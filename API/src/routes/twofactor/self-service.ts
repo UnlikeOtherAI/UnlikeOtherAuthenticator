@@ -200,7 +200,7 @@ export function registerTwoFactorSelfServiceRoutes(app: FastifyInstance): void {
         request.accessTokenClaims = claims;
       }
 
-      const finalResult = await runWithRequestAdminTransaction(request, async (prisma) => {
+      const outcome = await runWithRequestAdminTransaction(request, async (prisma) => {
         await lockProductTeamPolicyShared(prisma);
         await lockAndAssertAuthenticationEpoch(
           {
@@ -260,27 +260,36 @@ export function registerTwoFactorSelfServiceRoutes(app: FastifyInstance): void {
           { teamPrisma: prisma, prisma },
         );
 
+        return {
+          result,
+          userId: lockedSetup.userId,
+          authMethod: lockedSetup.authMethod ?? 'email_password',
+        };
+      });
+
+      if (outcome) {
+        // After the login committed, never inside it: a failed best-effort write inside the
+        // transaction would abort it, and the issued code would silently roll back with it.
         try {
           await recordLoginLog(
             {
-              userId: lockedSetup.userId,
+              userId: outcome.userId,
               domain: config.domain,
-              authMethod: lockedSetup.authMethod ?? 'email_password',
+              authMethod: outcome.authMethod,
               ip: request.ip ?? null,
               userAgent:
                 typeof request.headers['user-agent'] === 'string'
                   ? request.headers['user-agent']
                   : null,
             },
-            { prisma },
+            { prisma: request.adminDb },
           );
         } catch (err) {
           request.log.error({ err }, 'failed to record login log');
         }
+      }
 
-        return result;
-      });
-
+      const finalResult = outcome?.result;
       reply.status(200).send({
         ok: true,
         code: finalResult?.status === 'granted' ? finalResult.code : undefined,

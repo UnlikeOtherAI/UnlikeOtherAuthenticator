@@ -55,7 +55,7 @@ export function registerTwoFactorVerifyRoute(app: FastifyInstance): void {
         throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
       }
 
-      const finalResult = await runWithRequestAdminTransaction(request, async (prisma) => {
+      const outcome = await runWithRequestAdminTransaction(request, async (prisma) => {
         await lockProductTeamPolicyShared(prisma);
         await lockAndAssertAuthenticationEpoch(
           {
@@ -98,30 +98,37 @@ export function registerTwoFactorVerifyRoute(app: FastifyInstance): void {
             orgId: lockedChallenge.orgId,
             teamId: lockedChallenge.teamId,
           },
-          { teamPrisma: request.adminDb, prisma },
+          { teamPrisma: prisma, prisma },
         );
 
-        try {
-          await recordLoginLog(
-            {
-              userId: lockedChallenge.userId,
-              domain: config.domain,
-              authMethod: lockedChallenge.authMethod,
-              ip: request.ip ?? null,
-              userAgent:
-                typeof request.headers['user-agent'] === 'string'
-                  ? request.headers['user-agent']
-                  : null,
-            },
-            { prisma },
-          );
-        } catch (err) {
-          request.log.error({ err }, 'failed to record login log');
-        }
-
-        return decision;
+        return {
+          decision,
+          userId: lockedChallenge.userId,
+          authMethod: lockedChallenge.authMethod,
+        };
       });
 
+      // After the login committed, never inside it: a failed best-effort write inside the
+      // transaction would abort it, and the issued code would silently roll back with it.
+      try {
+        await recordLoginLog(
+          {
+            userId: outcome.userId,
+            domain: config.domain,
+            authMethod: outcome.authMethod,
+            ip: request.ip ?? null,
+            userAgent:
+              typeof request.headers['user-agent'] === 'string'
+                ? request.headers['user-agent']
+                : null,
+          },
+          { prisma: request.adminDb },
+        );
+      } catch (err) {
+        request.log.error({ err }, 'failed to record login log');
+      }
+
+      const finalResult = outcome.decision;
       reply.status(200).send({
         ok: true,
         code: finalResult.status === 'granted' ? finalResult.code : undefined,

@@ -35,6 +35,7 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       jwt.ts                — JWT signing/verification configuration
     /db
       prisma.ts             — Prisma client construction (anonymous + tenant-scoped)
+      pool-checkout-guard.ts — Flags global-client use inside a same-pool interactive transaction
       tenant-context.ts     — RLS tenant-context helpers
     /plugins
       tenant-context.plugin.ts — Fastify plugin that wires per-request RLS tenant context
@@ -49,6 +50,7 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       org-features.ts               — Returns 404 when org features are disabled
       org-role-guard.ts             — Validates user access token and org role for /org endpoints
       rate-limiter.ts               — Rate limiting
+      product-api-bulkhead.ts       — Per-instance concurrency cap on product data APIs (503 PRODUCT_API_BUSY)
       same-origin-browser.ts        — Rejects cross-site browser mutations on capability signing actions
       superuser-access-token.ts     — Validates user access tokens for superuser-only domain endpoints
       user-access-token.ts          — Validates a user access token (no role requirement) for /avatar/me dual auth
@@ -516,6 +518,19 @@ Request → Route → Middleware → Service → Database (Prisma)
 
 - **error-handler** — catches all errors. Returns a generic public body via `utils/error-response.ts` to the caller and logs specifics internally.
 - **rate-limiter** — request rate limiting; keyed helpers for auth routes live in `routes/auth/rate-limit-keys.ts`.
+- **product-api-bulkhead** — a per-instance counting semaphore over the product data APIs
+  (`/org/*`, `/domain/*`, `/settings/*`, `/internal/org/*`, `/avatar/*`, `/email/*`), acquired
+  in `onRequest` so the preHandlers' own DB reads count, and released exactly once on
+  response, error, or client disconnect. Excess requests wait in a bounded FIFO queue
+  (`PRODUCT_API_QUEUE_WAIT_MS`, `PRODUCT_API_MAX_QUEUE`), then get `503` + `Retry-After: 1` +
+  `PRODUCT_API_BUSY`. `PRODUCT_API_MAX_CONCURRENCY` (default 2) is sized from the per-instance
+  pool caps (app 3 / admin 2) so `/auth/*` always keeps a connection — the 2026-09-26 outage was
+  one product's `/org/me` burst exhausting both pools. Sign-in (`/auth/*` incl. `/auth/token`,
+  `/oauth/*`, `/2fa/*`), `/integrations/*`, `/internal/admin/*`, billing and Stripe webhooks,
+  discovery, health, the Auth/Admin windows and what they fetch while signing in (`/i18n/get`,
+  `/teams/:teamId/avatar`) are never limited. Deliberately unlimited because their class is not
+  clear-cut: `/billing/*` (money-moving confirmations behind app-key auth), `/signatures/*`
+  (signing sessions are part of login continuation) and `/apps/*` (native-app startup config).
 
 Refresh and revocation use one lock hierarchy: product-policy read lock when applicable, exact
 user-global, exact user+normalized-domain when applicable, then organisation/team membership and
@@ -828,6 +843,18 @@ admin client because every avatar route authenticates before a tenant context ex
 - All queries go through services, never directly from routes
 - Transactions used where atomicity matters (e.g. user creation + superuser assignment)
 - Connection pooling handled by Prisma
+- **Inside an interactive transaction, use the transaction client — never the global
+  client of the same pool.** `runWithTenantContext` / `request.withTenantTx` (app pool)
+  and `runWithRequestAdminTransaction` / `runInTransaction(request.adminDb, …)` (admin
+  pool) hand the body a `tx`; every query the body and the services it calls make must go
+  through that `tx` (thread it as `prisma` / `policyPrisma` / `crossProductPrisma` /
+  `teamPrisma`, …). Reaching for `getPrisma()`, `getAdminPrisma()` or `request.adminDb`
+  from inside checks out a second connection from a pool whose per-instance cap is 2–3,
+  and under concurrent load that waits on the connection its own transaction owns until
+  the 5 s interactive-transaction timeout (P2028) — the 2026-09-26 sign-in outage. Using
+  the *other* pool's client inside a transaction is fine. `db/pool-checkout-guard.ts`
+  wraps both global clients to enforce this: a same-pool nested checkout throws under
+  `NODE_ENV=test` and is logged once per call site everywhere else.
 - Production container startup keeps schema authority and request authority
   separate. `docker/start-production.sh` supplies `DATABASE_ADMIN_URL` as a
   command-scoped `DATABASE_URL` only to `prisma migrate deploy`, then starts

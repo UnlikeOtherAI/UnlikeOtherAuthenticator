@@ -14,6 +14,7 @@ import {
 } from './config/env.js';
 import { connectPrisma, disconnectPrisma } from './db/prisma.js';
 import { registerErrorHandler } from './middleware/error-handler.js';
+import { registerProductApiBulkhead } from './middleware/product-api-bulkhead.js';
 import tenantContextPlugin from './plugins/tenant-context.plugin.js';
 import { registerRoutes } from './routes/index.js';
 import { preloadTariffSnapshotSigningKey } from './services/billing-snapshot.service.js';
@@ -274,6 +275,12 @@ export async function createApp(): Promise<FastifyInstance> {
   });
 
   registerErrorHandler(app);
+  // Registered before the routes so its onRequest hook runs ahead of every preHandler.
+  registerProductApiBulkhead(app, {
+    maxConcurrency: env.PRODUCT_API_MAX_CONCURRENCY,
+    maxQueue: env.PRODUCT_API_MAX_QUEUE,
+    queueWaitMs: env.PRODUCT_API_QUEUE_WAIT_MS,
+  });
   await app.register(tenantContextPlugin);
   await registerRoutes(app);
 

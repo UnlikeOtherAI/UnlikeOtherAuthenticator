@@ -113,6 +113,21 @@ const EnvSchema = z
     REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(30),
     TOKEN_PRUNE_RETENTION_DAYS: z.coerce.number().int().min(0).max(365).default(7),
     LOG_RETENTION_DAYS: z.coerce.number().int().positive().max(365).default(90),
+    // Product-API bulkhead (middleware/product-api-bulkhead.ts): the per-instance cap on
+    // concurrently executing product data-API requests (/org/*, /domain/*, /settings/*, ...),
+    // so one product's burst can never hold every connection sign-in needs. Default 2 because
+    // the pools are capped at connection_limit=3 (DATABASE_URL) and 2 (DATABASE_ADMIN_URL) per
+    // instance (Docs/deploy.md): each product request holds one app connection for its tenant
+    // transaction and briefly one admin connection for domain-hash auth, so two in flight
+    // always leave at least one connection in each pool for /auth/*.
+    PRODUCT_API_MAX_CONCURRENCY: z.coerce.number().int().min(1).max(1000).default(2),
+    // How long an excess request may wait for a slot before 503 PRODUCT_API_BUSY. Kept well
+    // under the 30 s request timeout so a caller gets a clear, retryable answer, not a hang.
+    PRODUCT_API_QUEUE_WAIT_MS: z.coerce.number().int().min(0).max(25_000).default(3_000),
+    // Queue depth beyond which excess requests are refused at once. Two slots drain roughly
+    // 20-40 requests a second, so ~32 is what a 3 s budget can realistically clear; queueing
+    // more only delays the same 503 and pins memory during a flood.
+    PRODUCT_API_MAX_QUEUE: z.coerce.number().int().min(0).max(10_000).default(32),
     // Brief 8 / Phase 10: AI translation service credentials (optional; the UI falls back to English if disabled).
     AI_TRANSLATION_PROVIDER: z.enum(['disabled', 'openai']).default('disabled'),
     OPENAI_API_KEY: z.string().min(1).optional(),

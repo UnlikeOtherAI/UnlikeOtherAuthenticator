@@ -157,27 +157,7 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
         );
 
         if (finalized.kind !== 'granted') return finalized;
-
-        try {
-          await recordLoginLog(
-            {
-              userId,
-              email,
-              domain: config.domain,
-              authMethod: 'email_password',
-              ip: request.ip ?? null,
-              userAgent:
-                typeof request.headers['user-agent'] === 'string'
-                  ? request.headers['user-agent']
-                  : null,
-            },
-            { prisma },
-          );
-        } catch (err) {
-          request.log.error({ err }, 'failed to record login log');
-        }
-
-        return finalized;
+        return { ...finalized, userId };
       });
 
       if (outcome.kind === 'twofa') {
@@ -200,6 +180,27 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
       if (outcome.kind === 'team_chooser') {
         reply.status(200).send({ login_token: outcome.loginToken, ...outcome.choices });
         return;
+      }
+
+      // After the login committed, never inside it: a failed best-effort write inside the
+      // transaction would abort it, and the issued code would silently roll back with it.
+      try {
+        await recordLoginLog(
+          {
+            userId: outcome.userId,
+            email,
+            domain: config.domain,
+            authMethod: 'email_password',
+            ip: request.ip ?? null,
+            userAgent:
+              typeof request.headers['user-agent'] === 'string'
+                ? request.headers['user-agent']
+                : null,
+          },
+          { prisma: request.adminDb },
+        );
+      } catch (err) {
+        request.log.error({ err }, 'failed to record login log');
       }
 
       reply.status(200).send({
