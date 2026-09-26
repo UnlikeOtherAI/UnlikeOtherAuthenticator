@@ -151,27 +151,6 @@ export function registerAuthVerifyCodeRoute(app: FastifyInstance): void {
           },
         );
 
-        if (result.kind === 'granted') {
-          try {
-            await recordLoginLog(
-              {
-                userId,
-                email,
-                domain: config.domain,
-                authMethod: 'email_code',
-                ip: request.ip ?? null,
-                userAgent:
-                  typeof request.headers['user-agent'] === 'string'
-                    ? request.headers['user-agent']
-                    : null,
-              },
-              { prisma },
-            );
-          } catch (err) {
-            request.log.error({ err }, 'failed to record login log');
-          }
-        }
-
         return result;
       });
 
@@ -190,6 +169,27 @@ export function registerAuthVerifyCodeRoute(app: FastifyInstance): void {
           ...outcome.setup,
         });
         return;
+      }
+
+      // After the login committed, never inside it: a failed best-effort write inside the
+      // transaction would abort it, and the issued code would silently roll back with it.
+      try {
+        await recordLoginLog(
+          {
+            userId,
+            email,
+            domain: config.domain,
+            authMethod: 'email_code',
+            ip: request.ip ?? null,
+            userAgent:
+              typeof request.headers['user-agent'] === 'string'
+                ? request.headers['user-agent']
+                : null,
+          },
+          { prisma: request.adminDb },
+        );
+      } catch (err) {
+        request.log.error({ err }, 'failed to record login log');
       }
 
       reply.status(200).send({

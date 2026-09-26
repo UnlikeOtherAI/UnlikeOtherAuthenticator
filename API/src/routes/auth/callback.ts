@@ -269,25 +269,7 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
         // request. No PKCE challenge means there is no client-held verifier to bind an auth code
         // to, so complete the invite without issuing a browser-visible authorization result.
         if (acceptedInvite && !socialState.code_challenge) {
-          try {
-            await recordLoginLog(
-              {
-                userId,
-                email: profile.email,
-                domain: config.domain,
-                authMethod: provider,
-                ip: request.ip ?? null,
-                userAgent:
-                  typeof request.headers['user-agent'] === 'string'
-                    ? request.headers['user-agent']
-                    : null,
-              },
-              { prisma },
-            );
-          } catch (err) {
-            request.log.error({ err }, 'failed to record invite-bound social login log');
-          }
-          return { kind: 'invite_accepted' as const };
+          return { kind: 'invite_accepted' as const, userId };
         }
 
         let autoSelectedTeam: AutoSelectedTeam | null = acceptedInvite
@@ -366,6 +348,12 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
             : finalized;
         }
 
+        return { ...finalized, userId };
+      });
+
+      // After the login committed, never inside it: a failed best-effort write inside the
+      // transaction would abort it, and the issued code would silently roll back with it.
+      const recordSocialLogin = async (userId: string): Promise<void> => {
         try {
           await recordLoginLog(
             {
@@ -379,14 +367,12 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
                   ? request.headers['user-agent']
                   : null,
             },
-            { prisma },
+            { prisma: request.adminDb },
           );
         } catch (err) {
           request.log.error({ err }, 'failed to record login log');
         }
-
-        return finalized;
-      });
+      };
 
       if (outcome.kind === 'auth_failed') {
         redirectNoStore(reply, buildAuthFailedRedirectUrl(redirectUrl, socialState.state));
@@ -394,6 +380,7 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
       }
 
       if (outcome.kind === 'invite_accepted') {
+        await recordSocialLogin(outcome.userId);
         const u = new URL(`${baseUrl}/auth`);
         u.searchParams.set('config_url', configUrl);
         u.searchParams.set('flow', 'invite_accepted');
@@ -448,6 +435,8 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
         redirectNoStore(reply, u.toString());
         return;
       }
+
+      await recordSocialLogin(outcome.userId);
 
       if (isCustomSchemeUrl(outcome.finalResult.redirectTo)) {
         // Native deep link: hand off via a "signed in" page instead of a 302 to a custom
