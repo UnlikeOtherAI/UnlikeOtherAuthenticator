@@ -44,4 +44,9 @@ export const PRODUCTION_PUBLIC_ERROR_CODES = new Set([
   // caller is already authenticated as the user whose own store it is.
   'SETTING_VALUE_TOO_LARGE',
   'SETTINGS_QUOTA_EXCEEDED',
+  // Product data APIs (`/org/*`, `/domain/*`, `/settings/*`, ...) refused by the per-instance
+  // concurrency bulkhead (middleware/product-api-bulkhead.ts) after the wait budget or a full
+  // queue. Products branch on it to back off and retry after `Retry-After`. Not an oracle: it
+  // says nothing about any user, domain or record — only that this instance is busy.
+  'PRODUCT_API_BUSY',
 ]);
