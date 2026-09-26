@@ -2,7 +2,11 @@ import type { PrismaClient } from '@prisma/client';
 
 import { getEnv } from '../config/env.js';
 import { getPrisma } from '../db/prisma.js';
-import { mapAuthMethodToProvider, recordAuthIdentity } from './auth-identity.service.js';
+import {
+  mapAuthMethodToProvider,
+  recordAuthIdentity,
+  type AuthIdentityPrisma,
+} from './auth-identity.service.js';
 
 type LoginLogPrisma = {
   loginLog: Pick<PrismaClient['loginLog'], 'create' | 'deleteMany' | 'findMany'>;
@@ -13,6 +17,11 @@ type LoginLogDeps = {
   env?: ReturnType<typeof getEnv>;
   prisma?: LoginLogPrisma;
   now?: () => Date;
+};
+
+type RecordLoginLogDeps = Omit<LoginLogDeps, 'prisma'> & {
+  // The BYPASSRLS admin client, or a transaction on it: the auth identity is written through it too.
+  prisma?: LoginLogPrisma & AuthIdentityPrisma;
 };
 
 export type LoginLogRecord = {
@@ -55,7 +64,7 @@ export async function recordLoginLog(
     ip?: string | null;
     userAgent?: string | null;
   },
-  deps?: LoginLogDeps,
+  deps?: RecordLoginLogDeps,
 ): Promise<void> {
   const env = deps?.env ?? getEnv();
   if (!env.DATABASE_URL) return;
@@ -86,10 +95,13 @@ export async function recordLoginLog(
     select: { id: true },
   });
 
-  // Record the auth identity for this login (design §4.2). Best-effort and via the BYPASSRLS admin
-  // client (the table is locked down for uoa_app), so an identity write never blocks the login.
-  // providerSubject is the email here; social phases refine it to the real OAuth subject via the
-  // same (userId, provider) upsert.
+  // Record the auth identity for this login (design §4.2). Best-effort, on the BYPASSRLS admin
+  // client (the table is locked down for uoa_app). providerSubject is the email here; social phases
+  // refine it to the real OAuth subject via the same (userId, provider) upsert.
+  //
+  // Write it through the caller's client, never a fresh admin connection: most logins record this
+  // inside their admin transaction, and a second admin-pool checkout while that transaction holds
+  // a connection starves the capped production pool until the login transaction times out.
   try {
     await recordAuthIdentity(
       {
@@ -98,7 +110,7 @@ export async function recordLoginLog(
         providerSubject: email,
         email,
       },
-      { env, now: () => now },
+      { env, now: () => now, ...(deps?.prisma ? { prisma: deps.prisma } : {}) },
     );
   } catch {
     // Identity recording is non-critical; the login has already succeeded and been logged.

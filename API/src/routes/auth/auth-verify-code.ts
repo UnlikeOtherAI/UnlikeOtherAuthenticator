@@ -103,7 +103,10 @@ export function registerAuthVerifyCodeRoute(app: FastifyInstance): void {
             sharedSecret: SHARED_SECRET,
             audience: LOGIN_SESSION_AUDIENCE,
           });
-          const choices = await buildSessionChoices({ userId, config }, { prisma });
+          const choices = await buildSessionChoices(
+            { userId, config },
+            { crossProductPrisma: prisma, policyPrisma: prisma, prisma },
+          );
           return { loginToken, choices };
         });
         reply.status(200).send({ login_token: chooser.loginToken, ...chooser.choices });

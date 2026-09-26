@@ -75,7 +75,10 @@ export function registerAuthSessionChoicesRoute(app: FastifyInstance): void {
           audience: LOGIN_SESSION_AUDIENCE,
           now: new Date(),
         });
-        return buildSessionChoices({ userId: lockedSession.userId, config }, { prisma: tx });
+        return buildSessionChoices(
+          { userId: lockedSession.userId, config },
+          { crossProductPrisma: tx, policyPrisma: tx, prisma: tx },
+        );
       });
 
       reply.status(200).send({ ...choices });
