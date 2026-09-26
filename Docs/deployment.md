@@ -121,9 +121,10 @@ A green deploy tick is not proof. Decode the served config — that is what UOA 
 ### Known failure modes, seen in practice
 
 - **A red gate silently freezes deployment.** DeepTest's deploy job `needs: build`, and `build`
-  includes a Playwright browser suite. With 32 of those failing, the host sat 75 commits behind
-  `main` for days while every merge looked successful in the repo. Nothing warns you; the deploy
-  job simply never runs.
+  included a Playwright browser suite. With 32 of those failing, the host sat 75 commits behind
+  `main` for days while every merge looked successful in the repo, and it happened again from
+  2026-09-10 for two weeks. Nothing warns you; the deploy job simply never runs. The browser suite
+  has since left the deploy gate (it runs by hand), but any failing required step does the same.
 - **One lint error blocks everything.** AdGoes' deploy failed on a single `no-empty` violation in a
   test file and stayed broken for ~2 months, so config changes merged to `main` never shipped.
 - **A push may not trigger the run.** Observed on AdGoes: a push to `main` produced no workflow run
