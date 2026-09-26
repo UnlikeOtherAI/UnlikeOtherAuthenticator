@@ -35,6 +35,7 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       jwt.ts                — JWT signing/verification configuration
     /db
       prisma.ts             — Prisma client construction (anonymous + tenant-scoped)
+      pool-checkout-guard.ts — Flags global-client use inside a same-pool interactive transaction
       tenant-context.ts     — RLS tenant-context helpers
     /plugins
       tenant-context.plugin.ts — Fastify plugin that wires per-request RLS tenant context
@@ -828,6 +829,18 @@ admin client because every avatar route authenticates before a tenant context ex
 - All queries go through services, never directly from routes
 - Transactions used where atomicity matters (e.g. user creation + superuser assignment)
 - Connection pooling handled by Prisma
+- **Inside an interactive transaction, use the transaction client — never the global
+  client of the same pool.** `runWithTenantContext` / `request.withTenantTx` (app pool)
+  and `runWithRequestAdminTransaction` / `runInTransaction(request.adminDb, …)` (admin
+  pool) hand the body a `tx`; every query the body and the services it calls make must go
+  through that `tx` (thread it as `prisma` / `policyPrisma` / `crossProductPrisma` /
+  `teamPrisma`, …). Reaching for `getPrisma()`, `getAdminPrisma()` or `request.adminDb`
+  from inside checks out a second connection from a pool whose per-instance cap is 2–3,
+  and under concurrent load that waits on the connection its own transaction owns until
+  the 5 s interactive-transaction timeout (P2028) — the 2026-09-26 sign-in outage. Using
+  the *other* pool's client inside a transaction is fine. `db/pool-checkout-guard.ts`
+  wraps both global clients to enforce this: a same-pool nested checkout throws under
+  `NODE_ENV=test` and is logged once per call site everywhere else.
 - Production container startup keeps schema authority and request authority
   separate. `docker/start-production.sh` supplies `DATABASE_ADMIN_URL` as a
   command-scoped `DATABASE_URL` only to `prisma migrate deploy`, then starts

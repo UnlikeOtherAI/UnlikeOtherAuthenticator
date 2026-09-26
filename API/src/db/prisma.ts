@@ -1,7 +1,11 @@
 import { PrismaClient } from '@prisma/client';
 
 import { getEnv, requireEnv } from '../config/env.js';
+import { guardPoolCheckouts } from './pool-checkout-guard.js';
 
+// Both global clients are wrapped by `guardPoolCheckouts`: inside an interactive transaction,
+// code must use the transaction client it was handed, never the global client of the same pool
+// (see pool-checkout-guard.ts for the incident that rule comes from).
 let prisma: PrismaClient | undefined;
 let adminPrisma: PrismaClient | undefined;
 
@@ -9,9 +13,10 @@ export function getPrisma(): PrismaClient {
   if (prisma) return prisma;
 
   const { DATABASE_URL } = requireEnv('DATABASE_URL');
-  prisma = new PrismaClient({
-    datasources: { db: { url: DATABASE_URL } },
-  });
+  prisma = guardPoolCheckouts(
+    new PrismaClient({ datasources: { db: { url: DATABASE_URL } } }),
+    'app',
+  );
   return prisma;
 }
 
@@ -31,9 +36,7 @@ export function getAdminPrisma(): PrismaClient {
     throw new Error('getAdminPrisma(): neither DATABASE_ADMIN_URL nor DATABASE_URL is set');
   }
 
-  adminPrisma = new PrismaClient({
-    datasources: { db: { url } },
-  });
+  adminPrisma = guardPoolCheckouts(new PrismaClient({ datasources: { db: { url } } }), 'admin');
   return adminPrisma;
 }
 
