@@ -153,7 +153,10 @@ export function registerAuthSelectTeamRoute(app: FastifyInstance): void {
             config,
             now: new Date(),
           });
-          return buildSessionChoices({ userId: lockedSession.userId, config }, { prisma: tx });
+          return buildSessionChoices(
+            { userId: lockedSession.userId, config },
+            { crossProductPrisma: tx, policyPrisma: tx, prisma: tx },
+          );
         });
         reply.status(200).send({ login_token, ...choices });
         return;

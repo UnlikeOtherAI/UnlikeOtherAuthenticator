@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { Env } from '../../src/config/env.js';
 import { listLoginLogsForDomain, recordLoginLog } from '../../src/services/login-log.service.js';
@@ -111,6 +111,40 @@ describe('login-log.service', () => {
         authMethod: 'google',
       },
       { env: testEnv(), prisma, now: () => now },
+    );
+  });
+
+  it('records the auth identity through the injected client, not a second pool connection', async () => {
+    const now = new Date('2026-02-10T00:00:00.000Z');
+    const upsert = vi.fn().mockResolvedValue({ id: 'ai-1' });
+
+    // Callers pass their admin login transaction. A fresh admin-pool checkout here would wait for
+    // the connection that transaction holds, so the identity must go through the same client.
+    const prisma = {
+      loginLog: {
+        create: async () => ({ id: 'log1' }),
+        deleteMany: async () => ({ count: 0 }),
+        findMany: async () => [],
+      },
+      user: { findUnique: async () => null },
+      authIdentity: { upsert },
+    };
+
+    await recordLoginLog(
+      {
+        userId: 'u1',
+        email: 'User@Example.com',
+        domain: 'client.example.com',
+        authMethod: 'google',
+      },
+      { env: testEnv(), prisma, now: () => now },
+    );
+
+    expect(upsert).toHaveBeenCalledTimes(1);
+    expect(upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { userId_provider: { userId: 'u1', provider: 'google' } },
+      }),
     );
   });
 
