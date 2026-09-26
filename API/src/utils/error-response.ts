@@ -349,6 +349,15 @@ function explainKnownCode(
         summary: 'This operation requires a superuser token.',
         hints: ['Use a token for a superuser on the target domain.'],
       };
+    case 'PRODUCT_API_BUSY':
+      return {
+        summary:
+          'This instance is at its concurrency cap for product data APIs and did not process the request.',
+        hints: [
+          'Retry after the Retry-After delay with backoff; the request had no effect.',
+          'Do not fan out one UOA call per end-user request — cache /org/me and settings per session.',
+        ],
+      };
   }
 
   return explainAuthProviderCode(code);

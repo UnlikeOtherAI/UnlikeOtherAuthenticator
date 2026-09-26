@@ -40,6 +40,20 @@ You need BOTH to ship a working integration. Phase 0 + Phase 1 below cover them 
 
 ---
 
+## Concurrency limits on product data APIs
+
+The data APIs your backend calls on its users' request paths — \`/org/*\`, \`/domain/*\`,
+\`/settings/*\`, \`/internal/org/*\`, \`/avatar/*\`, \`/email/*\` — share a small per-instance
+concurrency cap so sign-in always keeps database connections. An excess request waits briefly
+(FIFO), then answers **\`503\`** with **\`Retry-After: 1\`** and code **\`PRODUCT_API_BUSY\`**. The
+request had no effect: retry after the delay with backoff (you already treat 5xx as temporary).
+
+Never fan out one UOA call per end-user request. Resolve \`/org/me\` and settings once per
+session, cache them for the session, and refresh on your own schedule — a burst of ~100
+\`/org/me\` calls in one second is exactly what this limit exists to absorb. Sign-in
+(\`/auth/*\` including \`/auth/token\`, \`/oauth/*\`, \`/2fa/*\`), onboarding (\`/integrations/*\`),
+billing and operator paths are never limited.
+
 ## Phase 0 — Generate your RS256 signing keypair
 
 Every config JWT is RS256-signed. You need an RSA-2048 keypair whose PUBLIC JWK is discoverable at a JWKS URL UOA can fetch, and whose PRIVATE key stays in your backend.
