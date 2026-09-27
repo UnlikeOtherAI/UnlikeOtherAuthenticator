@@ -29,10 +29,8 @@ const DEFAULT_UI_THEME = {
   logo: { url: '', alt: 'Sign in' },
 };
 
-/** Build the validated first-party ClientConfig for the MCP profile. `redirectUris`
- *  are the registered client's, so selectRedirectUrl validates against them. */
-export function buildMcpClientConfig(redirectUris: string[], nativeApp?: NativeApp | null): ClientConfig {
-  const env = getEnv();
+/** The dedicated first-party logical domain every public-profile artifact is bound to. */
+export function resolveMcpOAuthDomain(env = getEnv()): string {
   // The MCP profile must run on its own dedicated first-party domain — never the admin
   // domain (a SUPERUSER bootstrap there would bypass ADMIN_BOOTSTRAP_EMAILS) and never a
   // customer domain. Fail closed when misconfigured; public routes additionally require
@@ -42,7 +40,14 @@ export function buildMcpClientConfig(redirectUris: string[], nativeApp?: NativeA
   if (configured === getAdminAuthDomain(env)) {
     throw new AppError('INTERNAL', 500, 'MCP_OAUTH_DOMAIN_FORBIDDEN_ADMIN');
   }
-  const domain = configured;
+  return configured;
+}
+
+/** Build the validated first-party ClientConfig for the MCP profile. `redirectUris`
+ *  are the registered client's, so selectRedirectUrl validates against them. */
+export function buildMcpClientConfig(redirectUris: string[], nativeApp?: NativeApp | null): ClientConfig {
+  const env = getEnv();
+  const domain = resolveMcpOAuthDomain(env);
   const methods = (env.MCP_OAUTH_ENABLED_AUTH_METHODS ?? 'email_password')
     .split(',')
     .map((s) => s.trim())

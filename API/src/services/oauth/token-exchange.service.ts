@@ -1,6 +1,8 @@
 // Public-client token exchange for the MCP profile (brief §22.14): redeem an
 // authorization code (PKCE, no client secret) for a resource-bound RS256 access
-// token. Refresh-token issuance for this profile is a follow-up.
+// token. Registered native-app clients additionally start a rotating refresh-token
+// family in the same transaction (see native-refresh.service.ts); plain dynamic
+// registrations receive only the access token.
 import type { Prisma, PrismaClient } from '@prisma/client';
 
 import { getEnv, getPublicBaseUrl } from '../../config/env.js';
@@ -13,6 +15,7 @@ import { lockProductTeamPolicyShared } from '../product-team-policy-lock.service
 import { resolveTwoFaPolicy, isTwoFaAuthenticationSufficient } from '../twofactor-policy.service.js';
 import { signMcpAccessToken } from './access-token.service.js';
 import { consumeOAuthCode } from './oauth-code.service.js';
+import { isNativeRefreshClient, issueNativeRefreshToken } from './native-refresh.service.js';
 
 type Db = Prisma.TransactionClient;
 
@@ -25,6 +28,9 @@ function accessTokenTtlSeconds(): number {
 export interface OAuthTokenResult {
   accessToken: string;
   expiresInSeconds: number;
+  /** Present only for registered native-app clients. */
+  refreshToken?: string;
+  refreshTokenExpiresInSeconds?: number;
 }
 
 export async function exchangeOAuthCodeForAccessToken(
@@ -99,5 +105,25 @@ export async function exchangeOAuthCodeForAccessToken(
     scope: consumed.scope ?? undefined,
   });
 
-  return { accessToken, expiresInSeconds: ttlSeconds };
+  if (!isNativeRefreshClient(client)) return { accessToken, expiresInSeconds: ttlSeconds };
+  // consumeOAuthCode holds the user-global and user/domain locks and asserted the code's
+  // credential epoch, so the new family is linearized with every credential revocation.
+  const refresh = await issueNativeRefreshToken(
+    {
+      userId: consumed.userId,
+      clientId: params.clientId,
+      domain: params.domain,
+      credentialEpoch: consumed.credentialEpoch,
+      twoFaCompleted: consumed.twoFaCompleted,
+      scope: consumed.scope,
+      resource: consumed.resource,
+    },
+    prisma,
+  );
+  return {
+    accessToken,
+    expiresInSeconds: ttlSeconds,
+    refreshToken: refresh.refreshToken,
+    refreshTokenExpiresInSeconds: refresh.expiresInSeconds,
+  };
 }

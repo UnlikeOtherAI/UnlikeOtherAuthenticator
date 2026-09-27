@@ -60,7 +60,10 @@ export function registerOAuthRegisterRoute(app: FastifyInstance): void {
         client_id_issued_at: Math.floor(client.createdAt.getTime() / 1000),
         client_name: client.clientName ?? undefined,
         redirect_uris: client.redirectUris,
-        grant_types: ['authorization_code'],
+        // Only registrations bound to an enabled native-app policy receive refresh tokens.
+        grant_types: client.nativeAppId
+          ? ['authorization_code', 'refresh_token']
+          : ['authorization_code'],
         response_types: ['code'],
         token_endpoint_auth_method: 'none',
         scope: client.scopes.join(' ') || undefined,

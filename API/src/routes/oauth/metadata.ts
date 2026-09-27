@@ -22,14 +22,17 @@ export function registerOAuthMetadataRoute(app: FastifyInstance): void {
         authorization_endpoint: `${issuer}/oauth/authorize`,
         token_endpoint: `${issuer}/oauth/token`,
         registration_endpoint: `${issuer}/oauth/register`,
+        revocation_endpoint: `${issuer}/oauth/revoke`,
         jwks_uri: `${issuer}/oauth/jwks.json`,
         scopes_supported: scopes,
         response_types_supported: ['code'],
-        // Only advertise grants that are implemented. refresh_token for this profile
-        // is a follow-up; access tokens are short-lived and clients re-authorize.
-        grant_types_supported: ['authorization_code'],
+        // Only advertise grants that are implemented. refresh_token is issued only to
+        // clients registered with an enabled native-app app_id (see /oauth/register's
+        // per-client grant_types); plain dynamic registrations re-authorize on expiry.
+        grant_types_supported: ['authorization_code', 'refresh_token'],
         code_challenge_methods_supported: ['S256'],
         token_endpoint_auth_methods_supported: ['none'],
+        revocation_endpoint_auth_methods_supported: ['none'],
         // RFC 8707: this profile binds tokens to the requested resource (the `aud`).
         authorization_response_iss_parameter_supported: false,
         // RFC 8707: only advertise resource-indicator support when an allowlist is
