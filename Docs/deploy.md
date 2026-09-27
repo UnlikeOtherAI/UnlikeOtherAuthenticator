@@ -407,7 +407,7 @@ Before enabling the confidential exchange in production:
 
 7. Verify `GET https://authentication.unlikeotherai.com/oauth/jwks.json` returns
    the configured public key, while discovery, registration, authorize, login,
-   and `/oauth/token` return 404. Exercise correct and wrong product credentials,
+   `/oauth/token` and `/oauth/revoke` return 404. Exercise correct and wrong product credentials,
    resource variants, scope widening, disabled mapping, replay, and selected
    user/organisation/team membership before enabling confidential callers.
 8. For each approved chain, provision both independent mappings. The

@@ -2851,3 +2851,17 @@ for the protocol, scope/consent, storage, revocation and client requirements.
 ## Native app profiles — 2026-09-25
 
 Admin-managed public native apps may use server-owned stored branding and login policy selected by a public reverse-domain app_id. This is a scoped extension of the existing public OAuth profile, not permission to accept unsigned website configs. Website config JWT verification and confidential client authentication are unchanged. Native apps receive no shared secret, retain S256 PKCE, and return only a one-use code. Apps are managed by current admin superusers, independently of billing app keys and feature flags. See Docs/Auth/native-accounts.md and Docs/plans/native-app-sign-in.md for policy, social login, revocation and operator setup.
+
+## Native app refresh tokens — 2026-09-27
+
+Clarifies §14, §22.10 and §22.14 for registered native apps; nothing above is removed. §22.14
+already scopes a public refresh-token grant to `/oauth/token`; it is now implemented, but only for
+clients registered with an enabled Admin-managed native-app `app_id`. A native app is an installed
+public client, not browser JavaScript: it keeps the refresh token (with its non-secret client id)
+only in the operating system's encrypted secret store and never persists the access token or
+profile data. Plain dynamic (MCP) registrations and browser clients still receive no refresh
+token. The family is bound to the exact public client, the native logical domain, the credential
+epoch of the originating login and the exact granted scope and resource; it rotates on every use
+with the §22.10 replay grace and reuse revocation, never widens access, and ends on any
+credential-epoch increment, app disable or security edit. `POST /oauth/revoke` (RFC 7009) applies
+the `/auth/revoke` logout semantics. See [Auth/native-accounts.md](Auth/native-accounts.md).
