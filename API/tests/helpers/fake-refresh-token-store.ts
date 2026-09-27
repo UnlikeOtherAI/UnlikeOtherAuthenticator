@@ -27,6 +27,9 @@ export type FakeRefreshTokenRow = {
   orgId: string | null;
   teamId: string | null;
   twoFaCompleted: boolean;
+  credentialEpoch: number | null;
+  oauthScope: string | null;
+  resource: string | null;
   createdAt: Date;
   expiresAt: Date;
   revokedAt: Date | null;
@@ -56,6 +59,9 @@ export class FakeRefreshStore {
           orgId: (data.orgId as string | null) ?? null,
           teamId: (data.teamId as string | null) ?? null,
           twoFaCompleted: data.twoFaCompleted === true,
+          credentialEpoch: (data.credentialEpoch as number | null | undefined) ?? null,
+          oauthScope: (data.oauthScope as string | null | undefined) ?? null,
+          resource: (data.resource as string | null | undefined) ?? null,
           createdAt: data.createdAt as Date,
           expiresAt: data.expiresAt as Date,
           revokedAt: null,

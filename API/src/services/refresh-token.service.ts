@@ -11,9 +11,11 @@ import {
   hashRefreshToken,
   matchesRefreshTokenContext,
   REFRESH_TOKEN_REPLAY_GRACE_MS,
+  refreshTokenGrantBinding,
   refreshTokenSelect,
   resolveRefreshTokenReplay,
   type RefreshTokenContext,
+  type RefreshTokenGrantBinding,
   type RefreshTokenRow,
 } from './refresh-token-replay.service.js';
 import { bumpUserTokenVersion } from './refresh-token-revocation.service.js';
@@ -183,7 +185,7 @@ async function createRefreshTokenRecord(
     orgId?: string | null;
     teamId?: string | null;
     twoFaCompleted: boolean;
-  },
+  } & Partial<RefreshTokenGrantBinding>,
   refreshToken: string,
   deps?: RefreshTokenDeps,
 ): Promise<{
@@ -208,6 +210,7 @@ async function createRefreshTokenRecord(
       orgId: params.orgId ?? null,
       teamId: params.teamId ?? null,
       twoFaCompleted: params.twoFaCompleted,
+      ...refreshTokenGrantBinding(params),
       expiresAt,
       createdAt: now,
     },
@@ -233,7 +236,7 @@ export async function issueRefreshToken(
     orgId?: string | null;
     teamId?: string | null;
     twoFaCompleted: boolean;
-  },
+  } & Partial<RefreshTokenGrantBinding>,
   deps?: RefreshTokenDeps,
 ): Promise<{
   expiresInSeconds: number;
@@ -258,7 +261,7 @@ export async function exchangeRefreshToken(
   orgId: string | null;
   teamId: string | null;
   twoFaCompleted: boolean;
-}> {
+} & RefreshTokenGrantBinding> {
   const prisma = getRefreshTokenPrisma(deps);
   const sharedSecret = getSharedSecret(deps);
   const tokenHash = hashRefreshToken(params.refreshToken, sharedSecret);
@@ -367,6 +370,8 @@ export async function exchangeRefreshToken(
       orgId: expectedTeam.orgId,
       teamId: expectedTeam.teamId,
       twoFaCompleted: row.twoFaCompleted === true,
+      // The public grant binding is immutable for the life of the family.
+      ...refreshTokenGrantBinding(row),
     },
     successor,
     {
@@ -404,6 +409,7 @@ export async function exchangeRefreshToken(
     orgId: expectedTeam.orgId,
     teamId: expectedTeam.teamId,
     twoFaCompleted: row.twoFaCompleted === true,
+    ...refreshTokenGrantBinding(row),
   };
 }
 

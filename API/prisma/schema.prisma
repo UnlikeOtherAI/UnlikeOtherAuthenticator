@@ -600,6 +600,13 @@ model RefreshToken {
   // One-time durable marker for theft/corruption epoch invalidation. Policy retirement sets only
   // revokedAt, so a later post-grace predecessor use can still trigger exactly one epoch bump.
   securityRevokedAt DateTime? @map("security_revoked_at")
+  // Public OAuth native-app grant binding: the credential epoch (users.token_version) the
+  // originating authorization code was issued under, plus the exact granted scope and RFC 8707
+  // resource. Rotation copies all three unchanged, so a refresh can never widen access and any
+  // epoch increment ends the family. Confidential /auth/token families leave them null.
+  credentialEpoch   Int?      @map("credential_epoch")
+  oauthScope        String?   @map("oauth_scope")
+  resource          String?
   expiresAt         DateTime  @map("expires_at")
   revokedAt         DateTime? @map("revoked_at")
   lastUsedAt        DateTime? @map("last_used_at")
