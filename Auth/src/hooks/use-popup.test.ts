@@ -64,6 +64,19 @@ describe('parsePopupQueryParams', () => {
     expect(parsed.inviteEmail).toBe('invitee@example.com');
   });
 
+  describe('prompt', () => {
+    it('asks for the account chooser only for prompt=select_account', () => {
+      expect(parsePopupQueryParams('?prompt=select_account').selectAccount).toBe(true);
+    });
+
+    it('ignores an absent, empty, or unsupported prompt value', () => {
+      expect(parsePopupQueryParams('').selectAccount).toBe(false);
+      expect(parsePopupQueryParams('?config_url=x').selectAccount).toBe(false);
+      expect(parsePopupQueryParams('?prompt=login').selectAccount).toBe(false);
+      expect(parsePopupQueryParams('?prompt=').selectAccount).toBe(false);
+    });
+  });
+
   // Gap-fix B Task 2 (design §11.4): team_hint deep-link/switch preselect parsing.
   describe('team_hint', () => {
     it('parses a team_hint query param', () => {

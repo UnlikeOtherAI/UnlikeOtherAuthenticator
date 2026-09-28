@@ -150,6 +150,12 @@ the fallback when the field is left empty.
    auto-skip. Client-side preselect ONLY — an invalid or non-matching hint is silently ignored (the
    chooser just renders normally); \`select-team\`'s product-policy + exact ACTIVE-membership check is the sole
    authority and a hint can never select a team the user isn't already a member of.
+8. \`GET /auth\` accepts an optional \`prompt=select_account\` for a person adding another account
+   to the product. The social buttons forward it, and Google then shows its account chooser
+   (including "Use another account") instead of silently reusing the Google account the browser is
+   already signed into. Send it only for that flow — an ordinary sign-in omits it and is unchanged.
+   Any other \`prompt\` value is ignored by the Auth UI; it selects a provider screen and grants
+   nothing.
 
 ---
 

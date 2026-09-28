@@ -39,6 +39,11 @@ const QuerySchema = z
     // Opaque relying-party CSRF value. UOA does not interpret it; it is bound to
     // this login and echoed verbatim on the final redirect.
     state: z.string().min(1).max(2048).optional(),
+    // The relying party's `/auth?prompt=select_account`, forwarded by the Auth UI: the
+    // person is adding another account, so the provider must show its account chooser
+    // instead of silently reusing the browser's provider session. Only this one value
+    // exists; it selects a provider screen and grants nothing. Honoured by Google.
+    prompt: z.literal('select_account').optional(),
   })
   .strict();
 
@@ -75,6 +80,7 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
         request_access,
         invite_token,
         state: relyingPartyState,
+        prompt,
       } = QuerySchema.parse(request.query);
 
       const config = request.config;
@@ -148,6 +154,7 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
           clientId: env.GOOGLE_CLIENT_ID,
           redirectUri,
           state,
+          selectAccount: prompt === 'select_account',
         });
         redirectNoStore(reply, url);
         return;

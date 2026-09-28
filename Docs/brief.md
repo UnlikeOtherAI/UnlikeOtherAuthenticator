@@ -561,6 +561,11 @@ The following tighten ambiguities in the brief to prevent misinterpretation duri
 - Only **provider-verified emails** are accepted from social login providers
 - If a social provider returns an unverified email, the login is **rejected**
 - This prevents account takeover via unverified email claims
+- A product adding a **second account** for someone already signed in may send
+  `prompt=select_account` on `GET /auth`. The social buttons forward it and Google then shows its
+  account chooser instead of silently reusing the Google account the browser is signed into. It
+  only selects a provider screen: every check above still applies, and an ordinary sign-in without
+  it is unchanged. (Added 2026-09-28 for Nessie's multiple signed-in accounts.)
 
 ---
 

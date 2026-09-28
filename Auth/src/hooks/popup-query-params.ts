@@ -55,6 +55,12 @@ export type PopupQueryParams = {
    * server-side ACTIVE-membership + domain check remains the sole authority.
    */
   teamHint: string | null;
+  /**
+   * `prompt=select_account` from the relying party: the person is adding another account, so the
+   * social provider must show its account chooser instead of silently reusing the browser's
+   * current provider session. Forwarded to `/auth/social/:provider`; grants nothing.
+   */
+  selectAccount: boolean;
 };
 
 function normalizeSearch(value: string): string {
@@ -87,6 +93,7 @@ export function parsePopupQueryParams(search: string): PopupQueryParams {
       handoffTarget: null,
       loginToken: null,
       teamHint: null,
+      selectAccount: false,
     };
   }
 
@@ -121,6 +128,9 @@ export function parsePopupQueryParams(search: string): PopupQueryParams {
   // re-checked against the verified user's own chooser payload before it can select anything.
   const teamHint = params.get('team_hint');
   const inviteAccepted = params.get('flow') === 'invite_accepted';
+  // Only the one OIDC prompt value UOA forwards is recognised; any other value is ignored rather
+  // than passed on, so the provider never sees a prompt the relying party did not mean.
+  const selectAccount = params.get('prompt') === 'select_account';
 
   const validTypes = ['VERIFY_EMAIL_SET_PASSWORD', 'VERIFY_EMAIL', 'LOGIN_LINK', 'PASSWORD_RESET'] as const;
   const emailTokenType = rawType && (validTypes as readonly string[]).includes(rawType)
@@ -152,5 +162,6 @@ export function parsePopupQueryParams(search: string): PopupQueryParams {
     handoffTarget: handoffTarget && handoffTarget.trim() ? handoffTarget : null,
     loginToken: loginToken && loginToken.trim() ? loginToken : null,
     teamHint: teamHint && teamHint.trim() ? teamHint : null,
+    selectAccount,
   };
 }
