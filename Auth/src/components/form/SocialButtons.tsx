@@ -124,6 +124,7 @@ export function SocialButtons(props?: { showDivider?: boolean }): React.JSX.Elem
           popup.requestAccess,
           popup.state,
           popup.inviteToken,
+          popup.selectAccount,
         );
 
         return (
@@ -146,6 +147,7 @@ function buildSocialUrl(
   requestAccess: boolean,
   state: string | null,
   inviteToken: string | null,
+  selectAccount: boolean,
 ): string {
   // Auth UI runs inside the authenticator popup, so use relative URLs.
   const params = new URLSearchParams();
@@ -167,6 +169,11 @@ function buildSocialUrl(
   }
   if (inviteToken) {
     params.set('invite_token', inviteToken);
+  }
+  // The relying party asked for an account chooser (a person adding another account), so the
+  // provider must not silently reuse whichever of its accounts the browser is signed into.
+  if (selectAccount) {
+    params.set('prompt', 'select_account');
   }
   return `/auth/social/${provider}?${params.toString()}`;
 }

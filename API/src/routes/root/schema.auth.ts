@@ -18,6 +18,8 @@ export const authEndpoints: EndpointSchema[] = [
       code_challenge_method: '"S256" when code_challenge is sent',
       team_hint:
         "string (optional, ≤256 chars, id/slug-safe charset) — chooser preselect / one-click team switch (design §11.4): when the team chooser renders, a team already in the verified user's own chooser payload matching this teamId or slug is auto-selected, same as the single-team auto-skip. Client-side ONLY — an invalid or non-matching value is silently ignored (chooser renders normally) and select-team's server-side product-policy + exact ACTIVE-membership check remains the sole authority; it can never select a team the user doesn't already have.",
+      prompt:
+        '"select_account" (optional) — the person is adding another account, so a social button forwards it to /auth/social/:provider and the provider shows its account chooser instead of reusing the browser\'s provider session (Google). Any other value is ignored here. Selects a provider screen only; grants nothing.',
     },
   },
   {
@@ -343,6 +345,8 @@ export const authEndpoints: EndpointSchema[] = [
         'string (optional) — routes social auth through configured-team access policy',
       invite_token:
         'string (optional) — direct team invitation capability. The provider-verified email must exactly match the invite email; otherwise authentication is rejected.',
+      prompt:
+        '"select_account" (optional) — forwarded from /auth. Google receives prompt=select_account and shows its account chooser; other providers ignore it. Any other value is refused with a generic 400.',
     },
   },
   {
