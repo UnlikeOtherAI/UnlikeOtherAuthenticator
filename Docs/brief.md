@@ -830,6 +830,12 @@ rebind); resource, scope allowlist, and enabled state are mutable. API responses
 and audit metadata contain policy only and never expose domain credential
 material.
 
+A source domain and product may hold one mapping per exact resource (the
+unique key is source domain + product + resource), so one product can reach
+several resources — for example Nessie reaching both Ledger and DeepCRM — each
+under its own audited scope allowlist. The exchange resolves the mapping for
+the exact requested resource and never borrows another resource's scopes.
+
 The authenticated Admin panel exposes this policy under Settings → Delegation
 mappings. It uses the existing same-origin admin session internally and never
 asks an operator to copy, decode, or reveal a browser token. The visible

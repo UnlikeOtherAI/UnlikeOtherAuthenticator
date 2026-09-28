@@ -11,7 +11,22 @@ const tokenProvisionMigrationUrl = new URL(
   import.meta.url,
 );
 
+const perResourceMigrationUrl = new URL(
+  '../../prisma/migrations/20260928213000_delegation_mapping_per_resource/migration.sql',
+  import.meta.url,
+);
+
 describe('confidential delegation mapping migration', () => {
+  it('keys a mapping by source domain, product and exact resource', async () => {
+    const sql = await readFile(perResourceMigrationUrl, 'utf8');
+
+    expect(sql).toContain('DROP INDEX "confidential_delegation_mappings_client_domain_id_product_key"');
+    expect(sql).toContain(
+      '"confidential_delegation_mappings"("client_domain_id", "product", "resource")',
+    );
+  });
+
+
   it('constrains exact domain/product mappings, HTTPS resources, and supported scopes', async () => {
     const sql = await readFile(migrationUrl, 'utf8');
 
