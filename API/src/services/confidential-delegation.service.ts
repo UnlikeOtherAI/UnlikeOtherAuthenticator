@@ -301,38 +301,46 @@ export async function updateConfidentialDelegationMapping(
     ...actorUpdateData(params.actor),
   };
 
-  return client(deps).$transaction(async (tx) => {
-    const existing = await tx.confidentialDelegationMapping.findUnique({
-      where: { id: params.mappingId },
-      include: mappingInclude,
-    });
-    if (!existing) {
-      throw new AppError('NOT_FOUND', 404, 'CONFIDENTIAL_DELEGATION_NOT_FOUND');
-    }
-    assertFirstPartyDelegationBinding({
-      sourceDomain: existing.clientDomain.domain,
-      product: existing.product,
-      resource: data.resource ?? existing.resource,
-      scopes: data.scopes ?? existing.scopes,
-    });
-    const updated = await tx.confidentialDelegationMapping.update({
-      where: { id: existing.id },
-      data,
-      include: mappingInclude,
-    });
-    await tx.adminAuditLog.create({
-      data: {
-        actorEmail: params.actor.email,
-        action: 'confidential_delegation.updated',
-        targetDomain: existing.clientDomain.domain,
-        metadata: {
-          before: auditMetadata(existing),
-          after: auditMetadata(updated),
+  try {
+    return await client(deps).$transaction(async (tx) => {
+      const existing = await tx.confidentialDelegationMapping.findUnique({
+        where: { id: params.mappingId },
+        include: mappingInclude,
+      });
+      if (!existing) {
+        throw new AppError('NOT_FOUND', 404, 'CONFIDENTIAL_DELEGATION_NOT_FOUND');
+      }
+      assertFirstPartyDelegationBinding({
+        sourceDomain: existing.clientDomain.domain,
+        product: existing.product,
+        resource: data.resource ?? existing.resource,
+        scopes: data.scopes ?? existing.scopes,
+      });
+      const updated = await tx.confidentialDelegationMapping.update({
+        where: { id: existing.id },
+        data,
+        include: mappingInclude,
+      });
+      await tx.adminAuditLog.create({
+        data: {
+          actorEmail: params.actor.email,
+          action: 'confidential_delegation.updated',
+          targetDomain: existing.clientDomain.domain,
+          metadata: {
+            before: auditMetadata(existing),
+            after: auditMetadata(updated),
+          },
         },
-      },
+      });
+      return updated;
     });
-    return updated;
-  });
+  } catch (error) {
+    // Moving a mapping onto a resource the same source product already maps.
+    if ((error as { code?: unknown } | null)?.code === 'P2002') {
+      throw new AppError('BAD_REQUEST', 400, 'CONFIDENTIAL_DELEGATION_EXISTS');
+    }
+    throw error;
+  }
 }
 
 export async function deleteConfidentialDelegationMapping(
@@ -388,11 +396,14 @@ export async function resolveConfidentialDelegation(
     throw invalidDelegation();
   }
 
+  // One mapping per exact resource: a product may reach several resources, each
+  // under its own audited scope allowlist.
   const mapping = await client(deps).confidentialDelegationMapping.findUnique({
     where: {
-      clientDomainId_product: {
+      clientDomainId_product_resource: {
         clientDomainId: params.authenticatedClientDomainId,
         product,
+        resource: params.resource,
       },
     },
     include: mappingInclude,

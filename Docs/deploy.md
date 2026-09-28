@@ -375,9 +375,10 @@ Before enabling the confidential exchange in production:
 5. Confirm each source domain publishes its assertion signing public key at the
    same-host `jwks_url` in its config JWT.
 6. In the authenticated Admin panel, open **Settings → Delegation mappings** and
-   create one mapping per source domain/product with the exact target HTTPS
-   resource and the smallest required subset of `ai.invoke`, `billing.read`,
-   and the separately granted `token.provision`. The panel calls
+   create one mapping per source domain, product and exact target HTTPS
+   resource (a product that calls several resources gets one mapping each),
+   with the smallest required subset of `ai.invoke`, `billing.read`, and the
+   separately granted `token.provision`. The panel calls
    `/internal/admin/confidential-delegations` with the existing same-origin
    admin session; do not extract the browser token or expose a product
    credential. Mapping state is database-backed; do not add source/resource env

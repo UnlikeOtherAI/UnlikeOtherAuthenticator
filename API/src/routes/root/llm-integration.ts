@@ -321,7 +321,10 @@ const response = await fetch(
 Before traffic is enabled, a UOA superuser creates the corresponding mapping
 through \`/internal/admin/confidential-delegations\`. Source domain and product
 are immutable after creation; resource, allowlisted scopes, and enabled state
-are audited mutable policy. Nessie, DeepWater, DeepSignal, and DeepTest therefore
+are audited mutable policy. A product holds one mapping per exact resource, so
+calling a second product (for example DeepCRM at \`https://api.deepcrm.live\`)
+needs its own mapping and scope allowlist; a request for a resource with no
+mapping of its own is refused. Nessie, DeepWater, DeepSignal, and DeepTest therefore
 use their own registered domains and credentials even when their target resource
 is the same Ledger deployment. A credential rotation remains valid because the
 mapping binds the registered ClientDomain, never a plaintext secret, hash, or

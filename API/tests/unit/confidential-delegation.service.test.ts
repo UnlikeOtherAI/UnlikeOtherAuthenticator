@@ -35,23 +35,31 @@ function mapping(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function resolverPrisma(row = mapping() as ReturnType<typeof mapping> | null) {
+function resolverPrisma(...rows: Array<ReturnType<typeof mapping> | null>) {
+  const stored = (rows.length ? rows : [mapping()]).filter(
+    (row): row is ReturnType<typeof mapping> => row !== null,
+  );
   const findUnique = vi.fn(
     async ({
       where,
     }: {
       where: {
-        clientDomainId_product: {
+        clientDomainId_product_resource: {
           clientDomainId: string;
           product: string;
+          resource: string;
         };
       };
     }) => {
-      const key = where.clientDomainId_product;
-      if (row && key.clientDomainId === row.clientDomainId && key.product === row.product) {
-        return row;
-      }
-      return null;
+      const key = where.clientDomainId_product_resource;
+      return (
+        stored.find(
+          (row) =>
+            key.clientDomainId === row.clientDomainId &&
+            key.product === row.product &&
+            key.resource === row.resource,
+        ) ?? null
+      );
     },
   );
   return {
@@ -100,6 +108,33 @@ describe('confidential delegation resolution', () => {
       resource,
       scope: 'billing.read',
     });
+  });
+
+  it('resolves each of one product\'s resources through its own mapping and scopes', async () => {
+    const deepCrm = 'https://api.deepcrm.live';
+    const { prisma, findUnique } = resolverPrisma(
+      mapping(),
+      mapping({ id: 'delegation-2', resource: deepCrm, scopes: [ConfidentialDelegationScope.AI_INVOKE] }),
+    );
+
+    await expect(
+      resolveConfidentialDelegation(request({ resource: deepCrm }), { prisma }),
+    ).resolves.toEqual({ product, resource: deepCrm, scope: 'ai.invoke' });
+    expect(findUnique).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        where: { clientDomainId_product_resource: { clientDomainId, product, resource: deepCrm } },
+      }),
+    );
+    // DeepCRM's mapping never borrows the Ledger mapping's wider allowlist.
+    await expect(
+      resolveConfidentialDelegation(request({ resource: deepCrm, scope: 'billing.read' }), { prisma }),
+    ).rejects.toThrow('TOKEN_EXCHANGE_DELEGATION_NOT_ALLOWED');
+    await expect(
+      resolveConfidentialDelegation(request({ scope: 'billing.read' }), { prisma }),
+    ).resolves.toEqual({ product, resource, scope: 'billing.read' });
+    await expect(
+      resolveConfidentialDelegation(request({ resource: 'https://api.unmapped.example' }), { prisma }),
+    ).rejects.toThrow('TOKEN_EXCHANGE_DELEGATION_NOT_ALLOWED');
   });
 
   it('allows token provisioning only when the exact app/product mapping grants it', async () => {

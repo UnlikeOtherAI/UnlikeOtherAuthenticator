@@ -718,7 +718,7 @@ model ConfidentialDelegationMapping {
 
   clientDomain ClientDomain @relation(fields: [clientDomainId], references: [id], onDelete: Cascade)
 
-  @@unique([clientDomainId, product])
+  @@unique([clientDomainId, product, resource])
   @@index([product, enabled])
   @@map("confidential_delegation_mappings")
 }
