@@ -26,6 +26,11 @@ The Authenticator now issues a **token pair** from `POST /auth/token`:
 
 `POST /auth/revoke` revokes the refresh-token family used by the caller during logout.
 
+The public OAuth profile (`/oauth/token`, brief §22.14) also issues and rotates refresh tokens,
+but only for clients registered with an enabled native-app `app_id`; see
+[Public native-app refresh tokens](#public-native-app-refresh-tokens) and
+[native-accounts.md](native-accounts.md#native-refresh-tokens).
+
 ---
 
 ## Token Model
@@ -60,6 +65,9 @@ Refresh tokens are stored in the `refresh_tokens` table with:
 - `team_id` (nullable exact team scope)
 - `two_fa_completed` (immutable authorization-code assurance; legacy rows default `false`)
 - `security_revoked_at` (nullable one-time theft/corruption epoch-invalidation marker)
+- `credential_epoch` (public native families only: `users.token_version` of the originating code)
+- `oauth_scope` (public native families only: exact granted scope)
+- `resource` (public native families only: exact granted RFC 8707 resource, null for the issuer)
 - `expires_at`
 - `revoked_at`
 - `last_used_at`
@@ -191,7 +199,10 @@ The shipped revocation caller audit is:
 | Authorization-code exchange   | `uoa_admin`               | product policy → user-global → user/domain → org/team                            | epoch check + code consume + refresh issue                            |
 | Signing continuation complete | `uoa_admin`               | product policy → user-global → user/domain → org/team → signature → continuation | epoch/policy check + continuation consume + code issue                |
 | Refresh rotation/reuse        | `uoa_admin`               | product policy → user-global → user/domain → org/team → signature                | rotate, or durable family theft revocation                            |
+| Public native code exchange   | `uoa_admin`               | product policy → user-global → user/domain                                       | epoch check + code consume + native family issue                      |
+| Public native refresh         | `uoa_admin`               | product policy → user-global → user/domain → signature                           | rotate after client/epoch/factor/scope checks, or theft revocation    |
 | `POST /auth/revoke`           | tenant domain transaction | user-global → user/domain                                                        | family revoke + `tokenVersion`                                        |
+| `POST /oauth/revoke`          | `uoa_admin`               | user-global → user/domain                                                        | family revoke + `tokenVersion`                                        |
 | Org deactivate/remove         | `uoa_admin`               | user-global → user/domain → org/team                                             | status + exact-org + legacy-domain revoke                             |
 | Team-member remove            | `uoa_admin`               | user-global → org/team                                                           | status + exact-team revoke                                            |
 | Password reset                | `uoa_admin`               | user-global                                                                      | password + all-refresh revoke + `tokenVersion`                        |
@@ -369,6 +380,39 @@ Success response:
 
 ---
 
+## Public native-app refresh tokens
+
+Added 2026-09-27. `POST /oauth/token` (public PKCE profile) issues a refresh token only when the
+registered client resolved to an enabled, current-revision native app. Plain dynamic
+registrations are unchanged.
+
+- The family is created in the authorization-code redemption transaction, after the code's
+  credential epoch is asserted under the user-global and user/domain locks.
+- Rows use `client_id` = the public client id, `domain` = `MCP_OAUTH_DOMAIN`, and the fixed
+  `config_url` = `urn:unlikeotherai:uoa:public-oauth-client`. A confidential row always carries an
+  https signed-config URL and a domain-hash client id, so neither grant can present or revoke the
+  other's rows.
+- `credential_epoch`, `oauth_scope` and `resource` are copied unchanged to every successor and
+  compared as part of the replay chain's immutable family link.
+- `grant_type=refresh_token` takes JSON `{grant_type, refresh_token, client_id}` (optional `scope`
+  must equal the original grant). Rotation, the 120-second replay grace and reuse detection are
+  the functions above. After the family decision, in the same transaction, UOA requires the
+  client and native app to still be current, the user to exist, `users.token_version` to equal the
+  family's `credential_epoch`, the current second-factor policy to be satisfied by the family's
+  `two_fa_completed` proof, the signature policy to be complete, and the stored scope/resource to
+  remain within the client registration and server allowlists; any failure rolls the rotation
+  back. The access token is signed like the code-exchange token with the original scope and
+  resource.
+- Every refusal is `401` with the generic error body. Because the family is bound to its credential
+  epoch, any `tokenVersion` increment ends it — including a confidential `/auth/revoke` logout in
+  another product, which only rotates, never ends, confidential families.
+- `POST /oauth/revoke` (RFC 7009, JSON `{token, client_id}`) calls the same
+  `revokeRefreshTokenFamily` as `/auth/revoke` with the public context and always answers `200 {}`.
+- The replay window has no application credential behind it for a public client: a stolen
+  predecessor plus the non-secret `client_id` can recover the live successor for 120 seconds.
+
+---
+
 ## Environment
 
 | Variable                             | Default | Description                                                                                                           |
@@ -411,4 +455,7 @@ Client backends integrating with the Authenticator must:
   intentionally treated as lacking completed interactive 2FA proof.
 - Confidential assertion replay protection requires the `confidential_assertion_uses` migration to be deployed before confidential exchange traffic reaches the new revision.
 - Per-product exchange requires `20260719020000_add_confidential_delegation_mappings`, an active registered ClientDomain/credential for each product, and an audited mapping provisioned before that product sends traffic. Unknown/disabled mappings fail closed.
+- Public native-app refresh tokens require `20260927120000_bind_public_refresh_grant` (three
+  nullable `refresh_tokens` columns plus a `NOT VALID` CHECK; no rewrite, no history scan) before
+  the new revision serves `/oauth/token`.
 - For G Cloud / Cloud Run deployments, apply `prisma migrate deploy` as part of the rollout before or alongside the new container revision.

@@ -84,8 +84,20 @@ describe('public OAuth profile gate', () => {
             client_id: 'client',
           },
         }),
+        app.inject({
+          method: 'POST',
+          url: '/oauth/token',
+          payload: { grant_type: 'refresh_token', refresh_token: 'token', client_id: 'client' },
+        }),
+        app.inject({
+          method: 'POST',
+          url: '/oauth/revoke',
+          payload: { token: 'token', client_id: 'client' },
+        }),
       ]);
-      expect(responses.map((response) => response.statusCode)).toEqual([404, 404, 404, 404, 404]);
+      expect(responses.map((response) => response.statusCode)).toEqual([
+        404, 404, 404, 404, 404, 404, 404,
+      ]);
 
       const repeatedRegistrationAttempts = await Promise.all(
         Array.from({ length: 21 }, () =>
@@ -117,6 +129,9 @@ describe('public OAuth profile gate', () => {
       expect(metadata.json()).toMatchObject({
         registration_endpoint: expect.stringContaining('/oauth/register'),
         token_endpoint: expect.stringContaining('/oauth/token'),
+        revocation_endpoint: expect.stringContaining('/oauth/revoke'),
+        grant_types_supported: ['authorization_code', 'refresh_token'],
+        revocation_endpoint_auth_methods_supported: ['none'],
       });
     } finally {
       await app.close();

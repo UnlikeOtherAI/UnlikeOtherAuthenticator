@@ -113,3 +113,13 @@ Cancellation returns access_denied plus original state; the page removes used Go
 query parameters after hydration. No native registration performs automatic team
 placement. Audit entries include the changed security policy. Existing signed
 website configuration, social state and confidential code grants stay unchanged.
+
+## 2026-09-27 follow-up: native refresh tokens
+
+The "No refresh grant" decision above is superseded for registered native apps only. Clients
+registered with an enabled native-app `app_id` now receive a rotating refresh token from the
+code exchange and may use `grant_type=refresh_token` plus RFC 7009 `/oauth/revoke`, reusing the
+confidential refresh-token family machinery bound to the client, credential epoch, scope and
+resource. Plain dynamic registrations still receive no refresh token. Session tokens in URLs,
+privileged scopes and consent bypass based on app_id remain prohibited. See
+[native-accounts.md](../Auth/native-accounts.md#native-refresh-tokens).

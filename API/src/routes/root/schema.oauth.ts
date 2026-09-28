@@ -14,9 +14,13 @@ export const oauthEndpoints: EndpointSchema[] = [
       authorization_endpoint: 'string',
       token_endpoint: 'string',
       registration_endpoint: 'string',
+      revocation_endpoint: 'string — RFC 7009 /oauth/revoke',
       jwks_uri: 'string',
+      grant_types_supported:
+        'string[] — ["authorization_code", "refresh_token"]; refresh_token is issued only to registered native-app clients',
       code_challenge_methods_supported: 'string[] — ["S256"]',
       token_endpoint_auth_methods_supported: 'string[] — ["none"]',
+      revocation_endpoint_auth_methods_supported: 'string[] — ["none"]',
     },
   },
   {
@@ -42,6 +46,8 @@ export const oauthEndpoints: EndpointSchema[] = [
     response: {
       client_id: 'string',
       redirect_uris: 'string[]',
+      grant_types:
+        'string[] — ["authorization_code", "refresh_token"] when app_id resolved to an enabled native app; otherwise ["authorization_code"]',
       token_endpoint_auth_method: 'none',
     },
   },
@@ -95,20 +101,43 @@ export const oauthEndpoints: EndpointSchema[] = [
     method: 'POST',
     path: '/oauth/token',
     description:
-      'Public PKCE authorization-code exchange (no client secret); returns a resource-bound RS256 access token',
-    auth: 'public (PKCE; IP rate-limited); 404 unless MCP_OAUTH_PUBLIC_PROFILE_ENABLED=true and profile config is valid',
+      'Public PKCE authorization-code exchange (no client secret) and, for registered native-app clients only, the rotating refresh-token grant; returns a resource-bound RS256 access token',
+    auth: 'public (PKCE or bound refresh token; separate IP rate-limit buckets for code and refresh grants); 404 unless MCP_OAUTH_PUBLIC_PROFILE_ENABLED=true and profile config is valid',
     body: {
-      grant_type: 'authorization_code (optional, default)',
-      code: 'string (required)',
-      redirect_uri: 'string (required)',
-      code_verifier: 'string (required; PKCE)',
-      client_id: 'string (required)',
-      scope: 'string (optional; when supplied, must exactly match the authorize-time scope)',
+      grant_type: 'authorization_code (optional, default) | refresh_token',
+      code: 'string (authorization_code: required)',
+      redirect_uri: 'string (authorization_code: required)',
+      code_verifier: 'string (authorization_code: required; PKCE)',
+      refresh_token: 'string (refresh_token: required; the latest opaque refresh token)',
+      client_id: 'string (required; a refresh token is bound to the exact client that obtained it)',
+      scope:
+        'string (optional; when supplied, must exactly match the originally granted scope — never widened or narrowed)',
     },
     response: {
-      access_token: 'string — RS256 JWT, aud = resource',
+      access_token: 'string — RS256 JWT, aud = resource (or the issuer when none was granted)',
       token_type: 'Bearer',
       expires_in: 'number (seconds)',
+      refresh_token:
+        'string — native-app clients only: opaque, rotated on every refresh; persist the newest one before using the access token',
+      refresh_token_expires_in: 'number (seconds) — native-app clients only',
+      scope: 'string — refresh_token grant only: the originally granted scope (omitted when none was granted)',
     },
+    notes:
+      'Refresh tokens are issued only to clients registered with an enabled native-app app_id; plain dynamic registrations are unchanged. Each refresh rotates the token within its family (REFRESH_TOKEN_TTL_DAYS lifetime, inherited on rotation). Re-presenting the immediate predecessor within 120 s returns the same live successor; a predecessor used later revokes the whole family and increments the user credential epoch. Every refresh re-checks, in one transaction, the client and its native-app policy, the user, the credential epoch the family was issued under (password reset, 2FA changes, logout anywhere or reuse revocation end it), the second-factor and signature policy, and the scope/resource allowlists, and never issues broader scope or resource than the original grant. Every refusal is 401 with the generic error body; malformed bodies are 400. Responses are Cache-Control: no-store.',
+  },
+  {
+    method: 'POST',
+    path: '/oauth/revoke',
+    description:
+      'RFC 7009 revocation of a public-client refresh token; revokes its whole family when the token belongs to the presenting client',
+    auth: 'public (client_id binding; IP rate-limited); 404 unless MCP_OAUTH_PUBLIC_PROFILE_ENABLED=true and profile config is valid',
+    body: {
+      token: 'string (required; the refresh token)',
+      client_id: 'string (required; must be the client the token was issued to)',
+      token_type_hint: 'string (optional; ignored)',
+    },
+    response: { 200: '{} — always, including unknown, foreign, repeated or malformed tokens' },
+    notes:
+      'Same logout semantics as /auth/revoke: the family is revoked and the user credential epoch is incremented once, which invalidates current access tokens and ends every other public-client refresh family of that user. Cache-Control: no-store.',
   },
 ];

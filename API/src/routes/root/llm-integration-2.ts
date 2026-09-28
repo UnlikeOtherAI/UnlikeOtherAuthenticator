@@ -455,6 +455,13 @@ config-JWT flow above.
   — renders the first-party login UI; on success redirects to \`redirect_uri?code=&state=\`.
 - \`POST /oauth/token\` — PKCE exchange (\`code\`, \`redirect_uri\`, \`code_verifier\`, \`client_id\`),
   **no client secret**. Returns a resource-bound **RS256** access token (\`aud\` = the requested \`resource\`).
+  Clients registered with an enabled native-app \`app_id\` also receive \`refresh_token\` +
+  \`refresh_token_expires_in\`, and renew with JSON
+  \`{ "grant_type": "refresh_token", "refresh_token": "...", "client_id": "..." }\` (rotated on every
+  use, bound to that exact client, never broader than the original scope/resource; every refusal is
+  a generic 401). Plain dynamic registrations get no refresh token and re-authorize on expiry.
+- \`POST /oauth/revoke\` — RFC 7009, JSON \`{ "token": "...", "client_id": "..." }\`; always 200, revokes the
+  refresh-token family when it belongs to that client (same logout semantics as \`/auth/revoke\`).
 - \`GET /oauth/jwks.json\` — verify those access tokens here (separate from the config JWKS).
 
 Standard OAuth 2.1 + PKCE authorization-code flow; resource servers validate the token

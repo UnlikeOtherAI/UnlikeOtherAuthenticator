@@ -20,6 +20,16 @@ export type RefreshTokenContext = {
   domain: string;
 };
 
+/**
+ * Immutable public OAuth grant binding carried unchanged through a family. Confidential
+ * `/auth/token` families leave every field null.
+ */
+export type RefreshTokenGrantBinding = {
+  credentialEpoch: number | null;
+  oauthScope: string | null;
+  resource: string | null;
+};
+
 export type RefreshTokenRow = {
   id: string;
   tokenHash: string;
@@ -37,7 +47,7 @@ export type RefreshTokenRow = {
   orgId: string | null;
   teamId: string | null;
   twoFaCompleted: boolean;
-};
+} & Partial<RefreshTokenGrantBinding>;
 
 type ReplayPrisma = Pick<PrismaClient, 'refreshToken'>;
 
@@ -58,7 +68,31 @@ export const refreshTokenSelect = {
   orgId: true,
   teamId: true,
   twoFaCompleted: true,
+  credentialEpoch: true,
+  oauthScope: true,
+  resource: true,
 } as const;
+
+/** Read a row's grant binding, treating absent legacy values as null. */
+export function refreshTokenGrantBinding(
+  row: Partial<RefreshTokenGrantBinding>,
+): RefreshTokenGrantBinding {
+  return {
+    credentialEpoch: row.credentialEpoch ?? null,
+    oauthScope: row.oauthScope ?? null,
+    resource: row.resource ?? null,
+  };
+}
+
+function sameRefreshTokenGrantBinding(left: RefreshTokenRow, right: RefreshTokenRow): boolean {
+  const a = refreshTokenGrantBinding(left);
+  const b = refreshTokenGrantBinding(right);
+  return (
+    a.credentialEpoch === b.credentialEpoch &&
+    a.oauthScope === b.oauthScope &&
+    a.resource === b.resource
+  );
+}
 
 export function hashRefreshToken(token: string, pepper: string): string {
   return createHmac('sha256', pepper).update(token, 'utf8').digest('hex');
@@ -89,7 +123,8 @@ function sameRefreshTokenFamily(left: RefreshTokenRow, right: RefreshTokenRow): 
     left.domain === right.domain &&
     left.clientId === right.clientId &&
     left.configUrl === right.configUrl &&
-    (left.twoFaCompleted === true) === (right.twoFaCompleted === true)
+    (left.twoFaCompleted === true) === (right.twoFaCompleted === true) &&
+    sameRefreshTokenGrantBinding(left, right)
   );
 }
 
@@ -130,15 +165,17 @@ export async function resolveRefreshTokenReplay(
     retireFamily: (row: RefreshTokenRow, now: Date) => Promise<never>;
     rejectReuse: (row: RefreshTokenRow, now: Date) => Promise<never>;
   },
-): Promise<{
-  expiresInSeconds: number;
-  refreshToken: string;
-  replayed: true;
-  userId: string;
-  orgId: string | null;
-  teamId: string | null;
-  twoFaCompleted: boolean;
-}> {
+): Promise<
+  {
+    expiresInSeconds: number;
+    refreshToken: string;
+    replayed: true;
+    userId: string;
+    orgId: string | null;
+    teamId: string | null;
+    twoFaCompleted: boolean;
+  } & RefreshTokenGrantBinding
+> {
   const firstDecisionAt = deps.now();
   if (!hasValidTeamScope(params.row)) {
     return deps.rejectCorruption(params.row, firstDecisionAt);
@@ -253,5 +290,6 @@ export async function resolveRefreshTokenReplay(
     orgId: current.orgId,
     teamId: current.teamId,
     twoFaCompleted: current.twoFaCompleted === true,
+    ...refreshTokenGrantBinding(current),
   };
 }
