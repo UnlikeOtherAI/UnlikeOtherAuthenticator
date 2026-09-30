@@ -228,7 +228,7 @@ export function registerOrganisationRoutes(app: FastifyInstance) {
       setTenantContextFromRequest(request, { orgId, userId: tenantUserId(request) });
       await request.withTenantTx((tx) =>
         deleteOrganisation(
-          { orgId, domain, ...orgCaller(request) },
+          { orgId, domain, config: requireVerifiedConfig(request), ...orgCaller(request) },
           { prisma: asPrismaClient(tx) },
         ),
       );

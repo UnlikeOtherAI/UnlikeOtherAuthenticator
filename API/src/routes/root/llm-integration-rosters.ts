@@ -98,4 +98,12 @@ provenance and does not silently narrow the target. A present but invalid,
 blank or ambiguous credential fails closed. Omitting both credentials selects
 backend mode only with \`backend_org_management=true\` and only for an
 organisation created on the verified product domain. Resending still refuses
-revoked, accepted, declined, denied or unapproved invitations.`;
+revoked, accepted, declined, denied or unapproved invitations.
+
+Organisation roster permissions also include \`transferOwnership\`: true only for the ACTIVE
+canonical owner (or an explicitly authorized backend). Owner and Admin have the same default
+management capabilities, including changing non-owner org roles. Do not offer Owner in an
+ordinary role picker, and do not offer removal, deactivation or demotion for an owner row.
+Use \`POST /org/organisations/:orgId/transfer-ownership\` for handover to another ACTIVE member;
+it atomically changes the canonical owner, promotes the recipient and demotes the outgoing owner.
+`;

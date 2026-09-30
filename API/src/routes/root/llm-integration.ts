@@ -139,15 +139,17 @@ The org and team role **vocabularies are per-domain configuration**
 
 UOA gates its own org and team surfaces on exactly this table, using three capability names —
 \`members.manage\` (roster mutation at either scope), \`teams.manage\` (the team object), and
-\`organisation.manage\` (the organisation object: rename, member-invites policy, icon; **org scope
+\`organisation.manage\` (the organisation object: rename, deletion, member-invites policy, icon; **org scope
 only**, so a team role never reaches it). See \`org_features.role_grants\` at \`/api\`. Products
 declare their own catalogue in \`org_features.capabilities\` and gate on their own verbs.
 
-A short list stays deliberately outside the table because it is structural rather than configured:
-deleting an organisation, transferring its ownership and changing an org member's role require the
-acting user to **be** \`Organisation.ownerId\`; granting or removing the \`"owner"\` role requires
-the actor to hold it; and billing management is a verdict UOA computes from state only UOA holds,
-never a grant. No \`role_grants\` entry can reach any of them.
+Ordinary org role changes use \`members.manage\`, and org deletion uses
+\`organisation.manage\`. Under the default grant table both Owner and Admin can manage them.
+Ownership is structural: only the ACTIVE canonical \`Organisation.ownerId\` holding the
+\`owner\` role may hand over ownership. No ordinary add, role change, removal or deactivation
+may assign or alter an owner, even if other owners remain. These target protections also apply
+in backend mode. Billing management remains a verdict UOA computes from its own state,
+never a grant. No \`role_grants\` entry can bypass ownership protection.
 
 Structural does not mean exempt from your vocabulary. Ownership transfer is the one such operation
 that also *writes* a role — the outgoing owner's — so it obeys \`org_roles\` like every other

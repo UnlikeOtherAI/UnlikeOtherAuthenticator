@@ -76,7 +76,7 @@ export const orgEndpoints: EndpointSchema[] = [
     method: 'DELETE',
     path: '/org/organisations/:orgId',
     description:
-      'Delete organisation. Deliberately NOT a capability: the acting user must BE Organisation.ownerId, a structural invariant no grant table can reach.',
+      'Delete organisation. User mode requires the organisation.manage capability at ORG scope, admitting owner/admin under the default grant table.',
     auth: 'domain hash bearer token',
   },
   {
@@ -97,14 +97,14 @@ export const orgEndpoints: EndpointSchema[] = [
       meta: 'object — { hasMore, nextCursor, prevCursor }',
       next_cursor: 'string | null — compatibility alias for meta.nextCursor',
       permissions:
-        'object — { addMember, changeMemberRole, removeMember, deactivateMember, reactivateMember, viewMemberEmail, orgRoleOptions }; each is a live caller verdict. orgRoleOptions is the verified-config org role vocabulary excluding owner, present only when changeMemberRole is true; ownership transfer is a separate action.',
+        'object — { addMember, changeMemberRole, removeMember, deactivateMember, reactivateMember, viewMemberEmail, transferOwnership, orgRoleOptions }; each is a live caller verdict. orgRoleOptions is the verified-config org role vocabulary excluding owner, present only when changeMemberRole is true; transferOwnership is true only for the ACTIVE canonical owner (or an explicitly authorized backend). Ownership transfer is a separate action.',
     },
   },
   {
     method: 'POST',
     path: '/org/organisations/:orgId/members',
     description:
-      'Add organisation member. User mode requires the members.manage capability at ORG scope (org_features.role_grants) — org owner/admin under the default table. Granting the "owner" role additionally requires the actor to BE an owner: owner is the one fixed role, so no grant reaches it.',
+      'Add organisation member. User mode requires the members.manage capability at ORG scope (org_features.role_grants) — org owner/admin under the default table. The owner role is reserved for ownership transfer; ordinary membership operations cannot assign it or change an existing owner.',
     auth: 'domain hash bearer token',
     body: {
       // The handler parses `userId` (AddMemberBodySchema in organisation-route.shared.ts); the
@@ -132,7 +132,7 @@ export const orgEndpoints: EndpointSchema[] = [
     method: 'PUT',
     path: '/org/organisations/:orgId/members/:userId',
     description:
-      'Change member role. Deliberately NOT a capability: the acting user must BE Organisation.ownerId. The new role is validated against org_features.org_roles.',
+      'Change a non-owner member role. User mode requires members.manage at ORG scope, admitting owner/admin under the default table. The role is validated against org_features.org_roles; owner assignment and any change to an existing owner are refused.',
     auth: 'domain hash bearer token',
     body: { role: 'string (required)' },
     response: {

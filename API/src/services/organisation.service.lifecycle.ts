@@ -9,6 +9,7 @@ import {
 } from './refresh-token-revocation.service.js';
 import { lockRefreshSessionUserDomain } from './refresh-session-lock.service.js';
 import { lockTeamMembershipRows } from './team-scope.service.js';
+import { assertMutableOrganisationMember, lockOrganisationMemberships } from './organisation-membership-lock.service.js';
 
 import {
   assertDatabaseEnabled,
@@ -85,20 +86,22 @@ export async function deactivateOrganisationMember(
   // deactivate, and never deactivate an owner (must transfer ownership first).
   const member = await prisma.orgMember.findFirst({
     where: { orgId: org.id, userId, status: 'ACTIVE' },
-    select: { id: true, role: true },
+    select: { id: true, role: true, userId: true },
   });
   if (!member) throw new AppError('NOT_FOUND', 404);
-  if (member.role === 'owner') throw new AppError('BAD_REQUEST', 400);
+  assertMutableOrganisationMember(member, org.ownerId);
 
   await runInTransaction(prisma, async (tx) => {
     await lockRefreshSessionUserDomain({ userId, domain: org.domain }, { prisma: tx });
+    await lockOrganisationMemberships(tx, org.id, [userId, ...(actorUserId ? [actorUserId] : [])]);
+    await requireOrgMemberManager(tx, { orgId: org.id, actorUserId, config: params.config });
     await lockTeamMembershipRows({ userId, orgId: org.id }, { prisma: tx });
     const lockedMember = await tx.orgMember.findFirst({
       where: { orgId: org.id, userId, status: 'ACTIVE' },
-      select: { id: true, role: true },
+      select: { id: true, role: true, userId: true },
     });
     if (!lockedMember) throw new AppError('NOT_FOUND', 404);
-    if (lockedMember.role === 'owner') throw new AppError('BAD_REQUEST', 400);
+    assertMutableOrganisationMember(lockedMember, org.ownerId);
 
     const now = new Date();
     await tx.orgMember.update({

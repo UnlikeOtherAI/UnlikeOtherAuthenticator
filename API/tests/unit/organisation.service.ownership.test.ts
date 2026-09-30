@@ -21,18 +21,11 @@ import {
  */
 function stubTransfer(prisma: PrismaClient, options?: { outgoingOwnerRow?: boolean }): void {
   prisma.organisation.findFirst.mockResolvedValue(baseOrg);
-  prisma.orgMember.findFirst
-    .mockResolvedValueOnce({
-      id: 'member-new',
-      orgId: 'org-1',
-      userId: 'u-new-owner',
-      role: 'member',
-    })
-    .mockResolvedValueOnce(
-      options?.outgoingOwnerRow === false
-        ? null
-        : { id: 'member-old-owner', orgId: 'org-1', userId: 'u-owner', role: 'owner' },
-    );
+  prisma.orgMember.findFirst.mockImplementation((args: { where: { userId: string } }) => Promise.resolve(
+    args.where.userId === 'u-owner'
+      ? options?.outgoingOwnerRow === false ? null : { id: 'member-old-owner', orgId: 'org-1', userId: 'u-owner', role: 'owner' }
+      : { id: 'member-new', orgId: 'org-1', userId: 'u-new-owner', role: 'member' },
+  ));
   prisma.organisation.update.mockResolvedValue({ ...baseOrg, ownerId: 'u-new-owner' });
   prisma.orgMember.update.mockResolvedValue({
     id: 'member-new',
@@ -71,9 +64,9 @@ describe('Organisation service: ownership transfer', () => {
     );
 
     expect(result).toMatchObject({ id: 'org-1', ownerId: 'u-new-owner' });
-    expect(prisma.organisation.update).toHaveBeenCalledWith(
+    expect(prisma.organisation.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'org-1' },
+        where: { id: 'org-1', ownerId: 'u-owner' },
         data: { ownerId: 'u-new-owner' },
       }),
     );
@@ -200,7 +193,7 @@ describe('Organisation service: ownership transfer', () => {
     expect(prisma.organisation.update).not.toHaveBeenCalled();
   });
 
-  it('transfers without a demotion write when the outgoing owner has no membership row', async () => {
+  it('allows explicit backend recovery when the outgoing owner has no membership row', async () => {
     const prisma = makePrismaMock();
     stubTransfer(prisma, { outgoingOwnerRow: false });
 
@@ -208,7 +201,7 @@ describe('Organisation service: ownership transfer', () => {
       {
         orgId: 'org-1',
         domain: 'acme.example.com',
-        actorUserId: 'u-owner',
+        actor: { via: 'domain_backend', sourceDomain: 'acme.example.com' },
         newOwnerId: 'u-new-owner',
         config: makeConfig(),
       },

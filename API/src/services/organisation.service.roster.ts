@@ -71,7 +71,8 @@ export type OrganisationRosterPermissions = {
   deactivateMember: boolean;
   reactivateMember: boolean;
   viewMemberEmail: boolean;
-  /** Config-authored roles an organisation owner may assign; `owner` transfers through its own route. */
+  transferOwnership: boolean;
+  /** Config-authored roles an organisation administrator may assign; `owner` transfers through its own route. */
   orgRoleOptions: string[];
 };
 
@@ -126,9 +127,10 @@ function rosterPermissions(params: {
   const canManage =
     !params.actorUserId ||
     configRoleHoldsCapability(params.config, 'org', params.actorRole, 'members.manage');
-  const isOwner = !params.actorUserId || params.orgOwnerId === params.actorUserId;
+  const isOwner = !params.actorUserId ||
+    (params.orgOwnerId === params.actorUserId && params.actorRole === OWNER_ROLE);
 
-  const changeMemberRole = isOwner;
+  const changeMemberRole = canManage;
   return {
     addMember: canManage,
     changeMemberRole,
@@ -136,6 +138,7 @@ function rosterPermissions(params: {
     deactivateMember: canManage,
     reactivateMember: canManage,
     viewMemberEmail: canManage,
+    transferOwnership: isOwner,
     // The role vocabulary is UOA configuration, not a client-side convention. A caller who
     // cannot change roles gets no role-picker data, and ownership is never an in-place role edit.
     orgRoleOptions: changeMemberRole

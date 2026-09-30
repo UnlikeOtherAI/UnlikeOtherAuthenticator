@@ -24,10 +24,10 @@ describe('Organisation service: member lifecycle (deactivate/reactivate)', () =>
 
     prisma.organisation.findFirst.mockResolvedValue(baseOrg);
     // Actor lookup (owner), then target member lookup (ACTIVE member).
-    prisma.orgMember.findFirst
-      .mockResolvedValueOnce({ id: 'm-owner', orgId: 'org-1', userId: 'u-owner', role: 'owner' })
-      .mockResolvedValueOnce({ id: 'member-target', role: 'member' })
-      .mockResolvedValue({ id: 'member-target', role: 'member' });
+    prisma.orgMember.findFirst.mockImplementation((args: { where: { userId: string } }) => Promise.resolve({
+      id: args.where.userId === 'u-owner' ? 'm-owner' : 'member-target', orgId: 'org-1', userId: args.where.userId,
+      role: args.where.userId === 'u-owner' ? 'owner' : 'member',
+    }));
     prisma.orgMember.update.mockResolvedValue({ id: 'member-target', status: 'DEACTIVATED' });
     prisma.teamMember.updateMany.mockResolvedValue({ count: 1 });
 
@@ -145,10 +145,10 @@ describe('Organisation service: member lifecycle (deactivate/reactivate)', () =>
     const prisma = makePrismaMock();
 
     prisma.organisation.findFirst.mockResolvedValue(baseOrg);
-    prisma.orgMember.findFirst
-      .mockResolvedValueOnce({ id: 'm-owner', orgId: 'org-1', userId: 'u-owner', role: 'owner' })
-      .mockResolvedValueOnce({ id: 'member-target', role: 'member' })
-      .mockResolvedValue({ id: 'member-target', role: 'member' });
+    prisma.orgMember.findFirst.mockImplementation((args: { where: { userId: string } }) => Promise.resolve({
+      id: args.where.userId === 'u-owner' ? 'm-owner' : 'member-target', orgId: 'org-1', userId: args.where.userId,
+      role: args.where.userId === 'u-owner' ? 'owner' : 'member',
+    }));
     prisma.orgMember.update.mockResolvedValue({ id: 'member-target', status: 'DEACTIVATED' });
     prisma.teamMember.updateMany.mockResolvedValue({ count: 1 });
     prisma.refreshToken.updateMany.mockRejectedValueOnce(new Error('revocation failed'));

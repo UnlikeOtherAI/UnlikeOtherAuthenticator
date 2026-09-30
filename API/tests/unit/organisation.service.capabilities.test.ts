@@ -5,13 +5,14 @@ import type { ClientConfig } from '../../src/services/config.service.js';
 import { isBillingManager } from '../../src/services/billing-stripe-manager.service.js';
 import {
   addOrganisationMember,
+  changeOrganisationMemberRole,
   removeOrganisationMember,
 } from '../../src/services/organisation.service.members.js';
 import {
   deactivateOrganisationMember,
   reactivateOrganisationMember,
 } from '../../src/services/organisation.service.lifecycle.js';
-import { updateOrganisation } from '../../src/services/organisation.service.organisation.js';
+import { deleteOrganisation, updateOrganisation } from '../../src/services/organisation.service.organisation.js';
 import {
   baseOrg,
   makeConfig,
@@ -115,6 +116,10 @@ const GATES: {
     capability: 'organisation.manage',
     run: (prisma, config) =>
       updateOrganisation({ ...orgParams, name: 'Renamed', config }, { prisma }),
+  },
+  {
+    name: 'changeOrganisationMemberRole', capability: 'members.manage',
+    run: (prisma, config) => changeOrganisationMemberRole({ ...orgParams, userId: TARGET, role: 'member', config }, { prisma }),
   },
   {
     name: 'addOrganisationMember',
@@ -267,6 +272,20 @@ describe('Organisation service: org-scope gates under a domain-authored grant ta
 
     for (const gate of GATES) {
       expect(await passedGate(gate, 'owner', locked), gate.name).toBe(true);
+    }
+  });
+});
+
+describe('Organisation deletion capability', () => {
+  useOrganisationMembershipTestEnv();
+  it('admits Owner and Admin, and honors custom organisation.manage grants', async () => {
+    for (const role of ['owner', 'admin', 'member', 'registrar']) {
+      const prisma = makePrismaMock(); seedOrg(prisma, role);
+      prisma.orgMember.findMany.mockResolvedValue([]);
+      const config = role === 'registrar' ? makeConfig({ org_roles: ['owner', 'registrar'], role_grants: { org: { registrar: ['organisation.manage'] } } }) : makeConfig();
+      const run = deleteOrganisation({ ...orgParams, config }, { prisma });
+      if (role === 'member') await expect(run).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      else await expect(run).resolves.toEqual({ deleted: true });
     }
   });
 });

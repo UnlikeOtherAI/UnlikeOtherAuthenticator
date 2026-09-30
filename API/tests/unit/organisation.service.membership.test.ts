@@ -199,7 +199,7 @@ describe('Organisation service: membership', () => {
     const prisma = makePrismaMock();
 
     prisma.organisation.findFirst.mockResolvedValue(baseOrg);
-    prisma.orgMember.findFirst.mockResolvedValue({
+    prisma.orgMember.findFirst.mockResolvedValueOnce({ id: 'm-owner', orgId: 'org-1', userId: 'u-owner', role: 'owner' }).mockResolvedValue({
       id: 'member-target',
       orgId: 'org-1',
       userId: 'u-member',
@@ -234,25 +234,10 @@ describe('Organisation service: membership', () => {
 
     prisma.organisation.findFirst.mockResolvedValue(baseOrg);
     // actor lookup (owner), then target lookup (member).
-    prisma.orgMember.findFirst
-      .mockResolvedValueOnce({
-        id: 'm-owner',
-        orgId: 'org-1',
-        userId: 'u-owner',
-        role: 'owner',
-      })
-      .mockResolvedValueOnce({
-        id: 'member-target',
-        orgId: 'org-1',
-        userId: 'u-member',
-        role: 'member',
-      })
-      .mockResolvedValue({
-        id: 'member-target',
-        orgId: 'org-1',
-        userId: 'u-member',
-        role: 'member',
-      });
+    prisma.orgMember.findFirst.mockImplementation((args: { where: { userId: string } }) => Promise.resolve({
+      id: args.where.userId === 'u-owner' ? 'm-owner' : 'member-target', orgId: 'org-1', userId: args.where.userId,
+      role: args.where.userId === 'u-owner' ? 'owner' : 'member',
+    }));
     prisma.orgMember.count.mockResolvedValue(1);
     prisma.orgMember.update.mockResolvedValue({ id: 'member-target', status: 'REMOVED' });
     prisma.teamMember.updateMany.mockResolvedValue({ count: 1 });
@@ -295,20 +280,10 @@ describe('Organisation service: membership', () => {
     const prisma = makePrismaMock();
 
     prisma.organisation.findFirst.mockResolvedValue(baseOrg);
-    prisma.orgMember.findFirst
-      .mockResolvedValueOnce({ id: 'm-owner', orgId: 'org-1', userId: 'u-owner', role: 'owner' })
-      .mockResolvedValueOnce({
-        id: 'member-target',
-        orgId: 'org-1',
-        userId: 'u-member',
-        role: 'member',
-      })
-      .mockResolvedValue({
-        id: 'member-target',
-        orgId: 'org-1',
-        userId: 'u-member',
-        role: 'member',
-      });
+    prisma.orgMember.findFirst.mockImplementation((args: { where: { userId: string } }) => Promise.resolve({
+      id: args.where.userId === 'u-owner' ? 'm-owner' : 'member-target', orgId: 'org-1', userId: args.where.userId,
+      role: args.where.userId === 'u-owner' ? 'owner' : 'member',
+    }));
     prisma.orgMember.count.mockResolvedValue(1);
     prisma.orgMember.update.mockResolvedValue({ id: 'member-target', status: 'REMOVED' });
     prisma.teamMember.updateMany.mockResolvedValue({ count: 1 });
@@ -387,7 +362,7 @@ describe('Organisation service: membership', () => {
       { prisma },
     );
 
-    await expect(promise).rejects.toMatchObject({ code: 'FORBIDDEN', statusCode: 403 });
+    await expect(promise).rejects.toMatchObject({ code: 'BAD_REQUEST', statusCode: 400 });
     expect(prisma.orgMember.create).not.toHaveBeenCalled();
   });
 
@@ -423,7 +398,7 @@ describe('Organisation service: membership', () => {
       { prisma },
     );
 
-    await expect(promise).rejects.toMatchObject({ code: 'FORBIDDEN', statusCode: 403 });
+    await expect(promise).rejects.toMatchObject({ code: 'BAD_REQUEST', statusCode: 400 });
     expect(prisma.orgMember.delete).not.toHaveBeenCalled();
   });
 

@@ -6130,8 +6130,8 @@ paths:
       summary: Delete organisation
       operationId: deleteOrg
       description: |
-        Deliberately **not** a capability: in user mode the caller must BE `Organisation.ownerId`,
-        a structural invariant no `role_grants` table can reach.
+        In user mode the caller needs `organisation.manage` at org scope. The default
+        grant table admits both Owner and Admin; custom role grants remain authoritative.
       security:
         - domainHashBearer: []
           accessToken: []
@@ -6155,8 +6155,9 @@ paths:
       summary: Transfer organisation ownership
       operationId: transferOrgOwnership
       description: |
-        Transfers ownership to another org member. Caller must be the current owner — deliberately
-        not a capability, for the same reason as organisation delete.
+        Transfers ownership to another ACTIVE org member. User callers must be the ACTIVE
+        canonical owner holding the owner role. Locked rechecks and both membership writes
+        commit atomically. Ordinary membership operations cannot alter any owner.
         Provide exactly one of `newOwnerId` or `newOwnerUserId`.
       security:
         - domainHashBearer: []
@@ -6217,7 +6218,8 @@ paths:
         '200':
           description: |
             Paginated member list. Each entry carries `avatarImageUrl` — see
-            Docs/Auth/avatars.md §9.
+            Docs/Auth/avatars.md §9. Permissions include the live transferOwnership verdict
+            for the canonical owner, and role options exclude owner.
           content:
             application/json:
               schema:
@@ -6236,8 +6238,8 @@ paths:
       description: |
         Adds a user (by userId) to the organisation. In user mode the caller needs the
         `members.manage` capability at **org** scope (`org_features.role_grants`) — an org
-        owner/admin under the default grant table. Assigning the `owner` role additionally
-        requires the caller to hold it: `owner` is the one fixed role, so no grant reaches it.
+        owner/admin under the default grant table. The `owner` role is reserved for
+        ownership transfer; ordinary membership operations cannot assign or alter an owner.
         `role` is validated against `org_features.org_roles`.
         Rate limited: 100/hour per domain+actor.
       security:
@@ -6284,8 +6286,9 @@ paths:
       summary: Update org member role
       operationId: updateOrgMemberRole
       description: |
-        Deliberately **not** a capability: in user mode the caller must BE `Organisation.ownerId`.
-        `role` is validated against `org_features.org_roles`.
+        Changes a non-owner member role. In user mode the caller needs `members.manage`
+        at org scope. `role` is validated against `org_features.org_roles`; Owner assignment
+        and changes to any existing owner are refused.
       security:
         - domainHashBearer: []
           accessToken: []
