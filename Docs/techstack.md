@@ -296,3 +296,10 @@ All secrets and configuration live in environment variables. Nothing is hardcode
 
 The workspace pins Undici's major-6 override to `^6.28.1`, including its transitive
 Auth test dependency, to meet the high-severity dependency audit gate.
+
+The same gate requires Axios `^1.20.0`, brace-expansion `^5.0.11`, and
+Nodemailer `^10.0.6`. These floors address the current
+[Axios](https://github.com/advisories/GHSA-c29m-xwm3-cm6r),
+[brace-expansion](https://github.com/advisories/GHSA-qhr7-859c-m2p7), and
+[Nodemailer](https://github.com/advisories/GHSA-v53p-9fqp-m79j)
+availability advisories. Scope policy is independent of these dependency updates.
