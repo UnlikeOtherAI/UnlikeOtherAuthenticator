@@ -405,6 +405,7 @@ export async function deleteOrganisation(
     domain?: string;
     actorUserId?: string;
     actor?: OrgActorProvenance;
+    config?: ClientConfig;
   },
   deps?: OrgServiceDeps,
 ): Promise<{ deleted: boolean }> {
@@ -417,15 +418,16 @@ export async function deleteOrganisation(
     deps?.prisma ??
     ((params.actor?.via === 'admin_superuser' ? getAdminPrisma() : getPrisma()) as unknown as OrgServicePrisma);
   const org = await resolveOrganisation(prisma, { orgId: params.orgId });
-  // "Must be the owner" is a check on the acting user; backend mode has none.
-  if (actorUserId && org.ownerId !== actorUserId) {
-    throw new AppError('FORBIDDEN', 403);
-  }
 
   try {
     await runInTransaction(prisma, async (tx) => {
       if (!(await lockTeamOrganisationRow(org.id, { prisma: tx }))) {
         throw new AppError('NOT_FOUND', 404);
+      }
+      if (actorUserId) {
+        if (!params.config) throw new AppError('INTERNAL', 500, 'CONFIG_REQUIRED');
+        const actorMembership = await getOrganisationMember(tx, { orgId: org.id, userId: actorUserId }, { activeOnly: true });
+        requireOrgCapability(params.config, 'organisation.manage', actorMembership?.role);
       }
       const members = await tx.orgMember.findMany({
         where: { orgId: org.id },

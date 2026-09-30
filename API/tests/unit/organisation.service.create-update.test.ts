@@ -597,11 +597,13 @@ describe('Organisation service: organisation CRUD', () => {
     });
     prisma.orgMember.findMany.mockResolvedValue([{ userId: 'u-owner' }]);
 
+    prisma.orgMember.findFirst.mockResolvedValue({ id: 'm-owner', role: 'owner' });
     const result = await deleteOrganisation(
       {
         orgId: 'org-1',
         domain: 'acme.example.com',
         actorUserId: 'u-owner',
+        config: makeConfig(),
       },
       { prisma },
     );
@@ -611,7 +613,7 @@ describe('Organisation service: organisation CRUD', () => {
     expect(prisma.organisation.delete).toHaveBeenCalledWith({ where: { id: 'org-1' } });
   });
 
-  it('forbids deleting an organisation when caller is not the owner', async () => {
+  it('forbids deleting an organisation when caller lacks organisation.manage', async () => {
     const prisma = makePrismaMock();
 
     prisma.organisation.findFirst.mockResolvedValue({
@@ -629,6 +631,7 @@ describe('Organisation service: organisation CRUD', () => {
         orgId: 'org-1',
         domain: 'acme.example.com',
         actorUserId: 'u-not-owner',
+        config: makeConfig(),
       },
       { prisma },
     );

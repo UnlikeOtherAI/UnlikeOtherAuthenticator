@@ -427,3 +427,14 @@ A user holds **one role per team**. Per-user flag overrides handle exceptions wi
 The default role is marked with a tick. Auto-enrolled users receive it automatically.
 
 See `Docs/Requirements/feature-flags.md` for the full specification.
+
+
+### Protected ownership (2026-09-30)
+
+Default organisation Owner and Admin have identical management capabilities. Organisation
+role changes use `members.manage`; organisation deletion uses `organisation.manage`.
+Every owner is protected from generic removal, deactivation and role changes, even if another
+owner exists. Generic membership operations cannot assign `owner`. Ownership changes only
+through the existing handover route, authorized by the ACTIVE canonical owner and performed
+atomically with locked membership checks. Configured custom-role capabilities remain intact.
+The roster advertises that authority separately as `transferOwnership`.

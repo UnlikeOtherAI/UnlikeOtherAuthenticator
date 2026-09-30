@@ -2876,3 +2876,25 @@ epoch of the originating login and the exact granted scope and resource; it rota
 with the §22.10 replay grace and reuse revocation, never widens access, and ends on any
 credential-epoch increment, app disable or security edit. `POST /oauth/revoke` (RFC 7009) applies
 the `/auth/revoke` logout semantics. See [Auth/native-accounts.md](Auth/native-accounts.md).
+
+
+## 2026-09-30 amendment: protected ownership and administrator parity
+
+This amendment supersedes the earlier owner-only restrictions on organisation deletion and
+non-owner membership role changes, and the last-owner-only removal guard. The default Owner
+and Admin roles have the same management powers: `members.manage` governs ordinary org role
+changes and `organisation.manage` governs organisation deletion. Domain-authored capability
+grants remain authoritative for custom roles.
+
+Every owner is protected from ordinary removal, deactivation and role changes, regardless of
+how many other owners exist. The `owner` role cannot be assigned through ordinary Add member
+or Role operations, including trusted backend operations. Only the ACTIVE canonical owner can
+hand over ownership to another ACTIVE existing member; the changes to `ownerId` and both roles
+commit atomically after locked rechecks. Explicit backend recovery remains independently
+controlled by the existing opt-in contract. The outgoing role follows the verified domain
+vocabulary; Nessie explicitly requests `admin`.
+
+Legacy non-canonical owner rows remain protected rather than silently rewritten. Only the
+canonical owner may initiate the organisation-wide handover; platform operators must handle
+any repair of historic inconsistent ownership. Roster permissions advertise `transferOwnership`
+as a separate verdict, and ordinary role options continue to exclude `owner`.

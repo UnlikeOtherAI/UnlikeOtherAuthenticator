@@ -9,6 +9,10 @@ import {
 } from './refresh-token-revocation.service.js';
 import { lockRefreshSessionUserDomain } from './refresh-session-lock.service.js';
 import { lockTeamMembershipRows } from './team-scope.service.js';
+import {
+  assertMutableOrganisationMember,
+  lockOrganisationMemberships,
+} from './organisation-membership-lock.service.js';
 
 import {
   assertDatabaseEnabled,
@@ -62,38 +66,25 @@ export async function addOrganisationMember(
   const maxMembers = parseOrgLimit(params.config);
   const orgRoles = parseOrgFeatureRoles(params.config);
   ensureOrgRole(role, orgRoles);
+  if (role === 'owner') throw new AppError('BAD_REQUEST', 400, 'OWNER_ROLE_RESERVED');
 
   const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgServicePrisma);
   const org = await resolveOrganisation(prisma, { orgId: params.orgId });
 
-  // Both checks below are about the ACTING USER's standing inside this org. In
-  // backend mode there is no acting user: the domain pairing already proved the
-  // caller owns the whole tenant, and "an admin must not self-elevate to owner"
-  // has no subject to protect against.
-  if (actorUserId) {
-    const actorMembership = await getOrganisationMember(
-      prisma,
-      { orgId: org.id, userId: actorUserId },
-      { activeOnly: true },
-    );
-    requireOrgCapability(params.config, 'members.manage', actorMembership?.role);
-    // Only owners may grant the `owner` role — no capability makes this reachable. `owner` is the
-    // one fixed role (mandatory in every vocabulary, structurally every capability), so comparing
-    // against the literal here is the invariant itself, not a leftover role check: a holder of
-    // `members.manage` must not be able to self-elevate by adding another `owner` row.
-    if (role === 'owner' && actorMembership?.role !== 'owner') {
-      throw new AppError('FORBIDDEN', 403);
-    }
-  }
-
   const { member: createdMember, reactivated } = await runInTransaction(prisma, async (tx) => {
+    await lockOrganisationMemberships(tx, org.id, [userId, ...(actorUserId ? [actorUserId] : [])]);
+    if (actorUserId) {
+      const actorMembership = await getOrganisationMember(tx, { orgId: org.id, userId: actorUserId }, { activeOnly: true });
+      requireOrgCapability(params.config, 'members.manage', actorMembership?.role);
+    }
     await lockTeamMembershipRows({ userId, orgId: org.id }, { prisma: tx });
     // Include the status so a prior DEACTIVATED/REMOVED row can be reactivated instead of
     // rejected (design §4.1: statuses are tombstones, re-adding flips them back to ACTIVE).
     const existingMemberInOrg = await tx.orgMember.findFirst({
       where: { orgId: org.id, userId },
-      select: { id: true, status: true },
+      select: { id: true, status: true, role: true, userId: true },
     });
+    if (existingMemberInOrg) assertMutableOrganisationMember(existingMemberInOrg, org.ownerId);
     if (existingMemberInOrg && existingMemberInOrg.status === 'ACTIVE') {
       throw new AppError('BAD_REQUEST', 400);
     }
@@ -195,28 +186,26 @@ export async function changeOrganisationMemberRole(
 
   const orgRoles = parseOrgFeatureRoles(params.config);
   ensureOrgRole(role, orgRoles);
+  if (role === 'owner') throw new AppError('BAD_REQUEST', 400, 'OWNER_ROLE_RESERVED');
 
   const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgServicePrisma);
   const org = await resolveOrganisation(prisma, { orgId: params.orgId });
-  // "Must be the org owner" is a check on the acting user; backend mode has none.
-  if (actorUserId && org.ownerId !== actorUserId) throw new AppError('FORBIDDEN', 403);
-
-  // A non-ACTIVE (DEACTIVATED/REMOVED) member has no role to change (design §4.9: membership
-  // checks require ACTIVE).
-  const member = await prisma.orgMember.findFirst({
-    where: { orgId: org.id, userId, status: 'ACTIVE' },
-    select: { id: true, orgId: true, userId: true, role: true },
-  });
-  if (!member) throw new AppError('NOT_FOUND', 404);
-  if (member.userId === org.ownerId && role !== 'owner') {
-    throw new AppError('BAD_REQUEST', 400);
-  }
-
-  const previousRole = member.role;
-  const updated = await prisma.orgMember.update({
-    where: { id: member.id },
-    data: { role },
-    select: MEMBER_SELECT,
+  const { updated, previousRole } = await runInTransaction(prisma, async (tx) => {
+    await lockOrganisationMemberships(tx, org.id, [userId, ...(actorUserId ? [actorUserId] : [])]);
+    if (actorUserId) {
+      const actorMembership = await getOrganisationMember(tx, { orgId: org.id, userId: actorUserId }, { activeOnly: true });
+      requireOrgCapability(params.config, 'members.manage', actorMembership?.role);
+    }
+    const member = await tx.orgMember.findFirst({
+      where: { orgId: org.id, userId, status: 'ACTIVE' },
+      select: { id: true, role: true, userId: true },
+    });
+    if (!member) throw new AppError('NOT_FOUND', 404);
+    assertMutableOrganisationMember(member, org.ownerId);
+    const updatedMember = await tx.orgMember.update({
+      where: { id: member.id }, data: { role }, select: MEMBER_SELECT,
+    });
+    return { updated: updatedMember, previousRole: member.role };
   });
 
   await auditOrg({
@@ -259,8 +248,7 @@ export async function removeOrganisationMember(
   const prisma = deps?.prisma ?? (getAdminPrisma() as unknown as OrgServicePrisma);
   const org = await resolveOrganisation(prisma, { orgId: params.orgId });
 
-  // Actor-standing checks only; backend mode has no acting user. The owner-count
-  // invariant below is NOT an actor check and still applies to both callers.
+  // Backend callers have independent authority; owner protection applies to every caller.
   const actorMembership = actorUserId
     ? await getOrganisationMember(
         prisma,
@@ -275,26 +263,15 @@ export async function removeOrganisationMember(
   const member = await getOrganisationMember(prisma, { orgId: org.id, userId });
   if (!member) throw new AppError('NOT_FOUND', 404);
 
-  // Only owners may remove another `owner` member — the mirror of the self-elevation guard in
-  // `addOrganisationMember`, and for the same reason: `owner` is the one fixed role, so no
-  // configured grant can reach it. A holder of `members.manage` cannot remove an owner even when
-  // other owners remain.
-  if (member.role === 'owner' && actorMembership && actorMembership.role !== 'owner') {
-    throw new AppError('FORBIDDEN', 403);
-  }
-
-  // Owner-count guards must count ACTIVE owners only (design §4.1/§4.5) — a REMOVED/DEACTIVATED
-  // owner row must not be able to block the last remaining active owner from being removed, nor
-  // count toward "there is still another owner".
-  const ownerCount = await prisma.orgMember.count({
-    where: { orgId: org.id, role: 'owner', status: 'ACTIVE' },
-  });
-  if (member.role === 'owner' && ownerCount <= 1) {
-    throw new AppError('BAD_REQUEST', 400);
-  }
+  assertMutableOrganisationMember(member, org.ownerId);
 
   await runInTransaction(prisma, async (tx) => {
     await lockRefreshSessionUserDomain({ userId, domain: org.domain }, { prisma: tx });
+    await lockOrganisationMemberships(tx, org.id, [userId, ...(actorUserId ? [actorUserId] : [])]);
+    if (actorUserId) {
+      const actorStanding = await getOrganisationMember(tx, { orgId: org.id, userId: actorUserId }, { activeOnly: true });
+      requireOrgCapability(params.config, 'members.manage', actorStanding?.role);
+    }
     await lockTeamMembershipRows({ userId, orgId: org.id }, { prisma: tx });
     const lockedMember = await tx.orgMember.findFirst({
       where: { orgId: org.id, userId },
@@ -302,32 +279,7 @@ export async function removeOrganisationMember(
     });
     if (!lockedMember) throw new AppError('NOT_FOUND', 404);
 
-    const ownerCountTx = await tx.orgMember.count({
-      where: { orgId: org.id, role: 'owner', status: 'ACTIVE' },
-    });
-    if (lockedMember.role === 'owner' && ownerCountTx <= 1) {
-      throw new AppError('BAD_REQUEST', 400);
-    }
-
-    const owners =
-      lockedMember.userId === org.ownerId
-        ? await tx.orgMember.findMany({
-            where: {
-              orgId: org.id,
-              role: 'owner',
-              status: 'ACTIVE',
-              userId: { not: lockedMember.userId },
-            },
-            select: { userId: true },
-          })
-        : [];
-
-    if (lockedMember.userId === org.ownerId && owners.length) {
-      await tx.organisation.update({
-        where: { id: org.id },
-        data: { ownerId: owners[0].userId },
-      });
-    }
+    assertMutableOrganisationMember(lockedMember, org.ownerId);
 
     const now = new Date();
 

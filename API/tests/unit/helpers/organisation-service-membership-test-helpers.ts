@@ -27,6 +27,8 @@ export function makePrismaMock(): PrismaClient {
       findUnique: vi.fn(),
       findUniqueOrThrow: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      delete: vi.fn().mockResolvedValue(baseOrg),
     },
     orgMember: {
       findMany: vi.fn(),
@@ -61,7 +63,7 @@ export function makePrismaMock(): PrismaClient {
     refreshToken: {
       updateMany: vi.fn().mockResolvedValue({ count: 0 }),
     },
-    $queryRaw: vi.fn().mockResolvedValue([]),
+    $queryRaw: vi.fn().mockResolvedValue([{ id: 'org-1' }]),
     $transaction: vi.fn(),
   } as unknown as PrismaClient;
 
