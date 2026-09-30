@@ -631,6 +631,12 @@ forced RLS and a deny-all `uoa_app` policy. Mappings bind ClientDomain rather
 than an individual secret row so normal per-domain credential rotation remains
 valid without ever storing or returning plaintext credentials.
 
+The memory recipient uses independently granted `memory.read` and `memory.write`
+scopes at its exact HTTPS resource. Neither scope implies the other, and existing
+delegation mappings are never expanded by migration. UOA authorizes the current
+originating user/organisation/team; Remember separately enforces memory ownership
+and the source-derived disclosure basis before returning learned content.
+
 The billing boundary is deliberately server-to-server. A purpose-bound product
 app key authenticates the exact deployment, while its credential-bound RS256
 actor JWT binds each request to one active UOA user, organisation, and team for

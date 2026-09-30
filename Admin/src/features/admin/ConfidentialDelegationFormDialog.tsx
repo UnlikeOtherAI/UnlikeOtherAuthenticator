@@ -33,6 +33,17 @@ const scopeOptions: Array<{
     description: 'Allows delegated reads of billing and usage information.',
   },
   {
+    value: 'memory.read',
+    label: 'Memory read',
+    description:
+      'Allows delegated memory reads at this resource, subject to current source permissions.',
+  },
+  {
+    value: 'memory.write',
+    label: 'Memory write',
+    description: 'Allows delegated memory changes at this resource. Does not imply read access.',
+  },
+  {
     value: 'token.provision',
     label: 'Token provisioning',
     description:

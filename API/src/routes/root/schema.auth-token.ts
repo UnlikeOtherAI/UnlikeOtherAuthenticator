@@ -26,7 +26,7 @@ export const authTokenEndpoint: EndpointSchema = {
     'resource?':
       'exact DB-allowlisted HTTPS resource URI (required for token-exchange grant; becomes access-token aud)',
     'scope?':
-      'space-delimited exact requested scopes (required for token-exchange grant); supported values are ai.invoke, billing.read, and token.provision, and every requested scope must be allowed by the product mapping',
+      'space-delimited exact requested scopes (required for token-exchange grant); supported values are ai.invoke, billing.read, token.provision, memory.read, and memory.write, and every requested scope must be allowed by the product mapping',
   },
   response: {
     access_token:
@@ -41,7 +41,7 @@ export const authTokenEndpoint: EndpointSchema = {
     'issued_token_type?':
       '"urn:ietf:params:oauth:token-type:access_token"; confidential token-exchange grant only',
     'scope?':
-      'exact granted request subset of "ai.invoke", "billing.read", and/or "token.provision"; token.provision is never implied by ai.invoke; confidential token-exchange grant only',
+      'exact granted request subset of "ai.invoke", "billing.read", "token.provision", "memory.read", and/or "memory.write"; token.provision is never implied by ai.invoke; confidential token-exchange grant only',
     token_type: '"Bearer"',
     'firstLogin?':
       'object { memberships: { orgs, teams }, pending_invites, capabilities { can_create_org, can_accept_invite } } — included only on authorization_code exchange when org_features.enabled is true. Never included on refresh_token or team-switch grants.',
