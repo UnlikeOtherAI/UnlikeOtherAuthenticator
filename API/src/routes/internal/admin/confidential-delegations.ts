@@ -10,7 +10,18 @@ import {
   updateConfidentialDelegationMapping,
 } from '../../../services/confidential-delegation.service.js';
 
-const ScopeSchema = z.enum(['ai.invoke', 'billing.read', 'token.provision']);
+const ScopeSchema = z.enum([
+  'ai.invoke',
+  'billing.read',
+  'token.provision',
+  'memory.read',
+  'memory.write',
+]);
+const ScopesSchema = z
+  .array(ScopeSchema)
+  .min(1)
+  .max(5)
+  .refine((scopes) => new Set(scopes).size === scopes.length, 'Duplicate scopes are not allowed.');
 const MappingIdSchema = z.object({
   mappingId: z.string().trim().min(1),
 });
@@ -22,14 +33,14 @@ const CreateMappingSchema = z
       .trim()
       .regex(/^[a-z0-9][a-z0-9._-]{0,99}$/),
     resource: z.string().trim().min(1).max(2048),
-    scopes: z.array(ScopeSchema).min(1).max(3),
+    scopes: ScopesSchema,
     enabled: z.boolean().optional(),
   })
   .strict();
 const UpdateMappingSchema = z
   .object({
     resource: z.string().trim().min(1).max(2048).optional(),
-    scopes: z.array(ScopeSchema).min(1).max(3).optional(),
+    scopes: ScopesSchema.optional(),
     enabled: z.boolean().optional(),
   })
   .strict()

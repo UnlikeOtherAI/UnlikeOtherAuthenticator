@@ -4,12 +4,14 @@ export const ConfidentialDelegationScopeSchema = z.enum([
   'ai.invoke',
   'billing.read',
   'token.provision',
+  'memory.read',
+  'memory.write',
 ]);
 
 export const ConfidentialDelegationScopesSchema = z
   .array(ConfidentialDelegationScopeSchema)
   .min(1, 'Select at least one scope.')
-  .max(3)
+  .max(5)
   .refine((scopes) => new Set(scopes).size === scopes.length, {
     message: 'Each scope may only be selected once.',
   });

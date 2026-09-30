@@ -415,9 +415,14 @@ Unknown or disabled mappings, a product selected with another app credential,
 an inexact resource (including path/trailing-slash differences), duplicate or
 unsupported scopes, and scope widening all fail closed before assertion
 verification. Supported delegation scopes are \`ai.invoke\`, \`billing.read\`,
-and \`token.provision\`; the last is a separate high-privilege app capability
+\`memory.read\`, \`memory.write\`, and \`token.provision\`; the last is a separate high-privilege app capability
 and is never implied by \`ai.invoke\`. The response and token contain only what that request asked
 for, never the full mapping allowlist.
+
+\`memory.read\` and \`memory.write\` are explicit resource-bound scopes. Neither
+implies the other, and no AI/billing/provisioning grant implies memory access.
+The recipient still checks current subject, source and destination authority.
+New scope support does not create a mapping or expand existing grants.
 
 The confidential grant is rate-limited per authenticated source domain
 (600/minute) and per verified source-domain user (60/minute), so users behind

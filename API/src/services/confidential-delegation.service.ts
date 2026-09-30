@@ -22,6 +22,8 @@ export const CONFIDENTIAL_DELEGATION_SCOPES = [
   'ai.invoke',
   'billing.read',
   'token.provision',
+  'memory.read',
+  'memory.write',
 ] as const;
 export type ConfidentialDelegationScopeName = (typeof CONFIDENTIAL_DELEGATION_SCOPES)[number];
 
@@ -29,12 +31,16 @@ const databaseScope = {
   'ai.invoke': ConfidentialDelegationScope.AI_INVOKE,
   'billing.read': ConfidentialDelegationScope.BILLING_READ,
   'token.provision': ConfidentialDelegationScope.TOKEN_PROVISION,
+  'memory.read': ConfidentialDelegationScope.MEMORY_READ,
+  'memory.write': ConfidentialDelegationScope.MEMORY_WRITE,
 } satisfies Record<ConfidentialDelegationScopeName, ConfidentialDelegationScope>;
 
 const publicScope = {
   [ConfidentialDelegationScope.AI_INVOKE]: 'ai.invoke',
   [ConfidentialDelegationScope.BILLING_READ]: 'billing.read',
   [ConfidentialDelegationScope.TOKEN_PROVISION]: 'token.provision',
+  [ConfidentialDelegationScope.MEMORY_READ]: 'memory.read',
+  [ConfidentialDelegationScope.MEMORY_WRITE]: 'memory.write',
 } satisfies Record<ConfidentialDelegationScope, ConfidentialDelegationScopeName>;
 
 type MutationActor = {

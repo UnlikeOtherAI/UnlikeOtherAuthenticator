@@ -315,7 +315,7 @@ export const confidentialTokenExchangeDocumentation = {
       'lowercase product identifier; must match the mapping bound to the authenticated ClientDomain',
     resource: 'exact HTTPS resource URI stored in that product mapping',
     scope:
-      'space-delimited exact requested subset of ai.invoke, billing.read, and/or token.provision; token provisioning is never implied by ai.invoke and UOA rejects any scope outside the mapping allowlist',
+      'space-delimited exact requested subset of ai.invoke, billing.read, token.provision, memory.read, and/or memory.write; token provisioning is never implied by ai.invoke and UOA rejects any scope outside the mapping allowlist',
   },
   application_binding: {
     authentication:
@@ -337,8 +337,7 @@ export const confidentialTokenExchangeDocumentation = {
       'the immediate caller still presents only its own per-domain app credential; another product credential, a webhook secret, a user token, or a shared fallback is never accepted as caller authentication',
     verification:
       'the subject must be a UOA RS256 at+jwt with iss equal to UOA and aud exactly https://<authenticated caller config domain>; source_domain and azp must identify the same inbound source product domain',
-    team:
-      'org and active are mandatory and internally consistent. UOA revalidates the inbound source-product mapping, then checks the stable user, source-domain role, ACTIVE organisation, and ACTIVE selected team under the ultimate signed origin at the tail of the act chain.',
+    team: 'org and active are mandatory and internally consistent. UOA revalidates the inbound source-product mapping, then checks the stable user, source-domain role, ACTIVE organisation, and ACTIVE selected team under the ultimate signed origin at the tail of the act chain.',
     narrowing:
       'requested scope must be allowed by the immediate caller mapping and be a subset of the inbound token scope. The downstream expiry is capped to the remaining inbound lifetime.',
     reuse:

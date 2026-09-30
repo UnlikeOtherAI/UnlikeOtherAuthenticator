@@ -2898,3 +2898,16 @@ Legacy non-canonical owner rows remain protected rather than silently rewritten.
 canonical owner may initiate the organisation-wide handover; platform operators must handle
 any repair of historic inconsistent ownership. Roster permissions advertise `transferOwnership`
 as a separate verdict, and ordinary role options continue to exclude `owner`.
+
+## 2026-09-30 Memory delegation scopes
+
+The confidential exchange additionally supports explicit `memory.read` and
+`memory.write` scopes for Remember.ninja and other registered memory resources.
+Neither scope implies the other; AI invocation, billing and provisioning grants
+never imply memory access. The exact domain/product/resource mapping must explicitly
+allow every requested scope. This vocabulary migration creates no mappings and
+expands no existing grants. The recipient still enforces current subject, source,
+resource and output-destination authority; a scope is not a data entitlement.
+Resource-bound RS256 verification, live UOA epoch/team checks and replay handling
+remain unchanged. Deploy the migration/API before configuring an operator-reviewed
+Remember mapping and updating the consuming product.

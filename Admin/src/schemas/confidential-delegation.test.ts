@@ -6,6 +6,22 @@ import {
 } from './confidential-delegation';
 
 describe('confidential delegation schemas', () => {
+  it('accepts separately selected memory scopes without adding other grants', () => {
+    const base = {
+      sourceDomain: 'api.nessie.works',
+      product: 'nessie',
+      resource: 'https://api.remember.ninja',
+    };
+    for (const scope of ['memory.read', 'memory.write']) {
+      expect(ConfidentialDelegationFormSchema.parse({ ...base, scopes: [scope] }).scopes).toEqual([
+        scope,
+      ]);
+      expect(
+        ConfidentialDelegationFormSchema.safeParse({ ...base, scopes: [scope, scope] }).success,
+      ).toBe(false);
+    }
+  });
+
   it('normalizes a valid operator form at the boundary', () => {
     expect(
       ConfidentialDelegationFormSchema.parse({

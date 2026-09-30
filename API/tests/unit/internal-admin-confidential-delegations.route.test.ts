@@ -120,6 +120,44 @@ describe('internal confidential delegation admin routes', () => {
     }
   });
 
+  it('accepts explicit memory grants and rejects duplicate scope requests over HTTP', async () => {
+    const { createApp } = await import('../../src/app.js');
+    const app = await createApp();
+    const headers = { authorization: 'Bearer admin-token' };
+    const payload = {
+      source_domain: 'api.nessie.works',
+      product: 'nessie',
+      resource: 'https://remember.ninja',
+      scopes: ['memory.read', 'memory.write'],
+    };
+    try {
+      const accepted = await app.inject({
+        method: 'POST',
+        url: '/internal/admin/confidential-delegations',
+        headers,
+        payload,
+      });
+      expect(accepted.statusCode).toBe(201);
+      expect(service.createConfidentialDelegationMapping).toHaveBeenCalledWith(
+        expect.objectContaining({
+          scopes: ['memory.read', 'memory.write'],
+          resource: payload.resource,
+        }),
+      );
+      service.createConfidentialDelegationMapping.mockClear();
+      const refused = await app.inject({
+        method: 'POST',
+        url: '/internal/admin/confidential-delegations',
+        headers,
+        payload: { ...payload, scopes: ['memory.read', 'memory.read'] },
+      });
+      expect(refused.statusCode).toBe(400);
+      expect(service.createConfidentialDelegationMapping).not.toHaveBeenCalled();
+    } finally {
+      await app.close();
+    }
+  });
+
   it('creates, updates, and deletes mappings with the authenticated actor', async () => {
     const { createApp } = await import('../../src/app.js');
     const app = await createApp();

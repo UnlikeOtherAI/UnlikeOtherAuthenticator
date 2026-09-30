@@ -277,6 +277,8 @@ enum ConfidentialDelegationScope {
   AI_INVOKE       @map("ai.invoke")
   BILLING_READ    @map("billing.read")
   TOKEN_PROVISION @map("token.provision")
+  MEMORY_READ     @map("memory.read")
+  MEMORY_WRITE    @map("memory.write")
 }
 
 model User {
