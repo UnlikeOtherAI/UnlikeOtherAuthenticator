@@ -1,4 +1,7 @@
 -- Scope vocabulary only: existing mapping grants are never expanded.
+SET lock_timeout = '5s';
+SET statement_timeout = '120s';
+
 ALTER TYPE "ConfidentialDelegationScope" ADD VALUE IF NOT EXISTS 'memory.read';
 ALTER TYPE "ConfidentialDelegationScope" ADD VALUE IF NOT EXISTS 'memory.write';
 
@@ -20,4 +23,4 @@ ALTER TABLE "confidential_delegation_mappings"
       AND (cardinality("scopes") < 5 OR "scopes"[2] <> "scopes"[5])
       AND (cardinality("scopes") < 5 OR "scopes"[3] <> "scopes"[5])
       AND (cardinality("scopes") < 5 OR "scopes"[4] <> "scopes"[5])
-    );
+    ) NOT VALID;

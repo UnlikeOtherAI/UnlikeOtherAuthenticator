@@ -384,6 +384,16 @@ Before enabling the confidential exchange in production:
    credential. Mapping state is database-backed; do not add source/resource env
    fallbacks.
 
+   For Nessie→Remember, first apply
+   `20260930170000_add_memory_delegation_scopes`, then create a separate mapping
+   to the exact configured Remember HTTPS resource. Grant `memory.read` and
+   `memory.write` independently as required; existing inference/CRM mappings and
+   their scopes are never reused or automatically widened. Verify both resource
+   probes with the current UOA subject and selected organisation/team before
+   enabling the Remember cohort in Nessie. This pairs deployments using existing
+   UOA accounts; it does not create a second human account or per-user Remember
+   credential.
+
    > ### ⚠️ `token.provision` — read before granting it
    >
    > `token.provision` is a high-trust delegation scope: it authorises the

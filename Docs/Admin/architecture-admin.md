@@ -153,6 +153,9 @@ When a template demonstrates a section that does not yet have a route here, use 
 - Components must not decode raw transport payloads ad hoc
 - Shared API error handling should map backend responses into a consistent UI-facing shape
 - Confidential delegation responses are parsed with a frontend Zod contract before rendering. Mutations use the same-origin admin bearer client; the UI must never extract or display that bearer or any product credential.
+- Memory read and memory write are separate unchecked choices on a new mapping.
+  Selecting one never selects the other; the exact recipient remains the resource
+  boundary and no per-user memory-service credential is created.
 - Billing responses are parsed by `schemas/billing.ts` and transported only
   through `services/billing-admin-service.ts` and the TanStack Query hooks in
   `features/admin/billing-admin-queries.ts`. App-key plaintext exists only in
