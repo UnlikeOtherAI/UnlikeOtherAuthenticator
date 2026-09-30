@@ -110,11 +110,15 @@ describe('confidential delegation resolution', () => {
     });
   });
 
-  it('resolves each of one product\'s resources through its own mapping and scopes', async () => {
+  it("resolves each of one product's resources through its own mapping and scopes", async () => {
     const deepCrm = 'https://api.deepcrm.live';
     const { prisma, findUnique } = resolverPrisma(
       mapping(),
-      mapping({ id: 'delegation-2', resource: deepCrm, scopes: [ConfidentialDelegationScope.AI_INVOKE] }),
+      mapping({
+        id: 'delegation-2',
+        resource: deepCrm,
+        scopes: [ConfidentialDelegationScope.AI_INVOKE],
+      }),
     );
 
     await expect(
@@ -127,13 +131,17 @@ describe('confidential delegation resolution', () => {
     );
     // DeepCRM's mapping never borrows the Ledger mapping's wider allowlist.
     await expect(
-      resolveConfidentialDelegation(request({ resource: deepCrm, scope: 'billing.read' }), { prisma }),
+      resolveConfidentialDelegation(request({ resource: deepCrm, scope: 'billing.read' }), {
+        prisma,
+      }),
     ).rejects.toThrow('TOKEN_EXCHANGE_DELEGATION_NOT_ALLOWED');
     await expect(
       resolveConfidentialDelegation(request({ scope: 'billing.read' }), { prisma }),
     ).resolves.toEqual({ product, resource, scope: 'billing.read' });
     await expect(
-      resolveConfidentialDelegation(request({ resource: 'https://api.unmapped.example' }), { prisma }),
+      resolveConfidentialDelegation(request({ resource: 'https://api.unmapped.example' }), {
+        prisma,
+      }),
     ).rejects.toThrow('TOKEN_EXCHANGE_DELEGATION_NOT_ALLOWED');
   });
 
@@ -151,6 +159,50 @@ describe('confidential delegation resolution', () => {
     });
     await expect(
       resolveConfidentialDelegation(request({ scope: 'ai.invoke' }), { prisma }),
+    ).rejects.toThrow('TOKEN_EXCHANGE_DELEGATION_NOT_ALLOWED');
+  });
+
+  it('requires separate explicit memory grants on the exact resource', async () => {
+    const memoryResource = 'https://api.remember.ninja';
+    const { prisma } = resolverPrisma(
+      mapping(),
+      mapping({ resource: memoryResource, scopes: [ConfidentialDelegationScope.MEMORY_READ] }),
+    );
+    await expect(
+      resolveConfidentialDelegation(request({ resource: memoryResource, scope: 'memory.read' }), {
+        prisma,
+      }),
+    ).resolves.toEqual({ product, resource: memoryResource, scope: 'memory.read' });
+    for (const scope of [
+      'memory.write',
+      'memory.read memory.write',
+      'memory.read memory.read',
+      'ai.invoke',
+    ]) {
+      await expect(
+        resolveConfidentialDelegation(request({ resource: memoryResource, scope }), { prisma }),
+      ).rejects.toThrow('TOKEN_EXCHANGE_DELEGATION_NOT_ALLOWED');
+    }
+    await expect(
+      resolveConfidentialDelegation(request({ scope: 'memory.read' }), { prisma }),
+    ).rejects.toThrow('TOKEN_EXCHANGE_DELEGATION_NOT_ALLOWED');
+    const writer = resolverPrisma(
+      mapping({
+        resource: memoryResource,
+        scopes: [ConfidentialDelegationScope.MEMORY_WRITE],
+      }),
+    );
+    await expect(
+      resolveConfidentialDelegation(
+        request({ resource: memoryResource, scope: 'memory.write' }),
+        writer,
+      ),
+    ).resolves.toEqual({ product, resource: memoryResource, scope: 'memory.write' });
+    await expect(
+      resolveConfidentialDelegation(
+        request({ resource: memoryResource, scope: 'memory.read' }),
+        writer,
+      ),
     ).rejects.toThrow('TOKEN_EXCHANGE_DELEGATION_NOT_ALLOWED');
   });
 

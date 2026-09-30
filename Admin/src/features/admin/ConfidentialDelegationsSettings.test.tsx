@@ -164,6 +164,25 @@ describe('ConfidentialDelegationsSettings', () => {
     );
   });
 
+  it('keeps memory read and write separate and unselected until the operator grants them', async () => {
+    const user = userEvent.setup();
+    render(<ConfidentialDelegationsSettings />);
+    await user.click(screen.getByRole('button', { name: 'Edit' }));
+    const read = screen.getByRole('checkbox', { name: /Memory read/ }) as HTMLInputElement;
+    const write = screen.getByRole('checkbox', { name: /Memory write/ }) as HTMLInputElement;
+    expect(read.checked).toBe(false);
+    expect(write.checked).toBe(false);
+    await user.click(read);
+    expect(write.checked).toBe(false);
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+    await waitFor(() =>
+      expect(mocks.updateMutateAsync).toHaveBeenCalledWith({
+        mappingId: 'mapping-1',
+        input: { resource: mapping.resource, scopes: ['ai.invoke', 'memory.read'], enabled: true },
+      }),
+    );
+  });
+
   // `token.provision` is a high-trust scope bounded by the mapping's exact
   // resource. The dialog must say so before an operator saves, and must not claim
   // any authority over UOA's own `/org/*` surface — that surface authenticates the
@@ -195,8 +214,6 @@ describe('ConfidentialDelegationsSettings', () => {
     await user.click(screen.getByRole('checkbox', { name: /Token provisioning/ }));
 
     const alert = await screen.findByRole('alert');
-    expect(
-      within(alert).queryByText(/organisation and team authority over UOA/i),
-    ).toBeNull();
+    expect(within(alert).queryByText(/organisation and team authority over UOA/i)).toBeNull();
   });
 });
