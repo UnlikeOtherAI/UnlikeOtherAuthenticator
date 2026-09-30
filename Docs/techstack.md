@@ -291,3 +291,9 @@ All secrets and configuration live in environment variables. Nothing is hardcode
 - `SIGNATURE_MAX_PDF_PAGES` — bounded source page limit (default 200, allowed 1–2,000)
 - `SIGNATURE_CONTINUATION_TTL_MINUTES` — short-lived signing capability lifetime (default 10, allowed 2–30 minutes)
 - `SIGNATURE_MAX_SIGN_ATTEMPTS` — maximum failed signing submissions before a continuation is rejected (default 10, allowed 1–50)
+
+
+### HTTP dependency baseline
+
+The workspace pins Undici's major-6 override to `^6.28.1`, including its transitive
+Auth test dependency, to meet the high-severity dependency audit gate.
