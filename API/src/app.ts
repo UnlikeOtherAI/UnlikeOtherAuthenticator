@@ -34,7 +34,9 @@ export async function createApp(): Promise<FastifyInstance> {
   }
 
   const app = fastify({
-    trustProxy: 1,
+    // Cloud Run's local ingress proxy and local development reverse proxies.
+    // Public direct peers must never be trusted based only on their hop count.
+    trustProxy: ['loopback', 'linklocal'],
     // Defence-in-depth caps. The only request body we expect anywhere near this size
     // is the signed config JWT (capped to 64 KiB at the fetch layer). Per-route
     // `bodyLimit` overrides exist where larger bodies are legitimate (e.g. `/email/send`).

@@ -52,7 +52,7 @@ async function buildApp(): Promise<FastifyInstance> {
   const { registerAuthResetPasswordRoutes } = await import(
     '../../src/routes/auth/reset-password.js'
   );
-  const app = fastify({ trustProxy: 1 });
+  const app = fastify({ trustProxy: ['loopback', 'linklocal'] });
   app.decorateRequest('adminDb', {
     getter() {
       return {} as PrismaClient;
@@ -129,7 +129,7 @@ async function consumeAndProbe(name: string, globalKey: string): Promise<void> {
 
 describe('auth limiters global ceiling', () => {
   it('POST /auth/reset-password/request consumes the fixed global bucket even when IP and email keys are fresh', async () => {
-    // request.ip is attacker's choice under trustProxy: 1, so a global-only request — fresh IP,
+    // request.ip is attacker's choice under trustProxy: ['loopback', 'linklocal'], so a global-only request — fresh IP,
     // fresh email — must still consume the fixed `auth:reset-request:global` key. Reset the
     // module registry so this file's limiter state cannot leak in from other tests.
     vi.resetModules();

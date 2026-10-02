@@ -34,7 +34,7 @@ const QuerySchema = z.object({ ...AvatarImageQueryFields }).strict();
 // The only unauthenticated image endpoint, so it carries its own budget: generous enough for a
 // chooser rendering a full team list on every login, tight enough that it is not a free
 // image-proxy for whoever knows a team id. The per-IP key is attacker's choice if the edge does
-// not overwrite X-Forwarded-For (app.ts sets trustProxy: 1), so compose it with a global bucket
+// not overwrite X-Forwarded-For (app.ts trusts local ingress proxies), so compose it with a global bucket
 // no request input can move: the handler performs an outbound provider fetch, and this bounds
 // how many of those a header-rotating flood can drive.
 const publicAvatarIpRateLimit = createRateLimiter({
