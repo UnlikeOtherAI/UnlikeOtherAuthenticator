@@ -55,6 +55,7 @@ export function registerRootRoute(app: FastifyInstance): void {
       api: '/api',
       native_apps: { admin: '/admin/apps', registration: '/oauth/register', public_identifier: 'app_id', client_secret_required: false },
       config_jwt: configJwtDocumentation,
+      website_service_identity: 'Separate subfolder services use config.domain=hostname/mount-path (no trailing slash). Register each complete identity independently; credentials, signing keys, roles, allowlists and organisation origin scope never inherit from its parent hostname.',
       access_token: accessTokenDocumentation,
       team_switch: teamSwitchDocumentation,
       confidential_token_exchange: confidentialTokenExchangeDocumentation,

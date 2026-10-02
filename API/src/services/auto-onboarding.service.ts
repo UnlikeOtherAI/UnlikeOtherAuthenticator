@@ -11,7 +11,8 @@ import {
   type PublicRsaJwk,
 } from './client-jwk.service.js';
 import { fetchPartnerJwks } from './jwks-fetch.service.js';
-import { validateConfigFields } from './config.service.js';
+import { assertConfigDomainMatchesConfigUrl, validateConfigFields } from './config.service.js';
+import { clientServiceContainsUrl } from '../utils/client-service.js';
 import {
   findOpenIntegrationRequest,
   upsertPendingIntegrationRequest,
@@ -96,7 +97,7 @@ function assertJwksHostMatchesDomain(jwksUrl: string, domain: string): void {
   if (url.protocol !== 'https:') {
     throw new AppError('BAD_REQUEST', 400, 'INTEGRATION_JWKS_URL_INVALID');
   }
-  if (normalizeHostname(url.hostname) !== normalizeHostname(domain)) {
+  if (!clientServiceContainsUrl(domain, jwksUrl)) {
     throw new AppError('BAD_REQUEST', 400, 'INTEGRATION_JWKS_HOST_MISMATCH');
   }
 }
@@ -205,6 +206,8 @@ export async function tryAutoOnboard(
   configUrl: string,
 ): Promise<AutoOnboardingOutcome> {
   const { header, domain, jwksUrl } = readAutoOnboardingFields(configJwt);
+  // Reject a claimed sibling/parent mount before recording an onboarding request.
+  assertConfigDomainMatchesConfigUrl(domain, configUrl);
 
   if (header.alg !== 'RS256') {
     throw new AppError('BAD_REQUEST', 400, 'CONFIG_JWT_INVALID');

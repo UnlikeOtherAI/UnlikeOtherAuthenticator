@@ -33,7 +33,7 @@ async function buildApp(): Promise<FastifyInstance> {
   const { registerPublicTeamAvatarRoute } = await import(
     '../../src/routes/avatar/public-team.js'
   );
-  const app = fastify({ trustProxy: 1 });
+  const app = fastify({ trustProxy: ['loopback', 'linklocal'] });
   // Fastify 5 rejects reference-type request decorators ("use the { getter, setter } interface"),
   // so follow the production convention in API/src/plugins/tenant-context.plugin.ts (and the
   // onRequest pattern in org-me.route.test.ts): decorate an inert placeholder, then assign the
@@ -60,7 +60,7 @@ describe('GET /teams/:teamId/avatar global rate limit', () => {
       const REQUESTS = 120;
 
       // Rotating the last X-Forwarded-For hop moves request.ip past the 300/hr per-IP bucket
-      // on every request (trustProxy: 1 makes the header hop request.ip), so none of these can
+      // on every request (trustProxy: ['loopback', 'linklocal'] makes the header hop request.ip), so none of these can
       // be refused by the per-IP key — each one must succeed and consume the global bucket.
       for (let i = 0; i < REQUESTS; i += 1) {
         const res = await app.inject({

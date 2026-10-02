@@ -343,7 +343,7 @@ export async function verifyClientConfig(
     try {
       assertConfigDomainMatchesConfigUrl(config.domain, params.config_url);
       response.domain_match = true;
-      passedCheck(response, 'domain_match', 'config.domain matches the hostname of config_url.');
+      passedCheck(response, 'domain_match', 'config.domain matches the hostname and service path of config_url.');
     } catch {
       response.domain_match = false;
       let configUrlHost = 'unknown';
@@ -356,7 +356,7 @@ export async function verifyClientConfig(
         response,
         'domain_match',
         'CONFIG_DOMAIN_MISMATCH',
-        'config.domain does not match the hostname of config_url.',
+        'config.domain does not match the hostname and service path of config_url.',
         [`config.domain: ${config.domain}`, `config_url host: ${configUrlHost}`],
       );
     }

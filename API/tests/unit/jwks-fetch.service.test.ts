@@ -12,6 +12,16 @@ const publicJwk = {
 };
 
 describe('fetchPartnerJwks', () => {
+  it('refuses redirects outside a service mount even on the same hostname', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response('', {
+      status: 302, headers: { location: 'https://client.example.com/other/jwks.json' },
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(fetchPartnerJwks('https://client.example.com/rafikimedia/jwks.json', {
+      expectedHost: 'client.example.com/rafikimedia',
+    })).rejects.toMatchObject({ statusCode: 400, message: 'INTEGRATION_JWKS_HOST_MISMATCH' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();

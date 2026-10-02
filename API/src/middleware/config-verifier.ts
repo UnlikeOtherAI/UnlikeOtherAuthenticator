@@ -305,7 +305,7 @@ export async function configVerifier(
     mergeAuthDebugInfo(request, {
       stage: 'config_domain',
       code: 'CONFIG_DOMAIN_MISMATCH',
-      summary: 'The config JWT domain does not match the hostname of config_url.',
+      summary: 'The config JWT domain does not match the hostname and service path of config_url.',
     });
     void recordConfigVerifierError(request, {
       configJwt: request.configJwt,
@@ -313,8 +313,8 @@ export async function configVerifier(
       phase: 'config_domain',
       statusCode: 422,
       errorCode: 'CONFIG_DOMAIN_MISMATCH',
-      summary: 'The config JWT domain does not match the hostname of config_url.',
-      details: ['The config domain claim did not match the config_url hostname.'],
+      summary: 'The config JWT domain does not match the hostname and service path of config_url.',
+      details: ['The config domain claim did not match the config_url hostname and service path.'],
     });
     throw err;
   }

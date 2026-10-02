@@ -60,7 +60,7 @@ export const configJwtDocumentation = {
   },
   required_fields: {
     domain:
-      'string — client domain. This must exactly match the hostname of the HTTPS config_url when the auth service fetches the JWT.',
+      'string — client service identity: a hostname, or hostname/lowercase-mount-path without a trailing slash for an independent subfolder service. The complete value owns its separate keys, credentials, roles and policies. Config and JWKS URLs must match the hostname and stay within the exact mount path. Legacy hostname clients are unchanged.',
     redirect_urls:
       'string[] — non-empty list of callback targets (RFC 8252): an https:// URL on any host, an http:// URL on loopback only (localhost/127.0.0.1/[::1]), or a native custom-scheme deep link (e.g. com.acme.app://callback). Non-loopback http and dangerous schemes (javascript:, data:, …) are rejected. The runtime redirect_url must match an entry byte-for-byte, including scheme, host, port, path, AND query string. No normalization, no prefix matching, no query wildcards. Do NOT append per-request state (?state=…) to the redirect — carry it out-of-band via sessionStorage or a first-party cookie.',
     enabled_auth_methods:

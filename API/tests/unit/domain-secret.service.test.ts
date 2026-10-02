@@ -68,6 +68,25 @@ describe('domain-secret.service', () => {
     ).rejects.toMatchObject({ statusCode: 401 });
   });
 
+  it('never substitutes parent or sibling service credentials', async () => {
+    const domains = ['therockbottom.co.uk', 'therockbottom.co.uk/rafikimedia', 'therockbottom.co.uk/other'];
+    const hashes = domains.map(domain => createDomainClientHash(domain, 'same-test-secret-with-enough-length'));
+    const findUnique = vi.fn(async ({ where }: { where: { domain: string } }) => {
+      const index = domains.indexOf(where.domain);
+      return index < 0 ? null : { id: `service-${index}`, status: 'active', secrets: [
+        { hashPrefix: hashes[index].slice(0, 12), secretDigest: digestDomainClientHash(hashes[index]) },
+      ] };
+    });
+    const prisma = { clientDomain: { findUnique } } as never;
+    for (let target = 0; target < domains.length; target++) {
+      for (let credential = 0; credential < hashes.length; credential++) {
+        const result = verifyDomainAuthToken({ domain: domains[target], token: hashes[credential] }, { prisma });
+        if (target === credential) await expect(result).resolves.toMatchObject({ domain: domains[target], clientDomainId: `service-${target}` });
+        else await expect(result).rejects.toMatchObject({ statusCode: 401 });
+      }
+    }
+  });
+
   describe('rotateAdminDomainSecret', () => {
     // Regression guard for H3 (2026-04-22 audit). The rotate flow must never
     // reveal the raw client secret to the admin and must NOT deactivate the

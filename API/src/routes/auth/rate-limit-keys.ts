@@ -53,7 +53,7 @@ function ipRateLimiter(prefix: string, limit: number, windowMs: number): RateLim
   });
 }
 
-// app.ts sets trustProxy: 1, so request.ip is the last X-Forwarded-For hop: if the edge does not
+// app.ts trusts local ingress proxies, so request.ip is the last X-Forwarded-For hop: if the edge does not
 // overwrite a client-supplied XFF, every :ip: bucket above is attacker's choice. Compose each
 // credential-guarding limiter with a GLOBAL bucket that has no request input, so a header-rotating
 // attacker still hits a hard ceiling. This is a volumetric circuit breaker, not a quota: the
