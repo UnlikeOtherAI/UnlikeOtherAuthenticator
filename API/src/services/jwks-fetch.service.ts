@@ -1,6 +1,6 @@
 import { fetch as undiciFetch } from 'undici';
 
-import { normalizeDomain } from '../utils/domain.js';
+import { clientServiceContainsUrl } from '../utils/client-service.js';
 import { AppError } from '../utils/errors.js';
 import {
   closeSsrfAgent,
@@ -63,8 +63,8 @@ export async function fetchPartnerJwks(
     throw new AppError('BAD_REQUEST', 400, 'INTEGRATION_JWKS_URL_INVALID');
   }
 
-  const expectedHost = opts?.expectedHost ? normalizeDomain(opts.expectedHost) : null;
-  if (expectedHost && normalizeDomain(url.hostname) !== expectedHost) {
+  const expectedHost = opts?.expectedHost;
+  if (expectedHost && !clientServiceContainsUrl(expectedHost, jwksUrl)) {
     throw new AppError('BAD_REQUEST', 400, 'INTEGRATION_JWKS_HOST_MISMATCH');
   }
 
@@ -112,7 +112,7 @@ export async function fetchPartnerJwks(
             // the host that was bound to the config JWT's `domain` claim. Otherwise
             // an attacker with `evil.com`-controlled keys could substitute them
             // after the caller's host-match check and before signature verification.
-            if (expectedHost && normalizeDomain(nextUrl.hostname) !== expectedHost) {
+            if (expectedHost && !clientServiceContainsUrl(expectedHost, nextUrl.href)) {
               throw new AppError('BAD_REQUEST', 400, 'INTEGRATION_JWKS_HOST_MISMATCH');
             }
             url = nextUrl;

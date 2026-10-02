@@ -6,6 +6,7 @@ import { getEnv } from '../config/env.js';
 import { tryParseHttpUrl, tryParseRedirectUrl } from '../utils/http-url.js';
 import { getAppLogger } from '../utils/app-logger.js';
 import { OrgFeaturesSchema } from './config-org-features.schema.js';
+import { clientService, clientServiceContainsUrl } from '../utils/client-service.js';
 
 const CONFIG_JWT_ALLOWED_ALGS = ['RS256'] as const;
 const CONFIG_JWKS_CACHE_TTL_MS = 10 * 60 * 1000;
@@ -114,7 +115,7 @@ const UiThemeSchema = z
   .passthrough();
 
 const RequiredConfigSchema = z.object({
-  domain: z.string().min(1),
+  domain: z.string().min(1).refine((value) => clientService(value) !== null),
   // Brief 6.6: validate redirect URLs from config before redirecting.
   redirect_urls: z.array(RedirectUrlSchema).min(1),
   enabled_auth_methods: z.array(z.string().min(1)).min(1),
@@ -267,7 +268,7 @@ const ClientConfigSchema = RequiredConfigSchema.extend({
   const logoUrl = config.ui_theme.logo.url.trim();
   if (logoUrl) {
     const logoHost = normalizeHostname(new URL(logoUrl).hostname);
-    const configHost = normalizeHostname(config.domain);
+    const configHost = clientService(config.domain)?.hostname;
     if (logoHost !== configHost) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -427,17 +428,7 @@ export async function verifyConfigJwtSignatureWithKeyDomain(
  * own infrastructure.
  */
 export function assertConfigDomainMatchesConfigUrl(domainClaim: string, configUrl: string): void {
-  let url: URL;
-  try {
-    url = new URL(configUrl);
-  } catch {
-    throw new AppError('BAD_REQUEST', 400);
-  }
-
-  const domain = normalizeHostname(domainClaim);
-  const originHost = normalizeHostname(url.hostname);
-
-  if (!domain || !originHost || domain !== originHost) {
+  if (!clientServiceContainsUrl(domainClaim, configUrl)) {
     throw new AppError('BAD_REQUEST', 400);
   }
 }

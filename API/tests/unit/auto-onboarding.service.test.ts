@@ -130,6 +130,17 @@ describe('verifyConfigJwtViaPublishedJwks', () => {
 });
 
 describe('tryAutoOnboard', () => {
+  it('registers a mounted service under its full identity', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json(await testConfigJwks())));
+    const domain = 'client.example.com/rafikimedia';
+    const jwt = await signTestConfigJwt(baseClientConfigPayload({ domain,
+      jwks_url: 'https://client.example.com/rafikimedia/auth/jwks.json', contact_email: 'owner@example.com' }));
+    await tryAutoOnboard(jwt, 'https://client.example.com/rafikimedia/auth/config');
+    expect(integrationRequestMocks.upsertPendingIntegrationRequest).toHaveBeenCalledWith(expect.objectContaining({ domain }));
+    integrationRequestMocks.upsertPendingIntegrationRequest.mockClear();
+    await expect(tryAutoOnboard(jwt, 'https://client.example.com/other/config')).rejects.toMatchObject({ statusCode: 400 });
+    expect(integrationRequestMocks.upsertPendingIntegrationRequest).not.toHaveBeenCalled();
+  });
   beforeEach(() => {
     integrationRequestMocks.findOpenIntegrationRequest.mockReset().mockResolvedValue(null);
     integrationRequestMocks.upsertPendingIntegrationRequest

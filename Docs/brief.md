@@ -2911,3 +2911,22 @@ resource and output-destination authority; a scope is not a data entitlement.
 Resource-bound RS256 verification, live UOA epoch/team checks and replay handling
 remain unchanged. Deploy the migration/API before configuring an operator-reviewed
 Remember mapping and updating the consuming product.
+
+
+### Independent website services hosted in subfolders (2026-10-02)
+
+A website service may use a canonical hostname plus lowercase mount path as its
+`domain`, for example `therockbottom.co.uk/rafikimedia`. This is a separate client
+identity from `therockbottom.co.uk`, with independent signing keys, backend
+credentials, login policy, domain roles and organisation origin scope. Existing
+hostname clients retain their behavior and are never migrated or used as fallback.
+Config and published JWKS must be HTTPS URLs under the exact hostname and path
+segment boundary. JWKS redirects cannot leave that boundary. Paths contain only
+lowercase letters, digits, underscores and hyphens in nonempty segments, without
+trailing slash, escapes, dot segments, ports, query or fragment. Admin routes
+URL-encode the full service identifier. No schema migration or duplicate identity
+store is required: existing service keys are text and all lookups remain exact.
+
+UOA remains the authority for people, profiles, organisations, teams and invitations.
+Relying products use stable UOA references and live authorization checks. This
+service separation does not create browser-origin isolation between subfolders.

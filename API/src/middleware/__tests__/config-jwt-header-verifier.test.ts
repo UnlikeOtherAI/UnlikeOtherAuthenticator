@@ -31,14 +31,14 @@ describe('config JWT header verifier', () => {
     restoreEnv('CONFIG_JWKS_URL', originalConfigJwksUrl);
   });
 
-  it('requires the signing key domain to match the config domain', async () => {
+  it.each(['attacker.example.com', 'victim.example.com', 'victim.example.com/other'])('rejects a different service signing key: %s', async (keyDomain) => {
     process.env.SHARED_SECRET = 'test-shared-secret-with-enough-length';
     process.env.DATABASE_URL = 'postgres://example.invalid/db';
     configService.verifyConfigJwtSignatureWithKeyDomain.mockResolvedValue({
-      payload: { domain: 'victim.example.com' },
-      keyDomain: 'attacker.example.com',
+      payload: { domain: 'victim.example.com/rafikimedia' },
+      keyDomain,
     });
-    configService.validateConfigFields.mockReturnValue({ domain: 'victim.example.com' });
+    configService.validateConfigFields.mockReturnValue({ domain: 'victim.example.com/rafikimedia' });
 
     await expect(
       configJwtHeaderVerifier(request({ 'x-uoa-config-jwt': 'jwt' }), {} as never),
