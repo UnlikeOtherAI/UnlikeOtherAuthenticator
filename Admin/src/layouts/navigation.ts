@@ -1,103 +1,34 @@
 import type { IconName } from '../components/icons/Icon';
-
-export type NavItem = {
-  label: string;
-  path: string;
-  icon: IconName;
-  badgeKey?: 'domains' | 'orgs' | 'users' | 'teams' | 'integrationRequests';
-  // Only render this item when its badge has a value (e.g. hide until there is an actual new integration).
-  hideWhenEmpty?: boolean;
-};
-
-export type NavSection = {
-  label: string;
-  items: NavItem[];
-};
-
+export type NavItem = { label: string; path: string; icon: IconName; badgeKey?: 'integrationRequests' };
+export type NavSection = { label: string; items: NavItem[] };
 export const navSections: NavSection[] = [
-  {
-    label: 'Overview',
-    items: [{ label: 'Dashboard', path: '/dashboard', icon: 'grid' }],
-  },
-  {
-    label: 'Configuration',
-    items: [
-      { label: 'Apps', path: '/apps', icon: 'grid' },
-      {
-        label: 'New Integrations',
-        path: '/integrations',
-        icon: 'bell',
-        badgeKey: 'integrationRequests',
-        hideWhenEmpty: true,
-      },
-    ],
-  },
-  {
-    label: 'Directory',
-    items: [
-      { label: 'Services', path: '/domains', icon: 'globe', badgeKey: 'domains' },
-      { label: 'Organisations', path: '/organisations', icon: 'building', badgeKey: 'orgs' },
-      { label: 'Teams', path: '/teams', icon: 'users', badgeKey: 'teams' },
-      { label: 'Users', path: '/users', icon: 'user', badgeKey: 'users' },
-    ],
-  },
-  {
-    label: 'Security',
-    items: [
-      { label: 'Login Logs', path: '/logs', icon: 'logs' },
-      { label: 'Connection Errors', path: '/connection-errors', icon: 'alert' },
-      { label: 'Super-users', path: '/superusers', icon: 'key' },
-    ],
-  },
-  {
-    label: 'Flags',
-    items: [{ label: 'Feature Flags', path: '/feature-flags', icon: 'key' }],
-  },
-  {
-    label: 'System',
-    items: [
-      { label: 'Billing', path: '/billing', icon: 'building' },
-      { label: 'API Keys', path: '/api-keys', icon: 'key' },
-      { label: 'Settings', path: '/settings', icon: 'settings' },
-    ],
-  },
+  { label: '', items: [{ label: 'Dashboard', path: '/dashboard', icon: 'grid' }] },
+  { label: 'Directory', items: [
+    { label: 'Users', path: '/users', icon: 'user' },
+    { label: 'Organisations', path: '/organisations', icon: 'building' },
+    { label: 'Teams', path: '/teams', icon: 'users' },
+  ] },
+  { label: 'Integrations', items: [
+    { label: 'Website services', path: '/domains', icon: 'globe' },
+    { label: 'Native apps', path: '/apps', icon: 'grid' },
+    { label: 'Integration requests', path: '/integrations', icon: 'bell', badgeKey: 'integrationRequests' },
+    { label: 'Delegation policies', path: '/delegations', icon: 'key' },
+    { label: 'Feature flags', path: '/feature-flags', icon: 'key' },
+  ] },
+  { label: 'Billing', items: [{ label: 'Products & invoices', path: '/billing', icon: 'building' }] },
+  { label: 'Security', items: [
+    { label: 'Administrators', path: '/superusers', icon: 'users' },
+    { label: 'Access reason templates', path: '/access-reasons', icon: 'alert' },
+    { label: 'Access bans', path: '/bans', icon: 'alert' },
+    { label: 'Automation API keys', path: '/api-keys', icon: 'key' },
+  ] },
+  { label: 'Activity', items: [
+    { label: 'Login activity', path: '/logs', icon: 'logs' },
+    { label: 'Connection errors', path: '/connection-errors', icon: 'alert' },
+  ] },
 ];
-
 export function navLabelForPath(pathname: string) {
-  if (pathname.startsWith('/integrations/')) {
-    return 'Integration Request';
-  }
-
-  if (pathname.startsWith('/organisations/') && pathname.includes('/teams/')) {
-    return 'Team';
-  }
-
-  if (pathname.startsWith('/organisations/')) {
-    return 'Organisation';
-  }
-
-  if (pathname.startsWith('/domains/')) {
-    return 'Service';
-  }
-
-  if (pathname.startsWith('/feature-flags/') && pathname.includes('/groups/')) {
-    return 'Audience Group';
-  }
-
-  if (pathname.startsWith('/feature-flags/')) {
-    return 'Feature Flags';
-  }
-
-  if (pathname.startsWith('/users/')) {
-    return 'User';
-  }
-
-  if (pathname.startsWith('/superusers')) {
-    return 'Super-users';
-  }
-
-  const item = navSections
-    .flatMap((section) => section.items)
-    .find((entry) => entry.path === pathname);
+  if (pathname.includes('/teams/') && pathname.startsWith('/organisations/')) return 'Team';
+  const item = navSections.flatMap((section) => section.items).find((entry) => pathname === entry.path || pathname.startsWith(`${entry.path}/`));
   return item?.label ?? 'Dashboard';
 }

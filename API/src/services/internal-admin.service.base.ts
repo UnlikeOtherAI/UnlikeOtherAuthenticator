@@ -9,6 +9,7 @@ import {
 } from '../utils/avatar-url.js';
 import { normalizeDomain } from '../utils/domain.js';
 import type { AvatarSource } from './avatar.service.js';
+import { deriveInviteStatus } from './team-invite-state-machine.js';
 import { toPublicTwoFaPolicy } from './twofactor-policy.service.js';
 
 export { normalizeDomain };
@@ -160,8 +161,10 @@ export function formatAdminOrganisation(
       email: invite.email,
       role: invite.teamRole,
       targetTeam: invite.team.name,
+      targetTeamId: invite.teamId,
+      approvalStatus: invite.approvalStatus.toLowerCase(),
       method: 'ANY',
-      status: invite.acceptedAt ? 'claimed' : 'pending',
+      status: deriveInviteStatus(invite, new Date()),
       created: displayDate(invite.createdAt),
     })),
   };
@@ -246,21 +249,13 @@ export async function getAdminStats() {
 
   const prisma = getAdminPrisma();
   const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  today.setUTCHours(0, 0, 0, 0);
 
-  const [users, orgs, roleDomains, orgDomains, logDomains, loginsToday] = await Promise.all([
+  const [users, orgs, domains, loginsToday] = await Promise.all([
     prisma.user.count(),
     prisma.organisation.count(),
-    prisma.domainRole.findMany({ distinct: ['domain'], select: { domain: true } }),
-    prisma.organisation.findMany({ distinct: ['domain'], select: { domain: true } }),
-    prisma.loginLog.findMany({ distinct: ['domain'], select: { domain: true } }),
+    prisma.clientDomain.count({ where: { status: 'ACTIVE' } }),
     prisma.loginLog.count({ where: { createdAt: { gte: today } } }),
   ]);
-  const domains = new Set([
-    ...roleDomains.map((row) => normalizeDomain(row.domain)),
-    ...orgDomains.map((row) => normalizeDomain(row.domain)),
-    ...logDomains.map((row) => normalizeDomain(row.domain)),
-  ]);
-
-  return { users, domains: domains.size, orgs, loginsToday };
+  return { users, domains, orgs, loginsToday };
 }

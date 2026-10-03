@@ -17,6 +17,7 @@ import { registerConfigValidateRoute } from './config-validate.js';
 import { registerConfigVerifyRoute } from './config-verify.js';
 import { registerLlmRoute } from './llm.js';
 import { endpoints } from './schema.js';
+// Admin schema includes exact-user activity filters and canonical invitation history states.
 import { readAdminIndexAssetUrls } from '../../services/admin-ui.service.js';
 import { renderRootHoldingPage } from '../../services/root-page.service.js';
 

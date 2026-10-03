@@ -1,8 +1,11 @@
 // @vitest-environment happy-dom
 
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render as renderBase, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import type { ReactElement } from 'react';
+import { MemoryRouter, useLocation, useNavigate } from 'react-router';
 
 import { BillingPage } from './BillingPage';
 
@@ -166,6 +169,28 @@ function mutation(mutateAsync: ReturnType<typeof vi.fn>) {
   };
 }
 
+function Location() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  return (
+    <>
+      <output data-testid="location">
+        {location.pathname}
+        {location.search}
+      </output>
+      <button onClick={() => navigate(-1)}>Browser back</button>
+    </>
+  );
+}
+function render(ui: ReactElement, entry = '/billing?product=service-1') {
+  return renderBase(
+    <MemoryRouter initialEntries={[entry]}>
+      {ui}
+      <Location />
+    </MemoryRouter>,
+  );
+}
+
 describe('BillingPage', () => {
   beforeEach(() => {
     Object.values(mocks).forEach((mock) => mock.mockReset());
@@ -179,7 +204,7 @@ describe('BillingPage', () => {
 
     expect(screen.getByRole('heading', { name: 'Billing' })).toBeTruthy();
     expect(screen.getByText('20.00%')).toBeTruthy();
-    expect(screen.getByText('2000 GBP')).toBeTruthy();
+    expect(screen.getByText('20.00 GBP')).toBeTruthy();
     expect(screen.getAllByText('Default')).toHaveLength(2);
 
     await user.click(screen.getByRole('button', { name: /App keys/ }));
@@ -190,12 +215,39 @@ describe('BillingPage', () => {
 
     await user.click(screen.getByRole('button', { name: /Stripe subscriptions/ }));
     expect(screen.getByText('Example Org')).toBeTruthy();
-    expect(screen.getByText('Research · team')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Research' })).toBeTruthy();
     expect(screen.getByText('Test')).toBeTruthy();
 
     await user.click(screen.getByRole('button', { name: /Add-ons & credits/ }));
     expect(screen.getByText('Priority support')).toBeTruthy();
-    expect(screen.getByText('+1000 GBP')).toBeTruthy();
+    expect(screen.getByText('+10.00 GBP')).toBeTruthy();
+  });
+
+  it('opens a product from its list, persists its tab, and restores the list with browser Back', async () => {
+    const user = userEvent.setup();
+    render(<BillingPage />, '/billing');
+    const link = screen.getByRole('link', { name: 'DeepWater' });
+    expect(link.getAttribute('href')).toBe('/billing?product=service-1');
+    await user.click(link);
+    expect(screen.getByText('20.00 GBP')).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: /Assignments/ }));
+    expect(screen.getByTestId('location').textContent).toContain('tab=assignments');
+    expect(screen.getByRole('link', { name: 'Research' }).getAttribute('href')).toBe(
+      '/organisations/org-1/teams/team-1',
+    );
+    expect(screen.queryByRole('button', { name: 'Tariff version' })).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Browser back' }));
+    expect(screen.getByText('20.00 GBP')).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'Browser back' }));
+    expect(screen.getByRole('link', { name: 'DeepWater' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /App keys/ })).toBeNull();
+  });
+
+  it('restores an app key detail directly without exposing plaintext', () => {
+    render(<BillingPage />, '/billing?product=service-1&tab=app-keys&record=app-key-1');
+    expect(screen.getByRole('dialog', { name: 'DeepWater production' })).toBeTruthy();
+    expect(screen.getByText('Actor audience')).toBeTruthy();
+    expect(screen.queryByText(/^uoa_app_[A-Za-z0-9_-]{20,}$/)).toBeNull();
   });
 
   it('opens a safe at-cost/no-collection service form by default', async () => {
@@ -211,5 +263,16 @@ describe('BillingPage', () => {
     expect((screen.getByRole('combobox', { name: /Collection/ }) as HTMLSelectElement).value).toBe(
       'none',
     );
+    expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull();
+    await user.type(screen.getByRole('textbox', { name: 'Display name' }), 'Unsaved product');
+    await user.click(screen.getByRole('button', { name: 'Close modal' }));
+    expect(screen.getByRole('alert').textContent).toContain('Discard unsaved changes?');
+    await user.click(screen.getByRole('button', { name: 'Keep editing' }));
+    expect((screen.getByRole('textbox', { name: 'Display name' }) as HTMLInputElement).value).toBe(
+      'Unsaved product',
+    );
+    await user.click(screen.getByRole('button', { name: 'Close modal' }));
+    await user.click(screen.getByRole('button', { name: 'Discard changes' }));
+    expect(screen.queryByRole('dialog', { name: 'Add billing service' })).toBeNull();
   });
 });

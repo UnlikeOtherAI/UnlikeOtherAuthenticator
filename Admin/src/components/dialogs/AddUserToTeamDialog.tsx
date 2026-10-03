@@ -25,7 +25,7 @@ function AddUserToTeamForm({
   user,
 }: Omit<Props, 'open' | 'user'> & { user: UserSummary }) {
   const mutation = useAddUserToTeamMutation();
-  const { register, watch, setValue, handleSubmit } = useForm({
+  const { register, watch, setValue, handleSubmit, formState } = useForm({
     defaultValues: { orgId: '', teamId: '', teamRole: 'member' as TeamRole },
   });
   const selectedOrg = organisations.find((org) => org.id === watch('orgId')) ?? organisations[0];
@@ -54,14 +54,13 @@ function AddUserToTeamForm({
   return (
     <Modal
       isOpen
+      isPending={mutation.isPending}
+      isDirty={formState.isDirty}
       onClose={close}
       title="Add User to Team"
       widthClassName="max-w-xl"
       footer={
         <>
-          <Button onClick={close} disabled={mutation.isPending}>
-            Cancel
-          </Button>
           <Button
             icon="check"
             variant="primary"
@@ -88,8 +87,8 @@ function AddUserToTeamForm({
             value={selectedOrg?.id ?? ''}
             disabled={mutation.isPending || !organisations.length}
             onChange={(event) => {
-              setValue('orgId', event.target.value);
-              setValue('teamId', '');
+              setValue('orgId', event.target.value, { shouldDirty: true });
+              setValue('teamId', '', { shouldDirty: true });
             }}
           >
             {organisations.map((org) => (

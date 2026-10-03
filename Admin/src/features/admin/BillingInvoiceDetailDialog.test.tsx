@@ -138,6 +138,43 @@ describe('BillingInvoiceDetailDialog server-authored actions', () => {
     expect(mocks.issue).toHaveBeenCalledWith('invoice-1');
   });
 
+  it('retains the payment inputs and idempotency key after failure for retry', async () => {
+    const user = userEvent.setup();
+    mocks.payment.mockRejectedValueOnce(new Error('Temporary failure')).mockResolvedValueOnce({});
+    const onClose = vi.fn();
+    render(
+      <BillingInvoiceDetailDialog
+        invoice={invoice({
+          status: 'issued',
+          actions: {
+            issue: null,
+            download_pdf: true,
+            void: false,
+            payment_limits: { payment: money('5000', '$50.00'), refund: null, write_off: null },
+          },
+        })}
+        onClose={onClose}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Record payment activity' }));
+    await user.type(screen.getByRole('textbox', { name: /^Amount \(minor units\)/ }), '1234');
+    await user.click(screen.getByRole('button', { name: 'Record activity' }));
+    await waitFor(() => expect(mocks.payment).toHaveBeenCalledTimes(1));
+    const first = mocks.payment.mock.calls[0][0];
+    expect(
+      (screen.getByRole('textbox', { name: /^Amount \(minor units\)/ }) as HTMLInputElement).value,
+    ).toBe('1234');
+    await user.click(screen.getByRole('button', { name: 'Record activity' }));
+    await waitFor(() => expect(mocks.payment).toHaveBeenCalledTimes(2));
+    expect(mocks.payment.mock.calls[1][0]).toEqual(first);
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Record activity' })).toBeNull(),
+    );
+    await user.keyboard('{Escape}');
+    expect(onClose).toHaveBeenCalledOnce();
+    expect(screen.queryByText('Discard unsaved changes?')).toBeNull();
+  });
+
   it('renders the distinct recoverable issuing action supplied by UOA', async () => {
     const user = userEvent.setup();
     render(

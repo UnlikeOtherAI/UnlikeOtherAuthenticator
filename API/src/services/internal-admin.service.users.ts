@@ -12,10 +12,11 @@ import {
 import { writeAuditLog, type AuditLogPrisma } from './audit-log.service.js';
 import { resetTwoFactorForUser } from './twofactor-disable.service.js';
 
-export async function getAdminLogs(limit = 100) {
+export async function getAdminLogs(limit = 100, userId?: string) {
   if (!isDatabaseEnabled()) return [];
 
   const rows = await getAdminPrisma().loginLog.findMany({
+    where: userId ? { userId } : undefined,
     orderBy: { createdAt: 'desc' },
     take: Math.max(1, Math.min(500, limit)),
     select: {
@@ -32,6 +33,8 @@ export async function getAdminLogs(limit = 100) {
 
   return rows.map((log) => ({
     id: log.id,
+    userId: log.userId,
+    occurredAt: log.createdAt.toISOString(),
     ts: displayTimestamp(log.createdAt),
     user: log.email || null,
     domain: log.domain,

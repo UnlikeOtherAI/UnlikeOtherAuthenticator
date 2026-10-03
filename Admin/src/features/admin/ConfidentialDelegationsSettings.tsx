@@ -1,3 +1,4 @@
+import { Link } from 'react-router';
 import { useState } from 'react';
 
 import { ActionButton, ActionDivider } from '../../components/ui/ActionButton';
@@ -43,17 +44,6 @@ export function ConfidentialDelegationsSettings() {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
-        <p className="font-semibold">
-          Application identity and delegated user identity stay separate.
-        </p>
-        <p className="mt-1 text-xs text-blue-800">
-          Each mapping authorises one registered source product, using that product&apos;s own app
-          credential, to request a narrow resource-bound token. No browser credential or product
-          secret is displayed here.
-        </p>
-      </div>
-
       <Card>
         <CardHeader>
           <div>
@@ -84,7 +74,7 @@ export function ConfidentialDelegationsSettings() {
                 <tr key={mapping.id}>
                   <Td>
                     <p className="font-medium text-gray-800">{mapping.product}</p>
-                    <code className="text-xs text-gray-400">{mapping.source_domain}</code>
+                    <Link className="text-xs text-indigo-700 hover:underline" to={`/domains/${encodeURIComponent(mapping.source_domain)}`}>{mapping.source_domain}</Link>
                   </Td>
                   <Td>
                     <code className="block max-w-xs break-all text-xs text-gray-600">

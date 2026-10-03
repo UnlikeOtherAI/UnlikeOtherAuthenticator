@@ -57,11 +57,12 @@ export function AgreementDialog({
   return (
     <Modal
       isOpen={isOpen}
+      isPending={form.formState.isSubmitting}
+      isDirty={form.formState.isDirty}
       onClose={onClose}
       title={initial ? 'Edit agreement' : 'Create agreement'}
       footer={
         <>
-          <Button disabled={form.formState.isSubmitting} onClick={onClose}>Cancel</Button>
           <Button form="agreement-form" type="submit" variant="primary" disabled={form.formState.isSubmitting}>
             {form.formState.isSubmitting ? 'Saving…' : 'Save agreement'}
           </Button>
@@ -151,11 +152,12 @@ export function AgreementVersionDialog({
   return (
     <Modal
       isOpen={isOpen}
+      isPending={form.formState.isSubmitting}
+      isDirty={form.formState.isDirty || file !== null}
       onClose={onClose}
       title={initial ? `Edit draft v${initial.version}` : 'Upload agreement version'}
       footer={
         <>
-          <Button disabled={form.formState.isSubmitting} onClick={onClose}>Cancel</Button>
           <Button form="agreement-version-form" type="submit" variant="primary" disabled={form.formState.isSubmitting}>
             {form.formState.isSubmitting ? 'Saving…' : initial ? 'Save draft' : 'Upload draft'}
           </Button>
@@ -233,11 +235,12 @@ export function ReplaceAgreementPdfDialog({
   return (
     <Modal
       isOpen={isOpen}
+      isPending={pending}
+      isDirty={file !== null}
       onClose={onClose}
       title={`Replace draft PDF${version ? ` for v${version.version}` : ''}`}
       footer={
         <>
-          <Button disabled={pending} onClick={onClose}>Cancel</Button>
           <Button disabled={pending} variant="danger" onClick={replace}>{pending ? 'Replacing…' : 'Replace PDF'}</Button>
         </>
       }
@@ -283,11 +286,12 @@ export function RevokeSignatureDialog({
   return (
     <Modal
       isOpen={isOpen}
+      isPending={form.formState.isSubmitting}
+      isDirty={form.formState.isDirty}
       onClose={onClose}
       title="Revoke signature"
       footer={
         <>
-          <Button disabled={form.formState.isSubmitting} onClick={onClose}>Cancel</Button>
           <Button form="revoke-signature-form" type="submit" variant="danger" disabled={form.formState.isSubmitting}>
             {form.formState.isSubmitting ? 'Revoking…' : 'Revoke signature'}
           </Button>

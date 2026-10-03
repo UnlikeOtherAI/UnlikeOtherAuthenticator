@@ -58,7 +58,7 @@ describe('TeamAvatarSection', () => {
 
     expect(mocks.deleteMutateAsync).not.toHaveBeenCalled();
     const confirmation = mocks.confirm.mock.calls[0] as [string, string, () => Promise<void>];
-    expect(confirmation[0]).toBe('Remove company avatar?');
+    expect(confirmation[0]).toBe('Remove team avatar?');
 
     await confirmation[2]();
 

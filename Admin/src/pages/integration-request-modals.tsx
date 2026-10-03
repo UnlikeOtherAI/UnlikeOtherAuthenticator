@@ -30,6 +30,7 @@ export function AcceptIntegrationModal({
   const [clientSecret, setClientSecret] = useState('');
   const [deliveryMode, setDeliveryMode] = useState<IntegrationClaimDeliveryMode>('email');
   const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -45,6 +46,8 @@ export function AcceptIntegrationModal({
       setError('Client secret must be at least 32 characters.');
       return;
     }
+    if (pending) return;
+    setPending(true);
     try {
       await onSubmit({
         label: label.trim() || undefined,
@@ -53,18 +56,19 @@ export function AcceptIntegrationModal({
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Accept failed');
-    }
+    } finally { setPending(false); }
   }
 
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Accept Integration"
+      title="Accept integration"
+      isPending={pending}
+      isDirty={Boolean(label || clientSecret || deliveryMode !== 'email')}
       footer={
         <>
-          <Button onClick={onClose}>Cancel</Button>
-          <Button icon="check" variant="primary" onClick={submit}>
+          <Button icon="check" variant="primary" disabled={pending} onClick={submit}>
             Accept
           </Button>
         </>
@@ -228,6 +232,7 @@ export function DeclineIntegrationModal({
 }) {
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -242,22 +247,25 @@ export function DeclineIntegrationModal({
       setError('Reason is required.');
       return;
     }
+    if (pending) return;
+    setPending(true);
     try {
       await onSubmit(trimmed);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Decline failed');
-    }
+    } finally { setPending(false); }
   }
 
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Decline Integration"
+      title="Decline integration"
+      isPending={pending}
+      isDirty={Boolean(reason)}
       footer={
         <>
-          <Button onClick={onClose}>Cancel</Button>
-          <Button variant="danger" onClick={submit}>
+          <Button variant="danger" disabled={pending} onClick={submit}>
             Decline
           </Button>
         </>

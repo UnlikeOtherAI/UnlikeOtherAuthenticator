@@ -58,12 +58,13 @@ export function TeamDialog({
   return (
     <Modal
       isOpen={open}
+      isDirty={form.formState.isDirty}
+      isPending={saving}
       onClose={onClose}
       title={isEdit ? 'Edit Team' : 'Add Team'}
       widthClassName="max-w-xl"
       footer={
         <>
-          <Button onClick={onClose}>Cancel</Button>
           <Button
             icon="check"
             variant="primary"

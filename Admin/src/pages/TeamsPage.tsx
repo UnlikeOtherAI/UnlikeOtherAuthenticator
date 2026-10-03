@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useDirectoryParam } from '../features/admin/useDirectoryParam';
+import { useMemo } from 'react';
 
 import { AutocompleteSelect } from '../components/ui/AutocompleteSelect';
 import { Card } from '../components/ui/Card';
@@ -9,10 +10,10 @@ import { useOrganisationsQuery, useTeamsQuery } from '../features/admin/admin-qu
 import { TeamTable } from '../features/admin/TeamTable';
 
 export function TeamsPage() {
-  const { data: teams = [], isLoading } = useTeamsQuery();
+  const { data: teams = [], isLoading, isError, refetch } = useTeamsQuery();
   const { data: orgs = [] } = useOrganisationsQuery();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedOrgId, setSelectedOrgId] = useState('all');
+  const [searchQuery, setSearchQuery] = useDirectoryParam('q');
+  const [selectedOrgId, setSelectedOrgId] = useDirectoryParam('org', 'all');
   const filteredTeams = useMemo(() => {
     const byOrg = selectedOrgId === 'all' ? teams : teams.filter((team) => team.orgId === selectedOrgId);
     const normalizedQuery = searchQuery.trim().toLowerCase();
@@ -28,7 +29,7 @@ export function TeamsPage() {
 
   return (
     <>
-      <PageHeader title="Teams" description="All teams across all organisations" />
+      <PageHeader title="Teams" description="Teams from the loaded organisation directory." />
       <Card>
         <div className="flex flex-wrap items-end gap-3 border-b border-gray-100 px-4 py-3">
           <label className="block w-60 max-w-full">
@@ -37,7 +38,7 @@ export function TeamsPage() {
           </label>
           <AutocompleteSelect label="Organisation" options={orgOptions} placeholder="Search organisations..." value={selectedOrgId} onChange={setSelectedOrgId} />
         </div>
-        {isLoading ? (
+        {isError ? <div role="alert" className="p-5">Could not load this directory. <button type="button" className="text-indigo-600" onClick={() => void refetch()}>Retry</button></div> : isLoading ? (
           <p className="px-5 py-6 text-sm text-gray-400">Loading teams...</p>
         ) : (
           <>
