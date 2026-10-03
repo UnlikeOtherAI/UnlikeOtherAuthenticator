@@ -1,6 +1,9 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
+import { Link } from 'react-router';
+import { DataTable, Td } from '../../components/ui/Table';
+import { useBillingNavigation } from './billing-navigation';
 
 import { Badge, type BadgeVariant } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
@@ -105,8 +108,9 @@ export function BillingContractsPanel({
   const contracts = useMemo(() => contractsQuery.data ?? [], [contractsQuery.data]);
   const issuers = useMemo(() => issuersQuery.data ?? [], [issuersQuery.data]);
   const invoices = useMemo(() => invoicesQuery.data ?? [], [invoicesQuery.data]);
-  const [organisationFilter, setOrganisationFilter] = useState('');
-  const [selectedContractId, setSelectedContractId] = useState('');
+  const { params, href, update } = useBillingNavigation();
+  const organisationFilter = params.get('organisation') ?? '';
+  const selectedContractId = params.get('contract') ?? '';
   const [createContractOpen, setCreateContractOpen] = useState(false);
   const [versionContract, setVersionContract] = useState<BillingContract | null>(null);
   const [activation, setActivation] = useState<{
@@ -115,7 +119,8 @@ export function BillingContractsPanel({
   } | null>(null);
   const [issuerOpen, setIssuerOpen] = useState(false);
   const [buyerOrganisationId, setBuyerOrganisationId] = useState('');
-  const [selectedInvoiceId, setSelectedInvoiceId] = useState('');
+  const selectedInvoiceId = params.get('invoice') ?? '';
+  const setSelectedInvoiceId = (id: string) => update({ invoice: id || null });
   const form = useForm<BillingInvoiceCalculateFormValues>({
     resolver: zodResolver(BillingInvoiceCalculateFormSchema),
     defaultValues: { contractId: '', issuerProfileId: '', billingMonth: latestClosedMonth() },
@@ -129,37 +134,25 @@ export function BillingContractsPanel({
     [contracts, organisationFilter],
   );
   const selectedContract =
-    visibleContracts.find((contract) => contract.id === selectedContractId) ??
-    visibleContracts[0] ??
-    null;
+    contracts.find((contract) => contract.id === selectedContractId) ?? null;
   const selectedInvoice = invoices.find((invoice) => invoice.id === selectedInvoiceId) ?? null;
 
   useEffect(() => {
-    if (selectedContract && selectedContract.id !== selectedContractId) {
-      setSelectedContractId(selectedContract.id);
-    }
-  }, [selectedContract, selectedContractId]);
-
-  useEffect(() => {
-    const activeContract = contracts.find((contract) => contract.status === 'active');
-    if (
-      !contracts.some(
-        (contract) => contract.id === form.getValues('contractId') && contract.status === 'active',
-      )
-    ) {
-      form.setValue('contractId', activeContract?.id ?? '');
-    }
+    form.setValue('contractId', selectedContract?.status === 'active' ? selectedContract.id : '');
     const activeIssuer = issuers.find((issuer) => issuer.active);
     if (
       !issuers.some((issuer) => issuer.id === form.getValues('issuerProfileId') && issuer.active)
     ) {
       form.setValue('issuerProfileId', activeIssuer?.id ?? '');
     }
-  }, [contracts, form, issuers]);
+  }, [selectedContract, form, issuers]);
 
   async function calculateInvoice(values: BillingInvoiceCalculateFormValues) {
-    const invoice = await calculate.mutateAsync(values);
-    setSelectedInvoiceId(invoice.id);
+    if (!selectedContract || values.contractId !== selectedContract.id) return;
+    try {
+      const invoice = await calculate.mutateAsync(values);
+      setSelectedInvoiceId(invoice.id);
+    } catch { /* The mutation error is rendered below; preserve inputs for retry. */ }
   }
 
   const loading = contractsQuery.isLoading || issuersQuery.isLoading || invoicesQuery.isLoading;
@@ -167,11 +160,6 @@ export function BillingContractsPanel({
 
   return (
     <div className="space-y-5">
-      <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-950">
-        Contract pricing, invoice calculations, and lifecycle records live only in UOA. Customer
-        invoices expose the calculated price per service—never raw token cost, token counts, or
-        internal margin.
-      </div>
       {servicesLoading ? (
         <p className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-500">
           Loading billing services before contract activation...
@@ -204,26 +192,12 @@ export function BillingContractsPanel({
             <SelectField
               className="w-full"
               value={organisationFilter}
-              onChange={(event) => setOrganisationFilter(event.target.value)}
+              onChange={(event) => update({ organisation: event.target.value, contract: null, invoice: null })}
             >
               <option value="">All organisations</option>
               {organisations.map((organisation) => (
                 <option key={organisation.id} value={organisation.id}>
                   {organisation.name}
-                </option>
-              ))}
-            </SelectField>
-          </FieldShell>
-          <FieldShell label="Selected contract">
-            <SelectField
-              className="w-full"
-              value={selectedContract?.id ?? ''}
-              onChange={(event) => setSelectedContractId(event.target.value)}
-            >
-              <option value="">No contract selected</option>
-              {visibleContracts.map((contract) => (
-                <option key={contract.id} value={contract.id}>
-                  {contract.organisation_name ?? contract.organisation_id} · {contract.reference}
                 </option>
               ))}
             </SelectField>
@@ -238,6 +212,19 @@ export function BillingContractsPanel({
             No organisation contracts match this view.
           </p>
         ) : null}
+        {!loading && !failed && !selectedContractId && visibleContracts.length > 0 ? (
+          <DataTable headers={['Contract', 'Organisation', 'Status']}>
+            {visibleContracts.map((contract) => (
+              <tr key={contract.id}>
+                <Td><Link className="font-medium text-blue-600 hover:underline" to={href({ contract: contract.id, invoice: null })}>{contract.name}</Link><p className="text-xs text-gray-500">{contract.reference}</p></Td>
+                <Td><Link className="text-blue-600 hover:underline" to={`/organisations/${encodeURIComponent(contract.organisation_id)}`}>{contract.organisation_name ?? contract.organisation_id}</Link></Td>
+                <Td><Badge variant={contractVariant(contract.status)}>{contract.status}</Badge></Td>
+              </tr>
+            ))}
+          </DataTable>
+        ) : null}
+        {!loading && !failed && selectedContractId && !selectedContract ? <p className="p-5 text-sm">Contract unavailable.</p> : null}
+        {selectedContractId ? <div className="px-5 py-3"><Link className="text-sm text-blue-600 hover:underline" to={href({ contract: null, invoice: null })}>All contracts</Link></div> : null}
         {selectedContract ? (
           <div className="p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -250,7 +237,7 @@ export function BillingContractsPanel({
                 </div>
                 <p className="mt-1 text-xs text-gray-500">
                   {selectedContract.reference} ·{' '}
-                  {selectedContract.organisation_name ?? selectedContract.organisation_id}
+                  <Link className="text-blue-600 hover:underline" to={`/organisations/${encodeURIComponent(selectedContract.organisation_id)}`}>{selectedContract.organisation_name ?? selectedContract.organisation_id}</Link>
                 </p>
               </div>
               <div className="flex gap-2">
@@ -323,7 +310,7 @@ export function BillingContractsPanel({
         ) : null}
       </Card>
 
-      <Card>
+      {selectedContract?.status === 'active' ? <Card>
         <CardHeader>
           <div>
             <h2 className="text-sm font-semibold text-gray-900">Invoice calculator</h2>
@@ -331,24 +318,13 @@ export function BillingContractsPanel({
               Freeze a draft from the active contract and Ledger-backed monthly usage.
             </p>
           </div>
-          <Badge variant="blue">Customer-safe output</Badge>
         </CardHeader>
         <form
           className="grid gap-4 p-5 md:grid-cols-4"
           onSubmit={form.handleSubmit(calculateInvoice)}
         >
-          <FieldShell label="Active contract" error={form.formState.errors.contractId?.message}>
-            <SelectField className="w-full" {...form.register('contractId')}>
-              <option value="">Select contract</option>
-              {contracts
-                .filter((contract) => contract.status === 'active')
-                .map((contract) => (
-                  <option key={contract.id} value={contract.id}>
-                    {contract.organisation_name} · {contract.reference}
-                  </option>
-                ))}
-            </SelectField>
-          </FieldShell>
+          <input type="hidden" {...form.register('contractId')} />
+          <div className="text-sm"><p className="font-medium text-gray-700">Contract</p><p>{selectedContract.name} � {selectedContract.reference}</p></div>
           <FieldShell label="Issuer" error={form.formState.errors.issuerProfileId?.message}>
             <SelectField className="w-full" {...form.register('issuerProfileId')}>
               <option value="">Select issuer</option>
@@ -369,7 +345,7 @@ export function BillingContractsPanel({
               className="w-full"
               type="submit"
               variant="primary"
-              disabled={calculate.isPending}
+              disabled={calculate.isPending || loading || failed}
             >
               {calculate.isPending ? 'Calculating...' : 'Calculate draft'}
             </Button>
@@ -382,9 +358,9 @@ export function BillingContractsPanel({
             </p>
           ) : null}
         </form>
-      </Card>
+      </Card> : null}
 
-      <BillingInvoiceHistory invoices={invoices} onSelect={setSelectedInvoiceId} />
+      <BillingInvoiceHistory invoices={invoices.filter((invoice) => (!organisationFilter || invoice.organisation_id === organisationFilter) && (!selectedContractId || invoice.contract_id === selectedContractId))} />
 
       <CreateBillingContractDialog
         open={createContractOpen}

@@ -58,14 +58,18 @@ export function BillingAssignmentDialog({
   }, [eligibleTeams, form]);
 
   async function submit(values: BillingAssignmentFormValues) {
+    try {
     await save.mutateAsync(values);
     onClose();
+    } catch { /* Keep values and show the mutation error for retry. */ }
   }
 
   return (
     <Modal
       isOpen={open}
       onClose={onClose}
+      isPending={save.isPending}
+      isDirty={form.formState.isDirty}
       title={`Assign tariff · ${service.name}`}
       footer={
         <>

@@ -65,14 +65,18 @@ export function BillingAdjustmentDialog({
   }, [eligibleTeams, form]);
 
   async function submit(values: BillingAdjustmentFormValues) {
+    try {
     await create.mutateAsync(values);
     onClose();
+    } catch { /* Keep values and show the mutation error for retry. */ }
   }
 
   return (
     <Modal
       isOpen={open}
       onClose={onClose}
+      isPending={create.isPending}
+      isDirty={form.formState.isDirty}
       title={`Add commercial line · ${service.name}`}
       footer={
         <>

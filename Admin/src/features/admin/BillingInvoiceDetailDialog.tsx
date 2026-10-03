@@ -167,8 +167,10 @@ export function BillingInvoiceDetailDialog({
       });
       return;
     }
-    await recordPayment.mutateAsync({ invoiceId: currentInvoice.id, values });
-    setShowPayment(false);
+    try {
+      await recordPayment.mutateAsync({ invoiceId: currentInvoice.id, values });
+      setShowPayment(false);
+    } catch { /* Retain values and the idempotency key for a safe retry. */ }
   }
 
   const allowedPaymentKinds = availablePaymentKinds(currentInvoice);
@@ -179,6 +181,8 @@ export function BillingInvoiceDetailDialog({
     <Modal
       isOpen
       onClose={onClose}
+      isPending={issue.isPending || voidInvoice.isPending || recordPayment.isPending || downloading}
+      isDirty={paymentForm.formState.isDirty || Boolean(voidReason)}
       title={invoice.invoice_number ?? `Draft invoice · ${invoice.billing_month}`}
       widthClassName="max-w-4xl"
       footer={<Button onClick={onClose}>Close</Button>}

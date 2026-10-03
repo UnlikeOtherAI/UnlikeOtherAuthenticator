@@ -1,5 +1,6 @@
 import { Badge } from '../../components/ui/Badge';
-import { Button } from '../../components/ui/Button';
+import { Link } from 'react-router';
+import { useBillingNavigation } from './billing-navigation';
 import { Card, CardHeader } from '../../components/ui/Card';
 import { DataTable, Td } from '../../components/ui/Table';
 import type { BillingInvoice } from '../../schemas/billing-contracts';
@@ -16,11 +17,10 @@ function statusVariant(status: BillingInvoice['status']) {
 
 export function BillingInvoiceHistory({
   invoices,
-  onSelect,
 }: {
   invoices: BillingInvoice[];
-  onSelect: (invoiceId: string) => void;
 }) {
+  const { href } = useBillingNavigation();
   return (
     <Card>
       <CardHeader>
@@ -30,7 +30,6 @@ export function BillingInvoiceHistory({
             Drafts, issued PDFs, payments, refunds, write-offs, and voids.
           </p>
         </div>
-        <Badge variant="slate">{invoices.length} invoices</Badge>
       </CardHeader>
       {invoices.length === 0 ? (
         <p className="p-8 text-center text-sm text-gray-500">
@@ -44,7 +43,7 @@ export function BillingInvoiceHistory({
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="truncate font-semibold text-gray-900">
-                      {invoice.invoice_number ?? `Draft r${invoice.revision}`}
+                      <Link className="text-blue-600 hover:underline" to={href({ invoice: invoice.id })}>{invoice.invoice_number ?? `Draft r${invoice.revision}`}</Link>
                     </p>
                     <p className="mt-1 truncate text-xs text-gray-500">
                       {invoice.buyer.legal_name} · {invoice.billing_month}
@@ -59,9 +58,7 @@ export function BillingInvoiceHistory({
                     Outstanding{' '}
                     <strong className="text-gray-800">{invoice.totals.outstanding.display}</strong>
                   </p>
-                  <Button size="sm" onClick={() => onSelect(invoice.id)}>
-                    View
-                  </Button>
+                  <Link className="text-blue-600 hover:underline" to={href({ invoice: invoice.id })}>View invoice</Link>
                 </div>
               </div>
             ))}
@@ -73,9 +70,9 @@ export function BillingInvoiceHistory({
               {invoices.map((invoice) => (
                 <tr key={invoice.id}>
                   <Td className="font-medium text-gray-900">
-                    {invoice.invoice_number ?? `Draft r${invoice.revision}`}
+                    <Link className="text-blue-600 hover:underline" to={href({ invoice: invoice.id })}>{invoice.invoice_number ?? `Draft r${invoice.revision}`}</Link>
                   </Td>
-                  <Td>{invoice.buyer.legal_name}</Td>
+                  <Td><Link className="text-blue-600 hover:underline" to={`/organisations/${encodeURIComponent(invoice.organisation_id)}`}>{invoice.buyer.legal_name}</Link></Td>
                   <Td>{invoice.billing_month}</Td>
                   <Td>
                     <Badge variant={statusVariant(invoice.status)}>{invoice.status}</Badge>
@@ -83,9 +80,7 @@ export function BillingInvoiceHistory({
                   <Td>{invoice.totals.total.display}</Td>
                   <Td>{invoice.totals.outstanding.display}</Td>
                   <Td className="text-right">
-                    <Button size="sm" onClick={() => onSelect(invoice.id)}>
-                      View
-                    </Button>
+                    <Link className="text-blue-600 hover:underline" to={href({ invoice: invoice.id })}>View invoice</Link>
                   </Td>
                 </tr>
               ))}
