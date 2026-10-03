@@ -2937,3 +2937,5 @@ service separation does not create browser-origin isolation between subfolders.
 Products replace transferable session snapshots with exactly `{url,token}`. The server issues a random 256-bit code valid for 30 minutes. Renewal invalidates the previous code; redemption atomically consumes it and creates an independent refresh family. Source expiry, logout, credential revocation and current team/product/2FA/signature policy are rechecked. The verified config URL and domain bind the environment. Credentials never travel in URLs. Products own issue and login entry surfaces.
 
 `GET /domain/users?domain=...&user_id=...` supports exact UOA subject lookup for relying products that persist only subject references. The current domain role remains required; this never searches outside the authenticated domain.
+
+Normal independent-session logout uses `POST /auth/revoke` with `{refresh_token,scope:"family"}`. This preserves other families and does not increment the global credential epoch. Omission keeps existing global revocation semantics. A product clears its local session only after upstream confirms revocation; failures retain it for retry.

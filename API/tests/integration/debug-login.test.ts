@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createTestDb } from '../helpers/test-db.js';
 import { baseClientConfigPayload } from '../helpers/test-config.js';
 import { validateConfigFields } from '../../src/services/config.service.js';
-import { issueRefreshToken } from '../../src/services/refresh-token.service.js';
+import { issueRefreshToken, revokeRefreshTokenFamily } from '../../src/services/refresh-token.service.js';
 import { hashRefreshToken } from '../../src/services/refresh-token-replay.service.js';
 import { issueDebugLogin, redeemDebugLogin } from '../../src/services/debug-login.service.js';
 import { exchangeRefreshTokenForTokens } from '../../src/services/token.service.js';
@@ -152,6 +152,23 @@ describe.skipIf(!process.env.DATABASE_URL)('durable single-use debug login', () 
     const refreshed = await exchangeRefreshTokenForTokens({ ...context(), refreshToken: pair.refreshToken,
       authenticatedClientDomainId: clientDomainId }, { prisma: handle.prisma, adminPrisma: handle.prisma });
     expect(refreshed.refreshToken).not.toBe(pair.refreshToken);
+  });
+
+  it('family logout preserves independent sessions in both directions and revokes unused source grants', async () => {
+    const a = await source();
+    const grant = await issueDebugLogin({ ...context(), refreshToken: a.refresh.refreshToken }, deps());
+    const receiver = await redeemDebugLogin({ ...context(), token: grant.token }, deps());
+    const unused = await issueDebugLogin({ ...context(), refreshToken: a.refresh.refreshToken }, deps());
+    await revokeRefreshTokenFamily({ ...context(), domain, refreshToken: a.refresh.refreshToken, familyOnly: true }, deps());
+    await expect(redeemDebugLogin({ ...context(), token: unused.token }, deps())).rejects.toThrow();
+    await expect(exchangeRefreshTokenForTokens({ ...context(), refreshToken: receiver.refreshToken,
+      authenticatedClientDomainId: clientDomainId }, { prisma: handle.prisma, adminPrisma: handle.prisma })).resolves.toBeDefined();
+    const b = await source();
+    const bGrant = await issueDebugLogin({ ...context(), refreshToken: b.refresh.refreshToken }, deps());
+    const bReceiver = await redeemDebugLogin({ ...context(), token: bGrant.token }, deps());
+    await revokeRefreshTokenFamily({ ...context(), domain, refreshToken: bReceiver.refreshToken, familyOnly: true }, deps());
+    await expect(exchangeRefreshTokenForTokens({ ...context(), refreshToken: b.refresh.refreshToken,
+      authenticatedClientDomainId: clientDomainId }, { prisma: handle.prisma, adminPrisma: handle.prisma })).resolves.toBeDefined();
   });
 
 });

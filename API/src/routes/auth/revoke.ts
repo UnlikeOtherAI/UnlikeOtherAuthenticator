@@ -12,6 +12,7 @@ import { revokeRateLimiter } from './rate-limit-keys.js';
 const BodySchema = z
   .object({
     refresh_token: z.string().min(1).max(4096),
+    scope: z.literal('family').optional(),
   })
   .strict();
 
@@ -22,7 +23,7 @@ export function registerAuthRevokeRoute(app: FastifyInstance): void {
       preHandler: [configVerifier, requireDomainHashAuth, revokeRateLimiter],
     },
     async (request, reply) => {
-      const { refresh_token } = BodySchema.parse(request.body);
+      const { refresh_token, scope } = BodySchema.parse(request.body);
 
       const config = request.config;
       const configUrl = request.configUrl;
@@ -40,6 +41,7 @@ export function registerAuthRevokeRoute(app: FastifyInstance): void {
         await revokeRefreshTokenFamily(
           {
             refreshToken: refresh_token,
+            familyOnly: scope === 'family',
             domain: config.domain,
             configUrl,
             clientId,
