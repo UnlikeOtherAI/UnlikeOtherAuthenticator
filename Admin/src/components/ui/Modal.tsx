@@ -37,6 +37,8 @@ export function Modal({ children, footer, isOpen, onClose, title, widthClassName
     document.body.style.overflow = 'hidden';
     dialog.current?.focus();
     function onKey(event: KeyboardEvent) {
+      const stack = document.querySelectorAll('[role="dialog"][aria-modal="true"]');
+      if (stack[stack.length - 1] !== dialog.current) return;
       if (event.key === 'Escape') { event.preventDefault(); requestClose(); }
       if (event.key !== 'Tab') return;
       const nodes = Array.from(dialog.current?.querySelectorAll<HTMLElement>('a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex="0"]') ?? []).filter((node) => !node.hidden && node.getAttribute('aria-hidden') !== 'true');

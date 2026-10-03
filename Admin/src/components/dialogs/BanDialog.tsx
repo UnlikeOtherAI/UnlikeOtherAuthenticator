@@ -5,15 +5,17 @@ import { FieldShell, TextField } from '../ui/FormFields';
 import { Modal } from '../ui/Modal';
 import { useCreateBanMutation } from '../../features/admin/admin-queries';
 
-export type BanKind = 'email' | 'ip' | 'pattern';
+export type BanKind = 'email' | 'ip' | 'pattern' | 'user';
 
 const PLACEHOLDER: Record<BanKind, string> = {
+  user: 'UOA user ID',
   ip: '185.220.101.0/24',
   pattern: '*@tempmail.example',
   email: 'spam@example.com',
 };
 
 const VALUE_LABEL: Record<BanKind, string> = {
+  user: 'User ID',
   ip: 'IP address or CIDR range',
   pattern: 'Email pattern (glob, e.g. *@evil.com)',
   email: 'Email address',
@@ -55,12 +57,13 @@ export function BanDialog({
   return (
     <Modal
       isOpen={open}
+      isPending={createBan.isPending}
+      isDirty={Boolean(value || domain || reason)}
       onClose={onClose}
       title={`Add ${kind} ban`}
       widthClassName="max-w-xl"
       footer={
         <>
-          <Button onClick={onClose}>Cancel</Button>
           <Button icon="check" variant="primary" disabled={!canSubmit} onClick={submit}>
             {createBan.isPending ? 'Adding…' : 'Add'}
           </Button>
