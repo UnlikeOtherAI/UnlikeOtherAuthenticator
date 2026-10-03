@@ -407,10 +407,10 @@ export const internalAdminEndpoints: EndpointSchema[] = [
   {
     method: 'GET',
     path: '/internal/admin/logs',
-    description: 'List login logs across domains',
+    description: 'List latest successful login events across domains or for one exact user ID; not a complete paginated history',
     auth: adminAuth,
-    query: { limit: 'number (optional, max 500)' },
-    response: { 200: 'Login log array', '401/403': authFailures },
+    query: { limit: 'number (optional, default 100, max 500)', userId: 'string (optional, exact UOA subject)' },
+    response: { 200: 'Login log array including userId (nullable), occurredAt (ISO UTC), legacy ts display, and result=ok', '401/403': authFailures },
   },
   {
     method: 'GET',
@@ -483,3 +483,4 @@ export const internalAdminEndpoints: EndpointSchema[] = [
   },
   ...buildInternalAdminAppEndpoints({ adminAuth, keyedAuth, authFailures }),
 ];
+

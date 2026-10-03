@@ -19,7 +19,7 @@ import { LogsPage } from '../pages/LogsPage';
 import { LoginPage } from '../pages/LoginPage';
 import { OrganisationDetailPage } from '../pages/OrganisationDetailPage';
 import { OrganisationsPage } from '../pages/OrganisationsPage';
-import { SettingsPage } from '../pages/SettingsPage';
+import { SettingsPage, BansPage, DelegationsPage } from '../pages/SettingsPage';
 import { SuperUsersPage } from '../pages/SuperUsersPage';
 import { TeamDetailPage } from '../pages/TeamDetailPage';
 import { UserDetailPage } from '../pages/UserDetailPage';
@@ -61,6 +61,8 @@ export function App() {
         <Route path="api-keys" element={<ApiKeysPage />} />
         <Route path="billing" element={<BillingPage />} />
         <Route path="settings" element={<SettingsPage />} />
+        <Route path="bans" element={<BansPage />} />
+        <Route path="delegations" element={<DelegationsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
