@@ -4,7 +4,7 @@ import { Button } from './Button';
 
 type PageHeaderProps = {
   title: string;
-  description: string;
+  description?: string;
   actions?: ReactNode;
   backLabel?: string;
   badges?: ReactNode;
@@ -23,7 +23,7 @@ export function PageHeader({ actions, backLabel = 'Back', badges, description, l
             <h1 className="truncate text-lg font-semibold text-gray-900">{title}</h1>
             {badges}
           </div>
-          <p className="mt-0.5 text-sm text-gray-500">{description}</p>
+          {description ? <p className="mt-0.5 text-sm text-gray-500">{description}</p> : null}
         </div>
       </div>
       {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}

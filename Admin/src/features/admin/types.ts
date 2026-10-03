@@ -159,6 +159,8 @@ export type PreapprovedMember = {
 
 export type LoginLog = {
   id: string;
+  userId?: string | null;
+  occurredAt?: string;
   ts: string;
   user: string | null;
   domain: string;
