@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router';
 import { NativeAppsPage } from '../pages/NativeAppsPage';
+import { NativeAppDetailPage } from '../pages/NativeAppDetailPage';
 
 import { AdminSessionGuard } from '../features/auth/admin-session';
 import { AdminUiProvider } from '../features/shell/admin-ui';
@@ -19,7 +20,7 @@ import { LogsPage } from '../pages/LogsPage';
 import { LoginPage } from '../pages/LoginPage';
 import { OrganisationDetailPage } from '../pages/OrganisationDetailPage';
 import { OrganisationsPage } from '../pages/OrganisationsPage';
-import { SettingsPage } from '../pages/SettingsPage';
+import { SettingsPage, BansPage, DelegationsPage } from '../pages/SettingsPage';
 import { SuperUsersPage } from '../pages/SuperUsersPage';
 import { TeamDetailPage } from '../pages/TeamDetailPage';
 import { UserDetailPage } from '../pages/UserDetailPage';
@@ -43,6 +44,7 @@ export function App() {
         <Route index element={<DashboardPage />} />
         <Route path="dashboard" element={<DashboardPage />} />
         <Route path="apps" element={<NativeAppsPage />} />
+        <Route path="apps/:appId" element={<NativeAppDetailPage />} />
         <Route path="integrations" element={<IntegrationRequestsPage />} />
         <Route path="domains" element={<DirectoryDomainsPage />} />
         <Route path="domains/:domainId" element={<DomainDetailPage />} />
@@ -61,6 +63,8 @@ export function App() {
         <Route path="api-keys" element={<ApiKeysPage />} />
         <Route path="billing" element={<BillingPage />} />
         <Route path="settings" element={<SettingsPage />} />
+        <Route path="bans" element={<BansPage />} />
+        <Route path="delegations" element={<DelegationsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>

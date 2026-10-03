@@ -151,12 +151,16 @@ export type PreapprovedMember = {
   role: UoaRole;
   targetTeam: string;
   method: 'ANY' | 'EMAIL' | 'GOOGLE' | 'GITHUB' | 'MICROSOFT' | 'APPLE';
-  status: 'pending' | 'claimed';
+  status: 'pending' | 'claimed' | 'accepted' | 'declined' | 'replaced' | 'revoked' | 'expired';
+  approvalStatus?: 'not_required' | 'pending' | 'approved' | 'denied';
+  targetTeamId?: string;
   created: string;
 };
 
 export type LoginLog = {
   id: string;
+  userId?: string | null;
+  occurredAt?: string;
   ts: string;
   user: string | null;
   domain: string;

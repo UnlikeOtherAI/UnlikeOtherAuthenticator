@@ -41,6 +41,7 @@ export function KillSwitchDialog({
 
   async function submit(values: KillSwitchFormValues) {
     if (!app) return;
+    try {
     await mutation.mutateAsync({
       name: values.name,
       platform: values.platform,
@@ -56,17 +57,19 @@ export function KillSwitchDialog({
       cacheTtl: values.cacheTtl,
     });
     onClose();
+    } catch { /* Mutation error remains visible; retain the form for retry. */ }
   }
 
   return (
     <Modal
       isOpen={open && Boolean(app)}
-      onClose={onClose}
+      isPending={mutation.isPending}
+      isDirty={form.formState.isDirty}
+      onClose={() => { if (!mutation.isPending) onClose(); }}
       title={isEdit ? 'Edit Kill Switch' : 'Add Kill Switch'}
       widthClassName="max-w-xl"
       footer={
         <>
-          <Button onClick={onClose}>Cancel</Button>
           <Button icon="check" variant="primary" disabled={mutation.isPending} onClick={form.handleSubmit(submit)}>
             {mutation.isPending ? 'Saving...' : isEdit ? 'Save changes' : 'Add'}
           </Button>

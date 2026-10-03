@@ -149,19 +149,24 @@ export function CreateBillingInvoiceIssuerDialog({
   }
 
   async function submit(values: BillingInvoiceIssuerFormValues) {
-    await create.mutateAsync(values);
-    close();
+    try {
+      await create.mutateAsync(values);
+      close();
+    } catch {
+      /* Preserve the form and error for retry. */
+    }
   }
 
   return (
     <Modal
       isOpen={open}
       onClose={close}
+      isPending={create.isPending}
+      isDirty={form.formState.isDirty}
       title="Create invoice issuer"
       widthClassName="max-w-2xl"
       footer={
         <>
-          <Button onClick={close}>Cancel</Button>
           <Button
             icon="check"
             variant="primary"
@@ -276,8 +281,12 @@ export function EditBillingInvoiceBuyerDialog({
   }
 
   async function submit(values: BillingInvoiceBuyerFormValues) {
-    await save.mutateAsync(values);
-    close();
+    try {
+      await save.mutateAsync(values);
+      close();
+    } catch {
+      /* Preserve the form and error for retry. */
+    }
   }
 
   const loading = buyer.isPending && buyer.fetchStatus === 'fetching';
@@ -286,11 +295,12 @@ export function EditBillingInvoiceBuyerDialog({
     <Modal
       isOpen={Boolean(organisationId)}
       onClose={close}
+      isPending={save.isPending}
+      isDirty={form.formState.isDirty}
       title="Edit invoice buyer"
       widthClassName="max-w-2xl"
       footer={
         <>
-          <Button onClick={close}>Cancel</Button>
           <Button
             icon="check"
             variant="primary"

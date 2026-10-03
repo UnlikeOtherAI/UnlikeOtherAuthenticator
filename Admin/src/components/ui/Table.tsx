@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState, type ReactNode, type TdHTMLAttributes } from 'react';
+import { useContext, useEffect, useMemo, useRef, useState, type ReactNode, type TdHTMLAttributes } from 'react';
+import { UNSAFE_LocationContext, UNSAFE_NavigationContext } from 'react-router';
 
 import { cn } from '../../utils/cn';
 import { useCookieState } from '../../utils/cookie-state';
@@ -18,11 +19,11 @@ type DataTableProps = {
 export function DataTable({ children, className, headers }: DataTableProps) {
   return (
     <div className={cn('w-full overflow-x-auto', className)}>
-      <table className="w-full min-w-[760px] border-collapse">
+      <table className="w-full border-collapse">
         <thead>
           <tr>
             {headers.map((header) => (
-              <th key={header} className="border-b border-gray-200 bg-gray-50 px-5 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+              <th key={header} scope="col" className="border-b border-gray-200 bg-gray-50 px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-500 sm:px-5">
                 {header}
               </th>
             ))}
@@ -39,7 +40,7 @@ type TdProps = TdHTMLAttributes<HTMLTableCellElement> & {
 };
 
 export function Td({ children, className, ...props }: TdProps) {
-  return <td {...props} className={cn('border-b border-gray-100 px-5 py-2.5 text-sm text-gray-700', className)}>{children}</td>;
+  return <td {...props} className={cn('border-b border-gray-100 px-3 py-2.5 text-sm text-gray-700 sm:px-5', className)}>{children}</td>;
 }
 
 type PaginationProps = {
@@ -51,8 +52,25 @@ type PaginationProps = {
   totalItems: number;
 };
 
-export function usePagination<T>(items: T[], initialPageSize = 10) {
+export function usePagination<T>(items: T[], initialPageSize = 10, options: { key?: string; resetKey?: string; url?: boolean } = {}) {
   const [page, setPage] = useState(1);
+  const location = useContext(UNSAFE_LocationContext)?.location;
+  const navigation = useContext(UNSAFE_NavigationContext);
+  const key = options.key ?? 'page';
+  const priorResetKey = useRef(options.resetKey);
+  const reset = priorResetKey.current !== options.resetKey;
+  const params = new URLSearchParams(location?.search);
+  const urlPage = Number(params.get(key) ?? 1);
+  const useUrl = options.url !== false && !!location && !!navigation;
+  const requestedPage = reset ? 1 : useUrl ? (Number.isSafeInteger(urlPage) && urlPage > 0 ? urlPage : 1) : page;
+  const changePage = (next: number) => {
+    setPage(next);
+    if (!useUrl || !location || !navigation) return;
+    const search = new URLSearchParams(location.search);
+    if (next > 1) search.set(key, String(next)); else search.delete(key);
+    const base = navigation.basename === '/' ? '' : navigation.basename.replace(/\/$/, '');
+    navigation.navigator.push({ pathname: `${base}${location.pathname}`, search: search.toString() ? `?${search}` : '', hash: location.hash }, location.state);
+  };
   const [storedPageSize, setStoredPageSize] = useCookieState<TablePageSizeOption>(
     tablePageSizeCookieName,
     toPageSizeOption(initialPageSize),
@@ -60,11 +78,22 @@ export function usePagination<T>(items: T[], initialPageSize = 10) {
   );
   const pageSize = Number(storedPageSize);
   const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
-  const currentPage = Math.min(page, totalPages);
+  const currentPage = Math.min(requestedPage, totalPages);
 
   useEffect(() => {
     setPage(1);
-  }, [pageSize]);
+  }, [pageSize, options.resetKey]);
+
+  useEffect(() => {
+    if (priorResetKey.current === options.resetKey) return;
+    priorResetKey.current = options.resetKey;
+    if (!useUrl || !location || !navigation) return;
+    const search = new URLSearchParams(location.search);
+    if (!search.has(key)) return;
+    search.delete(key);
+    const base = navigation.basename === '/' ? '' : navigation.basename.replace(/\/$/, '');
+    navigation.navigator.replace({ pathname: `${base}${location.pathname}`, search: search.toString() ? `?${search}` : '', hash: location.hash }, location.state);
+  }, [options.resetKey, useUrl, location, navigation, key]);
 
   useEffect(() => {
     setPage((current) => Math.min(current, totalPages));
@@ -78,10 +107,10 @@ export function usePagination<T>(items: T[], initialPageSize = 10) {
   return {
     pageItems,
     pagination: {
-      onPageChange: setPage,
+      onPageChange: changePage,
       onPageSizeChange: (nextPageSize: number) => {
         setStoredPageSize(toPageSizeOption(nextPageSize));
-        setPage(1);
+        changePage(1);
       },
       page: currentPage,
       pageSize,
@@ -91,6 +120,7 @@ export function usePagination<T>(items: T[], initialPageSize = 10) {
 }
 
 export function PaginationFooter({ onPageChange, onPageSizeChange, page, pageSize, pageSizeOptions = tablePageSizeOptions, totalItems }: PaginationProps) {
+  if (totalItems === 0) return null;
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
   const start = totalItems === 0 ? 0 : (page - 1) * pageSize + 1;
   const end = Math.min(page * pageSize, totalItems);

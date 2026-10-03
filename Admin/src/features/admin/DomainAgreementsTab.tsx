@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router';
 
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
@@ -18,7 +19,10 @@ type AgreementsSection = 'agreements' | 'evidence' | 'audit';
 export function DomainAgreementsTab({ domain }: { domain: string }) {
   const { confirm } = useAdminUi();
   const overview = useDomainSignaturesQuery(domain);
-  const [section, setSection] = useState<AgreementsSection>('agreements');
+  const [params, setParams] = useSearchParams();
+  const sectionParam = params.get('section');
+  const section: AgreementsSection = sectionParam === 'evidence' || sectionParam === 'audit' ? sectionParam : 'agreements';
+  const setSection = (value: AgreementsSection) => setParams((current) => { const next = new URLSearchParams(current); next.set('section', value); return next; });
   const [retentionDays, setRetentionDays] = useState('');
   const [settingsError, setSettingsError] = useState(false);
   const [settingsPending, setSettingsPending] = useState(false);
@@ -42,7 +46,7 @@ export function DomainAgreementsTab({ domain }: { domain: string }) {
 
   if (overview.isLoading) return <p className="text-sm text-gray-400">Loading agreement settings…</p>;
   if (overview.isError || !overview.data) {
-    return <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">Agreement settings could not be loaded.</p>;
+    return <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">Agreement settings could not be loaded. <Button onClick={() => overview.refetch()}>Retry</Button></p>;
   }
 
   const { agreements, audit_events: auditEvents, settings } = overview.data;
@@ -61,8 +65,9 @@ export function DomainAgreementsTab({ domain }: { domain: string }) {
         retentionDays ? parsedRetention : null,
       );
       await overview.refetch();
-    } catch {
+    } catch (error) {
       setSettingsError(true);
+      throw error;
     } finally {
       setSettingsPending(false);
     }
@@ -89,7 +94,7 @@ export function DomainAgreementsTab({ domain }: { domain: string }) {
               <Badge variant={settings.enabled ? 'green' : 'slate'}>{settings.enabled ? 'Enabled' : 'Disabled'}</Badge>
             </div>
             <p className="mt-1 max-w-2xl text-xs text-gray-500">
-              Optional and isolated to {domain}. When disabled, this domain&apos;s existing authorization and refresh behaviour is unchanged.
+              Require signed agreements before users can sign in to {domain}.
             </p>
           </div>
           <Switch
@@ -114,7 +119,7 @@ export function DomainAgreementsTab({ domain }: { domain: string }) {
               <Button
                 size="sm"
                 disabled={!retentionDirty || settingsPending || (Boolean(retentionDays) && !validRetention)}
-                onClick={() => void saveSettings(settings.enabled)}
+                onClick={() => { void saveSettings(settings.enabled).catch(() => undefined); }}
               >
                 Save
               </Button>
