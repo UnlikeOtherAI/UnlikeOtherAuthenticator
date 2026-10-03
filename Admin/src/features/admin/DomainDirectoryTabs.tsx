@@ -131,7 +131,7 @@ export function DomainUsersTab({ users }: { users: Users }) {
             </Td>
             <Td><MethodBadge method={user.method} /></Td>
             <Td><Badge variant={user.twofa ? 'green' : 'slate'}>{user.twofa ? 'Enrolled' : 'Not enrolled'}</Badge></Td>
-            <Td className="text-xs text-gray-400">{user.lastLogin}</Td>
+            <Td className="text-xs text-gray-400">{user.lastLogin === 'Never' ? 'Not in recent activity' : user.lastLogin}</Td>
             <Td><StatusBadge status={user.status} /></Td>
           </tr>
         ))}

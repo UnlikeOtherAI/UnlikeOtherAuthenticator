@@ -111,7 +111,7 @@ export function TeamDetailPage() {
               </Td>
               <Td><StatusBadge status={member.teamRoles[team.name] ?? 'member'} /></Td>
               <Td><Badge variant={member.twofa ? 'green' : 'slate'}>{member.twofa ? '2FA enabled' : '2FA not enrolled'}</Badge></Td>
-              <Td className="text-xs text-gray-400">{member.lastLogin}</Td>
+              <Td className="text-xs text-gray-400">{member.lastLogin === 'Never' ? 'Not in recent activity' : member.lastLogin}</Td>
 
             </tr>
           ))}

@@ -183,7 +183,7 @@ export function OrganisationDetailPage() {
                     })}
                   </div>
                 </Td>
-                <Td className="text-xs text-gray-400">{member.lastLogin}</Td>
+                <Td className="text-xs text-gray-400">{member.lastLogin === 'Never' ? 'Not in recent activity' : member.lastLogin}</Td>
 
               </tr>
             ))}
@@ -209,7 +209,7 @@ export function OrganisationDetailPage() {
                 <Td>{preapproval.targetTeamId ? <Link state={recordState} to={`/organisations/${org.id}/teams/${preapproval.targetTeamId}`} className="text-indigo-600">{preapproval.targetTeam}</Link> : preapproval.targetTeam}</Td>
                 <Td><StatusBadge status={preapproval.role} /></Td>
                 <Td><Badge variant={['claimed', 'accepted'].includes(preapproval.status) ? 'green' : 'amber'}>{preapproval.status}</Badge></Td>
-                <Td>{preapproval.approvalStatus?.replaceAll('_', ' ') ?? '—'}</Td>
+                <Td>{preapproval.approvalStatus?.replaceAll('_', ' ') ?? 'ï¿½'}</Td>
                 <Td className="text-xs text-gray-400">{preapproval.created}</Td>
 
               </tr>
