@@ -1,7 +1,10 @@
 import { MembershipStatus } from '@prisma/client';
 import { describe, expect, it, vi } from 'vitest';
 
-import { getResolvedAppFeatureFlags } from '../feature-flag-resolution.service.js';
+import {
+  getResolvedAppFeatureFlags,
+  resolveAppFeatureFlags,
+} from '../feature-flag-resolution.service.js';
 
 function app(overrides: Record<string, unknown> = {}) {
   return {
@@ -23,6 +26,9 @@ function prisma(
     teamMemberships?: unknown[];
     roleValues?: unknown[];
     userOverrides?: unknown[];
+    userLifecycle?: string;
+    orgLifecycle?: string;
+    teamLifecycle?: string;
   } = {},
 ) {
   const appFindUnique = vi
@@ -63,6 +69,24 @@ function prisma(
     roleValueFindMany,
     overrideFindMany,
     client: {
+      user: {
+        findUnique: vi
+          .fn()
+          .mockResolvedValue({ lifecycleStatus: overrides.userLifecycle ?? 'ACTIVE' }),
+      },
+      organisation: {
+        findUnique: vi
+          .fn()
+          .mockResolvedValue({ lifecycleStatus: overrides.orgLifecycle ?? 'ACTIVE' }),
+      },
+      team: {
+        findUnique: vi
+          .fn()
+          .mockResolvedValue({
+            lifecycleStatus: overrides.teamLifecycle ?? 'ACTIVE',
+            orgId: 'org_1',
+          }),
+      },
       app: { findUnique: appFindUnique },
       featureFlagDefinition: { findMany: definitionFindMany },
       featureFlagRoleValue: { findMany: roleValueFindMany },
@@ -74,6 +98,29 @@ function prisma(
 }
 
 describe('backend feature-flag resolution', () => {
+  it.each(['DISABLED', 'DELETING', 'DELETED'])(
+    'never grants even default flags to a %s lifecycle subject',
+    async (status) => {
+      for (const field of ['userLifecycle', 'orgLifecycle', 'teamLifecycle'] as const) {
+        const mocks = prisma({ [field]: status });
+        const result = await resolveAppFeatureFlags(
+          app(),
+          { userId: 'user_1', teamId: 'team_1' },
+          { prisma: mocks.client },
+          { unauthorizedSubject: 'defaults' },
+        );
+        expect(result).toEqual({});
+        expect(mocks.definitionFindMany).not.toHaveBeenCalled();
+        expect(mocks.overrideFindMany).not.toHaveBeenCalled();
+      }
+    },
+  );
+
+  it('does not publish anonymous defaults for a disabled app-owning organisation', async () => {
+    const mocks = prisma({ orgLifecycle: 'DISABLED' });
+    expect(await resolveAppFeatureFlags(app(), {}, { prisma: mocks.client })).toEqual({});
+  });
+
   it('binds one app domain and exact active user/team before resolving override > role > default', async () => {
     const mocks = prisma();
     const flags = await getResolvedAppFeatureFlags(
@@ -116,6 +163,8 @@ describe('backend feature-flag resolution', () => {
         status: MembershipStatus.ACTIVE,
         team: {
           orgId: 'org_1',
+          lifecycleStatus: 'ACTIVE',
+          org: { lifecycleStatus: 'ACTIVE' },
           id: 'team_1',
         },
       },

@@ -1,6 +1,8 @@
 import { MembershipStatus, type App, type PrismaClient } from '@prisma/client';
 
 import { normalizeDomain } from '../utils/domain.js';
+import { AppError } from '../utils/errors.js';
+import { assertEntityAccess } from './entity-lifecycle.service.js';
 
 type FlagPrisma = Pick<
   PrismaClient,
@@ -10,6 +12,9 @@ type FlagPrisma = Pick<
   | 'featureFlagUserOverride'
   | 'orgMember'
   | 'teamMember'
+  | 'user'
+  | 'organisation'
+  | 'team'
 >;
 
 type FlagApp = Pick<
@@ -66,6 +71,8 @@ async function resolveRoleName(
       status: MembershipStatus.ACTIVE,
       team: {
         orgId: app.orgId,
+        lifecycleStatus: 'ACTIVE',
+        org: { lifecycleStatus: 'ACTIVE' },
         ...(subject.teamId ? { id: subject.teamId } : {}),
       },
     },
@@ -108,6 +115,15 @@ export async function resolveAppFeatureFlags(
   },
 ): Promise<Record<string, boolean>> {
   if (!app.active || !app.featureFlagsEnabled) return {};
+  try {
+    await assertEntityAccess(
+      { userId: subject.userId, orgId: app.orgId, teamId: subject.teamId },
+      deps.prisma,
+    );
+  } catch (error) {
+    if (error instanceof AppError && error.message === 'ACCESS_DENIED') return {};
+    throw error;
+  }
 
   const definitions = await deps.prisma.featureFlagDefinition.findMany({
     where: { appId: app.id },

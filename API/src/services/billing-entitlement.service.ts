@@ -212,6 +212,8 @@ export async function resolveEffectiveTariffContext(
             where: {
               id: request.teamId,
               orgId: request.organisationId,
+              lifecycleStatus: 'ACTIVE',
+              org: { lifecycleStatus: 'ACTIVE' },
               members: {
                 some: {
                   userId: request.userId,

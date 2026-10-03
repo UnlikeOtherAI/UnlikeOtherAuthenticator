@@ -25,7 +25,12 @@ export async function resolveBillingFundingViewer(
       select: { id: true, name: true },
     }),
     prisma.team.findFirst({
-      where: { id: params.teamId, orgId: params.organisationId },
+      where: {
+        id: params.teamId,
+        orgId: params.organisationId,
+        lifecycleStatus: 'ACTIVE',
+        org: { lifecycleStatus: 'ACTIVE' },
+      },
       select: { id: true },
     }),
     prisma.orgMember.findUnique({
