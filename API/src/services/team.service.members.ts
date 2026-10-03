@@ -388,7 +388,7 @@ export async function removeTeamMember(
       teamRole: removedMember.teamRole,
       via: AUDIT_VIA_MANAGER,
     },
-  });
+  }, { prisma });
 
   return { removed: true };
 }
