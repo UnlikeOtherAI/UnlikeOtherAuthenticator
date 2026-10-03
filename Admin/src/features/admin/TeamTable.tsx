@@ -1,4 +1,5 @@
-import { useNavigate } from 'react-router';
+import { Link } from 'react-router';
+import { useDirectoryNavigation } from './useDirectoryNavigation';
 
 import { Badge } from '../../components/ui/Badge';
 import { DataTable, Td } from '../../components/ui/Table';
@@ -17,7 +18,7 @@ type TeamTableProps = {
 };
 
 export function TeamTable({ emptyMessage = 'No teams found.', showDescription = false, showOrganisation = false, teams }: TeamTableProps) {
-  const navigate = useNavigate();
+  const { recordState, openRecord } = useDirectoryNavigation('/teams');
   const headers = ['Team', showOrganisation ? 'Organisation' : null, showDescription ? 'Description' : null, 'Members'].filter((header): header is string => Boolean(header));
 
   return (
@@ -27,21 +28,21 @@ export function TeamTable({ emptyMessage = 'No teams found.', showDescription = 
           key={team.id}
           className="cursor-pointer transition-colors hover:bg-gray-50"
           tabIndex={0}
-          onClick={() => navigate(`/organisations/${team.orgId}/teams/${team.id}`)}
+          onClick={() => openRecord(`/organisations/${team.orgId}/teams/${team.id}`)}
           onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              navigate(`/organisations/${team.orgId}/teams/${team.id}`);
+            if (event.key === 'Enter' && event.target === event.currentTarget) {
+              openRecord(`/organisations/${team.orgId}/teams/${team.id}`);
             }
           }}
         >
           <Td>
             <div className="flex items-center gap-2">
               <TeamAvatar label={team.name} teamId={team.id} />
-              <span className="font-semibold text-indigo-600">{team.name}</span>
+              <Link state={recordState} to={`/organisations/${team.orgId}/teams/${team.id}`} onClick={(event) => event.stopPropagation()} className="font-semibold text-indigo-600">{team.name}</Link>
               {team.isDefault ? <Badge variant="blue">Default</Badge> : null}
             </div>
           </Td>
-          {showOrganisation ? <Td className="text-gray-700">{team.orgName ?? team.orgId}</Td> : null}
+          {showOrganisation ? <Td className="text-gray-700"><Link state={recordState} to={`/organisations/${team.orgId}`} onClick={(event) => event.stopPropagation()} className="text-indigo-600">{team.orgName ?? team.orgId}</Link></Td> : null}
           {showDescription ? <Td className="text-xs text-gray-400">{team.description || '-'}</Td> : null}
           <Td>{team.members}</Td>
         </tr>

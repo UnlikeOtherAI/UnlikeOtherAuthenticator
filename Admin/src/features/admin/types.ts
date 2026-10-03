@@ -151,7 +151,9 @@ export type PreapprovedMember = {
   role: UoaRole;
   targetTeam: string;
   method: 'ANY' | 'EMAIL' | 'GOOGLE' | 'GITHUB' | 'MICROSOFT' | 'APPLE';
-  status: 'pending' | 'claimed';
+  status: 'pending' | 'claimed' | 'accepted' | 'declined' | 'replaced' | 'revoked' | 'expired';
+  approvalStatus?: 'not_required' | 'pending' | 'approved' | 'denied';
+  targetTeamId?: string;
   created: string;
 };
 

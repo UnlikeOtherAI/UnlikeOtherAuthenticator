@@ -1,28 +1,22 @@
-import { useState } from 'react';
+import { useDirectoryNavigation } from '../features/admin/useDirectoryNavigation';
+import { useDirectoryParam } from '../features/admin/useDirectoryParam';
+import { SegmentedTabs } from '../components/ui/Tabs';
+import { useUserLogsQuery } from '../features/admin/activity-queries';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Link, useNavigate, useParams } from 'react-router';
+import { Link, useParams } from 'react-router';
 
-import { ActionButton, ActionDivider } from '../components/ui/ActionButton';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Card, CardHeader } from '../components/ui/Card';
 import { PageHeader } from '../components/ui/PageHeader';
 import { MethodBadge, StatusBadge } from '../components/ui/Status';
 import { DataTable, PaginationFooter, Td, usePagination } from '../components/ui/Table';
-import { AddUserToTeamDialog } from '../components/dialogs/AddUserToTeamDialog';
-import { ChangeTeamRoleDialog } from '../components/dialogs/ChangeTeamRoleDialog';
-import { EditUserDialog } from '../components/dialogs/EditUserDialog';
-import { useLogsQuery, useOrganisationsQuery, useUserQuery } from '../features/admin/admin-queries';
+import { useOrganisationsQuery, useUserQuery } from '../features/admin/admin-queries';
 import { UserAvatar } from '../features/admin/UserAvatar';
 import { UserAvatarSection } from '../features/admin/UserAvatarSection';
-import type { AvatarSource, Organisation, OrganisationMember, Team, UserSummary } from '../features/admin/types';
+import type { AvatarSource, Organisation, OrganisationMember, Team } from '../features/admin/types';
 import { adminService } from '../services/admin-service';
 import { useAdminUi } from '../features/shell/admin-ui';
-
-type DialogState =
-  | { kind: 'edit-user'; user: UserSummary }
-  | { kind: 'add-to-team'; user: UserSummary }
-  | { kind: 'change-team-role'; member: OrganisationMember; team: Team };
 
 const avatarSourceLabels: Record<AvatarSource, string> = {
   uploaded: 'Uploaded',
@@ -38,23 +32,25 @@ type TeamMembership = {
 
 export function UserDetailPage() {
   const { userId } = useParams();
-  const navigate = useNavigate();
+  const { recordState, openRecord, goBack } = useDirectoryNavigation('/users');
   const queryClient = useQueryClient();
   const { confirm } = useAdminUi();
-  const [dialog, setDialog] = useState<DialogState | null>(null);
-  const closeDialog = () => setDialog(null);
+  const [rawTab, setTab] = useDirectoryParam('tab', 'memberships');
+  const tab = ['profile', 'security', 'activity'].includes(rawTab) ? rawTab : 'memberships';
   const userQuery = useUserQuery(userId ?? null);
   const orgsQuery = useOrganisationsQuery();
-  const logsQuery = useLogsQuery();
+  const logsQuery = useUserLogsQuery(userId ?? '');
   const user = userQuery.data;
   const organisations = orgsQuery.data ?? [];
   const memberships = buildMemberships(organisations, userId);
-  const recentLogs = logsQuery.data?.filter((log) => log.user === user?.email) ?? [];
+  const recentLogs = logsQuery.data ?? [];
   const { pageItems, pagination } = usePagination(memberships);
   const resetTwoFa = useMutation({
     mutationFn: () => adminService.resetUserTwoFactor(userId ?? ''),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin'] }),
   });
+
+  if (userQuery.isError) return <div role="alert">Could not load user. <Button onClick={() => void userQuery.refetch()}>Retry</Button></div>;
 
   if (userQuery.isLoading || orgsQuery.isLoading) {
     return <p className="text-sm text-gray-400">Loading user...</p>;
@@ -73,16 +69,21 @@ export function UserDetailPage() {
         badges={
           <>
             <StatusBadge status={user.status} />
-            <StatusBadge status={user.twofa ? 'On' : 'Off'} />
+            <Badge variant={user.twofa ? 'green' : 'slate'}>{user.twofa ? '2FA enabled' : '2FA not enrolled'}</Badge>
             <MethodBadge method={user.method} />
             {user.avatarSource ? <Badge variant="slate">{`Avatar: ${avatarSourceLabels[user.avatarSource]}`}</Badge> : null}
           </>
         }
-        onBack={() => navigate('/users')}
-        actions={
-          <>
-            <Button onClick={() => setDialog({ kind: 'edit-user', user })}>Edit User</Button>
-            <Button variant="primary" onClick={() => setDialog({ kind: 'add-to-team', user })}>Add to Team</Button>
+        onBack={goBack}
+      />
+      <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <Metric label="Services" value={String(user.domains.length)} />
+        <Metric label="Organisations" value={String(organisations.filter((org) => org.members.some((member) => member.id === user.id)).length)} />
+        <Metric label="Teams" value={String(memberships.length)} />
+        <Metric label="Last Login" value={user.lastLogin} />
+      </div>
+      <SegmentedTabs value={tab} onChange={setTab} options={[{ label: 'Memberships', value: 'memberships' }, { label: 'Profile', value: 'profile' }, { label: 'Security', value: 'security' }, { label: 'Activity', value: 'activity' }]} />
+      {tab === 'security' ? <Card className="p-5">
             <Button
               disabled={resetTwoFa.isPending}
               onClick={() =>
@@ -97,62 +98,60 @@ export function UserDetailPage() {
             >
               {resetTwoFa.isPending ? 'Resetting...' : 'Reset 2FA'}
             </Button>
-            <Button variant={user.status === 'banned' ? 'secondary' : 'danger'} onClick={() => confirm(`${user.status === 'banned' ? 'Unban' : 'Ban'} ${user.email}?`, 'A production write endpoint is required before this can change stored user state.')}>
-              {user.status === 'banned' ? 'Unban' : 'Ban User'}
-            </Button>
-          </>
-        }
-      />
-      <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Metric label="Domains" value={user.domains.length > 0 ? user.domains.join(', ') : 'Linked by org'} />
-        <Metric label="Organisations" value={String(new Set(memberships.map((membership) => membership.organisation.id)).size)} />
-        <Metric label="Teams" value={String(memberships.length)} />
-        <Metric label="Last Login" value={user.lastLogin} />
-      </div>
+      </Card> : null}
+      {tab === 'profile' ?
       <div className="mb-5">
+        <div className="mb-4 flex flex-wrap gap-3">{user.domains.map((domain) => <Link state={recordState} key={domain} className="text-sm text-indigo-600" to={`/domains/${encodeURIComponent(domain)}`}>{domain}</Link>)}</div>
         <UserAvatarSection userId={user.id} userName={user.name ?? user.email} />
-      </div>
+      </div> : null}
+      {tab === 'memberships' ? <>
+      {orgsQuery.isError ? <p role="alert">Could not load memberships. <Button onClick={() => void orgsQuery.refetch()}>Retry</Button></p> : null}
+      <Card className="mb-4">
+        <CardHeader>Organisations</CardHeader>
+        <div className="divide-y divide-gray-100">
+          {organisations.filter((org) => org.members.some((member) => member.id === user.id)).map((org) => <div className="px-5 py-3" key={org.id}><Link state={recordState} className="text-sm text-indigo-600" to={`/organisations/${org.id}`}>{org.name}</Link></div>)}
+        </div>
+      </Card>
       <Card>
         <CardHeader>
           <span className="text-sm font-semibold text-gray-900">Teams</span>
-          <Button icon="plus" size="sm" variant="primary" onClick={() => setDialog({ kind: 'add-to-team', user })}>Add to Team</Button>
         </CardHeader>
-        <DataTable headers={['Organisation', 'Team', 'Org Role', 'Team Role', 'Members', 'Actions']}>
+        <DataTable headers={['Organisation', 'Team', 'Org Role', 'Team Role', 'Members']}>
           {pageItems.map(({ member, organisation, team }) => (
             <tr
               key={`${organisation.id}-${team.id}`}
               className="cursor-pointer transition-colors hover:bg-gray-50"
               tabIndex={0}
-              onClick={() => navigate(`/organisations/${organisation.id}/teams/${team.id}`)}
+              onClick={() => openRecord(`/organisations/${organisation.id}/teams/${team.id}`)}
               onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  navigate(`/organisations/${organisation.id}/teams/${team.id}`);
+                if (event.key === 'Enter' && event.target === event.currentTarget) {
+                  openRecord(`/organisations/${organisation.id}/teams/${team.id}`);
                 }
               }}
             >
-              <Td><Link className="font-medium text-indigo-600 hover:text-indigo-900" to={`/organisations/${organisation.id}`} onClick={(event) => event.stopPropagation()}>{organisation.name}</Link></Td>
+              <Td><Link state={recordState} className="font-medium text-indigo-600 hover:text-indigo-900" to={`/organisations/${organisation.id}`} onClick={(event) => event.stopPropagation()}>{organisation.name}</Link></Td>
               <Td>
-                <Link className="font-medium text-indigo-600 hover:text-indigo-900" to={`/organisations/${organisation.id}/teams/${team.id}`} onClick={(event) => event.stopPropagation()}>{team.name}</Link>
+                <Link state={recordState} className="font-medium text-indigo-600 hover:text-indigo-900" to={`/organisations/${organisation.id}/teams/${team.id}`} onClick={(event) => event.stopPropagation()}>{team.name}</Link>
                 {team.isDefault ? <Badge className="ml-2" variant="blue">Default</Badge> : null}
               </Td>
               <Td><StatusBadge status={member.role} /></Td>
               <Td><StatusBadge status={member.teamRoles[team.name] ?? 'member'} /></Td>
               <Td>{team.members}</Td>
-              <Td className="whitespace-nowrap" onClick={(event) => event.stopPropagation()}>
-                <ActionButton tone="amber" onClick={() => setDialog({ kind: 'change-team-role', member, team })}>Change Role</ActionButton>
-                <ActionDivider />
-                <ActionButton tone="red" onClick={() => confirm(`Remove from ${team.name}?`, `${user.email} will stay in the user directory.`)}>Remove</ActionButton>
-              </Td>
+
             </tr>
           ))}
+        {pageItems.length === 0 && !orgsQuery.isError ? <tr><Td colSpan={5}>No teams in the loaded organisation directory.</Td></tr> : null}
         </DataTable>
         <PaginationFooter {...pagination} />
       </Card>
-      <Card className="mt-4">
+      </> : null}
+      {tab === 'activity' ? <Card className="mt-4">
         <CardHeader>
           <span className="text-sm font-semibold text-gray-900">Recent Login Activity</span>
         </CardHeader>
         <div className="divide-y divide-gray-100">
+          {logsQuery.isError ? <p role="alert">Could not load login activity. <Button onClick={() => void logsQuery.refetch()}>Retry</Button></p> : null}
+          {logsQuery.isLoading ? <p>Loading login activity...</p> : null}
           {recentLogs.slice(0, 5).map((log) => (
             <div key={log.id} className="flex flex-wrap items-center justify-between gap-2 px-5 py-3 text-sm">
               <span className="text-gray-700">{log.ts}</span>
@@ -160,22 +159,9 @@ export function UserDetailPage() {
               <Badge variant={log.result === 'ok' ? 'green' : 'red'}>{log.result.toUpperCase()}</Badge>
             </div>
           ))}
-          {recentLogs.length === 0 ? <p className="px-5 py-4 text-sm text-gray-400">No recent logins.</p> : null}
+          {!logsQuery.isLoading && !logsQuery.isError && recentLogs.length === 0 ? <p className="px-5 py-4 text-sm text-gray-400">No recent logins.</p> : null}
         </div>
-      </Card>
-      <EditUserDialog open={dialog?.kind === 'edit-user'} user={dialog?.kind === 'edit-user' ? dialog.user : null} onClose={closeDialog} />
-      <AddUserToTeamDialog
-        open={dialog?.kind === 'add-to-team'}
-        user={dialog?.kind === 'add-to-team' ? dialog.user : null}
-        organisations={organisations}
-        onClose={closeDialog}
-      />
-      <ChangeTeamRoleDialog
-        open={dialog?.kind === 'change-team-role'}
-        member={dialog?.kind === 'change-team-role' ? dialog.member : null}
-        team={dialog?.kind === 'change-team-role' ? dialog.team : null}
-        onClose={closeDialog}
-      />
+      </Card> : null}
     </>
   );
 }
