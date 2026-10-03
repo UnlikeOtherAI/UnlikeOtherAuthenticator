@@ -40,6 +40,7 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
     /plugins
       tenant-context.plugin.ts — Fastify plugin that wires per-request RLS tenant context
     /middleware
+      access-status-enabled.ts      — Server-owned default-off gate before status-proof route work
       admin-superuser.ts            — Validates admin access token + superuser role for /internal/admin/*
       billing-app-auth.ts            — Authenticates a product-bound app key for /billing/v1/*
       config-jwt-header-verifier.ts — Verifies signed config JWT supplied via header
@@ -893,3 +894,11 @@ Tests include real PostgreSQL replay races, cross-action/person/domain misuse,
 expiry, credential revocation and persisted attempt exhaustion.
 The PostgreSQL test helper invokes Prisma through Node and pipes SQL through
 stdin on every platform, including Windows (no shell command interpolation).
+
+### Access-status runtime gate
+
+`AUTH_ACCESS_STATUS_ENABLED` defaults to false. Both website/native proof start
+and verify routes run `requireAccessStatusEnabled` at `onRequest`, before signed
+config retrieval, native public-profile/client checks or lifecycle proof services.
+The HTML renderer injects the separate boolean `__UOA_ACCESS_STATUS_ENABLED__`
+and passes it to Auth SSR. Product configuration cannot supply this setting.

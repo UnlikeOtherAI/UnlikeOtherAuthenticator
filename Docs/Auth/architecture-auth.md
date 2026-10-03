@@ -83,6 +83,8 @@ For the full product spec, see [brief.md](./brief.md). For tech stack, see [tech
       use-theme.ts            — Shorthand hook for theme context
       use-popup.ts            — Popup lifecycle (redirect handling, window messaging)
     /utils
+      access-status.tsx       — Default-off server runtime flag context for login diagnostics
+      bootstrap.ts           — API bootstrap values shared by SSR and hydration
       api.ts                  — API client for calling auth server endpoints (includes the
                                  Phase 3c authStart/verifyLoginCode/selectTeam flow helpers)
       signature-api.ts        — Typed capability-session JSON/PDF calls for the hosted signing flow
@@ -288,3 +290,12 @@ These two steps are held entirely in client state (`use-popup.tsx`'s `pendingEma
 - The API client handles base URL, headers, and error normalization
 - API errors are always displayed generically — the API client never surfaces specific error messages to the UI
 - Loading and error states managed by the `use-auth` hook
+
+### Optional access-status diagnostics
+
+The login diagnostic is absent by default. `utils/bootstrap.ts` reads the
+separate API-owned `__UOA_ACCESS_STATUS_ENABLED__` boolean (or the explicit SSR
+value). `utils/access-status.tsx` provides it to LoginPage independently of
+product config, query parameters and browser storage. Only auth-server
+`AUTH_ACCESS_STATUS_ENABLED=true` enables the entry and server endpoints.
+The API also refuses previously issued proofs when disabled.
