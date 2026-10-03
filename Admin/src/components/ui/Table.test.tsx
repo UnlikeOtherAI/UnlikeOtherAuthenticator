@@ -14,10 +14,10 @@ function Detail() { const navigate = useNavigate(); return <button onClick={() =
 it('restores URL pagination through a detail visit and browser Back', async () => {
   const user = userEvent.setup();
   render(<MemoryRouter initialEntries={['/list?page=2']}><Routes><Route path="/list" element={<List />} /><Route path="/record/:id" element={<Detail />} /></Routes></MemoryRouter>);
-  expect(screen.queryByRole('link', { name: 'Record 1', exact: true })).toBeNull();
-  await user.click(screen.getByRole('link', { name: 'Record 11', exact: true }));
+  expect(screen.queryByRole('link', { name: 'Record 1' })).toBeNull();
+  await user.click(screen.getByRole('link', { name: 'Record 11' }));
   await user.click(screen.getByRole('button', { name: 'Back' }));
   expect(screen.getByText('?page=2')).toBeTruthy();
   await user.click(screen.getByRole('button', { name: 'Next' }));
-  expect(screen.getByRole('link', { name: 'Record 21', exact: true })).toBeTruthy();
+  expect(screen.getByRole('link', { name: 'Record 21' })).toBeTruthy();
 });

@@ -6,8 +6,10 @@ import { Icon } from '../icons/Icon';
 import { Badge } from '../ui/Badge';
 import { adminService } from '../../services/admin-service';
 import type { SearchResult } from '../../features/admin/types';
+import { useDirectoryNavigation } from '../../features/admin/useDirectoryNavigation';
 
 export function GlobalSearch() {
+  const { recordState } = useDirectoryNavigation('/dashboard');
   const [inputValue, setInputValue] = useState('');
   const [query, setQuery] = useState('');
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -68,7 +70,7 @@ export function GlobalSearch() {
           {isFetching || query !== inputValue.trim() ? <p role="status" className="p-4 text-sm text-gray-500">Searching...</p> : isError ? <div role="alert" className="p-4 text-sm text-red-700">Search failed. <button type="button" onClick={() => void refetch()}>Try again</button></div> : data.length > 0 ? (
             <div className="py-1">
               {data.map((result) => (
-                <Link key={searchKey(result)} to={resultPath(result)} className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-indigo-50" onClick={() => setInputValue('')}>
+                <Link key={searchKey(result)} state={recordState} to={resultPath(result)} className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-indigo-50" onClick={() => setInputValue('')}>
                   <ResultAvatar result={result} />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium text-gray-900">{resultLabel(result)}</span>

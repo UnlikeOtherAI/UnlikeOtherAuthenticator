@@ -1,3 +1,4 @@
+import { useDirectoryNavigation } from '../features/admin/useDirectoryNavigation';
 import { useMemo, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { useListParams } from '../utils/list-params';
@@ -21,6 +22,7 @@ const detailSectionCookieValues = sectionCookieValues(detailSectionIds);
 type DetailSectionId = (typeof detailSectionIds)[number];
 
 export function ConnectionErrorsPage() {
+  const { recordState } = useDirectoryNavigation('/dashboard');
   const { data: errors = [], isLoading, isError, refetch } = useHandshakeErrorsQuery();
   const state = useListParams();
   const selectedErrorId = state.get('selected');
@@ -92,11 +94,11 @@ export function ConnectionErrorsPage() {
                   >
                     <Td className="whitespace-nowrap text-xs text-gray-400">{error.ts}</Td>
                     <Td>
-                      <Link className="text-indigo-700 hover:underline" to={`/domains/${encodeURIComponent(error.domain)}`}>{error.domain}</Link>
+                      <Link state={recordState} className="text-indigo-700 hover:underline" to={`/domains/${encodeURIComponent(error.domain)}`}>{error.domain}</Link>
                     </Td>
                     <Td><Badge variant="blue">{phaseLabel(error.phase)}</Badge></Td>
                     <Td>
-                      <Link className="text-xs font-semibold text-red-700 hover:underline" to={`?${new URLSearchParams({ ...Object.fromEntries(state.params), selected: error.id })}`}>{error.errorCode}</Link>
+                      <Link state={recordState} className="text-xs font-semibold text-red-700 hover:underline" to={`?${new URLSearchParams({ ...Object.fromEntries(state.params), selected: error.id })}`}>{error.errorCode}</Link>
                     </Td>
                     <Td><Badge variant={error.statusCode >= 500 ? 'red' : 'amber'}>{error.statusCode}</Badge></Td>
                   </tr>

@@ -64,3 +64,20 @@ If you are building the admin panel:
 3. Do not invent a new dashboard design.
 4. Reuse the template structure and visual language.
 5. Keep the codebase under strict lint and typecheck gates.
+
+## 2026-10-03 approved UI refactor amendment
+
+The operator explicitly approved decluttering the entire admin panel, revising its menu and
+record navigation, and removing unjustified or nonfunctional interface elements while
+preserving working operations. For this approved work, the current route/menu contract in the
+[architecture amendment](architecture-admin.md#2026-10-03-approved-navigation-and-interaction-amendment)
+and [capability audit](admin-ui-refactor-audit.md) supersedes the earlier requirement to preserve
+the template information architecture exactly. The original templates and rules above remain
+as historical design references; this amendment does not delete or rewrite them.
+
+Continue using the existing React/Tailwind visual language, icons and reusable primitives.
+Each retained control must either navigate to a real record, disclose useful information or
+perform a supported operation. Do not restore placeholder saves, fake confirmations, invented
+counts or implementation-only prose merely because a historical template contains them.
+Authentication, identity authority, commercial invariants and the strict quality gate remain
+unchanged by this visual/navigation authorization.
