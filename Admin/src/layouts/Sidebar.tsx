@@ -4,8 +4,7 @@ import { Icon } from '../components/icons/Icon';
 import { Avatar } from '../components/ui/Avatar';
 import { Badge } from '../components/ui/Badge';
 import { adminAssets } from '../config/assets';
-import { useDashboardQuery, useIntegrationRequestsQuery } from '../features/admin/admin-queries';
-import type { AdminData } from '../features/admin/types';
+import { useIntegrationRequestsQuery } from '../features/admin/admin-queries';
 import { UserAvatar } from '../features/admin/UserAvatar';
 import { useAdminSession, useAdminSessionActions } from '../features/auth/admin-session';
 import { useAdminUi } from '../features/shell/admin-ui';
@@ -19,7 +18,6 @@ type SidebarBadge = {
 };
 
 export function Sidebar() {
-  const { data } = useDashboardQuery();
   const { data: integrationRequests } = useIntegrationRequestsQuery('PENDING');
   const pendingIntegrationCount = integrationRequests?.length ?? 0;
   const { adminUser } = useAdminSession();
@@ -46,8 +44,7 @@ export function Sidebar() {
         <nav className="flex-1 px-2 py-2">
           {navSections.map((section) => {
             const visibleItems = section.items
-              .map((item) => ({ item, badge: getSidebarBadge(item, data, pendingIntegrationCount) }))
-              .filter(({ item, badge }) => !(item.hideWhenEmpty && !badge));
+              .map((item) => ({ item, badge: item.badgeKey && pendingIntegrationCount > 0 ? { label: formatCompactCount(pendingIntegrationCount), tone: 'alert' as const } : undefined }));
 
             if (visibleItems.length === 0) {
               return null;
@@ -55,7 +52,7 @@ export function Sidebar() {
 
             return (
               <div key={section.label}>
-                <p className="mb-1 mt-4 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-600 first:mt-2">{section.label}</p>
+                {section.label ? <p className="mb-1 mt-4 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400 first:mt-2">{section.label}</p> : null}
                 {visibleItems.map(({ item, badge }) => (
                   <SidebarLink key={item.path} item={item} badge={badge} onClick={closeSidebar} />
                 ))}
@@ -64,15 +61,15 @@ export function Sidebar() {
           })}
         </nav>
         <div className="border-t border-slate-800 p-2">
-          <button className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left transition-colors hover:bg-slate-800" type="button" onClick={signOut}>
+          <button aria-label="Sign out" className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left transition-colors hover:bg-slate-800" type="button" onClick={signOut}>
             {adminUser?.id ? (
               <UserAvatar userId={adminUser.id} label={adminUser.email} />
             ) : (
-              <Avatar label={adminUser?.email ?? 'sys_admin'} />
+              <Avatar label={adminUser?.email ?? 'Administrator'} />
             )}
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-medium text-slate-200">sys_admin</span>
-              <span className="block truncate text-xs text-slate-500">{adminUser?.email ?? 'admin@system.local'}</span>
+              <span className="block truncate text-sm font-medium text-slate-200">{adminUser?.email ?? 'Administrator'}</span>
+              <span className="block text-xs text-slate-400">Sign out</span>
             </span>
             <Icon name="logout" className="h-4 w-4 shrink-0 text-slate-500" />
           </button>
@@ -110,38 +107,4 @@ function SidebarLink({ badge, item, onClick }: { badge?: SidebarBadge; item: Nav
   );
 }
 
-function getSidebarBadge(item: NavItem, data: AdminData | undefined, pendingIntegrationCount: number): SidebarBadge | undefined {
-  const value = getBadgeValue(item, data, pendingIntegrationCount);
-  if (value === undefined) {
-    return undefined;
-  }
 
-  return {
-    label: formatCompactCount(value),
-    tone: item.badgeKey === 'integrationRequests' ? 'alert' : 'default',
-  };
-}
-
-function getBadgeValue(item: NavItem, data: AdminData | undefined, pendingIntegrationCount: number) {
-  if (!item.badgeKey) {
-    return undefined;
-  }
-
-  if (item.badgeKey === 'integrationRequests') {
-    return pendingIntegrationCount > 0 ? pendingIntegrationCount : undefined;
-  }
-
-  if (!data) {
-    return undefined;
-  }
-
-  if (item.badgeKey === 'users') {
-    return data.stats.users;
-  }
-
-  if (item.badgeKey === 'teams') {
-    return data.organisations.reduce((total, org) => total + org.teams.length, 0);
-  }
-
-  return data.stats[item.badgeKey];
-}
