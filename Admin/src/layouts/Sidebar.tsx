@@ -106,5 +106,3 @@ function SidebarLink({ badge, item, onClick }: { badge?: SidebarBadge; item: Nav
     </NavLink>
   );
 }
-
-

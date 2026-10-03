@@ -483,4 +483,3 @@ export const internalAdminEndpoints: EndpointSchema[] = [
   },
   ...buildInternalAdminAppEndpoints({ adminAuth, keyedAuth, authFailures }),
 ];
-

@@ -24,4 +24,3 @@ export function registerLlmRoute(app: FastifyInstance): void {
     reply.type('text/markdown; charset=utf-8').send(renderLlmMarkdown());
   });
 }
-

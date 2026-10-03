@@ -38,4 +38,3 @@ export function BansPage() {
     <BanDialog open={dialog !== null} kind={dialog ?? 'email'} onClose={() => setDialog(null)} />
   </>;
 }
-

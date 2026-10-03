@@ -70,4 +70,3 @@ describe('ConfirmDialog', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 });
-

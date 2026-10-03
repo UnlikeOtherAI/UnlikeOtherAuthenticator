@@ -218,4 +218,3 @@ describe('ConfidentialDelegationsSettings', () => {
     expect(within(alert).queryByText(/organisation and team authority over UOA/i)).toBeNull();
   });
 });
-
