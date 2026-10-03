@@ -30,11 +30,6 @@ import {
 } from './team.service.base.js';
 import { auditOrg } from './organisation.service.base.js';
 import { getTeamInvitedEntries, type TeamInvitedEntry } from './team-invite.service.invited.js';
-import {
-  lockTeamMembershipRows,
-  lockTeamOrganisationRow,
-  lockTeamTeamRow,
-} from './team-scope.service.js';
 
 const TEAM_SELECT = {
   id: true,

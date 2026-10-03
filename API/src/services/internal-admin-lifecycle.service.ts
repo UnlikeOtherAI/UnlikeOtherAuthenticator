@@ -9,6 +9,7 @@ import { lockRefreshSessionUser } from './refresh-session-lock.service.js';
 export type LifecycleActor = { userId: string; tokenVersion: number };
 export async function requireLifecycleActor(tx: PrismaClient, actor: LifecycleActor): Promise<string> {
   await lockRefreshSessionUser(actor.userId, { prisma: tx });
+  await tx.$queryRaw(Prisma.sql`SELECT user_id FROM domain_roles WHERE user_id=${actor.userId} AND domain=${getAdminAuthDomain()} FOR SHARE`);
   const user = await tx.user.findUnique({ where: { id: actor.userId } });
   const role = await tx.domainRole.findUnique({ where: { domain_userId: { domain: getAdminAuthDomain(), userId: actor.userId } } });
   if (!user || !user.email || user.lifecycleStatus !== 'ACTIVE' || user.tokenVersion !== actor.tokenVersion || role?.role !== 'SUPERUSER') {
@@ -49,6 +50,14 @@ export async function revokeLifecycleSessions(tx: PrismaClient, scope: Lifecycle
   const scopeWhere = scope === 'TEAM' ? { teamId: id } : { orgId: id };
   await tx.refreshToken.updateMany({ where: { ...scopeWhere, revokedAt: null }, data: { revokedAt: new Date() } });
   await tx.authorizationCode.deleteMany({ where: scopeWhere });
+  if (scope === 'ORGANISATION') {
+    const org = await tx.organisation.findUniqueOrThrow({ where: { id }, select: { domain: true } });
+    const userIds = memberships.map(m => m.userId);
+    // Before scoped sessions existed, origin-domain rows were attributable only to this
+    // user's one active organisation in that domain. Retire that legacy authority explicitly.
+    await tx.refreshToken.updateMany({ where: { userId: { in: userIds }, domain: org.domain, orgId: null, revokedAt: null }, data: { revokedAt: new Date() } });
+    await tx.authorizationCode.deleteMany({ where: { userId: { in: userIds }, domain: org.domain, orgId: null } });
+  }
 }
 
 export async function getEntityLifecycle(scope: LifecycleScope, id: string) {
@@ -77,9 +86,9 @@ export async function setEntityLifecycle(params: {
     }
     if (params.scope === 'USER') await lockRefreshSessionUser(params.id, { prisma: tx });
     const data = { lifecycleStatus: params.status, lifecycleChangedAt: new Date(),
-      lifecycleReason: params.status === 'DISABLED' ? template!.message : null,
-      lifecycleTemplateId: params.status === 'DISABLED' ? template!.id : null,
-      lifecycleTemplateRevision: params.status === 'DISABLED' ? template!.revision : null,
+      lifecycleReason: params.status === 'DISABLED' ? template?.message ?? null : null,
+      lifecycleTemplateId: params.status === 'DISABLED' ? template?.id ?? null : null,
+      lifecycleTemplateRevision: params.status === 'DISABLED' ? template?.revision ?? null : null,
       lifecycleInternalNote: params.internalNote ?? null };
     if (params.scope === 'USER') await tx.user.update({ where: { id: params.id }, data });
     else if (params.scope === 'TEAM') await tx.team.update({ where: { id: params.id }, data });

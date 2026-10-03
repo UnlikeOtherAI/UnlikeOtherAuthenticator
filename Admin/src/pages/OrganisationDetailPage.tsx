@@ -89,7 +89,7 @@ export function OrganisationDetailPage() {
         }
       />
       <div className="mb-5 grid gap-3 md:grid-cols-[2fr_1fr_1fr]">
-        <MetricCard label="Owner" value={org.owner?.name ?? org.owner?.email ?? 'Deleted owner'} action={org.owner ? <button className="text-xs font-medium text-indigo-600 hover:text-indigo-900" type="button" onClick={() => openUser(org.owner!.id)}>{org.owner?.email}</button> : null} />
+        <MetricCard label="Owner" value={org.owner?.name ?? org.owner?.email ?? 'Deleted owner'} action={org.owner ? <button className="text-xs font-medium text-indigo-600 hover:text-indigo-900" type="button" onClick={() => org.owner ? openUser(org.owner.id) : undefined}>{org.owner?.email}</button> : null} />
         <MetricCard label="Members" value={String(org.members.length)} />
         <MetricCard label="Teams" value={String(org.teams.length)} />
       </div>

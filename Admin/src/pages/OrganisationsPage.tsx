@@ -65,7 +65,7 @@ export function OrganisationsPage() {
                     </div>
                   </Td>
                   <Td>
-                    <button className="text-left text-sm text-gray-700 hover:text-indigo-700" type="button" onClick={(event) => { event.stopPropagation(); org.owner && openUser(org.owner.id); }}>{org.owner?.name}</button>
+                    <button className="text-left text-sm text-gray-700 hover:text-indigo-700" type="button" onClick={(event) => { event.stopPropagation(); if (org.owner) openUser(org.owner.id); }}>{org.owner?.name}</button>
                     <p className="text-xs text-gray-400">{org.owner?.email}</p>
                   </Td>
                   <Td>{org.members.length}</Td>

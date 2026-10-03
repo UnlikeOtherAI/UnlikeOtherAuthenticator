@@ -35,7 +35,9 @@ export async function startLifecycleStatus(input: Context & { email: string }) {
     } });
     return user.email;
   });
-  if (email) void sendActionVerificationEmail({ to: email, code, domain: input.config.domain,
+  // Deliver the same neutral mail operation for known and unknown recipients. Only eligible
+  // identities have a persisted challenge; no profile or login credential is created otherwise.
+  await sendActionVerificationEmail({ to: email ?? input.email.trim().toLowerCase(), code, domain: input.config.domain,
     description: 'View your account access status', theme: extractEmailTheme(input.config) }).catch(() => undefined);
   await new Promise(resolve => setTimeout(resolve, Math.max(0, 250 - (Date.now() - startedAt))));
   return { ok: true, challengeId: id };

@@ -42,7 +42,10 @@ model EntityDeletionJob {
   revision          Int @default(1)
   preview           Json
   blockers          Json @default("[]")
-  actorUserId       String @map("actor_user_id")
+  actorUserId       String? @map("actor_user_id")
+  progress          Json @default("{}")
+  leaseOwner        String? @map("lease_owner")
+  leaseExpiresAt    DateTime? @map("lease_expires_at")
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
   completedAt       DateTime? @map("completed_at")
@@ -58,6 +61,7 @@ model EntityDeletionParticipant {
   domain         String
   acknowledgedAt DateTime? @map("acknowledged_at")
   outcome        String? @db.VarChar(2000)
+  retainedEvidence Json @default("[]") @map("retained_evidence")
   job EntityDeletionJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
   @@unique([jobId, clientDomainId])
   @@map("entity_deletion_participants")
