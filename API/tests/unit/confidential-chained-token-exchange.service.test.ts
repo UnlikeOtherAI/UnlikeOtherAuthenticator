@@ -368,7 +368,7 @@ describe('chained confidential exchange', () => {
       expect.objectContaining({
         where: expect.objectContaining({
           userId,
-          org: { domain: upstream.sub },
+          org: { domain: upstream.sub, lifecycleStatus: 'ACTIVE' },
         }),
       }),
     );
