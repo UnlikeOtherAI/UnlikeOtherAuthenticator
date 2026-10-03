@@ -3,7 +3,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { asPrismaClient } from '../../db/tenant-context.js';
 import { configVerifier } from '../../middleware/config-verifier.js';
 import requireDomainHashAuthForDomainQuery from '../../middleware/domain-hash-auth.js';
-import { setTenantContextFromRequest } from '../../plugins/tenant-context.plugin.js';
+import { setTenantContextFromRequest, runWithOrgAdminEffectTransaction } from '../../plugins/tenant-context.plugin.js';
 import {
   listOrganisationMembers,
   addOrganisationMember,
@@ -207,10 +207,11 @@ export function registerOrganisationMemberRoutes(app: FastifyInstance) {
       const orgId = getOrgIdFromParams(request.params);
       const userId = getUserIdFromParams(request.params);
 
-      await removeOrganisationMember(
+      setTenantContextFromRequest(request, { orgId });
+      await runWithOrgAdminEffectTransaction(request, tx => removeOrganisationMember(
         { orgId, domain, ...orgCaller(request), userId, config },
-        { prisma: request.adminDb },
-      );
+        { prisma: tx },
+      ));
 
       reply.status(200).send({ ok: true });
     },
@@ -233,10 +234,11 @@ export function registerOrganisationMemberRoutes(app: FastifyInstance) {
       const orgId = getOrgIdFromParams(request.params);
       const userId = getUserIdFromParams(request.params);
 
-      await deactivateOrganisationMember(
+      setTenantContextFromRequest(request, { orgId });
+      await runWithOrgAdminEffectTransaction(request, tx => deactivateOrganisationMember(
         { orgId, domain, ...orgCaller(request), userId, config },
-        { prisma: request.adminDb },
-      );
+        { prisma: tx },
+      ));
 
       reply.status(200).send({ ok: true });
     },
