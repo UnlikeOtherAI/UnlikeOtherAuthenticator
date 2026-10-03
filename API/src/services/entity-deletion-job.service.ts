@@ -38,7 +38,8 @@ export async function beginEntityDeletion(params: {
   scope: LifecycleScope; id: string; mode: IdentityDeletionMode; previewDigest: string;
   confirmation: string; requestKey: string; actor: LifecycleActor;
 }) {
-  return runInTransaction(getAdminPrisma(), async tx => {
+  return getAdminPrisma().$transaction(async transaction => {
+    const tx = transaction as unknown as PrismaClient;
     await lockProductTeamPolicyExclusive(tx);
     const actorEmail = await requireLifecycleActor(tx, params.actor);
     const previous = await tx.entityDeletionJob.findUnique({ where: { requestKey: params.requestKey }, include: { participants: true } });
@@ -67,7 +68,7 @@ export async function beginEntityDeletion(params: {
     }, include: { participants: true } });
     await tx.adminAuditLog.create({ data: { actorEmail, action: 'entity.deletion_started', metadata: { jobId: job.id, scope: params.scope, targetId: params.id, mode: params.mode } } });
     return job;
-  });
+  }, { timeout: 15_000 });
 }
 
 export async function getDeletionJob(id: string) {

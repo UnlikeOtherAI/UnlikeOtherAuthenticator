@@ -33,4 +33,3 @@ export function makeConfig(overrides?: Partial<ClientConfig>): ClientConfig {
     },
   };
 }
-

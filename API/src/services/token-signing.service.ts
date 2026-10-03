@@ -71,4 +71,3 @@ export async function signAccessToken(params: {
     throw new AppError('INTERNAL', 500, 'TOKEN_SIGN_FAILED');
   }
 }
-

@@ -71,7 +71,8 @@ export async function getActiveUserOrgContext(
       userId,
       ...(orgId ? { orgId } : {}),
       status: 'ACTIVE',
-      ...(params.allowCrossDomain ? {} : { org: { domain } }),
+      user: { lifecycleStatus: 'ACTIVE' },
+      org: { lifecycleStatus: 'ACTIVE', ...(params.allowCrossDomain ? {} : { domain }) },
     },
     select: {
       orgId: true,
@@ -88,6 +89,8 @@ export async function getActiveUserOrgContext(
       status: 'ACTIVE',
       team: {
         orgId: orgMembership.orgId,
+        lifecycleStatus: 'ACTIVE',
+        org: { lifecycleStatus: 'ACTIVE' },
       },
     },
     orderBy: { teamId: 'asc' },
