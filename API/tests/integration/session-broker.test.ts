@@ -30,7 +30,7 @@ describe.skipIf(!process.env.DATABASE_URL)('durable Selkie broker validation', (
     resetAccessTokenKeyCache(); await db?.cleanup();
   });
   beforeEach(async () => {
-    await db.prisma.teamMember.deleteMany(); await db.prisma.orgMember.deleteMany();
+    await db.prisma.ban.deleteMany(); await db.prisma.teamMember.deleteMany(); await db.prisma.orgMember.deleteMany();
     await db.prisma.team.deleteMany(); await db.prisma.organisation.deleteMany();
     await db.prisma.domainRole.deleteMany(); await db.prisma.user.deleteMany();
     await db.prisma.confidentialDelegationMapping.deleteMany(); await db.prisma.billingAppKey.deleteMany(); await db.prisma.billingService.deleteMany(); await db.prisma.clientDomain.deleteMany();
@@ -57,7 +57,7 @@ describe.skipIf(!process.env.DATABASE_URL)('durable Selkie broker validation', (
       active: { orgId, teamId }, org: { org_id: orgId, tenant_slug: 'test', org_role: 'owner',
         teams: [teamId], team_roles: { [teamId]: 'owner' } }, ...overrides });
   }
-  const validate = (value: string, targetDomain = 'api.selkie.live') => validateSessionBroker({ token: value, targetDomain }, { prisma: db.prisma });
+  const validate = (value: string, domain = 'api.selkie.live', enabled = true) => validateSessionBroker({ token: value, targetConfig: { domain, org_features: { enabled } } }, { prisma: db.prisma });
   it('returns only subject, exact active bindings and bounded expiry', async () => {
     const result = await validate(await token());
     expect(Object.keys(result).sort()).toEqual(['active', 'expires_at', 'sub']);
@@ -86,6 +86,23 @@ describe.skipIf(!process.env.DATABASE_URL)('durable Selkie broker validation', (
     await db.prisma.confidentialDelegationMapping.update({ where: { id: mappingId }, data: { enabled: true } });
     await db.prisma.domainRole.deleteMany(); await expect(validate(value)).rejects.toThrow();
   });
+  it('admits only personal subject devices when the verified target explicitly disables teams', async () => {
+    const value = await token(); await db.prisma.billingAppKey.updateMany({ data: { revokedAt: new Date() } });
+    expect((await validate(value, 'api.selkie.live', false)).sub).toBe(userId);
+    await expect(validate(value)).rejects.toThrow();
+    await expect(validateSessionBroker({ token: value, targetConfig: { domain: 'api.selkie.live' } }, { prisma: db.prisma })).rejects.toThrow();
+    await db.prisma.domainRole.deleteMany({ where: { domain: 'api.selkie.live' } });
+    await expect(validate(value, 'api.selkie.live', false)).rejects.toThrow();
+  });
+  it('rejects current target user and email bans despite a valid source epoch', async () => {
+    const value = await token();
+    await db.prisma.ban.create({ data: { domain: 'api.selkie.live', type: 'USER', value: userId } });
+    await expect(validate(value, 'api.selkie.live', false)).rejects.toThrow();
+    await db.prisma.ban.deleteMany();
+    const user = await db.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    await db.prisma.ban.create({ data: { domain: 'api.selkie.live', type: 'EMAIL', value: user.email } });
+    await expect(validate(value, 'api.selkie.live', false)).rejects.toThrow();
+  });
   it('refuses operator mappings that widen the broker source, product, resource or scopes', async () => {
     for (const override of [{ sourceDomain: 'other.example' }, { product: 'other' },
       { resource: 'https://other.example' }, { scopes: ['session:broker', 'token.provision'] }]) {
@@ -95,7 +112,7 @@ describe.skipIf(!process.env.DATABASE_URL)('durable Selkie broker validation', (
   });
   it('rechecks expiry after database work and rejects a disabled target', async () => {
     const value = await token(); const now = Math.floor(Date.now() / 1000); let reads = 0;
-    await expect(validateSessionBroker({ token: value, targetDomain: 'api.selkie.live' },
+    await expect(validateSessionBroker({ token: value, targetConfig: { domain: 'api.selkie.live', org_features: { enabled: true } } },
       { prisma: db.prisma, now: () => ++reads === 1 ? now : now + 301 })).rejects.toThrow();
     await db.prisma.clientDomain.update({ where: { domain: 'api.selkie.live' }, data: { status: 'disabled' } });
     await expect(validate(value)).rejects.toThrow();
