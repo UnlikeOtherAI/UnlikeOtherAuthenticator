@@ -69,9 +69,12 @@ export async function issueDebugLogin(
     if (recent >= 20) throw new AppError('RATE_LIMITED', 429, 'RATE_LIMITED');
     if (input.previousToken) {
       const previous = await tx.debugLoginGrant.findUnique({ where: { tokenHash: digest(input.previousToken) } });
-      if (!previous || previous.userId !== source.userId || previous.sourceFamilyId !== source.familyId
-        || !matchesContext(previous, input)) throw fail();
-      await tx.debugLoginGrant.updateMany({ where: { id: previous.id, usedAt: null }, data: { usedAt: now } });
+      if (previous) {
+        if (previous.userId !== source.userId || previous.sourceFamilyId !== source.familyId
+          || !matchesContext(previous, input)) throw fail();
+        await tx.debugLoginGrant.updateMany({ where: { id: previous.id, usedAt: null }, data: { usedAt: now } });
+      }
+      // Pruned expiry metadata means no live grant remains to invalidate.
     }
     const token = randomBytes(32).toString('base64url');
     await tx.debugLoginGrant.create({ data: {

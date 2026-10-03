@@ -84,6 +84,17 @@ describe.skipIf(!process.env.DATABASE_URL)('durable single-use debug login', () 
     await expect(redeemDebugLogin({ ...context(), token: old.token }, deps())).rejects.toThrow();
     await expect(redeemDebugLogin({ ...context(), token: renewed.token }, deps())).resolves.toBeDefined();
   });
+  it('renews an expired code after retention has pruned its metadata', async () => {
+    const a = await source();
+    const old = await issueDebugLogin({ ...context(), refreshToken: a.refresh.refreshToken }, deps());
+    await handle.prisma.debugLoginGrant.updateMany({ where: { userId: a.user.id },
+      data: { expiresAt: new Date(Date.now() - 1) } });
+    await handle.prisma.debugLoginGrant.deleteMany({ where: { userId: a.user.id, expiresAt: { lt: new Date() } } });
+    const renewed = await issueDebugLogin({ ...context(), refreshToken: a.refresh.refreshToken,
+      previousToken: old.token }, deps());
+    await expect(redeemDebugLogin({ ...context(), token: old.token }, deps())).rejects.toThrow();
+    await expect(redeemDebugLogin({ ...context(), token: renewed.token }, deps())).resolves.toBeDefined();
+  });
   it('rejects expiry, changed app/environment, and credential revocation', async () => {
     const a = await source();
     const grant = await issueDebugLogin({ ...context(), refreshToken: a.refresh.refreshToken }, deps());
