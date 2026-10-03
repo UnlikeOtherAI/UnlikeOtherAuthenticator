@@ -273,6 +273,7 @@ describe.skipIf(!hasDatabase)('/org list cursor pagination with created_at ties'
   it('returns every group exactly once when all rows share created_at', async () => {
     const owner = await createOwner();
     const org = await createOrg(owner.id, 'groups-tie');
+    await handle!.prisma.orgMember.create({ data: { orgId: org.id, userId: owner.id, role: 'owner' } });
 
     const created: string[] = [];
     for (let i = 0; i < TIE_COUNT; i += 1) {
