@@ -68,7 +68,9 @@ export function CreateBillingContractDialog({
     try {
       await create.mutateAsync(values);
       onClose();
-    } catch { /* Preserve the form and mutation error for retry. */ }
+    } catch {
+      /* Preserve the form and mutation error for retry. */
+    }
   }
 
   return (
@@ -80,7 +82,9 @@ export function CreateBillingContractDialog({
       title="Create organisation contract"
       footer={
         <>
-          <Button onClick={onClose}>Cancel</Button>
+          <Button disabled={create.isPending} onClick={onClose}>
+            Cancel
+          </Button>
           <Button variant="primary" disabled={create.isPending} onClick={form.handleSubmit(submit)}>
             {create.isPending ? 'Creating...' : 'Create contract'}
           </Button>
@@ -143,7 +147,9 @@ export function AddBillingContractVersionDialog({
     try {
       await create.mutateAsync(values);
       onClose();
-    } catch { /* Preserve the form and mutation error for retry. */ }
+    } catch {
+      /* Preserve the form and mutation error for retry. */
+    }
   }
 
   return (
@@ -155,7 +161,9 @@ export function AddBillingContractVersionDialog({
       title={`Add contract terms · ${contract?.name ?? ''}`}
       footer={
         <>
-          <Button onClick={onClose}>Cancel</Button>
+          <Button disabled={create.isPending} onClick={onClose}>
+            Cancel
+          </Button>
           <Button variant="primary" disabled={create.isPending} onClick={form.handleSubmit(submit)}>
             {create.isPending ? 'Saving...' : 'Save draft terms'}
           </Button>
@@ -250,7 +258,9 @@ export function ActivateBillingContractVersionDialog({
     try {
       await activate.mutateAsync(selectedServices);
       onClose();
-    } catch { /* Preserve selected services and show the mutation error. */ }
+    } catch {
+      /* Preserve selected services and show the mutation error. */
+    }
   }
 
   return (
@@ -263,7 +273,9 @@ export function ActivateBillingContractVersionDialog({
       widthClassName="max-w-2xl"
       footer={
         <>
-          <Button onClick={onClose}>Cancel</Button>
+          <Button disabled={activate.isPending} onClick={onClose}>
+            Cancel
+          </Button>
           <Button
             variant="primary"
             disabled={activate.isPending || !selectionIsValid || !confirmed}

@@ -59,9 +59,11 @@ export function BillingAssignmentDialog({
 
   async function submit(values: BillingAssignmentFormValues) {
     try {
-    await save.mutateAsync(values);
-    onClose();
-    } catch { /* Keep values and show the mutation error for retry. */ }
+      await save.mutateAsync(values);
+      onClose();
+    } catch {
+      /* Keep values and show the mutation error for retry. */
+    }
   }
 
   return (
@@ -73,7 +75,9 @@ export function BillingAssignmentDialog({
       title={`Assign tariff · ${service.name}`}
       footer={
         <>
-          <Button onClick={onClose}>Cancel</Button>
+          <Button disabled={save.isPending} onClick={onClose}>
+            Cancel
+          </Button>
           <Button
             icon="check"
             variant="primary"

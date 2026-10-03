@@ -44,9 +44,11 @@ export function BillingTariffDialog({
 
   async function submit(values: BillingTariffFormValues) {
     try {
-    await create.mutateAsync(values);
-    onClose();
-    } catch { /* Keep values and show the mutation error for retry. */ }
+      await create.mutateAsync(values);
+      onClose();
+    } catch {
+      /* Keep values and show the mutation error for retry. */
+    }
   }
 
   return (
@@ -59,7 +61,9 @@ export function BillingTariffDialog({
       widthClassName="max-w-2xl"
       footer={
         <>
-          <Button onClick={onClose}>Cancel</Button>
+          <Button disabled={create.isPending} onClick={onClose}>
+            Cancel
+          </Button>
           <Button
             icon="plus"
             variant="primary"

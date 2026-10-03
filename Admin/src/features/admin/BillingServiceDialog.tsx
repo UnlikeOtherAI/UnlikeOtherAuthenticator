@@ -33,9 +33,11 @@ export function BillingServiceDialog({ onClose, open }: { onClose: () => void; o
 
   async function submit(values: BillingServiceFormValues) {
     try {
-    await create.mutateAsync(values);
-    onClose();
-    } catch { /* Keep values and show the mutation error for retry. */ }
+      await create.mutateAsync(values);
+      onClose();
+    } catch {
+      /* Keep values and show the mutation error for retry. */
+    }
   }
 
   return (
@@ -48,7 +50,9 @@ export function BillingServiceDialog({ onClose, open }: { onClose: () => void; o
       widthClassName="max-w-2xl"
       footer={
         <>
-          <Button onClick={onClose}>Cancel</Button>
+          <Button disabled={create.isPending} onClick={onClose}>
+            Cancel
+          </Button>
           <Button
             icon="plus"
             variant="primary"

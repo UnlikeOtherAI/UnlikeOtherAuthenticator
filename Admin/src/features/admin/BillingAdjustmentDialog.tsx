@@ -66,9 +66,11 @@ export function BillingAdjustmentDialog({
 
   async function submit(values: BillingAdjustmentFormValues) {
     try {
-    await create.mutateAsync(values);
-    onClose();
-    } catch { /* Keep values and show the mutation error for retry. */ }
+      await create.mutateAsync(values);
+      onClose();
+    } catch {
+      /* Keep values and show the mutation error for retry. */
+    }
   }
 
   return (
@@ -80,7 +82,9 @@ export function BillingAdjustmentDialog({
       title={`Add commercial line · ${service.name}`}
       footer={
         <>
-          <Button onClick={onClose}>Cancel</Button>
+          <Button disabled={create.isPending} onClick={onClose}>
+            Cancel
+          </Button>
           <Button
             icon="check"
             variant="primary"

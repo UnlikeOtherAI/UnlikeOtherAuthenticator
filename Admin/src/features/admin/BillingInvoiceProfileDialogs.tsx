@@ -152,7 +152,9 @@ export function CreateBillingInvoiceIssuerDialog({
     try {
       await create.mutateAsync(values);
       close();
-    } catch { /* Preserve the form and error for retry. */ }
+    } catch {
+      /* Preserve the form and error for retry. */
+    }
   }
 
   return (
@@ -165,7 +167,9 @@ export function CreateBillingInvoiceIssuerDialog({
       widthClassName="max-w-2xl"
       footer={
         <>
-          <Button onClick={close}>Cancel</Button>
+          <Button disabled={create.isPending} onClick={close}>
+            Cancel
+          </Button>
           <Button
             icon="check"
             variant="primary"
@@ -283,7 +287,9 @@ export function EditBillingInvoiceBuyerDialog({
     try {
       await save.mutateAsync(values);
       close();
-    } catch { /* Preserve the form and error for retry. */ }
+    } catch {
+      /* Preserve the form and error for retry. */
+    }
   }
 
   const loading = buyer.isPending && buyer.fetchStatus === 'fetching';
@@ -298,7 +304,9 @@ export function EditBillingInvoiceBuyerDialog({
       widthClassName="max-w-2xl"
       footer={
         <>
-          <Button onClick={close}>Cancel</Button>
+          <Button disabled={save.isPending} onClick={close}>
+            Cancel
+          </Button>
           <Button
             icon="check"
             variant="primary"

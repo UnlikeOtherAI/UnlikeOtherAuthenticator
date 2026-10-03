@@ -4,8 +4,9 @@ import { Link } from 'react-router';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
-import { DataTable, Td } from '../components/ui/Table';
+import { DataTable, Td, PaginationFooter, usePagination } from '../components/ui/Table';
 import { useBillingNavigation } from '../features/admin/billing-navigation';
+import { TextField } from '../components/ui/FormFields';
 import { PageHeader } from '../components/ui/PageHeader';
 import { UnderlineTabs } from '../components/ui/Tabs';
 import { BillingAdjustmentDialog } from '../features/admin/BillingAdjustmentDialog';
@@ -20,9 +21,16 @@ import { BillingContractsPanel } from '../features/admin/BillingContractsPanel';
 import type { CreatedBillingAppKey } from '../schemas/billing';
 
 export function BillingPage() {
-  const { data: services = [], isError, isLoading } = useBillingServicesQuery();
+  const { data: services = [], isError, isLoading, refetch } = useBillingServicesQuery();
   const { params, href, update } = useBillingNavigation();
   const selectedServiceId = params.get('product') ?? '';
+  const query = params.get('q') ?? '';
+  const visibleServices = services
+    .filter((service) =>
+      `${service.name} ${service.identifier}`.toLowerCase().includes(query.toLowerCase()),
+    )
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const { pageItems, pagination } = usePagination(visibleServices, 10, { key: 'products_page' });
   const [createServiceOpen, setCreateServiceOpen] = useState(false);
   const [tariffOpen, setTariffOpen] = useState(false);
   const [assignmentOpen, setAssignmentOpen] = useState(false);
@@ -59,21 +67,20 @@ export function BillingPage() {
       {section === 'products' ? (
         <>
           {isLoading ? (
-            <Card className="px-5 py-8 text-sm text-gray-400">
-              Loading products...
-            </Card>
+            <Card className="px-5 py-8 text-sm text-gray-400">Loading products...</Card>
           ) : null}
           {isError ? (
             <Card className="border-red-200 px-5 py-8 text-sm text-red-600">
-              Could not load billing services.
+              Could not load billing services.{' '}
+              <Button className="ml-3" onClick={() => void refetch()}>
+                Retry
+              </Button>
             </Card>
           ) : null}
           {!isLoading && !isError && services.length === 0 ? (
             <Card className="px-5 py-10 text-center">
               <p className="text-sm font-semibold text-gray-800">No billing services yet</p>
-              <p className="mt-1 text-sm text-gray-500">
-                Add a product with its initial tariff.
-              </p>
+              <p className="mt-1 text-sm text-gray-500">Add a product with its initial tariff.</p>
               <Button
                 className="mt-4"
                 icon="plus"
@@ -87,21 +94,65 @@ export function BillingPage() {
 
           {!isLoading && !isError && !selectedServiceId && services.length > 0 ? (
             <Card>
+              <div className="p-4">
+                <TextField
+                  aria-label="Search billing products"
+                  placeholder="Search products"
+                  value={query}
+                  onChange={(event) => update({ q: event.target.value, products_page: null })}
+                />
+              </div>
               <DataTable headers={['Product', 'Status', 'Default tariff']}>
-                {services.map((service) => (
+                {pageItems.map((service) => (
                   <tr key={service.id}>
-                    <Td><Link className="font-medium text-blue-600 hover:underline" to={href({ product: service.id, tab: null })}>{service.name}</Link><p className="text-xs text-gray-500">{service.identifier}</p></Td>
-                    <Td><Badge variant={service.active ? 'green' : 'slate'}>{service.active ? 'Active' : 'Inactive'}</Badge></Td>
-                    <Td>{service.tariffs.find((tariff) => tariff.is_default)?.name ?? 'No default tariff'}</Td>
+                    <Td>
+                      <Link
+                        className="font-medium text-blue-600 hover:underline"
+                        to={href({ product: service.id, tab: null, record: null })}
+                      >
+                        {service.name}
+                      </Link>
+                      <p className="text-xs text-gray-500">{service.identifier}</p>
+                    </Td>
+                    <Td>
+                      <Badge variant={service.active ? 'green' : 'slate'}>
+                        {service.active ? 'Active' : 'Inactive'}
+                      </Badge>
+                    </Td>
+                    <Td>
+                      {service.tariffs.find((tariff) => tariff.is_default)?.name ??
+                        'No default tariff'}
+                    </Td>
                   </tr>
                 ))}
+                {visibleServices.length === 0 ? (
+                  <tr>
+                    <Td colSpan={3}>No products match this search.</Td>
+                  </tr>
+                ) : null}
               </DataTable>
+              <PaginationFooter {...pagination} />
             </Card>
           ) : null}
-          {!isLoading && !isError && selectedServiceId && !selectedService ? <Card className="p-5">Product unavailable. <Link className="text-blue-600 hover:underline" to={href({ product: null, tab: null })}>All products</Link></Card> : null}
+          {!isLoading && !isError && selectedServiceId && !selectedService ? (
+            <Card className="p-5">
+              Product unavailable.{' '}
+              <Link
+                className="text-blue-600 hover:underline"
+                to={href({ product: null, tab: null, record: null })}
+              >
+                All products
+              </Link>
+            </Card>
+          ) : null}
           {selectedService ? (
             <div className="space-y-4">
-              <Link className="text-sm text-blue-600 hover:underline" to={href({ product: null, tab: null })}>All products</Link>
+              <Link
+                className="text-sm text-blue-600 hover:underline"
+                to={href({ product: null, tab: null, record: null })}
+              >
+                All products
+              </Link>
               <BillingServicePanel
                 service={selectedService}
                 onAddTariff={() => setTariffOpen(true)}

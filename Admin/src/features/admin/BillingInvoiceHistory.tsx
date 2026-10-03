@@ -2,12 +2,8 @@ import { Badge } from '../../components/ui/Badge';
 import { Link } from 'react-router';
 import { useBillingNavigation } from './billing-navigation';
 import { Card, CardHeader } from '../../components/ui/Card';
-import { DataTable, Td } from '../../components/ui/Table';
+import { DataTable, Td, PaginationFooter, usePagination } from '../../components/ui/Table';
 import type { BillingInvoice } from '../../schemas/billing-contracts';
-
-function formatDate(value: string): string {
-  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(value));
-}
 
 function statusVariant(status: BillingInvoice['status']) {
   if (status === 'issued') return 'green' as const;
@@ -15,20 +11,14 @@ function statusVariant(status: BillingInvoice['status']) {
   return 'slate' as const;
 }
 
-export function BillingInvoiceHistory({
-  invoices,
-}: {
-  invoices: BillingInvoice[];
-}) {
+export function BillingInvoiceHistory({ invoices }: { invoices: BillingInvoice[] }) {
   const { href } = useBillingNavigation();
+  const { pageItems, pagination } = usePagination(invoices, 10, { key: 'invoices_page' });
   return (
     <Card>
       <CardHeader>
         <div>
           <h2 className="text-sm font-semibold text-gray-900">Invoice history</h2>
-          <p className="mt-0.5 text-xs text-gray-500">
-            Drafts, issued PDFs, payments, refunds, write-offs, and voids.
-          </p>
         </div>
       </CardHeader>
       {invoices.length === 0 ? (
@@ -38,12 +28,17 @@ export function BillingInvoiceHistory({
       ) : (
         <>
           <div className="divide-y divide-gray-100 md:hidden">
-            {invoices.map((invoice) => (
+            {pageItems.map((invoice) => (
               <div key={invoice.id} className="space-y-3 px-4 py-4 text-sm">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="truncate font-semibold text-gray-900">
-                      <Link className="text-blue-600 hover:underline" to={href({ invoice: invoice.id })}>{invoice.invoice_number ?? `Draft r${invoice.revision}`}</Link>
+                      <Link
+                        className="text-blue-600 hover:underline"
+                        to={href({ invoice: invoice.id })}
+                      >
+                        {invoice.invoice_number ?? `Draft r${invoice.revision}`}
+                      </Link>
                     </p>
                     <p className="mt-1 truncate text-xs text-gray-500">
                       {invoice.buyer.legal_name} · {invoice.billing_month}
@@ -58,41 +53,45 @@ export function BillingInvoiceHistory({
                     Outstanding{' '}
                     <strong className="text-gray-800">{invoice.totals.outstanding.display}</strong>
                   </p>
-                  <Link className="text-blue-600 hover:underline" to={href({ invoice: invoice.id })}>View invoice</Link>
                 </div>
               </div>
             ))}
           </div>
           <div className="hidden md:block">
             <DataTable
-              headers={['Invoice', 'Organisation', 'Month', 'Status', 'Total', 'Outstanding', '']}
+              headers={['Invoice', 'Organisation', 'Month', 'Status', 'Total', 'Outstanding']}
             >
-              {invoices.map((invoice) => (
+              {pageItems.map((invoice) => (
                 <tr key={invoice.id}>
                   <Td className="font-medium text-gray-900">
-                    <Link className="text-blue-600 hover:underline" to={href({ invoice: invoice.id })}>{invoice.invoice_number ?? `Draft r${invoice.revision}`}</Link>
+                    <Link
+                      className="text-blue-600 hover:underline"
+                      to={href({ invoice: invoice.id })}
+                    >
+                      {invoice.invoice_number ?? `Draft r${invoice.revision}`}
+                    </Link>
                   </Td>
-                  <Td><Link className="text-blue-600 hover:underline" to={`/organisations/${encodeURIComponent(invoice.organisation_id)}`}>{invoice.buyer.legal_name}</Link></Td>
+                  <Td>
+                    <Link
+                      className="text-blue-600 hover:underline"
+                      to={`/organisations/${encodeURIComponent(invoice.organisation_id)}`}
+                    >
+                      {invoice.buyer.legal_name}
+                    </Link>
+                  </Td>
                   <Td>{invoice.billing_month}</Td>
                   <Td>
                     <Badge variant={statusVariant(invoice.status)}>{invoice.status}</Badge>
                   </Td>
                   <Td>{invoice.totals.total.display}</Td>
                   <Td>{invoice.totals.outstanding.display}</Td>
-                  <Td className="text-right">
-                    <Link className="text-blue-600 hover:underline" to={href({ invoice: invoice.id })}>View invoice</Link>
-                  </Td>
                 </tr>
               ))}
             </DataTable>
           </div>
         </>
       )}
-      {invoices[0] ? (
-        <p className="border-t border-gray-100 px-5 py-3 text-xs text-gray-400">
-          Latest activity {formatDate(invoices[0].created_at)}
-        </p>
-      ) : null}
+      <PaginationFooter {...pagination} />
     </Card>
   );
 }

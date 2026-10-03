@@ -55,9 +55,11 @@ export function BillingAppKeyDialog({
 
   async function submit(values: BillingAppKeyFormValues) {
     try {
-    const created = await create.mutateAsync(values);
-    onCreated(created);
-    } catch { /* Keep values and show the mutation error for retry. */ }
+      const created = await create.mutateAsync(values);
+      onCreated(created);
+    } catch {
+      /* Keep values and show the mutation error for retry. */
+    }
   }
 
   return (
@@ -70,7 +72,9 @@ export function BillingAppKeyDialog({
       widthClassName="max-w-2xl"
       footer={
         <>
-          <Button onClick={onClose}>Cancel</Button>
+          <Button disabled={create.isPending} onClick={onClose}>
+            Cancel
+          </Button>
           <Button
             icon="key"
             variant="primary"

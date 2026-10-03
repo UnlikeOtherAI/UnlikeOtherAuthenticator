@@ -2,7 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Link } from 'react-router';
-import { DataTable, Td } from '../../components/ui/Table';
+import { DataTable, Td, PaginationFooter, usePagination } from '../../components/ui/Table';
 import { useBillingNavigation } from './billing-navigation';
 
 import { Badge, type BadgeVariant } from '../../components/ui/Badge';
@@ -133,8 +133,8 @@ export function BillingContractsPanel({
         : contracts,
     [contracts, organisationFilter],
   );
-  const selectedContract =
-    contracts.find((contract) => contract.id === selectedContractId) ?? null;
+  const { pageItems, pagination } = usePagination(visibleContracts, 10, { key: 'contracts_page' });
+  const selectedContract = contracts.find((contract) => contract.id === selectedContractId) ?? null;
   const selectedInvoice = invoices.find((invoice) => invoice.id === selectedInvoiceId) ?? null;
 
   useEffect(() => {
@@ -152,7 +152,9 @@ export function BillingContractsPanel({
     try {
       const invoice = await calculate.mutateAsync(values);
       setSelectedInvoiceId(invoice.id);
-    } catch { /* The mutation error is rendered below; preserve inputs for retry. */ }
+    } catch {
+      /* The mutation error is rendered below; preserve inputs for retry. */
+    }
   }
 
   const loading = contractsQuery.isLoading || issuersQuery.isLoading || invoicesQuery.isLoading;
@@ -177,7 +179,7 @@ export function BillingContractsPanel({
           <div>
             <h2 className="text-sm font-semibold text-gray-900">Organisation contracts</h2>
             <p className="mt-0.5 text-xs text-gray-500">
-              Immutable margin terms and monthly service prices.
+              Versioned usage markup and monthly service prices.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -192,7 +194,15 @@ export function BillingContractsPanel({
             <SelectField
               className="w-full"
               value={organisationFilter}
-              onChange={(event) => update({ organisation: event.target.value, contract: null, invoice: null })}
+              onChange={(event) =>
+                update({
+                  organisation: event.target.value,
+                  contract: null,
+                  invoice: null,
+                  contracts_page: null,
+                  invoices_page: null,
+                })
+              }
             >
               <option value="">All organisations</option>
               {organisations.map((organisation) => (
@@ -205,7 +215,20 @@ export function BillingContractsPanel({
         </div>
         {loading ? <p className="p-5 text-sm text-gray-400">Loading contract billing...</p> : null}
         {failed ? (
-          <p className="p-5 text-sm text-red-600">Could not load the contract control plane.</p>
+          <p className="p-5 text-sm text-red-600">
+            Could not load contract billing.{' '}
+            <Button
+              onClick={() =>
+                void Promise.all([
+                  contractsQuery.refetch(),
+                  issuersQuery.refetch(),
+                  invoicesQuery.refetch(),
+                ])
+              }
+            >
+              Retry
+            </Button>
+          </p>
         ) : null}
         {!loading && !failed && visibleContracts.length === 0 ? (
           <p className="p-8 text-center text-sm text-gray-500">
@@ -213,18 +236,49 @@ export function BillingContractsPanel({
           </p>
         ) : null}
         {!loading && !failed && !selectedContractId && visibleContracts.length > 0 ? (
-          <DataTable headers={['Contract', 'Organisation', 'Status']}>
-            {visibleContracts.map((contract) => (
-              <tr key={contract.id}>
-                <Td><Link className="font-medium text-blue-600 hover:underline" to={href({ contract: contract.id, invoice: null })}>{contract.name}</Link><p className="text-xs text-gray-500">{contract.reference}</p></Td>
-                <Td><Link className="text-blue-600 hover:underline" to={`/organisations/${encodeURIComponent(contract.organisation_id)}`}>{contract.organisation_name ?? contract.organisation_id}</Link></Td>
-                <Td><Badge variant={contractVariant(contract.status)}>{contract.status}</Badge></Td>
-              </tr>
-            ))}
-          </DataTable>
+          <>
+            <DataTable headers={['Contract', 'Organisation', 'Status']}>
+              {pageItems.map((contract) => (
+                <tr key={contract.id}>
+                  <Td>
+                    <Link
+                      className="font-medium text-blue-600 hover:underline"
+                      to={href({ contract: contract.id, invoice: null })}
+                    >
+                      {contract.name}
+                    </Link>
+                    <p className="text-xs text-gray-500">{contract.reference}</p>
+                  </Td>
+                  <Td>
+                    <Link
+                      className="text-blue-600 hover:underline"
+                      to={`/organisations/${encodeURIComponent(contract.organisation_id)}`}
+                    >
+                      {contract.organisation_name ?? contract.organisation_id}
+                    </Link>
+                  </Td>
+                  <Td>
+                    <Badge variant={contractVariant(contract.status)}>{contract.status}</Badge>
+                  </Td>
+                </tr>
+              ))}
+            </DataTable>
+            <PaginationFooter {...pagination} />
+          </>
         ) : null}
-        {!loading && !failed && selectedContractId && !selectedContract ? <p className="p-5 text-sm">Contract unavailable.</p> : null}
-        {selectedContractId ? <div className="px-5 py-3"><Link className="text-sm text-blue-600 hover:underline" to={href({ contract: null, invoice: null })}>All contracts</Link></div> : null}
+        {!loading && !failed && selectedContractId && !selectedContract ? (
+          <p className="p-5 text-sm">Contract unavailable.</p>
+        ) : null}
+        {selectedContractId ? (
+          <div className="px-5 py-3">
+            <Link
+              className="text-sm text-blue-600 hover:underline"
+              to={href({ contract: null, invoice: null })}
+            >
+              All contracts
+            </Link>
+          </div>
+        ) : null}
         {selectedContract ? (
           <div className="p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -237,7 +291,12 @@ export function BillingContractsPanel({
                 </div>
                 <p className="mt-1 text-xs text-gray-500">
                   {selectedContract.reference} ·{' '}
-                  <Link className="text-blue-600 hover:underline" to={`/organisations/${encodeURIComponent(selectedContract.organisation_id)}`}>{selectedContract.organisation_name ?? selectedContract.organisation_id}</Link>
+                  <Link
+                    className="text-blue-600 hover:underline"
+                    to={`/organisations/${encodeURIComponent(selectedContract.organisation_id)}`}
+                  >
+                    {selectedContract.organisation_name ?? selectedContract.organisation_id}
+                  </Link>
                 </p>
               </div>
               <div className="flex gap-2">
@@ -258,7 +317,7 @@ export function BillingContractsPanel({
                     <div>
                       <p className="font-semibold text-gray-900">Version {version.version}</p>
                       <p className="mt-1 text-xs text-gray-500">
-                        {version.usage_markup_percent}% margin · {version.effective_from_month} ·{' '}
+                        {version.usage_markup_percent}% markup · {version.effective_from_month} ·{' '}
                         {version.currency}
                       </p>
                     </div>
@@ -279,7 +338,7 @@ export function BillingContractsPanel({
                 <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
                   <tr>
                     <th className="px-4 py-2.5">Version</th>
-                    <th className="px-4 py-2.5">Margin</th>
+                    <th className="px-4 py-2.5">Usage markup</th>
                     <th className="px-4 py-2.5">Effective</th>
                     <th className="px-4 py-2.5">Services</th>
                     <th className="px-4 py-2.5 text-right">Action</th>
@@ -310,57 +369,74 @@ export function BillingContractsPanel({
         ) : null}
       </Card>
 
-      {selectedContract?.status === 'active' ? <Card>
-        <CardHeader>
-          <div>
-            <h2 className="text-sm font-semibold text-gray-900">Invoice calculator</h2>
-            <p className="mt-0.5 text-xs text-gray-500">
-              Freeze a draft from the active contract and Ledger-backed monthly usage.
-            </p>
-          </div>
-        </CardHeader>
-        <form
-          className="grid gap-4 p-5 md:grid-cols-4"
-          onSubmit={form.handleSubmit(calculateInvoice)}
-        >
-          <input type="hidden" {...form.register('contractId')} />
-          <div className="text-sm"><p className="font-medium text-gray-700">Contract</p><p>{selectedContract.name} � {selectedContract.reference}</p></div>
-          <FieldShell label="Issuer" error={form.formState.errors.issuerProfileId?.message}>
-            <SelectField className="w-full" {...form.register('issuerProfileId')}>
-              <option value="">Select issuer</option>
-              {issuers
-                .filter((issuer) => issuer.active)
-                .map((issuer) => (
-                  <option key={issuer.id} value={issuer.id}>
-                    {issuer.legal_name}
-                  </option>
-                ))}
-            </SelectField>
-          </FieldShell>
-          <FieldShell label="Billing month" error={form.formState.errors.billingMonth?.message}>
-            <TextField type="month" max={latestClosedMonth()} {...form.register('billingMonth')} />
-          </FieldShell>
-          <div className="flex items-end">
-            <Button
-              className="w-full"
-              type="submit"
-              variant="primary"
-              disabled={calculate.isPending || loading || failed}
-            >
-              {calculate.isPending ? 'Calculating...' : 'Calculate draft'}
-            </Button>
-          </div>
-          {calculate.isError ? (
-            <p className="text-sm text-red-600 md:col-span-4">
-              {calculate.error instanceof Error
-                ? calculate.error.message
-                : 'Invoice calculation failed.'}
-            </p>
-          ) : null}
-        </form>
-      </Card> : null}
+      {selectedContract?.status === 'active' ? (
+        <Card>
+          <CardHeader>
+            <div>
+              <h2 className="text-sm font-semibold text-gray-900">Invoice calculator</h2>
+              <p className="mt-0.5 text-xs text-gray-500">
+                Create an immutable draft for a closed billing month.
+              </p>
+            </div>
+          </CardHeader>
+          <form
+            className="grid gap-4 p-5 md:grid-cols-4"
+            onSubmit={form.handleSubmit(calculateInvoice)}
+          >
+            <input type="hidden" {...form.register('contractId')} />
+            <div className="text-sm">
+              <p className="font-medium text-gray-700">Contract</p>
+              <p>
+                {selectedContract.name} � {selectedContract.reference}
+              </p>
+            </div>
+            <FieldShell label="Issuer" error={form.formState.errors.issuerProfileId?.message}>
+              <SelectField className="w-full" {...form.register('issuerProfileId')}>
+                <option value="">Select issuer</option>
+                {issuers
+                  .filter((issuer) => issuer.active)
+                  .map((issuer) => (
+                    <option key={issuer.id} value={issuer.id}>
+                      {issuer.legal_name}
+                    </option>
+                  ))}
+              </SelectField>
+            </FieldShell>
+            <FieldShell label="Billing month" error={form.formState.errors.billingMonth?.message}>
+              <TextField
+                type="month"
+                max={latestClosedMonth()}
+                {...form.register('billingMonth')}
+              />
+            </FieldShell>
+            <div className="flex items-end">
+              <Button
+                className="w-full"
+                type="submit"
+                variant="primary"
+                disabled={calculate.isPending || loading || failed}
+              >
+                {calculate.isPending ? 'Calculating...' : 'Calculate draft'}
+              </Button>
+            </div>
+            {calculate.isError ? (
+              <p className="text-sm text-red-600 md:col-span-4">
+                {calculate.error instanceof Error
+                  ? calculate.error.message
+                  : 'Invoice calculation failed.'}
+              </p>
+            ) : null}
+          </form>
+        </Card>
+      ) : null}
 
-      <BillingInvoiceHistory invoices={invoices.filter((invoice) => (!organisationFilter || invoice.organisation_id === organisationFilter) && (!selectedContractId || invoice.contract_id === selectedContractId))} />
+      <BillingInvoiceHistory
+        invoices={invoices.filter(
+          (invoice) =>
+            (!organisationFilter || invoice.organisation_id === organisationFilter) &&
+            (!selectedContractId || invoice.contract_id === selectedContractId),
+        )}
+      />
 
       <CreateBillingContractDialog
         open={createContractOpen}
@@ -381,9 +457,39 @@ export function BillingContractsPanel({
         organisationId={buyerOrganisationId}
         onClose={() => setBuyerOrganisationId('')}
       />
+      {selectedInvoiceId && !selectedInvoice && !loading && !failed ? (
+        <p role="alert" className="text-sm text-red-600">
+          Invoice unavailable.{' '}
+          <button className="underline" onClick={() => setSelectedInvoiceId('')}>
+            Dismiss
+          </button>
+        </p>
+      ) : null}
       <BillingInvoiceDetailDialog
         invoice={selectedInvoice}
         onClose={() => setSelectedInvoiceId('')}
+        contextLinks={
+          selectedInvoice ? (
+            <>
+              <Link
+                className="text-blue-600 hover:underline"
+                to={href({
+                  contract: selectedInvoice.contract_id,
+                  organisation: null,
+                  invoice: null,
+                })}
+              >
+                View contract
+              </Link>
+              <Link
+                className="text-blue-600 hover:underline"
+                to={`/organisations/${encodeURIComponent(selectedInvoice.organisation_id)}`}
+              >
+                View organisation
+              </Link>
+            </>
+          ) : undefined
+        }
       />
     </div>
   );
