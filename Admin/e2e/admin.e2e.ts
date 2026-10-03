@@ -292,3 +292,38 @@ test('billing product and contract selection, invoice guards and retry preserve 
   expect(fixture.errors).toEqual([]);
   expect(fixture.unexpected).toEqual([]);
 });
+
+
+test('user add-to-team retains organisation team and role on failed save, then refreshes membership', async ({ page }) => {
+  const fixture = await installFixtures(page);
+  await page.goto('/users/u101');
+  await expect(page.getByRole('link', { name: 'Platform', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Add to team', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Add User to Team', exact: true });
+  await dialog.getByRole('combobox', { name: 'Organisation', exact: true }).selectOption('o3');
+  await dialog.getByRole('combobox', { name: 'Target team', exact: true }).selectOption('t32');
+  await dialog.getByRole('combobox', { name: 'Team role', exact: true }).selectOption('admin');
+  await page.keyboard.press('Escape');
+  await expect(dialog.getByText('Discard unsaved changes?')).toBeVisible();
+  await dialog.getByRole('button', { name: 'Keep editing' }).click();
+  await dialog.getByRole('button', { name: 'Add', exact: true }).click();
+  await expect(dialog.getByRole('alert')).toContainText('Could not add the user.');
+  await expect(dialog.getByRole('combobox', { name: 'Organisation', exact: true })).toHaveValue('o3');
+  await expect(dialog.getByRole('combobox', { name: 'Target team', exact: true })).toHaveValue('t32');
+  await expect(dialog.getByRole('combobox', { name: 'Team role', exact: true })).toHaveValue('admin');
+  expect(fixture.memberships).toEqual([{ orgId: 'o3', teamId: 't32', teamRole: 'admin' }]);
+  await dialog.getByRole('button', { name: 'Add', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(fixture.memberships).toEqual([
+    { orgId: 'o3', teamId: 't32', teamRole: 'admin' },
+    { orgId: 'o3', teamId: 't32', teamRole: 'admin' },
+  ]);
+  const row = page.getByRole('row').filter({ has: page.getByRole('link', { name: 'Platform', exact: true }) });
+  await expect(row).toContainText('Widgets Core');
+  await expect(row.locator('td').nth(3)).toHaveText('admin');
+  await expect(row.getByRole('link', { name: 'Platform', exact: true })).toHaveAttribute('href', '/organisations/o3/teams/t32');
+  await page.reload();
+  await expect(page.getByRole('link', { name: 'Platform', exact: true })).toBeVisible();
+  expect(fixture.errors).toEqual([]);
+  expect(fixture.unexpected).toEqual([]);
+});

@@ -74,6 +74,7 @@ export async function installFixtures(page: Page) {
   const invoices: unknown[] = [billing.invoice];
   const calculations: unknown[] = [];
   const payments: unknown[] = [];
+  const memberships: unknown[] = [];
   let paymentFailures = 1;
   const native = structuredClone(nativeApp);
   const unexpected: string[] = [];
@@ -94,6 +95,24 @@ export async function installFixtures(page: Page) {
     const json = (body: unknown, status = 200) =>
       route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
     if (req.method() !== 'GET') {
+      if (path === '/users/u101/teams' && req.method() === 'POST') {
+        const input = req.postDataJSON();
+        memberships.push(input);
+        if (memberships.length === 1) return json({ error: 'Synthetic membership failure' }, 503);
+        const org = data.organisations.find((entry) => entry.id === input.orgId);
+        const team = org?.teams.find((entry) => entry.id === input.teamId);
+        const user = data.users.find((entry) => entry.id === 'u101');
+        if (!org || !team || !user || !['member', 'admin'].includes(input.teamRole)) {
+          unexpected.push('Invalid membership fixture payload');
+          return json({ error: 'Invalid membership' }, 400);
+        }
+        const defaultTeam = org.teams.find((entry) => entry.isDefault);
+        const names = [...new Set([defaultTeam?.name, team.name].filter((name): name is string => !!name))];
+        org.members.push({ ...user, role: 'member', teams: names,
+          teamRoles: { ...(defaultTeam ? { [defaultTeam.name]: 'member' as const } : {}), [team.name]: input.teamRole } });
+        org.teams.forEach((entry) => { if (names.includes(entry.name)) entry.members += 1; });
+        return json({ ok: true, userId: user.id, ...input });
+      }
       if (path === '/billing/invoices/calculate') {
         const input = req.postDataJSON();
         calculations.push(input);
@@ -211,6 +230,7 @@ export async function installFixtures(page: Page) {
     native,
     calculations,
     payments,
+    memberships,
     failNextNativeSave: () => {
       nativeFailures = 1;
     },
