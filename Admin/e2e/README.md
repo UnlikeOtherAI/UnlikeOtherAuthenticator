@@ -3,7 +3,7 @@
 These tests run the real React UI against isolated synthetic API fixtures. No login credentials,
 production API calls, database, email or payment runtime are used. Every external request is
 blocked; unknown API reads and every unlisted mutation are recorded and fail the checks.
-Only explicitly modeled native-app saves, invoice calculations and payment retries are accepted.
+Only explicitly modeled native-app saves, invoice calculations, payment retries and team memberships are accepted.
 
 ## Run
 
@@ -63,3 +63,10 @@ Screenshot follow-up: the sidebar logo is explicitly decoded before capture, wit
 rendered dimensions checked (820x820 source, 56x56 CSS box inside a 64px header). Desktop and
 mobile navigation captures show the complete logo. The earlier white arc was a partially decoded
 PNG captured too early, not layout clipping. The two native-flow checks passed after this change.
+
+Final main-merge follow-up at `e9ef79f`: **2/2 new Add to team checks passed** on desktop/mobile.
+The real user detail action opens the dialog; selecting an organisation, target team and admin
+role survives a synthetic failed POST and dirty-dismissal guard. Retry submits the same payload,
+closes the dialog, refreshes the membership table with the correct role and canonical team link,
+and remains visible after reload. No production UI fix was needed. The suite now defines 20
+checks; the previous 18-case full run and this targeted 2-case merge follow-up are separate runs.
