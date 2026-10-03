@@ -13,7 +13,7 @@ type SegmentedTabsProps<T extends string> = {
 
 export function SegmentedTabs<T extends string>({ onChange, options, value }: SegmentedTabsProps<T>) {
   return (
-    <div className="mb-4 flex w-fit gap-px rounded-lg bg-gray-200 p-1">
+    <div className="mb-4 flex w-fit max-w-full flex-wrap gap-px rounded-lg bg-gray-200 p-1">
       {options.map((option) => (
         <button
           key={option.value}
