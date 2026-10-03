@@ -574,72 +574,9 @@ describe('Organisation service: organisation CRUD', () => {
     await expect(promise).rejects.toMatchObject({ code: 'FORBIDDEN', statusCode: 403 });
   });
 
-  it('deletes an organisation when called by the owner', async () => {
+  it.each(['u-owner', 'u-not-owner'])('requires deletion workflow for %s without writes', async actorUserId => {
     const prisma = makePrismaMock();
-
-    prisma.organisation.findFirst.mockResolvedValue({
-      id: 'org-1',
-      domain: 'acme.example.com',
-      name: 'Acme',
-      slug: 'acme',
-      ownerId: 'u-owner',
-      createdAt: now,
-      updatedAt: now,
-    });
-    prisma.organisation.delete.mockResolvedValue({
-      id: 'org-1',
-      domain: 'acme.example.com',
-      name: 'Acme',
-      slug: 'acme',
-      ownerId: 'u-owner',
-      createdAt: now,
-      updatedAt: now,
-    });
-    prisma.orgMember.findMany.mockResolvedValue([{ userId: 'u-owner' }]);
-
-    prisma.orgMember.findFirst.mockResolvedValue({ id: 'm-owner', role: 'owner' });
-    const result = await deleteOrganisation(
-      {
-        orgId: 'org-1',
-        domain: 'acme.example.com',
-        actorUserId: 'u-owner',
-        config: makeConfig(),
-      },
-      { prisma },
-    );
-
-    expect(result).toEqual({ deleted: true });
-    expect(prisma.$queryRaw).toHaveBeenCalledTimes(3);
-    expect(prisma.organisation.delete).toHaveBeenCalledWith({ where: { id: 'org-1' } });
-  });
-
-  it('forbids deleting an organisation when caller lacks organisation.manage', async () => {
-    const prisma = makePrismaMock();
-
-    prisma.organisation.findFirst.mockResolvedValue({
-      id: 'org-1',
-      domain: 'acme.example.com',
-      name: 'Acme',
-      slug: 'acme',
-      ownerId: 'u-owner',
-      createdAt: now,
-      updatedAt: now,
-    });
-
-    const promise = deleteOrganisation(
-      {
-        orgId: 'org-1',
-        domain: 'acme.example.com',
-        actorUserId: 'u-not-owner',
-        config: makeConfig(),
-      },
-      { prisma },
-    );
-
-    await expect(promise).rejects.toMatchObject({
-      code: 'FORBIDDEN',
-      statusCode: 403,
-    });
-    expect(prisma.organisation.delete).not.toHaveBeenCalled();
+    await expect(deleteOrganisation({ orgId: 'org-1', domain: 'acme.example.com', actorUserId, config: makeConfig() }, { prisma })).rejects.toMatchObject({ statusCode: 409, message: 'ENTITY_DELETION_WORKFLOW_REQUIRED' });
+    expect(prisma.organisation.delete).not.toHaveBeenCalled(); expect(prisma.$queryRaw).not.toHaveBeenCalled();
   });
 });

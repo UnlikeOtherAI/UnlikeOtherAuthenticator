@@ -33,8 +33,8 @@ export async function retainedEvidence(tx: PrismaClient, scope: LifecycleScope, 
   for (const model of models) {
     const keys = model.fields.filter(f => f.kind === 'object' && f.type === referencedModel && f.relationOnDelete === 'Restrict')
       .flatMap(f => f.relationFromFields ?? []);
-    const scalarKeys = scope === 'USER' && model.name !== 'BillingAppKey' ? model.fields.filter(f => f.kind === 'scalar' && /^(createdByUserId|actorUserId)$/.test(f.name)).map(f => f.name) : [];
-    const emailKeys = scope === 'USER' && model.name !== 'BillingAppKey' ? model.fields.filter(f => f.kind === 'scalar' && /^(createdByEmail|actorEmail|publishedByEmail)$/.test(f.name)).map(f => f.name) : [];
+    const scalarKeys = scope === 'USER' && !['BillingAppKey', 'BillingTariffAssignment'].includes(model.name) ? model.fields.filter(f => f.kind === 'scalar' && /^(createdByUserId|actorUserId)$/.test(f.name)).map(f => f.name) : [];
+    const emailKeys = scope === 'USER' && !['BillingAppKey', 'BillingTariffAssignment'].includes(model.name) ? model.fields.filter(f => f.kind === 'scalar' && /^(createdByEmail|actorEmail|publishedByEmail)$/.test(f.name)).map(f => f.name) : [];
     if (!keys.length && !scalarKeys.length && !emailKeys.length) continue;
     const table = Prisma.raw(`"${model.dbName ?? model.name}"`);
     const columns = [...new Set([...keys, ...scalarKeys])].map(key => Prisma.raw(`"${model.fields.find(f => f.name === key)?.dbName ?? key}"`));
@@ -77,6 +77,7 @@ export async function orphanEligibility(tx: PrismaClient, userId: string, orgId:
   if (nativeDomain && await tx.domainRole.count({ where: { userId, domain: nativeDomain } })) reasons.push('Standalone native account');
   if (await tx.domainRole.count({ where: { userId, domain: getAdminAuthDomain(), role: 'SUPERUSER' } })) reasons.push('Platform administrator');
   if (await tx.userSetting.count({ where: { userId } })) reasons.push('Personal settings');
+  if (await tx.billingServiceAccess.count({ where: { userId, teamId: { notIn: teamIds } } })) reasons.push('Other product access dependency');
   const scopeDomain = orgId ? (await tx.organisation.findUnique({ where: { id: orgId }, select: { domain: true } }))?.domain : undefined;
   if (await tx.domainRole.count({ where: { userId, ...(scopeDomain ? { domain: { not: scopeDomain } } : {}) } })) reasons.push('Other product identity association');
   if (await tx.refreshToken.count({ where: { userId, OR: [{ orgId: null }, { orgId: { not: orgId ?? '' } }] } })) reasons.push('Standalone or other product session history');
@@ -120,6 +121,9 @@ export async function previewEntityDeletion(tx: PrismaClient, scope: LifecycleSc
   if (scope !== 'USER' && await tx.billingCreditAccount.count({ where: { ...billingWhere, autoTopUpState: { not: 'DISABLED' } } })) blockers.push('Disable automatic top-up before confirming deletion.');
   const domainSet = new Set<string>();
   if (scope === 'USER') {
+    const identity = await tx.user.findUniqueOrThrow({ where: { id }, select: { domain: true } });
+    if (identity.domain) domainSet.add(identity.domain);
+    for (const membership of await tx.orgMember.findMany({ where: { userId: id }, select: { org: { select: { domain: true } } } })) domainSet.add(membership.org.domain);
     for (const role of await tx.domainRole.findMany({ where: { userId: id } })) domainSet.add(role.domain);
     for (const log of await tx.loginLog.findMany({ where: { userId: id }, distinct: ['domain'], select: { domain: true } })) domainSet.add(log.domain);
     for (const session of await tx.refreshToken.findMany({ where: { userId: id }, distinct: ['domain'], select: { domain: true } })) domainSet.add(session.domain);
@@ -138,9 +142,15 @@ export async function previewEntityDeletion(tx: PrismaClient, scope: LifecycleSc
   const nativeDomain = getEnv().MCP_OAUTH_DOMAIN;
   if (nativeDomain) domainSet.delete(nativeDomain);
   const participants: DeletionPreview['participants'] = [];
-  if (teamIds.length) {
-    const accesses = await tx.billingServiceAccess.findMany({ where: { teamId: { in: teamIds } }, select: { service: { select: { identifier: true } } } });
-    for (const access of accesses) domainSet.add(access.service.identifier);
+  if (teamIds.length || scope === 'USER') {
+    const accesses = await tx.billingServiceAccess.findMany({ where: scope === 'USER' ? { userId: id } : { teamId: { in: teamIds } }, select: { appKey: { select: { actorIssuer: true } } } });
+    for (const access of accesses) {
+      try {
+        const issuer = new URL(access.appKey.actorIssuer);
+        if (issuer.protocol !== 'https:' || issuer.username || issuer.password || issuer.search || issuer.hash || issuer.pathname !== '/' || issuer.port) throw new Error('Unsupported authority');
+        domainSet.add(issuer.hostname.toLowerCase());
+      } catch { blockers.push('Product access history has no exact registered HTTPS issuer authority.'); }
+    }
   }
   for (const domain of [...domainSet].sort()) {
     const client = await tx.clientDomain.findUnique({ where: { domain }, select: { id: true } });

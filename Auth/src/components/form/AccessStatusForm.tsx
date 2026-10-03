@@ -5,7 +5,7 @@ import { usePopup } from '../../hooks/use-popup.js';
 import { useTranslation } from '../../i18n/use-translation.js';
 import { postJson } from '../../utils/api.js';
 
-type EntityStatus = { id: string; status: string; reason: string | null };
+type EntityStatus = { id: string; name?: string; status: string; reason: string | null };
 type StatusResult = { user: EntityStatus; organisations: EntityStatus[]; teams: (EntityStatus & { parent: EntityStatus })[] };
 export function AccessStatusForm(): React.JSX.Element | null {
   const { configUrl, clientId, redirectUrl } = usePopup();
@@ -45,8 +45,8 @@ export function AccessStatusForm(): React.JSX.Element | null {
         {challengeId ? <Button type="button" variant="secondary" disabled={pending} onClick={() => { setChallengeId(null); setCode(''); setTotp(''); setError(''); }}>{t('auth.accessStatus.restart')}</Button> : null}
       </form> : <div role="status" className="space-y-2">
         <p>{t('auth.accessStatus.account')}: {result.user.status.toLowerCase()} {result.user.reason}</p>
-        {result.organisations.map(org => <p key={org.id}>{t('auth.accessStatus.organisation')} {org.id}: {org.status.toLowerCase()} {org.reason}</p>)}
-        {result.teams.map(team => <p key={team.id}>{t('auth.accessStatus.team')} {team.id}: {team.status.toLowerCase()} {team.reason}{team.parent.status !== 'ACTIVE' ? ` (${t('auth.accessStatus.parent')}: ${team.parent.reason ?? team.parent.status.toLowerCase()})` : ''}</p>)}
+        {result.organisations.map(org => <p key={org.id}>{t('auth.accessStatus.organisation')} {org.name ?? org.id}: {org.status.toLowerCase()} {org.reason}</p>)}
+        {result.teams.map(team => <p key={team.id}>{t('auth.accessStatus.team')} {team.name ?? team.id}: {team.status.toLowerCase()} {team.reason}{team.parent.status !== 'ACTIVE' ? ` (${t('auth.accessStatus.parent')}: ${team.parent.name ?? team.parent.id} — ${team.parent.reason ?? team.parent.status.toLowerCase()})` : ''}</p>)}
       </div>}
     </div> : null}
   </div>;

@@ -10,8 +10,12 @@ import { buildUserIdentity } from './user-scope.service.js';
 import { sendActionVerificationEmail } from './email.service.js';
 import { extractEmailTheme } from './email-theme.service.js';
 import type { ClientConfig } from './config.service.js';
+import { lockProductTeamPolicyShared } from './product-team-policy-lock.service.js';
+import { resolveProductTeamPolicy } from './product-team-policy.service.js';
+import { getOAuthClient } from './oauth/client.service.js';
+import type { Prisma } from '@prisma/client';
 
-type Context = { config: ClientConfig; configUrl: string };
+type Context = { config: ClientConfig; configUrl: string; native?: { clientId: string; redirectUri: string; revision: number } };
 const digest = (id: string, code: string) => hashEmailToken(`lifecycle:${id}:${code}`, getEnv().SHARED_SECRET);
 const failed = () => new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
 
@@ -21,6 +25,8 @@ export async function startLifecycleStatus(input: Context & { email: string }) {
   const id = randomUUID(), code = randomInt(0, 1_000_000).toString().padStart(6, '0');
   const { userKey } = buildUserIdentity({ email: input.email, domain: input.config.domain, userScope: input.config.user_scope });
   const email = await getAdminPrisma().$transaction(async tx => {
+    await lockProductTeamPolicyShared(tx);
+    await assertCurrentNativeContext(tx, input);
     const found = await tx.user.findUnique({ where: { userKey } });
     if (!found) return null;
     await lockRefreshSessionUser(found.id, { prisma: tx });
@@ -45,6 +51,8 @@ export async function startLifecycleStatus(input: Context & { email: string }) {
 
 export async function verifyLifecycleStatus(input: Context & { challengeId: string; code: string; twoFactorCode?: string }) {
   const result = await getAdminPrisma().$transaction(async tx => {
+    await lockProductTeamPolicyShared(tx);
+    await assertCurrentNativeContext(tx, input);
     const candidate = await tx.verificationToken.findUnique({ where: { id: input.challengeId } });
     if (!candidate?.userId) return null;
     await lockRefreshSessionUser(candidate.userId, { prisma: tx });
@@ -63,15 +71,23 @@ export async function verifyLifecycleStatus(input: Context & { challengeId: stri
       await tx.user.update({ where: { id: user.id }, data: { twoFaLastAcceptedCounter: counter } });
     }
     await tx.verificationToken.update({ where: { id: token.id }, data: { usedAt: new Date() } });
-    const memberships = await tx.orgMember.findMany({ where: { userId: user.id, status: 'ACTIVE', org: { domain: input.config.domain } }, include: { org: true } });
-    const teams = await tx.teamMember.findMany({ where: { userId: user.id, status: 'ACTIVE', team: { org: { domain: input.config.domain } } }, include: { team: { include: { org: true } } } });
+    const policy = await resolveProductTeamPolicy({ domain: input.config.domain }, { prisma: tx });
+    const orgFilter = policy.scope === 'all_active_memberships' ? {} : { domain: input.config.domain };
+    const memberships = await tx.orgMember.findMany({ where: { userId: user.id, status: 'ACTIVE', org: orgFilter }, include: { org: true } });
+    const teams = await tx.teamMember.findMany({ where: { userId: user.id, status: 'ACTIVE', team: { org: orgFilter } }, include: { team: { include: { org: true } } } });
     return {
       user: { id: user.id, status: user.lifecycleStatus, reason: user.lifecycleReason },
-      organisations: memberships.map(m => ({ id: m.orgId, status: m.org.lifecycleStatus, reason: m.org.lifecycleReason })),
-      teams: teams.map(m => ({ id: m.teamId, status: m.team.lifecycleStatus, reason: m.team.lifecycleReason,
-        parent: { id: m.team.orgId, status: m.team.org.lifecycleStatus, reason: m.team.org.lifecycleReason } })),
+      organisations: memberships.map(m => ({ id: m.orgId, name: m.org.name, status: m.org.lifecycleStatus, reason: m.org.lifecycleReason })),
+      teams: teams.map(m => ({ id: m.teamId, name: m.team.name, status: m.team.lifecycleStatus, reason: m.team.lifecycleReason,
+        parent: { id: m.team.orgId, name: m.team.org.name, status: m.team.org.lifecycleStatus, reason: m.team.org.lifecycleReason } })),
     };
   });
   if (!result) throw failed();
   return result;
+}
+
+async function assertCurrentNativeContext(tx: Prisma.TransactionClient, context: Context) {
+  if (!context.native) return;
+  const client = await getOAuthClient(context.native.clientId, tx);
+  if (!client || !client.redirectUris.includes(context.native.redirectUri) || (client.nativeAppRevision ?? 0) !== context.native.revision) throw failed();
 }

@@ -2964,3 +2964,7 @@ exact organisation/team pair and per-domain identity scope, and commits every
 membership and audit record together. Removed memberships do not recover old roles
 or revoked sessions. The dialog retains failed selections for retry, prevents
 concurrent submissions, and refreshes admin membership views after success.
+
+The deletion executor commits bounded leased scope/account/audit stages, with retryable progress instead of a long global authentication lock. An already-DELETED child retained as evidence is included in organisation preview but never revived or rewritten. Operational product access grants, unsigned signing continuations, provider credentials, creator attribution and normalized allowlists are erased; restricted signing/financial snapshots retain their existing immutable protections and appear in the evidence inventory. Active-job identifiers needed for recovery remain restricted until completion, when mutable erasure receipts use a one-way target digest.
+
+Access-status proof is reachable from the existing Auth login screen for signed websites and registered native clients. It returns workplace labels and authorized reasons only after mailbox proof and enrolled TOTP. Server-owned product/team mapping determines cross-product membership visibility; unmapped products retain same-origin isolation. Registered native app revision and callback are rechecked under the product policy lock at verification.

@@ -72,7 +72,7 @@ export async function listTeams(
 
   const rows = await prisma.team.findMany({
     where: {
-      orgId: org.id,
+      orgId: org.id, lifecycleStatus: 'ACTIVE',
       // HIDDEN teams are excluded from any org-MEMBER-visible listing unless the caller is already
       // an ACTIVE member of that specific team (design §4.6) — invite-only discovery is preserved.
       // That is a discovery rule between members of one team. In backend mode the caller is
@@ -257,7 +257,7 @@ export async function getTeam(
   const row = await prisma.team.findFirst({
     where: {
       id: params.teamId,
-      orgId: org.id,
+      orgId: org.id, lifecycleStatus: 'ACTIVE',
     },
     select: {
       ...TEAM_SELECT,

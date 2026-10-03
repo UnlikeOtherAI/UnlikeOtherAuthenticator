@@ -407,7 +407,7 @@ export async function getOrganisationMember(
     where: {
       orgId: params.orgId,
       userId: params.userId,
-      ...(opts?.activeOnly ? { status: 'ACTIVE' as MembershipStatus } : {}),
+      ...(opts?.activeOnly ? { status: 'ACTIVE' as MembershipStatus, user: { lifecycleStatus: 'ACTIVE' as const }, org: { lifecycleStatus: 'ACTIVE' as const } } : {}),
     },
     select: { id: true, orgId: true, userId: true, role: true },
   });

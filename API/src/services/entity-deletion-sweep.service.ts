@@ -20,8 +20,15 @@ export async function eraseOperationalIdentity(tx: PrismaClient, userId: string,
     const domains = new Set([
       ...(await tx.domainRole.findMany({ where: { userId }, select: { domain: true } })).map(r => r.domain),
       ...(await tx.loginLog.findMany({ where: { userId }, distinct: ['domain'], select: { domain: true } })).map(r => r.domain),
+      ...(await tx.refreshToken.findMany({ where: { userId }, distinct: ['domain'], select: { domain: true } })).map(r => r.domain),
+      ...(await tx.orgMember.findMany({ where: { userId }, select: { org: { select: { domain: true } } } })).map(r => r.org.domain),
+      ...(await tx.agreementSignature.findMany({ where: { userId }, distinct: ['domain'], select: { domain: true } })).map(r => r.domain),
       ...(user.domain ? [user.domain] : []),
     ]);
+    for (const access of await tx.billingServiceAccess.findMany({ where: { userId }, select: { appKey: { select: { actorIssuer: true } } } })) {
+      const issuer = new URL(access.appKey.actorIssuer);
+      if (issuer.protocol === 'https:' && issuer.pathname === '/' && !issuer.port && !issuer.username && !issuer.password) domains.add(issuer.hostname.toLowerCase());
+    }
     await tx.historicalIdentityReference.createMany({ data: [...domains].map(domain => ({ userId, domain })), skipDuplicates: true });
   } else await tx.historicalIdentityReference.deleteMany({ where: { userId } });
   await tx.authorizationCode.deleteMany({ where: { userId } });
@@ -85,7 +92,7 @@ export async function sweepDeletion(tx: PrismaClient, preview: DeletionPreview, 
   await tx.refreshToken.deleteMany({ where: teamWhere });
   if (!deleteOrg) {
     // The default workspace remains unique even when its old row is retained as evidence.
-    await tx.team.updateMany({ where: { id: { in: teamIds } }, data: { isDefault: false } });
+    await tx.team.updateMany({ where: { id: { in: teamIds }, lifecycleStatus: { not: 'DELETED' } }, data: { isDefault: false } });
     const replacement = await tx.team.findFirst({ where: { orgId, id: { notIn: teamIds }, lifecycleStatus: { in: ['ACTIVE', 'DISABLED'] } }, orderBy: { id: 'asc' } });
     if (replacement && !await tx.team.count({ where: { orgId, isDefault: true, id: { notIn: teamIds } } })) await tx.team.update({ where: { id: replacement.id }, data: { isDefault: true } });
     for (const candidate of eligibility.filter(c => c.eligible)) await tx.orgMember.deleteMany({ where: { orgId, userId: candidate.id } });
@@ -99,14 +106,15 @@ export async function sweepDeletion(tx: PrismaClient, preview: DeletionPreview, 
     await tx.organisation.update({ where: { id: orgId }, data: { ownerId: null } });
   }
   for (const teamId of teamIds) {
+    if ((await tx.team.findUnique({ where: { id: teamId }, select: { lifecycleStatus: true } }))?.lifecycleStatus === 'DELETED') continue;
     const retained = await retainedEvidence(tx, 'TEAM', teamId);
     if (!retained.length) await tx.team.delete({ where: { id: teamId } });
-    else await tx.team.update({ where: { id: teamId }, data: { lifecycleStatus: 'DELETED', name: 'Deleted team', description: null, iconUrl: null, allowedEmails: [], allowedEmailDomains: [] } });
+    else await tx.team.update({ where: { id: teamId }, data: { lifecycleStatus: 'DELETED', name: 'Deleted team', description: null, iconUrl: null, allowedEmails: [], allowedEmailDomains: [], lifecycleReason: null, lifecycleInternalNote: null, lifecycleTemplateId: null, lifecycleTemplateRevision: null } });
   }
   if (deleteOrg) {
     const retained = await retainedEvidence(tx, 'ORGANISATION', orgId);
     if (!retained.length && !await tx.team.count({ where: { orgId } })) await tx.organisation.delete({ where: { id: orgId } });
-    else await tx.organisation.update({ where: { id: orgId }, data: { lifecycleStatus: 'DELETED', name: 'Deleted organisation', iconUrl: null, allowedEmails: [], allowedEmailDomains: [] } });
+    else await tx.organisation.update({ where: { id: orgId }, data: { lifecycleStatus: 'DELETED', name: 'Deleted organisation', iconUrl: null, allowedEmails: [], allowedEmailDomains: [], lifecycleReason: null, lifecycleInternalNote: null, lifecycleTemplateId: null, lifecycleTemplateRevision: null } });
   }
   for (const candidate of eligibility) {
     if (eraseAccounts && candidate.eligible) await eraseOperationalIdentity(tx, candidate.id, preview.mode);
