@@ -61,6 +61,8 @@ describe('Directory navigation and truthful controls', () => {
     expect(router.state.location.pathname).toBe('/organisations/org-1');
     expect(screen.getByRole('button', { name: 'Members' })).toBeTruthy();
     expect(screen.queryByText('Login access whitelist')).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Teams' }));
+    expect(router.state.location.search).toBe('?tab=teams');
     await user.click(screen.getByRole('button', { name: /back/i }));
     expect(router.state.location.search).toBe('?q=Acme');
     expect((screen.getByRole('searchbox') as HTMLInputElement).value).toBe('Acme');

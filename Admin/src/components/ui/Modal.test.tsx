@@ -28,3 +28,14 @@ it('only the topmost dialog handles Escape and pending operations cannot dismiss
   await user.tab(); expect(document.activeElement).toBe(within(dialog).getByRole('button', { name: 'Close modal' }));
   await user.keyboard('{Escape}'); expect(inner).toHaveBeenCalledOnce(); expect(outer).not.toHaveBeenCalled();
 });
+
+it('does not discard through an already-open warning once a save begins', async () => {
+  const close = vi.fn(); const user = userEvent.setup();
+  const view = render(<Modal isOpen isDirty title="Edit" onClose={close}>Draft</Modal>);
+  await user.keyboard('{Escape}');
+  expect(screen.getByText('Discard unsaved changes?')).toBeTruthy();
+  view.rerender(<Modal isOpen isDirty isPending title="Edit" onClose={close}>Draft</Modal>);
+  await user.click(screen.getByRole('button', { name: 'Discard changes' }));
+  await user.keyboard('{Escape}');
+  expect(close).not.toHaveBeenCalled();
+});
