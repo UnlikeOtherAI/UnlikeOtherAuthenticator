@@ -51,20 +51,33 @@ function requireActorEmail(request: { adminAccessTokenClaims?: { email: string }
 }
 
 export function registerInternalAdminUserRoutes(app: FastifyInstance): void {
-  app.post('/internal/admin/users/:userId/teams', adminRoute(uploadResponseSchema), async (request) => {
-    const { userId } = UserParamsSchema.parse(request.params);
-    const body = z.object({
-      orgId: z.string().trim().min(1),
-      teamId: z.string().trim().min(1),
-      teamRole: z.enum(['member', 'admin']),
-    }).strict().parse(request.body);
-    const claims = request.adminAccessTokenClaims;
-    if (!claims) throw new AppError('INTERNAL', 500, 'MISSING_ADMIN_CLAIMS');
-    return addAdminUserToTeam({
-      userId, ...body,
-      actor: { via: 'admin_superuser', userId: claims.userId, email: claims.email },
-    });
-  });
+  app.post(
+    '/internal/admin/users/:userId/teams',
+    adminRoute(uploadResponseSchema),
+    async (request) => {
+      const { userId } = UserParamsSchema.parse(request.params);
+      const body = z
+        .object({
+          orgId: z.string().trim().min(1),
+          teamId: z.string().trim().min(1),
+          teamRole: z.enum(['member', 'admin']),
+        })
+        .strict()
+        .parse(request.body);
+      const claims = request.adminAccessTokenClaims;
+      if (!claims) throw new AppError('INTERNAL', 500, 'MISSING_ADMIN_CLAIMS');
+      return addAdminUserToTeam({
+        userId,
+        ...body,
+        actor: {
+          via: 'admin_superuser',
+          userId: claims.userId,
+          email: claims.email,
+          tokenVersion: claims.tokenVersion,
+        },
+      });
+    },
+  );
 
   app.post(
     '/internal/admin/users/:userId/2fa/disable',

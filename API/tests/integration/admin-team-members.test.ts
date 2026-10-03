@@ -3,17 +3,25 @@ import { randomUUID } from 'node:crypto';
 
 import { addAdminUserToTeam } from '../../src/services/internal-admin-team-members.service.js';
 import { createTestDb } from '../helpers/test-db.js';
+import { getAdminAuthDomain } from '../../src/config/env.js';
 
 const actor = {
   via: 'admin_superuser' as const,
   userId: 'operator',
   email: 'operator@example.com',
+  tokenVersion: 0,
 };
 
 describe.skipIf(!process.env.DATABASE_URL)('Admin Add User to Team persistence', () => {
   let db: NonNullable<Awaited<ReturnType<typeof createTestDb>>>;
   beforeAll(async () => {
     db = (await createTestDb())!;
+    await db.prisma.user.create({
+      data: { id: actor.userId, email: actor.email, userKey: actor.userId },
+    });
+    await db.prisma.domainRole.create({
+      data: { userId: actor.userId, domain: getAdminAuthDomain(), role: 'SUPERUSER' },
+    });
   });
   afterAll(async () => {
     await db?.cleanup();
@@ -52,6 +60,38 @@ describe.skipIf(!process.env.DATABASE_URL)('Admin Add User to Team persistence',
   }
   const add = (input: Parameters<typeof addAdminUserToTeam>[0]) =>
     addAdminUserToTeam(input, { prisma: db.prisma });
+
+  it('refuses disabled identities and containers without adding membership', async () => {
+    for (const scope of ['user', 'organisation', 'team', 'defaultTeam'] as const) {
+      const { input, defaultTeam } = await seed();
+      if (scope === 'user')
+        await db.prisma.user.update({
+          where: { id: input.userId },
+          data: { lifecycleStatus: 'DISABLED' },
+        });
+      else if (scope === 'organisation')
+        await db.prisma.organisation.update({
+          where: { id: input.orgId },
+          data: { lifecycleStatus: 'DISABLED' },
+        });
+      else
+        await db.prisma.team.update({
+          where: { id: scope === 'team' ? input.teamId : defaultTeam.id },
+          data: { lifecycleStatus: 'DISABLED' },
+        });
+      await expect(add(input)).rejects.toMatchObject({ statusCode: 403 });
+      expect(await db.prisma.orgMember.count({ where: { userId: input.userId } })).toBe(0);
+      expect(await db.prisma.teamMember.count({ where: { userId: input.userId } })).toBe(0);
+    }
+  });
+
+  it('rechecks the administrator credential epoch at the write boundary', async () => {
+    const { input } = await seed();
+    await expect(add({ ...input, actor: { ...actor, tokenVersion: 1 } })).rejects.toMatchObject({
+      statusCode: 403,
+    });
+    expect(await db.prisma.orgMember.count({ where: { userId: input.userId } })).toBe(0);
+  });
 
   it('persists org, default and selected membership, and one atomic audit trail across concurrent retries', async () => {
     const { input, defaultTeam } = await seed();
