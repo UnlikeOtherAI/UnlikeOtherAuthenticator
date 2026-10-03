@@ -1,3 +1,4 @@
+import { useDirectoryNavigation } from '../features/admin/useDirectoryNavigation';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { Button } from '../components/ui/Button';
@@ -7,6 +8,7 @@ import { NativeAppDialog } from '../features/admin/NativeAppDialog';
 import { useNativeApps } from '../features/admin/native-app-queries';
 
 export function NativeAppDetailPage() {
+  const { goBack } = useDirectoryNavigation('/apps');
   const { appId } = useParams();
   const query = useNativeApps();
   const [editing, setEditing] = useState(false);
@@ -15,7 +17,7 @@ export function NativeAppDetailPage() {
   if (query.isError) return <p role="alert">Could not load app. <Button onClick={() => query.refetch()}>Retry</Button></p>;
   if (!app) return <p>App not found. <Link to="/apps">Return to native apps</Link></p>;
   return <>
-    <Link to="/apps" className="mb-3 inline-block text-sm text-indigo-600 hover:underline">Native apps</Link>
+    <Button icon="back" variant="ghost" onClick={goBack}>Back</Button>
     <PageHeader title={app.name} description={app.identifier} actions={<Button onClick={() => setEditing(true)}>Edit app</Button>} />
     <div className="grid gap-4 md:grid-cols-2">
       <Card className="space-y-4 p-5">

@@ -1,3 +1,4 @@
+import { useDirectoryNavigation } from './useDirectoryNavigation';
 import { Link } from 'react-router';
 import { Modal } from '../../components/ui/Modal';
 import type { BillingService } from '../../schemas/billing';
@@ -5,6 +6,7 @@ import { billingMoney } from './billing-money';
 import { useBillingNavigation } from './billing-navigation';
 
 export function BillingRecordDetail({ service }: { service: BillingService }) {
+  const { recordState } = useDirectoryNavigation('/billing');
   const { params, href, update } = useBillingNavigation();
   const id = params.get('record');
   if (!id) return null;
@@ -92,6 +94,7 @@ export function BillingRecordDetail({ service }: { service: BillingService }) {
         <p className="mb-4 flex flex-wrap gap-2 text-sm">
           <Link
             className="text-blue-600 hover:underline"
+            state={recordState}
             to={`/organisations/${encodeURIComponent(subject.organisation.id)}`}
           >
             {subject.organisation.name}
@@ -99,6 +102,7 @@ export function BillingRecordDetail({ service }: { service: BillingService }) {
           {subject.team ? (
             <Link
               className="text-blue-600 hover:underline"
+              state={recordState}
               to={`/organisations/${encodeURIComponent(subject.organisation.id)}/teams/${encodeURIComponent(subject.team.id)}`}
             >
               {subject.team.name}

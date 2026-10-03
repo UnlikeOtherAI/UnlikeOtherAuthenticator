@@ -1,4 +1,4 @@
-import { useNavigate, useParams, useSearchParams } from 'react-router';
+import { useLocation, useParams, useSearchParams } from 'react-router';
 
 import { Avatar } from '../components/ui/Avatar';
 import { PageHeader } from '../components/ui/PageHeader';
@@ -15,6 +15,7 @@ import {
   DomainTeamsTab,
   DomainUsersTab,
 } from '../features/admin/DomainDirectoryTabs';
+import { useDirectoryNavigation } from '../features/admin/useDirectoryNavigation';
 import { useDomainQuery } from '../features/admin/admin-queries';
 
 const DOMAIN_TABS = ['overview', 'credentials', 'organisations', 'teams', 'users', 'access', 'agreements', 'keys', 'email'] as const;
@@ -26,7 +27,8 @@ function isDomainTab(value: string | null): value is DomainTab {
 
 export function DomainDetailPage() {
   const { domainId } = useParams();
-  const navigate = useNavigate();
+  const location = useLocation();
+  const { goBack } = useDirectoryNavigation('/domains');
   const [searchParams, setSearchParams] = useSearchParams();
   const { data, isLoading, isError, refetch } = useDomainQuery(domainId);
 
@@ -37,6 +39,8 @@ export function DomainDetailPage() {
     setSearchParams(
       (current) => {
         const params = new URLSearchParams(current);
+        params.delete('q');
+        params.delete('page');
         if (next === 'overview') {
           params.delete('tab');
         } else {
@@ -44,7 +48,7 @@ export function DomainDetailPage() {
         }
         return params;
       },
-      { replace: false },
+      { replace: false, state: location.state },
     );
   }
 
@@ -67,7 +71,7 @@ export function DomainDetailPage() {
         description={domain.label && domain.label !== domain.name ? domain.name : ''}
         leading={<Avatar label={domain.name} shape="square" size="md" />}
         badges={<StatusBadge status={domain.status} />}
-        onBack={() => navigate('/domains')}
+        onBack={goBack}
       />
       <UnderlineTabs<DomainTab>
         value={tab}

@@ -47,7 +47,7 @@ export function FeatureFlagDetailPage() {
   const [localDialog, setLocalDialog] = useState<DialogState | null>(null);
   const [params, setParams] = useSearchParams();
   function changeParam(key: string, value?: string) {
-    setParams((current) => { const next = new URLSearchParams(current); if (value) next.set(key, value); else next.delete(key); return next; });
+    setParams((current) => { const next = new URLSearchParams(current); if (key === 'platform') { next.delete('flagsPage'); next.delete('rulesPage'); } if (value) next.set(key, value); else next.delete(key); return next; });
   }
   const setDialog = setLocalDialog;
   const closeDialog = () => { setLocalDialog(null); setParams((current) => { const next = new URLSearchParams(current); next.delete('flag'); next.delete('rule'); return next; }); };
@@ -82,8 +82,8 @@ export function FeatureFlagDetailPage() {
     return filterKillSwitchesByPlatform(app.killSwitches, app.platforms.find((platform) => platform.id === selectedPlatformId)?.key ?? selectedPlatformId);
   }, [app, selectedPlatformId]);
 
-  const { pageItems: flagPageItems, pagination: flagPagination } = usePagination(visibleFlags);
-  const { pageItems: killSwitchPageItems, pagination: killSwitchPagination } = usePagination(visibleKillSwitches);
+  const { pageItems: flagPageItems, pagination: flagPagination } = usePagination(visibleFlags, 10, { key: 'flagsPage', resetKey: selectedPlatformId });
+  const { pageItems: killSwitchPageItems, pagination: killSwitchPagination } = usePagination(visibleKillSwitches, 10, { key: 'rulesPage', resetKey: selectedPlatformId });
 
   if (isError) return <p role="alert">Could not load feature flags. <Button onClick={() => refetch()}>Retry</Button></p>;
 
