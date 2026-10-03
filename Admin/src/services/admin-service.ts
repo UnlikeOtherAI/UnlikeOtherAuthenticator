@@ -327,6 +327,10 @@ export const adminService = {
   },
   deleteTeamAvatar: (teamId: string) =>
     api.delete<{ ok: boolean }>(`/internal/admin/teams/${encodeURIComponent(teamId)}/avatar`),
+  addUserToTeam: ({ userId, ...body }: { userId: string; orgId: string; teamId: string; teamRole: 'member' | 'admin' }) =>
+    api.post<{ ok: true; userId: string; orgId: string; teamId: string; teamRole: 'member' | 'admin' }>(
+      `/internal/admin/users/${encodeURIComponent(userId)}/teams`, body,
+    ),
   getUsers: () => api.get<UserSummary[]>('/internal/admin/users'),
   getUser: (userId: string) => api.get<UserSummary | null>(`/internal/admin/users/${encodeURIComponent(userId)}`),
   // Image bytes, not JSON: <img src> cannot carry the admin bearer, so avatars are

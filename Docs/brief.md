@@ -2939,3 +2939,17 @@ Products replace transferable session snapshots with exactly `{url,token}`. The 
 `GET /domain/users?domain=...&user_id=...` supports exact UOA subject lookup for relying products that persist only subject references. The current domain role remains required; this never searches outside the authenticated domain.
 
 Normal independent-session logout uses `POST /auth/revoke` with `{refresh_token,scope:"family"}`. This preserves other families and does not increment the global credential epoch. Omission keeps existing global revocation semantics. A product clears its local session only after upstream confirms revocation; failures retain it for retry.
+
+
+## Admin Add User to Team (2026-10-03)
+
+The existing user-detail dialog adds an existing UOA user by stable subject to the
+selected organisation and team through the platform-superuser API. A missing or
+REMOVED organisation membership is added as member with default-team membership;
+the selected team receives Member or Admin. Existing active roles remain unchanged,
+exact retries are idempotent, and DEACTIVATED memberships and owner changes are
+refused. This operator path uses UOA's standard membership limits, validates the
+exact organisation/team pair and per-domain identity scope, and commits every
+membership and audit record together. Removed memberships do not recover old roles
+or revoked sessions. The dialog retains failed selections for retry, prevents
+concurrent submissions, and refreshes admin membership views after success.
