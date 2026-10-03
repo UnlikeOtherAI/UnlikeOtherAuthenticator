@@ -39,3 +39,17 @@ TypeScript, ESLint and production Vite build pass after shared primitive integra
 No production writes or mail sends. Browser/mobile and connected end-to-end checks remain the
 orchestrator integration gate. Agreement/evidence controls retained by source review; no live
 signature test records created.
+
+
+## Integrated browser verification follow-up
+
+The durable `Admin/e2e` synthetic-fixture harness now passes 18 desktop/mobile checks at
+`8c050be`. It covers all menu destinations and addressable detail/tab inventory, service
+list/detail/related-user browser and header Back, nested confirmation dismissal, native
+failed-save retry/reload/focus/dirty guards, activity filters/CSV/selection exclusion and all
+four ban types. Billing checks cover product detail, selected-contract calculation payload,
+invoice details/related organisation return, action caps, stable failed-retry idempotency and
+successful-payment dirty-state reset. Native filtered header return and feature flag/rule
+pagination separation and platform reset have focused regression coverage. TypeScript, ESLint
+and nine focused component tests pass for this follow-up. No production records or providers
+were contacted. The source-review-only agreement/backend limits above still apply.

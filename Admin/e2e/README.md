@@ -51,3 +51,10 @@ remain responsible for those contracts. Failed browser runs save screenshots and
 
 2026-10-03, Windows, installed Chrome: the initial 12 checks passed (six cases on both viewports).
 The expanded suite includes nine cases per viewport; its final result is recorded below.
+
+Final expanded run: **18/18 passed** (nine cases on both viewports) on integration revision
+`8c050be`, 2026-10-03, Windows installed Chrome, one worker, approximately 1.1 minutes.
+Admin TypeScript and ESLint also passed; the focused invoice/feature pagination component suite
+passed all nine tests. Desktop/mobile native detail screenshots are retained under the ignored
+artifacts directory. These checks found and fixed stale successful-payment dirty state and
+missing return context; they do not claim live backend or provider verification.
