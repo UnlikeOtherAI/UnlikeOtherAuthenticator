@@ -10,6 +10,7 @@ export async function scrubOperatorAttribution(tx: PrismaClient, user: { id: str
       data: { [`${field}ByUserId`]: null, [`${field}ByEmail`]: null } });
   }
   await tx.billingAppKey.updateMany({ where: { OR: [{ createdByUserId: user.id }, ...(byEmail ? [{ createdByEmail: byEmail }] : [])] }, data: { createdByUserId: null, createdByEmail: null } });
+  await tx.billingTariffAssignment.updateMany({ where: { OR: [{ createdByUserId: user.id }, ...(byEmail ? [{ createdByEmail: byEmail }] : [])] }, data: { createdByUserId: null, createdByEmail: null } });
   if (byEmail) {
     await tx.clientDomainJwk.updateMany({ where: { createdByEmail: byEmail }, data: { createdByEmail: null } });
     await tx.clientDomainIntegrationRequest.deleteMany({ where: { contactEmail: byEmail } });

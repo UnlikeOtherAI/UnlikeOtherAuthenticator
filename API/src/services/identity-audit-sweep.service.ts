@@ -4,7 +4,7 @@ import { Prisma, type PrismaClient } from '@prisma/client';
 export function scrubIdentityJson(value: Prisma.JsonValue, terms: string[], eraseId?: string, identityContext = false, identityId = eraseId): Prisma.InputJsonValue {
   const [email, name, userKey] = terms;
   const scrub = (item: Prisma.JsonValue, key = '', ownIdentity = identityContext): Prisma.JsonValue => {
-    if (ownIdentity && /^(ip|userAgent|avatarUrl|phone|address|providerUserId|providerAccountId|externalId)$/i.test(key)) return null;
+    if (ownIdentity && /^(ip|ipAddress|userAgent|avatarUrl|phone|address|providerSubject|providerSubjectId|providerUserId|providerAccountId|externalId|fingerprint)$/i.test(key)) return null;
     if (typeof item === 'string') {
       if (eraseId && item === eraseId) return null;
       if (userKey && item === userKey) return null;
@@ -20,7 +20,7 @@ export function scrubIdentityJson(value: Prisma.JsonValue, terms: string[], eras
     if (item && typeof item === 'object') {
       const entries = Object.entries(item);
       const differentIdentity = entries.some(([k, v]) => typeof v === 'string' && ((/^(userId|subjectId)$/i.test(k) && identityId && v !== identityId) || (/^email$/i.test(k) && email && v.toLowerCase() !== email.toLowerCase())));
-      const bound = !differentIdentity && (ownIdentity || entries.some(([k, v]) => typeof v === 'string' && ((/^(userId|subjectId|id)$/i.test(k) && v === identityId) || (/email$/i.test(k) && email && v.toLowerCase() === email.toLowerCase()))));
+      const bound = !differentIdentity && (ownIdentity || entries.some(([k, v]) => typeof v === 'string' && ((/^(userId|subjectId|targetId|id)$/i.test(k) && v === identityId) || (/email$/i.test(k) && email && v.toLowerCase() === email.toLowerCase()))));
       return Object.fromEntries(Object.entries(item).map(([k, v]) => [k, v === undefined ? null : scrub(v, k, bound)]));
     }
     return item;

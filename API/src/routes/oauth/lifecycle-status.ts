@@ -12,6 +12,7 @@ async function context(request: FastifyRequest) {
   const client = await getOAuthClient(query.client_id);
   if (!client || !client.redirectUris.includes(query.redirect_uri)) throw new AppError('UNAUTHORIZED', 401);
   return { config: buildMcpClientConfig(client.redirectUris, client.nativeApp),
+    native: { clientId: client.clientId, redirectUri: query.redirect_uri, revision: client.nativeAppRevision ?? 0 },
     configUrl: `native-status:${client.clientId}:${client.nativeAppRevision ?? 0}:${query.redirect_uri}` };
 }
 export function registerOAuthLifecycleStatus(app: FastifyInstance) {

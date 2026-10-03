@@ -278,14 +278,14 @@ describe('Organisation service: org-scope gates under a domain-authored grant ta
 
 describe('Organisation deletion capability', () => {
   useOrganisationMembershipTestEnv();
-  it('admits Owner and Admin, and honors custom organisation.manage grants', async () => {
+  it('requires preview and product acknowledgements even for organisation.manage grants', async () => {
     for (const role of ['owner', 'admin', 'member', 'registrar']) {
       const prisma = makePrismaMock(); seedOrg(prisma, role);
       prisma.orgMember.findMany.mockResolvedValue([]);
       const config = role === 'registrar' ? makeConfig({ org_roles: ['owner', 'registrar'], role_grants: { org: { registrar: ['organisation.manage'] } } }) : makeConfig();
       const run = deleteOrganisation({ ...orgParams, config }, { prisma });
-      if (role === 'member') await expect(run).rejects.toMatchObject({ code: 'FORBIDDEN' });
-      else await expect(run).resolves.toEqual({ deleted: true });
+      await expect(run).rejects.toMatchObject({ statusCode: 409, message: 'ENTITY_DELETION_WORKFLOW_REQUIRED' });
+      expect(prisma.organisation.delete).not.toHaveBeenCalled();
     }
   });
 });

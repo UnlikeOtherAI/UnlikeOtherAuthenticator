@@ -22,7 +22,7 @@ async function markDeleting(tx: PrismaClient, preview: DeletionPreview) {
     await lockRefreshSessionUser(preview.targetId, { prisma: tx });
     await tx.user.update({ where: { id: preview.targetId }, data });
   } else {
-    await tx.team.updateMany({ where: { id: { in: preview.teamIds } }, data });
+    await tx.team.updateMany({ where: { id: { in: preview.teamIds }, lifecycleStatus: { not: 'DELETED' } }, data });
     if (preview.effectiveScope === 'ORGANISATION') await tx.organisation.update({ where: { id: preview.effectiveTargetId }, data });
     for (const candidate of preview.candidates.filter(c => c.eligible)) {
       await lockRefreshSessionUser(candidate.id, { prisma: tx });
