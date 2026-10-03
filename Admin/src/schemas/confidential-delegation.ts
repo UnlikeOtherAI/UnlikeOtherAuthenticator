@@ -6,6 +6,7 @@ export const ConfidentialDelegationScopeSchema = z.enum([
   'token.provision',
   'memory.read',
   'memory.write',
+  'session:broker',
 ]);
 
 export const ConfidentialDelegationScopesSchema = z

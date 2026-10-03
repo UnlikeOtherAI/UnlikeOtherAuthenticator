@@ -1474,7 +1474,7 @@ components:
           enum: [300]
         scope:
           type: string
-          description: Exact requested subset of ai.invoke, billing.read, token.provision, memory.read, and memory.write. No scope implies another.
+          description: Exact requested subset of ai.invoke, billing.read, token.provision, memory.read, memory.write, and session:broker (exact approved Coder-to-Selkie only). No scope implies another.
 
     ConfidentialDelegationMapping:
       type: object
@@ -1506,7 +1506,7 @@ components:
           uniqueItems: true
           items:
             type: string
-            enum: [ai.invoke, billing.read, token.provision, memory.read, memory.write]
+            enum: [ai.invoke, billing.read, token.provision, memory.read, memory.write, "session:broker"]
         enabled:
           type: boolean
         created_by_email:
@@ -2521,6 +2521,45 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /auth/session-broker/validate:
+    post:
+      summary: Validate an audience-bound Coder-to-Selkie broker capability
+      security:
+        - domainHashBearer: []
+      parameters:
+        - in: query
+          name: config_url
+          required: true
+          schema: {type: string, format: uri}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [token]
+              properties:
+                token: {type: string, minLength: 1, maxLength: 16384}
+      responses:
+        '200':
+          description: Current canonical subject and team; no profile or refresh authority
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sub, expires_at, active]
+                properties:
+                  sub: {type: string}
+                  expires_at: {type: string, format: date-time}
+                  active:
+                    type: object
+                    required: [orgId, teamId]
+                    properties:
+                      orgId: {type: string}
+                      teamId: {type: string}
+        '403':
+          description: Invalid capability or current authority refused
   /auth/token:
     post:
       tags: [Auth]
@@ -7572,7 +7611,7 @@ paths:
                   uniqueItems: true
                   items:
                     type: string
-                    enum: [ai.invoke, billing.read, token.provision, memory.read, memory.write]
+                    enum: [ai.invoke, billing.read, token.provision, memory.read, memory.write, "session:broker"]
                 enabled:
                   type: boolean
                   default: true
@@ -7638,7 +7677,7 @@ paths:
                   uniqueItems: true
                   items:
                     type: string
-                    enum: [ai.invoke, billing.read, token.provision, memory.read, memory.write]
+                    enum: [ai.invoke, billing.read, token.provision, memory.read, memory.write, "session:broker"]
                 enabled:
                   type: boolean
       responses:

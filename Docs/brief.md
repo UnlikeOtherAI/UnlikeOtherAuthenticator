@@ -2953,3 +2953,7 @@ exact organisation/team pair and per-domain identity scope, and commits every
 membership and audit record together. Removed memberships do not recover old roles
 or revoked sessions. The dialog retains failed selections for retry, prevents
 concurrent submissions, and refreshes admin membership views after success.
+
+## Coder to Selkie session broker (2026-10-03)
+
+A dedicated `session:broker` confidential capability replaces caller-profile login assertions. It is limited to the exact approved Coder source and Selkie API resource, current epoch/team and an enabled operator mapping. Selkie validates through UOA on each request and caps local handles at the five-minute capability expiry. No refresh-family or debug-grant authority is conveyed. See [Auth/session-broker.md](Auth/session-broker.md).

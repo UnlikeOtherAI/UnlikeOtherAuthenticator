@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { registerSessionBrokerRoutes } from './session-broker.js';
 import { registerDebugLoginRoutes } from './debug-login.js';
 import { registerActionVerificationRoutes } from './action-verification.js';
 
@@ -29,6 +30,7 @@ import { registerAuthCallbackRoute } from './callback.js';
 export function registerAuthRoutes(app: FastifyInstance): void {
   registerActionVerificationRoutes(app);
   registerDebugLoginRoutes(app);
+  registerSessionBrokerRoutes(app);
   registerAuthEntrypointRoute(app);
   registerAuthCallbackRoute(app);
   registerAuthEmailResetPasswordRoute(app);

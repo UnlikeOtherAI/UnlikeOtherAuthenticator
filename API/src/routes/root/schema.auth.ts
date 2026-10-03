@@ -5,6 +5,11 @@ import { authEmailEndpoints } from './schema.auth-email.js';
 
 export const authEndpoints: EndpointSchema[] = [
   ...actionVerificationEndpoints,
+  { method: 'POST', path: '/auth/session-broker/validate',
+    description: 'Validate a direct Coder-to-Selkie short-lived session:broker capability against current UOA authority.',
+    auth: 'Selkie verified config_url and domain hash bearer', query: { config_url: 'signed Selkie configuration URL' },
+    body: { token: 'UOA RS256 resource capability (max 16384 characters)' },
+    response: { sub: 'stable UOA subject', expires_at: 'RFC3339 expiry', active: 'object {orgId,teamId}: exact UOA organisation and team ids' } },
   {
     method: 'GET',
     path: '/auth',
