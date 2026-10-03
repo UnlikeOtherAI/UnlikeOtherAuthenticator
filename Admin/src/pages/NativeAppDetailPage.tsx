@@ -11,7 +11,7 @@ export function NativeAppDetailPage() {
   const query = useNativeApps();
   const [editing, setEditing] = useState(false);
   const app = query.data?.find((item) => item.id === appId);
-  if (query.isPending) return <p>Loading app…</p>;
+  if (query.isPending) return <p>Loading appâ€¦</p>;
   if (query.isError) return <p role="alert">Could not load app. <Button onClick={() => query.refetch()}>Retry</Button></p>;
   if (!app) return <p>App not found. <Link to="/apps">Return to native apps</Link></p>;
   return <>

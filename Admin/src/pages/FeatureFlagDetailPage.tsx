@@ -57,7 +57,7 @@ export function FeatureFlagDetailPage() {
   const flagDeleteMutation = useDeleteFeatureFlagMutation(resolvedAppId);
   const killSwitchDeleteMutation = useDeleteKillSwitchMutation(resolvedAppId);
   const requestedPlatform = params.get('platform');
-  const selectedPlatformId = app?.platforms.some((platform) => platform.id === requestedPlatform) ? requestedPlatform! : ALL_PLATFORMS_ID;
+  const selectedPlatformId = app?.platforms.some((platform) => platform.id === requestedPlatform) ? (requestedPlatform ?? ALL_PLATFORMS_ID) : ALL_PLATFORMS_ID;
   const setSelectedPlatformId = (next: string) => changeParam('platform', next);
   const tabParam = params.get('tab');
   const tab: AppDetailTab = appDetailTabs.includes(tabParam as AppDetailTab) ? tabParam as AppDetailTab : 'flags';

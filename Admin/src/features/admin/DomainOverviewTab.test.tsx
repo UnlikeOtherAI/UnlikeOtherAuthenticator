@@ -11,7 +11,7 @@ vi.mock('../shell/admin-ui', () => ({ useAdminUi: () => ({ confirm: mocks.confir
 vi.mock('../../services/admin-service', () => ({ adminService: { rotateDomainSecret: mocks.rotate, updateDomain: mocks.update } }));
 const domain: Domain = { id: 'example.com/app', name: 'example.com/app', label: 'Example', secretAge: '1 day', secretOld: false,
   users: 2, orgs: 1, status: 'active', twoFaPolicy: 'optional', allowedEmailDomains: [], allowedEmails: [],
-  allowedRedirectUrls: [], created: '2026-10-01', hash: 'prefix…' };
+  allowedRedirectUrls: [], created: '2026-10-01', hash: 'prefixâ€¦' };
 afterEach(cleanup);
 beforeEach(() => { mocks.confirm.mockReset(); mocks.rotate.mockReset().mockResolvedValue({ delivery_mode: 'email', email_dispatched: true }); });
 function mount(section: 'overview' | 'credentials') {

@@ -18,7 +18,7 @@ export function NativeAppsPage() {
   return <>
     <PageHeader description="" title="Native apps"
       actions={<Button icon="plus" variant="primary" onClick={() => setEditing('new')}>Register app</Button>} />
-    <Card><div className="border-b border-gray-100 p-4"><TextField type="search" aria-label="Search native apps" placeholder="Search native apps�" value={search} onChange={(event) => setParams({ q: event.target.value }, { replace: true })} /></div>{query.isPending ? <p className="p-5">Loading apps…</p> : query.isError ?
+    <Card><div className="border-b border-gray-100 p-4"><TextField type="search" aria-label="Search native apps" placeholder="Search native apps…" value={search} onChange={(event) => setParams({ q: event.target.value }, { replace: true })} /></div>{query.isPending ? <p className="p-5">Loading apps…</p> : query.isError ?
       <p role="alert" className="p-5 text-red-600">Could not load apps. <button onClick={() => query.refetch()}>Retry</button></p> :
       !apps.length ? <p className="p-5 text-gray-500">No native apps match this view.</p> :
       <DataTable headers={['App', 'Identifier', 'Login methods', 'Status']}>
