@@ -53,8 +53,9 @@ export function UserAvatarSection({ userId, userName }: UserAvatarSectionProps) 
     confirm('Remove uploaded avatar?', `${userName} falls back to their provider image or a generated one.`, async () => {
       try {
         await remove.mutateAsync();
-      } catch {
+      } catch (error) {
         setError('The avatar could not be removed. Try again.');
+        throw error;
       }
     });
   }

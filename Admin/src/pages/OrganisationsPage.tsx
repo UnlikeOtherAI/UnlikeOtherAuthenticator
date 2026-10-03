@@ -98,12 +98,13 @@ function NewOrganisationModal({ isOpen, onClose }: { isOpen: boolean; onClose: (
   return (
     <Modal
       isOpen={isOpen}
-      onClose={() => { if (!mutation.isPending) onClose(); }}
+      isDirty={form.formState.isDirty}
+      isPending={mutation.isPending}
+      onClose={() => { if (!mutation.isPending) { form.reset(); onClose(); } }}
       title="New Organisation"
       widthClassName="max-w-xl"
       footer={
         <>
-          <Button onClick={onClose}>Cancel</Button>
           <Button icon="check" variant="primary" disabled={mutation.isPending} onClick={form.handleSubmit(submit)}>
             {mutation.isPending ? 'Creating...' : 'Create Organisation'}
           </Button>

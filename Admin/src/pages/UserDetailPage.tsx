@@ -39,7 +39,7 @@ export function UserDetailPage() {
   const tab = ['profile', 'security', 'activity'].includes(rawTab) ? rawTab : 'memberships';
   const userQuery = useUserQuery(userId ?? null);
   const orgsQuery = useOrganisationsQuery();
-  const logsQuery = useUserLogsQuery(userId);
+  const logsQuery = useUserLogsQuery(userId ?? '');
   const user = userQuery.data;
   const organisations = orgsQuery.data ?? [];
   const memberships = buildMemberships(organisations, userId);
@@ -77,7 +77,7 @@ export function UserDetailPage() {
         onBack={goBack}
       />
       <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Metric label="Domains" value={user.domains.length > 0 ? user.domains.join(', ') : 'Linked by org'} />
+        <Metric label="Services" value={String(user.domains.length)} />
         <Metric label="Organisations" value={String(organisations.filter((org) => org.members.some((member) => member.id === user.id)).length)} />
         <Metric label="Teams" value={String(memberships.length)} />
         <Metric label="Last Login" value={user.lastLogin} />
@@ -101,9 +101,18 @@ export function UserDetailPage() {
       </Card> : null}
       {tab === 'profile' ?
       <div className="mb-5">
+        <div className="mb-4 flex flex-wrap gap-3">{user.domains.map((domain) => <Link state={recordState} key={domain} className="text-sm text-indigo-600" to={`/domains/${encodeURIComponent(domain)}`}>{domain}</Link>)}</div>
         <UserAvatarSection userId={user.id} userName={user.name ?? user.email} />
       </div> : null}
-      {tab === 'memberships' ? <Card>
+      {tab === 'memberships' ? <>
+      {orgsQuery.isError ? <p role="alert">Could not load memberships. <Button onClick={() => void orgsQuery.refetch()}>Retry</Button></p> : null}
+      <Card className="mb-4">
+        <CardHeader>Organisations</CardHeader>
+        <div className="divide-y divide-gray-100">
+          {organisations.filter((org) => org.members.some((member) => member.id === user.id)).map((org) => <div className="px-5 py-3" key={org.id}><Link state={recordState} className="text-sm text-indigo-600" to={`/organisations/${org.id}`}>{org.name}</Link></div>)}
+        </div>
+      </Card>
+      <Card>
         <CardHeader>
           <span className="text-sm font-semibold text-gray-900">Teams</span>
         </CardHeader>
@@ -131,9 +140,11 @@ export function UserDetailPage() {
 
             </tr>
           ))}
+        {pageItems.length === 0 && !orgsQuery.isError ? <tr><Td colSpan={5}>No teams in the loaded organisation directory.</Td></tr> : null}
         </DataTable>
         <PaginationFooter {...pagination} />
-      </Card> : null}
+      </Card>
+      </> : null}
       {tab === 'activity' ? <Card className="mt-4">
         <CardHeader>
           <span className="text-sm font-semibold text-gray-900">Recent Login Activity</span>

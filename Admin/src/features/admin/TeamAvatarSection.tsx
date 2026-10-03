@@ -53,8 +53,9 @@ export function TeamAvatarSection({ teamId, teamName }: TeamAvatarSectionProps) 
     confirm('Remove team avatar?', `${teamName} falls back to its icon or a generated image.`, async () => {
       try {
         await remove.mutateAsync();
-      } catch {
+      } catch (error) {
         setError('The avatar could not be removed. Try again.');
+        throw error;
       }
     });
   }

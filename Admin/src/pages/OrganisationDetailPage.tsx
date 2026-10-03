@@ -62,9 +62,9 @@ export function OrganisationDetailPage() {
   });
   const [rawTab, setTab] = useDirectoryParam('tab', 'members');
   const tab: OrgTab = ['teams', 'invitations', 'access'].includes(rawTab) ? rawTab as OrgTab : 'members';
-  const { pageItems: teamPageItems, pagination: teamPagination } = usePagination(org?.teams ?? []);
-  const { pageItems: memberPageItems, pagination: memberPagination } = usePagination(org?.members ?? []);
-  const { pageItems: preapprovalPageItems, pagination: preapprovalPagination } = usePagination(org?.preapprovedMembers ?? []);
+  const { pageItems: teamPageItems, pagination: teamPagination } = usePagination(org?.teams ?? [], 10, { key: 'teamsPage' });
+  const { pageItems: memberPageItems, pagination: memberPagination } = usePagination(org?.members ?? [], 10, { key: 'membersPage' });
+  const { pageItems: preapprovalPageItems, pagination: preapprovalPagination } = usePagination(org?.preapprovedMembers ?? [], 10, { key: 'invitationsPage' });
 
   if (isError) return <div role="alert">Could not load organisation. <Button onClick={() => void refetch()}>Retry</Button></div>;
 
@@ -94,11 +94,7 @@ export function OrganisationDetailPage() {
                   `Delete ${org.name}?`,
                   'This permanently deletes the organisation and its teams and memberships. User accounts are retained.',
                   async () => {
-                    try {
-                      await deleteOrganisation.mutateAsync();
-                    } catch {
-                      // The mutation renders a public refusal or generic failure below.
-                    }
+                    await deleteOrganisation.mutateAsync();
                   },
                   org.name,
                 );
@@ -191,6 +187,7 @@ export function OrganisationDetailPage() {
 
               </tr>
             ))}
+          {memberPageItems.length === 0 ? <tr><Td colSpan={4}>No members found.</Td></tr> : null}
           </DataTable>
           <PaginationFooter {...memberPagination} />
         </Card>
@@ -217,6 +214,7 @@ export function OrganisationDetailPage() {
 
               </tr>
             ))}
+          {preapprovalPageItems.length === 0 ? <tr><Td colSpan={6}>No invitations found.</Td></tr> : null}
           </DataTable>
           <PaginationFooter {...preapprovalPagination} />
         </Card>

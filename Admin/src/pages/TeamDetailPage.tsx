@@ -115,6 +115,7 @@ export function TeamDetailPage() {
 
             </tr>
           ))}
+        {pageItems.length === 0 ? <tr><Td colSpan={4}>No members found.</Td></tr> : null}
         </DataTable>
         <PaginationFooter {...pagination} />
       </Card> : null}

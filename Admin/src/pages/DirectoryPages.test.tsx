@@ -6,6 +6,8 @@ import { createMemoryRouter, RouterProvider } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OrganisationsPage } from './OrganisationsPage';
 import { OrganisationDetailPage } from './OrganisationDetailPage';
+import { UsersPage } from './UsersPage';
+import { TeamsPage } from './TeamsPage';
 import { TeamTable } from '../features/admin/TeamTable';
 
 const mocks = vi.hoisted(() => ({ create: vi.fn(), refetch: vi.fn(), isError: false, createError: false }));
@@ -20,6 +22,10 @@ vi.mock('../features/admin/admin-queries', () => ({
   useOrganisationsQuery: () => ({ data: [organisation], isLoading: false, isError: mocks.isError, refetch: mocks.refetch }),
   useOrganisationQuery: () => ({ data: organisation, isLoading: false, isError: false }),
   useCreateOrganisationMutation: () => ({ mutateAsync: mocks.create, isPending: false, isError: mocks.createError }),
+  useUsersQuery: () => ({ data: [{ id: 'user-1', name: 'Alex', email: 'alex@example.com', domains: ['example.com'], method: 'email', twofa: true, lastLogin: '2026-10-03', status: 'active' }], isLoading: false }),
+  useDomainsQuery: () => ({ data: [{ name: 'example.com', label: 'Example' }] }),
+  useUserAvatarQuery: () => ({ data: undefined }),
+  useTeamsQuery: () => ({ data: [{ ...organisation.teams[0], orgName: 'Acme' }], isLoading: false }),
   useTeamAvatarQuery: () => ({ data: undefined }),
 }));
 vi.mock('../features/shell/admin-ui', () => ({ useAdminUi: () => ({ confirm: vi.fn() }) }));
@@ -28,6 +34,8 @@ function mount(path = '/organisations') {
   const router = createMemoryRouter([
     { path: '/organisations', element: <OrganisationsPage /> },
     { path: '/organisations/:orgId', element: <OrganisationDetailPage /> },
+    { path: '/users', element: <UsersPage /> },
+    { path: '/teams', element: <TeamsPage /> },
     { path: '/users/:id', element: <p>User record</p> },
   ], { initialEntries: [path] });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
@@ -104,4 +112,18 @@ describe('Directory navigation and truthful controls', () => {
     await userEvent.setup().click(screen.getByRole('link', { name: 'Acme' }));
     expect(router.state.location.pathname).toBe('/organisations/org-1');
   });
+  it('restores user and team filters from the URL and exposes native user links', async () => {
+    const router = mount('/users?q=missing&domain=example.com');
+    expect(screen.getByText('No users match these filters.')).toBeTruthy();
+    await userEvent.setup().clear(screen.getByRole('searchbox'));
+    expect(screen.getByRole('link', { name: 'Alex' }).getAttribute('href')).toBe('/users/user-1');
+    expect(screen.getByText('2FA enabled')).toBeTruthy();
+    expect(router.state.location.search).toBe('?domain=example.com');
+    cleanup();
+    mount('/teams?q=missing');
+    expect(screen.getByText('No teams found.')).toBeTruthy();
+    await userEvent.setup().clear(screen.getByRole('searchbox'));
+    expect(screen.getByRole('link', { name: 'Engineering' })).toBeTruthy();
+  });
+
 });

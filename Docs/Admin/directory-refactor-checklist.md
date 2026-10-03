@@ -23,3 +23,14 @@ Admin membership add/remove/role-change, ownership transfer, invitation write ac
 Directory APIs currently return bounded windows (100 by default). Labels describe the loaded window; filters do not imply a complete database search. Full server-side directory search/pagination is still a separate backend contract change.
 
 No production record was modified for verification.
+
+## Local validation (2026-10-03, Windows)
+
+- Admin lint and typecheck passed; API typecheck passed after Prisma generation and workspace package compilation.
+- Directory routing/filter/create/error tests: 6 passed.
+- Team edit failure/retry and dirty-discard tests: 2 passed.
+- Existing user/team avatar tests: 4 passed.
+- Invitation mapping plus canonical invitation state-machine tests: 20 passed.
+- Shared two-factor policy save now catches failures and retains the selected policy for retry; focused test included.
+- Billing protocol package TypeScript compilation completed, but its generated-artifact check reported drift in billing-credits-v1.json in this Windows checkout. No generated schema was changed by this tranche. The orchestrator must resolve/check this in the final gate.
+- Rendered browser checks and lifecycle integration are owned by the orchestrator; these local component tests do not claim live browser or production verification.
