@@ -14,6 +14,15 @@ const authFailures = '401 when bearer token is missing/invalid; 403 when token i
 
 export const internalAdminEndpoints: EndpointSchema[] = [
   {
+    method: 'POST',
+    path: '/internal/admin/users/:userId/teams',
+    description: 'Atomically add an existing user to a team, including organisation and default-team membership when needed',
+    auth: adminAuth,
+    body: { orgId: 'string (required)', teamId: 'string (required, belongs to orgId)', teamRole: 'member | admin (required)' },
+    response: { 200: '{ ok: true, userId, orgId, teamId, teamRole }', '401/403': authFailures },
+    notes: 'Uses standard UOA membership limits. Exact retries are idempotent; existing active roles are preserved. Removed memberships may be re-added without restoring old privileges or sessions; deactivated memberships and owner changes are refused. Memberships and operator audit records commit together.',
+  },
+  {
     method: 'GET',
     path: '/internal/admin/config',
     description: 'Serve the signed first-party Admin config JWT used by /admin/login',
