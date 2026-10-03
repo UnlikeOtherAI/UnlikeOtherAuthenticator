@@ -163,7 +163,7 @@ export async function createMemberInvite(
     domain: params.config.domain,
   });
   const existingUser = await prisma.user.findUnique({
-    where: { userKey: identity.userKey },
+    where: { lifecycleStatus: 'ACTIVE', userKey: identity.userKey },
     select: { id: true, tokenVersion: true },
   });
 
@@ -360,7 +360,7 @@ export async function approveInvite(
     domain: params.config.domain,
   });
   const existingUser = await prisma.user.findUnique({
-    where: { userKey: identity.userKey },
+    where: { lifecycleStatus: 'ACTIVE', userKey: identity.userKey },
     select: { id: true, tokenVersion: true },
   });
 

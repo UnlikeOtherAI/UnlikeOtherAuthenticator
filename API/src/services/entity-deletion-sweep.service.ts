@@ -1,0 +1,116 @@
+import { type PrismaClient, type IdentityDeletionMode } from '@prisma/client';
+import { AppError } from '../utils/errors.js';
+import type { DeletionPreview } from './entity-deletion-preview.service.js';
+import { orphanEligibility, retainedEvidence } from './entity-deletion-preview.service.js';
+import { lockRefreshSessionUser } from './refresh-session-lock.service.js';
+
+export { scrubIdentityJson } from './identity-audit-sweep.service.js';
+import { scrubOperationalAudits } from './identity-audit-sweep.service.js';
+
+export async function eraseOperationalIdentity(tx: PrismaClient, userId: string, mode: IdentityDeletionMode): Promise<void> {
+  await lockRefreshSessionUser(userId, { prisma: tx });
+  const user = await tx.user.findUniqueOrThrow({ where: { id: userId } });
+  if (user.lifecycleStatus === 'DELETED') return;
+  if (await tx.organisation.count({ where: { ownerId: userId, lifecycleStatus: { not: 'DELETED' } } })) {
+    throw new AppError('BAD_REQUEST', 409, 'OWNERSHIP_TRANSFER_REQUIRED');
+  }
+  const email = user.email;
+  if (mode === 'RETAIN_REFERENCE') {
+    const domains = new Set([
+      ...(await tx.domainRole.findMany({ where: { userId }, select: { domain: true } })).map(r => r.domain),
+      ...(await tx.loginLog.findMany({ where: { userId }, distinct: ['domain'], select: { domain: true } })).map(r => r.domain),
+      ...(user.domain ? [user.domain] : []),
+    ]);
+    await tx.historicalIdentityReference.createMany({ data: [...domains].map(domain => ({ userId, domain })), skipDuplicates: true });
+  } else await tx.historicalIdentityReference.deleteMany({ where: { userId } });
+  await tx.authorizationCode.deleteMany({ where: { userId } });
+  await tx.verificationToken.deleteMany({ where: { OR: [{ userId }, ...(user.userKey ? [{ userKey: user.userKey }] : [])] } });
+  await tx.refreshToken.deleteMany({ where: { userId } });
+  await tx.nativeOAuthFlow.deleteMany({ where: { userId } });
+  await tx.debugLoginGrant.deleteMany({ where: { userId } });
+  await tx.authIdentity.deleteMany({ where: { userId } });
+  await tx.userAvatar.deleteMany({ where: { userId } });
+  await tx.userSetting.deleteMany({ where: { userId } });
+  await tx.featureFlagUserOverride.deleteMany({ where: { userId } });
+  await tx.groupMember.deleteMany({ where: { userId } });
+  await tx.teamMember.deleteMany({ where: { userId } });
+  await tx.orgMember.deleteMany({ where: { userId } });
+  await tx.domainRole.deleteMany({ where: { userId } });
+  await tx.loginLog.deleteMany({ where: { OR: [{ userId }, ...(email ? [{ email: { equals: email, mode: 'insensitive' as const }, ...(user.domain ? { domain: user.domain } : {}) }] : [])] } });
+  await tx.teamInvite.deleteMany({ where: { OR: [{ acceptedUserId: userId }, ...(email ? [{ email: { equals: email, mode: 'insensitive' as const }, team: { org: { ...(user.domain ? { domain: user.domain } : {}) } } }] : [])] } });
+  await tx.teamInvite.updateMany({ where: { invitedByUserId: userId }, data: { invitedByUserId: null, invitedByName: null, invitedByEmail: null } });
+  await tx.teamInvite.updateMany({ where: { requestedByUserId: userId }, data: { requestedByUserId: null } });
+  await tx.teamInviteLink.updateMany({ where: { createdByUserId: userId }, data: { createdByUserId: null, revokedAt: new Date() } });
+  await tx.accessRequest.deleteMany({ where: { OR: [{ userId }, ...(email ? [{ email: { equals: email, mode: 'insensitive' as const }, team: { org: { ...(user.domain ? { domain: user.domain } : {}) } } }] : [])] } });
+  await tx.accessRequest.updateMany({ where: { reviewedByUserId: userId }, data: { reviewedByUserId: null, reviewReason: null } });
+  await tx.ban.deleteMany({ where: { OR: [{ type: 'USER', value: userId }, ...(email ? [{ type: 'EMAIL' as const, value: email }] : [])] } });
+  if (email) {
+    await tx.ban.updateMany({ where: { createdByEmail: email }, data: { createdByEmail: null } });
+    for (const organisation of await tx.organisation.findMany({ where: { allowedEmails: { has: email } } })) {
+      await tx.organisation.update({ where: { id: organisation.id }, data: { allowedEmails: organisation.allowedEmails.filter(e => e.toLowerCase() !== email.toLowerCase()) } });
+    }
+    for (const team of await tx.team.findMany({ where: { allowedEmails: { has: email } } })) {
+      await tx.team.update({ where: { id: team.id }, data: { allowedEmails: team.allowedEmails.filter(e => e.toLowerCase() !== email.toLowerCase()) } });
+    }
+    for (const domain of await tx.clientDomain.findMany({ where: { allowedEmails: { has: email } } })) {
+      await tx.clientDomain.update({ where: { id: domain.id }, data: { allowedEmails: domain.allowedEmails.filter(e => e.toLowerCase() !== email.toLowerCase()) } });
+    }
+  }
+  await scrubOperationalAudits(tx, user, mode === 'ERASE_REFERENCE');
+  const protectedRows = await retainedEvidence(tx, 'USER', userId);
+  await tx.user.update({ where: { id: userId }, data: {
+    lifecycleStatus: 'DELETED', lifecycleChangedAt: new Date(), email: null, userKey: null, name: null,
+    passwordHash: null, twoFaEnabled: false, twoFaSecret: null, twoFaLastAcceptedCounter: null,
+    avatarUrl: null, tokenVersion: { increment: 1 }, lifecycleReason: null, lifecycleInternalNote: null,
+    lifecycleTemplateId: null, lifecycleTemplateRevision: null,
+  } });
+  if (mode === 'ERASE_REFERENCE' && protectedRows.length === 0) await tx.user.delete({ where: { id: userId } });
+}
+
+export async function sweepDeletion(tx: PrismaClient, preview: DeletionPreview): Promise<void> {
+  if (preview.scope === 'USER') return eraseOperationalIdentity(tx, preview.targetId, preview.mode);
+  const orgId = preview.organisationId!;
+  const deleteOrg = preview.effectiveScope === 'ORGANISATION';
+  const teamIds = preview.teamIds;
+  const teamWhere = { teamId: { in: teamIds } };
+  await tx.teamInvite.deleteMany({ where: teamWhere });
+  await tx.teamInviteLink.deleteMany({ where: teamWhere });
+  await tx.accessRequest.deleteMany({ where: teamWhere });
+  await tx.teamAvatar.deleteMany({ where: teamWhere });
+  await tx.ban.deleteMany({ where: teamWhere });
+  // Eligibility is frozen by the exclusive product lock plus canonical user locks at execution.
+  const eligibility = await Promise.all(preview.candidates.filter(c => c.eligible).map(c => c.id).sort()
+    .map(userId => orphanEligibility(tx, userId, orgId, teamIds, deleteOrg)));
+  await tx.teamMember.deleteMany({ where: teamWhere });
+  await tx.debugLoginGrant.deleteMany({ where: teamWhere });
+  await tx.authorizationCode.deleteMany({ where: teamWhere });
+  await tx.refreshToken.deleteMany({ where: teamWhere });
+  if (!deleteOrg) {
+    // The default workspace remains unique even when its old row is retained as evidence.
+    await tx.team.updateMany({ where: { id: { in: teamIds } }, data: { isDefault: false } });
+    const replacement = await tx.team.findFirst({ where: { orgId, id: { notIn: teamIds }, lifecycleStatus: 'ACTIVE' }, orderBy: { id: 'asc' } });
+    if (replacement && !await tx.team.count({ where: { orgId, isDefault: true, id: { notIn: teamIds } } })) await tx.team.update({ where: { id: replacement.id }, data: { isDefault: true } });
+    for (const candidate of eligibility.filter(c => c.eligible)) await tx.orgMember.deleteMany({ where: { orgId, userId: candidate.id } });
+  }
+  if (deleteOrg) {
+    await tx.orgMember.deleteMany({ where: { orgId } });
+    await tx.group.deleteMany({ where: { orgId } });
+    await tx.ban.deleteMany({ where: { orgId } });
+    await tx.app.deleteMany({ where: { orgId } });
+    await tx.orgAuditLog.deleteMany({ where: { orgId } });
+    await tx.organisation.update({ where: { id: orgId }, data: { ownerId: null } });
+  }
+  for (const teamId of teamIds) {
+    const retained = await retainedEvidence(tx, 'TEAM', teamId);
+    if (!retained.length) await tx.team.delete({ where: { id: teamId } });
+    else await tx.team.update({ where: { id: teamId }, data: { lifecycleStatus: 'DELETED', name: 'Deleted team', description: null, iconUrl: null, allowedEmails: [], allowedEmailDomains: [] } });
+  }
+  if (deleteOrg) {
+    const retained = await retainedEvidence(tx, 'ORGANISATION', orgId);
+    if (!retained.length && !await tx.team.count({ where: { orgId } })) await tx.organisation.delete({ where: { id: orgId } });
+    else await tx.organisation.update({ where: { id: orgId }, data: { lifecycleStatus: 'DELETED', name: 'Deleted organisation', iconUrl: null, allowedEmails: [], allowedEmailDomains: [] } });
+  }
+  for (const candidate of eligibility) {
+    if (candidate.eligible) await eraseOperationalIdentity(tx, candidate.id, preview.mode);
+  }
+}

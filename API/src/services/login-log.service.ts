@@ -1,3 +1,4 @@
+import { requireIdentityEmail } from './entity-lifecycle.service.js';
 import type { PrismaClient } from '@prisma/client';
 
 import { getEnv } from '../config/env.js';
@@ -75,11 +76,11 @@ export async function recordLoginLog(
   let email = (params.email ?? '').trim().toLowerCase();
   if (!email) {
     const user = await prisma.user.findUnique({
-      where: { id: params.userId },
+      where: { lifecycleStatus: 'ACTIVE', id: params.userId },
       select: { email: true },
     });
     if (!user) return;
-    email = user.email.trim().toLowerCase();
+    email = requireIdentityEmail(user.email).trim().toLowerCase();
   }
 
   await prisma.loginLog.create({

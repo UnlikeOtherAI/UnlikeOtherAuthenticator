@@ -92,7 +92,7 @@ export type TeamMemberCandidate = {
   identity: {
     displayName: string | null;
     avatarImageUrl: string;
-    email: string;
+    email: string | null;
   };
 };
 
@@ -112,7 +112,7 @@ function toTeamRosterMember(
     status: MembershipStatus;
     createdAt: Date;
     updatedAt: Date;
-    user: { id: string; name: string | null; email: string };
+    user: { id: string; name: string | null; email: string | null };
   },
   domain: string,
   includeEmail: boolean,
@@ -127,7 +127,7 @@ function toTeamRosterMember(
     identity: {
       displayName: row.user.name,
       avatarImageUrl,
-      ...(includeEmail ? { email: row.user.email } : {}),
+      ...(includeEmail && row.user.email ? { email: row.user.email } : {}),
     },
     role: row.teamRole,
     teamRole: row.teamRole,

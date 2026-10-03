@@ -61,7 +61,7 @@ export async function issueDebugLogin(
     const now = deps.now?.() ?? new Date();
     if (!source) throw fail();
     await validateSource(input, source, tx, now);
-    const user = await tx.user.findUnique({ where: { id: source.userId }, select: { tokenVersion: true } });
+    const user = await tx.user.findUnique({ where: { lifecycleStatus: 'ACTIVE', id: source.userId }, select: { tokenVersion: true } });
     if (!user) throw fail();
     const recent = await tx.debugLoginGrant.count({ where: {
       userId: source.userId, createdAt: { gt: new Date(now.getTime() - 30 * 60_000) },

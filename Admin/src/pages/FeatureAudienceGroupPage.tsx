@@ -60,7 +60,7 @@ function AudienceGroupEditor({ app, group, isNew, onBack, users }: { app: AppFla
       return targetUsers;
     }
 
-    return targetUsers.filter((user) => [user.name ?? '', user.email, ...user.domains].some((value) => value.toLowerCase().includes(normalized)));
+    return targetUsers.filter((user) => [user.name ?? '', user.email, ...user.domains].some((value) => (value ?? "").toLowerCase().includes(normalized)));
   }, [searchQuery, targetUsers]);
   const { pageItems, pagination } = usePagination(filteredUsers);
 
@@ -126,9 +126,9 @@ function AudienceGroupEditor({ app, group, isNew, onBack, users }: { app: AppFla
                 <tr key={user.id} className="transition-colors hover:bg-gray-50">
                   <Td>
                     <div className="flex items-center gap-2">
-                      <UserAvatar userId={user.id} label={user.name ?? user.email} />
+                      <UserAvatar userId={user.id} label={user.name ?? user.email ?? 'Deleted user'} />
                       <div>
-                        <span className="font-medium text-gray-700">{user.name ?? user.email}</span>
+                        <span className="font-medium text-gray-700">{user.name ?? user.email ?? 'Deleted user'}</span>
                         <p className="text-xs text-gray-400">{user.email}</p>
                       </div>
                     </div>
@@ -138,7 +138,7 @@ function AudienceGroupEditor({ app, group, isNew, onBack, users }: { app: AppFla
                   <Td><StatusBadge status={user.twofa ? 'On' : 'Off'} /></Td>
                   <Td className="text-xs text-gray-400">{user.lastLogin}</Td>
                   <Td className="whitespace-nowrap">
-                    {userMode === 'selected' ? <ActionButton aria-label={`Remove ${user.name ?? user.email}`} tone="red" onClick={() => removeUser(user.id)}>Remove</ActionButton> : <span className="text-xs text-gray-400">All users</span>}
+                    {userMode === 'selected' ? <ActionButton aria-label={`Remove ${user.name ?? user.email ?? 'Deleted user'}`} tone="red" onClick={() => removeUser(user.id)}>Remove</ActionButton> : <span className="text-xs text-gray-400">All users</span>}
                   </Td>
                 </tr>
               ))}
@@ -203,7 +203,7 @@ function AddUserModal({ app, isOpen, onAdd, onClose, selectedUserIds, users }: {
 
     return eligibleUsers(app, users)
       .filter((user) => !selectedUserIds.has(user.id))
-      .filter((user) => [user.name ?? '', user.email, ...user.domains].some((value) => value.toLowerCase().includes(normalized)))
+      .filter((user) => [user.name ?? '', user.email, ...user.domains].some((value) => (value ?? "").toLowerCase().includes(normalized)))
       .slice(0, 8);
   }, [app, query, selectedUserIds, users]);
 
@@ -222,10 +222,10 @@ function AddUserModal({ app, isOpen, onAdd, onClose, selectedUserIds, users }: {
           {results.map((user) => (
             <div key={user.id} className="flex items-center justify-between gap-3 border-b border-gray-100 px-3 py-2 last:border-b-0">
               <div className="min-w-0">
-                <p className="truncate text-sm font-medium text-gray-900">{user.name ?? user.email}</p>
+                <p className="truncate text-sm font-medium text-gray-900">{user.name ?? user.email ?? 'Deleted user'}</p>
                 <p className="truncate text-xs text-gray-400">{user.email}</p>
               </div>
-              <Button aria-label={`Add ${user.name ?? user.email}`} size="sm" variant="primary" onClick={() => onAdd(user.id)}>Add</Button>
+              <Button aria-label={`Add ${user.name ?? user.email ?? 'Deleted user'}`} size="sm" variant="primary" onClick={() => onAdd(user.id)}>Add</Button>
             </div>
           ))}
           {!query.trim() ? <p className="px-3 py-4 text-sm text-gray-400">Start typing to find a user.</p> : null}

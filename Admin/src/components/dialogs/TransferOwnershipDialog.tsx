@@ -20,9 +20,9 @@ export function TransferOwnershipDialog({ onClose, open, organisation }: { onClo
       {organisation ? (
         <div className="space-y-4">
           <FieldShell label="New owner">
-            <SelectField defaultValue={organisation.owner.id}>
+            <SelectField defaultValue={organisation.owner?.id}>
               {organisation.members.map((member) => (
-                <option key={member.id} value={member.id}>{member.name ?? member.email} — {member.email}</option>
+                <option key={member.id} value={member.id}>{member.name ?? member.email ?? 'Deleted user'} — {member.email}</option>
               ))}
             </SelectField>
           </FieldShell>

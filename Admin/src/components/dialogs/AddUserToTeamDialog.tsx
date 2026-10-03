@@ -37,7 +37,7 @@ export function AddUserToTeamDialog({
     >
       {user ? (
         <div className="space-y-4">
-          <ReadOnlyUser name={user.name ?? user.email} email={user.email} />
+          <ReadOnlyUser name={user.name ?? user.email ?? 'Deleted user'} email={user.email ?? ""} />
           <FieldShell label="Organisation">
             <SelectField value={selectedOrgId} onChange={(event) => setSelectedOrgId(event.target.value)}>
               {organisations.map((organisation) => (

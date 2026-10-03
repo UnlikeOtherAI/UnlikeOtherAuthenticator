@@ -30,7 +30,7 @@ export function ChangeTeamRoleDialog({
     >
       {member && team ? (
         <div className="space-y-4">
-          <ReadOnlyUser name={member.name ?? member.email} email={member.email} />
+          <ReadOnlyUser name={member.name ?? member.email ?? 'Deleted user'} email={member.email ?? ""} />
           <FieldShell label="Team">
             <TextField disabled value={team.name} />
           </FieldShell>

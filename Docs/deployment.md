@@ -207,3 +207,7 @@ Product databases live on the Hetzner host, most inside the shared `postgres` co
 ssh root@178.105.82.46 'docker exec postgres psql -U postgres -tAc \
   "SELECT datname FROM pg_database WHERE datistemplate = false"'
 ```
+
+## Entity deletion adapter deployment (2026-10-03)
+
+Deploy the forward lifecycle migration before the API/Admin release. No production erasure is part of development or migration. Back up and exercise the deployment in staging. Registered products need an adapter for GET `/domain/deletion-jobs?domain=<exact identity>` and POST `/domain/deletion-jobs/:id/acknowledge?domain=<same identity>` using that product's existing domain bearer. Process effectiveScope/effectiveTargetId and committed accountsToDelete; persist idempotent job revision handling. Acknowledge PURGED only after content cleanup commits, or RETAINED_EVIDENCE when restricted records remain. Never treat receipt as purge. UOA holds the entity/candidates terminal while awaiting acknowledgement. The API/Admin build alone does not install adapters elsewhere; outstanding participants remain visible and block completion. Lifecycle changes require live checks in consuming products; offline access tokens remain valid until their bounded expiry absent introspection/revocation integration.

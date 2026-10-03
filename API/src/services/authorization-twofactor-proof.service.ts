@@ -20,7 +20,7 @@ export async function assertAuthorizationTwoFaProof(
       { prisma: deps.prisma },
     ),
     deps.prisma.user.findUnique({
-      where: { id: params.userId },
+      where: { lifecycleStatus: 'ACTIVE', id: params.userId },
       select: { twoFaEnabled: true },
     }),
   ]);

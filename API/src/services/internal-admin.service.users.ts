@@ -78,14 +78,15 @@ export async function getAdminUsers(limit?: number) {
     const latestLog = latestLogByUser.get(user.id);
     return {
       id: user.id,
-      name: user.name,
+      name: user.lifecycleStatus === 'DELETED' ? 'Deleted user' : user.name,
+      deleted: user.lifecycleStatus === 'DELETED',
       email: user.email,
       domains: Array.from(domainsByUser.get(user.id) ?? []),
       twofa: user.twoFaEnabled,
       avatarSource: adminAvatarSource(uploadedAvatarUserIds.has(user.id), user.avatarUrl),
       avatarImageUrl: adminAvatarImageUrl({ baseUrl, userId: user.id }),
       lastLogin: latestLog ? displayTimestamp(latestLog.createdAt) : 'Never',
-      status: 'active',
+      status: user.lifecycleStatus.toLowerCase(),
       method: method(latestLog?.authMethod),
       created: displayDate(user.createdAt),
     };
@@ -107,14 +108,15 @@ export async function getAdminUser(userId: string) {
 
   return {
     id: user.id,
-    name: user.name,
+    name: user.lifecycleStatus === 'DELETED' ? 'Deleted user' : user.name,
+      deleted: user.lifecycleStatus === 'DELETED',
     email: user.email,
     domains: roles.map((role) => role.domain),
     twofa: user.twoFaEnabled,
     avatarSource: adminAvatarSource(Boolean(uploadedAvatar), user.avatarUrl),
     avatarImageUrl: adminAvatarImageUrl({ baseUrl: avatarImageBaseUrl(), userId: user.id }),
     lastLogin: latestLog ? displayTimestamp(latestLog.createdAt) : 'Never',
-    status: 'active',
+    status: user.lifecycleStatus.toLowerCase(),
     method: method(latestLog?.authMethod),
     created: displayDate(user.createdAt),
   };

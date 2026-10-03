@@ -13,7 +13,7 @@ type LoginPrisma = {
   $queryRaw: PrismaClient['$queryRaw'];
   user: {
     findUnique: (args: {
-      where: { userKey: string };
+      where: { userKey: string; lifecycleStatus: 'ACTIVE' };
       select: { id: true; passwordHash: true; twoFaEnabled: true; tokenVersion: true };
     }) => Promise<{
       id: string;
@@ -55,7 +55,7 @@ export async function loginWithEmailPassword(
 
   const prisma = deps?.prisma ?? (getPrisma() as unknown as LoginPrisma);
   const user = await prisma.user.findUnique({
-    where: { userKey },
+    where: { lifecycleStatus: 'ACTIVE', userKey },
     select: { id: true, passwordHash: true, twoFaEnabled: true, tokenVersion: true },
   });
 
@@ -77,7 +77,7 @@ export async function loginWithEmailPassword(
     { prisma: prisma as unknown as PrismaClient },
   );
   const lockedUser = await prisma.user.findUnique({
-    where: { userKey },
+    where: { lifecycleStatus: 'ACTIVE', userKey },
     select: { id: true, passwordHash: true, twoFaEnabled: true, tokenVersion: true },
   });
   if (!lockedUser || lockedUser.id !== user.id) {

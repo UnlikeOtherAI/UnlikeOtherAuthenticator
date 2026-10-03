@@ -37,7 +37,7 @@ export async function verifyTwoFactorForLogin(
   const prisma = deps?.prisma ?? (getPrisma() as unknown as TwoFaLoginPrisma);
 
   const user = await prisma.user.findUnique({
-    where: { id: params.userId },
+    where: { lifecycleStatus: 'ACTIVE', id: params.userId },
     select: { twoFaEnabled: true, twoFaSecret: true, twoFaLastAcceptedCounter: true },
   });
 

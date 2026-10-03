@@ -81,7 +81,7 @@ export async function resendTeamInvite(
     domain: params.config.domain,
   });
   const existingUser = await prisma.user.findUnique({
-    where: { userKey: identity.userKey },
+    where: { lifecycleStatus: 'ACTIVE', userKey: identity.userKey },
     select: { id: true, tokenVersion: true },
   });
   if (existingUser && params.config.existing_user_registration_behavior === 'inline_sign_in') {

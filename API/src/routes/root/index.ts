@@ -1,3 +1,4 @@
+import { lifecycleDocumentation } from './schema.lifecycle.js';
 import { readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -62,6 +63,7 @@ export function registerRootRoute(app: FastifyInstance): void {
       config_validation: configValidationEndpointDocumentation,
       config_verification: configVerificationEndpointDocumentation,
       endpoints,
+      lifecycle: lifecycleDocumentation,
       debug_login: {
         issue: { method: 'POST', path: '/auth/debug-login/issue', auth: 'domain bearer plus source refresh_token',
           body: { refresh_token: 'string', previous_token: 'optional one-use token to invalidate' },

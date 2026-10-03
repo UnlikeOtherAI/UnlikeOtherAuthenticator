@@ -20,7 +20,7 @@ export function ChangeOrgRoleDialog({ member, onClose, open }: { member: Organis
     >
       {member ? (
         <div className="space-y-4">
-          <ReadOnlyUser name={member.name ?? member.email} email={member.email} />
+          <ReadOnlyUser name={member.name ?? member.email ?? 'Deleted user'} email={member.email ?? ""} />
           <FieldShell label="Organisation role">
             <SelectField defaultValue={member.role}>
               <option value="member">Member</option>

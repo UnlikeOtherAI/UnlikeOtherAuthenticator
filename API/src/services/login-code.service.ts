@@ -83,7 +83,7 @@ export async function issueLoginCode(
 
   const prisma = deps?.prisma ?? getPrisma();
   const user = await prisma.user.findUnique({
-    where: { userKey },
+    where: { lifecycleStatus: 'ACTIVE', userKey },
     select: { id: true, tokenVersion: true },
   });
   if (!user) return;

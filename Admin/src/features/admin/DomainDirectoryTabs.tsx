@@ -21,7 +21,7 @@ export function DomainOrganisationsTab({ organisations }: { organisations: Organ
     const normalized = query.trim().toLowerCase();
     if (!normalized) return organisations;
     return organisations.filter((org) =>
-      [org.name, org.slug, org.owner.email, org.owner.name ?? ''].some((value) => value.toLowerCase().includes(normalized)),
+      [org.name, org.slug, org.owner?.email, org.owner?.name ?? ''].some((value) => (value ?? "").toLowerCase().includes(normalized)),
     );
   }, [organisations, query]);
   const { pageItems, pagination } = usePagination(filtered);
@@ -54,8 +54,8 @@ export function DomainOrganisationsTab({ organisations }: { organisations: Organ
               </div>
             </Td>
             <Td>
-              <p className="text-sm text-gray-700">{org.owner.name ?? org.owner.email}</p>
-              <p className="text-xs text-gray-400">{org.owner.email}</p>
+              <p className="text-sm text-gray-700">{org.owner?.name ?? org.owner?.email}</p>
+              <p className="text-xs text-gray-400">{org.owner?.email}</p>
             </Td>
             <Td>{org.members.length}</Td>
             <Td>{org.teams.length}</Td>
@@ -79,7 +79,7 @@ export function DomainTeamsTab({ teams }: { teams: Teams }) {
     const normalized = query.trim().toLowerCase();
     if (!normalized) return teams;
     return teams.filter((team) =>
-      [team.name, team.orgName, team.description].some((value) => value.toLowerCase().includes(normalized)),
+      [team.name, team.orgName, team.description].some((value) => (value ?? "").toLowerCase().includes(normalized)),
     );
   }, [teams, query]);
   const { pageItems, pagination } = usePagination(filtered);
@@ -101,7 +101,7 @@ export function DomainUsersTab({ users }: { users: Users }) {
   const filtered = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     if (!normalized) return users;
-    return users.filter((user) => [user.name ?? '', user.email].some((value) => value.toLowerCase().includes(normalized)));
+    return users.filter((user) => [user.name ?? '', user.email].some((value) => (value ?? "").toLowerCase().includes(normalized)));
   }, [users, query]);
   const { pageItems, pagination } = usePagination(filtered);
 
@@ -125,9 +125,9 @@ export function DomainUsersTab({ users }: { users: Users }) {
           >
             <Td>
               <div className="flex items-center gap-2">
-                <UserAvatar userId={user.id} label={user.name ?? user.email} />
+                <UserAvatar userId={user.id} label={user.name ?? user.email ?? 'Deleted user'} />
                 <div>
-                  <span className="font-medium text-gray-700">{user.name ?? user.email}</span>
+                  <span className="font-medium text-gray-700">{user.name ?? user.email ?? 'Deleted user'}</span>
                   <p className="text-xs text-gray-400">{user.email}</p>
                 </div>
               </div>

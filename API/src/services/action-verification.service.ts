@@ -1,3 +1,4 @@
+import { requireIdentityEmail } from './entity-lifecycle.service.js';
 import { randomInt, randomUUID, timingSafeEqual } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
 import { getEnv } from '../config/env.js';
@@ -30,7 +31,7 @@ const codeHash = (id: string, code: string) => hashEmailToken(`${id}:${code}`, g
 
 async function requireFactor(context: Context, prisma: Pick<PrismaClient, 'user' | 'organisation' | 'clientDomain'>): Promise<boolean> {
   const user = await prisma.user.findUnique({
-    where: { id: context.claims.userId }, select: { twoFaEnabled: true },
+    where: { lifecycleStatus: 'ACTIVE', id: context.claims.userId }, select: { twoFaEnabled: true },
   });
   if (!user) throw failed();
   const policy = await resolveTwoFaPolicy({
@@ -53,8 +54,8 @@ export async function startActionVerification(
       userId: input.claims.userId, domain: input.config.domain, credentialEpoch: input.claims.tokenVersion,
     }, { prisma: tx });
     const now = deps.now?.() ?? new Date();
-    const user = await tx.user.findUnique({ where: { id: input.claims.userId } });
-    if (!user) throw failed();
+    const user = await tx.user.findUnique({ where: { lifecycleStatus: 'ACTIVE', id: input.claims.userId } });
+    if (!user || !user.email || !user.userKey) throw failed();
     // Persisted under the user lock: multiple service instances cannot evade this ceiling.
     const recent = await tx.verificationToken.count({ where: {
       userId: user.id, type: 'ACTION_VERIFICATION', createdAt: { gt: new Date(now.getTime() - 15 * 60_000) },
@@ -67,12 +68,12 @@ export async function startActionVerification(
       actionDigest: input.actionDigest, usedAt: null,
     }, data: { usedAt: now } });
     await tx.verificationToken.create({ data: {
-      id, type: 'ACTION_VERIFICATION', email: user.email, userKey: user.userKey,
+      id, type: 'ACTION_VERIFICATION', email: requireIdentityEmail(user.email), userKey: user.userKey,
       userId: user.id, tokenVersion: user.tokenVersion, domain: input.config.domain,
       configUrl: input.configUrl, actionDigest: input.actionDigest,
       tokenHash: codeHash(id, code), expiresAt,
     } });
-    return { email: user.email, expiresAt, twoFactorRequired };
+    return { email: requireIdentityEmail(user.email), expiresAt, twoFactorRequired };
   });
   await (deps.sendEmail ?? sendActionVerificationEmail)({
     to: result.email, code, domain: input.config.domain, description: input.description,

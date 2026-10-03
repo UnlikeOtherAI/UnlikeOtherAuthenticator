@@ -100,7 +100,7 @@ export type OrganisationRecord = {
   domain: string;
   name: string;
   slug: string;
-  ownerId: string;
+  ownerId: string | null;
   memberInvites: OrgMemberInvitesValue;
   iconUrl: string | null;
   createdAt: Date;
@@ -252,7 +252,7 @@ export function toOrganisationRecord(row: {
   domain: string;
   name: string;
   slug: string;
-  ownerId: string;
+  ownerId: string | null;
   memberInvites?: string;
   iconUrl?: string | null;
   createdAt: Date;

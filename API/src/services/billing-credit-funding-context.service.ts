@@ -1,3 +1,4 @@
+import { requireIdentityEmail } from './entity-lifecycle.service.js';
 import {
   BillingAssignmentScope,
   type BillingStripeCustomer,
@@ -141,7 +142,7 @@ export async function resolveCreditFundingActionContext(
   const [localCustomer, user, organisation, team] = await Promise.all([
     prisma.billingStripeCustomer.findUnique({ where: { id: creditAccount.customerId } }),
     prisma.user.findUnique({
-      where: { id: params.request.userId },
+      where: { lifecycleStatus: 'ACTIVE', id: params.request.userId },
       select: { id: true, email: true },
     }),
     prisma.organisation.findUnique({
@@ -179,7 +180,7 @@ export async function resolveCreditFundingActionContext(
       {
         customer: localCustomer,
         account,
-        email: user.email,
+        email: requireIdentityEmail(user.email),
         name: localCustomer.teamId === null ? organisation.name : team.name || organisation.name,
         orgId: organisation.id,
         teamId: localCustomer.teamId,

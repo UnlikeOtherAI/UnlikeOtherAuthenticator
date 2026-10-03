@@ -91,7 +91,7 @@ export async function searchAdmin(query: string) {
     .filter(({ team }) => team.name.toLowerCase().includes(normalized))
     .slice(0, 4);
   const userMatches = users
-    .filter((user) => (user.name ?? '').toLowerCase().includes(normalized) || user.email.toLowerCase().includes(normalized))
+    .filter((user) => (user.name ?? '').toLowerCase().includes(normalized) || (user.email ?? "").toLowerCase().includes(normalized))
     .slice(0, 5)
     .map((user) => ({ type: 'user', user }));
 

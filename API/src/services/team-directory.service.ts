@@ -1,3 +1,4 @@
+import { requireIdentityEmail } from './entity-lifecycle.service.js';
 import type { PrismaClient } from '@prisma/client';
 
 import { getAdminPrisma, getPrisma } from '../db/prisma.js';
@@ -236,17 +237,17 @@ export async function buildSidebarPendingInvites(
   const now = deps?.now ? deps.now() : new Date();
 
   const user = await prisma.user.findUnique({
-    where: { id: params.userId },
+    where: { lifecycleStatus: 'ACTIVE', id: params.userId },
     select: { email: true },
   });
-  if (!user) return [];
+  if (!user || !user.email) return [];
 
   const invitePrisma = deps?.invitePrisma ?? getAdminPrisma();
   const policy = deps?.policy ?? { scope: 'client_domain' as const };
 
   const invites = await invitePrisma.teamInvite.findMany({
     where: pendingInviteWhereForCaller({
-      email: user.email,
+      email: requireIdentityEmail(user.email),
       userId: params.userId,
       domain: params.domain,
       policy,

@@ -1,3 +1,4 @@
+import { lifecycleEndpoints } from './schema.lifecycle.js';
 import { authEndpoints } from './schema.auth.js';
 import { nativeAppEndpoints } from './schema.native-apps.js';
 import { avatarEndpoints } from './schema.avatars.js';
@@ -35,6 +36,7 @@ const orgContractEndpoints: EndpointSchema[] = withOrgContract([
 ]);
 
 export const endpoints: EndpointSchema[] = [
+  ...lifecycleEndpoints,
   { method: 'POST', path: '/auth/debug-login/issue', description: 'Mint a 30-minute single-use login code from a current source refresh family',
     auth: 'verified config and domain bearer plus source refresh credential', query: { config_url: 'signed product config URL' },
     body: { refresh_token: 'current source refresh token', previous_token: 'optional previous code to invalidate atomically' },

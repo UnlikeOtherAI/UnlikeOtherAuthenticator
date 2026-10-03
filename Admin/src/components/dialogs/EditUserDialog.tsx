@@ -23,7 +23,7 @@ export function EditUserDialog({ onClose, open, user }: { onClose: () => void; o
             <TextField defaultValue={user.name ?? ''} placeholder="User name" />
           </FieldShell>
           <FieldShell label="Email address">
-            <TextField defaultValue={user.email} type="email" />
+            <TextField defaultValue={user.email ?? ""} type="email" />
           </FieldShell>
           <FieldShell label="Status">
             <SelectField defaultValue={user.status}>

@@ -1,3 +1,4 @@
+import { registerLifecycleStatusRoutes } from './lifecycle-status.js';
 import type { FastifyInstance } from 'fastify';
 import { registerDebugLoginRoutes } from './debug-login.js';
 import { registerActionVerificationRoutes } from './action-verification.js';
@@ -27,6 +28,7 @@ import { registerAuthSocialRoute } from './social.js';
 import { registerAuthCallbackRoute } from './callback.js';
 
 export function registerAuthRoutes(app: FastifyInstance): void {
+  registerLifecycleStatusRoutes(app);
   registerActionVerificationRoutes(app);
   registerDebugLoginRoutes(app);
   registerAuthEntrypointRoute(app);

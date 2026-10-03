@@ -77,7 +77,7 @@ export function createRefreshTokenRotationPolicyGuard(params: {
           { prisma: params.prisma },
         ),
         params.prisma.user.findUnique({
-          where: { id: userId },
+          where: { lifecycleStatus: 'ACTIVE', id: userId },
           select: { twoFaEnabled: true },
         }),
       ]);

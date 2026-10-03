@@ -1,3 +1,4 @@
+import { requireIdentityEmail } from './entity-lifecycle.service.js';
 import { getAdminPrisma } from '../db/prisma.js';
 import { adminAvatarImageUrl, avatarImageBaseUrl } from '../utils/avatar-url.js';
 import {
@@ -141,7 +142,7 @@ export async function getAdminDomain(domain: string) {
     return {
       id: user.id,
       name: user.name,
-      email: user.email,
+      email: requireIdentityEmail(user.email),
       domains: [normalized],
       twofa: user.twoFaEnabled,
       avatarSource: adminAvatarSource(uploadedAvatarUserIds.has(user.id), user.avatarUrl),

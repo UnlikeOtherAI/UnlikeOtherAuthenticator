@@ -114,7 +114,7 @@ async function autoCreatePersonalOrgForUser(params: {
   logError: OrgPlacementLogger;
 }): Promise<RegistrationOrgPlacementResult> {
   const user = await params.prisma.user.findUnique({
-    where: { id: params.userId },
+    where: { lifecycleStatus: 'ACTIVE', id: params.userId },
     select: { name: true },
   });
 

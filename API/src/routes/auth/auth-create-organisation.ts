@@ -177,7 +177,7 @@ export function registerAuthCreateOrganisationRoute(app: FastifyInstance): void 
           { crossProductPrisma: tx, policyPrisma: tx, prisma: tx },
         );
         const user = await tx.user.findUnique({
-          where: { id: lockedSession.userId },
+          where: { lifecycleStatus: 'ACTIVE', id: lockedSession.userId },
           select: { twoFaEnabled: true },
         });
         if (!user) rejectOrganisationCreation();

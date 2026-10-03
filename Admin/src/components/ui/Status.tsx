@@ -4,6 +4,8 @@ import type { AuthMethod, EntityStatus, UoaRole } from '../../features/admin/typ
 export function StatusBadge({ status }: { status: EntityStatus | UoaRole | 'On' | 'Off' | 'OK' | 'FAIL' | 'Default' | 'Enabled' | 'Disabled' }) {
   const variant = {
     active: 'green',
+    deleting: 'red',
+    deleted: 'slate',
     disabled: 'red',
     banned: 'red',
     owner: 'purple',

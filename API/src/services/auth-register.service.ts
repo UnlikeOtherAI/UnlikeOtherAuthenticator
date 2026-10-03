@@ -168,7 +168,7 @@ export async function requestRegistrationInstructions(
 
   const prisma = deps?.prisma ?? getPrisma();
   const existing = await prisma.user.findUnique({
-    where: { userKey },
+    where: { lifecycleStatus: 'ACTIVE', userKey },
     select: { id: true, tokenVersion: true },
   });
 

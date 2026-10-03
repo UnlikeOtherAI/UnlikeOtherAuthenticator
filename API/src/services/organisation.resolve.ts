@@ -56,12 +56,13 @@ export async function resolveOrganisation(
   }
 
   const row = await prisma.organisation.findFirst({
-    where: { id: orgId },
+    where: { id: orgId, lifecycleStatus: 'ACTIVE' },
     select: ORGANISATION_SELECT,
   });
 
   if (!row) throw new AppError('NOT_FOUND', 404);
-  return row;
+  if (!row.ownerId) throw new AppError('FORBIDDEN', 403);
+  return { ...row, ownerId: row.ownerId };
 }
 
 /**
@@ -82,10 +83,11 @@ export async function resolveOrganisationByDomain(
   }
 
   const row = await prisma.organisation.findFirst({
-    where: { id: orgId, domain },
+    where: { id: orgId, domain, lifecycleStatus: 'ACTIVE' },
     select: ORGANISATION_SELECT,
   });
 
   if (!row) throw new AppError('NOT_FOUND', 404);
-  return row;
+  if (!row.ownerId) throw new AppError('FORBIDDEN', 403);
+  return { ...row, ownerId: row.ownerId };
 }
