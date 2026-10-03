@@ -1,4 +1,8 @@
-import { useState } from 'react';
+import { Link } from 'react-router';
+import { useBillingNavigation } from './billing-navigation';
+import { billingMoney } from './billing-money';
+import { BillingSubscriptionsTable } from './BillingSubscriptionsTable';
+import { BillingRecordDetail } from './BillingRecordDetail';
 
 import { Badge, type BadgeVariant } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
@@ -35,13 +39,6 @@ function keyStatus(key: BillingService['app_keys'][number]): {
   return { label: 'Active', variant: 'green' };
 }
 
-function subscriptionStatus(status: string): BadgeVariant {
-  if (status === 'active' || status === 'trialing') return 'green';
-  if (status === 'past_due' || status === 'unpaid') return 'amber';
-  if (status === 'canceled' || status === 'incomplete_expired') return 'slate';
-  return 'red';
-}
-
 export function BillingServicePanel({
   onAddAppKey,
   onAddAdjustment,
@@ -55,7 +52,17 @@ export function BillingServicePanel({
   onAddTariff: () => void;
   service: BillingService;
 }) {
-  const [tab, setTab] = useState<BillingTab>('tariffs');
+  const { params, href, update } = useBillingNavigation();
+  const requestedTab = params.get('tab') ?? 'tariffs';
+  const tab: BillingTab = [
+    'tariffs',
+    'assignments',
+    'adjustments',
+    'app-keys',
+    'subscriptions',
+  ].includes(requestedTab)
+    ? (requestedTab as BillingTab)
+    : 'tariffs';
   const setDefault = useSetDefaultBillingTariffMutation(service.id);
   const removeAssignment = useRemoveBillingAssignmentMutation(service.id);
   const revokeKey = useRevokeBillingAppKeyMutation(service.id);
@@ -80,24 +87,32 @@ export function BillingServicePanel({
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button icon="plus" size="sm" onClick={onAddTariff}>
-            Tariff version
-          </Button>
-          <Button icon="building" size="sm" onClick={onAddAssignment}>
-            Assignment
-          </Button>
-          <Button icon="plus" size="sm" onClick={onAddAdjustment}>
-            Commercial line
-          </Button>
-          <Button icon="key" size="sm" variant="primary" onClick={onAddAppKey}>
-            Product key
-          </Button>
+          {tab === 'tariffs' ? (
+            <Button icon="plus" size="sm" onClick={onAddTariff}>
+              Tariff version
+            </Button>
+          ) : null}
+          {tab === 'assignments' ? (
+            <Button icon="building" size="sm" onClick={onAddAssignment}>
+              Assignment
+            </Button>
+          ) : null}
+          {tab === 'adjustments' ? (
+            <Button icon="plus" size="sm" onClick={onAddAdjustment}>
+              Add-on or credit
+            </Button>
+          ) : null}
+          {tab === 'app-keys' ? (
+            <Button icon="key" size="sm" variant="primary" onClick={onAddAppKey}>
+              Product key
+            </Button>
+          ) : null}
         </div>
       </CardHeader>
       <div className="px-5 pt-4">
         <UnderlineTabs
           value={tab}
-          onChange={setTab}
+          onChange={(value) => update({ tab: value, record: null })}
           options={[
             { label: 'Tariffs', value: 'tariffs', count: service.tariffs.length },
             { label: 'Assignments', value: 'assignments', count: service.assignments.length },
@@ -122,7 +137,11 @@ export function BillingServicePanel({
           {service.tariffs.map((tariff) => (
             <tr key={tariff.id}>
               <Td>
-                <p className="font-medium text-gray-800">{tariff.name}</p>
+                <p className="font-medium text-gray-800">
+                  <Link className="text-blue-600 hover:underline" to={href({ record: tariff.id })}>
+                    {tariff.name}
+                  </Link>
+                </p>
                 <code className="text-xs text-gray-400">
                   {tariff.key} v{tariff.version}
                 </code>
@@ -144,9 +163,11 @@ export function BillingServicePanel({
               <Td>{(tariff.markup_bps / 100).toFixed(2)}%</Td>
               <Td>
                 <span className="font-mono text-xs">
-                  {tariff.monthly_subscription.amount_minor} {tariff.monthly_subscription.currency}
+                  {billingMoney(
+                    tariff.monthly_subscription.amount_minor,
+                    tariff.monthly_subscription.currency,
+                  )}
                 </span>
-                <span className="block text-[11px] text-gray-400">minor units</span>
               </Td>
               <Td className="text-xs text-gray-400">
                 {date(tariff.created_at)}
@@ -187,10 +208,35 @@ export function BillingServicePanel({
                   {assignment.scope}
                 </Badge>
               </Td>
-              <Td>{assignment.organisation.name}</Td>
-              <Td>{assignment.team?.name ?? 'Entire organisation'}</Td>
               <Td>
-                <p className="font-medium text-gray-700">{assignment.tariff.name}</p>
+                <Link
+                  className="text-blue-600 hover:underline"
+                  to={`/organisations/${encodeURIComponent(assignment.organisation.id)}`}
+                >
+                  {assignment.organisation.name}
+                </Link>
+              </Td>
+              <Td>
+                {assignment.team ? (
+                  <Link
+                    className="text-blue-600 hover:underline"
+                    to={`/organisations/${encodeURIComponent(assignment.organisation.id)}/teams/${encodeURIComponent(assignment.team.id)}`}
+                  >
+                    {assignment.team.name}
+                  </Link>
+                ) : (
+                  'Entire organisation'
+                )}
+              </Td>
+              <Td>
+                <p className="font-medium text-gray-700">
+                  <Link
+                    className="text-blue-600 hover:underline"
+                    to={href({ record: assignment.id })}
+                  >
+                    {assignment.tariff.name}
+                  </Link>
+                </p>
                 <code className="text-xs text-gray-400">
                   {assignment.tariff.key} v{assignment.tariff.version}
                 </code>
@@ -233,7 +279,11 @@ export function BillingServicePanel({
             return (
               <tr key={key.id}>
                 <Td>
-                  <p className="font-medium text-gray-700">{key.name}</p>
+                  <p className="font-medium text-gray-700">
+                    <Link className="text-blue-600 hover:underline" to={href({ record: key.id })}>
+                      {key.name}
+                    </Link>
+                  </p>
                   <Badge
                     className="mt-1 whitespace-nowrap"
                     variant={key.purpose === 'customer_lifecycle' ? 'purple' : 'blue'}
@@ -305,13 +355,36 @@ export function BillingServicePanel({
           {service.adjustments.map((adjustment) => (
             <tr key={adjustment.id}>
               <Td>
-                <p className="font-medium text-gray-700">{adjustment.organisation.name}</p>
+                <p className="font-medium text-gray-700">
+                  <Link
+                    className="text-blue-600 hover:underline"
+                    to={`/organisations/${encodeURIComponent(adjustment.organisation.id)}`}
+                  >
+                    {adjustment.organisation.name}
+                  </Link>
+                </p>
                 <span className="text-xs text-gray-400">
-                  {adjustment.team?.name ?? 'Entire organisation'}
+                  {adjustment.team ? (
+                    <Link
+                      className="text-blue-600 hover:underline"
+                      to={`/organisations/${encodeURIComponent(adjustment.organisation.id)}/teams/${encodeURIComponent(adjustment.team.id)}`}
+                    >
+                      {adjustment.team.name}
+                    </Link>
+                  ) : (
+                    'Entire organisation'
+                  )}
                 </span>
               </Td>
               <Td>
-                <p className="font-medium text-gray-700">{adjustment.name}</p>
+                <p className="font-medium text-gray-700">
+                  <Link
+                    className="text-blue-600 hover:underline"
+                    to={href({ record: adjustment.id })}
+                  >
+                    {adjustment.name}
+                  </Link>
+                </p>
                 <code className="text-xs text-gray-400">{adjustment.key}</code>
               </Td>
               <Td>
@@ -325,9 +398,8 @@ export function BillingServicePanel({
               <Td>
                 <span className="font-mono text-xs">
                   {adjustment.kind === 'credit' ? '−' : '+'}
-                  {adjustment.amount_minor} {adjustment.currency}
+                  {billingMoney(adjustment.amount_minor, adjustment.currency)}
                 </span>
-                <span className="block text-[11px] text-gray-400">minor units</span>
               </Td>
               <Td className="text-xs">
                 {date(adjustment.starts_at)}
@@ -362,60 +434,15 @@ export function BillingServicePanel({
           {service.adjustments.length === 0 ? (
             <tr>
               <Td colSpan={6} className="text-gray-400">
-                No UOA-owned add-ons or credits for this service.
+                No add-ons or credits for this product.
               </Td>
             </tr>
           ) : null}
         </DataTable>
       ) : null}
 
-      {tab === 'subscriptions' ? (
-        <DataTable headers={['Subject', 'Tariff', 'Status', 'Period end', 'Stripe mode', 'Synced']}>
-          {service.stripe_subscriptions.map((subscription) => (
-            <tr key={subscription.id}>
-              <Td>
-                <p className="font-medium text-gray-700">{subscription.organisation.name}</p>
-                <span className="text-xs text-gray-400">
-                  {subscription.team?.name ?? 'Entire organisation'} · {subscription.scope}
-                </span>
-              </Td>
-              <Td>
-                <code className="text-xs">{subscription.tariff_id}</code>
-                <span className="block text-[11px] text-gray-400">
-                  {subscription.tariff_source}
-                </span>
-              </Td>
-              <Td>
-                <Badge variant={subscriptionStatus(subscription.status)}>
-                  {subscription.status}
-                </Badge>
-                {subscription.cancel_at_period_end ? (
-                  <span className="mt-1 block text-[11px] text-amber-600">
-                    Cancels at period end
-                  </span>
-                ) : null}
-              </Td>
-              <Td className="text-xs">{date(subscription.current_period_end)}</Td>
-              <Td>
-                <Badge variant={subscription.livemode ? 'red' : 'blue'}>
-                  {subscription.livemode ? 'Live' : 'Test'}
-                </Badge>
-                <code className="mt-1 block text-[11px] text-gray-400">
-                  {subscription.stripe_account_id}
-                </code>
-              </Td>
-              <Td className="text-xs text-gray-400">{date(subscription.updated_at)}</Td>
-            </tr>
-          ))}
-          {service.stripe_subscriptions.length === 0 ? (
-            <tr>
-              <Td colSpan={6} className="text-gray-400">
-                No Stripe subscription projections for this service.
-              </Td>
-            </tr>
-          ) : null}
-        </DataTable>
-      ) : null}
+      {tab === 'subscriptions' ? <BillingSubscriptionsTable service={service} /> : null}
+      <BillingRecordDetail service={service} />
     </Card>
   );
 }

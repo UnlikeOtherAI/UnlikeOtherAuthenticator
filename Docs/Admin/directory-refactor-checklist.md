@@ -34,3 +34,16 @@ No production record was modified for verification.
 - Shared two-factor policy save now catches failures and retains the selected policy for retry; focused test included.
 - Billing protocol package TypeScript compilation completed, but its generated-artifact check reported drift in billing-credits-v1.json in this Windows checkout. No generated schema was changed by this tranche. The orchestrator must resolve/check this in the final gate.
 - Rendered browser checks and lifecycle integration are owned by the orchestrator; these local component tests do not claim live browser or production verification.
+
+## Independent integrated-source regression review
+
+Reviewed integration a6d8f5e across directory, shared dialogs, security and activity routes. Fixed concrete regressions:
+
+- Detail tab navigation discarded router state and therefore the originating filters. Parameter changes retain state; a bounded return trail now preserves nested service/organisation/team/user navigation.
+- A dirty-form discard warning remained clickable after saving began. The shared discard action now honors pending state as Escape and the close button already do.
+- Compact connection-error rows removed the diagnostic summary and organisation without moving them to the inspector. The inspector now retains summary, organisation, app ID, app, endpoint and missing claims. Query failure no longer renders a false empty-log table.
+- Segmented detail tabs wrap inside narrow viewports instead of extending beyond the content width.
+
+Added tests cover nested return paths (including service filters), external return-path rejection, detail tab changes, pending discard, diagnostic field retention and query-failure retry. Read authorization remains `requireAdminSuperuser`; exact user activity is filtered in the database by UOA subject. No production state changed.
+
+Remaining verification limitations: visual responsive behavior requires the orchestrator's browser pass. Existing list-window bounds and the planned lifecycle integrations are not changed by this review.

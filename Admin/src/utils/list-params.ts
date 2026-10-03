@@ -1,7 +1,8 @@
-import { useSearchParams } from 'react-router';
+import { useLocation, useSearchParams } from 'react-router';
 
 /** List state belongs in the URL so record navigation and Back retain context. */
 export function useListParams() {
+  const location = useLocation();
   const [params, setParams] = useSearchParams();
   return {
     params,
@@ -11,6 +12,6 @@ export function useListParams() {
       if (value) next.set(key, value); else next.delete(key);
       if (reset) { next.delete('page'); next.delete('selected'); }
       return next;
-    }, { replace: reset }),
+    }, { replace: reset, state: location.state }),
   };
 }

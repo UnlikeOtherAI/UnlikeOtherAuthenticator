@@ -64,7 +64,7 @@ export function Modal({ children, footer, isOpen, onClose, title, widthClassName
           </button>
         </div>
         <div className="max-h-[70vh] overflow-y-auto px-6 py-5">{children}</div>
-        {discard ? <div role="alert" className="flex flex-wrap items-center gap-3 border-t border-amber-200 bg-amber-50 px-6 py-3 text-sm"><span>Discard unsaved changes?</span><button type="button" className="font-semibold text-indigo-700" onClick={() => setDiscard(false)}>Keep editing</button><button type="button" className="font-semibold text-red-700" onClick={() => { setDiscard(false); closeRef.current(); }}>Discard changes</button></div> : null}
+        {discard ? <div role="alert" className="flex flex-wrap items-center gap-3 border-t border-amber-200 bg-amber-50 px-6 py-3 text-sm"><span>Discard unsaved changes?</span><button type="button" className="font-semibold text-indigo-700" onClick={() => setDiscard(false)}>Keep editing</button><button type="button" disabled={isPending} className="font-semibold text-red-700 disabled:opacity-50" onClick={() => { if (pendingRef.current) return; setDiscard(false); closeRef.current(); }}>Discard changes</button></div> : null}
         {footer ? <div className="flex justify-end gap-2 border-t border-gray-100 bg-gray-50 px-6 py-3">{footer}</div> : null}
       </div>
     </div>

@@ -63,7 +63,7 @@ export function ConnectionErrorsPage() {
       <Card className="mb-4 p-4">
         <div className="flex flex-wrap items-end gap-3">
           <FieldShell label="Search">
-            <TextField className="w-72" placeholder="Error, request id, app, domain..." type="search" value={query} onChange={(event) => setQuery(event.target.value)} />
+            <TextField className="w-full sm:w-72" placeholder="Error, request id, app, domain..." type="search" value={query} onChange={(event) => setQuery(event.target.value)} />
           </FieldShell>
           <AutocompleteSelect allLabel="All domains" emptyLabel="No domains found." label="Domain" options={domainOptions} placeholder="Search domains..." value={domain} onChange={setDomain} />
           <FieldShell label="Phase">
@@ -78,8 +78,7 @@ export function ConnectionErrorsPage() {
           </FieldShell>
         </div>
       </Card>
-      {isError ? <QueryError retry={refetch} /> : null}
-      <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_28rem]">
+      {isError ? <QueryError retry={refetch} /> : <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_28rem]">
         <Card>
           {isLoading ? (
             <p className="px-5 py-6 text-sm text-gray-400">Loading connection errors...</p>
@@ -113,7 +112,7 @@ export function ConnectionErrorsPage() {
           )}
         </Card>
         <ErrorDetail error={selectedError} />
-      </div>
+      </div>}
     </>
   );
 }
@@ -154,6 +153,7 @@ function ErrorDetail({ error }: { error: HandshakeErrorLog | null }) {
       </CardHeader>
       <div className="space-y-3 p-5">
         <CollapsibleDetailSection id="summary" title="Summary" openSections={openSections} onToggle={toggleSection}>
+          <p className="mb-4 break-words text-sm text-gray-700">{error.summary}</p>
           <DetailGrid error={error} />
           <div className="mt-4 space-y-3">
             <div>
@@ -202,6 +202,8 @@ function DetailGrid({ error }: { error: HandshakeErrorLog }) {
   const rows = [
     ['Domain', error.domain],
     ['App', error.app],
+    ['App ID', error.appId],
+    ['Organisation', error.organisation],
     ['Endpoint', error.endpoint],
     ['Phase', phaseLabel(error.phase)],
     ['IP', error.ip],
