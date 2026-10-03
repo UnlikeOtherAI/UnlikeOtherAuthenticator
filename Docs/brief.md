@@ -2951,3 +2951,16 @@ Team deletion covers the target UOA-owned data and connected product content. De
 Implementation plan: additive migration and central denial/issuance guards; administrator template/lifecycle APIs; current digest-bound preview and typed confirmation; durable idempotent jobs with committed DELETING candidates; exact registered ClientDomain pull/ack protocol; scoped PII sweep without overriding evidence constraints; dedicated controls in existing detail/settings pages; focused real PostgreSQL lifecycle/race tests plus integration and rendered-flow evaluation. `/api` and `/llm` publish the contract. Legacy direct org/team delete paths refuse with `ENTITY_DELETION_WORKFLOW_REQUIRED` to prevent bypass.
 
 Connected products must deploy adapters that pull assigned jobs and acknowledge the exact revision only after committed cleanup. This repository cannot silently deploy those adapters. Unknown registration/inventory or missing acknowledgement is a visible completion blocker. Native logical domains are direct identity use, not imaginary product backends. Offline JWT validators require online lifecycle checks or bounded expiry; local revocation alone cannot rewrite an already delivered JWT. Mailbox proof (plus enrolled TOTP) can read access reasons without granting a session or exposing pre-authentication reasons.
+
+## Admin Add User to Team (2026-10-03)
+
+The existing user-detail dialog adds an existing UOA user by stable subject to the
+selected organisation and team through the platform-superuser API. A missing or
+REMOVED organisation membership is added as member with default-team membership;
+the selected team receives Member or Admin. Existing active roles remain unchanged,
+exact retries are idempotent, and DEACTIVATED memberships and owner changes are
+refused. This operator path uses UOA's standard membership limits, validates the
+exact organisation/team pair and per-domain identity scope, and commits every
+membership and audit record together. Removed memberships do not recover old roles
+or revoked sessions. The dialog retains failed selections for retry, prevents
+concurrent submissions, and refreshes admin membership views after success.
