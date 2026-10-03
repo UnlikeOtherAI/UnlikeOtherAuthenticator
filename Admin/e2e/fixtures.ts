@@ -200,7 +200,6 @@ export async function installFixtures(page: Page) {
     if (path === '/billing/invoices') return json(invoices);
     if (path.endsWith('/invoice-profile'))
       return json({ error: 'No synthetic buyer profile' }, 404);
-    if (path.startsWith('/billing/')) return json([]);
     if (path === '/bans') return json([...data.bans.emails, ...data.bans.ips]);
     if (path === '/search') return json([{ type: 'user', user: data.users[0] }]);
     unexpected.push(`GET ${path}`);
