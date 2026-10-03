@@ -72,9 +72,6 @@ export function BillingAppKeyDialog({
       widthClassName="max-w-2xl"
       footer={
         <>
-          <Button disabled={create.isPending} onClick={onClose}>
-            Cancel
-          </Button>
           <Button
             icon="key"
             variant="primary"

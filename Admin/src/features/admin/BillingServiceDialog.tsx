@@ -50,9 +50,6 @@ export function BillingServiceDialog({ onClose, open }: { onClose: () => void; o
       widthClassName="max-w-2xl"
       footer={
         <>
-          <Button disabled={create.isPending} onClick={onClose}>
-            Cancel
-          </Button>
           <Button
             icon="plus"
             variant="primary"
