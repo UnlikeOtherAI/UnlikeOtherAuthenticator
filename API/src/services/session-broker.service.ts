@@ -31,6 +31,8 @@ export async function validateSessionBroker(params: { token: string; targetDomai
       .sort((a, b) => a.id.localeCompare(b.id))) {
       await lockTokenIssuanceProductPolicy({ clientDomainId: item.id, domain: item.domain }, { prisma: tx });
     }
+    const currentTarget = await tx.clientDomain.findUnique({ where: { id: target.id }, select: { status: true } });
+    if (currentTarget?.status !== 'active') throw forbidden();
     await resolveConfidentialDelegationForSource({ sourceDomain: SESSION_BROKER_SOURCE,
       product: 'coder', resource: SESSION_BROKER_RESOURCE, scope: SESSION_BROKER_SCOPE }, { prisma: tx });
     try {
@@ -52,7 +54,7 @@ export async function validateSessionBroker(params: { token: string; targetDomai
         orgId: subject.active.orgId, groupsEnabled: false }, { prisma: tx, crossProductPrisma: tx, policyPrisma: tx }),
     ]);
     if (!user || !role || !targetRole || !org || !targetOrg || !targetOrg.teams.includes(subject.active.teamId) ||
-      !org.teams.includes(subject.active.teamId) || subject.exp <= now) throw forbidden();
+      !org.teams.includes(subject.active.teamId) || subject.exp <= (deps.now?.() ?? Math.floor(Date.now() / 1000))) throw forbidden();
     return { sub: subject.sub, expires_at: new Date(subject.exp * 1000).toISOString(),
       active: { orgId: subject.active.orgId, teamId: subject.active.teamId } };
   });

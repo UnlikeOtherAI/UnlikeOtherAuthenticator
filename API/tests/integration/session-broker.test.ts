@@ -93,6 +93,13 @@ describe.skipIf(!process.env.DATABASE_URL)('durable Selkie broker validation', (
         scopes: ['session:broker'], actor: { email: 'operator@example.com' }, ...override }, { prisma: db.prisma })).rejects.toThrow();
     }
   });
+  it('rechecks expiry after database work and rejects a disabled target', async () => {
+    const value = await token(); const now = Math.floor(Date.now() / 1000); let reads = 0;
+    await expect(validateSessionBroker({ token: value, targetDomain: 'api.selkie.live' },
+      { prisma: db.prisma, now: () => ++reads === 1 ? now : now + 301 })).rejects.toThrow();
+    await db.prisma.clientDomain.update({ where: { domain: 'api.selkie.live' }, data: { status: 'disabled' } });
+    await expect(validate(value)).rejects.toThrow();
+  });
   it('preserves retryable database failure rather than claiming revocation', async () => {
     const value = await token(); const unavailable = new Error('Database unavailable');
     const spy = vi.spyOn(epoch, 'lockAndAssertAuthenticationEpoch').mockRejectedValueOnce(unavailable);
