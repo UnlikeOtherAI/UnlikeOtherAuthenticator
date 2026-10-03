@@ -167,9 +167,10 @@ export async function verifyAccessToken(
     if (!current || !isActiveLifecycle(current.lifecycleStatus) || current.tokenVersion !== credentialEpoch) {
       throw new AppError('UNAUTHORIZED', 401, 'INVALID_ACCESS_TOKEN');
     }
-    if (parsed.active) {
-      if (!prisma.organisation || !prisma.team) throw new AppError('INTERNAL', 500, 'LIFECYCLE_STORE_REQUIRED');
-      await assertEntityAccess(parsed.active, prisma as Pick<PrismaClient, 'user' | 'organisation' | 'team'>);
+    const scope = parsed.active ?? (parsed.org ? { orgId: parsed.org.org_id } : undefined);
+    if (scope) {
+      if (!prisma.organisation || ('teamId' in scope && scope.teamId && !prisma.team)) throw new AppError('INTERNAL', 500, 'LIFECYCLE_STORE_REQUIRED');
+      await assertEntityAccess(scope, prisma as Pick<PrismaClient, 'user' | 'organisation' | 'team'>);
     }
   } else if (parsed.tv === undefined) {
     // Missing-tv compatibility is never an offline signature-only bypass.

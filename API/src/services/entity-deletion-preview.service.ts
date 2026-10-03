@@ -11,7 +11,7 @@ export async function activeBillingBlockers(tx: PrismaClient, scope: LifecycleSc
     const keys = model.fields.filter(f => f.kind === 'object' && f.type === modelName).flatMap(f => f.relationFromFields ?? []);
     const state = model.fields.find(f => ['status', 'state', 'active'].includes(f.name));
     if (!keys.length || !state) continue;
-    const terminal = state.kind === 'enum' ? Prisma.dmmf.datamodel.enums.find(e => e.name === state.type)!.values
+    const terminal = state.kind === 'enum' ? (Prisma.dmmf.datamodel.enums.find(e => e.name === state.type)?.values ?? [])
       .filter(v => ['COMPLETE', 'COMPLETED', 'EXPIRED', 'ABANDONED', 'CANCELED', 'CANCELLED', 'FAILED'].includes(v.name)).map(v => v.name)
       : ['canceled', 'incomplete_expired', 'complete', 'expired'];
     const where = { OR: keys.map(key => ({ [key]: id })), [state.name]: state.name === 'active' ? true : { notIn: terminal } };
@@ -26,15 +26,32 @@ export type RetainedEvidence = { model: string; count: number; reason: string; s
 export async function retainedEvidence(tx: PrismaClient, scope: LifecycleScope, id: string): Promise<RetainedEvidence[]> {
   const referencedModel = scope === 'USER' ? 'User' : scope === 'TEAM' ? 'Team' : 'Organisation';
   const models = Prisma.dmmf.datamodel.models.filter(model => model.name.startsWith('Billing') ||
-    ['AgreementSignature', 'SignatureClaimIntent', 'SigningContinuation'].includes(model.name));
+    ['AgreementSignature', 'SignatureClaimIntent'].includes(model.name));
   const evidence: RetainedEvidence[] = [];
+  const queries: Prisma.Sql[] = [];
+  const identity = scope === 'USER' ? await tx.user.findUnique({ where: { id }, select: { email: true } }) : null;
   for (const model of models) {
-    const keys = model.fields.filter(f => f.kind === 'object' && f.type === referencedModel)
+    const keys = model.fields.filter(f => f.kind === 'object' && f.type === referencedModel && f.relationOnDelete === 'Restrict')
       .flatMap(f => f.relationFromFields ?? []);
-    if (!keys.length) continue;
-    const delegate = (tx as unknown as Record<string, Counter>)[model.name[0].toLowerCase() + model.name.slice(1)];
-    const count = await delegate.count({ where: { OR: keys.map(key => ({ [key]: id })) } });
-    if (count) evidence.push({ model: model.name, count, scope, targetId: id, reason: model.name.startsWith('Billing')
+    const scalarKeys = scope === 'USER' && model.name !== 'BillingAppKey' ? model.fields.filter(f => f.kind === 'scalar' && /^(createdByUserId|actorUserId)$/.test(f.name)).map(f => f.name) : [];
+    const emailKeys = scope === 'USER' && model.name !== 'BillingAppKey' ? model.fields.filter(f => f.kind === 'scalar' && /^(createdByEmail|actorEmail|publishedByEmail)$/.test(f.name)).map(f => f.name) : [];
+    if (!keys.length && !scalarKeys.length && !emailKeys.length) continue;
+    const table = Prisma.raw(`"${model.dbName ?? model.name}"`);
+    const columns = [...new Set([...keys, ...scalarKeys])].map(key => Prisma.raw(`"${model.fields.find(f => f.name === key)?.dbName ?? key}"`));
+    const conditions = columns.map(column => Prisma.sql`${column}=${id}`);
+    if (identity?.email) for (const key of emailKeys) conditions.push(Prisma.sql`lower(${Prisma.raw(`"${model.fields.find(f => f.name === key)?.dbName ?? key}"`)})=lower(${identity.email})`);
+    if (conditions.length) queries.push(Prisma.sql`SELECT ${model.name}::text AS model, COUNT(*)::int AS count FROM ${table} WHERE ${Prisma.join(conditions, ' OR ')}`);
+  }
+  if (scope === 'USER') {
+    queries.push(Prisma.sql`SELECT 'SignatureAuditEvent'::text AS model, COUNT(*)::int AS count FROM signature_audit_events WHERE actor_user_id=${id} OR target_id=${id} OR metadata::text LIKE ${`%${id}%`} OR (${Boolean(identity?.email)} AND lower(to_jsonb(signature_audit_events)::text) LIKE ${`%${identity?.email?.toLowerCase() ?? ''}%`})`);
+    if (identity?.email) {
+      queries.push(Prisma.sql`SELECT 'SignatureRevocation'::text AS model, COUNT(*)::int AS count FROM signature_revocations WHERE lower(actor_email)=lower(${identity.email})`);
+      queries.push(Prisma.sql`SELECT 'AgreementVersion'::text AS model, COUNT(*)::int AS count FROM agreement_versions WHERE lower(published_by_email)=lower(${identity.email})`);
+    }
+  }
+  const counts = queries.length ? await tx.$queryRaw<{ model: string; count: number }[]>(Prisma.join(queries, ' UNION ALL ')) : [];
+  for (const { model, count } of counts) {
+    if (count) evidence.push({ model, count, scope, targetId: id, reason: model.startsWith('Billing')
       ? 'Restricted commercial history; active collection must be settled separately.'
       : 'Restricted signing evidence under its existing retention policy.' });
   }
@@ -49,8 +66,10 @@ export type DeletionPreview = {
   blockers: string[]; confirmation: string; digest: string;
 };
 
-export async function orphanEligibility(tx: PrismaClient, userId: string, orgId: string | null, teamIds: string[], deleteOrg: boolean) {
+export async function orphanEligibility(tx: PrismaClient, userId: string, orgId: string | null, teamIds: string[], deleteOrg: boolean, committed = false) {
   const reasons: string[] = [];
+  const identity = await tx.user.findUnique({ where: { id: userId }, select: { lifecycleStatus: true } });
+  if (!identity || (identity.lifecycleStatus !== 'DELETING' || !committed) && ['DELETING', 'DELETED'].includes(identity.lifecycleStatus)) reasons.push('Account already has a terminal lifecycle');
   if (await tx.teamMember.count({ where: { userId, teamId: { notIn: teamIds } } })) reasons.push('Other team membership');
   if (await tx.orgMember.count({ where: { userId, ...(orgId ? { orgId: { not: orgId } } : {}) } })) reasons.push('Other organisation membership');
   if (await tx.organisation.count({ where: { ownerId: userId, ...(deleteOrg && orgId ? { id: { not: orgId } } : {}) } })) reasons.push('Organisation ownership');
@@ -86,6 +105,9 @@ export async function previewEntityDeletion(tx: PrismaClient, scope: LifecycleSc
   const candidateIds = scope === 'USER' ? [id] : [...new Set([...teamCandidates, ...orgCandidates, ...(owner ? [owner] : [])])].sort();
   const candidates = scope === 'USER' ? [] : await Promise.all(candidateIds.map(userId => orphanEligibility(tx, userId, orgId, teamIds, effectiveScope === 'ORGANISATION')));
   const blockers: string[] = [];
+  if (orgId && await tx.team.count({ where: { orgId, lifecycleStatus: 'DELETING', id: { notIn: teamIds } } })) blockers.push('Finish the existing deletion in this organisation before confirming another container deletion.');
+  if (effectiveScope === 'ORGANISATION' && await tx.team.count({ where: { orgId: effectiveTargetId, lifecycleStatus: 'DELETING' } })) blockers.push('Finish the existing team deletion before confirming organisation deletion.');
+  if (scope === 'TEAM' && (await tx.organisation.findUniqueOrThrow({ where: { id: orgId ?? '' } })).lifecycleStatus === 'DELETING') blockers.push('The organisation already has a deletion in progress.');
   blockers.push(...await activeBillingBlockers(tx, effectiveScope, effectiveTargetId));
   for (const candidate of candidates.filter(c => c.eligible)) blockers.push(...await activeBillingBlockers(tx, 'USER', candidate.id));
   if (scope === 'USER' && await tx.organisation.count({ where: { ownerId: id, lifecycleStatus: { not: 'DELETED' } } })) blockers.push('Transfer ownership of every retained organisation before deleting this account.');
@@ -103,9 +125,9 @@ export async function previewEntityDeletion(tx: PrismaClient, scope: LifecycleSc
     for (const session of await tx.refreshToken.findMany({ where: { userId: id }, distinct: ['domain'], select: { domain: true } })) domainSet.add(session.domain);
     for (const signature of await tx.agreementSignature.findMany({ where: { userId: id }, distinct: ['domain'], select: { domain: true } })) domainSet.add(signature.domain);
   } else {
-    const org = await tx.organisation.findUniqueOrThrow({ where: { id: orgId! } });
+    const org = await tx.organisation.findUniqueOrThrow({ where: { id: orgId ?? '' } });
     domainSet.add(org.domain);
-    const sessions = await tx.refreshToken.findMany({ where: effectiveScope === 'TEAM' ? { teamId: id } : { orgId: orgId! }, select: { domain: true } });
+    const sessions = await tx.refreshToken.findMany({ where: effectiveScope === 'TEAM' ? { teamId: id } : { orgId: orgId ?? '' }, select: { domain: true } });
     for (const session of sessions) domainSet.add(session.domain);
     for (const candidate of candidates.filter(c => c.eligible)) {
       for (const role of await tx.domainRole.findMany({ where: { userId: candidate.id }, select: { domain: true } })) domainSet.add(role.domain);
@@ -113,7 +135,8 @@ export async function previewEntityDeletion(tx: PrismaClient, scope: LifecycleSc
     }
   }
   domainSet.delete(getAdminAuthDomain());
-  if (getEnv().MCP_OAUTH_DOMAIN) domainSet.delete(getEnv().MCP_OAUTH_DOMAIN!);
+  const nativeDomain = getEnv().MCP_OAUTH_DOMAIN;
+  if (nativeDomain) domainSet.delete(nativeDomain);
   const participants: DeletionPreview['participants'] = [];
   if (teamIds.length) {
     const accesses = await tx.billingServiceAccess.findMany({ where: { teamId: { in: teamIds } }, select: { service: { select: { identifier: true } } } });

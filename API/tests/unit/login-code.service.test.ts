@@ -300,7 +300,7 @@ describe('login-code.service', () => {
     it('fails closed for a legacy existing-user login code without an issue epoch', async () => {
       const prisma = makePrisma();
       (prisma.verificationToken.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(
-        validLoginCodeRow({  tokenVersion: null }),
+        validLoginCodeRow({ tokenVersion: null }),
       );
 
       await expect(

@@ -1,3 +1,4 @@
+import { registerOAuthLifecycleStatus } from './lifecycle-status.js';
 import type { FastifyInstance } from 'fastify';
 import { registerNativeAppIcon } from './native-app-icon.js';
 import { registerPublicSocialRoutes } from './social.js';
@@ -13,6 +14,7 @@ import { registerOAuthTokenRoute } from './token.js';
 
 // Public-client / MCP OAuth profile (brief §22.14).
 export function registerOAuthRoutes(app: FastifyInstance): void {
+  registerOAuthLifecycleStatus(app);
   registerNativeAppIcon(app);
   registerPublicSocialRoutes(app);
   registerOAuthAccountRoutes(app);

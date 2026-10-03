@@ -1,3 +1,4 @@
+import { AccessStatusForm } from '../components/form/AccessStatusForm.js';
 import React from 'react';
 import { NativeAppConsent } from '../components/form/NativeAppConsent.js';
 
@@ -31,6 +32,7 @@ export function LoginPage(): React.JSX.Element {
       {!clientId ? <div className="mt-6">
         <SocialButtons showDivider={showEmailPassword} />
       </div> : null}
+      <AccessStatusForm />
     </div>
   );
 }

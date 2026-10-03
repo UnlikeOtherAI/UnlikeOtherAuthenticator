@@ -313,7 +313,7 @@ describe('signing continuation completion', () => {
   it('rejects invalid, expired, consumed, and attempt-exhausted capabilities identically', async () => {
     for (const row of [
       null,
-      continuation({  tokenVersion: null }),
+      continuation({ tokenVersion: null }),
       continuation({ expiresAt: NOW }),
       continuation({ consumedAt: NOW }),
       continuation({ attemptCount: env.SIGNATURE_MAX_SIGN_ATTEMPTS }),

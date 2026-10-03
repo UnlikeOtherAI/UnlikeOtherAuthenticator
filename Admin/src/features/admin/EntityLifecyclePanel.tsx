@@ -10,7 +10,7 @@ type Lifecycle = { status: 'ACTIVE' | 'DISABLED' | 'DELETING' | 'DELETED'; reaso
 type Preview = { digest: string; confirmation: string; name: string; mode: string; deletesEmptyOrganisation: boolean;
   teamIds: string[]; candidates: { id: string; eligible: boolean; reasons: string[] }[];
   participants: { domain: string }[]; retainedEvidence: { model: string; count: number; reason: string }[]; blockers: string[] };
-type Job = { id: string; status: string; preview: Preview; blockers: string[]; participants: { domain: string; acknowledgedAt: string | null; outcome: string | null }[] };
+type Job = { id: string; status: string; preview: Preview; blockers: string[]; participants: { domain: string; acknowledgedAt: string | null; outcome: string | null; retainedEvidence?: {label:string;count:number;reason:string}[] }[] };
 const api = createApiClient();
 const inputClass = 'w-full rounded-lg border border-gray-300 p-2 text-sm';
 
@@ -35,7 +35,7 @@ function EntityLifecyclePanelBody({ scope, id }: { scope: LifecycleScope; id: st
   async function act(task: () => Promise<unknown>) {
     setError(''); setPending(true);
     try { await task(); await queryClient.invalidateQueries({ queryKey: ['admin'] }); }
-    catch (failure) { setError(failure instanceof ApiRequestError ? failure.code ?? failure.message : 'The action failed. Review the current state and try again.'); await lifecycle.refetch(); }
+    catch (failure) { setError(failure instanceof ApiRequestError ? failure.code ?? failure.message : 'The action failed. Review the current state and try again.'); await lifecycle.refetch(); await templates.refetch(); }
     finally { setPending(false); }
   }
   if (!lifecycle.data) return <p role={lifecycle.isError ? 'alert' : undefined}> {lifecycle.isError ? 'Could not load lifecycle state.' : 'Loading lifecycle…'}</p>;
@@ -53,7 +53,7 @@ function EntityLifecyclePanelBody({ scope, id }: { scope: LifecycleScope; id: st
         {selected ? <p className="text-sm">{selected.message}</p> : null}
         <label className="block">Internal note (administrators only)<textarea className={inputClass} value={note} maxLength={2000} onChange={e => setNote(e.target.value)} disabled={pending} /></label>
         <Button disabled={pending || (lifecycle.data.status === 'ACTIVE' && !selected)} onClick={() => void act(() => api.post(path, {
-          status: lifecycle.data!.status === 'ACTIVE' ? 'DISABLED' : 'ACTIVE', templateId: selected?.id, templateRevision: selected?.revision, internalNote: note,
+          status: lifecycle.data?.status === 'ACTIVE' ? 'DISABLED' : 'ACTIVE', templateId: selected?.id, templateRevision: selected?.revision, internalNote: note,
         }))}>{lifecycle.data.status === 'ACTIVE' ? 'Disable access' : 'Reactivate access'}</Button>
         <label className="block">Identity handling<select className={inputClass} value={mode} onChange={e => { setMode(e.target.value); setPreview(null); setConfirmation(''); }} disabled={pending}>
           <option value="RETAIN_REFERENCE">Retain a Deleted user reference</option><option value="ERASE_REFERENCE">Erase identity references</option>
@@ -73,9 +73,10 @@ function EntityLifecyclePanelBody({ scope, id }: { scope: LifecycleScope; id: st
           const created = await api.post<Job>(`${path}/delete`, { mode, previewDigest: preview.digest, confirmation, requestKey }); setJobId(created.id);
         })}>Confirm deletion</Button>
       </div> : null}
+      {job.isError ? <p role="alert">Could not load deletion progress. <Button onClick={() => void job.refetch()}>Retry loading progress</Button></p> : null}
       {job.data ? <div className="space-y-2 border-t pt-4">
         <p>Deletion job {job.data.id}: {job.data.status.toLowerCase().replaceAll('_', ' ')}</p>
-        <ul>{job.data.participants.map(p => <li key={p.domain}>{p.domain}: {p.acknowledgedAt ? p.outcome : 'waiting for product acknowledgement'}</li>)}</ul>
+        <ul>{job.data.participants.map(p => <li key={p.domain}>{p.domain}: {p.acknowledgedAt ? p.outcome : 'waiting for product acknowledgement'}{p.outcome === 'RETAINED_EVIDENCE' ? <ul>{p.retainedEvidence?.length ? p.retainedEvidence.map((r,i) => <li key={i}>{r.label}: {r.count}. {r.reason}</li>) : <li>Product reported retained evidence; details unavailable.</li>}</ul> : null}</li>)}</ul>
         {job.data.blockers.map(b => <p key={b} role="alert">{b}</p>)}
         <ul>{job.data.preview.retainedEvidence.map((r, i) => <li key={i}>{r.model.replace(/([a-z])([A-Z])/g, '$1 $2')}: {r.count}. {r.reason}</li>)}</ul>
         {job.data.status !== 'COMPLETE' ? <Button disabled={pending || job.data.status === 'WAITING_FOR_PRODUCTS'} onClick={() => void act(() => api.post(`/internal/admin/lifecycle/deletion-jobs/${resolvedJobId}/retry`))}>Finish or retry deletion</Button> : <p>Operational deletion completed. Listed protected evidence remains restricted.</p>}

@@ -1,6 +1,6 @@
 import type { ClientConfig } from './config.service.js';
 import { getEnv } from '../config/env.js';
-import { getAdminPrisma, getPrisma } from '../db/prisma.js';
+import { getPrisma } from '../db/prisma.js';
 import { runInTransaction } from '../db/tenant-context.js';
 import { AppError } from '../utils/errors.js';
 
@@ -35,10 +35,6 @@ import {
   type TeamRecord,
 } from './team.service.base.js';
 import { resolveTeamCreatorTeamRole } from './role-grants.js';
-import {
-  lockTeamMembershipRows,
-  lockTeamOrganisationRow,
-} from './team-scope.service.js';
 
 const ORGANISATION_SELECT = {
   id: true,

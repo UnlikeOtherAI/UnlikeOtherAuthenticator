@@ -1,6 +1,20 @@
 import type { Translations } from './en.js';
 
 export const cs = {
+  'auth.accessStatus.open': "Zkontrolovat stav přístupu",
+  'auth.accessStatus.description': "Ověřte e-mail a zobrazte důvody omezení účtu a pracovních prostorů. Tímto se nepřihlašujete.",
+  'auth.accessStatus.email': "E-mailová adresa",
+  'auth.accessStatus.sent': "Pokud existuje odpovídající účet, byl odeslán ověřovací kód.",
+  'auth.accessStatus.code': "Ověřovací kód z e-mailu",
+  'auth.accessStatus.totp': "Kód autentizátoru (pokud je zapnutý)",
+  'auth.accessStatus.verify': "Zobrazit stav přístupu",
+  'auth.accessStatus.send': "Odeslat ověřovací kód",
+  'auth.accessStatus.restart': "Vyžádat nový kód",
+  'auth.accessStatus.failed': "Stav přístupu nelze ověřit. Zkontrolujte kódy nebo si vyžádejte nový.",
+  'auth.accessStatus.account': "Účet",
+  'auth.accessStatus.organisation': "Organizace",
+  'auth.accessStatus.team': "Tým",
+  'auth.accessStatus.parent': "Přístup k organizaci",
   'auth.login.title': 'Přihlášení',
   'auth.register.title': 'Vytvoření účtu',
   'auth.resetPassword.title': 'Obnovení hesla',
