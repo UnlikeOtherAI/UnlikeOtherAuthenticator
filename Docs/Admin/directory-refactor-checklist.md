@@ -47,3 +47,11 @@ Reviewed integration a6d8f5e across directory, shared dialogs, security and acti
 Added tests cover nested return paths (including service filters), external return-path rejection, detail tab changes, pending discard, diagnostic field retention and query-failure retry. Read authorization remains `requireAdminSuperuser`; exact user activity is filtered in the database by UOA subject. No production state changed.
 
 Remaining verification limitations: visual responsive behavior requires the orchestrator's browser pass. Existing list-window bounds and the planned lifecycle integrations are not changed by this review.
+
+
+## Final integration evidence update
+
+The orchestrator subsequently confirmed that the protocol artifact check issue above was
+CRLF-only in the Windows checkout. Normalizing local JSON line endings produced no Git content
+diff and no schema change; the full recursive build passed. The final integrated CI and browser
+results remain in the orchestrator delivery record.
