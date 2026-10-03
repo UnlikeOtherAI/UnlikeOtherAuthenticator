@@ -209,7 +209,7 @@ export function ConfidentialDelegationFormDialog({ mapping, onClose, open }: Pro
               >
                 <input
                   type="checkbox"
-                  className="mt-0.5 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                  className="mt-0.5 h-4 w-4 rounded-sm border-gray-300 text-indigo-600 focus:ring-indigo-500"
                   checked={selectedScopes.includes(scope.value)}
                   onChange={() => toggleScope(scope.value)}
                 />
@@ -252,7 +252,7 @@ export function ConfidentialDelegationFormDialog({ mapping, onClose, open }: Pro
           </span>
           <input
             type="checkbox"
-            className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+            className="h-4 w-4 rounded-sm border-gray-300 text-indigo-600 focus:ring-indigo-500"
             checked={enabled}
             onChange={(event) =>
               form.setValue('enabled', event.target.checked, {

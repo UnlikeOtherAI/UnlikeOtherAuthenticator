@@ -118,7 +118,7 @@ export function DebugFab() {
             spellCheck={false}
             aria-label="Session snapshot JSON"
             onFocus={(event) => event.currentTarget.select()}
-            className="h-72 w-full resize-none rounded-lg border border-gray-200 bg-gray-50 p-3 font-mono text-xs text-gray-800 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            className="h-72 w-full resize-none rounded-lg border border-gray-200 bg-gray-50 p-3 font-mono text-xs text-gray-800 focus:border-indigo-500 focus:outline-hidden focus:ring-1 focus:ring-indigo-500"
           />
         </div>
       </Modal>

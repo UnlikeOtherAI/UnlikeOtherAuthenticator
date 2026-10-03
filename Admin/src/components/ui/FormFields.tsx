@@ -25,7 +25,7 @@ export function TextField(props: InputHTMLAttributes<HTMLInputElement>) {
     <input
       {...props}
       className={cn(
-        'h-9 w-full rounded-lg border border-gray-200 bg-gray-50 px-3 text-sm text-gray-900 outline-none transition-colors placeholder:text-gray-400 focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-100',
+        'h-9 w-full rounded-lg border border-gray-200 bg-gray-50 px-3 text-sm text-gray-900 outline-hidden transition-colors placeholder:text-gray-400 focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-100',
         props.className,
       )}
     />
@@ -37,7 +37,7 @@ export function SelectField(props: SelectHTMLAttributes<HTMLSelectElement>) {
     <select
       {...props}
       className={cn(
-        'h-9 rounded-lg border border-gray-200 bg-gray-50 px-3 text-sm text-gray-900 outline-none transition-colors focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-100',
+        'h-9 rounded-lg border border-gray-200 bg-gray-50 px-3 text-sm text-gray-900 outline-hidden transition-colors focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-100',
         props.className,
       )}
     />
@@ -49,7 +49,7 @@ export function TextAreaField(props: TextareaHTMLAttributes<HTMLTextAreaElement>
     <textarea
       {...props}
       className={cn(
-        'w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 outline-none transition-colors placeholder:text-gray-400 focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-100',
+        'w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 outline-hidden transition-colors placeholder:text-gray-400 focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-100',
         props.className,
       )}
     />

@@ -306,9 +306,9 @@ export const authEndpoints: EndpointSchema[] = [
   {
     method: 'POST',
     path: '/auth/revoke',
-    description: 'Revoke refresh token family and the user access tokens (logout)',
+    description: 'Revoke one refresh family, optionally preserving independent sessions',
     auth: 'config_url query param + domain hash bearer token',
-    body: { refresh_token: 'string (required)' },
+    body: { refresh_token: 'string (required)', scope: 'optional family; omission retains global credential revocation' },
     response: { ok: 'true' },
   },
   {

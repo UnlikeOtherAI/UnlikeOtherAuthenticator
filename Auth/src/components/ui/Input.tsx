@@ -4,7 +4,7 @@ const FIELD_INPUT_CLASS = [
   'mt-1 w-full rounded-[var(--uoa-radius-input)] border border-[var(--uoa-color-border)]',
   'bg-[var(--uoa-color-surface)] px-3 py-2 text-[var(--uoa-color-text)]',
   'placeholder:text-[var(--uoa-color-muted)]',
-  'focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--uoa-color-primary)]',
+  'focus:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--uoa-color-primary)]',
   'focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--uoa-color-bg)]',
   'disabled:cursor-not-allowed disabled:opacity-60',
 ].join(' ');

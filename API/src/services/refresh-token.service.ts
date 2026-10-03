@@ -416,6 +416,7 @@ export async function exchangeRefreshToken(
 export async function revokeRefreshTokenFamily(
   params: RefreshTokenContext & {
     refreshToken: string;
+    familyOnly?: boolean;
   },
   deps?: RefreshTokenDeps,
 ): Promise<void> {
@@ -447,6 +448,10 @@ export async function revokeRefreshTokenFamily(
 
     // Claim the exact presented capability once, then mark the whole family. Logout retries and
     // later presentation of the same predecessor cannot repeatedly bump the global epoch.
-    await invalidateRefreshTokenFamilySecurityEpoch(tx, row, nowDate(deps));
+    if (params.familyOnly) {
+      await revokeRefreshTokenFamilyInternal(tx, row.familyId, nowDate(deps));
+    } else {
+      await invalidateRefreshTokenFamilySecurityEpoch(tx, row, nowDate(deps));
+    }
   });
 }

@@ -303,3 +303,7 @@ Nodemailer `^10.0.6`. These floors address the current
 [brace-expansion](https://github.com/advisories/GHSA-qhr7-859c-m2p7), and
 [Nodemailer](https://github.com/advisories/GHSA-v53p-9fqp-m79j)
 availability advisories. Scope policy is independent of these dependency updates.
+
+### CSS dependency maintenance (2026-10-03)
+
+Auth and Admin use Tailwind 4 through `@tailwindcss/postcss` in Vite, retaining their explicit JavaScript configs through `@config`. Utility names and default border/placeholder colors preserve the earlier appearance. This removes Tailwind 3's unpatched `braces` dependency; multipart parsing uses patched `@fastify/busboy` 3.2.1 or later. No audit advisory is suppressed.

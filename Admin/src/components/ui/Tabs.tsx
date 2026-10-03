@@ -19,7 +19,7 @@ export function SegmentedTabs<T extends string>({ onChange, options, value }: Se
           key={option.value}
           className={cn(
             'h-8 rounded-md px-3 text-sm font-medium transition-colors',
-            value === option.value ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900',
+            value === option.value ? 'bg-white text-gray-900 shadow-xs' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900',
           )}
           type="button"
           onClick={() => onChange(option.value)}

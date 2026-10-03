@@ -71,7 +71,7 @@ export function BillingServicePanel({
             <Badge variant={service.active ? 'green' : 'slate'}>
               {service.active ? 'Active' : 'Inactive'}
             </Badge>
-            <code className="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
+            <code className="rounded-sm bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
               {service.identifier}
             </code>
           </div>

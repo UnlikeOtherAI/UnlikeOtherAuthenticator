@@ -27,6 +27,7 @@ describe('retention-pruning.service', () => {
     const now = new Date('2026-04-20T12:00:00.000Z');
     const calls: Record<string, unknown> = {};
     const prisma = {
+      debugLoginGrant: { deleteMany: async (args: unknown) => { calls.debugLoginGrant = args; return { count: 8 }; } },
       refreshToken: {
         deleteMany: async (args: unknown) => {
           calls.refreshToken = args;
@@ -98,7 +99,9 @@ describe('retention-pruning.service', () => {
     expect(calls.handshakeErrorLog).toMatchObject({
       where: { createdAt: { lt: new Date('2026-01-20T12:00:00.000Z') } },
     });
+    expect(calls.debugLoginGrant).toMatchObject({ where: { expiresAt: { lt: now } } });
     expect(result).toEqual({
+      debugLoginGrantsDeleted: 8,
       authorizationCodesDeleted: 2,
       confidentialAssertionUsesDeleted: 6,
       handshakeErrorLogsDeleted: 5,

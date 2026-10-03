@@ -48,9 +48,9 @@ export function PasswordInput(props: PasswordInputProps): React.JSX.Element {
           aria-pressed={visible}
           aria-label={visible ? hideToggleLabel : showToggleLabel}
           className={[
-            'absolute inset-y-0 right-2 my-1 flex items-center rounded px-2 text-xs font-medium',
+            'absolute inset-y-0 right-2 my-1 flex items-center rounded-sm px-2 text-xs font-medium',
             'text-[var(--uoa-color-primary)] hover:underline',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--uoa-color-primary)]',
+            'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--uoa-color-primary)]',
           ].join(' ')}
         >
           {visible ? hideToggleLabel : showToggleLabel}

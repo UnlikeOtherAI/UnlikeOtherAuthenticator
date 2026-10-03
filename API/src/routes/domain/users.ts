@@ -7,6 +7,7 @@ import { listUsersForDomain } from '../../services/domain-users.service.js';
 const QuerySchema = z
   .object({
     domain: z.string().trim().min(1),
+    user_id: z.string().trim().min(1).max(256).optional(),
     limit: z.coerce.number().int().positive().optional(),
   })
   .strict();
@@ -18,9 +19,9 @@ export function registerDomainUsersRoute(app: FastifyInstance): void {
       preHandler: [requireDomainHashAuthForDomainQuery],
     },
     async (request, reply) => {
-      const { domain, limit } = QuerySchema.parse(request.query);
+      const { domain, limit, user_id } = QuerySchema.parse(request.query);
 
-      const users = await listUsersForDomain({ domain, limit });
+      const users = await listUsersForDomain({ domain, limit, userId: user_id });
 
       reply.status(200).send({
         ok: true,

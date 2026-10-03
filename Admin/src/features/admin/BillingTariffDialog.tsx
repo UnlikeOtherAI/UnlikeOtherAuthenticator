@@ -123,7 +123,7 @@ export function BillingTariffDialog({
           <input
             {...form.register('setAsDefault')}
             type="checkbox"
-            className="mt-0.5 h-4 w-4 rounded border-gray-300 text-indigo-600"
+            className="mt-0.5 h-4 w-4 rounded-sm border-gray-300 text-indigo-600"
           />
           <span>
             <span className="block text-sm font-medium text-gray-700">

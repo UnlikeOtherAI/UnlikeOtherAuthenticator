@@ -79,7 +79,7 @@ export function AgreementDialog({
           <TextField {...form.register('displayOrder', { valueAsNumber: true })} min={0} max={100000} type="number" />
         </FieldShell>
         <label className="flex items-start gap-2 text-sm text-gray-700">
-          <input {...form.register('requiredForAccess')} className="mt-0.5 h-4 w-4 rounded border-gray-300" disabled={Boolean(initial)} type="checkbox" />
+          <input {...form.register('requiredForAccess')} className="mt-0.5 h-4 w-4 rounded-sm border-gray-300" disabled={Boolean(initial)} type="checkbox" />
           <span>
             <span className="font-medium">Required for access</span>
             <span className="block text-xs text-gray-400">

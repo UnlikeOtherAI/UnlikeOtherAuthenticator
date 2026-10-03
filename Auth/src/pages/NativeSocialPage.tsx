@@ -31,7 +31,7 @@ export function NativeSocialPage(): React.JSX.Element {
     <h1 className={classNames.title}>{factor ? 'Authenticator code' : 'Complete sign-in'}</h1>
     <NativeAppConsent />
     {factor?.manual_secret ? <><p>Add this key to your authenticator, then enter its six-digit code.</p>
-      <code className="break-all rounded border p-3">{factor.manual_secret}</code></> : null}
+      <code className="break-all rounded-sm border p-3">{factor.manual_secret}</code></> : null}
     {factor ? <Input label="Authenticator code" name="code" value={code} onChange={(e) => setCode(e.currentTarget.value)}
       inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" required /> : null}
     {error ? <p role="alert">Sign-in could not be completed. Try again or restart sign-in.</p> : null}
