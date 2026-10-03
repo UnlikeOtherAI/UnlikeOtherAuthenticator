@@ -143,4 +143,15 @@ describe.skipIf(!process.env.DATABASE_URL)('durable single-use debug login', () 
     await expect(redeemDebugLogin({ ...context(), token: short.token }, deps())).rejects.toThrow();
   });
 
+  it('redeems a supported themed source into a canonical family that can refresh normally', async () => {
+    const a = await source();
+    const themed = `${configUrl}?theme=nessie`;
+    await handle.prisma.refreshToken.updateMany({ where: { userId: a.user.id }, data: { configUrl: themed } });
+    const grant = await issueDebugLogin({ ...context(), configUrl: themed, refreshToken: a.refresh.refreshToken }, deps());
+    const pair = await redeemDebugLogin({ ...context(), token: grant.token }, deps());
+    const refreshed = await exchangeRefreshTokenForTokens({ ...context(), refreshToken: pair.refreshToken,
+      authenticatedClientDomainId: clientDomainId }, { prisma: handle.prisma, adminPrisma: handle.prisma });
+    expect(refreshed.refreshToken).not.toBe(pair.refreshToken);
+  });
+
 });

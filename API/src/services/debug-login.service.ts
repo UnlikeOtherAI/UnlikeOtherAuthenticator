@@ -112,7 +112,7 @@ export async function redeemDebugLogin(input: Context & { token: string }, deps:
     if (remainingSeconds <= 0) throw fail();
     const refresh = await issueRefreshToken({
       userId: source.userId, domain: source.domain, clientId: source.clientId,
-      configUrl: source.configUrl, orgId: source.orgId, teamId: source.teamId,
+      configUrl: input.configUrl, orgId: source.orgId, teamId: source.teamId,
       twoFaCompleted: source.twoFaCompleted,
     }, { prisma: tx, now: () => now,
       refreshTokenTtlSeconds: remainingSeconds });
