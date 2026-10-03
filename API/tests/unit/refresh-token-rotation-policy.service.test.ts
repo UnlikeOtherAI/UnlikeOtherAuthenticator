@@ -82,7 +82,7 @@ describe('refresh-token team-switch policy guard', () => {
     expect(prisma.$queryRaw).toHaveBeenCalledTimes(4);
     expect(afterTeamLock).toHaveBeenCalledOnce();
     expect(prisma.user.findUnique).toHaveBeenCalledWith({
-      where: { id: row.userId },
+      where: { id: row.userId, lifecycleStatus: 'ACTIVE' },
       select: { twoFaEnabled: true },
     });
     expect(prisma.$executeRaw).toHaveBeenCalledOnce();

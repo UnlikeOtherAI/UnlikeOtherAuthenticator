@@ -108,6 +108,7 @@ export function formatAdminOrganisation(
     name: team.name,
     description: team.description ?? '',
     isDefault: team.isDefault,
+    status: team.lifecycleStatus.toLowerCase(),
     members: team._count.members,
     orgName: org.name,
     allowedEmailDomains: team.allowedEmailDomains,
@@ -147,12 +148,12 @@ export function formatAdminOrganisation(
     allowedEmailDomains: org.allowedEmailDomains,
     allowedEmails: org.allowedEmails,
     created: displayDate(org.createdAt),
-    owner: {
+    owner: org.owner ? {
       id: org.owner.id,
       name: org.owner.name,
       email: org.owner.email,
       avatarImageUrl: adminAvatarImageUrl({ baseUrl, userId: org.owner.id }),
-    },
+    } : null,
     teams,
     members,
     preapprovedMembers: org.invites.map((invite) => ({

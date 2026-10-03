@@ -162,7 +162,7 @@ export async function reserveSignatureClaimIntent(
 
     const [user, version] = await Promise.all([
       tx.user.findUnique({
-        where: { id: continuation.userId },
+        where: { lifecycleStatus: 'ACTIVE', id: continuation.userId },
         select: { email: true, name: true },
       }),
       tx.agreementVersion.findFirst({
@@ -175,7 +175,7 @@ export async function reserveSignatureClaimIntent(
         include: { agreement: true },
       }),
     ]);
-    if (!user || !version) throw new AppError('INTERNAL', 500, 'SIGNATURE_CONTEXT_MISSING');
+    if (!user?.email || !version) throw new AppError('INTERNAL', 500, 'SIGNATURE_CONTEXT_MISSING');
     if (!requirementMatchesVersion(requirement, version)) {
       throw new AppError('INTERNAL', 500, 'SIGNATURE_POLICY_CHANGED_DURING_CLAIM');
     }

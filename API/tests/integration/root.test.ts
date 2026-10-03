@@ -240,7 +240,7 @@ describe('GET /api', () => {
         path: '/internal/admin/organisations/:orgId',
         auth: expect.stringContaining('superuser'),
         response: expect.objectContaining({
-          400: expect.stringContaining('ORG_HAS_PROTECTED_RECORDS'),
+          409: expect.stringContaining('ENTITY_DELETION_WORKFLOW_REQUIRED'),
         }),
       }),
     );
@@ -430,6 +430,6 @@ describe('GET /llm', () => {
     expect(res.body).toContain('/billing/v1/credits');
     expect(res.body).toContain('/billing/v1/recurring-addons');
     expect(res.body).toContain('DELETE /internal/admin/organisations/:orgId');
-    expect(res.body).toContain('ORG_HAS_PROTECTED_RECORDS');
+    expect(res.body).toContain('ENTITY_DELETION_WORKFLOW_REQUIRED');
   });
 });

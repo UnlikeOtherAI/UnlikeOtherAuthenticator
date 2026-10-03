@@ -1,3 +1,4 @@
+import { DeletionJobPage } from '../pages/DeletionJobPage';
 import { Navigate, Route, Routes } from 'react-router';
 import { NativeAppsPage } from '../pages/NativeAppsPage';
 import { NativeAppDetailPage } from '../pages/NativeAppDetailPage';
@@ -20,7 +21,7 @@ import { LogsPage } from '../pages/LogsPage';
 import { LoginPage } from '../pages/LoginPage';
 import { OrganisationDetailPage } from '../pages/OrganisationDetailPage';
 import { OrganisationsPage } from '../pages/OrganisationsPage';
-import { SettingsPage, BansPage, DelegationsPage } from '../pages/SettingsPage';
+import { SettingsPage, BansPage, DelegationsPage, LifecycleTemplatesPage } from '../pages/SettingsPage';
 import { SuperUsersPage } from '../pages/SuperUsersPage';
 import { TeamDetailPage } from '../pages/TeamDetailPage';
 import { UserDetailPage } from '../pages/UserDetailPage';
@@ -64,6 +65,8 @@ export function App() {
         <Route path="billing" element={<BillingPage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="bans" element={<BansPage />} />
+        <Route path="deletion-jobs/:jobId" element={<DeletionJobPage />} />
+        <Route path="access-reasons" element={<LifecycleTemplatesPage />} />
         <Route path="delegations" element={<DelegationsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/dashboard" replace />} />

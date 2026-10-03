@@ -4,6 +4,7 @@ import type { Prisma, PrismaClient } from '@prisma/client';
 
 import { getEnv } from '../config/env.js';
 import { getAdminPrisma, getPrisma } from '../db/prisma.js';
+import { assertTenantEffectAuthority } from '../services/tenant-effect-authority.service.js';
 import {
   runInTransaction,
   runWithTenantContext as runWithContext,
@@ -14,7 +15,10 @@ declare module 'fastify' {
   interface FastifyRequest {
     tenantContext?: TenantContext;
     adminDb: PrismaClient;
-    withTenantTx: <T>(handler: (tx: Prisma.TransactionClient) => Promise<T>) => Promise<T>;
+    /** Domain-only is an explicit route policy for access requests/revocation;
+     * it never enables domainBackend RLS visibility or replaces a user credential. */
+    withTenantTx: <T>(handler: (tx: Prisma.TransactionClient) => Promise<T>,
+      options?: { authority: 'domain' }) => Promise<T>;
   }
 }
 
@@ -46,7 +50,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     if (getEnv().DATABASE_URL) {
       request.adminDb = getAdminPrisma();
     }
-    request.withTenantTx = async (handler) => {
+    request.withTenantTx = async (handler, options) => {
       const context = request.tenantContext;
       if (!context) {
         throw new Error(
@@ -61,7 +65,10 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       if (!getEnv().DATABASE_URL) {
         return handler({} as Prisma.TransactionClient);
       }
-      return runWithContext({ context, prisma: getPrisma() }, handler);
+      return runWithContext({ context, prisma: getPrisma() }, async (tx) => {
+        await assertTenantEffectAuthority(request, context, tx, request.adminDb, options);
+        return handler(tx);
+      });
     };
   });
 };
@@ -112,4 +119,19 @@ export function runWithRequestAdminTransaction<T>(
 ): Promise<T> {
   if (!getEnv().DATABASE_URL) return handler({} as PrismaClient);
   return runInTransaction(request.adminDb, handler);
+}
+
+/** Membership removal must revoke cross-product sessions on BYPASSRLS, while
+ * sharing the exact effect-authority and canonical locks used by tenant writes. */
+export function runWithOrgAdminEffectTransaction<T>(
+  request: FastifyRequest,
+  handler: (tx: PrismaClient) => Promise<T>,
+): Promise<T> {
+  const context = request.tenantContext;
+  if (!context) throw new Error('Organisation effect transaction requires tenantContext');
+  if (!getEnv().DATABASE_URL) return handler(request.adminDb);
+  return runInTransaction(request.adminDb, async tx => {
+    await assertTenantEffectAuthority(request, context, tx as unknown as Prisma.TransactionClient, tx);
+    return handler(tx);
+  });
 }

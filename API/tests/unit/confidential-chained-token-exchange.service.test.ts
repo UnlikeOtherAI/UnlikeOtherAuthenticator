@@ -122,7 +122,7 @@ function prismaMock(options?: {
       findUnique: vi.fn().mockResolvedValue(
         options?.userExists === false
           ? null
-          : {
+          : { lifecycleStatus: 'ACTIVE',
               email: 'current-user@example.com',
               tokenVersion: options?.tokenVersion ?? 0,
               twoFaEnabled: false,
@@ -272,7 +272,7 @@ describe('chained confidential exchange', () => {
 
   it('rejects a pre-reset chained token whose credential epoch is no longer current', async () => {
     const { now, token } = await signInboundToken({ credentialEpoch: 0 });
-    const prisma = prismaMock({ tokenVersion: 1 });
+    const prisma = prismaMock({  tokenVersion: 1 });
 
     await expect(
       exchangeConfidentialChainedAccessToken(
@@ -310,7 +310,7 @@ describe('chained confidential exchange', () => {
 
     await expect(
       exchangeConfidentialChainedAccessToken(input, {
-        prisma: prismaMock({ tokenVersion: 0 }),
+        prisma: prismaMock({  tokenVersion: 0 }),
         now: () => now,
         signAccessToken,
         resolveDelegation: resolveDelegation(),
@@ -368,7 +368,7 @@ describe('chained confidential exchange', () => {
       expect.objectContaining({
         where: expect.objectContaining({
           userId,
-          org: { domain: upstream.sub },
+          org: { domain: upstream.sub, lifecycleStatus: 'ACTIVE' },
         }),
       }),
     );
@@ -404,7 +404,7 @@ describe('chained confidential exchange', () => {
   it('refuses a drifted original-product mapping as configuration before any subject lookup', async () => {
     const { now, token } = await signInboundToken();
     // A moved epoch must not win: the mapping refusal is decided first.
-    const prisma = prismaMock({ tokenVersion: 1 });
+    const prisma = prismaMock({  tokenVersion: 1 });
 
     await expect(
       exchangeConfidentialChainedAccessToken(

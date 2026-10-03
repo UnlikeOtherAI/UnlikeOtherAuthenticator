@@ -39,7 +39,7 @@ function makeEnv() {
 }
 
 function makeInviteRow(overrides?: Record<string, unknown>) {
-  return {
+  return { lifecycleStatus: 'ACTIVE',
     id: 'invite-1',
     orgId: 'org-1',
     teamId: 'team-1',
@@ -73,7 +73,7 @@ function makePrisma(invite: ReturnType<typeof makeInviteRow> | null = makeInvite
       findFirst: vi.fn().mockImplementation((args: { where: { id: string } }) =>
         Promise.resolve(
           args.where.id === 'org-1'
-            ? {
+            ? { lifecycleStatus: 'ACTIVE',
                 id: 'org-1',
                 domain: 'client.example.com',
                 name: 'Acme',
@@ -205,7 +205,7 @@ describe('getTeamInvite (GET .../teams/:teamId/invitations/:inviteId)', () => {
 
     expect(record.id).toBe('invite-1');
     expect(prisma.organisation.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'org-1' } }),
+      expect.objectContaining({ where: { id: 'org-1', lifecycleStatus: 'ACTIVE' } }),
     );
   });
 

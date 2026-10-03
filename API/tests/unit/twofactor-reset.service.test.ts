@@ -135,7 +135,7 @@ describe('requestTwoFaReset', () => {
     );
 
     expect(findUnique).toHaveBeenCalledWith({
-      where: { userKey: 'existing@example.com' },
+      where: { userKey: 'existing@example.com', lifecycleStatus: 'ACTIVE' },
       select: { id: true, tokenVersion: true, twoFaEnabled: true },
     });
 
@@ -190,7 +190,7 @@ describe('requestTwoFaReset', () => {
     );
 
     expect(findUnique).toHaveBeenCalledWith({
-      where: { userKey: 'client.example.com|missing@example.com' },
+      where: { userKey: 'client.example.com|missing@example.com', lifecycleStatus: 'ACTIVE' },
       select: { id: true, tokenVersion: true, twoFaEnabled: true },
     });
 
@@ -238,7 +238,7 @@ describe('resetTwoFaWithToken', () => {
       $queryRaw: vi.fn(),
       $transaction: async (fn) => await fn(prisma),
       user: {
-        findUnique: vi.fn().mockResolvedValue({
+        findUnique: vi.fn().mockResolvedValue({ lifecycleStatus: 'ACTIVE',
           id: 'u1',
           tokenVersion: 7,
           userKey: 'user@example.com',
@@ -323,7 +323,7 @@ describe('resetTwoFaWithToken', () => {
       $queryRaw: vi.fn(),
       $transaction: async (fn) => await fn(prisma),
       user: {
-        findUnique: vi.fn().mockResolvedValue({
+        findUnique: vi.fn().mockResolvedValue({ lifecycleStatus: 'ACTIVE',
           id: 'u1',
           tokenVersion: 7,
           userKey: 'user@example.com',
@@ -374,8 +374,8 @@ describe('resetTwoFaWithToken', () => {
   });
 
   it.each([
-    { label: 'a sibling token from a superseded epoch', tokenVersion: 6 },
-    { label: 'a legacy existing-user token without an issue epoch', tokenVersion: null },
+    { lifecycleStatus: 'ACTIVE', label: 'a sibling token from a superseded epoch', tokenVersion: 6 },
+    { lifecycleStatus: 'ACTIVE', label: 'a legacy existing-user token without an issue epoch', tokenVersion: null },
   ])('rejects $label', async ({ tokenVersion }) => {
     const updateUser = vi.fn().mockResolvedValue({ id: 'u1' });
     const updateToken = vi.fn().mockResolvedValue({ count: 1 });
@@ -383,7 +383,7 @@ describe('resetTwoFaWithToken', () => {
       $queryRaw: vi.fn(),
       $transaction: async (fn) => await fn(prisma),
       user: {
-        findUnique: vi.fn().mockResolvedValue({
+        findUnique: vi.fn().mockResolvedValue({ lifecycleStatus: 'ACTIVE',
           id: 'u1',
           tokenVersion: 7,
           userKey: 'user@example.com',

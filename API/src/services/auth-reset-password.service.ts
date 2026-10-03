@@ -129,7 +129,7 @@ export async function requestPasswordReset(
 
   const prisma = deps?.prisma ?? (getPrisma() as unknown as ResetPasswordPrisma);
   const existing = await prisma.user.findUnique({
-    where: { userKey },
+    where: { lifecycleStatus: 'ACTIVE', userKey },
     select: { id: true, tokenVersion: true },
   });
 

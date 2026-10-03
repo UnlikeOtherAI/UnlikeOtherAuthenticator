@@ -6,7 +6,7 @@ import { createRateLimiter } from '../../middleware/rate-limiter.js';
 import { requireOrgRole } from '../../middleware/org-role-guard.js';
 import requireDomainHashAuthForDomainQuery from '../../middleware/domain-hash-auth.js';
 import { requireOrgFeatures } from '../../middleware/org-features.js';
-import { setTenantContextFromRequest } from '../../plugins/tenant-context.plugin.js';
+import { setTenantContextFromRequest, runWithOrgAdminEffectTransaction } from '../../plugins/tenant-context.plugin.js';
 import {
   addTeamMember,
   changeTeamMemberRole,
@@ -389,7 +389,8 @@ export function registerTeamRoutes(app: FastifyInstance): void {
       const teamId = getTeamIdFromParams(request.params);
       const userId = getMemberUserIdFromParams(request.params);
 
-      await removeTeamMember(
+      setTenantContextFromRequest(request, { orgId });
+      await runWithOrgAdminEffectTransaction(request, tx => removeTeamMember(
         {
           orgId,
           teamId,
@@ -398,8 +399,8 @@ export function registerTeamRoutes(app: FastifyInstance): void {
           userId,
           config: requireVerifiedConfig(request),
         },
-        { prisma: request.adminDb },
-      );
+        { prisma: tx },
+      ));
 
       reply.status(200).send({ ok: true });
     },

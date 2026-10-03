@@ -21,7 +21,7 @@ import type {
 import type { DirectBillingServiceAccess } from './billing-service-access.service.js';
 
 type ProductIdentity = { identifier: string; name: string };
-type UserIdentity = { id: string; name: string | null; email: string };
+type UserIdentity = { id: string; name: string | null; email: string | null };
 type PortfolioService = BillingStatementV2['connected_service_usage']['services'][number];
 
 function rawTotal(line: RawMeteringLine): string {

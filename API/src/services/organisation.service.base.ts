@@ -100,7 +100,7 @@ export type OrganisationRecord = {
   domain: string;
   name: string;
   slug: string;
-  ownerId: string;
+  ownerId: string | null;
   memberInvites: OrgMemberInvitesValue;
   iconUrl: string | null;
   createdAt: Date;
@@ -252,7 +252,7 @@ export function toOrganisationRecord(row: {
   domain: string;
   name: string;
   slug: string;
-  ownerId: string;
+  ownerId: string | null;
   memberInvites?: string;
   iconUrl?: string | null;
   createdAt: Date;
@@ -407,7 +407,7 @@ export async function getOrganisationMember(
     where: {
       orgId: params.orgId,
       userId: params.userId,
-      ...(opts?.activeOnly ? { status: 'ACTIVE' as MembershipStatus } : {}),
+      ...(opts?.activeOnly ? { status: 'ACTIVE' as MembershipStatus, user: { lifecycleStatus: 'ACTIVE' as const }, org: { lifecycleStatus: 'ACTIVE' as const } } : {}),
     },
     select: { id: true, orgId: true, userId: true, role: true },
   });

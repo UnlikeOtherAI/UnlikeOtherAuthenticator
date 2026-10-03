@@ -1,3 +1,4 @@
+import { requireIdentityEmail } from './entity-lifecycle.service.js';
 import type { PrismaClient } from '@prisma/client';
 
 import type { ClientConfig } from './config.service.js';
@@ -78,10 +79,10 @@ export async function buildFirstLoginBlock(
   const now = deps?.now ? deps.now() : new Date();
 
   const user = await prisma.user.findUnique({
-    where: { id: params.userId },
+    where: { lifecycleStatus: 'ACTIVE', id: params.userId },
     select: { email: true },
   });
-  if (!user) {
+  if (!user || !user.email) {
     return null;
   }
 
@@ -113,7 +114,7 @@ export async function buildFirstLoginBlock(
     }),
     prisma.teamInvite.findMany({
       where: {
-        email: user.email,
+        email: requireIdentityEmail(user.email),
         org: { domain },
         // Task 3/4 (design §4.7): expired invites and invites awaiting member-invite approval are
         // not yet real pending invites for the invitee — excluded from every pending-invite surface.
@@ -342,10 +343,10 @@ export async function buildSessionChoices(
   const now = deps?.now ? deps.now() : new Date();
 
   const user = await prisma.user.findUnique({
-    where: { id: params.userId },
+    where: { lifecycleStatus: 'ACTIVE', id: params.userId },
     select: { email: true },
   });
-  if (!user) {
+  if (!user || !user.email) {
     return { teams: [], pending_invites: [], can_create_org: false, creatable_orgs: [] };
   }
 
@@ -389,7 +390,7 @@ export async function buildSessionChoices(
       // the payload inside the transaction that just accepted or declined an invitation, and a
       // separate connection would not see that yet.
       where: pendingInviteWhereForCaller({
-        email: user.email,
+        email: requireIdentityEmail(user.email),
         userId: params.userId,
         domain,
         policy,

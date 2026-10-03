@@ -381,7 +381,7 @@ describe('capability-scoped signing evidence', () => {
     const prisma = fakePrisma({ existing });
     const deps = dependencies(prisma);
     if (epochState === 'legacy null epoch') {
-      prisma.setContinuation(continuation({ tokenVersion: null }));
+      prisma.setContinuation(continuation({  tokenVersion: null }));
     } else {
       prisma.user.findUnique.mockResolvedValueOnce({
         email: 'person@example.com',

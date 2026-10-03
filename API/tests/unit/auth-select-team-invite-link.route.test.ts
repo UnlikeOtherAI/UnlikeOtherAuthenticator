@@ -177,7 +177,7 @@ describe('POST /auth/select-team invite-link redemption', () => {
     prismaMock.$executeRaw.mockResolvedValue(1);
     prismaMock.$queryRaw.mockResolvedValue([]);
     prismaMock.domainSignatureSettings.findUnique.mockResolvedValue(null);
-    prismaMock.user.findUnique.mockResolvedValue({
+    prismaMock.user.findUnique.mockResolvedValue({ lifecycleStatus: 'ACTIVE',
       id: 'user-1',
       email: 'jane@example.com',
       twoFaEnabled: false,
@@ -217,7 +217,7 @@ describe('POST /auth/select-team invite-link redemption', () => {
       .mockResolvedValueOnce(null)
       .mockResolvedValue({ id: 'tm-1', status: 'ACTIVE' });
     prismaMock.teamMember.create.mockResolvedValue({ id: 'tm-1' });
-    prismaMock.user.findUnique.mockResolvedValue({ twoFaEnabled: false, tokenVersion: 0 });
+    prismaMock.user.findUnique.mockResolvedValue({ lifecycleStatus: 'ACTIVE', twoFaEnabled: false, tokenVersion: 0 });
 
     const res = await postSelectTeam({
       login_token: loginToken,
@@ -267,7 +267,7 @@ describe('POST /auth/select-team invite-link redemption', () => {
       status: 'ACTIVE',
     });
     prismaMock.teamMember.findFirst.mockResolvedValue({ id: 'tm-2', status: 'ACTIVE' });
-    prismaMock.user.findUnique.mockResolvedValue({ twoFaEnabled: true, tokenVersion: 0 });
+    prismaMock.user.findUnique.mockResolvedValue({ lifecycleStatus: 'ACTIVE', twoFaEnabled: true, tokenVersion: 0 });
     prismaMock.clientDomain.findUnique.mockResolvedValue({ twoFaPolicy: 'REQUIRED' });
     prismaMock.organisation.findMany.mockResolvedValue([]);
 

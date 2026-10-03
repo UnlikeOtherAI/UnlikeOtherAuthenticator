@@ -20,7 +20,7 @@ export function OrganisationsPage() {
   const { recordState, openRecord } = useDirectoryNavigation('/organisations');
   const [search, setSearch] = useDirectoryParam('q');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const { pageItems, pagination } = usePagination(data.filter((org) => [org.name, org.slug, org.owner.email].some((value) => value.toLowerCase().includes(search.trim().toLowerCase()))));
+  const { pageItems, pagination } = usePagination(data.filter((org) => [org.name, org.slug, org.owner?.email].some((value) => (value ?? '').toLowerCase().includes(search.trim().toLowerCase()))));
 
   return (
     <>
@@ -56,8 +56,8 @@ export function OrganisationsPage() {
                     </div>
                   </Td>
                   <Td>
-                    {org.owner.id ? <Link state={recordState} className="text-indigo-600" to={`/users/${org.owner.id}`} onClick={(event) => event.stopPropagation()}>{org.owner.name ?? org.owner.email}</Link> : <span>Owner unavailable</span>}
-                    <p className="text-xs text-gray-400">{org.owner.email}</p>
+                    {org.owner?.id ? <Link state={recordState} className="text-indigo-600" to={`/users/${org.owner?.id}`} onClick={(event) => event.stopPropagation()}>{org.owner?.name ?? org.owner?.email}</Link> : <span>Owner unavailable</span>}
+                    <p className="text-xs text-gray-400">{org.owner?.email}</p>
                   </Td>
                   <Td>{org.members.length}</Td>
                   <Td>{org.teams.length}</Td>

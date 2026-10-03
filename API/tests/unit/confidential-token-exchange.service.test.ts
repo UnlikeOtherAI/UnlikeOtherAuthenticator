@@ -110,7 +110,7 @@ function prismaMock(options?: {
       findUnique: vi.fn().mockResolvedValue(
         options?.userExists === false
           ? null
-          : {
+          : { lifecycleStatus: 'ACTIVE',
               email: 'nessie-user@example.com',
               tokenVersion: options?.tokenVersion ?? 0,
               twoFaEnabled: false,
@@ -296,7 +296,7 @@ describe('confidential token exchange', () => {
   });
 
   it('rejects a pre-reset assertion whose credential epoch is no longer current', async () => {
-    const prisma = prismaMock({ tokenVersion: 1 });
+    const prisma = prismaMock({  tokenVersion: 1 });
     await expect(
       exchangeConfidentialSubjectToken(
         exchangeInput(await signSubjectToken({ credentialEpoch: 0 })),
@@ -318,7 +318,7 @@ describe('confidential token exchange', () => {
 
     await expect(
       exchangeConfidentialSubjectToken(exchangeInput(subjectToken), {
-        prisma: prismaMock({ tokenVersion: 0 }),
+        prisma: prismaMock({  tokenVersion: 0 }),
         fetchJwks: fetchJwks(),
         signAccessToken,
         consumeSubjectRateLimit: vi.fn(),

@@ -320,6 +320,7 @@ export async function hasTeamCapability(
   capability: UoaCapability,
   params: TeamCapabilityCheck,
 ): Promise<boolean> {
+  if (params.teamId && !await prisma.team.findFirst({ where: { id: params.teamId, orgId: params.orgId, lifecycleStatus: 'ACTIVE', org: { lifecycleStatus: 'ACTIVE' } }, select: { id: true } })) return false;
   if (!params.actorUserId) return true;
 
   const grants = resolveRoleGrants(params.config);
@@ -336,7 +337,7 @@ export async function hasTeamCapability(
   if (!params.teamId) return false;
 
   const actorTeamMembership = await prisma.teamMember.findFirst({
-    where: { teamId: params.teamId, userId: params.actorUserId, status: 'ACTIVE' },
+    where: { teamId: params.teamId, userId: params.actorUserId, status: 'ACTIVE', user: { lifecycleStatus: 'ACTIVE' }, team: { lifecycleStatus: 'ACTIVE', org: { lifecycleStatus: 'ACTIVE' } } },
     select: { teamRole: true },
   });
   return roleHoldsCapability(grants, 'team', actorTeamMembership?.teamRole, capability);
@@ -361,7 +362,7 @@ export async function resolveAndAuthorizeTeamOrg(
   domain: string;
   name: string;
   slug: string;
-  ownerId: string;
+  ownerId: string | null;
   createdAt: Date;
   updatedAt: Date;
 }> {

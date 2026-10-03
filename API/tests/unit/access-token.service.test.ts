@@ -13,8 +13,10 @@ function secretKey(secret: string): Uint8Array {
 function depsWithTokenVersion(tokenVersion: number | null) {
   return {
     prisma: {
+      organisation: { findUnique: async () => ({ lifecycleStatus: 'ACTIVE' }) },
+      team: { findUnique: async () => ({ lifecycleStatus: 'ACTIVE', orgId: 'org_1', org: { lifecycleStatus: 'ACTIVE' } }) },
       user: {
-        findUnique: async () => (tokenVersion === null ? null : { tokenVersion }),
+        findUnique: async () => (tokenVersion === null ? null : { lifecycleStatus: 'ACTIVE', tokenVersion }),
       },
     },
   } as unknown as Parameters<typeof verifyAccessToken>[1];

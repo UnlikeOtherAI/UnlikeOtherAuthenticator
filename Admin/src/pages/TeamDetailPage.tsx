@@ -1,3 +1,4 @@
+import { EntityLifecyclePanel } from '../features/admin/EntityLifecyclePanel';
 import { useDirectoryNavigation } from '../features/admin/useDirectoryNavigation';
 import { useDirectoryParam } from '../features/admin/useDirectoryParam';
 import { SegmentedTabs } from '../components/ui/Tabs';
@@ -74,6 +75,7 @@ export function TeamDetailPage() {
       <div className="mb-5">
         <TeamAvatarSection teamId={team.id} teamName={team.name} />
       </div> : null}
+      {tab === 'access' ? <div className="mb-5"><EntityLifecyclePanel scope="TEAM" id={team.id} /></div> : null}
       {tab === 'access' ? <div className="mb-5">
         <LoginRestrictionSection
           title="Login access whitelist"
@@ -102,9 +104,9 @@ export function TeamDetailPage() {
             >
               <Td>
                 <div className="flex items-center gap-2">
-                  <UserAvatar userId={member.id} label={member.name ?? member.email} />
+                  <UserAvatar userId={member.id} label={member.name ?? member.email ?? 'Deleted user'} />
                   <div>
-                    <Link state={recordState} to={`/users/${member.id}`} className="font-medium text-indigo-600" onClick={(event) => event.stopPropagation()}>{member.name ?? member.email}</Link>
+                    <Link state={recordState} to={`/users/${member.id}`} className="font-medium text-indigo-600" onClick={(event) => event.stopPropagation()}>{member.name ?? member.email ?? 'Deleted user'}</Link>
                     <p className="text-xs text-gray-400">{member.email}</p>
                   </div>
                 </div>

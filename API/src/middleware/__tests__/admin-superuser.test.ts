@@ -15,12 +15,12 @@ vi.mock('../../db/prisma.js', () => ({
       findUnique: domainRoleFindUnique,
     },
     user: {
-      findUnique: async () => ({ tokenVersion: 0 }),
+      findUnique: async () => ({ lifecycleStatus: 'ACTIVE', tokenVersion: 0 }),
     },
   }),
   getPrisma: () => ({
     user: {
-      findUnique: async () => ({ tokenVersion: 0 }),
+      findUnique: async () => ({ lifecycleStatus: 'ACTIVE', tokenVersion: 0 }),
     },
   }),
 }));

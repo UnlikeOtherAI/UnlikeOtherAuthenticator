@@ -1,6 +1,20 @@
 import type { Translations } from './en.js';
 
 export const es = {
+  'auth.accessStatus.open': "Consultar estado de acceso",
+  'auth.accessStatus.description': "Verifica tu correo para consultar los motivos de acceso de tu cuenta y espacios. Esto no inicia sesión.",
+  'auth.accessStatus.email': "Correo electrónico",
+  'auth.accessStatus.sent': "Si existe una cuenta elegible, se ha enviado un código de verificación.",
+  'auth.accessStatus.code': "Código de verificación del correo",
+  'auth.accessStatus.totp': "Código del autenticador (si está activado)",
+  'auth.accessStatus.verify': "Ver estado de acceso",
+  'auth.accessStatus.send': "Enviar código",
+  'auth.accessStatus.restart': "Solicitar otro código",
+  'auth.accessStatus.failed': "No se pudo verificar el estado. Revisa los códigos o solicita otro.",
+  'auth.accessStatus.account': "Cuenta",
+  'auth.accessStatus.organisation': "Organización",
+  'auth.accessStatus.team': "Equipo",
+  'auth.accessStatus.parent': "Acceso de la organización",
   'auth.login.title': 'Iniciar sesión',
   'auth.register.title': 'Crea tu cuenta',
   'auth.resetPassword.title': 'Restablece tu contraseña',

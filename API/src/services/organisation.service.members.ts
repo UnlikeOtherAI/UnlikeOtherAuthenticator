@@ -93,7 +93,7 @@ export async function addOrganisationMember(
     if (memberCount >= maxMembers) throw new AppError('BAD_REQUEST', 400);
 
     const targetUser = await tx.user.findUnique({
-      where: { id: userId },
+      where: { lifecycleStatus: 'ACTIVE', id: userId },
       select: { id: true, domain: true },
     });
     if (!targetUser) throw new AppError('BAD_REQUEST', 400);
@@ -329,7 +329,7 @@ export async function removeOrganisationMember(
     targetType: 'org_member',
     targetId: member.id,
     metadata: { userId, role: member.role },
-  });
+  }, { prisma });
 
   return { removed: true };
 }

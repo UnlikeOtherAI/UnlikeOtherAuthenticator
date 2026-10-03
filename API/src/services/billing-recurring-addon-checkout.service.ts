@@ -1,3 +1,4 @@
+import { requireIdentityEmail } from './entity-lifecycle.service.js';
 import {
   BillingRecurringAddonCheckoutStatus,
   MembershipStatus,
@@ -232,7 +233,7 @@ export async function createRecurringAddonCheckout(
   const details = await prisma.$transaction(async (tx) => {
     const [user, organisation, team, orgMember, teamMember, liveSubscription] = await Promise.all([
       tx.user.findUnique({
-        where: { id: params.request.userId },
+        where: { lifecycleStatus: 'ACTIVE', id: params.request.userId },
         select: { id: true, email: true, name: true },
       }),
       tx.organisation.findUnique({
@@ -309,7 +310,7 @@ export async function createRecurringAddonCheckout(
     {
       customer,
       account,
-      email: details.user.email,
+      email: requireIdentityEmail(details.user.email),
       name: selectedScope.customerTeamId ? details.team.name : details.organisation.name,
       orgId: params.request.organisationId,
       teamId: selectedScope.customerTeamId,

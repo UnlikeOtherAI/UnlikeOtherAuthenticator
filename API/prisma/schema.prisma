@@ -12,6 +12,79 @@ enum UserRole {
   USER
 }
 
+enum EntityLifecycleStatus {
+  ACTIVE
+  DISABLED
+  DELETING
+  DELETED
+}
+
+model LifecycleReasonTemplate {
+  id        String @id @default(cuid())
+  scope     LifecycleScope
+  title     String @db.VarChar(120)
+  message   String @db.VarChar(2000)
+  revision  Int @default(1)
+  enabled   Boolean @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  @@map("lifecycle_reason_templates")
+}
+
+// Stable scalar references deliberately survive the deletion they coordinate.
+model EntityDeletionJob {
+  id                String @id @default(cuid())
+  scope             LifecycleScope
+  targetId          String @map("target_id")
+  mode              IdentityDeletionMode
+  status            DeletionJobStatus
+  requestKey        String @unique @map("request_key")
+  revision          Int @default(1)
+  preview           Json
+  blockers          Json @default("[]")
+  actorUserId       String? @map("actor_user_id")
+  progress          Json @default("{}")
+  leaseOwner        String? @map("lease_owner")
+  leaseExpiresAt    DateTime? @map("lease_expires_at")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  completedAt       DateTime? @map("completed_at")
+  participants      EntityDeletionParticipant[]
+  @@unique([scope, targetId])
+  @@map("entity_deletion_jobs")
+}
+
+model EntityDeletionParticipant {
+  id             String @id @default(cuid())
+  jobId          String @map("job_id")
+  clientDomainId String @map("client_domain_id")
+  domain         String
+  acknowledgedAt DateTime? @map("acknowledged_at")
+  outcome        String? @db.VarChar(2000)
+  retainedEvidence Json @default("[]") @map("retained_evidence")
+  job EntityDeletionJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  @@unique([jobId, clientDomainId])
+  @@map("entity_deletion_participants")
+}
+
+enum LifecycleScope {
+  USER
+  ORGANISATION
+  TEAM
+}
+
+enum IdentityDeletionMode {
+  RETAIN_REFERENCE
+  ERASE_REFERENCE
+}
+
+enum DeletionJobStatus {
+  WAITING_FOR_PRODUCTS
+  READY
+  BLOCKED
+  COMPLETE
+}
+
 enum VerificationTokenType {
   LOGIN_LINK
   VERIFY_EMAIL_SET_PASSWORD
@@ -20,6 +93,7 @@ enum VerificationTokenType {
   TWOFA_RESET
   LOGIN_CODE
   ACTION_VERIFICATION
+  LIFECYCLE_STATUS
 }
 
 enum ClientDomainIntegrationStatus {
@@ -286,8 +360,14 @@ model User {
   id                                   String                                    @id @default(cuid())
   // Note: email is not globally unique because `user_scope` can be "per_domain".
   // Uniqueness is enforced via `user_key` instead (global: email, per_domain: domain|email).
-  email                                String                                    @db.Citext
-  userKey                              String                                    @unique @map("user_key")
+  email                                String?                                   @db.Citext
+  userKey                              String?                                   @unique @map("user_key")
+  lifecycleStatus                      EntityLifecycleStatus                     @default(ACTIVE) @map("lifecycle_status")
+  lifecycleChangedAt                   DateTime?                                 @map("lifecycle_changed_at")
+  lifecycleReason                      String?                                   @map("lifecycle_reason") @db.VarChar(2000)
+  lifecycleInternalNote                String?                                   @map("lifecycle_internal_note") @db.VarChar(2000)
+  lifecycleTemplateId                  String?                                   @map("lifecycle_template_id")
+  lifecycleTemplateRevision            Int?                                      @map("lifecycle_template_revision")
   domain                               String?
   passwordHash                         String?                                   @map("password_hash")
   name                                 String?
@@ -319,6 +399,7 @@ model User {
   recurringAddonCancellationsAsUser    BillingRecurringAddonCancellationIntent[] @relation("RecurringAddonCancellationSubscriber")
 
   domainRoles            DomainRole[]
+  historicalDomains      HistoricalIdentityReference[]
   authIdentities         AuthIdentity[]
   tokens                 VerificationToken[]
   authorizationCodes     AuthorizationCode[]
@@ -341,6 +422,15 @@ model User {
   @@index([email])
   @@index([domain])
   @@map("users")
+}
+
+// Domain-scoped, content-free historical lookup authority. Never a login or directory membership.
+model HistoricalIdentityReference {
+  userId String @map("user_id")
+  domain String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@id([userId, domain])
+  @@map("historical_identity_references")
 }
 
 // Docs/Auth/avatars.md §3: uploaded avatars live in their own table so a later social login —
@@ -1092,10 +1182,16 @@ model OrgAuditLog {
 
 model Organisation {
   id                  String       @id @default(cuid())
+  lifecycleStatus     EntityLifecycleStatus @default(ACTIVE) @map("lifecycle_status")
+  lifecycleChangedAt  DateTime? @map("lifecycle_changed_at")
+  lifecycleReason     String? @map("lifecycle_reason") @db.VarChar(2000)
+  lifecycleInternalNote String? @map("lifecycle_internal_note") @db.VarChar(2000)
+  lifecycleTemplateId String? @map("lifecycle_template_id")
+  lifecycleTemplateRevision Int? @map("lifecycle_template_revision")
   domain              String
   name                String       @db.VarChar(100)
   slug                String       @db.VarChar(63)
-  ownerId             String       @map("owner_id")
+  ownerId             String?      @map("owner_id")
   iconUrl             String?      @map("icon_url") // external URL only, no local storage (brief §15); §11.3
   twoFaPolicy         TwoFaPolicy? @map("two_fa_policy")
   allowedEmailDomains String[]     @default([]) @map("allowed_email_domains")
@@ -1108,7 +1204,7 @@ model Organisation {
   createdAt           DateTime     @default(now()) @map("created_at")
   updatedAt           DateTime     @updatedAt @map("updated_at")
 
-  owner                             User                                      @relation("OrgOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  owner                             User?                                     @relation("OrgOwner", fields: [ownerId], references: [id], onDelete: Restrict)
   members                           OrgMember[]
   teams                             Team[]
   groups                            Group[]
@@ -1295,6 +1391,12 @@ model FeatureFlagUserOverride {
 
 model Team {
   id                  String   @id @default(cuid())
+  lifecycleStatus     EntityLifecycleStatus @default(ACTIVE) @map("lifecycle_status")
+  lifecycleChangedAt  DateTime? @map("lifecycle_changed_at")
+  lifecycleReason     String? @map("lifecycle_reason") @db.VarChar(2000)
+  lifecycleInternalNote String? @map("lifecycle_internal_note") @db.VarChar(2000)
+  lifecycleTemplateId String? @map("lifecycle_template_id")
+  lifecycleTemplateRevision Int? @map("lifecycle_template_revision")
   orgId               String   @map("org_id")
   groupId             String?  @map("group_id")
   name                String   @db.VarChar(100)

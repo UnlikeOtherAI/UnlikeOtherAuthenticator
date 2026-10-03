@@ -3,7 +3,6 @@ import { getEnv } from '../config/env.js';
 import { getAdminPrisma, getPrisma } from '../db/prisma.js';
 import { runInTransaction } from '../db/tenant-context.js';
 import { AppError } from '../utils/errors.js';
-
 import { auditOrg, type OrgActorProvenance } from './organisation.service.base.js';
 import { revokeRefreshTokenFamiliesForUserTeam } from './refresh-token-revocation.service.js';
 import { lockRefreshSessionUser } from './refresh-session-lock.service.js';
@@ -23,14 +22,12 @@ import {
   type TeamMemberRecord,
   isP2002Error,
 } from './team.service.base.js';
-
 /**
  * Manager-driven team mutations (`addTeamMember` / `changeTeamMemberRole` / `removeTeamMember`) each
  * write an org audit row tagged with this `via`, so the audit stream distinguishes an owner/admin
  * acting on somebody else's membership from the self-service paths (`self_join`, `invite_link`).
  */
 const AUDIT_VIA_MANAGER = 'manager';
-
 export async function addTeamMember(
   params: {
     orgId: string;
@@ -46,17 +43,14 @@ export async function addTeamMember(
 ): Promise<TeamMemberRecord> {
   const env = deps?.env ?? getEnv();
   assertDatabaseEnabled(env);
-
   const actorUserId = resolveOrgActor(params);
   const userId = params.userId.trim();
   const teamRole = normalizeTeamRole(params.teamRole, params.config);
   const maxMembersPerTeam = parseMaxMembersPerTeam(params.config);
   const maxTeamMembershipsPerUser = parseMaxTeamMembershipsPerUser(params.config);
-
   if (!userId) {
     throw new AppError('BAD_REQUEST', 400);
   }
-
   const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgServicePrisma);
   const org = await resolveAndAuthorizeTeamOrg(prisma, {
     orgId: params.orgId,
@@ -68,7 +62,6 @@ export async function addTeamMember(
     actorUserId,
     config: params.config,
   });
-
   const target = await getOrganisationMember(prisma, {
     orgId: org.id,
     userId,
@@ -76,7 +69,6 @@ export async function addTeamMember(
   if (!target) {
     throw new AppError('BAD_REQUEST', 400);
   }
-
   const team = await prisma.team.findFirst({
     where: {
       id: params.teamId,
@@ -87,7 +79,6 @@ export async function addTeamMember(
   if (!team) {
     throw new AppError('NOT_FOUND', 404);
   }
-
   const { member, reactivated } = await runInTransaction(prisma, async (tx) => {
     await lockTeamMembershipRows(
       { userId, orgId: org.id, teamId: team.id },
@@ -99,7 +90,6 @@ export async function addTeamMember(
     if (memberCount >= maxMembersPerTeam) {
       throw new AppError('BAD_REQUEST', 400);
     }
-
     const userMemberships = await tx.teamMember.count({
       where: {
         userId,
@@ -112,7 +102,6 @@ export async function addTeamMember(
     if (userMemberships >= maxTeamMembershipsPerUser) {
       throw new AppError('BAD_REQUEST', 400);
     }
-
     // A prior DEACTIVATED/REMOVED (teamId, userId) row is reactivated instead of rejected
     // (design §4.1: statuses are tombstones under the same unique constraint).
     const existing = await tx.teamMember.findFirst({
@@ -122,7 +111,6 @@ export async function addTeamMember(
     if (existing && existing.status === 'ACTIVE') {
       throw new AppError('BAD_REQUEST', 400);
     }
-
     try {
       const record = existing
         ? await tx.teamMember.update({
@@ -388,7 +376,7 @@ export async function removeTeamMember(
       teamRole: removedMember.teamRole,
       via: AUDIT_VIA_MANAGER,
     },
-  });
+  }, { prisma });
 
   return { removed: true };
 }

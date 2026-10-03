@@ -111,7 +111,8 @@ it from domain Y with a domain-Y token; a domain-Y *backend* still cannot.
 | \`GET /org/me\` | **No** — 401. It answers "who am I", which has no meaning without a caller. |
 | \`GET /org/organisations\` | Yes (already was). |
 | \`POST /org/organisations\` | Yes. Body **must** carry \`owner_user_id\`; \`allow_user_create_org\` does not apply. The response carries \`defaultTeam\` (below). |
-| \`GET|PUT|DELETE /org/organisations/:orgId\` | Yes. |
+| \`GET|PUT /org/organisations/:orgId\` | Yes. |
+| \`DELETE /org/organisations/:orgId\` and \`DELETE .../teams/:teamId\` | Refused with \`409 ENTITY_DELETION_WORKFLOW_REQUIRED\`; use platform-admin lifecycle jobs. |
 | \`GET|POST /org/organisations/:orgId/members\` | Yes. \`POST\` takes \`userId\` as today. |
 | \`PUT|DELETE .../members/:userId\` | Yes. |
 | \`POST .../members/:userId/deactivate|reactivate\` | Yes. |
@@ -120,7 +121,7 @@ it from domain Y with a domain-Y token; a domain-Y *backend* still cannot.
 | \`GET .../teams\` | Yes — and lists \`HIDDEN\` teams too; that filter is member-to-member discovery. |
 | \`POST .../teams\` | Yes — but \`join_creator\` is ignored: there is no acting user to add. |
 | \`GET .../teams/:teamId\` | Yes, including \`?include=invited\`. |
-| \`PUT|DELETE .../teams/:teamId\` | Yes. |
+| \`PUT .../teams/:teamId\` | Yes. |
 | \`POST .../teams/:teamId/members\` | Yes. Takes \`userId\` as today. |
 | \`PUT|DELETE .../teams/:teamId/members/:userId\` | Yes. |
 | \`GET|PUT|DELETE .../teams/:teamId/avatar\` | Yes. |

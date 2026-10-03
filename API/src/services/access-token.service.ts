@@ -12,6 +12,7 @@ import {
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import { verifyUserAccessTokenRs256 } from './user-access-token-key.service.js';
+import { isActiveLifecycle, assertEntityAccess } from './entity-lifecycle.service.js';
 
 // Both are accepted for the whole transition, and neither can stand in for the
 // other: the branch is chosen by the protected header and each branch pins its
@@ -84,7 +85,7 @@ function sharedSecretKey(sharedSecret: string): Uint8Array {
   return new TextEncoder().encode(sharedSecret);
 }
 
-type AccessTokenPrisma = Pick<PrismaClient, 'user'>;
+type AccessTokenPrisma = Pick<PrismaClient, 'user'> & Partial<Pick<PrismaClient, 'organisation' | 'team'>>;
 
 /**
  * Verify the signature and the registered claims, choosing the branch from the
@@ -160,11 +161,16 @@ export async function verifyAccessToken(
   const credentialEpoch = parsed.tv ?? 0;
   if (prisma) {
     const current = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { tokenVersion: true },
+      where: { lifecycleStatus: 'ACTIVE', id: userId },
+      select: { tokenVersion: true, lifecycleStatus: true },
     });
-    if (!current || current.tokenVersion !== credentialEpoch) {
+    if (!current || !isActiveLifecycle(current.lifecycleStatus) || current.tokenVersion !== credentialEpoch) {
       throw new AppError('UNAUTHORIZED', 401, 'INVALID_ACCESS_TOKEN');
+    }
+    const scope = parsed.active ?? (parsed.org ? { orgId: parsed.org.org_id } : undefined);
+    if (scope) {
+      if (!prisma.organisation || ('teamId' in scope && scope.teamId && !prisma.team)) throw new AppError('INTERNAL', 500, 'LIFECYCLE_STORE_REQUIRED');
+      await assertEntityAccess(scope, prisma as Pick<PrismaClient, 'user' | 'organisation' | 'team'>);
     }
   } else if (parsed.tv === undefined) {
     // Missing-tv compatibility is never an offline signature-only bypass.

@@ -125,6 +125,7 @@ describe.skipIf(!hasDatabase)('GET /org/organisations/:orgId/groups', () => {
       select: { id: true },
     });
 
+    await handle!.prisma.orgMember.create({ data: { orgId: org.id, userId: user.id, role: 'owner' } });
     const now = Date.now();
     await handle!.prisma.group.createMany({
       data: [
@@ -290,6 +291,7 @@ describe.skipIf(!hasDatabase)('GET /org/organisations/:orgId/groups', () => {
       select: { id: true },
     });
 
+    await handle!.prisma.orgMember.create({ data: { orgId: org.id, userId: owner.id, role: 'owner' } });
     const team = await handle!.prisma.team.create({
       data: {
         orgId: org.id,

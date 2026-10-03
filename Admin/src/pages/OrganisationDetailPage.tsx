@@ -1,9 +1,9 @@
+import { EntityLifecyclePanel } from '../features/admin/EntityLifecyclePanel';
 import { useDirectoryNavigation } from '../features/admin/useDirectoryNavigation';
 import type { ReactNode } from 'react';
-import { useState } from 'react';
 import { useDirectoryParam } from '../features/admin/useDirectoryParam';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Link, useNavigate, useParams } from 'react-router';
+import { Link, useParams } from 'react-router';
 
 import { Avatar } from '../components/ui/Avatar';
 import { Badge } from '../components/ui/Badge';
@@ -15,7 +15,6 @@ import { DataTable, PaginationFooter, Td, usePagination } from '../components/ui
 import { SegmentedTabs } from '../components/ui/Tabs';
 import { LoginRestrictionSection } from '../components/sections/LoginRestrictionSection';
 import { adminService } from '../services/admin-service';
-import { ApiRequestError } from '../services/api-client';
 import { useOrganisationQuery } from '../features/admin/admin-queries';
 import type { OrganisationTwoFaPolicy } from '../features/admin/types';
 import { TeamTable } from '../features/admin/TeamTable';
@@ -24,17 +23,13 @@ import {
   ORGANISATION_TWOFA_POLICY_OPTIONS,
   TwoFactorPolicySelect,
 } from '../features/admin/TwoFactorPolicySelect';
-import { useAdminUi } from '../features/shell/admin-ui';
 
 type OrgTab = 'teams' | 'members' | 'invitations' | 'access';
 
 export function OrganisationDetailPage() {
   const { orgId } = useParams();
   const { recordState, openRecord, goBack } = useDirectoryNavigation('/organisations');
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { confirm } = useAdminUi();
-  const [deleteError, setDeleteError] = useState<string | null>(null);
   const { data: org, isLoading, isError, refetch } = useOrganisationQuery(orgId);
   const updateRestriction = useMutation({
     mutationFn: (input: { allowedEmailDomains: string[]; allowedEmails: string[] }) =>
@@ -45,20 +40,6 @@ export function OrganisationDetailPage() {
     mutationFn: (twoFaPolicy: OrganisationTwoFaPolicy) =>
       adminService.updateOrganisation(orgId ?? '', { twoFaPolicy }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin'] }),
-  });
-  const deleteOrganisation = useMutation({
-    mutationFn: () => adminService.deleteOrganisation(orgId ?? ''),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['admin'] });
-      navigate('/organisations');
-    },
-    onError: (error) => {
-      setDeleteError(
-        error instanceof ApiRequestError && error.code === 'ORG_HAS_PROTECTED_RECORDS'
-          ? 'This organisation has protected billing/commercial records and cannot be deleted'
-          : 'The organisation could not be deleted. Try again.',
-      );
-    },
   });
   const [rawTab, setTab] = useDirectoryParam('tab', 'members');
   const tab: OrgTab = ['teams', 'invitations', 'access'].includes(rawTab) ? rawTab as OrgTab : 'members';
@@ -83,39 +64,14 @@ export function OrganisationDetailPage() {
         description={`${org.slug} · Created ${org.created}`}
         leading={<Avatar label={org.name} shape="square" size="md" />}
         onBack={goBack}
-        actions={
-          <>
-            <Button
-              disabled={deleteOrganisation.isPending}
-              variant="danger"
-              onClick={() => {
-                setDeleteError(null);
-                confirm(
-                  `Delete ${org.name}?`,
-                  'This permanently deletes the organisation and its teams and memberships. User accounts are retained.',
-                  async () => {
-                    await deleteOrganisation.mutateAsync();
-                  },
-                  org.name,
-                );
-              }}
-            >
-              {deleteOrganisation.isPending ? 'Deleting...' : 'Delete'}
-            </Button>
-          </>
-        }
       />
-      {deleteError ? (
-        <p className="mb-5 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
-          {deleteError}
-        </p>
-      ) : null}
       <div className="mb-5 grid gap-3 md:grid-cols-[2fr_1fr_1fr]">
-        <MetricCard label="Owner" value={org.owner.name ?? (org.owner.email || 'Owner unavailable')} action={org.owner.id ? <Link state={recordState} className="text-xs text-indigo-600" to={`/users/${org.owner.id}`}>{org.owner.email}</Link> : undefined} />
+        <MetricCard label="Owner" value={org.owner?.name ?? (org.owner?.email || 'Owner unavailable')} action={org.owner?.id ? <Link state={recordState} className="text-xs text-indigo-600" to={`/users/${org.owner?.id}`}>{org.owner?.email}</Link> : undefined} />
         <MetricCard label="Members" value={String(org.members.length)} />
         <MetricCard label="Teams" value={String(org.teams.length)} />
       </div>
       <SegmentedTabs<OrgTab> value={tab} onChange={setTab} options={[{ label: 'Members', value: 'members' }, { label: 'Teams', value: 'teams' }, { label: 'Invitations', value: 'invitations' }, { label: 'Access', value: 'access' }]} />
+      {tab === 'access' ? <div className="mb-5"><EntityLifecyclePanel scope="ORGANISATION" id={org.id} /></div> : null}
       {tab === 'access' ? <>
       <div className="mb-5">
         <LoginRestrictionSection
@@ -167,9 +123,9 @@ export function OrganisationDetailPage() {
               >
                 <Td>
                   <div className="flex items-center gap-2">
-                    <UserAvatar userId={member.id} label={member.name ?? member.email} />
+                    <UserAvatar userId={member.id} label={member.name ?? member.email ?? 'Deleted user'} />
                     <div>
-                      <Link state={recordState} to={`/users/${member.id}`} className="font-medium text-indigo-600" onClick={(event) => event.stopPropagation()}>{member.name ?? member.email}</Link>
+                      <Link state={recordState} to={`/users/${member.id}`} className="font-medium text-indigo-600" onClick={(event) => event.stopPropagation()}>{member.name ?? member.email ?? 'Deleted user'}</Link>
                       <p className="text-xs text-gray-400">{member.email}</p>
                     </div>
                   </div>
@@ -209,7 +165,7 @@ export function OrganisationDetailPage() {
                 <Td>{preapproval.targetTeamId ? <Link state={recordState} to={`/organisations/${org.id}/teams/${preapproval.targetTeamId}`} className="text-indigo-600">{preapproval.targetTeam}</Link> : preapproval.targetTeam}</Td>
                 <Td><StatusBadge status={preapproval.role} /></Td>
                 <Td><Badge variant={['claimed', 'accepted'].includes(preapproval.status) ? 'green' : 'amber'}>{preapproval.status}</Badge></Td>
-                <Td>{preapproval.approvalStatus?.replaceAll('_', ' ') ?? '�'}</Td>
+                <Td>{preapproval.approvalStatus?.replaceAll('_', ' ') ?? 'Not applicable'}</Td>
                 <Td className="text-xs text-gray-400">{preapproval.created}</Td>
 
               </tr>

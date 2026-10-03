@@ -21,7 +21,7 @@ describe.skipIf(!hasDatabase)('admin organisation deletion persistence', () => {
     if (handle) await handle.cleanup();
   });
 
-  it('cascades membership rows, preserves users, and writes admin provenance', async () => {
+  it('refuses the legacy bypass and preserves all operational records', async () => {
     const [owner, member] = await Promise.all([
       handle!.prisma.user.create({
         data: { email: 'delete-owner@example.com', userKey: 'delete-owner@example.com' },
@@ -71,7 +71,7 @@ describe.skipIf(!hasDatabase)('admin organisation deletion persistence', () => {
         },
         { prisma: handle!.prisma, auditPrisma: handle!.prisma },
       ),
-    ).resolves.toEqual({ deleted: true });
+    ).rejects.toMatchObject({ statusCode: 409, message: 'ENTITY_DELETION_WORKFLOW_REQUIRED' });
 
     await expect(
       Promise.all([
@@ -80,23 +80,9 @@ describe.skipIf(!hasDatabase)('admin organisation deletion persistence', () => {
         handle!.prisma.teamMember.count({ where: { teamId: team.id } }),
         handle!.prisma.user.count({ where: { id: { in: [owner.id, member.id] } } }),
       ]),
-    ).resolves.toEqual([0, 0, 0, 2]);
+    ).resolves.toEqual([1, 2, 2, 2]);
 
-    const audit = await handle!.prisma.orgAuditLog.findFirstOrThrow({
-      where: {
-        orgId: organisation.id,
-        action: 'org.deleted',
-        targetId: organisation.id,
-      },
-    });
-    expect(audit.actorUserId).toBeNull();
-    expect(audit.metadata).toMatchObject({
-      uoa_actor: {
-        via: 'admin_superuser',
-        user_id: 'admin-user',
-        email: 'admin@example.com',
-      },
-    });
+    expect(await handle!.prisma.orgAuditLog.count({ where: { orgId: organisation.id, action: 'org.deleted' } })).toBe(0);
   });
 
   it('refuses deletion when protected commercial records exist', async () => {
@@ -135,9 +121,8 @@ describe.skipIf(!hasDatabase)('admin organisation deletion persistence', () => {
         { prisma: handle!.prisma, auditPrisma: handle!.prisma },
       ),
     ).rejects.toMatchObject({
-      code: 'BAD_REQUEST',
-      statusCode: 400,
-      message: 'ORG_HAS_PROTECTED_RECORDS',
+      statusCode: 409,
+      message: 'ENTITY_DELETION_WORKFLOW_REQUIRED',
     });
 
     await expect(

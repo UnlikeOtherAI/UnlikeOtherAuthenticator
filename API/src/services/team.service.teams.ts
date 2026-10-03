@@ -30,11 +30,6 @@ import {
 } from './team.service.base.js';
 import { auditOrg } from './organisation.service.base.js';
 import { getTeamInvitedEntries, type TeamInvitedEntry } from './team-invite.service.invited.js';
-import {
-  lockTeamMembershipRows,
-  lockTeamOrganisationRow,
-  lockTeamTeamRow,
-} from './team-scope.service.js';
 
 const TEAM_SELECT = {
   id: true,
@@ -77,7 +72,7 @@ export async function listTeams(
 
   const rows = await prisma.team.findMany({
     where: {
-      orgId: org.id,
+      orgId: org.id, lifecycleStatus: 'ACTIVE',
       // HIDDEN teams are excluded from any org-MEMBER-visible listing unless the caller is already
       // an ACTIVE member of that specific team (design §4.6) — invite-only discovery is preserved.
       // That is a discovery rule between members of one team. In backend mode the caller is
@@ -262,7 +257,7 @@ export async function getTeam(
   const row = await prisma.team.findFirst({
     where: {
       id: params.teamId,
-      orgId: org.id,
+      orgId: org.id, lifecycleStatus: 'ACTIVE',
     },
     select: {
       ...TEAM_SELECT,
@@ -426,106 +421,6 @@ export async function deleteTeam(
     afterMembershipLocks?: () => Promise<void>;
   },
 ): Promise<{ deleted: boolean }> {
-  const env = deps?.env ?? getEnv();
-  assertDatabaseEnabled(env);
-
-  const actorUserId = resolveOrgActor(params);
-
-  const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgServicePrisma);
-  const org = await resolveAndAuthorizeTeamOrg(prisma, {
-    orgId: params.orgId,
-    actorUserId,
-  });
-  await requireTeamCapability(prisma, 'teams.manage', {
-    orgId: org.id,
-    teamId: params.teamId,
-    actorUserId,
-    config: params.config,
-  });
-
-  await runInTransaction(prisma, async (tx) => {
-    if (!(await lockTeamOrganisationRow(org.id, { prisma: tx }))) {
-      throw new AppError('NOT_FOUND', 404);
-    }
-    const team = await lockTeamTeamRow(
-      { orgId: org.id, teamId: params.teamId },
-      { prisma: tx },
-    );
-    if (!team) {
-      throw new AppError('NOT_FOUND', 404);
-    }
-    if (team.isDefault) {
-      throw new AppError('BAD_REQUEST', 400);
-    }
-    await deps?.afterTargetTeamLock?.();
-
-    const defaultTeam = await tx.team.findFirst({
-      where: { orgId: org.id, isDefault: true },
-      select: { id: true },
-    });
-    if (!defaultTeam) {
-      throw new AppError('INTERNAL', 500, 'DEFAULT_TEAM_MISSING');
-    }
-
-    const membershipRows = await tx.teamMember.findMany({
-      where: { teamId: team.id },
-      orderBy: { userId: 'asc' },
-      select: { userId: true },
-    });
-    for (const member of membershipRows) {
-      await lockTeamMembershipRows(
-        { userId: member.userId, orgId: org.id },
-        { prisma: tx },
-      );
-    }
-    await deps?.afterMembershipLocks?.();
-
-    const members = membershipRows.length
-      ? await tx.teamMember.findMany({
-          where: {
-            teamId: team.id,
-            userId: { in: membershipRows.map((member) => member.userId) },
-            status: 'ACTIVE',
-          },
-          orderBy: { userId: 'asc' },
-          select: { userId: true },
-        })
-      : [];
-
-    for (const member of members) {
-      const userMembershipCount = await tx.teamMember.count({
-        where: {
-          userId: member.userId,
-          team: {
-            orgId: org.id,
-          },
-          status: 'ACTIVE',
-        },
-      });
-
-      if (userMembershipCount <= 1) {
-        await tx.teamMember.create({
-          data: {
-            teamId: defaultTeam.id,
-            userId: member.userId,
-          },
-        });
-      }
-    }
-
-    await tx.team.delete({ where: { id: team.id } });
-  });
-
-  await auditOrg({
-    orgId: org.id,
-    actorUserId,
-    actor: params.actor,
-    action: 'team.deleted',
-    targetType: 'team',
-    // The row is gone by now, so the id is the only durable identifier — the
-    // `team.created` row carries the name/slug this id refers to.
-    targetId: params.teamId,
-  });
-
-  return { deleted: true };
+  void params; void deps;
+  throw new AppError('BAD_REQUEST', 409, 'ENTITY_DELETION_WORKFLOW_REQUIRED');
 }

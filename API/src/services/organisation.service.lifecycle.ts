@@ -136,7 +136,7 @@ export async function deactivateOrganisationMember(
     targetType: 'org_member',
     targetId: member.id,
     metadata: { userId },
-  });
+  }, { prisma });
 
   return { deactivated: true };
 }
@@ -203,7 +203,7 @@ export async function reactivateOrganisationMember(
     targetType: 'org_member',
     targetId: member.id,
     metadata: { userId },
-  });
+  }, { prisma });
 
   return { reactivated: true };
 }

@@ -35,6 +35,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
     const redirectUrl = 'https://client.example.com/oauth/callback';
 
     const prisma = {
+      organisation: { findUnique: vi.fn().mockResolvedValue({ lifecycleStatus: 'ACTIVE' }) },
       $queryRaw: vi.fn().mockResolvedValue([]),
       authorizationCode: {
         findUnique: vi.fn(),
@@ -90,7 +91,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
       domain: config.domain,
       userId: 'user-1',
     });
-    prisma.user.findUnique.mockResolvedValue({ email: 'user@example.com', tokenVersion: 0 });
+    prisma.user.findUnique.mockResolvedValue({ lifecycleStatus: 'ACTIVE', email: 'user@example.com', tokenVersion: 0 });
     prisma.orgMember.findFirst.mockResolvedValue({
       orgId: 'org-1',
       role: 'admin',
@@ -157,6 +158,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
     const redirectUrl = 'https://client.example.com/oauth/callback';
 
     const prisma = {
+      organisation: { findUnique: vi.fn().mockResolvedValue({ lifecycleStatus: 'ACTIVE' }) },
       $queryRaw: vi.fn().mockResolvedValue([]),
       authorizationCode: {
         findUnique: vi.fn(),
@@ -204,7 +206,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
       domain: config.domain,
       userId: 'user-2',
     });
-    prisma.user.findUnique.mockResolvedValue({ email: 'user2@example.com', tokenVersion: 0 });
+    prisma.user.findUnique.mockResolvedValue({ lifecycleStatus: 'ACTIVE', email: 'user2@example.com', tokenVersion: 0 });
 
     const { accessToken, refreshToken } = await exchangeAuthorizationCodeForTokens(
       { code, config, configUrl, redirectUrl, clientId, codeVerifier: TEST_CODE_VERIFIER },
@@ -250,6 +252,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
     const redirectUrl = 'https://client.example.com/oauth/callback';
 
     const prisma = {
+      organisation: { findUnique: vi.fn().mockResolvedValue({ lifecycleStatus: 'ACTIVE' }) },
       $queryRaw: vi.fn().mockResolvedValue([]),
       authorizationCode: {
         findUnique: vi.fn(),
@@ -305,7 +308,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
       domain: config.domain,
       userId: 'user-3',
     });
-    prisma.user.findUnique.mockResolvedValue({ email: 'user3@example.com', tokenVersion: 0 });
+    prisma.user.findUnique.mockResolvedValue({ lifecycleStatus: 'ACTIVE', email: 'user3@example.com', tokenVersion: 0 });
     prisma.orgMember.findFirst.mockResolvedValue(null);
     prisma.orgMember.findMany.mockResolvedValue([]);
     prisma.teamMember.findMany.mockResolvedValue([]);
@@ -352,6 +355,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
     const redirectUrl = 'https://client.example.com/oauth/callback';
 
     const prisma = {
+      organisation: { findUnique: vi.fn().mockResolvedValue({ lifecycleStatus: 'ACTIVE' }) },
       $queryRaw: vi.fn().mockResolvedValue([]),
       authorizationCode: {
         findUnique: vi.fn(),
@@ -399,7 +403,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
       domain: config.domain,
       userId: 'user-pkce',
     });
-    prisma.user.findUnique.mockResolvedValue({ email: 'pkce@example.com', tokenVersion: 0 });
+    prisma.user.findUnique.mockResolvedValue({ lifecycleStatus: 'ACTIVE', email: 'pkce@example.com', tokenVersion: 0 });
 
     await expect(
       exchangeAuthorizationCodeForTokens(
@@ -444,6 +448,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
     const redirectUrl = 'https://client.example.com/oauth/callback';
 
     const prisma = {
+      organisation: { findUnique: vi.fn().mockResolvedValue({ lifecycleStatus: 'ACTIVE' }) },
       $queryRaw: vi.fn().mockResolvedValue([]),
       authorizationCode: { findUnique: vi.fn(), updateMany: vi.fn() },
       refreshToken: { create: vi.fn() },

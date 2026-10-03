@@ -86,6 +86,14 @@ describe.skipIf(!process.env.DATABASE_URL)('durable Selkie broker validation', (
     await db.prisma.confidentialDelegationMapping.update({ where: { id: mappingId }, data: { enabled: true } });
     await db.prisma.domainRole.deleteMany(); await expect(validate(value)).rejects.toThrow();
   });
+  it.each(['user', 'organisation', 'team'] as const)('rejects disabled %s lifecycle for an already issued broker token', async scope => {
+    const value = await token();
+    if (scope === 'user') await db.prisma.user.update({ where: { id: userId }, data: { lifecycleStatus: 'DISABLED' } });
+    else if (scope === 'organisation') await db.prisma.organisation.update({ where: { id: orgId }, data: { lifecycleStatus: 'DISABLED' } });
+    else await db.prisma.team.update({ where: { id: teamId }, data: { lifecycleStatus: 'DISABLED' } });
+    await expect(validate(value)).rejects.toThrow();
+    await expect(validate(value, 'api.selkie.live', false)).rejects.toThrow();
+  });
   it('admits only personal subject devices when the verified target explicitly disables teams', async () => {
     const value = await token(); await db.prisma.billingAppKey.updateMany({ data: { revokedAt: new Date() } });
     expect((await validate(value, 'api.selkie.live', false)).sub).toBe(userId);

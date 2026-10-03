@@ -68,6 +68,11 @@ function makePrisma(
       teamMemberFindMany,
     },
     prisma: {
+      user: { findUnique: vi.fn().mockResolvedValue({ lifecycleStatus: 'ACTIVE' }) },
+      organisation: { findUnique: vi.fn().mockResolvedValue({ lifecycleStatus: 'ACTIVE' }) },
+      team: {
+        findUnique: vi.fn().mockResolvedValue({ lifecycleStatus: 'ACTIVE', orgId: 'org_1' }),
+      },
       app: { findMany: appFindMany },
       featureFlagDefinition: { findMany: definitionFindMany },
       featureFlagRoleValue: { findMany: roleValueFindMany },

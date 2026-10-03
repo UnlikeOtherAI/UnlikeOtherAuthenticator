@@ -73,7 +73,7 @@ export function registerAccessRequestRoutes(app: FastifyInstance): void {
           { orgId, teamId, config, status },
           { prisma: asPrismaClient(tx) },
         ),
-      );
+      { authority: 'domain' });
 
       reply.status(200).send(result);
     },
@@ -109,7 +109,7 @@ export function registerAccessRequestRoutes(app: FastifyInstance): void {
           },
           { prisma: asPrismaClient(tx) },
         ),
-      );
+      { authority: 'domain' });
 
       reply.status(200).send(result);
     },
@@ -145,7 +145,7 @@ export function registerAccessRequestRoutes(app: FastifyInstance): void {
           },
           { prisma: asPrismaClient(tx) },
         ),
-      );
+      { authority: 'domain' });
 
       reply.status(200).send(result);
     },

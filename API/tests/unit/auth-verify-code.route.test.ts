@@ -195,7 +195,7 @@ describe('POST /auth/verify-code', () => {
       login_flow: { email_code_enabled: true, team_selection: 'auto' },
     });
     verifyLoginCodeMock.mockResolvedValue({ userId: 'user-1', credentialEpoch: 0 });
-    prismaMock.user.findUnique.mockResolvedValue({
+    prismaMock.user.findUnique.mockResolvedValue({ lifecycleStatus: 'ACTIVE',
       email: 'jane@example.com',
       twoFaEnabled: false,
       tokenVersion: 0,
@@ -230,7 +230,7 @@ describe('POST /auth/verify-code', () => {
 
   it('team_selection "off" (default): finalizes immediately like /auth/login', async () => {
     verifyLoginCodeMock.mockResolvedValue({ userId: 'user-1', credentialEpoch: 0 });
-    prismaMock.user.findUnique.mockResolvedValue({
+    prismaMock.user.findUnique.mockResolvedValue({ lifecycleStatus: 'ACTIVE',
       email: 'jane@example.com',
       twoFaEnabled: false,
       tokenVersion: 0,
@@ -258,7 +258,7 @@ describe('POST /auth/verify-code', () => {
       login_flow: { email_code_enabled: true, team_selection: 'off' },
     });
     verifyLoginCodeMock.mockResolvedValue({ userId: 'user-1', credentialEpoch: 0 });
-    prismaMock.user.findUnique.mockResolvedValue({
+    prismaMock.user.findUnique.mockResolvedValue({ lifecycleStatus: 'ACTIVE',
       email: 'jane@example.com',
       twoFaEnabled: true,
       tokenVersion: 0,
@@ -284,7 +284,7 @@ describe('POST /auth/verify-code', () => {
       login_flow: { email_code_enabled: true, team_selection: 'off' },
     });
     verifyLoginCodeMock.mockResolvedValue({ userId: 'user-1', credentialEpoch: 0 });
-    prismaMock.user.findUnique.mockResolvedValue({
+    prismaMock.user.findUnique.mockResolvedValue({ lifecycleStatus: 'ACTIVE',
       email: 'jane@example.com',
       twoFaEnabled: true,
       tokenVersion: 0,

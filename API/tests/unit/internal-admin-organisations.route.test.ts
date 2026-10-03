@@ -80,8 +80,8 @@ describe('DELETE /internal/admin/organisations/:orgId', () => {
     }
   });
 
-  it('deletes in backend-actor mode with verified admin provenance', async () => {
-    organisationService.deleteOrganisation.mockResolvedValue({ deleted: true });
+  it('forwards verified admin provenance to the deletion workflow boundary', async () => {
+    organisationService.deleteOrganisation.mockRejectedValue(new AppError('BAD_REQUEST', 409, 'ENTITY_DELETION_WORKFLOW_REQUIRED'));
     const { createApp } = await import('../../src/app.js');
     const app = await createApp();
     await app.ready();
@@ -93,8 +93,8 @@ describe('DELETE /internal/admin/organisations/:orgId', () => {
         headers: { authorization: `Bearer ${await accessToken('superuser')}` },
       });
 
-      expect(response.statusCode).toBe(200);
-      expect(response.json()).toEqual({ deleted: true });
+      expect(response.statusCode).toBe(409);
+      expect(response.json()).toEqual({ error: 'Request failed', code: 'ENTITY_DELETION_WORKFLOW_REQUIRED' });
       expect(organisationService.deleteOrganisation).toHaveBeenCalledWith({
         orgId: 'org-1',
         actor: {
@@ -108,9 +108,9 @@ describe('DELETE /internal/admin/organisations/:orgId', () => {
     }
   });
 
-  it('exposes the named protected-records refusal', async () => {
+  it('exposes the required-workflow refusal', async () => {
     organisationService.deleteOrganisation.mockRejectedValue(
-      new AppError('BAD_REQUEST', 400, 'ORG_HAS_PROTECTED_RECORDS'),
+      new AppError('BAD_REQUEST', 409, 'ENTITY_DELETION_WORKFLOW_REQUIRED'),
     );
     const { createApp } = await import('../../src/app.js');
     const app = await createApp();
@@ -123,10 +123,10 @@ describe('DELETE /internal/admin/organisations/:orgId', () => {
         headers: { authorization: `Bearer ${await accessToken('superuser')}` },
       });
 
-      expect(response.statusCode).toBe(400);
+      expect(response.statusCode).toBe(409);
       expect(response.json()).toEqual({
         error: 'Request failed',
-        code: 'ORG_HAS_PROTECTED_RECORDS',
+        code: 'ENTITY_DELETION_WORKFLOW_REQUIRED',
       });
     } finally {
       await app.close();

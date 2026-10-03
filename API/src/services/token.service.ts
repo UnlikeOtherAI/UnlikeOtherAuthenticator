@@ -1,12 +1,11 @@
+import { requireIdentityEmail } from './entity-lifecycle.service.js';
 import type { PrismaClient } from '@prisma/client';
-import { SignJWT } from 'jose';
+import { signAccessToken } from './token-signing.service.js';
 
-import { ACCESS_TOKEN_AUDIENCE } from '../config/constants.js';
 import {
   getAdminAuthDomain,
   getAuthServiceIdentifier,
   getEnv,
-  isUserAccessTokenRs256Enabled,
   requireEnv,
 } from '../config/env.js';
 import { getAdminPrisma, getPrisma } from '../db/prisma.js';
@@ -20,7 +19,6 @@ import type { ClientConfig } from './config.service.js';
 import {
   getActiveClientOrgContext,
   getUserOrgContext,
-  type OrgContext,
 } from './org-context.service.js';
 import { buildFirstLoginBlock, type FirstLoginBlock } from './first-login.service.js';
 import {
@@ -28,7 +26,6 @@ import {
   requiresExactAuthorizationTeam,
 } from './required-team-placement.service.js';
 import { lockTokenIssuanceProductPolicy } from './product-team-policy-lock.service.js';
-import { signUserAccessTokenRs256 } from './user-access-token-key.service.js';
 import { resolveProductTeamPolicy } from './product-team-policy.service.js';
 import { assertAuthorizationTwoFaProof } from './authorization-twofactor-proof.service.js';
 import {
@@ -60,78 +57,8 @@ type TokenDeps = {
   afterRequiredTeamLock?: () => Promise<void>;
 };
 
-function sharedSecretKey(sharedSecret: string): Uint8Array {
-  return new TextEncoder().encode(sharedSecret);
-}
-
 type ActiveTeam = { orgId: string; teamId: string };
-type ActiveTeamClaim = ActiveTeam & { tenantSlug: string };
 
-async function signAccessToken(params: {
-  userId: string;
-  email: string;
-  domain: string;
-  role: 'superuser' | 'user';
-  clientId: string;
-  sharedSecret: string;
-  ttl: string;
-  issuer: string;
-  tokenVersion: number;
-  org?: OrgContext | null;
-  active?: ActiveTeamClaim | null;
-  /** False for the first-party admin domain, which signs with its own separate
-   *  HS256 secret and is consumed only by UOA's own Admin panel — not a relying
-   *  party, so it stays out of the publishable-signature surface. */
-  relyingPartyToken: boolean;
-}): Promise<string> {
-  const payload = {
-    email: params.email,
-    domain: params.domain,
-    client_id: params.clientId,
-    role: params.role,
-    tv: params.tokenVersion,
-  } as {
-    email: string;
-    domain: string;
-    client_id: string;
-    role: 'superuser' | 'user';
-    tv: number;
-    org?: OrgContext;
-    active?: ActiveTeamClaim;
-  };
-
-  if (params.org) {
-    payload.org = params.org;
-  }
-
-  if (params.active) {
-    payload.active = params.active;
-  }
-
-  try {
-    // Same claims, same iss/aud/sub, same TTL either way — only the signature and
-    // the kid header change, so this is a drop-in for every existing consumer.
-    if (params.relyingPartyToken && isUserAccessTokenRs256Enabled()) {
-      return await signUserAccessTokenRs256({
-        payload,
-        issuer: params.issuer,
-        audience: ACCESS_TOKEN_AUDIENCE,
-        subject: params.userId,
-        ttl: params.ttl,
-      });
-    }
-    return await new SignJWT(payload)
-      .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
-      .setIssuer(params.issuer)
-      .setAudience(ACCESS_TOKEN_AUDIENCE)
-      .setSubject(params.userId)
-      .setIssuedAt()
-      .setExpirationTime(params.ttl)
-      .sign(sharedSecretKey(params.sharedSecret));
-  } catch {
-    throw new AppError('INTERNAL', 500, 'TOKEN_SIGN_FAILED');
-  }
-}
 
 function resolveAccessTokenContext(params: {
   clientId?: string;
@@ -199,7 +126,7 @@ export async function issueTokenPairForUser(
   });
 
   const user = await prisma.user.findUnique({
-    where: { id: params.userId },
+    where: { lifecycleStatus: 'ACTIVE', id: params.userId },
     select: { email: true, tokenVersion: true },
   });
   if (!user) throw new AppError('INTERNAL', 500, 'MISSING_USER');
@@ -262,7 +189,7 @@ export async function issueTokenPairForUser(
 
   const accessToken = await signAccessToken({
     userId: params.userId,
-    email: user.email,
+    email: requireIdentityEmail(user.email),
     domain: params.config.domain,
     role,
     clientId: accessTokenContext.clientId,

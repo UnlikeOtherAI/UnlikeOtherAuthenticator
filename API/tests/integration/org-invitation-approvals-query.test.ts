@@ -90,6 +90,7 @@ describe.skipIf(!hasDatabase)('GET /org/organisations/:orgId/invitations query h
       select: { id: true },
     });
     orgId = org.id;
+    await handle.prisma.orgMember.create({ data: { orgId, userId: owner.id, role: 'owner' } });
 
     const team = await handle.prisma.team.create({
       data: { orgId: org.id, name: 'Team Alpha', slug: 'team-alpha' },

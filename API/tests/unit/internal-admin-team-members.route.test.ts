@@ -82,7 +82,12 @@ describe('POST /internal/admin/users/:userId/teams', () => {
     expect(membershipService.addAdminUserToTeam).toHaveBeenCalledWith({
       ...body,
       userId: 'user-1',
-      actor: { via: 'admin_superuser', userId: 'admin-user', email: 'admin@example.com' },
+      actor: {
+        via: 'admin_superuser',
+        userId: 'admin-user',
+        email: 'admin@example.com',
+        tokenVersion: 0,
+      },
     });
   });
 });

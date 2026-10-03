@@ -13,6 +13,9 @@ type StartupPrisma = Pick<
   | 'killSwitchEntry'
   | 'orgMember'
   | 'teamMember'
+  | 'user'
+  | 'organisation'
+  | 'team'
 >;
 
 type StartupDeps = {

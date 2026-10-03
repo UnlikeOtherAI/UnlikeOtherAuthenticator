@@ -197,7 +197,7 @@ describe('POST /auth/session-choices', () => {
       await releaseLock.promise;
       return [];
     });
-    prismaMock.user.findUnique.mockResolvedValue({ tokenVersion: 0, twoFaEnabled: false });
+    prismaMock.user.findUnique.mockResolvedValue({ lifecycleStatus: 'ACTIVE', tokenVersion: 0, twoFaEnabled: false });
 
     const responsePromise = postSessionChoices({ login_token: loginToken });
     await lockEntered.promise;
@@ -213,7 +213,7 @@ describe('POST /auth/session-choices', () => {
 
   it('returns the team choices for a valid login_token', async () => {
     const loginToken = await mintLoginToken('user-1');
-    prismaMock.user.findUnique.mockResolvedValue({
+    prismaMock.user.findUnique.mockResolvedValue({ lifecycleStatus: 'ACTIVE',
       email: 'jo@example.com',
       twoFaEnabled: false,
       tokenVersion: 0,

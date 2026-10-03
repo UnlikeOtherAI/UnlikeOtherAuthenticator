@@ -4,6 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const getPrismaMock = vi.hoisted(() => vi.fn());
 const getAdminPrismaMock = vi.hoisted(() => vi.fn());
 const runWithContextMock = vi.hoisted(() => vi.fn());
+const effectAuthorityMock = vi.hoisted(() => vi.fn());
+vi.mock('../../services/tenant-effect-authority.service.js', () => ({
+  assertTenantEffectAuthority: effectAuthorityMock,
+}));
 
 vi.mock('../../db/prisma.js', () => ({
   getPrisma: getPrismaMock,
@@ -71,6 +75,7 @@ describe('tenant-context plugin', () => {
     getPrismaMock.mockReset();
     getAdminPrismaMock.mockReset();
     runWithContextMock.mockReset();
+    effectAuthorityMock.mockReset();
   });
 
   it('registers request decorators and an onRequest hook', async () => {
@@ -129,6 +134,8 @@ describe('tenant-context plugin', () => {
 
     const result = await request.withTenantTx(async (tx) => tx);
     expect(result).toEqual({ tx: true });
+    expect(effectAuthorityMock).toHaveBeenCalledWith(request, request.tenantContext,
+      { tx: true }, request.adminDb, undefined);
     expect(runWithContextMock).toHaveBeenCalledWith(
       {
         prisma: tenantClient,

@@ -41,6 +41,7 @@ export async function lockBillingAdminEffectAuthority(
         ON role_row."user_id" = user_row."id"
        AND role_row."domain" = ${domain}
       WHERE user_row."id" = ${userId}
+        AND user_row."lifecycle_status" = 'ACTIVE'
       FOR UPDATE OF user_row, role_row
     `,
   );

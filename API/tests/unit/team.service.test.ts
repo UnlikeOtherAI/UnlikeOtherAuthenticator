@@ -91,7 +91,7 @@ describe('Team service', () => {
     expect(prisma.team.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
-          orgId: 'org-1',
+          orgId: 'org-1', lifecycleStatus: 'ACTIVE',
           OR: [
             { NOT: { joinPolicy: 'HIDDEN' } },
             { members: { some: { userId: 'u-owner', status: 'ACTIVE' } } },
@@ -376,120 +376,9 @@ describe('Team service', () => {
   // icon_url validation coverage (accept https, clear on null, reject junk) lives in
   // team.service.icon-url.test.ts (CLAUDE.md 500-line split).
 
-  it('reassigns remaining users before deleting a team', async () => {
+  it.each(['team-1', 'team-default'])('requires deletion workflow for %s without re-homing users', async teamId => {
     const prisma = makePrismaMock();
-
-    prisma.organisation.findFirst.mockResolvedValue({
-      id: 'org-1',
-      domain: 'acme.example.com',
-      name: 'Acme',
-      slug: 'acme',
-      ownerId: 'u-owner',
-      createdAt: now,
-      updatedAt: now,
-    });
-    prisma.orgMember.findFirst.mockResolvedValue({
-      id: 'm-owner',
-      orgId: 'org-1',
-      userId: 'u-owner',
-      role: 'owner',
-      createdAt: now,
-      updatedAt: now,
-    });
-    prisma.team.findFirst.mockResolvedValue({ id: 'team-default' });
-    prisma.$queryRaw
-      .mockResolvedValueOnce([{ id: 'org-1' }])
-      .mockResolvedValueOnce([{ id: 'team-1', isDefault: false }]);
-    prisma.teamMember.findMany.mockResolvedValue([
-      { userId: 'u-owner', status: 'ACTIVE' },
-      { userId: 'u-2', status: 'ACTIVE' },
-    ]);
-    prisma.teamMember.count.mockImplementation(async (args: { where: { userId?: string } }) => {
-      if (args.where.userId === 'u-owner') return 1;
-      return 2;
-    });
-    prisma.teamMember.create.mockResolvedValue({
-      id: 'tm-moved',
-      teamId: 'team-default',
-      userId: 'u-owner',
-      teamRole: 'member',
-      createdAt: now,
-      updatedAt: now,
-    });
-    prisma.team.delete.mockResolvedValue({
-      id: 'team-1',
-      orgId: 'org-1',
-      groupId: null,
-      name: 'Platform',
-      slug: 'platform',
-      description: null,
-      isDefault: false,
-      createdAt: now,
-      updatedAt: now,
-    });
-
-    const result = await deleteTeam(
-      {
-        orgId: 'org-1',
-        teamId: 'team-1',
-        domain: 'acme.example.com',
-        actorUserId: 'u-owner',
-        config: makeConfig(),
-      },
-      { prisma },
-    );
-
-    expect(result).toEqual({ deleted: true });
-    expect(prisma.teamMember.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: {
-          teamId: 'team-default',
-          userId: 'u-owner',
-        },
-      }),
-    );
-    expect(prisma.team.delete).toHaveBeenCalledWith({ where: { id: 'team-1' } });
-  });
-
-  it('rejects deleting the default team', async () => {
-    const prisma = makePrismaMock();
-
-    prisma.organisation.findFirst.mockResolvedValue({
-      id: 'org-1',
-      domain: 'acme.example.com',
-      name: 'Acme',
-      slug: 'acme',
-      ownerId: 'u-owner',
-      createdAt: now,
-      updatedAt: now,
-    });
-    prisma.orgMember.findFirst.mockResolvedValue({
-      id: 'm-owner',
-      orgId: 'org-1',
-      userId: 'u-owner',
-      role: 'owner',
-      createdAt: now,
-      updatedAt: now,
-    });
-    prisma.$queryRaw
-      .mockResolvedValueOnce([{ id: 'org-1' }])
-      .mockResolvedValueOnce([{ id: 'team-default', isDefault: true }]);
-
-    const promise = deleteTeam(
-      {
-        orgId: 'org-1',
-        teamId: 'team-default',
-        domain: 'acme.example.com',
-        actorUserId: 'u-owner',
-        config: makeConfig(),
-      },
-      { prisma },
-    );
-
-    await expect(promise).rejects.toMatchObject({
-      code: 'BAD_REQUEST',
-      statusCode: 400,
-    });
-    expect(prisma.team.delete).not.toHaveBeenCalled();
+    await expect(deleteTeam({ orgId: 'org-1', teamId, domain: 'acme.example.com', actorUserId: 'u-owner', config: makeConfig() }, { prisma })).rejects.toMatchObject({ statusCode: 409, message: 'ENTITY_DELETION_WORKFLOW_REQUIRED' });
+    expect(prisma.team.delete).not.toHaveBeenCalled(); expect(prisma.teamMember.create).not.toHaveBeenCalled(); expect(prisma.$queryRaw).not.toHaveBeenCalled();
   });
 });

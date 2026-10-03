@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const domainRole = vi.hoisted(() => ({
   count: vi.fn(),
+  findUnique: vi.fn(),
   delete: vi.fn(),
   findMany: vi.fn(),
   upsert: vi.fn(),
@@ -15,8 +16,9 @@ const user = vi.hoisted(() => ({
 const prisma = vi.hoisted(() => ({
   domainRole,
   user,
+  $queryRaw: vi.fn().mockResolvedValue([]),
   $transaction: vi.fn(async (fn: (tx: { domainRole: typeof domainRole }) => unknown) =>
-    fn({ domainRole }),
+    fn(prisma),
   ),
 }));
 
@@ -37,6 +39,8 @@ describe('admin superuser service', () => {
     process.env.SHARED_SECRET = 'test-shared-secret-with-enough-length';
     process.env.ADMIN_AUTH_DOMAIN = 'Admin.Example.Com.';
     vi.clearAllMocks();
+    user.findUnique.mockResolvedValue({ id: 'user_1', email: 'admin@example.com', lifecycleStatus: 'ACTIVE', tokenVersion: 0 });
+    domainRole.findUnique.mockResolvedValue({ role: 'SUPERUSER' });
   });
 
   afterEach(() => {
@@ -71,7 +75,7 @@ describe('admin superuser service', () => {
   });
 
   it('searches users who are not already admin-domain superusers', async () => {
-    user.findMany.mockResolvedValue([{ id: 'user_2', email: 'user@example.com', name: null }]);
+    user.findMany.mockResolvedValue([{ lifecycleStatus: 'ACTIVE', id: 'user_2', email: 'user@example.com', name: null }]);
     const { searchNonSuperusers } = await import('../../src/services/admin-superusers.service.js');
 
     await expect(searchNonSuperusers('user')).resolves.toEqual([
@@ -93,7 +97,9 @@ describe('admin superuser service', () => {
   });
 
   it('grants superuser idempotently with upsert', async () => {
-    user.findUnique.mockResolvedValue({ id: 'user_3', email: 'grant@example.com', name: 'Grant' });
+    user.findUnique.mockImplementation(async ({ where }) => where.id === 'user_1'
+      ? { lifecycleStatus: 'ACTIVE', id: 'user_1', email: 'admin@example.com', tokenVersion: 0 }
+      : { lifecycleStatus: 'ACTIVE', id: 'user_3', email: 'grant@example.com', name: 'Grant' });
     domainRole.upsert.mockResolvedValue({
       userId: 'user_3',
       createdAt: new Date('2026-04-23T11:00:00Z'),
@@ -101,7 +107,7 @@ describe('admin superuser service', () => {
     });
     const { grantAdminSuperuser } = await import('../../src/services/admin-superusers.service.js');
 
-    await expect(grantAdminSuperuser('user_3')).resolves.toMatchObject({
+    await expect(grantAdminSuperuser('user_3', { userId: 'user_1', tokenVersion: 0 })).resolves.toMatchObject({
       userId: 'user_3',
       email: 'grant@example.com',
     });
@@ -117,7 +123,7 @@ describe('admin superuser service', () => {
     const { revokeAdminSuperuser } = await import('../../src/services/admin-superusers.service.js');
 
     await expect(
-      revokeAdminSuperuser({ userId: 'user_1', actorUserId: 'user_1' }),
+      revokeAdminSuperuser({ userId: 'user_1', actorUserId: 'user_1', actorTokenVersion: 0 }),
     ).rejects.toMatchObject({ statusCode: 409, message: 'CANNOT_REMOVE_SELF' });
   });
 
@@ -126,7 +132,7 @@ describe('admin superuser service', () => {
     const { revokeAdminSuperuser } = await import('../../src/services/admin-superusers.service.js');
 
     await expect(
-      revokeAdminSuperuser({ userId: 'user_2', actorUserId: 'user_1' }),
+      revokeAdminSuperuser({ userId: 'user_2', actorUserId: 'user_1', actorTokenVersion: 0 }),
     ).rejects.toMatchObject({ statusCode: 409, message: 'CANNOT_REMOVE_LAST_SUPERUSER' });
     expect(domainRole.delete).not.toHaveBeenCalled();
   });

@@ -1,3 +1,4 @@
+import { requireIdentityEmail } from './entity-lifecycle.service.js';
 import type { Prisma, PrismaClient } from '@prisma/client';
 import type { ClientConfig } from './config.service.js';
 
@@ -232,13 +233,13 @@ export async function verifyEmailToken(
         throw new AppError('BAD_REQUEST', 400, 'INVALID_TOKEN');
       }
       const existingUser = await tx.user.findUnique({
-        where: { id: epoch.userId },
+        where: { lifecycleStatus: 'ACTIVE', id: epoch.userId },
         select: { id: true, userKey: true, email: true, domain: true },
       });
       if (
         !existingUser ||
         existingUser.userKey !== tokenRow.userKey ||
-        existingUser.email.toLowerCase() !== tokenRow.email.toLowerCase() ||
+        requireIdentityEmail(existingUser.email).toLowerCase() !== tokenRow.email.toLowerCase() ||
         existingUser.domain !== tokenRow.domain
       ) {
         throw new AppError('BAD_REQUEST', 400, 'INVALID_TOKEN');
@@ -253,7 +254,7 @@ export async function verifyEmailToken(
       const existingUser =
         epoch.kind === 'user'
           ? await tx.user.findUnique({
-              where: { id: epoch.userId },
+              where: { lifecycleStatus: 'ACTIVE', id: epoch.userId },
               select: { id: true, passwordHash: true, userKey: true },
             })
           : null;
@@ -380,7 +381,7 @@ export async function verifyEmailToken(
     }
 
     const authenticatedUser = await tx.user.findUnique({
-      where: { id: userId },
+      where: { lifecycleStatus: 'ACTIVE', id: userId },
       select: { twoFaEnabled: true, tokenVersion: true },
     });
     if (!authenticatedUser) {

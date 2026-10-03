@@ -80,7 +80,7 @@ function AddUserToTeamForm({
           void submit(event);
         }}
       >
-        <ReadOnlyUser name={user.name ?? user.email} email={user.email} />
+        <ReadOnlyUser name={user.name ?? user.email ?? 'Deleted user'} email={user.email ?? ''} />
         <FieldShell label="Organisation">
           <SelectField
             {...register('orgId')}

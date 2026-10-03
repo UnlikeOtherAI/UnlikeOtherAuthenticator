@@ -107,7 +107,7 @@ export async function createTeamInvites(
     });
 
     const existingUser = await prisma.user.findUnique({
-      where: { userKey: identity.userKey },
+      where: { lifecycleStatus: 'ACTIVE', userKey: identity.userKey },
       select: { id: true, tokenVersion: true },
     });
 

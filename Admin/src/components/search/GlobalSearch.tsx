@@ -118,7 +118,7 @@ function resultLabel(result: SearchResult) {
     return result.team.name;
   }
 
-  return result.user.name ?? result.user.email;
+  return result.user.name ?? result.user.email ?? 'Deleted user';
 }
 
 function resultSubLabel(result: SearchResult) {

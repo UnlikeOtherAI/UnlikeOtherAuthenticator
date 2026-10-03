@@ -1,3 +1,4 @@
+import { requireIdentityEmail } from './entity-lifecycle.service.js';
 import type { PrismaClient } from '@prisma/client';
 
 import { getEnv } from '../config/env.js';
@@ -77,12 +78,12 @@ export async function requireUserContext(
   deps?: AvatarDeps,
 ): Promise<UserAvatarContext> {
   const user = await prismaFor(deps).user.findUnique({
-    where: { id: userId },
+    where: { lifecycleStatus: 'ACTIVE', id: userId },
     select: { id: true, email: true, domain: true },
   });
   if (!user) throw new AppError('NOT_FOUND', 404, 'USER_NOT_FOUND');
 
-  return { userId: user.id, email: user.email, domain: user.domain };
+  return { userId: user.id, email: requireIdentityEmail(user.email), domain: user.domain };
 }
 
 /**
@@ -106,7 +107,7 @@ export async function resolveAvatar(
       select: { contentType: true, data: true },
     }),
     prisma.user.findUnique({
-      where: { id: params.userId },
+      where: { lifecycleStatus: 'ACTIVE', id: params.userId },
       select: { id: true, avatarUrl: true },
     }),
   ]);
@@ -170,7 +171,7 @@ export async function uploadAvatar(
   const contentType = sniffAvatarUpload(params.data);
 
   const user = await prisma.user.findUnique({
-    where: { id: params.userId },
+    where: { lifecycleStatus: 'ACTIVE', id: params.userId },
     select: { id: true },
   });
   if (!user) throw new AppError('NOT_FOUND', 404, 'USER_NOT_FOUND');

@@ -132,7 +132,7 @@ export async function requestTwoFaReset(
   // refresh families on sibling product domains, and the request path has no tenant transaction.
   const prisma = deps?.prisma ?? (getAdminPrisma() as unknown as TwoFaResetRequestPrisma);
   const existing = await prisma.user.findUnique({
-    where: { userKey },
+    where: { lifecycleStatus: 'ACTIVE', userKey },
     select: { id: true, tokenVersion: true, twoFaEnabled: true },
   });
 

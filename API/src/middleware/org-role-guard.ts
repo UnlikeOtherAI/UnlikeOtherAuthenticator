@@ -1,3 +1,4 @@
+import { requireIdentityEmail } from '../services/entity-lifecycle.service.js';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
 import { AppError } from '../utils/errors.js';
@@ -184,7 +185,7 @@ async function resolveSubjectAssertionClaims(
 
   const [user, org] = await Promise.all([
     request.adminDb.user.findUnique({
-      where: { id: assertion.sub },
+      where: { lifecycleStatus: 'ACTIVE', id: assertion.sub },
       select: { email: true },
     }),
     getActiveClientOrgContext(
@@ -214,7 +215,7 @@ async function resolveSubjectAssertionClaims(
   return {
     userId: assertion.sub,
     tokenVersion: identity.tokenVersion,
-    email: user.email,
+    email: requireIdentityEmail(user.email),
     domain: sourceDomain,
     // Assertions identify a user and their live team, not an OAuth client.
     // A request may name another team in the same organisation: its service

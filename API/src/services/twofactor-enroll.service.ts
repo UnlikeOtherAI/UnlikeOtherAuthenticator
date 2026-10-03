@@ -15,7 +15,7 @@ type EnrollPrisma = {
       };
     }) => Promise<{ count: number }>;
     findUnique: (args: {
-      where: { id: string };
+      where: { id: string; lifecycleStatus: 'ACTIVE' };
       select: { id: true; twoFaEnabled: true };
     }) => Promise<{ id: string; twoFaEnabled: boolean } | null>;
   };
@@ -77,7 +77,7 @@ export async function enrollTwoFactorForUser(
   if (updated.count === 1) return;
 
   const existing = await prisma.user.findUnique({
-    where: { id: params.userId },
+    where: { lifecycleStatus: 'ACTIVE', id: params.userId },
     select: { id: true, twoFaEnabled: true },
   });
 

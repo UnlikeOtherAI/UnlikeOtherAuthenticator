@@ -44,7 +44,7 @@ describe('verification-token epoch proofs', () => {
   });
 
   it('accepts only the exact issue-time user, userKey, and credential epoch', async () => {
-    const findUnique = vi.fn().mockResolvedValue({
+    const findUnique = vi.fn().mockResolvedValue({ lifecycleStatus: 'ACTIVE',
       id: 'user-1',
       userKey: 'user@example.com',
       tokenVersion: 7,
@@ -55,7 +55,7 @@ describe('verification-token epoch proofs', () => {
       readVerificationTokenEpoch({ user: { findUnique } } as never, proof),
     ).resolves.toEqual({ kind: 'user', userId: 'user-1', credentialEpoch: 7 });
 
-    findUnique.mockResolvedValue({
+    findUnique.mockResolvedValue({ lifecycleStatus: 'ACTIVE',
       id: 'user-1',
       userKey: 'user@example.com',
       tokenVersion: 8,
@@ -74,7 +74,7 @@ describe('verification-token epoch proofs', () => {
       user: {
         findUnique: vi.fn(async () => {
           order.push('read');
-          return { id: 'user-1', userKey: 'user@example.com', tokenVersion: 8 };
+          return { lifecycleStatus: 'ACTIVE', id: 'user-1', userKey: 'user@example.com', tokenVersion: 8 };
         }),
       },
     };

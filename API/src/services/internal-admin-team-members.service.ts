@@ -12,6 +12,9 @@ import {
 import { writeOrgAuditLog, type OrgActorProvenance } from './org-audit-log.service.js';
 import { lockRefreshSessionUser } from './refresh-session-lock.service.js';
 import { lockTeamMembershipRows } from './team-scope.service.js';
+import { assertEntityAccess } from './entity-lifecycle.service.js';
+import { requireLifecycleActor } from './internal-admin-lifecycle.service.js';
+import { lockProductTeamPolicyExclusive } from './product-team-policy-lock.service.js';
 
 // Platform administration has no caller-supplied product config. Use UOA's standard limits.
 const limits = OrgFeaturesSchema.parse({});
@@ -22,13 +25,15 @@ export async function addAdminUserToTeam(
     orgId: string;
     teamId: string;
     teamRole: 'member' | 'admin';
-    actor: Extract<OrgActorProvenance, { via: 'admin_superuser' }>;
+    actor: Extract<OrgActorProvenance, { via: 'admin_superuser' }> & { tokenVersion: number };
   },
   deps: { prisma?: PrismaClient } = {},
 ) {
   if (!['member', 'admin'].includes(input.teamRole)) throw new AppError('BAD_REQUEST', 400);
   const prisma = deps.prisma ?? getAdminPrisma();
   return runInTransaction(prisma, async (tx) => {
+    await lockProductTeamPolicyExclusive(tx);
+    await requireLifecycleActor(tx, input.actor);
     await lockRefreshSessionUser(input.userId, { prisma: tx });
     await lockOrganisationMemberships(tx, input.orgId, [input.userId]);
     await lockTeamMembershipRows(input, { prisma: tx });
@@ -42,6 +47,7 @@ export async function addAdminUserToTeam(
     if (!user || !team || (user.domain && user.domain !== org.domain)) {
       throw new AppError('BAD_REQUEST', 400);
     }
+    await assertEntityAccess(input, tx);
     const member = await tx.orgMember.findUnique({
       where: { orgId_userId: { orgId: org.id, userId: input.userId } },
     });
@@ -50,12 +56,14 @@ export async function addAdminUserToTeam(
     const addingOrg = member?.status !== 'ACTIVE';
     if (addingOrg && org.ownerId === input.userId)
       throw new AppError('BAD_REQUEST', 400, 'OWNER_PROTECTED');
+    if (!org.ownerId) throw new AppError('FORBIDDEN', 403, 'ACCESS_DENIED');
     if (addingOrg && member) assertMutableOrganisationMember(member, org.ownerId);
 
     const targetTeams = [{ id: team.id, role: input.teamRole }];
     if (addingOrg) {
       const defaultTeam = await tx.team.findFirst({ where: { orgId: org.id, isDefault: true } });
       if (!defaultTeam) throw new AppError('INTERNAL', 500, 'DEFAULT_TEAM_MISSING');
+      await assertEntityAccess({ orgId: org.id, teamId: defaultTeam.id }, tx);
       if (defaultTeam.id !== team.id) targetTeams.push({ id: defaultTeam.id, role: 'member' });
       const count = await tx.orgMember.count({ where: { orgId: org.id, status: 'ACTIVE' } });
       if (count >= limits.max_members_per_org) throw new AppError('BAD_REQUEST', 400);

@@ -25,7 +25,7 @@ export function UsersPage() {
     const normalizedQuery = searchQuery.trim().toLowerCase();
 
     return users.filter((user) => {
-      const matchesSearch = !normalizedQuery || [user.name ?? '', user.email].some((value) => value.toLowerCase().includes(normalizedQuery));
+      const matchesSearch = !normalizedQuery || [user.name ?? '', user.email].some((value) => (value ?? '').toLowerCase().includes(normalizedQuery));
       const matchesDomain = selectedDomain === 'all' || user.domains.includes(selectedDomain);
       const matchesStatus = selectedStatus === 'all' || user.status === selectedStatus;
       return matchesSearch && matchesDomain && matchesStatus;
@@ -72,9 +72,9 @@ export function UsersPage() {
                 >
                   <Td>
                     <div className="flex items-center gap-2">
-                      <UserAvatar userId={user.id} label={user.name ?? user.email} />
+                      <UserAvatar userId={user.id} label={user.name ?? user.email ?? 'Deleted user'} />
                       <div>
-                        <Link state={recordState} to={`/users/${user.id}`} onClick={(event) => event.stopPropagation()} className="font-medium text-indigo-600">{user.name ?? user.email}</Link>
+                        <Link state={recordState} to={`/users/${user.id}`} onClick={(event) => event.stopPropagation()} className="font-medium text-indigo-600">{user.name ?? user.email ?? 'Deleted user'}</Link>
                         <p className="text-xs text-gray-400">{user.email}</p>
                       </div>
                     </div>

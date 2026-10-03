@@ -10,9 +10,8 @@ import {
 } from '../../src/services/team.service.js';
 import { makeConfig, makePrismaMock, now, useTeamServiceTestEnv } from './helpers/team-service-test-helpers.js';
 
-// `auditOrg` writes best-effort through the BYPASSRLS admin client *after* the mutation's own
-// transaction commits (design §4.10), so the audit row lands on this client rather than on the
-// tenant client the mutation used.
+// Add/role audit uses the administrator client; revocation now reuses its
+// existing administrator transaction so the authority guard cannot open a nested pool checkout.
 const orgAuditLog = vi.hoisted(() => ({ create: vi.fn() }));
 
 vi.mock('../../src/db/prisma.js', () => ({
@@ -303,6 +302,7 @@ describe('Team service: members audit trail', () => {
 
   describe('removeTeamMember', () => {
     function mockRemoval(prisma: PrismaClient): void {
+      Object.assign(prisma, { orgAuditLog });
       mockOrgAndOwnerActor(prisma);
       prisma.teamMember.findFirst.mockResolvedValue({ id: 'tm-target', teamRole: 'admin' });
       // The user still has another ACTIVE membership, so this is not their last team.

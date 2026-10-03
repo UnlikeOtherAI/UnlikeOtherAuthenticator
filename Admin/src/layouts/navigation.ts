@@ -18,6 +18,7 @@ export const navSections: NavSection[] = [
   { label: 'Billing', items: [{ label: 'Products & invoices', path: '/billing', icon: 'building' }] },
   { label: 'Security', items: [
     { label: 'Administrators', path: '/superusers', icon: 'users' },
+    { label: 'Access reason templates', path: '/access-reasons', icon: 'alert' },
     { label: 'Access bans', path: '/bans', icon: 'alert' },
     { label: 'Automation API keys', path: '/api-keys', icon: 'key' },
   ] },
@@ -27,6 +28,7 @@ export const navSections: NavSection[] = [
   ] },
 ];
 export function navLabelForPath(pathname: string) {
+  if (pathname.startsWith('/deletion-jobs/')) return 'Deletion progress';
   if (pathname.includes('/teams/') && pathname.startsWith('/organisations/')) return 'Team';
   const item = navSections.flatMap((section) => section.items).find((entry) => pathname === entry.path || pathname.startsWith(`${entry.path}/`));
   return item?.label ?? 'Dashboard';

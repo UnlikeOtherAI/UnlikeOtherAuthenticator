@@ -1,6 +1,6 @@
 export type AuthMethod = 'email' | 'google' | 'github' | 'apple' | 'facebook' | 'linkedin' | 'microsoft';
 
-export type EntityStatus = 'active' | 'disabled' | 'banned';
+export type EntityStatus = 'active' | 'disabled' | 'banned' | 'deleting' | 'deleted';
 
 export type UoaRole = 'owner' | 'admin' | 'member';
 
@@ -114,7 +114,8 @@ export type TeamAvatarUpload = {
 export type UserSummary = {
   id: string;
   name: string | null;
-  email: string;
+  email: string | null;
+  deleted?: boolean;
   domains: string[];
   twofa: boolean;
   lastLogin: string;
@@ -138,7 +139,7 @@ export type Organisation = {
   allowedEmailDomains: string[];
   allowedEmails: string[];
   created: string;
-  owner: Pick<UserSummary, 'id' | 'name' | 'email'>;
+  owner: Pick<UserSummary, 'id' | 'name' | 'email'> | null;
   twoFaPolicy: OrganisationTwoFaPolicy;
   teams: Team[];
   members: OrganisationMember[];

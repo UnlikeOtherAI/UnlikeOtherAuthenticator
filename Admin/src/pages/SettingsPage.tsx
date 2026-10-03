@@ -1,3 +1,4 @@
+import { LifecycleTemplatesSettings } from '../features/admin/LifecycleTemplatesSettings';
 import { useState } from 'react';
 import { Navigate, useLocation } from 'react-router';
 import { Button } from '../components/ui/Button';
@@ -37,4 +38,8 @@ export function BansPage() {
     </DataTable><PaginationFooter {...pagination} /></>}</Card>}
     <BanDialog open={dialog !== null} kind={dialog ?? 'email'} onClose={() => setDialog(null)} />
   </>;
+}
+
+export function LifecycleTemplatesPage() {
+  return <><PageHeader title="Access reason templates" description="Customer-facing reasons for disabling users, organisations, and teams." /><LifecycleTemplatesSettings /></>;
 }

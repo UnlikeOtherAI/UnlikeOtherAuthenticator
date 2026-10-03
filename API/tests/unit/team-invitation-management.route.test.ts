@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
     organisation: { findFirst: vi.fn() },
     orgMember: { findFirst: vi.fn() },
     teamMember: { findFirst: vi.fn() },
+    team: { findFirst: vi.fn() },
     user: { findUnique: vi.fn() },
   },
 }));
@@ -98,14 +99,15 @@ describe.each(endpoints)('$method invitations$suffix authorization', (endpoint) 
     vi.clearAllMocks();
     config.org_features!.backend_org_management = true;
     delete config.org_features!.role_grants;
-    mocks.prisma.organisation.findFirst.mockResolvedValue({ id: 'org-1', domain: config.domain });
+    mocks.prisma.organisation.findFirst.mockResolvedValue({ id: 'org-1', domain: config.domain, ownerId: 'owner-1' });
     mocks.prisma.orgMember.findFirst.mockResolvedValue({ id: 'om-1', role: 'member' });
     mocks.prisma.teamMember.findFirst.mockResolvedValue({ teamRole: 'admin' });
+    mocks.prisma.team.findFirst.mockResolvedValue({ id: 'team-1', lifecycleStatus: 'ACTIVE' });
     mocks.prisma.user.findUnique.mockResolvedValue({ email: 'actor@example.com' });
     mocks.assertion.mockResolvedValue({
       sub: 'actor-1', tv: 1, active: { orgId: 'org-1', teamId: 'session-team' },
     });
-    mocks.epoch.mockResolvedValue({ tokenVersion: 1 });
+    mocks.epoch.mockResolvedValue({ lifecycleStatus: 'ACTIVE', tokenVersion: 1 });
     mocks.context.mockResolvedValue({
       org_id: 'org-1', org_role: 'member', teams: ['session-team'], tenant_slug: 'org',
     });
@@ -119,7 +121,7 @@ describe.each(endpoints)('$method invitations$suffix authorization', (endpoint) 
   it('authorizes a subject assertion against the target team, independent of session team', async () => {
     expect((await call(endpoint)).statusCode).toBe(200);
     expect(mocks.prisma.teamMember.findFirst).toHaveBeenCalledWith({
-      where: { teamId: 'team-1', userId: 'actor-1', status: 'ACTIVE' },
+      where: { teamId: 'team-1', userId: 'actor-1', status: 'ACTIVE', user: { lifecycleStatus: 'ACTIVE' }, team: { lifecycleStatus: 'ACTIVE', org: { lifecycleStatus: 'ACTIVE' } } },
       select: { teamRole: true },
     });
     expect(mocks.tenant).toHaveBeenCalledWith(expect.anything(), {

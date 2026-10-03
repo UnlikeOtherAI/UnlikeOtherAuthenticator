@@ -1,3 +1,4 @@
+import { requireIdentityEmail } from './entity-lifecycle.service.js';
 import type { PrismaClient } from '@prisma/client';
 
 import { getAuthServiceIdentifier, getEnv, requireEnv } from '../config/env.js';
@@ -87,7 +88,7 @@ export async function startTwoFactorSetup(
 
   const prisma = prismaClient(deps);
   const user = await prisma.user.findUnique({
-    where: { id: params.userId },
+    where: { lifecycleStatus: 'ACTIVE', id: params.userId },
     select: { email: true, twoFaEnabled: true, tokenVersion: true },
   });
 
@@ -122,7 +123,7 @@ export async function startTwoFactorSetup(
 
   return buildSetupResult({
     config: params.config,
-    email: user.email,
+    email: requireIdentityEmail(user.email),
     secret,
     setupToken,
     renderTotpQrSvg: deps?.renderTotpQrSvg ?? renderTotpQrSvg,
@@ -144,7 +145,7 @@ export async function renderTwoFactorSetupFromTokenSecret(
 
   const prisma = prismaClient(deps);
   const user = await prisma.user.findUnique({
-    where: { id: params.userId },
+    where: { lifecycleStatus: 'ACTIVE', id: params.userId },
     select: { email: true, twoFaEnabled: true },
   });
 
@@ -154,7 +155,7 @@ export async function renderTwoFactorSetupFromTokenSecret(
 
   return buildSetupResult({
     config: params.config,
-    email: user.email,
+    email: requireIdentityEmail(user.email),
     secret: params.totpSecret,
     setupToken: params.setupToken,
     renderTotpQrSvg: deps?.renderTotpQrSvg ?? renderTotpQrSvg,

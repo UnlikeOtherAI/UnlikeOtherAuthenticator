@@ -1,6 +1,6 @@
 import type { ClientConfig } from './config.service.js';
 import { getEnv } from '../config/env.js';
-import { getAdminPrisma, getPrisma } from '../db/prisma.js';
+import { getPrisma } from '../db/prisma.js';
 import { runInTransaction } from '../db/tenant-context.js';
 import { AppError } from '../utils/errors.js';
 
@@ -35,10 +35,6 @@ import {
   type TeamRecord,
 } from './team.service.base.js';
 import { resolveTeamCreatorTeamRole } from './role-grants.js';
-import {
-  lockTeamMembershipRows,
-  lockTeamOrganisationRow,
-} from './team-scope.service.js';
 
 const ORGANISATION_SELECT = {
   id: true,
@@ -160,7 +156,7 @@ export async function createOrganisation(
 
   const created = await runInTransaction(prisma, async (tx) => {
     const userExists = await tx.user.findUnique({
-      where: { id: ownerId },
+      where: { lifecycleStatus: 'ACTIVE', id: ownerId },
       select: { id: true },
     });
     if (!userExists) throw new AppError('BAD_REQUEST', 400);
@@ -409,58 +405,6 @@ export async function deleteOrganisation(
   },
   deps?: OrgServiceDeps,
 ): Promise<{ deleted: boolean }> {
-  const env = deps?.env ?? getEnv();
-  assertDatabaseEnabled(env);
-
-  const actorUserId = resolveOrgActor(params);
-
-  const prisma =
-    deps?.prisma ??
-    ((params.actor?.via === 'admin_superuser' ? getAdminPrisma() : getPrisma()) as unknown as OrgServicePrisma);
-  const org = await resolveOrganisation(prisma, { orgId: params.orgId });
-
-  try {
-    await runInTransaction(prisma, async (tx) => {
-      if (!(await lockTeamOrganisationRow(org.id, { prisma: tx }))) {
-        throw new AppError('NOT_FOUND', 404);
-      }
-      if (actorUserId) {
-        if (!params.config) throw new AppError('INTERNAL', 500, 'CONFIG_REQUIRED');
-        const actorMembership = await getOrganisationMember(tx, { orgId: org.id, userId: actorUserId }, { activeOnly: true });
-        requireOrgCapability(params.config, 'organisation.manage', actorMembership?.role);
-      }
-      const members = await tx.orgMember.findMany({
-        where: { orgId: org.id },
-        orderBy: { userId: 'asc' },
-        select: { userId: true },
-      });
-      for (const member of members) {
-        await lockTeamMembershipRows(
-          { userId: member.userId, orgId: org.id },
-          { prisma: tx },
-        );
-      }
-      await tx.organisation.delete({ where: { id: org.id } });
-    });
-  } catch (err) {
-    if (isP2003Error(err)) {
-      throw new AppError('BAD_REQUEST', 400, 'ORG_HAS_PROTECTED_RECORDS');
-    }
-    throw err;
-  }
-
-  // Written after the delete commits. `OrgAuditLog.orgId` is not a foreign key
-  // to organisations, so the trail outlives the organisation it describes —
-  // which is the whole point for a deletion.
-  await auditOrg({
-    orgId: org.id,
-    actorUserId,
-    actor: params.actor,
-    action: 'org.deleted',
-    targetType: 'organisation',
-    targetId: org.id,
-    metadata: { name: org.name, slug: org.slug, ownerId: org.ownerId },
-  }, { prisma: deps?.auditPrisma });
-
-  return { deleted: true };
+  void params; void deps;
+  throw new AppError('BAD_REQUEST', 409, 'ENTITY_DELETION_WORKFLOW_REQUIRED');
 }

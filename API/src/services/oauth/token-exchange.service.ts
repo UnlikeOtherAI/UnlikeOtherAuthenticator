@@ -1,3 +1,4 @@
+import { requireIdentityEmail } from '../entity-lifecycle.service.js';
 // Public-client token exchange for the MCP profile (brief §22.14): redeem an
 // authorization code (PKCE, no client secret) for a resource-bound RS256 access
 // token. Registered native-app clients additionally start a rotating refresh-token
@@ -66,7 +67,7 @@ export async function exchangeOAuthCodeForAccessToken(
   if (!client) throw new AppError('UNAUTHORIZED', 401, 'INVALID_AUTH_CODE');
   validatePublicScopes(consumed.scope ?? undefined, client.scopes);
   const config = buildMcpClientConfig(client.redirectUris, client.nativeApp);
-  const current = await prisma.user.findUnique({ where: { id: consumed.userId }, select: { twoFaEnabled: true } });
+  const current = await prisma.user.findUnique({ where: { lifecycleStatus: 'ACTIVE', id: consumed.userId }, select: { twoFaEnabled: true } });
   const policy = await resolveTwoFaPolicy({ config, userId: consumed.userId }, { prisma });
   if (!current || !isTwoFaAuthenticationSufficient({ policy, twoFaEnabled: current.twoFaEnabled, twoFaCompleted: consumed.twoFaCompleted })) {
     throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
@@ -78,7 +79,7 @@ export async function exchangeOAuthCodeForAccessToken(
   });
 
   const user = await prisma.user.findUnique({
-    where: { id: consumed.userId },
+    where: { lifecycleStatus: 'ACTIVE', id: consumed.userId },
     select: { email: true },
   });
   if (!user) throw new AppError('INTERNAL', 500, 'MISSING_USER');
@@ -94,7 +95,7 @@ export async function exchangeOAuthCodeForAccessToken(
     subject: consumed.userId,
     credentialEpoch: consumed.credentialEpoch,
     twoFaCompleted: consumed.twoFaCompleted,
-    email: user.email,
+    email: requireIdentityEmail(user.email),
     domain: params.domain,
     clientId: params.clientId,
     role: !client.nativeAppId && (domainRole.role === 'SUPERUSER' || platformSuperuser) ? 'superuser' : 'user',

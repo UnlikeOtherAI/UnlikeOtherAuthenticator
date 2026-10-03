@@ -1,3 +1,4 @@
+import { requireIdentityEmail } from './entity-lifecycle.service.js';
 import type { PrismaClient, UserRole } from '@prisma/client';
 
 import { getEnv } from '../config/env.js';
@@ -52,7 +53,7 @@ export async function listUsersForDomain(
   const limit = Math.max(1, Math.min(500, params.limit ?? 100));
 
   const rows = await prisma.domainRole.findMany({
-    where: { domain, ...(params.userId ? { userId: params.userId } : {}) },
+    where: { domain, user: { lifecycleStatus: 'ACTIVE' }, ...(params.userId ? { userId: params.userId } : {}) },
     orderBy: { createdAt: 'desc' },
     take: limit,
     select: {
@@ -84,7 +85,7 @@ export async function listUsersForDomain(
 
   return rows.map((r) => ({
     id: r.user.id,
-    email: r.user.email,
+    email: requireIdentityEmail(r.user.email),
     name: r.user.name,
     avatarUrl: r.user.avatarUrl,
     avatarSource: uploadedUserIds.has(r.user.id)

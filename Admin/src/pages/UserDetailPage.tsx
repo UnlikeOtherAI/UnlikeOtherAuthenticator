@@ -1,3 +1,4 @@
+import { EntityLifecyclePanel } from '../features/admin/EntityLifecyclePanel';
 import { useState } from 'react';
 import { AddUserToTeamDialog } from '../components/dialogs/AddUserToTeamDialog';
 import { useDirectoryNavigation } from '../features/admin/useDirectoryNavigation';
@@ -66,9 +67,9 @@ export function UserDetailPage() {
   return (
     <>
       <PageHeader
-        title={user.name ?? user.email}
+        title={user.name ?? user.email ?? 'Deleted user'}
         description={`${user.email} · Registered ${user.created}`}
-        leading={<UserAvatar userId={user.id} label={user.name ?? user.email} size="md" />}
+        leading={<UserAvatar userId={user.id} label={user.name ?? user.email ?? 'Deleted user'} size="md" />}
         badges={
           <>
             <StatusBadge status={user.status} />
@@ -86,6 +87,7 @@ export function UserDetailPage() {
         <Metric label="Last Login" value={user.lastLogin} />
       </div>
       <SegmentedTabs value={tab} onChange={setTab} options={[{ label: 'Memberships', value: 'memberships' }, { label: 'Profile', value: 'profile' }, { label: 'Security', value: 'security' }, { label: 'Activity', value: 'activity' }]} />
+      {tab === 'security' ? <div className="mb-5"><EntityLifecyclePanel scope="USER" id={user.id} /></div> : null}
       {tab === 'security' ? <Card className="p-5">
             <Button
               disabled={resetTwoFa.isPending}
@@ -105,7 +107,7 @@ export function UserDetailPage() {
       {tab === 'profile' ?
       <div className="mb-5">
         <div className="mb-4 flex flex-wrap gap-3">{user.domains.map((domain) => <Link state={recordState} key={domain} className="text-sm text-indigo-600" to={`/domains/${encodeURIComponent(domain)}`}>{domain}</Link>)}</div>
-        <UserAvatarSection userId={user.id} userName={user.name ?? user.email} />
+        <UserAvatarSection userId={user.id} userName={user.name ?? user.email ?? 'Deleted user'} />
       </div> : null}
       {tab === 'memberships' ? <>
       {orgsQuery.isError ? <p role="alert">Could not load memberships. <Button onClick={() => void orgsQuery.refetch()}>Retry</Button></p> : null}

@@ -48,7 +48,7 @@ export function registerAuthRevokeRoute(app: FastifyInstance): void {
           },
           { prisma: asPrismaClient(tx) },
         );
-      });
+      }, { authority: 'domain' });
 
       reply.status(200).send({ ok: true });
     },

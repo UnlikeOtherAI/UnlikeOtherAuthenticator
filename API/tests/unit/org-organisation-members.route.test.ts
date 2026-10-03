@@ -140,7 +140,7 @@ describe('GET /org/organisations/:orgId/members actor gate', () => {
     // the actor through rather than silently running in backend mode.
     expect(prismaMock.orgMember.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { orgId: 'org-1', userId: 'user-1', status: 'ACTIVE' },
+        where: { orgId: 'org-1', userId: 'user-1', status: 'ACTIVE', user: { lifecycleStatus: 'ACTIVE' }, org: { lifecycleStatus: 'ACTIVE' } },
       }),
     );
     expect(prismaMock.orgMember.findMany).not.toHaveBeenCalled();
