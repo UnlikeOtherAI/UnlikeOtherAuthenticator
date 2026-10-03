@@ -34,6 +34,12 @@ export async function installFixtures(page: Page) {
   let nativeFailures = 0;
   let nativeWrites = 0;
   page.on('pageerror', (error) => errors.push(error.message));
+  await page.route('**/*', (route) => {
+    const url = new URL(route.request().url());
+    if (url.hostname === '127.0.0.1') return route.continue();
+    unexpected.push(`External request ${url.origin}`);
+    return route.abort();
+  });
   await page.route('**/internal/admin/**', async (route) => {
     const req = route.request();
     const url = new URL(req.url());

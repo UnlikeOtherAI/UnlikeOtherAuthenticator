@@ -31,7 +31,7 @@ test('addressable details, subsections and legacy routes retain their content', 
     '/integrations?status=ALL&request=request-1', '/feature-flags/app2', '/feature-flags/app2?tab=killswitches',
     '/feature-flags/app2?tab=settings', '/feature-flags/app2/groups/new', '/billing?section=contracts',
   ];
-  for (const path of paths) { await page.goto(path); await assertRendered(page); }
+  for (const path of paths) { await page.goto(path); await expect(page).toHaveURL(`http://127.0.0.1:5274${path}`); await assertRendered(page); }
   expect(fixture.errors).toEqual([]);
   expect(fixture.unexpected).toEqual([]);
 });
