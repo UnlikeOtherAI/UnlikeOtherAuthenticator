@@ -28,6 +28,7 @@ export const navSections: NavSection[] = [
   ] },
 ];
 export function navLabelForPath(pathname: string) {
+  if (pathname.startsWith('/deletion-jobs/')) return 'Deletion progress';
   if (pathname.includes('/teams/') && pathname.startsWith('/organisations/')) return 'Team';
   const item = navSections.flatMap((section) => section.items).find((entry) => pathname === entry.path || pathname.startsWith(`${entry.path}/`));
   return item?.label ?? 'Dashboard';
