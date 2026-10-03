@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 
 import { Button } from '../../components/ui/Button';
@@ -67,6 +67,7 @@ type Props = {
 
 export function ConfidentialDelegationFormDialog({ mapping, onClose, open }: Props) {
   const { data: domains = [] } = useDomainsQuery();
+  const [serverError, setServerError] = useState(false);
   const create = useCreateConfidentialDelegationMutation();
   const update = useUpdateConfidentialDelegationMutation();
   const form = useForm<ConfidentialDelegationFormValues>({
@@ -76,6 +77,7 @@ export function ConfidentialDelegationFormDialog({ mapping, onClose, open }: Pro
 
   useEffect(() => {
     if (!open) return;
+    setServerError(false);
     form.reset(
       mapping
         ? {
@@ -92,8 +94,8 @@ export function ConfidentialDelegationFormDialog({ mapping, onClose, open }: Pro
   const selectedScopes = form.watch('scopes');
   const enabled = form.watch('enabled');
   const sourceDomainLabel = mapping ? mapping.source_domain : form.watch('sourceDomain');
-  const pending = create.isPending || update.isPending;
-  const mutationFailed = create.isError || update.isError;
+  const pending = form.formState.isSubmitting || create.isPending || update.isPending;
+  const mutationFailed = serverError || create.isError || update.isError;
 
   function toggleScope(scope: ConfidentialDelegationScope) {
     const next = selectedScopes.includes(scope)
@@ -103,6 +105,8 @@ export function ConfidentialDelegationFormDialog({ mapping, onClose, open }: Pro
   }
 
   async function submit(values: ConfidentialDelegationFormValues) {
+    setServerError(false);
+    try {
     if (mapping) {
       await update.mutateAsync({
         mappingId: mapping.id,
@@ -116,17 +120,21 @@ export function ConfidentialDelegationFormDialog({ mapping, onClose, open }: Pro
       await create.mutateAsync(values);
     }
     onClose();
+    } catch {
+      setServerError(true);
+    }
   }
 
   return (
     <Modal
       isOpen={open}
+      isPending={pending}
+      isDirty={form.formState.isDirty}
       onClose={onClose}
       title={mapping ? 'Edit confidential delegation' : 'Create confidential delegation'}
       widthClassName="max-w-2xl"
       footer={
         <>
-          <Button onClick={onClose}>Cancel</Button>
           <Button
             icon="check"
             variant="primary"

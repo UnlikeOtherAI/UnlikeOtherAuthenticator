@@ -1,16 +1,16 @@
+import { useDirectoryNavigation } from '../features/admin/useDirectoryNavigation';
+import { useDirectoryParam } from '../features/admin/useDirectoryParam';
+import { SegmentedTabs } from '../components/ui/Tabs';
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNavigate, useParams } from 'react-router';
+import { Link, useParams } from 'react-router';
 
-import { ActionButton, ActionDivider } from '../components/ui/ActionButton';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Card, CardHeader } from '../components/ui/Card';
 import { PageHeader } from '../components/ui/PageHeader';
 import { StatusBadge } from '../components/ui/Status';
 import { DataTable, PaginationFooter, Td, usePagination } from '../components/ui/Table';
-import { AddMemberDialog } from '../components/dialogs/AddMemberDialog';
-import { ChangeTeamRoleDialog } from '../components/dialogs/ChangeTeamRoleDialog';
 import { TeamDialog } from '../components/dialogs/TeamDialog';
 import { LoginRestrictionSection } from '../components/sections/LoginRestrictionSection';
 import { adminService } from '../services/admin-service';
@@ -18,22 +18,16 @@ import { useTeamQuery } from '../features/admin/admin-queries';
 import { TeamAvatar } from '../features/admin/TeamAvatar';
 import { TeamAvatarSection } from '../features/admin/TeamAvatarSection';
 import { UserAvatar } from '../features/admin/UserAvatar';
-import type { OrganisationMember } from '../features/admin/types';
-import { useAdminUi } from '../features/shell/admin-ui';
-
-type DialogState =
-  | { kind: 'edit-team' }
-  | { kind: 'add-member' }
-  | { kind: 'change-team-role'; member: OrganisationMember };
 
 export function TeamDetailPage() {
   const { orgId, teamId } = useParams();
-  const navigate = useNavigate();
+  const { recordState, openRecord, goBack } = useDirectoryNavigation('/organisations');
+  const [rawTab, setTab] = useDirectoryParam('tab', 'members');
+  const tab = ['profile', 'access'].includes(rawTab) ? rawTab : 'members';
   const queryClient = useQueryClient();
-  const { confirm, openUser } = useAdminUi();
-  const [dialog, setDialog] = useState<DialogState | null>(null);
-  const closeDialog = () => setDialog(null);
-  const { data, isLoading } = useTeamQuery(orgId, teamId);
+  const [dialog, setDialog] = useState(false);
+  const closeDialog = () => setDialog(false);
+  const { data, isLoading, isError, refetch } = useTeamQuery(orgId, teamId);
   const updateRestriction = useMutation({
     mutationFn: (input: { allowedEmailDomains: string[]; allowedEmails: string[] }) =>
       adminService.updateTeam(orgId ?? '', teamId ?? '', input),
@@ -47,6 +41,8 @@ export function TeamDetailPage() {
   const teamName = data?.team?.name;
   const members = data?.org && teamName ? data.org.members.filter((member) => member.teams.includes(teamName)) : [];
   const { pageItems, pagination } = usePagination(members);
+
+  if (isError) return <div role="alert">Could not load team. <Button onClick={() => void refetch()}>Retry</Button></div>;
 
   if (isLoading) {
     return <p className="text-sm text-gray-400">Loading team...</p>;
@@ -65,18 +61,20 @@ export function TeamDetailPage() {
         description={`${org.name} · ${members.length} members`}
         leading={<TeamAvatar label={team.name} size="md" teamId={team.id} />}
         badges={team.isDefault ? <Badge variant="blue">Default</Badge> : null}
-        onBack={() => navigate(`/organisations/${org.id}`)}
+        onBack={goBack}
         actions={
           <>
-            <Button onClick={() => setDialog({ kind: 'edit-team' })}>Edit</Button>
-            {!team.isDefault ? <Button variant="danger" onClick={() => confirm(`Delete ${team.name}?`, 'Members stay in the organisation.')}>Delete</Button> : null}
+            <Button onClick={() => setDialog(true)}>Edit</Button>
           </>
         }
       />
+      <p className="mb-4 text-sm"><Link state={recordState} to={`/organisations/${org.id}`} className="text-indigo-600">{org.name}</Link></p>
+      <SegmentedTabs value={tab} onChange={setTab} options={[{ label: 'Members', value: 'members' }, { label: 'Profile', value: 'profile' }, { label: 'Access', value: 'access' }]} />
+      {tab === 'profile' ?
       <div className="mb-5">
         <TeamAvatarSection teamId={team.id} teamName={team.name} />
-      </div>
-      <div className="mb-5">
+      </div> : null}
+      {tab === 'access' ? <div className="mb-5">
         <LoginRestrictionSection
           title="Login access whitelist"
           description="Empty = no restriction. A user may sign in if their email domain OR their exact email is listed. Superusers always bypass."
@@ -84,22 +82,21 @@ export function TeamDetailPage() {
           allowedEmails={team.allowedEmails}
           onSave={(next) => updateRestriction.mutateAsync(next)}
         />
-      </div>
-      <Card>
+      </div> : null}
+      {tab === 'members' ? <Card>
         <CardHeader>
           <span className="text-sm font-semibold text-gray-900">Members ({members.length})</span>
-          <Button icon="plus" size="sm" variant="primary" onClick={() => setDialog({ kind: 'add-member' })}>Add Member</Button>
         </CardHeader>
-        <DataTable headers={['User', 'Team Role', '2FA', 'Last Login', 'Actions']}>
+        <DataTable headers={['User', 'Team Role', '2FA', 'Last Login']}>
           {pageItems.map((member) => (
             <tr
               key={member.id}
               className="cursor-pointer transition-colors hover:bg-gray-50"
               tabIndex={0}
-              onClick={() => openUser(member.id)}
+              onClick={() => openRecord(`/users/${member.id}`)}
               onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  openUser(member.id);
+                if (event.key === 'Enter' && event.target === event.currentTarget) {
+                  openRecord(`/users/${member.id}`);
                 }
               }}
             >
@@ -107,36 +104,26 @@ export function TeamDetailPage() {
                 <div className="flex items-center gap-2">
                   <UserAvatar userId={member.id} label={member.name ?? member.email} />
                   <div>
-                    <span className="font-medium text-gray-700">{member.name ?? member.email}</span>
+                    <Link state={recordState} to={`/users/${member.id}`} className="font-medium text-indigo-600" onClick={(event) => event.stopPropagation()}>{member.name ?? member.email}</Link>
                     <p className="text-xs text-gray-400">{member.email}</p>
                   </div>
                 </div>
               </Td>
               <Td><StatusBadge status={member.teamRoles[team.name] ?? 'member'} /></Td>
-              <Td><StatusBadge status={member.twofa ? 'On' : 'Off'} /></Td>
-              <Td className="text-xs text-gray-400">{member.lastLogin}</Td>
-              <Td className="whitespace-nowrap" onClick={(event) => event.stopPropagation()}>
-                <ActionButton tone="amber" onClick={() => setDialog({ kind: 'change-team-role', member })}>Change Role</ActionButton>
-                <ActionDivider />
-                <ActionButton tone="red" onClick={() => confirm('Remove from team?', `${member.name ?? member.email} will be removed from ${team.name}.`)}>Remove</ActionButton>
-              </Td>
+              <Td><Badge variant={member.twofa ? 'green' : 'slate'}>{member.twofa ? '2FA enabled' : '2FA not enrolled'}</Badge></Td>
+              <Td className="text-xs text-gray-400">{member.lastLogin === 'Never' ? 'Not in recent activity' : member.lastLogin}</Td>
+
             </tr>
           ))}
+        {pageItems.length === 0 ? <tr><Td colSpan={4}>No members found.</Td></tr> : null}
         </DataTable>
         <PaginationFooter {...pagination} />
-      </Card>
+      </Card> : null}
       <TeamDialog
-        open={dialog?.kind === 'edit-team'}
+        open={dialog}
         team={team}
         onClose={closeDialog}
         onSave={(values) => updateTeamDetails.mutateAsync(values)}
-      />
-      <AddMemberDialog open={dialog?.kind === 'add-member'} organisation={org} team={team} onClose={closeDialog} />
-      <ChangeTeamRoleDialog
-        open={dialog?.kind === 'change-team-role'}
-        member={dialog?.kind === 'change-team-role' ? dialog.member : null}
-        team={team}
-        onClose={closeDialog}
       />
     </>
   );

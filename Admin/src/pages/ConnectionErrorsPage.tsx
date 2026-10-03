@@ -1,4 +1,8 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useDirectoryNavigation } from '../features/admin/useDirectoryNavigation';
+import { useMemo, type ReactNode } from 'react';
+import { Link } from 'react-router';
+import { useListParams } from '../utils/list-params';
+import { QueryError } from '../components/ui/QueryError';
 
 import { AutocompleteSelect } from '../components/ui/AutocompleteSelect';
 import { Badge } from '../components/ui/Badge';
@@ -18,11 +22,13 @@ const detailSectionCookieValues = sectionCookieValues(detailSectionIds);
 type DetailSectionId = (typeof detailSectionIds)[number];
 
 export function ConnectionErrorsPage() {
-  const { data: errors = [], isLoading } = useHandshakeErrorsQuery();
-  const [selectedErrorId, setSelectedErrorId] = useState<string | null>(null);
-  const [query, setQuery] = useState('');
-  const [domain, setDomain] = useState('all');
-  const [phase, setPhase] = useState('all');
+  const { recordState } = useDirectoryNavigation('/dashboard');
+  const { data: errors = [], isLoading, isError, refetch } = useHandshakeErrorsQuery();
+  const state = useListParams();
+  const selectedErrorId = state.get('selected');
+  const query = state.get('q'); const setQuery = (value: string) => state.set('q', value);
+  const domain = state.get('domain', 'all'); const setDomain = (value: string) => state.set('domain', value);
+  const phase = state.get('phase', 'all'); const setPhase = (value: string) => state.set('phase', value);
   const domainOptions = useMemo(() => {
     const counts = new Map<string, number>();
     errors.forEach((error) => counts.set(error.domain, (counts.get(error.domain) ?? 0) + 1));
@@ -41,7 +47,7 @@ export function ConnectionErrorsPage() {
     });
   }, [domain, errors, phase, query]);
   const { pageItems, pagination } = usePagination(filteredErrors);
-  const selectedError = errors.find((error) => error.id === selectedErrorId) ?? filteredErrors[0] ?? null;
+  const selectedError = filteredErrors.find((error) => error.id === selectedErrorId) ?? null;
 
   function exportFilteredErrors() {
     const blob = new Blob([JSON.stringify(filteredErrors, null, 2)], { type: 'application/json' });
@@ -55,11 +61,11 @@ export function ConnectionErrorsPage() {
 
   return (
     <>
-      <PageHeader title="Connection Errors" description="Rejected app handshakes, config JWT failures, and SDK startup errors" actions={<Button icon="download" onClick={exportFilteredErrors}>Export JSON</Button>} />
+      <PageHeader title="Connection errors" description="Latest recorded connection errors. Filters and export cover this loaded window. Times are UTC." actions={<Button icon="download" disabled={!filteredErrors.length} onClick={exportFilteredErrors}>Export JSON</Button>} />
       <Card className="mb-4 p-4">
         <div className="flex flex-wrap items-end gap-3">
           <FieldShell label="Search">
-            <TextField className="w-72" placeholder="Error, request id, app, domain..." type="search" value={query} onChange={(event) => setQuery(event.target.value)} />
+            <TextField className="w-full sm:w-72" placeholder="Error, request id, app, domain..." type="search" value={query} onChange={(event) => setQuery(event.target.value)} />
           </FieldShell>
           <AutocompleteSelect allLabel="All domains" emptyLabel="No domains found." label="Domain" options={domainOptions} placeholder="Search domains..." value={domain} onChange={setDomain} />
           <FieldShell label="Phase">
@@ -74,46 +80,32 @@ export function ConnectionErrorsPage() {
           </FieldShell>
         </div>
       </Card>
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_28rem]">
+      {isError ? <QueryError retry={refetch} /> : <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_28rem]">
         <Card>
           {isLoading ? (
             <p className="px-5 py-6 text-sm text-gray-400">Loading connection errors...</p>
           ) : (
             <>
-              <DataTable headers={['Time', 'Domain', 'App', 'Phase', 'Error', 'Missing', 'Status']}>
+              <DataTable headers={['Time (UTC)', 'Service', 'Phase', 'Error', 'Status']}>
                 {pageItems.map((error) => (
                   <tr
                     key={error.id}
-                    className="cursor-pointer transition-colors hover:bg-gray-50"
-                    tabIndex={0}
-                    onClick={() => setSelectedErrorId(error.id)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') {
-                        setSelectedErrorId(error.id);
-                      }
-                    }}
+                    className={selectedErrorId === error.id ? 'bg-indigo-50' : 'hover:bg-gray-50'}
                   >
                     <Td className="whitespace-nowrap text-xs text-gray-400">{error.ts}</Td>
                     <Td>
-                      <span className="font-medium text-gray-900">{error.domain}</span>
-                      <p className="mt-0.5 text-xs text-gray-400">{error.endpoint}</p>
-                    </Td>
-                    <Td>
-                      <span className="font-medium text-gray-700">{error.app}</span>
-                      <p className="mt-0.5 text-xs text-gray-400">{error.organisation}</p>
+                      <Link state={recordState} className="text-indigo-700 hover:underline" to={`/domains/${encodeURIComponent(error.domain)}`}>{error.domain}</Link>
                     </Td>
                     <Td><Badge variant="blue">{phaseLabel(error.phase)}</Badge></Td>
                     <Td>
-                      <code className="text-xs font-semibold text-red-600">{error.errorCode}</code>
-                      <p className="mt-0.5 text-xs text-gray-400">{error.summary}</p>
+                      <Link state={recordState} className="text-xs font-semibold text-red-700 hover:underline" to={`?${new URLSearchParams({ ...Object.fromEntries(state.params), selected: error.id })}`}>{error.errorCode}</Link>
                     </Td>
-                    <Td className="text-xs text-gray-500">{error.missingClaims.length > 0 ? error.missingClaims.join(', ') : '-'}</Td>
                     <Td><Badge variant={error.statusCode >= 500 ? 'red' : 'amber'}>{error.statusCode}</Badge></Td>
                   </tr>
                 ))}
                 {pageItems.length === 0 ? (
                   <tr>
-                    <Td colSpan={7} className="text-sm text-gray-400">No connection errors match the filters.</Td>
+                    <Td colSpan={5} className="text-sm text-gray-400">No connection errors match the filters.</Td>
                   </tr>
                 ) : null}
               </DataTable>
@@ -122,7 +114,7 @@ export function ConnectionErrorsPage() {
           )}
         </Card>
         <ErrorDetail error={selectedError} />
-      </div>
+      </div>}
     </>
   );
 }
@@ -130,7 +122,7 @@ export function ConnectionErrorsPage() {
 function ErrorDetail({ error }: { error: HandshakeErrorLog | null }) {
   const [openSectionValue, setOpenSectionValue] = useCookieState<string>(
     detailSectionCookieName,
-    '',
+    'summary',
     detailSectionCookieValues,
   );
   const openSections = useMemo(() => new Set(openSectionValue.split(',').filter(Boolean) as DetailSectionId[]), [openSectionValue]);
@@ -163,6 +155,7 @@ function ErrorDetail({ error }: { error: HandshakeErrorLog | null }) {
       </CardHeader>
       <div className="space-y-3 p-5">
         <CollapsibleDetailSection id="summary" title="Summary" openSections={openSections} onToggle={toggleSection}>
+          <p className="mb-4 break-words text-sm text-gray-700">{error.summary}</p>
           <DetailGrid error={error} />
           <div className="mt-4 space-y-3">
             <div>
@@ -211,6 +204,8 @@ function DetailGrid({ error }: { error: HandshakeErrorLog }) {
   const rows = [
     ['Domain', error.domain],
     ['App', error.app],
+    ['App ID', error.appId],
+    ['Organisation', error.organisation],
     ['Endpoint', error.endpoint],
     ['Phase', phaseLabel(error.phase)],
     ['IP', error.ip],

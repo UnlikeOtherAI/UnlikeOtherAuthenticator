@@ -1,8 +1,11 @@
 // @vitest-environment happy-dom
 
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, render as renderBase, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import type { ReactElement } from 'react';
+import { MemoryRouter, useLocation } from 'react-router';
 
 import type { BillingService } from '../../schemas/billing';
 import { BillingContractsPanel } from './BillingContractsPanel';
@@ -195,7 +198,20 @@ vi.mock('./admin-queries', () => ({
 }));
 
 vi.mock('./billing-contract-queries', () => ({
-  useBillingContractsQuery: () => ({ data: [state.contract], isError: false, isLoading: false }),
+  useBillingContractsQuery: () => ({
+    data: [
+      state.contract,
+      {
+        ...state.contract,
+        id: 'contract-2',
+        name: 'Second contract',
+        organisation_id: 'org-2',
+        reference: 'MSA-SECOND',
+      },
+    ],
+    isError: false,
+    isLoading: false,
+  }),
   useBillingInvoiceIssuersQuery: () => ({ data: [state.issuer], isError: false, isLoading: false }),
   useBillingInvoicesQuery: () => ({ data: [state.invoice], isError: false, isLoading: false }),
   useCalculateBillingInvoiceMutation: () => mutation(state.calculate, state.calculateReset),
@@ -243,6 +259,19 @@ const services = [
   },
 ] satisfies BillingService[];
 
+function Location() {
+  const location = useLocation();
+  return <output data-testid="location">{location.search}</output>;
+}
+function render(ui: ReactElement, entry = '/billing?section=contracts&contract=contract-1') {
+  return renderBase(
+    <MemoryRouter initialEntries={[entry]}>
+      {ui}
+      <Location />
+    </MemoryRouter>,
+  );
+}
+
 describe('BillingContractsPanel', () => {
   beforeEach(() => {
     state.calculate.mockReset().mockResolvedValue(state.invoice);
@@ -262,7 +291,7 @@ describe('BillingContractsPanel', () => {
     render(<BillingContractsPanel services={services} />);
 
     expect(screen.getByRole('heading', { name: 'Organisation contracts' })).toBeTruthy();
-    expect(screen.getByText('Enterprise AI services')).toBeTruthy();
+    expect(screen.getAllByText('Enterprise AI services').length).toBeGreaterThan(0);
     expect(screen.getByText('40.00%')).toBeTruthy();
     expect(screen.getByText('45.00%')).toBeTruthy();
     expect(screen.getAllByRole('button', { name: 'Activate' }).length).toBeGreaterThan(0);
@@ -277,7 +306,7 @@ describe('BillingContractsPanel', () => {
     expect(screen.queryByText('$42.11 raw provider cost')).toBeNull();
     expect(screen.queryByText('987,654 tokens')).toBeNull();
 
-    await user.click(screen.getAllByRole('button', { name: 'View' })[0]);
+    await user.click(screen.getAllByRole('link', { name: 'UOA-2026-000001' })[0]);
     const detail = screen.getByRole('dialog', { name: 'UOA-2026-000001' });
     expect(within(detail).getByRole('columnheader', { name: 'Calculated price' })).toBeTruthy();
     expect(within(detail).getAllByText('DeepWater').length).toBeGreaterThan(0);
@@ -299,9 +328,6 @@ describe('BillingContractsPanel', () => {
     render(<BillingContractsPanel services={services} />);
 
     await waitFor(() => {
-      expect(
-        (screen.getByRole('combobox', { name: 'Active contract' }) as HTMLSelectElement).value,
-      ).toBe('contract-1');
       expect((screen.getByRole('combobox', { name: 'Issuer' }) as HTMLSelectElement).value).toBe(
         'issuer-1',
       );
@@ -320,5 +346,34 @@ describe('BillingContractsPanel', () => {
     expect(within(detail).getAllByText('$125.00').length).toBeGreaterThan(0);
     expect(within(detail).getAllByText('$150.00').length).toBeGreaterThan(0);
     expect(within(detail).getAllByText('$0.00').length).toBeGreaterThan(0);
+  });
+  it('calculates the opened contract instead of the first active contract and keeps inputs on failure', async () => {
+    const user = userEvent.setup();
+    state.calculate
+      .mockRejectedValueOnce(new Error('Calculation unavailable'))
+      .mockResolvedValue(state.invoice);
+    render(
+      <BillingContractsPanel services={services} />,
+      '/billing?section=contracts&contract=contract-2',
+    );
+    await user.click(screen.getByRole('button', { name: 'Calculate draft' }));
+    await waitFor(() =>
+      expect(state.calculate).toHaveBeenCalledWith(
+        expect.objectContaining({ contractId: 'contract-2' }),
+      ),
+    );
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Calculate draft' })).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'Calculate draft' }));
+    await screen.findByRole('dialog', { name: 'UOA-2026-000001' });
+    expect(screen.getByTestId('location').textContent).toContain('invoice=invoice-1');
+  });
+
+  it('lists contracts with addressable links and no unrelated calculator', () => {
+    render(<BillingContractsPanel services={services} />, '/billing?section=contracts');
+    expect(screen.getByRole('link', { name: 'Second contract' }).getAttribute('href')).toBe(
+      '/billing?section=contracts&contract=contract-2',
+    );
+    expect(screen.queryByRole('button', { name: 'Calculate draft' })).toBeNull();
   });
 });

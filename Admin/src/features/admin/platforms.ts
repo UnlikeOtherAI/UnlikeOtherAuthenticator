@@ -38,7 +38,7 @@ export function isAllPlatformsSelection(platformId: string) {
 
 export function platformNames(app: AppFlagSummary, platformIds: string[]) {
   return platformIds
-    .map((platformId) => app.platforms.find((platform) => platform.id === platformId)?.name)
+    .map((platformId) => app.platforms.find((platform) => platform.id === platformId || platform.key === platformId)?.name ?? platformKindLabel(platformId as AppPlatformKind))
     .filter(Boolean)
     .join(', ');
 }

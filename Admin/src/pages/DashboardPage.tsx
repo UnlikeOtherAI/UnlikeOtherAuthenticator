@@ -1,99 +1,30 @@
 import { Link } from 'react-router';
-
 import { Card, CardHeader } from '../components/ui/Card';
 import { PageHeader } from '../components/ui/PageHeader';
+import { QueryError } from '../components/ui/QueryError';
 import { MethodBadge } from '../components/ui/Status';
-import { DataTable, PaginationFooter, Td, usePagination } from '../components/ui/Table';
+import { DataTable, Td } from '../components/ui/Table';
 import { useDashboardQuery } from '../features/admin/admin-queries';
+import { activityTime } from '../utils/activity';
 
 export function DashboardPage() {
-  const { data, isLoading } = useDashboardQuery();
-  const { pageItems: logPageItems, pagination: logPagination } = usePagination(data?.logs ?? [], 5);
-
-  if (isLoading || !data) {
-    return <p className="text-sm text-gray-400">Loading dashboard...</p>;
-  }
-
+  const { data, isLoading, isError, refetch } = useDashboardQuery();
+  if (isError) return <QueryError retry={refetch} />;
+  if (isLoading || !data) return <p role="status" className="text-sm text-gray-500">Loading dashboard...</p>;
   const stats = [
-    { label: 'Total Users', value: data.stats.users.toLocaleString(), sub: 'registered accounts', color: 'text-green-600' },
-    { label: 'Active Domains', value: data.stats.domains.toString(), sub: 'seen in roles, orgs, or logs', color: 'text-gray-500' },
-    { label: 'Organisations', value: data.stats.orgs.toString(), sub: 'stored organisations', color: 'text-blue-600' },
-    { label: 'Logins Today', value: data.stats.loginsToday.toString(), sub: 'successful auth events', color: 'text-amber-600' },
+    { label: 'Users', value: data.stats.users, path: '/users' },
+    { label: 'Active website services', value: data.stats.domains, path: '/domains?status=active' },
+    { label: 'Organisations', value: data.stats.orgs, path: '/organisations' },
+    { label: 'Logins today (UTC)', value: data.stats.loginsToday, path: `/logs?from=${new Date().toISOString().slice(0,10)}` },
   ];
-  const alerts = [
-    ...data.handshakeErrors.slice(0, 3).map((error) => ({
-      color: 'bg-red-500',
-      title: error.errorCode,
-      description: `${error.domain} · ${error.phase}`,
-    })),
-    ...(data.handshakeErrors.length === 0
-      ? [
-          {
-            color: 'bg-green-500',
-            title: 'No handshake errors',
-            description: 'Recent config and JWT handshakes look clean',
-          },
-        ]
-      : []),
-  ];
-
-  return (
-    <>
-      <PageHeader title="Dashboard" description="System overview and recent activity" />
-      <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {stats.map((stat) => (
-          <Card key={stat.label} className="p-4">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">{stat.label}</p>
-            <p className="mt-1 text-3xl font-bold text-gray-900">{stat.value}</p>
-            <p className={`mt-0.5 text-xs ${stat.color}`}>{stat.sub}</p>
-          </Card>
-        ))}
-      </div>
-      <div className="grid gap-4 xl:grid-cols-[2fr_1fr]">
-        <Card>
-          <CardHeader>
-            <span className="text-sm font-semibold text-gray-900">Recent Login Activity</span>
-            <Link to="/logs" className="text-xs font-medium text-indigo-600 hover:text-indigo-800">
-              View all
-            </Link>
-          </CardHeader>
-          <DataTable headers={['User', 'Domain', 'Method', 'Time']}>
-            {logPageItems.map((log) => (
-              <tr key={log.id} className="transition-colors hover:bg-gray-50">
-                <Td>{log.user ?? <span className="italic text-gray-400">unknown</span>}</Td>
-                <Td className="text-xs text-gray-400">{log.domain}</Td>
-                <Td>
-                  <MethodBadge method={log.method} />
-                </Td>
-                <Td className="text-xs text-gray-400">{log.ts}</Td>
-              </tr>
-            ))}
-          </DataTable>
-          <PaginationFooter {...logPagination} />
-        </Card>
-        <Card>
-          <CardHeader>
-            <span className="text-sm font-semibold text-gray-900">Alerts</span>
-          </CardHeader>
-          <div className="divide-y divide-gray-50">
-            {alerts.map((alert) => (
-              <AlertRow key={`${alert.title}-${alert.description}`} {...alert} />
-            ))}
-          </div>
-        </Card>
-      </div>
-    </>
-  );
-}
-
-function AlertRow({ color, description, title }: { color: string; description: string; title: string }) {
-  return (
-    <div className="flex gap-2 px-4 py-3">
-      <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${color}`} />
-      <div>
-        <p className="text-xs font-medium text-gray-900">{title}</p>
-        <p className="mt-0.5 text-xs text-gray-400">{description}</p>
-      </div>
+  return <>
+    <PageHeader title="Dashboard" />
+    <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{stats.map((stat) => <Link to={stat.path} key={stat.label} className="rounded-xl focus:outline-2 focus:outline-indigo-600"><Card className="p-4 hover:border-indigo-300"><p className="text-sm text-gray-500">{stat.label}</p><p className="mt-1 text-3xl font-semibold">{stat.value.toLocaleString()}</p></Card></Link>)}</div>
+    <div className="grid gap-4 xl:grid-cols-[2fr_1fr]">
+      <Card><CardHeader><h2 className="text-sm font-semibold">Recent logins</h2><Link to="/logs" className="text-sm text-indigo-700">View activity</Link></CardHeader>
+        <DataTable headers={['User', 'Service', 'Method', 'Time (UTC)']}>{data.logs.slice(0,5).map((log) => <tr key={log.id}><Td>{log.userId ? <Link className="text-indigo-700 hover:underline" to={`/users/${encodeURIComponent(log.userId)}`}>{log.user}</Link> : log.user ?? 'Unknown'}</Td><Td><Link className="text-indigo-700 hover:underline" to={`/domains/${encodeURIComponent(log.domain)}`}>{log.domain}</Link></Td><Td><MethodBadge method={log.method} /></Td><Td>{activityTime(log).replace('T',' ').replace('.000Z','')}</Td></tr>)}{!data.logs.length ? <tr><Td colSpan={4}>No recent logins.</Td></tr> : null}</DataTable>
+      </Card>
+      <Card><CardHeader><h2 className="text-sm font-semibold">Recent connection errors</h2><Link to="/connection-errors" className="text-sm text-indigo-700">View errors</Link></CardHeader><div className="divide-y divide-gray-100">{data.handshakeErrors.slice(0,3).map((error) => <Link key={error.id} className="block p-4 hover:bg-gray-50" to={`/connection-errors?selected=${encodeURIComponent(error.id)}`}><p className="text-sm font-medium text-red-700">{error.errorCode}</p><p className="mt-1 break-all text-xs text-gray-500">{error.domain}</p></Link>)}{!data.handshakeErrors.length ? <p className="p-4 text-sm text-gray-500">No recent connection errors.</p> : null}</div></Card>
     </div>
-  );
+  </>;
 }

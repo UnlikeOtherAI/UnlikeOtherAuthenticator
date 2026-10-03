@@ -65,18 +65,23 @@ export function CreateBillingContractDialog({
   }, [form, open]);
 
   async function submit(values: BillingContractFormValues) {
-    await create.mutateAsync(values);
-    onClose();
+    try {
+      await create.mutateAsync(values);
+      onClose();
+    } catch {
+      /* Preserve the form and mutation error for retry. */
+    }
   }
 
   return (
     <Modal
       isOpen={open}
       onClose={onClose}
+      isPending={create.isPending}
+      isDirty={form.formState.isDirty}
       title="Create organisation contract"
       footer={
         <>
-          <Button onClick={onClose}>Cancel</Button>
           <Button variant="primary" disabled={create.isPending} onClick={form.handleSubmit(submit)}>
             {create.isPending ? 'Creating...' : 'Create contract'}
           </Button>
@@ -136,18 +141,23 @@ export function AddBillingContractVersionDialog({
   }, [contract, form]);
 
   async function submit(values: BillingContractVersionFormValues) {
-    await create.mutateAsync(values);
-    onClose();
+    try {
+      await create.mutateAsync(values);
+      onClose();
+    } catch {
+      /* Preserve the form and mutation error for retry. */
+    }
   }
 
   return (
     <Modal
       isOpen={Boolean(contract)}
       onClose={onClose}
+      isPending={create.isPending}
+      isDirty={form.formState.isDirty}
       title={`Add contract terms · ${contract?.name ?? ''}`}
       footer={
         <>
-          <Button onClick={onClose}>Cancel</Button>
           <Button variant="primary" disabled={create.isPending} onClick={form.handleSubmit(submit)}>
             {create.isPending ? 'Saving...' : 'Save draft terms'}
           </Button>
@@ -239,19 +249,24 @@ export function ActivateBillingContractVersionDialog({
       );
       return;
     }
-    await activate.mutateAsync(selectedServices);
-    onClose();
+    try {
+      await activate.mutateAsync(selectedServices);
+      onClose();
+    } catch {
+      /* Preserve selected services and show the mutation error. */
+    }
   }
 
   return (
     <Modal
       isOpen={Boolean(contract && version)}
       onClose={onClose}
+      isPending={activate.isPending}
+      isDirty={selectedServices.length > 0}
       title={`Activate version ${version?.version ?? ''}`}
       widthClassName="max-w-2xl"
       footer={
         <>
-          <Button onClick={onClose}>Cancel</Button>
           <Button
             variant="primary"
             disabled={activate.isPending || !selectionIsValid || !confirmed}

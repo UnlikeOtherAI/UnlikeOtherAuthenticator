@@ -37,6 +37,8 @@ export function TwoFactorPolicySelect(props: {
   saving?: boolean;
   onSave: (value: TwoFactorPolicyValue) => Promise<unknown>;
 }) {
+  const [error, setError] = useState(false);
+  const [pending, setPending] = useState(false);
   const [value, setValue] = useState<TwoFactorPolicyValue>(props.value);
 
   useEffect(() => {
@@ -45,6 +47,14 @@ export function TwoFactorPolicySelect(props: {
 
   const selected = props.options.find((option) => option.value === value);
   const dirty = value !== props.value;
+
+  async function save() {
+    setError(false);
+    setPending(true);
+    try { await props.onSave(value); }
+    catch { setError(true); }
+    finally { setPending(false); }
+  }
 
   return (
     <Card className="p-5">
@@ -57,10 +67,10 @@ export function TwoFactorPolicySelect(props: {
           icon="check"
           variant="primary"
           size="sm"
-          disabled={!dirty || props.saving}
-          onClick={() => props.onSave(value)}
+          disabled={!dirty || props.saving || pending}
+          onClick={() => void save()}
         >
-          {props.saving ? 'Saving...' : 'Save'}
+          {props.saving || pending ? 'Saving...' : 'Save'}
         </Button>
       </div>
       <div className="grid gap-3 md:grid-cols-[240px_minmax(0,1fr)]">
@@ -77,6 +87,7 @@ export function TwoFactorPolicySelect(props: {
           {selected?.hint}
         </div>
       </div>
+      {error ? <p role="alert" className="mt-3 text-sm text-red-600">Could not save the policy. Try again.</p> : null}
     </Card>
   );
 }

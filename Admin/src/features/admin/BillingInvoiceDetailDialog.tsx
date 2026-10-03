@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useForm } from 'react-hook-form';
 
 import { Badge, type BadgeVariant } from '../../components/ui/Badge';
@@ -72,9 +72,11 @@ function ActionError({ value }: { value: unknown }) {
 export function BillingInvoiceDetailDialog({
   invoice,
   onClose,
+  contextLinks,
 }: {
   invoice: BillingInvoice | null;
   onClose: () => void;
+  contextLinks?: ReactNode;
 }) {
   const issue = useIssueBillingInvoiceMutation();
   const voidInvoice = useVoidBillingInvoiceMutation();
@@ -143,6 +145,7 @@ export function BillingInvoiceDetailDialog({
 
   if (!invoice) return null;
   const currentInvoice = invoice;
+  const busy = issue.isPending || voidInvoice.isPending || recordPayment.isPending || downloading;
 
   async function downloadPdf() {
     setDownloading(true);
@@ -167,8 +170,13 @@ export function BillingInvoiceDetailDialog({
       });
       return;
     }
-    await recordPayment.mutateAsync({ invoiceId: currentInvoice.id, values });
-    setShowPayment(false);
+    try {
+      await recordPayment.mutateAsync({ invoiceId: currentInvoice.id, values });
+      paymentForm.reset({ ...values, amountMinor: '', reference: '', idempotencyKey: crypto.randomUUID(), occurredAt: nowForInput() });
+      setShowPayment(false);
+    } catch {
+      /* Retain values and the idempotency key for a safe retry. */
+    }
   }
 
   const allowedPaymentKinds = availablePaymentKinds(currentInvoice);
@@ -179,11 +187,17 @@ export function BillingInvoiceDetailDialog({
     <Modal
       isOpen
       onClose={onClose}
+      isPending={busy}
+      isDirty={paymentForm.formState.isDirty || Boolean(voidReason)}
       title={invoice.invoice_number ?? `Draft invoice · ${invoice.billing_month}`}
       widthClassName="max-w-4xl"
-      footer={<Button onClick={onClose}>Close</Button>}
     >
       <div className="space-y-5">
+        {contextLinks ? (
+          <nav aria-label="Invoice relationships" className="flex flex-wrap gap-3 text-sm">
+            {contextLinks}
+          </nav>
+        ) : null}
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-gray-50 px-4 py-3">
           <div>
             <div className="flex items-center gap-2">
@@ -328,26 +342,22 @@ export function BillingInvoiceDetailDialog({
 
         <div className="flex flex-wrap gap-2">
           {invoice.actions.issue ? (
-            <Button
-              variant="primary"
-              disabled={issue.isPending}
-              onClick={() => setShowIssueConfirm(true)}
-            >
+            <Button variant="primary" disabled={busy} onClick={() => setShowIssueConfirm(true)}>
               {invoice.actions.issue === 'resume_issue' ? 'Resume invoice issue' : 'Issue invoice'}
             </Button>
           ) : null}
           {invoice.actions.download_pdf ? (
-            <Button disabled={downloading} onClick={downloadPdf}>
+            <Button disabled={busy} onClick={downloadPdf}>
               {downloading ? 'Downloading...' : 'Download PDF'}
             </Button>
           ) : null}
           {allowedPaymentKinds.length > 0 ? (
-            <Button onClick={() => setShowPayment((value) => !value)}>
+            <Button disabled={busy} onClick={() => setShowPayment((value) => !value)}>
               Record payment activity
             </Button>
           ) : null}
           {invoice.actions.void ? (
-            <Button variant="danger" onClick={() => setShowVoid((value) => !value)}>
+            <Button disabled={busy} variant="danger" onClick={() => setShowVoid((value) => !value)}>
               Void invoice
             </Button>
           ) : null}
@@ -366,12 +376,10 @@ export function BillingInvoiceDetailDialog({
                 : 'UOA will allocate the next invoice number and store an immutable PDF. This cannot be undone; an issued invoice can only be voided when UOA permits it.'}
             </p>
             <div className="flex gap-2">
-              <Button onClick={() => setShowIssueConfirm(false)}>Cancel</Button>
-              <Button
-                variant="primary"
-                disabled={issue.isPending}
-                onClick={() => issue.mutate(invoice.id)}
-              >
+              <Button disabled={busy} onClick={() => setShowIssueConfirm(false)}>
+                Cancel
+              </Button>
+              <Button variant="primary" disabled={busy} onClick={() => issue.mutate(invoice.id)}>
                 {issue.isPending ? 'Issuing...' : 'Confirm issue'}
               </Button>
             </div>
@@ -428,7 +436,7 @@ export function BillingInvoiceDetailDialog({
                 />
               </FieldShell>
             </div>
-            <Button type="submit" variant="primary" disabled={recordPayment.isPending}>
+            <Button type="submit" variant="primary" disabled={busy}>
               {recordPayment.isPending ? 'Recording...' : 'Record activity'}
             </Button>
             <ActionError value={recordPayment.error} />
@@ -447,7 +455,7 @@ export function BillingInvoiceDetailDialog({
             </FieldShell>
             <Button
               variant="danger"
-              disabled={voidInvoice.isPending || !voidReason.trim()}
+              disabled={busy || !voidReason.trim()}
               onClick={() =>
                 voidInvoice.mutate({ invoiceId: invoice.id, reason: voidReason.trim() })
               }

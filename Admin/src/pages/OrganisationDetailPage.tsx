@@ -1,9 +1,10 @@
+import { useDirectoryNavigation } from '../features/admin/useDirectoryNavigation';
 import type { ReactNode } from 'react';
 import { useState } from 'react';
+import { useDirectoryParam } from '../features/admin/useDirectoryParam';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from 'react-router';
 
-import { ActionButton, ActionDivider } from '../components/ui/ActionButton';
 import { Avatar } from '../components/ui/Avatar';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
@@ -12,17 +13,11 @@ import { PageHeader } from '../components/ui/PageHeader';
 import { StatusBadge } from '../components/ui/Status';
 import { DataTable, PaginationFooter, Td, usePagination } from '../components/ui/Table';
 import { SegmentedTabs } from '../components/ui/Tabs';
-import { AddMemberDialog } from '../components/dialogs/AddMemberDialog';
-import { ChangeOrgRoleDialog } from '../components/dialogs/ChangeOrgRoleDialog';
-import { EditOrganisationDialog } from '../components/dialogs/EditOrganisationDialog';
-import { PreapprovalDialog } from '../components/dialogs/PreapprovalDialog';
-import { TeamDialog } from '../components/dialogs/TeamDialog';
-import { TransferOwnershipDialog } from '../components/dialogs/TransferOwnershipDialog';
 import { LoginRestrictionSection } from '../components/sections/LoginRestrictionSection';
 import { adminService } from '../services/admin-service';
 import { ApiRequestError } from '../services/api-client';
 import { useOrganisationQuery } from '../features/admin/admin-queries';
-import type { OrganisationMember, OrganisationTwoFaPolicy, PreapprovedMember } from '../features/admin/types';
+import type { OrganisationTwoFaPolicy } from '../features/admin/types';
 import { TeamTable } from '../features/admin/TeamTable';
 import { UserAvatar } from '../features/admin/UserAvatar';
 import {
@@ -31,26 +26,16 @@ import {
 } from '../features/admin/TwoFactorPolicySelect';
 import { useAdminUi } from '../features/shell/admin-ui';
 
-type OrgTab = 'teams' | 'members' | 'preapproved';
-
-type DialogState =
-  | { kind: 'edit-org' }
-  | { kind: 'transfer' }
-  | { kind: 'add-team' }
-  | { kind: 'add-member' }
-  | { kind: 'change-org-role'; member: OrganisationMember }
-  | { kind: 'add-preapproval' }
-  | { kind: 'edit-preapproval'; preapproval: PreapprovedMember };
+type OrgTab = 'teams' | 'members' | 'invitations' | 'access';
 
 export function OrganisationDetailPage() {
   const { orgId } = useParams();
+  const { recordState, openRecord, goBack } = useDirectoryNavigation('/organisations');
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { confirm, openUser } = useAdminUi();
-  const [dialog, setDialog] = useState<DialogState | null>(null);
+  const { confirm } = useAdminUi();
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const closeDialog = () => setDialog(null);
-  const { data: org, isLoading } = useOrganisationQuery(orgId);
+  const { data: org, isLoading, isError, refetch } = useOrganisationQuery(orgId);
   const updateRestriction = useMutation({
     mutationFn: (input: { allowedEmailDomains: string[]; allowedEmails: string[] }) =>
       adminService.updateOrganisation(orgId ?? '', input),
@@ -75,10 +60,13 @@ export function OrganisationDetailPage() {
       );
     },
   });
-  const [tab, setTab] = useState<OrgTab>('teams');
-  const { pageItems: teamPageItems, pagination: teamPagination } = usePagination(org?.teams ?? []);
-  const { pageItems: memberPageItems, pagination: memberPagination } = usePagination(org?.members ?? []);
-  const { pageItems: preapprovalPageItems, pagination: preapprovalPagination } = usePagination(org?.preapprovedMembers ?? []);
+  const [rawTab, setTab] = useDirectoryParam('tab', 'members');
+  const tab: OrgTab = ['teams', 'invitations', 'access'].includes(rawTab) ? rawTab as OrgTab : 'members';
+  const { pageItems: teamPageItems, pagination: teamPagination } = usePagination(org?.teams ?? [], 10, { key: 'teamsPage' });
+  const { pageItems: memberPageItems, pagination: memberPagination } = usePagination(org?.members ?? [], 10, { key: 'membersPage' });
+  const { pageItems: preapprovalPageItems, pagination: preapprovalPagination } = usePagination(org?.preapprovedMembers ?? [], 10, { key: 'invitationsPage' });
+
+  if (isError) return <div role="alert">Could not load organisation. <Button onClick={() => void refetch()}>Retry</Button></div>;
 
   if (isLoading) {
     return <p className="text-sm text-gray-400">Loading organisation...</p>;
@@ -94,12 +82,9 @@ export function OrganisationDetailPage() {
         title={org.name}
         description={`${org.slug} · Created ${org.created}`}
         leading={<Avatar label={org.name} shape="square" size="md" />}
-        badges={<Badge variant="green">Active</Badge>}
-        onBack={() => navigate('/organisations')}
+        onBack={goBack}
         actions={
           <>
-            <Button onClick={() => setDialog({ kind: 'edit-org' })}>Edit</Button>
-            <Button onClick={() => setDialog({ kind: 'transfer' })}>Transfer Ownership</Button>
             <Button
               disabled={deleteOrganisation.isPending}
               variant="danger"
@@ -109,11 +94,7 @@ export function OrganisationDetailPage() {
                   `Delete ${org.name}?`,
                   'This permanently deletes the organisation and its teams and memberships. User accounts are retained.',
                   async () => {
-                    try {
-                      await deleteOrganisation.mutateAsync();
-                    } catch {
-                      // The mutation renders a public refusal or generic failure below.
-                    }
+                    await deleteOrganisation.mutateAsync();
                   },
                   org.name,
                 );
@@ -130,10 +111,12 @@ export function OrganisationDetailPage() {
         </p>
       ) : null}
       <div className="mb-5 grid gap-3 md:grid-cols-[2fr_1fr_1fr]">
-        <MetricCard label="Owner" value={org.owner.name ?? org.owner.email} action={<button className="text-xs font-medium text-indigo-600 hover:text-indigo-900" type="button" onClick={() => openUser(org.owner.id)}>{org.owner.email}</button>} />
+        <MetricCard label="Owner" value={org.owner.name ?? (org.owner.email || 'Owner unavailable')} action={org.owner.id ? <Link state={recordState} className="text-xs text-indigo-600" to={`/users/${org.owner.id}`}>{org.owner.email}</Link> : undefined} />
         <MetricCard label="Members" value={String(org.members.length)} />
         <MetricCard label="Teams" value={String(org.teams.length)} />
       </div>
+      <SegmentedTabs<OrgTab> value={tab} onChange={setTab} options={[{ label: 'Members', value: 'members' }, { label: 'Teams', value: 'teams' }, { label: 'Invitations', value: 'invitations' }, { label: 'Access', value: 'access' }]} />
+      {tab === 'access' ? <>
       <div className="mb-5">
         <LoginRestrictionSection
           title="Login access whitelist"
@@ -153,12 +136,12 @@ export function OrganisationDetailPage() {
           onSave={(next) => updateTwoFaPolicy.mutateAsync(next)}
         />
       </div>
-      <SegmentedTabs<OrgTab> value={tab} onChange={setTab} options={[{ label: 'Teams', value: 'teams' }, { label: 'Members', value: 'members' }, { label: 'Pre-approved', value: 'preapproved' }]} />
+
+      </> : null}
       {tab === 'teams' ? (
         <Card>
           <CardHeader>
             <span className="text-sm font-semibold text-gray-900">Teams</span>
-            <Button icon="plus" size="sm" variant="primary" onClick={() => setDialog({ kind: 'add-team' })}>Add Team</Button>
           </CardHeader>
           <TeamTable teams={teamPageItems} showDescription />
           <PaginationFooter {...teamPagination} />
@@ -168,18 +151,17 @@ export function OrganisationDetailPage() {
         <Card>
           <CardHeader>
             <span className="text-sm font-semibold text-gray-900">Members</span>
-            <Button icon="plus" size="sm" variant="primary" onClick={() => setDialog({ kind: 'add-member' })}>Add Member</Button>
           </CardHeader>
-          <DataTable headers={['User', 'Role', 'Teams', 'Last Login', 'Actions']}>
+          <DataTable headers={['User', 'Role', 'Teams', 'Last Login']}>
             {memberPageItems.map((member) => (
               <tr
                 key={member.id}
                 className="cursor-pointer transition-colors hover:bg-gray-50"
                 tabIndex={0}
-                onClick={() => openUser(member.id)}
+                onClick={() => openRecord(`/users/${member.id}`)}
                 onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
-                    openUser(member.id);
+                  if (event.key === 'Enter' && event.target === event.currentTarget) {
+                    openRecord(`/users/${member.id}`);
                   }
                 }}
               >
@@ -187,7 +169,7 @@ export function OrganisationDetailPage() {
                   <div className="flex items-center gap-2">
                     <UserAvatar userId={member.id} label={member.name ?? member.email} />
                     <div>
-                      <span className="font-medium text-gray-700">{member.name ?? member.email}</span>
+                      <Link state={recordState} to={`/users/${member.id}`} className="font-medium text-indigo-600" onClick={(event) => event.stopPropagation()}>{member.name ?? member.email}</Link>
                       <p className="text-xs text-gray-400">{member.email}</p>
                     </div>
                   </div>
@@ -197,74 +179,46 @@ export function OrganisationDetailPage() {
                   <div className="flex flex-wrap gap-1">
                     {member.teams.map((teamName) => {
                       const team = org.teams.find((item) => item.name === teamName);
-                      return team ? <Link key={team.id} className="text-xs text-indigo-600 hover:text-indigo-900" to={`/organisations/${org.id}/teams/${team.id}`} onClick={(event) => event.stopPropagation()}>{teamName}</Link> : <span key={teamName}>{teamName}</span>;
+                      return team ? <Link state={recordState} key={team.id} className="text-xs text-indigo-600 hover:text-indigo-900" to={`/organisations/${org.id}/teams/${team.id}`} onClick={(event) => event.stopPropagation()}>{teamName}</Link> : <span key={teamName}>{teamName}</span>;
                     })}
                   </div>
                 </Td>
-                <Td className="text-xs text-gray-400">{member.lastLogin}</Td>
-                <Td className="whitespace-nowrap" onClick={(event) => event.stopPropagation()}>
-                  <ActionButton tone="amber" onClick={() => setDialog({ kind: 'change-org-role', member })}>Change Role</ActionButton>
-                  <ActionDivider />
-                  <ActionButton tone="red" onClick={() => confirm(`Remove ${member.name ?? member.email}?`, 'Removes them from all teams in this org.')}>Remove</ActionButton>
-                </Td>
+                <Td className="text-xs text-gray-400">{member.lastLogin === 'Never' ? 'Not in recent activity' : member.lastLogin}</Td>
+
               </tr>
             ))}
+          {memberPageItems.length === 0 ? <tr><Td colSpan={4}>No members found.</Td></tr> : null}
           </DataTable>
           <PaginationFooter {...memberPagination} />
         </Card>
       ) : null}
-      {tab === 'preapproved' ? (
+      {tab === 'invitations' ? (
         <Card>
           <CardHeader>
             <div>
-              <span className="text-sm font-semibold text-gray-900">Pre-approved Users</span>
-              <p className="mt-0.5 text-xs text-gray-400">Email allow-list entries that become members on first verified login.</p>
+              <span className="text-sm font-semibold text-gray-900">Invitations</span>
+              <p className="mt-0.5 text-xs text-gray-400">Invitations and their current status.</p>
             </div>
-            <Button icon="plus" size="sm" variant="primary" onClick={() => setDialog({ kind: 'add-preapproval' })}>Add Pre-approval</Button>
           </CardHeader>
-          <DataTable headers={['Email', 'Target Team', 'Role', 'Method', 'Status', 'Created', 'Actions']}>
+          <DataTable headers={['Email', 'Target Team', 'Role', 'Status', 'Approval', 'Created']}>
             {preapprovalPageItems.map((preapproval) => (
               <tr
                 key={preapproval.id}
-                className="cursor-pointer transition-colors hover:bg-gray-50"
-                tabIndex={0}
-                onClick={() => setDialog({ kind: 'edit-preapproval', preapproval })}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
-                    setDialog({ kind: 'edit-preapproval', preapproval });
-                  }
-                }}
               >
                 <Td><code className="text-xs">{preapproval.email}</code></Td>
-                <Td>{preapproval.targetTeam}</Td>
+                <Td>{preapproval.targetTeamId ? <Link state={recordState} to={`/organisations/${org.id}/teams/${preapproval.targetTeamId}`} className="text-indigo-600">{preapproval.targetTeam}</Link> : preapproval.targetTeam}</Td>
                 <Td><StatusBadge status={preapproval.role} /></Td>
-                <Td><Badge>{preapproval.method}</Badge></Td>
-                <Td><Badge variant={preapproval.status === 'claimed' ? 'green' : 'amber'}>{preapproval.status}</Badge></Td>
+                <Td><Badge variant={['claimed', 'accepted'].includes(preapproval.status) ? 'green' : 'amber'}>{preapproval.status}</Badge></Td>
+                <Td>{preapproval.approvalStatus?.replaceAll('_', ' ') ?? '�'}</Td>
                 <Td className="text-xs text-gray-400">{preapproval.created}</Td>
-                <Td className="whitespace-nowrap" onClick={(event) => event.stopPropagation()}>
-                  <ActionButton tone="red" onClick={() => confirm(`Revoke ${preapproval.email}?`, 'This removes the pre-approval entry, not an active user account.')}>Revoke</ActionButton>
-                </Td>
+
               </tr>
             ))}
+          {preapprovalPageItems.length === 0 ? <tr><Td colSpan={6}>No invitations found.</Td></tr> : null}
           </DataTable>
           <PaginationFooter {...preapprovalPagination} />
         </Card>
       ) : null}
-      <EditOrganisationDialog open={dialog?.kind === 'edit-org'} organisation={org} onClose={closeDialog} />
-      <TransferOwnershipDialog open={dialog?.kind === 'transfer'} organisation={org} onClose={closeDialog} />
-      <TeamDialog open={dialog?.kind === 'add-team'} team={null} onClose={closeDialog} />
-      <AddMemberDialog open={dialog?.kind === 'add-member'} organisation={org} onClose={closeDialog} />
-      <ChangeOrgRoleDialog
-        open={dialog?.kind === 'change-org-role'}
-        member={dialog?.kind === 'change-org-role' ? dialog.member : null}
-        onClose={closeDialog}
-      />
-      <PreapprovalDialog
-        open={dialog?.kind === 'add-preapproval' || dialog?.kind === 'edit-preapproval'}
-        organisation={org}
-        preapproval={dialog?.kind === 'edit-preapproval' ? dialog.preapproval : null}
-        onClose={closeDialog}
-      />
     </>
   );
 }

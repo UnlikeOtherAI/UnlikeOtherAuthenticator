@@ -10,7 +10,7 @@ const defaults: NativeAppForm = { identifier: '', name: '', enabled: true, redir
   scopes: ['openid', 'profile', 'email'], methods: ['google', 'email_password'], allow_registration: true,
   primary_color: '#2563eb', background_color: '#ffffff', text_color: '#111827' };
 export function NativeAppDialog({ app, close }: { app?: NativeApp; close: () => void }) {
-  const { register, handleSubmit } = useForm<NativeAppForm>({ defaultValues: app ?? defaults });
+  const { register, handleSubmit, formState } = useForm<NativeAppForm>({ defaultValues: app ?? defaults });
   const [redirects, setRedirects] = useState(app?.redirect_uris.join('\n') ?? '');
   const [file, setFile] = useState<File | null | undefined>(undefined);
   const [error, setError] = useState('');
@@ -22,7 +22,7 @@ export function NativeAppDialog({ app, close }: { app?: NativeApp; close: () => 
     try { await save.mutateAsync({ form: parsed.data, id: app?.id, file }); close(); }
     catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not save this app.'); }
   }
-  return <Modal isOpen onClose={close} title={app ? `Edit ${app.name}` : 'Register app'} widthClassName="max-w-xl">
+  return <Modal isOpen isPending={save.isPending} isDirty={formState.isDirty || redirects !== (app?.redirect_uris.join('\n') ?? '') || file !== undefined} onClose={() => { if (!save.isPending) close(); }} title={app ? `Edit ${app.name}` : 'Register app'} widthClassName="max-w-xl">
     <form className="space-y-4" onSubmit={handleSubmit(submit)}>
       <FieldShell label="App name"><TextField {...register('name')} required /></FieldShell>
       <FieldShell label="App identifier" hint="Reverse-domain name, for example com.example.browser. Public; no secret is issued.">
@@ -50,7 +50,7 @@ export function NativeAppDialog({ app, close }: { app?: NativeApp; close: () => 
       <label className="block text-sm"><input type="checkbox" {...register('enabled')} /> Enabled</label>
       {app ? <p className="text-xs text-gray-500">Changing login methods, account access, return URLs or enabled status requires users to sign in again.</p> : null}
       {error ? <p role="alert" className="text-sm text-red-600">{error}</p> : null}
-      <div className="flex justify-end gap-2"><Button type="button" onClick={close}>Cancel</Button>
+      <div className="flex justify-end gap-2">
         <Button variant="primary" type="submit" disabled={save.isPending}>{save.isPending ? 'Saving…' : 'Save app'}</Button></div>
     </form>
   </Modal>;
