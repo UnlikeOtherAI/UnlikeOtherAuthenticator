@@ -1,27 +1,19 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { Link } from 'react-router';
 
-import { ActionButton, ActionDivider } from '../components/ui/ActionButton';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { PageHeader } from '../components/ui/PageHeader';
 import { DataTable, PaginationFooter, Td, usePagination } from '../components/ui/Table';
-import { AppSettingsDialog } from '../components/dialogs/AppSettingsDialog';
 import { RegisterAppDialog } from '../components/dialogs/RegisterAppDialog';
 import { useSettingsQuery } from '../features/admin/admin-queries';
 import { platformKindLabel } from '../features/admin/platforms';
-import type { AppFlagSummary } from '../features/admin/types';
-import { useAdminUi } from '../features/shell/admin-ui';
 
-type DialogState =
-  | { kind: 'register-app' }
-  | { kind: 'app-settings'; app: AppFlagSummary };
+type DialogState = { kind: 'register-app' };
 
 export function FeatureFlagsPage() {
-  const { data, isLoading } = useSettingsQuery();
-  const { confirm } = useAdminUi();
-  const navigate = useNavigate();
+  const { data, isLoading, isError, refetch } = useSettingsQuery();
   const [dialog, setDialog] = useState<DialogState | null>(null);
   const closeDialog = () => setDialog(null);
   const apps = data?.apps ?? [];
@@ -29,44 +21,30 @@ export function FeatureFlagsPage() {
 
   return (
     <>
-      <PageHeader
+      <PageHeader description=""
         title="Feature Flags"
-        description="Apps, platforms, feature flags, audience groups, and versioned kill switches"
         actions={<Button icon="plus" variant="primary" onClick={() => setDialog({ kind: 'register-app' })}>Register App</Button>}
       />
       <Card>
-        {isLoading || !data ? (
+        {isError ? <p role="alert" className="p-5">Could not load apps. <Button onClick={() => refetch()}>Retry</Button></p> : isLoading || !data ? (
           <p className="px-5 py-6 text-sm text-gray-400">Loading apps...</p>
         ) : (
           <>
-            <DataTable headers={['App', 'Identifier', 'Domain', 'Organisation', 'Platforms', 'Flags', 'Kill Switches', 'Actions']}>
+            <DataTable headers={['App', 'Identifier', 'Service', 'Organisation', 'Flags', 'Kill switches']}>
               {pageItems.map((app) => (
                 <tr
                   key={app.id}
                   className="cursor-pointer transition-colors hover:bg-gray-50"
-                  tabIndex={0}
-                  onClick={() => navigate(`/feature-flags/${app.id}`)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') {
-                      navigate(`/feature-flags/${app.id}`);
-                    }
-                  }}
                 >
                   <Td>
-                    <p className="font-semibold text-indigo-600">{app.name}</p>
+                    <Link to={`/feature-flags/${app.id}`} className="font-semibold text-indigo-600 hover:underline">{app.name}</Link>
                     <p className="mt-0.5 text-xs text-gray-400">{platformKindLabel(app.platform)}</p>
                   </Td>
                   <Td><code className="text-xs">{app.identifier}</code></Td>
-                  <Td><code>{app.domain}</code></Td>
+                  <Td><Link to={`/domains/${encodeURIComponent(app.domain)}`} className="text-indigo-600 hover:underline">{app.domain}</Link></Td>
                   <Td className="text-xs text-gray-500">{app.org}</Td>
-                  <Td><Badge variant="blue">{app.platforms.length}</Badge></Td>
                   <Td><span className="font-semibold">{app.flags}</span></Td>
                   <Td><Badge variant={app.killSwitches.length ? 'amber' : 'slate'}>{app.killSwitches.length}</Badge></Td>
-                  <Td className="whitespace-nowrap" onClick={(event) => event.stopPropagation()}>
-                    <ActionButton tone="amber" onClick={() => setDialog({ kind: 'app-settings', app })}>Settings</ActionButton>
-                    <ActionDivider />
-                    <ActionButton tone="red" onClick={() => confirm(`Delete ${app.name}?`, 'A production write endpoint is required before this can change stored app registrations.')}>Delete</ActionButton>
-                  </Td>
                 </tr>
               ))}
             </DataTable>
@@ -75,11 +53,6 @@ export function FeatureFlagsPage() {
         )}
       </Card>
       <RegisterAppDialog open={dialog?.kind === 'register-app'} onClose={closeDialog} />
-      <AppSettingsDialog
-        open={dialog?.kind === 'app-settings'}
-        app={dialog?.kind === 'app-settings' ? dialog.app : null}
-        onClose={closeDialog}
-      />
     </>
   );
 }

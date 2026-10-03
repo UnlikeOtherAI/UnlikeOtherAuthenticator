@@ -19,7 +19,7 @@ function StatusPill({ value }: { value: string | null | undefined }) {
 
 export function DomainEmailSection({ domain }: DomainEmailSectionProps) {
   const queryClient = useQueryClient();
-  const { data, isLoading } = useDomainEmailQuery(domain);
+  const { data, isLoading, isError, refetch } = useDomainEmailQuery(domain);
   const [registration, setRegistration] = useState<DomainEmailRegistration | null>(null);
   const [form, setForm] = useState({
     mailingDomain: '',
@@ -80,11 +80,11 @@ export function DomainEmailSection({ domain }: DomainEmailSectionProps) {
           <p className="mt-0.5 text-xs text-gray-400">Configure SES-backed sending for this domain.</p>
         </div>
         <div className="flex gap-2">
-          <StatusPill value={config?.sesVerification} />
-          <StatusPill value={config?.sesDkim} />
+          <span className="text-xs text-gray-500">Verification <StatusPill value={config?.sesVerification} /></span>
+          <span className="text-xs text-gray-500">DKIM <StatusPill value={config?.sesDkim} /></span>
         </div>
       </CardHeader>
-      {isLoading ? (
+      {isError ? <p role="alert" className="p-5">Could not load email settings. <Button onClick={() => refetch()}>Retry</Button></p> : isLoading ? (
         <p className="px-5 py-6 text-sm text-gray-400">Loading email settings...</p>
       ) : (
         <div className="space-y-4 p-5">
@@ -102,6 +102,7 @@ export function DomainEmailSection({ domain }: DomainEmailSectionProps) {
               <TextField value={form.replyToDefault} onChange={(event) => setForm((current) => ({ ...current, replyToDefault: event.target.value }))} placeholder="support@example.com" />
             </FieldShell>
           </div>
+          {save.isError || register.isError || refresh.isError || toggle.isError ? <p role="alert" className="text-sm text-red-600">The email change failed. Your input is retained; try again.</p> : null}
           <div className="flex flex-wrap gap-2">
             <Button variant="primary" disabled={save.isPending} onClick={() => save.mutate()}>Save</Button>
             <Button disabled={!data?.adminCredentialsConfigured || !config?.mailingDomain || register.isPending} onClick={() => register.mutate()}>Register sender</Button>

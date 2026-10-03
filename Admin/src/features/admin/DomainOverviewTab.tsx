@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { Badge } from '../../components/ui/Badge';
@@ -9,19 +10,15 @@ import { Modal } from '../../components/ui/Modal';
 import { StatusBadge } from '../../components/ui/Status';
 import { adminService, type DomainRotateResponse } from '../../services/admin-service';
 import { useAdminUi } from '../shell/admin-ui';
-import type { Domain, TwoFaPolicy } from './types';
-import {
-  DOMAIN_TWOFA_POLICY_OPTIONS,
-  isDomainTwoFaPolicy,
-  TwoFactorPolicySelect,
-} from './TwoFactorPolicySelect';
+import type { Domain } from './types';
 
 type DomainOverviewTabProps = {
   domain: Domain;
+  section?: 'overview' | 'credentials';
   counts: { organisations: number; teams: number; users: number };
 };
 
-export function DomainOverviewTab({ counts, domain }: DomainOverviewTabProps) {
+export function DomainOverviewTab({ counts, domain, section = 'overview' }: DomainOverviewTabProps) {
   const queryClient = useQueryClient();
   const { confirm } = useAdminUi();
   const [label, setLabel] = useState(domain.label);
@@ -33,7 +30,7 @@ export function DomainOverviewTab({ counts, domain }: DomainOverviewTabProps) {
   }, [domain.label]);
 
   const updateDomain = useMutation({
-    mutationFn: (input: { label?: string; status?: 'active' | 'disabled'; twoFaPolicy?: TwoFaPolicy }) =>
+    mutationFn: (input: { label?: string; status?: 'active' | 'disabled' }) =>
       adminService.updateDomain(domain.name, input),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin'] }),
   });
@@ -51,10 +48,11 @@ export function DomainOverviewTab({ counts, domain }: DomainOverviewTabProps) {
 
   return (
     <div className="space-y-5">
+      {section === 'overview' ? <>
       <div className="grid gap-3 md:grid-cols-3">
-        <MetricCard label="Organisations" value={counts.organisations} />
-        <MetricCard label="Teams" value={counts.teams} />
-        <MetricCard label="Users" value={counts.users} />
+        <MetricCard label="Organisations" value={counts.organisations} href="?tab=organisations" />
+        <MetricCard label="Teams" value={counts.teams} href="?tab=teams" />
+        <MetricCard label="Users" value={counts.users} href="?tab=users" />
       </div>
 
       <Card className="p-5">
@@ -86,25 +84,14 @@ export function DomainOverviewTab({ counts, domain }: DomainOverviewTabProps) {
         <p className="mt-3 text-xs text-gray-400">Added {domain.created}</p>
       </Card>
 
-      <TwoFactorPolicySelect
-        title="Two-factor authentication"
-        description="Domain policy is combined with organisation policy at login; the strongest policy wins while config 2fa_enabled is the master gate."
-        value={domain.twoFaPolicy}
-        options={DOMAIN_TWOFA_POLICY_OPTIONS}
-        saving={updateDomain.isPending}
-        onSave={(next) =>
-          isDomainTwoFaPolicy(next)
-            ? updateDomain.mutateAsync({ twoFaPolicy: next })
-            : Promise.resolve()
-        }
-      />
-
+      {updateDomain.isError ? <p role="alert" className="text-sm text-red-600">Could not save the service. Try again.</p> : null}
+      </> : null}
+      {section === 'credentials' ? <>
       <Card className="p-5">
         <div className="mb-4">
-          <h3 className="text-sm font-semibold text-gray-900">Secret &amp; status</h3>
+          <h3 className="text-sm font-semibold text-gray-900">Backend credentials</h3>
           <p className="mt-0.5 text-xs text-gray-500">
-            Domain bearer auth uses hash(domain + shared secret). Rotation issues a fresh secret; the current one keeps
-            working until the partner switches over.
+            Rotation issues a new credential. The current credential stays valid until the partner claims or uses its replacement.
           </p>
         </div>
         <dl className="grid gap-4 sm:grid-cols-3">
@@ -143,7 +130,7 @@ export function DomainOverviewTab({ counts, domain }: DomainOverviewTabProps) {
               )
             }
           >
-            Rotate
+            Rotate and email claim link
           </Button>
           <Button
             onClick={() =>
@@ -156,7 +143,7 @@ export function DomainOverviewTab({ counts, domain }: DomainOverviewTabProps) {
               )
             }
           >
-            Rotate &amp; reveal
+            Rotate and reveal once
           </Button>
           <Button
             variant={isActive ? 'danger' : 'secondary'}
@@ -177,6 +164,7 @@ export function DomainOverviewTab({ counts, domain }: DomainOverviewTabProps) {
         </div>
       </Card>
 
+      </> : null}
       <RotateNoticeModal result={rotateResult} onClose={() => setRotateResult(null)} />
       <Modal
         isOpen={Boolean(rotateError)}
@@ -194,11 +182,11 @@ export function DomainOverviewTab({ counts, domain }: DomainOverviewTabProps) {
   );
 }
 
-function MetricCard({ label, value }: { label: string; value: number }) {
+function MetricCard({ label, value, href }: { label: string; value: number; href: string }) {
   return (
     <Card className="p-4">
       <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">{label}</p>
-      <p className="mt-1 truncate text-lg font-semibold text-gray-900">{value}</p>
+      <Link to={href} className="mt-1 block text-lg font-semibold text-indigo-600 hover:underline" aria-label={`View ${value} ${label.toLowerCase()}`}>{value}</Link>
     </Card>
   );
 }

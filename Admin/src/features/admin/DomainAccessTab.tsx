@@ -8,6 +8,8 @@ import { AllowedEmailDomainsField } from '../../components/sections/AllowedEmail
 import { AllowedEmailsField } from '../../components/sections/AllowedEmailsField';
 import { AllowedRedirectUrlsField } from '../../components/sections/AllowedRedirectUrlsField';
 import { adminService } from '../../services/admin-service';
+import { DOMAIN_TWOFA_POLICY_OPTIONS, isDomainTwoFaPolicy, TwoFactorPolicySelect } from './TwoFactorPolicySelect';
+import type { TwoFaPolicy } from './types';
 import type { Domain } from './types';
 
 type AccessForm = {
@@ -35,6 +37,11 @@ export function DomainAccessTab({ domain }: { domain: Domain }) {
     onError: () => setError(true),
   });
 
+  const policy = useMutation({
+    mutationFn: (twoFaPolicy: TwoFaPolicy) => adminService.updateDomain(domain.name, { twoFaPolicy }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin'] }),
+  });
+
   const dirty =
     !sameList(form.allowedEmailDomains, domain.allowedEmailDomains) ||
     !sameList(form.allowedEmails, domain.allowedEmails) ||
@@ -47,6 +54,7 @@ export function DomainAccessTab({ domain }: { domain: Domain }) {
 
   return (
     <div className="space-y-5">
+      <TwoFactorPolicySelect title="Two-factor authentication" description="The strongest service and organisation policy applies at sign-in." value={domain.twoFaPolicy} options={DOMAIN_TWOFA_POLICY_OPTIONS} saving={policy.isPending} onSave={(next) => isDomainTwoFaPolicy(next) ? policy.mutateAsync(next) : Promise.resolve()} />
       <div className="flex items-center justify-between gap-3">
         <p className="text-xs text-gray-500">Changes to login access and redirect URLs apply on the next sign-in.</p>
         <Button icon="check" variant="primary" size="sm" disabled={!dirty || save.isPending} onClick={submit}>
