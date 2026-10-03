@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@prisma/client';
 
 import { lockRefreshSessionUser } from './refresh-session-lock.service.js';
+import { isActiveLifecycle } from './entity-lifecycle.service.js';
 
 export type VerificationTokenEpochProof = {
   tokenVersion: number | null;
@@ -37,9 +38,9 @@ const resolveVerificationTokenEpoch = async (
 
   const user = await prisma.user.findUnique({
     where: { id: proof.userId },
-    select: { id: true, tokenVersion: true, userKey: true },
+    select: { id: true, tokenVersion: true, userKey: true, lifecycleStatus: true },
   });
-  if (!user || user.userKey !== proof.userKey || user.tokenVersion !== proof.tokenVersion) {
+  if (!user || !isActiveLifecycle(user.lifecycleStatus) || user.userKey !== proof.userKey || user.tokenVersion !== proof.tokenVersion) {
     return null;
   }
 

@@ -1,3 +1,4 @@
+import { EntityLifecyclePanel } from '../features/admin/EntityLifecyclePanel';
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from 'react-router';
@@ -67,9 +68,9 @@ export function UserDetailPage() {
   return (
     <>
       <PageHeader
-        title={user.name ?? user.email}
+        title={user.name ?? user.email ?? 'Deleted user'}
         description={`${user.email} · Registered ${user.created}`}
-        leading={<UserAvatar userId={user.id} label={user.name ?? user.email} size="md" />}
+        leading={<UserAvatar userId={user.id} label={user.name ?? user.email ?? 'Deleted user'} size="md" />}
         badges={
           <>
             <StatusBadge status={user.status} />
@@ -97,9 +98,6 @@ export function UserDetailPage() {
             >
               {resetTwoFa.isPending ? 'Resetting...' : 'Reset 2FA'}
             </Button>
-            <Button variant={user.status === 'banned' ? 'secondary' : 'danger'} onClick={() => confirm(`${user.status === 'banned' ? 'Unban' : 'Ban'} ${user.email}?`, 'A production write endpoint is required before this can change stored user state.')}>
-              {user.status === 'banned' ? 'Unban' : 'Ban User'}
-            </Button>
           </>
         }
       />
@@ -110,8 +108,9 @@ export function UserDetailPage() {
         <Metric label="Last Login" value={user.lastLogin} />
       </div>
       <div className="mb-5">
-        <UserAvatarSection userId={user.id} userName={user.name ?? user.email} />
+        <UserAvatarSection userId={user.id} userName={user.name ?? user.email ?? 'Deleted user'} />
       </div>
+      <EntityLifecyclePanel scope="USER" id={user.id} />
       <Card>
         <CardHeader>
           <span className="text-sm font-semibold text-gray-900">Teams</span>

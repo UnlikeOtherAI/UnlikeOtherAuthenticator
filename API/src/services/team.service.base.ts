@@ -361,7 +361,7 @@ export async function resolveAndAuthorizeTeamOrg(
   domain: string;
   name: string;
   slug: string;
-  ownerId: string;
+  ownerId: string | null;
   createdAt: Date;
   updatedAt: Date;
 }> {

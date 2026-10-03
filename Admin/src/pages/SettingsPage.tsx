@@ -1,3 +1,4 @@
+import { LifecycleTemplatesSettings } from '../features/admin/LifecycleTemplatesSettings';
 import { useState } from 'react';
 
 import { ActionButton } from '../components/ui/ActionButton';
@@ -11,7 +12,7 @@ import { useDeleteBanMutation, useSettingsQuery } from '../features/admin/admin-
 import { ConfidentialDelegationsSettings } from '../features/admin/ConfidentialDelegationsSettings';
 import { useAdminUi } from '../features/shell/admin-ui';
 
-type SettingsTab = 'bans' | 'delegations' | 'system';
+type SettingsTab = 'bans' | 'delegations' | 'lifecycle' | 'system';
 
 type BanDialogState = { banKind: BanKind };
 
@@ -27,11 +28,13 @@ export function SettingsPage() {
         options={[
           { label: 'Bans', value: 'bans' },
           { label: 'Delegation mappings', value: 'delegations' },
+          { label: 'Deletion reasons', value: 'lifecycle' },
           { label: 'System', value: 'system' },
         ]}
       />
       {tab === 'bans' ? <BansSettings /> : null}
       {tab === 'delegations' ? <ConfidentialDelegationsSettings /> : null}
+      {tab === 'lifecycle' ? <LifecycleTemplatesSettings /> : null}
       {tab === 'system' ? <SystemSettings /> : null}
     </>
   );

@@ -1,3 +1,4 @@
+import { requireIdentityEmail } from './entity-lifecycle.service.js';
 import type { BanType, PrismaClient } from '@prisma/client';
 
 import { getEnv } from '../config/env.js';
@@ -106,7 +107,7 @@ export async function assertNotBannedAtLogin(
   const loginDomain = normalizeDomain(params.domain);
 
   const user = await prisma.user.findUnique({
-    where: { id: params.userId },
+    where: { lifecycleStatus: 'ACTIVE', id: params.userId },
     select: {
       email: true,
       domainRoles: { where: { domain: loginDomain }, select: { role: true } },
@@ -138,7 +139,7 @@ export async function assertNotBannedAtLogin(
   if (bans.length === 0) return;
 
   const principal: Principal = {
-    email: user.email.trim().toLowerCase(),
+    email: requireIdentityEmail(user.email).trim().toLowerCase(),
     userId: params.userId,
     ip: params.ip ?? null,
   };

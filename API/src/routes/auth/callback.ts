@@ -237,7 +237,7 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
         let credentialEpoch = typeof returnedEpoch === 'number' ? returnedEpoch : 0;
         if (returnedEpoch === undefined && getEnv().DATABASE_URL) {
           const currentUser = await prisma.user.findUnique({
-            where: { id: userId },
+            where: { lifecycleStatus: 'ACTIVE', id: userId },
             select: { tokenVersion: true },
           });
           if (!currentUser) {

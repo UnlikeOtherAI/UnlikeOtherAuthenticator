@@ -21,7 +21,7 @@ export async function resolveBillingFundingViewer(
   const prisma = deps?.prisma ?? getAdminPrisma();
   const [user, team, organisationMembership, teamMembership] = await Promise.all([
     prisma.user.findUnique({
-      where: { id: params.userId },
+      where: { lifecycleStatus: 'ACTIVE', id: params.userId },
       select: { id: true, name: true },
     }),
     prisma.team.findFirst({

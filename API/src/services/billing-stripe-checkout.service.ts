@@ -1,3 +1,4 @@
+import { requireIdentityEmail } from './entity-lifecycle.service.js';
 import {
   BillingCollectionMode,
   BillingTariffMode,
@@ -134,7 +135,7 @@ export async function createStripeCheckoutSession(
   const details = await prisma.$transaction(async (tx) => {
     const [user, org, team, orgMember, teamMember, tariff, activeSubscription] = await Promise.all([
       tx.user.findUnique({
-        where: { id: payload.subject.user_id },
+        where: { lifecycleStatus: 'ACTIVE', id: payload.subject.user_id },
         select: { id: true, email: true, name: true },
       }),
       tx.organisation.findUnique({
@@ -261,7 +262,7 @@ export async function createStripeCheckoutSession(
     {
       customer,
       account,
-      email: details.user.email,
+      email: requireIdentityEmail(details.user.email),
       name: details.team?.name ?? details.org.name,
       orgId: payload.subject.organisation_id,
       teamId: selectedScope.teamId,

@@ -1,3 +1,4 @@
+import { requireIdentityEmail } from './entity-lifecycle.service.js';
 import type { PrismaClient } from '@prisma/client';
 import { SignJWT } from 'jose';
 
@@ -199,7 +200,7 @@ export async function issueTokenPairForUser(
   });
 
   const user = await prisma.user.findUnique({
-    where: { id: params.userId },
+    where: { lifecycleStatus: 'ACTIVE', id: params.userId },
     select: { email: true, tokenVersion: true },
   });
   if (!user) throw new AppError('INTERNAL', 500, 'MISSING_USER');
@@ -262,7 +263,7 @@ export async function issueTokenPairForUser(
 
   const accessToken = await signAccessToken({
     userId: params.userId,
-    email: user.email,
+    email: requireIdentityEmail(user.email),
     domain: params.config.domain,
     role,
     clientId: accessTokenContext.clientId,

@@ -1,3 +1,4 @@
+import { requireIdentityEmail } from './entity-lifecycle.service.js';
 import type { PrismaClient } from '@prisma/client';
 import { decodeJwt, decodeProtectedHeader, jwtVerify } from 'jose';
 import { z } from 'zod';
@@ -223,7 +224,7 @@ async function exchangeConfidentialSubjectTokenInsidePolicyLock(
 
   const [user, domainRole, org] = await Promise.all([
     prisma.user.findUnique({
-      where: { id: assertion.sub },
+      where: { lifecycleStatus: 'ACTIVE', id: assertion.sub },
       select: { email: true },
     }),
     prisma.domainRole.findUnique({
@@ -276,7 +277,7 @@ async function exchangeConfidentialSubjectTokenInsidePolicyLock(
   const accessToken = await (deps.signAccessToken ?? signConfidentialAccessToken)({
     subject: assertion.sub,
     credentialEpoch,
-    email: user.email,
+    email: requireIdentityEmail(user.email),
     sourceDomain,
     product: delegation.product,
     resource: delegation.resource,

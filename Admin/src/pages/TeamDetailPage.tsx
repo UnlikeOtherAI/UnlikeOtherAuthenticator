@@ -1,3 +1,4 @@
+import { EntityLifecyclePanel } from '../features/admin/EntityLifecyclePanel';
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router';
@@ -69,7 +70,6 @@ export function TeamDetailPage() {
         actions={
           <>
             <Button onClick={() => setDialog({ kind: 'edit-team' })}>Edit</Button>
-            {!team.isDefault ? <Button variant="danger" onClick={() => confirm(`Delete ${team.name}?`, 'Members stay in the organisation.')}>Delete</Button> : null}
           </>
         }
       />
@@ -85,6 +85,7 @@ export function TeamDetailPage() {
           onSave={(next) => updateRestriction.mutateAsync(next)}
         />
       </div>
+      <EntityLifecyclePanel scope="TEAM" id={team.id} />
       <Card>
         <CardHeader>
           <span className="text-sm font-semibold text-gray-900">Members ({members.length})</span>
@@ -105,9 +106,9 @@ export function TeamDetailPage() {
             >
               <Td>
                 <div className="flex items-center gap-2">
-                  <UserAvatar userId={member.id} label={member.name ?? member.email} />
+                  <UserAvatar userId={member.id} label={member.name ?? member.email ?? 'Deleted user'} />
                   <div>
-                    <span className="font-medium text-gray-700">{member.name ?? member.email}</span>
+                    <span className="font-medium text-gray-700">{member.name ?? member.email ?? 'Deleted user'}</span>
                     <p className="text-xs text-gray-400">{member.email}</p>
                   </div>
                 </div>
@@ -118,7 +119,7 @@ export function TeamDetailPage() {
               <Td className="whitespace-nowrap" onClick={(event) => event.stopPropagation()}>
                 <ActionButton tone="amber" onClick={() => setDialog({ kind: 'change-team-role', member })}>Change Role</ActionButton>
                 <ActionDivider />
-                <ActionButton tone="red" onClick={() => confirm('Remove from team?', `${member.name ?? member.email} will be removed from ${team.name}.`)}>Remove</ActionButton>
+                <ActionButton tone="red" onClick={() => confirm('Remove from team?', `${member.name ?? member.email ?? 'Deleted user'} will be removed from ${team.name}.`)}>Remove</ActionButton>
               </Td>
             </tr>
           ))}

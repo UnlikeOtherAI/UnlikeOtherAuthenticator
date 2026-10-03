@@ -94,7 +94,7 @@ function toRosterMember(
     status: MembershipStatus;
     createdAt: Date;
     updatedAt: Date;
-    user: { id: string; name: string | null; email: string };
+    user: { id: string; name: string | null; email: string | null };
   },
   domain: string,
   includeEmail: boolean,
@@ -109,7 +109,7 @@ function toRosterMember(
     identity: {
       displayName: row.user.name,
       avatarImageUrl,
-      ...(includeEmail ? { email: row.user.email } : {}),
+      ...(includeEmail && row.user.email ? { email: row.user.email } : {}),
     },
     role: row.role,
     status: row.status,

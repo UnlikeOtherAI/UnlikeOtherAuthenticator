@@ -46,7 +46,7 @@ export async function handlePublicGoogleCallback(request: FastifyRequest, reply:
     // Native app policy is a hard ceiling, independent of the shared tenant allowlist.
     if (!current.config.allow_registration) {
       const { userKey } = buildUserIdentity({ email: profile.email, domain: config.domain, userScope: config.user_scope });
-      if (!await tx.user.findUnique({ where: { userKey }, select: { id: true } })) throw new AppError('UNAUTHORIZED', 401);
+      if (!await tx.user.findUnique({ where: { lifecycleStatus: 'ACTIVE', userKey }, select: { id: true } })) throw new AppError('UNAUTHORIZED', 401);
     }
     const result = await loginWithSocialProfile({ profile, config: current.config, ip: request.ip }, {
       prisma: tx, skipAutoPlacement: true,

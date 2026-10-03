@@ -1,3 +1,4 @@
+import { EntityLifecyclePanel } from '../features/admin/EntityLifecyclePanel';
 import type { ReactNode } from 'react';
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -20,7 +21,6 @@ import { TeamDialog } from '../components/dialogs/TeamDialog';
 import { TransferOwnershipDialog } from '../components/dialogs/TransferOwnershipDialog';
 import { LoginRestrictionSection } from '../components/sections/LoginRestrictionSection';
 import { adminService } from '../services/admin-service';
-import { ApiRequestError } from '../services/api-client';
 import { useOrganisationQuery } from '../features/admin/admin-queries';
 import type { OrganisationMember, OrganisationTwoFaPolicy, PreapprovedMember } from '../features/admin/types';
 import { TeamTable } from '../features/admin/TeamTable';
@@ -48,7 +48,6 @@ export function OrganisationDetailPage() {
   const queryClient = useQueryClient();
   const { confirm, openUser } = useAdminUi();
   const [dialog, setDialog] = useState<DialogState | null>(null);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
   const closeDialog = () => setDialog(null);
   const { data: org, isLoading } = useOrganisationQuery(orgId);
   const updateRestriction = useMutation({
@@ -60,20 +59,6 @@ export function OrganisationDetailPage() {
     mutationFn: (twoFaPolicy: OrganisationTwoFaPolicy) =>
       adminService.updateOrganisation(orgId ?? '', { twoFaPolicy }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin'] }),
-  });
-  const deleteOrganisation = useMutation({
-    mutationFn: () => adminService.deleteOrganisation(orgId ?? ''),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['admin'] });
-      navigate('/organisations');
-    },
-    onError: (error) => {
-      setDeleteError(
-        error instanceof ApiRequestError && error.code === 'ORG_HAS_PROTECTED_RECORDS'
-          ? 'This organisation has protected billing/commercial records and cannot be deleted'
-          : 'The organisation could not be deleted. Try again.',
-      );
-    },
   });
   const [tab, setTab] = useState<OrgTab>('teams');
   const { pageItems: teamPageItems, pagination: teamPagination } = usePagination(org?.teams ?? []);
@@ -100,37 +85,11 @@ export function OrganisationDetailPage() {
           <>
             <Button onClick={() => setDialog({ kind: 'edit-org' })}>Edit</Button>
             <Button onClick={() => setDialog({ kind: 'transfer' })}>Transfer Ownership</Button>
-            <Button
-              disabled={deleteOrganisation.isPending}
-              variant="danger"
-              onClick={() => {
-                setDeleteError(null);
-                confirm(
-                  `Delete ${org.name}?`,
-                  'This permanently deletes the organisation and its teams and memberships. User accounts are retained.',
-                  async () => {
-                    try {
-                      await deleteOrganisation.mutateAsync();
-                    } catch {
-                      // The mutation renders a public refusal or generic failure below.
-                    }
-                  },
-                  org.name,
-                );
-              }}
-            >
-              {deleteOrganisation.isPending ? 'Deleting...' : 'Delete'}
-            </Button>
           </>
         }
       />
-      {deleteError ? (
-        <p className="mb-5 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
-          {deleteError}
-        </p>
-      ) : null}
       <div className="mb-5 grid gap-3 md:grid-cols-[2fr_1fr_1fr]">
-        <MetricCard label="Owner" value={org.owner.name ?? org.owner.email} action={<button className="text-xs font-medium text-indigo-600 hover:text-indigo-900" type="button" onClick={() => openUser(org.owner.id)}>{org.owner.email}</button>} />
+        <MetricCard label="Owner" value={org.owner?.name ?? org.owner?.email ?? 'Deleted owner'} action={org.owner ? <button className="text-xs font-medium text-indigo-600 hover:text-indigo-900" type="button" onClick={() => openUser(org.owner!.id)}>{org.owner?.email}</button> : null} />
         <MetricCard label="Members" value={String(org.members.length)} />
         <MetricCard label="Teams" value={String(org.teams.length)} />
       </div>
@@ -153,9 +112,10 @@ export function OrganisationDetailPage() {
           onSave={(next) => updateTwoFaPolicy.mutateAsync(next)}
         />
       </div>
+      <EntityLifecyclePanel scope="ORGANISATION" id={org.id} />
       <SegmentedTabs<OrgTab> value={tab} onChange={setTab} options={[{ label: 'Teams', value: 'teams' }, { label: 'Members', value: 'members' }, { label: 'Pre-approved', value: 'preapproved' }]} />
       {tab === 'teams' ? (
-        <Card>
+      <Card>
           <CardHeader>
             <span className="text-sm font-semibold text-gray-900">Teams</span>
             <Button icon="plus" size="sm" variant="primary" onClick={() => setDialog({ kind: 'add-team' })}>Add Team</Button>
@@ -185,9 +145,9 @@ export function OrganisationDetailPage() {
               >
                 <Td>
                   <div className="flex items-center gap-2">
-                    <UserAvatar userId={member.id} label={member.name ?? member.email} />
+                    <UserAvatar userId={member.id} label={member.name ?? member.email ?? 'Deleted user'} />
                     <div>
-                      <span className="font-medium text-gray-700">{member.name ?? member.email}</span>
+                      <span className="font-medium text-gray-700">{member.name ?? member.email ?? 'Deleted user'}</span>
                       <p className="text-xs text-gray-400">{member.email}</p>
                     </div>
                   </div>
@@ -205,7 +165,7 @@ export function OrganisationDetailPage() {
                 <Td className="whitespace-nowrap" onClick={(event) => event.stopPropagation()}>
                   <ActionButton tone="amber" onClick={() => setDialog({ kind: 'change-org-role', member })}>Change Role</ActionButton>
                   <ActionDivider />
-                  <ActionButton tone="red" onClick={() => confirm(`Remove ${member.name ?? member.email}?`, 'Removes them from all teams in this org.')}>Remove</ActionButton>
+                  <ActionButton tone="red" onClick={() => confirm(`Remove ${member.name ?? member.email ?? 'Deleted user'}?`, 'Removes them from all teams in this org.')}>Remove</ActionButton>
                 </Td>
               </tr>
             ))}

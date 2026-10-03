@@ -1,3 +1,4 @@
+import { requireIdentityEmail } from './entity-lifecycle.service.js';
 import type { PrismaClient } from '@prisma/client';
 
 import { getEnv } from '../config/env.js';
@@ -45,7 +46,7 @@ export async function assertEmailDomainAllowedForLogin(
   const loginDomain = normalizeDomain(params.domain);
 
   const user = await prisma.user.findUnique({
-    where: { id: params.userId },
+    where: { lifecycleStatus: 'ACTIVE', id: params.userId },
     select: {
       email: true,
       domainRoles: {
@@ -93,8 +94,8 @@ export async function assertEmailDomainAllowedForLogin(
 
   if (restrictionLists.length === 0) return;
 
-  const email = user.email.trim().toLowerCase();
-  const emailDomain = extractEmailDomain(user.email);
+  const email = requireIdentityEmail(user.email).trim().toLowerCase();
+  const emailDomain = extractEmailDomain(requireIdentityEmail(user.email));
   const allowed = restrictionLists.every(
     (scope) =>
       (emailDomain !== null && scope.domains.includes(emailDomain)) || scope.emails.includes(email),

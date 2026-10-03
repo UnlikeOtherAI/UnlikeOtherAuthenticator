@@ -196,7 +196,7 @@ export async function resolveEffectiveTariffContext(
             select: { id: true },
           }),
           tx.user.findUnique({
-            where: { id: request.userId },
+            where: { lifecycleStatus: 'ACTIVE', id: request.userId },
             select: { id: true, tokenVersion: true },
           }),
           tx.orgMember.findUnique({

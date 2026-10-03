@@ -1,3 +1,4 @@
+import { requireIdentityEmail } from './entity-lifecycle.service.js';
 import type { Prisma } from '@prisma/client';
 import type { ClientConfig } from './config.service.js';
 
@@ -104,14 +105,14 @@ export async function acceptTeamInviteWithinTransaction(params: {
   assertTeamInviteTransition({ transition: 'accept', invite, now: params.now });
 
   const user = await params.prisma.user.findUnique({
-    where: { id: params.userId },
+    where: { lifecycleStatus: 'ACTIVE', id: params.userId },
     select: { id: true, email: true, name: true },
   });
   if (!user) {
     throw new AppError('BAD_REQUEST', 400);
   }
 
-  if (user.email.toLowerCase() !== invite.email.toLowerCase()) {
+  if (requireIdentityEmail(user.email).toLowerCase() !== invite.email.toLowerCase()) {
     throw new AppError('BAD_REQUEST', 400);
   }
 
@@ -334,10 +335,10 @@ export async function declineTeamInviteForUser(params: {
   // userId — which is the only thing that ever made this call the invitee's to make.
 
   const user = await params.prisma.user.findUnique({
-    where: { id: params.userId },
+    where: { lifecycleStatus: 'ACTIVE', id: params.userId },
     select: { email: true },
   });
-  if (!user || user.email.toLowerCase() !== invite.email.toLowerCase()) {
+  if (!user || requireIdentityEmail(user.email).toLowerCase() !== invite.email.toLowerCase()) {
     throw new AppError('BAD_REQUEST', 400);
   }
 

@@ -1,3 +1,4 @@
+import { requireIdentityEmail } from './entity-lifecycle.service.js';
 import { Prisma, type PrismaClient } from '@prisma/client';
 
 import { getEnv } from '../config/env.js';
@@ -58,7 +59,7 @@ function deriveDisplayName(user: UserIdentity): string {
   const fromName = user.name?.trim();
   if (fromName) return fromName.slice(0, 80);
 
-  const localPart = user.email.split('@')[0]?.trim() ?? '';
+  const localPart = requireIdentityEmail(user.email).split('@')[0]?.trim() ?? '';
   const normalized = localPart.replace(/[._-]+/g, ' ').trim();
   if (normalized) return normalized.slice(0, 80);
 
@@ -202,14 +203,14 @@ export async function ensureUserHasRequiredTeam(
     await lockRequiredTeamPlacementUser(userId, { prisma: tx });
 
     const user = await tx.user.findUnique({
-      where: { id: userId },
+      where: { lifecycleStatus: 'ACTIVE', id: userId },
       select: {
         id: true,
         email: true,
         name: true,
       },
     });
-    if (!user) return null;
+    if (!user || !user.email) return null;
 
     const orgMembership = await tx.orgMember.findFirst({
       where: {
@@ -228,7 +229,7 @@ export async function ensureUserHasRequiredTeam(
       return createPersonalOrgAndTeam({
         tx,
         domain,
-        user,
+        user: { ...user, email: user.email },
       });
     }
 
@@ -251,7 +252,7 @@ export async function ensureUserHasRequiredTeam(
     return createPersonalTeamForExistingOrg({
       tx,
       config: params.config,
-      user,
+      user: { ...user, email: user.email },
       orgMembership,
     });
   });

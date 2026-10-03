@@ -122,7 +122,7 @@ export async function loginWithSocialProfile(
   const prisma = deps?.prisma ?? (getPrisma() as unknown as SocialLoginPrisma);
 
   const existing = await prisma.user.findUnique({
-    where: { userKey },
+    where: { lifecycleStatus: 'ACTIVE', userKey },
     select: { id: true },
   });
 

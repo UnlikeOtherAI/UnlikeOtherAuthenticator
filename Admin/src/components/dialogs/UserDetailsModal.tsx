@@ -53,9 +53,9 @@ export function UserDetailsModal() {
       {user ? (
         <div className="space-y-5">
           <div className="flex items-start gap-3">
-            <UserAvatar userId={user.id} label={user.name ?? user.email} size="md" />
+            <UserAvatar userId={user.id} label={user.name ?? user.email ?? 'Deleted user'} size="md" />
             <div className="min-w-0 flex-1">
-              <p className="truncate text-base font-semibold text-gray-900">{user.name ?? user.email}</p>
+              <p className="truncate text-base font-semibold text-gray-900">{user.name ?? user.email ?? 'Deleted user'}</p>
               <p className="truncate text-sm text-gray-500">{user.email}</p>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 <StatusBadge status={user.status} />

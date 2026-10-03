@@ -1,3 +1,4 @@
+import { requireIdentityEmail } from './entity-lifecycle.service.js';
 import type { ClientConfig } from './config.service.js';
 
 import { getPrisma } from '../db/prisma.js';
@@ -54,7 +55,7 @@ async function listNotificationRecipients(params: {
 
   const emails = new Set<string>();
   for (const row of rows) {
-    const email = row.user.email.trim().toLowerCase();
+    const email = requireIdentityEmail(row.user.email).trim().toLowerCase();
     if (email) emails.add(email);
   }
 
@@ -81,14 +82,14 @@ export async function handlePostAuthenticationAccessRequest(params: {
   });
 
   const user = await prisma.user.findUnique({
-    where: { id: params.userId },
+    where: { lifecycleStatus: 'ACTIVE', id: params.userId },
     select: {
       id: true,
       email: true,
       name: true,
     },
   });
-  if (!user) {
+  if (!user || !user.email) {
     return { status: 'continue' };
   }
 
@@ -111,7 +112,7 @@ export async function handlePostAuthenticationAccessRequest(params: {
   // enforced for the new self-join (OPEN_TO_ORG) and HIDDEN-listing paths; enforcing them on this
   // legacy mechanism is deferred to a migration that can map config targets to teams. (Deviation from
   // design §4.6, raised per the non-breaking requirement.)
-  if (isAutoGrantDomain({ email: user.email, config: params.config })) {
+  if (isAutoGrantDomain({ email: requireIdentityEmail(user.email), config: params.config })) {
     await ensureUserAssignedToConfiguredAccessTarget({
       prisma,
       config: params.config,
@@ -124,7 +125,7 @@ export async function handlePostAuthenticationAccessRequest(params: {
   const existingPending = await prisma.accessRequest.findFirst({
     where: {
       teamId: team.id,
-      email: user.email,
+      email: requireIdentityEmail(user.email),
       status: 'PENDING',
     },
     orderBy: { createdAt: 'desc' },
@@ -178,7 +179,7 @@ export async function handlePostAuthenticationAccessRequest(params: {
         data: {
           orgId: org.id,
           teamId: team.id,
-          email: user.email,
+          email: requireIdentityEmail(user.email),
           userId: user.id,
           requestName: normalizeRequestName(user.name),
           lastRequestedAt: now,
@@ -216,7 +217,7 @@ export async function handlePostAuthenticationAccessRequest(params: {
       await sendNotification({
         to: recipient.email,
         reviewUrl,
-        requesterEmail: user.email,
+        requesterEmail: requireIdentityEmail(user.email),
         requesterName: user.name,
         organisationName: org.name,
         teamName: team.name,

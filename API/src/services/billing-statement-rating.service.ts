@@ -21,7 +21,7 @@ type RatingPlan = {
 type UserIdentity = {
   id: string;
   name: string | null;
-  email: string;
+  email: string | null;
 };
 
 type UsageLine = BillingStatementV1['usage']['lines'][number];

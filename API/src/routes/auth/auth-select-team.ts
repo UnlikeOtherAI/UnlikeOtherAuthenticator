@@ -250,7 +250,7 @@ export function registerAuthSelectTeamRoute(app: FastifyInstance): void {
         );
 
         const user = await tx.user.findUnique({
-          where: { id: lockedSession.userId },
+          where: { lifecycleStatus: 'ACTIVE', id: lockedSession.userId },
           select: { twoFaEnabled: true },
         });
         if (!user) rejectSelection();

@@ -1,3 +1,4 @@
+import { requireIdentityEmail } from '../../services/entity-lifecycle.service.js';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireMcpOAuthPublicProfile } from './public-profile-guard.js';
@@ -18,10 +19,10 @@ export function registerOAuthAccountRoutes(app: FastifyInstance): void {
     const account = await verifyPublicAccountToken(request.headers.authorization, 'profile');
     const user = await request.adminDb.$transaction(async (tx) => {
       await authorizePublicAccount(account, tx);
-      return tx.user.findUnique({ where: { id: account.userId }, select: { id: true, email: true, name: true } });
+      return tx.user.findUnique({ where: { lifecycleStatus: 'ACTIVE', id: account.userId }, select: { id: true, email: true, name: true } });
     });
     if (!user) throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
-    reply.header('Cache-Control', 'no-store').send({ sub: user.id, email: user.email, name: user.name });
+    reply.header('Cache-Control', 'no-store').send({ sub: user.id, email: requireIdentityEmail(user.email), name: user.name });
   });
   app.get('/oauth/me/avatar', { preHandler }, async (request, reply) => {
     const account = await verifyPublicAccountToken(request.headers.authorization, 'profile');

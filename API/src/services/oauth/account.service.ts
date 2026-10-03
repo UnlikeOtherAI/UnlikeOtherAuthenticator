@@ -42,7 +42,7 @@ export async function authorizePublicAccount(
   if (!await getOAuthClient(account.clientId, prisma)) throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
   await lockAndAssertAuthenticationEpoch(account, { prisma });
   if (account.expiresAt <= Date.now() / 1000) throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
-  const user = await prisma.user.findUnique({ where: { id: account.userId }, select: { twoFaEnabled: true } });
+  const user = await prisma.user.findUnique({ where: { lifecycleStatus: 'ACTIVE', id: account.userId }, select: { twoFaEnabled: true } });
   const policy = await resolveTwoFaPolicy({ config: account.config, userId: account.userId }, { prisma });
   if (!user || !isTwoFaAuthenticationSufficient({ policy, twoFaEnabled: user.twoFaEnabled, twoFaCompleted: account.twoFaCompleted })) {
     throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');

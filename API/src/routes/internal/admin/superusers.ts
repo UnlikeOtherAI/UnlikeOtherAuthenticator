@@ -41,7 +41,7 @@ export function registerInternalAdminSuperuserRoutes(app: FastifyInstance): void
     { ...adminRoute, schema: { response: { 201: objectSchema } } },
     async (request, reply) => {
       const body = GrantBodySchema.parse(request.body);
-      return reply.status(201).send(await grantAdminSuperuser(body.userId));
+      return reply.status(201).send(await grantAdminSuperuser(body.userId, { userId: request.adminAccessTokenClaims!.userId, tokenVersion: request.adminAccessTokenClaims!.tokenVersion }));
     },
   );
 
@@ -49,7 +49,7 @@ export function registerInternalAdminSuperuserRoutes(app: FastifyInstance): void
     const { userId } = UserIdParamsSchema.parse(request.params);
     const actorUserId = request.adminAccessTokenClaims?.userId;
     if (!actorUserId) throw new AppError('UNAUTHORIZED', 401);
-    await revokeAdminSuperuser({ userId, actorUserId });
+    await revokeAdminSuperuser({ userId, actorUserId, actorTokenVersion: request.adminAccessTokenClaims!.tokenVersion });
     return reply.status(204).send();
   });
 }

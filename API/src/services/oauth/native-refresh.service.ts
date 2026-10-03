@@ -1,3 +1,4 @@
+import { requireIdentityEmail } from '../entity-lifecycle.service.js';
 // Rotating refresh tokens for registered native-app clients of the public OAuth profile
 // (brief §22.14, Docs/Auth/native-accounts.md). This reuses the confidential refresh-token
 // machinery unchanged — families, rotation with inherited TTL, the 120 s response-loss replay
@@ -112,7 +113,7 @@ async function rotateNativeRefreshToken(
   // read is linearized with password reset, 2FA changes, logout and reuse revocation. Any epoch
   // increment since the originating login ends the family. Throwing rolls the rotation back.
   const user = await tx.user.findUnique({
-    where: { id: rotated.userId },
+    where: { lifecycleStatus: 'ACTIVE', id: rotated.userId },
     select: { email: true, tokenVersion: true, twoFaEnabled: true },
   });
   const credentialEpoch = rotated.credentialEpoch;
@@ -140,7 +141,7 @@ async function rotateNativeRefreshToken(
     subject: rotated.userId,
     credentialEpoch,
     twoFaCompleted: rotated.twoFaCompleted,
-    email: user.email,
+    email: requireIdentityEmail(user.email),
     domain: config.domain,
     clientId: client.clientId,
     // Native registrations never confer an administrative role (same as the code exchange).
