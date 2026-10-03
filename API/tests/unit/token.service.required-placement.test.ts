@@ -107,7 +107,7 @@ describe('required team placement during token exchange', () => {
         }),
       },
       user: {
-        findUnique: vi.fn().mockResolvedValue({
+        findUnique: vi.fn().mockResolvedValue({ lifecycleStatus: 'ACTIVE',
           id: 'user-new',
           email: 'new.user@example.com',
           name: 'New User',
@@ -224,7 +224,7 @@ describe('required team placement during token exchange', () => {
       team: { create: createTeam },
       teamMember: { count: vi.fn().mockResolvedValue(1) },
       user: {
-        findUnique: vi.fn().mockResolvedValue({
+        findUnique: vi.fn().mockResolvedValue({ lifecycleStatus: 'ACTIVE',
           email: 'tombstone@example.com',
           id: 'user-tombstone',
           name: 'Tombstone User',
@@ -265,7 +265,7 @@ describe('required team placement during token exchange', () => {
       team: { create: vi.fn() },
       teamMember: { count: vi.fn().mockResolvedValue(1) },
       user: {
-        findUnique: vi.fn().mockResolvedValue({
+        findUnique: vi.fn().mockResolvedValue({ lifecycleStatus: 'ACTIVE',
           email: 'existing@example.com',
           id: 'user-existing',
           name: 'Existing User',
@@ -433,7 +433,7 @@ describe('required team placement during token exchange', () => {
           ),
         },
         user: {
-          findUnique: vi.fn().mockResolvedValue({
+          findUnique: vi.fn().mockResolvedValue({ lifecycleStatus: 'ACTIVE',
             email: 'race@example.com',
             id: 'user-race',
             name: 'Race User',

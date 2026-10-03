@@ -64,7 +64,7 @@ describe('requestRegistrationInstructions', () => {
   it('creates a LOGIN_LINK token and sends neutral registration email for an existing user', async () => {
     const findUnique = vi
       .fn<PrismaStub['user']['findUnique']>()
-      .mockResolvedValue({ id: 'u1', tokenVersion: 7 });
+      .mockResolvedValue({ lifecycleStatus: 'ACTIVE', id: 'u1', tokenVersion: 7 });
     const createToken = vi
       .fn<PrismaStub['verificationToken']['create']>()
       .mockResolvedValue({ id: 't1' });
@@ -133,7 +133,7 @@ describe('requestRegistrationInstructions', () => {
   it('returns existing_user without creating a token when the client opts into inline sign-in', async () => {
     const findUnique = vi
       .fn<PrismaStub['user']['findUnique']>()
-      .mockResolvedValue({ id: 'u1', tokenVersion: 7 });
+      .mockResolvedValue({ lifecycleStatus: 'ACTIVE', id: 'u1', tokenVersion: 7 });
     const createToken = vi
       .fn<PrismaStub['verificationToken']['create']>()
       .mockResolvedValue({ id: 't1' });
@@ -420,7 +420,7 @@ describe('requestRegistrationInstructions', () => {
   it('still sends neutral registration email for existing users even when domain restrictions are configured', async () => {
     const findUnique = vi
       .fn<PrismaStub['user']['findUnique']>()
-      .mockResolvedValue({ id: 'u2', tokenVersion: 11 });
+      .mockResolvedValue({ lifecycleStatus: 'ACTIVE', id: 'u2', tokenVersion: 11 });
     const createToken = vi
       .fn<PrismaStub['verificationToken']['create']>()
       .mockResolvedValue({ id: 't5' });

@@ -1,3 +1,4 @@
+import { DeletionJobPage } from '../pages/DeletionJobPage';
 import { Navigate, Route, Routes } from 'react-router';
 import { NativeAppsPage } from '../pages/NativeAppsPage';
 import { NativeAppDetailPage } from '../pages/NativeAppDetailPage';
@@ -64,6 +65,7 @@ export function App() {
         <Route path="billing" element={<BillingPage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="bans" element={<BansPage />} />
+        <Route path="deletion-jobs/:jobId" element={<DeletionJobPage />} />
         <Route path="access-reasons" element={<LifecycleTemplatesPage />} />
         <Route path="delegations" element={<DelegationsPage />} />
       </Route>

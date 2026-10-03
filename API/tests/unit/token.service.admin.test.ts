@@ -105,7 +105,7 @@ describe('admin-domain token issuance', () => {
       domain: config.domain,
       userId: 'admin-user',
     });
-    prisma.user.findUnique.mockResolvedValue({ email: 'admin@example.com', tokenVersion: 0 });
+    prisma.user.findUnique.mockResolvedValue({ lifecycleStatus: 'ACTIVE', email: 'admin@example.com', tokenVersion: 0 });
 
     const { accessToken } = await exchangeAuthorizationCodeForTokens(
       { code, config, configUrl, redirectUrl, codeVerifier: TEST_CODE_VERIFIER },
@@ -187,7 +187,7 @@ describe('admin-domain token issuance', () => {
           : { role: 'USER', domain, userId: 'client-user' };
       },
     );
-    prisma.user.findUnique.mockResolvedValue({ email: 'operator@example.com', tokenVersion: 0 });
+    prisma.user.findUnique.mockResolvedValue({ lifecycleStatus: 'ACTIVE', email: 'operator@example.com', tokenVersion: 0 });
 
     const { accessToken } = await exchangeAuthorizationCodeForTokens(
       { code, config, configUrl, redirectUrl, clientId, codeVerifier: TEST_CODE_VERIFIER },

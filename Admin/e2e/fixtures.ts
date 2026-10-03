@@ -1,3 +1,4 @@
+import { createLifecycleFixtures } from './lifecycle-fixtures';
 import { createBillingFixtures } from './billing-fixtures';
 import type { Page } from '@playwright/test';
 import { mockAdminData } from '../src/features/admin/__mocks__/mock-data';
@@ -64,6 +65,7 @@ const signatures = {
 /** All browser API calls terminate here. Unexpected writes fail closed. */
 export async function installFixtures(page: Page) {
   const data = structuredClone(mockAdminData);
+  const lifecycle = createLifecycleFixtures();
   data.domains.forEach((domain) => {
     domain.id = domain.name;
   });
@@ -94,6 +96,7 @@ export async function installFixtures(page: Page) {
     const path = decodeURIComponent(url.pathname.replace('/internal/admin', ''));
     const json = (body: unknown, status = 200) =>
       route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
+    if (path.startsWith('/lifecycle/')) return lifecycle.handle(route, path);
     if (req.method() !== 'GET') {
       if (path === '/users/u101/teams' && req.method() === 'POST') {
         const input = req.postDataJSON();
@@ -227,6 +230,7 @@ export async function installFixtures(page: Page) {
   return {
     unexpected,
     errors,
+    lifecycle,
     native,
     calculations,
     payments,

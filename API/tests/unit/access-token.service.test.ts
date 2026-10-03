@@ -14,7 +14,7 @@ function depsWithTokenVersion(tokenVersion: number | null) {
   return {
     prisma: {
       user: {
-        findUnique: async () => (tokenVersion === null ? null : { tokenVersion }),
+        findUnique: async () => (tokenVersion === null ? null : { lifecycleStatus: 'ACTIVE', tokenVersion }),
       },
     },
   } as unknown as Parameters<typeof verifyAccessToken>[1];

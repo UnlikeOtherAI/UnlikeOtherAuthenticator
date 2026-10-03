@@ -65,7 +65,7 @@ describe('requestPasswordReset', () => {
   it('creates a PASSWORD_RESET token and sends email for an existing user', async () => {
     const findUnique = vi
       .fn<PrismaStub['user']['findUnique']>()
-      .mockResolvedValue({ id: 'u1', tokenVersion: 7 });
+      .mockResolvedValue({ lifecycleStatus: 'ACTIVE', id: 'u1', tokenVersion: 7 });
     const createToken = vi
       .fn<PrismaStub['verificationToken']['create']>()
       .mockResolvedValue({ id: 't1' });
@@ -202,7 +202,7 @@ describe('resetPasswordWithToken', () => {
     const prisma = {
       $queryRaw: vi.fn(),
       user: {
-        findUnique: vi.fn().mockResolvedValue({
+        findUnique: vi.fn().mockResolvedValue({ lifecycleStatus: 'ACTIVE',
           id: userId,
           tokenVersion: params?.userTokenVersion ?? 7,
           userKey,

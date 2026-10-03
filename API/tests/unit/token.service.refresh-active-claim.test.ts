@@ -49,7 +49,7 @@ describe('exchangeRefreshTokenForTokens active-claim re-validation (unit)', () =
           updateMany: vi.fn().mockResolvedValue({ count: 1 }),
         },
         user: {
-          findUnique: vi.fn().mockResolvedValue({ email: 'user@example.com', tokenVersion: 0 }),
+          findUnique: vi.fn().mockResolvedValue({ lifecycleStatus: 'ACTIVE', email: 'user@example.com', tokenVersion: 0 }),
         },
         domainRole: {
           findUnique: vi.fn().mockResolvedValue({

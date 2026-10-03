@@ -186,7 +186,7 @@ describe('POST /auth/select-team', () => {
     prismaMock.$executeRaw.mockResolvedValue(1);
     prismaMock.$queryRaw.mockResolvedValue([]);
     prismaMock.domainSignatureSettings.findUnique.mockResolvedValue(null);
-    prismaMock.user.findUnique.mockResolvedValue({
+    prismaMock.user.findUnique.mockResolvedValue({ lifecycleStatus: 'ACTIVE',
       id: 'user-1',
       email: 'jane@example.com',
       twoFaEnabled: false,
@@ -326,7 +326,7 @@ describe('POST /auth/select-team', () => {
         service: { identifier: 'deepsignal' },
       },
     ]);
-    prismaMock.user.findUnique.mockResolvedValue({ twoFaEnabled: false, tokenVersion: 0 });
+    prismaMock.user.findUnique.mockResolvedValue({ lifecycleStatus: 'ACTIVE', twoFaEnabled: false, tokenVersion: 0 });
 
     const res = await postSelectTeam({ login_token: loginToken, teamId: 'team-nessie' });
 
@@ -352,7 +352,7 @@ describe('POST /auth/select-team', () => {
     prismaMock.team.findFirst.mockResolvedValue({ id: 'team-1', orgId: 'org-1' });
     prismaMock.teamMember.findFirst.mockResolvedValue({ id: 'member-1' });
     prismaMock.orgMember.findFirst.mockResolvedValue({ id: 'org-member-1' });
-    prismaMock.user.findUnique.mockResolvedValue({ twoFaEnabled: false, tokenVersion: 0 });
+    prismaMock.user.findUnique.mockResolvedValue({ lifecycleStatus: 'ACTIVE', twoFaEnabled: false, tokenVersion: 0 });
 
     const res = await postSelectTeam({ login_token: loginToken, teamId: 'team-1' });
 
@@ -377,7 +377,7 @@ describe('POST /auth/select-team', () => {
 
   it('finalizes with no team scope when neither teamId nor inviteId is given', async () => {
     const loginToken = await mintLoginToken('user-1');
-    prismaMock.user.findUnique.mockResolvedValue({ twoFaEnabled: false, tokenVersion: 0 });
+    prismaMock.user.findUnique.mockResolvedValue({ lifecycleStatus: 'ACTIVE', twoFaEnabled: false, tokenVersion: 0 });
 
     const res = await postSelectTeam({ login_token: loginToken });
 
@@ -411,7 +411,7 @@ describe('POST /auth/select-team', () => {
 
   it('accepts a pending invite and finalizes scoped to the invite team/org', async () => {
     const loginToken = await mintLoginToken('user-1');
-    prismaMock.teamInvite.findUnique.mockResolvedValue({
+    prismaMock.teamInvite.findUnique.mockResolvedValue({ lifecycleStatus: 'ACTIVE',
       id: 'invite-1',
       orgId: 'org-9',
       teamId: 'team-9',
@@ -428,7 +428,7 @@ describe('POST /auth/select-team', () => {
     });
     prismaMock.user.findUnique.mockImplementation(async (args: { where: { id: string } }) => {
       if (args.where.id === 'user-1') {
-        return {
+        return { lifecycleStatus: 'ACTIVE',
           id: 'user-1',
           email: 'jane@example.com',
           name: null,
@@ -464,7 +464,7 @@ describe('POST /auth/select-team', () => {
 
   it('declines a pending invite and returns a refreshed chooser payload', async () => {
     const loginToken = await mintLoginToken('user-1');
-    prismaMock.teamInvite.findUnique.mockResolvedValue({
+    prismaMock.teamInvite.findUnique.mockResolvedValue({ lifecycleStatus: 'ACTIVE',
       id: 'invite-1',
       email: 'jane@example.com',
       acceptedAt: null,
@@ -474,7 +474,7 @@ describe('POST /auth/select-team', () => {
       approvalStatus: 'NOT_REQUIRED',
       org: { domain: 'client.example.com' },
     });
-    prismaMock.user.findUnique.mockResolvedValue({
+    prismaMock.user.findUnique.mockResolvedValue({ lifecycleStatus: 'ACTIVE',
       email: 'jane@example.com',
       twoFaEnabled: false,
       tokenVersion: 0,

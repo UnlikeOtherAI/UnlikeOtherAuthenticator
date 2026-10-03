@@ -71,7 +71,7 @@ describe('admin superuser service', () => {
   });
 
   it('searches users who are not already admin-domain superusers', async () => {
-    user.findMany.mockResolvedValue([{ id: 'user_2', email: 'user@example.com', name: null }]);
+    user.findMany.mockResolvedValue([{ lifecycleStatus: 'ACTIVE', id: 'user_2', email: 'user@example.com', name: null }]);
     const { searchNonSuperusers } = await import('../../src/services/admin-superusers.service.js');
 
     await expect(searchNonSuperusers('user')).resolves.toEqual([
@@ -93,7 +93,7 @@ describe('admin superuser service', () => {
   });
 
   it('grants superuser idempotently with upsert', async () => {
-    user.findUnique.mockResolvedValue({ id: 'user_3', email: 'grant@example.com', name: 'Grant' });
+    user.findUnique.mockResolvedValue({ lifecycleStatus: 'ACTIVE', id: 'user_3', email: 'grant@example.com', name: 'Grant' });
     domainRole.upsert.mockResolvedValue({
       userId: 'user_3',
       createdAt: new Date('2026-04-23T11:00:00Z'),

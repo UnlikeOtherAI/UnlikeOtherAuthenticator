@@ -47,7 +47,7 @@ describe('internal admin user summaries', () => {
 
   it('returns an absolute admin avatar URL and the resolved source per user', async () => {
     prisma.user.findMany.mockResolvedValue([
-      {
+      { lifecycleStatus: 'ACTIVE',
         id: 'user_1',
         name: 'Uploader',
         email: 'uploader@example.com',
@@ -85,7 +85,7 @@ describe('internal admin user summaries', () => {
   });
 
   it('returns the same pair on the single-user read, generated when nothing is set', async () => {
-    prisma.user.findUnique.mockResolvedValue({
+    prisma.user.findUnique.mockResolvedValue({ lifecycleStatus: 'ACTIVE',
       id: 'user_3',
       name: 'Generated',
       email: 'generated@example.com',
@@ -105,7 +105,7 @@ describe('internal admin user summaries', () => {
 
   it('emits a root-relative URL when PUBLIC_BASE_URL is unset', async () => {
     Reflect.deleteProperty(process.env, 'PUBLIC_BASE_URL');
-    prisma.user.findUnique.mockResolvedValue({
+    prisma.user.findUnique.mockResolvedValue({ lifecycleStatus: 'ACTIVE',
       id: 'user_4',
       name: null,
       email: 'relative@example.com',

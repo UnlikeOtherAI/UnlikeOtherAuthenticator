@@ -86,7 +86,7 @@ describe('login-code.service', () => {
 
     it('supersedes prior unused codes, creates a new hashed token, and emails the code', async () => {
       const prisma = makePrisma();
-      (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({ lifecycleStatus: 'ACTIVE',
         id: 'user-1',
         tokenVersion: 7,
       });
@@ -143,7 +143,7 @@ describe('login-code.service', () => {
       (prisma.verificationToken.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({
         count: 1,
       });
-      (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({ lifecycleStatus: 'ACTIVE',
         id: 'user-1',
         tokenVersion: 0,
         userKey: 'jane@example.com',
@@ -178,7 +178,7 @@ describe('login-code.service', () => {
       (prisma.verificationToken.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(
         validLoginCodeRow(),
       );
-      (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({ lifecycleStatus: 'ACTIVE',
         id: 'user-1',
         tokenVersion: 0,
         userKey: 'jane@example.com',
@@ -262,7 +262,7 @@ describe('login-code.service', () => {
       (prisma.verificationToken.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({
         count: 0,
       });
-      (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({ lifecycleStatus: 'ACTIVE',
         id: 'user-1',
         tokenVersion: 0,
         userKey: 'jane@example.com',
@@ -281,7 +281,7 @@ describe('login-code.service', () => {
       (prisma.verificationToken.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(
         validLoginCodeRow(),
       );
-      (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({ lifecycleStatus: 'ACTIVE',
         id: 'user-1',
         tokenVersion: 1,
         userKey: 'jane@example.com',
@@ -300,7 +300,7 @@ describe('login-code.service', () => {
     it('fails closed for a legacy existing-user login code without an issue epoch', async () => {
       const prisma = makePrisma();
       (prisma.verificationToken.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(
-        validLoginCodeRow({ tokenVersion: null }),
+        validLoginCodeRow({  tokenVersion: null }),
       );
 
       await expect(
@@ -319,7 +319,7 @@ describe('login-code.service', () => {
       (prisma.verificationToken.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(
         validLoginCodeRow({ expiresAt: new Date('2026-03-01T00:00:01.000Z') }),
       );
-      (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({ lifecycleStatus: 'ACTIVE',
         id: 'user-1',
         tokenVersion: 0,
         userKey: 'jane@example.com',

@@ -105,7 +105,7 @@ describe.each(endpoints)('$method invitations$suffix authorization', (endpoint) 
     mocks.assertion.mockResolvedValue({
       sub: 'actor-1', tv: 1, active: { orgId: 'org-1', teamId: 'session-team' },
     });
-    mocks.epoch.mockResolvedValue({ tokenVersion: 1 });
+    mocks.epoch.mockResolvedValue({ lifecycleStatus: 'ACTIVE', tokenVersion: 1 });
     mocks.context.mockResolvedValue({
       org_id: 'org-1', org_role: 'member', teams: ['session-team'], tenant_slug: 'org',
     });

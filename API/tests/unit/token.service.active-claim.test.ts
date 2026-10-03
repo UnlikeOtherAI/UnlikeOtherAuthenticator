@@ -93,7 +93,7 @@ describe('exchangeAuthorizationCodeForTokens active claim (unit)', () => {
       domain: config.domain,
       userId: 'user-active',
     });
-    prisma.user.findUnique.mockResolvedValue({ email: 'active@example.com', tokenVersion: 0 });
+    prisma.user.findUnique.mockResolvedValue({ lifecycleStatus: 'ACTIVE', email: 'active@example.com', tokenVersion: 0 });
 
     const { accessToken } = await exchangeAuthorizationCodeForTokens(
       { code, config, configUrl, redirectUrl, clientId, codeVerifier: TEST_CODE_VERIFIER },
@@ -198,7 +198,7 @@ describe('exchangeAuthorizationCodeForTokens active claim (unit)', () => {
       domain: config.domain,
       userId: 'user-active',
     });
-    prisma.user.findUnique.mockResolvedValue({
+    prisma.user.findUnique.mockResolvedValue({ lifecycleStatus: 'ACTIVE',
       email: 'active@example.com',
       tokenVersion: 0,
     });
@@ -269,7 +269,7 @@ describe('exchangeAuthorizationCodeForTokens active claim (unit)', () => {
       domain: config.domain,
       userId: 'user-active',
     });
-    prisma.user.findUnique.mockResolvedValue({
+    prisma.user.findUnique.mockResolvedValue({ lifecycleStatus: 'ACTIVE',
       email: 'active@example.com',
       tokenVersion: 0,
     });
@@ -360,7 +360,7 @@ describe('exchangeAuthorizationCodeForTokens active claim (unit)', () => {
       domain: config.domain,
       userId: 'user-partial',
     });
-    prisma.user.findUnique.mockResolvedValue({ email: 'partial@example.com', tokenVersion: 0 });
+    prisma.user.findUnique.mockResolvedValue({ lifecycleStatus: 'ACTIVE', email: 'partial@example.com', tokenVersion: 0 });
 
     await expect(
       exchangeAuthorizationCodeForTokens(
@@ -444,7 +444,7 @@ describe('exchangeAuthorizationCodeForTokens active claim (unit)', () => {
       domain: config.domain,
       userId: 'user-none',
     });
-    prisma.user.findUnique.mockResolvedValue({ email: 'none@example.com', tokenVersion: 0 });
+    prisma.user.findUnique.mockResolvedValue({ lifecycleStatus: 'ACTIVE', email: 'none@example.com', tokenVersion: 0 });
 
     const { accessToken } = await exchangeAuthorizationCodeForTokens(
       { code, config, configUrl, redirectUrl, clientId, codeVerifier: TEST_CODE_VERIFIER },

@@ -29,7 +29,7 @@ describe('disableTwoFactorForUser', () => {
         }),
       },
       user: {
-        findUnique: vi.fn(async () => ({ tokenVersion: 0, twoFaEnabled: true })),
+        findUnique: vi.fn(async () => ({ lifecycleStatus: 'ACTIVE', tokenVersion: 0, twoFaEnabled: true })),
         updateMany: vi.fn(async () => {
           events.push('twofa-disable');
           return { count: 1 };
