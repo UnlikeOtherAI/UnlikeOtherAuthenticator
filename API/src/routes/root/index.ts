@@ -55,6 +55,7 @@ export function registerRootRoute(app: FastifyInstance): void {
       docs: '/llm',
       api: '/api',
       native_apps: { admin: '/admin/apps', registration: '/oauth/register', public_identifier: 'app_id', client_secret_required: false },
+      admin_team_membership: 'POST /internal/admin/users/:userId/teams atomically adds an existing user to the selected organisation/team through the admin superuser boundary; see endpoints for its request and lifecycle rules.',
       config_jwt: configJwtDocumentation,
       website_service_identity: 'Separate subfolder services use config.domain=hostname/mount-path (no trailing slash). Register each complete identity independently; credentials, signing keys, roles, allowlists and organisation origin scope never inherit from its parent hostname.',
       access_token: accessTokenDocumentation,

@@ -314,6 +314,7 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       internal-admin.service.base.ts        — Internal-admin service building blocks
       internal-admin.service.domains.ts     — Domain admin operations
       internal-admin.service.organisations.ts — Organisation admin operations
+      internal-admin-team-members.service.ts — Atomic audited platform-admin team additions and prerequisite memberships
       internal-admin.service.users.ts       — User admin operations
       jwks-fetch.service.ts                 — JWKS fetch helper
       login-log.service.ts                  — Login log writes

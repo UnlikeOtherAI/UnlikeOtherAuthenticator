@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { AddUserToTeamDialog } from '../components/dialogs/AddUserToTeamDialog';
 import { useDirectoryNavigation } from '../features/admin/useDirectoryNavigation';
 import { useDirectoryParam } from '../features/admin/useDirectoryParam';
 import { SegmentedTabs } from '../components/ui/Tabs';
@@ -31,6 +33,7 @@ type TeamMembership = {
 };
 
 export function UserDetailPage() {
+  const [addingToTeam, setAddingToTeam] = useState(false);
   const { userId } = useParams();
   const { recordState, openRecord, goBack } = useDirectoryNavigation('/users');
   const queryClient = useQueryClient();
@@ -115,6 +118,7 @@ export function UserDetailPage() {
       <Card>
         <CardHeader>
           <span className="text-sm font-semibold text-gray-900">Teams</span>
+          <Button disabled={orgsQuery.isError} onClick={() => setAddingToTeam(true)}>Add to team</Button>
         </CardHeader>
         <DataTable headers={['Organisation', 'Team', 'Org Role', 'Team Role', 'Members']}>
           {pageItems.map(({ member, organisation, team }) => (
@@ -162,6 +166,7 @@ export function UserDetailPage() {
           {!logsQuery.isLoading && !logsQuery.isError && recentLogs.length === 0 ? <p className="px-5 py-4 text-sm text-gray-400">No recent logins.</p> : null}
         </div>
       </Card> : null}
+      <AddUserToTeamDialog open={addingToTeam} onClose={() => setAddingToTeam(false)} user={user} organisations={organisations} />
     </>
   );
 }

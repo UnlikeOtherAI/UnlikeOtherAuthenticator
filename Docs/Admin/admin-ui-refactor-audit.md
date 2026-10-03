@@ -206,3 +206,7 @@ replace the final CI/deployment record.
 - Database-backed integration tests, final required GitHub checks and deployment are tracked on the delivery PR. No live invoice, identity, email, signature or credential mutation was used as a test.
 
 Final integrated review also removed redundant Cancel buttons that bypassed dirty-draft protection, guarded agreement/delegation forms, separated flag/rule pagination and reset the payment form only after a successful save. Failed payment retries retain their idempotency key and inputs.
+
+## Concurrent membership capability integration
+
+PR #70 added an audited `POST /internal/admin/users/:userId/teams` contract while this refactor was in progress. That working operation is retained: User detail → Memberships → Add to team opens its existing organisation/team/Member-or-Admin form. The shared modal now guards dirty/pending dismissal; exact payloads, idempotent retries, server membership limits, ownership/deactivation refusal and cache invalidation are unchanged. Earlier inventory statements about missing membership-add support describe the starting baseline and are superseded for this specific action. Membership removal/role changes/ownership transfers and the other listed API gaps remain separate.

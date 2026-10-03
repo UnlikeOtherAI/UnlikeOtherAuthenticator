@@ -3,6 +3,7 @@ import type { Prisma, PrismaClient } from '@prisma/client';
 import { getAdminPrisma } from '../db/prisma.js';
 
 export type AdminAuditAction =
+  | 'user.team_added'
   | 'integration.accepted'
   | 'integration.declined'
   | 'integration.deleted'

@@ -55,3 +55,7 @@ The orchestrator subsequently confirmed that the protocol artifact check issue a
 CRLF-only in the Windows checkout. Normalizing local JSON line endings produced no Git content
 diff and no schema change; the full recursive build passed. The final integrated CI and browser
 results remain in the orchestrator delivery record.
+
+## Membership-add integration update
+
+The concurrent PR #70 supplied a real, audited user-to-team admin mutation. The refactor preserves it under User detail → Memberships → Add to team. The earlier missing-write inventory applies to the original baseline; this specific add operation is now supported and retained, with pending/dirty guards and failure/retry tests. Other membership/ownership write gaps remain.
