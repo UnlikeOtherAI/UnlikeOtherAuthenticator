@@ -58,3 +58,8 @@ Admin TypeScript and ESLint also passed; the focused invoice/feature pagination 
 passed all nine tests. Desktop/mobile native detail screenshots are retained under the ignored
 artifacts directory. These checks found and fixed stale successful-payment dirty state and
 missing return context; they do not claim live backend or provider verification.
+
+Screenshot follow-up: the sidebar logo is explicitly decoded before capture, with intrinsic and
+rendered dimensions checked (820x820 source, 56x56 CSS box inside a 64px header). Desktop and
+mobile navigation captures show the complete logo. The earlier white arc was a partially decoded
+PNG captured too early, not layout clipping. The two native-flow checks passed after this change.

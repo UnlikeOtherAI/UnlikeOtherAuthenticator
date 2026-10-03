@@ -90,7 +90,7 @@ test('service filters survive record navigation and browser Back; related users 
 });
 
 test('native edits keep input after failure, persist on retry, and guard keyboard dismissal', async ({
-  page,
+  page, isMobile,
 }, testInfo) => {
   const fixture = await installFixtures(page);
   await page.goto('/apps?q=Fixture');
@@ -110,7 +110,30 @@ test('native edits keep input after failure, persist on retry, and guard keyboar
   await expect(dialog).toHaveCount(0);
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Fixture Browser renamed' })).toBeVisible();
+  const logo = page.locator('aside img[alt="UOA"]');
+  const logoMetrics = await logo.evaluate(async (element) => {
+    const img = element as HTMLImageElement;
+    await img.decode();
+    const rect = img.getBoundingClientRect();
+    const parent = img.parentElement?.getBoundingClientRect();
+    return { complete: img.complete, naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight,
+      width: rect.width, height: rect.height, x: rect.x, y: rect.y,
+      parentHeight: parent?.height, parentY: parent?.y, source: img.currentSrc };
+  });
+  expect(logoMetrics.complete).toBe(true);
+  expect(logoMetrics.naturalWidth).toBeGreaterThan(0);
+  expect(logoMetrics.width).toBe(56);
+  expect(logoMetrics.height).toBe(56);
+  await testInfo.attach('decoded-logo-metrics', { body: JSON.stringify(logoMetrics, null, 2), contentType: 'application/json' });
+  console.log(testInfo.project.name, 'decoded logo', JSON.stringify(logoMetrics));
   await page.screenshot({ path: testInfo.outputPath('native-detail.png'), fullPage: true });
+  if (isMobile) {
+    await page.getByRole('button', { name: 'Toggle navigation' }).click();
+    await expect(logo).toBeInViewport();
+    await page.screenshot({ path: testInfo.outputPath('native-navigation.png'), fullPage: true });
+    await page.getByRole('button', { name: 'Close navigation' }).click({ position: { x: 350, y: 100 } });
+  }
+
   expect(fixture.nativeWrites()).toBe(2);
   await page.getByRole('button', { name: 'Edit app' }).click();
   await dialog.getByRole('button', { name: 'Close modal' }).focus();
