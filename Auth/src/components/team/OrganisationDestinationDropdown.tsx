@@ -140,7 +140,7 @@ export function OrganisationDestinationDropdown(props: {
         disabled={props.disabled}
         onClick={() => (isOpen ? setIsOpen(false) : openAt(selectedIndex))}
         onKeyDown={handleTriggerKeyDown}
-        className="flex w-full items-center justify-between rounded-[var(--uoa-radius-input)] border border-[var(--uoa-color-border)] bg-[var(--uoa-color-surface)] px-3 py-2 text-left text-sm text-[var(--uoa-color-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--uoa-color-primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--uoa-color-bg)] disabled:cursor-not-allowed disabled:opacity-60"
+        className="flex w-full items-center justify-between rounded-[var(--uoa-radius-input)] border border-[var(--uoa-color-border)] bg-[var(--uoa-color-surface)] px-3 py-2 text-left text-sm text-[var(--uoa-color-text)] focus:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--uoa-color-primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--uoa-color-bg)] disabled:cursor-not-allowed disabled:opacity-60"
       >
         <span>{selectedOption?.label ?? ''}</span>
         <svg aria-hidden="true" viewBox="0 0 20 20" className="h-4 w-4 shrink-0">
@@ -173,7 +173,7 @@ export function OrganisationDestinationDropdown(props: {
               aria-selected={option.value === props.value}
               onClick={() => choose(index)}
               onKeyDown={(event) => handleOptionKeyDown(event, index)}
-              className="flex w-full rounded-[calc(var(--uoa-radius-input)-4px)] px-3 py-2 text-left text-sm text-[var(--uoa-color-text)] hover:bg-[var(--uoa-color-bg)] focus:bg-[var(--uoa-color-bg)] focus:outline-none"
+              className="flex w-full rounded-[calc(var(--uoa-radius-input)-4px)] px-3 py-2 text-left text-sm text-[var(--uoa-color-text)] hover:bg-[var(--uoa-color-bg)] focus:bg-[var(--uoa-color-bg)] focus:outline-hidden"
             >
               {option.label}
             </button>

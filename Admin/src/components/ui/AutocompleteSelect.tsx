@@ -34,7 +34,7 @@ export function AutocompleteSelect({ allLabel = 'All organisations', emptyLabel 
     <label className="relative block w-72 max-w-full">
       <span className="mb-1.5 block text-sm font-medium text-gray-700">{label}</span>
       <input
-        className="h-9 w-full rounded-lg border border-gray-200 bg-gray-50 px-3 text-sm text-gray-900 outline-none transition-colors placeholder:text-gray-400 focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-100"
+        className="h-9 w-full rounded-lg border border-gray-200 bg-gray-50 px-3 text-sm text-gray-900 outline-hidden transition-colors placeholder:text-gray-400 focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-100"
         value={isOpen ? query : selected?.label ?? ''}
         placeholder={placeholder}
         autoComplete="off"

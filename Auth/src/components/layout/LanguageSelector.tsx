@@ -13,7 +13,7 @@ function selectClasses(): string {
   return [
     'rounded-[var(--uoa-radius-input)] border border-[var(--uoa-color-border)]',
     'bg-[var(--uoa-color-surface)] px-3 py-2 text-sm text-[var(--uoa-color-text)]',
-    'focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--uoa-color-primary)]',
+    'focus:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--uoa-color-primary)]',
     'focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--uoa-color-bg)]',
   ].join(' ');
 }

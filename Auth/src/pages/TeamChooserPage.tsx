@@ -195,7 +195,7 @@ export function TeamChooserPage(): React.JSX.Element {
             aria-hidden="true"
             // This surface is intentionally opaque: the team rows must never show through
             // the floating control when the card scrolls underneath it.
-            className="flex h-10 w-10 items-center justify-center rounded-full border border-[var(--uoa-color-border)] bg-[var(--uoa-color-surface)] text-xl leading-none shadow-sm transition-colors hover:border-[var(--uoa-color-primary)]"
+            className="flex h-10 w-10 items-center justify-center rounded-full border border-[var(--uoa-color-border)] bg-[var(--uoa-color-surface)] text-xl leading-none shadow-xs transition-colors hover:border-[var(--uoa-color-primary)]"
           >
             +
           </span>

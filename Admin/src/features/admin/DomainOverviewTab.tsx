@@ -111,7 +111,7 @@ export function DomainOverviewTab({ counts, domain }: DomainOverviewTabProps) {
           <div>
             <dt className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Client hash</dt>
             <dd className="mt-1">
-              <code className="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600">{domain.hash}</code>
+              <code className="rounded-sm bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600">{domain.hash}</code>
             </dd>
           </div>
           <div>
@@ -231,7 +231,7 @@ function RotateNoticeModal({ onClose, result }: { onClose: () => void; result: D
       <div className="space-y-3 text-sm text-gray-600">
         <p>{description}</p>
         {result?.credentials ? (
-          <dl className="grid grid-cols-1 gap-2 rounded border border-amber-200 bg-amber-50 p-3 text-xs">
+          <dl className="grid grid-cols-1 gap-2 rounded-sm border border-amber-200 bg-amber-50 p-3 text-xs">
             {(
               [
                 ['domain', result.credentials.domain],

@@ -32,7 +32,7 @@ export function Button({ children, className, disabled, icon, size = 'md', type 
       type={type}
       disabled={disabled}
       className={cn(
-        'inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg border font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:pointer-events-none disabled:opacity-60',
+        'inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg border font-medium transition-colors focus:outline-hidden focus:ring-2 focus:ring-offset-2 disabled:pointer-events-none disabled:opacity-60',
         variants[variant],
         sizes[size],
         className,

@@ -101,7 +101,7 @@ export function PaginationFooter({ onPageChange, onPageSizeChange, page, pageSiz
         <span className="text-xs font-medium text-gray-500">Rows per page</span>
         <select
           aria-label="Rows per page"
-          className="h-8 rounded-lg border border-gray-200 bg-white px-2 text-xs font-medium text-gray-700 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+          className="h-8 rounded-lg border border-gray-200 bg-white px-2 text-xs font-medium text-gray-700 outline-hidden focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
           value={pageSize}
           onChange={(event) => onPageSizeChange(Number(event.target.value))}
         >

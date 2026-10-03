@@ -352,12 +352,12 @@ function cardClasses(style: CardStyle): string {
     'rounded-[var(--uoa-radius-card)] bg-[var(--uoa-color-surface)] text-[var(--uoa-color-text)]';
   if (style === 'plain') return `${base}`;
   if (style === 'shadow') return `${base} shadow-lg shadow-black/5`;
-  return `${base} border border-[var(--uoa-color-border)] shadow-sm shadow-black/5`;
+  return `${base} border border-[var(--uoa-color-border)] shadow-xs shadow-black/5`;
 }
 
 function buttonPrimaryClasses(style: ButtonStyle): string {
   const base =
-    'inline-flex w-full items-center justify-center gap-2 rounded-[var(--uoa-radius-button)] px-4 py-2.5 font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--uoa-color-primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--uoa-color-bg)] disabled:opacity-60';
+    'inline-flex w-full items-center justify-center gap-2 rounded-[var(--uoa-radius-button)] px-4 py-2.5 font-medium focus:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--uoa-color-primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--uoa-color-bg)] disabled:opacity-60';
   if (style === 'outline') {
     return `${base} border border-[var(--uoa-color-primary)] bg-transparent text-[var(--uoa-color-primary)] hover:bg-[var(--uoa-color-surface)]`;
   }
@@ -369,7 +369,7 @@ function buttonPrimaryClasses(style: ButtonStyle): string {
 
 function buttonSecondaryClasses(style: ButtonStyle): string {
   const base =
-    'inline-flex w-full items-center justify-center gap-2 rounded-[var(--uoa-radius-button)] px-4 py-2.5 font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--uoa-color-primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--uoa-color-bg)] disabled:opacity-60';
+    'inline-flex w-full items-center justify-center gap-2 rounded-[var(--uoa-radius-button)] px-4 py-2.5 font-medium focus:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--uoa-color-primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--uoa-color-bg)] disabled:opacity-60';
   // Secondary stays neutral regardless of primary style choice.
   void style;
   return `${base} border border-[var(--uoa-color-border)] bg-[var(--uoa-color-surface)] text-[var(--uoa-color-text)] hover:opacity-90`;
