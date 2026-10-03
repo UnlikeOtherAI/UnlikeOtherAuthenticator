@@ -1,14 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-
 import type { ClientConfig } from '../../src/services/config.service.js';
 import { signLoginSession } from '../../src/services/login-session.service.js';
 import { testUiTheme } from '../helpers/test-config.js';
-
 const SHARED_SECRET = 'test-shared-secret-with-enough-length';
 const LOGIN_SESSION_AUDIENCE = 'uoa:login-session';
-
 let currentConfig: ClientConfig | null = null;
-
 function deferred(): { promise: Promise<void>; resolve: () => void } {
   let resolve!: () => void;
   const promise = new Promise<void>((done) => {
@@ -16,15 +12,12 @@ function deferred(): { promise: Promise<void>; resolve: () => void } {
   });
   return { promise, resolve };
 }
-
 const recordLoginLogMock = vi.fn(async () => undefined);
 const assertEmailDomainAllowedForLoginMock = vi.fn(async () => undefined);
 const assertNotBannedAtLoginMock = vi.fn(async () => undefined);
-
 vi.mock('@unlikeotherai/qr-art', () => ({
   renderSVG: () => '<svg />',
 }));
-
 vi.mock('../../src/middleware/config-verifier.js', () => ({
   configVerifier: async (request: {
     query?: { config_url?: string };
@@ -35,17 +28,14 @@ vi.mock('../../src/middleware/config-verifier.js', () => ({
     request.config = currentConfig ?? undefined;
   },
 }));
-
 vi.mock('../../src/services/login-log.service.js', () => ({
   recordLoginLog: (...args: unknown[]) => recordLoginLogMock(...args),
 }));
-
 vi.mock('../../src/services/login-domain-policy.service.js', () => ({
   assertEmailDomainAllowedForLogin: (...args: unknown[]) =>
     assertEmailDomainAllowedForLoginMock(...args),
   isEmailAdminAllowedForRegistration: vi.fn(async () => false),
 }));
-
 vi.mock('../../src/services/ban-policy.service.js', () => ({
   assertNotBannedAtLogin: (...args: unknown[]) => assertNotBannedAtLoginMock(...args),
   isPrincipalBannedForRegistration: vi.fn(async () => false),

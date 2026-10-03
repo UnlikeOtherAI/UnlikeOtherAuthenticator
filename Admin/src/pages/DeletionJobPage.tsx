@@ -1,10 +1,11 @@
+import { lifecycleErrorMessage } from '../features/admin/lifecycle-errors';
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { PageHeader } from '../components/ui/PageHeader';
-import { createApiClient, ApiRequestError } from '../services/api-client';
+import { createApiClient } from '../services/api-client';
 
 const api = createApiClient();
 type Job = {
@@ -29,7 +30,7 @@ export function DeletionJobPage() {
       client.setQueryData(['admin', 'deletion-job', jobId], result);
       await client.invalidateQueries({ queryKey: ['admin'] });
     } catch (failure) {
-      setError(failure instanceof ApiRequestError ? failure.code ?? failure.message : 'Deletion could not continue. Try again.');
+      setError(lifecycleErrorMessage(failure));
       await query.refetch();
     } finally { setPending(false); }
   }

@@ -37,7 +37,7 @@ test('last-team preview includes empty organisation, shared accounts and evidenc
   await expect(page.getByRole('button', { name: 'Confirm deletion' })).toBeDisabled();
   await page.getByLabel('Type DELETE t12').fill('DELETE t12');
   await page.getByRole('button', { name: 'Confirm deletion' }).click();
-  await expect(page.getByRole('alert')).toContainText('RETRY_REQUIRED');
+  await expect(page.getByRole('alert')).toContainText('The action could not complete');
   await page.getByRole('button', { name: 'Confirm deletion' }).click();
   await expect(page.getByText(/Deletion job job-1: ready/)).toBeVisible();
   const attempts = fixture.lifecycle.writes.filter((w) => w.path.endsWith('/delete'));

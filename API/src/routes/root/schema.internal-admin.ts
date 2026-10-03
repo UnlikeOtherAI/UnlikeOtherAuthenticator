@@ -344,11 +344,10 @@ export const internalAdminEndpoints: EndpointSchema[] = [
     method: 'DELETE',
     path: '/internal/admin/organisations/:orgId',
     description:
-      'Delete an organisation and its nested membership data; refuses organisations with protected billing/commercial records',
+      'Legacy direct deletion is refused; use the platform-admin lifecycle preview, confirmation, and durable job workflow',
     auth: adminAuth,
     response: {
-      200: '{ deleted: true }',
-      400: 'Generic error envelope with code ORG_HAS_PROTECTED_RECORDS when protected records exist',
+      409: 'Generic error envelope with code ENTITY_DELETION_WORKFLOW_REQUIRED',
       '401/403': authFailures,
     },
   },

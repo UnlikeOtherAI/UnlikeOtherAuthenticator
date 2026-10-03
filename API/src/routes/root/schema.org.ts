@@ -76,7 +76,7 @@ export const orgEndpoints: EndpointSchema[] = [
     method: 'DELETE',
     path: '/org/organisations/:orgId',
     description:
-      'Delete organisation. User mode requires the organisation.manage capability at ORG scope, admitting owner/admin under the default grant table.',
+      'Legacy direct organisation deletion returns 409 ENTITY_DELETION_WORKFLOW_REQUIRED. A platform administrator must preview and confirm a lifecycle deletion job.',
     auth: 'domain hash bearer token',
   },
   {
@@ -251,7 +251,7 @@ export const orgEndpoints: EndpointSchema[] = [
     method: 'DELETE',
     path: '/org/organisations/:orgId/teams/:teamId',
     description:
-      'Delete team. Same teams.manage gate as the PUT. The organisation default team cannot be deleted.',
+      'Legacy direct team deletion returns 409 ENTITY_DELETION_WORKFLOW_REQUIRED. A platform administrator must preview and confirm a lifecycle deletion job, including any last-team organisation cascade.',
     auth: 'domain hash bearer token',
   },
   {

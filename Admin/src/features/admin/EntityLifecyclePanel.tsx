@@ -1,9 +1,10 @@
+import { lifecycleErrorMessage } from './lifecycle-errors';
 import { Link, useNavigate } from 'react-router';
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '../../components/ui/Button';
 import { Card, CardHeader } from '../../components/ui/Card';
-import { createApiClient, ApiRequestError } from '../../services/api-client';
+import { createApiClient } from '../../services/api-client';
 
 export type LifecycleScope = 'USER' | 'ORGANISATION' | 'TEAM';
 export type LifecycleTemplate = { id: string; scope: LifecycleScope; title: string; message: string; revision: number; enabled: boolean };
@@ -33,7 +34,7 @@ function EntityLifecyclePanelBody({ scope, id }: { scope: LifecycleScope; id: st
   async function act(task: () => Promise<unknown>) {
     setError(''); setPending(true);
     try { await task(); await queryClient.invalidateQueries({ queryKey: ['admin'] }); }
-    catch (failure) { setError(failure instanceof ApiRequestError ? failure.code ?? failure.message : 'The action failed. Review the current state and try again.'); await lifecycle.refetch(); await templates.refetch(); }
+    catch (failure) { setError(lifecycleErrorMessage(failure)); await lifecycle.refetch(); await templates.refetch(); }
     finally { setPending(false); }
   }
   if (!lifecycle.data) return <p role={lifecycle.isError ? 'alert' : undefined}> {lifecycle.isError ? 'Could not load lifecycle state.' : 'Loading lifecycle…'}</p>;

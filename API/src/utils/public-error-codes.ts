@@ -22,6 +22,20 @@ export const PRODUCTION_PUBLIC_ERROR_CODES = new Set([
   // An authenticated platform superuser already knows the exact organisation. This code lets the
   // Admin UI distinguish durable billing/commercial FK protection from an otherwise generic 400.
   'ORG_HAS_PROTECTED_RECORDS',
+  // These workflow decisions occur only after administrator or exact-product authentication.
+  // Pre-authentication lifecycle/status failures still use the generic error body.
+  'ENTITY_DELETION_WORKFLOW_REQUIRED',
+  'LIFECYCLE_TEMPLATE_CHANGED',
+  'ENTITY_TERMINAL',
+  'LAST_ACTIVE_PLATFORM_ADMIN',
+  'OWNERSHIP_TRANSFER_REQUIRED',
+  'DELETION_PREVIEW_CHANGED',
+  'DELETION_BLOCKED',
+  'DELETION_RETRY_MISMATCH',
+  'DELETION_PRODUCTS_PENDING',
+  'DELETION_ALREADY_RUNNING',
+  'DELETION_CANDIDATE_DEPENDENCY_CHANGED',
+  'DELETION_ACK_MISMATCH',
   // Creating an organisation whose address is already held: the person is asked to pick another
   // name. Not an oracle — `/auth/slug-available` and `/domain/slug-available` already answer
   // "taken" for the same label.
