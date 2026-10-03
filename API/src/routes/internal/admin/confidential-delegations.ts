@@ -16,6 +16,7 @@ const ScopeSchema = z.enum([
   'token.provision',
   'memory.read',
   'memory.write',
+  'session:broker',
 ]);
 const ScopesSchema = z
   .array(ScopeSchema)
