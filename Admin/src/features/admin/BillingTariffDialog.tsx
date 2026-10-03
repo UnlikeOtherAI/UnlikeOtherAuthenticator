@@ -43,19 +43,27 @@ export function BillingTariffDialog({
   }, [form, open]);
 
   async function submit(values: BillingTariffFormValues) {
-    await create.mutateAsync(values);
-    onClose();
+    try {
+      await create.mutateAsync(values);
+      onClose();
+    } catch {
+      /* Keep values and show the mutation error for retry. */
+    }
   }
 
   return (
     <Modal
       isOpen={open}
       onClose={onClose}
+      isPending={create.isPending}
+      isDirty={form.formState.isDirty}
       title={`Add tariff version · ${service.name}`}
       widthClassName="max-w-2xl"
       footer={
         <>
-          <Button onClick={onClose}>Cancel</Button>
+          <Button disabled={create.isPending} onClick={onClose}>
+            Cancel
+          </Button>
           <Button
             icon="plus"
             variant="primary"
