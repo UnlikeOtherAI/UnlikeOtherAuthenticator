@@ -1,5 +1,8 @@
-import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useDirectoryNavigation } from '../features/admin/useDirectoryNavigation';
+import { Badge } from '../components/ui/Badge';
+import { useDirectoryParam } from '../features/admin/useDirectoryParam';
+import { useMemo } from 'react';
+import { Link } from 'react-router';
 
 import { AutocompleteSelect } from '../components/ui/AutocompleteSelect';
 import { Card } from '../components/ui/Card';
@@ -11,12 +14,12 @@ import { useDomainsQuery, useUsersQuery } from '../features/admin/admin-queries'
 import { UserAvatar } from '../features/admin/UserAvatar';
 
 export function UsersPage() {
-  const { data: users = [], isLoading } = useUsersQuery();
+  const { data: users = [], isLoading, isError, refetch } = useUsersQuery();
   const { data: domains = [] } = useDomainsQuery();
-  const navigate = useNavigate();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedDomain, setSelectedDomain] = useState('all');
-  const [selectedStatus, setSelectedStatus] = useState('all');
+  const { recordState, openRecord } = useDirectoryNavigation('/users');
+  const [searchQuery, setSearchQuery] = useDirectoryParam('q');
+  const [selectedDomain, setSelectedDomain] = useDirectoryParam('domain', 'all');
+  const [selectedStatus, setSelectedStatus] = useDirectoryParam('status', 'all');
   const domainOptions = useMemo(() => domains.map((domain) => ({ label: domain.name, meta: domain.label, value: domain.name })), [domains]);
   const filteredUsers = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
@@ -32,7 +35,7 @@ export function UsersPage() {
 
   return (
     <>
-      <PageHeader title="Users" description="All users across all domains" />
+      <PageHeader title="Users" description="Search the latest 100 users." />
       <Card>
         <div className="flex flex-wrap items-end gap-3 border-b border-gray-100 px-4 py-3">
           <label className="block w-64 max-w-full">
@@ -50,7 +53,7 @@ export function UsersPage() {
             </SelectField>
           </label>
         </div>
-        {isLoading ? (
+        {isError ? <div role="alert" className="p-5">Could not load this directory. <button type="button" className="text-indigo-600" onClick={() => void refetch()}>Retry</button></div> : isLoading ? (
           <p className="px-5 py-6 text-sm text-gray-400">Loading users...</p>
         ) : (
           <>
@@ -60,10 +63,10 @@ export function UsersPage() {
                   key={user.id}
                   className="cursor-pointer transition-colors hover:bg-gray-50"
                   tabIndex={0}
-                  onClick={() => navigate(`/users/${user.id}`)}
+                  onClick={() => openRecord(`/users/${user.id}`)}
                   onKeyDown={(event) => {
-                    if (event.key === 'Enter') {
-                      navigate(`/users/${user.id}`);
+                    if (event.key === 'Enter' && event.target === event.currentTarget) {
+                      openRecord(`/users/${user.id}`);
                     }
                   }}
                 >
@@ -71,22 +74,24 @@ export function UsersPage() {
                     <div className="flex items-center gap-2">
                       <UserAvatar userId={user.id} label={user.name ?? user.email} />
                       <div>
-                        <span className="font-medium text-gray-700">{user.name ?? user.email}</span>
+                        <Link state={recordState} to={`/users/${user.id}`} onClick={(event) => event.stopPropagation()} className="font-medium text-indigo-600">{user.name ?? user.email}</Link>
                         <p className="text-xs text-gray-400">{user.email}</p>
                       </div>
                     </div>
                   </Td>
                   <Td>
                     <div className="flex flex-wrap gap-1">
-                      {user.domains.map((domain) => <span key={domain} className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">{domain}</span>)}
+                      {user.domains.slice(0, 2).map((domain) => <Link state={recordState} key={domain} to={`/domains/${encodeURIComponent(domain)}`} onClick={(event) => event.stopPropagation()} className="text-xs text-indigo-600">{domain}</Link>)}
+                      {user.domains.length > 2 ? <span className="text-xs text-gray-500">+{user.domains.length - 2} more</span> : null}
                     </div>
                   </Td>
                   <Td><MethodBadge method={user.method} /></Td>
-                  <Td><StatusBadge status={user.twofa ? 'On' : 'Off'} /></Td>
+                  <Td><Badge variant={user.twofa ? 'green' : 'slate'}>{user.twofa ? '2FA enabled' : '2FA not enrolled'}</Badge></Td>
                   <Td className="text-xs text-gray-400">{user.lastLogin}</Td>
                   <Td><StatusBadge status={user.status} /></Td>
                 </tr>
               ))}
+            {pageItems.length === 0 ? <tr><Td colSpan={6}>No users match these filters.</Td></tr> : null}
             </DataTable>
             <PaginationFooter {...pagination} />
           </>

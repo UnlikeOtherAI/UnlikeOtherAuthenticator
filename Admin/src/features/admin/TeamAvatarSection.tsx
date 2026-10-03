@@ -50,7 +50,7 @@ export function TeamAvatarSection({ teamId, teamName }: TeamAvatarSectionProps) 
 
   function requestRemove() {
     setError('');
-    confirm('Remove company avatar?', `${teamName} falls back to its icon or a generated image.`, async () => {
+    confirm('Remove team avatar?', `${teamName} falls back to its icon or a generated image.`, async () => {
       try {
         await remove.mutateAsync();
       } catch {
@@ -63,7 +63,7 @@ export function TeamAvatarSection({ teamId, teamName }: TeamAvatarSectionProps) 
     <section className="rounded-xl border border-gray-200 bg-white p-5">
       <div className="mb-3 flex items-start justify-between gap-4">
         <div>
-          <h3 className="text-sm font-semibold text-gray-900">Company avatar</h3>
+          <h3 className="text-sm font-semibold text-gray-900">Team avatar</h3>
           <p className="mt-0.5 text-xs text-gray-500">
             Shown wherever {teamName} appears. Removing the uploaded image falls back to the team icon or a generated image.
           </p>
