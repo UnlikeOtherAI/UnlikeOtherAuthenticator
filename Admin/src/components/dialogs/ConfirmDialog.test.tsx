@@ -30,6 +30,18 @@ function ConfirmationLauncher({ onConfirm }: { onConfirm: () => void }) {
 }
 
 describe('ConfirmDialog', () => {
+  it('keeps a failed mutation open with input intact for retry', async () => {
+    const onConfirm = vi.fn().mockRejectedValueOnce(new Error('Failed')).mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    render(<AdminUiProvider><ConfirmationLauncher onConfirm={onConfirm} /><ConfirmDialog /></AdminUiProvider>);
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    await user.type(screen.getByRole('textbox'), 'Acme');
+    await user.click(screen.getByRole('button', { name: 'Delete Acme' }));
+    expect(screen.getByRole('alert').textContent).toContain('Try again');
+    expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('Acme');
+    await user.click(screen.getByRole('button', { name: 'Delete Acme' }));
+    expect(onConfirm).toHaveBeenCalledTimes(2); expect(screen.queryByRole('dialog')).toBeNull();
+  });
   it('requires the configured confirmation text before enabling the destructive action', async () => {
     const onConfirm = vi.fn();
     const user = userEvent.setup();
@@ -41,7 +53,7 @@ describe('ConfirmDialog', () => {
     );
 
     await user.click(screen.getByRole('button', { name: 'Delete' }));
-    const confirmButton = screen.getByRole('button', { name: 'Confirm' }) as HTMLButtonElement;
+    const confirmButton = screen.getByRole('button', { name: 'Delete Acme' }) as HTMLButtonElement;
     const confirmationInput = screen.getByRole('textbox', {
       name: 'Type Acme to confirm',
     });
@@ -58,3 +70,4 @@ describe('ConfirmDialog', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 });
+

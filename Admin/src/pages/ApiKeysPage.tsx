@@ -1,4 +1,7 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router';
+import { useListParams } from '../utils/list-params';
+import { QueryError } from '../components/ui/QueryError';
 
 import { Badge, type BadgeVariant } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
@@ -29,7 +32,9 @@ function formatDate(value: string | null): string {
 }
 
 export function ApiKeysPage() {
-  const { data: keys = [], isLoading } = useApiKeysQuery();
+  const { data: keys = [], isLoading, isError, refetch } = useApiKeysQuery();
+  const state = useListParams();
+  const selected = keys.find((key) => key.id === state.get('selected'));
   const [createOpen, setCreateOpen] = useState(false);
   const [createdKey, setCreatedKey] = useState<ApiKeyCreatedResponse | null>(null);
   const [pendingRevoke, setPendingRevoke] = useState<ApiKeyResponse | null>(null);
@@ -40,12 +45,12 @@ export function ApiKeysPage() {
   return (
     <>
       <PageHeader
-        title="API Keys"
+        title="Automation API keys"
         description="Admin API keys for terminal/CI control of feature flags and kill switches."
         actions={<Button icon="plus" variant="primary" onClick={() => setCreateOpen(true)}>Create API key</Button>}
       />
       <Card>
-        {isLoading ? (
+        {isError ? <QueryError retry={refetch} /> : isLoading ? (
           <p className="px-5 py-6 text-sm text-gray-400">Loading API keys...</p>
         ) : (
           <>
@@ -55,7 +60,7 @@ export function ApiKeysPage() {
                 const revoked = Boolean(key.revoked_at);
                 return (
                   <tr key={key.id}>
-                    <Td><p className="font-medium text-gray-700">{key.name}</p></Td>
+                    <Td><Link className="font-medium text-indigo-700 hover:underline" to={`?${new URLSearchParams({ ...Object.fromEntries(state.params), selected: key.id })}`}>{key.name}</Link></Td>
                     <Td><code className="text-xs">{key.key_prefix}</code></Td>
                     <Td className="text-xs text-gray-400">{formatDate(key.last_used_at)}</Td>
                     <Td className="text-xs text-gray-400">{formatDate(key.expires_at)}</Td>
@@ -82,6 +87,7 @@ export function ApiKeysPage() {
           </>
         )}
       </Card>
+      {selected ? <Card className="mt-4 p-5"><h2 className="font-semibold">{selected.name}</h2><dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">{[['ID',selected.id],['Prefix',selected.key_prefix],['Created',formatDate(selected.created_at)],['Created by',selected.created_by_email ?? 'Unknown'],['Last used',formatDate(selected.last_used_at)],['Expires',formatDate(selected.expires_at)]].map(([label,value]) => <div key={label}><dt className="text-gray-500">{label}</dt><dd className="break-all">{value}</dd></div>)}</dl></Card> : null}
 
       <CreateApiKeyModal
         isOpen={createOpen}
@@ -96,12 +102,13 @@ export function ApiKeysPage() {
 
       <Modal
         isOpen={Boolean(pendingRevoke)}
+        isPending={revoke.isPending}
         onClose={() => setPendingRevoke(null)}
         title="Revoke API key?"
         widthClassName="max-w-sm"
         footer={(
           <>
-            <Button onClick={() => setPendingRevoke(null)}>Cancel</Button>
+            <Button disabled={revoke.isPending} onClick={() => setPendingRevoke(null)}>Cancel</Button>
             <Button
               variant="danger"
               disabled={!pendingRevoke || revoke.isPending}
@@ -119,6 +126,7 @@ export function ApiKeysPage() {
           Revoking <span className="font-semibold">{pendingRevoke?.name}</span> immediately blocks any terminal or CI
           job using it. This cannot be undone.
         </p>
+        {revoke.isError ? <p role="alert" className="mt-3 text-sm text-red-700">Could not revoke this key. Try again.</p> : null}
       </Modal>
     </>
   );
@@ -167,11 +175,12 @@ function CreateApiKeyModal({
   return (
     <Modal
       isOpen={isOpen}
+      isPending={create.isPending}
+      isDirty={Boolean(name || expiresAt)}
       onClose={onClose}
       title="Create API key"
       footer={(
         <>
-          <Button onClick={onClose}>Cancel</Button>
           <Button icon="plus" variant="primary" disabled={create.isPending} onClick={submit}>
             Create key
           </Button>
@@ -234,10 +243,10 @@ function ApiKeyRevealModal({
             again. If you lose it, revoke it and create a new one.
           </div>
           <CopyBlock label="API key" value={createdKey.key} sensitive />
-          <div>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+          <details>
+            <summary className="mb-2 cursor-pointer text-xs font-semibold uppercase tracking-wide text-gray-500">
               Terminal recipes
-            </p>
+            </summary>
             <p className="mb-3 text-xs text-gray-400">
               Authenticate with the <code>X-API-Key</code> header. Replace <code>APP_ID</code> /{' '}
               <code>KILL_SWITCH_ID</code> with ids from the apps list.
@@ -247,7 +256,7 @@ function ApiKeyRevealModal({
                 <CopyBlock key={snippet.label} label={snippet.label} value={snippet.command} />
               ))}
             </div>
-          </div>
+          </details>
         </div>
       ) : null}
     </Modal>

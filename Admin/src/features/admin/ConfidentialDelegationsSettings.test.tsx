@@ -1,3 +1,4 @@
+import { MemoryRouter } from 'react-router';
 // @vitest-environment happy-dom
 
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
@@ -80,7 +81,7 @@ describe('ConfidentialDelegationsSettings', () => {
   });
 
   it('renders policy without displaying any application or browser credential', () => {
-    render(<ConfidentialDelegationsSettings />);
+    render(<MemoryRouter><ConfidentialDelegationsSettings /></MemoryRouter>);
 
     expect(screen.getByText('deepwater')).toBeTruthy();
     expect(screen.getByText('api.deepwater.live')).toBeTruthy();
@@ -91,7 +92,7 @@ describe('ConfidentialDelegationsSettings', () => {
 
   it('supports explicit disable and guarded delete actions', async () => {
     const user = userEvent.setup();
-    render(<ConfidentialDelegationsSettings />);
+    render(<MemoryRouter><ConfidentialDelegationsSettings /></MemoryRouter>);
 
     await user.click(screen.getByRole('button', { name: 'Disable' }));
     expect(mocks.updateMutate).toHaveBeenCalledWith({
@@ -109,7 +110,7 @@ describe('ConfidentialDelegationsSettings', () => {
 
   it('keeps source and product immutable while editing mutable policy', async () => {
     const user = userEvent.setup();
-    render(<ConfidentialDelegationsSettings />);
+    render(<MemoryRouter><ConfidentialDelegationsSettings /></MemoryRouter>);
 
     await user.click(screen.getByRole('button', { name: 'Edit' }));
 
@@ -134,7 +135,7 @@ describe('ConfidentialDelegationsSettings', () => {
 
   it('creates an exact enabled AI-only mapping through the operator form', async () => {
     const user = userEvent.setup();
-    render(<ConfidentialDelegationsSettings />);
+    render(<MemoryRouter><ConfidentialDelegationsSettings /></MemoryRouter>);
 
     await user.click(screen.getByRole('button', { name: 'Create mapping' }));
     await user.selectOptions(
@@ -166,7 +167,7 @@ describe('ConfidentialDelegationsSettings', () => {
 
   it('keeps memory read and write separate and unselected until the operator grants them', async () => {
     const user = userEvent.setup();
-    render(<ConfidentialDelegationsSettings />);
+    render(<MemoryRouter><ConfidentialDelegationsSettings /></MemoryRouter>);
     await user.click(screen.getByRole('button', { name: 'Edit' }));
     const read = screen.getByRole('checkbox', { name: /Memory read/ }) as HTMLInputElement;
     const write = screen.getByRole('checkbox', { name: /Memory write/ }) as HTMLInputElement;
@@ -189,7 +190,7 @@ describe('ConfidentialDelegationsSettings', () => {
   // domain pairing and accepts no resource token.
   it('warns that token.provision is high-trust and bounded by the resource', async () => {
     const user = userEvent.setup();
-    render(<ConfidentialDelegationsSettings />);
+    render(<MemoryRouter><ConfidentialDelegationsSettings /></MemoryRouter>);
 
     await user.click(screen.getByRole('button', { name: 'Edit' }));
 
@@ -205,7 +206,7 @@ describe('ConfidentialDelegationsSettings', () => {
 
   it('never claims organisation authority over UOA for an /org-shaped resource', async () => {
     const user = userEvent.setup();
-    render(<ConfidentialDelegationsSettings />);
+    render(<MemoryRouter><ConfidentialDelegationsSettings /></MemoryRouter>);
 
     await user.click(screen.getByRole('button', { name: 'Edit' }));
     const resource = screen.getByRole('textbox', { name: /^Resource/ });
@@ -217,3 +218,4 @@ describe('ConfidentialDelegationsSettings', () => {
     expect(within(alert).queryByText(/organisation and team authority over UOA/i)).toBeNull();
   });
 });
+
