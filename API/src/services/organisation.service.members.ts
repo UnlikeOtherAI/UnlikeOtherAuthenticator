@@ -329,7 +329,7 @@ export async function removeOrganisationMember(
     targetType: 'org_member',
     targetId: member.id,
     metadata: { userId, role: member.role },
-  });
+  }, { prisma });
 
   return { removed: true };
 }

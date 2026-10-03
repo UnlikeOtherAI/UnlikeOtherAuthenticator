@@ -7,6 +7,8 @@ import { assertTenantEffectAuthority } from '../../src/services/tenant-effect-au
 import { lockProductTeamPolicyExclusive } from '../../src/services/product-team-policy-lock.service.js';
 import { lockRefreshSessionUser } from '../../src/services/refresh-session-lock.service.js';
 import { createTestDb } from '../helpers/test-db.js';
+import { guardPoolCheckouts } from '../../src/db/pool-checkout-guard.js';
+import { runWithOrgAdminEffectTransaction } from '../../src/plugins/tenant-context.plugin.js';
 
 describe.skipIf(!process.env.DATABASE_URL)('tenant effect authority on PostgreSQL', () => {
   let handle: NonNullable<Awaited<ReturnType<typeof createTestDb>>>;
@@ -59,6 +61,18 @@ describe.skipIf(!process.env.DATABASE_URL)('tenant effect authority on PostgreSQ
     });
     await expect(f.effect()).rejects.toThrow('AUTHENTICATION_FAILED');
     expect((await handle.prisma.organisation.findUniqueOrThrow({ where: { id: f.org.id } })).name).toBe('Before');
+  });
+  it('uses the current admin transaction for authority without a nested pool checkout', async () => {
+    const f = await fixture();
+    f.request.adminDb = guardPoolCheckouts(handle.prisma, 'admin');
+    f.request.tenantContext = f.context;
+    await runWithOrgAdminEffectTransaction(f.request, async tx => {
+      await tx.organisation.update({ where: { id: f.org.id }, data: { name: 'After' } });
+      await tx.orgAuditLog.create({ data: { orgId: f.org.id, actorUserId: f.actor.id,
+        action: 'org.updated', targetType: 'organisation', targetId: f.org.id } });
+    });
+    expect((await handle.prisma.organisation.findUniqueOrThrow({ where: { id: f.org.id } })).name).toBe('After');
+    expect(await handle.prisma.orgAuditLog.count({ where: { targetId: f.org.id } })).toBe(1);
   });
   it('rejects a revoked platform role and a disabled target container at effect time', async () => {
     const f = await fixture();

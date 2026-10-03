@@ -131,7 +131,7 @@ export function runWithOrgAdminEffectTransaction<T>(
   if (!context) throw new Error('Organisation effect transaction requires tenantContext');
   if (!getEnv().DATABASE_URL) return handler(request.adminDb);
   return runInTransaction(request.adminDb, async tx => {
-    await assertTenantEffectAuthority(request, context, tx as unknown as Prisma.TransactionClient, request.adminDb);
+    await assertTenantEffectAuthority(request, context, tx as unknown as Prisma.TransactionClient, tx);
     return handler(tx);
   });
 }
