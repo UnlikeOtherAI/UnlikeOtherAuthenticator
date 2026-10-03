@@ -1,6 +1,7 @@
-import { useSearchParams } from 'react-router';
+import { useLocation, useSearchParams } from 'react-router';
 
 export function useBillingNavigation() {
+  const location = useLocation();
   const [params, setParams] = useSearchParams();
   function href(changes: Record<string, string | null>) {
     const next = new URLSearchParams(params);
@@ -11,7 +12,7 @@ export function useBillingNavigation() {
     return `/billing${next.size ? `?${next}` : ''}`;
   }
   function update(changes: Record<string, string | null>) {
-    setParams(new URLSearchParams(href(changes).split('?')[1] ?? ''));
+    setParams(new URLSearchParams(href(changes).split('?')[1] ?? ''), { state: location.state });
   }
   return { params, href, update };
 }

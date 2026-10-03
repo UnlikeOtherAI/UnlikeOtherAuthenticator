@@ -172,6 +172,7 @@ export function BillingInvoiceDetailDialog({
     }
     try {
       await recordPayment.mutateAsync({ invoiceId: currentInvoice.id, values });
+      paymentForm.reset({ ...values, amountMinor: '', reference: '', idempotencyKey: crypto.randomUUID(), occurredAt: nowForInput() });
       setShowPayment(false);
     } catch {
       /* Retain values and the idempotency key for a safe retry. */
@@ -190,11 +191,6 @@ export function BillingInvoiceDetailDialog({
       isDirty={paymentForm.formState.isDirty || Boolean(voidReason)}
       title={invoice.invoice_number ?? `Draft invoice · ${invoice.billing_month}`}
       widthClassName="max-w-4xl"
-      footer={
-        <Button disabled={busy} onClick={onClose}>
-          Close
-        </Button>
-      }
     >
       <div className="space-y-5">
         {contextLinks ? (

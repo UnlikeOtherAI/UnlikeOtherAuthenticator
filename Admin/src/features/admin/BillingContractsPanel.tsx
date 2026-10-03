@@ -1,3 +1,4 @@
+import { useDirectoryNavigation } from './useDirectoryNavigation';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
@@ -103,6 +104,7 @@ export function BillingContractsPanel({
   const contractsQuery = useBillingContractsQuery();
   const issuersQuery = useBillingInvoiceIssuersQuery();
   const invoicesQuery = useBillingInvoicesQuery();
+  const { recordState } = useDirectoryNavigation('/billing');
   const { data: organisations = [] } = useOrganisationsQuery();
   const calculate = useCalculateBillingInvoiceMutation();
   const contracts = useMemo(() => contractsQuery.data ?? [], [contractsQuery.data]);
@@ -252,6 +254,7 @@ export function BillingContractsPanel({
                   <Td>
                     <Link
                       className="text-blue-600 hover:underline"
+                      state={recordState}
                       to={`/organisations/${encodeURIComponent(contract.organisation_id)}`}
                     >
                       {contract.organisation_name ?? contract.organisation_id}
@@ -293,6 +296,7 @@ export function BillingContractsPanel({
                   {selectedContract.reference} ·{' '}
                   <Link
                     className="text-blue-600 hover:underline"
+                    state={recordState}
                     to={`/organisations/${encodeURIComponent(selectedContract.organisation_id)}`}
                   >
                     {selectedContract.organisation_name ?? selectedContract.organisation_id}
@@ -387,7 +391,7 @@ export function BillingContractsPanel({
             <div className="text-sm">
               <p className="font-medium text-gray-700">Contract</p>
               <p>
-                {selectedContract.name} � {selectedContract.reference}
+                {selectedContract.name} · {selectedContract.reference}
               </p>
             </div>
             <FieldShell label="Issuer" error={form.formState.errors.issuerProfileId?.message}>
@@ -483,6 +487,7 @@ export function BillingContractsPanel({
               </Link>
               <Link
                 className="text-blue-600 hover:underline"
+                state={recordState}
                 to={`/organisations/${encodeURIComponent(selectedInvoice.organisation_id)}`}
               >
                 View organisation

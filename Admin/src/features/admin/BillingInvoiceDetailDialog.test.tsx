@@ -141,6 +141,7 @@ describe('BillingInvoiceDetailDialog server-authored actions', () => {
   it('retains the payment inputs and idempotency key after failure for retry', async () => {
     const user = userEvent.setup();
     mocks.payment.mockRejectedValueOnce(new Error('Temporary failure')).mockResolvedValueOnce({});
+    const onClose = vi.fn();
     render(
       <BillingInvoiceDetailDialog
         invoice={invoice({
@@ -152,7 +153,7 @@ describe('BillingInvoiceDetailDialog server-authored actions', () => {
             payment_limits: { payment: money('5000', '$50.00'), refund: null, write_off: null },
           },
         })}
-        onClose={vi.fn()}
+        onClose={onClose}
       />,
     );
     await user.click(screen.getByRole('button', { name: 'Record payment activity' }));
@@ -169,6 +170,9 @@ describe('BillingInvoiceDetailDialog server-authored actions', () => {
     await waitFor(() =>
       expect(screen.queryByRole('button', { name: 'Record activity' })).toBeNull(),
     );
+    await user.keyboard('{Escape}');
+    expect(onClose).toHaveBeenCalledOnce();
+    expect(screen.queryByText('Discard unsaved changes?')).toBeNull();
   });
 
   it('renders the distinct recoverable issuing action supplied by UOA', async () => {

@@ -1,3 +1,4 @@
+import { useDirectoryNavigation } from './useDirectoryNavigation';
 import { Badge } from '../../components/ui/Badge';
 import { Link } from 'react-router';
 import { useBillingNavigation } from './billing-navigation';
@@ -12,6 +13,7 @@ function statusVariant(status: BillingInvoice['status']) {
 }
 
 export function BillingInvoiceHistory({ invoices }: { invoices: BillingInvoice[] }) {
+  const { recordState } = useDirectoryNavigation('/billing');
   const { href } = useBillingNavigation();
   const { pageItems, pagination } = usePagination(invoices, 10, { key: 'invoices_page' });
   return (
@@ -74,6 +76,7 @@ export function BillingInvoiceHistory({ invoices }: { invoices: BillingInvoice[]
                   <Td>
                     <Link
                       className="text-blue-600 hover:underline"
+                      state={recordState}
                       to={`/organisations/${encodeURIComponent(invoice.organisation_id)}`}
                     >
                       {invoice.buyer.legal_name}

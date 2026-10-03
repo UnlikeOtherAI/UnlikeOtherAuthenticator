@@ -1,3 +1,4 @@
+import { useDirectoryNavigation } from '../features/admin/useDirectoryNavigation';
 import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { TextField } from '../components/ui/FormFields';
@@ -10,6 +11,7 @@ import { NativeAppDialog } from '../features/admin/NativeAppDialog';
 import type { NativeApp } from '../schemas/native-app';
 
 export function NativeAppsPage() {
+  const { recordState } = useDirectoryNavigation('/apps');
   const query = useNativeApps();
   const [params, setParams] = useSearchParams();
   const search = params.get('q') ?? '';
@@ -23,7 +25,7 @@ export function NativeAppsPage() {
       !apps.length ? <p className="p-5 text-gray-500">No native apps match this view.</p> :
       <DataTable headers={['App', 'Identifier', 'Login methods', 'Status']}>
         {apps.map((app) => <tr key={app.id}>
-          <Td><span className="flex items-center gap-3">{app.icon_url ? <img src={app.icon_url} className="h-8 w-8 object-contain" alt="" /> : null}<Link className="font-medium text-indigo-600 hover:underline" to={`/apps/${encodeURIComponent(app.id)}`}>{app.name}</Link></span></Td>
+          <Td><span className="flex items-center gap-3">{app.icon_url ? <img src={app.icon_url} className="h-8 w-8 object-contain" alt="" /> : null}<Link className="font-medium text-indigo-600 hover:underline" state={recordState} to={`/apps/${encodeURIComponent(app.id)}`}>{app.name}</Link></span></Td>
           <Td>{app.identifier}</Td><Td>{app.methods.map((m) => m === 'google' ? 'Google' : 'Email/password').join(', ')}</Td>
           <Td>{app.enabled ? 'Enabled' : 'Disabled'}</Td>
         </tr>)}

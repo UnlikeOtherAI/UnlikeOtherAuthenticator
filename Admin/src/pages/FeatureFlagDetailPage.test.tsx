@@ -45,3 +45,17 @@ describe('feature flag routes preserve live actions', () => {
     expect(screen.queryByRole('button', { name: 'Save changes' })).toBeNull();
   });
 });
+
+
+it('keeps flag and rule pages independent and resets the platform filter page', async () => {
+  const app = mockAdminData.apps.find((item) => item.id === 'app2')!;
+  const original = app.flagDefinitions;
+  app.flagDefinitions = Array.from({ length: 12 }, (_, index) => ({ ...original[0]!, id: `fixture-${index}`, key: `fixture_${index}`, platformMode: 'all' }));
+  try {
+    mount('?flagsPage=2&rulesPage=1');
+    expect(screen.getByRole('link', { name: 'fixture_10' })).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'fixture_0' })).toBeNull();
+    await userEvent.selectOptions(screen.getAllByRole('combobox')[0]!, app.platforms[0]!.id);
+    await waitFor(() => expect(screen.getByRole('link', { name: 'fixture_0' })).toBeTruthy());
+  } finally { app.flagDefinitions = original; }
+});
