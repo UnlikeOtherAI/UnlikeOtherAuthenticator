@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link, useSearchParams } from 'react-router';
 
 import { Badge, type BadgeVariant } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
@@ -23,6 +24,9 @@ type Props = {
 
 export function DomainAgreementManager({ agreements, domain, enabled, refresh }: Props) {
   const { confirm } = useAdminUi();
+  const [params] = useSearchParams();
+  const selectedId = params.get('agreement');
+  const visible = selectedId ? agreements.filter((agreement) => agreement.id === selectedId) : agreements;
   const [agreementDialog, setAgreementDialog] = useState<DomainAgreement | 'new' | null>(null);
   const [versionAgreement, setVersionAgreement] = useState<DomainAgreement | null>(null);
   const [editingVersion, setEditingVersion] = useState<{ agreement: DomainAgreement; version: DomainAgreementVersion } | null>(null);
@@ -66,11 +70,7 @@ export function DomainAgreementManager({ agreements, domain, enabled, refresh }:
 
   function confirmed(title: string, body: string, action: () => Promise<unknown>) {
     confirm(title, body, async () => {
-      try {
-        await update(action);
-      } catch {
-        // The persistent inline error is shown after the confirmation closes.
-      }
+      await update(action);
     });
   }
 
@@ -103,12 +103,14 @@ export function DomainAgreementManager({ agreements, domain, enabled, refresh }:
         <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">The operation could not be completed. The domain policy may have changed; refresh and try again.</p>
       ) : null}
 
-      {agreements.map((agreement) => (
+      {selectedId ? <Link className="text-sm text-indigo-600 hover:underline" to="?tab=agreements">All agreements</Link> : null}
+      {selectedId && !visible.length ? <p>Agreement not found.</p> : null}
+      {visible.map((agreement) => (
         <Card key={agreement.id}>
           <CardHeader>
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-sm font-semibold text-gray-900">{agreement.title}</h3>
+                <h3><Link to={`?tab=agreements&agreement=${encodeURIComponent(agreement.id)}`} className="text-sm font-semibold text-indigo-600 hover:underline">{agreement.title}</Link></h3>
                 <Badge variant={agreement.required_for_access ? 'purple' : 'slate'}>
                   {agreement.required_for_access ? 'Required' : 'Optional'}
                 </Badge>

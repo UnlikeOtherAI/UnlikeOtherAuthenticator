@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
+import { Modal } from '../ui/Modal';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { FieldShell, TextAreaField } from '../ui/FormFields';
@@ -10,9 +11,10 @@ import { adminService } from '../../services/admin-service';
 import type { DomainJwk } from '../../features/admin/types';
 
 export function DomainSigningKeysSection({ domain }: { domain: string }) {
-  const { data = [], isLoading } = useDomainJwksQuery(domain);
+  const { data = [], isLoading, isError, refetch } = useDomainJwksQuery(domain);
   const { confirm } = useAdminUi();
   const queryClient = useQueryClient();
+  const [adding, setAdding] = useState(false);
   const [jwkText, setJwkText] = useState('');
   const [addError, setAddError] = useState<string | null>(null);
 
@@ -22,6 +24,7 @@ export function DomainSigningKeysSection({ domain }: { domain: string }) {
     mutationFn: (jwk: Record<string, unknown>) => adminService.addDomainJwk(domain, jwk),
     onSuccess: () => {
       setJwkText('');
+      setAdding(false);
       setAddError(null);
       void queryClient.invalidateQueries({ queryKey: ['admin', 'domain-jwks', domain] });
     },
@@ -53,8 +56,8 @@ export function DomainSigningKeysSection({ domain }: { domain: string }) {
 
   return (
     <section className="space-y-3">
-      <h3 className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Signing Keys</h3>
-      {isLoading ? (
+      <div className="flex items-center justify-between"><h3 className="text-sm font-semibold">Signing keys</h3><Button onClick={() => setAdding(true)}>Add signing key</Button></div>
+      {isError ? <p role="alert">Could not load signing keys. <Button onClick={() => refetch()}>Retry</Button></p> : isLoading ? (
         <p className="text-sm text-gray-400">Loading signing keys...</p>
       ) : (
         <ul className="divide-y divide-gray-100 rounded-lg border border-gray-100">
@@ -81,6 +84,7 @@ export function DomainSigningKeysSection({ domain }: { domain: string }) {
         </ul>
       )}
 
+      <Modal isOpen={adding} isPending={addMutation.isPending} isDirty={Boolean(jwkText)} onClose={() => { if (!addMutation.isPending) setAdding(false); }} title="Add signing key">
       <FieldShell
         label="Add JWK (JSON)"
         hint={
@@ -108,6 +112,7 @@ export function DomainSigningKeysSection({ domain }: { domain: string }) {
           Add signing key
         </Button>
       </div>
+      </Modal>
     </section>
   );
 }

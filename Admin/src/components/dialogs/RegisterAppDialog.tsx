@@ -17,20 +17,23 @@ export function RegisterAppDialog({ onClose, open }: { onClose: () => void; open
   });
 
   async function submit(values: RegisterAppFormValues) {
+    try {
     await mutation.mutateAsync(values);
     form.reset();
     onClose();
+    } catch { /* Retain input and render the mutation error. */ }
   }
 
   return (
     <Modal
       isOpen={open}
+      isPending={mutation.isPending}
+      isDirty={form.formState.isDirty}
       onClose={onClose}
       title="Register App"
       widthClassName="max-w-xl"
       footer={
         <>
-          <Button onClick={onClose}>Cancel</Button>
           <Button icon="check" variant="primary" disabled={mutation.isPending} onClick={form.handleSubmit(submit)}>
             {mutation.isPending ? 'Adding...' : 'Add'}
           </Button>

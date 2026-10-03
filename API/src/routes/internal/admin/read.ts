@@ -29,6 +29,7 @@ const TeamParamsSchema = z.object({
 const UserParamsSchema = z.object({ userId: z.string().trim().min(1) });
 const DomainParamsSchema = z.object({ domain: z.string().trim().min(3).transform(normalizeDomain) });
 const LimitQuerySchema = z.object({ limit: z.coerce.number().int().positive().optional() }).strict();
+const LogsQuerySchema = LimitQuerySchema.extend({ userId: z.string().trim().min(1).optional() });
 const SearchQuerySchema = z.object({ q: z.string().trim().default('') }).strict();
 
 const objectSchema = { type: 'object', additionalProperties: true } as const;
@@ -103,8 +104,8 @@ export function registerInternalAdminReadRoutes(app: FastifyInstance): void {
   app.get('/internal/admin/settings', adminRoute(settingsSchema), async () => getAdminSettings());
 
   app.get('/internal/admin/logs', adminRoute(arraySchema), async (request) => {
-    const { limit } = LimitQuerySchema.parse(request.query);
-    return getAdminLogs(limit);
+    const { limit, userId } = LogsQuerySchema.parse(request.query);
+    return getAdminLogs(limit, userId);
   });
 
   app.get('/internal/admin/handshake-errors', adminRoute(arraySchema), async (request) => {

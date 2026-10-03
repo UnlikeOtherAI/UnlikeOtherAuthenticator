@@ -247,3 +247,59 @@ Do not hardcode hosts or protocols in components.
 Domain detail pages include a transactional email section. The section reads and writes `/internal/admin/domains/:domain/email`, registers SES sender identities, displays DNS records, refreshes verification/DKIM status, and only enables sending after both statuses are `Success`.
 
 Super-users are managed from `/superusers`. This page lists current `ADMIN_AUTH_DOMAIN` super-users, searches eligible UOA users, grants access, and protects revocation with a confirmation dialog.
+
+## 2026-10-03 approved navigation and interaction amendment
+
+The user approved revising the historical template information architecture to declutter the
+entire admin panel, link related records and preserve every working operation. This amendment
+supersedes the navigation-preservation wording and the corresponding historical route
+composition above for that approved scope. It does not change the CSR stack, module boundaries,
+first-party admin authentication or server-side authorization requirements.
+
+The implemented menu groups are Dashboard, Directory, Integrations, Billing, Security and
+Activity. Directory contains Users, Organisations and Teams. Integrations contains Website
+services, Native apps, Integration requests, Delegation policies and Feature flags. Billing has
+one Products & invoices entry with Product billing and Contracts & invoices sections. Security
+contains Administrators, Access bans and Automation API keys. Activity contains Login activity
+and Connection errors. The complete route-to-screen table and operation inventory are maintained
+in [the consolidated capability audit](admin-ui-refactor-audit.md).
+
+Route additions and compatibility behavior:
+
+- `/apps/:appId` is the canonical native app detail; `/apps` remains the list/register entry.
+- `/bans` exposes all four supported ban kinds. `/delegations` exposes confidential mappings.
+- `/settings` remains a compatibility redirect: `tab=delegations` opens `/delegations`; other
+  old settings selections open `/bans`. The implementation-only System view is removed.
+- `/feature-flags/:appId/groups/:groupId` remains a compatibility unavailable state with a
+  return link. It no longer offers an editor that cannot persist an audience group.
+- `/billing` retains one router route and uses query parameters for products, sections, selected
+  records, contracts and invoices. It does not merge their underlying entity models.
+
+Website service tabs separate Overview, directory relationships, Access, Credentials,
+Agreements, Signing keys and Email. Organisation and team details open on members. User details
+separate Memberships, Profile, Security and Activity. Profiles contain avatar controls; Access
+contains login restrictions and applicable 2FA policy. Invitation history is labeled Invitations,
+using the shared invitation state machine plus separate approval status, not fabricated
+preapproval/claimed state. The compatibility transport property `preapprovedMembers` remains
+until a separately versioned API change.
+
+Record names are native links with keyboard/new-tab behavior. Related links identify the actual
+entity; secondary actions must not trigger row navigation. URL state carries filters, tab,
+pagination and selected detail where implemented. Return context is bounded and accepts only
+known internal admin route roots. Multiple tables must have independent pagination keys.
+Client tables and filters must state bounded response windows instead of implying complete
+server-side search. The activity table explicitly states UTC and successful-login scope.
+
+Shared dialogs trap focus, handle Escape, restore focus, guard dirty edits and prevent dismissing
+pending work. Failed writes retain the form/confirmation for retry. Unsupported mutation controls
+are removed instead of inventing authority or implying success. Safety copy about secrets,
+revocation, retention, scope and immutable/monetary actions remains justified. Tables remain
+horizontally scrollable where necessary and segmented tabs wrap in narrow layouts; rendered
+mobile verification is still required by the final integration gate.
+
+Capability evidence and remaining backend gaps are recorded in the
+[directory](directory-refactor-checklist.md),
+[integration](integrations-refactor-checklist.md), and
+[billing](billing-refactor-checklist.md) checklists. A separate lifecycle project owns
+suspension/deactivation and deletion-job contracts; this UI amendment does not certify that
+work as complete or authorize a legacy delete bypass.

@@ -32,19 +32,24 @@ export function BillingServiceDialog({ onClose, open }: { onClose: () => void; o
   }, [form, open]);
 
   async function submit(values: BillingServiceFormValues) {
-    await create.mutateAsync(values);
-    onClose();
+    try {
+      await create.mutateAsync(values);
+      onClose();
+    } catch {
+      /* Keep values and show the mutation error for retry. */
+    }
   }
 
   return (
     <Modal
       isOpen={open}
       onClose={onClose}
+      isPending={create.isPending}
+      isDirty={form.formState.isDirty}
       title="Add billing service"
       widthClassName="max-w-2xl"
       footer={
         <>
-          <Button onClick={onClose}>Cancel</Button>
           <Button
             icon="plus"
             variant="primary"

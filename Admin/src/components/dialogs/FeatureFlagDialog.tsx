@@ -41,23 +41,26 @@ export function FeatureFlagDialog({
 
   async function submit(values: FeatureFlagFormValues) {
     if (!app) return;
+    try {
     await mutation.mutateAsync({
       key: values.key,
       description: values.description,
       defaultState: values.defaultState === 'enabled',
     });
     onClose();
+    } catch { /* Mutation error remains visible; retain the form for retry. */ }
   }
 
   return (
     <Modal
       isOpen={open && Boolean(app)}
-      onClose={onClose}
+      isPending={mutation.isPending}
+      isDirty={form.formState.isDirty}
+      onClose={() => { if (!mutation.isPending) onClose(); }}
       title={isEdit ? 'Edit Feature Flag' : 'Add Feature Flag'}
       widthClassName="max-w-xl"
       footer={
         <>
-          <Button onClick={onClose}>Cancel</Button>
           <Button icon="check" variant="primary" disabled={mutation.isPending} onClick={form.handleSubmit(submit)}>
             {mutation.isPending ? 'Saving...' : isEdit ? 'Save changes' : 'Add'}
           </Button>
