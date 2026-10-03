@@ -22,10 +22,7 @@ export function Topbar() {
         <span className="truncate font-medium text-gray-900">{label}</span>
       </nav>
       <GlobalSearch />
-      <button className="relative rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600" type="button" aria-label="Notifications">
-        <Icon name="bell" className="h-5 w-5" />
-        <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-red-500" />
-      </button>
     </header>
   );
 }
+
