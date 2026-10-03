@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { requireAccessStatusEnabled } from '../../middleware/access-status-enabled.js';
 import { createRateLimiter } from '../../middleware/rate-limiter.js';
 import { startLifecycleStatus, verifyLifecycleStatus } from '../../services/lifecycle-status.service.js';
 import { getOAuthClient } from '../../services/oauth/client.service.js';
@@ -16,7 +17,7 @@ async function context(request: FastifyRequest) {
     configUrl: `native-status:${client.clientId}:${client.nativeAppRevision ?? 0}:${query.redirect_uri}` };
 }
 export function registerOAuthLifecycleStatus(app: FastifyInstance) {
-  const options = { preHandler: [requireMcpOAuthPublicProfile, createRateLimiter({ limit: 10, windowMs: 15 * 60_000, keyBuilder: r => `native-lifecycle:${r.ip}` })] };
+  const options = { onRequest: requireAccessStatusEnabled, preHandler: [requireMcpOAuthPublicProfile, createRateLimiter({ limit: 10, windowMs: 15 * 60_000, keyBuilder: r => `native-lifecycle:${r.ip}` })] };
   app.post('/oauth/lifecycle-status/start', options, async request => {
     const body = z.object({ email: z.string().email().max(320) }).strict().parse(request.body);
     return startLifecycleStatus({ ...await context(request), ...body });
