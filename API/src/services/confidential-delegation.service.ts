@@ -24,6 +24,7 @@ export const CONFIDENTIAL_DELEGATION_SCOPES = [
   'token.provision',
   'memory.read',
   'memory.write',
+  'session:broker',
 ] as const;
 export type ConfidentialDelegationScopeName = (typeof CONFIDENTIAL_DELEGATION_SCOPES)[number];
 
@@ -33,6 +34,7 @@ const databaseScope = {
   'token.provision': ConfidentialDelegationScope.TOKEN_PROVISION,
   'memory.read': ConfidentialDelegationScope.MEMORY_READ,
   'memory.write': ConfidentialDelegationScope.MEMORY_WRITE,
+  'session:broker': ConfidentialDelegationScope.SESSION_BROKER,
 } satisfies Record<ConfidentialDelegationScopeName, ConfidentialDelegationScope>;
 
 const publicScope = {
@@ -41,6 +43,7 @@ const publicScope = {
   [ConfidentialDelegationScope.TOKEN_PROVISION]: 'token.provision',
   [ConfidentialDelegationScope.MEMORY_READ]: 'memory.read',
   [ConfidentialDelegationScope.MEMORY_WRITE]: 'memory.write',
+  [ConfidentialDelegationScope.SESSION_BROKER]: 'session:broker',
 } satisfies Record<ConfidentialDelegationScope, ConfidentialDelegationScopeName>;
 
 type MutationActor = {
@@ -149,6 +152,11 @@ function assertFirstPartyDelegationBinding(params: {
   resource: string;
   scopes: readonly ConfidentialDelegationScope[];
 }) {
+  if (params.scopes.includes(ConfidentialDelegationScope.SESSION_BROKER) &&
+    (params.sourceDomain !== 'coder.unlikeotherai.com' || params.product !== 'coder' ||
+      params.resource !== 'https://api.selkie.live' || params.scopes.length !== 1)) {
+    throw new AppError('BAD_REQUEST', 400, 'FIRST_PARTY_CONFIDENTIAL_DELEGATION_MISMATCH');
+  }
   const binding =
     FIRST_PARTY_CONFIDENTIAL_DELEGATIONS[
       params.product as keyof typeof FIRST_PARTY_CONFIDENTIAL_DELEGATIONS
@@ -425,6 +433,10 @@ export async function resolveConfidentialDelegation(
     throw invalidDelegation();
   }
 
+  if (requestedScopes.includes('session:broker') && (sourceDomain !== 'coder.unlikeotherai.com' ||
+    product !== 'coder' || params.resource !== 'https://api.selkie.live' || requestedScopes.length !== 1)) {
+    throw invalidDelegation();
+  }
   const allowedScopes = new Set(scopeNamesFromDatabase(mapping.scopes));
   if (requestedScopes.some((scope) => !allowedScopes.has(scope))) {
     throw invalidDelegation();

@@ -187,6 +187,9 @@ async function exchangeConfidentialSubjectTokenInsidePolicyLock(
   );
   const { assertion, issuer, sourceDomain } = verified;
   const credentialEpoch = assertion.tv;
+  if (delegation.scope === 'session:broker' && !assertion.active) {
+    throw new AppError('FORBIDDEN', 403, 'TOKEN_EXCHANGE_TEAM_CONTEXT_REQUIRED');
+  }
 
   const prisma = deps.prisma ?? getAdminPrisma();
   // Whether the assertion's team context fits the product is decided by the

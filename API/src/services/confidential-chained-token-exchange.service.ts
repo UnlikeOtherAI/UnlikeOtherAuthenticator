@@ -269,6 +269,7 @@ async function exchangeConfidentialChainedAccessTokenInsidePolicyLock(
     },
     { prisma: deps.prisma },
   );
+  if (delegation.scope === 'session:broker') throw invalidDelegation();
   const requestedScopes = parseConfidentialDelegationScope(delegation.scope);
   const inboundScopes = new Set(parseConfidentialDelegationScope(subject.scope));
   // Asking for more than the inbound token carries is scope widening, the same
