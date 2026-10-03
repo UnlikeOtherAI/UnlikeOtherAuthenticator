@@ -75,9 +75,6 @@ export function BillingAssignmentDialog({
       title={`Assign tariff · ${service.name}`}
       footer={
         <>
-          <Button disabled={save.isPending} onClick={onClose}>
-            Cancel
-          </Button>
           <Button
             icon="check"
             variant="primary"
