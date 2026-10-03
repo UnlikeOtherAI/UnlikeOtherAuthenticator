@@ -342,7 +342,8 @@ describe.skipIf(!hasDatabase)('user-facing /org team CRUD and membership', () =>
         'x-uoa-access-token': `Bearer ${ownerToken}`,
       },
     });
-    expect(deleteTeam.statusCode).toBe(200);
+    expect(deleteTeam.statusCode).toBe(409);
+    expect(deleteTeam.json()).toMatchObject({ code: 'ENTITY_DELETION_WORKFLOW_REQUIRED' });
 
     await app.close();
   });

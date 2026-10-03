@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -26,12 +26,6 @@ const hasDatabase = Boolean(process.env.DATABASE_URL);
 
 function apiRootDir(): string {
   return path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-}
-
-/** Same resolution as `tests/helpers/test-db.ts`: team binaries may or may not be hoisted. */
-function prismaBinPath(): string {
-  const local = path.join(apiRootDir(), 'node_modules', '.bin', 'prisma');
-  return fs.existsSync(local) ? local : path.join(apiRootDir(), '..', 'node_modules', '.bin', 'prisma');
 }
 
 function migrationSqlPath(): string {
@@ -65,8 +59,8 @@ describe.skipIf(!hasDatabase)('team-invite actionable invariants migration', () 
 
   function replayMigration(): void {
     execFileSync(
-      prismaBinPath(),
-      ['db', 'execute', '--file', migrationSqlPath(), '--schema', 'prisma/schema.prisma'],
+      process.execPath,
+      [createRequire(import.meta.url).resolve('prisma/build/index.js'), 'db', 'execute', '--file', migrationSqlPath(), '--schema', 'prisma/schema.prisma'],
       {
         cwd: apiRootDir(),
         env: { ...process.env, DATABASE_URL: handle!.databaseUrl },

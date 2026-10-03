@@ -17,7 +17,7 @@ describe('getOrganisationMember: activeOnly actor-authorization filter (§4.9)',
     await getOrganisationMember(prisma, { orgId: 'org-1', userId: 'actor-1' }, { activeOnly: true });
 
     expect(findFirst).toHaveBeenCalledWith({
-      where: { orgId: 'org-1', userId: 'actor-1', status: 'ACTIVE' },
+      where: { orgId: 'org-1', userId: 'actor-1', status: 'ACTIVE', user: { lifecycleStatus: 'ACTIVE' }, org: { lifecycleStatus: 'ACTIVE' } },
       select: { id: true, orgId: true, userId: true, role: true },
     });
   });

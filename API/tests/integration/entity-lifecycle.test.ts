@@ -191,7 +191,7 @@ describe.skipIf(!process.env.DATABASE_URL)('entity lifecycle on PostgreSQL', () 
     const evidence = await handle.prisma.signatureAuditEvent.create({ data: { domain, actorUserId: target.id, actorEmail: target.email,
       action: 'legal.evidence', targetType: 'user', targetId: target.id, metadata: { signerName: 'Signer', ip: '192.0.2.9' } } });
     const preview = await getDeletionPreview('USER', target.id, 'ERASE_REFERENCE');
-    expect(preview.retainedEvidence).toContainEqual(expect.objectContaining({ model: 'SignatureAuditEvent', count: 1 }));
+    expect(preview.retainedEvidence.filter(item => item.model === 'SignatureAuditEvent')).toEqual([expect.objectContaining({ model: 'SignatureAuditEvent', count: 1 })]);
     const job = await start('USER', target.id, admin, 'ERASE_REFERENCE'); await executeEntityDeletion(job.id, admin);
     expect((await handle.prisma.user.findUniqueOrThrow({ where: { id: target.id } })).email).toBeNull();
     expect(await handle.prisma.signatureAuditEvent.findUnique({ where: { id: evidence.id } })).toEqual(evidence);
@@ -248,16 +248,22 @@ describe.skipIf(!process.env.DATABASE_URL)('entity lifecycle on PostgreSQL', () 
   });
   it('cascades an organisation after an earlier child deletion retained immutable billing evidence', async () => {
     const admin = await actor(), { org, team } = await container();
-    await handle.prisma.team.create({ data: { orgId: org.id, name: 'Remaining', slug: randomUUID() } });
+    const remaining = await handle.prisma.team.create({ data: { orgId: org.id, name: 'Remaining', slug: randomUUID() } });
     const account = await handle.prisma.billingStripeAccount.create({ data: { stripeAccountId: `acct_${randomUUID()}`, livemode: false } });
     const customer = await handle.prisma.billingStripeCustomer.create({ data: { accountId: account.id, orgId: org.id, teamId: team.id, scope: 'TEAM', scopeKey: `${org.id}:${team.id}` } });
     const evidence = await handle.prisma.billingCreditAccount.create({ data: { accountId: account.id, customerId: customer.id, orgId: org.id, teamId: team.id, scope: 'TEAM', scopeKey: `${org.id}:${team.id}` } });
+    const secondCustomer = await handle.prisma.billingStripeCustomer.create({ data: { accountId: account.id, orgId: org.id, teamId: remaining.id, scope: 'TEAM', scopeKey: `${org.id}:${remaining.id}` } });
+    await handle.prisma.billingCreditAccount.create({ data: { accountId: account.id, customerId: secondCustomer.id, orgId: org.id, teamId: remaining.id, scope: 'TEAM', scopeKey: `${org.id}:${remaining.id}` } });
     const first = await start('TEAM', team.id, admin); await acknowledge(first); await executeEntityDeletion(first.id, admin);
     expect((await handle.prisma.team.findUniqueOrThrow({ where: { id: team.id } })).lifecycleStatus).toBe('DELETED');
     const last = await start('ORGANISATION', org.id, admin); await acknowledge(last);
     expect((await executeEntityDeletion(last.id, admin)).status).toBe('COMPLETE');
     expect((await handle.prisma.organisation.findUniqueOrThrow({ where: { id: org.id } })).lifecycleStatus).toBe('DELETED');
     expect(await handle.prisma.billingCreditAccount.findUnique({ where: { id: evidence.id } })).toEqual(evidence);
+    const retainedTeams = await handle.prisma.team.findMany({ where: { orgId: org.id } });
+    expect(retainedTeams).toHaveLength(2);
+    expect(new Set(retainedTeams.map(row => row.name)).size).toBe(2);
+    expect(retainedTeams.every(row => row.lifecycleStatus === 'DELETED' && row.slug === `deleted-${row.id}`)).toBe(true);
   });
   it('returns workplace labels for mapped cross-product memberships without leaking them to unmapped products', async () => {
     const { owner, org } = await container();

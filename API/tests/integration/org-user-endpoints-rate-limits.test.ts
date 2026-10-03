@@ -99,7 +99,8 @@ describe.skipIf(!hasDatabase)('user-facing /org endpoints rate limits', () => {
           'x-uoa-access-token': `Bearer ${orgOwnerToken}`,
         },
       });
-      expect(deleteRes.statusCode).toBe(200);
+      expect(deleteRes.statusCode).toBe(409);
+    expect(deleteRes.json()).toMatchObject({ code: 'ENTITY_DELETION_WORKFLOW_REQUIRED' });
     }
 
     const blockedRes = await app.inject({

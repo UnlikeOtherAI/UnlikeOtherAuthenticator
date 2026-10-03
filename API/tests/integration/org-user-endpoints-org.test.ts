@@ -189,7 +189,8 @@ describe.skipIf(!hasDatabase)('user-facing /org organisations and members', () =
         'x-uoa-access-token': `Bearer ${ownerTokenForUpdate}`,
       },
     });
-    expect(deleteRes.statusCode).toBe(200);
+    expect(deleteRes.statusCode).toBe(409);
+    expect(deleteRes.json()).toMatchObject({ code: 'ENTITY_DELETION_WORKFLOW_REQUIRED' });
 
     const afterDelete = await app.inject({
       method: 'GET',
@@ -199,7 +200,7 @@ describe.skipIf(!hasDatabase)('user-facing /org organisations and members', () =
         'x-uoa-access-token': `Bearer ${ownerTokenForUpdate}`,
       },
     });
-    expect(afterDelete.statusCode).toBe(404);
+    expect(afterDelete.statusCode).toBe(200);
 
     await app.close();
   });

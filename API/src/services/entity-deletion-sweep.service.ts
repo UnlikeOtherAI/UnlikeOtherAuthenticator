@@ -109,12 +109,12 @@ export async function sweepDeletion(tx: PrismaClient, preview: DeletionPreview, 
     if ((await tx.team.findUnique({ where: { id: teamId }, select: { lifecycleStatus: true } }))?.lifecycleStatus === 'DELETED') continue;
     const retained = await retainedEvidence(tx, 'TEAM', teamId);
     if (!retained.length) await tx.team.delete({ where: { id: teamId } });
-    else await tx.team.update({ where: { id: teamId }, data: { lifecycleStatus: 'DELETED', name: 'Deleted team', description: null, iconUrl: null, allowedEmails: [], allowedEmailDomains: [], lifecycleReason: null, lifecycleInternalNote: null, lifecycleTemplateId: null, lifecycleTemplateRevision: null } });
+    else await tx.team.update({ where: { id: teamId }, data: { lifecycleStatus: 'DELETED', name: `Deleted team ${teamId}`, slug: `deleted-${teamId}`, groupId: null, description: null, iconUrl: null, allowedEmails: [], allowedEmailDomains: [], lifecycleReason: null, lifecycleInternalNote: null, lifecycleTemplateId: null, lifecycleTemplateRevision: null } });
   }
   if (deleteOrg) {
     const retained = await retainedEvidence(tx, 'ORGANISATION', orgId);
     if (!retained.length && !await tx.team.count({ where: { orgId } })) await tx.organisation.delete({ where: { id: orgId } });
-    else await tx.organisation.update({ where: { id: orgId }, data: { lifecycleStatus: 'DELETED', name: 'Deleted organisation', iconUrl: null, allowedEmails: [], allowedEmailDomains: [], lifecycleReason: null, lifecycleInternalNote: null, lifecycleTemplateId: null, lifecycleTemplateRevision: null } });
+    else await tx.organisation.update({ where: { id: orgId }, data: { lifecycleStatus: 'DELETED', name: 'Deleted organisation', slug: `deleted-${orgId}`, iconUrl: null, allowedEmails: [], allowedEmailDomains: [], lifecycleReason: null, lifecycleInternalNote: null, lifecycleTemplateId: null, lifecycleTemplateRevision: null } });
   }
   for (const candidate of eligibility) {
     if (eraseAccounts && candidate.eligible) await eraseOperationalIdentity(tx, candidate.id, preview.mode);

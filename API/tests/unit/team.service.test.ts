@@ -91,7 +91,7 @@ describe('Team service', () => {
     expect(prisma.team.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
-          orgId: 'org-1',
+          orgId: 'org-1', lifecycleStatus: 'ACTIVE',
           OR: [
             { NOT: { joinPolicy: 'HIDDEN' } },
             { members: { some: { userId: 'u-owner', status: 'ACTIVE' } } },

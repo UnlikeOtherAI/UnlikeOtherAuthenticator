@@ -113,8 +113,8 @@ export async function previewEntityDeletion(tx: PrismaClient, scope: LifecycleSc
   for (const candidate of candidates.filter(c => c.eligible)) blockers.push(...await activeBillingBlockers(tx, 'USER', candidate.id));
   if (scope === 'USER' && await tx.organisation.count({ where: { ownerId: id, lifecycleStatus: { not: 'DELETED' } } })) blockers.push('Transfer ownership of every retained organisation before deleting this account.');
   const evidence = await retainedEvidence(tx, effectiveScope, effectiveTargetId);
-  for (const teamId of teamIds) evidence.push(...await retainedEvidence(tx, 'TEAM', teamId));
-  for (const userId of candidateIds) evidence.push(...await retainedEvidence(tx, 'USER', userId));
+  for (const teamId of teamIds.filter(teamId => effectiveScope !== 'TEAM' || teamId !== effectiveTargetId)) evidence.push(...await retainedEvidence(tx, 'TEAM', teamId));
+  for (const userId of candidateIds.filter(userId => effectiveScope !== 'USER' || userId !== effectiveTargetId)) evidence.push(...await retainedEvidence(tx, 'USER', userId));
   // Live financial capabilities are not inert history. They must be closed before the job can finish.
   const billingWhere = orgId ? { orgId, ...(effectiveScope === 'TEAM' ? { teamId: id } : {}) } : { userId: id };
   if (scope !== 'USER' && await tx.billingStripeSubscription.count({ where: { ...billingWhere, status: { notIn: ['canceled', 'incomplete_expired'] } } })) blockers.push('Cancel active Stripe subscriptions before confirming deletion.');

@@ -186,17 +186,6 @@ describe.skipIf(!hasDatabase)('team deletion and membership removal race', () =>
     );
   }
 
-  async function expectStillPending(promise: Promise<unknown>): Promise<void> {
-    const state = await Promise.race([
-      promise.then(
-        () => 'settled',
-        () => 'settled',
-      ),
-      new Promise<'pending'>((resolve) => setTimeout(() => resolve('pending'), 25)),
-    ]);
-    expect(state).toBe('pending');
-  }
-
   async function expectOnlyBackupMembership(team: SeededTeam): Promise<void> {
     expect(
       await handle.prisma.teamMember.findUnique({
@@ -231,78 +220,36 @@ describe.skipIf(!hasDatabase)('team deletion and membership removal race', () =>
     ).toBe(1);
   }
 
-  it('does not recreate default membership when removal obtains the locks first', async () => {
+  it('refuses legacy deletion while an in-flight removal completes normally', async () => {
     const team = await seedTeam();
     const statusWritten = deferred();
     const releaseRemoval = deferred();
-
     const removal = remove(team, async () => {
       statusWritten.resolve();
       await releaseRemoval.promise;
     });
     await statusWritten.promise;
-
-    const deletion = deleteTargetTeam(team);
-    await expectStillPending(deletion);
-    releaseRemoval.resolve();
-
+    try {
+      await expect(deleteTargetTeam(team)).rejects.toMatchObject({
+        statusCode: 409, message: 'ENTITY_DELETION_WORKFLOW_REQUIRED',
+      });
+    } finally {
+      releaseRemoval.resolve();
+    }
     await expect(removal).resolves.toEqual({ removed: true });
-    await expect(deletion).resolves.toEqual({ deleted: true });
-    expect(
-      await handle.prisma.team.findUnique({
-        where: { id: team.targetTeamId },
-        select: { id: true },
-      }),
-    ).toBeNull();
+    expect(await handle.prisma.team.count({ where: { id: team.targetTeamId } })).toBe(1);
     await expectOnlyBackupMembership(team);
   });
 
-  it('deletes first and makes a waiting removal fail against current state', async () => {
-    const team = await seedTeam();
-    const membershipsLocked = deferred();
-    const releaseDeletion = deferred();
-
-    const deletion = deleteTargetTeam(team, async () => {
-      membershipsLocked.resolve();
-      await releaseDeletion.promise;
-    });
-    await membershipsLocked.promise;
-
-    const removal = remove(team);
-    await expectStillPending(removal);
-    releaseDeletion.resolve();
-
-    await expect(deletion).resolves.toEqual({ deleted: true });
-    await expect(removal).rejects.toMatchObject({
-      code: 'NOT_FOUND',
-      statusCode: 404,
-    });
-    expect(
-      await handle.prisma.team.findUnique({
-        where: { id: team.targetTeamId },
-        select: { id: true },
-      }),
-    ).toBeNull();
-    await expectOnlyBackupMembership(team);
-  });
-
-  it('waits for an in-flight insert, then re-homes its committed member', async () => {
+  it('refuses legacy deletion without consuming an in-flight membership insert', async () => {
     const team = await seedTeam();
     const lateUserId = await seedMemberWithoutTeam(team);
     const membershipInserted = deferred();
     const releaseInsertion = deferred();
-
     const insertion = handle.prisma.$transaction(async (tx) => {
-      await lockTeamMembershipRows(
-        { userId: lateUserId, orgId: team.orgId },
-        { prisma: tx },
-      );
+      await lockTeamMembershipRows({ userId: lateUserId, orgId: team.orgId }, { prisma: tx });
       const membership = await tx.teamMember.create({
-        data: {
-          teamId: team.targetTeamId,
-          userId: lateUserId,
-          teamRole: 'member',
-        },
+        data: { teamId: team.targetTeamId, userId: lateUserId, teamRole: 'member' },
         select: { id: true },
       });
       membershipInserted.resolve();
@@ -310,88 +257,18 @@ describe.skipIf(!hasDatabase)('team deletion and membership removal race', () =>
       return membership;
     });
     await membershipInserted.promise;
-
-    const deletion = deleteTargetTeam(team);
-    await expectStillPending(deletion);
-    releaseInsertion.resolve();
-
-    await expect(insertion).resolves.toEqual({ id: expect.any(String) });
-    await expect(deletion).resolves.toEqual({ deleted: true });
-    expect(
-      await handle.prisma.team.findUnique({
-        where: { id: team.targetTeamId },
-        select: { id: true },
-      }),
-    ).toBeNull();
-    expect(
-      await handle.prisma.teamMember.findUniqueOrThrow({
-        where: {
-          teamId_userId: {
-            teamId: team.defaultTeamId,
-            userId: lateUserId,
-          },
-        },
-        select: { status: true },
-      }),
-    ).toEqual({ status: 'ACTIVE' });
-  });
-
-  it('blocks a late insert behind deletion and leaves no orphan membership', async () => {
-    const team = await seedTeam();
-    const lateUserId = await seedMemberWithoutTeam(team);
-    const targetTeamLocked = deferred();
-    const releaseDeletion = deferred();
-
-    const deletionWithLockHook = deleteTeam(
-      {
-        orgId: team.orgId,
-        teamId: team.targetTeamId,
-        domain,
-        actorUserId: team.ownerId,
-        config: teamConfig(),
-      },
-      {
-        prisma: handle.prisma,
-        afterTargetTeamLock: async () => {
-          targetTeamLocked.resolve();
-          await releaseDeletion.promise;
-        },
-      },
-    );
-    await targetTeamLocked.promise;
-
-    const insertAttempted = deferred();
-    const insertion = handle.prisma.$transaction(async (tx) => {
-      await lockTeamMembershipRows(
-        { userId: lateUserId, orgId: team.orgId },
-        { prisma: tx },
-      );
-      insertAttempted.resolve();
-      return tx.teamMember.create({
-        data: {
-          teamId: team.targetTeamId,
-          userId: lateUserId,
-          teamRole: 'member',
-        },
-        select: { id: true },
+    try {
+      await expect(deleteTargetTeam(team)).rejects.toMatchObject({
+        statusCode: 409, message: 'ENTITY_DELETION_WORKFLOW_REQUIRED',
       });
-    });
-    await insertAttempted.promise;
-    await expectStillPending(insertion);
-    releaseDeletion.resolve();
-
-    await expect(deletionWithLockHook).resolves.toEqual({ deleted: true });
-    await expect(insertion).rejects.toMatchObject({ code: 'P2003' });
-    expect(
-      await handle.prisma.team.findUnique({
-        where: { id: team.targetTeamId },
-        select: { id: true },
-      }),
-    ).toBeNull();
-    expect(
-      await handle.prisma.teamMember.count({
-        where: { userId: lateUserId },
-      }),
-    ).toBe(0);
+    } finally {
+      releaseInsertion.resolve();
+    }
+    await expect(insertion).resolves.toEqual({ id: expect.any(String) });
+    expect(await handle.prisma.team.count({ where: { id: team.targetTeamId } })).toBe(1);
+    expect(await handle.prisma.teamMember.findUniqueOrThrow({
+      where: { teamId_userId: { teamId: team.targetTeamId, userId: lateUserId } },
+      select: { status: true },
+    })).toEqual({ status: 'ACTIVE' });
   });
 });
