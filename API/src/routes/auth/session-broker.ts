@@ -17,7 +17,7 @@ export function registerSessionBrokerRoutes(app: FastifyInstance): void {
     preHandler: [ingress, configVerifier, requireDomainHashAuth, limit],
   }, async (request) => {
     if (!request.config || !request.domainAuthClientDomainId) throw new AppError('UNAUTHORIZED', 401);
-    return validateSessionBroker({ token: body.parse(request.body).token, targetDomain: request.config.domain },
+    return validateSessionBroker({ token: body.parse(request.body).token, targetConfig: request.config },
       { prisma: request.adminDb });
   });
 }

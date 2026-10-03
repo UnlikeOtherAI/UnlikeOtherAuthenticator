@@ -25,9 +25,16 @@ Source logout prevents further renewal. An already issued delegated capability r
 valid for at most five minutes, subject to current epoch, membership and mapping checks.
 Register the new scope through the operator API; no mapping is created by deployment.
 
-Selkie admission additionally requires a current Selkie domain role and the same active
-team admitted by Selkie’s server-owned product policy. The source mapping does not
-create target membership. Existing cross-product policy requires a current Selkie
-customer-lifecycle registration; absent or revoked registration refuses the broker.
+Selkie admission always requires its current domain role and canonical UOA ban policy.
+The source mapping creates no target membership. Only the current verified target
+config decides the data boundary: explicit `org_features.enabled:false` permits only
+subject-owned personal device access; the source team remains provenance and grants
+no team resource. For `enabled:true`, the same active team must also be admitted by
+Selkie’s server-owned product policy, including its current customer-lifecycle registration.
+Absent or ambiguous target configuration fails closed. Personal mode needs no invented
+billing registration or local tenant hierarchy.
 Selkie’s product-specific suspension rules remain enforced by its local session handler.
 Database outages fail closed and remain retryable errors, rather than proven revocation.
+
+This delegated capability asserts no MFA completion. Privileged operations keep their
+existing UOA action-verification requirement independently of enrollment.
