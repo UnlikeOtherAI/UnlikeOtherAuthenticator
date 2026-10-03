@@ -7,10 +7,12 @@ import { SelectField, TextField } from '../components/ui/FormFields';
 import { PageHeader } from '../components/ui/PageHeader';
 import { StatusBadge } from '../components/ui/Status';
 import { DataTable, PaginationFooter, Td, usePagination } from '../components/ui/Table';
+import { useDirectoryNavigation } from '../features/admin/useDirectoryNavigation';
 import { useDomainsQuery } from '../features/admin/admin-queries';
 
 export function DirectoryDomainsPage() {
   const { data = [], isLoading, isError, refetch } = useDomainsQuery();
+  const { recordState } = useDirectoryNavigation('/domains');
   const [params, setParams] = useSearchParams();
   const query = params.get('q') ?? '';
   const status = params.get('status') ?? 'active';
@@ -60,7 +62,7 @@ export function DirectoryDomainsPage() {
                   className="cursor-pointer transition-colors hover:bg-gray-50"
                 >
                   <Td>
-                    <Link className="font-semibold text-indigo-600 hover:underline" to={`/domains/${encodeURIComponent(domain.id)}`}>{domain.label || domain.name}</Link>
+                    <Link state={recordState} className="font-semibold text-indigo-600 hover:underline" to={`/domains/${encodeURIComponent(domain.id)}`}>{domain.label || domain.name}</Link>
                     {domain.label && domain.label !== domain.name ? (
                       <p className="mt-0.5 text-xs text-gray-400">{domain.name}</p>
                     ) : null}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useLocation } from 'react-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { Badge } from '../../components/ui/Badge';
@@ -183,10 +183,11 @@ export function DomainOverviewTab({ counts, domain, section = 'overview' }: Doma
 }
 
 function MetricCard({ label, value, href }: { label: string; value: number; href: string }) {
+  const location = useLocation();
   return (
     <Card className="p-4">
       <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">{label}</p>
-      <Link to={href} className="mt-1 block text-lg font-semibold text-indigo-600 hover:underline" aria-label={`View ${value} ${label.toLowerCase()}`}>{value}</Link>
+      <Link state={location.state} to={href} className="mt-1 block text-lg font-semibold text-indigo-600 hover:underline" aria-label={`View ${value} ${label.toLowerCase()}`}>{value}</Link>
     </Card>
   );
 }

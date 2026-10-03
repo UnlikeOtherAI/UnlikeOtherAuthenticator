@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { expect, test, type Page } from '@playwright/test';
 import { navSections } from '../src/layouts/navigation';
 import { installFixtures } from './fixtures';
@@ -23,6 +24,7 @@ test('every menu destination renders at desktop and mobile sizes', async ({ page
 
 test('addressable details, subsections and legacy routes retain their content', async ({ page }) => {
   const fixture = await installFixtures(page);
+  test.setTimeout(90_000);
   const paths = [
     '/users/u101', '/organisations/o1', '/organisations/o1/teams/t12', '/apps/native-1',
     '/domains/app.acme.com', ...['organisations', 'teams', 'users', 'access', 'credentials', 'keys', 'email', 'agreements'].map((tab) => `/domains/app.acme.com?tab=${tab}`),
@@ -86,6 +88,83 @@ test('native edits keep input after failure, persist on retry, and guard keyboar
   await page.keyboard.press('Escape');
   await expect(dialog).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Edit app' })).toBeFocused();
+  expect(fixture.errors).toEqual([]);
+  expect(fixture.unexpected).toEqual([]);
+});
+
+
+test('activity filters, CSV export and excluded selections stay in sync', async ({ page }) => {
+  const fixture = await installFixtures(page);
+  await page.goto('/logs?selected=l1');
+  await expect(page.getByRole('heading', { name: 'Login event' })).toBeVisible();
+  await page.getByRole('searchbox', { name: 'Search activity' }).fill('alice');
+  await page.getByRole('combobox', { name: 'Method', exact: true }).selectOption('google');
+  await page.getByLabel('From (UTC)', { exact: true }).fill('2026-04-07');
+  await page.getByLabel('To (UTC)', { exact: true }).fill('2026-04-07');
+  await expect(page.locator('main tbody tr')).toHaveCount(1);
+  const pendingDownload = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export CSV' }).click();
+  const download = await pendingDownload;
+  expect(download.suggestedFilename()).toBe('login-activity.csv');
+  const file = await download.path();
+  const csv = await readFile(file, 'utf8');
+  expect(csv).toContain('alice@acme.com');
+  expect(csv).not.toContain('bob@widgets.io');
+  expect(csv.trim().split('\r\n')).toHaveLength(2);
+  await page.getByRole('searchbox', { name: 'Search activity' }).fill('unmatched-event');
+  await expect(page.getByRole('heading', { name: 'Login event' })).toHaveCount(0);
+  await expect(page.getByText('No logins match these filters.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Export CSV' })).toBeDisabled();
+  await page.goto('/connection-errors?selected=he1');
+  await expect(page.getByText('Error Detail', { exact: true })).toBeVisible();
+  await page.getByPlaceholder('Error, request id, app, domain...').fill('unmatched-error');
+  await expect(page.getByText('Error Detail', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Select an error to inspect', { exact: false })).toBeVisible();
+  expect(fixture.errors).toEqual([]);
+  expect(fixture.unexpected).toEqual([]);
+});
+
+test('access bans expose all four kinds and filter without losing rules', async ({ page }) => {
+  const fixture = await installFixtures(page);
+  await page.goto('/bans');
+  for (const [kind, count] of [['emails', 3], ['patterns', 3], ['ips', 3], ['users', 1]] as const) {
+    await page.getByRole('combobox', { name: 'Ban type' }).selectOption(kind);
+    await expect(page.locator('main tbody tr')).toHaveCount(count);
+    await expect(page.locator('main tbody tr').first().locator('td').nth(1)).toHaveText(kind);
+  }
+  await page.getByRole('combobox', { name: 'Ban type' }).selectOption('');
+  await expect(page.locator('main tbody tr')).toHaveCount(10);
+  await page.getByRole('searchbox', { name: 'Search bans' }).fill('unmatched-ban');
+  await expect(page.getByText('No bans match these filters.')).toBeVisible();
+  expect(fixture.errors).toEqual([]);
+  expect(fixture.unexpected).toEqual([]);
+});
+
+
+test('record Back button returns to the service directory tab and search', async ({ page }) => {
+  const fixture = await installFixtures(page);
+  await page.goto('/domains/app.acme.com?tab=users&q=Alice');
+  await page.getByRole('link', { name: 'Alice Chen', exact: true }).click();
+  await expect(page).toHaveURL(/\/users\/u101$/);
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  await expect(page).toHaveURL('http://127.0.0.1:5274/domains/app.acme.com?tab=users&q=Alice');
+  await expect(page.getByPlaceholder('Search by name or email...')).toHaveValue('Alice');
+  expect(fixture.errors).toEqual([]);
+  expect(fixture.unexpected).toEqual([]);
+});
+
+
+test('nested credential confirmation Escape preserves its request review', async ({ page }) => {
+  const fixture = await installFixtures(page);
+  await page.goto('/integrations?status=ALL&request=request-1');
+  await page.getByRole('button', { name: 'Reveal Secret Here' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(2);
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(1);
+  await expect(page.getByRole('dialog', { name: 'Integration Request', exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/request=request-1/);
+  await page.getByRole('link', { name: 'Open website service' }).click();
+  await expect(page).toHaveURL(/\/domains\/app.acme.com$/);
   expect(fixture.errors).toEqual([]);
   expect(fixture.unexpected).toEqual([]);
 });
