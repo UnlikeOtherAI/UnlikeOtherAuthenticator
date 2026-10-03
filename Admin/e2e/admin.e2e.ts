@@ -59,7 +59,7 @@ test('service filters survive record navigation and browser Back; related users 
   expect(fixture.unexpected).toEqual([]);
 });
 
-test('native edits keep input after failure, persist on retry, and guard keyboard dismissal', async ({ page }) => {
+test('native edits keep input after failure, persist on retry, and guard keyboard dismissal', async ({ page }, testInfo) => {
   const fixture = await installFixtures(page);
   await page.goto('/apps');
   await page.getByRole('link', { name: 'Fixture Browser', exact: true }).click();
@@ -78,6 +78,7 @@ test('native edits keep input after failure, persist on retry, and guard keyboar
   await expect(dialog).toHaveCount(0);
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Fixture Browser renamed' })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('native-detail.png'), fullPage: true });
   expect(fixture.nativeWrites()).toBe(2);
   await page.getByRole('button', { name: 'Edit app' }).click();
   await dialog.getByRole('button', { name: 'Close modal' }).focus();
