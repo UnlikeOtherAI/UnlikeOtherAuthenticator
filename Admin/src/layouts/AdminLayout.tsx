@@ -4,7 +4,6 @@ import { ConfirmDialog } from '../components/dialogs/ConfirmDialog';
 import { DebugFab } from '../components/DebugFab';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
-import { UserDetailsModal } from '../components/dialogs/UserDetailsModal';
 
 export function AdminLayout() {
   return (
@@ -16,7 +15,6 @@ export function AdminLayout() {
           <Outlet />
         </main>
       </div>
-      <UserDetailsModal />
       <ConfirmDialog />
       {/* DEV-gated like adminEnv.bypassAuth: a support-debug surface has no place in a production build. */}
       {import.meta.env.DEV ? <DebugFab /> : null}

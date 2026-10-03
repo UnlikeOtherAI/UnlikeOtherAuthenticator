@@ -1,4 +1,4 @@
-import { useContext, useEffect, useMemo, useState, type ReactNode, type TdHTMLAttributes } from 'react';
+import { useContext, useEffect, useMemo, useRef, useState, type ReactNode, type TdHTMLAttributes } from 'react';
 import { UNSAFE_LocationContext, UNSAFE_NavigationContext } from 'react-router';
 
 import { cn } from '../../utils/cn';
@@ -57,10 +57,12 @@ export function usePagination<T>(items: T[], initialPageSize = 10, options: { ke
   const location = useContext(UNSAFE_LocationContext)?.location;
   const navigation = useContext(UNSAFE_NavigationContext);
   const key = options.key ?? 'page';
+  const priorResetKey = useRef(options.resetKey);
+  const reset = priorResetKey.current !== options.resetKey;
   const params = new URLSearchParams(location?.search);
   const urlPage = Number(params.get(key) ?? 1);
   const useUrl = options.url !== false && !!location && !!navigation;
-  const requestedPage = useUrl ? (Number.isSafeInteger(urlPage) && urlPage > 0 ? urlPage : 1) : page;
+  const requestedPage = reset ? 1 : useUrl ? (Number.isSafeInteger(urlPage) && urlPage > 0 ? urlPage : 1) : page;
   const changePage = (next: number) => {
     setPage(next);
     if (!useUrl || !location || !navigation) return;
@@ -81,6 +83,17 @@ export function usePagination<T>(items: T[], initialPageSize = 10, options: { ke
   useEffect(() => {
     setPage(1);
   }, [pageSize, options.resetKey]);
+
+  useEffect(() => {
+    if (priorResetKey.current === options.resetKey) return;
+    priorResetKey.current = options.resetKey;
+    if (!useUrl || !location || !navigation) return;
+    const search = new URLSearchParams(location.search);
+    if (!search.has(key)) return;
+    search.delete(key);
+    const base = navigation.basename === '/' ? '' : navigation.basename.replace(/\/$/, '');
+    navigation.navigator.replace({ pathname: `${base}${location.pathname}`, search: search.toString() ? `?${search}` : '', hash: location.hash }, location.state);
+  }, [options.resetKey, useUrl, location, navigation, key]);
 
   useEffect(() => {
     setPage((current) => Math.min(current, totalPages));
