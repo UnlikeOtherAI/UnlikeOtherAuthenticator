@@ -39,7 +39,7 @@ function roleToPublic(role: UserRole): 'superuser' | 'user' {
  * Returns only non-sensitive user fields (no password hash, no 2FA secret, no user_key).
  */
 export async function listUsersForDomain(
-  params: { domain: string; limit?: number },
+  params: { domain: string; limit?: number; userId?: string },
   deps?: DomainUsersDeps,
 ): Promise<DomainUserRecord[]> {
   const env = deps?.env ?? getEnv();
@@ -52,7 +52,7 @@ export async function listUsersForDomain(
   const limit = Math.max(1, Math.min(500, params.limit ?? 100));
 
   const rows = await prisma.domainRole.findMany({
-    where: { domain },
+    where: { domain, ...(params.userId ? { userId: params.userId } : {}) },
     orderBy: { createdAt: 'desc' },
     take: limit,
     select: {

@@ -62,6 +62,14 @@ export function registerRootRoute(app: FastifyInstance): void {
       config_validation: configValidationEndpointDocumentation,
       config_verification: configVerificationEndpointDocumentation,
       endpoints,
+      debug_login: {
+        issue: { method: 'POST', path: '/auth/debug-login/issue', auth: 'domain bearer plus source refresh_token',
+          body: { refresh_token: 'string', previous_token: 'optional one-use token to invalidate' },
+          response: { token: 'opaque one-use code', expires_in: 1800 } },
+        redeem: { method: 'POST', path: '/auth/debug-login/redeem', auth: 'domain bearer',
+          body: { token: 'opaque one-use code' }, response: 'Independent access and refresh token pair' },
+        binding: 'Exact verified config_url, domain, client, source refresh family, credential epoch and selected team. Tokens travel only in POST bodies.',
+      },
       product_api_concurrency:
         'Product data APIs — /org/*, /domain/*, /settings/*, /internal/org/*, /avatar/*, /email/* — share a small per-instance concurrency cap so sign-in always keeps database connections. An excess request waits briefly in FIFO order, then answers 503 with Retry-After: 1 and code PRODUCT_API_BUSY (the request had no effect). Retry after the delay with backoff and never fan out one UOA call per end-user request: resolve /org/me and settings once per session and cache them. /auth/* (including /auth/token), /oauth/*, /2fa/*, /integrations/*, /internal/admin/*, /billing/* and discovery are never limited.',
       org_me_subject_assertion:

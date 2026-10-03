@@ -129,11 +129,12 @@ export const domainEndpoints: EndpointSchema[] = [
   {
     method: 'GET',
     path: '/domain/users',
-    description: 'List users for a domain',
+    description: 'List users for a domain or resolve one exact UOA subject in that domain',
     auth: 'domain hash bearer token',
     query: {
       domain: 'string (required)',
       limit: 'number (optional)',
+      user_id: 'string (optional): exact subject filter; domain visibility still required',
     },
     response: {
       'users[].avatar_url':

@@ -625,6 +625,27 @@ model RefreshToken {
   @@map("refresh_tokens")
 }
 
+// One-use support login capability. No existing credential is stored or exported.
+model DebugLoginGrant {
+  id String @id @default(cuid())
+  tokenHash String @unique @map("token_hash")
+  sourceFamilyId String @map("source_family_id")
+  userId String @map("user_id")
+  tokenVersion Int @map("token_version")
+  domain String
+  clientId String @map("client_id")
+  configUrl String @map("config_url")
+  orgId String? @map("org_id")
+  teamId String? @map("team_id")
+  expiresAt DateTime @map("expires_at")
+  usedAt DateTime? @map("used_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId, createdAt])
+  @@index([expiresAt])
+  @@map("debug_login_grants")
+}
+
 model LoginLog {
   id         String   @id @default(cuid())
   userId     String?  @map("user_id")

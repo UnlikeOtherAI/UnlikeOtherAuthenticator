@@ -4,6 +4,7 @@ import { getEnv } from '../config/env.js';
 import { getAdminPrisma } from '../db/prisma.js';
 
 type RetentionPrisma = {
+  debugLoginGrant: Pick<PrismaClient['debugLoginGrant'], 'deleteMany'>;
   authorizationCode: Pick<PrismaClient['authorizationCode'], 'deleteMany'>;
   confidentialAssertionUse: Pick<PrismaClient['confidentialAssertionUse'], 'deleteMany'>;
   handshakeErrorLog: Pick<PrismaClient['handshakeErrorLog'], 'deleteMany'>;
@@ -20,6 +21,7 @@ type RetentionPruneDeps = {
 };
 
 export type RetentionPruneResult = {
+  debugLoginGrantsDeleted: number;
   authorizationCodesDeleted: number;
   confidentialAssertionUsesDeleted: number;
   handshakeErrorLogsDeleted: number;
@@ -35,6 +37,7 @@ function subtractDays(date: Date, days: number): Date {
 
 function emptyResult(): RetentionPruneResult {
   return {
+    debugLoginGrantsDeleted: 0,
     authorizationCodesDeleted: 0,
     confidentialAssertionUsesDeleted: 0,
     handshakeErrorLogsDeleted: 0,
@@ -57,6 +60,7 @@ export async function pruneExpiredSecurityData(
   const loginLogCutoff = subtractDays(now, env.LOG_RETENTION_DAYS);
 
   const [
+    debugLoginGrants,
     refreshTokens,
     authorizationCodes,
     confidentialAssertionUses,
@@ -65,6 +69,7 @@ export async function pruneExpiredSecurityData(
     loginLogs,
     handshakeErrorLogs,
   ] = await Promise.all([
+    prisma.debugLoginGrant.deleteMany({ where: { expiresAt: { lt: now } } }),
     prisma.refreshToken.deleteMany({
       where: { expiresAt: { lt: tokenCutoff } },
     }),
@@ -89,6 +94,7 @@ export async function pruneExpiredSecurityData(
   ]);
 
   return {
+    debugLoginGrantsDeleted: debugLoginGrants.count,
     authorizationCodesDeleted: authorizationCodes.count,
     confidentialAssertionUsesDeleted: confidentialAssertionUses.count,
     handshakeErrorLogsDeleted: handshakeErrorLogs.count,

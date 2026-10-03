@@ -35,6 +35,14 @@ const orgContractEndpoints: EndpointSchema[] = withOrgContract([
 ]);
 
 export const endpoints: EndpointSchema[] = [
+  { method: 'POST', path: '/auth/debug-login/issue', description: 'Mint a 30-minute single-use login code from a current source refresh family',
+    auth: 'verified config and domain bearer plus source refresh credential', query: { config_url: 'signed product config URL' },
+    body: { refresh_token: 'current source refresh token', previous_token: 'optional previous code to invalidate atomically' },
+    response: { token: 'random opaque one-use code', expires_in: '1800' } },
+  { method: 'POST', path: '/auth/debug-login/redeem', description: 'Consume one code and mint an independent session after current authority checks',
+    auth: 'verified config and domain bearer', query: { config_url: 'same product config identity' },
+    body: { token: 'one-use login code' }, response: { access_token: 'new token', refresh_token: 'new independent family',
+      expires_in: 'access lifetime seconds', refresh_token_expires_in: 'remaining source lifetime seconds', token_type: 'Bearer' } },
   ...nativeAppEndpoints,
   ...baseEndpoints,
   ...configDebugEndpoints,

@@ -383,7 +383,7 @@ The first-party Admin UI is served from [/admin](/admin). It dogfoods the same a
 
 ## Operational endpoints
 
-- \`GET /domain/users\` — list users for a domain.
+- \`GET /domain/users\` — list users for a domain; optional \`user_id\` resolves an exact subject while requiring the same domain visibility.
 - \`GET /domain/logs\` — domain login logs.
 - \`GET /org/me\` — current user's org context.
 - \`POST /email/send\` — send a transactional email for a configured domain. Supply \`X-UOA-Config-JWT: <signed config JWT>\`; UOA verifies the RS256 config JWT directly from the header, requires the domain email config to be enabled and SES verification/DKIM to both be \`Success\`, then sends \`{ to, subject, text, html?, reply_to? }\`.
