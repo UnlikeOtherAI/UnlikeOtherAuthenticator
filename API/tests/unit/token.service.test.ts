@@ -35,6 +35,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
     const redirectUrl = 'https://client.example.com/oauth/callback';
 
     const prisma = {
+      organisation: { findUnique: vi.fn().mockResolvedValue({ lifecycleStatus: 'ACTIVE' }) },
       $queryRaw: vi.fn().mockResolvedValue([]),
       authorizationCode: {
         findUnique: vi.fn(),
@@ -157,6 +158,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
     const redirectUrl = 'https://client.example.com/oauth/callback';
 
     const prisma = {
+      organisation: { findUnique: vi.fn().mockResolvedValue({ lifecycleStatus: 'ACTIVE' }) },
       $queryRaw: vi.fn().mockResolvedValue([]),
       authorizationCode: {
         findUnique: vi.fn(),
@@ -250,6 +252,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
     const redirectUrl = 'https://client.example.com/oauth/callback';
 
     const prisma = {
+      organisation: { findUnique: vi.fn().mockResolvedValue({ lifecycleStatus: 'ACTIVE' }) },
       $queryRaw: vi.fn().mockResolvedValue([]),
       authorizationCode: {
         findUnique: vi.fn(),
@@ -352,6 +355,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
     const redirectUrl = 'https://client.example.com/oauth/callback';
 
     const prisma = {
+      organisation: { findUnique: vi.fn().mockResolvedValue({ lifecycleStatus: 'ACTIVE' }) },
       $queryRaw: vi.fn().mockResolvedValue([]),
       authorizationCode: {
         findUnique: vi.fn(),
@@ -444,6 +448,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
     const redirectUrl = 'https://client.example.com/oauth/callback';
 
     const prisma = {
+      organisation: { findUnique: vi.fn().mockResolvedValue({ lifecycleStatus: 'ACTIVE' }) },
       $queryRaw: vi.fn().mockResolvedValue([]),
       authorizationCode: { findUnique: vi.fn(), updateMany: vi.fn() },
       refreshToken: { create: vi.fn() },

@@ -267,7 +267,7 @@ describe('POST /auth/select-team invite-link redemption', () => {
       status: 'ACTIVE',
     });
     prismaMock.teamMember.findFirst.mockResolvedValue({ id: 'tm-2', status: 'ACTIVE' });
-    prismaMock.user.findUnique.mockResolvedValue({ twoFaEnabled: true, tokenVersion: 0 });
+    prismaMock.user.findUnique.mockResolvedValue({ lifecycleStatus: 'ACTIVE', twoFaEnabled: true, tokenVersion: 0 });
     prismaMock.clientDomain.findUnique.mockResolvedValue({ twoFaPolicy: 'REQUIRED' });
     prismaMock.organisation.findMany.mockResolvedValue([]);
 

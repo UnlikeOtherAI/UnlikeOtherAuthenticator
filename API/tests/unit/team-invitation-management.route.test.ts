@@ -98,7 +98,7 @@ describe.each(endpoints)('$method invitations$suffix authorization', (endpoint) 
     vi.clearAllMocks();
     config.org_features!.backend_org_management = true;
     delete config.org_features!.role_grants;
-    mocks.prisma.organisation.findFirst.mockResolvedValue({ id: 'org-1', domain: config.domain });
+    mocks.prisma.organisation.findFirst.mockResolvedValue({ id: 'org-1', domain: config.domain, ownerId: 'owner-1' });
     mocks.prisma.orgMember.findFirst.mockResolvedValue({ id: 'om-1', role: 'member' });
     mocks.prisma.teamMember.findFirst.mockResolvedValue({ teamRole: 'admin' });
     mocks.prisma.user.findUnique.mockResolvedValue({ email: 'actor@example.com' });

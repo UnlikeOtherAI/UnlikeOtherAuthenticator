@@ -157,7 +157,7 @@ export function fakePrisma(params?: { existing?: ReturnType<typeof signatureRow>
       }),
     },
     user: {
-      findUnique: vi.fn().mockResolvedValue({
+      findUnique: vi.fn().mockResolvedValue({ lifecycleStatus: 'ACTIVE',
         email: 'person@example.com',
         name: 'Profile Name',
         tokenVersion: 0,

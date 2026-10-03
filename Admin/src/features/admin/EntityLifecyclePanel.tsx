@@ -1,3 +1,4 @@
+import { Link, useNavigate } from 'react-router';
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '../../components/ui/Button';
@@ -19,18 +20,15 @@ export function EntityLifecyclePanel({ scope, id }: { scope: LifecycleScope; id:
 }
 function EntityLifecyclePanelBody({ scope, id }: { scope: LifecycleScope; id: string }) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const path = `/internal/admin/lifecycle/${scope}/${encodeURIComponent(id)}`;
   const lifecycle = useQuery({ queryKey: ['admin', 'lifecycle', scope, id], queryFn: () => api.get<Lifecycle>(path) });
   const templates = useQuery({ queryKey: ['admin', 'lifecycle-templates'], queryFn: () => api.get<{ data: LifecycleTemplate[] }>('/internal/admin/lifecycle/templates') });
   const [templateId, setTemplateId] = useState(''), [note, setNote] = useState('');
   const [mode, setMode] = useState('RETAIN_REFERENCE'), [preview, setPreview] = useState<Preview | null>(null);
-  const [confirmation, setConfirmation] = useState(''), [jobId, setJobId] = useState<string | null>(null);
+  const [confirmation, setConfirmation] = useState('');
   const [requestKey, setRequestKey] = useState(() => crypto.randomUUID());
   const [error, setError] = useState(''), [pending, setPending] = useState(false);
-  const resolvedJobId = jobId ?? lifecycle.data?.deletionJobId;
-  const job = useQuery({ queryKey: ['admin', 'deletion-job', resolvedJobId], enabled: Boolean(resolvedJobId),
-    queryFn: () => api.get<Job>(`/internal/admin/lifecycle/deletion-jobs/${resolvedJobId}`),
-    refetchInterval: query => query.state.data?.status === 'WAITING_FOR_PRODUCTS' ? 10_000 : false });
   const selected = templates.data?.data.find(t => t.id === templateId);
   async function act(task: () => Promise<unknown>) {
     setError(''); setPending(true);
@@ -70,17 +68,10 @@ function EntityLifecyclePanelBody({ scope, id }: { scope: LifecycleScope; id: st
         {preview.blockers.length ? <ul role="alert">{preview.blockers.map(b => <li key={b}>{b}</li>)}</ul> : null}
         <label className="block">Type {preview.confirmation}<input className={inputClass} value={confirmation} onChange={e => setConfirmation(e.target.value)} disabled={pending} /></label>
         <Button variant="danger" disabled={pending || preview.blockers.length > 0 || confirmation !== preview.confirmation} onClick={() => void act(async () => {
-          const created = await api.post<Job>(`${path}/delete`, { mode, previewDigest: preview.digest, confirmation, requestKey }); setJobId(created.id);
+          const created = await api.post<Job>(`${path}/delete`, { mode, previewDigest: preview.digest, confirmation, requestKey }); navigate(`/deletion-jobs/${encodeURIComponent(created.id)}`);
         })}>Confirm deletion</Button>
       </div> : null}
-      {job.isError ? <p role="alert">Could not load deletion progress. <Button onClick={() => void job.refetch()}>Retry loading progress</Button></p> : null}
-      {job.data ? <div className="space-y-2 border-t pt-4">
-        <p>Deletion job {job.data.id}: {job.data.status.toLowerCase().replaceAll('_', ' ')}</p>
-        <ul>{job.data.participants.map(p => <li key={p.domain}>{p.domain}: {p.acknowledgedAt ? p.outcome : 'waiting for product acknowledgement'}{p.outcome === 'RETAINED_EVIDENCE' ? <ul>{p.retainedEvidence?.length ? p.retainedEvidence.map((r,i) => <li key={i}>{r.label}: {r.count}. {r.reason}</li>) : <li>Product reported retained evidence; details unavailable.</li>}</ul> : null}</li>)}</ul>
-        {job.data.blockers.map(b => <p key={b} role="alert">{b}</p>)}
-        <ul>{job.data.preview.retainedEvidence.map((r, i) => <li key={i}>{r.model.replace(/([a-z])([A-Z])/g, '$1 $2')}: {r.count}. {r.reason}</li>)}</ul>
-        {job.data.status !== 'COMPLETE' ? <Button disabled={pending || job.data.status === 'WAITING_FOR_PRODUCTS'} onClick={() => void act(() => api.post(`/internal/admin/lifecycle/deletion-jobs/${resolvedJobId}/retry`))}>Finish or retry deletion</Button> : <p>Operational deletion completed. Listed protected evidence remains restricted.</p>}
-      </div> : null}
+      {lifecycle.data.deletionJobId ? <Link className="text-indigo-600 hover:underline" to={`/deletion-jobs/${encodeURIComponent(lifecycle.data.deletionJobId)}`}>View deletion progress and retained evidence</Link> : null}
     </div>
   </Card>;
 }

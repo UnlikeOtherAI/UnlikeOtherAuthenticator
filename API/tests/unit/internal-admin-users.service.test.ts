@@ -55,7 +55,7 @@ describe('internal admin user summaries', () => {
         avatarUrl: null,
         createdAt: new Date('2026-04-23T10:00:00Z'),
       },
-      {
+      { lifecycleStatus: 'ACTIVE',
         id: 'user_2',
         name: null,
         email: 'provider@example.com',

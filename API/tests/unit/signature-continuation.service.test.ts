@@ -55,7 +55,7 @@ function fakePrisma(existing: ReturnType<typeof continuation> | null = null) {
     $queryRaw: vi.fn().mockResolvedValue([]),
     $transaction: vi.fn(),
     user: {
-      findUnique: vi.fn().mockResolvedValue({ tokenVersion: 0, twoFaEnabled: true }),
+      findUnique: vi.fn().mockResolvedValue({ lifecycleStatus: 'ACTIVE', tokenVersion: 0, twoFaEnabled: true }),
     },
     orgMember: { findFirst: vi.fn().mockResolvedValue({ id: 'org-member-1' }) },
     teamMember: { findFirst: vi.fn().mockResolvedValue({ id: 'team-member-1' }) },
@@ -294,7 +294,7 @@ describe('signing continuation completion', () => {
 
   it('rejects a stale continuation before consumption or authorization-code issuance', async () => {
     const prisma = fakePrisma(continuation());
-    prisma.user.findUnique.mockResolvedValue({ tokenVersion: 1, twoFaEnabled: true });
+    prisma.user.findUnique.mockResolvedValue({ lifecycleStatus: 'ACTIVE', tokenVersion: 1, twoFaEnabled: true });
     const issueConfigCode = vi.fn();
 
     await expect(

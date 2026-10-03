@@ -205,7 +205,7 @@ describe('getTeamInvite (GET .../teams/:teamId/invitations/:inviteId)', () => {
 
     expect(record.id).toBe('invite-1');
     expect(prisma.organisation.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'org-1' } }),
+      expect.objectContaining({ where: { id: 'org-1', lifecycleStatus: 'ACTIVE' } }),
     );
   });
 

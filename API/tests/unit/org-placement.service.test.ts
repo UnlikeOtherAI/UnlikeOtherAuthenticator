@@ -452,7 +452,7 @@ describe('org-placement.service', () => {
 
     expect(result).toEqual({ status: 'auto_created', orgId: 'org-new', teamId: 'team-new' });
     expect(prisma.user.findUnique).toHaveBeenCalledWith({
-      where: { id: 'user-1' },
+      where: { id: 'user-1', lifecycleStatus: 'ACTIVE' },
       select: { name: true },
     });
     expect(prisma.teamInvite.findFirst).toHaveBeenCalledTimes(1);

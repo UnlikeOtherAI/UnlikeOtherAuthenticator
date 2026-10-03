@@ -342,6 +342,8 @@ describe('POST /auth/select-team', () => {
         orgId: 'org-nessie',
         userId: 'user-1',
         status: 'ACTIVE',
+        org: { lifecycleStatus: 'ACTIVE' },
+        user: { lifecycleStatus: 'ACTIVE' },
       },
       select: { id: true },
     });
@@ -396,7 +398,7 @@ describe('POST /auth/select-team', () => {
     prismaMock.team.findFirst.mockResolvedValue({ id: 'team-1', orgId: 'org-1' });
     prismaMock.teamMember.findFirst.mockResolvedValue({ id: 'member-1' });
     prismaMock.orgMember.findFirst.mockResolvedValue({ id: 'org-member-1' });
-    prismaMock.user.findUnique.mockResolvedValue({ twoFaEnabled: true, tokenVersion: 0 });
+    prismaMock.user.findUnique.mockResolvedValue({ lifecycleStatus: 'ACTIVE', twoFaEnabled: true, tokenVersion: 0 });
     prismaMock.clientDomain.findUnique.mockResolvedValue({ twoFaPolicy: 'REQUIRED' });
     prismaMock.organisation.findMany.mockResolvedValue([]);
 

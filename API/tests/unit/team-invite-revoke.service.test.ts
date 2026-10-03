@@ -439,7 +439,7 @@ describe('revokeTeamInvite (DELETE .../teams/:teamId/invitations/:inviteId)', ()
 
     expect(result).toEqual({ ok: true });
     expect(prisma.organisation.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'org-1' } }),
+      expect.objectContaining({ where: { id: 'org-1', lifecycleStatus: 'ACTIVE' } }),
     );
   });
 

@@ -10,7 +10,7 @@ const api = createApiClient();
 type Job = {
   id: string; status: string; scope: string; blockers: string[];
   preview: { name?: string; retainedEvidence: { model: string; count: number; reason: string }[] };
-  participants: { domain: string; acknowledgedAt: string | null; outcome: string | null }[];
+  participants: { domain: string; acknowledgedAt: string | null; outcome: string | null; retainedEvidence?: { label: string; count: number; reason: string }[] }[];
 };
 
 /** Independent of entity detail: successful erasure may remove that record entirely. */
@@ -45,6 +45,7 @@ export function DeletionJobPage() {
       {job.blockers.map((blocker) => <p key={blocker} role="alert">{blocker}</p>)}
       <ul className="space-y-2">{job.participants.map((participant) => <li className="break-words" key={participant.domain}>
         {participant.domain}: {participant.acknowledgedAt ? participant.outcome?.toLowerCase().replaceAll('_', ' ') : 'waiting for product acknowledgement'}
+        {participant.outcome === 'RETAINED_EVIDENCE' ? <ul>{participant.retainedEvidence?.length ? participant.retainedEvidence.map((record, index) => <li key={index}>{record.label}: {record.count}. {record.reason}</li>) : <li>Product reported retained evidence; details unavailable.</li>}</ul> : null}
       </li>)}</ul>
       {job.preview.retainedEvidence.length ? <div><h3 className="font-semibold">Restricted retained evidence</h3><ul className="space-y-2">{job.preview.retainedEvidence.map((record, index) =>
         <li key={index}>{record.model.replace(/([a-z])([A-Z])/g, '$1 $2')}: {record.count}. {record.reason}</li>)}</ul></div> : null}

@@ -25,6 +25,8 @@ describe('exchangeRefreshTokenForTokens active-claim re-validation (unit)', () =
       configUrl,
       now,
       prisma: {
+        organisation: { findUnique: vi.fn().mockResolvedValue({ lifecycleStatus: 'ACTIVE' }) },
+        team: { findUnique: vi.fn().mockResolvedValue({ lifecycleStatus: 'ACTIVE', orgId: params.storedOrgId }) },
         $executeRaw: vi.fn().mockResolvedValue(1),
         $queryRaw: vi.fn().mockResolvedValue([]),
         domainSignatureSettings: {
@@ -74,8 +76,8 @@ describe('exchangeRefreshTokenForTokens active-claim re-validation (unit)', () =
           ),
         },
         orgMember: {
-          findFirst: vi.fn(async (args: { where?: { org?: unknown } }) =>
-            params.crossDomain && args.where?.org
+          findFirst: vi.fn(async (args: { where?: { org?: { domain?: string } } }) =>
+            params.crossDomain && args.where?.org?.domain
               ? null
               : {
                   orgId: params.storedOrgId ?? 'org-existing',
@@ -86,8 +88,8 @@ describe('exchangeRefreshTokenForTokens active-claim re-validation (unit)', () =
         },
         teamMember: {
           findFirst: vi.fn(
-            async (args: { where?: { teamId?: string; team?: { org?: unknown } } }) => {
-              if (params.crossDomain && args.where?.team?.org) return null;
+            async (args: { where?: { teamId?: string; team?: { org?: { domain?: string } } } }) => {
+              if (params.crossDomain && args.where?.team?.org?.domain) return null;
               return args.where?.teamId && params.contextTeamIds.includes(args.where.teamId)
                 ? { id: `membership-${args.where.teamId}` }
                 : null;

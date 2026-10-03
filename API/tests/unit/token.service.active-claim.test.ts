@@ -47,8 +47,8 @@ describe('exchangeAuthorizationCodeForTokens active claim (unit)', () => {
       teamInvite: { findMany: vi.fn() },
       clientDomain: { findUnique: vi.fn() },
       billingAppKey: { findMany: vi.fn() },
-      organisation: { create: vi.fn() },
-      team: { create: vi.fn() },
+      organisation: { create: vi.fn(), findUnique: vi.fn().mockResolvedValue({ lifecycleStatus: 'ACTIVE' }) },
+      team: { create: vi.fn(), findUnique: vi.fn().mockResolvedValue({ lifecycleStatus: 'ACTIVE', orgId: 'org-active' }) },
     } as unknown as PrismaClient;
   }
 
@@ -156,18 +156,18 @@ describe('exchangeAuthorizationCodeForTokens active claim (unit)', () => {
       tokenVersion: 0,
     });
     prisma.authorizationCode.updateMany.mockResolvedValue({ count: 1 });
-    prisma.orgMember.findFirst.mockImplementation(async (args: { where: { org?: unknown } }) =>
-      args.where.org ? null : { id: 'org-member-nessie', orgId: 'org-nessie', role: 'member' },
+    prisma.orgMember.findFirst.mockImplementation(async (args: { where: { org?: { domain?: string } } }) =>
+      args.where.org?.domain ? null : { id: 'org-member-nessie', orgId: 'org-nessie', role: 'member' },
     );
     prisma.teamMember.findFirst.mockImplementation(
-      async (args: { where: { team?: { org?: unknown } } }) =>
-        args.where.team?.org ? null : { id: 'team-member-nessie' },
+      async (args: { where: { team?: { org?: { domain?: string } } } }) =>
+        args.where.team?.org?.domain ? null : { id: 'team-member-nessie' },
     );
-    prisma.orgMember.findMany.mockImplementation(async (args: { where: { org?: unknown } }) =>
-      args.where.org ? [] : [{ orgId: 'org-nessie', role: 'member' }],
+    prisma.orgMember.findMany.mockImplementation(async (args: { where: { org?: { domain?: string } } }) =>
+      args.where.org?.domain ? [] : [{ orgId: 'org-nessie', role: 'member' }],
     );
     prisma.teamMember.findMany.mockImplementation(
-      async (args: { where: { team?: { orgId?: string; org?: unknown } } }) => {
+      async (args: { where: { team?: { orgId?: string; org?: { domain?: string } } } }) => {
         if (args.where.team?.orgId) {
           return [{ teamId: 'team-nessie', teamRole: 'member' }];
         }
@@ -247,12 +247,12 @@ describe('exchangeAuthorizationCodeForTokens active claim (unit)', () => {
       teamId: 'team-nessie',
     });
     prisma.authorizationCode.updateMany.mockResolvedValue({ count: 1 });
-    prisma.orgMember.findFirst.mockImplementation(async (args: { where: { org?: unknown } }) =>
-      args.where.org ? null : { id: 'org-member-nessie', orgId: 'org-nessie', role: 'member' },
+    prisma.orgMember.findFirst.mockImplementation(async (args: { where: { org?: { domain?: string } } }) =>
+      args.where.org?.domain ? null : { id: 'org-member-nessie', orgId: 'org-nessie', role: 'member' },
     );
     prisma.teamMember.findFirst.mockImplementation(
-      async (args: { where: { team?: { org?: unknown } } }) =>
-        args.where.team?.org ? null : { id: 'team-member-nessie' },
+      async (args: { where: { team?: { org?: { domain?: string } } } }) =>
+        args.where.team?.org?.domain ? null : { id: 'team-member-nessie' },
     );
     prisma.clientDomain.findUnique.mockResolvedValue({ status: 'active' });
     prisma.billingAppKey.findMany

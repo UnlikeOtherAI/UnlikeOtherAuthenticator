@@ -103,7 +103,7 @@ describe('requestRegistrationInstructions', () => {
     );
 
     expect(findUnique).toHaveBeenCalledWith({
-      where: { userKey: 'existing@example.com' },
+      where: { userKey: 'existing@example.com', lifecycleStatus: 'ACTIVE' },
       select: { id: true, tokenVersion: true },
     });
 
@@ -208,7 +208,7 @@ describe('requestRegistrationInstructions', () => {
     );
 
     expect(findUnique).toHaveBeenCalledWith({
-      where: { userKey: 'client.example.com|new@example.com' },
+      where: { userKey: 'client.example.com|new@example.com', lifecycleStatus: 'ACTIVE' },
       select: { id: true, tokenVersion: true },
     });
 

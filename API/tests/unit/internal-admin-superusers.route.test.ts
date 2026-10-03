@@ -113,7 +113,7 @@ describe('/internal/admin/superusers', () => {
         payload: { userId: 'user_2' },
       });
       expect(grant.statusCode).toBe(201);
-      expect(service.grantAdminSuperuser).toHaveBeenCalledWith('user_2');
+      expect(service.grantAdminSuperuser).toHaveBeenCalledWith('user_2', { userId: 'admin-user', tokenVersion: 0 });
 
       const revoke = await app.inject({
         method: 'DELETE',
@@ -123,7 +123,7 @@ describe('/internal/admin/superusers', () => {
       expect(revoke.statusCode).toBe(204);
       expect(service.revokeAdminSuperuser).toHaveBeenCalledWith({
         userId: 'user_2',
-        actorUserId: 'admin-user',
+        actorUserId: 'admin-user', actorTokenVersion: 0,
       });
     } finally {
       await app.close();

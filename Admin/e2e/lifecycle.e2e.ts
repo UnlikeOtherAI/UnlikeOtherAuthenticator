@@ -44,6 +44,7 @@ test('last-team preview includes empty organisation, shared accounts and evidenc
   expect(attempts).toHaveLength(2);
   expect(attempts[0].body.requestKey).toEqual(attempts[1].body.requestKey);
   expect(attempts[1].body.mode).toBe('ERASE_REFERENCE');
+  await expect(page).toHaveURL(/\/deletion-jobs\/job-1$/);
   await page.reload();
   await expect(page.getByText(/Deletion job job-1: ready/)).toBeVisible();
   await page.getByRole('button', { name: 'Finish or retry deletion' }).click();
