@@ -1,3 +1,4 @@
+import { useDirectoryNavigation } from '../features/admin/useDirectoryNavigation';
 import { Link } from 'react-router';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
@@ -11,6 +12,7 @@ import { useListParams } from '../utils/list-params';
 import { activityTime, loginCsv } from '../utils/activity';
 
 export function LogsPage() {
+  const { recordState } = useDirectoryNavigation('/dashboard');
   const state = useListParams();
   const { data: logs = [], isLoading, isError, refetch } = useActivityQuery(state.get('userId') || undefined);
   const query = state.get('q'); const domain = state.get('domain'); const method = state.get('method');
@@ -35,9 +37,9 @@ export function LogsPage() {
     </div></Card>
     {isError ? <QueryError retry={refetch} /> : <Card>{isLoading ? <p role="status" className="p-5">Loading activity...</p> : <><DataTable headers={['Time (UTC)', 'User', 'Service', 'Method', 'IP address']}>
       {pageItems.map((log) => <tr key={log.id} className={selected?.id === log.id ? 'bg-indigo-50' : 'hover:bg-gray-50'}>
-        <Td><Link className="text-indigo-700 hover:underline" to={`?${new URLSearchParams({ ...Object.fromEntries(state.params), selected: log.id })}`}>{activityTime(log).replace('T', ' ').replace('.000Z', '')}</Link></Td>
-        <Td>{log.userId ? <Link className="text-indigo-700 hover:underline" to={`/users/${encodeURIComponent(log.userId)}`}>{log.user ?? 'User'}</Link> : log.user ?? 'Unknown'}</Td>
-        <Td><Link className="text-indigo-700 hover:underline" to={`/domains/${encodeURIComponent(log.domain)}`}>{log.domain}</Link></Td><Td><MethodBadge method={log.method} /></Td><Td>{log.ip}</Td>
+        <Td><Link state={recordState} className="text-indigo-700 hover:underline" to={`?${new URLSearchParams({ ...Object.fromEntries(state.params), selected: log.id })}`}>{activityTime(log).replace('T', ' ').replace('.000Z', '')}</Link></Td>
+        <Td>{log.userId ? <Link state={recordState} className="text-indigo-700 hover:underline" to={`/users/${encodeURIComponent(log.userId)}`}>{log.user ?? 'User'}</Link> : log.user ?? 'Unknown'}</Td>
+        <Td><Link state={recordState} className="text-indigo-700 hover:underline" to={`/domains/${encodeURIComponent(log.domain)}`}>{log.domain}</Link></Td><Td><MethodBadge method={log.method} /></Td><Td>{log.ip}</Td>
       </tr>)}
       {!pageItems.length ? <tr><Td colSpan={5}>No logins match these filters.</Td></tr> : null}
     </DataTable><PaginationFooter {...pagination} /></>}</Card>}

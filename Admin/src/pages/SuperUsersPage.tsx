@@ -1,3 +1,4 @@
+import { useDirectoryNavigation } from '../features/admin/useDirectoryNavigation';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -14,6 +15,7 @@ import { useAdminUi } from '../features/shell/admin-ui';
 import { adminService } from '../services/admin-service';
 
 export function SuperUsersPage() {
+  const { recordState } = useDirectoryNavigation('/dashboard');
   const cache = useQueryClient();
   const { data: superusers = [], isLoading, isError, refetch } = useSuperusersQuery();
   const [query, setQuery] = useState(''); const [grantOpen, setGrantOpen] = useState(false);
@@ -25,7 +27,7 @@ export function SuperUsersPage() {
   return <>
     <PageHeader title="Administrators" description="Platform access to this admin panel." actions={<Button icon="plus" variant="primary" onClick={() => setGrantOpen(true)}>Grant access</Button>} />
     {isError ? <QueryError retry={refetch} /> : <Card>{isLoading ? <p role="status" className="p-5">Loading administrators...</p> : <DataTable headers={['User', 'Granted', 'Actions']}>
-      {superusers.map((user) => <tr key={user.userId}><Td><div className="flex items-center gap-2"><UserAvatar userId={user.userId} label={user.name ?? user.email} /><div><Link className="font-medium text-indigo-700 hover:underline" to={`/users/${user.userId}`}>{user.name ?? user.email}</Link>{user.name ? <p className="text-xs text-gray-500">{user.email}</p> : null}</div></div></Td><Td>{new Date(user.createdAt).toLocaleString()}</Td><Td><Button size="sm" onClick={() => confirm(`Revoke access for ${user.email}?`, 'This removes platform administrator access. Organisation and team memberships are unchanged.', async () => { await revoke.mutateAsync(user.userId); })}>Revoke access</Button></Td></tr>)}
+      {superusers.map((user) => <tr key={user.userId}><Td><div className="flex items-center gap-2"><UserAvatar userId={user.userId} label={user.name ?? user.email} /><div><Link state={recordState} className="font-medium text-indigo-700 hover:underline" to={`/users/${user.userId}`}>{user.name ?? user.email}</Link>{user.name ? <p className="text-xs text-gray-500">{user.email}</p> : null}</div></div></Td><Td>{new Date(user.createdAt).toLocaleString()}</Td><Td><Button size="sm" onClick={() => confirm(`Revoke access for ${user.email}?`, 'This removes platform administrator access. Organisation and team memberships are unchanged.', async () => { await revoke.mutateAsync(user.userId); })}>Revoke access</Button></Td></tr>)}
       {!superusers.length ? <tr><Td colSpan={3}>No administrators found.</Td></tr> : null}
     </DataTable>}</Card>}
     <Modal isOpen={grantOpen} onClose={() => setGrantOpen(false)} title="Grant administrator access">
