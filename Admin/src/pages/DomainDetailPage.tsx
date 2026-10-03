@@ -17,7 +17,7 @@ import {
 } from '../features/admin/DomainDirectoryTabs';
 import { useDomainQuery } from '../features/admin/admin-queries';
 
-const DOMAIN_TABS = ['overview', 'organisations', 'teams', 'users', 'access', 'agreements', 'keys', 'email'] as const;
+const DOMAIN_TABS = ['overview', 'credentials', 'organisations', 'teams', 'users', 'access', 'agreements', 'keys', 'email'] as const;
 type DomainTab = (typeof DOMAIN_TABS)[number];
 
 function isDomainTab(value: string | null): value is DomainTab {
@@ -28,7 +28,7 @@ export function DomainDetailPage() {
   const { domainId } = useParams();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { data, isLoading } = useDomainQuery(domainId);
+  const { data, isLoading, isError, refetch } = useDomainQuery(domainId);
 
   const tabParam = searchParams.get('tab');
   const tab: DomainTab = isDomainTab(tabParam) ? tabParam : 'overview';
@@ -44,13 +44,15 @@ export function DomainDetailPage() {
         }
         return params;
       },
-      { replace: true },
+      { replace: false },
     );
   }
 
   if (isLoading) {
     return <p className="text-sm text-gray-400">Loading domain...</p>;
   }
+
+  if (isError) return <p role="alert">Could not load service. <button onClick={() => refetch()}>Retry</button></p>;
 
   if (!data) {
     return <p className="text-sm text-gray-400">Domain not found.</p>;
@@ -61,8 +63,8 @@ export function DomainDetailPage() {
   return (
     <>
       <PageHeader
-        title={domain.name}
-        description={domain.label || 'Domain directory'}
+        title={domain.label || domain.name}
+        description={domain.label && domain.label !== domain.name ? domain.name : ''}
         leading={<Avatar label={domain.name} shape="square" size="md" />}
         badges={<StatusBadge status={domain.status} />}
         onBack={() => navigate('/domains')}
@@ -72,18 +74,20 @@ export function DomainDetailPage() {
         onChange={selectTab}
         options={[
           { label: 'Overview', value: 'overview' },
-          { label: 'Organisations', value: 'organisations', count: organisations.length },
-          { label: 'Teams', value: 'teams', count: teams.length },
-          { label: 'Users', value: 'users', count: users.length },
+          { label: 'Organisations', value: 'organisations' },
+          { label: 'Teams', value: 'teams' },
+          { label: 'Users', value: 'users' },
           { label: 'Access', value: 'access' },
+          { label: 'Credentials', value: 'credentials' },
           { label: 'Agreements', value: 'agreements' },
           { label: 'Signing keys', value: 'keys' },
           { label: 'Email', value: 'email' },
         ]}
       />
-      {tab === 'overview' ? (
+      {tab === 'overview' || tab === 'credentials' ? (
         <DomainOverviewTab
           domain={domain}
+          section={tab}
           counts={{ organisations: organisations.length, teams: teams.length, users: users.length }}
         />
       ) : null}

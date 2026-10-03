@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { Link, useSearchParams } from 'react-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { Badge } from '../components/ui/Badge';
@@ -36,12 +37,15 @@ const statusBadgeVariant: Record<IntegrationRequestStatus, 'amber' | 'green' | '
 };
 
 export function IntegrationRequestsPage() {
-  const [status, setStatus] = useState<StatusFilter>('PENDING');
-  const [query, setQuery] = useState('');
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const { data = [], isLoading } = useIntegrationRequestsQuery(
-    status === 'ALL' ? undefined : status,
-  );
+  const [params, setParams] = useSearchParams();
+  const statusValue = params.get('status');
+  const status: StatusFilter = statusValue === 'ALL' || statusValue === 'ACCEPTED' || statusValue === 'DECLINED' ? statusValue : 'PENDING';
+  const query = params.get('q') ?? '';
+  const selectedId = params.get('request');
+  function filter(key: string, value: string) {
+    setParams((current) => { const next = new URLSearchParams(current); if (value) next.set(key, value); else next.delete(key); next.delete('page'); return next; }, { replace: key !== 'request' });
+  }
+  const { data = [], isLoading, isError, refetch } = useIntegrationRequestsQuery(status === 'ALL' ? undefined : status);
 
   const filtered = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -57,41 +61,41 @@ export function IntegrationRequestsPage() {
 
   return (
     <>
-      <PageHeader
-        title="New Integrations"
-        description="Partner domains that tried to call /auth and want to onboard"
+      <PageHeader description=""
+        title="Integration requests"
       />
       <Card>
         <div className="flex flex-wrap gap-2 border-b border-gray-100 px-4 py-3">
           <TextField
+            aria-label="Search integration requests"
             className="w-60"
             placeholder="Filter by domain, contact, fingerprint..."
             type="search"
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => filter('q', event.target.value)}
           />
-          <SelectField value={status} onChange={(event) => setStatus(event.target.value as StatusFilter)}>
+          <SelectField aria-label="Request status" value={status} onChange={(event) => filter('status', event.target.value)}>
             <option value="ALL">All</option>
             <option value="PENDING">Pending</option>
             <option value="ACCEPTED">Accepted</option>
             <option value="DECLINED">Declined</option>
           </SelectField>
         </div>
-        {isLoading ? (
+        {isError ? <p role="alert" className="p-5">Could not load requests. <Button onClick={() => refetch()}>Retry</Button></p> : isLoading ? (
           <p className="px-5 py-6 text-sm text-gray-400">Loading integration requests...</p>
         ) : (
           <>
-            <DataTable headers={['Domain', 'Submitted', 'Status', 'Contact', 'Actions']}>
+            <DataTable headers={['Service', 'Submitted', 'Status', 'Contact']}>
               {pageItems.map((row) => (
                 <IntegrationRow
                   key={row.id}
                   row={row}
-                  onOpen={() => setSelectedId(row.id)}
+                  href={`?${new URLSearchParams({ ...Object.fromEntries(params), request: row.id })}`}
                 />
               ))}
               {pageItems.length === 0 ? (
                 <tr>
-                  <Td colSpan={5} className="text-sm text-gray-400">
+                  <Td colSpan={4} className="text-sm text-gray-400">
                     No integration requests match the filters.
                   </Td>
                 </tr>
@@ -103,24 +107,19 @@ export function IntegrationRequestsPage() {
       </Card>
       <IntegrationDetailPanel
         id={selectedId}
-        onClose={() => setSelectedId(null)}
+        onClose={() => filter('request', '')}
       />
     </>
   );
 }
 
-function IntegrationRow({ row, onOpen }: { row: IntegrationRequestSummary; onOpen: () => void }) {
+function IntegrationRow({ row, href }: { row: IntegrationRequestSummary; href: string }) {
   return (
     <tr
       className="cursor-pointer transition-colors hover:bg-gray-50"
-      tabIndex={0}
-      onClick={onOpen}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter') onOpen();
-      }}
     >
       <Td>
-        <p className="font-medium text-gray-900">{row.domain}</p>
+        <Link className="font-medium text-indigo-600 hover:underline" to={href}>{row.domain}</Link>
         <p className="mt-0.5 truncate text-xs text-gray-400">kid: {row.kid}</p>
       </Td>
       <Td className="text-xs text-gray-500">{formatIso(row.submitted_at)}</Td>
@@ -128,15 +127,12 @@ function IntegrationRow({ row, onOpen }: { row: IntegrationRequestSummary; onOpe
         <Badge variant={statusBadgeVariant[row.status]}>{row.status.toLowerCase()}</Badge>
       </Td>
       <Td>{row.contact_email}</Td>
-      <Td className="whitespace-nowrap">
-        <span className="text-xs text-gray-400">Open →</span>
-      </Td>
     </tr>
   );
 }
 
 function IntegrationDetailPanel({ id, onClose }: { id: string | null; onClose: () => void }) {
-  const { data, isLoading } = useIntegrationRequestQuery(id);
+  const { data, isLoading, isError, refetch } = useIntegrationRequestQuery(id);
   const isOpen = Boolean(id);
 
   return (
@@ -147,7 +143,7 @@ function IntegrationDetailPanel({ id, onClose }: { id: string | null; onClose: (
       widthClassName="max-w-2xl"
       footer={<Button onClick={onClose}>Close</Button>}
     >
-      {isLoading || !data ? (
+      {isError ? <p role="alert">Could not load this request. <Button onClick={() => refetch()}>Retry</Button></p> : isLoading || !data ? (
         <p className="text-sm text-gray-400">Loading...</p>
       ) : (
         <IntegrationDetailBody detail={data} onDone={onClose} />
@@ -190,6 +186,8 @@ function IntegrationDetailBody({
         {detail.config_url ? <DetailRow label="Config URL" value={detail.config_url} mono /> : null}
       </DetailSection>
 
+      {detail.status === 'ACCEPTED' ? <Link to={`/domains/${encodeURIComponent(detail.domain)}`} className="text-indigo-600 hover:underline">Open website service</Link> : null}
+      <details><summary className="cursor-pointer text-sm font-medium">Technical review details</summary>
       <DetailSection title="Public JWK">
         <JsonBlock value={detail.public_jwk} />
       </DetailSection>
@@ -206,6 +204,7 @@ function IntegrationDetailBody({
         </DetailSection>
       ) : null}
 
+      </details>
       <DetailSection title="Decision">
         <IntegrationDecisionControls detail={detail} onDone={onDone} />
       </DetailSection>
@@ -251,7 +250,7 @@ function IntegrationDecisionControls({
   function runDelete() {
     confirm(
       `Delete integration for ${detail.domain}?`,
-      'This removes the request record. Any accepted ClientDomain row is not deleted.',
+      'This removes the request record. The registered website service is retained.',
       async () => {
         await deleteMutation.mutateAsync();
         onDone();
@@ -374,5 +373,5 @@ function JsonBlock({ value }: { value: unknown }) {
 }
 
 function formatIso(value: string): string {
-  return value.slice(0, 19).replace('T', ' ');
+  return new Date(value).toLocaleString(undefined, { timeZoneName: 'short' });
 }
