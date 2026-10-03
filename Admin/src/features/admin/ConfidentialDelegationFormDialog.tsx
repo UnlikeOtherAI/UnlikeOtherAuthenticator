@@ -49,6 +49,12 @@ const scopeOptions: Array<{
     description:
       'High-trust scope. Authorises token provisioning against the exact resource above, and nothing else.',
   },
+  {
+    value: 'session:broker',
+    label: 'Session brokering',
+    description:
+      'Allows Coder (coder.unlikeotherai.com, product coder) to broker Selkie sessions at exactly https://api.selkie.live. Select only this scope.',
+  },
 ];
 
 const emptyValues: ConfidentialDelegationFormValues = {
