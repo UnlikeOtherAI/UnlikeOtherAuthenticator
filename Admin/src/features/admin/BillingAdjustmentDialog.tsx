@@ -82,9 +82,6 @@ export function BillingAdjustmentDialog({
       title={`Add commercial line · ${service.name}`}
       footer={
         <>
-          <Button disabled={create.isPending} onClick={onClose}>
-            Cancel
-          </Button>
           <Button
             icon="check"
             variant="primary"

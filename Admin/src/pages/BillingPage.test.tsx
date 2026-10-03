@@ -263,5 +263,16 @@ describe('BillingPage', () => {
     expect((screen.getByRole('combobox', { name: /Collection/ }) as HTMLSelectElement).value).toBe(
       'none',
     );
+    expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull();
+    await user.type(screen.getByRole('textbox', { name: 'Display name' }), 'Unsaved product');
+    await user.click(screen.getByRole('button', { name: 'Close modal' }));
+    expect(screen.getByRole('alert').textContent).toContain('Discard unsaved changes?');
+    await user.click(screen.getByRole('button', { name: 'Keep editing' }));
+    expect((screen.getByRole('textbox', { name: 'Display name' }) as HTMLInputElement).value).toBe(
+      'Unsaved product',
+    );
+    await user.click(screen.getByRole('button', { name: 'Close modal' }));
+    await user.click(screen.getByRole('button', { name: 'Discard changes' }));
+    expect(screen.queryByRole('dialog', { name: 'Add billing service' })).toBeNull();
   });
 });
