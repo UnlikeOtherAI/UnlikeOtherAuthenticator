@@ -195,3 +195,14 @@ recursive build passed. The orchestrator also reported 109 Admin tests, Admin li
 focused API regression/typecheck/lint passing; the full API suite and expanded rendered billing
 checks were still running/pending when this report was written. These reported checks do not
 replace the final CI/deployment record.
+
+## Integrated verification (2026-10-03)
+
+- Windows: 115 Admin component/transport tests passed; Admin lint, typecheck and production build passed. The workspace recursive build also passed after normalizing local generated JSON line endings; no generated schema content changed.
+- Windows Chrome: 18 synthetic browser flows passed across desktop and Pixel 7 viewports. Coverage includes every menu destination, direct record URLs, nested Back context, filters/CSV, all ban types, native edit retry/reload, nested confirmations, selected-contract calculation and invoice payment retry/idempotency. Screenshots were visually inspected. These checks do not make production mutations.
+- Ubuntu (`umac`), Node 22: the complete DB-less API suite passed: 326 files, 2,105 tests; 85 DB-dependent files / 446 tests were skipped. The full workspace build passed there. This resolves Windows-only Unix-shell/file-mode/line-ending failures; three Windows timeout suites also passed when rerun with two workers (33 tests).
+- New focused API checks cover exact user-ID log filtering, bounded limits, ISO timestamps, active registered-service counts and UTC day boundaries. Existing authentication/authorization tests remain in the full suite.
+- Dependency audit passed the high/critical gate; moderate/low advisories remain. Diff whitespace and changed-source length checks passed.
+- Database-backed integration tests, final required GitHub checks and deployment are tracked on the delivery PR. No live invoice, identity, email, signature or credential mutation was used as a test.
+
+Final integrated review also removed redundant Cancel buttons that bypassed dirty-draft protection, guarded agreement/delegation forms, separated flag/rule pagination and reset the payment form only after a successful save. Failed payment retries retain their idempotency key and inputs.
