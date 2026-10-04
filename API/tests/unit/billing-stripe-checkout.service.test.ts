@@ -285,6 +285,13 @@ describe('Stripe Checkout authorization, recovery, and account binding', () => {
       deps(state),
     );
     expect(result.checkout_session_id).toBe('cs_1');
+    expect(result.tariff).toEqual({
+      collection_mode: payload.tariff.collection_mode,
+      monthly_subscription: payload.tariff.monthly_subscription,
+      usage_billing_enabled: payload.tariff.usage_billing_enabled,
+      payment_collection_enabled: payload.tariff.payment_collection_enabled,
+      raw_usage_preserved: payload.tariff.raw_usage_preserved,
+    });
     const input = state.checkoutCreate.mock.calls[0]?.[0];
     expect(input.line_items).toEqual([
       { price: 'price_monthly_1', quantity: 1 },

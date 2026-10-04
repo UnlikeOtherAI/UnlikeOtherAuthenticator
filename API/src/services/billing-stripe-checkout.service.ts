@@ -17,6 +17,7 @@ import {
   BILLING_CUSTOMER_ACTION,
 } from './billing-customer-action-intent.service.js';
 import {
+  customerBillingTariff,
   resolveEffectiveTariffContext,
   type EffectiveTariffPayload,
 } from './billing-entitlement.service.js';
@@ -74,7 +75,7 @@ function openSessionResult(session: Stripe.Checkout.Session, payload: EffectiveT
     checkout_session_id: session.id,
     checkout_url: session.url,
     expires_at: new Date(session.expires_at * 1000).toISOString(),
-    tariff: payload.tariff,
+    tariff: customerBillingTariff(payload.tariff),
   };
 }
 

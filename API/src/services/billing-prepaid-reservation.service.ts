@@ -103,6 +103,14 @@ async function lockDispatchId(tx: Prisma.TransactionClient, dispatchId: string):
   await tx.$queryRaw(Prisma.sql`SELECT pg_advisory_xact_lock(481602, hashtext(${dispatchId}))::text`);
 }
 
+async function assertActiveRuntimeKey(tx: Prisma.TransactionClient, keyId: string): Promise<void> {
+  const keys = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+    SELECT id FROM billing_ledger_runtime_keys
+    WHERE id = ${keyId} AND revoked_at IS NULL FOR SHARE
+  `);
+  if (keys.length !== 1) throw new AppError('UNAUTHORIZED', 401, 'INVALID_LEDGER_RUNTIME_KEY');
+}
+
 export async function reservePrepaidDispatch(
   params: { runtimeSecret: string; delegation: string; input: ReservePrepaidDispatchInput },
   deps?: { prisma?: PrismaClient; now?: Date },
@@ -139,6 +147,7 @@ export async function reservePrepaidDispatch(
   const billingMonth = utcBillingMonth(dispatchStartedAt);
   const decision = await runBillingSerializableTransaction(prisma, async (tx) => {
     await lockDispatchId(tx, input.dispatchId);
+    await assertActiveRuntimeKey(tx, key.id);
     await assertActiveSubject(tx, input, actor.tv);
     const previous = await tx.billingLedgerDispatchDecision.findUnique({
       where: { dispatchId: input.dispatchId },
@@ -163,7 +172,6 @@ export async function reservePrepaidDispatch(
     const existing = await tx.billingPrepaidReservation.findUnique({
       where: { dispatchId: input.dispatchId },
     });
-    await assertActiveSubject(tx, input, actor.tv);
     if (existing) {
       if (existing.appKeyId !== key.id || existing.serviceId !== key.serviceId ||
         existing.requestFingerprint !== input.requestFingerprint ||
@@ -221,6 +229,8 @@ export async function reservePrepaidDispatch(
 
   return runBillingSerializableTransaction(prisma, async (tx) => {
     await lockDispatchId(tx, input.dispatchId);
+    await assertActiveRuntimeKey(tx, key.id);
+    await assertActiveSubject(tx, input, actor.tv);
     const cancelled = await tx.billingLedgerDispatchDecision.findUnique({
       where: { dispatchId: input.dispatchId }, select: { status: true },
     });
