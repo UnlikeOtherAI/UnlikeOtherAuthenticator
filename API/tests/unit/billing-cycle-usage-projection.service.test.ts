@@ -1,7 +1,9 @@
 import { BillingUsagePaymentMode, type BillingTariff } from '@prisma/client';
 import { describe, expect, it } from 'vitest';
 
-import { projectCycleUsage } from '../../src/services/billing-cycle-usage-projection.service.js';
+import {
+  aggregateOrganisationCycleUsage, projectCycleUsage,
+} from '../../src/services/billing-cycle-usage-projection.service.js';
 import type { NormalizedMeteringUsage } from '../../src/services/billing-metering.types.js';
 
 const expected = { serviceIdentifier: 'nessie', organisationId: 'org-1',
@@ -41,5 +43,30 @@ describe('customer cycle usage payment mode', () => {
       usage_payment_mode: 'pay_as_you_go',
       customer_charge: expect.objectContaining({ amount: '13' }),
     }));
+  });
+
+  it('keeps org payable and prepaid credit evidence in separate customer lines', () => {
+    const projected = aggregateOrganisationCycleUsage([
+      { id: 'payg-a', label: 'Metered usage', usage_payment_mode: 'pay_as_you_go',
+        customer_charge: { amount: '1', currency: 'USD', display: '$1.00' },
+        credits_consumed: '1000.000001' },
+      { id: 'prepaid-b', label: 'Metered usage', usage_payment_mode: 'prepaid',
+        customer_charge: null, credits_consumed: '2000.000002' },
+      { id: 'prepaid-c', label: 'Metered usage', usage_payment_mode: 'prepaid',
+        customer_charge: null, credits_consumed: '0.000003' },
+    ]);
+    expect(projected).toMatchObject([
+      { usage_payment_mode: 'pay_as_you_go', credits_consumed: '1000.000001',
+        customer_charge: { amount: '1' } },
+      { usage_payment_mode: 'prepaid', credits_consumed: '2000.000005',
+        customer_charge: null },
+    ]);
+    expect(aggregateOrganisationCycleUsage([
+      { id: 'payg-a', label: 'Metered usage', usage_payment_mode: 'pay_as_you_go',
+        customer_charge: { amount: '1', currency: 'USD', display: '$1.00' },
+        credits_consumed: '1000' },
+      { id: 'prepaid-b', label: 'Metered usage', usage_payment_mode: 'prepaid',
+        customer_charge: null, credits_consumed: null },
+    ])[1]?.credits_consumed).toBeNull();
   });
 });

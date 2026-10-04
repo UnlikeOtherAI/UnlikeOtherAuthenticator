@@ -111,7 +111,8 @@ export async function listCustomerInvoices(
         { issuedAt: cursorDate, id: { lt: cursor.id } },
       ] : []),
     ] } : {}),
-    lines: { some: { serviceIdentifier: context.request.product } },
+    lines: { some: { serviceIdentifier: context.request.product },
+      every: { serviceIdentifier: context.request.product } },
   }, include: { lines: true, paymentEvents: true },
   orderBy: [{ issuedAt: 'desc' }, { id: 'desc' }], take: limit + 1 }) : [];
   const prepaid = await prisma.billingCreditPaymentInvoice.findMany({ where: {
@@ -158,7 +159,8 @@ async function readCustomerInvoice(
     const row = await prisma.billingInvoice.findFirst({ where: { id: source.id,
       orgId: context.request.organisationId,
       status: { in: [BillingInvoiceStatus.ISSUED, BillingInvoiceStatus.VOID] },
-      lines: { some: { serviceIdentifier: context.request.product } },
+      lines: { some: { serviceIdentifier: context.request.product },
+        every: { serviceIdentifier: context.request.product } },
     }, include: { lines: true, paymentEvents: true } });
     if (!row) notFound();
     await authorizeBillingCycle({ ...context, payerScope: BillingAssignmentScope.ORGANISATION },
