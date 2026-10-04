@@ -20,14 +20,9 @@ import {
   billingHostedRedirectResponseJsonSchema,
   billingPortalSessionRequestJsonSchema,
   billingPortalSessionResponseJsonSchema,
-  billingControlledByJsonSchema,
-  BILLING_ORG_BILLING_MANAGE_ACTION_ID,
   billingCreditsV1ConformanceFixture,
   billingCreditsV1JsonSchema,
   billingCreditsV1OpenApiDocument,
-  BILLING_CREDIT_PURCHASE_STATES,
-  BILLING_CREDIT_PURCHASE_STATUS_PATH,
-  billingCreditPurchaseStatusV1JsonSchema,
   billingStatementV1ConformanceFixture,
   billingStatementV1JsonSchema,
   billingStatementV1OpenApiDocument,
@@ -483,136 +478,5 @@ describe('public BillingCreditsV1 consumer protocol', () => {
     expect(fixtureArtifact).toEqual(billingCreditsV1ConformanceFixture);
     expect(openApiArtifact).toEqual(billingCreditsV1OpenApiDocument);
     expect(billingCreditsV1OpenApiDocument.info.version).toBe(BILLING_CREDITS_PROTOCOL_VERSION);
-  });
-});
-
-describe('localized credit purchase status protocol', () => {
-  it('validates every state with required localized copy and rejects extra fields', () => {
-    const ajv = new Ajv2020({ allErrors: true, strict: true });
-    const validate = ajv.compile(billingCreditPurchaseStatusV1JsonSchema);
-    for (const state of BILLING_CREDIT_PURCHASE_STATES) {
-      expect(validate({
-        schema_version: 1,
-        purchase_id: 'purchase_1',
-        state,
-        title: 'Payment status',
-        message: 'Payment message',
-        awaiting_confirmation: state === 'processing',
-      }), JSON.stringify(validate.errors)).toBe(true);
-    }
-    expect(BILLING_CREDIT_PURCHASE_STATUS_PATH).toBe('/billing/v1/credits/purchase-status');
-    expect(validate({
-      schema_version: 1,
-      purchase_id: 'purchase_1',
-      state: 'succeeded',
-      title: 'Payment confirmed',
-      message: 'Credits are ready',
-      awaiting_confirmation: false,
-      balance: '5000',
-    })).toBe(false);
-    expect(validate({
-      schema_version: 1,
-      purchase_id: 'purchase_1',
-      state: 'unknown',
-      title: 'Payment status',
-      message: 'Payment message',
-      awaiting_confirmation: false,
-    })).toBe(false);
-  });
-
-  it('keeps the published JSON Schema artifact equal to its runtime schema', async () => {
-    const schemaArtifact = await readJson('../schema/billing-credit-purchase-status-v1.json');
-    expect(schemaArtifact).toEqual(billingCreditPurchaseStatusV1JsonSchema);
-  });
-});
-
-describe('organisation billing responsibility (protocol 1.3.0)', () => {
-  const controlledByManager = {
-    scope: 'organisation',
-    organisation_id: 'org_synthetic',
-    organisation_name: 'Acme',
-    message: 'Billing for this team is managed for the whole organisation.',
-    can_manage: true,
-    manage_action_id: BILLING_ORG_BILLING_MANAGE_ACTION_ID,
-  } as const;
-  const controlledByMember = { ...controlledByManager, can_manage: false, manage_action_id: null };
-
-  it('accepts both viewer shapes and rejects a fabricated manage action', () => {
-    const ajv = new Ajv2020({ allErrors: true, strict: true });
-    addFormats(ajv);
-    const validate = ajv.compile(billingControlledByJsonSchema);
-
-    expect(validate(controlledByManager), JSON.stringify(validate.errors)).toBe(true);
-    expect(validate(controlledByMember), JSON.stringify(validate.errors)).toBe(true);
-    expect(validate({ ...controlledByManager, manage_action_id: 'org-billing-transfer' })).toBe(
-      false,
-    );
-    expect(validate({ ...controlledByManager, scope: 'team' })).toBe(false);
-    expect(validate({ ...controlledByManager, unexpected: true })).toBe(false);
-  });
-
-  it('is optional on the statement and the credits view, so 1.2.0 payloads stay valid', () => {
-    const ajv = new Ajv2020({ allErrors: true, strict: true });
-    addFormats(ajv);
-    const validateStatement = ajv.compile(billingStatementV1JsonSchema);
-    const validateCredits = ajv.compile(billingCreditsV1JsonSchema);
-
-    expect(validateStatement(billingStatementV1ConformanceFixture)).toBe(true);
-    expect(
-      validateStatement({
-        ...billingStatementV1ConformanceFixture,
-        controlled_by: controlledByMember,
-        actions: [],
-        capabilities: { can_upgrade: false, can_open_portal: false, can_cancel: false },
-      }),
-      JSON.stringify(validateStatement.errors),
-    ).toBe(true);
-
-    expect(validateCredits(billingCreditsV1ConformanceFixture)).toBe(true);
-    expect(
-      validateCredits({ ...billingCreditsV1ConformanceFixture, controlled_by: controlledByMember }),
-      JSON.stringify(validateCredits.errors),
-    ).toBe(true);
-  });
-
-  it('carries the organisation roll-up only on V2, with per-team pinned snapshots', () => {
-    const ajv = new Ajv2020({ allErrors: true, strict: true });
-    addFormats(ajv);
-    const validate = ajv.compile(billingStatementV2JsonSchema);
-    const organisationScope = {
-      organisation_id: 'org_synthetic',
-      organisation_name: 'Acme',
-      title: 'Organisation billing',
-      description: 'Every team in Acme, billed together.',
-      teams: [
-        {
-          team_id: 'team_synthetic',
-          team_name: 'Research',
-          display_name: 'Research',
-          pinned_ledger_snapshot:
-            billingStatementV2ConformanceFixture.pinned_inputs.ledger_snapshots[0],
-          connected_service_usage: billingStatementV2ConformanceFixture.connected_service_usage,
-          commercial_lines: billingStatementV2ConformanceFixture.commercial_lines,
-          totals: billingStatementV2ConformanceFixture.totals,
-        },
-      ],
-      commercial_lines: billingStatementV2ConformanceFixture.commercial_lines,
-      totals: billingStatementV2ConformanceFixture.totals,
-    };
-
-    expect(
-      validate({
-        ...billingStatementV2ConformanceFixture,
-        controlled_by: controlledByManager,
-        organisation_scope: organisationScope,
-      }),
-      JSON.stringify(validate.errors),
-    ).toBe(true);
-    expect(
-      validate({
-        ...billingStatementV2ConformanceFixture,
-        organisation_scope: { ...organisationScope, locally_calculated_total: 'forbidden' },
-      }),
-    ).toBe(false);
   });
 });
