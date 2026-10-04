@@ -67,6 +67,7 @@ const totals = object(
 );
 const summaryProperties = {
   cycle_id: id,
+  correction_of_cycle_id: id,
   period,
   state: { enum: ['open_preview', 'pending_reconciliation', 'finalized', 'adjusted', 'voided'] },
   scope,
@@ -74,7 +75,8 @@ const summaryProperties = {
   totals: { type: 'array', items: totals },
   document_available: { type: 'boolean' },
 };
-const summaryRequired = Object.keys(summaryProperties);
+const summaryRequired = Object.keys(summaryProperties)
+  .filter((key) => key !== 'correction_of_cycle_id');
 const seatInterval = object(['starts_at', 'ends_at', 'quantity'], {
   starts_at: datetime, ends_at: datetime, quantity: decimal,
 });

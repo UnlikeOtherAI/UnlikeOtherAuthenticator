@@ -121,6 +121,11 @@
                   "minLength": 1,
                   "maxLength": 256
                 },
+                "correction_of_cycle_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
                 "period": {
                   "type": "object",
                   "additionalProperties": false,
@@ -576,6 +581,11 @@
         ],
         "properties": {
           "cycle_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "correction_of_cycle_id": {
             "type": "string",
             "minLength": 1,
             "maxLength": 256
