@@ -5,10 +5,15 @@ import { BillingAssignmentScope, Prisma, type PrismaClient } from '@prisma/clien
 import type { BillingCycleDetailV2, BillingCycleUsageLine } from '../contracts/billing-statement-v1.js';
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
+import { exactMoney } from './billing-money.service.js';
 import { billingCycleSnapshotDigest } from './billing-cycle-read.service.js';
 import {
-  decimalCredits, readCycleCreditEvidence, type CycleCreditEvidence,
+  decimalCredits,
 } from './billing-cycle-credit-evidence.service.js';
+import {
+  readVerifiedCycleCreditEvidence, usdFromRatedMicrocredits,
+  type VerifiedCycleCreditEvidence,
+} from './billing-cycle-paid-credit-evidence.service.js';
 import {
   monthlyFinancialQuoteEvidence, privateMonthlyQuoteEvidence,
   projectMonthlySubscriptionLine,
@@ -18,6 +23,9 @@ import {
   type CycleUsageEvidence,
 } from './billing-cycle-usage-projection.service.js';
 import { fetchLedgerMeteringUsage } from './billing-ledger-collector.service.js';
+import {
+  fetchVerifiedLedgerPaidReceiptSet, type LedgerPaidReceiptSet,
+} from './billing-ledger-paid-receipt-proof.service.js';
 import { fetchLedgerHistoricalBillingTeams } from './billing-ledger-team-discovery.service.js';
 import {
   quoteSubscriptionMonthlyCharge, type MonthlyChargeSource,
@@ -56,6 +64,7 @@ export async function prepareBillingCycleClose(
   deps?: { prisma?: PrismaClient; now?: () => Date;
     quote?: typeof quoteSubscriptionMonthlyCharge;
     fetchMetering?: typeof fetchLedgerMeteringUsage;
+    fetchPaidReceiptSet?: typeof fetchVerifiedLedgerPaidReceiptSet;
     discoverTeams?: typeof fetchLedgerHistoricalBillingTeams },
 ): Promise<PreparedBillingCycleClose> {
   const prisma = deps?.prisma ?? getAdminPrisma();
@@ -83,8 +92,8 @@ export async function prepareBillingCycleClose(
   const teams = initial.teamId ? [initial.teamId] : discovery?.teamIds ?? [];
 
   const ledgerSnapshots: CycleUsageEvidence[] = [];
-  const creditEvidence: CycleCreditEvidence[] = [];
-  const ratedByTeam = new Map<string, string>();
+  const creditEvidence: VerifiedCycleCreditEvidence[] = [];
+  const proofs = new Map<string, LedgerPaidReceiptSet>();
   let usageLines: BillingCycleUsageLine[] = [];
   const organisationUsageLines: BillingCycleUsageLine[] = [];
   for (const teamId of teams) {
@@ -98,22 +107,30 @@ export async function prepareBillingCycleClose(
       currency: initial.currency,
     }, tariff);
     ledgerSnapshots.push(projected.evidence);
-    const ratedAmount = projected.ratedAmount;
-    ratedByTeam.set(teamId, ratedAmount);
-    const teamCreditEvidence = await readCycleCreditEvidence(prisma, {
-      orgId: initial.organisationId, teamId, serviceId: service.id,
-      billingMonth: params.billingMonth, payer: initial.scope, tariff,
-      ratedAmount, rawLines: projected.evidence.raw_lines,
+    const scope = { product: service.identifier, organisationId: initial.organisationId,
+      teamId, billingMonth: params.billingMonth, serviceId: service.id };
+    const proof = await (deps?.fetchPaidReceiptSet ?? fetchVerifiedLedgerPaidReceiptSet)(scope);
+    proofs.set(teamId, proof);
+    const teamCreditEvidence = await readVerifiedCycleCreditEvidence(prisma, {
+      scope, proof, payer: initial.scope, tariff,
+      rawLines: projected.evidence.raw_lines,
     });
+    const collectible = BigInt(teamCreditEvidence.consumed_microcredits) -
+      BigInt(teamCreditEvidence.waived_microcredits);
+    const line = projected.lines.map((item) => ({ ...item,
+      customer_charge: item.usage_payment_mode === 'prepaid' ? null :
+        exactMoney(usdFromRatedMicrocredits(collectible), initial.currency) }));
     creditEvidence.push(teamCreditEvidence);
-    if (initial.teamId !== null) usageLines = projected.lines;
-    else organisationUsageLines.push(...projected.lines.map((line) => ({ ...line,
+    if (initial.teamId !== null) usageLines = line;
+    else organisationUsageLines.push(...line.map((item) => ({ ...item,
       credits_consumed: teamCreditEvidence.covered ?
         decimalCredits(BigInt(teamCreditEvidence.consumed_microcredits ?? '0')) : null,
     })));
   }
   const consumedMicrocredits = creditEvidence.every((row) => row.covered) ?
     creditEvidence.reduce((sum, row) => sum + BigInt(row.consumed_microcredits ?? '0'), 0n) : null;
+  const waivedMicrocredits = creditEvidence.reduce((sum, row) =>
+    sum + BigInt(row.waived_microcredits), 0n);
   if (initial.teamId === null) {
     usageLines = aggregateOrganisationCycleUsage(organisationUsageLines);
   }
@@ -135,12 +152,12 @@ export async function prepareBillingCycleClose(
     const fingerprint = quoteFingerprint(quote, startsAt, endsAt);
     const lockedCreditEvidence = await Promise.all(teams.map((teamId) => {
       const raw = ledgerSnapshots.find((row) => row.team_id === teamId)?.raw_lines;
-      const ratedAmount = ratedByTeam.get(teamId);
-      if (!raw || ratedAmount === undefined) hold('BILLING_CYCLE_LEDGER_SCOPE_MISMATCH');
-      return readCycleCreditEvidence(tx, {
-        orgId: quote.organisationId, teamId, serviceId: service.id,
-        billingMonth: params.billingMonth, payer: quote.scope, tariff,
-        ratedAmount, rawLines: raw,
+      const proof = proofs.get(teamId);
+      if (!raw || !proof) hold('BILLING_CYCLE_LEDGER_SCOPE_MISMATCH');
+      return readVerifiedCycleCreditEvidence(tx, {
+        scope: { product: service.identifier, organisationId: quote.organisationId,
+          teamId, billingMonth: params.billingMonth, serviceId: service.id },
+        proof, payer: quote.scope, tariff, rawLines: raw,
       });
     }));
     if (lockedCreditEvidence.some((row, index) =>
@@ -189,7 +206,8 @@ export async function prepareBillingCycleClose(
       totals: [], document_available: false, subscription_lines: [subscription],
       usage_lines: usageLines,
       credits: { consumed: consumedMicrocredits === null ? null :
-        decimalCredits(consumedMicrocredits), opening_balance: null, closing_balance: null,
+        decimalCredits(consumedMicrocredits), waived: decimalCredits(waivedMicrocredits),
+        opening_balance: null, closing_balance: null,
         status: 'pending_reconciliation' },
       documents: [], adjustments: [],
     };
@@ -197,6 +215,7 @@ export async function prepareBillingCycleClose(
       previous_cycle_id: existing?.id ?? null,
       team_discovery: discovery,
       quote: privateMonthlyQuoteEvidence(quote), ledger_snapshots: ledgerSnapshots,
+      paid_receipt_proofs: [...proofs.values()],
       credit_evidence: creditEvidence, credit_fingerprint: creditFingerprint };
     const digest = billingCycleSnapshotDigest(publicSnapshot, privateEvidence);
     await tx.billingCustomerCycle.create({ data: {

@@ -35,6 +35,30 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "evidence_complete": {
+                  "const": false
+                }
+              },
+              "required": [
+                "evidence_complete"
+              ]
+            },
+            "then": {
+              "properties": {
+                "remaining_credits": {
+                  "type": "null"
+                },
+                "percent_used": {
+                  "type": "null"
+                }
+              }
+            }
+          }
+        ],
         "required": [
           "scope_type",
           "scope_id",

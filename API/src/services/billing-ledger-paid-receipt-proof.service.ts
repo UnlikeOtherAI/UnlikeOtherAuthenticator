@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 
-import { type Prisma, type PrismaClient } from '@prisma/client';
+import { Prisma, type PrismaClient } from '@prisma/client';
 import { compactVerify, createLocalJWKSet, createRemoteJWKSet } from 'jose';
 import { z } from 'zod';
 
@@ -93,7 +93,7 @@ function binaryOrder(left: string, right: string): number {
 export async function matchUoaPaidReceiptSet(reader: Reader,
   scope: PaidReceiptScope, proof: LedgerPaidReceiptSet,
 ): Promise<{ ratedMicrocredits: bigint; forwardMicrocredits: bigint;
-  legacyMicrocredits: bigint; receiptCount: number }> {
+  legacyMicrocredits: bigint; receiptCount: number; rawCostTotal: string }> {
   const where = { serviceId: scope.serviceId, orgId: scope.organisationId,
     teamId: scope.teamId, billingMonth: scope.billingMonth };
   const [forward, legacy] = await Promise.all([
@@ -145,8 +145,10 @@ export async function matchUoaPaidReceiptSet(reader: Reader,
   }
   const forwardMicrocredits = forward.reduce((sum, row) => sum + row.ratedMicrocredits, 0n);
   const legacyMicrocredits = legacy.reduce((sum, row) => sum + row.ratedMicrocredits, 0n);
+  const rawCostTotal = rows.reduce((sum, row) => sum.add(new Prisma.Decimal(row.rawCost)),
+    new Prisma.Decimal(0)).toFixed(18);
   return { ratedMicrocredits: forwardMicrocredits + legacyMicrocredits,
-    forwardMicrocredits, legacyMicrocredits, receiptCount: rows.length };
+    forwardMicrocredits, legacyMicrocredits, receiptCount: rows.length, rawCostTotal };
 }
 
 export async function fetchVerifiedLedgerPaidReceiptSet(
