@@ -244,6 +244,8 @@ export async function captureIssuedManualBillingCycle(
     totals: [{ currency: invoice.currency,
       subscription: cycleMoney(subscriptionMinor, invoice.currency),
       usage_charge: cycleMoney(majorAmountToMinorRounded(usageAmount, invoice.currency), invoice.currency),
+      tax: cycleMoney(0n, invoice.currency),
+      gross_total: cycleMoney(invoice.totalMinor, invoice.currency),
       credits_applied: cycleMoney(0n, invoice.currency),
       total_due: cycleMoney(invoice.totalMinor, invoice.currency),
       total_paid: cycleMoney(totalPaid, invoice.currency),

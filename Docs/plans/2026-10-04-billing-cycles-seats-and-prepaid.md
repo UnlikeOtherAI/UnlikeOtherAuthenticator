@@ -125,6 +125,9 @@ to the invoice's gross and credit totals. An old invoice without allocation
 evidence remains a valid legal document but its ambiguous product cycle stays
 pending. A partial whole-invoice payment is never split among products by a
 ratio; product paid/outstanding needs actual line payment evidence.
+The customer cycle totals show tax and gross explicitly: subscription plus
+usage plus tax equals gross, and gross less applied usage credits equals due.
+The canonical monthly legal invoice retains its original gross convention.
 Manual and Stripe collection must both supply real monthly documents. Fetching
 historical months must not create charges, recalculate current terms or invent
 old invoices. Stripe invoice PDFs may not contain the full measured usage/seat

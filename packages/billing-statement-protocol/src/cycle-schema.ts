@@ -51,12 +51,14 @@ const product = object(['id', 'identifier', 'name'], {
   id, identifier: id, name: { type: 'string' },
 });
 const totals = object(
-  ['currency', 'subscription', 'usage_charge', 'credits_applied',
+  ['currency', 'subscription', 'usage_charge', 'tax', 'gross_total', 'credits_applied',
     'total_due', 'total_paid', 'outstanding'],
   {
     currency: { type: 'string', pattern: '^[A-Z]{3}$' },
     subscription: moneySchema({ signed: true }),
     usage_charge: moneySchema({ signed: true }),
+    tax: moneySchema({ signed: true }),
+    gross_total: moneySchema({ signed: true }),
     credits_applied: moneySchema({ signed: true }),
     total_due: moneySchema({ signed: true }),
     total_paid: moneySchema({ signed: true }),

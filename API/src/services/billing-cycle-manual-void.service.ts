@@ -97,6 +97,8 @@ export async function refreshVoidedManualBillingCycle(
     totals: prior.totals.map((total) => ({ ...total,
       subscription: cycleMoney(0n, total.currency),
       usage_charge: cycleMoney(0n, total.currency),
+      tax: cycleMoney(0n, total.currency),
+      gross_total: cycleMoney(0n, total.currency),
       credits_applied: cycleMoney(0n, total.currency),
       total_due: cycleMoney(0n, total.currency),
       total_paid: cycleMoney(0n, total.currency),
