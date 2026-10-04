@@ -1065,7 +1065,9 @@ publishes the copied legal invoice and separate frozen PDF/CSV customer-charge
 breakdown as a new cycle revision. Tax, credits and multi-service invoices
 without exact line-level settlement allocation hold; no whole-invoice amount
 is silently assigned to one service. A second attempt with the same immutable
-effect is idempotent, while changed payment evidence requires a new revision.
+effect is idempotent, while a verified payment or refund appends a new cycle
+revision with updated paid and outstanding amounts. The original legal PDF
+and its single invoice-line allocation remain immutable.
 If Ledger adds a late receipt before finalization, preparation appends a new
 pending revision and retains the original snapshot. A late receipt after
 finalization holds for a separately evidenced financial adjustment. Customer

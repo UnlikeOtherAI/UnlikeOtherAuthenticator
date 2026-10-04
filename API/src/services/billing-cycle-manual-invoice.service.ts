@@ -16,6 +16,9 @@ import {
 } from './billing-money.service.js';
 
 const MAX_DOCUMENT_BYTES = 20 * 1024 * 1024;
+type IssuedInvoice = Prisma.BillingInvoiceGetPayload<{
+  include: { lines: true; paymentEvents: true };
+}>;
 
 function hold(code: string): never {
   throw new AppError('INTERNAL', 409, code);
@@ -31,6 +34,27 @@ function paymentFacts(events: Array<{ id: string; kind: string;
     amount_minor: event.amountMinor.toString(), currency: event.currency,
     occurred_at: event.occurredAt.toISOString() }))
     .sort((left, right) => left.id.localeCompare(right.id));
+}
+
+function invoiceSourceFingerprint(invoice: IssuedInvoice): string {
+  return digest(JSON.stringify({
+    id: invoice.id, org_id: invoice.orgId, contract_id: invoice.contractId,
+    contract_version_id: invoice.contractVersionId, billing_month: invoice.billingMonth,
+    status: invoice.status, voided_at: invoice.voidedAt?.toISOString() ?? null,
+    invoice_number: invoice.invoiceNumber, issue_date: invoice.issueDate?.toISOString() ?? null,
+    issued_at: invoice.issuedAt?.toISOString() ?? null,
+    currency: invoice.currency, subtotal_minor: invoice.subtotalMinor.toString(),
+    tax_minor: invoice.taxAmountMinor.toString(),
+    credits_minor: invoice.creditsAppliedMinor.toString(),
+    total_minor: invoice.totalMinor.toString(),
+    issuer_snapshot: invoice.issuerSnapshot, buyer_snapshot: invoice.buyerSnapshot,
+    calculation_digest: invoice.calculationDigest,
+    pdf_key: invoice.pdfObjectKey, pdf_sha256: invoice.pdfSha256,
+    lines: invoice.lines.map((line) => ({ id: line.id, service_id: line.serviceId,
+      amount_minor: line.amountMinor.toString(), currency: line.currency,
+      position: line.position })).sort((a, b) => a.id.localeCompare(b.id)),
+    payment_events: paymentFacts(invoice.paymentEvents),
+  }));
 }
 
 function legalParty(value: Prisma.JsonValue): boolean {
@@ -85,6 +109,47 @@ export async function captureIssuedManualBillingCycle(
       include: { lines: true, paymentEvents: true } }),
   ]);
   if (!cycle || !invoice) hold('BILLING_CYCLE_ISSUED_SOURCE_MISSING');
+  const existingLine = invoice.lines[0];
+  if (existingLine) {
+    const key = digest(`manual\0${invoice.id}\0${existingLine.id}`);
+    const existing = await prisma.billingCustomerCycleInvoiceAllocation.findUnique({
+      where: { authorityKey: key }, include: { cycle: true },
+    });
+    if (existing) {
+      if (existing.cycle.orgId !== cycle.orgId || existing.cycle.serviceId !== cycle.serviceId ||
+        existing.cycle.billingMonth !== cycle.billingMonth ||
+        existing.cycle.teamId !== cycle.teamId ||
+        invoice.status !== BillingInvoiceStatus.ISSUED || invoice.voidedAt ||
+        invoice.lines.length !== 1 || existingLine.serviceId !== cycle.serviceId ||
+        existingLine.amountMinor !== existing.amountMinor ||
+        existingLine.currency !== existing.currency ||
+        billingCycleSnapshotDigest(existing.cycle.publicSnapshot,
+          existing.cycle.privateEvidence) !== existing.cycle.snapshotSha256) {
+        hold('BILLING_CYCLE_INVOICE_ALLOCATION_CONFLICT');
+      }
+      // Return the latest immutable view of this one allocated liability.
+      // A new payment/refund is captured as another view by the payment worker.
+      const latest = await prisma.billingCustomerCycle.findFirst({ where: {
+        orgId: cycle.orgId, serviceId: cycle.serviceId, teamId: cycle.teamId,
+        billingMonth: cycle.billingMonth,
+      }, orderBy: { revision: 'desc' } });
+      const latestEvidence = latest?.privateEvidence as Record<string, unknown> | undefined;
+      const allocation = latestEvidence?.invoice_allocation as Record<string, unknown> | undefined;
+      if (!latest || allocation?.authority_key !== key ||
+        billingCycleSnapshotDigest(latest.publicSnapshot, latest.privateEvidence) !==
+          latest.snapshotSha256) hold('BILLING_CYCLE_INVOICE_ALLOCATION_CONFLICT');
+      const sourceDigest = digest(JSON.stringify({ invoice_id: invoice.id,
+        line_id: existingLine.id, invoice_number: invoice.invoiceNumber,
+        amount_minor: existingLine.amountMinor.toString(), currency: invoice.currency,
+        pdf_sha256: invoice.pdfSha256, payment_events: paymentFacts(invoice.paymentEvents) }));
+      if ((allocation.latest_source_digest ?? allocation.source_digest) !== sourceDigest) {
+        const { refreshIssuedManualBillingCyclePayment } =
+          await import('./billing-cycle-manual-payment.service.js');
+        return refreshIssuedManualBillingCyclePayment({ invoiceId: invoice.id }, deps);
+      }
+      return { cycleId: latest.id, snapshotSha256: latest.snapshotSha256 };
+    }
+  }
   if (billingCycleSnapshotDigest(cycle.publicSnapshot, cycle.privateEvidence) !==
     cycle.snapshotSha256) hold('BILLING_CYCLE_SNAPSHOT_INTEGRITY');
   const pending = cycle.publicSnapshot as unknown as BillingCycleDetailV2;
@@ -138,7 +203,10 @@ export async function captureIssuedManualBillingCycle(
   }
   const invoiceBytes = await storage.read(invoice.pdfObjectKey);
   if (invoiceBytes.length === 0 || invoiceBytes.length > MAX_DOCUMENT_BYTES ||
+    invoiceBytes.subarray(0, 5).toString('ascii') !== '%PDF-' ||
     digest(invoiceBytes) !== invoice.pdfSha256) hold('BILLING_CYCLE_ISSUED_PDF_INTEGRITY');
+
+  const sourceFingerprint = invoiceSourceFingerprint(invoice);
 
   const allocationKey = digest(`manual\0${invoice.id}\0${line.id}`);
   const sourceDigest = digest(JSON.stringify({ invoice_id: invoice.id,
@@ -172,7 +240,7 @@ export async function captureIssuedManualBillingCycle(
       total_due: cycleMoney(invoice.totalMinor, invoice.currency),
       total_paid: cycleMoney(totalPaid, invoice.currency),
       outstanding: cycleMoney(invoice.totalMinor - totalPaid, invoice.currency) }],
-    credits: { consumed: '0', opening_balance: null, closing_balance: null,
+    credits: { consumed: null, opening_balance: null, closing_balance: null,
       status: 'pending_reconciliation' },
     document_available: true,
     documents: [
@@ -208,12 +276,17 @@ export async function captureIssuedManualBillingCycle(
       teamId: cycle.teamId, billingMonth: cycle.billingMonth,
     }, orderBy: { revision: 'desc' } });
     if (latest?.id !== cycle.id) hold('BILLING_CYCLE_SOURCE_REVISION_CHANGED');
-    const currentEvents = await tx.billingInvoicePaymentEvent.findMany({
-      where: { invoiceId: invoice.id },
-    });
-    if (JSON.stringify(paymentFacts(currentEvents)) !==
-      JSON.stringify(paymentFacts(invoice.paymentEvents))) {
-      hold('BILLING_CYCLE_MANUAL_PAYMENT_CHANGED');
+    const [currentInvoice, currentTerm] = await Promise.all([
+      tx.billingInvoice.findUnique({ where: { id: invoice.id },
+        include: { lines: true, paymentEvents: true } }),
+      tx.billingContractServiceTerm.findUnique({ where: { id: source.id },
+        select: { serviceId: true, contractVersionId: true } }),
+    ]);
+    if (!currentInvoice || currentInvoice.status !== BillingInvoiceStatus.ISSUED ||
+      currentInvoice.voidedAt || invoiceSourceFingerprint(currentInvoice) !== sourceFingerprint ||
+      currentTerm?.serviceId !== term.serviceId ||
+      currentTerm?.contractVersionId !== term.contractVersionId) {
+      hold('BILLING_CYCLE_MANUAL_SOURCE_CHANGED');
     }
     await tx.billingCustomerCycle.create({ data: {
       id, serviceId: cycle.serviceId, orgId: cycle.orgId,

@@ -217,6 +217,9 @@ describe.skipIf(!enabled)('customer cycle scope persistence', () => {
       cursor: 'cursor-august-new-receipt', sha256: 'e'.repeat(64) } });
     const revised = await prepareBillingCycleClose(params, deps);
     expect(revised.cycleId).not.toBe(first.cycleId);
+    const nonbillable = await getBillingCycleDetail(viewer, revised.cycleId,
+      { prisma: db.prisma });
+    expect(nonbillable.usage_lines[0]?.customer_charge?.amount).toBe('0');
     const revisions = await db.prisma.billingCustomerCycle.findMany({ where: {
       serviceId, orgId, teamId: null, billingMonth: '2026-08',
     }, orderBy: { revision: 'asc' } });

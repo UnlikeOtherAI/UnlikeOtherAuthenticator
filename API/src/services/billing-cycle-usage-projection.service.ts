@@ -63,8 +63,7 @@ export function projectCycleUsage(
   const lines: BillingCycleUsageLine[] = usage.lines.length === 0 ? [] : [{
     id: `usage:${createHash('sha256').update(`${expected.serviceIdentifier}\0${expected.teamId}\0${expected.billingMonth}`).digest('hex')}`,
     label: 'Metered usage',
-    customer_charge: ratedCharges.length === 0 ? null :
-      exactMoney(sumBillingDecimals(ratedCharges), expected.currency),
+    customer_charge: exactMoney(sumBillingDecimals(ratedCharges), expected.currency),
     credits_consumed: null,
   }];
   return { lines, evidence: { team_id: expected.teamId,
