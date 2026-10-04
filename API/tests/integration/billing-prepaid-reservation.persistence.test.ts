@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { Prisma, type PrismaClient } from '@prisma/client';
+import { BillingAssignmentScope, Prisma, type PrismaClient } from '@prisma/client';
 import { exportJWK, generateKeyPair, SignJWT, type KeyLike } from 'jose';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -7,6 +7,7 @@ import {
   finalizePrepaidDispatch, getLedgerDispatchDecision, reservePrepaidDispatch,
 } from '../../src/services/billing-prepaid-reservation.service.js';
 import { assertPrepaidUsageCovered } from '../../src/services/billing-prepaid-coverage.service.js';
+import { readCycleCreditEvidence } from '../../src/services/billing-cycle-credit-evidence.service.js';
 import { createTestDb } from '../helpers/test-db.js';
 import { resetAccessTokenKeyCache } from '../../src/services/oauth/access-token.service.js';
 
@@ -170,6 +171,16 @@ describe.skipIf(!enabled)('prepaid dispatch liability in PostgreSQL', () => {
     expect(await prisma.billingCreditEntry.count({
       where: { creditAccountId: ids.credit, sourceType: 'prepaid_provider_receipt' },
     })).toBe(2);
+    const tariff = await prisma.billingTariff.findUniqueOrThrow({ where: { id: ids.tariff } });
+    const creditEvidence = await readCycleCreditEvidence(prisma, {
+      orgId: ids.org, teamId: ids.team, serviceId: ids.service,
+      billingMonth: '2026-10', payer: BillingAssignmentScope.TEAM,
+      tariff, ratedAmount: '0.0000000013', rawLines: [{
+        billingDisposition: 'paid', selectedProviderCost: '0.0000000013',
+      }] as never,
+    });
+    expect(creditEvidence).toMatchObject({ covered: true,
+      consumed_microcredits: '2', funded_debit_microcredits: '2' });
     await expect(assertPrepaidUsageCovered({
       usage: { billingCompleteness: { state: 'complete', unresolvedPaidAttempts: '0' },
         scope: { organizationId: ids.org, teamId: ids.team, month: '2026-10' },
@@ -186,6 +197,14 @@ describe.skipIf(!enabled)('prepaid dispatch liability in PostgreSQL', () => {
 
   it('holds active credit, accepts trusted zero, and tombstones a lost request', async () => {
     await reserveFixture(99);
+    const tariff = await prisma.billingTariff.findUniqueOrThrow({ where: { id: ids.tariff } });
+    expect((await readCycleCreditEvidence(prisma, {
+      orgId: ids.org, teamId: ids.team, serviceId: ids.service,
+      billingMonth: '2026-10', payer: BillingAssignmentScope.TEAM,
+      tariff, ratedAmount: '0.0000000013', rawLines: [{
+        billingDisposition: 'paid', selectedProviderCost: '0.0000000013',
+      }] as never,
+    })).covered).toBe(false);
     await expect(assertPrepaidUsageCovered({
       usage: { billingCompleteness: { state: 'complete', unresolvedPaidAttempts: '0' },
         scope: { organizationId: ids.org, teamId: ids.team, month: '2026-10' },

@@ -108,6 +108,13 @@ terms, membership/capacity intervals, credit allocation and invoice identity
 privately. An open month is a clearly labelled preview, never a downloadable
 final invoice. A finalized invoice's totals and evidence are frozen; delayed
 receipts or later corrections use an explicit adjustment/credit-note lineage.
+Cycle `credits_consumed` means UOA-rated paid usage credits, including PAYG
+usage invoiced without a funded-wallet debit; it never includes seats or tax.
+The private evidence records funded-wallet debit separately. A completed PAYG
+settlement or settled prepaid receipt chain must match the closed Ledger-rated
+amount before a customer credit number is confirmed. Unknown coverage stays
+pending; proven zero usage is zero. Opening and closing funded-wallet balances
+remain pending until immutable account-entry boundaries establish them.
 Unknown paid usage holds final settlement rather than yielding a zero invoice.
 Prepaid consumption is a usage breakdown and never a second demand for payment:
 paid top-up invoices and monthly subscription invoices remain distinct documents.

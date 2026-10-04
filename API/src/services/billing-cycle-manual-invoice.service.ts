@@ -183,6 +183,15 @@ export async function captureIssuedManualBillingCycle(
   const subscriptionMinor = BigInt(String(quote.amount_minor));
   const usageAmount = pending.usage_lines.reduce((total, usage) =>
     addBillingDecimals(total, usage.customer_charge?.amount ?? '0'), '0');
+  const creditEvidence = privateEvidence.credit_evidence;
+  if (usageAmount !== '0' && (!Array.isArray(creditEvidence) ||
+    pending.credits.consumed === null || creditEvidence.some((item) => !item ||
+      item.covered !== true || item.funded_debit_microcredits !== '0'))) {
+    // This strict one-line issuer path cannot demand payment again for usage
+    // already funded by wallet credits. A broader line allocation must bind
+    // the actual settlement references before finalization.
+    hold('BILLING_CYCLE_MANUAL_CREDIT_ALLOCATION_UNPROVEN');
+  }
   if (pending.usage_lines.some((usage) => usage.customer_charge === null) ||
     pending.subscription_lines.length !== 1 ||
     pending.subscription_lines[0]?.customer_charge.amount_minor !==
@@ -239,8 +248,7 @@ export async function captureIssuedManualBillingCycle(
       total_due: cycleMoney(invoice.totalMinor, invoice.currency),
       total_paid: cycleMoney(totalPaid, invoice.currency),
       outstanding: cycleMoney(invoice.totalMinor - totalPaid, invoice.currency) }],
-    credits: { consumed: null, opening_balance: null, closing_balance: null,
-      status: 'pending_reconciliation' },
+    credits: pending.credits,
     document_available: true,
     documents: [
       document(invoiceDocumentId, 'monthly_invoice', 'pdf', invoice.invoiceNumber,

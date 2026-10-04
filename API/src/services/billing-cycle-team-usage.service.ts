@@ -9,6 +9,7 @@ import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import { assertUnambiguousCreditPayer } from './billing-credit-payer-period.service.js';
 import { billingCycleSnapshotDigest } from './billing-cycle-read.service.js';
+import { decimalCredits, readCycleCreditEvidence } from './billing-cycle-credit-evidence.service.js';
 import {
   cycleUsageContentFingerprint, projectCycleUsage, type CycleUsageEvidence,
 } from './billing-cycle-usage-projection.service.js';
@@ -86,6 +87,12 @@ export async function prepareBillingTeamUsageCycle(
     organisationId: params.organisationId, teamId: params.teamId,
     billingMonth: params.billingMonth, startsAt, endsAt,
     currency: terms.tariff.currency }, terms.tariff);
+  const ratedAmount = projected.lines[0]?.customer_charge?.amount ?? '0';
+  const creditEvidence = await readCycleCreditEvidence(prisma, {
+    orgId: params.organisationId, teamId: params.teamId, serviceId: params.serviceId,
+    billingMonth: params.billingMonth, payer, tariff: terms.tariff,
+    ratedAmount, rawLines: projected.evidence.raw_lines,
+  });
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       return await prisma.$transaction(async (tx) => {
@@ -100,6 +107,14 @@ export async function prepareBillingTeamUsageCycle(
         if (frozenTerms.tariff.id !== terms.tariff.id ||
           frozenTerms.assignmentId !== terms.assignmentId || frozenPayer !== payer) {
           hold('BILLING_CYCLE_HISTORICAL_TERMS_CHANGED');
+        }
+        const lockedCredits = await readCycleCreditEvidence(tx, {
+          orgId: params.organisationId, teamId: params.teamId, serviceId: params.serviceId,
+          billingMonth: params.billingMonth, payer, tariff: terms.tariff,
+          ratedAmount, rawLines: projected.evidence.raw_lines,
+        });
+        if (lockedCredits.fingerprint !== creditEvidence.fingerprint) {
+          hold('BILLING_CYCLE_CREDIT_SOURCE_CHANGED');
         }
         if (organisationSubscription) {
           const orgCycleId = params.organisationCycleId;
@@ -145,7 +160,8 @@ export async function prepareBillingTeamUsageCycle(
             hold('BILLING_CYCLE_EXISTING_RECONCILIATION_REQUIRED');
           }
           if (cycleUsageContentFingerprint(snapshots as CycleUsageEvidence[]) ===
-            cycleUsageContentFingerprint([projected.evidence])) {
+            cycleUsageContentFingerprint([projected.evidence]) &&
+            prior.credit_fingerprint === creditEvidence.fingerprint) {
             return { cycleId: existing.id, snapshotSha256: existing.snapshotSha256 };
           }
           if (existing.state !== 'pending_reconciliation') {
@@ -161,8 +177,13 @@ export async function prepareBillingTeamUsageCycle(
           scope: { organisation_id: params.organisationId, team_id: params.teamId,
             cycle_scope: 'team', payer_scope: payer.toLowerCase() as 'team' | 'organisation' },
           product: service, totals: [], document_available: false,
-          subscription_lines: [], usage_lines: projected.lines,
-          credits: { consumed: null, opening_balance: null, closing_balance: null,
+          subscription_lines: [], usage_lines: projected.lines.map((line) => ({
+            ...line, credits_consumed: creditEvidence.covered ?
+              decimalCredits(BigInt(creditEvidence.consumed_microcredits ?? '0')) : null,
+          })),
+          credits: { consumed: creditEvidence.covered ?
+            decimalCredits(BigInt(creditEvidence.consumed_microcredits ?? '0')) : null,
+            opening_balance: null, closing_balance: null,
             status: 'pending_reconciliation' },
           documents: [], adjustments: [],
         };
@@ -171,7 +192,8 @@ export async function prepareBillingTeamUsageCycle(
           organisation_cycle_id: params.organisationCycleId ?? null,
           team_discovery: discovery.snapshot,
           previous_cycle_id: existing?.id ?? null,
-          ledger_snapshots: [projected.evidence] };
+          ledger_snapshots: [projected.evidence],
+          credit_evidence: [creditEvidence], credit_fingerprint: creditEvidence.fingerprint };
         const digest = billingCycleSnapshotDigest(publicSnapshot, privateEvidence);
         await tx.billingCustomerCycle.create({ data: {
           id, serviceId: params.serviceId, orgId: params.organisationId,
