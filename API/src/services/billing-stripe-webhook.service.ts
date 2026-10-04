@@ -20,6 +20,8 @@ import {
   reconcileStripeCycleInvoiceUsage,
   type StripeInvoiceWebhookType,
 } from './billing-stripe-invoice.service.js';
+import { prepareStripePaymentInvoice, persistStripePaymentInvoice }
+  from './billing-stripe-payment-invoice-source.service.js';
 import { prepareRecurringAddonWebhook } from './billing-recurring-addon-webhook.service.js';
 import { applyRecurringAddonWebhook } from './billing-recurring-addon-webhook-apply.service.js';
 import {
@@ -37,7 +39,8 @@ export { refreshStripeSubscriptionProjection, syncStripeSubscriptionProjection }
 
 type StripeWebhookClient = Pick<
   Stripe,
-  'accounts' | 'billing' | 'checkout' | 'invoices' | 'invoiceItems' | 'subscriptions' | 'webhooks'
+  'accounts' | 'billing' | 'charges' | 'checkout' | 'invoicePayments' |
+  'invoices' | 'invoiceItems' | 'subscriptions' | 'webhooks'
 > &
   CreditFundingWebhookClient;
 
@@ -245,6 +248,9 @@ export async function handleStripeWebhook(
     ? { checkoutSession: null, subscriptionId: null, subscription: null }
     : await currentEventState(event, stripe, account);
   const creditFunding = await prepareCreditFundingWebhook(event, stripe, account, prisma);
+  const subscriptionPaymentInvoice = !recurringAddon && !creditFunding && event.type === 'invoice.paid'
+    ? await prepareStripePaymentInvoice((event.data.object as Stripe.Invoice).id, account, prisma, stripe)
+    : null;
   if (recurringAddon && creditFunding) {
     throw new AppError('INTERNAL', 503, 'STRIPE_WEBHOOK_BINDING_AMBIGUOUS');
   }
@@ -280,6 +286,9 @@ export async function handleStripeWebhook(
         },
       });
       await processEvent(tx, state, account);
+      if (subscriptionPaymentInvoice) {
+        await persistStripePaymentInvoice(tx, subscriptionPaymentInvoice);
+      }
       if (recurringAddon) {
         await applyRecurringAddonWebhook(tx, recurringAddon, webhookEvent.id, account);
       }

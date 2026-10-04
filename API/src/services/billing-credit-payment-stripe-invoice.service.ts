@@ -3,6 +3,7 @@ import type Stripe from 'stripe';
 
 import { AppError } from '../utils/errors.js';
 import { assertStripeObjectLivemode } from './billing-stripe-client.service.js';
+import { downloadStripeInvoicePdf } from './billing-stripe-invoice-document.service.js';
 
 type StripeReader = Pick<Stripe, 'checkout' | 'invoicePayments' | 'invoices'>;
 export type VerifiedStripePaymentInvoice = {
@@ -32,16 +33,6 @@ function exactMinor(value: number): bigint {
     throw new AppError('INTERNAL', 502, 'STRIPE_PAYMENT_INVOICE_AMOUNT_INVALID');
   }
   return BigInt(value);
-}
-
-function pdfUrl(value: string | null | undefined): URL {
-  if (!value) throw new AppError('INTERNAL', 409, 'STRIPE_PAYMENT_INVOICE_PDF_PENDING');
-  const url = new URL(value);
-  if (url.protocol !== 'https:' || url.hostname !== 'pay.stripe.com' ||
-      !url.pathname.startsWith('/invoice/')) {
-    throw new AppError('INTERNAL', 502, 'STRIPE_PAYMENT_INVOICE_PDF_URL_INVALID');
-  }
-  return url;
 }
 
 // A Stripe invoice wins over a UOA-issued document only when the exact
@@ -116,23 +107,7 @@ export async function resolveExistingStripePaymentInvoice(
   if (taxMinor > source.grossAmountMinor) {
     throw new AppError('INTERNAL', 409, 'STRIPE_PAYMENT_INVOICE_TAX_INVALID');
   }
-  const url = pdfUrl(invoice.invoice_pdf);
-  const response = await download(url, {
-    redirect: 'error',
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (!response.ok) {
-    throw new AppError('INTERNAL', 503, 'STRIPE_PAYMENT_INVOICE_PDF_UNAVAILABLE');
-  }
-  const contentLength = Number(response.headers.get('content-length') ?? '0');
-  if (contentLength > 5_000_000) {
-    throw new AppError('INTERNAL', 502, 'STRIPE_PAYMENT_INVOICE_PDF_TOO_LARGE');
-  }
-  const bytes = new Uint8Array(await response.arrayBuffer());
-  if (bytes.length > 5_000_000 || bytes.length < 8 ||
-      new TextDecoder().decode(bytes.subarray(0, 5)) !== '%PDF-') {
-    throw new AppError('INTERNAL', 502, 'STRIPE_PAYMENT_INVOICE_PDF_INVALID');
-  }
+  const bytes = await downloadStripeInvoicePdf(invoice.invoice_pdf, download);
   return {
     invoiceId,
     number: invoice.number,
