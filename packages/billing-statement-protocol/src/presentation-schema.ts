@@ -13,5 +13,18 @@ export const billingCreditPurchaseStatusV1JsonSchema = {
     title: { type: 'string', minLength: 1 },
     message: { type: 'string', minLength: 1 },
     awaiting_confirmation: { type: 'boolean' },
+    continuation: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['redirect_url', 'purchase_id'],
+      properties: {
+        redirect_url: {
+          type: 'string',
+          maxLength: 2048,
+          pattern: '^https://checkout\\.stripe\\.com/',
+        },
+        purchase_id: { type: 'string', minLength: 1, maxLength: 256 },
+      },
+    },
   },
 } as const;

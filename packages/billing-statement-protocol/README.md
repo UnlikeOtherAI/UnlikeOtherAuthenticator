@@ -168,7 +168,10 @@ account, team, storefront and app-key scope. It returns display-ready title and
 message, `state`, and `awaiting_confirmation`. Only the committed credit entry
 can yield `succeeded`; an open browser, success URL or Stripe intent alone cannot.
 Poll only while confirmation is pending, with a finite limit and an explicit
-retry. Reading a status never creates a payment or restarts the person's work.
+retry. When Stripe still reports the exact bound Checkout open, the response may
+include `continuation` with the same `purchase_id` and its bounded hosted URL.
+Opening that redirect resumes the same Checkout. Reading a status never creates
+a payment or restarts the person's work.
 
 The purchase status schema is exported as
 `./schema/billing-credit-purchase-status-v1.json` and included in the credits

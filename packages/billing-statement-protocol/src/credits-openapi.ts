@@ -118,8 +118,8 @@ export const billingCreditsV1OpenApiDocument = {
       post: {
         ...authenticatedOperation,
         operationId: 'getBillingCreditPurchaseStatusV1',
-        summary: 'Read one authorized credit purchase after returning from checkout',
-        description: 'Only the committed credit entry proves success. Reads do not create charges or settle credits.',
+        summary: 'Read one authorized credit purchase and resume its open Checkout',
+        description: 'Only the committed credit entry proves success. An optional continuation resumes the exact open Checkout; reads do not create charges or settle credits.',
         requestBody: requestBody('purchase_id'),
         responses: {
           200: {

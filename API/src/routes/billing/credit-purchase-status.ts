@@ -22,6 +22,7 @@ export function registerBillingCreditPurchaseStatusRoute(app: FastifyInstance): 
       credential, endpoint: BILLING_CREDIT_PURCHASE_STATUS_PATH,
       actorToken: readBillingActorHeader(request.headers['x-uoa-actor']),
       locale: presentation.locale,
+      presentationEnabled: presentation.enabled,
       request: {
         product: body.product, organisationId: body.organisation_id,
         teamId: body.team_id, userId: body.user_id, purchaseId: body.purchase_id,
