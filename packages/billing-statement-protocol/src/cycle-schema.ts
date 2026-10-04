@@ -93,6 +93,7 @@ const subscriptionLine = object([
 const rawUnits = object(['input', 'cached_input', 'output', 'total'], {
   input: decimal, cached_input: decimal, output: decimal, total: decimal,
   reasoning: decimal, cache_write: decimal,
+  cache_write_5m: decimal, cache_write_1h: decimal,
 });
 const usageLine = object([
   'id', 'service_id', 'usage_unit', 'calls', 'raw_units',

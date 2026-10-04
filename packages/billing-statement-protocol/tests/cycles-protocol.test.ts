@@ -80,6 +80,6 @@ describe('customer billing cycles protocol', () => {
       download_request: billingCycleDownloadRequestV2ConformanceFixture,
     });
     expect(await read('openapi/billing-cycles-v2.openapi.json')).toEqual(billingCyclesV2OpenApiDocument);
-    expect(BILLING_CYCLES_PROTOCOL_VERSION).toBe('2.0.0');
+    expect(BILLING_CYCLES_PROTOCOL_VERSION).toBe('2.1.0');
   });
 });
