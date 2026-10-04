@@ -79,4 +79,19 @@ describe('monthly seat quote', () => {
       membershipIntervals: [], capacityRevisions: [],
     })).toThrow('BILLING_SEAT_EVIDENCE_INVALID');
   });
+
+  it('tracks a future contract roster before its commercial boundary without charging early', () => {
+    const agreement = { seatPolicy: BillingSeatPolicy.AUTOMATIC,
+      seatChargeTiming: BillingSeatChargeTiming.PRORATED,
+      unitAmountMinor: 290n, activatedAt: at('2028-01-25T12:00:00Z'),
+      commercialEffectiveAt: at('2028-02-01T00:00:00Z'),
+      commercialEndsAt: at('2028-03-01T00:00:00Z'), endedAt: null,
+      capacityRevisions: [], membershipIntervals: [
+        { id: 'observed-roster', userId: 'person-1',
+          startsAt: at('2028-01-25T12:00:00Z'), endsAt: at('2028-02-15T00:00:00Z') },
+      ] };
+    expect(quoteMonthlySeatCharge({ ...agreement, billingMonth: '2028-01' }).amountMinor).toBe(0n);
+    expect(quoteMonthlySeatCharge({ ...agreement, billingMonth: month }).amountMinor).toBe(140n);
+    expect(quoteMonthlySeatCharge({ ...agreement, billingMonth: '2028-03' }).amountMinor).toBe(0n);
+  });
 });

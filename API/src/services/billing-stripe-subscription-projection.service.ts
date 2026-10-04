@@ -1,4 +1,4 @@
-import type { Prisma, PrismaClient } from '@prisma/client';
+import { BillingMonthlyChargeBasis, BillingSeatPolicy, Prisma, type PrismaClient } from '@prisma/client';
 import type Stripe from 'stripe';
 
 import { AppError } from '../utils/errors.js';
@@ -157,9 +157,18 @@ export async function syncBaseStripeSubscription(
     throw new AppError('INTERNAL', 502, 'STRIPE_SUBSCRIPTION_BINDING_INVALID');
   }
   const items = exactSubscriptionItems(subscription, {
-    monthlyPriceId: price.stripeMonthlyPriceId,
+    monthlyPriceId: checkout.tariff.monthlyChargeBasis !== BillingMonthlyChargeBasis.PER_SEAT
+      ? price.stripeMonthlyPriceId : null,
     usagePriceId: catalog.stripeUsagePriceId,
   });
+  const fixedSeats = checkout.tariff.monthlyChargeBasis === BillingMonthlyChargeBasis.PER_SEAT &&
+    checkout.tariff.seatPolicy === BillingSeatPolicy.FIXED;
+  if ((fixedSeats && (checkout.fixedSeatQuantity === null ||
+    subscription.metadata.uoa_fixed_seat_quantity !== String(checkout.fixedSeatQuantity))) ||
+    (!fixedSeats && (checkout.fixedSeatQuantity !== null ||
+      subscription.metadata.uoa_fixed_seat_quantity))) {
+    throw new AppError('INTERNAL', 502, 'STRIPE_SEAT_QUANTITY_BINDING_INVALID');
+  }
   const period = subscriptionPeriod(subscription);
   const existing = await tx.billingStripeSubscription.findUnique({
     where: {
