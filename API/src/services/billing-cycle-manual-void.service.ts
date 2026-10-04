@@ -36,7 +36,8 @@ export async function refreshVoidedManualBillingCycle(
   if (!allocation) return null;
   const invoice = await prisma.billingInvoice.findUnique({
     where: { id: params.invoiceId },
-    include: { lines: true, paymentEvents: true,
+    include: { lines: true, paymentEvents: true, lineFinancialAllocations: true,
+      creditSettlementRefs: true, lineCreditAllocations: true,
       _count: { select: { creditSettlementRefs: true } } },
   });
   if (!invoice || invoice.status !== BillingInvoiceStatus.VOID || !invoice.voidedAt ||
@@ -124,7 +125,8 @@ export async function refreshVoidedManualBillingCycle(
         serviceId: latest.serviceId, teamId: latest.teamId,
         billingMonth: latest.billingMonth }, orderBy: { revision: 'desc' } }),
       tx.billingInvoice.findUnique({ where: { id: invoice.id },
-        include: { lines: true, paymentEvents: true,
+        include: { lines: true, paymentEvents: true, lineFinancialAllocations: true,
+          creditSettlementRefs: true, lineCreditAllocations: true,
           _count: { select: { creditSettlementRefs: true } } } }),
     ]);
     if (current?.id !== latest.id || !currentInvoice ||

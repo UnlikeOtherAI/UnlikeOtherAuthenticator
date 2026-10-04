@@ -187,6 +187,10 @@ to the invoice's gross and credit totals. An old invoice without allocation
 evidence remains a valid legal document but its ambiguous product cycle stays
 pending. A partial whole-invoice payment is never split among products by a
 ratio; product paid/outstanding needs actual line payment evidence.
+Manual cycle replay fingerprints every frozen line allocation and credit
+reference binding, in binary identifier order, along with the original legal
+invoice facts. A different allocation cannot be accepted by replaying the
+same invoice ID or PDF hash.
 Each funded settlement reference is assigned to its own service line in stable
 service and settlement order. The invoice-wide cumulative microcredit rounding
 determines the minor-unit delta at each reference; it preserves fractional
