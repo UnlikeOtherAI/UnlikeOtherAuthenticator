@@ -610,3 +610,8 @@ resolution source; the actual gross payment and legal invoice are recorded in
 the same transaction. A later signed usage difference creates its own supplement
 after the preceding payment is accepted. This scheduler is machine-only; the
 resulting actual payment invoice is reachable in the common InvoiceV1 history.
+
+Processor retry windows use database time, independently of service-month quote
+time and application-host clock drift. Supplement workers verify their database
+lease immediately before creating invoices/items, finalizing, or enabling
+collection; a stale worker holds instead of issuing another payment operation.

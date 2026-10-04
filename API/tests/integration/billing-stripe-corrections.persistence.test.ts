@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { collectStripeCorrectionInvoice } from '../../src/services/billing-stripe-correction-invoice.service.js';
 import { compensateFinalizedStripeInvoice } from '../../src/services/billing-stripe-invoice-close-resolution.service.js';
@@ -111,6 +111,30 @@ describe.skipIf(!process.env.DATABASE_URL)('durable Stripe usage corrections', (
         leaseToken: 'e5c70b32-0701-4c20-9bf5-e018e04725a8' } });
     await expect(collectStripeCorrectionInvoice(fresh, deps())).rejects.toThrow('STRIPE_CORRECTION_LEASE_BUSY');
     expect(fixture.client.invoices.create).toHaveBeenCalledTimes(3);
+  });
+
+  it('uses database time despite host clock drift and fences a worker whose lease expires before creation', async () => {
+    const handle = await createTestDb();
+    if (!handle) throw new Error('DATABASE_URL_REQUIRED');
+    try {
+      const local = await correctionFixture(handle.prisma);
+      const request = { closeId: local.close.id, amountMicroMinor: 130_000_000n,
+        cursor: 'bus_correction_1' };
+      const clock = vi.spyOn(Date, 'now').mockReturnValue(0);
+      try {
+        local.client.invoices.list.mockImplementationOnce(async () => {
+          await handle.prisma.$executeRaw(Prisma.sql`UPDATE billing_stripe_cycle_corrections
+            SET lease_expires_at = clock_timestamp() - interval '1 second'
+            WHERE close_id = ${local.close.id}`);
+          return { data: [], has_more: false };
+        });
+        await expect(collectStripeCorrectionInvoice(request,
+          { prisma: handle.prisma, stripe: local.stripe })).rejects.toThrow('STRIPE_CORRECTION_LEASE_LOST');
+        expect(local.client.invoices.create).not.toHaveBeenCalled();
+        await collectStripeCorrectionInvoice(request, { prisma: handle.prisma, stripe: local.stripe });
+        expect(local.client.invoices.create).toHaveBeenCalledOnce();
+      } finally { clock.mockRestore(); }
+    } finally { await handle.cleanup(); }
   });
 
   it('preserves an explicitly inclusive original VAT treatment while settling only net usage', async () => {

@@ -14,7 +14,6 @@ import type { StripeInvoiceCashClient } from './billing-stripe-payment-evidence.
 import { stripeExternalId } from './billing-stripe-webhook-utils.service.js';
 
 type Client = StripeInvoiceCashClient & Pick<Stripe, 'accounts' | 'subscriptions' | 'invoiceItems' | 'taxRates'>;
-const RETRY_WINDOW_MS = 23 * 60 * 60_000;
 
 async function recoverInvoice(stripe: Client, customer: string, key: string, since: Date) {
   let after: string | undefined; let found: Stripe.Invoice | null = null;
@@ -64,9 +63,18 @@ export async function collectStripeCorrectionInvoice(params: {
     RETURNING first_attempt_at AS "firstAttemptAt"`);
   if (!lease[0]) correctionHold('STRIPE_CORRECTION_LEASE_BUSY');
   const update = async (data: Prisma.BillingStripeCycleCorrectionUpdateManyMutationInput) => {
+    await assertLease();
     const result = await prisma.billingStripeCycleCorrection.updateMany({
       where: { id: source.id, leaseToken: token }, data });
     if (result.count !== 1) correctionHold('STRIPE_CORRECTION_LEASE_LOST');
+  };
+  const assertLease = async (creating = false) => {
+    const rows = await prisma.$queryRaw<Array<{ active: boolean; retryAllowed: boolean }>>(Prisma.sql`
+      SELECT lease_token = ${token}::uuid AND lease_expires_at > clock_timestamp() AS active,
+        first_attempt_at > clock_timestamp() - interval '23 hours' AS "retryAllowed"
+      FROM billing_stripe_cycle_corrections WHERE id = ${source.id}::uuid`);
+    if (!rows[0]?.active) correctionHold('STRIPE_CORRECTION_LEASE_LOST');
+    if (creating && !rows[0].retryAllowed) correctionHold('STRIPE_CORRECTION_RETRY_KEY_EXPIRED');
   };
   const verifyInvoice = (invoice: Stripe.Invoice) => {
     assertStripeObjectLivemode(invoice, close.subscription.livemode);
@@ -111,13 +119,8 @@ export async function collectStripeCorrectionInvoice(params: {
   try {
     let invoice = source.stripeInvoiceId ? await stripe.invoices.retrieve(source.stripeInvoiceId) :
       await recoverInvoice(stripe, policy.customerId, source.authorityKey, lease[0].firstAttemptAt);
-    const retryAllowed = () => {
-      if (Date.now() - lease[0].firstAttemptAt.getTime() >= RETRY_WINDOW_MS) {
-        correctionHold('STRIPE_CORRECTION_RETRY_KEY_EXPIRED');
-      }
-    };
     if (!invoice) {
-      retryAllowed();
+      await assertLease(true);
       invoice = await stripe.invoices.create({ customer: policy.customerId,
         currency: source.currency.toLowerCase(), collection_method: 'charge_automatically',
         pending_invoice_items_behavior: 'exclude', auto_advance: false,
@@ -133,7 +136,7 @@ export async function collectStripeCorrectionInvoice(params: {
     let itemId = await lines(invoice, source.stripeInvoiceItemId);
     if (!itemId) {
       if (invoice.status !== 'draft') correctionHold('STRIPE_CORRECTION_ITEM_UNPROVEN');
-      retryAllowed();
+      await assertLease(true);
       const item = await stripe.invoiceItems.create({ customer: policy.customerId,
         invoice: invoice.id, currency: source.currency.toLowerCase(), amount: Number(itemAmount),
         tax_behavior: policy.behavior, tax_rates: policy.rates.map((rate) => rate.id),
@@ -145,6 +148,7 @@ export async function collectStripeCorrectionInvoice(params: {
     await update({ stripeInvoiceItemId: itemId });
     await lines(invoice, itemId);
     if (invoice.status === 'draft') {
+      await assertLease();
       invoice = await stripe.invoices.finalizeInvoice(invoice.id, { auto_advance: false });
       verifyInvoice(invoice);
       if (invoice.status === 'draft') correctionHold('STRIPE_CORRECTION_FINALIZATION_PENDING');
@@ -155,6 +159,7 @@ export async function collectStripeCorrectionInvoice(params: {
         adjustmentInvoiceId: invoice.id, actorEmail: 'billing-cycle-scheduler',
         observedAt: new Date(), correctionId: source.id }, { prisma, stripe });
     } else if (!invoice.auto_advance) {
+      await assertLease();
       const resumed = await stripe.invoices.update(invoice.id, { auto_advance: true });
       verifyInvoice(resumed);
       if (!resumed.auto_advance) correctionHold('STRIPE_CORRECTION_COLLECTION_UNCONFIRMED');

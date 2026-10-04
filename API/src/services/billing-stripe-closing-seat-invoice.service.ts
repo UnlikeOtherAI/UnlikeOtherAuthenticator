@@ -17,7 +17,6 @@ import type { quoteUnexportedClosedPeriodLiability }
 
 type Client = Pick<Stripe, 'accounts' | 'subscriptions' | 'invoices' | 'invoiceItems'>;
 type Source = Awaited<ReturnType<typeof freezeStripeMonthlyChargeSource>>;
-const RETRY_KEY_MAX_AGE_MS = 23 * 60 * 60 * 1000;
 
 function hold(code: string): never { throw new AppError('INTERNAL', 409, code); }
 
@@ -120,6 +119,14 @@ export async function collectStripeClosingSeatInvoice(params: {
     RETURNING first_invoice_attempt_at AS "firstInvoiceAttemptAt"
   `);
   if (!lease[0]) hold('STRIPE_CLOSING_INVOICE_LEASE_BUSY');
+  const assertLease = async (creating = false) => {
+    const permission = await deps.prisma.$queryRaw<Array<{ active: boolean; retryAllowed: boolean }>>(Prisma.sql`
+      SELECT invoice_lease_token = ${token}::uuid AND invoice_lease_expires_at > clock_timestamp() AS active,
+        first_invoice_attempt_at > clock_timestamp() - interval '23 hours' AS "retryAllowed"
+      FROM billing_stripe_monthly_charges WHERE id = ${source.id}`);
+    if (!permission[0]?.active) hold('STRIPE_CLOSING_INVOICE_LEASE_LOST');
+    if (creating && !permission[0].retryAllowed) hold('STRIPE_CLOSING_INVOICE_RETRY_KEY_EXPIRED');
+  };
   try {
     const remote = await stripe.subscriptions.retrieve(row.stripeSubscriptionId);
     assertStripeObjectLivemode(remote, row.livemode);
@@ -130,9 +137,7 @@ export async function collectStripeClosingSeatInvoice(params: {
       await recoverClosingInvoice(stripe, source, row.customer.stripeCustomerId,
         lease[0].firstInvoiceAttemptAt);
     if (!invoice) {
-      if (Date.now() - lease[0].firstInvoiceAttemptAt.getTime() >= RETRY_KEY_MAX_AGE_MS) {
-        hold('STRIPE_CLOSING_INVOICE_RETRY_KEY_EXPIRED');
-      }
+      await assertLease(true);
       const paymentMethod = stripeExternalId(remote.default_payment_method);
       if (!remote.automatic_tax || !Array.isArray(remote.default_tax_rates) ||
         (remote.automatic_tax.enabled && remote.default_tax_rates.length > 0)) {
@@ -151,6 +156,7 @@ export async function collectStripeClosingSeatInvoice(params: {
     }
     verifyClosingInvoice(invoice, source, row.customer.stripeCustomerId, row.livemode);
     if (source.stripeInvoiceId && source.stripeInvoiceId !== invoice.id) hold('STRIPE_CLOSING_INVOICE_CHANGED');
+    await assertLease();
     const attached = await deps.prisma.billingStripeMonthlyCharge.updateMany({ where: {
       id: source.id, invoiceLeaseToken: token,
     }, data: { stripeInvoiceId: invoice.id } });
@@ -160,9 +166,10 @@ export async function collectStripeClosingSeatInvoice(params: {
         invoiceId: invoice.id, customerId: row.customer.stripeCustomerId, livemode: row.livemode,
         billingMonth: lastMonth, periodStartsAt: start, periodEndsAt: end,
         currency: source.currency, stripeMonthlyItemId: null, monthlyLineObserved: false,
-        closingCancellation: true }, { prisma: deps.prisma, stripe, quote: deps.quote, now: deps.now });
+        closingCancellation: true, closingLeaseToken: token }, { prisma: deps.prisma, stripe, quote: deps.quote, now: deps.now });
       const accepted = await deps.prisma.billingStripeMonthlyCharge.findUniqueOrThrow({ where: { id: source.id } });
       await verifyClosingDraftLines(stripe, invoice, source, accepted.stripeInvoiceItemId);
+      await assertLease();
       const finalized = await stripe.invoices.finalizeInvoice(invoice.id, { auto_advance: true });
       verifyClosingInvoice(finalized, source, row.customer.stripeCustomerId, row.livemode);
       if (finalized.id !== invoice.id || finalized.status === 'draft') hold('STRIPE_CLOSING_INVOICE_FINALIZATION_PENDING');

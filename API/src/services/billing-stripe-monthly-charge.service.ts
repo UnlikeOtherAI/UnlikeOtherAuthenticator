@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@prisma/client';
+import { Prisma, type PrismaClient } from '@prisma/client';
 import type Stripe from 'stripe';
 
 import { AppError } from '../utils/errors.js';
@@ -8,7 +8,6 @@ import { quoteSubscriptionMonthlyCharge } from './billing-monthly-subscription-q
 
 type StripeMonthlyClient = Pick<Stripe, 'invoiceItems'>;
 type Source = Awaited<ReturnType<PrismaClient['billingStripeMonthlyCharge']['upsert']>>;
-const RETRY_KEY_MAX_AGE_MS = 23 * 60 * 60 * 1000;
 
 async function remoteItem(
   stripe: StripeMonthlyClient, invoiceId: string, authorityKey: string,
@@ -67,6 +66,7 @@ export async function collectStripeMonthlyCharge(params: {
   stripeMonthlyItemId: string | null;
   monthlyLineObserved: boolean;
   closingCancellation: boolean;
+  closingLeaseToken?: string;
 }, deps: {
   prisma: PrismaClient;
   stripe: StripeMonthlyClient;
@@ -120,16 +120,19 @@ export async function collectStripeMonthlyCharge(params: {
   if (source.stripeInvoiceItemId || source.state === 'ACCEPTED') {
     throw new AppError('INTERNAL', 409, 'STRIPE_MONTHLY_CHARGE_ACCEPTED_ITEM_MISSING');
   }
-  const now = deps.now?.() ?? new Date();
-  if (source.firstAttemptAt &&
-    now.getTime() - source.firstAttemptAt.getTime() >= RETRY_KEY_MAX_AGE_MS) {
-    throw new AppError('INTERNAL', 409, 'STRIPE_MONTHLY_CHARGE_RETRY_KEY_EXPIRED');
+  const attempt = await deps.prisma.$queryRaw<Array<{ allowed: boolean }>>(Prisma.sql`
+    UPDATE billing_stripe_monthly_charges
+      SET first_attempt_at = coalesce(first_attempt_at, clock_timestamp())
+    WHERE id = ${source.id}
+      AND (allocation_kind <> 'CLOSING' OR
+        (invoice_lease_token = ${params.closingLeaseToken ?? null}::uuid
+          AND invoice_lease_expires_at > clock_timestamp()))
+    RETURNING first_attempt_at > clock_timestamp() - interval '23 hours' AS allowed`);
+  if (!attempt[0]) {
+    throw new AppError('INTERNAL', 409, 'STRIPE_CLOSING_INVOICE_LEASE_LOST');
   }
-  if (!source.firstAttemptAt) {
-    await deps.prisma.billingStripeMonthlyCharge.updateMany({
-      where: { id: source.id, firstAttemptAt: null },
-      data: { firstAttemptAt: now },
-    });
+  if (!attempt[0].allowed) {
+    throw new AppError('INTERNAL', 409, 'STRIPE_MONTHLY_CHARGE_RETRY_KEY_EXPIRED');
   }
   try {
     const item = await deps.stripe.invoiceItems.create({

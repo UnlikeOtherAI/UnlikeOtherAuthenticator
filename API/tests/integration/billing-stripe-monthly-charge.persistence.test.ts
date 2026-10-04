@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
+import { Prisma } from '@prisma/client';
+
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type Stripe from 'stripe';
@@ -154,9 +156,14 @@ describe.skipIf(!process.env.DATABASE_URL)('Stripe monthly seat charge source', 
       where: { subscriptionId_billingMonth: { subscriptionId, billingMonth: nextMonth } },
       data: { firstAttemptAt: new Date('2026-10-30T00:00:00.000Z') },
     })).rejects.toThrow();
-    // A real attempt timestamp is immutable; advance the clock beyond its
-    // conservative 23-hour key window instead of rewriting evidence.
-    deps.now = () => new Date('2026-11-02T01:00:00.000Z');
+    // Only this isolated fixture bypasses the immutable timestamp guard.
+    // Business quote time must not govern the processor retry-key window.
+    await db.prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe('SET LOCAL session_replication_role = replica');
+      await tx.$executeRaw(Prisma.sql`UPDATE billing_stripe_monthly_charges
+        SET first_attempt_at = clock_timestamp() - interval '25 hours'
+        WHERE subscription_id = ${subscriptionId} AND billing_month = ${nextMonth}`);
+    });
     await expect(collectStripeMonthlyCharge(input, deps))
       .rejects.toThrow('STRIPE_MONTHLY_CHARGE_RETRY_KEY_EXPIRED');
     expect(stripe.invoiceItems.create).toHaveBeenCalledOnce();
