@@ -148,6 +148,7 @@ export async function quoteSubscriptionMonthlyCharge(
       amountMinor: terms.unitAmountMinor, unitAmountMinor: terms.unitAmountMinor,
       uniqueHumanSeats: null, seatMilliseconds: null, monthMilliseconds: null,
       currency: terms.currency, baselineCapturedAt: null, baselineMemberCount: null,
+      commercialEffectiveAt: null, commercialEndsAt: null, endedAt: null,
       intervals: [], capacityRevisions: [], evidenceIds: [] };
   }
   const agreement = terms.agreement;
@@ -193,6 +194,9 @@ export async function quoteSubscriptionMonthlyCharge(
     monthMilliseconds: quote.monthMilliseconds, currency: terms.currency,
     baselineCapturedAt: agreement.baselineCapturedAt,
     baselineMemberCount: agreement.baselineMemberCount,
+    commercialEffectiveAt: agreement.commercialEffectiveAt,
+    commercialEndsAt: agreement.commercialEndsAt,
+    endedAt: agreement.endedAt,
     intervals: agreement.membershipIntervals.filter((row) => quote.evidenceIds.includes(row.id)),
     capacityRevisions: agreement.capacityRevisions.filter((row) => quote.evidenceIds.includes(row.id)),
     evidenceIds: quote.evidenceIds };

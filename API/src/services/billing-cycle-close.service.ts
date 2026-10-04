@@ -107,8 +107,15 @@ export async function prepareBillingCycleClose(
       if (evidence.quote_fingerprint !== fingerprint ||
         billingCycleSnapshotDigest(existing.publicSnapshot, existing.privateEvidence) !==
           existing.snapshotSha256) hold('BILLING_CYCLE_EXISTING_RECONCILIATION_REQUIRED');
-      return { cycleId: existing.id, amountMinor: quote.amountMinor,
-        currency: quote.currency, snapshotSha256: existing.snapshotSha256 };
+      const oldLedgerFingerprint = billingCycleSnapshotDigest(evidence.ledger_snapshots, {});
+      const newLedgerFingerprint = billingCycleSnapshotDigest(ledgerSnapshots, {});
+      if (oldLedgerFingerprint === newLedgerFingerprint) {
+        return { cycleId: existing.id, amountMinor: quote.amountMinor,
+          currency: quote.currency, snapshotSha256: existing.snapshotSha256 };
+      }
+      if (existing.state !== 'pending_reconciliation') {
+        hold('BILLING_CYCLE_FINALIZED_RECEIPT_ADJUSTMENT_REQUIRED');
+      }
     }
     const id = randomUUID();
     const subscription = projectMonthlySubscriptionLine(quote, startsAt, endsAt);
@@ -128,11 +135,13 @@ export async function prepareBillingCycleClose(
       documents: [], adjustments: [],
     };
     const privateEvidence = { source: quote.source, quote_fingerprint: fingerprint,
+      previous_cycle_id: existing?.id ?? null,
       quote: privateMonthlyQuoteEvidence(quote), ledger_snapshots: ledgerSnapshots };
     const digest = billingCycleSnapshotDigest(publicSnapshot, privateEvidence);
     await tx.billingCustomerCycle.create({ data: {
       id, serviceId: quote.serviceId, orgId: quote.organisationId,
-      teamId: quote.teamId, billingMonth: params.billingMonth, revision: 1,
+      teamId: quote.teamId, billingMonth: params.billingMonth,
+      revision: (existing?.revision ?? 0) + 1,
       state: 'pending_reconciliation', payerScope: quote.scope,
       publicSnapshot: publicSnapshot as unknown as Prisma.InputJsonValue,
       privateEvidence: privateEvidence as unknown as Prisma.InputJsonValue,

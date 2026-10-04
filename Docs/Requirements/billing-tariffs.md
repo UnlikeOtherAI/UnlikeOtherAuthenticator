@@ -994,6 +994,11 @@ quote drift. Pending credits are represented as unknown, never zero. This
 preparation does not create a payment invoice, mark liability paid, or make
 documents downloadable; those transitions require verified collection and
 credit evidence in a later immutable revision.
+If Ledger adds a late receipt before finalization, preparation appends a new
+pending revision and retains the original snapshot. A late receipt after
+finalization holds for a separately evidenced financial adjustment. Customer
+seat intervals are clipped to the immutable commercial effective/end and
+termination window used by the monetary quote.
 
 `BillingStatementV1.capabilities` describes UOA-owned billing actions only. A
 product runtime capability such as `can_be_private` is not inferred from a
