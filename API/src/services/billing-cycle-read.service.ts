@@ -120,7 +120,7 @@ function currentMonth(now: Date): string {
   return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
 }
 
-const cursorPattern = /^(\d{4}-(?:0[1-9]|1[0-2])):(team|organisation)$/;
+const cursorPattern = /^(\d{4}-(?:0[1-9]|1[0-2])):(preview|team|organisation)$/;
 
 function cycleOrder(row: CycleRow): number {
   return row.teamId === null ? 1 : 0;
@@ -184,6 +184,7 @@ export async function listBillingCycles(
   const rows = [...teamRows, ...orgRows]
     .sort((a, b) => b.billingMonth.localeCompare(a.billingMonth) || cycleOrder(a) - cycleOrder(b))
     .filter((row) => !cursor || row.billingMonth < cursor[1] ||
+      (row.billingMonth === cursor[1] && cursor[2] === 'preview') ||
       (row.billingMonth === cursor[1] && cycleOrder(row) >
         (cursor[2] === 'team' ? 0 : 1)));
   const controlledBy = params.cursor ? null : await resolveBillingControlledBy({
@@ -202,7 +203,7 @@ export async function listBillingCycles(
     schema_version: 2, generated_at: now.toISOString(), subject: publicSubject(context),
     cycles,
     next_cursor: hasMore ? last ? cycleCursor(last) :
-      `${currentMonth(now)}:team` : null,
+      `${currentMonth(now)}:preview` : null,
   };
 }
 

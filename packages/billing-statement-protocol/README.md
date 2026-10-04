@@ -195,3 +195,10 @@ the committed JSON Schema, example, or OpenAPI artifact drifts from the typed
 source. Breaking protocol changes require a protocol major and package major. The
 `schema_version` integer identifies the stable v1/v2 route family; each family
 has an independent semantic protocol version.
+
+# Cycle pagination
+
+The first page may contain an open preview before persisted cycles. Its
+`YYYY-MM:preview` cursor resumes at the first persisted team or organisation
+cycle, including one in that same month. Persisted pages use the team or
+organisation cursor and never repeat the preview.

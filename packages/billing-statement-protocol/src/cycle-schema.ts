@@ -134,7 +134,7 @@ const adjustment = object([
 
 export const billingCyclesListRequestV2JsonSchema = billingSubjectActionBodySchema({
   limit: { type: 'integer', minimum: 1, maximum: 24 },
-  cursor: { type: 'string', pattern: '^[0-9]{4}-(0[1-9]|1[0-2]):(team|organisation)$' },
+  cursor: { type: 'string', pattern: '^[0-9]{4}-(0[1-9]|1[0-2]):(preview|team|organisation)$' },
 });
 export const billingCycleDetailRequestV2JsonSchema = billingSubjectActionBodySchema(
   { cycle_id: id }, ['cycle_id'],
@@ -151,7 +151,7 @@ export const billingCyclesListV2JsonSchema = {
     subject,
     cycles: { type: 'array', items: object(summaryRequired, summaryProperties) },
     next_cursor: { anyOf: [
-      { type: 'string', pattern: '^[0-9]{4}-(0[1-9]|1[0-2]):(team|organisation)$' },
+      { type: 'string', pattern: '^[0-9]{4}-(0[1-9]|1[0-2]):(preview|team|organisation)$' },
       { type: 'null' },
     ] },
   }),
