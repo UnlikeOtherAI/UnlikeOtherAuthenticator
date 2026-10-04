@@ -2696,6 +2696,11 @@ return URL from UOA state. UOA persists the immutable local intent before
 calling Stripe, uses account/mode-scoped idempotency, recovers the same open
 Checkout across a fresh exact-scope actor, and applies webhooks only after
 current Stripe metadata matches the stored customer/catalog/intent binding.
+When one top-up payment is pending, its read action can continue only the same
+open payment for the unchanged offer, customer, product app key, service,
+amount, credit quantity, and return URLs. Other offers stay blocked until that
+payment is resolved. A Checkout completion snapshot does not add credits;
+verified PaymentIntent webhook evidence does.
 Missing policy, catalog, payment, consent, or Stripe evidence fails closed and
 keeps the corresponding projected action disabled.
 

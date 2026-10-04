@@ -1016,6 +1016,16 @@ before funding or consent is committed. A policy, catalog, payment method,
 consent, or Stripe binding gap disables the corresponding projected action and
 fails a forged direct request closed.
 
+When a team already has one pending top-up Checkout, the read projection may
+offer **Continue payment** only for that Checkout's exact active offer after
+rechecking its current Stripe session and the immutable account, team credit
+account, customer, product app key, service, catalog amount, credit quantity,
+and pinned return-URL digests. Other offers remain unavailable while that
+payment is pending. This read never changes checkout state; only a verified
+PaymentIntent webhook adds credits. Recovery updates are conditional on the
+checkout still being pending, so a webhook-completed checkout cannot be
+downgraded or redirected using a stale Stripe read.
+
 Disable authority is bound inside the database transaction. The immutable
 disable audit event identifies the exact requester, active lifecycle app key,
 organisation, team, account, prior consent, and generation. Its database
