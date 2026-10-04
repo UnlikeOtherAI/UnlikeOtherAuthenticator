@@ -92,6 +92,7 @@ describe('billing credit purchase-status route', () => {
         endpoint: '/billing/v1/credits/purchase-status',
         actorToken: 'signed-actor',
         locale: 'de',
+        presentationEnabled: true,
         request: {
           product: 'deepwater', organisationId: 'org_example', teamId: 'team_example',
           userId: 'user_example', purchaseId: 'purchase_1',
@@ -112,7 +113,7 @@ describe('billing credit purchase-status route', () => {
       expect(response.statusCode).toBe(200);
       expect(response.headers['cache-control']).toBe('private, no-store');
       expect(purchaseStatusService.getBillingCreditPurchaseStatus).toHaveBeenCalledWith(
-        expect.objectContaining({ locale: 'en-US' }),
+        expect.objectContaining({ locale: 'en-US', presentationEnabled: false }),
       );
     });
   });
