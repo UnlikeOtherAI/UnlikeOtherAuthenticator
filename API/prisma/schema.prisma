@@ -4290,6 +4290,44 @@ model BillingCustomerCycle {
   @@map("billing_customer_cycles")
 }
 
+// A durable source/month observation job. The source binding is immutable;
+// leases and generations make concurrent schedulers and restarts safe.
+model BillingCycleCloseWatch {
+  id               String    @id @default(cuid())
+  sourceKind       String    @map("source_kind") @db.VarChar(24)
+  sourceId         String    @map("source_id") @db.VarChar(255)
+  serviceId        String    @map("service_id")
+  orgId            String    @map("org_id")
+  teamId           String?   @map("team_id")
+  billingMonth     String    @map("billing_month") @db.Char(7)
+  priority         Int       @default(1)
+  nextCheckAt      DateTime  @map("next_check_at")
+  generation       BigInt    @default(0)
+  leaseToken       String?   @map("lease_token") @db.Uuid
+  leaseExpiresAt   DateTime? @map("lease_expires_at")
+  attempts         Int       @default(0)
+  lastCycleId      String?   @map("last_cycle_id")
+  lastErrorCode    String?   @map("last_error_code") @db.VarChar(100)
+  lastCheckedAt    DateTime? @map("last_checked_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  @@unique([sourceKind, sourceId, billingMonth])
+  @@index([priority, nextCheckAt], map: "billing_cycle_close_watches_due_idx")
+  @@index([serviceId, orgId, teamId, billingMonth], map: "billing_cycle_close_watches_scope_idx")
+  @@map("billing_cycle_close_watches")
+}
+
+// Historical source enumeration resumes at a persisted key rather than
+// restarting at the first subscription or tenant after every process restart.
+model BillingCycleSeedProgress {
+  kind       String   @id @db.VarChar(24)
+  lastKey    String   @default("") @map("last_key") @db.VarChar(520)
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@map("billing_cycle_seed_progress")
+}
+
 // Document metadata points only at immutable bytes copied from a verified
 // payment authority, or at UOA's frozen measured-usage breakdown.
 model BillingCustomerCycleDocument {
