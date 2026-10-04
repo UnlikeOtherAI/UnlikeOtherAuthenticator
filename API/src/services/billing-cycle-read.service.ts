@@ -258,8 +258,19 @@ export async function downloadBillingCycleDocument(
   }
   hydrate(document.cycle, context);
   const bytes = await (deps?.storage ?? createBillingInvoicePdfStorage()).read(document.objectKey);
-  if (createHash('sha256').update(bytes).digest('hex') !== document.sha256) {
+  if (bytes.length === 0 || bytes.length > 20 * 1024 * 1024 ||
+      (document.format === 'pdf' && bytes.subarray(0, 5).toString() !== '%PDF-') ||
+      (document.format === 'csv' && bytes.subarray(0, 3).toString('hex') !== 'efbbbf') ||
+      createHash('sha256').update(bytes).digest('hex') !== document.sha256) {
     throw new AppError('INTERNAL', 503, 'BILLING_CYCLE_DOCUMENT_INTEGRITY');
+  }
+  // Storage reads may block while membership or a token epoch is revoked.
+  // Recheck the current selected-team and payer authority before disclosing bytes.
+  await authorizeBillingCycle(context, { prisma });
+  if (document.cycle.teamId === null ||
+      document.cycle.payerScope === BillingAssignmentScope.ORGANISATION) {
+    await authorizeBillingCycle({ ...context, payerScope: document.cycle.payerScope },
+      { prisma });
   }
   return {
     bytes, contentType: document.format === 'pdf' ? 'application/pdf' : 'text/csv',
