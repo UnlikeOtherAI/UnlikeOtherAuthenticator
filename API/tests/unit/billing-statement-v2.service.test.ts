@@ -221,13 +221,16 @@ describe('canonical UOA BillingStatementV2', () => {
     expect(statement.connected_service_usage.title).toBe('Využití připojených služeb');
     const connectedService = statement.connected_service_usage.services[0]!;
     expect(connectedService.title).toBe('Využití týmu: DeepWater');
-    expect(connectedService.totals.usage[0]?.display).toBe('1 000 nezpracovaných tokenů za celý tým');
+    expect(connectedService.totals.usage[0]?.display).toBe('1 000 použitých tokenů za celý tým');
+    expect(connectedService.totals.provider_costs[0]?.display)
+      .toBe('Náklady poskytovatele za celý tým: $1.25');
     expect(connectedService.description).toContain('Tým využil');
     expect(connectedService.origins[0]?.call_share.percent).toBe('100.00');
-    expect(connectedService.origins[0]?.call_share.display).toContain('z volání služby DeepWater');
-    expect(connectedService.origins[0]?.usage[0]?.display).toContain('nezpracovaných tokenů');
-    expect(connectedService.users[0]?.call_share.display).toContain('z');
-    expect(connectedService.users[0]?.provider_costs[0]?.display).toContain('nákladů poskytovatele');
+    expect(connectedService.origins[0]?.call_share.display).toBe('100,00 % volání služby DeepWater');
+    expect(connectedService.origins[0]?.usage[0]?.display).toContain('použitých tokenů');
+    expect(connectedService.users[0]?.call_share.display).toContain('volání služby DeepWater');
+    expect(connectedService.users[0]?.provider_costs[0]?.display)
+      .toContain(' % z nákladů poskytovatele (');
     const ajv = new Ajv2020({ allErrors: true, strict: true });
     addFormats(ajv);
     const validate = ajv.compile(billingStatementV2JsonSchema);

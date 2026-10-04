@@ -260,7 +260,7 @@ describe('canonical UOA billing statement', () => {
     expect(accessUpsert).not.toHaveBeenCalled();
     expect(fetchMetering).toHaveBeenCalledTimes(2);
     expect(statement.commercial_lines[0]).toMatchObject({
-      label: 'Standard Měsíční předplatné',
+      label: 'Standard – měsíční předplatné',
       detail: 'Součást vašeho aktuálního tarifu.',
     });
     expect(statement).toMatchObject({
@@ -297,13 +297,13 @@ describe('canonical UOA billing statement', () => {
         usage_unit: 'requests',
         raw_units: '10',
         billable_units: '12',
-        display: '12 účtovaných požadavků (10 nezpracovaných)',
+        display: '12 účtovaných požadavků (10 použitých)',
       },
       {
         usage_unit: 'tokens',
         raw_units: '150',
         billable_units: '180',
-        display: '180 účtovaných tokenů (150 nezpracovaných)',
+        display: '180 účtovaných tokenů (150 použitých)',
       },
     ]);
     expect(statement.usage.cost_totals).toEqual([
