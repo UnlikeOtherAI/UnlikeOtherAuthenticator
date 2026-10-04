@@ -4,10 +4,12 @@ import { Prisma, type PrismaClient } from '@prisma/client';
 
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
+import { collectStripeClosingSeatInvoice } from './billing-stripe-closing-seat-invoice.service.js';
 import { prepareBillingCycleClose } from './billing-cycle-close.service.js';
 import { prepareBillingTeamUsageCycle } from './billing-cycle-team-usage.service.js';
 import { fetchLedgerHistoricalBillingTeams } from './billing-ledger-team-discovery.service.js';
 import { billingCycleSnapshotDigest } from './billing-cycle-read.service.js';
+import { finalizePrepaidBillingCycle } from './billing-cycle-prepaid-correction.service.js';
 
 const BATCH_SIZE = 50;
 type Claimed = { id: string; sourceKind: string; sourceId: string;
@@ -74,11 +76,15 @@ async function retry(prisma: PrismaClient, row: Claimed,
 async function runOne(prisma: PrismaClient, row: Claimed,
   deps: { close?: typeof prepareBillingCycleClose;
     team?: typeof prepareBillingTeamUsageCycle;
+    finalizePrepaid?: typeof finalizePrepaidBillingCycle;
     discover?: typeof fetchLedgerHistoricalBillingTeams }): Promise<string | null> {
   const service = await prisma.billingService.findUnique({ where: { id: row.serviceId },
     select: { identifier: true } });
   if (!service) throw new AppError('INTERNAL', 409, 'BILLING_CYCLE_SOURCE_SERVICE_MISSING');
   if (row.sourceKind === 'stripe' || row.sourceKind === 'manual') {
+    if (row.sourceKind === 'stripe') await collectStripeClosingSeatInvoice({
+      subscriptionId: row.sourceId, billingMonth: row.billingMonth,
+    }, { prisma });
     const result = await (deps.close ?? prepareBillingCycleClose)({
       source: { kind: row.sourceKind, id: row.sourceId }, billingMonth: row.billingMonth,
     }, { prisma });
@@ -88,7 +94,9 @@ async function runOne(prisma: PrismaClient, row: Claimed,
       cycle.teamId !== row.teamId || cycle.billingMonth !== row.billingMonth) {
       throw new AppError('INTERNAL', 409, 'BILLING_CYCLE_WATCH_SOURCE_REBOUND');
     }
-    return result.cycleId;
+    const finalized = await (deps.finalizePrepaid ?? finalizePrepaidBillingCycle)(
+      { cycleId: result.cycleId }, { prisma });
+    return finalized?.cycleId ?? result.cycleId;
   }
   if (row.sourceKind === 'team_discovery') {
     if (row.teamId !== null || row.sourceId !== `${row.serviceId}:${row.orgId}`) {
@@ -131,7 +139,15 @@ async function runOne(prisma: PrismaClient, row: Claimed,
         teamId: row.teamId, billingMonth: row.billingMonth,
         organisationCycleId: orgCycle?.id,
       }, { prisma });
-      return result.cycleId;
+      const cycle = await prisma.billingCustomerCycle.findUnique({ where: { id: result.cycleId },
+        select: { serviceId: true, orgId: true, teamId: true, billingMonth: true } });
+      if (!cycle || cycle.serviceId !== row.serviceId || cycle.orgId !== row.orgId ||
+        cycle.teamId !== row.teamId || cycle.billingMonth !== row.billingMonth) {
+        throw new AppError('INTERNAL', 409, 'BILLING_CYCLE_WATCH_SOURCE_REBOUND');
+      }
+      const finalized = await (deps.finalizePrepaid ?? finalizePrepaidBillingCycle)(
+        { cycleId: result.cycleId }, { prisma });
+      return finalized?.cycleId ?? result.cycleId;
     } catch (error) {
       if (!(error instanceof AppError) ||
         error.message !== 'BILLING_CYCLE_MONTHLY_SOURCE_REQUIRED') throw error;
@@ -165,6 +181,7 @@ export async function runBillingCycleCloseBatch(deps?: {
   prisma?: PrismaClient; now?: Date;
   close?: typeof prepareBillingCycleClose;
   team?: typeof prepareBillingTeamUsageCycle;
+  finalizePrepaid?: typeof finalizePrepaidBillingCycle;
   discover?: typeof fetchLedgerHistoricalBillingTeams;
 }): Promise<{ checked: number; held: number; backlog: number;
   failures: Array<{ id: string; code: string }> }> {

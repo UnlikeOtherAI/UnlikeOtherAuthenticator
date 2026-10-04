@@ -66,6 +66,10 @@ version removes a service, activation deletes that service's live organisation
 assignment and the historical term retains a nullable provenance pointer.
 Generic tariff management rejects organisation/team overrides and removal of an
 assignment protected by the current active version.
+Historical rating also gives the effective immutable contract service term
+precedence over every generic team or organisation tariff event, including a
+team event committed after contract activation. Ordinary team overrides apply
+only when no effective contract service term governs the billing month.
 
 ## Explicit legal profiles
 

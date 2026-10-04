@@ -222,7 +222,8 @@ export async function reservePrepaidDispatch(
     })).tariff;
     if (tariff.usagePaymentMode === BillingUsagePaymentMode.PAY_AS_YOU_GO ||
       tariff.mode === BillingTariffMode.FREE) {
-      await reserveBudgetDispatch(tx, { dispatchId: input.dispatchId, startedAt: dispatchStartedAt,
+      await reserveBudgetDispatch(tx, { dispatchId: input.dispatchId,
+        requestFingerprint: input.requestFingerprint, startedAt: dispatchStartedAt,
         product: input.product, serviceId: key.serviceId,
         providerServiceId: input.providerServiceId,
         orgId: input.organisationId, teamId: input.teamId, userId: input.userId,
@@ -246,7 +247,7 @@ export async function reservePrepaidDispatch(
       throw new AppError('BAD_REQUEST', 409, 'PREPAID_CURRENCY_UNSUPPORTED');
     }
     return null;
-  }, 'BILLING_CREDIT_ACCOUNT_RETRY_EXHAUSTED');
+  }, 'BILLING_CREDIT_ACCOUNT_RETRY_EXHAUSTED', { timeoutMs: 30_000 });
   if (decision) return withBudgetContextDigest(prisma, decision);
   if (bound === null) throw new AppError('BAD_REQUEST', 422, 'PREPAID_BOUND_REQUIRED');
   if (input.currency !== 'USD') {
@@ -307,7 +308,8 @@ export async function reservePrepaidDispatch(
       throw new AppError('FORBIDDEN', 403, 'PREPAID_TARIFF_REQUIRED');
     }
     const reserved = ratedMicrocredits(bound, tariff.markupBps);
-    await reserveBudgetDispatch(tx, { dispatchId: input.dispatchId, startedAt: dispatchStartedAt,
+    await reserveBudgetDispatch(tx, { dispatchId: input.dispatchId,
+      requestFingerprint: input.requestFingerprint, startedAt: dispatchStartedAt,
       product: input.product, serviceId: key.serviceId,
       providerServiceId: input.providerServiceId,
       orgId: input.organisationId, teamId: input.teamId, userId: input.userId,
@@ -336,7 +338,7 @@ export async function reservePrepaidDispatch(
       request_fingerprint: reservation.requestFingerprint,
       reserved_microcredits: reserved.toString(), billing_month: billingMonth,
       currency: reservation.currency };
-  }, 'BILLING_CREDIT_ACCOUNT_RETRY_EXHAUSTED');
+  }, 'BILLING_CREDIT_ACCOUNT_RETRY_EXHAUSTED', { timeoutMs: 30_000 });
   return withBudgetContextDigest(prisma, prepaid);
 }
 

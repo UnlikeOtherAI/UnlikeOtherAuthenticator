@@ -3,6 +3,25 @@ import { describe, expect, it, vi } from 'vitest';
 import { resolveBillingTariffForMonth } from '../../src/services/billing-tariff-history.service.js';
 
 describe('manual contract term history', () => {
+  it('retains the effective organisation contract over a later generic team tariff event', async () => {
+    const tariff = { id: 'contract-tariff', serviceId: 'service_1', mode: 'CUSTOM',
+      collectionMode: 'MANUAL', markupBps: 1750 };
+    const teamEvent = { tariffId: 'team-free', tariff: {
+      id: 'team-free', serviceId: 'service_1', mode: 'FREE', markupBps: 0 } };
+    const reader = {
+      billingService: { findUnique: vi.fn().mockResolvedValue({ tariffHistoryFromMonth: '2026-07' }) },
+      billingOrganisationContractVersion: { findMany: vi.fn().mockResolvedValue([{
+        effectiveFromMonth: '2026-07', contractId: 'contract_1',
+        contract: { status: 'ACTIVE', terminatedAt: null },
+        serviceTerms: [{ tariff, tariffAssignmentId: 'assignment_1' }],
+      }]) },
+      billingTariffTermEvent: { findFirst: vi.fn().mockResolvedValue(teamEvent) },
+    };
+    expect(await resolveBillingTariffForMonth(reader as never, {
+      serviceId: 'service_1', organisationId: 'org_1', teamId: 'team_1', billingMonth: '2026-08',
+    })).toMatchObject({ tariff, source: 'ORGANISATION', assignmentId: 'assignment_1' });
+    expect(reader.billingTariffTermEvent.findFirst).not.toHaveBeenCalled();
+  });
   it('uses the explicitly effective immutable contract version before legacy pointer coverage', async () => {
     const tariff = { id: 'contract-tariff', serviceId: 'service_1', markupBps: 1750 };
     const reader = {

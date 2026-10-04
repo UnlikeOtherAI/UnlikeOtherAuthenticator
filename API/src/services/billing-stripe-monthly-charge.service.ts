@@ -1,33 +1,14 @@
-import { createHash } from 'node:crypto';
-
 import type { PrismaClient } from '@prisma/client';
 import type Stripe from 'stripe';
 
 import { AppError } from '../utils/errors.js';
 import { assertStripeObjectLivemode } from './billing-stripe-client.service.js';
+import { freezeStripeMonthlyChargeSource } from './billing-stripe-monthly-charge-source.service.js';
 import { quoteSubscriptionMonthlyCharge } from './billing-monthly-subscription-quote.service.js';
 
 type StripeMonthlyClient = Pick<Stripe, 'invoiceItems'>;
-type MonthlyQuote = Awaited<ReturnType<typeof quoteSubscriptionMonthlyCharge>>;
 type Source = Awaited<ReturnType<PrismaClient['billingStripeMonthlyCharge']['upsert']>>;
 const RETRY_KEY_MAX_AGE_MS = 23 * 60 * 60 * 1000;
-
-function sha256(value: unknown): string {
-  return createHash('sha256').update(JSON.stringify(value, (_key, item) =>
-    typeof item === 'bigint' ? item.toString() : item)).digest('hex');
-}
-
-function quoteDigest(quote: MonthlyQuote): string {
-  return sha256({ source: quote.source, billingMonth: quote.billingMonth,
-    serviceId: quote.serviceId, tariffId: quote.tariffId,
-    orgId: quote.organisationId, teamId: quote.teamId, scope: quote.scope,
-    agreementId: quote.agreementId, amountMinor: quote.amountMinor,
-    unitAmountMinor: quote.unitAmountMinor, chargeBasis: quote.chargeBasis,
-    seatPolicy: quote.seatPolicy, seatChargeTiming: quote.seatChargeTiming,
-    commercialEffectiveAt: quote.commercialEffectiveAt,
-    commercialEndsAt: quote.commercialEndsAt, evidenceIds: quote.evidenceIds,
-    intervals: quote.intervals, capacityRevisions: quote.capacityRevisions });
-}
 
 async function remoteItem(
   stripe: StripeMonthlyClient, invoiceId: string, authorityKey: string,
@@ -114,38 +95,20 @@ export async function collectStripeMonthlyCharge(params: {
     quote.amountMinor < 0n || quote.amountMinor > BigInt(Number.MAX_SAFE_INTEGER)) {
     throw new AppError('INTERNAL', 409, 'STRIPE_SEAT_MONTHLY_SOURCE_INVALID');
   }
-  const authorityKey = sha256({ accountId: params.accountId,
-    subscriptionId: params.subscriptionId, billingMonth: params.billingMonth });
-  const source = await deps.prisma.billingStripeMonthlyCharge.upsert({
-    where: { subscriptionId_billingMonth: {
-      subscriptionId: params.subscriptionId, billingMonth: params.billingMonth,
-    } },
-    create: {
-      subscriptionId: params.subscriptionId, accountId: params.accountId,
-      stripeInvoiceId: params.invoiceId, billingMonth: params.billingMonth,
-      periodStartsAt: params.periodStartsAt, periodEndsAt: params.periodEndsAt,
-      amountMinor: quote.amountMinor, currency: params.currency,
-      authorityKey, sourceDigest: quoteDigest(quote),
-      idempotencyKey: `uoa-monthly-seat-${authorityKey}`,
-      state: quote.amountMinor === 0n ? 'NO_CHARGE' : 'PENDING',
-    },
-    update: {},
-  });
-  if (source.accountId !== params.accountId ||
-    source.stripeInvoiceId !== params.invoiceId || source.amountMinor !== quote.amountMinor ||
-    source.currency !== params.currency || source.authorityKey !== authorityKey ||
-    source.sourceDigest !== quoteDigest(quote) ||
-    source.periodStartsAt.getTime() !== params.periodStartsAt.getTime() ||
-    source.periodEndsAt.getTime() !== params.periodEndsAt.getTime()) {
-    throw new AppError('INTERNAL', 409, 'STRIPE_MONTHLY_CHARGE_SOURCE_CHANGED');
-  }
+  const source = await freezeStripeMonthlyChargeSource(quote, params, deps.prisma);
   if (source.amountMinor === 0n) {
     if (source.state !== 'NO_CHARGE' || source.stripeInvoiceItemId) {
       throw new AppError('INTERNAL', 409, 'STRIPE_MONTHLY_ZERO_CHARGE_SOURCE_INVALID');
     }
     return;
   }
-  const observed = await remoteItem(deps.stripe, params.invoiceId, authorityKey);
+  if (source.stripeInvoiceId !== params.invoiceId) {
+    // The one monthly obligation may already belong to a closing invoice.
+    if (source.allocationKind === 'CLOSING' && source.state === 'ACCEPTED') return;
+    throw new AppError('INTERNAL', 409, source.allocationKind === 'CLOSING' ?
+      'STRIPE_MONTHLY_CHARGE_INVOICE_ALLOCATION_PENDING' : 'STRIPE_MONTHLY_CHARGE_SOURCE_CHANGED');
+  }
+  const observed = await remoteItem(deps.stripe, params.invoiceId, source.authorityKey);
   if (observed) {
     verifyItem(observed, source, params);
     if (source.stripeInvoiceItemId && source.stripeInvoiceItemId !== observed.id) {
@@ -175,7 +138,7 @@ export async function collectStripeMonthlyCharge(params: {
       description: 'Monthly service charge', discountable: false,
       period: { start: Math.floor(source.periodStartsAt.getTime() / 1000),
         end: Math.floor(source.periodEndsAt.getTime() / 1000) },
-      metadata: { uoa_monthly_charge_key: authorityKey,
+      metadata: { uoa_monthly_charge_key: source.authorityKey,
         uoa_billing_month: params.billingMonth },
     }, { idempotencyKey: source.idempotencyKey });
     verifyItem(item, source, params);

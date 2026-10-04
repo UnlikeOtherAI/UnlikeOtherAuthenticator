@@ -117,16 +117,18 @@ export async function resolveBillingTariffForMonth(
   if (params.billingMonth < service.tariffHistoryFromMonth && !contract) {
     throw new AppError('INTERNAL', 409, 'BILLING_TARIFF_HISTORY_RECONCILIATION_REQUIRED');
   }
+  // An effective negotiated contract is the commercial authority. A later
+  // generic team event cannot replace its frozen organisation service term.
+  if (contract) {
+    return { tariff: contract.tariff, source: BillingTariffSource.ORGANISATION,
+      assignmentId: contract.tariffAssignmentId };
+  }
   const choices = [
     { source: BillingTariffSource.TEAM, scopeKey: `${params.organisationId}:${params.teamId}` },
     { source: BillingTariffSource.ORGANISATION, scopeKey: params.organisationId },
     { source: BillingTariffSource.SERVICE_DEFAULT, scopeKey: params.serviceId },
   ];
   for (const choice of choices) {
-    if (choice.source === BillingTariffSource.ORGANISATION && contract) {
-      return { tariff: contract.tariff, source: BillingTariffSource.ORGANISATION,
-        assignmentId: contract.tariffAssignmentId };
-    }
     if (params.billingMonth < service.tariffHistoryFromMonth) continue;
     const event = await reader.billingTariffTermEvent.findFirst({
       where: {

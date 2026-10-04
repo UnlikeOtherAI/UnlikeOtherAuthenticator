@@ -21,6 +21,10 @@ commercial rate, with no product-side money or credit calculations.
 Immutable tariffs select flat monthly or per-seat monthly charges, independently
 of prepaid or pay-as-you-go usage, and apply to a team or organisation payer.
 Per-seat tariffs select `AUTOMATIC` or `FIXED` and `FULL_MONTH` or `PRORATED`.
+`FULL_MONTH` charges each distinct eligible person once if they are present for
+any positive interval in that UTC month; leaving and rejoining never charges a
+second seat. `PRORATED` charges the union of eligible presence intervals divided
+by the actual UTC month's duration, with exact integer cumulative rounding.
 New per-seat plans default to automatic/prorated; existing assignments retain
 their frozen terms. Purchased fixed capacity belongs to a scoped subscription,
 not a shared tariff. A flat subscription charges once per selected scope.
@@ -90,10 +94,25 @@ microcredits even without an active budget. Frozen PREPAID account or PAYG
 organization/team lifetime rating carries sub-microcredit fractions. One
 receipt delta feeds wallet debit, budget scopes and cycle evidence. Historical
 PREPAID debit proof stays separate; a late old receipt cannot rerate or rebill
-earlier receipts. For pre-cutover windows, `evidence_complete=false` and
-remaining credits and percent used stay unknown until signed Ledger receipt
-coverage and frozen historical UOA rating prove the full cohort. Unknown
-ancestry or unresolved paid attempts are holds, never zero spend.
+earlier receipts. Every capped decision verifies a fresh, signed Ledger cohort
+for the full relevant month, including the interval after UOA migration and
+before all Ledger instances enforce holds. A legacy PREPAID debit is imported
+only from its existing frozen reservation and absent forward hold, irrespective
+of the migration timestamp; the timestamp never proves financial coverage.
+Ledger's paid receipt IDs and costs must match immutable UOA liabilities, and
+its other authorized, receipt-free dispatch IDs must match active maximum-credit
+holds. Organization caps use one signed all-team cohort per month, with no
+customer-visible cross-team raw usage; team and native caps retain exact team
+scope. Repeated policies in one decision reuse the same verified cohort, while
+each new decision fetches fresh proof. During first admission the only excluded
+dispatch is named with its request fingerprint and selected team in the signed
+UOA assertion and receives its own hold in that transaction. Product-native
+project/run proof also binds the signed
+scope ID, birth and run owner; unproven post-birth ancestry leaves the cap held.
+Accepted signed snapshot cursors and cohort hashes are kept in a private
+append-only audit. Missing frozen historical PAYG rating, unknown ancestry, or
+unresolved paid attempts keep `evidence_complete=false` with unknown remaining
+credits and percent used; none are inferred as zero.
 
 Long-running jobs must preserve renewable original-actor authority, not only a
 subject/team snapshot. Nessie and Deep Test already have renewable per-call
@@ -480,3 +499,33 @@ adjustments and invoice-reader integration remain in progress. Parallel payment
 UX work in UOA #80 and Nessie #1116 retains ownership of localization and resuming
 an existing incomplete purchase; it must rebase its canonical package after
 this billing source is final. No competing payment UX is introduced here.
+
+
+### Earned final seat month after Stripe cancellation
+
+The durable closed-month source watch collects a cancelled per-seat subscription's
+last earned UTC month even when Stripe produces no further renewal invoice.
+`BillingStripeMonthlyCharge` remains the unique subscription/month obligation;
+its quote freezes before processor egress. Renewal and closing allocation compete
+for this same source, so they cannot collect the fee twice. A closing allocation
+has an explicit invoice lease and immutable first-attempt time. Bounded remote
+metadata recovery handles a lost creation acknowledgement; an expired uncertain
+idempotency window holds rather than creating another invoice.
+
+The collector verifies the original checkout, Stripe account/mode/customer and
+cancelled subscription, creates a standalone draft excluding unrelated pending
+items and inherits the original subscription's explicit tax configuration. It
+adds the exact earned fee once and verifies that the draft contains only that
+accepted item before finalization enables automatic collection. Zero fees create
+no legal invoice. Actual paid cash still enters the
+common payment source only after InvoicePayment/PaymentIntent/captured-charge
+proof. A standalone invoice binds to its accepted monthly source and exact payer;
+neither its quote nor its finalization is evidence of payment. These are
+machine-only collection paths behind the existing Billing cycles and InvoiceV1
+customer surfaces.
+
+The durable source and team-usage watches invoke the prepaid finalizer after
+verifying the prepared cycle's service, organisation, team and month. They retain
+the resulting finalized revision as their last cycle. A late settled debit
+produces a new immutable breakdown revision while retaining the original legal
+documents and cash liability; this requires no customer request to finalize it.

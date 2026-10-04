@@ -2,6 +2,12 @@ import { randomUUID } from 'node:crypto';
 
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
+import type Stripe from 'stripe';
+
+import { collectStripeClosingSeatInvoice } from '../../src/services/billing-stripe-closing-seat-invoice.service.js';
+import { createStripeInvoiceFixture } from '../helpers/stripe-payment-invoice-fixture.js';
+import { prepareStripePaymentInvoice, persistStripePaymentInvoice }
+  from '../../src/services/billing-stripe-payment-invoice-source.service.js';
 import { collectStripeMonthlyCharge } from '../../src/services/billing-stripe-monthly-charge.service.js';
 import { createTestDb } from '../helpers/test-db.js';
 
@@ -200,4 +206,106 @@ describe.skipIf(!process.env.DATABASE_URL)('Stripe monthly seat charge source', 
       where: { subscriptionId, billingMonth },
     })).toBe(0);
   });
+
+  it('recovers one earned closing invoice after cancellation and a lost creation acknowledgement', async () => {
+    const closingMonth = '2026-07';
+    const start = new Date('2026-07-01T00:00:00.000Z');
+    const end = new Date('2026-08-01T00:00:00.000Z');
+    const ended = new Date('2026-07-16T00:00:00.000Z');
+    const local = await db.prisma.billingStripeSubscription.update({ where: { id: subscriptionId },
+      data: { status: 'canceled', billableFrom: start, billableUntil: ended } });
+    const account = await db.prisma.billingStripeAccount.findUniqueOrThrow({ where: { id: accountId } });
+    const invoices: Array<Record<string, unknown>> = [];
+    const items: Array<Record<string, unknown>> = [];
+    let unrelatedLine = false;
+    const stripe = { accounts: { retrieveCurrent: vi.fn().mockResolvedValue({ id: account.stripeAccountId }) },
+      subscriptions: { retrieve: vi.fn().mockResolvedValue({ id: local.stripeSubscriptionId,
+        livemode: false, status: 'canceled', customer: 'cus_monthly', default_payment_method: 'pm_monthly',
+        metadata: { uoa_checkout_id: local.checkoutId },
+        automatic_tax: { enabled: false }, default_tax_rates: [{ id: 'txr_fixture20' }] }) },
+      invoices: {
+        list: vi.fn().mockImplementation(async () => ({ data: invoices, has_more: false })),
+        retrieve: vi.fn().mockImplementation(async () => invoices[0]),
+        listLineItems: vi.fn().mockImplementation(async () => ({ data: [...items.map((item) => ({
+          ...item, id: 'il_closing', parent: { type: 'invoice_item_details',
+            invoice_item_details: { invoice_item: item.id } }, discount_amounts: [], pretax_credit_amounts: [],
+        })), ...(unrelatedLine ? [{ id: 'il_unrelated', amount: 1000 }] : [])], has_more: false })),
+        create: vi.fn().mockImplementation(async (input: Record<string, unknown>) => {
+          invoices.push({ ...input, id: 'in_closing', livemode: false, status: 'draft' });
+          throw new Error('invoice accepted; response lost');
+        }),
+        finalizeInvoice: vi.fn().mockImplementation(async () => {
+          Object.assign(invoices[0] ?? {}, { status: 'open', auto_advance: true });
+          return invoices[0];
+        }),
+      },
+      invoiceItems: {
+        list: vi.fn().mockImplementation(async () => ({ data: items, has_more: false })),
+        create: vi.fn().mockImplementation(async (input: Record<string, unknown>) => {
+          const item = { ...input, id: 'ii_closing', livemode: false }; items.push(item); return item;
+        }),
+      },
+    };
+    const deps = { prisma: db.prisma, stripe: stripe as unknown as Stripe, stripeLivemode: false,
+      quote: vi.fn().mockResolvedValue({ ...quote(5000n), billingMonth: closingMonth,
+        commercialEffectiveAt: start, commercialEndsAt: ended }), now: () => new Date('2026-10-04T00:00:00.000Z') };
+    expect(await collectStripeClosingSeatInvoice({ subscriptionId, billingMonth: '2026-06' }, deps)).toBeNull();
+    await expect(collectStripeClosingSeatInvoice({ subscriptionId, billingMonth: closingMonth }, deps))
+      .rejects.toThrow('invoice accepted; response lost');
+    const frozen = await db.prisma.billingStripeMonthlyCharge.findUniqueOrThrow({
+      where: { subscriptionId_billingMonth: { subscriptionId, billingMonth: closingMonth } } });
+    expect(frozen).toMatchObject({ allocationKind: 'CLOSING', stripeInvoiceId: null,
+      invoiceLeaseToken: null, amountMinor: 5000n });
+    expect(frozen.firstInvoiceAttemptAt).not.toBeNull();
+    unrelatedLine = true;
+    await expect(collectStripeClosingSeatInvoice({ subscriptionId, billingMonth: closingMonth }, deps))
+      .rejects.toThrow('STRIPE_CLOSING_INVOICE_LINES_UNPROVEN');
+    expect(stripe.invoices.finalizeInvoice).not.toHaveBeenCalled();
+    unrelatedLine = false;
+    await collectStripeClosingSeatInvoice({ subscriptionId, billingMonth: closingMonth }, deps);
+    await collectStripeClosingSeatInvoice({ subscriptionId, billingMonth: closingMonth }, deps);
+    expect(stripe.invoices.create).toHaveBeenCalledOnce();
+    expect(stripe.invoices.create.mock.calls[0]?.[0]).toMatchObject({
+      default_tax_rates: ['txr_fixture20'], automatic_tax: { enabled: false },
+      pending_invoice_items_behavior: 'exclude',
+    });
+    expect(stripe.invoiceItems.create).toHaveBeenCalledOnce();
+    expect(stripe.invoices.finalizeInvoice).toHaveBeenCalledOnce();
+    const accepted = await db.prisma.billingStripeMonthlyCharge.findUniqueOrThrow({ where: { id: frozen.id } });
+    expect(accepted).toMatchObject({ state: 'ACCEPTED', stripeInvoiceId: 'in_closing',
+      stripeInvoiceItemId: 'ii_closing', invoiceLeaseToken: null });
+    await expect(db.prisma.billingStripeMonthlyCharge.update({ where: { id: frozen.id },
+      data: { stripeInvoiceId: 'in_duplicate' } })).rejects.toThrow();
+    await collectStripeMonthlyCharge({ ...params('in_renewal_after_cancel'), billingMonth: closingMonth,
+      periodStartsAt: start, periodEndsAt: end }, { prisma: db.prisma,
+      stripe: deps.stripe, quote: deps.quote });
+    expect(stripe.invoiceItems.create).toHaveBeenCalledOnce();
+    expect(await db.prisma.billingCreditEntry.count({ where: { creditAccount: { orgId } } })).toBe(0);
+    // Cash evidence for a standalone closing invoice must bind through the
+    // accepted monthly item rather than an absent Stripe subscription parent.
+    const cash = await createStripeInvoiceFixture(db.prisma, accountId, 'in_closing');
+    const paidInvoice = { ...cash.invoice, parent: null, amount_paid: 6000, amount_due: 6000,
+      total: 6000, total_taxes: [{ amount: 1000 }], metadata: invoices[0]?.metadata };
+    (cash.stripe.invoices.retrieve as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(paidInvoice);
+    (cash.stripe.invoices.listLineItems as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({ data: [{
+      id: 'il_closing', invoice: 'in_closing', currency: 'usd', livemode: false, amount: 5000,
+      parent: { type: 'invoice_item_details', invoice_item_details: { invoice_item: 'ii_closing' } },
+      period: { start: start.getTime() / 1000, end: end.getTime() / 1000 },
+      taxes: [{ amount: 1000, tax_behavior: 'exclusive' }], discount_amounts: [], pretax_credit_amounts: [],
+    }], has_more: false });
+    const payment = await cash.stripe.invoicePayments.list();
+    (cash.stripe.invoicePayments.list as unknown as ReturnType<typeof vi.fn>)
+      .mockResolvedValue({ ...payment, data: [{ ...payment.data[0], amount_paid: 6000 }] });
+    const intent = await cash.stripe.paymentIntents.retrieve(cash.intentId);
+    (cash.stripe.paymentIntents.retrieve as unknown as ReturnType<typeof vi.fn>)
+      .mockResolvedValue({ ...intent, amount_received: 6000 });
+    const charge = await cash.stripe.charges.retrieve(cash.chargeId);
+    (cash.stripe.charges.retrieve as unknown as ReturnType<typeof vi.fn>)
+      .mockResolvedValue({ ...charge, amount_captured: 6000 });
+    const paymentSource = await prepareStripePaymentInvoice('in_closing', cash.account, db.prisma, cash.stripe);
+    if (!paymentSource) throw new Error('CLOSING_CASH_SOURCE_REQUIRED');
+    const saved = await db.prisma.$transaction((tx) => persistStripePaymentInvoice(tx, paymentSource));
+    expect(saved).toMatchObject({ subscriptionId, paidAmountMinor: 6000n, dueAmountMinor: 6000n, taxAmountMinor: 1000n });
+  });
+
 });
