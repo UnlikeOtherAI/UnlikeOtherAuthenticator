@@ -2231,6 +2231,7 @@ model BillingStripeUsageExport {
   currency                   String    @db.Char(3)
   cumulativeCustomerCharge   String    @map("cumulative_customer_charge") @db.VarChar(120)
   cumulativeMeterQuantity    BigInt    @map("cumulative_meter_quantity")
+  cumulativeGrossMeterQuantity BigInt? @map("cumulative_gross_meter_quantity")
   deltaMeterQuantity         BigInt    @map("delta_meter_quantity")
   stripeMeterEventIdentifier String    @unique @map("stripe_meter_event_identifier") @db.VarChar(100)
   stripeMeterEventCreatedAt  DateTime? @map("stripe_meter_event_created_at")

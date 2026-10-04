@@ -144,10 +144,7 @@ async function prepareExports(
     if (confirmedOffset !== params.creditOffsetMicroMinor) {
       throw new AppError('INTERNAL', 409, 'BILLING_CREDIT_ALLOCATION_CHANGED_DURING_EXPORT');
     }
-    const charges = applyCreditOffsetToStripeCharges(
-      validatedStripeCumulativeCharges(params.usage, subscription),
-      params.creditOffsetMicroMinor,
-    );
+    const grossCharges = validatedStripeCumulativeCharges(params.usage, subscription);
     const capturedAt = new Date(params.usage.snapshot.capturedAt);
     const previousRows = await tx.billingStripeUsageExport.findMany({
       where: {
@@ -178,9 +175,9 @@ async function prepareExports(
       }
     }
     for (const [key, previous] of latestByKey) {
-      charges.set(
+      grossCharges.set(
         key,
-        charges.get(key) ?? {
+        grossCharges.get(key) ?? {
           billingProduct: previous.billingProduct,
           callerProduct: previous.callerProduct,
           currency: previous.currency,
@@ -189,6 +186,11 @@ async function prepareExports(
         },
       );
     }
+    const charges = applyCreditOffsetToStripeCharges(
+      grossCharges,
+      params.creditOffsetMicroMinor,
+      latestByKey,
+    );
 
     for (const [key, charge] of charges) {
       const existing = existingByKey.get(key);
@@ -219,6 +221,7 @@ async function prepareExports(
           currency: charge.currency,
           cumulativeCustomerCharge: charge.amount,
           cumulativeMeterQuantity: charge.quantity,
+          cumulativeGrossMeterQuantity: grossCharges.get(key)?.quantity ?? charge.quantity,
           deltaMeterQuantity: delta,
           stripeMeterEventIdentifier: eventIdentifier({
             accountId: subscription.accountId,
@@ -300,6 +303,8 @@ async function sendPendingExports(
         stripeMeterEventState: row.stripeMeterEventState,
         stripeMeterEventAttemptedAt: row.stripeMeterEventAttemptedAt,
         stripeMeterEventFirstAttemptedAt: row.stripeMeterEventFirstAttemptedAt,
+        stripeMeterEventIdentifier: row.stripeMeterEventIdentifier,
+        stripeMeterEventAttemptGeneration: row.stripeMeterEventAttemptGeneration,
       },
       data: {
         stripeMeterEventAttemptedAt: params.now,
@@ -329,6 +334,9 @@ async function sendPendingExports(
         id: row.id,
         stripeMeterEventCreatedAt: null,
         stripeMeterEventState: BillingStripeMeterEventState.UNCERTAIN,
+        stripeMeterEventIdentifier: row.stripeMeterEventIdentifier,
+        stripeMeterEventAttemptGeneration: row.stripeMeterEventAttemptGeneration,
+        stripeMeterEventAttemptedAt: params.now,
       },
       data: {
         stripeMeterEventCreatedAt: new Date(event.created * 1000),

@@ -179,25 +179,50 @@ function majorAmountFromMeterQuantity(quantity: bigint, currency: string): strin
   return fraction ? `${whole}.${fraction}` : whole;
 }
 
-/** Spread one exact prepaid offset across the subscription's caller buckets. */
+/** Keep each caller's prior prepaid allocation fixed and fund only new gross usage. */
 export function applyCreditOffsetToStripeCharges(
   charges: Map<string, CumulativeCharge>,
   offsetMicroMinor: bigint,
+  previous: ReadonlyMap<string, {
+    cumulativeGrossMeterQuantity: bigint | null;
+    cumulativeMeterQuantity: bigint;
+  }>,
 ): Map<string, CumulativeCharge> {
   if (offsetMicroMinor < 0n) {
     throw new AppError('INTERNAL', 500, 'BILLING_CREDIT_OFFSET_INVALID');
   }
-  if (offsetMicroMinor === 0n) return charges;
   const entries = [...charges.entries()].sort(([left], [right]) => left.localeCompare(right));
   const gross = entries.reduce((sum, [, charge]) => sum + charge.quantity, 0n);
-  if (gross < offsetMicroMinor || gross === 0n) {
+  if (gross < offsetMicroMinor) {
     throw new AppError('INTERNAL', 409, 'BILLING_CREDIT_OFFSET_EXCEEDS_USAGE');
   }
+  let frozenOffset = 0n;
   const allocations = entries.map(([key, charge]) => {
-    const weighted = charge.quantity * offsetMicroMinor;
-    return { key, charge, offset: weighted / gross, remainder: weighted % gross };
+    const prior = previous.get(key);
+    if (prior && prior.cumulativeGrossMeterQuantity === null) {
+      throw new AppError('INTERNAL', 409, 'STRIPE_BUCKET_GROSS_HISTORY_MISSING');
+    }
+    const priorGross = prior?.cumulativeGrossMeterQuantity ?? 0n;
+    const priorNet = prior?.cumulativeMeterQuantity ?? 0n;
+    if (priorGross < priorNet || charge.quantity < priorGross) {
+      throw new AppError('INTERNAL', 409, 'STRIPE_BUCKET_USAGE_RECONCILIATION_REQUIRED');
+    }
+    frozenOffset += priorGross - priorNet;
+    return { key, charge, priorNet, increment: charge.quantity - priorGross,
+      offset: 0n, remainder: 0n };
   });
-  let unallocated = offsetMicroMinor - allocations.reduce((sum, row) => sum + row.offset, 0n);
+  const additionalOffset = offsetMicroMinor - frozenOffset;
+  const incrementalGross = allocations.reduce((sum, row) => sum + row.increment, 0n);
+  if (additionalOffset < 0n || additionalOffset > incrementalGross) {
+    throw new AppError('INTERNAL', 409, 'STRIPE_BUCKET_CREDIT_RECONCILIATION_REQUIRED');
+  }
+  for (const row of allocations) {
+    if (incrementalGross === 0n) break;
+    const weighted = row.increment * additionalOffset;
+    row.offset = weighted / incrementalGross;
+    row.remainder = weighted % incrementalGross;
+  }
+  let unallocated = additionalOffset - allocations.reduce((sum, row) => sum + row.offset, 0n);
   for (const row of [...allocations].sort((left, right) =>
     left.remainder === right.remainder
       ? left.key.localeCompare(right.key)
@@ -207,8 +232,8 @@ export function applyCreditOffsetToStripeCharges(
     row.offset += 1n;
     unallocated -= 1n;
   }
-  return new Map(allocations.map(({ key, charge, offset }) => {
-    const quantity = charge.quantity - offset;
+  return new Map(allocations.map(({ key, charge, priorNet, increment, offset }) => {
+    const quantity = priorNet + increment - offset;
     return [key, {
       ...charge,
       amount: majorAmountFromMeterQuantity(quantity, charge.currency),
