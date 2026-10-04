@@ -15,6 +15,7 @@ import {
   type CycleUsageEvidence,
 } from './billing-cycle-usage-projection.service.js';
 import { fetchLedgerMeteringUsage } from './billing-ledger-collector.service.js';
+import { fetchLedgerHistoricalBillingTeams } from './billing-ledger-team-discovery.service.js';
 import {
   quoteSubscriptionMonthlyCharge, type MonthlyChargeSource,
 } from './billing-monthly-subscription-quote.service.js';
@@ -51,7 +52,8 @@ export async function prepareBillingCycleClose(
   params: { source: MonthlyChargeSource; billingMonth: string },
   deps?: { prisma?: PrismaClient; now?: () => Date;
     quote?: typeof quoteSubscriptionMonthlyCharge;
-    fetchMetering?: typeof fetchLedgerMeteringUsage },
+    fetchMetering?: typeof fetchLedgerMeteringUsage;
+    discoverTeams?: typeof fetchLedgerHistoricalBillingTeams },
 ): Promise<PreparedBillingCycleClose> {
   const prisma = deps?.prisma ?? getAdminPrisma();
   const quoteFn = deps?.quote ?? quoteSubscriptionMonthlyCharge;
@@ -63,27 +65,30 @@ export async function prepareBillingCycleClose(
     (initial.teamId !== null && initial.scope !== BillingAssignmentScope.TEAM)) {
     hold('BILLING_CYCLE_SOURCE_SCOPE_INVALID');
   }
-  const [service, tariff, teams] = await Promise.all([
+  const [service, tariff] = await Promise.all([
     prisma.billingService.findUnique({ where: { id: initial.serviceId },
       select: { id: true, identifier: true, name: true } }),
     prisma.billingTariff.findUnique({ where: { id: initial.tariffId } }),
-    initial.teamId ? Promise.resolve([{ id: initial.teamId }]) :
-      prisma.team.findMany({ where: { orgId: initial.organisationId },
-        select: { id: true }, orderBy: { id: 'asc' } }),
   ]);
   if (!service || !tariff || tariff.serviceId !== service.id ||
     tariff.currency !== initial.currency) hold('BILLING_CYCLE_SOURCE_TERMS_INVALID');
+  const discovery = initial.teamId === null ?
+    await (deps?.discoverTeams ?? fetchLedgerHistoricalBillingTeams)({
+      product: service.identifier, organisationId: initial.organisationId,
+      billingMonth: params.billingMonth,
+    }) : null;
+  const teams = initial.teamId ? [initial.teamId] : discovery?.teamIds ?? [];
 
   const ledgerSnapshots: CycleUsageEvidence[] = [];
   let usageLines: BillingCycleUsageLine[] = [];
-  for (const team of teams) {
+  for (const teamId of teams) {
     const usage = await (deps?.fetchMetering ?? fetchLedgerMeteringUsage)({
       product: service.identifier, organisationId: initial.organisationId,
-      teamId: team.id, billingMonth: params.billingMonth, groupBy: 'user',
+      teamId, billingMonth: params.billingMonth, groupBy: 'user',
     });
     const projected = projectCycleUsage(usage, {
       serviceIdentifier: service.identifier, organisationId: initial.organisationId,
-      teamId: team.id, billingMonth: params.billingMonth, startsAt, endsAt,
+      teamId, billingMonth: params.billingMonth, startsAt, endsAt,
       currency: initial.currency,
     }, tariff);
     ledgerSnapshots.push(projected.evidence);
@@ -144,6 +149,7 @@ export async function prepareBillingCycleClose(
     };
     const privateEvidence = { source: quote.source, quote_fingerprint: fingerprint,
       previous_cycle_id: existing?.id ?? null,
+      team_discovery: discovery,
       quote: privateMonthlyQuoteEvidence(quote), ledger_snapshots: ledgerSnapshots };
     const digest = billingCycleSnapshotDigest(publicSnapshot, privateEvidence);
     await tx.billingCustomerCycle.create({ data: {

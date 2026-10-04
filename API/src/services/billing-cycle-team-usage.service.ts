@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import {
-  BillingAssignmentScope, Prisma, type PrismaClient,
+  BillingAssignmentScope, BillingTariffSource, Prisma, type PrismaClient,
 } from '@prisma/client';
 
 import type { BillingCycleDetailV2 } from '../contracts/billing-statement-v1.js';
@@ -13,6 +13,7 @@ import {
   cycleUsageContentFingerprint, projectCycleUsage, type CycleUsageEvidence,
 } from './billing-cycle-usage-projection.service.js';
 import { fetchLedgerMeteringUsage } from './billing-ledger-collector.service.js';
+import { fetchLedgerHistoricalBillingTeams } from './billing-ledger-team-discovery.service.js';
 import { resolveBillingTariffForMonth } from './billing-tariff-history.service.js';
 
 function hold(code: string): never {
@@ -51,24 +52,30 @@ async function historicalPayer(
  */
 export async function prepareBillingTeamUsageCycle(
   params: { serviceId: string; organisationId: string; teamId: string;
-    billingMonth: string },
+    billingMonth: string; organisationCycleId?: string },
   deps?: { prisma?: PrismaClient; now?: () => Date;
-    fetchMetering?: typeof fetchLedgerMeteringUsage },
+    fetchMetering?: typeof fetchLedgerMeteringUsage;
+    discoverTeams?: typeof fetchLedgerHistoricalBillingTeams },
 ): Promise<{ cycleId: string; snapshotSha256: string }> {
   const prisma = deps?.prisma ?? getAdminPrisma();
   const { startsAt, endsAt } = period(params.billingMonth);
   if (endsAt > (deps?.now?.() ?? new Date())) hold('BILLING_MONTH_NOT_CLOSED');
-  const [service, team, terms, payer] = await Promise.all([
+  const [service, terms, payer] = await Promise.all([
     prisma.billingService.findUnique({ where: { id: params.serviceId },
       select: { id: true, identifier: true, name: true } }),
-    prisma.team.findUnique({ where: { id: params.teamId }, select: { orgId: true } }),
     resolveBillingTariffForMonth(prisma, params),
     historicalPayer(prisma, params.organisationId, params.billingMonth),
   ]);
-  if (!service || !team || team.orgId !== params.organisationId) {
-    hold('BILLING_CYCLE_TEAM_SCOPE_MISSING');
-  }
-  if (terms.tariff.monthlyAmountMinor !== 0n) {
+  if (!service) hold('BILLING_CYCLE_SERVICE_MISSING');
+  const discovery = await (deps?.discoverTeams ?? fetchLedgerHistoricalBillingTeams)({
+    product: service.identifier, organisationId: params.organisationId,
+    billingMonth: params.billingMonth,
+  });
+  if (!discovery.teamIds.includes(params.teamId)) hold('BILLING_CYCLE_TEAM_SCOPE_MISSING');
+  const organisationSubscription = terms.tariff.monthlyAmountMinor !== 0n &&
+    terms.source === BillingTariffSource.ORGANISATION &&
+    Boolean(params.organisationCycleId);
+  if (terms.tariff.monthlyAmountMinor !== 0n && !organisationSubscription) {
     hold('BILLING_CYCLE_MONTHLY_SOURCE_REQUIRED');
   }
   const usage = await (deps?.fetchMetering ?? fetchLedgerMeteringUsage)({
@@ -94,6 +101,33 @@ export async function prepareBillingTeamUsageCycle(
           frozenTerms.assignmentId !== terms.assignmentId || frozenPayer !== payer) {
           hold('BILLING_CYCLE_HISTORICAL_TERMS_CHANGED');
         }
+        if (organisationSubscription) {
+          const orgCycleId = params.organisationCycleId;
+          if (!orgCycleId) hold('BILLING_CYCLE_ORGANISATION_SOURCE_RECONCILIATION_REQUIRED');
+          if (payer !== BillingAssignmentScope.ORGANISATION) {
+            hold('BILLING_CYCLE_ORGANISATION_PAYER_REQUIRED');
+          }
+          const organisationCycle = await tx.billingCustomerCycle.findUnique({
+            where: { id: orgCycleId },
+          });
+          const orgEvidence = organisationCycle?.privateEvidence as
+            Record<string, unknown> | undefined;
+          const orgQuote = orgEvidence?.quote as Record<string, unknown> | undefined;
+          const orgSnapshots = orgEvidence?.ledger_snapshots;
+          if (!organisationCycle || organisationCycle.serviceId !== params.serviceId ||
+            organisationCycle.orgId !== params.organisationId ||
+            organisationCycle.teamId !== null ||
+            organisationCycle.billingMonth !== params.billingMonth ||
+            organisationCycle.payerScope !== BillingAssignmentScope.ORGANISATION ||
+            orgQuote?.tariff_id !== terms.tariff.id ||
+            billingCycleSnapshotDigest(organisationCycle.publicSnapshot,
+              organisationCycle.privateEvidence) !== organisationCycle.snapshotSha256 ||
+            !Array.isArray(orgSnapshots) || !orgSnapshots.some((row) => row &&
+              row.team_id === params.teamId &&
+              row.content_sha256 === projected.evidence.content_sha256)) {
+            hold('BILLING_CYCLE_ORGANISATION_SOURCE_RECONCILIATION_REQUIRED');
+          }
+        }
         const existing = await tx.billingCustomerCycle.findFirst({ where: {
           serviceId: params.serviceId, orgId: params.organisationId,
           teamId: params.teamId, billingMonth: params.billingMonth,
@@ -102,6 +136,7 @@ export async function prepareBillingTeamUsageCycle(
           const prior = existing.privateEvidence as Record<string, unknown>;
           const snapshots = prior.ledger_snapshots;
           if (prior.source !== 'team_usage_only' || prior.tariff_id !== terms.tariff.id ||
+            (prior.organisation_cycle_id ?? null) !== (params.organisationCycleId ?? null) ||
             existing.payerScope !== payer ||
             billingCycleSnapshotDigest(existing.publicSnapshot, existing.privateEvidence) !==
               existing.snapshotSha256 || !Array.isArray(snapshots) ||
@@ -133,6 +168,8 @@ export async function prepareBillingTeamUsageCycle(
         };
         const privateEvidence = { source: 'team_usage_only', tariff_id: terms.tariff.id,
           tariff_source: terms.source, assignment_id: terms.assignmentId,
+          organisation_cycle_id: params.organisationCycleId ?? null,
+          team_discovery: discovery.snapshot,
           previous_cycle_id: existing?.id ?? null,
           ledger_snapshots: [projected.evidence] };
         const digest = billingCycleSnapshotDigest(publicSnapshot, privateEvidence);
