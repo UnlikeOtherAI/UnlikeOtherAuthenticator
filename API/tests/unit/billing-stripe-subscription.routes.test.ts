@@ -51,8 +51,11 @@ const summary = {
   },
   tariff: {
     collection_mode: 'stripe',
-    monthly_subscription: { amount_minor: '2000', currency: 'GBP' },
+    monthly_subscription: { amount_minor: '2000', currency: 'GBP',
+      charge_basis: 'flat', seat_policy: null, seat_timing: null,
+      amount_role: 'monthly_total' },
     usage_billing_enabled: true,
+    usage_payment_mode: 'pay_as_you_go',
     payment_collection_enabled: true,
     raw_usage_preserved: true,
   },
