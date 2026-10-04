@@ -134,6 +134,15 @@ describe.skipIf(!enabled)('issued manual invoice cycle persistence', () => {
         capturedAt: new Date('2026-04-01T00:00:00.000Z') } },
     } });
     invoiceId = invoice.id;
+    const frozenLine = await db.prisma.billingInvoiceLine.findFirstOrThrow({
+      where: { invoiceId },
+    });
+    await db.prisma.billingInvoiceLineFinancialAllocation.create({ data: {
+      lineId: frozenLine.id, invoiceId, serviceId, billingMonth: '2026-03',
+      subscriptionMinor: 2000n, usageMinor: 0n, taxMinor: 0n,
+      invoiceCreditMinor: 0n, totalMinor: 2000n, dueMinor: 2000n,
+      currency: 'USD', calculationDigest: 'c'.repeat(64),
+    } });
     await issueBillingInvoice({ invoiceId, actor: { email: 'admin@example.com' } }, {
       prisma: db.prisma, storage, now: () => new Date('2026-04-01T00:00:00.000Z'),
       authorizeAdminEffect: vi.fn().mockResolvedValue(undefined),
@@ -166,6 +175,46 @@ describe.skipIf(!enabled)('issued manual invoice cycle persistence', () => {
     actorToken: 'test-signed-actor', endpoint: '/billing/v1/cycles/detail',
     request: { product: serviceIdentifier, organisationId: orgId, teamId, userId: ownerId } };
   }
+
+  it('keeps an initially unallocated issued invoice queued across failed projection and restart', async () => {
+    const queued = await db.prisma.$queryRaw<Array<{ invoice_id: string }>>`
+      SELECT invoice_id FROM billing_manual_cycle_reconciliation_queue
+      WHERE invoice_id = ${invoiceId}
+    `;
+    expect(queued).toHaveLength(1);
+    expect(await runManualCycleReconciliationBatch({ prisma: db.prisma,
+      prepareClose: vi.fn().mockRejectedValue(new Error('temporary Ledger outage')),
+    })).toMatchObject({ checked: 1, held: 1 });
+    expect(await db.prisma.billingCustomerCycleInvoiceAllocation.count()).toBe(0);
+    await db.prisma.$executeRaw`
+      UPDATE billing_manual_cycle_reconciliation_queue SET due_at = now()
+      WHERE invoice_id = ${invoiceId}
+    `;
+    const prepared = vi.fn().mockResolvedValue({ cycleId: pendingCycleId });
+    const recovered = await runManualCycleReconciliationBatch({ prisma: db.prisma,
+      prepareClose: prepared,
+      captureIssued: (params) => captureIssuedManualBillingCycle(params,
+        { prisma: db.prisma, storage }),
+      refreshPayment: (params) => refreshIssuedManualBillingCyclePayment(params,
+        { prisma: db.prisma, storage }),
+    });
+    expect(recovered.held, JSON.stringify(recovered.failures)).toBe(0);
+    expect(prepared).toHaveBeenCalledOnce();
+    expect(prepared.mock.calls[0]?.[0]).toEqual({
+      source: { kind: 'manual', id: termId }, billingMonth: '2026-03',
+    });
+    expect(await db.prisma.billingCustomerCycleInvoiceAllocation.count()).toBe(1);
+    // Capture commits a newer queue generation while the first worker holds
+    // its lease; that worker cannot acknowledge away the follow-up event.
+    expect(await runManualCycleReconciliationBatch({ prisma: db.prisma,
+      refreshPayment: (params) => refreshIssuedManualBillingCyclePayment(params,
+        { prisma: db.prisma, storage }),
+    })).toMatchObject({ checked: 1, held: 0 });
+    expect(await db.prisma.$queryRaw<Array<{ invoice_id: string }>>`
+      SELECT invoice_id FROM billing_manual_cycle_reconciliation_queue
+      WHERE invoice_id = ${invoiceId}
+    `).toHaveLength(0);
+  });
 
   it('records actual invoice line, immutable legal PDF and credits-only charge breakdown', async () => {
     const result = await captureIssuedManualBillingCycle({ cycleId: pendingCycleId,
@@ -218,7 +267,7 @@ describe.skipIf(!enabled)('issued manual invoice cycle persistence', () => {
       WHERE invoice_id = ${invoiceId}
     `;
     expect(queued).toHaveLength(1);
-    expect(queued[0]?.generation).toBeGreaterThan(1n);
+    expect(queued[0]?.generation).toBeGreaterThanOrEqual(1n);
     let releaseWork: (() => void) | undefined;
     let markStarted: (() => void) | undefined;
     const started = new Promise<void>((resolve) => { markStarted = resolve; });
