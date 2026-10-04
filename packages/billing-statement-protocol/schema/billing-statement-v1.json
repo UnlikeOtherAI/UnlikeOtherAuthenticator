@@ -175,45 +175,14 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "tariff_id",
-        "key",
-        "version",
-        "name",
         "display_name",
-        "mode",
         "collection_mode",
-        "markup_bps",
-        "markup_percent",
-        "markup_display",
-        "usage_multiplier_bps",
         "monthly_subscription",
         "assignment"
       ],
       "properties": {
-        "tariff_id": {
-          "type": "string"
-        },
-        "key": {
-          "type": "string"
-        },
-        "version": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "name": {
-          "type": "string"
-        },
         "display_name": {
           "type": "string"
-        },
-        "mode": {
-          "type": "string",
-          "enum": [
-            "standard",
-            "free",
-            "at_cost",
-            "custom"
-          ]
         },
         "collection_mode": {
           "type": "string",
@@ -222,20 +191,6 @@
             "manual",
             "none"
           ]
-        },
-        "markup_bps": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "markup_percent": {
-          "type": "string"
-        },
-        "markup_display": {
-          "type": "string"
-        },
-        "usage_multiplier_bps": {
-          "type": "integer",
-          "minimum": 0
         },
         "monthly_subscription": {
           "type": "object",
@@ -427,7 +382,7 @@
       "required": [
         "lines",
         "totals",
-        "cost_totals",
+        "charge_totals",
         "user_totals"
       ],
       "properties": {
@@ -443,10 +398,8 @@
               "calls",
               "attribution",
               "raw_units",
-              "billable_units",
               "share",
-              "provider_cost",
-              "rated_charge"
+              "customer_charge"
             ],
             "properties": {
               "id": {
@@ -517,34 +470,6 @@
                   }
                 }
               },
-              "billable_units": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": [
-                  "input",
-                  "cached_input",
-                  "output",
-                  "total"
-                ],
-                "properties": {
-                  "input": {
-                    "type": "string",
-                    "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
-                  },
-                  "cached_input": {
-                    "type": "string",
-                    "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
-                  },
-                  "output": {
-                    "type": "string",
-                    "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
-                  },
-                  "total": {
-                    "type": "string",
-                    "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
-                  }
-                }
-              },
               "share": {
                 "type": "object",
                 "additionalProperties": false,
@@ -567,118 +492,34 @@
                   }
                 }
               },
-              "provider_cost": {
+              "customer_charge": {
                 "anyOf": [
                   {
-                    "type": "null"
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "amount",
+                      "currency",
+                      "display"
+                    ],
+                    "properties": {
+                      "amount": {
+                        "type": "string",
+                        "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                      },
+                      "currency": {
+                        "type": "string",
+                        "pattern": "^[A-Z]{3}$"
+                      },
+                      "display": {
+                        "type": "string"
+                      }
+                    }
                   },
                   {
-                    "type": "object",
-                    "additionalProperties": false,
-                    "required": [
-                      "amount",
-                      "currency",
-                      "display",
-                      "provenance"
-                    ],
-                    "properties": {
-                      "amount": {
-                        "type": "string",
-                        "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
-                      },
-                      "currency": {
-                        "type": "string",
-                        "pattern": "^[A-Z]{3}$"
-                      },
-                      "display": {
-                        "type": "string"
-                      },
-                      "provenance": {
-                        "type": "string"
-                      }
-                    }
+                    "type": "null"
                   }
                 ]
-              },
-              "rated_charge": {
-                "type": [
-                  "object",
-                  "null"
-                ],
-                "additionalProperties": false,
-                "required": [
-                  "base",
-                  "markup",
-                  "total"
-                ],
-                "properties": {
-                  "base": {
-                    "type": "object",
-                    "additionalProperties": false,
-                    "required": [
-                      "amount",
-                      "currency",
-                      "display"
-                    ],
-                    "properties": {
-                      "amount": {
-                        "type": "string",
-                        "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
-                      },
-                      "currency": {
-                        "type": "string",
-                        "pattern": "^[A-Z]{3}$"
-                      },
-                      "display": {
-                        "type": "string"
-                      }
-                    }
-                  },
-                  "markup": {
-                    "type": "object",
-                    "additionalProperties": false,
-                    "required": [
-                      "amount",
-                      "currency",
-                      "display"
-                    ],
-                    "properties": {
-                      "amount": {
-                        "type": "string",
-                        "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
-                      },
-                      "currency": {
-                        "type": "string",
-                        "pattern": "^[A-Z]{3}$"
-                      },
-                      "display": {
-                        "type": "string"
-                      }
-                    }
-                  },
-                  "total": {
-                    "type": "object",
-                    "additionalProperties": false,
-                    "required": [
-                      "amount",
-                      "currency",
-                      "display"
-                    ],
-                    "properties": {
-                      "amount": {
-                        "type": "string",
-                        "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
-                      },
-                      "currency": {
-                        "type": "string",
-                        "pattern": "^[A-Z]{3}$"
-                      },
-                      "display": {
-                        "type": "string"
-                      }
-                    }
-                  }
-                }
               }
             }
           }
@@ -691,7 +532,6 @@
             "required": [
               "usage_unit",
               "raw_units",
-              "billable_units",
               "display"
             ],
             "properties": {
@@ -701,73 +541,24 @@
               "raw_units": {
                 "type": "string"
               },
-              "billable_units": {
-                "type": "string"
-              },
               "display": {
                 "type": "string"
               }
             }
           }
         },
-        "cost_totals": {
+        "charge_totals": {
           "type": "array",
           "items": {
             "type": "object",
             "additionalProperties": false,
             "required": [
               "currency",
-              "provider_cost",
-              "markup",
               "usage_charge"
             ],
             "properties": {
               "currency": {
                 "type": "string"
-              },
-              "provider_cost": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": [
-                  "amount",
-                  "currency",
-                  "display"
-                ],
-                "properties": {
-                  "amount": {
-                    "type": "string",
-                    "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
-                  },
-                  "currency": {
-                    "type": "string",
-                    "pattern": "^[A-Z]{3}$"
-                  },
-                  "display": {
-                    "type": "string"
-                  }
-                }
-              },
-              "markup": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": [
-                  "amount",
-                  "currency",
-                  "display"
-                ],
-                "properties": {
-                  "amount": {
-                    "type": "string",
-                    "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
-                  },
-                  "currency": {
-                    "type": "string",
-                    "pattern": "^[A-Z]{3}$"
-                  },
-                  "display": {
-                    "type": "string"
-                  }
-                }
               },
               "usage_charge": {
                 "type": "object",
@@ -805,7 +596,7 @@
               "email",
               "calls",
               "usage",
-              "costs"
+              "charges"
             ],
             "properties": {
               "user_id": {
@@ -831,8 +622,7 @@
                   "additionalProperties": false,
                   "required": [
                     "usage_unit",
-                    "raw_units",
-                    "billable_units"
+                    "raw_units"
                   ],
                   "properties": {
                     "usage_unit": {
@@ -840,71 +630,22 @@
                     },
                     "raw_units": {
                       "type": "string"
-                    },
-                    "billable_units": {
-                      "type": "string"
                     }
                   }
                 }
               },
-              "costs": {
+              "charges": {
                 "type": "array",
                 "items": {
                   "type": "object",
                   "additionalProperties": false,
                   "required": [
                     "currency",
-                    "provider_cost",
-                    "markup",
                     "usage_charge"
                   ],
                   "properties": {
                     "currency": {
                       "type": "string"
-                    },
-                    "provider_cost": {
-                      "type": "object",
-                      "additionalProperties": false,
-                      "required": [
-                        "amount",
-                        "currency",
-                        "display"
-                      ],
-                      "properties": {
-                        "amount": {
-                          "type": "string",
-                          "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
-                        },
-                        "currency": {
-                          "type": "string",
-                          "pattern": "^[A-Z]{3}$"
-                        },
-                        "display": {
-                          "type": "string"
-                        }
-                      }
-                    },
-                    "markup": {
-                      "type": "object",
-                      "additionalProperties": false,
-                      "required": [
-                        "amount",
-                        "currency",
-                        "display"
-                      ],
-                      "properties": {
-                        "amount": {
-                          "type": "string",
-                          "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
-                        },
-                        "currency": {
-                          "type": "string",
-                          "pattern": "^[A-Z]{3}$"
-                        },
-                        "display": {
-                          "type": "string"
-                        }
-                      }
                     },
                     "usage_charge": {
                       "type": "object",

@@ -115,8 +115,8 @@ function teamCommercialLines(params: {
       id: `monthly_${params.tariff.id}_${params.teamId}`,
       kind: 'monthly_subscription',
       product: params.statementProduct,
-      label: `${params.tariff.name} monthly subscription`,
-      detail: `Tariff ${params.tariff.key} v${params.tariff.version}`,
+      label: 'Monthly subscription',
+      detail: 'Subscription charge for this billing period',
       amount: exactMoney(monthlyAmount, params.tariff.currency),
     },
     ...params.ratedLines.map((line) => ({ ...line, id: `${line.id}_${params.teamId}` })),
@@ -131,7 +131,7 @@ function teamCommercialLines(params: {
             ? ('credit' as const)
             : ('add_on' as const),
         product: params.statementProduct,
-        label: adjustment.name,
+        label: adjustment.kind === BillingAdjustmentKind.CREDIT ? 'Credit' : 'Additional charge',
         detail: adjustment.cadence === 'MONTHLY' ? 'Monthly adjustment' : 'One-time adjustment',
         amount: exactMoney(signed, adjustment.currency),
       };

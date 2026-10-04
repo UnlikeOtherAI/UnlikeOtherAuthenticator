@@ -25,6 +25,7 @@ import {
   billingCreditsV1ConformanceFixture,
   billingCreditsV1JsonSchema,
   billingCreditsV1OpenApiDocument,
+  billingRecurringAddonV1ConformanceFixtures,
   billingStatementV1ConformanceFixture,
   billingStatementV1JsonSchema,
   billingStatementV1OpenApiDocument,
@@ -38,6 +39,37 @@ import {
 async function readJson(path: string): Promise<unknown> {
   return JSON.parse(await readFile(new URL(path, import.meta.url), 'utf8'));
 }
+
+function expectCustomerBillingPrivacy(value: unknown): void {
+  if (Array.isArray(value)) {
+    value.forEach(expectCustomerBillingPrivacy);
+    return;
+  }
+  if (value === null || typeof value !== 'object') return;
+  for (const [key, child] of Object.entries(value)) {
+    expect(key).not.toMatch(/markup|provider_cost|cost_basis|multiplier|billable_units|rated_charge|cost_totals|provider_costs/i);
+    if (typeof child === 'string' && /^(display|display_name|label|detail|description|message|title)$/.test(key)) {
+      expect(child).not.toMatch(/provider cost|markup|margin|at.cost|cost.plus/i);
+    }
+    expectCustomerBillingPrivacy(child);
+  }
+}
+
+describe('customer billing privacy boundary', () => {
+  it('excludes private rating terms from every public customer fixture', () => {
+    [
+      billingStatementV1ConformanceFixture,
+      billingStatementV2ConformanceFixture,
+      billingCreditsV1ConformanceFixture,
+      billingRecurringAddonV1ConformanceFixtures,
+      billingConsumerActionV1ConformanceFixtures,
+    ].forEach(expectCustomerBillingPrivacy);
+    expect(billingStatementV1ConformanceFixture.usage.charge_totals[0]?.usage_charge.amount)
+      .toBe('3.6');
+    expect(billingStatementV1ConformanceFixture.plan.monthly_subscription.amount_minor)
+      .toBe('2000');
+  });
+});
 
 describe('public BillingStatementV1 consumer protocol', () => {
   it('validates the conformance fixture against the exact Draft 2020-12 schema', () => {

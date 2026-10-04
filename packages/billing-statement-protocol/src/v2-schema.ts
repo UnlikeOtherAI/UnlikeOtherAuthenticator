@@ -4,17 +4,6 @@ import {
   BILLING_STATEMENT_V2_SCHEMA_VERSION,
 } from './v2-types.js';
 
-const exactMoneySchema = {
-  type: 'object',
-  additionalProperties: false,
-  required: ['amount', 'currency', 'display'],
-  properties: {
-    amount: { type: 'string', pattern: '^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$' },
-    currency: { type: 'string', pattern: '^[A-Z]{3}$' },
-    display: { type: 'string' },
-  },
-} as const;
-
 const usageShareSchema = {
   type: 'object',
   additionalProperties: false,
@@ -47,37 +36,13 @@ const usageContributionSchema = {
   },
 } as const;
 
-const costTotalSchema = {
-  type: 'object',
-  additionalProperties: false,
-  required: ['currency', 'provider_cost', 'display'],
-  properties: {
-    currency: { type: 'string', pattern: '^[A-Z]{3}$' },
-    provider_cost: exactMoneySchema,
-    display: { type: 'string' },
-  },
-} as const;
-
-const costContributionSchema = {
-  type: 'object',
-  additionalProperties: false,
-  required: ['currency', 'provider_cost', 'display', 'share'],
-  properties: {
-    ...costTotalSchema.properties,
-    share: {
-      anyOf: [usageShareSchema, { type: 'null' }],
-    },
-  },
-} as const;
-
 const portfolioTotalsSchema = {
   type: 'object',
   additionalProperties: false,
-  required: ['calls', 'usage', 'provider_costs'],
+  required: ['calls', 'usage'],
   properties: {
     calls: { type: 'string', pattern: '^(0|[1-9][0-9]*)$' },
     usage: { type: 'array', items: usageTotalSchema },
-    provider_costs: { type: 'array', items: costTotalSchema },
   },
 } as const;
 
@@ -107,7 +72,6 @@ const portfolioOriginSchema = {
     'calls',
     'call_share',
     'usage',
-    'provider_costs',
   ],
   properties: {
     product: { type: ['string', 'null'] },
@@ -117,7 +81,6 @@ const portfolioOriginSchema = {
     calls: { type: 'string', pattern: '^(0|[1-9][0-9]*)$' },
     call_share: usageShareSchema,
     usage: { type: 'array', items: usageContributionSchema },
-    provider_costs: { type: 'array', items: costContributionSchema },
   },
 } as const;
 
@@ -132,7 +95,6 @@ const portfolioUserSchema = {
     'calls',
     'call_share',
     'usage',
-    'provider_costs',
   ],
   properties: {
     user_id: { type: ['string', 'null'] },
@@ -142,7 +104,6 @@ const portfolioUserSchema = {
     calls: { type: 'string', pattern: '^(0|[1-9][0-9]*)$' },
     call_share: usageShareSchema,
     usage: { type: 'array', items: usageContributionSchema },
-    provider_costs: { type: 'array', items: costContributionSchema },
   },
 } as const;
 

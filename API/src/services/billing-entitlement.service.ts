@@ -44,13 +44,8 @@ export type EffectiveTariffPayload = {
   };
   tariff: {
     id: string;
-    key: string;
-    version: number;
     mode: 'standard' | 'free' | 'at_cost' | 'custom';
     collection_mode: 'stripe' | 'manual' | 'none';
-    markup_bps: number;
-    markup_percent: string;
-    usage_price_multiplier_bps: number;
     monthly_subscription: {
       amount_minor: string;
       currency: string;
@@ -97,9 +92,23 @@ function assignmentScope(
   return 'service_default';
 }
 
-function priceMultiplierBps(tariff: TariffRow): number {
-  if (tariff.mode === BillingTariffMode.FREE) return 0;
-  return 10_000 + tariff.markupBps;
+export function customerBillingTariff(
+  tariff: EffectiveTariffPayload['tariff'],
+): Pick<
+  EffectiveTariffPayload['tariff'],
+  | 'collection_mode'
+  | 'monthly_subscription'
+  | 'usage_billing_enabled'
+  | 'payment_collection_enabled'
+  | 'raw_usage_preserved'
+> {
+  return {
+    collection_mode: tariff.collection_mode,
+    monthly_subscription: tariff.monthly_subscription,
+    usage_billing_enabled: tariff.usage_billing_enabled,
+    payment_collection_enabled: tariff.payment_collection_enabled,
+    raw_usage_preserved: tariff.raw_usage_preserved,
+  };
 }
 
 function payloadFor(params: {
@@ -133,13 +142,8 @@ function payloadFor(params: {
     },
     tariff: {
       id: params.tariff.id,
-      key: params.tariff.key,
-      version: params.tariff.version,
       mode: billingModeToPublic(params.tariff.mode),
       collection_mode: billingCollectionModeToPublic(params.tariff.collectionMode),
-      markup_bps: params.tariff.markupBps,
-      markup_percent: (params.tariff.markupBps / 100).toFixed(2),
-      usage_price_multiplier_bps: priceMultiplierBps(params.tariff),
       monthly_subscription: {
         amount_minor: params.tariff.monthlyAmountMinor.toString(),
         currency: params.tariff.currency,

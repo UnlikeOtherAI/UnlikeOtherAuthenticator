@@ -38,14 +38,7 @@ export type BillingCheckoutSessionRequest = BillingSubjectActionRequest & {
 };
 
 export type BillingCheckoutTariff = {
-  id: string;
-  key: string;
-  version: number;
-  mode: 'standard' | 'free' | 'at_cost' | 'custom';
   collection_mode: 'stripe' | 'manual' | 'none';
-  markup_bps: number;
-  markup_percent: string;
-  usage_price_multiplier_bps: number;
   monthly_subscription: {
     amount_minor: string;
     currency: string;

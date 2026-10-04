@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
 import { requireBillingLifecycleAppKey } from '../../middleware/billing-app-auth.js';
+import { billingCheckoutTariffJsonSchema } from '../../contracts/billing-statement-v1.js';
 import { createStripeCheckoutSession } from '../../services/billing-stripe-checkout.service.js';
 import { AppError } from '../../utils/errors.js';
 import { BillingSubjectRequestSchema, readBillingActorHeader } from './billing-request.js';
@@ -18,7 +19,7 @@ const responseSchema = {
     checkout_session_id: { type: 'string' },
     checkout_url: { type: 'string' },
     expires_at: { type: 'string' },
-    tariff: { type: 'object', additionalProperties: true },
+    tariff: billingCheckoutTariffJsonSchema,
   },
 } as const;
 

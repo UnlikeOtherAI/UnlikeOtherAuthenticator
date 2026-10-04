@@ -194,11 +194,11 @@ Collection rules:
   to collect payment.
 - `manual` means payment is expected but is collected outside the automated
   Stripe flow.
-- `none` means no payment is collected. Rating and cost visibility remain
-  active for any non-free tariff, so `usage_billing_enabled` can be true while
+- `none` means no payment is collected. Private rating remains active for any
+  non-free tariff, so `usage_billing_enabled` can be true while
   `payment_collection_enabled` is false.
-- `at_cost + none + monthly_subscription.amount_minor = "0"` is the explicit
-  special plan for showing 100% provider cost with no payment.
+- `at_cost + none + monthly_subscription.amount_minor = "0"` is an internal
+  tariff combination that collects no payment; it does not display cost basis.
 - Pricing mode and collection mode are separate immutable tariff-version terms.
   A collection change creates a new version.
 
@@ -219,36 +219,25 @@ The team must belong to the organisation. The user must exist and hold active
 membership in both the organisation and team. A missing membership, mismatched
 product credential, inactive service, or missing default fails closed.
 
-## Raw usage, billable units, and price presentation
+## Raw usage and customer price presentation
 
 Raw provider usage is immutable accounting evidence. Token counts, search
 requests, storage bytes, and other metered quantities must never be overwritten
 or relabeled to represent markup.
 
-UOA's snapshot exposes one signed `usage_price_multiplier_bps`:
-
-- `free`: `0`
-- `at_cost`: `10000`
-- `standard` or `custom`: `10000 + markup_bps`
-
-UOA applies that multiplier to the selected raw provider cost while retaining
-the original usage quantities. UOA may also expose a separately labelled
-customer-facing billable unit:
-
-```text
-customer_billable_units =
-  raw_metered_units × usage_price_multiplier_bps / 10000
-```
-
-That value is a derived commercial unit, not provider output. UOA calculates it
-with decimal-safe arithmetic while preserving Ledger's exact raw-unit evidence,
-so display or invoice rounding never mutates the raw facts. Its customer-facing
-label follows the underlying meter: billable token-equivalent units for
-token-metered AI, billable search-equivalent units for SERP, and billable
-research-equivalent units for DeepWater. Consumer pages render UOA's immutable
-raw-unit labels, separately labelled customer billable units, and
-customer-facing monetary amount. They never calculate those values or present
-a derived unit as provider output.
+UOA rates selected raw provider cost internally using the immutable commercial
+term for the billing month. A US$10.00 raw cost at the internal 30% standard
+rate yields a US$13.00 customer usage charge, or 13,000 prepaid credits at
+1,000 credits per US dollar. Customers see only their original usage units,
+credit consumption, exact customer charge, monthly subscription price and
+billing scope. Customer statements, Checkout and subscription summaries never
+include raw provider cost, cost basis, markup, price multiplier, or derived
+billable units. Signed product entitlement snapshots retain only the tariff
+identity needed for UOA's Checkout binding, collection and usage-billing flags,
+monthly subscription price, and assignment scope. Product backends do not rate
+usage; UOA's private Ledger and tariff data remain the financial authority.
+Statement adjustment rows use generic customer labels because operator-entered
+internal adjustment names are not classified as customer-safe copy.
 
 ## Individual product credentials
 
@@ -400,13 +389,7 @@ content-free business payload plus its RS256 signature:
     },
     "tariff": {
       "id": "tariff-id",
-      "key": "standard",
-      "version": 1,
-      "mode": "standard",
       "collection_mode": "stripe",
-      "markup_bps": 2000,
-      "markup_percent": "20.00",
-      "usage_price_multiplier_bps": 12000,
       "monthly_subscription": {
         "amount_minor": "0",
         "currency": "GBP"
@@ -626,9 +609,9 @@ provider cost, producing each exact major-currency customer charge. UOA then
 converts it to an integer count of
 `10^-6` minor-currency units and sends only the delta since the previous
 snapshot to Stripe's sum meter, using a stable idempotent event identifier.
-Stripe therefore meters rated money—not tokens, searches, research runs, or
-their derived billable units. Raw facts remain in Ledger; customer billable
-usage and display-ready totals belong to UOA and flow unchanged to product UIs.
+Stripe therefore meters rated money—not tokens, searches, or research runs.
+Raw facts remain in Ledger; UOA projects only raw usage and customer charge
+totals to product UIs.
 
 Snapshot cursors and cumulative/delta exports are stored so retries can be
 replayed and audited. If a corrected liability is lower than the amount already
@@ -722,7 +705,7 @@ contract. The lifecycle and export descriptions above use the same boundaries.
 UOA is the only commercial billing engine and system of record. It owns:
 
 - immutable tariff terms and assignment precedence;
-- centrally rated billable units, markup, customer charges, exact totals, and
+- privately rated customer charges, exact totals, and
   currencies;
 - monthly subscriptions, add-ons, credits, collection state, and customer
   actions;
@@ -806,7 +789,8 @@ caller/origin to the string `unattributed` only inside its display-only
 
 ### Canonical public customer contract
 
-The frozen v1 and additive v2 paths are:
+The v1 and v2 route names remain while their privacy-revised protocol shapes
+require strict consumers to update together:
 
 | Method and path                                         | Behaviour                                                                                                                                                                      |
 | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -820,7 +804,7 @@ The frozen v1 and additive v2 paths are:
 | `GET /schemas/billing-consumer-actions-v1.example.json` | Synthetic, credential-free fixtures for every billing consumer-action message                                                                                                  |
 | `GET /schemas/billing-consumer-actions-v1.openapi.json` | OpenAPI 3.1 components embedding the exact action schemas and fixtures                                                                                                         |
 | `POST /billing/v1/service-access/confirm`               | Records one direct product session after exact product-key, actor, and active membership verification                                                                          |
-| `POST /billing/v1/customer-statement`                   | Display-ready current/past-month plan, subscription, raw and billable usage, cross-service and per-user attribution, commercial lines, exact totals, capabilities, and actions |
+| `POST /billing/v1/customer-statement`                   | Display-ready current/past-month plan, subscription, raw usage, customer charges, cross-service and per-user attribution, commercial lines, exact totals, capabilities, and actions |
 | `POST /billing/v2/customer-statement`                   | The same UOA-owned commercial statement plus complete display-ready totals, origins, and users across all services connected to the exact team                                 |
 | `POST /billing/v1/cancellation/preview`                 | Complete confirmation-dialog model plus opaque five-minute token and server-generated idempotency key                                                                          |
 | `POST /billing/v1/cancellation/confirm`                 | Locked, revalidated, idempotent confirmation for the preview's exact pinned direct subscriptions                                                                               |
@@ -835,8 +819,11 @@ The canonical UOA and Ledger product identifiers are `nessie`, `deepwater`,
 mapped at the product boundary and are never sent in billing subjects.
 
 Products render `BillingStatementV1` or `BillingStatementV2` unchanged. New
-consumers use v2; v1 remains frozen and served for compatibility. Products must
-not derive tariff copy, totals, usage shares, provider-cost shares, markup,
+consumers use v2. The statement protocol's privacy revision is breaking:
+package 2.0.0, V1 protocol 2.0.0 and V2 protocol 3.0.0 retain the route names
+but remove cost-basis fields. Consuming products must update their strict
+validators before the producer switches. Products must not derive tariff copy,
+totals, usage shares, customer charges,
 cancellation scope, or action choices. The three action
 IDs and fixed routes are:
 

@@ -2407,6 +2407,14 @@ holding database locks across external work.
 
 ## 2026-07 Billing Tariff Control Plane
 
+**2026-10 customer privacy amendment:** UOA alone computes price adjustments
+from private raw provider cost and immutable tariff terms. Customer billing
+responses and products show balances, credit usage, customer charges, raw usage,
+monthly subscription prices, and payer scope. They never show provider cost,
+markup, margin, multipliers, cost-basis modes, or derived billable units. This
+amendment supersedes the earlier customer billable-unit and cost-visibility
+language below while preserving the internal rating and evidence model.
+
 Tariffs and all commercial billing for UOA-backed products live in UOA. Ledger
 owns only immutable raw usage, provider cost, and attribution facts, while
 products consume a signed effective-tariff snapshot and display-ready billing

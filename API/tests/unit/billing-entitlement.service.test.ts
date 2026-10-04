@@ -113,7 +113,7 @@ describe('effective billing tariff resolution', () => {
     signSnapshot.mockClear();
   });
 
-  it('prefers a team assignment and exposes price markup without inflating usage', async () => {
+  it('prefers a team assignment without exposing private rating terms', async () => {
     const teamTariff = {
       ...defaultTariff,
       id: 'tariff_team',
@@ -157,12 +157,7 @@ describe('effective billing tariff resolution', () => {
       authorized_party: { app_key_id: 'key_1' },
       tariff: {
         id: 'tariff_team',
-        version: 3,
-        mode: 'custom',
         collection_mode: 'none',
-        markup_bps: 4_000,
-        markup_percent: '40.00',
-        usage_price_multiplier_bps: 14_000,
         monthly_subscription: { amount_minor: '2000', currency: 'USD' },
         usage_billing_enabled: true,
         payment_collection_enabled: false,
@@ -172,6 +167,7 @@ describe('effective billing tariff resolution', () => {
     });
     expect(result.payload).not.toHaveProperty('tokens');
     expect(result.payload).not.toHaveProperty('usage');
+    expect(JSON.stringify(result.payload)).not.toMatch(/markup|multiplier|at_cost|provider_cost/i);
     expect(prisma.billingServiceAccess.upsert).not.toHaveBeenCalled();
   });
 
@@ -265,14 +261,12 @@ describe('effective billing tariff resolution', () => {
     {
       mode: BillingTariffMode.FREE,
       collectionMode: BillingCollectionMode.NONE,
-      usagePriceMultiplierBps: 0,
       usageBillingEnabled: false,
       paymentCollectionEnabled: false,
     },
     {
       mode: BillingTariffMode.AT_COST,
       collectionMode: BillingCollectionMode.NONE,
-      usagePriceMultiplierBps: 10_000,
       usageBillingEnabled: true,
       paymentCollectionEnabled: false,
     },
@@ -281,7 +275,6 @@ describe('effective billing tariff resolution', () => {
     async ({
       mode,
       collectionMode,
-      usagePriceMultiplierBps,
       usageBillingEnabled,
       paymentCollectionEnabled,
     }) => {
@@ -303,7 +296,6 @@ describe('effective billing tariff resolution', () => {
       );
 
       expect(result.payload.tariff).toMatchObject({
-        usage_price_multiplier_bps: usagePriceMultiplierBps,
         usage_billing_enabled: usageBillingEnabled,
         payment_collection_enabled: paymentCollectionEnabled,
         raw_usage_preserved: true,

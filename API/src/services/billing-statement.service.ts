@@ -306,8 +306,8 @@ async function buildCanonicalBillingStatement(
       id: `monthly_${summary.tariff.id}`,
       kind: 'monthly_subscription',
       product: statementProduct,
-      label: `${tariff.name} monthly subscription`,
-      detail: `Tariff ${summary.tariff.key} v${summary.tariff.version}`,
+      label: 'Monthly subscription',
+      detail: 'Subscription charge for this billing period',
       amount: exactMoney(monthlyAmount, currency),
     },
     ...rated.commercialLines,
@@ -322,7 +322,7 @@ async function buildCanonicalBillingStatement(
             ? ('credit' as const)
             : ('add_on' as const),
         product: statementProduct,
-        label: adjustment.name,
+        label: adjustment.kind === BillingAdjustmentKind.CREDIT ? 'Credit' : 'Additional charge',
         detail: adjustment.cadence === 'MONTHLY' ? 'Monthly adjustment' : 'One-time adjustment',
         amount: exactMoney(signed, adjustment.currency),
       };
@@ -344,8 +344,6 @@ async function buildCanonicalBillingStatement(
           actions: [],
         }
       : billingStatementActions(currentSummary, canonicalRequest, context.credential);
-  const markupPercent = (summary.tariff.markup_bps / 100).toFixed(2);
-
   const statement: BillingStatementV1 = {
     schema_version: BILLING_STATEMENT_SCHEMA_VERSION,
     statement_id: `bst_${randomUUID()}`,
@@ -373,17 +371,8 @@ async function buildCanonicalBillingStatement(
       tariff: { id: summary.tariff.id, version: summary.tariff.version },
     },
     plan: {
-      tariff_id: summary.tariff.id,
-      key: summary.tariff.key,
-      version: summary.tariff.version,
-      name: tariff.name,
-      display_name: `${tariff.name} · v${summary.tariff.version}`,
-      mode,
+      display_name: 'Monthly subscription',
       collection_mode: summary.tariff.collection_mode,
-      markup_bps: summary.tariff.markup_bps,
-      markup_percent: markupPercent,
-      markup_display: `${markupPercent}%`,
-      usage_multiplier_bps: summary.tariff.usage_price_multiplier_bps,
       monthly_subscription: {
         amount_minor: summary.tariff.monthly_subscription.amount_minor,
         ...exactMoney(monthlyAmount, currency),

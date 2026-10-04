@@ -4,7 +4,7 @@ export const BILLING_STATEMENT_SCHEMA_VERSION = 1 as const;
 export const BILLING_STATEMENT_SCHEMA_PATH = '/schemas/billing-statement-v1.json' as const;
 export const BILLING_STATEMENT_EXAMPLE_PATH = '/schemas/billing-statement-v1.example.json' as const;
 export const BILLING_STATEMENT_OPENAPI_PATH = '/schemas/billing-statement-v1.openapi.json' as const;
-export const BILLING_STATEMENT_PROTOCOL_VERSION = '1.0.0' as const;
+export const BILLING_STATEMENT_PROTOCOL_VERSION = '2.0.0' as const;
 
 export type ExactMoney = {
   amount: string;
@@ -49,17 +49,8 @@ export type BillingStatementV1 = {
     tariff: { id: string; version: number };
   };
   plan: {
-    tariff_id: string;
-    key: string;
-    version: number;
-    name: string;
     display_name: string;
-    mode: 'standard' | 'free' | 'at_cost' | 'custom';
     collection_mode: 'stripe' | 'manual' | 'none';
-    markup_bps: number;
-    markup_percent: string;
-    markup_display: string;
-    usage_multiplier_bps: number;
     monthly_subscription: ExactMoney & { amount_minor: string };
     assignment: {
       scope: 'team' | 'organisation' | 'service_default';
@@ -106,34 +97,20 @@ export type BillingStatementV1 = {
         output: string;
         total: string;
       };
-      billable_units: {
-        input: string;
-        cached_input: string;
-        output: string;
-        total: string;
-      };
       share: {
         basis_points: number;
         percent: string;
         display: string;
       };
-      provider_cost: (ExactMoney & { provenance: string }) | null;
-      rated_charge: {
-        base: ExactMoney;
-        markup: ExactMoney;
-        total: ExactMoney;
-      } | null;
+      customer_charge: ExactMoney | null;
     }>;
     totals: Array<{
       usage_unit: string;
       raw_units: string;
-      billable_units: string;
       display: string;
     }>;
-    cost_totals: Array<{
+    charge_totals: Array<{
       currency: string;
-      provider_cost: ExactMoney;
-      markup: ExactMoney;
       usage_charge: ExactMoney;
     }>;
     user_totals: Array<{
@@ -144,12 +121,9 @@ export type BillingStatementV1 = {
       usage: Array<{
         usage_unit: string;
         raw_units: string;
-        billable_units: string;
       }>;
-      costs: Array<{
+      charges: Array<{
         currency: string;
-        provider_cost: ExactMoney;
-        markup: ExactMoney;
         usage_charge: ExactMoney;
       }>;
     }>;
