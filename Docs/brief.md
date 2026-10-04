@@ -2723,6 +2723,10 @@ settle it, once, and it cannot restore automatic top-up. A timed-out request
 whose payment ID was not saved is not retried after disable. The projection
 shows automatic top-up as paused when the exact monthly remainder cannot cover
 one full saved refill, and shows the reset date from the UTC period end.
+The manager may revoke the shared account through any currently authorized
+lifecycle app key for that team, including another connected service or a
+rotated key; the audit records the acting app while the old attempt remains
+bound to its original consent app and service.
 Missing policy, catalog, payment, consent, or Stripe evidence fails closed and
 keeps the corresponding projected action disabled.
 

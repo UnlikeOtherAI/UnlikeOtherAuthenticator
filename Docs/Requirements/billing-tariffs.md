@@ -1057,6 +1057,12 @@ out before its Payment Intent ID was saved is never retried after disable, but
 an exact late event may still settle it once. Neither path can restore consent
 or activate automatic top-up.
 
+The manager who disables a shared credit account may use any currently
+authorized lifecycle app key for that exact team, including one from another
+connected service or a rotated key. The disable audit records the acting app
+and service; the unresolved attempt and later Stripe event stay bound to the
+original consent's app and service.
+
 The projected automatic-top-up state is `paused` when the saved monthly limit
 cannot cover one full refill, including when a positive remainder is smaller
 than that refill. The projection keeps the exact charged and remaining money
