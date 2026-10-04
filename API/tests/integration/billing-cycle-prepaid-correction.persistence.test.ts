@@ -7,6 +7,7 @@ import {
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { prepareBillingCycleClose } from '../../src/services/billing-cycle-close.service.js';
+import { runBillingCycleCloseBatch } from '../../src/services/billing-cycle-close-run.service.js';
 import { finalizePrepaidBillingCycle } from
   '../../src/services/billing-cycle-prepaid-correction.service.js';
 import type { BillingInvoicePdfStorage } from
@@ -243,9 +244,23 @@ describe.skipIf(!enabled)('prepaid finalized cycle late receipt', () => {
     const firstPending = await prepareBillingCycleClose({
       source: quote().source, billingMonth: month,
     }, deps);
-    const first = await finalizePrepaidBillingCycle({ cycleId: firstPending.cycleId },
-      { prisma: db.prisma, storage });
+    const watch = await db.prisma.billingCycleCloseWatch.create({ data: {
+      sourceKind: 'team_usage', sourceId: `${ids.service}:${ids.org}:${ids.team}`,
+      serviceId: ids.service, orgId: ids.org, teamId: ids.team,
+      billingMonth: month, nextCheckAt: new Date('2020-01-01T00:00:00.000Z'),
+    } });
+    const finalize = vi.fn((params: { cycleId: string }) =>
+      finalizePrepaidBillingCycle(params, { prisma: db.prisma, storage }));
+    expect(await runBillingCycleCloseBatch({ prisma: db.prisma,
+      now: new Date('2026-09-03T00:00:00.000Z'),
+      team: vi.fn().mockResolvedValue(firstPending), finalizePrepaid: finalize,
+    })).toMatchObject({ checked: 1, held: 0 });
+    expect(finalize).toHaveBeenCalledOnce();
+    const first = await finalize.mock.results[0]?.value;
     expect(first).not.toBeNull();
+    expect((await db.prisma.billingCycleCloseWatch.findUniqueOrThrow({
+      where: { id: watch.id },
+    })).lastCycleId).toBe(first!.cycleId);
     const original = await db.prisma.billingCustomerCycle.findUniqueOrThrow({
       where: { id: first!.cycleId },
     });

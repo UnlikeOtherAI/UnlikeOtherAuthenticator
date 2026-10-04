@@ -506,3 +506,9 @@ proof. A standalone invoice binds to its accepted monthly source and exact payer
 neither its quote nor its finalization is evidence of payment. These are
 machine-only collection paths behind the existing Billing cycles and InvoiceV1
 customer surfaces.
+
+The durable source and team-usage watches invoke the prepaid finalizer after
+verifying the prepared cycle's service, organisation, team and month. They retain
+the resulting finalized revision as their last cycle. A late settled debit
+produces a new immutable breakdown revision while retaining the original legal
+documents and cash liability; this requires no customer request to finalize it.
