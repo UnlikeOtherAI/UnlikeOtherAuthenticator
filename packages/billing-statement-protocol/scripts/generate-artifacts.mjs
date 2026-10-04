@@ -19,10 +19,12 @@ import {
   billingCreditsV1JsonSchema,
   billingCreditsV1OpenApiDocument,
   billingCreditPurchaseStatusV1JsonSchema,
+  billingCreditFundingRequestV1JsonSchema,
 } from '../dist/index.js';
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const artifacts = new Map([
+  [resolve(packageRoot, 'schema/billing-credit-funding-request-v1.json'), billingCreditFundingRequestV1JsonSchema],
   [resolve(packageRoot, 'schema/billing-credit-purchase-status-v1.json'), billingCreditPurchaseStatusV1JsonSchema],
   [resolve(packageRoot, 'schema/billing-credits-v1.json'), billingCreditsV1JsonSchema],
   [

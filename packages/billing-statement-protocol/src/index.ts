@@ -1,5 +1,11 @@
 export { billingConsumerActionV1ConformanceFixtures } from './action-conformance-fixtures.js';
 export * from './presentation-types.js';
+export * from './credits-attention-types.js';
+export {
+  billingCreditAttentionV1JsonSchema,
+  billingCreditFundingRequestActionV1JsonSchema,
+  billingCreditFundingRequestV1JsonSchema,
+} from './credits-attention-schema.js';
 export { billingCreditPurchaseStatusV1JsonSchema } from './presentation-schema.js';
 export {
   billingConsumerActionV1OpenApiDocument,

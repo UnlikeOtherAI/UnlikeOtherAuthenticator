@@ -9,6 +9,10 @@ import {
 import { creditAmountSchema, moneySchema } from './funding-schema-primitives.js';
 import { billingControlledByJsonSchema } from './org-billing-schema.js';
 import {
+  billingCreditAttentionV1JsonSchema,
+  billingCreditFundingRequestActionV1JsonSchema,
+} from './credits-attention-schema.js';
+import {
   billingCreditsManagerRecentEntriesJsonSchema,
   billingCreditsManagerSummaryJsonSchema,
   billingCreditsManagerConsentJsonSchema,
@@ -296,5 +300,9 @@ export const billingCreditsV1JsonSchema = {
     // Optional and absent from `required`: a credits view without it means the
     // organisation has not taken billing over, which is every deployment today.
     controlled_by: billingControlledByJsonSchema,
+    attention: {
+      type: 'array', maxItems: 5, uniqueItems: true, items: billingCreditAttentionV1JsonSchema,
+    },
+    funding_request: billingCreditFundingRequestActionV1JsonSchema,
   },
 } as const;
