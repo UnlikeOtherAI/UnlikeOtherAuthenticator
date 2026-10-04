@@ -216,6 +216,7 @@ export const billingCheckoutSessionRequestJsonSchema = {
     ...billingSubjectActionRequestProperties,
     success_url: hostedReturnUrlSchema,
     cancel_url: hostedReturnUrlSchema,
+    fixed_seat_quantity: { type: 'integer', minimum: 1, maximum: 1_000_000 },
   },
 } as const;
 

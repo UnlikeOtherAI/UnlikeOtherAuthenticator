@@ -4,7 +4,7 @@ export const BILLING_STATEMENT_SCHEMA_VERSION = 1 as const;
 export const BILLING_STATEMENT_SCHEMA_PATH = '/schemas/billing-statement-v1.json' as const;
 export const BILLING_STATEMENT_EXAMPLE_PATH = '/schemas/billing-statement-v1.example.json' as const;
 export const BILLING_STATEMENT_OPENAPI_PATH = '/schemas/billing-statement-v1.openapi.json' as const;
-export const BILLING_STATEMENT_PROTOCOL_VERSION = '4.0.0' as const;
+export const BILLING_STATEMENT_PROTOCOL_VERSION = '4.1.0' as const;
 
 export type ExactMoney = {
   amount: string;

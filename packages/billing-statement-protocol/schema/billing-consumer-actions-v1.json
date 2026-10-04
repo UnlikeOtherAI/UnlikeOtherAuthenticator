@@ -97,6 +97,11 @@
           "format": "uri",
           "pattern": "^https://",
           "maxLength": 2048
+        },
+        "fixed_seat_quantity": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000
         }
       }
     },

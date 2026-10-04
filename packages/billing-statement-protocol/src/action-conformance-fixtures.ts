@@ -11,6 +11,7 @@ export const billingConsumerActionV1ConformanceFixtures = {
     user_id: 'user_synthetic',
     success_url: 'https://product.example.com/billing/checkout/success',
     cancel_url: 'https://product.example.com/billing/checkout/cancel',
+    fixed_seat_quantity: 12,
   },
   checkout_session_response: {
     checkout_session_id: 'bcs_synthetic',
