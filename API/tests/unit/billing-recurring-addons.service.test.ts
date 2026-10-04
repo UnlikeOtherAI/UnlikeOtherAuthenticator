@@ -139,7 +139,7 @@ describe('privacy-safe recurring add-on scopes', () => {
 
   it('keeps the read projection available while collection actions are frozen', async () => {
     const result = await getBillingRecurringAddons(
-      { request, actorToken: 'signed-actor', credential },
+      { request, actorToken: 'signed-actor', credential, locale: 'cs' },
       dependencies(
         addonData(
           BillingRecurringAddonSubscriptionScope.TEAM,
@@ -156,6 +156,7 @@ describe('privacy-safe recurring add-on scopes', () => {
       capabilities: { can_manage_addons: false },
       offers: [{ actions: [{ id: 'cancel', enabled: false }] }],
     });
+    expect(result.offers[0]?.monthly_price.display).toBe('US$50.00 / měsíc');
   });
 
   it.each([

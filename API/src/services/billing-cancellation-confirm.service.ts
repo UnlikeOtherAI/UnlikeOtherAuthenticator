@@ -297,26 +297,44 @@ function confirmationResult(
   indirectProducts: string[],
   locale?: BillingCustomerLocale,
 ): BillingCancellationConfirmationV1 {
+  return localizeCancellationConfirmation(
+    {
+      schema_version: BILLING_CANCELLATION_SCHEMA_VERSION,
+      status: 'confirmed',
+      title: '',
+      message: '',
+      cancelled_services: subscriptions.map((subscription) => ({
+        service_id: subscription.serviceId,
+        product: subscription.service.identifier,
+        name: subscription.service.name,
+        display_name: subscription.service.name,
+        status: 'cancels_at_period_end',
+        effective_at: subscription.currentPeriodEnd?.toISOString() ?? null,
+      })),
+      indirect_services: indirectProducts.sort().map((product) => ({
+        product,
+        display_name: product,
+        impact: '',
+      })),
+    },
+    locale,
+  );
+}
+
+function localizeCancellationConfirmation(
+  result: BillingCancellationConfirmationV1,
+  locale?: BillingCustomerLocale,
+): BillingCancellationConfirmationV1 {
   const copy = billingSubscriptionCopy(locale);
   return {
-    schema_version: BILLING_CANCELLATION_SCHEMA_VERSION,
-    status: 'confirmed',
+    ...result,
     title: copy.cancellationScheduled,
     message:
-      subscriptions.length === 1
+      result.cancelled_services.length === 1
         ? copy.oneSubscriptionEnds
-        : billingPluralCopy(copy.manySubscriptionsEnd, subscriptions.length, locale),
-    cancelled_services: subscriptions.map((subscription) => ({
-      service_id: subscription.serviceId,
-      product: subscription.service.identifier,
-      name: subscription.service.name,
-      display_name: subscription.service.name,
-      status: 'cancels_at_period_end',
-      effective_at: subscription.currentPeriodEnd?.toISOString() ?? null,
-    })),
-    indirect_services: indirectProducts.sort().map((product) => ({
-      product,
-      display_name: product,
+        : billingPluralCopy(copy.manySubscriptionsEnd, result.cancelled_services.length, locale),
+    indirect_services: result.indirect_services.map((service) => ({
+      ...service,
       impact: copy.noSeparateSubscriptionCanceled,
     })),
   };
@@ -398,7 +416,9 @@ export async function confirmBillingCancellation(
     prisma,
     deps?.loadState ?? loadBillingCancellationState,
   );
-  if ('completed' in claimed) return claimed.completed;
+  if ('completed' in claimed) {
+    return localizeCancellationConfirmation(claimed.completed, params.locale);
+  }
 
   const configured = deps?.stripe ? undefined : requireStripeBillingEnabled();
   const stripe = deps?.stripe ?? configured?.client;
@@ -439,7 +459,7 @@ export async function confirmBillingCancellation(
         completed.requestDigest === requestDigest(params.selection) &&
         completed.result !== null
       ) {
-        return parseStoredResult(completed.result);
+        return localizeCancellationConfirmation(parseStoredResult(completed.result), params.locale);
       }
       throw new AppError('BAD_REQUEST', 409, 'BILLING_CANCELLATION_STATE_CHANGED');
     }

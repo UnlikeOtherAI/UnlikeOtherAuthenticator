@@ -8,6 +8,7 @@ import type {
 import type { BillingCustomerLocale } from './billing-copy-locale.js';
 import { billingLocale, formatBillingCopy } from './billing-copy-locale.js';
 import {
+  billingCreditCopy,
   billingBuiltInCreditOfferCopy,
   billingLocalizedCreditDisplay,
 } from './billing-credit-copy.catalog.js';
@@ -99,72 +100,76 @@ function fundingPolicy(
   locale?: BillingCustomerLocale,
 ) {
   const copy = billingCreditFundingCopy(locale);
+  const offers = (data.policy?.topUpOffers ?? []).map((offer) => {
+    const catalogExecutable = configuredCatalog(data, offer, readiness);
+    const canResume = readiness.resumableTopUpOfferId === offer.id && catalogExecutable;
+    const pendingCheckoutBlocksOffer =
+      (data.unresolvedTopUpCheckouts ?? []).length > 0 &&
+      !canResume &&
+      !readiness.topUpCheckoutReady;
+    const available = Boolean(
+      data.policy?.topUpEnabled &&
+      collectionEnabled &&
+      (readiness.topUpCheckoutReady || canResume) &&
+      catalogExecutable,
+    );
+    const builtInCopy = billingBuiltInCreditOfferCopy(offer.key, locale);
+    const creditDisplay = billingLocalizedCreditDisplay(
+      creditAmount(offer.creditsReceivedMicrocredits, locale).credits,
+      locale,
+    );
+    return {
+      id: offer.id,
+      key: offer.key,
+      name: builtInCopy?.name ?? offer.name,
+      description: builtInCopy?.description ?? offer.description,
+      payment_amount: billingCreditsPaymentMoney(offer.paymentAmountMinor),
+      credits_received: creditAmount(offer.creditsReceivedMicrocredits, locale),
+      available,
+      unavailable_reason: available
+        ? null
+        : pendingCheckoutBlocksOffer
+          ? copy.paymentPending
+          : data.policy?.topUpEnabled
+            ? copy.offerUnavailable
+            : copy.topUpsDisabled,
+      action: manager
+        ? {
+            id: 'top_up' as const,
+            kind: 'hosted_redirect' as const,
+            label: canResume
+              ? copy.continuePayment
+              : formatBillingCopy(copy.buyOffer, { credits: creditDisplay }),
+            description: canResume
+              ? copy.continuePaymentDescription
+              : copy.buyOfferDescription,
+            enabled: available,
+            disabled_reason: available
+              ? null
+              : !collectionEnabled
+                ? copy.collectionUnavailable
+                : pendingCheckoutBlocksOffer
+                  ? copy.paymentPending
+                  : copy.unavailableForPayment,
+            request: {
+              method: 'POST' as const,
+              path: '/billing/v1/credits/top-up-checkout' as const,
+              body: { ...requestBody, offer_id: offer.id },
+            },
+          }
+        : null,
+    };
+  });
+  const description = offers.some((offer) => offer.available)
+    ? `${copy.description} ${billingCreditCopy(locale).smallestOfferHint}`
+    : copy.description;
   const policy = data.policy;
   return {
     top_up_enabled: Boolean(policy?.topUpEnabled && collectionEnabled),
     automatic_top_up_enabled: Boolean(policy?.automaticTopUpEnabled && collectionEnabled),
     title: copy.title,
-    description: copy.description,
-    offers: (policy?.topUpOffers ?? []).map((offer) => {
-      const catalogExecutable = configuredCatalog(data, offer, readiness);
-      const canResume = readiness.resumableTopUpOfferId === offer.id && catalogExecutable;
-      const pendingCheckoutBlocksOffer =
-        (data.unresolvedTopUpCheckouts ?? []).length > 0 &&
-        !canResume &&
-        !readiness.topUpCheckoutReady;
-      const available = Boolean(
-        policy?.topUpEnabled &&
-        collectionEnabled &&
-        (readiness.topUpCheckoutReady || canResume) &&
-        catalogExecutable,
-      );
-      const builtInCopy = billingBuiltInCreditOfferCopy(offer.key, locale);
-      const creditDisplay = billingLocalizedCreditDisplay(
-        creditAmount(offer.creditsReceivedMicrocredits, locale).credits,
-        locale,
-      );
-      return {
-        id: offer.id,
-        key: offer.key,
-        name: builtInCopy?.name ?? offer.name,
-        description: builtInCopy?.description ?? offer.description,
-        payment_amount: billingCreditsPaymentMoney(offer.paymentAmountMinor),
-        credits_received: creditAmount(offer.creditsReceivedMicrocredits, locale),
-        available,
-        unavailable_reason: available
-          ? null
-          : pendingCheckoutBlocksOffer
-          ? copy.paymentPending
-            : policy?.topUpEnabled
-              ? copy.offerUnavailable
-              : copy.topUpsDisabled,
-        action: manager
-          ? {
-              id: 'top_up' as const,
-              kind: 'hosted_redirect' as const,
-              label: canResume
-                ? copy.continuePayment
-                : formatBillingCopy(copy.buyOffer, { credits: creditDisplay }),
-              description: canResume
-                ? copy.continuePaymentDescription
-                : copy.buyOfferDescription,
-              enabled: available,
-              disabled_reason: available
-                ? null
-                : !collectionEnabled
-                  ? copy.collectionUnavailable
-                  : pendingCheckoutBlocksOffer
-                    ? copy.paymentPending
-                    : copy.unavailableForPayment,
-              request: {
-                method: 'POST' as const,
-                path: '/billing/v1/credits/top-up-checkout' as const,
-                body: { ...requestBody, offer_id: offer.id },
-              },
-            }
-          : null,
-      };
-    }),
+    description,
+    offers,
   };
 }
 
