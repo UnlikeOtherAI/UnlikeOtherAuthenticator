@@ -81,10 +81,11 @@ same idempotency key even if the next request supplies another language.
 
 This freeze is enforced by the service path. The recurring add-on checkout's
 existing immutable-snapshot trigger also covers the new column; the base
-`billing_stripe_checkout_sessions` table has only its scope-coherence trigger,
-so its new locale column is not independently immutable at the database layer.
-No application retry/update path changes it. This is a defense-in-depth
-asymmetry, not a reproduced retry defect.
+`billing_stripe_checkout_sessions` table originally had only its scope-coherence
+trigger, so the locale column was not independently immutable at the database
+layer. A follow-up additive migration now rejects changes to that field, with a
+PostgreSQL mutation regression in
+`billing-stripe-checkout-locale-immutability.persistence.test.ts`.
 
 The new focused unit regression simulates a Czech request whose Stripe response
 is lost, then a German retry. Both Stripe creates use Czech and identical
