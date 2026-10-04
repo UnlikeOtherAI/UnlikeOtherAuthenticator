@@ -101,16 +101,16 @@ subscription state.
 
 `BillingCreditsV1` displays the exact team's one shared cross-service balance
 under the required heading `Remaining credits`. The fixed public conversion is
-1,000 credits = US$1.00. Credit quantities are always whole integers. UOA keeps
-sub-credit usage in its exact internal rated remainder and deducts it only when
-the cumulative service/user amount reaches another complete credit. The USD
-equivalent remains an exact decimal derived from the whole-credit quantity.
+1,000 credits = US$1.00. Credit quantities retain up to six fractional digits (microcredits), and the
+USD equivalent retains up to nine fractional digits. UOA deducts the exact
+settled microcredit amount. Display currency can round to cents while machine
+amounts remain exact.
 UOA supplies fixed top-up offers and every complete auto-top-up action. The
 consumer relays the frozen action body unchanged and never chooses an offer or
 option by rebuilding its subject.
 
-Credit protocol 1.4.0 callers opt in to UOA's reconciliation status with
-`x-uoa-billing-credits-protocol: 1.4.0`. Older consumers receive the legacy
+Credit protocol 2.0.0 callers opt in to UOA's reconciliation status with
+`x-uoa-billing-credits-protocol: 2.0.0`. Older consumers receive the legacy
 shape and a reconciliation hold until they negotiate the status revision.
 
 Both credits and recurring add-ons use manager/member discriminated unions.

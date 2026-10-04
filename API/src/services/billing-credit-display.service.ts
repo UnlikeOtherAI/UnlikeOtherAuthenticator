@@ -47,12 +47,11 @@ export function billingWholeCredits(microcredits: bigint): bigint {
 }
 
 export function billingCreditAmount(microcredits: bigint): BillingCreditAmount {
-  const wholeCredits = billingWholeCredits(microcredits);
-  const credits = wholeCredits.toString();
-  const usd = scaledDecimal(wholeCredits, 3);
+  const credits = scaledDecimal(microcredits, 6);
+  const usd = scaledDecimal(microcredits, 9);
   return {
     credits,
-    display: `${grouped(credits)} ${wholeCredits === 1n || wholeCredits === -1n ? 'credit' : 'credits'}`,
+    display: `${grouped(credits)} ${microcredits === MICROCREDITS_PER_CREDIT || microcredits === -MICROCREDITS_PER_CREDIT ? 'credit' : 'credits'}`,
     usd_equivalent: {
       amount: usd,
       currency: 'USD',
