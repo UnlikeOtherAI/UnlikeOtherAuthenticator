@@ -28,7 +28,7 @@ function sessionId(checkout: CreditCheckout): string | null {
   return checkout.stripeCheckoutSessionId;
 }
 
-function assertSessionBinding(
+export function assertCreditCheckoutSessionBinding(
   session: Stripe.Checkout.Session,
   checkout: CreditCheckout,
   kind: CreditCheckoutKind,
@@ -83,7 +83,7 @@ async function findSession(
   if (knownId) {
     try {
       const session = await stripe.checkout.sessions.retrieve(knownId);
-      assertSessionBinding(session, checkout, kind, customerStripeId, account);
+      assertCreditCheckoutSessionBinding(session, checkout, kind, customerStripeId, account);
       return session;
     } catch (error) {
       if (!isMissingStripeResource(error)) throw error;
@@ -105,7 +105,7 @@ async function findSession(
         session.client_reference_id === checkout.id &&
         session.metadata?.[metadataKey(kind)] === checkout.id
       ) {
-        assertSessionBinding(session, checkout, kind, customerStripeId, account);
+        assertCreditCheckoutSessionBinding(session, checkout, kind, customerStripeId, account);
         matches.push(session);
       }
     }

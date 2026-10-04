@@ -20,6 +20,7 @@ import { createBillingCreditTopUpCheckout } from '../../services/billing-credit-
 import { AppError } from '../../utils/errors.js';
 import { BillingSubjectRequestSchema, readBillingActorHeader } from './billing-request.js';
 import type { BillingActorEndpoint } from '../../services/billing-actor-audience.service.js';
+import { readBillingPresentation } from './billing-presentation.js';
 
 const OfferRequestSchema = BillingSubjectRequestSchema.extend({
   offer_id: z.string().trim().min(1).max(256),
@@ -33,7 +34,10 @@ const HostedRedirectResponseSchema = {
   type: 'object',
   additionalProperties: false,
   required: ['redirect_url'],
-  properties: { redirect_url: { type: 'string', format: 'uri' } },
+  properties: {
+    redirect_url: { type: 'string', format: 'uri' },
+    purchase_id: { type: 'string', minLength: 1, maxLength: 256 },
+  },
 } as const;
 
 function actionContext(
@@ -70,9 +74,11 @@ export function registerBillingCreditFundingActionRoutes(app: FastifyInstance): 
     },
     async (request, reply) => {
       const body = OfferRequestSchema.parse(request.body);
+      const presentation = readBillingPresentation(request.headers);
       const context = actionContext(request, body, BILLING_CREDITS_TOP_UP_PATH);
       const result = await createBillingCreditTopUpCheckout({
         ...context,
+        includePurchaseId: presentation.enabled,
         request: { ...context.request, offerId: body.offer_id },
       });
       reply.header('Cache-Control', 'private, no-store');

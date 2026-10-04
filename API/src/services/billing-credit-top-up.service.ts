@@ -90,11 +90,11 @@ function sameScopeBinding(
   );
 }
 
-function openRedirect(session: Stripe.Checkout.Session): { redirect_url: string } {
+function openRedirect(session: Stripe.Checkout.Session, purchaseId?: string) {
   if (session.status !== 'open' || !session.url || !session.url.startsWith('https://')) {
     throw new AppError('BAD_REQUEST', 409, 'BILLING_CREDIT_TOP_UP_NOT_OPEN');
   }
-  return { redirect_url: session.url };
+  return { redirect_url: session.url, ...(purchaseId ? { purchase_id: purchaseId } : {}) };
 }
 
 type Dependencies = {
@@ -112,9 +112,10 @@ export async function createBillingCreditTopUpCheckout(
     actorToken: string;
     credential: VerifiedBillingAppKey;
     endpoint: BillingActorEndpoint;
+    includePurchaseId?: boolean;
   },
   deps?: Dependencies,
-): Promise<{ redirect_url: string }> {
+): Promise<{ redirect_url: string; purchase_id?: string }> {
   const prisma = deps?.prisma ?? getAdminPrisma();
   const context = await (deps?.resolveContext ?? resolveCreditFundingActionContext)(
     {
@@ -185,7 +186,7 @@ export async function createBillingCreditTopUpCheckout(
       },
       { prisma, stripe: context.stripe },
     );
-    if (recovered.session) return openRedirect(recovered.session);
+    if (recovered.session) return openRedirect(recovered.session, params.includePurchaseId ? replay.id : undefined);
     throw new AppError('INTERNAL', 503, 'BILLING_CREDIT_TOP_UP_RETRY');
   }
 
@@ -216,7 +217,7 @@ export async function createBillingCreditTopUpCheckout(
       { prisma, stripe: context.stripe },
     );
     if (sameScopeBinding(unresolved, expected) && recovered.session?.status === 'open') {
-      return openRedirect(recovered.session);
+      return openRedirect(recovered.session, params.includePurchaseId ? unresolved.id : undefined);
     }
     if (!recovered.abandoned && recovered.session?.status !== 'expired') {
       throw new AppError('BAD_REQUEST', 409, 'BILLING_CREDIT_TOP_UP_PENDING');
@@ -272,7 +273,9 @@ export async function createBillingCreditTopUpCheckout(
         },
         { prisma, stripe: context.stripe },
       );
-      if (recovered.session?.status === 'open') return openRedirect(recovered.session);
+      if (recovered.session?.status === 'open') {
+        return openRedirect(recovered.session, params.includePurchaseId ? winner.id : undefined);
+      }
     }
     throw new AppError('BAD_REQUEST', 409, 'BILLING_CREDIT_TOP_UP_PENDING');
   }
@@ -326,5 +329,5 @@ export async function createBillingCreditTopUpCheckout(
       expiresAt: new Date(session.expires_at * 1000),
     },
   });
-  return openRedirect(session);
+  return openRedirect(session, params.includePurchaseId ? checkout.id : undefined);
 }

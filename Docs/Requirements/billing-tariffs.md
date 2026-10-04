@@ -1121,3 +1121,20 @@ research units, raw provider cost, cost-token equivalents, tariff markup, or
 the margin calculation. Even operator-created descriptions must not encode
 those prohibited facts. Product applications receive only UOA's display-ready
 invoice view model and never reproduce the calculator.
+
+### Credit purchase return and display language (2026-10-04)
+
+Presentation 1.5 explicitly negotiates customer display language using
+`x-uoa-billing-presentation` and `x-uoa-billing-locale`. Absent negotiation keeps
+legacy English and the original redirect shape. The selected locale never
+changes signed subjects, prices, consent, or frozen action request bodies.
+
+A negotiated one-time credit purchase returns its exact opaque `purchase_id`.
+Resuming an open checkout returns the same reference. Its read-only status endpoint
+revalidates actor, membership, current billing authority and exact Stripe account,
+credit account, customer, storefront and app key. Local completion plus the
+immutable webhook and credit-entry proof is the only success signal. Remote
+Checkout or PaymentIntent success remains processing until that commit exists.
+Status reads cannot create a charge, write financial evidence, or restart work.
+Consumers use bounded reads only while awaiting confirmation and offer explicit
+retry on unknown state. Schema and examples live in the public billing protocol.
