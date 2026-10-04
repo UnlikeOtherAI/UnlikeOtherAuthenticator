@@ -6,7 +6,7 @@ const adminAuth =
 const contractActionProjection =
   'Server-authored contract.actions.add_version; clients render it and never reconstruct eligibility.';
 const versionActionProjection =
-  'Server-authored version.actions.{activation_state,activate}. activation_state is active | ready | scheduled | superseded | contract_terminated; clients render these values and never reconstruct eligibility.';
+  'Server-authored version.actions.{activation_state,activate}. ready is a future-month draft eligible for activation; scheduled is an activated future-month version. Other states are active | superseded | contract_terminated. Clients render these values and never reconstruct eligibility.';
 const contractAndVersionActionProjection =
   contractActionProjection + ' Nested versions use ' + versionActionProjection;
 const invoiceActionProjection =

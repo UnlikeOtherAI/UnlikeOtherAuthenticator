@@ -293,6 +293,27 @@ test('billing product and contract selection, invoice guards and retry preserve 
   expect(fixture.unexpected).toEqual([]);
 });
 
+test('future manual terms activate from the contract doorway without changing this month', async ({
+  page,
+}) => {
+  const fixture = await installFixtures(page);
+  await page.goto('/billing?section=contracts&contract=contract-1');
+  await page.getByRole('button', { name: 'Activate', exact: true }).first().click();
+  const dialog = page.getByRole('dialog', { name: 'Activate version 2' });
+  await expect(dialog.getByText(/These terms start in 2026-11/)).toBeVisible();
+  await page.screenshot({ path: 'e2e/artifacts/future-contract-activation.png', fullPage: true });
+  await dialog.getByRole('checkbox', { name: /Fixture product/ }).check();
+  await dialog.getByRole('textbox', { name: 'Fixture product monthly amount in minor units' })
+    .fill('6000');
+  await dialog.getByRole('checkbox', { name: /I confirm these exact monthly prices/ }).check();
+  await dialog.getByRole('button', { name: 'Activate immutable terms' }).click();
+  await expect(page.getByText('Starts 2026-11').last()).toBeVisible();
+  expect(fixture.activations).toEqual([{ services: [
+    { service_id: 'billing-1', monthly_amount_minor: '6000' },
+  ] }]);
+  expect(fixture.unexpected).toEqual([]);
+});
+
 test('new billing terms show the prospective 30 percent default', async ({ page }) => {
   const fixture = await installFixtures(page);
   await page.goto('/billing?section=products');

@@ -3,12 +3,16 @@ import {
   BillingCollectionMode,
   BillingOrganisationContractStatus,
   BillingTariffMode,
+  BillingTariffSource,
   Prisma,
   type PrismaClient,
 } from '@prisma/client';
 
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
+import {
+  appendTariffTermEvent, lockTariffHistoryService,
+} from './billing-tariff-history.service.js';
 
 const KEY_PATTERN = /^[a-z0-9][a-z0-9._-]{0,99}$/;
 const MONTH_PATTERN = /^(\d{4})-(0[1-9]|1[0-2])$/;
@@ -250,10 +254,6 @@ async function activateInTransaction(
   if (contract.status === BillingOrganisationContractStatus.TERMINATED) {
     throw new AppError('BAD_REQUEST', 409, 'BILLING_CONTRACT_TERMINATED');
   }
-  const currentMonth = params.now.toISOString().slice(0, 7);
-  if (version.effectiveFromMonth > currentMonth) {
-    throw new AppError('BAD_REQUEST', 409, 'BILLING_CONTRACT_VERSION_NOT_EFFECTIVE');
-  }
   const previousTerms = currentVersion?.serviceTerms ?? [];
   const previousAssignmentIds = previousTerms.flatMap((term) =>
     term.tariffAssignmentId ? [term.tariffAssignmentId] : [],
@@ -275,7 +275,7 @@ async function activateInTransaction(
   const previousAssignmentById = new Map(previousAssignments.map((row) => [row.id, row]));
   if (
     previousTerms.some((term) => {
-      if (!term.tariffAssignmentId) return true;
+      if (!term.tariffAssignmentId) return false;
       const assignment = previousAssignmentById.get(term.tariffAssignmentId);
       return (
         !assignment ||
@@ -306,12 +306,19 @@ async function activateInTransaction(
     if (!matches) throw new AppError('BAD_REQUEST', 409, 'BILLING_CONTRACT_VERSION_ACTIVE');
     return version;
   }
+  if (version.effectiveFromMonth <= params.now.toISOString().slice(0, 7)) {
+    throw new AppError('BAD_REQUEST', 409,
+      'BILLING_CONTRACT_RETROACTIVE_TERMS_RECONCILIATION_REQUIRED');
+  }
   if (currentVersion && currentVersion.effectiveFromMonth >= version.effectiveFromMonth) {
     throw new AppError('BAD_REQUEST', 409, 'BILLING_CONTRACT_VERSION_SUPERSEDED');
   }
 
   const serviceIds = params.services.map((item) => item.serviceId);
   await lockStripeContractScopes(tx, contract.orgId, serviceIds);
+  for (const serviceId of [...new Set([
+    ...serviceIds, ...previousTerms.map((term) => term.serviceId),
+  ])].sort()) await lockTariffHistoryService(tx, serviceId);
   const [serviceRows, teamOverride, checkout, subscription] = await Promise.all([
     tx.billingService.findMany({
       where: { id: { in: serviceIds }, active: true },
@@ -389,48 +396,30 @@ async function activateInTransaction(
         createdByEmail: params.actor.email,
       },
     });
-    const assignment = await tx.billingTariffAssignment.upsert({
-      where: {
-        serviceId_scope_scopeKey: {
-          serviceId: requested.serviceId,
-          scope: BillingAssignmentScope.ORGANISATION,
-          scopeKey: contract.orgId,
-        },
-      },
-      create: {
-        serviceId: requested.serviceId,
-        tariffId: tariff.id,
-        orgId: contract.orgId,
-        teamId: null,
-        scope: BillingAssignmentScope.ORGANISATION,
-        scopeKey: contract.orgId,
-        createdByUserId: params.actor.userId ?? null,
-        createdByEmail: params.actor.email,
-      },
-      update: {
-        tariffId: tariff.id,
-        createdByUserId: params.actor.userId ?? null,
-        createdByEmail: params.actor.email,
-      },
-    });
     createdTerms.push(
       await tx.billingContractServiceTerm.create({
         data: {
           contractVersionId: version.id,
           serviceId: requested.serviceId,
           tariffId: tariff.id,
-          tariffAssignmentId: assignment.id,
+          tariffAssignmentId: null,
           monthlyAmountMinor: requested.amount,
         },
       }),
     );
   }
   const selectedServices = new Set(serviceIds);
-  const removedServiceIds: string[] = [];
   for (const previous of previousTerms) {
     if (selectedServices.has(previous.serviceId) || !previous.tariffAssignmentId) continue;
-    await tx.billingTariffAssignment.delete({ where: { id: previous.tariffAssignmentId } });
-    removedServiceIds.push(previous.serviceId);
+    await appendTariffTermEvent(tx, {
+      serviceId: previous.serviceId,
+      source: BillingTariffSource.ORGANISATION,
+      scopeKey: contract.orgId,
+      effectiveFromMonth: version.effectiveFromMonth,
+      tariffId: null,
+      actorEmail: params.actor.email,
+      reason: 'contract_service_removed',
+    });
   }
   await tx.billingOrganisationContract.update({
     where: { id: contract.id },
@@ -447,7 +436,7 @@ async function activateInTransaction(
         contract_id: contract.id,
         contract_version_id: version.id,
         service_ids: serviceIds,
-        removed_service_ids: removedServiceIds,
+        effective_from_month: version.effectiveFromMonth,
       },
     },
   });

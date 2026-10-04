@@ -78,7 +78,7 @@ function VersionAction({
   const label = {
     active: 'Active',
     ready: 'Unavailable',
-    scheduled: `Available ${version.effective_from_month}`,
+    scheduled: `Starts ${version.effective_from_month}`,
     superseded: 'Frozen',
     contract_terminated: 'Contract terminated',
   }[version.actions.activation_state];

@@ -34,7 +34,7 @@ const version: BillingContractVersion = {
   usage_markup_percent: '40.00',
   currency: 'USD',
   payment_terms_days: 30,
-  effective_from_month: '2026-08',
+  effective_from_month: '2026-11',
   services: [],
   actions: { activation_state: 'ready', activate: true },
   created_at: '2026-07-21T00:00:00.000Z',

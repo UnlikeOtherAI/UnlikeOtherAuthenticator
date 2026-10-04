@@ -15,7 +15,10 @@ import {
 import type { NormalizedMeteringPortfolio } from './billing-metering.types.js';
 import { runBillingSerializableTransaction } from './billing-serializable-transaction.service.js';
 import { assertUnambiguousCreditPayer } from './billing-credit-payer-period.service.js';
-import { resolveBillingTariffForMonth } from './billing-tariff-history.service.js';
+import {
+  lockTariffHistoryService,
+  resolveBillingTariffForMonth,
+} from './billing-tariff-history.service.js';
 
 function sameInstant(left: Date, right: string): boolean {
   return left.getTime() === Date.parse(right);
@@ -229,6 +232,9 @@ async function settleInTransaction(
     if (!service.active && portfolioProducts.has(service.identifier)) {
       throw new AppError('INTERNAL', 409, 'BILLING_CREDIT_SERVICE_INACTIVE');
     }
+  }
+  for (const serviceId of services.map((service) => service.id).sort()) {
+    await lockTariffHistoryService(tx, serviceId);
   }
 
   const newServiceIds = services

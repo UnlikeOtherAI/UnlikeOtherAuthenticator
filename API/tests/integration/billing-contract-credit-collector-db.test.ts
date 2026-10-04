@@ -207,6 +207,7 @@ describe.skipIf(!process.env.DATABASE_URL)('contract invoice canonical credit co
         creditAccountId: creditAccount.id,
         tariffId: tariff.id,
         serviceId: service.id,
+        teamId: team.id,
         appKeyId: appKey.id,
         billingMonth: '2026-06',
         currency: 'USD',

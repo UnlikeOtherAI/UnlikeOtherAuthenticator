@@ -6,7 +6,7 @@ async function currentContractTerm(
   tx: Prisma.TransactionClient,
   params: { organisationId: string; serviceId: string; assignmentId?: string },
 ) {
-  const contract = await tx.billingOrganisationContract.findFirst({
+  const contracts = await tx.billingOrganisationContract.findMany({
     where: {
       orgId: params.organisationId,
       status: BillingOrganisationContractStatus.ACTIVE,
@@ -15,8 +15,8 @@ async function currentContractTerm(
       versions: {
         where: { serviceTerms: { some: {} } },
         orderBy: [{ effectiveFromMonth: 'desc' }, { version: 'desc' }],
-        take: 1,
         select: {
+          effectiveFromMonth: true,
           serviceTerms: {
             where: {
               serviceId: params.serviceId,
@@ -29,7 +29,17 @@ async function currentContractTerm(
       },
     },
   });
-  return contract?.versions[0]?.serviceTerms[0] ?? null;
+  const currentMonth = new Date().toISOString().slice(0, 7);
+  for (const contract of contracts) {
+    const current = contract.versions.find((version) =>
+      version.effectiveFromMonth <= currentMonth);
+    const future = contract.versions.find((version) =>
+      version.effectiveFromMonth > currentMonth && version.serviceTerms.length > 0);
+    if (current?.serviceTerms[0] || future?.serviceTerms[0]) {
+      return current?.serviceTerms[0] ?? future?.serviceTerms[0];
+    }
+  }
+  return null;
 }
 
 export async function assertContractAssignmentWriteAllowed(

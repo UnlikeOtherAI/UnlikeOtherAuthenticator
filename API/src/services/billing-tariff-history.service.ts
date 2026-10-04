@@ -2,7 +2,8 @@ import { BillingTariffSource, Prisma, type BillingTariff } from '@prisma/client'
 
 import { AppError } from '../utils/errors.js';
 
-type Reader = Pick<Prisma.TransactionClient, 'billingService' | 'billingTariffTermEvent'>;
+type Reader = Pick<Prisma.TransactionClient,
+  'billingService' | 'billingTariffTermEvent' | 'billingOrganisationContractVersion'>;
 
 export type EffectiveTariff = {
   tariff: BillingTariff;
@@ -70,7 +71,33 @@ export async function resolveBillingTariffForMonth(
     where: { id: params.serviceId },
     select: { tariffHistoryFromMonth: true },
   });
-  if (!service || params.billingMonth < service.tariffHistoryFromMonth) {
+  if (!service) {
+    throw new AppError('NOT_FOUND', 404, 'BILLING_SERVICE_NOT_FOUND');
+  }
+  const contractVersions = await reader.billingOrganisationContractVersion.findMany({
+    where: {
+      effectiveFromMonth: { lte: params.billingMonth },
+      contract: { orgId: params.organisationId, status: { in: ['ACTIVE', 'TERMINATED'] } },
+      serviceTerms: { some: {} },
+    },
+    include: {
+      serviceTerms: {
+        where: { serviceId: params.serviceId },
+        include: { tariff: true },
+      },
+    },
+    orderBy: [{ effectiveFromMonth: 'desc' }, { version: 'desc' }],
+  });
+  const latestByContract = new Map<string, typeof contractVersions[number]>();
+  for (const item of contractVersions) {
+    if (!latestByContract.has(item.contractId)) latestByContract.set(item.contractId, item);
+  }
+  const claims = [...latestByContract.values()].filter((item) => item.serviceTerms.length > 0);
+  if (claims.length > 1) {
+    throw new AppError('INTERNAL', 409, 'BILLING_CONTRACT_TERMS_CONFLICT');
+  }
+  const contract = claims[0]?.serviceTerms[0];
+  if (params.billingMonth < service.tariffHistoryFromMonth && !contract) {
     throw new AppError('INTERNAL', 409, 'BILLING_TARIFF_HISTORY_RECONCILIATION_REQUIRED');
   }
   const choices = [
@@ -79,6 +106,11 @@ export async function resolveBillingTariffForMonth(
     { source: BillingTariffSource.SERVICE_DEFAULT, scopeKey: params.serviceId },
   ];
   for (const choice of choices) {
+    if (choice.source === BillingTariffSource.ORGANISATION && contract) {
+      return { tariff: contract.tariff, source: BillingTariffSource.ORGANISATION,
+        assignmentId: contract.tariffAssignmentId };
+    }
+    if (params.billingMonth < service.tariffHistoryFromMonth) continue;
     const event = await reader.billingTariffTermEvent.findFirst({
       where: {
         serviceId: params.serviceId,

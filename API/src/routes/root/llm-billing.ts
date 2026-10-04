@@ -337,7 +337,8 @@ Contract and version controls are also server-authored. A contract returns
 \`actions.{activation_state,activate}\`. The activation state is exactly \`active\`,
 \`ready\`, \`scheduled\`, \`superseded\`, or \`contract_terminated\`. Admin clients
 render those controls as returned and never decide locally which authored version may be
-activated.
+activated. A draft is ready only for a future effective month; scheduled means
+an activated version will take effect in that future month.
 
 Every customer-safe invoice DTO includes a server-authored \`actions\` projection.
 \`issue\` is \`issue\` only when UOA's database readiness function proves the active

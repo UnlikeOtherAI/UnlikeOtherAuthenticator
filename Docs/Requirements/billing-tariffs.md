@@ -42,8 +42,14 @@ decision before that month governing it. Removing an assignment appends an
 explicit removal so the next lower-precedence term applies. UOA resolves the
 requested billing month before rating credits or a customer statement; a
 read cannot establish that month's terms. Stripe subscriptions continue to use
-their checkout-pinned tariff, and manual invoices use their explicitly
-effective contract version.
+their checkout-pinned tariff. Activated manual contract service terms are
+resolved by their immutable contract version's explicit effective month for
+credit and statement rating as well as manual invoices. Competing contracts
+claiming one service/month are held for reconciliation. New manual contract
+versions may only be activated for a future UTC billing month. Activation
+records their immutable terms without moving the live assignment, so already
+dispatched but not yet settled usage in the current month keeps its price.
+Legacy activated versions retain their original effective months and terms.
 
 The migration starts legacy history only at a month for which the current
 pointer can be supported by the service creation, assignment update, and

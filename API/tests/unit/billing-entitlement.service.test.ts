@@ -95,6 +95,7 @@ function fakePrisma(params: {
         return null;
       }),
     },
+    billingOrganisationContractVersion: { findMany: vi.fn().mockResolvedValue([]) },
     billingServiceAccess: {
       upsert: vi.fn().mockResolvedValue({}),
     },
