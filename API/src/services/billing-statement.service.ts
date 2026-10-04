@@ -279,7 +279,7 @@ async function buildCanonicalBillingStatement(
       id: `monthly_${summary.tariff.id}`,
       kind: 'monthly_subscription',
       product: statementProduct,
-      label: `${tariff.name} ${copy.monthlySubscription}`,
+      label: `${tariff.name} – ${copy.monthlySubscription}`,
       detail: billingSubscriptionText(copy.tariffDetails, { key: summary.tariff.key, version: summary.tariff.version }),
       amount: exactMoney(monthlyAmount, currency),
     },

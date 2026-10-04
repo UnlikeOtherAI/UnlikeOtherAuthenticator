@@ -148,7 +148,7 @@ function teamCommercialLines(params: {
       id: `monthly_${params.tariff.id}_${params.teamId}`,
       kind: 'monthly_subscription',
       product: params.statementProduct,
-      label: `${params.tariff.name} ${copy.monthlySubscription}`,
+      label: `${params.tariff.name} – ${copy.monthlySubscription}`,
       detail: billingSubscriptionText(copy.tariffDetails, { key: params.tariff.key, version: params.tariff.version }),
       amount: exactMoney(monthlyAmount, params.tariff.currency),
     },

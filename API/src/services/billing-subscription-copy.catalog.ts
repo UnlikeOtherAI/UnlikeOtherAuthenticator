@@ -56,7 +56,7 @@ export const BILLING_SUBSCRIPTION_COPY = {
     cancellationAlreadyScheduled: 'Zrušení už je naplánováno.',
     onlyManagerCancel: 'Předplatné může zrušit pouze správce plateb.',
     noCancellableSubscription: 'Není aktivní předplatné, které lze zrušit.',
-    monthlySubscription: 'Měsíční předplatné',
+    monthlySubscription: 'měsíční předplatné',
     tariffDetails: 'Součást vašeho aktuálního tarifu.',
     monthlyAdjustment: 'Měsíční úprava',
     oneTimeAdjustment: 'Jednorázová úprava',
