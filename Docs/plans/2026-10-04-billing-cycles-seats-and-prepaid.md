@@ -292,3 +292,8 @@ baseline counts and reversal or backdating of a subscription end. It also
 updates both old and new scopes when an authoritative membership row moves,
 using ordered organisation locks. Public callers cannot invoke the privileged
 roster functions directly.
+
+Financial remainder allocation and invoice calculation use binary UTF-8 ordering
+for service, subject and addon identifiers, consistent with PostgreSQL `COLLATE
+"C"`. Locale settings cannot choose a different recipient for a scarce credit
+or change an invoice calculation digest.

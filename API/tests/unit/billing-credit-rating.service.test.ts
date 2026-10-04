@@ -78,6 +78,21 @@ function portfolio(lines: NormalizedMeteringPortfolio['lines']): NormalizedMeter
 }
 
 describe('canonical all-service credit rating', () => {
+  it('assigns a scarce remainder credit by stable binary identity order without losing liability', () => {
+    const users = ['a', 'A', 'ä'];
+    const rate = (order: string[]) => rateCreditPortfolio({
+      portfolio: portfolio(order.map((user) => line('deepwater', user, '0.001'))),
+      services: [deepwater], previousAllocations: [], balanceMicrocredits: 1_000_000n,
+      validTeamUserIds: new Set(users),
+    });
+    const first = rate(users);
+    expect(rate([...users].reverse())).toEqual(first);
+    expect(first[0]?.consumedMicrocredits).toBe(1_000_000n);
+    expect(first[0]?.remainingMicroMinor).toBe(200_000n);
+    expect(first[0]?.allocations.find((item) => item.consumedMicrocredits > 0n)?.userId).toBe('A');
+    expect(first[0]?.allocations.map((item) => item.userId)).toEqual(['A', 'a', 'ä']);
+  });
+
   it('charges 1560 credits for $1.20 provider cost at the central 30% rate', () => {
     const [result] = rateCreditPortfolio({
       portfolio: portfolio([line('deepwater', 'user_1', '1.20')]),

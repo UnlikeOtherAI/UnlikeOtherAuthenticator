@@ -57,12 +57,12 @@ function bucketKey(serviceId: string, userId: string | null): string {
 }
 
 function compareBuckets(left: Bucket, right: Bucket): number {
-  const service = left.service.identifier.localeCompare(right.service.identifier);
+  const service = Buffer.compare(Buffer.from(left.service.identifier), Buffer.from(right.service.identifier));
   if (service !== 0) return service;
   if (left.userId === right.userId) return 0;
   if (left.userId === null) return 1;
   if (right.userId === null) return -1;
-  return left.userId.localeCompare(right.userId);
+  return Buffer.compare(Buffer.from(left.userId), Buffer.from(right.userId));
 }
 
 function selectedCost(line: NormalizedMeteringPortfolio['lines'][number]): string | null {
@@ -279,6 +279,6 @@ export function rateCreditPortfolio(params: {
     });
   }
   return [...byService.values()].sort((left, right) =>
-    left.service.identifier.localeCompare(right.service.identifier),
+    Buffer.compare(Buffer.from(left.service.identifier), Buffer.from(right.service.identifier)),
   );
 }

@@ -237,7 +237,7 @@ export async function calculateBillingContractInvoice(
       };
     }),
   );
-  calculated.sort((left, right) => left.serviceIdentifier.localeCompare(right.serviceIdentifier));
+  calculated.sort((left, right) => Buffer.compare(Buffer.from(left.serviceIdentifier), Buffer.from(right.serviceIdentifier)));
   const subtotalMinor = calculated.reduce((total, line) => total + line.amountMinor, 0n);
   const creditEvidence = calculated.flatMap((line) => line.credits);
   const creditsAppliedMicrocredits = creditEvidence.reduce(
@@ -252,8 +252,9 @@ export async function calculateBillingContractInvoice(
   const addonEvidence = calculated
     .flatMap((line) => line.addons)
     .sort((left, right) =>
-      `${left.offerKey}:${left.scope}:${left.subscriptionId}`.localeCompare(
-        `${right.offerKey}:${right.scope}:${right.subscriptionId}`,
+      Buffer.compare(
+        Buffer.from(`${left.offerKey}:${left.scope}:${left.subscriptionId}`),
+        Buffer.from(`${right.offerKey}:${right.scope}:${right.subscriptionId}`),
       ),
     );
   if (subtotalMinor > MAX_INT64) {
