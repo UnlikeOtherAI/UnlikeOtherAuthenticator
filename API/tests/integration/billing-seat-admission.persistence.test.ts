@@ -6,6 +6,7 @@ import { getAdminAuthDomain } from '../../src/config/env.js';
 import {
   changeFixedSeatCapacity, listSeatSubscriptions,
 } from '../../src/services/billing-seat-capacity.service.js';
+import { observedBillingTime } from '../../src/services/billing-seat-observed-time.service.js';
 
 const enabled = Boolean(process.env.DATABASE_URL);
 let db: NonNullable<Awaited<ReturnType<typeof createTestDb>>>;
@@ -46,7 +47,7 @@ async function makeSeatSubscription(
     monthlyAmountMinor: 1000n,
   } });
   await prisma.$transaction(async (tx) => {
-    const now = new Date();
+    const now = await observedBillingTime(tx);
     await tx.billingSeatSubscription.create({ data: {
       id, contractServiceTermId: term.id, serviceId: service.id, tariffId: tariff.id,
       orgId, teamId: options.scope === 'TEAM' ? (options.team ?? teamId) : null,
@@ -105,6 +106,68 @@ describe.skipIf(!enabled)('authoritative seat admission and evidence', () => {
     expect(await prisma.billingSeatMembershipInterval.count({
       where: { seatSubscriptionId: 'seat_auto_org', userId: 'seat_person_one', endsAt: null },
     })).toBe(1);
+  });
+
+  it('starts and stops seat liability when durable membership becomes visible', async () => {
+    const userId = 'seat_commit_person';
+    await addUser(userId);
+    const observer = new PrismaClient({ datasources: { db: { url: db.databaseUrl } } });
+    try {
+      await expect(prisma.$transaction(async (tx) => {
+        await tx.teamMember.create({ data: { teamId, userId } });
+        throw new Error('simulated rollback');
+      })).rejects.toThrow('simulated rollback');
+      expect(await prisma.billingSeatMembershipInterval.count({ where: {
+        seatSubscriptionId: 'seat_auto_team', userId,
+      } })).toBe(0);
+      const joinLowerBound = await prisma.$transaction(async (tx) => {
+        await tx.teamMember.create({ data: { teamId, userId } });
+        expect(await observer.teamMember.findUnique({ where: {
+          teamId_userId: { teamId, userId },
+        } })).toBeNull();
+        expect(await observer.billingSeatMembershipInterval.count({ where: {
+          seatSubscriptionId: 'seat_auto_team', userId,
+        } })).toBe(0);
+        await tx.$queryRaw`SELECT 1 AS slept FROM pg_sleep(0.1)`;
+        const [clock] = await tx.$queryRaw<Array<{ at: Date }>>`
+          SELECT (clock_timestamp() AT TIME ZONE 'UTC')::timestamp(3) AS at
+        `;
+        return clock!.at;
+      });
+      const joined = await prisma.billingSeatMembershipInterval.findFirstOrThrow({
+        where: { seatSubscriptionId: 'seat_auto_team', userId, endsAt: null },
+      });
+      expect(joined.startsAt.getTime()).toBeGreaterThanOrEqual(joinLowerBound.getTime());
+      const leaveLowerBound = await prisma.$transaction(async (tx) => {
+        await tx.teamMember.update({ where: { teamId_userId: { teamId, userId } },
+          data: { status: 'REMOVED' } });
+        expect((await observer.teamMember.findUniqueOrThrow({ where: {
+          teamId_userId: { teamId, userId },
+        } })).status).toBe('ACTIVE');
+        expect((await observer.billingSeatMembershipInterval.findUniqueOrThrow({
+          where: { id: joined.id },
+        })).endsAt).toBeNull();
+        await tx.$queryRaw`SELECT 1 AS slept FROM pg_sleep(0.1)`;
+        const [clock] = await tx.$queryRaw<Array<{ at: Date }>>`
+          SELECT (clock_timestamp() AT TIME ZONE 'UTC')::timestamp(3) AS at
+        `;
+        return clock!.at;
+      });
+      const left = await prisma.billingSeatMembershipInterval.findUniqueOrThrow({ where: { id: joined.id } });
+      expect(left.endsAt!.getTime()).toBeGreaterThanOrEqual(leaveLowerBound.getTime());
+      await prisma.teamMember.delete({ where: { teamId_userId: { teamId, userId } } });
+      const intervals = await prisma.billingSeatMembershipInterval.count({ where: {
+        seatSubscriptionId: 'seat_auto_team', userId,
+      } });
+      await prisma.$transaction(async (tx) => {
+        await tx.teamMember.create({ data: { teamId, userId } });
+        await tx.teamMember.delete({ where: { teamId_userId: { teamId, userId } } });
+      });
+      expect(await prisma.billingSeatMembershipInterval.count({ where: {
+        seatSubscriptionId: 'seat_auto_team', userId,
+      } })).toBe(intervals);
+      await prisma.orgMember.delete({ where: { orgId_userId: { orgId, userId } } });
+    } finally { await observer.$disconnect(); }
   });
 
   it('enforces organisation and team fixed limits including pending invitations', async () => {
@@ -252,6 +315,28 @@ describe.skipIf(!enabled)('authoritative seat admission and evidence', () => {
     })).serviceId;
     const [summary] = await listSeatSubscriptions(serviceId, { prisma });
     expect(summary.current_capacity).toBe(5);
+
+    let releaseLock: () => void = () => undefined;
+    let signalLocked: () => void = () => undefined;
+    const lockHeld = new Promise<void>((resolve) => { releaseLock = resolve; });
+    const locked = new Promise<void>((resolve) => { signalLocked = resolve; });
+    const holding = prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM organisations WHERE id = ${orgId} FOR UPDATE`;
+      signalLocked();
+      await lockHeld;
+      return observedBillingTime(tx);
+    });
+    try {
+      await locked;
+      const waiting = changeFixedSeatCapacity({ subscriptionId: 'seat_fixed_org',
+        quantity: 6, actor: { userId: ownerId, tokenVersion: 0 },
+      }, { prisma });
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      releaseLock();
+      const lowerBound = await holding;
+      const revision = await waiting;
+      expect(new Date(revision.effective_at).getTime()).toBeGreaterThanOrEqual(lowerBound.getTime());
+    } finally { releaseLock(); }
 
     await makeSeatSubscription('seat_fixed_full_month', {
       policy: 'FIXED', scope: 'TEAM', team: emptyTeam.id,

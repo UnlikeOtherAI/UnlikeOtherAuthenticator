@@ -331,3 +331,17 @@ Financial remainder allocation and invoice calculation use binary UTF-8 ordering
 for service, subject and addon identifiers, consistent with PostgreSQL `COLLATE
 "C"`. Locale settings cannot choose a different recipient for a scarce credit
 or change an invoice calculation digest.
+
+Membership interval changes use the UTC clock at deferred transaction completion.
+An uncommitted join does not yet grant durable membership, and an uncommitted
+removal does not yet withdraw it. Using the earlier SQL statement timestamp
+would bill a join before another session can see it and stop billing a removal
+while the prior membership remains visible. Rollbacks create no seat evidence;
+a join and leave entirely within one transaction creates no billable interval.
+The seat persistence regression checks outside-session visibility, delayed
+commit timestamps, rollback and same-transaction join/leave.
+
+Fixed capacity revisions also use PostgreSQL's observed UTC clock after the
+organisation/subscription locks have been acquired. Application-host clock skew
+or a long wait for those locks cannot make a just-created revision future-dated
+relative to the admission trigger. Read-side current capacity uses the same clock.
