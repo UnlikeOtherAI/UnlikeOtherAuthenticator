@@ -39,13 +39,15 @@ const scope = {
 const totals = {
   type: 'object', additionalProperties: false,
   required: ['currency', 'gross_total', 'tax', 'credits_applied', 'voided_amount',
-    'total_due', 'total_paid', 'write_off', 'outstanding'],
+    'total_due', 'total_paid', 'refunded_amount', 'disputed_amount',
+    'write_off', 'outstanding'],
   properties: {
     currency: { type: 'string', pattern: '^[A-Z]{3}$' },
     gross_total: nonnegativeMoney,
     tax: { anyOf: [nonnegativeMoney, { type: 'null' }] },
     credits_applied: nonnegativeMoney, voided_amount: nonnegativeMoney,
     total_due: nonnegativeMoney, total_paid: nonnegativeMoney,
+    refunded_amount: nonnegativeMoney, disputed_amount: nonnegativeMoney,
     write_off: nonnegativeMoney, outstanding: nonnegativeMoney,
   },
 } as const;
@@ -53,7 +55,8 @@ const summaryProperties = {
   invoice_id: id,
   kind: { enum: ['prepaid_purchase', 'monthly_service', 'adjustment', 'credit_note'] },
   status: { enum: ['pending_document', 'issued', 'paid', 'partially_paid',
-    'voided', 'refunded', 'written_off'] },
+    'voided', 'refunded', 'partially_refunded', 'disputed',
+    'partially_disputed', 'written_off'] },
   number: { anyOf: [id, { type: 'null' }] }, charged_at: datetime,
   issued_at: { anyOf: [datetime, { type: 'null' }] }, scope,
   product_identifiers: { type: 'array', minItems: 1, items: id, uniqueItems: true },

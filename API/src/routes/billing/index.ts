@@ -4,6 +4,7 @@ import { registerBillingCancellationRoutes } from './cancellation.js';
 import { registerBillingCreditFundingActionRoutes } from './credit-funding-actions.js';
 import { registerBillingCreditsRoute } from './credits.js';
 import { registerBillingCycleRoutes } from './cycles.js';
+import { registerBillingCustomerInvoiceRoutes } from './customer-invoices.js';
 import { registerCustomerStatementRoutes } from './customer-statement.js';
 import { registerEffectiveTariffRoute } from './effective-tariff.js';
 import { registerBillingOrgResponsibilityRoutes } from './org-responsibility.js';
@@ -23,6 +24,7 @@ export function registerBillingRoutes(app: FastifyInstance): void {
   registerBillingCreditFundingActionRoutes(app);
   registerBillingCreditsRoute(app);
   registerBillingCycleRoutes(app);
+  registerBillingCustomerInvoiceRoutes(app);
   registerBillingRecurringAddonsRoute(app);
   registerBillingFundingArtifactRoutes(app);
   registerCustomerStatementRoutes(app);

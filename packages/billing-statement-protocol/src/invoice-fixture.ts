@@ -24,6 +24,7 @@ const summary = {
     tax: money('0', '0'), credits_applied: money('0', '0'),
     voided_amount: money('0', '0'),
     total_due: money('50', '5000'), total_paid: money('50', '5000'),
+    refunded_amount: money('0', '0'), disputed_amount: money('0', '0'),
     write_off: money('0', '0'),
     outstanding: money('0', '0') },
   document_available: true,

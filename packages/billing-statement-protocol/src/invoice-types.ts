@@ -27,6 +27,8 @@ export type BillingCustomerInvoiceTotals = {
   voided_amount: BillingCustomerInvoiceMoney;
   total_due: BillingCustomerInvoiceMoney;
   total_paid: BillingCustomerInvoiceMoney;
+  refunded_amount: BillingCustomerInvoiceMoney;
+  disputed_amount: BillingCustomerInvoiceMoney;
   write_off: BillingCustomerInvoiceMoney;
   outstanding: BillingCustomerInvoiceMoney;
 };
@@ -34,7 +36,8 @@ export type BillingCustomerInvoiceSummaryV1 = {
   invoice_id: string;
   kind: 'prepaid_purchase' | 'monthly_service' | 'adjustment' | 'credit_note';
   status: 'pending_document' | 'issued' | 'paid' | 'partially_paid' |
-    'voided' | 'refunded' | 'written_off';
+    'voided' | 'refunded' | 'partially_refunded' | 'disputed' |
+    'partially_disputed' | 'written_off';
   number: string | null;
   charged_at: string;
   issued_at: string | null;
