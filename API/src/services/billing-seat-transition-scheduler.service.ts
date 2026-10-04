@@ -15,7 +15,8 @@ export async function runSeatTransitionCycle(deps?: {
   const due = await prisma.billingSeatSubscription.findMany({
     where: { contractServiceTermId: { not: null }, endedAt: null,
       commercialEndsAt: { lte: now } },
-    select: { id: true }, orderBy: [{ commercialEndsAt: 'asc' }, { id: 'asc' }],
+    select: { id: true, orgId: true },
+    orderBy: [{ commercialEndsAt: 'asc' }, { id: 'asc' }],
     take: 100,
   });
   let closed = 0;
@@ -23,6 +24,11 @@ export async function runSeatTransitionCycle(deps?: {
     for (let attempt = 0; attempt < 3; attempt += 1) {
       try {
         const changed = await prisma.$transaction(async (tx) => {
+          // Admission and capacity changes lock the organisation first. Keep
+          // the same order before the seat row's deferred refresh trigger.
+          await tx.$queryRaw`
+            SELECT id FROM organisations WHERE id = ${row.orgId} FOR UPDATE
+          `;
           const observedAt = await observedBillingTime(tx);
           return tx.billingSeatSubscription.updateMany({
             where: { id: row.id, endedAt: null,
