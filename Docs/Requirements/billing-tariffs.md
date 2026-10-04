@@ -1138,3 +1138,17 @@ Checkout or PaymentIntent success remains processing until that commit exists.
 Status reads cannot create a charge, write financial evidence, or restart work.
 Consumers use bounded reads only while awaiting confirmation and offer explicit
 retry on unknown state. Schema and examples live in the public billing protocol.
+
+### Negotiated customer language and hosted pages (2026-10-04)
+
+Billing presentation clients send `x-uoa-billing-presentation: 1.5.0` and one
+supported `x-uoa-billing-locale` on reads, previews and actions. The locale stays
+outside the signed subject and frozen action body. Unsupported negotiation is
+rejected before a payment action; clients without it keep English projections.
+The same locale is passed to new Stripe Checkout, card setup and billing portal
+sessions (`en-US` maps to Stripe's `en`). Existing hosted sessions are resumed,
+not replaced just to change their language. Subscription and recurring Checkout
+leases persist the initial locale so even a lost-response retry in another
+language retains identical Stripe idempotency parameters. Legacy leases keep
+NULL and omit locale. Portal locale variants have separate session idempotency
+keys; opening a portal does not create a purchase.

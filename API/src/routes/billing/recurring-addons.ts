@@ -1,3 +1,4 @@
+import { readBillingPresentation } from './billing-presentation.js';
 import type { FastifyInstance } from 'fastify';
 import { Ajv2020 } from 'ajv/dist/2020.js';
 import * as ajvFormats from 'ajv-formats';
@@ -65,8 +66,10 @@ export function registerBillingRecurringAddonsRoute(app: FastifyInstance): void 
       const body = BillingSubjectRequestSchema.parse(request.body);
       const credential = request.billingAppKey;
       if (!credential) throw new AppError('UNAUTHORIZED', 401);
+      const presentation = readBillingPresentation(request.headers);
       const addons = await getBillingRecurringAddons({
         credential,
+        ...(presentation.enabled ? { locale: presentation.locale } : {}),
         actorToken: readBillingActorHeader(request.headers['x-uoa-actor']),
         endpoint: BILLING_RECURRING_ADDONS_READ_PATH,
         request: {
@@ -92,8 +95,10 @@ export function registerBillingRecurringAddonsRoute(app: FastifyInstance): void 
       const body = CheckoutRequestSchema.parse(request.body);
       const credential = request.billingAppKey;
       if (!credential) throw new AppError('UNAUTHORIZED', 401);
+      const presentation = readBillingPresentation(request.headers);
       const result = await createRecurringAddonCheckout({
         credential,
+        ...(presentation.enabled ? { locale: presentation.locale } : {}),
         actorToken: readBillingActorHeader(request.headers['x-uoa-actor']),
         endpoint: BILLING_RECURRING_ADDONS_CHECKOUT_PATH,
         request: {
@@ -120,8 +125,10 @@ export function registerBillingRecurringAddonsRoute(app: FastifyInstance): void 
       const body = CancellationPreviewRequestSchema.parse(request.body);
       const credential = request.billingAppKey;
       if (!credential) throw new AppError('UNAUTHORIZED', 401);
+      const presentation = readBillingPresentation(request.headers);
       const result = await createRecurringAddonCancellationPreview({
         credential,
+        ...(presentation.enabled ? { locale: presentation.locale } : {}),
         actorToken: readBillingActorHeader(request.headers['x-uoa-actor']),
         endpoint: BILLING_RECURRING_ADDONS_CANCELLATION_PREVIEW_PATH,
         request: {
@@ -148,8 +155,10 @@ export function registerBillingRecurringAddonsRoute(app: FastifyInstance): void 
       const body = CancellationConfirmRequestSchema.parse(request.body);
       const credential = request.billingAppKey;
       if (!credential) throw new AppError('UNAUTHORIZED', 401);
+      const presentation = readBillingPresentation(request.headers);
       const result = await confirmRecurringAddonCancellation({
         credential,
+        ...(presentation.enabled ? { locale: presentation.locale } : {}),
         actorToken: readBillingActorHeader(request.headers['x-uoa-actor']),
         endpoint: BILLING_RECURRING_ADDONS_CANCELLATION_CONFIRM_PATH,
         request: {

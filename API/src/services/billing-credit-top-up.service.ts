@@ -1,6 +1,8 @@
 import { BillingCreditCheckoutStatus, type PrismaClient } from '@prisma/client';
 import { createHash } from 'node:crypto';
 import type Stripe from 'stripe';
+import type { BillingCustomerLocale } from '../contracts/billing-statement-v1.js';
+import { stripeBillingLocale } from './billing-stripe-locale.js';
 
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
@@ -113,6 +115,7 @@ export async function createBillingCreditTopUpCheckout(
     credential: VerifiedBillingAppKey;
     endpoint: BillingActorEndpoint;
     includePurchaseId?: boolean;
+    locale?: BillingCustomerLocale;
   },
   deps?: Dependencies,
 ): Promise<{ redirect_url: string; purchase_id?: string }> {
@@ -290,6 +293,7 @@ export async function createBillingCreditTopUpCheckout(
   const session = await context.stripe.checkout.sessions.create(
     {
       mode: 'payment',
+      ...(params.locale ? { locale: stripeBillingLocale(params.locale) } : {}),
       customer: context.customer.stripeCustomerId as string,
       client_reference_id: checkout.id,
       success_url: returns.checkoutSuccess,

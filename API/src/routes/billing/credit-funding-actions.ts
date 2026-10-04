@@ -20,6 +20,7 @@ import { createBillingCreditTopUpCheckout } from '../../services/billing-credit-
 import { AppError } from '../../utils/errors.js';
 import { BillingSubjectRequestSchema, readBillingActorHeader } from './billing-request.js';
 import type { BillingActorEndpoint } from '../../services/billing-actor-audience.service.js';
+import type { BillingCustomerLocale } from '../../contracts/billing-statement-v1.js';
 import { readBillingPresentation } from './billing-presentation.js';
 
 const OfferRequestSchema = BillingSubjectRequestSchema.extend({
@@ -49,10 +50,13 @@ function actionContext(
   actorToken: string;
   endpoint: BillingActorEndpoint;
   credential: NonNullable<FastifyRequest['billingAppKey']>;
+  locale?: BillingCustomerLocale;
 } {
   const credential = request.billingAppKey;
   if (!credential) throw new AppError('UNAUTHORIZED', 401);
+  const presentation = readBillingPresentation(request.headers);
   return {
+    ...(presentation.enabled ? { locale: presentation.locale } : {}),
     credential,
     endpoint,
     actorToken: readBillingActorHeader(request.headers['x-uoa-actor']),

@@ -1,3 +1,5 @@
+import type { BillingCustomerLocale } from '../contracts/billing-statement-v1.js';
+import { stripeCheckoutLocale } from './billing-stripe-locale.js';
 import { requireIdentityEmail } from './entity-lifecycle.service.js';
 import {
   BillingCollectionMode,
@@ -88,6 +90,7 @@ export async function createStripeCheckoutSession(
     actorToken: string;
     credential: VerifiedBillingAppKey;
     endpoint: BillingActorEndpoint;
+    locale?: BillingCustomerLocale;
   },
   deps?: {
     prisma?: PrismaClient;
@@ -307,6 +310,7 @@ export async function createStripeCheckoutSession(
     const createData = {
       accountId: account.id,
       appKeyId: params.credential.id,
+      checkoutLocale: params.locale ?? null,
       customerId: customer.id,
       serviceId: params.credential.service.id,
       tariffId: details.tariff.id,
@@ -381,6 +385,7 @@ export async function createStripeCheckoutSession(
   const session = await stripe.checkout.sessions.create(
     {
       mode: 'subscription',
+      ...stripeCheckoutLocale(checkout.checkoutLocale),
       customer: customer.stripeCustomerId,
       client_reference_id: checkout.id,
       success_url: successUrl,

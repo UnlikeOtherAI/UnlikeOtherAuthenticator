@@ -1,3 +1,5 @@
+import type { BillingCustomerLocale } from '../../contracts/billing-statement-v1.js';
+import { readBillingPresentation } from './billing-presentation.js';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
@@ -98,10 +100,13 @@ function requestContext(
   actorToken: string;
   endpoint: BillingActorEndpoint;
   credential: NonNullable<FastifyRequest['billingAppKey']>;
+  locale?: BillingCustomerLocale;
 } {
   const credential = request.billingAppKey;
   if (!credential) throw new AppError('UNAUTHORIZED', 401);
+  const presentation = readBillingPresentation(request.headers);
   return {
+    ...(presentation.enabled ? { locale: presentation.locale } : {}),
     request: {
       product: body.product,
       organisationId: body.organisation_id,

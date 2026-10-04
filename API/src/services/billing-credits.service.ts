@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@prisma/client';
+import type { BillingCustomerLocale } from '../contracts/billing-statement-v1.js';
 
 import type { BillingActorEndpoint } from './billing-actor-audience.service.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
@@ -48,6 +49,7 @@ export async function getBillingCredits(
     actorToken: string;
     credential: VerifiedBillingAppKey;
     endpoint: BillingActorEndpoint;
+    locale?: BillingCustomerLocale;
   },
   deps?: Dependencies,
 ) {
@@ -130,6 +132,7 @@ export async function getBillingCredits(
     deps?.resolveActionReadiness ?? resolveBillingCreditActionReadiness
   )({ collection, credential: params.credential, data });
   return buildBillingCreditsProjection({
+    locale: params.locale,
     credential: params.credential,
     collection,
     viewer,

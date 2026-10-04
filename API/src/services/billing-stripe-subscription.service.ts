@@ -1,3 +1,5 @@
+import type { BillingCustomerLocale } from '../contracts/billing-statement-v1.js';
+import { stripeBillingLocale } from './billing-stripe-locale.js';
 import {
   BillingAssignmentScope,
   MembershipStatus,
@@ -319,6 +321,7 @@ export async function createStripePortalSession(
     actorToken: string;
     credential: VerifiedBillingAppKey;
     endpoint: BillingActorEndpoint;
+    locale?: BillingCustomerLocale;
   },
   deps?: Dependencies,
 ): Promise<{ portal_url: string }> {
@@ -370,8 +373,9 @@ export async function createStripePortalSession(
     {
       customer: subscription.customer.stripeCustomerId,
       return_url: returnUrl,
+      ...(params.locale ? { locale: stripeBillingLocale(params.locale) } : {}),
     },
-    { idempotencyKey: `uoa:billing-portal:${action.id}` },
+    { idempotencyKey: `uoa:billing-portal:${action.id}${params.locale ? `:${params.locale}` : ''}` },
   );
   assertStripeObjectLivemode(session, account.livemode);
   if (!session.url.startsWith('https://')) {

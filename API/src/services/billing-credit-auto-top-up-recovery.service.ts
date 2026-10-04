@@ -4,6 +4,7 @@ import {
   type PrismaClient,
 } from '@prisma/client';
 import type Stripe from 'stripe';
+import type { BillingCustomerLocale } from '../contracts/billing-statement-v1.js';
 
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
@@ -127,6 +128,7 @@ export async function recoverBillingCreditAutoTopUp(
     actorToken: string;
     credential: VerifiedBillingAppKey;
     endpoint: BillingActorEndpoint;
+    locale?: BillingCustomerLocale;
   },
   deps?: Dependencies,
 ): Promise<{ redirect_url: string }> {
@@ -264,6 +266,7 @@ export async function recoverBillingCreditAutoTopUp(
       // against that endpoint — never against the setup endpoint it delegates to.
       endpoint: params.endpoint,
       recovery: true,
+      locale: params.locale,
     },
     { prisma },
   );
