@@ -465,6 +465,69 @@ describe.skipIf(!enabled)('prepaid dispatch liability in PostgreSQL', () => {
     }
   });
 
+  it('keeps a manager-created run cap owned by its captured run owner', async () => {
+    const member = 'usr_prepaid_budget_member';
+    const runId = 'run-manager-created-member-budget';
+    const scope = { product: 'deepwater', organization_id: ids.org, team_id: ids.team,
+      scope_type: 'run' as const, scope_id: runId,
+      created_at: '2026-10-04T18:00:00.000Z', owner_sub: member };
+    const auth = async (subject: string, endpoint: string, nativeScope?: typeof scope) => ({
+      credential: actorCredential,
+      actorToken: await new SignJWT({ product: 'deepwater', organisation_id: ids.org,
+        team_id: ids.team, tv: 0,
+        ...(nativeScope ? { native_scope: nativeScope } : {}) })
+        .setProtectedHeader({ alg: 'RS256', kid: 'prepaid-test-key', typ: 'uoa-actor+jwt' })
+        .setIssuer(issuer).setAudience(`${issuer}${endpoint}`).setSubject(subject)
+        .setJti(`budget-${crypto.randomUUID()}`).setIssuedAt()
+        .setExpirationTime('45s').sign(signingKey),
+      request: { product: 'deepwater', organisationId: ids.org,
+        teamId: ids.team, userId: subject },
+    });
+    await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw(Prisma.sql`INSERT INTO users (id, email, user_key, name)
+        VALUES (${member}, 'budget-member@example.com', 'budget-member@example.com', 'Budget Member')`);
+      await tx.$executeRaw(Prisma.sql`INSERT INTO org_members
+        (id, org_id, user_id, domain, role, updated_at)
+        VALUES ('org-member-budget', ${ids.org}, ${member}, 'prepaid.example.com', 'member', CURRENT_TIMESTAMP)`);
+      await tx.$executeRaw(Prisma.sql`INSERT INTO team_members
+        (id, team_id, user_id, team_role, updated_at)
+        VALUES ('team-member-budget', ${ids.team}, ${member}, 'member', CURRENT_TIMESTAMP)`);
+    });
+    try {
+      await registerNativeBudgetScope(await auth(member,
+        '/billing/v1/credit-budgets/scopes', scope), scope, { prisma });
+      const write = { product: scope.product, organization_id: scope.organization_id,
+        team_id: scope.team_id, scope_type: scope.scope_type, scope_id: scope.scope_id,
+        period: 'per_run' as const, mode: 'enforce' as const,
+        limit_credits: '1', warn_threshold_percent: 80,
+        block_humans_when_over: true, degrade_model: null, degrade_provider: null };
+      const policy = await putCreditBudget(await auth(ids.user,
+        '/billing/v1/credit-budgets'), write, { prisma });
+      expect((await prisma.billingCreditBudgetPolicy.findUniqueOrThrow({
+        where: { id: policy.policy_id },
+      })).ownerUserId).toBe(member);
+      const listed = await listCreditBudgets(await auth(member,
+        '/billing/v1/credit-budgets'), { prisma });
+      expect(listed.budgets).toEqual([expect.objectContaining({
+        policy_id: policy.policy_id, scope_id: runId,
+      })]);
+      const tightened = await putCreditBudget(await auth(member,
+        '/billing/v1/credit-budgets'), { ...write, limit_credits: '0.5',
+        expected_version: policy.version }, { prisma });
+      expect(tightened.limit_credits).toBe('0.5');
+      await expect(putCreditBudget(await auth(member,
+        '/billing/v1/credit-budgets'), { ...write, limit_credits: '2',
+        expected_version: tightened.version }, { prisma }))
+        .rejects.toThrow('BUDGET_RUN_OWNER_REQUIRED');
+    } finally {
+      await prisma.billingCreditBudgetPolicy.deleteMany({ where: { scopeId: runId } });
+      await prisma.billingCreditBudgetNativeScope.deleteMany({ where: { scopeId: runId } });
+      await prisma.$executeRaw(Prisma.sql`DELETE FROM team_members WHERE user_id = ${member}`);
+      await prisma.$executeRaw(Prisma.sql`DELETE FROM org_members WHERE user_id = ${member}`);
+      await prisma.$executeRaw(Prisma.sql`DELETE FROM users WHERE id = ${member}`);
+    }
+  });
+
   it('holds active credit, accepts trusted zero, and tombstones a lost request', async () => {
     await reserveFixture(99);
     const tariff = await prisma.billingTariff.findUniqueOrThrow({ where: { id: ids.tariff } });

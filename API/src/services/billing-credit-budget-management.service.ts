@@ -243,6 +243,10 @@ export async function putCreditBudget(auth: Auth, input: BillingCreditBudgetWrit
       && (!source || source.teamId !== input.team_id)) {
       throw new AppError('FORBIDDEN', 403, 'BUDGET_SCOPE_EVIDENCE_MISSING');
     }
+    if (input.scope_type === 'run' && existing
+      && existing.ownerUserId !== source?.ownerUserId) {
+      throw new AppError('BAD_REQUEST', 409, 'BUDGET_RUN_OWNER_CONFLICT');
+    }
     if (!manager) {
       if (input.scope_type !== 'run' || input.mode !== 'enforce') {
         throw new AppError('FORBIDDEN', 403, 'BUDGET_MANAGER_REQUIRED');
@@ -264,7 +268,7 @@ export async function putCreditBudget(auth: Auth, input: BillingCreditBudgetWrit
       warnThresholdPercent: input.warn_threshold_percent,
       blockHumansWhenOver: input.block_humans_when_over,
       degradeModel: input.degrade_model, degradeProvider: input.degrade_provider,
-      ownerUserId: input.scope_type === 'run' ? existing?.ownerUserId ?? auth.request.userId : null,
+      ownerUserId: input.scope_type === 'run' ? source?.ownerUserId : null,
       disabledAt: null };
     const row = existing
       ? await tx.billingCreditBudgetPolicy.update({ where: { id: existing.id },
