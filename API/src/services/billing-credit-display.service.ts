@@ -47,9 +47,6 @@ export function billingWholeCredits(microcredits: bigint): bigint {
 }
 
 export function billingCreditAmount(microcredits: bigint): BillingCreditAmount {
-  if (microcredits % 10n !== 0n) {
-    throw new AppError('INTERNAL', 500, 'BILLING_CREDIT_PRECISION_INVALID');
-  }
   const wholeCredits = billingWholeCredits(microcredits);
   const credits = wholeCredits.toString();
   const usd = scaledDecimal(wholeCredits, 3);

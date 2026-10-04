@@ -1,4 +1,4 @@
-import { BillingStripeMeterEventState, Prisma, type PrismaClient } from '@prisma/client';
+import { BillingStripeMeterEventState, BillingUsagePaymentMode, Prisma, type PrismaClient } from '@prisma/client';
 import { createHash } from 'node:crypto';
 import type Stripe from 'stripe';
 
@@ -6,6 +6,7 @@ import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import { fetchLedgerMeteringUsage } from './billing-ledger-collector.service.js';
 import { settleSubscriptionCreditLiability } from './billing-credit-liability.service.js';
+import { assertPrepaidUsageCovered } from './billing-prepaid-coverage.service.js';
 import type { NormalizedMeteringUsage } from './billing-metering.types.js';
 import {
   assertStripeObjectLivemode,
@@ -391,6 +392,7 @@ export async function exportStripeUsage(
       teamId: true,
       serviceId: true,
       tariffId: true,
+      tariff: { select: { usagePaymentMode: true } },
       service: { select: { identifier: true } },
     },
   });
@@ -408,6 +410,17 @@ export async function exportStripeUsage(
   });
   const now = deps?.now?.() ?? new Date();
   stripeUsageMeterTimestamp(new Date(usage.snapshot.capturedAt), params.billingMonth, now);
+  if (subscription.tariff.usagePaymentMode === BillingUsagePaymentMode.PREPAID) {
+    await assertPrepaidUsageCovered({ usage, serviceId: subscription.serviceId,
+      product: subscription.service.identifier, organisationId: subscription.orgId,
+      teamId: subscription.teamId, billingMonth: params.billingMonth }, prisma);
+    const prior = await prisma.billingStripeUsageExport.count({
+      where: { subscriptionId: subscription.id, billingMonth: params.billingMonth },
+    });
+    if (prior !== 0) throw new AppError('INTERNAL', 409, 'PREPAID_STRIPE_EXPORT_CONFLICT');
+    return { ledgerSnapshotCursor: usage.snapshot.cursor,
+      billingMonth: params.billingMonth, exports: [] };
+  }
   const configured = deps?.stripe ? undefined : requireStripeBillingEnabled();
   const stripe = deps?.stripe ?? configured?.client;
   if (!stripe) {

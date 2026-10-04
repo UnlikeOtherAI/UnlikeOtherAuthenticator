@@ -76,8 +76,12 @@ settled rows require an explicit adjustment rather than a silent rerating.
 No operator endpoint exists yet, so an interval lacking this evidence stays
 held. A current pointer or the first statement read is not evidence of an
 earlier price.
-For a `standard` tariff, omitting `markup_bps` in the administrator API uses
-3,000 basis points centrally. `custom` requires an explicit value; `free` and
+The administrator write API accepts `markup_percent` as a decimal string with
+at most two decimal places (for example `"30.00"`); it converts exactly to
+internal basis points. The previous `markup_bps` write field is rejected, including
+requests that send both fields, so an operator cannot accidentally enter 30
+as basis points. For a `standard` tariff, omitting `markup_percent` uses
+30.00% centrally. `custom` requires an explicit value; `free` and
 `at_cost` default to zero. Provider cost is reported separately from the
 customer rated charge, so free rated base, markup, and total are all zero.
 
@@ -176,9 +180,65 @@ Each tariff contains:
 | ----------------------------------- | --------------------------------------------------------------------------- |
 | `mode`                              | `standard`, `free`, `at_cost`, or `custom`                                  |
 | `collection_mode`                   | `stripe`, `manual`, or `none`; independent of usage rating                  |
-| `markup_bps`                        | Price markup in basis points; 2,000 means 20.00%                            |
+| `markup_percent` (operator write)  | Exact decimal percentage string; `"20.00"` means 20%                       |
+| `markup_bps` (stored/read)          | Internal basis points; 2,000 means 20.00%                                   |
 | `monthly_subscription.amount_minor` | Monthly fixed charge in currency minor units; `"0"` means no monthly charge |
 | `monthly_subscription.currency`     | Three-letter uppercase ISO-style currency code                              |
+| `monthly_subscription.charge_basis` | `flat` for one scoped monthly charge or `per_seat` for each eligible human seat |
+| `monthly_subscription.seat_policy` | For per-seat plans, `automatic` active human members or `fixed` purchased capacity |
+| `monthly_subscription.seat_charge_timing` | For per-seat plans, `full_month` or `prorated` UTC membership/capacity intervals |
+| `usage_payment_mode`                | `pay_as_you_go` or `prepaid`; independent of the monthly charge               |
+
+Existing immutable tariff versions retain `flat` and `pay_as_you_go` through
+the additive migration. Newly configured plans must explicitly choose their
+monthly charge basis and usage payment mode. The Admin creation default is
+`prepaid`, and a team or organisation assignment continues to determine the
+payer scope. A per-seat amount is the price of one eligible seat per month;
+the Admin form enters that amount in natural currency units and converts it
+exactly to the integer `amount_minor` write contract. New per-seat forms
+default to automatic quantity with prorated seat changes. Per-seat terms are
+forbidden on flat plans; historical flat tariffs retain null seat terms. Fixed
+purchased capacity belongs to each scoped subscription, not to the reusable
+tariff. Seat quantity evidence is separate from usage credits.
+Prepaid usage is funded from the existing scoped credit account before a paid
+provider dispatch. It cannot become a positive Stripe usage-meter export when
+credits are exhausted or provider liability remains unresolved; the monthly
+subscription charge remains separate.
+
+Ledger uses a separately issued, product-bound runtime key for prepaid
+admission. A superuser provisions and revokes keys through
+`/internal/admin/billing/ledger-runtime-keys`; creation returns the secret
+once. Each key pins the product, exact Ledger audience, and original product
+source domain. The reserve request carries the original short-lived UOA
+delegation with `ai.invoke`, its live subject/team and credential epoch, an
+immutable physical dispatch ID, start time, request fingerprint, provider
+service ID, and an exact raw-cost upper bound. UOA rechecks the subject on
+every POST, including replay, and freezes the tariff, payer account, and UTC
+month. A null bound is permitted only to obtain a durable pay-as-you-go mode
+decision; prepaid admission rejects it. Prepaid credits support USD without
+inventing currency conversion. A billable call may reach the provider only
+after the reservation response is confirmed.
+Admission holds the live user, organisation, and team membership rows through
+its final transaction so credential-epoch and membership revocations serialize
+with the decision. A free tariff remains customer-free even when its raw
+provider receipt records a positive cost.
+
+`GET /billing/v1/ledger/reservations/:dispatchId` lets the product-bound
+runtime key recover a committed decision after a lost HTTP response. If
+absent, Ledger's no-egress release creates a durable cancellation tombstone
+under the same dispatch lock, so a delayed reserve cannot strand funds. An
+unresolved paid provider attempt retains its reservation; elapsed time never
+releases it. Settlement accepts only Ledger's authenticated immutable receipt,
+checks actual cost against the frozen bound, and debits the credit account
+through an append-only `PREPAID_USAGE` entry linked to the exact reservation.
+The account-wide cumulative rated numerator carries sub-microcredit remainders
+across dispatches, tariff versions, teams, and months; each new debit is the
+delta of the cumulative liability rounded up once to a microcredit. Per-call
+reservation bounds round up separately for safety, but do not determine the
+customer's debit. Pending holds reduce available credits without changing
+confirmed balance. The old portfolio credit allocator and Stripe usage meter
+exclude prepaid usage; invoice closure requires complete Ledger usage and
+matching settled raw-cost receipts.
 
 Mode rules:
 

@@ -61,7 +61,7 @@ export const billingContractAdminService = {
       await api.post<unknown>(
         `/internal/admin/billing/contracts/${encodeURIComponent(contractId)}/versions`,
         {
-          usage_markup_bps: input.usageMarkupBps,
+          usage_markup_percent: input.usageMarkupPercent,
           currency: input.currency,
           payment_terms_days: input.paymentTermsDays,
           effective_from_month: input.effectiveFromMonth,

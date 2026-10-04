@@ -22,7 +22,12 @@ const tariff = {
   mode: 'standard',
   collection_mode: 'stripe',
   markup_bps: 2000,
-  monthly_subscription: { amount_minor: '2000', currency: 'GBP' },
+  markup_percent: '20.00',
+  usage_payment_mode: 'prepaid',
+  monthly_subscription: {
+    amount_minor: '2000', currency: 'GBP', charge_basis: 'per_seat',
+    seat_policy: 'automatic', seat_charge_timing: 'prorated',
+  },
   is_default: true,
   created_by_email: 'operator@example.com',
   created_at: '2026-07-20T00:00:00.000Z',
@@ -41,8 +46,12 @@ describe('billingAdminService', () => {
       name: 'Standard',
       mode: 'standard',
       collectionMode: 'stripe',
-      markupBps: 2000,
-      monthlyAmountMinor: '2000',
+      markupPercent: '20.00',
+      usagePaymentMode: 'prepaid',
+      monthlyChargeBasis: 'per_seat',
+      seatPolicy: 'automatic',
+      seatChargeTiming: 'prorated',
+      monthlyAmount: '20.00',
       currency: 'GBP',
       setAsDefault: true,
     });
@@ -52,8 +61,12 @@ describe('billingAdminService', () => {
       name: 'Standard',
       mode: 'standard',
       collection_mode: 'stripe',
-      markup_bps: 2000,
-      monthly_subscription: { amount_minor: '2000', currency: 'GBP' },
+      markup_percent: '20.00',
+      usage_payment_mode: 'prepaid',
+      monthly_subscription: {
+        amount_minor: '2000', currency: 'GBP', charge_basis: 'per_seat',
+        seat_policy: 'automatic', seat_charge_timing: 'prorated',
+      },
       set_as_default: true,
     });
   });

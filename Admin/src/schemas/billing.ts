@@ -1,7 +1,11 @@
 import { z } from 'zod';
+import { billingMajorToMinor } from '../features/admin/billing-money';
 
 export const BillingModeSchema = z.enum(['standard', 'free', 'at_cost', 'custom']);
 export const BillingCollectionModeSchema = z.enum(['stripe', 'manual', 'none']);
+export const MarkupPercentFormSchema = z.string()
+  .regex(/^(0|[1-9]\d*)(?:\.\d{1,2})?$/, 'Enter a percentage with at most two decimals.')
+  .refine((value) => Number(value) <= 1000, 'Markup cannot exceed 1000%.');
 
 export const BillingTariffSchema = z.object({
   id: z.string(),
@@ -12,9 +16,14 @@ export const BillingTariffSchema = z.object({
   mode: BillingModeSchema,
   collection_mode: BillingCollectionModeSchema,
   markup_bps: z.number().int(),
+  markup_percent: z.string(),
+  usage_payment_mode: z.enum(['pay_as_you_go', 'prepaid']),
   monthly_subscription: z.object({
     amount_minor: z.string(),
     currency: z.string(),
+    charge_basis: z.enum(['flat', 'per_seat']),
+    seat_policy: z.enum(['automatic', 'fixed']).nullable(),
+    seat_charge_timing: z.enum(['full_month', 'prorated']).nullable(),
   }),
   is_default: z.boolean(),
   created_by_email: z.string().nullable(),
@@ -129,10 +138,12 @@ const tariffFields = {
   name: z.string().trim().min(1).max(120),
   mode: BillingModeSchema,
   collectionMode: BillingCollectionModeSchema,
-  markupBps: z.coerce.number().int().min(0).max(100_000),
-  monthlyAmountMinor: z
-    .string()
-    .regex(/^(0|[1-9]\d*)$/, 'Enter an integer in minor currency units.'),
+  markupPercent: MarkupPercentFormSchema,
+  usagePaymentMode: z.enum(['pay_as_you_go', 'prepaid']),
+  monthlyChargeBasis: z.enum(['flat', 'per_seat']),
+  seatPolicy: z.enum(['automatic', 'fixed']).optional(),
+  seatChargeTiming: z.enum(['full_month', 'prorated']).optional(),
+  monthlyAmount: z.string().regex(/^(0|[1-9]\d*)(?:\.\d+)?$/, 'Enter a currency amount.'),
   currency: z
     .string()
     .trim()
@@ -140,30 +151,63 @@ const tariffFields = {
     .transform((value) => value.toUpperCase()),
 };
 
+function validateTariffFields(
+  value: {
+    mode: z.infer<typeof BillingModeSchema>;
+    collectionMode: z.infer<typeof BillingCollectionModeSchema>;
+    markupPercent: string;
+    usagePaymentMode: 'pay_as_you_go' | 'prepaid';
+    monthlyAmount: string;
+    currency: string;
+    monthlyChargeBasis?: 'flat' | 'per_seat';
+    seatPolicy?: 'automatic' | 'fixed';
+    seatChargeTiming?: 'full_month' | 'prorated';
+  },
+  ctx: z.RefinementCtx,
+): void {
+  let minorAmount: string;
+  try {
+    minorAmount = billingMajorToMinor(value.monthlyAmount, value.currency);
+  } catch (error) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['monthlyAmount'],
+      message: error instanceof Error ? error.message : 'Invalid currency amount.',
+    });
+    return;
+  }
+  if ((value.mode === 'free' || value.mode === 'at_cost') && Number(value.markupPercent) !== 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['markupPercent'],
+      message: 'Free and at-cost tariffs must use 0% markup.',
+    });
+  }
+  if (value.mode === 'free' &&
+    (minorAmount !== '0' || value.collectionMode !== 'none' ||
+      value.usagePaymentMode !== 'pay_as_you_go')) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['mode'],
+      message: 'Free tariffs must have no subscription fee, prepaid usage, or payment collection.',
+    });
+  }
+  if (value.monthlyChargeBasis === 'per_seat' &&
+    (!value.seatPolicy || !value.seatChargeTiming)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['seatPolicy'],
+      message: 'Choose seat quantity and charge timing for a per-seat subscription.',
+    });
+  }
+}
+
 export const BillingTariffFormSchema = z
   .object({
     ...tariffFields,
     setAsDefault: z.boolean(),
   })
-  .superRefine((value, ctx) => {
-    if ((value.mode === 'free' || value.mode === 'at_cost') && value.markupBps !== 0) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['markupBps'],
-        message: 'Free and at-cost tariffs must use 0% markup.',
-      });
-    }
-    if (
-      value.mode === 'free' &&
-      (value.monthlyAmountMinor !== '0' || value.collectionMode !== 'none')
-    ) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['mode'],
-        message: 'Free tariffs must have no subscription fee or payment collection.',
-      });
-    }
-  });
+  .superRefine(validateTariffFields);
 
 export const BillingServiceFormSchema = z
   .object({
@@ -174,25 +218,7 @@ export const BillingServiceFormSchema = z
     serviceName: z.string().trim().min(1).max(120),
     ...tariffFields,
   })
-  .superRefine((value, ctx) => {
-    if ((value.mode === 'free' || value.mode === 'at_cost') && value.markupBps !== 0) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['markupBps'],
-        message: 'Free and at-cost tariffs must use 0% markup.',
-      });
-    }
-    if (
-      value.mode === 'free' &&
-      (value.monthlyAmountMinor !== '0' || value.collectionMode !== 'none')
-    ) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['mode'],
-        message: 'Free tariffs must have no subscription fee or payment collection.',
-      });
-    }
-  });
+  .superRefine(validateTariffFields);
 
 export const BillingAssignmentFormSchema = z.object({
   organisationId: z.string().min(1, 'Select an organisation.'),

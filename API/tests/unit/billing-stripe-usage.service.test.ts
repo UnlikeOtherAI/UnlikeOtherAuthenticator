@@ -52,6 +52,7 @@ function setup(existing: ExportRow[] = [], confirmedOffset = 0n) {
           orgId: fullSubscription.orgId,
           teamId: fullSubscription.teamId,
           service: { identifier: fullSubscription.service.identifier },
+          tariff: { usagePaymentMode: fullSubscription.tariff.usagePaymentMode },
         },
   );
   const findExports = vi.fn(async ({ where }: { where: Record<string, unknown> }) =>

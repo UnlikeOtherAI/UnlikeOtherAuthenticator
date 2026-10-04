@@ -165,7 +165,7 @@ describe('canonical customer billing routes', () => {
       expect(openApiResponse.headers['cache-control']).toBe('public, max-age=300');
       expect(openApiResponse.json()).toMatchObject({
         openapi: '3.1.0',
-        info: { version: '1.0.0' },
+        info: { version: '2.0.0' },
         components: {
           schemas: {
             BillingStatementV1: {
@@ -221,7 +221,7 @@ describe('canonical customer billing routes', () => {
       expect(openApiResponse.statusCode).toBe(200);
       expect(openApiResponse.json()).toMatchObject({
         openapi: '3.1.0',
-        info: { version: '2.0.0' },
+        info: { version: '3.0.0' },
         components: {
           schemas: { BillingStatementV2: { properties: { schema_version: { const: 2 } } } },
         },

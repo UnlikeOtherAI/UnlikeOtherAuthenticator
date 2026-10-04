@@ -183,7 +183,7 @@ describe('billingContractAdminService', () => {
       name: 'Enterprise AI services',
     });
     await billingContractAdminService.createVersion('contract/1', {
-      usageMarkupBps: 4000,
+      usageMarkupPercent: '40.00',
       currency: 'USD',
       paymentTermsDays: 30,
       effectiveFromMonth: '2026-07',
@@ -204,7 +204,7 @@ describe('billingContractAdminService', () => {
       2,
       '/internal/admin/billing/contracts/contract%2F1/versions',
       {
-        usage_markup_bps: 4000,
+        usage_markup_percent: '40.00',
         currency: 'USD',
         payment_terms_days: 30,
         effective_from_month: '2026-07',

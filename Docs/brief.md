@@ -2457,6 +2457,14 @@ collecting no payment; specifically, `at_cost` + `none` + a zero monthly amount
 represents 100% provider-cost visibility with no charge. Free tariffs require
 `none`, zero markup, and zero monthly amount.
 
+An immutable plan also distinguishes a flat scope-level monthly subscription
+from a monthly per-seat charge, and prepaid usage from pay-as-you-go usage.
+The existing team/organisation assignment still determines the payer and credit
+pool. Historical tariffs retain their original flat, pay-as-you-go terms;
+newly configured plans explicitly default to prepaid usage. A prepaid plan
+requires reserved funding before paid provider dispatch and never rolls an
+unfunded token remainder into an automatic Stripe usage charge.
+
 The optional Stripe collection foundation is fail-closed behind an explicit
 process gate. It maps exact immutable tariff versions to calendar-month
 subscriptions, accepts Checkout initiation only from the product's own app key
@@ -3001,3 +3009,18 @@ storage cannot enable it. The separate server-owned runtime bootstrap carries
 the same boolean to SSR and hydration. Enablement retains mailbox proof, enrolled
 TOTP, product membership/privacy filters, exact config binding and native app
 revision checks; it never grants a login session.
+
+## Billing cycles, configurable seats and prepaid pools (2026-10-04)
+
+Customer billing must keep markup and provider cost private while operators
+configure an exact percentage. Monthly subscriptions may charge once per team
+or organisation, or per seat. Per-seat plans select automatic membership-based
+or fixed purchased seats, and full-month or prorated charging. Automatic
+proration follows actual join/leave intervals; fixed capacity must constrain
+every invitation and membership grant atomically. Usage may independently draw
+from a prepaid team/organisation credit pool, reserved before paid dispatch.
+Nessie, Deepwater and Deep Test require reachable monthly billing-cycle pages
+with authorized invoice and measured-usage/seat breakdown downloads. Final
+documents retain immutable amounts and explicit correction lineage. The ordered
+implementation and proof requirements are in
+[the billing delivery plan](plans/2026-10-04-billing-cycles-seats-and-prepaid.md).

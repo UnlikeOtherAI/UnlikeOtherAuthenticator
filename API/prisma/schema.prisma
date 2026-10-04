@@ -190,6 +190,37 @@ enum BillingCollectionMode {
   NONE
 }
 
+enum BillingMonthlyChargeBasis {
+  FLAT
+  PER_SEAT
+}
+
+enum BillingSeatPolicy {
+  AUTOMATIC
+  FIXED
+}
+
+enum BillingSeatChargeTiming {
+  FULL_MONTH
+  PRORATED
+}
+
+enum BillingUsagePaymentMode {
+  PAY_AS_YOU_GO
+  PREPAID
+}
+
+enum BillingPrepaidReservationStatus {
+  ACTIVE
+  SETTLED
+  RELEASED
+}
+
+enum BillingLedgerDispatchDecisionStatus {
+  PAY_AS_YOU_GO
+  CANCELLED
+}
+
 enum BillingStripeMeterEventState {
   PENDING
   UNCERTAIN
@@ -272,6 +303,7 @@ enum BillingCreditEntryKind {
   REFUND_REVERSAL
   DISPUTE_REVERSAL
   ADJUSTMENT
+  PREPAID_USAGE
 }
 
 enum BillingCreditPaymentAdjustmentKind {
@@ -1720,6 +1752,8 @@ model BillingService {
   creditSetupCheckouts              BillingCreditSetupCheckout[]
   creditAutoTopUpAttempts           BillingCreditAutoTopUpAttempt[]
   creditSettlements                 BillingCreditUsageSettlement[]
+  ledgerRuntimeKeys                 BillingLedgerRuntimeKey[]
+  ledgerDispatchDecisions           BillingLedgerDispatchDecision[]
   creditSettlementAdjustments       BillingCreditUsageSettlementAdjustment[]
   creditUsageAllocations            BillingCreditUsageAllocation[]
   creditConsentRevisions            BillingCreditAutoTopUpConsentRevision[]
@@ -1750,6 +1784,10 @@ model BillingTariff {
   collectionMode     BillingCollectionMode @default(NONE) @map("collection_mode")
   markupBps          Int                   @map("markup_bps")
   monthlyAmountMinor BigInt                @default(0) @map("monthly_amount_minor")
+  monthlyChargeBasis BillingMonthlyChargeBasis @default(FLAT) @map("monthly_charge_basis")
+  seatPolicy BillingSeatPolicy? @map("seat_policy")
+  seatChargeTiming BillingSeatChargeTiming? @map("seat_charge_timing")
+  usagePaymentMode BillingUsagePaymentMode @default(PAY_AS_YOU_GO) @map("usage_payment_mode")
   currency           String                @db.Char(3)
   isDefault          Boolean               @default(false) @map("is_default")
   createdByUserId    String?               @map("created_by_user_id")
@@ -1763,6 +1801,7 @@ model BillingTariff {
   stripeCheckouts      BillingStripeCheckoutSession[]
   stripeSubscriptions  BillingStripeSubscription[]
   creditSettlements    BillingCreditUsageSettlement[]
+  prepaidReservations  BillingPrepaidReservation[]
   contractServiceTerms BillingContractServiceTerm[]
 
   @@unique([serviceId, key, version])
@@ -2850,6 +2889,8 @@ model BillingCreditAccount {
   paymentAdjustments       BillingCreditPaymentAdjustment[]
   consentRevisions         BillingCreditAutoTopUpConsentRevision[]  @relation("CreditAccountConsentRevisions")
   autoTopUpDisableEvents   BillingCreditAutoTopUpDisableEvent[]
+  prepaidReservations      BillingPrepaidReservation[]
+  prepaidRatingBuckets     BillingPrepaidRatingBucket[]
 
   @@unique([accountId, scopeKey, currency])
   @@index([orgId, teamId])
@@ -2864,11 +2905,125 @@ model BillingCreditAccount {
   @@map("billing_credit_accounts")
 }
 
+// A physical Ledger dispatch holds an exact worst-case rated liability before
+// provider work. Only its authenticated terminal receipt may settle or release
+// the hold; time alone never returns potentially spent funds to availability.
+model BillingPrepaidReservation {
+  id                    String                          @id @default(cuid())
+  dispatchId            String                          @unique @map("dispatch_id") @db.VarChar(160)
+  requestFingerprint    String                          @map("request_fingerprint") @db.Char(64)
+  receiptId             String?                         @unique @map("receipt_id") @db.VarChar(160)
+  creditAccountId       String                          @map("credit_account_id")
+  tariffId              String                          @map("tariff_id")
+  serviceId             String                          @map("service_id")
+  providerServiceId     String                          @map("provider_service_id") @db.VarChar(160)
+  appKeyId              String                          @map("app_key_id")
+  orgId                 String                          @map("org_id")
+  teamId                String                          @map("team_id")
+  userId                String                          @map("user_id")
+  billingMonth          String                          @map("billing_month") @db.Char(7)
+  dispatchStartedAt     DateTime                        @map("dispatch_started_at")
+  currency              String                          @db.Char(3)
+  rawCostBound          Decimal                         @map("raw_cost_bound") @db.Decimal(38, 18)
+  reservedMicrocredits  BigInt                          @map("reserved_microcredits")
+  rawCostActual         Decimal?                        @map("raw_cost_actual") @db.Decimal(38, 18)
+  debitedMicrocredits   BigInt?                         @map("debited_microcredits")
+  status                BillingPrepaidReservationStatus @default(ACTIVE)
+  createdAt             DateTime                        @default(now()) @map("created_at")
+  terminalAt            DateTime?                       @map("terminal_at")
+
+  creditAccount BillingCreditAccount           @relation(fields: [creditAccountId], references: [id], onDelete: Restrict)
+  tariff        BillingTariff                  @relation(fields: [tariffId], references: [id], onDelete: Restrict)
+  runtimeKey    BillingLedgerRuntimeKey        @relation(fields: [appKeyId], references: [id], onDelete: Restrict)
+  events        BillingPrepaidReservationEvent[]
+  creditEntry   BillingCreditEntry?
+
+  @@index([creditAccountId, status])
+  @@index([orgId, teamId, billingMonth])
+  @@map("billing_prepaid_reservations")
+}
+
+// Operator-issued only to Ledger for one product. The original UOA-signed
+// delegation has a separately pinned Ledger audience and source domain.
+model BillingLedgerRuntimeKey {
+  id                String    @id @default(cuid())
+  serviceId         String    @map("service_id")
+  secretDigest      String    @unique @map("secret_digest") @db.Char(64)
+  keyPrefix         String    @map("key_prefix") @db.VarChar(24)
+  ledgerAudience    String    @map("ledger_audience") @db.VarChar(255)
+  sourceDomain      String    @map("source_domain") @db.VarChar(255)
+  createdByEmail    String    @map("created_by_email") @db.VarChar(200)
+  createdAt         DateTime  @default(now()) @map("created_at")
+  revokedAt         DateTime? @map("revoked_at")
+
+  service      BillingService             @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  reservations BillingPrepaidReservation[]
+  dispatchDecisions BillingLedgerDispatchDecision[]
+  creditEntries BillingCreditEntry[]
+
+  @@index([serviceId, revokedAt])
+  @@map("billing_ledger_runtime_keys")
+}
+
+model BillingPrepaidReservationEvent {
+  id             String   @id @default(cuid())
+  reservationId  String   @map("reservation_id")
+  kind           String   @db.VarChar(24)
+  receiptId      String?  @map("receipt_id") @db.VarChar(160)
+  amountMicrocredits BigInt? @map("amount_microcredits")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  reservation BillingPrepaidReservation @relation(fields: [reservationId], references: [id], onDelete: Restrict)
+
+  @@index([reservationId, createdAt])
+  @@map("billing_prepaid_reservation_events")
+}
+
+// Round customer microcredits on the cumulative exact liability, then debit
+// only the delta. This carries sub-microcredit remainders across receipts.
+model BillingPrepaidRatingBucket {
+  creditAccountId String @id @map("credit_account_id")
+  currency String @db.Char(3)
+  cumulativeRatedQuanta Decimal @default(0) @map("cumulative_rated_quanta") @db.Decimal(80, 0)
+  debitedMicrocredits BigInt @default(0) @map("debited_microcredits")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  creditAccount BillingCreditAccount @relation(fields: [creditAccountId], references: [id], onDelete: Restrict)
+  @@map("billing_prepaid_rating_buckets")
+}
+
+// Durable PAYG decisions and no-egress tombstones close the lost-HTTP race.
+model BillingLedgerDispatchDecision {
+  dispatchId String @id @map("dispatch_id") @db.VarChar(160)
+  requestFingerprint String? @map("request_fingerprint") @db.Char(64)
+  runtimeKeyId String @map("runtime_key_id")
+  serviceId String @map("service_id")
+  providerServiceId String? @map("provider_service_id") @db.VarChar(160)
+  orgId String? @map("org_id")
+  teamId String? @map("team_id")
+  userId String? @map("user_id")
+  billingMonth String? @map("billing_month") @db.Char(7)
+  dispatchStartedAt DateTime? @map("dispatch_started_at")
+  currency String? @db.Char(3)
+  rawCostBound Decimal? @map("raw_cost_bound") @db.Decimal(38, 18)
+  status BillingLedgerDispatchDecisionStatus
+  receiptId String? @map("receipt_id") @db.VarChar(160)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  runtimeKey BillingLedgerRuntimeKey @relation(fields: [runtimeKeyId], references: [id], onDelete: Restrict)
+  service BillingService @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+
+  @@map("billing_ledger_dispatch_decisions")
+}
+
 model BillingCreditEntry {
   id                       String                      @id @default(cuid())
   creditAccountId          String                      @map("credit_account_id")
   serviceId                String?                     @map("service_id")
   appKeyId                 String?                     @map("app_key_id")
+  ledgerRuntimeKeyId       String?                     @map("ledger_runtime_key_id")
+  prepaidReservationId     String?                     @unique @map("prepaid_reservation_id")
   attributedUserId         String?                     @map("attributed_user_id")
   direction                BillingCreditEntryDirection
   kind                     BillingCreditEntryKind
@@ -2885,6 +3040,8 @@ model BillingCreditEntry {
   creditAccount                BillingCreditAccount                    @relation(fields: [creditAccountId], references: [id], onDelete: Restrict)
   service                      BillingService?                         @relation(fields: [serviceId], references: [id], onDelete: Restrict)
   appKey                       BillingAppKey?                          @relation(fields: [appKeyId], references: [id], onDelete: Restrict)
+  ledgerRuntimeKey             BillingLedgerRuntimeKey?                @relation(fields: [ledgerRuntimeKeyId], references: [id], onDelete: Restrict)
+  prepaidReservation           BillingPrepaidReservation?              @relation(fields: [prepaidReservationId], references: [id], onDelete: Restrict)
   attributedUser               User?                                   @relation("CreditEntryAttribution", fields: [attributedUserId], references: [id], onDelete: Restrict)
   reversesEntry                BillingCreditEntry?                     @relation("CreditEntryReversal", fields: [reversesEntryId], references: [id], onDelete: Restrict)
   reversedBy                   BillingCreditEntry[]                    @relation("CreditEntryReversal")

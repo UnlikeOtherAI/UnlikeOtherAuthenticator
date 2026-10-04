@@ -5,6 +5,7 @@ import { createApp } from '../../src/app.js';
 
 const services = vi.hoisted(() => ({
   listBillingContracts: vi.fn(),
+  createBillingContractVersion: vi.fn(),
   resolveBillingInvoiceIssueActions: vi.fn(),
   calculateBillingContractInvoice: vi.fn(),
   getBillingInvoice: vi.fn(),
@@ -37,7 +38,7 @@ vi.mock('../../src/middleware/admin-superuser.js', () => ({
 vi.mock('../../src/services/billing-contract.service.js', () => ({
   activateBillingContractVersion: vi.fn(),
   createBillingContract: vi.fn(),
-  createBillingContractVersion: vi.fn(),
+  createBillingContractVersion: services.createBillingContractVersion,
   listBillingContracts: services.listBillingContracts,
 }));
 
@@ -170,6 +171,49 @@ describe('contract invoice admin routes', () => {
       });
       expect(response.statusCode).toBe(401);
       expect(services.listBillingInvoices).not.toHaveBeenCalled();
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('accepts exact operator percentages and rejects old or ambiguous markup inputs', async () => {
+    services.createBillingContractVersion.mockResolvedValue({
+      id: 'version_2',
+      version: 2,
+      usageMarkupBps: 3001,
+      currency: 'USD',
+      paymentTermsDays: 30,
+      effectiveFromMonth: '9999-12',
+      createdAt: now,
+      serviceTerms: [],
+    });
+    const app = await createApp();
+    try {
+      const url = '/internal/admin/billing/contracts/contract_1/versions';
+      const base = {
+        usage_markup_percent: '30.01',
+        currency: 'USD',
+        payment_terms_days: 30,
+        effective_from_month: '9999-12',
+      };
+      const valid = await app.inject({
+        method: 'POST', url, headers: { authorization: 'Bearer admin-token' }, payload: base,
+      });
+      expect(valid.statusCode).toBe(201);
+      expect(services.createBillingContractVersion).toHaveBeenCalledWith(
+        expect.objectContaining({ usageMarkupBps: 3001 }),
+      );
+      for (const payload of [
+        { ...base, usage_markup_percent: '30.001' },
+        { ...base, usage_markup_percent: 30 },
+        { ...base, usage_markup_bps: 3001 },
+      ]) {
+        const response = await app.inject({
+          method: 'POST', url, headers: { authorization: 'Bearer admin-token' }, payload,
+        });
+        expect(response.statusCode).toBe(400);
+      }
+      expect(services.createBillingContractVersion).toHaveBeenCalledTimes(1);
     } finally {
       await app.close();
     }

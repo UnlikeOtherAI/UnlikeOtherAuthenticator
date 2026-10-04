@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MarkupPercentFormSchema } from './billing';
 
 const IdentifierSchema = z.string().trim().min(1).max(256);
 const MoneySchema = z.object({
@@ -197,7 +198,7 @@ export const BillingContractFormSchema = z.object({
 });
 
 export const BillingContractVersionFormSchema = z.object({
-  usageMarkupBps: z.coerce.number().int().min(0).max(100_000),
+  usageMarkupPercent: MarkupPercentFormSchema,
   currency: z
     .string()
     .trim()

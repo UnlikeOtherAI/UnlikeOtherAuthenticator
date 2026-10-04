@@ -10,6 +10,7 @@ import {
   listBillingContracts,
 } from '../../../services/billing-contract.service.js';
 import { calculateBillingContractInvoice } from '../../../services/billing-invoice-calculation.service.js';
+import { markupPercentToBps } from '../../../services/billing-markup-percent.service.js';
 import {
   getBillingInvoice,
   issueBillingInvoice,
@@ -135,7 +136,7 @@ export function registerInternalAdminBillingContractInvoiceRoutes(app: FastifyIn
       const { contractId } = ContractParamsSchema.parse(request.params);
       const body = z
         .object({
-          usage_markup_bps: z.number().int().min(0).max(100_000),
+          usage_markup_percent: z.string(),
           currency: CurrencySchema,
           payment_terms_days: z.number().int().min(0).max(365),
           effective_from_month: MonthSchema,
@@ -144,7 +145,7 @@ export function registerInternalAdminBillingContractInvoiceRoutes(app: FastifyIn
         .parse(request.body);
       const version = await createBillingContractVersion({
         contractId,
-        usageMarkupBps: body.usage_markup_bps,
+        usageMarkupBps: markupPercentToBps(body.usage_markup_percent),
         currency: body.currency,
         paymentTermsDays: body.payment_terms_days,
         effectiveFromMonth: body.effective_from_month,
@@ -155,7 +156,7 @@ export function registerInternalAdminBillingContractInvoiceRoutes(app: FastifyIn
         .send(
           serializeContractVersion(
             version,
-            version.effectiveFromMonth > currentBillingMonth() ? 'scheduled' : 'ready',
+            version.effectiveFromMonth > currentBillingMonth() ? 'ready' : 'superseded',
           ),
         );
     },

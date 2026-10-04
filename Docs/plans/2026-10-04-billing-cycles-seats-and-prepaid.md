@@ -1,0 +1,148 @@
+# Billing cycles, seat subscriptions and prepaid pools
+
+## Required result
+
+UOA owns commercial terms, memberships, seat capacity, prepaid credits, monthly
+cycles and invoices. Ledger owns every physical provider attempt and immutable
+measured usage/cost. Nessie, Deepwater and Deep Test provide a Billing cycles
+page reached from Credits & billing and their existing navigation framework.
+Customers can select a month, see its subscription/seat charges, measured token
+usage and credits consumed, and download its invoice and usage breakdown.
+
+The customer contract contains no markup, provider cost, rate card, multiplier
+or internal tariff formula. Operators enter markup as a decimal percentage:
+`30.00` means provider cost multiplied by `1.30`, once in UOA. Exact integer
+basis-point storage is private. Customer credits are consumed at the resulting
+commercial rate, with no product-side money or credit calculations.
+
+## Plan and seat policy
+
+Immutable tariffs select flat monthly or per-seat monthly charges, independently
+of prepaid or pay-as-you-go usage, and apply to a team or organisation payer.
+Per-seat tariffs select `AUTOMATIC` or `FIXED` and `FULL_MONTH` or `PRORATED`.
+New per-seat plans default to automatic/prorated; existing assignments retain
+their frozen terms. Purchased fixed capacity belongs to a scoped subscription,
+not a shared tariff. A flat subscription charges once per selected scope.
+
+Automatic seats are unique active human members in the subscription scope.
+Organisation seats deduplicate a person belonging to several teams. Agents,
+service credentials and pending invitations are not billable automatic seats.
+Prorated liability is the per-seat monthly price times the sum of active
+membership intervals overlapping the actual UTC month, divided by that month's
+duration. Intervals are half-open; joining/leaving at the same instant, repeated
+events, leave/rejoin and leap months have deterministic results. Decimal
+arithmetic rounds once at final currency settlement, not per event or person.
+Full-month automatic billing counts each person active at any instant in that
+month once. The current charge updates when members change; a closed invoice
+does not silently change. Policy activation captures an explicit current-member
+baseline, never fabricated historical membership evidence.
+
+Fixed seats charge contracted capacity, independently of occupancy. Capacity
+changes are explicit, auditable subscription revisions; prorated policy applies
+to their effective intervals. Full-month increases charge the increased capacity
+for the current month and decreases take effect next month. Shrinking below
+occupied/reserved capacity is refused without removing anyone automatically.
+
+Fixed capacity is enforced in UOA before every grant, including invitation
+creation/acceptance, direct/admin/backend membership, imports, automatic enrolment
+and team creation that adds members. Pending invitations reserve capacity only
+for people not already members; cancellation and expiry release it, and acceptance
+converts the reservation atomically. Organisation and team constraints are both
+checked; all effective fixed-seat subscriptions must be satisfied. Locks use a
+deterministic order. Concurrent invitation/acceptance/grant and billing activation
+cannot overbook. Replayed grants and invitations do not count twice. Existing
+rosters larger than a proposed capacity prevent activation rather than expel users.
+
+## Prepaid runtime and credit authority
+
+Team/organisation credit pools are funded only by confirmed payment/adjustment
+lineage. Before paid dispatch, Ledger obtains an idempotent UOA reservation using
+a product-bound Ledger runtime credential and the original fresh UOA delegation.
+UOA checks its own token signature, exact Ledger audience, product, credential
+epoch and current membership, freezes tariff/payer/month, and reserves the rated
+upper bound under the credit-account lock. Unknown bounds or insufficient funds
+stop the call before provider egress. No customer content enters billing.
+
+After an immutable Ledger receipt, a durable settlement queue sends exact raw
+cost and receipt identity. UOA debits once and releases the unused reservation.
+Trusted proof of no dispatch permits release; unresolved paid calls retain their
+reservation without blind TTL expiry. Settlement uses the runtime credential,
+not an expired human token, against the original immutable binding. Prepaid
+usage is excluded from pay-as-you-go Stripe export and the older credit collector
+to prevent duplicate charges, but remains present in customer credits, cycle
+usage and incomplete-liability status. Monthly fees are separate from usage.
+
+Long-running jobs must preserve renewable original-actor authority, not only a
+subject/team snapshot. Nessie and Deep Test already have renewable per-call
+delegation providers; Water's delayed compute context lacks that carrier and
+credential epoch. First reuse an existing exact-scope relying-party refresh
+path where available. Indirect/background jobs otherwise require a UOA-issued
+job-scoped renewal capability minted from a fresh original delegation, bound to
+the stable job, subject, org/team, product, audience, purpose, credential epoch
+and authorized job expiry. UOA rechecks revocation and membership at renewal and
+reservation. A capability cannot broaden scope, resurrect a cancelled job, or
+outlive its authorization. Refresh credentials never go to Ledger or the browser;
+products retain only appropriately encrypted UOA-issued relying-party material.
+Old jobs without captured proof require owner reauthorization, never a current
+user-row epoch backfill or an expired launch JWT. The exact issuer contract must
+be reviewed before implementation and covered by revocation/restart tests.
+
+## Monthly cycles and invoices
+
+UOA supplies a paginated, manager-authorized cycle list and exact-scope cycle
+detail. The public protocol publishes validated DTOs, fixed actions and synthetic
+fixtures. Each cycle identifies its UTC month, payer scope, products, state,
+measured usage by real unit, customer credit consumption, recurring/seat lines,
+due/paid amounts by currency and invoice/download metadata. It does not expose
+other teams' named usage through an organisation payer. Member projections retain
+existing privacy rules; financial invoices require the payer's billing authority.
+
+A durable immutable cycle snapshot pins source metering snapshots, effective
+terms, membership/capacity intervals, credit allocation and invoice identity
+privately. An open month is a clearly labelled preview, never a downloadable
+final invoice. A finalized invoice's totals and evidence are frozen; delayed
+receipts or later corrections use an explicit adjustment/credit-note lineage.
+Unknown paid usage holds final settlement rather than yielding a zero invoice.
+Prepaid consumption is a usage breakdown and never a second demand for payment:
+paid top-up invoices and monthly subscription invoices remain distinct documents.
+Manual and Stripe collection must both supply real monthly documents. Fetching
+historical months must not create charges, recalculate current terms or invent
+old invoices. Stripe invoice PDFs may not contain the full measured usage/seat
+evidence, so UOA also provides its frozen detailed breakdown download.
+
+Products validate the canonical contract and proxy only fixed same-product
+actions. Download authorization rechecks current payer scope; no arbitrary URL
+proxying, public storage URLs, cross-product invoice IDs or billing secrets.
+Documents and JSON contain customer amounts and measured units only. History
+links stay reachable from the current billing page, with loading, empty, pending,
+download and failure states. No duplicate local identity, membership or billing
+authority is added.
+
+## Ordered implementation and evidence
+
+1. Sol privacy/protocol tranche removes private terms from customer DTOs and
+   publishes the versioned public package; Sol operator tranche exposes exact
+   percentages and monthly/prepaid/seat selectors on existing billing surfaces.
+2. Sol backend tranche implements effective seat/capacity evidence, exact charging,
+   subscription collection and prepaid reservations. A subsequent substantial
+   tranche audits every membership writer and enforces capacity under real locks.
+3. Sol cycle tranche implements immutable history/document authority and public
+   contracts. Consumer work starts from that committed protocol and adds the
+   three product pages, entry points and authorized download flows.
+4. Integrate each scoped branch into its repository integration branch, review
+   the full brief, run required checks and merge green PRs. Preserve original
+   token-accounting regressions and do not modify historical production charges.
+
+Required proof includes exact 30% consumption without public markup keys/text;
+automatic add/remove/rejoin and leap-month proration; fixed invitation races and
+all grant paths; fixed capacity revisions; multiple team/org plans; prepaid
+simultaneous dispatch/receipt/retry/restart without overspend or double debit;
+invoice closure, delayed receipts and corrections; unauthorized cross-scope
+history/download refusal; and headless desktop/mobile views and actual download
+contents in all three products. Tests use isolated migrated databases and
+synthetic provider/Stripe transports. Paid providers, production financial writes,
+deployment configuration and real payment proof remain separate evidence tiers.
+
+Provider references: [Stripe prorations](https://docs.stripe.com/billing/subscriptions/prorations),
+[finalized invoices](https://docs.stripe.com/api/invoices/update),
+[invoice PDF fields](https://docs.stripe.com/api/invoices/object).

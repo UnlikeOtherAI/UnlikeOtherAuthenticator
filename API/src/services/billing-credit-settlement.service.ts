@@ -1,4 +1,4 @@
-import { Prisma, type PrismaClient } from '@prisma/client';
+import { BillingUsagePaymentMode, Prisma, type PrismaClient } from '@prisma/client';
 
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
@@ -266,6 +266,7 @@ async function settleInTransaction(
         mode: tariff.mode,
         markupBps: tariff.markupBps,
         currency: tariff.currency,
+        usagePaymentMode: tariff.usagePaymentMode,
       },
     };
   });
@@ -337,8 +338,14 @@ async function settleInTransaction(
     maxAdditionalCreditsByService,
   });
 
-  const settlements = [...existingSettlements];
-  for (const service of ratingServices) {
+  const prepaidServiceIds = new Set(ratingServices.filter((service) =>
+    service.tariff.usagePaymentMode === BillingUsagePaymentMode.PREPAID).map((service) => service.id));
+  if (existingSettlements.some((row) => prepaidServiceIds.has(row.serviceId) &&
+    row.cumulativeCreditsConsumedMicrocredits !== 0n)) {
+    throw new AppError('INTERNAL', 409, 'PREPAID_LEGACY_USAGE_RECONCILIATION_REQUIRED');
+  }
+  const settlements = existingSettlements.filter((row) => !prepaidServiceIds.has(row.serviceId));
+  for (const service of ratingServices.filter((row) => !prepaidServiceIds.has(row.id))) {
     if (settlements.some((settlement) => settlement.serviceId === service.id)) continue;
     const created = await tx.billingCreditUsageSettlement.create({
       data: {
@@ -358,6 +365,9 @@ async function settleInTransaction(
       },
     });
     settlements.push(created);
+  }
+  if (settlements.length === 0) {
+    return { snapshotId: snapshot.id, replayed: false, superseded: false };
   }
 
   const replays = await tx.billingCreditUsageSettlementAdjustment.findMany({
@@ -379,7 +389,7 @@ async function settleInTransaction(
     return { snapshotId: snapshot.id, replayed: true, superseded: false };
   }
 
-  const work = rated.map((target) => {
+  const work = rated.filter((target) => !prepaidServiceIds.has(target.service.id)).map((target) => {
     const settlement = settlements.find((row) => row.serviceId === target.service.id);
     if (!settlement) throw new AppError('INTERNAL', 500, 'BILLING_CREDIT_SETTLEMENT_MISSING');
     return { target, settlement };

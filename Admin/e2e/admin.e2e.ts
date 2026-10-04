@@ -314,24 +314,41 @@ test('future manual terms activate from the contract doorway without changing th
   expect(fixture.unexpected).toEqual([]);
 });
 
-test('new billing terms show the prospective 30 percent default', async ({ page }) => {
+test('new billing terms show the prospective 30 percent default', async ({ page }, testInfo) => {
   const fixture = await installFixtures(page);
   await page.goto('/billing?section=products');
   await page.getByRole('button', { name: 'Add service' }).click();
   const serviceDialog = page.getByRole('dialog', { name: 'Add billing service' });
   await expect(serviceDialog).toBeVisible();
-  await expect(serviceDialog.getByLabel('Markup (basis points)')).toHaveValue('3000');
-  await serviceDialog.screenshot({ path: 'e2e/artifacts/billing-service-default.png' });
+  await expect(serviceDialog.getByLabel('Markup (%)')).toHaveValue('30.00');
+  await expect(serviceDialog.getByLabel('Usage payment')).toHaveValue('prepaid');
+  await expect(serviceDialog.getByLabel('Monthly subscription basis')).toHaveValue('flat');
+  await expect(serviceDialog.getByLabel('Monthly price')).toHaveValue('0.00');
+  await serviceDialog.getByLabel('Monthly subscription basis').selectOption('per_seat');
+  await expect(serviceDialog.getByLabel('Seat quantity')).toHaveValue('automatic');
+  await serviceDialog.getByLabel('Seat quantity').selectOption('fixed');
+  await serviceDialog.getByLabel('Seat charge timing').selectOption('prorated');
+  await serviceDialog.getByLabel('Monthly price').fill('20.00');
+  await serviceDialog.screenshot({
+    path: `e2e/artifacts/billing-service-default-${testInfo.project.name}.png`,
+  });
   await page.keyboard.press('Escape');
+  await serviceDialog.getByRole('button', { name: 'Discard changes' }).click();
   await page.getByRole('link', { name: 'Fixture product', exact: true }).click();
   await expect(page.getByText(/Default and assignment changes take effect next UTC month/))
     .toBeVisible();
-  await page.screenshot({ path: 'e2e/artifacts/billing-effective-month.png' });
+  await page.screenshot({
+    path: `e2e/artifacts/billing-effective-month-${testInfo.project.name}.png`,
+  });
   await page.getByRole('button', { name: 'Tariff version' }).click();
   const tariffDialog = page.getByRole('dialog', { name: /Add tariff version/ });
   await expect(tariffDialog).toBeVisible();
-  await expect(tariffDialog.getByLabel('Markup (basis points)')).toHaveValue('3000');
-  await tariffDialog.screenshot({ path: 'e2e/artifacts/billing-tariff-default.png' });
+  await expect(tariffDialog.getByLabel('Markup (%)')).toHaveValue('30.00');
+  await expect(tariffDialog.getByLabel('Usage payment')).toHaveValue('prepaid');
+  await expect(tariffDialog.getByLabel('Monthly subscription basis')).toHaveValue('flat');
+  await tariffDialog.screenshot({
+    path: `e2e/artifacts/billing-tariff-default-${testInfo.project.name}.png`,
+  });
   expect(fixture.errors).toEqual([]);
   expect(fixture.unexpected).toEqual([]);
 });

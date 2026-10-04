@@ -123,7 +123,7 @@ export function AddBillingContractVersionDialog({
   const form = useForm<BillingContractVersionFormValues>({
     resolver: zodResolver(BillingContractVersionFormSchema),
     defaultValues: {
-      usageMarkupBps: 0,
+      usageMarkupPercent: '30.00',
       currency: 'USD',
       paymentTermsDays: 30,
       effectiveFromMonth: nextMonth(currentMonth()),
@@ -133,7 +133,7 @@ export function AddBillingContractVersionDialog({
   useEffect(() => {
     if (contract) {
       form.reset({
-        usageMarkupBps: 0,
+        usageMarkupPercent: '30.00',
         currency: contract.versions[0]?.currency ?? 'USD',
         paymentTermsDays: contract.versions[0]?.payment_terms_days ?? 30,
         effectiveFromMonth: nextEffectiveMonth(contract),
@@ -174,11 +174,11 @@ export function AddBillingContractVersionDialog({
       <form className="space-y-4" onSubmit={form.handleSubmit(submit)}>
         <div className="grid gap-4 sm:grid-cols-2">
           <FieldShell
-            label="Usage margin (basis points)"
-            hint="2,000 basis points is 20%. Only UOA applies this margin."
-            error={form.formState.errors.usageMarkupBps?.message}
+            label="Usage markup (%)"
+            hint="30.00% is the standard rate. Only UOA applies this markup."
+            error={form.formState.errors.usageMarkupPercent?.message}
           >
-            <TextField {...form.register('usageMarkupBps')} inputMode="numeric" />
+            <TextField {...form.register('usageMarkupPercent')} inputMode="decimal" />
           </FieldShell>
           <FieldShell label="Currency" error={form.formState.errors.currency?.message}>
             <TextField {...form.register('currency')} maxLength={3} />
