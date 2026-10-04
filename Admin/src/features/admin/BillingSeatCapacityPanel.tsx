@@ -13,13 +13,16 @@ function CapacityRow({ subscription, onChanged }: {
   onChanged: () => Promise<void>;
 }) {
   const [quantity, setQuantity] = useState(String(subscription.current_capacity ?? ''));
+  const pending = subscription.capacity_revisions.find(
+    (revision) => new Date(revision.effective_at).getTime() > Date.now(),
+  );
   const { confirm } = useAdminUi();
   const change = useMutation({
     mutationFn: (value: number) => billingAdminService.changeSeatCapacity(subscription.id, value),
     onSuccess: onChanged,
   });
   const target = Number(quantity);
-  const valid = /^\d+$/.test(quantity) && Number.isSafeInteger(target) && target > 0 &&
+  const valid = !pending && /^\d+$/.test(quantity) && Number.isSafeInteger(target) && target > 0 &&
     target !== subscription.current_capacity;
   const timing = subscription.seat_charge_timing === 'full_month' &&
     target < (subscription.current_capacity ?? 0)
@@ -42,11 +45,15 @@ function CapacityRow({ subscription, onChanged }: {
       <Td>{subscription.current_capacity ?? '—'}</Td>
       <Td>
         {subscription.seat_policy === 'fixed' && !subscription.ended_at ? (
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex min-w-32 flex-col items-start gap-2">
             <input aria-label={`Purchased seats for ${subscription.organisation.name}`}
               className="w-20 rounded border border-gray-300 px-2 py-1 text-sm"
-              inputMode="numeric" value={quantity}
+              inputMode="numeric" value={quantity} disabled={Boolean(pending)}
               onChange={(event) => setQuantity(event.target.value)} />
+            {pending ? <span className="text-xs text-gray-600">
+              {pending.quantity} seats scheduled for {new Date(pending.effective_at)
+                .toLocaleDateString(undefined, { timeZone: 'UTC', month: 'short', day: 'numeric', year: 'numeric' })}.
+            </span> : null}
             <Button size="sm" disabled={!valid || change.isPending}
               onClick={() => confirm('Change purchased seat capacity?', timing,
                 () => change.mutateAsync(target))}>

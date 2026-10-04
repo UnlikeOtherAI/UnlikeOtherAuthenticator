@@ -365,10 +365,14 @@ test('fixed seat capacity is reachable from the service subscription doorway', a
   const capacity = page.getByRole('textbox', { name: 'Purchased seats for Acme Research' });
   await expect(capacity).toHaveValue('5');
   await capacity.fill('6');
+  const saveSeats = page.getByRole('button', { name: 'Save seats' });
+  await saveSeats.scrollIntoViewIfNeeded();
+  await expect(capacity).toBeInViewport();
+  await expect(saveSeats).toBeInViewport();
   await page.screenshot({
     path: `e2e/artifacts/billing-seat-capacity-${testInfo.project.name}.png`, fullPage: true,
   });
-  await page.getByRole('button', { name: 'Save seats' }).click();
+  await saveSeats.click();
   const dialog = page.getByRole('dialog', { name: 'Change purchased seat capacity?' });
   await expect(dialog.getByText('The higher capacity starts now.')).toBeVisible();
   await dialog.getByRole('button', { name: 'Change purchased seat capacity' }).click();

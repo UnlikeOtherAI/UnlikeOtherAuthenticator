@@ -2,6 +2,7 @@ import type { PrismaClient } from '@prisma/client';
 
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
+import { requireLifecycleActor, type LifecycleActor } from './internal-admin-lifecycle.service.js';
 
 function client(deps?: { prisma?: PrismaClient }): PrismaClient {
   return deps?.prisma ?? getAdminPrisma();
@@ -50,7 +51,7 @@ export async function listSeatSubscriptions(
 }
 
 export async function changeFixedSeatCapacity(
-  input: { subscriptionId: string; quantity: number; actorEmail: string },
+  input: { subscriptionId: string; quantity: number; actor: LifecycleActor },
   deps?: { prisma?: PrismaClient; now?: () => Date },
 ) {
   if (!Number.isSafeInteger(input.quantity) || input.quantity <= 0) {
@@ -58,9 +59,15 @@ export async function changeFixedSeatCapacity(
   }
   const now = deps?.now?.() ?? new Date();
   return client(deps).$transaction(async (tx) => {
-    // Another capacity change on this subscription must finish before we pick
-    // an effective instant. The database admission trigger separately locks
-    // the organisation row against every membership and invitation writer.
+    // Recheck the token epoch and live superuser role at the final effect.
+    const actorEmail = await requireLifecycleActor(tx as PrismaClient, input.actor);
+    const scope = await tx.billingSeatSubscription.findUnique({
+      where: { id: input.subscriptionId }, select: { orgId: true },
+    });
+    if (!scope) throw new AppError('NOT_FOUND', 404, 'SEAT_SUBSCRIPTION_NOT_FOUND');
+    // Every roster, invitation and source writer takes this organisation lock
+    // first. Taking the subscription lock first can deadlock those writers.
+    await tx.$queryRaw`SELECT id FROM organisations WHERE id = ${scope.orgId} FOR UPDATE`;
     const locked = await tx.$queryRaw<Array<{ id: string }>>`
       SELECT id FROM billing_seat_subscriptions
       WHERE id = ${input.subscriptionId} FOR UPDATE
@@ -77,6 +84,9 @@ export async function changeFixedSeatCapacity(
       (revision) => revision.effectiveAt <= now,
     );
     if (!current) throw new AppError('BAD_REQUEST', 409, 'SEAT_CAPACITY_RECONCILIATION_REQUIRED');
+    if (subscription.capacityRevisions.some((revision) => revision.effectiveAt > now)) {
+      throw new AppError('BAD_REQUEST', 409, 'SEAT_CAPACITY_CHANGE_PENDING');
+    }
     if (current.quantity === input.quantity) {
       throw new AppError('BAD_REQUEST', 409, 'SEAT_CAPACITY_UNCHANGED');
     }
@@ -86,7 +96,7 @@ export async function changeFixedSeatCapacity(
       seatSubscriptionId: subscription.id, quantity: input.quantity, effectiveAt,
     } });
     await tx.adminAuditLog.create({ data: {
-      actorEmail: input.actorEmail,
+      actorEmail,
       action: 'billing.fixed_seat_capacity_changed',
       metadata: { seat_subscription_id: subscription.id, service_id: subscription.serviceId,
         organisation_id: subscription.orgId, team_id: subscription.teamId,

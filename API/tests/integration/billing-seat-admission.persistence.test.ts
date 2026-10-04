@@ -2,6 +2,7 @@ import { Prisma, PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { createTestDb } from '../helpers/test-db.js';
+import { getAdminAuthDomain } from '../../src/config/env.js';
 import {
   changeFixedSeatCapacity, listSeatSubscriptions,
 } from '../../src/services/billing-seat-capacity.service.js';
@@ -70,6 +71,9 @@ describe.skipIf(!enabled)('authoritative seat admission and evidence', () => {
     prisma = db.prisma;
     await prisma.user.create({ data: {
       id: ownerId, email: 'seat_owner@seat.example', userKey: 'seat_owner@seat.example',
+    } });
+    await prisma.domainRole.create({ data: {
+      userId: ownerId, domain: getAdminAuthDomain(), role: 'SUPERUSER',
     } });
     await prisma.organisation.create({ data: {
       id: orgId, ownerId, name: 'Seat test', slug: 'seat-test', domain: 'seat.example',
@@ -235,10 +239,12 @@ describe.skipIf(!enabled)('authoritative seat admission and evidence', () => {
     })).toBe(0);
 
     await expect(changeFixedSeatCapacity({
-      subscriptionId: 'seat_fixed_org', quantity: 1, actorEmail: 'admin@seat.example',
+      subscriptionId: 'seat_fixed_org', quantity: 1,
+      actor: { userId: ownerId, tokenVersion: 0 },
     }, { prisma })).rejects.toThrow('Fixed seat capacity exceeded');
     const increase = await changeFixedSeatCapacity({
-      subscriptionId: 'seat_fixed_org', quantity: 5, actorEmail: 'admin@seat.example',
+      subscriptionId: 'seat_fixed_org', quantity: 5,
+      actor: { userId: ownerId, tokenVersion: 0 },
     }, { prisma });
     expect(increase.quantity).toBe(5);
     const serviceId = (await prisma.billingSeatSubscription.findUniqueOrThrow({
@@ -254,12 +260,34 @@ describe.skipIf(!enabled)('authoritative seat admission and evidence', () => {
     const now = new Date();
     const reduced = await changeFixedSeatCapacity({
       subscriptionId: 'seat_fixed_full_month', quantity: 4,
-      actorEmail: 'admin@seat.example',
+      actor: { userId: ownerId, tokenVersion: 0 },
     }, { prisma, now: () => now });
     expect(reduced.effective_at.slice(0, 10)).toBe(
       new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1))
         .toISOString().slice(0, 10),
     );
+    await expect(changeFixedSeatCapacity({
+      subscriptionId: 'seat_fixed_full_month', quantity: 6,
+      actor: { userId: ownerId, tokenVersion: 0 },
+    }, { prisma, now: () => now })).rejects.toThrow('SEAT_CAPACITY_CHANGE_PENDING');
+    await prisma.domainRole.update({
+      where: { domain_userId: { domain: getAdminAuthDomain(), userId: ownerId } },
+      data: { role: 'USER' },
+    });
+    await expect(changeFixedSeatCapacity({
+      subscriptionId: 'seat_fixed_org', quantity: 6,
+      actor: { userId: ownerId, tokenVersion: 0 },
+    }, { prisma })).rejects.toThrow();
+    await prisma.domainRole.update({
+      where: { domain_userId: { domain: getAdminAuthDomain(), userId: ownerId } },
+      data: { role: 'SUPERUSER' },
+    });
+    await prisma.user.update({ where: { id: ownerId }, data: { tokenVersion: { increment: 1 } } });
+    await expect(changeFixedSeatCapacity({
+      subscriptionId: 'seat_fixed_org', quantity: 6,
+      actor: { userId: ownerId, tokenVersion: 0 },
+    }, { prisma })).rejects.toThrow();
+    await prisma.user.update({ where: { id: ownerId }, data: { tokenVersion: 0 } });
     const endedAt = new Date();
     await prisma.billingSeatSubscription.update({
       where: { id: 'seat_auto_empty' }, data: { endedAt },

@@ -179,7 +179,12 @@ audited positive quantity revision. Prorated changes and full-month increases
 start at the observed instant; a full-month decrease starts on the next UTC
 month boundary. Database admission checks reject a shrink below active members
 and unexpired pending invitations. The operator sees HTTP 409
-`SEAT_CAPACITY_EXCEEDED`; no roster is changed by a capacity request.
+`SEAT_CAPACITY_EXCEEDED`; no roster is changed by a capacity request. A pending
+future revision blocks another change with HTTP 409
+`SEAT_CAPACITY_CHANGE_PENDING` until it takes effect, and the Admin control
+shows its quantity and UTC effective date. Each change rechecks the operator's
+live superuser role and token epoch in the capacity transaction, after taking
+the same organisation lock used by roster admission.
 
 Seat intervals are private append-only billing evidence. A same-millisecond
 join/leave retains a zero-duration marker, preserving a captured baseline but
