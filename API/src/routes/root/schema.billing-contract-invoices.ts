@@ -42,7 +42,8 @@ export const billingContractInvoiceEndpoints: EndpointSchema[] = [
       'Append an immutable forward-effective commercial version. Markup is visible only on this contract-editor surface.',
     auth: adminAuth,
     body: {
-      usage_markup_bps: 'integer 0-100000 applied centrally to provider cost',
+      usage_markup_percent:
+        'exact decimal percentage string with at most two fractional digits, applied centrally',
       currency: 'exact three-letter ISO currency; no FX inference',
       payment_terms_days: 'integer 0-365',
       effective_from_month: 'UTC YYYY-MM, later than every existing version',

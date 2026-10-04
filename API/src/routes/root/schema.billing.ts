@@ -10,9 +10,11 @@ const tariffBody = {
   mode: 'standard | free | at_cost | custom',
   collection_mode:
     'stripe | manual | none; free requires none; none preserves rating/visibility without collecting payment',
-  markup_bps: 'optional integer 0-100000; omitted standard = 3000 (30%); custom requires explicit; free and at_cost = 0',
+  markup_percent:
+    'optional exact decimal percentage string, at most two fractional digits; standard defaults to 30.00; custom requires explicit; free and at_cost = 0.00',
   monthly_subscription:
-    '{ amount_minor: non-negative integer string, currency: three-letter uppercase ISO currency }',
+    '{ amount_minor: non-negative integer string, currency: uppercase ISO currency, charge_basis: flat | per_seat, seat_policy: automatic | fixed and seat_charge_timing: full_month | prorated for per_seat only }',
+  usage_payment_mode: 'prepaid | pay_as_you_go, independent of monthly subscription',
 };
 
 export const billingEndpoints: EndpointSchema[] = [
