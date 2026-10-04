@@ -5,6 +5,7 @@ import { AppError } from '../utils/errors.js';
 import { stripeUsageMeterTimestamp } from './billing-stripe-usage-validation.service.js';
 
 type Outcome = 'accepted' | 'not_accepted' | 'manual_invoice';
+const ACTIVE_SEND_LEASE_MS = 10 * 60_000;
 
 export async function listUncertainStripeUsageExports(
   deps?: { prisma?: PrismaClient },
@@ -58,6 +59,12 @@ export async function reconcileStripeUsageExport(
     if (row.stripeMeterEventState !== BillingStripeMeterEventState.UNCERTAIN &&
         row.stripeMeterEventState !== BillingStripeMeterEventState.RECONCILIATION_REQUIRED) {
       throw new AppError('BAD_REQUEST', 409, 'STRIPE_METER_EVENT_RECONCILIATION_NOT_PENDING');
+    }
+    if (row.stripeMeterEventAttemptedAt && (
+      params.observedAt < row.stripeMeterEventAttemptedAt ||
+      now.getTime() - row.stripeMeterEventAttemptedAt.getTime() < ACTIVE_SEND_LEASE_MS
+    )) {
+      throw new AppError('BAD_REQUEST', 409, 'STRIPE_METER_EVENT_SEND_STILL_ACTIVE');
     }
     if (params.outcome === 'not_accepted') {
       // The evidence releases exactly one retry. Outside Stripe's timestamp

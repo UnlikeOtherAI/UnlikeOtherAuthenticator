@@ -456,6 +456,12 @@ describe.skipIf(!databaseTestsEnabled)('organisation billing responsibility pers
         createdAt: new Date('2026-10-04T08:59:00.000Z'),
       },
     });
+    await expect(reconcileStripeUsageExport({
+      exportId: retryable.id, outcome: 'not_accepted',
+      evidenceReference: 'Stripe workbench search confirmed no event',
+      actorEmail: 'billing-ops@example.test', observedAt: new Date('2026-10-04T09:06:00.000Z'),
+      now: new Date('2026-10-04T09:06:00.000Z'),
+    }, { prisma })).rejects.toThrow('STRIPE_METER_EVENT_SEND_STILL_ACTIVE');
     await reconcileStripeUsageExport({
       exportId: retryable.id, outcome: 'not_accepted',
       evidenceReference: 'Stripe workbench search confirmed no event',

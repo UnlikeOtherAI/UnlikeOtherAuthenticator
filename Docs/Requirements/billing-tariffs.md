@@ -60,6 +60,10 @@ the rated liability, then reserves only the remaining amount as meter usage.
 The reservation and credit allocation share the payer account lock. Once a
 meter row is reserved or accepted, later top-ups can fund only new usage not
 already reserved for Stripe; refunds do not silently rewrite accepted usage.
+Each exported caller bucket stores gross and net cumulative quantity. Existing
+bucket allocations stay fixed, and newly consumed credits are applied only to
+new gross usage in that bucket. A legacy export without gross evidence holds
+subsequent export for reconciliation instead of guessing its prepaid share.
 Stripe delivery records a durable attempt before the external call. An
 unconfirmed attempt is retried only inside the identifier safety window measured
 from its immutable first possible acceptance, even if later attempts restart;
@@ -77,6 +81,8 @@ written atomically with the export state and admin audit log. The operator must
 verify the external Stripe event or invoice before submitting the decision;
 UOA cannot infer acceptance from a timeout or recover an expired identifier by
 automatic replay.
+An operator decision cannot race an active send lease, and an old response can
+mark acceptance only for the exact identifier, generation, and attempt it sent.
 
 `BillingCreditsV1` 1.4.0 callers opt in with
 `x-uoa-billing-credits-protocol: 1.4.0`. On a Ledger or legacy reconciliation

@@ -24,6 +24,7 @@ type ExportRow = {
   currency: string;
   cumulativeCustomerCharge: string;
   cumulativeMeterQuantity: bigint;
+  cumulativeGrossMeterQuantity?: bigint | null;
   deltaMeterQuantity: bigint;
   stripeMeterEventIdentifier: string;
   stripeMeterEventCreatedAt: Date | null;
@@ -88,7 +89,8 @@ function setup(existing: ExportRow[] = [], confirmedOffset = 0n) {
       data,
     }: {
       where: { id: string; stripeMeterEventCreatedAt: null; stripeMeterEventState?: BillingStripeMeterEventState;
-        stripeMeterEventAttemptedAt?: Date | null; stripeMeterEventFirstAttemptedAt?: Date | null };
+        stripeMeterEventAttemptedAt?: Date | null; stripeMeterEventFirstAttemptedAt?: Date | null;
+        stripeMeterEventIdentifier?: string; stripeMeterEventAttemptGeneration?: number };
       data: {
         stripeMeterEventCreatedAt?: Date;
         stripeMeterEventAttemptedAt?: Date;
@@ -101,7 +103,11 @@ function setup(existing: ExportRow[] = [], confirmedOffset = 0n) {
           (!('stripeMeterEventState' in where) || candidate.stripeMeterEventState === where.stripeMeterEventState) &&
           (!('stripeMeterEventAttemptedAt' in where) || candidate.stripeMeterEventAttemptedAt === where.stripeMeterEventAttemptedAt) &&
           (!('stripeMeterEventFirstAttemptedAt' in where) ||
-            candidate.stripeMeterEventFirstAttemptedAt === where.stripeMeterEventFirstAttemptedAt),
+            candidate.stripeMeterEventFirstAttemptedAt === where.stripeMeterEventFirstAttemptedAt) &&
+          (!('stripeMeterEventIdentifier' in where) ||
+            candidate.stripeMeterEventIdentifier === where.stripeMeterEventIdentifier) &&
+          (!('stripeMeterEventAttemptGeneration' in where) ||
+            candidate.stripeMeterEventAttemptGeneration === where.stripeMeterEventAttemptGeneration),
       );
       if (!row) return { count: 0 };
       if (data.stripeMeterEventCreatedAt) row.stripeMeterEventCreatedAt = data.stripeMeterEventCreatedAt;
@@ -185,6 +191,7 @@ describe('Stripe usage export', () => {
       data: expect.objectContaining({
         cumulativeCustomerCharge: '2.5',
         cumulativeMeterQuantity: 250_000_000n,
+      cumulativeGrossMeterQuantity: 250_000_000n,
         deltaMeterQuantity: 250_000_000n,
         createdAt: capturedAt,
       }),
@@ -261,6 +268,41 @@ describe('Stripe usage export', () => {
     );
   });
 
+  it('keeps caller A charged while applying later credits only to caller B new usage', async () => {
+    const prior = {
+      id: 'export_caller_a', accountId: stripeAccount.id, subscriptionId: 'subscription_1',
+      ledgerSnapshotCursor: 'mus_0123456789ABCDEFGHIJKLMNOPQRSTUV',
+      billingMonth: '2026-07', billingProduct: 'deepwater', callerProduct: 'deepsignal',
+      currency: 'USD', cumulativeCustomerCharge: '1.25',
+      cumulativeMeterQuantity: 125_000_000n, cumulativeGrossMeterQuantity: 125_000_000n,
+      deltaMeterQuantity: 125_000_000n, stripeMeterEventIdentifier: 'uoa_me_caller_a',
+      stripeMeterEventCreatedAt: capturedAt, stripeMeterEventState: BillingStripeMeterEventState.ACCEPTED,
+      createdAt: capturedAt,
+    };
+    const next = usage('1', 'mus_1123456789ABCDEFGHIJKLMNOPQRSTUV');
+    next.snapshot.capturedAt = new Date(capturedAt.getTime() + 60_000).toISOString();
+    next.lines.push({ ...next.lines[0]!, callerProduct: 'deeptest' });
+    const { prisma, stripe, createExport, meterCreate } = setup([prior], 50_000_000n);
+    await exportStripeUsage(
+      { subscriptionId: 'subscription_1', billingMonth: '2026-07' },
+      {
+        prisma: prisma as never, stripe: stripe as never,
+        settleCredits: vi.fn().mockResolvedValue(50_000_000n),
+        fetchUsage: vi.fn().mockResolvedValue(next),
+        now: () => new Date(capturedAt.getTime() + 60_000),
+      },
+    );
+    expect(createExport).toHaveBeenCalledTimes(1);
+    expect(createExport).toHaveBeenCalledWith({ data: expect.objectContaining({
+      callerProduct: 'deeptest', cumulativeGrossMeterQuantity: 125_000_000n,
+      cumulativeMeterQuantity: 75_000_000n, deltaMeterQuantity: 75_000_000n,
+    }) });
+    expect(meterCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ payload: expect.objectContaining({ value: '75000000' }) }),
+      expect.any(Object),
+    );
+  });
+
   it('holds if a later allocation would reduce already exported Stripe usage', async () => {
     const prior = {
       id: 'export_gross_first',
@@ -273,6 +315,7 @@ describe('Stripe usage export', () => {
       currency: 'USD',
       cumulativeCustomerCharge: '2.5',
       cumulativeMeterQuantity: 250_000_000n,
+      cumulativeGrossMeterQuantity: 250_000_000n,
       deltaMeterQuantity: 250_000_000n,
       stripeMeterEventIdentifier: 'uoa_me_gross_first',
       stripeMeterEventCreatedAt: capturedAt,
@@ -293,7 +336,7 @@ describe('Stripe usage export', () => {
         fetchUsage: vi.fn().mockResolvedValue(next),
         now: () => later,
       },
-    )).rejects.toThrow('STRIPE_METER_NEGATIVE_CORRECTION_REQUIRES_RECONCILIATION');
+    )).rejects.toThrow('STRIPE_BUCKET_CREDIT_RECONCILIATION_REQUIRED');
     expect(meterCreate).not.toHaveBeenCalled();
   });
 
@@ -309,6 +352,7 @@ describe('Stripe usage export', () => {
       currency: 'USD',
       cumulativeCustomerCharge: '2.5',
       cumulativeMeterQuantity: 250_000_000n,
+      cumulativeGrossMeterQuantity: 250_000_000n,
       deltaMeterQuantity: 250_000_000n,
       stripeMeterEventIdentifier: 'uoa_me_uncertain',
       stripeMeterEventCreatedAt: null,
@@ -356,6 +400,38 @@ describe('Stripe usage export', () => {
     expect(rows[0]?.stripeMeterEventState).toBe(BillingStripeMeterEventState.RECONCILIATION_REQUIRED);
   });
 
+  it('cannot settle a new identifier generation with an old in-flight response', async () => {
+    const { prisma, stripe, meterCreate, rows } = setup();
+    let release!: (value: { created: number; livemode: boolean }) => void;
+    const pendingResponse = new Promise<{ created: number; livemode: boolean }>((resolve) => {
+      release = resolve;
+    });
+    meterCreate.mockImplementation(() => pendingResponse);
+    const inFlight = exportStripeUsage(
+      { subscriptionId: 'subscription_1', billingMonth: '2026-07' },
+      {
+        prisma: prisma as never, stripe: stripe as never,
+        settleCredits: vi.fn().mockResolvedValue(0n),
+        fetchUsage: vi.fn().mockResolvedValue(usage()),
+        now: () => capturedAt,
+      },
+    );
+    await vi.waitFor(() => expect(meterCreate).toHaveBeenCalledTimes(1));
+    const row = rows[0];
+    if (!row) throw new Error('export fixture missing');
+    const oldIdentifier = row.stripeMeterEventIdentifier;
+    row.stripeMeterEventIdentifier = `${oldIdentifier}_r1`;
+    row.stripeMeterEventAttemptGeneration = 1;
+    row.stripeMeterEventState = BillingStripeMeterEventState.PENDING;
+    row.stripeMeterEventAttemptedAt = null;
+    row.stripeMeterEventFirstAttemptedAt = null;
+    release({ created: Math.floor(capturedAt.getTime() / 1000), livemode: false });
+    await expect(inFlight).rejects.toThrow('STRIPE_METER_EVENT_ACCEPTANCE_UNCERTAIN');
+    expect(row.stripeMeterEventIdentifier).toBe(`${oldIdentifier}_r1`);
+    expect(row.stripeMeterEventState).toBe(BillingStripeMeterEventState.PENDING);
+    expect(row.stripeMeterEventCreatedAt).toBeNull();
+  });
+
   it('holds a lower corrected snapshot for an auditable Stripe correction', async () => {
     const prior = {
       id: 'export_1',
@@ -368,6 +444,7 @@ describe('Stripe usage export', () => {
       currency: 'USD',
       cumulativeCustomerCharge: '2.5',
       cumulativeMeterQuantity: 250_000_000n,
+      cumulativeGrossMeterQuantity: 250_000_000n,
       deltaMeterQuantity: 250_000_000n,
       stripeMeterEventIdentifier: 'uoa_me_prior',
       stripeMeterEventCreatedAt: capturedAt,
@@ -387,7 +464,7 @@ describe('Stripe usage export', () => {
         fetchUsage: vi.fn().mockResolvedValue(nextUsage),
         now: () => later,
       },
-    )).rejects.toThrow('STRIPE_METER_NEGATIVE_CORRECTION_REQUIRES_RECONCILIATION');
+    )).rejects.toThrow('STRIPE_BUCKET_USAGE_RECONCILIATION_REQUIRED');
     expect(meterCreate).not.toHaveBeenCalled();
   });
 
@@ -403,6 +480,7 @@ describe('Stripe usage export', () => {
       currency: 'USD',
       cumulativeCustomerCharge: '2.5',
       cumulativeMeterQuantity: 250_000_000n,
+      cumulativeGrossMeterQuantity: 250_000_000n,
       deltaMeterQuantity: 250_000_000n,
       stripeMeterEventIdentifier: 'uoa_me_pending',
       stripeMeterEventCreatedAt: null,
@@ -440,6 +518,7 @@ describe('Stripe usage export', () => {
       currency: 'USD',
       cumulativeCustomerCharge: '2.5',
       cumulativeMeterQuantity: 250_000_000n,
+      cumulativeGrossMeterQuantity: 250_000_000n,
       deltaMeterQuantity: 250_000_000n,
       stripeMeterEventIdentifier: 'uoa_me_pending',
       stripeMeterEventCreatedAt: null,
@@ -484,6 +563,7 @@ describe('Stripe usage export', () => {
       currency: 'USD',
       cumulativeCustomerCharge: '2.5',
       cumulativeMeterQuantity: 250_000_000n,
+      cumulativeGrossMeterQuantity: 250_000_000n,
       deltaMeterQuantity: 250_000_000n,
       stripeMeterEventIdentifier: 'uoa_me_pre_boundary',
       stripeMeterEventCreatedAt: preBoundaryCapturedAt,
