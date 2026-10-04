@@ -27,7 +27,9 @@ type ExportRow = {
   deltaMeterQuantity: bigint;
   stripeMeterEventIdentifier: string;
   stripeMeterEventCreatedAt: Date | null;
+  stripeMeterEventFirstAttemptedAt?: Date | null;
   stripeMeterEventAttemptedAt?: Date | null;
+  stripeMeterEventAttemptGeneration?: number;
   stripeMeterEventState?: BillingStripeMeterEventState;
   createdAt: Date;
 };
@@ -60,7 +62,10 @@ function setup(existing: ExportRow[] = [], confirmedOffset = 0n) {
           (!where.ledgerSnapshotCursor ||
             row.ledgerSnapshotCursor === where.ledgerSnapshotCursor) &&
           (!('stripeMeterEventCreatedAt' in where) ||
-            row.stripeMeterEventCreatedAt === where.stripeMeterEventCreatedAt),
+            row.stripeMeterEventCreatedAt === where.stripeMeterEventCreatedAt) &&
+          (!('stripeMeterEventState' in where) ||
+            typeof where.stripeMeterEventState !== 'object' ||
+            row.stripeMeterEventState !== (where.stripeMeterEventState as { not: string }).not),
       )
       .sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime()),
   );
@@ -69,6 +74,8 @@ function setup(existing: ExportRow[] = [], confirmedOffset = 0n) {
       id: `export_${rows.length + 1}`,
       stripeMeterEventCreatedAt: null,
       stripeMeterEventAttemptedAt: null,
+      stripeMeterEventFirstAttemptedAt: null,
+      stripeMeterEventAttemptGeneration: 0,
       stripeMeterEventState: BillingStripeMeterEventState.PENDING,
       ...data,
     };
@@ -80,19 +87,28 @@ function setup(existing: ExportRow[] = [], confirmedOffset = 0n) {
       where,
       data,
     }: {
-      where: { id: string; stripeMeterEventCreatedAt: null; stripeMeterEventState?: BillingStripeMeterEventState };
+      where: { id: string; stripeMeterEventCreatedAt: null; stripeMeterEventState?: BillingStripeMeterEventState;
+        stripeMeterEventAttemptedAt?: Date | null; stripeMeterEventFirstAttemptedAt?: Date | null };
       data: {
         stripeMeterEventCreatedAt?: Date;
         stripeMeterEventAttemptedAt?: Date;
+        stripeMeterEventFirstAttemptedAt?: Date;
         stripeMeterEventState?: BillingStripeMeterEventState;
       };
     }) => {
       const row = rows.find(
-        (candidate) => candidate.id === where.id && candidate.stripeMeterEventCreatedAt === null,
+        (candidate) => candidate.id === where.id && candidate.stripeMeterEventCreatedAt === null &&
+          (!('stripeMeterEventState' in where) || candidate.stripeMeterEventState === where.stripeMeterEventState) &&
+          (!('stripeMeterEventAttemptedAt' in where) || candidate.stripeMeterEventAttemptedAt === where.stripeMeterEventAttemptedAt) &&
+          (!('stripeMeterEventFirstAttemptedAt' in where) ||
+            candidate.stripeMeterEventFirstAttemptedAt === where.stripeMeterEventFirstAttemptedAt),
       );
       if (!row) return { count: 0 };
       if (data.stripeMeterEventCreatedAt) row.stripeMeterEventCreatedAt = data.stripeMeterEventCreatedAt;
       if (data.stripeMeterEventAttemptedAt) row.stripeMeterEventAttemptedAt = data.stripeMeterEventAttemptedAt;
+      if (data.stripeMeterEventFirstAttemptedAt) {
+        row.stripeMeterEventFirstAttemptedAt = data.stripeMeterEventFirstAttemptedAt;
+      }
       if (data.stripeMeterEventState) row.stripeMeterEventState = data.stripeMeterEventState;
       return { count: 1 };
     },
@@ -296,6 +312,7 @@ describe('Stripe usage export', () => {
       deltaMeterQuantity: 250_000_000n,
       stripeMeterEventIdentifier: 'uoa_me_uncertain',
       stripeMeterEventCreatedAt: null,
+      stripeMeterEventFirstAttemptedAt: capturedAt,
       stripeMeterEventAttemptedAt: capturedAt,
       stripeMeterEventState: BillingStripeMeterEventState.UNCERTAIN,
       createdAt: capturedAt,
@@ -312,6 +329,31 @@ describe('Stripe usage export', () => {
       },
     )).rejects.toThrow('STRIPE_METER_EVENT_RECONCILIATION_REQUIRED');
     expect(meterCreate).not.toHaveBeenCalled();
+  });
+
+  it('anchors retry expiry to the first possible acceptance across repeated crashes', async () => {
+    const { prisma, stripe, meterCreate, rows } = setup();
+    meterCreate.mockRejectedValue(new Error('lost Stripe acknowledgement'));
+    let clock = new Date(capturedAt);
+    const run = () => exportStripeUsage(
+      { subscriptionId: 'subscription_1', billingMonth: '2026-07' },
+      {
+        prisma: prisma as never, stripe: stripe as never,
+        settleCredits: vi.fn().mockResolvedValue(0n),
+        fetchUsage: vi.fn().mockResolvedValue(usage()),
+        now: () => clock,
+      },
+    );
+    await expect(run()).rejects.toThrow('lost Stripe acknowledgement');
+    expect(rows[0]?.stripeMeterEventFirstAttemptedAt).toEqual(capturedAt);
+    clock = new Date(capturedAt.getTime() + 3 * 60_000);
+    await expect(run()).rejects.toThrow('lost Stripe acknowledgement');
+    expect(rows[0]?.stripeMeterEventAttemptedAt).toEqual(clock);
+    expect(rows[0]?.stripeMeterEventFirstAttemptedAt).toEqual(capturedAt);
+    clock = new Date(capturedAt.getTime() + 24 * 60 * 60_000);
+    await expect(run()).rejects.toThrow('STRIPE_METER_EVENT_RECONCILIATION_REQUIRED');
+    expect(meterCreate).toHaveBeenCalledTimes(2);
+    expect(rows[0]?.stripeMeterEventState).toBe(BillingStripeMeterEventState.RECONCILIATION_REQUIRED);
   });
 
   it('holds a lower corrected snapshot for an auditable Stripe correction', async () => {

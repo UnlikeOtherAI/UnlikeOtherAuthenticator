@@ -10,9 +10,9 @@ describe('dated credit payer lineage', () => {
     const prisma = { billingOrgResponsibility: { findUnique: vi.fn().mockResolvedValue({
       createdAt: when('2026-01-15T12:00:00.000Z'),
       transitions: [
-        { kind: 'ASSUMED', effectiveAt: when('2026-01-15T12:00:00.000Z') },
-        { kind: 'RELEASED', effectiveAt: when('2026-03-20T12:00:00.000Z') },
-        { kind: 'ASSUMED', effectiveAt: when('2026-05-10T12:00:00.000Z') },
+        { kind: 'ASSUMED', effectiveAt: when('2026-01-15T12:00:00.000Z'), source: 'customer_action' },
+        { kind: 'RELEASED', effectiveAt: when('2026-03-20T12:00:00.000Z'), source: 'customer_action' },
+        { kind: 'ASSUMED', effectiveAt: when('2026-05-10T12:00:00.000Z'), source: 'customer_action' },
       ],
     }) } };
     const check = (billingMonth: string, scope: BillingAssignmentScope) =>
@@ -29,10 +29,23 @@ describe('dated credit payer lineage', () => {
   it('holds legacy prehistory when an old mutable responsibility row lost earlier intervals', async () => {
     const prisma = { billingOrgResponsibility: { findUnique: vi.fn().mockResolvedValue({
       createdAt: when('2026-01-15T12:00:00.000Z'),
-      transitions: [{ kind: 'ASSUMED', effectiveAt: when('2026-05-10T12:00:00.000Z') }],
+      transitions: [{ kind: 'ASSUMED', effectiveAt: when('2026-05-10T12:00:00.000Z'), source: 'legacy_backfill' }],
     }) } };
     await expect(assertUnambiguousCreditPayer(prisma as never, {
       orgId: 'org_1', billingMonth: '2026-02', scope: BillingAssignmentScope.TEAM,
+    })).rejects.toThrow('BILLING_CREDIT_PAYER_PREHISTORY_UNCERTAIN');
+  });
+
+  it('holds legacy backdates and a one-second creation-boundary gap', async () => {
+    const prisma = { billingOrgResponsibility: { findUnique: vi.fn().mockResolvedValue({
+      createdAt: when('2026-03-01T00:00:00.100Z'),
+      transitions: [{
+        kind: 'ASSUMED', effectiveAt: when('2026-02-28T23:59:59.900Z'),
+        source: 'legacy_backfill',
+      }],
+    }) } };
+    await expect(assertUnambiguousCreditPayer(prisma as never, {
+      orgId: 'org_1', billingMonth: '2026-03', scope: BillingAssignmentScope.ORGANISATION,
     })).rejects.toThrow('BILLING_CREDIT_PAYER_PREHISTORY_UNCERTAIN');
   });
 });

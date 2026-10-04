@@ -67,6 +67,7 @@ describe('shared credit reads while Stripe collection is disabled', () => {
       resolvePortfolioProduct: vi.fn().mockResolvedValue('deepwater'),
       fetchPortfolio,
       settlePortfolio,
+      hasPendingSettlementWatch: vi.fn().mockResolvedValue(false),
       resolveViewer: vi.fn().mockResolvedValue({
         userId: request.userId,
         organisationId: request.organisationId,
@@ -96,5 +97,11 @@ describe('shared credit reads while Stripe collection is disabled', () => {
     });
     await expect(getBillingCredits({ request, actorToken: 'actor', credential }, deps))
       .rejects.toThrow('BILLING_CREDITS_PENDING_RECONCILIATION');
+    settlePortfolio.mockReset();
+    deps.hasPendingSettlementWatch.mockResolvedValue(true);
+    const olderPeriodHold = await getBillingCredits({
+      request, actorToken: 'actor', credential, supportsBillingStatus: true,
+    }, deps);
+    expect(olderPeriodHold.billing_status?.settlement_state).toBe('pending_reconciliation');
   });
 });

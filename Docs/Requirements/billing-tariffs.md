@@ -61,9 +61,22 @@ The reservation and credit allocation share the payer account lock. Once a
 meter row is reserved or accepted, later top-ups can fund only new usage not
 already reserved for Stripe; refunds do not silently rewrite accepted usage.
 Stripe delivery records a durable attempt before the external call. An
-unconfirmed attempt is retried only inside the identifier safety window;
+unconfirmed attempt is retried only inside the identifier safety window measured
+from its immutable first possible acceptance, even if later attempts restart;
 after that it is held for reconciliation. UOA never assumes a timed-out event
 was rejected or sends an unverified negative meter correction.
+Platform billing operators use the machine-only
+`GET /internal/admin/billing/stripe/usage-reconciliations` report to find
+unconfirmed meter rows. `POST` to the same path with `/:exportId` records an
+evidence reference, observation time, actor, and one of three decisions:
+confirmed accepted, confirmed not accepted (releases one retry generation with
+a new identifier only while
+Stripe's meter timestamp window remains open), or a verified manual invoice
+line for an expired period. Evidence is append-only and the resolution is
+written atomically with the export state and admin audit log. The operator must
+verify the external Stripe event or invoice before submitting the decision;
+UOA cannot infer acceptance from a timeout or recover an expired identifier by
+automatic replay.
 
 `BillingCreditsV1` 1.4.0 callers opt in with
 `x-uoa-billing-credits-protocol: 1.4.0`. On a Ledger or legacy reconciliation

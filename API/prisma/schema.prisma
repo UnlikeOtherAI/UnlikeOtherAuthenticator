@@ -195,6 +195,7 @@ enum BillingStripeMeterEventState {
   UNCERTAIN
   ACCEPTED
   RECONCILIATION_REQUIRED
+  MANUAL_SETTLED
 }
 
 enum BillingAssignmentScope {
@@ -2233,17 +2234,37 @@ model BillingStripeUsageExport {
   deltaMeterQuantity         BigInt    @map("delta_meter_quantity")
   stripeMeterEventIdentifier String    @unique @map("stripe_meter_event_identifier") @db.VarChar(100)
   stripeMeterEventCreatedAt  DateTime? @map("stripe_meter_event_created_at")
+  stripeMeterEventFirstAttemptedAt DateTime? @map("stripe_meter_event_first_attempted_at")
   stripeMeterEventAttemptedAt DateTime? @map("stripe_meter_event_attempted_at")
+  stripeMeterEventAttemptGeneration Int @default(0) @map("stripe_meter_event_attempt_generation")
   stripeMeterEventState       BillingStripeMeterEventState @default(PENDING) @map("stripe_meter_event_state")
   createdAt                  DateTime  @default(now()) @map("created_at")
 
   account      BillingStripeAccount      @relation(fields: [accountId], references: [id], onDelete: Restrict)
   subscription BillingStripeSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+  reconciliations BillingStripeUsageReconciliation[]
 
   @@unique([subscriptionId, ledgerSnapshotCursor, callerProduct, currency])
   @@index([accountId])
   @@index([subscriptionId, billingMonth, callerProduct, currency, createdAt])
   @@map("billing_stripe_usage_exports")
+}
+
+model BillingStripeUsageReconciliation {
+  id                String   @id @default(cuid())
+  exportId          String   @map("export_id")
+  outcome           String   @db.VarChar(32)
+  evidenceReference String   @map("evidence_reference") @db.VarChar(255)
+  priorEventIdentifier String @map("prior_event_identifier") @db.VarChar(100)
+  priorAttemptGeneration Int @map("prior_attempt_generation")
+  actorEmail        String   @map("actor_email") @db.VarChar(255)
+  observedAt        DateTime @map("observed_at")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  export BillingStripeUsageExport @relation(fields: [exportId], references: [id], onDelete: Restrict)
+
+  @@index([exportId, createdAt])
+  @@map("billing_stripe_usage_reconciliations")
 }
 
 model BillingStripeWebhookEvent {

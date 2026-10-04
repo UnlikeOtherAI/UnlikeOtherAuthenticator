@@ -152,6 +152,19 @@ export async function runCreditSettlementCycle(deps?: {
       });
       settled += 1;
     } catch (error) {
+      if (error instanceof AppError && error.message === 'BILLING_CREDIT_HISTORICAL_PAYER_MISMATCH') {
+        // Another account owned this period. Its watch carries the liability;
+        // this account has no unsettled charge to surface to its customer.
+        await prisma.billingCreditSettlementWatch.update({
+          where: { id: watch.id },
+          data: {
+            lastCheckedAt: now,
+            nextCheckAt: new Date(now.getTime() + 24 * 60 * 60_000),
+            lastError: null,
+          },
+        });
+        continue;
+      }
       await prisma.billingCreditSettlementWatch.update({
         where: { id: watch.id },
         data: {

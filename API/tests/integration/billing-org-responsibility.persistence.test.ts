@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { resolveCreditAccount } from '../../src/services/billing-credit-account.service.js';
 import { settleCreditPortfolio } from '../../src/services/billing-credit-settlement.service.js';
+import { reconcileStripeUsageExport } from '../../src/services/billing-stripe-reconciliation.service.js';
 import type { NormalizedMeteringPortfolio } from '../../src/services/billing-metering.types.js';
 import {
   assertOrgBillingAssumable,
@@ -394,5 +395,82 @@ describe.skipIf(!databaseTestsEnabled)('organisation billing responsibility pers
       where: { creditAccountId: organisationAccount.id },
     });
     expect(organisationRows).toBeGreaterThan(0);
+  });
+
+  it('records immutable evidence before resolving an expired uncertain Stripe delivery', async () => {
+    const row = await prisma.billingStripeUsageExport.create({
+      data: {
+        id: 'bue_org_billing_uncertain', accountId: ids.account,
+        subscriptionId: 'bss_org_billing_team',
+        ledgerSnapshotCursor: 'bus_org_billing_uncertain', billingMonth: '2026-07',
+        billingProduct: 'deepwater', callerProduct: 'deepwater', currency: 'USD',
+        cumulativeCustomerCharge: '1.30', cumulativeMeterQuantity: 130000000n,
+        deltaMeterQuantity: 130000000n,
+        stripeMeterEventIdentifier: 'uoa_me_org_billing_uncertain',
+        stripeMeterEventState: 'RECONCILIATION_REQUIRED',
+        stripeMeterEventFirstAttemptedAt: new Date('2026-07-21T12:00:00.000Z'),
+        stripeMeterEventAttemptedAt: new Date('2026-07-21T12:00:00.000Z'),
+        createdAt: new Date('2026-07-21T11:59:00.000Z'),
+      },
+    });
+    await expect(reconcileStripeUsageExport({
+      exportId: row.id, outcome: 'not_accepted',
+      evidenceReference: 'Stripe workbench search 2026-10-04 no event',
+      actorEmail: 'billing-ops@example.test', observedAt: new Date('2026-10-04T10:00:00.000Z'),
+      now: new Date('2026-10-04T11:00:00.000Z'),
+    }, { prisma })).rejects.toThrow('STRIPE_USAGE_MONTH_OUT_OF_RANGE');
+    expect(await prisma.billingStripeUsageReconciliation.count({ where: { exportId: row.id } }))
+      .toBe(0);
+    await reconcileStripeUsageExport({
+      exportId: row.id, outcome: 'manual_invoice',
+      evidenceReference: 'in_approved_reconciliation_001',
+      actorEmail: 'billing-ops@example.test', observedAt: new Date('2026-10-04T10:00:00.000Z'),
+      now: new Date('2026-10-04T11:00:00.000Z'),
+    }, { prisma });
+    const settled = await prisma.billingStripeUsageExport.findUniqueOrThrow({ where: { id: row.id } });
+    expect(settled.stripeMeterEventState).toBe('MANUAL_SETTLED');
+    const evidence = await prisma.billingStripeUsageReconciliation.findFirstOrThrow({
+      where: { exportId: row.id },
+    });
+    expect(evidence.evidenceReference).toBe('in_approved_reconciliation_001');
+    expect(evidence.priorEventIdentifier).toBe('uoa_me_org_billing_uncertain');
+    await expect(prisma.billingStripeUsageReconciliation.update({
+      where: { id: evidence.id }, data: { evidenceReference: 'altered' },
+    })).rejects.toThrow();
+    expect(await prisma.adminAuditLog.count({
+      where: { action: 'billing.stripe_meter_reconciled' },
+    })).toBe(1);
+
+    const retryable = await prisma.billingStripeUsageExport.create({
+      data: {
+        id: 'bue_org_billing_retryable', accountId: ids.account,
+        subscriptionId: 'bss_org_billing_team',
+        ledgerSnapshotCursor: 'bus_org_billing_retryable', billingMonth: '2026-10',
+        billingProduct: 'deepwater', callerProduct: 'deepwater', currency: 'USD',
+        cumulativeCustomerCharge: '0.20', cumulativeMeterQuantity: 20000000n,
+        deltaMeterQuantity: 20000000n,
+        stripeMeterEventIdentifier: 'uoa_me_org_billing_retryable',
+        stripeMeterEventState: 'RECONCILIATION_REQUIRED',
+        stripeMeterEventFirstAttemptedAt: new Date('2026-10-04T09:00:00.000Z'),
+        stripeMeterEventAttemptedAt: new Date('2026-10-04T09:05:00.000Z'),
+        createdAt: new Date('2026-10-04T08:59:00.000Z'),
+      },
+    });
+    await reconcileStripeUsageExport({
+      exportId: retryable.id, outcome: 'not_accepted',
+      evidenceReference: 'Stripe workbench search confirmed no event',
+      actorEmail: 'billing-ops@example.test', observedAt: new Date('2026-10-04T10:00:00.000Z'),
+      now: new Date('2026-10-04T11:00:00.000Z'),
+    }, { prisma });
+    const fresh = await prisma.billingStripeUsageExport.findUniqueOrThrow({
+      where: { id: retryable.id },
+    });
+    expect(fresh.stripeMeterEventState).toBe('PENDING');
+    expect(fresh.stripeMeterEventFirstAttemptedAt).toBeNull();
+    expect(fresh.stripeMeterEventAttemptGeneration).toBe(1);
+    expect(fresh.stripeMeterEventIdentifier).toBe('uoa_me_org_billing_retryable_r1');
+    expect((await prisma.billingStripeUsageReconciliation.findFirstOrThrow({
+      where: { exportId: retryable.id },
+    })).priorEventIdentifier).toBe('uoa_me_org_billing_retryable');
   });
 });
