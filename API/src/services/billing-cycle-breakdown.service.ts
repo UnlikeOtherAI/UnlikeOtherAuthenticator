@@ -59,23 +59,12 @@ export function renderBillingCycleBreakdownCsv(detail: BillingCycleDetailV2): Bu
     }
   }
   for (const line of detail.usage_lines) {
-    rows.push({ record_type: 'usage', id: line.id, description: line.service_id,
-      ...period, quantity: line.raw_units.total, unit: line.usage_unit,
+    rows.push({ record_type: 'usage', id: line.id, description: line.label,
+      ...period,
       customer_charge: line.customer_charge?.amount ?? 'pending',
       currency: line.customer_charge?.currency ?? '',
       credits_consumed: line.credits_consumed ?? 'pending',
       billing_status: detail.state });
-    for (const [kind, quantity] of Object.entries(line.raw_units)) {
-      if (kind === 'total') continue;
-      rows.push({ record_type: 'measured_dimension', id: line.id,
-        description: kind, ...period, quantity, unit: line.usage_unit,
-        billing_status: detail.state });
-    }
-    for (const modality of line.modalities ?? []) {
-      rows.push({ record_type: 'modality', id: line.id,
-        description: modality.modality, ...period, quantity: modality.raw_units,
-        unit: line.usage_unit, billing_status: detail.state });
-    }
   }
   for (const total of detail.totals) {
     rows.push({ record_type: 'total', id: detail.cycle_id,
@@ -110,7 +99,7 @@ function newPage(context: DrawContext): void {
   if (context.pageNumber > 0) context.page = context.document.addPage([pageWidth, pageHeight]);
   context.pageNumber += 1;
   context.y = pageHeight - margin;
-  context.page.drawText('UOA - Customer billing usage breakdown', {
+  context.page.drawText('UOA - Customer billing charge breakdown', {
     x: margin, y: context.y, font: context.bold, size: 10,
     color: rgb(0.16, 0.2, 0.27),
   });
@@ -178,7 +167,7 @@ export async function renderBillingCycleBreakdownPdf(detail: BillingCycleDetailV
   newPage(context);
   draw(context, `Billing month ${detail.period.month}`, { bold: true, size: 17 });
   draw(context, `${detail.product.name} - ${detail.scope.payer_scope} billing`, { size: 10 });
-  draw(context, 'Measured usage and customer charges. This breakdown is not a payment invoice.');
+  draw(context, 'Customer charges and credits. This breakdown is not a payment invoice.');
   context.y -= 12;
   draw(context, 'Subscription and seats', { bold: true, size: 12 });
   if (detail.subscription_lines.length === 0) draw(context, 'No confirmed subscription line.');
@@ -192,20 +181,10 @@ export async function renderBillingCycleBreakdownPdf(detail: BillingCycleDetailV
     }
   }
   context.y -= 8;
-  draw(context, 'Measured usage', { bold: true, size: 12 });
+  draw(context, 'Usage charges', { bold: true, size: 12 });
   if (detail.usage_lines.length === 0) draw(context, 'No confirmed usage line.');
   for (const line of detail.usage_lines) {
-    draw(context, `${line.service_id}: ${line.raw_units.total} ${line.usage_unit}, ${line.calls} calls`,
-      { bold: true });
-    draw(context, `Input ${line.raw_units.input}; cached input ${line.raw_units.cached_input}; output ${line.raw_units.output}`);
-    if (line.raw_units.reasoning) draw(context, `Reasoning ${line.raw_units.reasoning}`);
-    if (line.raw_units.cache_write) draw(context, `Cache write ${line.raw_units.cache_write}`);
-    if (line.raw_units.cache_write_5m) draw(context,
-      `Five-minute cache write ${line.raw_units.cache_write_5m}`);
-    if (line.raw_units.cache_write_1h) draw(context,
-      `One-hour cache write ${line.raw_units.cache_write_1h}`);
-    for (const modality of line.modalities ?? []) draw(context,
-      `${modality.modality}: ${modality.raw_units} ${line.usage_unit}`);
+    draw(context, line.label, { bold: true });
     draw(context, `Customer charge ${line.customer_charge?.display ?? 'pending'}; credits used ${line.credits_consumed ?? 'pending'}`);
   }
   context.y -= 8;

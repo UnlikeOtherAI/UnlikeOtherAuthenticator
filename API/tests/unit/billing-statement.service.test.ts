@@ -358,18 +358,8 @@ describe('canonical UOA billing statement', () => {
       expect.objectContaining({ group_by: 'service', sha256: 'a'.repeat(64) }),
       expect.objectContaining({ group_by: 'user', sha256: 'b'.repeat(64) }),
     ]);
-    expect(statement.usage.totals).toEqual([
-      {
-        usage_unit: 'requests',
-        raw_units: '10',
-        display: '10 requests used',
-      },
-      {
-        usage_unit: 'tokens',
-        raw_units: '150',
-        display: '150 tokens used',
-      },
-    ]);
+    expect(statement.usage).not.toHaveProperty('totals');
+    expect(JSON.stringify(statement)).not.toMatch(/raw_units|usage_unit|provider_cost/i);
     expect(statement.usage.charge_totals).toEqual([
       {
         currency: 'USD',

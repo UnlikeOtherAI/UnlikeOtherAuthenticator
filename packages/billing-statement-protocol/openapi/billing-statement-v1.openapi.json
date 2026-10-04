@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "UOA BillingStatementV1 consumer contract",
-    "version": "4.1.0",
+    "version": "5.0.0",
     "description": "OpenAPI 3.1 component and conformance fixture for the display-ready UOA customer billing statement."
   },
   "paths": {},
@@ -410,7 +410,6 @@
             "additionalProperties": false,
             "required": [
               "lines",
-              "totals",
               "charge_totals",
               "user_totals"
             ],
@@ -422,27 +421,12 @@
                   "additionalProperties": false,
                   "required": [
                     "id",
-                    "service_id",
-                    "usage_unit",
-                    "calls",
                     "attribution",
-                    "raw_units",
-                    "share",
                     "customer_charge"
                   ],
                   "properties": {
                     "id": {
                       "type": "string"
-                    },
-                    "service_id": {
-                      "type": "string"
-                    },
-                    "usage_unit": {
-                      "type": "string"
-                    },
-                    "calls": {
-                      "type": "string",
-                      "pattern": "^(0|[1-9][0-9]*)$"
                     },
                     "attribution": {
                       "type": "object",
@@ -467,56 +451,6 @@
                           "type": "string"
                         },
                         "origin_product": {
-                          "type": "string"
-                        }
-                      }
-                    },
-                    "raw_units": {
-                      "type": "object",
-                      "additionalProperties": false,
-                      "required": [
-                        "input",
-                        "cached_input",
-                        "output",
-                        "total"
-                      ],
-                      "properties": {
-                        "input": {
-                          "type": "string",
-                          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
-                        },
-                        "cached_input": {
-                          "type": "string",
-                          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
-                        },
-                        "output": {
-                          "type": "string",
-                          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
-                        },
-                        "total": {
-                          "type": "string",
-                          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
-                        }
-                      }
-                    },
-                    "share": {
-                      "type": "object",
-                      "additionalProperties": false,
-                      "required": [
-                        "basis_points",
-                        "percent",
-                        "display"
-                      ],
-                      "properties": {
-                        "basis_points": {
-                          "type": "integer",
-                          "minimum": 0,
-                          "maximum": 10000
-                        },
-                        "percent": {
-                          "type": "string"
-                        },
-                        "display": {
                           "type": "string"
                         }
                       }
@@ -549,29 +483,6 @@
                           "type": "null"
                         }
                       ]
-                    }
-                  }
-                }
-              },
-              "totals": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": [
-                    "usage_unit",
-                    "raw_units",
-                    "display"
-                  ],
-                  "properties": {
-                    "usage_unit": {
-                      "type": "string"
-                    },
-                    "raw_units": {
-                      "type": "string"
-                    },
-                    "display": {
-                      "type": "string"
                     }
                   }
                 }
@@ -623,8 +534,6 @@
                     "user_id",
                     "name",
                     "email",
-                    "calls",
-                    "usage",
                     "charges"
                   ],
                   "properties": {
@@ -639,29 +548,6 @@
                     },
                     "email": {
                       "type": "string"
-                    },
-                    "calls": {
-                      "type": "string",
-                      "pattern": "^(0|[1-9][0-9]*)$"
-                    },
-                    "usage": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "additionalProperties": false,
-                        "required": [
-                          "usage_unit",
-                          "raw_units"
-                        ],
-                        "properties": {
-                          "usage_unit": {
-                            "type": "string"
-                          },
-                          "raw_units": {
-                            "type": "string"
-                          }
-                        }
-                      }
                     },
                     "charges": {
                       "type": "array",
@@ -1134,38 +1020,17 @@
             "lines": [
               {
                 "id": "usage_openai_example",
-                "service_id": "openai",
-                "usage_unit": "tokens",
-                "calls": "2",
                 "attribution": {
                   "user_id": null,
                   "billing_product": "deepwater",
                   "caller_product": "nessie",
                   "origin_product": "nessie"
                 },
-                "raw_units": {
-                  "input": "100",
-                  "cached_input": "0",
-                  "output": "50",
-                  "total": "150"
-                },
-                "share": {
-                  "basis_points": 10000,
-                  "percent": "100.00",
-                  "display": "100.00%"
-                },
                 "customer_charge": {
                   "amount": "3.6",
                   "currency": "USD",
                   "display": "$3.6"
                 }
-              }
-            ],
-            "totals": [
-              {
-                "usage_unit": "tokens",
-                "raw_units": "150",
-                "display": "150 tokens used"
               }
             ],
             "charge_totals": [
@@ -1183,13 +1048,6 @@
                 "user_id": "user_example",
                 "name": "Example User",
                 "email": "example@example.invalid",
-                "calls": "2",
-                "usage": [
-                  {
-                    "usage_unit": "tokens",
-                    "raw_units": "150"
-                  }
-                ],
                 "charges": [
                   {
                     "currency": "USD",

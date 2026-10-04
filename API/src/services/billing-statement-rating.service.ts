@@ -2,7 +2,6 @@ import type { BillingStatementV1 } from '../contracts/billing-statement-v1.js';
 import {
   addBillingDecimals,
   exactMoney,
-  sumBillingDecimals,
 } from './billing-money.service.js';
 import { rateProviderCost } from './billing-rating.service.js';
 import {
@@ -27,16 +26,6 @@ type UsageLine = BillingStatementV1['usage']['lines'][number];
 type ChargeTotal = BillingStatementV1['usage']['charge_totals'][number];
 type CommercialLine = BillingStatementV1['commercial_lines'][number];
 
-function rawUnits(line: RawMeteringLine) {
-  const total = sumBillingDecimals([line.inputUnits, line.cachedInputUnits, line.outputUnits]);
-  return {
-    input: line.inputUnits,
-    cached_input: line.cachedInputUnits,
-    output: line.outputUnits,
-    total,
-  };
-}
-
 function selectedProviderCost(line: RawMeteringLine): {
   amount: string;
   currency: string;
@@ -60,67 +49,20 @@ function ratedCharge(
   return exactMoney(rated.total, rated.currency);
 }
 
-function shareBasisPoints(lineTotal: string, unitTotal: string): number {
-  const total = BigInt(unitTotal);
-  if (total === 0n) return 0;
-  const value = BigInt(lineTotal);
-  return Number((value * 10_000n + total / 2n) / total);
-}
-
-function formatPercent(basisPoints: number): string {
-  return (basisPoints / 100).toFixed(2);
-}
-
 function serviceLines(metering: NormalizedMeteringUsage, plan: RatingPlan): UsageLine[] {
-  const rawTotalsByUnit = new Map<string, string>();
-  for (const line of metering.lines) {
-    rawTotalsByUnit.set(
-      line.usageUnit,
-      addBillingDecimals(rawTotalsByUnit.get(line.usageUnit) ?? '0', rawUnits(line).total),
-    );
-  }
-
   return metering.lines.map((line, index) => {
-    const raw = rawUnits(line);
-    const basisPoints = shareBasisPoints(raw.total, rawTotalsByUnit.get(line.usageUnit) ?? '0');
     const cost = selectedProviderCost(line);
     return {
       id: `usage_${index + 1}`,
-      service_id: line.serviceId,
-      usage_unit: line.usageUnit,
-      calls: line.calls,
       attribution: {
         user_id: line.userId,
         billing_product: line.billingProduct,
         caller_product: line.callerProduct ?? UNATTRIBUTED_BILLING_PRODUCT,
         origin_product: line.originProduct ?? UNATTRIBUTED_BILLING_PRODUCT,
       },
-      raw_units: raw,
-      share: {
-        basis_points: basisPoints,
-        percent: formatPercent(basisPoints),
-        display: `${formatPercent(basisPoints)}% of ${line.usageUnit} usage`,
-      },
       customer_charge: ratedCharge(cost, plan),
     };
   });
-}
-
-function usageTotals(lines: UsageLine[]): BillingStatementV1['usage']['totals'] {
-  const totals = new Map<string, string>();
-  for (const line of lines) {
-    totals.set(
-      line.usage_unit,
-      addBillingDecimals(totals.get(line.usage_unit) ?? '0', line.raw_units.total),
-    );
-  }
-  return [...totals.entries()]
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([usageUnit, total]) => ({
-      usage_unit: usageUnit,
-      raw_units: total,
-      display: `${total} ${usageUnit} used`,
-    }));
 }
 
 function chargeTotals(lines: UsageLine[]): ChargeTotal[] {
@@ -160,11 +102,6 @@ function userTotals(
         user_id: userId,
         name: identity?.name ?? null,
         email: identity?.email ?? userId,
-        calls: sumBillingDecimals(rows.map((row) => row.calls)),
-        usage: usageTotals(lines).map((total) => ({
-          usage_unit: total.usage_unit,
-          raw_units: total.raw_units,
-        })),
         charges: chargeTotals(lines),
       };
     });
@@ -191,12 +128,10 @@ export function rateBillingStatementUsage(params: {
   commercialLines: CommercialLine[];
 } {
   const lines = serviceLines(params.serviceMetering, params.plan);
-  const totals = usageTotals(lines);
   const charges = chargeTotals(lines);
   return {
     usage: {
       lines,
-      totals,
       charge_totals: charges,
       user_totals: userTotals(params.userMetering, params.plan, params.users),
     },

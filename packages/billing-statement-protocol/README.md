@@ -4,18 +4,16 @@ Public, open-source-safe consumer contracts for UOA's display-ready
 `BillingStatementV1`, `BillingStatementV2`, shared `BillingCreditsV1`, recurring
 add-ons, customer billing actions, and monthly billing cycles.
 
-Package 4.2.0 removes the public pinned tariff identity and adds the version 2
-monthly cycle contract. The v1 and v2 statement route
-names remain, but both statement schemas omit raw provider cost, markup,
-cost-basis mode, multipliers and derived billable units. V2 adds a team-wide
-connected-service portfolio of raw usage and attribution shares. Products
-render UOA-authored customer charges, subscription prices and credit balances
-without calculating prices, totals or cancellation choices. Strict consumers
-must update their validators and field mappings before the producer deploys.
+Package 5.0.0 exposes customer charges, exact consumed credits, and monthly
+subscription/seat terms. Statement V1/V2 and cycle responses omit raw token,
+request, cache, reasoning, modality and provider-cost dimensions. Those facts
+remain private UOA/Ledger rating and reconciliation evidence. V2 no longer
+exports a connected-service raw usage portfolio. Products render UOA-authored
+balances and charges without calculating prices or usage units. Strict
+consumers must update validators and field mappings before producer rollout.
 `plan.monthly_subscription.amount_role` distinguishes a flat monthly total
-from a per-seat monthly unit price. `charge_basis`, seat policy/timing, and
-`usage_payment_mode` are customer plan facts; a seat unit amount is never an
-invoice total without a frozen seat quantity and billing period.
+from a per-seat monthly unit price; a unit price is never an invoice total
+without a frozen seat quantity and billing period.
 
 The action contract covers the normalized hosted redirect response,
 cancellation selection, exact preview and `confirm_action`, confirmation
@@ -80,12 +78,12 @@ import {
 selected team, plus organisation-wide subscription cycles to verified
 organisation billing managers. `scope.cycle_scope` identifies which kind;
 `scope.payer_scope` separately identifies who pays. An organisation-paid team
-cycle still contains only the selected team's measured usage. A nullable
+cycle still contains only the selected team's customer charges and consumed credits. A nullable
 `scope.team_id` denotes only the organisation-wide subscription cycle, never
 a wildcard over other teams. The cursor includes both month and cycle scope
 so both rows in one month remain reachable.
 `POST /billing/v1/cycles/detail` returns frozen subscription seat evidence,
-measured usage, credit movements, actual payment documents, and explicit later
+customer usage charges, consumed credits, actual payment documents, and explicit later
 adjustments. Available documents carry exact server-authored POST actions for
 `/billing/v1/cycles/download`; clients relay them unchanged. An open preview
 never has a final invoice download. Consumed prepaid credits reduce outstanding
@@ -93,17 +91,11 @@ usage liability and do not create a second payment invoice. Public payloads
 contain customer charges and seat prices, never provider cost or markup.
 
 New consumers request `POST /billing/v2/customer-statement`. Its
-`connected_service_usage` model contains display-ready totals for every
-metered service in the exact team and month, the service's origin-product
-shares, and per-user shares. UOA derives the requested product's rating and all
-of those totals from one pinned user-grouped Ledger portfolio snapshot.
-Other-service raw usage totals are explanatory only and never become line items on the
-requested product's commercial statement.
-Indirect use such as Nessie calling DeepWater can appear as a Nessie origin
-share, but it is not direct DeepWater access and cannot create a related
-cancellation option. A null legacy origin is displayed as `Unattributed
-origin`; it does not create a service or cancellation option. Frozen V1 uses
-the string `unattributed` only in its display-only attribution field.
+`usage.lines` and `usage.user_totals` contain customer charges only, rated by
+UOA from a pinned private Ledger portfolio. The public statement does not
+expose raw usage units, call counts, provider costs, or attribution shares.
+Organisation roll-ups retain per-team monetary totals only for an authorised
+organisation billing manager.
 
 Upgrade, portal, and cancellation controls continue to use the v1 action
 contract. Products whitelist the supplied action ID/path pair, proxy the
@@ -165,14 +157,16 @@ adds the customer's explicitly selected `fixed_seat_quantity` (integer 1 to
 1,000,000) before relaying checkout. UOA checks whether that field is required
 for the plan. All other body fields remain UOA-authored.
 
-Billing cycles protocol 2.1.0 optionally carries measured `cache_write_5m`
-and `cache_write_1h` raw token subtotals when Ledger supplied them. The two
-durations make up `cache_write`, which is disjoint from ordinary input and
-included once in `total`; reasoning and modality dimensions are subsets and
-do not increase `total`.
-Consumers omit absent dimensions rather than displaying zero.
+Customer cycles show subscription seats, rated usage charges and credits.
+`usage_lines` contain `id`, customer-facing `label`, `customer_charge`, and
+`credits_consumed`; no raw usage dimensions or provider/service pricing keys.
+Raw token counts, reasoning, cache and modality evidence remain private to
+Ledger and UOA reconciliation and never enter customer JSON or downloads.
+Credit budgets are a separate customer credit-only contract; their policies
+and spent/held/remaining amounts never expose token units or provider costs.
 
 Run `pnpm generate` after an intentional protocol change. Build and test fail if
 the committed JSON Schema, example, or OpenAPI artifact drifts from the typed
-source. Breaking protocol changes require a new schema version and package
-major; additive non-breaking package changes use normal semantic versioning.
+source. Breaking protocol changes require a protocol major and package major. The
+`schema_version` integer identifies the stable v1/v2 route family; each family
+has an independent semantic protocol version.

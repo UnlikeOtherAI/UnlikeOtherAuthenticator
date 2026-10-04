@@ -200,26 +200,14 @@ describe('canonical customer billing routes', () => {
         $id: '/schemas/billing-statement-v2.json',
         properties: {
           schema_version: { const: 2 },
-          connected_service_usage: { additionalProperties: false },
         },
       });
       expect(fixtureResponse.statusCode).toBe(200);
       expect(fixtureResponse.json()).toMatchObject({
         schema_version: 2,
         statement_id: 'bst_conformance_v2',
-        connected_service_usage: {
-          statement_product: 'deepwater',
-          services: [
-            {
-              billing_product: 'deepwater',
-              origins: [
-                expect.objectContaining({ product: 'deepwater' }),
-                expect.objectContaining({ product: 'nessie' }),
-              ],
-            },
-          ],
-        },
       });
+      expect(fixtureResponse.json()).not.toHaveProperty('connected_service_usage');
       expect(openApiResponse.statusCode).toBe(200);
       expect(openApiResponse.json()).toMatchObject({
         openapi: '3.1.0',

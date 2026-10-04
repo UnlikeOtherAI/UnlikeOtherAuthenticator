@@ -37,7 +37,6 @@ import {
 import { resolveBillingControlledBy } from './billing-org-responsibility.service.js';
 import { buildOrganisationStatementScope } from './billing-statement-organisation.service.js';
 import {
-  buildConnectedServicePortfolio,
   filterPortfolioForProduct,
 } from './billing-statement-portfolio.service.js';
 import {
@@ -445,13 +444,6 @@ async function buildCanonicalBillingStatement(
         },
       ],
     },
-    connected_service_usage: buildConnectedServicePortfolio({
-      statementProduct,
-      userMetering: portfolioUserMetering,
-      products,
-      accesses,
-      users: members.map((member) => member.user),
-    }),
     // The organisation roll-up goes only to an organisation billing manager,
     // and only while the organisation is actually paying.
     ...(controlledBy?.can_manage
@@ -468,7 +460,7 @@ async function buildCanonicalBillingStatement(
               periodEndsAt: period.endsAtDate,
               products,
             },
-            { prisma, fetchPortfolio: deps?.fetchPortfolio, listDirectAccess: deps?.listDirectAccess },
+            { prisma, fetchPortfolio: deps?.fetchPortfolio },
           ),
         }
       : {}),

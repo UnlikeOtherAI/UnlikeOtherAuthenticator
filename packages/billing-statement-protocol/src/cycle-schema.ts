@@ -90,19 +90,10 @@ const subscriptionLine = object([
   intervals: { type: 'array', items: seatInterval },
   customer_charge: moneySchema({ signed: true }),
 });
-const rawUnits = object(['input', 'cached_input', 'output', 'total'], {
-  input: decimal, cached_input: decimal, output: decimal, total: decimal,
-  reasoning: decimal, cache_write: decimal,
-  cache_write_5m: decimal, cache_write_1h: decimal,
-});
 const usageLine = object([
-  'id', 'service_id', 'usage_unit', 'calls', 'raw_units',
-  'customer_charge', 'credits_consumed',
+  'id', 'label', 'customer_charge', 'credits_consumed',
 ], {
-  id, service_id: id, usage_unit: id, calls: decimal, raw_units: rawUnits,
-  modalities: { type: 'array', items: object(['modality', 'raw_units'], {
-    modality: id, raw_units: decimal,
-  }) },
+  id, label: { type: 'string', minLength: 1 },
   customer_charge: { anyOf: [exactMoney, { type: 'null' }] },
   credits_consumed: nullableCredits,
 });

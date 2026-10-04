@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "UOA billing consumer action protocol v1",
-    "version": "4.1.0",
+    "version": "5.0.0",
     "description": "OpenAPI 3.1 components and synthetic fixtures for product-hosted redirects and UOA cancellation."
   },
   "paths": {},

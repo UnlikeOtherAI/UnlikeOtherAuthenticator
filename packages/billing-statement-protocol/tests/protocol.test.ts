@@ -8,6 +8,8 @@ import {
   BILLING_STATEMENT_PROTOCOL_VERSION,
   BILLING_STATEMENT_V2_PROTOCOL_VERSION,
   BILLING_CREDITS_PROTOCOL_VERSION,
+  billingCreditBudgetV1ConformanceFixture,
+  billingCycleDetailV2ConformanceFixture,
   billingCancellationConfirmationV1JsonSchema,
   billingCancellationConfirmRequestJsonSchema,
   billingCancellationPreviewV1JsonSchema,
@@ -47,7 +49,7 @@ function expectCustomerBillingPrivacy(value: unknown): void {
   }
   if (value === null || typeof value !== 'object') return;
   for (const [key, child] of Object.entries(value)) {
-    expect(key).not.toMatch(/markup|provider_cost|cost_basis|multiplier|billable_units|rated_charge|cost_totals|provider_costs/i);
+    expect(key).not.toMatch(/markup|provider_cost|cost_basis|multiplier|billable_units|rated_charge|cost_totals|provider_costs|raw_units|usage_unit|token_count|call_share|cache_write|reasoning_tokens/i);
     if (typeof child === 'string' && /^(display|display_name|label|detail|description|message|title)$/.test(key)) {
       expect(child).not.toMatch(/provider cost|markup|margin|at.cost|cost.plus/i);
     }
@@ -61,6 +63,8 @@ describe('customer billing privacy boundary', () => {
       billingStatementV1ConformanceFixture,
       billingStatementV2ConformanceFixture,
       billingCreditsV1ConformanceFixture,
+      billingCreditBudgetV1ConformanceFixture,
+      billingCycleDetailV2ConformanceFixture,
       billingRecurringAddonV1ConformanceFixtures,
       billingConsumerActionV1ConformanceFixtures,
     ].forEach(expectCustomerBillingPrivacy);
@@ -606,7 +610,6 @@ describe('organisation billing responsibility (protocol 1.3.0)', () => {
           display_name: 'Research',
           pinned_ledger_snapshot:
             billingStatementV2ConformanceFixture.pinned_inputs.ledger_snapshots[0],
-          connected_service_usage: billingStatementV2ConformanceFixture.connected_service_usage,
           commercial_lines: billingStatementV2ConformanceFixture.commercial_lines,
           totals: billingStatementV2ConformanceFixture.totals,
         },

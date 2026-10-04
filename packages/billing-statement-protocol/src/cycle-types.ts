@@ -1,7 +1,7 @@
 import type { ExactMoney } from './types.js';
 import type { BillingSubjectRequest } from './funding-schema-primitives.js';
 
-export const BILLING_CYCLES_PROTOCOL_VERSION = '2.1.0' as const;
+export const BILLING_CYCLES_PROTOCOL_VERSION = '3.0.0' as const;
 export const BILLING_CYCLES_SCHEMA_VERSION = 2 as const;
 export const BILLING_CYCLES_SCHEMA_PATH = '/schemas/billing-cycles-v2.json' as const;
 export const BILLING_CYCLES_EXAMPLE_PATH = '/schemas/billing-cycles-v2.example.json' as const;
@@ -82,20 +82,7 @@ export type BillingCycleSubscriptionLine = {
 };
 export type BillingCycleUsageLine = {
   id: string;
-  service_id: string;
-  usage_unit: string;
-  calls: string;
-  raw_units: {
-    input: string;
-    cached_input: string;
-    output: string;
-    total: string;
-    reasoning?: string;
-    cache_write?: string;
-    cache_write_5m?: string;
-    cache_write_1h?: string;
-  };
-  modalities?: Array<{ modality: string; raw_units: string }>;
+  label: string;
   customer_charge: ExactMoney | null;
   credits_consumed: string | null;
 };
