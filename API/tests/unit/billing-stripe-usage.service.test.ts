@@ -493,7 +493,7 @@ describe('Stripe usage export', () => {
       stripeMeterEventCreatedAt: null,
       createdAt: capturedAt,
     };
-    const { prisma, stripe, meterCreate, createExport } = setup([pending]);
+    const { prisma, stripe, meterCreate, payerVersionBump, createExport } = setup([pending]);
 
     await exportStripeUsage(
       { subscriptionId: 'subscription_1', billingMonth: '2026-07' },
@@ -507,6 +507,7 @@ describe('Stripe usage export', () => {
     );
 
     expect(createExport).not.toHaveBeenCalled();
+    expect(payerVersionBump).not.toHaveBeenCalled();
     expect(meterCreate).toHaveBeenCalledWith(
       expect.objectContaining({ identifier: 'uoa_me_pending' }),
       { idempotencyKey: 'uoa_me_pending' },

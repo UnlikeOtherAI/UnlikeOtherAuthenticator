@@ -129,16 +129,6 @@ async function prepareExports(
         AND ("team_id" = ${subscription.teamId} OR "team_id" IS NULL)
       ORDER BY "id" FOR UPDATE
     `);
-    // Credit settlement uses SERIALIZABLE isolation. A waiter can acquire
-    // this lock after our commit while retaining a snapshot from before the
-    // export. Advancing the payer row version forces PostgreSQL to retry that
-    // settlement against the newly reserved Stripe liability.
-    if (creditAccounts.length > 0) {
-      await tx.billingCreditAccount.updateMany({
-        where: { id: { in: creditAccounts.map((row) => row.id) } },
-        data: { updatedAt: new Date() },
-      });
-    }
     const confirmedSettlements = await tx.billingCreditUsageSettlement.findMany({
       where: {
         creditAccountId: { in: creditAccounts.map((row) => row.id) },
@@ -202,6 +192,7 @@ async function prepareExports(
       latestByKey,
     );
 
+    let payerVersionAdvanced = false;
     for (const [key, charge] of charges) {
       const existing = existingByKey.get(key);
       if (existing) {
@@ -219,6 +210,17 @@ async function prepareExports(
       if (delta === 0n) continue;
       if (delta < 0n) {
         throw new AppError('INTERNAL', 409, 'STRIPE_METER_NEGATIVE_CORRECTION_REQUIRES_RECONCILIATION');
+      }
+      // Credit settlement uses SERIALIZABLE isolation. A waiter can acquire
+      // this lock after our commit while retaining a snapshot from before the
+      // export. Advance the payer row version once for a new reservation so
+      // that settlement retries against the newly reserved liability.
+      if (!payerVersionAdvanced && creditAccounts.length > 0) {
+        await tx.billingCreditAccount.updateMany({
+          where: { id: { in: creditAccounts.map((row) => row.id) } },
+          data: { updatedAt: new Date() },
+        });
+        payerVersionAdvanced = true;
       }
       await tx.billingStripeUsageExport.create({
         data: {
