@@ -42,8 +42,13 @@ export type BillingCheckoutTariff = {
   monthly_subscription: {
     amount_minor: string;
     currency: string;
+    charge_basis: 'flat' | 'per_seat';
+    seat_policy: 'automatic' | 'fixed' | null;
+    seat_timing: 'full_month' | 'prorated' | null;
+    amount_role: 'monthly_total' | 'per_seat_unit';
   };
   usage_billing_enabled: boolean;
+  usage_payment_mode: 'prepaid' | 'pay_as_you_go';
   payment_collection_enabled: boolean;
   raw_usage_preserved: true;
 };

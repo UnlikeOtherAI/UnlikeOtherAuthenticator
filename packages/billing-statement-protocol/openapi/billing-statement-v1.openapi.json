@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "UOA BillingStatementV1 consumer contract",
-    "version": "3.0.0",
+    "version": "4.0.0",
     "description": "OpenAPI 3.1 component and conformance fixture for the display-ready UOA customer billing statement."
   },
   "paths": {},
@@ -169,6 +169,7 @@
             "required": [
               "display_name",
               "collection_mode",
+              "usage_payment_mode",
               "monthly_subscription",
               "assignment"
             ],
@@ -184,6 +185,12 @@
                   "none"
                 ]
               },
+              "usage_payment_mode": {
+                "enum": [
+                  "prepaid",
+                  "pay_as_you_go"
+                ]
+              },
               "monthly_subscription": {
                 "type": "object",
                 "additionalProperties": false,
@@ -191,7 +198,11 @@
                   "amount",
                   "currency",
                   "display",
-                  "amount_minor"
+                  "amount_minor",
+                  "charge_basis",
+                  "seat_policy",
+                  "seat_timing",
+                  "amount_role"
                 ],
                 "properties": {
                   "amount": {
@@ -208,6 +219,32 @@
                   "amount_minor": {
                     "type": "string",
                     "pattern": "^(0|[1-9][0-9]*)$"
+                  },
+                  "charge_basis": {
+                    "enum": [
+                      "flat",
+                      "per_seat"
+                    ]
+                  },
+                  "seat_policy": {
+                    "enum": [
+                      "automatic",
+                      "fixed",
+                      null
+                    ]
+                  },
+                  "seat_timing": {
+                    "enum": [
+                      "full_month",
+                      "prorated",
+                      null
+                    ]
+                  },
+                  "amount_role": {
+                    "enum": [
+                      "monthly_total",
+                      "per_seat_unit"
+                    ]
                   }
                 }
               },
@@ -1040,11 +1077,16 @@
           "plan": {
             "display_name": "Monthly subscription",
             "collection_mode": "stripe",
+            "usage_payment_mode": "prepaid",
             "monthly_subscription": {
               "amount": "20",
               "amount_minor": "2000",
               "currency": "GBP",
-              "display": "£20"
+              "display": "£20",
+              "charge_basis": "flat",
+              "seat_policy": null,
+              "seat_timing": null,
+              "amount_role": "monthly_total"
             },
             "assignment": {
               "scope": "team",

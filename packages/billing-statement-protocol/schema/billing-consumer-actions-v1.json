@@ -107,6 +107,7 @@
         "collection_mode",
         "monthly_subscription",
         "usage_billing_enabled",
+        "usage_payment_mode",
         "payment_collection_enabled",
         "raw_usage_preserved"
       ],
@@ -124,7 +125,11 @@
           "additionalProperties": false,
           "required": [
             "amount_minor",
-            "currency"
+            "currency",
+            "charge_basis",
+            "seat_policy",
+            "seat_timing",
+            "amount_role"
           ],
           "properties": {
             "amount_minor": {
@@ -134,11 +139,43 @@
             "currency": {
               "type": "string",
               "pattern": "^[A-Z]{3}$"
+            },
+            "charge_basis": {
+              "enum": [
+                "flat",
+                "per_seat"
+              ]
+            },
+            "seat_policy": {
+              "enum": [
+                "automatic",
+                "fixed",
+                null
+              ]
+            },
+            "seat_timing": {
+              "enum": [
+                "full_month",
+                "prorated",
+                null
+              ]
+            },
+            "amount_role": {
+              "enum": [
+                "monthly_total",
+                "per_seat_unit"
+              ]
             }
           }
         },
         "usage_billing_enabled": {
           "type": "boolean"
+        },
+        "usage_payment_mode": {
+          "enum": [
+            "prepaid",
+            "pay_as_you_go"
+          ]
         },
         "payment_collection_enabled": {
           "type": "boolean"
@@ -178,6 +215,7 @@
             "collection_mode",
             "monthly_subscription",
             "usage_billing_enabled",
+            "usage_payment_mode",
             "payment_collection_enabled",
             "raw_usage_preserved"
           ],
@@ -195,7 +233,11 @@
               "additionalProperties": false,
               "required": [
                 "amount_minor",
-                "currency"
+                "currency",
+                "charge_basis",
+                "seat_policy",
+                "seat_timing",
+                "amount_role"
               ],
               "properties": {
                 "amount_minor": {
@@ -205,11 +247,43 @@
                 "currency": {
                   "type": "string",
                   "pattern": "^[A-Z]{3}$"
+                },
+                "charge_basis": {
+                  "enum": [
+                    "flat",
+                    "per_seat"
+                  ]
+                },
+                "seat_policy": {
+                  "enum": [
+                    "automatic",
+                    "fixed",
+                    null
+                  ]
+                },
+                "seat_timing": {
+                  "enum": [
+                    "full_month",
+                    "prorated",
+                    null
+                  ]
+                },
+                "amount_role": {
+                  "enum": [
+                    "monthly_total",
+                    "per_seat_unit"
+                  ]
                 }
               }
             },
             "usage_billing_enabled": {
               "type": "boolean"
+            },
+            "usage_payment_mode": {
+              "enum": [
+                "prepaid",
+                "pay_as_you_go"
+              ]
             },
             "payment_collection_enabled": {
               "type": "boolean"

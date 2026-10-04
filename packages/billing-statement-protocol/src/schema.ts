@@ -124,19 +124,26 @@ export const billingStatementV1JsonSchema = {
       required: [
         'display_name',
         'collection_mode',
+        'usage_payment_mode',
         'monthly_subscription',
         'assignment',
       ],
       properties: {
         display_name: { type: 'string' },
         collection_mode: { type: 'string', enum: ['stripe', 'manual', 'none'] },
+        usage_payment_mode: { enum: ['prepaid', 'pay_as_you_go'] },
         monthly_subscription: {
           type: 'object',
           additionalProperties: false,
-          required: ['amount', 'currency', 'display', 'amount_minor'],
+          required: ['amount', 'currency', 'display', 'amount_minor',
+            'charge_basis', 'seat_policy', 'seat_timing', 'amount_role'],
           properties: {
             ...exactMoneyProperties,
             amount_minor: { type: 'string', pattern: '^(0|[1-9][0-9]*)$' },
+            charge_basis: { enum: ['flat', 'per_seat'] },
+            seat_policy: { enum: ['automatic', 'fixed', null] },
+            seat_timing: { enum: ['full_month', 'prorated', null] },
+            amount_role: { enum: ['monthly_total', 'per_seat_unit'] },
           },
         },
         assignment: {

@@ -23,6 +23,7 @@ import {
   type NormalizedMeteringUsage,
 } from './billing-metering.types.js';
 import { exactMoney, minorAmountToMajor } from './billing-money.service.js';
+import { quoteSubscriptionMonthlyCharge } from './billing-monthly-subscription-quote.service.js';
 import {
   listDirectTeamBillingServiceAccess,
   type DirectBillingServiceAccess,
@@ -67,6 +68,7 @@ type Dependencies = {
   listDirectAccess?: typeof listDirectTeamBillingServiceAccess;
   resolveControlledBy?: typeof resolveBillingControlledBy;
   buildOrganisationScope?: typeof buildOrganisationStatementScope;
+  quoteSubscription?: typeof quoteSubscriptionMonthlyCharge;
 };
 
 function monthPeriod(
@@ -266,9 +268,18 @@ async function buildCanonicalBillingStatement(
       monthly_subscription: {
         amount_minor: tariff.monthlyAmountMinor.toString(),
         currency: tariff.currency,
+        charge_basis: tariff.monthlyChargeBasis.toLowerCase() as 'flat' | 'per_seat',
+        seat_policy: tariff.seatPolicy?.toLowerCase() as 'automatic' | 'fixed' | undefined
+          ?? null,
+        seat_timing: tariff.seatChargeTiming?.toLowerCase() as
+          'full_month' | 'prorated' | undefined ?? null,
+        amount_role: tariff.monthlyChargeBasis === 'PER_SEAT'
+          ? 'per_seat_unit' as const : 'monthly_total' as const,
       },
       payment_collection_enabled: collectionMode !== 'none',
       usage_billing_enabled: modeFromTerm !== 'free',
+      usage_payment_mode: tariff.usagePaymentMode.toLowerCase() as
+        'prepaid' | 'pay_as_you_go',
     },
     assignment: {
       scope: effective.source.toLowerCase() as 'team' | 'organisation' | 'service_default',
@@ -301,15 +312,30 @@ async function buildCanonicalBillingStatement(
     summary.tariff.monthly_subscription.amount_minor,
     currency,
   );
+  const teamSubscriptionId = summary.subscription?.scope === 'team'
+    ? summary.subscription.id : null;
+  const perSeat = tariff.monthlyChargeBasis === 'PER_SEAT';
+  const quoted = perSeat && teamSubscriptionId && period.state === 'closed'
+    ? await (deps?.quoteSubscription ?? quoteSubscriptionMonthlyCharge)({
+      source: { kind: 'stripe', id: teamSubscriptionId }, billingMonth: period.key,
+    }, { prisma }) : null;
+  if (quoted && (quoted.serviceId !== context.credential.service.id ||
+      quoted.teamId !== context.request.teamId || quoted.currency !== currency)) {
+    throw new AppError('INTERNAL', 409, 'BILLING_MONTHLY_QUOTE_SCOPE_MISMATCH');
+  }
+  const subscriptionAmount = quoted
+    ? minorAmountToMajor(quoted.amountMinor.toString(), currency) : monthlyAmount;
+  const includeSubscriptionLine = !perSeat || quoted !== null;
   const commercialLines: BillingStatementV1['commercial_lines'] = [
-    {
+    ...(includeSubscriptionLine && (!summary.subscription || teamSubscriptionId) ? [{
       id: `monthly_${summary.tariff.id}`,
-      kind: 'monthly_subscription',
+      kind: 'monthly_subscription' as const,
       product: statementProduct,
       label: 'Monthly subscription',
-      detail: 'Subscription charge for this billing period',
-      amount: exactMoney(monthlyAmount, currency),
-    },
+      detail: quoted ? 'Frozen seat charge for this billing period' :
+        'Subscription charge for this billing period',
+      amount: exactMoney(subscriptionAmount, currency),
+    }] : []),
     ...rated.commercialLines,
     ...adjustments.map((adjustment) => {
       const amount = minorAmountToMajor(adjustment.amountMinor.toString(), adjustment.currency);
@@ -372,9 +398,14 @@ async function buildCanonicalBillingStatement(
     plan: {
       display_name: 'Monthly subscription',
       collection_mode: summary.tariff.collection_mode,
+      usage_payment_mode: summary.tariff.usage_payment_mode,
       monthly_subscription: {
         amount_minor: summary.tariff.monthly_subscription.amount_minor,
         ...exactMoney(monthlyAmount, currency),
+        charge_basis: summary.tariff.monthly_subscription.charge_basis,
+        seat_policy: summary.tariff.monthly_subscription.seat_policy,
+        seat_timing: summary.tariff.monthly_subscription.seat_timing,
+        amount_role: summary.tariff.monthly_subscription.amount_role,
       },
       assignment: summary.assignment,
     },

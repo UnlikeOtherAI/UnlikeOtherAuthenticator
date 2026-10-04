@@ -2,6 +2,10 @@ import {
   BillingAssignmentScope,
   BillingAppKeyPurpose,
   BillingCollectionMode,
+  BillingMonthlyChargeBasis,
+  BillingSeatChargeTiming,
+  BillingSeatPolicy,
+  BillingUsagePaymentMode,
   BillingTariffMode,
   BillingTariffSource,
   MembershipStatus,
@@ -9,7 +13,9 @@ import {
 } from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { getEffectiveTariffSnapshot } from '../../src/services/billing-entitlement.service.js';
+import {
+  customerBillingTariff, getEffectiveTariffSnapshot,
+} from '../../src/services/billing-entitlement.service.js';
 import type { VerifiedBillingAppKey } from '../../src/services/billing-app-key.service.js';
 
 const credential: VerifiedBillingAppKey = {
@@ -38,6 +44,10 @@ const defaultTariff = {
   collectionMode: BillingCollectionMode.STRIPE,
   markupBps: 2_000,
   monthlyAmountMinor: 0n,
+  monthlyChargeBasis: BillingMonthlyChargeBasis.FLAT,
+  seatPolicy: null,
+  seatChargeTiming: null,
+  usagePaymentMode: BillingUsagePaymentMode.PAY_AS_YOU_GO,
   currency: 'USD',
   isDefault: true,
   createdByUserId: null,
@@ -123,6 +133,10 @@ describe('effective billing tariff resolution', () => {
       collectionMode: BillingCollectionMode.NONE,
       markupBps: 4_000,
       monthlyAmountMinor: 2_000n,
+      monthlyChargeBasis: BillingMonthlyChargeBasis.PER_SEAT,
+      seatPolicy: BillingSeatPolicy.FIXED,
+      seatChargeTiming: BillingSeatChargeTiming.PRORATED,
+      usagePaymentMode: BillingUsagePaymentMode.PREPAID,
     };
     const prisma = fakePrisma({
       teamAssignment: {
@@ -158,7 +172,10 @@ describe('effective billing tariff resolution', () => {
       tariff: {
         id: 'tariff_team',
         collection_mode: 'none',
-        monthly_subscription: { amount_minor: '2000', currency: 'USD' },
+        monthly_subscription: { amount_minor: '2000', currency: 'USD',
+          charge_basis: 'per_seat', seat_policy: 'fixed', seat_timing: 'prorated',
+          amount_role: 'per_seat_unit' },
+        usage_payment_mode: 'prepaid',
         usage_billing_enabled: true,
         payment_collection_enabled: false,
         raw_usage_preserved: true,
@@ -168,6 +185,12 @@ describe('effective billing tariff resolution', () => {
     expect(result.payload).not.toHaveProperty('tokens');
     expect(result.payload).not.toHaveProperty('usage');
     expect(JSON.stringify(result.payload)).not.toMatch(/markup|multiplier|at_cost|provider_cost/i);
+    expect(customerBillingTariff(result.payload.tariff)).toMatchObject({
+      monthly_subscription: { amount_minor: '2000', amount_role: 'per_seat_unit' },
+      usage_payment_mode: 'prepaid',
+    });
+    expect(customerBillingTariff(result.payload.tariff)).not.toHaveProperty('id');
+    expect(customerBillingTariff(result.payload.tariff)).not.toHaveProperty('mode');
     expect(prisma.billingServiceAccess.upsert).not.toHaveBeenCalled();
   });
 

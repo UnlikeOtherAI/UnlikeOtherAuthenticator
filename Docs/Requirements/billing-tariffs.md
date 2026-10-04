@@ -915,7 +915,7 @@ The canonical UOA and Ledger product identifiers are `nessie`, `deepwater`,
 mapped at the product boundary and are never sent in billing subjects.
 
 Products render `BillingStatementV1` or `BillingStatementV2` unchanged. New
-consumers use v2. Package 3.1.0, V1 protocol 3.0.0, and V2 protocol 4.0.0
+consumers use v2. Package 4.0.0, V1 protocol 4.0.0, and V2 protocol 5.0.0
 retain the route names but remove the public pinned tariff identity, which is
 private financial authority. Consuming products must update their strict
 validators before the producer switches. Products must not derive tariff copy,
@@ -926,6 +926,13 @@ IDs and fixed routes are:
 - `upgrade` → `/billing/v1/stripe/checkout-session`;
 - `portal` → `/billing/v1/stripe/portal-session`;
 - `cancel` → `/billing/v1/cancellation/preview`.
+
+The customer plan and Checkout tariff include safe `charge_basis`, `seat_policy`,
+`seat_timing`, `amount_role`, and `usage_payment_mode`. A `per_seat_unit`
+`amount_minor` is the monthly price of one seat, never the customer's total.
+The frozen seat quote supplies a closed period's financial subscription line;
+an open per-seat statement leaves that line pending rather than displaying the
+unit price as a charged total. Provider cost, margin, and markup stay private.
 
 The statement supplies the exact request body, including server-pinned
 allowlisted return URLs. A product may whitelist these ID/path pairs and proxy

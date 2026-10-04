@@ -73,6 +73,8 @@ const effectiveTerm = {
     id: 'tariff_standard_v4', serviceId: 'service_deepwater', key: 'standard',
     version: 4, name: 'Provider cost plus 20% markup', mode: 'STANDARD', collectionMode: 'STRIPE',
     markupBps: 2_000, monthlyAmountMinor: 2000n, currency: 'GBP',
+    monthlyChargeBasis: 'FLAT', seatPolicy: null, seatChargeTiming: null,
+    usagePaymentMode: 'PAY_AS_YOU_GO',
   },
 };
 
@@ -191,6 +193,59 @@ function metering(groupBy: 'service' | 'user'): NormalizedMeteringUsage {
 }
 
 describe('canonical UOA billing statement', () => {
+  it('uses a frozen seat quote for a closed period, leaving the plan price labelled per seat', async () => {
+    const quoteSubscription = vi.fn().mockResolvedValue({
+      serviceId: 'service_deepwater', teamId: 'team_1', currency: 'GBP',
+      amountMinor: 3000n,
+    });
+    const perSeatTerm = { ...effectiveTerm, tariff: { ...effectiveTerm.tariff,
+      monthlyChargeBasis: 'PER_SEAT', seatPolicy: 'FIXED', seatChargeTiming: 'PRORATED',
+    } };
+    const prisma = {
+      billingService: {
+        findUnique: vi.fn().mockResolvedValue({ tariffHistoryFromMonth: '2026-01' }),
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      billingTariffTermEvent: { findFirst: vi.fn().mockResolvedValue(perSeatTerm) },
+      billingOrganisationContractVersion: { findMany: vi.fn().mockResolvedValue([]) },
+      billingCommercialAdjustment: { findMany: vi.fn().mockResolvedValue([]) },
+      teamMember: { findMany: vi.fn().mockResolvedValue([]) },
+    };
+    const statement = await getCanonicalBillingStatement(
+      { request, actorToken: 'signed-actor', credential, billingMonth: '2026-07' },
+      { prisma: prisma as never, now: () => new Date('2026-08-15T00:00:00.000Z'),
+        resolveSummary: vi.fn().mockResolvedValue(summary) as never,
+        fetchMetering: vi.fn(async (params: { groupBy: 'service' | 'user' }) =>
+          metering(params.groupBy)) as never,
+        listDirectAccess: vi.fn().mockResolvedValue([]),
+        resolveControlledBy: vi.fn().mockResolvedValue(null),
+        quoteSubscription: quoteSubscription as never,
+      },
+    );
+    expect(quoteSubscription).toHaveBeenCalledWith({
+      source: { kind: 'stripe', id: 'subscription_1' }, billingMonth: '2026-07',
+    }, { prisma });
+    expect(statement.plan.monthly_subscription).toMatchObject({
+      amount_minor: '2000', amount_role: 'per_seat_unit', charge_basis: 'per_seat',
+      seat_policy: 'fixed', seat_timing: 'prorated',
+    });
+    expect(statement.commercial_lines.find((line) => line.kind === 'monthly_subscription')?.amount)
+      .toMatchObject({ amount: '30', currency: 'GBP' });
+    const open = await getCanonicalBillingStatement(
+      { request, actorToken: 'signed-actor', credential, billingMonth: '2026-07' },
+      { prisma: prisma as never, now: () => new Date('2026-07-15T00:00:00.000Z'),
+        resolveSummary: vi.fn().mockResolvedValue(summary) as never,
+        fetchMetering: vi.fn(async (params: { groupBy: 'service' | 'user' }) =>
+          metering(params.groupBy)) as never,
+        listDirectAccess: vi.fn().mockResolvedValue([]),
+        resolveControlledBy: vi.fn().mockResolvedValue(null),
+        quoteSubscription: quoteSubscription as never,
+      },
+    );
+    expect(open.commercial_lines.some((line) => line.kind === 'monthly_subscription')).toBe(false);
+    expect(quoteSubscription).toHaveBeenCalledTimes(1);
+  });
+
   it('rates immutable raw metering centrally and emits a display-ready v1 model', async () => {
     const fetchMetering = vi.fn(async (params: { groupBy: 'service' | 'user' }) =>
       metering(params.groupBy),
