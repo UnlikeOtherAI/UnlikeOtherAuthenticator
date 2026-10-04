@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { BILLING_CUSTOMER_LOCALES } from '../../src/contracts/billing-statement-v1.js';
 import {
   getBillingCreditPurchaseStatus,
+  readCreditPurchaseEvidence,
   readCreditPurchaseState,
 } from '../../src/services/billing-credit-purchase-status.service.js';
 import { billingCreditPaymentCopy } from '../../src/services/billing-payment-copy.catalog.js';
@@ -180,6 +181,80 @@ describe('readCreditPurchaseState', () => {
   });
 
   it.each([
+    ['open', 'open', null, 'open'],
+    ['requires action while Checkout remains open', 'open', 'requires_action', 'requires_action'],
+    ['failed payment method while Checkout remains open', 'open', 'canceled', 'failed'],
+  ] as const)('returns the same-purchase continuation for %s', async (_label, sessionStatus, intentStatus, expected) => {
+    const remoteSession = session({
+      status: sessionStatus,
+      url: 'https://checkout.stripe.com/c/pay/cs_1?locale=cs',
+      payment_intent: intentStatus === null ? null : 'pi_1',
+    });
+    const remoteIntent = intentStatus === null ? undefined : intent({ status: intentStatus });
+    const evidence = await readCreditPurchaseEvidence({
+      checkout: checkout(), account, customerStripeId,
+      stripe: stripeFor({ session: remoteSession, intent: remoteIntent }).client,
+    });
+    expect(evidence.state).toBe(expected);
+    expect(evidence.continuation).toEqual({
+      redirect_url: 'https://checkout.stripe.com/c/pay/cs_1?locale=cs',
+      purchase_id: purchaseId,
+    });
+  });
+
+  it.each([
+    'https://checkout.stripe.com.evil.example/c/pay/cs_1',
+    'https://name:secret@checkout.stripe.com/c/pay/cs_1',
+    'http://checkout.stripe.com/c/pay/cs_1',
+    'https://checkout.stripe.com:444/c/pay/cs_1',
+    `https://checkout.stripe.com/c/pay/${'x'.repeat(2100)}`,
+  ])('does not return an unsafe Checkout URL: %s', async (url) => {
+    const evidence = await readCreditPurchaseEvidence({
+      checkout: checkout(), account, customerStripeId,
+      stripe: stripeFor({ session: session({ status: 'open', url, payment_intent: null }) }).client,
+    });
+    expect(evidence.state).toBe('open');
+    expect(evidence.continuation).toBeUndefined();
+  });
+
+  it('does not return a continuation for a completed Checkout without local credit proof', async () => {
+    const evidence = await readCreditPurchaseEvidence({
+      checkout: checkout(), account, customerStripeId,
+      stripe: stripeFor({ session: session({ status: 'complete', url: 'https://checkout.stripe.com/c/pay/cs_1' }) }).client,
+    });
+    expect(evidence.state).toBe('processing');
+    expect(evidence.continuation).toBeUndefined();
+  });
+
+  it('does not return a continuation after Checkout expires or local credit proof confirms completion', async () => {
+    const expiredSession = stripeFor({
+      session: session({ status: 'expired', url: null, payment_intent: null }),
+    });
+    const expired = await readCreditPurchaseEvidence({
+      checkout: checkout(), account, customerStripeId, stripe: expiredSession.client,
+    });
+    expect(expired).toEqual({ state: 'expired' });
+
+    const complete = await readCreditPurchaseEvidence({
+      checkout: checkout({
+        status: 'COMPLETE',
+        creditEntryId: 'credit_entry_1',
+        completionWebhookEventId: 'webhook_event_1',
+      }),
+      account, customerStripeId, stripe: stripeFor().client,
+    });
+    expect(complete).toEqual({ state: 'succeeded' });
+  });
+
+  it('withholds a valid-looking URL when the remote Checkout binding is mismatched', async () => {
+    const evidence = await readCreditPurchaseEvidence({
+      checkout: checkout(), account, customerStripeId,
+      stripe: stripeFor({ session: session({ id: 'cs_other', status: 'open', url: 'https://checkout.stripe.com/c/pay/cs_other' }) }).client,
+    });
+    expect(evidence).toEqual({ state: 'needs_review' });
+  });
+
+  it.each([
     ['wrong session id', { session: session({ id: 'cs_other' }) }],
     ['wrong Checkout customer', { session: session({ customer: 'cus_other' }) }],
     ['wrong Checkout mode', { session: session({ mode: 'setup' }) }],
@@ -349,5 +424,37 @@ describe('getBillingCreditPurchaseStatus authorization and scope', () => {
       request, credential, actorToken: 'actor', endpoint: '/billing/v1/credits/purchase-status',
     }, state.deps);
     expect(completed.awaiting_confirmation).toBe(false);
+  });
+
+  it('returns the exact purchase id with an authorized continuation', async () => {
+    const state = setup();
+    const result = await getBillingCreditPurchaseStatus({
+      request, credential, actorToken: 'actor', endpoint: '/billing/v1/credits/purchase-status',
+      presentationEnabled: true,
+    }, {
+      ...state.deps,
+      readEvidence: vi.fn().mockResolvedValue({
+        state: 'open',
+        continuation: { redirect_url: 'https://checkout.stripe.com/c/pay/cs_1', purchase_id: purchaseId },
+      }),
+    } as never);
+    expect(result.continuation).toEqual({
+      redirect_url: 'https://checkout.stripe.com/c/pay/cs_1', purchase_id: purchaseId,
+    });
+    expect(result.purchase_id).toBe(purchaseId);
+  });
+
+  it('does not expose continuations to legacy non-negotiated status callers', async () => {
+    const state = setup();
+    const result = await getBillingCreditPurchaseStatus({
+      request, credential, actorToken: 'actor', endpoint: '/billing/v1/credits/purchase-status',
+    }, {
+      ...state.deps,
+      readEvidence: vi.fn().mockResolvedValue({
+        state: 'open',
+        continuation: { redirect_url: 'https://checkout.stripe.com/c/pay/cs_1', purchase_id: purchaseId },
+      }),
+    } as never);
+    expect(result.continuation).toBeUndefined();
   });
 });

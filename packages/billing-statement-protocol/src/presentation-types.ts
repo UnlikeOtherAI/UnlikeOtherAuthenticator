@@ -1,3 +1,5 @@
+import type { BillingHostedRedirectResponse } from './action-types.js';
+
 /** Explicit presentation negotiation keeps older strict consumers in English. */
 export const BILLING_PRESENTATION_VERSION = '1.5.0' as const;
 export const BILLING_PRESENTATION_HEADER = 'x-uoa-billing-presentation' as const;
@@ -21,4 +23,6 @@ export type BillingCreditPurchaseStatusV1 = {
   message: string;
   /** Only a payment already awaiting confirmation warrants bounded automatic reads. */
   awaiting_confirmation: boolean;
+  /** The same authorized open Checkout, when Stripe still reports it resumable. */
+  continuation?: BillingHostedRedirectResponse;
 };

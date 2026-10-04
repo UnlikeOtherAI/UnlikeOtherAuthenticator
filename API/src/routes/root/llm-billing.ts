@@ -464,8 +464,11 @@ fresh endpoint-bound actor. The strict public schema is
 Stripe PaymentIntent does not prove that credits were added: only the durable
 credit entry plus its verified completion event yields \`succeeded\`. Read failures
 must not be presented as declined payments. Poll only \`awaiting_confirmation\`
-within a finite return window. Current authority, account/customer/service/app-key
-binding and private no-store responses prevent cross-context disclosure.
+within a finite return window. When Stripe still reports the exact bound Checkout
+open, the response may include \`continuation\` with the same opaque \`purchase_id\`;
+opening it resumes that session without creating another Checkout or charge.
+Current authority, account/customer/service/app-key binding and private no-store
+responses prevent cross-context disclosure.
 New hosted Stripe sessions receive the requested language. Resuming an existing
 session preserves it; subscription Checkout retries reuse their saved locale.
 `;

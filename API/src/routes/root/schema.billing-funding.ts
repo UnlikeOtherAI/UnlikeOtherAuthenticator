@@ -128,17 +128,17 @@ export const billingFundingEndpoints: EndpointSchema[] = [
   {
     method: 'POST',
     path: '/billing/v1/credits/purchase-status',
-    description: 'Read one opaque credit purchase after current billing authority and exact subject binding checks.',
+    description: 'Read one opaque credit purchase and optionally resume its exact still-open Checkout after current billing authority and binding checks.',
     auth: lifecycleAuth,
     body: { ...fundingSubject, purchase_id: 'exact opaque ID from a negotiated credit Checkout' },
     response: {
-      200: 'BillingCreditPurchaseStatusV1',
+      200: 'BillingCreditPurchaseStatusV1, optionally including the same purchase_id and safe Stripe Checkout continuation URL',
       '401/403': 'Current actor or billing authority denied',
       404: 'Purchase is not visible in this exact account, customer, service and app key',
       '502/503': 'Current billing context is unavailable',
     },
     notes:
-      'Read-only financial status. Succeeded requires a durable credit entry and its verified completion event; Stripe payment success alone remains processing. No charge or synthetic webhook is created. Presentation 1.5.0 headers select customer language; responses are private, no-store.',
+      'Read-only financial status. Succeeded requires a durable credit entry and its verified completion event; Stripe payment success alone remains processing. An optional continuation is returned only for the exact bound Checkout while Stripe still reports it open; it carries the same purchase_id and never creates a new Checkout or charge. Presentation 1.5.0 headers select customer language; responses are private, no-store.',
   },
   {
     method: 'POST',

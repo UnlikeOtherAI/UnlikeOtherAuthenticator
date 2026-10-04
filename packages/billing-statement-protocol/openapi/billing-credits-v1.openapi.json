@@ -228,8 +228,8 @@
           }
         ],
         "operationId": "getBillingCreditPurchaseStatusV1",
-        "summary": "Read one authorized credit purchase after returning from checkout",
-        "description": "Only the committed credit entry proves success. Reads do not create charges or settle credits.",
+        "summary": "Read one authorized credit purchase and resume its open Checkout",
+        "description": "Only the committed credit entry proves success. An optional continuation resumes the exact open Checkout; reads do not create charges or settle credits.",
         "requestBody": {
           "required": true,
           "content": {
@@ -331,6 +331,26 @@
                     },
                     "awaiting_confirmation": {
                       "type": "boolean"
+                    },
+                    "continuation": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "redirect_url",
+                        "purchase_id"
+                      ],
+                      "properties": {
+                        "redirect_url": {
+                          "type": "string",
+                          "maxLength": 2048,
+                          "pattern": "^https://checkout\\.stripe\\.com/"
+                        },
+                        "purchase_id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        }
+                      }
                     }
                   }
                 }

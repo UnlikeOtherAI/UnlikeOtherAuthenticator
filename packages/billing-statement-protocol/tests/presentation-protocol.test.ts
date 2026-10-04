@@ -25,6 +25,34 @@ describe('localized credit purchase status protocol', () => {
         awaiting_confirmation: state === 'processing',
       }), JSON.stringify(validate.errors)).toBe(true);
     }
+    expect(validate({
+      schema_version: 1,
+      purchase_id: 'purchase_1',
+      state: 'failed',
+      title: 'Payment failed',
+      message: 'Return to payment to try again',
+      awaiting_confirmation: false,
+      continuation: {
+        redirect_url: 'https://checkout.stripe.com/c/pay/cs_test_synthetic',
+        purchase_id: 'purchase_1',
+      },
+    }), JSON.stringify(validate.errors)).toBe(true);
+    for (const continuation of [
+      { redirect_url: 'https://checkout.stripe.com/c/pay/cs_test_synthetic' },
+      { redirect_url: 'https://checkout.stripe.com.evil.test/c/pay/x', purchase_id: 'purchase_1' },
+      { redirect_url: 'http://checkout.stripe.com/c/pay/x', purchase_id: 'purchase_1' },
+      { redirect_url: `https://checkout.stripe.com/${'x'.repeat(2100)}`, purchase_id: 'purchase_1' },
+    ]) {
+      expect(validate({
+        schema_version: 1,
+        purchase_id: 'purchase_1',
+        state: 'open',
+        title: 'Payment is open',
+        message: 'Return to payment',
+        awaiting_confirmation: false,
+        continuation,
+      })).toBe(false);
+    }
     expect(BILLING_CREDIT_PURCHASE_STATUS_PATH).toBe('/billing/v1/credits/purchase-status');
     expect(validate({
       schema_version: 1,
@@ -50,4 +78,3 @@ describe('localized credit purchase status protocol', () => {
     expect(schemaArtifact).toEqual(billingCreditPurchaseStatusV1JsonSchema);
   });
 });
-
