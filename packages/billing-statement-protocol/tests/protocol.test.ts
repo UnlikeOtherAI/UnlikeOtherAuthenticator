@@ -161,6 +161,19 @@ describe('public BillingStatementV2 consumer protocol', () => {
 });
 
 describe('public billing consumer action protocol', () => {
+  it('accepts only a bounded customer-selected fixed-seat quantity', () => {
+    const ajv = new Ajv2020({ allErrors: true, strict: true });
+    addFormats(ajv);
+    const validate = ajv.compile(billingCheckoutSessionRequestJsonSchema);
+    const request = billingConsumerActionV1ConformanceFixtures.checkout_session_request;
+    expect(validate(request)).toBe(true);
+    for (const invalid of [0, -1, 1.5, 1_000_001, '12']) {
+      expect(validate({ ...request, fixed_seat_quantity: invalid })).toBe(false);
+    }
+    const { fixed_seat_quantity: _selected, ...base } = request;
+    expect(validate(base)).toBe(true);
+  });
+
   it('validates every synthetic fixture against its exact Draft 2020-12 schema', () => {
     const ajv = new Ajv2020({ allErrors: true, strict: true });
     addFormats(ajv);

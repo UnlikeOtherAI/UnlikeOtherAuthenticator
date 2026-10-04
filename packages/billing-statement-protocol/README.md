@@ -4,7 +4,7 @@ Public, open-source-safe consumer contracts for UOA's display-ready
 `BillingStatementV1`, `BillingStatementV2`, shared `BillingCreditsV1`, recurring
 add-ons, customer billing actions, and monthly billing cycles.
 
-Package 4.0.0 removes the public pinned tariff identity and adds the version 2
+Package 4.1.0 removes the public pinned tariff identity and adds the version 2
 monthly cycle contract. The v1 and v2 statement route
 names remain, but both statement schemas omit raw provider cost, markup,
 cost-basis mode, multipliers and derived billable units. V2 adds a team-wide
@@ -159,10 +159,11 @@ never replaces them, so a consumer that predates it cannot read
 organisation-wide numbers as if they were the team's.
 
 The consumer-action contract also publishes the checkout-session and
-portal-session request and response envelopes (1.3.0). The bodies still come
-from UOA inside a statement action's `request.body`; publishing their shape
-lets a product validate what it relays and what it receives, instead of
-hand-writing a parallel schema.
+portal-session request and response envelopes. The bodies come from UOA inside
+a statement action's `request.body`. For a fixed-seat plan only, the product
+adds the customer's explicitly selected `fixed_seat_quantity` (integer 1 to
+1,000,000) before relaying checkout. UOA checks whether that field is required
+for the plan. All other body fields remain UOA-authored.
 
 Run `pnpm generate` after an intentional protocol change. Build and test fail if
 the committed JSON Schema, example, or OpenAPI artifact drifts from the typed
