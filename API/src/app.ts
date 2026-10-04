@@ -19,6 +19,7 @@ import tenantContextPlugin from './plugins/tenant-context.plugin.js';
 import { registerRoutes } from './routes/index.js';
 import { preloadTariffSnapshotSigningKey } from './services/billing-snapshot.service.js';
 import { startStripeBillingScheduler } from './services/billing-stripe-scheduler.service.js';
+import { startCreditSettlementScheduler } from './services/billing-credit-settlement-scheduler.service.js';
 import { preloadBillingAssertionSigningKey } from './services/billing-ledger-collector.service.js';
 import { sweepExpiredClaims } from './services/integration-claim.service.js';
 import { pruneExpiredSecurityData } from './services/retention-pruning.service.js';
@@ -259,6 +260,10 @@ export async function createApp(): Promise<FastifyInstance> {
           stripeBillingScheduler.stop();
         });
       }
+      const creditSettlementScheduler = startCreditSettlementScheduler({ log: app.log });
+      app.addHook('onClose', async () => {
+        creditSettlementScheduler.stop();
+      });
     }
   } else {
     app.log.warn('DATABASE_URL not set; database is disabled');

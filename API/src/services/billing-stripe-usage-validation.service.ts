@@ -171,6 +171,52 @@ export function stripeUsageChargeKey(callerProduct: string, currency: string): s
   return `${callerProduct}\0${currency}`;
 }
 
+function majorAmountFromMeterQuantity(quantity: bigint, currency: string): string {
+  const scale = currencyMinorDigits(currency) + STRIPE_METER_FRACTION_DIGITS;
+  const digits = quantity.toString().padStart(scale + 1, '0');
+  const whole = digits.slice(0, -scale);
+  const fraction = digits.slice(-scale).replace(/0+$/, '');
+  return fraction ? `${whole}.${fraction}` : whole;
+}
+
+/** Spread one exact prepaid offset across the subscription's caller buckets. */
+export function applyCreditOffsetToStripeCharges(
+  charges: Map<string, CumulativeCharge>,
+  offsetMicroMinor: bigint,
+): Map<string, CumulativeCharge> {
+  if (offsetMicroMinor < 0n) {
+    throw new AppError('INTERNAL', 500, 'BILLING_CREDIT_OFFSET_INVALID');
+  }
+  if (offsetMicroMinor === 0n) return charges;
+  const entries = [...charges.entries()].sort(([left], [right]) => left.localeCompare(right));
+  const gross = entries.reduce((sum, [, charge]) => sum + charge.quantity, 0n);
+  if (gross < offsetMicroMinor || gross === 0n) {
+    throw new AppError('INTERNAL', 409, 'BILLING_CREDIT_OFFSET_EXCEEDS_USAGE');
+  }
+  const allocations = entries.map(([key, charge]) => {
+    const weighted = charge.quantity * offsetMicroMinor;
+    return { key, charge, offset: weighted / gross, remainder: weighted % gross };
+  });
+  let unallocated = offsetMicroMinor - allocations.reduce((sum, row) => sum + row.offset, 0n);
+  for (const row of [...allocations].sort((left, right) =>
+    left.remainder === right.remainder
+      ? left.key.localeCompare(right.key)
+      : left.remainder > right.remainder ? -1 : 1,
+  )) {
+    if (unallocated === 0n) break;
+    row.offset += 1n;
+    unallocated -= 1n;
+  }
+  return new Map(allocations.map(({ key, charge, offset }) => {
+    const quantity = charge.quantity - offset;
+    return [key, {
+      ...charge,
+      amount: majorAmountFromMeterQuantity(quantity, charge.currency),
+      quantity,
+    }];
+  }));
+}
+
 export function validatedStripeCumulativeCharges(
   usage: NormalizedMeteringUsage,
   subscription: StripeUsageSubscription,
@@ -185,9 +231,6 @@ export function validatedStripeCumulativeCharges(
       markupBps: subscription.tariff.markupBps,
     },
     unattributedCaller: UNATTRIBUTED_BILLING_PRODUCT,
-    // Preserve the existing Stripe behaviour: rows with no cost at all do not
-    // create a meter event, while half-present/mismatched cost data fails.
-    missingCost: 'skip',
   });
   for (const item of rated) {
     const key = stripeUsageChargeKey(item.callerProduct, item.currency);

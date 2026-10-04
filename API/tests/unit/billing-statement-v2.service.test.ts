@@ -80,6 +80,7 @@ function line(overrides: Partial<RawMeteringLine> = {}): RawMeteringLine {
     selectedProviderCost: null,
     currency: null,
     costProvenance: null,
+    billingDisposition: 'paid',
     billingProduct: 'deepwater',
     callerProduct: 'deepwater',
     originProduct: 'deepwater',
@@ -99,6 +100,7 @@ function portfolio(
   const suffix = groupBy === 'service' ? '0' : '1';
   return {
     schemaVersion: 1,
+    billingCompleteness: { state: 'complete', unresolvedPaidAttempts: '0' },
     contract: 'metering-portfolio-v1',
     perspectiveProduct: 'deepwater',
     groupBy,

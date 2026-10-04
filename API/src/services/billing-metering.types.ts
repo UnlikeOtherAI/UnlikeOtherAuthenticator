@@ -17,7 +17,17 @@ export type RawMeteringLine = {
   callerProduct: string | null;
   originProduct: string | null;
   userId: string | null;
+  billingDisposition: 'paid' | 'nonbillable';
 };
+
+export type BillingCompleteness = {
+  state: 'complete' | 'unresolved';
+  unresolvedPaidAttempts: string;
+};
+
+export function meteringIsComplete(value: BillingCompleteness | undefined): boolean {
+  return value?.state === 'complete' && value.unresolvedPaidAttempts === '0';
+}
 
 export type NormalizedMeteringUsage = {
   schemaVersion: 1;
@@ -33,6 +43,7 @@ export type NormalizedMeteringUsage = {
   };
   calls: string;
   lines: RawMeteringLine[];
+  billingCompleteness: BillingCompleteness;
   snapshot: {
     cursor: string;
     id: string;

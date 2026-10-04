@@ -9,6 +9,7 @@ const now = new Date('2026-07-20T12:00:00.000Z');
 function usage(): NormalizedMeteringUsage {
   return {
     schemaVersion: 1,
+    billingCompleteness: { state: 'complete', unresolvedPaidAttempts: '0' },
     product: 'deepwater',
     groupBy: 'service',
     scope: {
@@ -33,6 +34,7 @@ function usage(): NormalizedMeteringUsage {
         selectedProviderCost: '2',
         currency: 'USD',
         costProvenance: 'provider_invoice',
+        billingDisposition: 'paid',
         billingProduct: 'deepwater',
         callerProduct: 'nessie',
         originProduct: 'nessie',

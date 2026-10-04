@@ -190,6 +190,13 @@ enum BillingCollectionMode {
   NONE
 }
 
+enum BillingStripeMeterEventState {
+  PENDING
+  UNCERTAIN
+  ACCEPTED
+  RECONCILIATION_REQUIRED
+}
+
 enum BillingAssignmentScope {
   ORGANISATION
   TEAM
@@ -1429,6 +1436,8 @@ model Team {
   billingCredits                           BillingCreditAccount[]
   billingCreditAdminAdjustments            BillingCreditAdminAdjustment[]
   billingCreditPortfolioSnapshots          BillingCreditPortfolioSnapshot[]
+  billingCreditUsageSettlements             BillingCreditUsageSettlement[]
+  billingCreditSettlementWatches             BillingCreditSettlementWatch[]
   billingCreditConsentRevisions            BillingCreditAutoTopUpConsentRevision[]
   billingCreditAutoTopUpDisables           BillingCreditAutoTopUpDisableEvent[]
   recurringAddonScopeCheckouts             BillingRecurringAddonCheckout[]           @relation("RecurringAddonCheckoutScopeTeam")
@@ -1806,11 +1815,31 @@ model BillingOrgResponsibility {
   org        Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
   assumedBy  User         @relation("BillingOrgResponsibilityAssumer", fields: [assumedByUserId], references: [id], onDelete: Restrict)
   releasedBy User?        @relation("BillingOrgResponsibilityReleaser", fields: [releasedByUserId], references: [id], onDelete: Restrict)
+  transitions BillingOrgResponsibilityTransition[]
 
   @@index([active])
   @@index([assumedByUserId])
   @@index([releasedByUserId])
   @@map("billing_org_responsibilities")
+}
+
+// Append-only effective payer changes. Monthly Ledger portfolios touching a
+// transition month are held because they cannot split cost at the instant.
+model BillingOrgResponsibilityTransition {
+  id               String   @id @default(cuid())
+  responsibilityId String   @map("responsibility_id")
+  orgId            String   @map("org_id")
+  kind             String   @db.VarChar(8)
+  effectiveAt      DateTime @map("effective_at")
+  actorUserId      String?  @map("actor_user_id")
+  source           String   @db.VarChar(24)
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  responsibility BillingOrgResponsibility @relation(fields: [responsibilityId], references: [id], onDelete: Restrict)
+
+  @@index([orgId, effectiveAt])
+  @@unique([responsibilityId, kind, effectiveAt])
+  @@map("billing_org_responsibility_transitions")
 }
 
 model BillingAppKey {
@@ -2204,6 +2233,8 @@ model BillingStripeUsageExport {
   deltaMeterQuantity         BigInt    @map("delta_meter_quantity")
   stripeMeterEventIdentifier String    @unique @map("stripe_meter_event_identifier") @db.VarChar(100)
   stripeMeterEventCreatedAt  DateTime? @map("stripe_meter_event_created_at")
+  stripeMeterEventAttemptedAt DateTime? @map("stripe_meter_event_attempted_at")
+  stripeMeterEventState       BillingStripeMeterEventState @default(PENDING) @map("stripe_meter_event_state")
   createdAt                  DateTime  @default(now()) @map("created_at")
 
   account      BillingStripeAccount      @relation(fields: [accountId], references: [id], onDelete: Restrict)
@@ -2719,6 +2750,7 @@ model BillingCreditAccount {
   setupCheckouts           BillingCreditSetupCheckout[]
   autoTopUpAttempts        BillingCreditAutoTopUpAttempt[]
   usageSettlements         BillingCreditUsageSettlement[]
+  settlementWatches        BillingCreditSettlementWatch[]
   settlementAdjustments    BillingCreditUsageSettlementAdjustment[]
   adminAdjustments         BillingCreditAdminAdjustment[]
   portfolioSnapshots       BillingCreditPortfolioSnapshot[]
@@ -2880,8 +2912,8 @@ model BillingCreditPortfolioSnapshot {
   perspectiveService BillingService                           @relation("CreditPortfolioPerspectiveService", fields: [perspectiveServiceId], references: [id], onDelete: Restrict)
   adjustments        BillingCreditUsageSettlementAdjustment[]
 
-  @@unique([creditAccountId, ledgerSnapshotId], map: "billing_credit_portfolio_snapshot_ledger_id_key")
-  @@unique([creditAccountId, ledgerSnapshotCursor], map: "billing_credit_portfolio_snapshot_cursor_key")
+  @@unique([creditAccountId, teamId, ledgerSnapshotId], map: "billing_credit_portfolio_snapshot_team_ledger_id_key")
+  @@unique([creditAccountId, teamId, ledgerSnapshotCursor], map: "billing_credit_portfolio_snapshot_team_cursor_key")
   @@index([accountId])
   @@index([orgId, teamId, billingMonth, capturedAt])
   @@index([perspectiveServiceId])
@@ -3132,6 +3164,7 @@ model BillingCreditUsageSettlement {
   id                                       String                             @id @default(cuid())
   accountId                                String                             @map("account_id")
   creditAccountId                          String                             @map("credit_account_id")
+  teamId                                   String?                            @map("team_id")
   subscriptionId                           String?                            @map("subscription_id")
   tariffId                                 String                             @map("tariff_id")
   serviceId                                String                             @map("service_id")
@@ -3147,6 +3180,7 @@ model BillingCreditUsageSettlement {
 
   account             BillingStripeAccount                      @relation(fields: [accountId], references: [id], onDelete: Restrict)
   creditAccount       BillingCreditAccount                      @relation(fields: [creditAccountId], references: [id], onDelete: Restrict)
+  team                Team?                                     @relation(fields: [teamId], references: [id], onDelete: Restrict)
   subscription        BillingStripeSubscription?                @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
   tariff              BillingTariff                             @relation(fields: [tariffId], references: [id], onDelete: Restrict)
   service             BillingService                            @relation(fields: [serviceId], references: [id], onDelete: Restrict)
@@ -3156,11 +3190,32 @@ model BillingCreditUsageSettlement {
   invoiceLines        BillingCreditInvoiceLine[]
   contractInvoiceRefs BillingInvoiceCreditSettlementReference[]
 
-  @@unique([creditAccountId, serviceId, billingMonth])
+  @@unique([creditAccountId, teamId, serviceId, billingMonth], map: "billing_credit_settlement_team_service_month_key")
   @@index([accountId])
   @@index([creditAccountId, billingMonth])
   @@index([appKeyId])
   @@map("billing_credit_usage_settlements")
+}
+
+// Durable fair scheduler cursor for every payer/source-team/month combination.
+// Older months keep being revisited so late Ledger receipts can be collected.
+model BillingCreditSettlementWatch {
+  id              String    @id @default(cuid())
+  creditAccountId String    @map("credit_account_id")
+  teamId          String    @map("team_id")
+  billingMonth    String    @map("billing_month") @db.Char(7)
+  nextCheckAt     DateTime  @default(now()) @map("next_check_at")
+  lastCheckedAt   DateTime? @map("last_checked_at")
+  lastCursor      String?   @map("last_cursor") @db.VarChar(80)
+  lastError       String?   @map("last_error") @db.VarChar(160)
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  creditAccount BillingCreditAccount @relation(fields: [creditAccountId], references: [id], onDelete: Restrict)
+  team          Team                 @relation(fields: [teamId], references: [id], onDelete: Restrict)
+
+  @@unique([creditAccountId, teamId, billingMonth], map: "billing_credit_watch_payer_team_month_key")
+  @@index([nextCheckAt, billingMonth])
+  @@map("billing_credit_settlement_watches")
 }
 
 // Repeated Ledger snapshots and corrections are append-only. A trigger locks the

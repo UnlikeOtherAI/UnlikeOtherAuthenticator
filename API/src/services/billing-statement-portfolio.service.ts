@@ -251,6 +251,7 @@ export function filterPortfolioForProduct(
       portfolio.lines.filter((line) => line.billingProduct === product).map((line) => line.calls),
     ),
     lines: portfolio.lines.filter((line) => line.billingProduct === product),
+    billingCompleteness: portfolio.billingCompleteness,
     snapshot: portfolio.snapshot,
   };
 }

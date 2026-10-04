@@ -11,13 +11,13 @@ import { useCreateBillingServiceMutation } from './billing-admin-queries';
 const defaults: BillingServiceFormValues = {
   identifier: '',
   serviceName: '',
-  key: 'at-cost',
-  name: 'At cost',
-  mode: 'at_cost',
+  key: 'standard',
+  name: 'Standard',
+  mode: 'standard',
   collectionMode: 'none',
-  markupBps: 0,
+  markupBps: 3000,
   monthlyAmountMinor: '0',
-  currency: 'GBP',
+  currency: 'USD',
 };
 
 export function BillingServiceDialog({ onClose, open }: { onClose: () => void; open: boolean }) {
@@ -112,7 +112,7 @@ export function BillingServiceDialog({ onClose, open }: { onClose: () => void; o
             </FieldShell>
             <FieldShell
               label="Markup (basis points)"
-              hint="2,000 = 20%; 4,000 = 40%."
+              hint="3,000 = 30%; each tariff stores its own negotiated rate."
               error={form.formState.errors.markupBps?.message}
             >
               <TextField {...form.register('markupBps')} type="number" min="0" step="1" />

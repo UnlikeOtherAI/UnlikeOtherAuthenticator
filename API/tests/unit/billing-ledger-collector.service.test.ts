@@ -47,6 +47,7 @@ beforeAll(async () => {
 function rawMeteringResponse(groupBy: 'service' | 'user' = 'service') {
   return {
     schemaVersion: 1,
+    billingCompleteness: { state: 'complete', unresolvedPaidAttempts: '0' },
     product: 'deepwater',
     scope: {
       organizationId: 'org_123',
@@ -80,6 +81,7 @@ function rawMeteringResponse(groupBy: 'service' | 'user' = 'service') {
           originProduct: 'nessie',
           serviceId: 'openai',
           costProvenance: 'provider_pricebook',
+          billingDisposition: 'paid',
           rawProviderCurrency: 'USD',
           calls: '2',
           rawProviderEstimatedCost: '1.2',
@@ -98,6 +100,7 @@ function rawMeteringResponse(groupBy: 'service' | 'user' = 'service') {
         serviceId: 'openai',
         usageUnit: 'tokens',
         costProvenance: 'provider_pricebook',
+        billingDisposition: 'paid',
         rawProviderCurrency: 'USD',
         calls: '2',
         rawProviderUsage: {
@@ -219,6 +222,7 @@ describe('Ledger raw metering collector', () => {
 
     expect(result).toMatchObject({
       schemaVersion: 1,
+    billingCompleteness: { state: 'complete', unresolvedPaidAttempts: '0' },
       groupBy: 'service',
       calls: '2',
       lines: [

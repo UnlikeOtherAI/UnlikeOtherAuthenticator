@@ -1,4 +1,8 @@
 import { BillingAppKeyPurpose, Prisma, PrismaClient } from '@prisma/client';
+import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { settleCreditPortfolio } from '../../src/services/billing-credit-settlement.service.js';
@@ -151,6 +155,7 @@ function line(product: string, userId: string | null, cost: string) {
     selectedProviderCost: cost,
     currency: 'USD',
     costProvenance: 'actual',
+    billingDisposition: 'paid',
     billingProduct: product,
     callerProduct: product,
     originProduct: product,
@@ -166,6 +171,7 @@ function portfolio(
 ): NormalizedMeteringPortfolio {
   return {
     schemaVersion: 1,
+    billingCompleteness: { state: 'complete', unresolvedPaidAttempts: '0' },
     contract: 'metering-portfolio-v1',
     perspectiveProduct: 'deepwater',
     groupBy: 'user',
@@ -539,4 +545,193 @@ describe.skipIf(!databaseTestsEnabled)('credit settlement persistence', () => {
       ).balanceMicrocredits,
     ).toBe(350_000_000n);
   });
+
+  it('keeps two source teams separate while debiting their shared organisation payer', async () => {
+    if (!handle) throw new Error('db handle missing');
+    const secondTeam = 'team_credit_settlement_other';
+    const orgCustomer = 'bsc_credit_settlement_org';
+    const orgAccount = 'bca_credit_settlement_org';
+    await handle.prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe('SET LOCAL session_replication_role = replica');
+      await tx.$executeRaw(Prisma.sql`
+        INSERT INTO "teams" ("id", "org_id", "name", "slug", "updated_at")
+        VALUES (${secondTeam}, ${ids.org}, 'Second Team', 'second-team', CURRENT_TIMESTAMP)
+      `);
+      await tx.$executeRaw(Prisma.sql`
+        INSERT INTO "team_members" ("id", "team_id", "user_id", "team_role", "status", "updated_at")
+        VALUES ('tm_credit_settlement_other', ${secondTeam}, ${ids.second}, 'owner', 'ACTIVE', CURRENT_TIMESTAMP)
+      `);
+      await tx.$executeRaw(Prisma.sql`
+        INSERT INTO "billing_stripe_customers"
+          ("id", "account_id", "org_id", "scope", "scope_key", "updated_at")
+        VALUES (${orgCustomer}, ${ids.account}, ${ids.org}, 'ORGANISATION', ${ids.org}, CURRENT_TIMESTAMP)
+      `);
+      await tx.$executeRaw(Prisma.sql`
+        INSERT INTO "billing_credit_accounts"
+          ("id", "account_id", "customer_id", "org_id", "scope", "scope_key", "currency",
+           "balance_microcredits", "updated_at")
+        VALUES (${orgAccount}, ${ids.account}, ${orgCustomer}, ${ids.org}, 'ORGANISATION',
+          ${ids.org}, 'USD', 2000000000, CURRENT_TIMESTAMP)
+      `);
+      await tx.$executeRaw(Prisma.sql`
+        INSERT INTO "billing_org_responsibilities"
+          ("id", "org_id", "active", "assumed_at", "assumed_by_user_id", "updated_at")
+        VALUES ('bor_credit_settlement_org', ${ids.org}, true,
+          '2026-06-01T00:00:00.000Z', ${ids.owner}, CURRENT_TIMESTAMP)
+      `);
+      await tx.$executeRaw(Prisma.sql`
+        INSERT INTO "billing_org_responsibility_transitions"
+          ("id", "responsibility_id", "org_id", "kind", "effective_at", "actor_user_id", "source")
+        VALUES ('bort_credit_settlement_org', 'bor_credit_settlement_org', ${ids.org},
+          'ASSUMED', '2026-06-01T00:00:00.000Z', ${ids.owner}, 'legacy_backfill')
+      `);
+    });
+    const first = portfolio('mup_org_team_a_123456789012345678901234',
+      '2026-07-21T13:00:00.000Z', [line('deepwater', ids.owner, '1')]);
+    const second = portfolio('mup_org_team_b_123456789012345678901234',
+      '2026-07-21T12:00:00.000Z', [line('deepwater', ids.second, '0.2')]);
+    second.scope.teamId = secondTeam;
+    await settleCreditPortfolio(
+      { creditAccountId: orgAccount, portfolio: first, credential: deepwaterCredential },
+      { prisma: handle.prisma },
+    );
+    await settleCreditPortfolio(
+      { creditAccountId: orgAccount, portfolio: second, credential: deepwaterCredential },
+      { prisma: handle.prisma },
+    );
+    const settlements = await handle.prisma.billingCreditUsageSettlement.findMany({
+      where: { creditAccountId: orgAccount },
+      orderBy: { teamId: 'asc' },
+    });
+    expect(settlements).toHaveLength(2);
+    expect(new Set(settlements.map((row) => row.teamId))).toEqual(new Set([ids.team, secondTeam]));
+    expect(settlements.reduce((sum, row) => sum + row.cumulativeCreditsConsumedMicrocredits, 0n))
+      .toBe(1_200_000_000n);
+    const payer = await handle.prisma.billingCreditAccount.findUniqueOrThrow({
+      where: { id: orgAccount },
+    });
+    expect(payer.balanceMicrocredits).toBe(800_000_000n);
+  });
+
+  it('attributes delayed paid usage to the original user after membership becomes inactive', async () => {
+    if (!handle) throw new Error('db handle missing');
+    await handle.prisma.teamMember.update({
+      where: { teamId_userId: { teamId: 'team_credit_settlement_other', userId: ids.second } },
+      data: { status: 'DEACTIVATED', statusChangedAt: new Date('2026-09-15T00:00:00.000Z') },
+    });
+    const delayed = portfolio('mup_departed_user_1234567890123456789012',
+      '2026-09-20T12:00:00.000Z', [line('deepwater', ids.second, '0.2')]);
+    delayed.scope = {
+      ...delayed.scope,
+      teamId: 'team_credit_settlement_other',
+      month: '2026-09',
+      startsAt: '2026-09-01T00:00:00.000Z',
+      endsAt: '2026-10-01T00:00:00.000Z',
+    };
+    await settleCreditPortfolio({
+      creditAccountId: 'bca_credit_settlement_org',
+      portfolio: delayed,
+      credential: deepwaterCredential,
+    }, { prisma: handle.prisma });
+    const allocation = await handle.prisma.billingCreditUsageAllocation.findFirstOrThrow({
+      where: { attributedUserId: ids.second, settlement: { billingMonth: '2026-09' } },
+    });
+    expect(allocation.cumulativeCreditsConsumedMicrocredits).toBe(200_000_000n);
+  });
+
+  it('upgrades populated legacy history without altering totals and restores identity protection', async () => {
+    if (!handle) throw new Error('db handle missing');
+    const prisma = handle.prisma;
+    const before = await prisma.billingCreditUsageSettlement.findMany({
+      select: { id: true, creditAccountId: true, teamId: true, billingMonth: true,
+        cumulativeCreditsConsumedMicrocredits: true,
+        cumulativeRatedUsageAmountMicroMinor: true },
+      orderBy: { id: 'asc' },
+    });
+    const orgRows = before.filter((row) =>
+      row.creditAccountId === 'bca_credit_settlement_org' && row.billingMonth === '2026-07');
+    expect(orgRows).toHaveLength(2);
+    const retained = orgRows[0];
+    const removed = orgRows[1];
+    if (!retained || !removed) throw new Error('org fixture incomplete');
+    // Model a historical overwritten organisation row with adjustments from
+    // two source teams. This schema is disposable and isolated to this test.
+    await prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe('SET LOCAL session_replication_role = replica');
+      await tx.$executeRaw(Prisma.sql`
+        UPDATE "billing_credit_usage_settlement_adjustments"
+        SET "settlement_id" = ${retained.id}, "sequence" = 2
+        WHERE "settlement_id" = ${removed.id}
+      `);
+      await tx.$executeRaw(Prisma.sql`
+        UPDATE "billing_credit_usage_allocations"
+        SET "settlement_id" = ${retained.id}
+        WHERE "settlement_id" = ${removed.id}
+      `);
+      await tx.$executeRaw(Prisma.sql`
+        DELETE FROM "billing_credit_usage_settlements" WHERE "id" = ${removed.id}
+      `);
+    });
+    const financialBefore = await prisma.billingCreditUsageSettlement.findMany({
+      select: { id: true, creditAccountId: true, cumulativeCreditsConsumedMicrocredits: true,
+        cumulativeRatedUsageAmountMicroMinor: true }, orderBy: { id: 'asc' },
+    });
+    for (const sql of [
+      'DROP INDEX "billing_credit_settlement_team_service_month_key"',
+      'DROP INDEX "billing_credit_portfolio_snapshot_team_ledger_id_key"',
+      'DROP INDEX "billing_credit_portfolio_snapshot_team_cursor_key"',
+      'ALTER TABLE "billing_credit_usage_settlements" DROP CONSTRAINT "billing_credit_usage_settlements_team_id_fkey"',
+      'ALTER TABLE "billing_credit_usage_settlements" DROP COLUMN "team_id"',
+      'CREATE UNIQUE INDEX "billing_credit_usage_settlements_credit_account_id_service__key" ON "billing_credit_usage_settlements"("credit_account_id", "service_id", "billing_month")',
+      'CREATE UNIQUE INDEX "billing_credit_portfolio_snapshot_ledger_id_key" ON "billing_credit_portfolio_snapshots"("credit_account_id", "ledger_snapshot_id")',
+      'CREATE UNIQUE INDEX "billing_credit_portfolio_snapshot_cursor_key" ON "billing_credit_portfolio_snapshots"("credit_account_id", "ledger_snapshot_cursor")',
+    ]) await prisma.$executeRawUnsafe(sql);
+    const migration = path.resolve(process.cwd(),
+      'prisma/migrations/20261004120000_scope_credit_settlements_by_origin_team/migration.sql');
+    const migrationSource = readFileSync(migration, 'utf8');
+    const failingSource = migrationSource.replace(
+      'ALTER TABLE "billing_credit_usage_settlements"\n  ENABLE TRIGGER',
+      'DO $$ BEGIN RAISE EXCEPTION \'forced upgrade rollback proof\'; END $$;\n' +
+        'ALTER TABLE "billing_credit_usage_settlements"\n  ENABLE TRIGGER',
+    );
+    expect(failingSource).not.toBe(migrationSource);
+    expect(() => execFileSync(process.execPath, [
+      createRequire(import.meta.url).resolve('prisma/build/index.js'),
+      'db', 'execute', '--stdin', '--schema', 'prisma/schema.prisma',
+    ], {
+      cwd: process.cwd(), env: { ...process.env, DATABASE_URL: handle.databaseUrl },
+      input: failingSource, stdio: ['pipe', 'pipe', 'pipe'],
+    })).toThrow();
+    const trigger = await prisma.$queryRaw<Array<{ tgenabled: string }>>(Prisma.sql`
+      SELECT tgenabled FROM pg_trigger
+      WHERE tgrelid = 'billing_credit_usage_settlements'::regclass
+        AND tgname = 'billing_credit_usage_settlements_immutable_identity'
+    `);
+    expect(trigger).toEqual([{ tgenabled: 'O' }]);
+    await expect(prisma.$executeRaw(Prisma.sql`
+      UPDATE "billing_credit_usage_settlements"
+      SET "billing_month" = '2026-08' WHERE "id" = ${retained.id}
+    `)).rejects.toThrow();
+    execFileSync(process.execPath, [
+      createRequire(import.meta.url).resolve('prisma/build/index.js'),
+      'db', 'execute', '--file', migration, '--schema', 'prisma/schema.prisma',
+    ], {
+      cwd: process.cwd(), env: { ...process.env, DATABASE_URL: handle.databaseUrl },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    const after = await prisma.billingCreditUsageSettlement.findMany({
+      select: { id: true, creditAccountId: true, teamId: true, cumulativeCreditsConsumedMicrocredits: true,
+        cumulativeRatedUsageAmountMicroMinor: true }, orderBy: { id: 'asc' },
+    });
+    expect(after.map(({ teamId: _teamId, ...row }) => row)).toEqual(financialBefore);
+    expect(after.find((row) => row.id === retained.id)?.teamId).toBeNull();
+    expect(after.filter((row) => row.creditAccountId === ids.creditAccount)
+      .every((row) => row.teamId === ids.team)).toBe(true);
+    const teamRow = after.find((row) => row.teamId === ids.team);
+    if (!teamRow) throw new Error('team lineage missing');
+    await expect(prisma.billingCreditUsageSettlement.update({
+      where: { id: teamRow.id },
+      data: { teamId: 'team_credit_settlement_other' },
+    })).rejects.toThrow();
+  }, 30_000);
 });

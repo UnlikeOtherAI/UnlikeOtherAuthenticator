@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { BillingStripeMeterEventState } from '@prisma/client';
 
 import type { NormalizedMeteringUsage } from '../../src/services/billing-metering.types.js';
 import {
@@ -26,10 +27,12 @@ type ExportRow = {
   deltaMeterQuantity: bigint;
   stripeMeterEventIdentifier: string;
   stripeMeterEventCreatedAt: Date | null;
+  stripeMeterEventAttemptedAt?: Date | null;
+  stripeMeterEventState?: BillingStripeMeterEventState;
   createdAt: Date;
 };
 
-function setup(existing: ExportRow[] = []) {
+function setup(existing: ExportRow[] = [], confirmedOffset = 0n) {
   const rows = [...existing];
   const fullSubscription = subscriptionFixture();
   const findSubscription = vi.fn(async (args: { include?: unknown }) =>
@@ -65,6 +68,8 @@ function setup(existing: ExportRow[] = []) {
     const row = {
       id: `export_${rows.length + 1}`,
       stripeMeterEventCreatedAt: null,
+      stripeMeterEventAttemptedAt: null,
+      stripeMeterEventState: BillingStripeMeterEventState.PENDING,
       ...data,
     };
     rows.push(row);
@@ -75,20 +80,32 @@ function setup(existing: ExportRow[] = []) {
       where,
       data,
     }: {
-      where: { id: string; stripeMeterEventCreatedAt: null };
-      data: { stripeMeterEventCreatedAt: Date };
+      where: { id: string; stripeMeterEventCreatedAt: null; stripeMeterEventState?: BillingStripeMeterEventState };
+      data: {
+        stripeMeterEventCreatedAt?: Date;
+        stripeMeterEventAttemptedAt?: Date;
+        stripeMeterEventState?: BillingStripeMeterEventState;
+      };
     }) => {
       const row = rows.find(
         (candidate) => candidate.id === where.id && candidate.stripeMeterEventCreatedAt === null,
       );
       if (!row) return { count: 0 };
-      row.stripeMeterEventCreatedAt = data.stripeMeterEventCreatedAt;
+      if (data.stripeMeterEventCreatedAt) row.stripeMeterEventCreatedAt = data.stripeMeterEventCreatedAt;
+      if (data.stripeMeterEventAttemptedAt) row.stripeMeterEventAttemptedAt = data.stripeMeterEventAttemptedAt;
+      if (data.stripeMeterEventState) row.stripeMeterEventState = data.stripeMeterEventState;
       return { count: 1 };
     },
   );
   const tx = {
-    $queryRaw: vi.fn().mockResolvedValue([{ id: fullSubscription.id }]),
+    $queryRaw: vi.fn().mockImplementation(async (query: { strings?: string[] }) =>
+      query.strings?.join('').includes('billing_credit_accounts')
+        ? [{ id: 'credit_account_1' }]
+        : [{ id: fullSubscription.id }]),
     billingStripeSubscription: { findUnique: findSubscription },
+    billingCreditUsageSettlement: { findMany: vi.fn().mockResolvedValue(
+      confirmedOffset ? [{ cumulativeCreditsConsumedMicrocredits: confirmedOffset * 10n }] : [],
+    ) },
     billingStripeUsageExport: {
       findMany: findExports,
       create: createExport,
@@ -142,6 +159,7 @@ describe('Stripe usage export', () => {
       {
         prisma: prisma as never,
         stripe: stripe as never,
+        settleCredits: vi.fn().mockResolvedValue(0n),
         fetchUsage: vi.fn().mockResolvedValue(usage()),
         now: () => capturedAt,
       },
@@ -167,7 +185,7 @@ describe('Stripe usage export', () => {
       },
       { idempotencyKey: expect.stringMatching(/^uoa_me_[a-f0-9]{64}$/) },
     );
-    expect(updateExports).toHaveBeenCalledOnce();
+    expect(updateExports).toHaveBeenCalledTimes(2);
     expect(result.exports).toHaveLength(1);
     expect(result.exports[0]).toMatchObject({
       cumulativeMeterQuantity: '250000000',
@@ -189,6 +207,7 @@ describe('Stripe usage export', () => {
       {
         prisma: prisma as never,
         stripe: stripe as never,
+        settleCredits: vi.fn().mockResolvedValue(0n),
         fetchUsage: vi.fn().mockResolvedValue(mixedUsage),
         now: () => capturedAt,
       },
@@ -202,7 +221,100 @@ describe('Stripe usage export', () => {
     });
   });
 
-  it('exports a negative cumulative delta when Ledger corrects a later snapshot', async () => {
+  it('subtracts prepaid credits once from cumulative metered usage', async () => {
+    const { prisma, stripe, createExport, meterCreate } = setup([], 50_000_000n);
+    await exportStripeUsage(
+      { subscriptionId: 'subscription_1', billingMonth: '2026-07' },
+      {
+        prisma: prisma as never,
+        stripe: stripe as never,
+        settleCredits: vi.fn().mockResolvedValue(50_000_000n),
+        fetchUsage: vi.fn().mockResolvedValue(usage()),
+        now: () => capturedAt,
+      },
+    );
+    expect(createExport).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        cumulativeCustomerCharge: '2',
+        cumulativeMeterQuantity: 200_000_000n,
+      }),
+    });
+    expect(meterCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ payload: expect.objectContaining({ value: '200000000' }) }),
+      expect.any(Object),
+    );
+  });
+
+  it('holds if a later allocation would reduce already exported Stripe usage', async () => {
+    const prior = {
+      id: 'export_gross_first',
+      accountId: stripeAccount.id,
+      subscriptionId: 'subscription_1',
+      ledgerSnapshotCursor: 'mus_0123456789ABCDEFGHIJKLMNOPQRSTUV',
+      billingMonth: '2026-07',
+      billingProduct: 'deepwater',
+      callerProduct: 'deepsignal',
+      currency: 'USD',
+      cumulativeCustomerCharge: '2.5',
+      cumulativeMeterQuantity: 250_000_000n,
+      deltaMeterQuantity: 250_000_000n,
+      stripeMeterEventIdentifier: 'uoa_me_gross_first',
+      stripeMeterEventCreatedAt: capturedAt,
+      stripeMeterEventAttemptedAt: capturedAt,
+      stripeMeterEventState: BillingStripeMeterEventState.ACCEPTED,
+      createdAt: capturedAt,
+    };
+    const later = new Date(capturedAt.getTime() + 5 * 60_000);
+    const next = usage('2', 'mus_1123456789ABCDEFGHIJKLMNOPQRSTUV');
+    next.snapshot.capturedAt = later.toISOString();
+    const { prisma, stripe, meterCreate } = setup([prior], 50_000_000n);
+    await expect(exportStripeUsage(
+      { subscriptionId: 'subscription_1', billingMonth: '2026-07' },
+      {
+        prisma: prisma as never,
+        stripe: stripe as never,
+        settleCredits: vi.fn().mockResolvedValue(50_000_000n),
+        fetchUsage: vi.fn().mockResolvedValue(next),
+        now: () => later,
+      },
+    )).rejects.toThrow('STRIPE_METER_NEGATIVE_CORRECTION_REQUIRES_RECONCILIATION');
+    expect(meterCreate).not.toHaveBeenCalled();
+  });
+
+  it('holds an uncertain accepted event after the identifier safety window', async () => {
+    const pending = {
+      id: 'export_uncertain',
+      accountId: stripeAccount.id,
+      subscriptionId: 'subscription_1',
+      ledgerSnapshotCursor: 'mus_0123456789ABCDEFGHIJKLMNOPQRSTUV',
+      billingMonth: '2026-07',
+      billingProduct: 'deepwater',
+      callerProduct: 'deepsignal',
+      currency: 'USD',
+      cumulativeCustomerCharge: '2.5',
+      cumulativeMeterQuantity: 250_000_000n,
+      deltaMeterQuantity: 250_000_000n,
+      stripeMeterEventIdentifier: 'uoa_me_uncertain',
+      stripeMeterEventCreatedAt: null,
+      stripeMeterEventAttemptedAt: capturedAt,
+      stripeMeterEventState: BillingStripeMeterEventState.UNCERTAIN,
+      createdAt: capturedAt,
+    };
+    const { prisma, stripe, meterCreate } = setup([pending]);
+    await expect(exportStripeUsage(
+      { subscriptionId: 'subscription_1', billingMonth: '2026-07' },
+      {
+        prisma: prisma as never,
+        stripe: stripe as never,
+        settleCredits: vi.fn().mockResolvedValue(0n),
+        fetchUsage: vi.fn().mockResolvedValue(usage()),
+        now: () => new Date(capturedAt.getTime() + 24 * 60 * 60_000),
+      },
+    )).rejects.toThrow('STRIPE_METER_EVENT_RECONCILIATION_REQUIRED');
+    expect(meterCreate).not.toHaveBeenCalled();
+  });
+
+  it('holds a lower corrected snapshot for an auditable Stripe correction', async () => {
     const prior = {
       id: 'export_1',
       accountId: stripeAccount.id,
@@ -224,22 +336,17 @@ describe('Stripe usage export', () => {
     nextUsage.snapshot.capturedAt = later.toISOString();
     const { prisma, stripe, meterCreate } = setup([prior]);
 
-    await exportStripeUsage(
+    await expect(exportStripeUsage(
       { subscriptionId: 'subscription_1', billingMonth: '2026-07' },
       {
         prisma: prisma as never,
         stripe: stripe as never,
+        settleCredits: vi.fn().mockResolvedValue(0n),
         fetchUsage: vi.fn().mockResolvedValue(nextUsage),
         now: () => later,
       },
-    );
-
-    expect(meterCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        payload: expect.objectContaining({ value: '-125000000' }),
-      }),
-      expect.any(Object),
-    );
+    )).rejects.toThrow('STRIPE_METER_NEGATIVE_CORRECTION_REQUIRES_RECONCILIATION');
+    expect(meterCreate).not.toHaveBeenCalled();
   });
 
   it('retries a durable pending export without creating a second delta row', async () => {
@@ -266,6 +373,7 @@ describe('Stripe usage export', () => {
       {
         prisma: prisma as never,
         stripe: stripe as never,
+        settleCredits: vi.fn().mockResolvedValue(0n),
         fetchUsage: vi.fn().mockResolvedValue(usage()),
         now: () => capturedAt,
       },
@@ -305,6 +413,7 @@ describe('Stripe usage export', () => {
       {
         prisma: prisma as never,
         stripe: stripe as never,
+        settleCredits: vi.fn().mockResolvedValue(0n),
         fetchUsage: vi.fn().mockResolvedValue(nextUsage),
         now: () => later,
       },
@@ -350,6 +459,7 @@ describe('Stripe usage export', () => {
       {
         prisma: prisma as never,
         stripe: stripe as never,
+        settleCredits: vi.fn().mockResolvedValue(0n),
         fetchUsage: vi.fn().mockResolvedValue(finalUsage),
         invoicePeriod: {
           startsAt: new Date('2026-07-01T00:00:00.000Z'),
@@ -386,7 +496,8 @@ describe('Stripe usage export', () => {
         {
           prisma: prisma as never,
           stripe: stripe as never,
-          fetchUsage: vi.fn().mockResolvedValue(futureUsage),
+          settleCredits: vi.fn().mockResolvedValue(0n),
+        fetchUsage: vi.fn().mockResolvedValue(futureUsage),
           now: () => capturedAt,
         },
       ),
@@ -404,7 +515,8 @@ describe('Stripe usage export', () => {
         {
           prisma: prisma as never,
           stripe: stripe as never,
-          fetchUsage: vi.fn().mockResolvedValue(usage()),
+          settleCredits: vi.fn().mockResolvedValue(0n),
+        fetchUsage: vi.fn().mockResolvedValue(usage()),
           now: () => capturedAt,
         },
       ),
@@ -441,7 +553,8 @@ describe('Stripe usage export', () => {
           {
             prisma: prisma as never,
             stripe: stripe as never,
-            fetchUsage: vi.fn().mockResolvedValue(value),
+            settleCredits: vi.fn().mockResolvedValue(0n),
+        fetchUsage: vi.fn().mockResolvedValue(value),
             now: () => capturedAt,
           },
         ),

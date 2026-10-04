@@ -14,6 +14,7 @@ import {
 } from './billing-credit-settlement-write.service.js';
 import type { NormalizedMeteringPortfolio } from './billing-metering.types.js';
 import { runBillingSerializableTransaction } from './billing-serializable-transaction.service.js';
+import { assertUnambiguousCreditPayer } from './billing-credit-payer-period.service.js';
 
 function sameInstant(left: Date, right: string): boolean {
   return left.getTime() === Date.parse(right);
@@ -120,11 +121,16 @@ async function settleInTransaction(
     where: { id: params.creditAccountId },
   });
   if (!account) throw new AppError('NOT_FOUND', 404, 'BILLING_CREDIT_ACCOUNT_MISSING');
+  await assertUnambiguousCreditPayer(tx, {
+    orgId: account.orgId,
+    scope: account.scope,
+    billingMonth: params.portfolio.scope.month,
+  });
   // The paying account may be the organisation's (Docs/plans/2026-08-15-org-billing-override.md
   // §2), in which case every team's portfolio settles against it. The team the
   // usage belongs to still drives rating, attribution and the snapshot row —
   // only where the credits are drawn from changes.
-  const settlementTeamId = account.teamId ?? params.portfolio.scope.teamId;
+  const settlementTeamId = params.portfolio.scope.teamId;
   const portfolioTeam =
     account.teamId === null
       ? await tx.team.findFirst({
@@ -139,6 +145,20 @@ async function settleInTransaction(
   ) {
     throw new AppError('INTERNAL', 409, 'BILLING_CREDIT_PORTFOLIO_SCOPE_MISMATCH');
   }
+  // A pre-migration organisation row may contain adjustments from several
+  // teams. Its prior debit cannot be apportioned without financial evidence.
+  // Hold this payer/month for reconciliation instead of debiting it again.
+  const legacy = await tx.billingCreditUsageSettlement.findFirst({
+    where: {
+      creditAccountId: account.id,
+      teamId: null,
+      billingMonth: params.portfolio.scope.month,
+    },
+    select: { id: true },
+  });
+  if (legacy) {
+    throw new AppError('INTERNAL', 409, 'BILLING_CREDIT_LEGACY_RECONCILIATION_REQUIRED');
+  }
 
   const perspectiveService = await tx.billingService.findUnique({
     where: { identifier: params.portfolio.perspectiveProduct },
@@ -148,8 +168,9 @@ async function settleInTransaction(
   }
   let snapshot = await tx.billingCreditPortfolioSnapshot.findUnique({
     where: {
-      creditAccountId_ledgerSnapshotCursor: {
+      creditAccountId_teamId_ledgerSnapshotCursor: {
         creditAccountId: account.id,
+        teamId: settlementTeamId,
         ledgerSnapshotCursor: params.portfolio.snapshot.cursor,
       },
     },
@@ -168,6 +189,7 @@ async function settleInTransaction(
     const latestSnapshot = await tx.billingCreditPortfolioSnapshot.findFirst({
       where: {
         creditAccountId: account.id,
+        teamId: settlementTeamId,
         billingMonth: params.portfolio.scope.month,
       },
       orderBy: [{ capturedAt: 'desc' }, { ledgerSnapshotCursor: 'desc' }],
@@ -199,7 +221,11 @@ async function settleInTransaction(
   }
 
   const existingSettlements = await tx.billingCreditUsageSettlement.findMany({
-    where: { creditAccountId: account.id, billingMonth: params.portfolio.scope.month },
+    where: {
+      creditAccountId: account.id,
+      teamId: settlementTeamId,
+      billingMonth: params.portfolio.scope.month,
+    },
     include: {
       service: true,
       tariff: true,
@@ -293,12 +319,58 @@ async function settleInTransaction(
     userId: row.userId,
     consumedMicrocredits: row.consumedMicrocredits,
   }));
+  const reservedExports = await tx.billingStripeUsageExport.findMany({
+    where: {
+      accountId: account.accountId,
+      billingMonth: params.portfolio.scope.month,
+      subscription: {
+        orgId: account.orgId,
+        ...(account.teamId ? { OR: [{ teamId: settlementTeamId }, { teamId: null }] } : {}),
+      },
+    },
+    select: { deltaMeterQuantity: true, subscription: { select: { serviceId: true } } },
+  });
+  const otherSettlements = await tx.billingCreditUsageSettlement.findMany({
+    where: {
+      creditAccountId: account.id,
+      teamId: { not: settlementTeamId },
+      billingMonth: params.portfolio.scope.month,
+    },
+    select: {
+      serviceId: true,
+      cumulativeRatedUsageAmountMicroMinor: true,
+      cumulativeCreditsConsumedMicrocredits: true,
+    },
+  });
+  const gross = rateCreditPortfolio({
+    portfolio: params.portfolio,
+    services: ratingServices,
+    previousAllocations: [],
+    balanceMicrocredits: 0n,
+    validTeamUserIds: new Set(teamMembers.map((member) => member.userId)),
+  });
+  const maxAdditionalCreditsByService = new Map<string, bigint>();
+  for (const service of gross) {
+    const reserved = reservedExports
+      .filter((row) => row.subscription.serviceId === service.service.id)
+      .reduce((sum, row) => sum + row.deltaMeterQuantity, 0n);
+    if (reserved === 0n) continue;
+    const other = otherSettlements.filter((row) => row.serviceId === service.service.id);
+    const otherGross = other.reduce((sum, row) => sum + row.cumulativeRatedUsageAmountMicroMinor, 0n);
+    const otherCredits = other.reduce((sum, row) => sum + row.cumulativeCreditsConsumedMicrocredits / 10n, 0n);
+    const currentCredits = previousAllocations
+      .filter((row) => row.serviceId === service.service.id)
+      .reduce((sum, row) => sum + row.consumedMicrocredits / 10n, 0n);
+    const unreserved = service.ratedMicroMinor + otherGross - reserved - otherCredits - currentCredits;
+    maxAdditionalCreditsByService.set(service.service.id, unreserved > 0n ? unreserved / 100_000n : 0n);
+  }
   const rated = rateCreditPortfolio({
     portfolio: params.portfolio,
     services: ratingServices,
     previousAllocations,
     balanceMicrocredits: account.balanceMicrocredits,
     validTeamUserIds: new Set(teamMembers.map((member) => member.userId)),
+    maxAdditionalCreditsByService,
   });
 
   const settlements = [...existingSettlements];
@@ -308,6 +380,7 @@ async function settleInTransaction(
       data: {
         accountId: account.accountId,
         creditAccountId: account.id,
+        teamId: settlementTeamId,
         tariffId: service.tariff.id,
         serviceId: service.id,
         appKeyId: params.credential.id,
