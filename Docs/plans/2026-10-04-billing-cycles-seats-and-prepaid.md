@@ -148,6 +148,14 @@ each selected team's usage remain separate watches, so a team fee is not copied
 to every team. A watch is evidence of work due, not an invoice or proof of
 financial completion; the signed receipt cohort, issuer allocation and actual
 payment source must still validate before finalization.
+Ledger's dedicated signed paid-receipt-set proof binds a product, organisation,
+team and closed UTC month. UOA verifies the Ledger actor JWS and compares every
+paid dispatch ID, selected receipt ID and 18-decimal actual cost against its
+immutable forward or legacy prepaid liability rows, including paid zero-cost
+receipts. A missing, duplicate or unresolved receipt keeps credits and the
+cycle pending even when the aggregate amount happens to match. The separate
+Ledger zero-incremental cohort is retained as private evidence, not mistaken
+for UOA-billed credits.
 Prepaid consumption is a credit-balance/account breakdown and never a second
 demand for payment. Every successful prepaid payment, including each automatic
 recharge, produces its own actual charge invoice; the monthly customer view

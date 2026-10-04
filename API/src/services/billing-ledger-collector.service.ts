@@ -109,7 +109,7 @@ async function signServiceAssertion(
     organisationId: string;
     teamId: string | null;
     billingMonth: string;
-    view?: 'team_portfolio';
+    view?: 'team_portfolio' | 'paid_receipt_set';
   },
   config: CollectorConfig,
   deps?: { now?: () => number },
@@ -260,6 +260,29 @@ export async function fetchLedgerRawUsage(
     },
     { fetch: deps?.fetch },
   );
+}
+
+/** The paid cohort has its own Ledger contract and signature verification. */
+export async function fetchLedgerRawPaidReceiptSet(
+  params: { product: string; organisationId: string; teamId: string;
+    billingMonth: string; cursor?: string },
+  deps?: { env?: Env; fetch?: typeof fetch; now?: () => number },
+): Promise<unknown> {
+  billingMonthBounds(params.billingMonth);
+  const config = await collectorConfig(deps?.env, deps?.env === undefined);
+  const assertion = await signServiceAssertion({ ...params, view: 'paid_receipt_set' },
+    config, { now: deps?.now });
+  const url = new URL(`${config.baseUrl}/v1/metering/paid-receipt-set`);
+  if (params.cursor) url.searchParams.set('cursor', params.cursor);
+  const response = await fetchLedgerJsonResponse({ url, headers: {
+    Accept: 'application/json', 'X-Ledger-App-Key': config.appKey,
+    'X-UOA-Service-Assertion': assertion,
+  }, errors: {
+    requestFailed: 'LEDGER_PAID_RECEIPT_SET_REQUEST_FAILED',
+    responseTooLarge: 'LEDGER_PAID_RECEIPT_SET_RESPONSE_TOO_LARGE',
+    responseInvalid: 'LEDGER_PAID_RECEIPT_SET_RESPONSE_INVALID',
+  } }, { fetch: deps?.fetch });
+  return response.value;
 }
 
 export async function fetchLedgerMeteringUsage(
