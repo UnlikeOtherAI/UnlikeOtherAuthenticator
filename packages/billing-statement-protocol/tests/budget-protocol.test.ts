@@ -23,6 +23,12 @@ describe('public credit budgets', () => {
     const polluted = structuredClone(billingCreditBudgetV1ConformanceFixture);
     (polluted.budgets[0] as unknown as Record<string, unknown>).raw_units = '10';
     expect(validate(polluted)).toBe(false);
+    const incomplete = structuredClone(billingCreditBudgetV1ConformanceFixture);
+    incomplete.budgets[0] = { ...incomplete.budgets[0]!, evidence_complete: false,
+      remaining_credits: null, percent_used: null };
+    expect(validate(incomplete)).toBe(true);
+    incomplete.budgets[0] = { ...incomplete.budgets[0]!, remaining_credits: '8753.375' };
+    expect(validate(incomplete)).toBe(false);
   });
 
   it('validates bounded writes and rejects local token budgets', () => {

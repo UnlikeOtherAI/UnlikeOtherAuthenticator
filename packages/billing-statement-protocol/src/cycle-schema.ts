@@ -104,7 +104,8 @@ const usageLine = { ...object([
 const creditSummary = object([
   'consumed', 'opening_balance', 'closing_balance', 'status',
 ], {
-  consumed: nullableCredits, opening_balance: nullableCredits, closing_balance: nullableCredits,
+  consumed: nullableCredits, waived: nullableCredits,
+  opening_balance: nullableCredits, closing_balance: nullableCredits,
   status: { enum: ['confirmed', 'pending_reconciliation'] },
 });
 const downloadAction = object(['method', 'path', 'body'], {

@@ -36,7 +36,7 @@ export function renderBillingCycleBreakdownCsv(detail: BillingCycleDetailV2): Bu
   const columns = [
     'record_type', 'id', 'description', 'period_start', 'period_end', 'quantity',
     'unit', 'unit_price', 'seat_policy', 'seat_timing', 'usage_payment_mode', 'customer_charge',
-    'currency', 'credits_consumed', 'tax', 'gross_total', 'credits_applied',
+    'currency', 'credits_consumed', 'credits_waived', 'tax', 'gross_total', 'credits_applied',
     'total_paid', 'outstanding',
     'opening_balance', 'closing_balance', 'billing_status',
   ] as const;
@@ -72,6 +72,7 @@ export function renderBillingCycleBreakdownCsv(detail: BillingCycleDetailV2): Bu
     rows.push({ record_type: 'total', id: detail.cycle_id,
       description: 'Amount due', ...period, customer_charge: total.total_due.amount,
       currency: total.currency, credits_consumed: detail.credits.consumed ?? 'pending',
+      credits_waived: detail.credits.waived ?? 'pending',
       tax: total.tax.amount, gross_total: total.gross_total.amount,
       credits_applied: total.credits_applied.amount,
       total_paid: total.total_paid.amount, outstanding: total.outstanding.amount,
@@ -83,6 +84,7 @@ export function renderBillingCycleBreakdownCsv(detail: BillingCycleDetailV2): Bu
     description: detail.state === 'pending_reconciliation'
       ? 'Pending reconciliation' : detail.state,
     ...period, credits_consumed: detail.credits.consumed ?? 'pending',
+    credits_waived: detail.credits.waived ?? 'pending',
     opening_balance: detail.credits.opening_balance ?? 'pending',
     closing_balance: detail.credits.closing_balance ?? 'pending',
     billing_status: detail.state });
@@ -206,6 +208,9 @@ export async function renderBillingCycleBreakdownPdf(detail: BillingCycleDetailV
       { bold: true });
   }
   draw(context, `Credits consumed: ${detail.credits.consumed ?? 'pending'}`);
+  if (detail.credits.waived && detail.credits.waived !== '0') {
+    draw(context, `Credits waived: ${detail.credits.waived}`);
+  }
   draw(context, `Opening credit balance: ${detail.credits.opening_balance ?? 'pending'}; closing credit balance: ${detail.credits.closing_balance ?? 'pending'}`);
   if (detail.credits.status === 'pending_reconciliation') {
     draw(context, 'Some usage or credit evidence remains under reconciliation.');

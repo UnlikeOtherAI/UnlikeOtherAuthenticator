@@ -206,6 +206,7 @@
     ],
     "credits": {
       "consumed": "13000",
+      "waived": "0",
       "opening_balance": "25000",
       "closing_balance": "12000",
       "status": "confirmed"

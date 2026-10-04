@@ -92,6 +92,8 @@ export type BillingCycleUsageLine = {
 };
 export type BillingCycleCredits = {
   consumed: string | null;
+  /** Confirmed usage credits forgiven by an actual UOA operator decision. */
+  waived?: string | null;
   opening_balance: string | null;
   closing_balance: string | null;
   status: 'confirmed' | 'pending_reconciliation';

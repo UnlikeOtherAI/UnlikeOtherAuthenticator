@@ -132,9 +132,10 @@ final invoice. A finalized invoice's totals and evidence are frozen; delayed
 receipts or later corrections use an explicit adjustment/credit-note lineage.
 Cycle `credits_consumed` means UOA-rated paid usage credits, including PAYG
 usage invoiced without a funded-wallet debit; it never includes seats or tax.
-The private evidence records funded-wallet debit separately. A completed PAYG
-settlement or settled prepaid receipt chain must match the closed Ledger-rated
-amount before a customer credit number is confirmed. Unknown coverage stays
+The private evidence records funded-wallet debit separately. Signed Ledger
+receipt identities and raw costs must match frozen UOA-rated receipt deltas
+before a customer credit number is confirmed. A verified operator waiver
+reduces collectible usage without erasing gross usage credits. Unknown coverage stays
 pending; proven zero usage is zero. Opening and closing funded-wallet balances
 remain pending until immutable account-entry boundaries establish them.
 Unknown paid usage holds final settlement rather than yielding a zero invoice.
@@ -202,6 +203,14 @@ invoice facts. A different allocation cannot be accepted by replaying the
 same invoice ID or PDF hash.
 New cycle snapshot keys, team receipt facts and seat evidence IDs use binary
 UTF-8 ordering before hashing, independent of the worker host locale.
+Closed usage cycles require a signed Ledger paid-receipt set for the exact
+product, organisation, team and month. Its dispatch/receipt/cost digest must
+equal immutable UOA paid liabilities, including exact-zero paid receipts and
+pre-cutover prepaid wallet evidence. The public credits-consumed amount sums
+those frozen UOA rating deltas; wallet debit is separate, and an operator's
+verified excess-cost waiver remains explicit private financial evidence.
+An absent receipt, unresolved attempt or mismatched aggregate raw cost holds
+the cycle rather than creating a confirmed zero or rerating the current tariff.
 Each funded settlement reference is assigned to its own service line in stable
 service and settlement order. The invoice-wide cumulative microcredit rounding
 determines the minor-unit delta at each reference; it preserves fractional

@@ -7,13 +7,18 @@ import {
 import type { BillingCycleDetailV2 } from '../contracts/billing-statement-v1.js';
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
+import { exactMoney } from './billing-money.service.js';
 import { assertUnambiguousCreditPayer } from './billing-credit-payer-period.service.js';
 import { billingCycleSnapshotDigest } from './billing-cycle-read.service.js';
-import { decimalCredits, readCycleCreditEvidence } from './billing-cycle-credit-evidence.service.js';
+import { decimalCredits } from './billing-cycle-credit-evidence.service.js';
+import {
+  readVerifiedCycleCreditEvidence, usdFromRatedMicrocredits,
+} from './billing-cycle-paid-credit-evidence.service.js';
 import {
   cycleUsageContentFingerprint, projectCycleUsage, type CycleUsageEvidence,
 } from './billing-cycle-usage-projection.service.js';
 import { fetchLedgerMeteringUsage } from './billing-ledger-collector.service.js';
+import { fetchVerifiedLedgerPaidReceiptSet } from './billing-ledger-paid-receipt-proof.service.js';
 import { fetchLedgerHistoricalBillingTeams } from './billing-ledger-team-discovery.service.js';
 import { resolveBillingTariffForMonth } from './billing-tariff-history.service.js';
 
@@ -56,6 +61,7 @@ export async function prepareBillingTeamUsageCycle(
     billingMonth: string; organisationCycleId?: string },
   deps?: { prisma?: PrismaClient; now?: () => Date;
     fetchMetering?: typeof fetchLedgerMeteringUsage;
+    fetchPaidReceiptSet?: typeof fetchVerifiedLedgerPaidReceiptSet;
     discoverTeams?: typeof fetchLedgerHistoricalBillingTeams },
 ): Promise<{ cycleId: string; snapshotSha256: string }> {
   const prisma = deps?.prisma ?? getAdminPrisma();
@@ -87,11 +93,12 @@ export async function prepareBillingTeamUsageCycle(
     organisationId: params.organisationId, teamId: params.teamId,
     billingMonth: params.billingMonth, startsAt, endsAt,
     currency: terms.tariff.currency }, terms.tariff);
-  const ratedAmount = projected.ratedAmount;
-  const creditEvidence = await readCycleCreditEvidence(prisma, {
-    orgId: params.organisationId, teamId: params.teamId, serviceId: params.serviceId,
-    billingMonth: params.billingMonth, payer, tariff: terms.tariff,
-    ratedAmount, rawLines: projected.evidence.raw_lines,
+  const scope = { product: service.identifier, organisationId: params.organisationId,
+    teamId: params.teamId, billingMonth: params.billingMonth, serviceId: params.serviceId };
+  const proof = await (deps?.fetchPaidReceiptSet ?? fetchVerifiedLedgerPaidReceiptSet)(scope);
+  const creditEvidence = await readVerifiedCycleCreditEvidence(prisma, {
+    scope, proof, payer, tariff: terms.tariff,
+    rawLines: projected.evidence.raw_lines,
   });
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
@@ -108,10 +115,9 @@ export async function prepareBillingTeamUsageCycle(
           frozenTerms.assignmentId !== terms.assignmentId || frozenPayer !== payer) {
           hold('BILLING_CYCLE_HISTORICAL_TERMS_CHANGED');
         }
-        const lockedCredits = await readCycleCreditEvidence(tx, {
-          orgId: params.organisationId, teamId: params.teamId, serviceId: params.serviceId,
-          billingMonth: params.billingMonth, payer, tariff: terms.tariff,
-          ratedAmount, rawLines: projected.evidence.raw_lines,
+        const lockedCredits = await readVerifiedCycleCreditEvidence(tx, {
+          scope, proof, payer, tariff: terms.tariff,
+          rawLines: projected.evidence.raw_lines,
         });
         if (lockedCredits.fingerprint !== creditEvidence.fingerprint) {
           hold('BILLING_CYCLE_CREDIT_SOURCE_CHANGED');
@@ -178,11 +184,16 @@ export async function prepareBillingTeamUsageCycle(
             cycle_scope: 'team', payer_scope: payer.toLowerCase() as 'team' | 'organisation' },
           product: service, totals: [], document_available: false,
           subscription_lines: [], usage_lines: projected.lines.map((line) => ({
-            ...line, credits_consumed: creditEvidence.covered ?
+            ...line, customer_charge: line.usage_payment_mode === 'prepaid' ? null :
+              exactMoney(usdFromRatedMicrocredits(
+                BigInt(creditEvidence.consumed_microcredits) -
+                BigInt(creditEvidence.waived_microcredits)), terms.tariff.currency),
+            credits_consumed: creditEvidence.covered ?
               decimalCredits(BigInt(creditEvidence.consumed_microcredits ?? '0')) : null,
           })),
           credits: { consumed: creditEvidence.covered ?
             decimalCredits(BigInt(creditEvidence.consumed_microcredits ?? '0')) : null,
+            waived: decimalCredits(BigInt(creditEvidence.waived_microcredits)),
             opening_balance: null, closing_balance: null,
             status: 'pending_reconciliation' },
           documents: [], adjustments: [],
@@ -193,6 +204,7 @@ export async function prepareBillingTeamUsageCycle(
           team_discovery: discovery.snapshot,
           previous_cycle_id: existing?.id ?? null,
           ledger_snapshots: [projected.evidence],
+          paid_receipt_proofs: [proof],
           credit_evidence: [creditEvidence], credit_fingerprint: creditEvidence.fingerprint };
         const digest = billingCycleSnapshotDigest(publicSnapshot, privateEvidence);
         await tx.billingCustomerCycle.create({ data: {

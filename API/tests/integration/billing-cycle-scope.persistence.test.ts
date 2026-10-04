@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 import {
   BillingAppKeyPurpose, BillingAssignmentScope, BillingCollectionMode, BillingMonthlyChargeBasis,
@@ -30,6 +30,7 @@ describe.skipIf(!enabled)('customer cycle scope persistence', () => {
   let ownerId: string;
   let teamManagerId: string;
   let tariffId: string;
+  let usageOnlyTariffId: string;
   let serviceIdentifier: string;
 
   beforeAll(async () => {
@@ -67,6 +68,7 @@ describe.skipIf(!enabled)('customer cycle scope persistence', () => {
       markupBps: 3000, monthlyAmountMinor: 0n,
       monthlyChargeBasis: BillingMonthlyChargeBasis.FLAT, currency: 'USD',
     } });
+    usageOnlyTariffId = usageOnlyTariff.id;
     await db.prisma.billingTariffTermEvent.create({ data: {
       serviceId, source: BillingTariffSource.SERVICE_DEFAULT, scopeKey: serviceId,
       effectiveFromMonth: '2026-01', tariffId: usageOnlyTariff.id,
@@ -83,6 +85,39 @@ describe.skipIf(!enabled)('customer cycle scope persistence', () => {
   });
 
   afterAll(async () => { await db?.cleanup(); });
+
+  async function recordPaidLiability(month: string, billedTeamId: string,
+    cost: string, ratedMicrocredits: bigint, frozenTariffId = usageOnlyTariffId) {
+    return db.prisma.billingPaidUsageLiability.create({ data: {
+      dispatchId: `dispatch-${randomUUID()}`, receiptId: `receipt-${randomUUID()}`,
+      serviceId, providerServiceId: 'model-synthetic', orgId, teamId: billedTeamId,
+      userId: ownerId, billingMonth: month, currency: 'USD', tariffId: frozenTariffId,
+      frozenMarkupBps: 3000, paymentMode: 'PAY_AS_YOU_GO', rawCostActual: cost,
+      ratedQuanta: '0', ratedMicrocredits,
+    } });
+  }
+
+  async function fetchPaidReceiptSet(scope: { product: string; organisationId: string;
+    teamId: string; serviceId: string; billingMonth: string }) {
+    const rows = await db.prisma.billingPaidUsageLiability.findMany({ where: {
+      serviceId: scope.serviceId, orgId: scope.organisationId,
+      teamId: scope.teamId, billingMonth: scope.billingMonth,
+    } });
+    rows.sort((a, b) => Buffer.compare(Buffer.from(a.dispatchId), Buffer.from(b.dispatchId)));
+    const hash = createHash('sha256').update('ledger-paid-receipt-set-v1:paid\n');
+    for (const row of rows) hash.update(JSON.stringify([
+      row.dispatchId, row.receiptId, row.rawCostActual.toFixed(18),
+    ])).update('\n');
+    return { contract: 'ledger-paid-receipt-set-v1' as const,
+      scope: { billing_product: scope.product, organization_id: scope.organisationId,
+        team_id: scope.teamId, billing_month: scope.billingMonth },
+      snapshot: { cursor: `mpr_${'a'.repeat(32)}`,
+        captured_at: '2026-10-04T00:00:00.000Z', immutable: true as const },
+      paid_receipt_count: String(rows.length), paid_receipt_sha256: hash.digest('hex'),
+      zero_incremental_count: '0', zero_incremental_sha256: createHash('sha256')
+        .update('ledger-paid-receipt-set-v1:zero\n').digest('hex'),
+      unresolved_paid_attempts: '0', signature: 'test-boundary-verified-signature'.repeat(4) };
+  }
 
   function context(userId: string): BillingCycleContext {
     return { credential: { service: { id: serviceId, identifier: 'scope-service',
@@ -200,7 +235,7 @@ describe.skipIf(!enabled)('customer cycle scope persistence', () => {
         capturedAt: '2026-09-03T00:00:00.000Z', sha256: 'a'.repeat(64) } });
     const params = { source, billingMonth: '2026-08' };
     const deps = { prisma: db.prisma, now: () => new Date('2026-09-03T00:00:00.000Z'),
-      quote: quoteFn, fetchMetering, discoverTeams };
+      quote: quoteFn, fetchMetering, discoverTeams, fetchPaidReceiptSet };
     const first = await prepareBillingCycleClose(params, deps);
     const replay = await prepareBillingCycleClose(params, deps);
     expect(replay).toEqual(first);
@@ -283,9 +318,10 @@ describe.skipIf(!enabled)('customer cycle scope persistence', () => {
     };
     const quoteFn = vi.fn().mockResolvedValue(quote);
     const fetchMetering = vi.fn().mockResolvedValue(usage);
+    await recordPaidLiability('2026-09', teamId, '10', 13_000_000_000n, tariffId);
     const params = { source, billingMonth: '2026-09' };
     const deps = { prisma: db.prisma, now: () => new Date('2026-10-03T00:00:00.000Z'),
-      quote: quoteFn, fetchMetering };
+      quote: quoteFn, fetchMetering, fetchPaidReceiptSet };
     fetchMetering.mockResolvedValueOnce({ ...usage,
       billingCompleteness: { state: 'unresolved', unresolvedPaidAttempts: '1' } });
     await expect(prepareBillingCycleClose(params, deps))
@@ -307,7 +343,7 @@ describe.skipIf(!enabled)('customer cycle scope persistence', () => {
     const detail = await getBillingCycleDetail(viewer, first.cycleId,
       { prisma: db.prisma });
     expect(detail.usage_lines[0]).toMatchObject({ label: 'Metered usage',
-      customer_charge: { amount: '13', currency: 'USD' }, credits_consumed: null });
+      customer_charge: { amount: '13', currency: 'USD' }, credits_consumed: '13000' });
     expect(JSON.stringify(detail)).not.toMatch(/raw_units|cache_write|reasoning|model-synthetic/);
     const privateRow = await db.prisma.billingCustomerCycle.findUniqueOrThrow({
       where: { id: first.cycleId },
@@ -424,7 +460,8 @@ describe.skipIf(!enabled)('customer cycle scope persistence', () => {
       const params = { serviceId, organisationId: orgId, teamId,
         billingMonth: '2026-02' };
       const deps = { prisma: db.prisma, now: () => new Date('2026-10-03T00:00:00.000Z'),
-        fetchMetering, discoverTeams };
+        fetchMetering, discoverTeams, fetchPaidReceiptSet };
+      await recordPaidLiability('2026-02', teamId, '10', 13_000_000_000n);
       const first = await prepareBillingTeamUsageCycle(params, deps);
       fetchMetering.mockResolvedValueOnce({ ...usage, snapshot: { ...usage.snapshot,
         id: 'feb-snapshot-new-assertion', cursor: 'feb-cursor-new-assertion',
@@ -436,9 +473,10 @@ describe.skipIf(!enabled)('customer cycle scope persistence', () => {
       const detail = await getBillingCycleDetail(viewer, first.cycleId,
         { prisma: db.prisma });
       expect(detail).toMatchObject({ scope: { cycle_scope: 'team', payer_scope: 'team' },
-        subscription_lines: [], credits: { consumed: null },
+        subscription_lines: [], credits: { consumed: '13000' },
         usage_lines: [{ customer_charge: { amount: '13' } }],
       });
+      await recordPaidLiability('2026-02', teamId, '2', 2_600_000_000n);
       fetchMetering.mockResolvedValue({ ...usage, lines: [{ ...usage.lines[0],
         actualProviderCost: '12', selectedProviderCost: '12' }],
       snapshot: { ...usage.snapshot, id: 'feb-snapshot-late', cursor: 'feb-cursor-late',
@@ -473,10 +511,11 @@ describe.skipIf(!enabled)('customer cycle scope persistence', () => {
       const discoverTeams = vi.fn().mockResolvedValue({ teamIds: [historicalTeamId],
         snapshot: { id: 'org-historical-snapshot', cursor: 'org-historical-snapshot',
           capturedAt: '2026-02-03T00:00:00.000Z', sha256: 'c'.repeat(64) } });
+      await recordPaidLiability('2026-01', historicalTeamId, '1', 1_300_000_000n);
       const result = await prepareBillingTeamUsageCycle({ serviceId,
         organisationId: orgId, teamId: historicalTeamId, billingMonth: '2026-01' },
       { prisma: db.prisma, now: () => new Date('2026-10-03T00:00:00.000Z'),
-        fetchMetering, discoverTeams });
+        fetchMetering, discoverTeams, fetchPaidReceiptSet });
       const row = await db.prisma.billingCustomerCycle.findUniqueOrThrow({
         where: { id: result.cycleId },
       });
@@ -512,6 +551,8 @@ describe.skipIf(!enabled)('customer cycle scope persistence', () => {
       commercialEffectiveAt: null, commercialEndsAt: null, endedAt: null,
     };
     const teamIds = [teamId, otherTeamId];
+    await recordPaidLiability('2026-03', teamId, '1', 1_300_000_000n, tariffId);
+    await recordPaidLiability('2026-03', otherTeamId, '2', 2_600_000_000n, tariffId);
     const discoverTeams = vi.fn().mockResolvedValue({ teamIds,
       snapshot: { id: 'march-team-discovery', cursor: 'march-team-discovery',
         capturedAt: '2026-04-03T00:00:00.000Z', sha256: 'a'.repeat(64) } });
@@ -537,7 +578,8 @@ describe.skipIf(!enabled)('customer cycle scope persistence', () => {
         sha256: 'b'.repeat(64) },
     }));
     const deps = { prisma: db.prisma, now: () => new Date('2026-04-03T00:00:00.000Z'),
-      quote: vi.fn().mockResolvedValue(quote), fetchMetering, discoverTeams };
+      quote: vi.fn().mockResolvedValue(quote), fetchMetering, discoverTeams,
+      fetchPaidReceiptSet };
     const orgCycle = await prepareBillingCycleClose({ source, billingMonth: '2026-03' }, deps);
     const teamCycles = await Promise.all(teamIds.map((id) =>
       prepareBillingTeamUsageCycle({ serviceId, organisationId: orgId,

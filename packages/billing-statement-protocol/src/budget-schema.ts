@@ -34,6 +34,10 @@ export const billingCreditBudgetV1JsonSchema = {
       items: {
         type: 'object',
         additionalProperties: false,
+        allOf: [{ if: { properties: { evidence_complete: { const: false } },
+          required: ['evidence_complete'] }, then: { properties: {
+          remaining_credits: { type: 'null' }, percent_used: { type: 'null' },
+        } } }],
         required: [...policyRequired, 'policy_id', 'version', 'spent_credits',
           'held_credits', 'evidence_complete', 'remaining_credits', 'percent_used',
           'effective_window_start', 'effective_window_end'],

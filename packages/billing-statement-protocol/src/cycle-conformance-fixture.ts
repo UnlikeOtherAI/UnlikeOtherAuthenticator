@@ -68,7 +68,7 @@ export const billingCycleDetailV2ConformanceFixture: BillingCycleDetailV2 = {
     credits_consumed: '13000',
   }],
   credits: {
-    consumed: '13000', opening_balance: '25000', closing_balance: '12000',
+    consumed: '13000', waived: '0', opening_balance: '25000', closing_balance: '12000',
     status: 'confirmed',
   },
   documents: [
