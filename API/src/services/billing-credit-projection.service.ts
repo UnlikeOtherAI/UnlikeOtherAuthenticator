@@ -209,6 +209,7 @@ export function buildBillingCreditsProjection(params: {
       requestBody,
       params.collection.stripeCollectionEnabled,
       params.actionReadiness ?? unavailableBillingCreditActions(),
+      params.period.endsAt,
     );
     const funding = actions.funding_policy;
     const automatic = actions.automatic_top_up;

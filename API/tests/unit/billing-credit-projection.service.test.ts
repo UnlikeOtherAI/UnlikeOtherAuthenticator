@@ -351,6 +351,52 @@ describe('privacy-safe shared credit projection', () => {
     });
   });
 
+  it('pauses projected automatic top-up when the remaining limit cannot cover one refill', () => {
+    const data = projectionData();
+    data.creditAccount.autoTopUpOptionId = 'option_1';
+    data.creditAccount.autoTopUpMonthlyChargeCapMinor = 10_000n;
+    data.autoTopUpChargedMinor = 8_500n;
+    data.policy = {
+      topUpEnabled: true,
+      automaticTopUpEnabled: true,
+      automaticConsentVersion: 'credits-v1',
+      topUpOffers: [],
+      autoTopUpOptions: [
+        {
+          id: 'option_1',
+          refillOfferId: 'offer_refill',
+          thresholdMicrocredits: 500_000_000n,
+          monthlyChargeCapMinor: 10_000n,
+          refillOffer: {
+            id: 'offer_refill',
+            active: true,
+            automaticTopUpEligible: true,
+            paymentAmountMinor: 2_000n,
+            creditsReceivedMicrocredits: 20_000_000_000n,
+          },
+        },
+      ],
+    } as never;
+
+    const result = buildBillingCreditsProjection({
+      credential,
+      collection,
+      viewer: viewer(true),
+      period,
+      data,
+      now,
+    });
+
+    expect(() => assertBillingCreditsContract(result)).not.toThrow();
+    expect(result.automatic_top_up).toMatchObject({
+      state: 'paused',
+      display_status: 'Automatic top-up is paused',
+      description: 'The monthly limit cannot cover another refill. It resets on 2026-08-01.',
+      charged_this_month: { amount_minor: '8500', currency: 'USD' },
+      remaining_monthly_cap: { amount_minor: '1500', currency: 'USD' },
+    });
+  });
+
   it('projects historical fractional usage as the whole-credit amount and balance', () => {
     const data = projectionData(49_999_000_000n);
     data.settlements[0]!.cumulativeCreditsConsumedMicrocredits = 1_000_000n;

@@ -1048,6 +1048,21 @@ failed or mismatched Stripe read disables the affected action but never
 classifies the card as expired. The existing credit protocol status field
 carries this projection; no route or protocol shape is added.
 
+Turning off automatic top-up revokes future consent even while an older
+attempt is unresolved. The disable transaction advances the generation,
+removes the current account consent and card pointer, and leaves that attempt
+and its immutable consent revision intact. An attempt with a persisted Payment
+Intent waits for its matching webhook; an attempt whose Stripe request timed
+out before its Payment Intent ID was saved is never retried after disable, but
+an exact late event may still settle it once. Neither path can restore consent
+or activate automatic top-up.
+
+The projected automatic-top-up state is `paused` when the saved monthly limit
+cannot cover one full refill, including when a positive remainder is smaller
+than that refill. The projection keeps the exact charged and remaining money
+values and gives the reset date from the current UTC billing period end; it
+does not infer a smaller refill or alter the saved limit.
+
 When a team already has one pending top-up Checkout, the read projection may
 offer **Continue payment** only for that Checkout's exact active offer after
 rechecking its current Stripe session and the immutable account, team credit
