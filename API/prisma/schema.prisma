@@ -2509,6 +2509,8 @@ model BillingSeatSubscription {
   activatedAt           DateTime                 @map("activated_at")
   endedAt               DateTime?                @map("ended_at")
   baselineCapturedAt    DateTime                 @map("baseline_captured_at")
+  // Non-null proves that activation captured the roster, including a real zero-seat baseline.
+  baselineMemberCount   Int?                     @map("baseline_member_count")
   createdAt             DateTime                 @default(now()) @map("created_at")
 
   stripeSubscription  BillingStripeSubscription? @relation(fields: [stripeSubscriptionId], references: [id], onDelete: Restrict)
