@@ -353,6 +353,35 @@ test('new billing terms show the prospective 30 percent default', async ({ page 
   expect(fixture.unexpected).toEqual([]);
 });
 
+test('fixed seat capacity is reachable from the service subscription doorway', async (
+  { page }, testInfo,
+) => {
+  const fixture = await installFixtures(page);
+  await page.goto('/billing?section=products');
+  await page.getByRole('link', { name: 'Fixture product', exact: true }).click();
+  await page.getByRole('button', { name: 'Subscriptions' }).click();
+  await expect(page.getByRole('heading', { name: 'Seat subscriptions' })).toBeVisible();
+  await expect(page.getByText('Acme Research').last()).toBeVisible();
+  const capacity = page.getByRole('textbox', { name: 'Purchased seats for Acme Research' });
+  await expect(capacity).toHaveValue('5');
+  await capacity.fill('6');
+  const saveSeats = page.getByRole('button', { name: 'Save seats' });
+  await saveSeats.scrollIntoViewIfNeeded();
+  await expect(capacity).toBeInViewport();
+  await expect(saveSeats).toBeInViewport();
+  await page.screenshot({
+    path: `e2e/artifacts/billing-seat-capacity-${testInfo.project.name}.png`, fullPage: true,
+  });
+  await saveSeats.click();
+  const dialog = page.getByRole('dialog', { name: 'Change purchased seat capacity?' });
+  await expect(dialog.getByText('The higher capacity starts now.')).toBeVisible();
+  await dialog.getByRole('button', { name: 'Change purchased seat capacity' }).click();
+  await expect(page.getByRole('row').filter({ has: capacity })).toContainText('6');
+  expect(fixture.seatCapacityWrites).toEqual([{ quantity: 6 }]);
+  expect(fixture.errors).toEqual([]);
+  expect(fixture.unexpected).toEqual([]);
+});
+
 
 test('user add-to-team retains organisation team and role on failed save, then refreshes membership', async ({ page }) => {
   const fixture = await installFixtures(page);

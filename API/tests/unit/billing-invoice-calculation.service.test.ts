@@ -253,4 +253,56 @@ describe('contract invoice calculator', () => {
       ),
     ).rejects.toThrow('BILLING_INVOICE_MONTH_NOT_CLOSED');
   });
+
+  it('stores the frozen per-seat quote as the manual monthly line and excludes prepaid usage', async () => {
+    const createInvoice = vi.fn().mockResolvedValue({ id: 'draft_per_seat' });
+    const tx = { $queryRaw: vi.fn().mockResolvedValue([{ locked: '' }]),
+      billingInvoice: { findFirst: vi.fn().mockResolvedValue(null), create: createInvoice },
+      adminAuditLog: { create: vi.fn() } };
+    const prisma = {
+      billingOrganisationContract: { findFirst: vi.fn().mockResolvedValue({
+        id: 'contract_1', orgId: 'org_1', versions: [{ id: 'version_1',
+          usageMarkupBps: 3000, currency: 'USD', serviceTerms: [{
+            id: 'term_1', serviceId: 'service_1', tariffId: 'tariff_1',
+            monthlyAmountMinor: 1000n,
+            service: { identifier: 'deepwater', name: 'DeepWater' },
+            tariff: { mode: BillingTariffMode.CUSTOM,
+              collectionMode: BillingCollectionMode.MANUAL, markupBps: 3000,
+              monthlyAmountMinor: 1000n, monthlyChargeBasis: 'PER_SEAT',
+              usagePaymentMode: 'PREPAID', currency: 'USD' },
+          }] }],
+      }) },
+      billingInvoiceIssuerProfile: { findFirst: vi.fn().mockResolvedValue({
+        id: 'issuer_1', legalName: 'UOA Ltd', tradingName: null,
+        billingEmail: 'billing@example.com', address: {},
+        taxIdentifier: null, companyRegistrationNumber: null,
+      }) },
+      billingOrganisationInvoiceProfile: { findUnique: vi.fn().mockResolvedValue({
+        id: 'buyer_1', legalName: 'Customer Ltd',
+        billingEmail: 'ap@example.com', billingAddress: {},
+        taxIdentifier: null, purchaseOrderReference: null,
+      }) },
+      $transaction: vi.fn(async (run: (value: typeof tx) => unknown) => run(tx)),
+    };
+    const quoteMonthly = vi.fn().mockResolvedValue({ agreementId: 'seat_1',
+      amountMinor: 1500n, seatMilliseconds: 1_500n,
+      evidenceIds: ['interval_1', 'interval_2'] });
+    await calculateBillingContractInvoice({ contractId: 'contract_1',
+      issuerProfileId: 'issuer_1', billingMonth: '2026-06',
+      actor: { email: 'admin@example.com' } }, {
+      prisma: prisma as never, now: () => now,
+      fetchMetering: vi.fn().mockResolvedValue(usage()),
+      collectFunding: vi.fn().mockResolvedValue({ credits: [], addons: [] }),
+      quoteMonthly,
+    });
+    expect(quoteMonthly).toHaveBeenCalledWith({
+      source: { kind: 'manual', id: 'term_1' }, billingMonth: '2026-06',
+    }, { prisma });
+    const invoice = createInvoice.mock.calls[0]![0].data;
+    expect(invoice.subtotalMinor).toBe(1500n);
+    expect(invoice.lines.create).toEqual([expect.objectContaining({
+      amountMinor: 1500n, serviceIdentifier: 'deepwater',
+    })]);
+    expect(invoice.calculationDigest).toMatch(/^[a-f0-9]{64}$/);
+  });
 });

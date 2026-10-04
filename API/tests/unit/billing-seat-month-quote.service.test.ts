@@ -39,6 +39,18 @@ describe('monthly seat quote', () => {
     expect(quote.uniqueHumanSeats).toBe(2);
   });
 
+  it('retains zero-duration baseline proof without charging a full-month seat', () => {
+    const instant = at('2028-02-01T00:00:00Z');
+    const quote = quoteMonthlySeatCharge({ billingMonth: month,
+      seatPolicy: BillingSeatPolicy.AUTOMATIC,
+      seatChargeTiming: BillingSeatChargeTiming.FULL_MONTH,
+      unitAmountMinor: 299n, activatedAt: instant, endedAt: null,
+      membershipIntervals: [{ id: 'baseline', userId: 'person-1',
+        startsAt: instant, endsAt: instant }], capacityRevisions: [] });
+    expect(quote).toMatchObject({ amountMinor: 0n, uniqueHumanSeats: 0,
+      evidenceIds: [] });
+  });
+
   it('prorates fixed purchased capacity and charges full-month increases this month', () => {
     const base = { billingMonth: month,
       seatPolicy: BillingSeatPolicy.FIXED, unitAmountMinor: 100n,

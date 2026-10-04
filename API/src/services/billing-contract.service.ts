@@ -1,11 +1,6 @@
 import {
-  BillingAssignmentScope,
-  BillingCollectionMode,
-  BillingOrganisationContractStatus,
-  BillingTariffMode,
-  BillingTariffSource,
-  Prisma,
-  type PrismaClient,
+  BillingAssignmentScope, BillingOrganisationContractStatus,
+  BillingTariffSource, Prisma, type PrismaClient,
 } from '@prisma/client';
 
 import { getAdminPrisma } from '../db/prisma.js';
@@ -13,11 +8,14 @@ import { AppError } from '../utils/errors.js';
 import {
   appendTariffTermEvent, lockTariffHistoryService,
 } from './billing-tariff-history.service.js';
+import {
+  contractSeatTerms, createManualSeatAgreement, normalizeContractServices,
+  type ContractServiceActivation, type NormalizedContractService,
+} from './billing-contract-seat.service.js';
 
 const KEY_PATTERN = /^[a-z0-9][a-z0-9._-]{0,99}$/;
 const MONTH_PATTERN = /^(\d{4})-(0[1-9]|1[0-2])$/;
 const CURRENCY_PATTERN = /^[A-Z]{3}$/;
-const MAX_INT64 = 9_223_372_036_854_775_807n;
 const MAX_MARKUP_BPS = 100_000;
 
 type Actor = { userId?: string | null; email: string };
@@ -198,41 +196,12 @@ export async function createBillingContractVersion(
   throw new AppError('INTERNAL', 500, 'BILLING_CONTRACT_VERSION_CREATE_FAILED');
 }
 
-type ServiceActivation = { serviceId: string; monthlyAmountMinor: string };
-
-function normalizeServices(
-  services: ServiceActivation[],
-): Array<ServiceActivation & { amount: bigint }> {
-  const seen = new Set<string>();
-  if (services.length < 1 || services.length > 100) {
-    throw new AppError('BAD_REQUEST', 400, 'BILLING_CONTRACT_SERVICES_INVALID');
-  }
-  return services.map((service) => {
-    let amount: bigint;
-    try {
-      amount = BigInt(service.monthlyAmountMinor);
-    } catch {
-      throw new AppError('BAD_REQUEST', 400, 'BILLING_CONTRACT_SERVICES_INVALID');
-    }
-    if (
-      !service.serviceId ||
-      seen.has(service.serviceId) ||
-      !/^(0|[1-9]\d*)$/.test(service.monthlyAmountMinor) ||
-      amount > MAX_INT64
-    ) {
-      throw new AppError('BAD_REQUEST', 400, 'BILLING_CONTRACT_SERVICES_INVALID');
-    }
-    seen.add(service.serviceId);
-    return { ...service, amount };
-  });
-}
-
 async function activateInTransaction(
   tx: Prisma.TransactionClient,
   params: {
     contractId: string;
     contractVersionId: string;
-    services: Array<ServiceActivation & { amount: bigint }>;
+    services: NormalizedContractService[];
     actor: Actor;
     now: Date;
   },
@@ -242,7 +211,7 @@ async function activateInTransaction(
     include: {
       versions: {
         orderBy: [{ effectiveFromMonth: 'desc' }, { version: 'desc' }],
-        include: { serviceTerms: { include: { tariff: true } } },
+        include: { serviceTerms: { include: { tariff: true, seatSubscription: true } } },
       },
     },
   });
@@ -294,14 +263,25 @@ async function activateInTransaction(
     if (currentVersion?.id !== version.id) {
       throw new AppError('BAD_REQUEST', 409, 'BILLING_CONTRACT_VERSION_SUPERSEDED');
     }
-    const requested = new Map(params.services.map((item) => [item.serviceId, item.amount]));
+    const requested = new Map(params.services.map((item) => [item.serviceId, item]));
     const matches =
       requested.size === version.serviceTerms.length &&
       version.serviceTerms.every(
-        (term) =>
-          requested.get(term.serviceId) === term.monthlyAmountMinor &&
-          term.tariff.markupBps === version.usageMarkupBps &&
-          term.tariff.currency === version.currency,
+        (term) => {
+          const requestedTerm = requested.get(term.serviceId);
+          if (!requestedTerm) return false;
+          const normalized = contractSeatTerms(requestedTerm, version,
+            { key: contractTariffKey(contract.id),
+              name: `${contract.name} contract`.slice(0, 120) });
+          return requestedTerm.amount === term.monthlyAmountMinor &&
+            normalized.fixedSeatQuantity === term.fixedSeatQuantity &&
+            normalized.tariff.monthlyChargeBasis === term.tariff.monthlyChargeBasis &&
+            normalized.tariff.seatPolicy === term.tariff.seatPolicy &&
+            normalized.tariff.seatChargeTiming === term.tariff.seatChargeTiming &&
+            normalized.tariff.usagePaymentMode === term.tariff.usagePaymentMode &&
+            term.tariff.markupBps === version.usageMarkupBps &&
+            term.tariff.currency === version.currency;
+        },
       );
     if (!matches) throw new AppError('BAD_REQUEST', 409, 'BILLING_CONTRACT_VERSION_ACTIVE');
     return version;
@@ -373,8 +353,11 @@ async function activateInTransaction(
   }
 
   const key = contractTariffKey(contract.id);
+  const commercialEffectiveAt = new Date(`${version.effectiveFromMonth}-01T00:00:00.000Z`);
   const createdTerms = [];
   for (const requested of params.services) {
+    const { tariff: normalized, fixedSeatQuantity } = contractSeatTerms(requested,
+      version, { key, name: `${contract.name} contract`.slice(0, 120) });
     const latest = await tx.billingTariff.findFirst({
       where: { serviceId: requested.serviceId, key },
       orderBy: { version: 'desc' },
@@ -386,27 +369,43 @@ async function activateInTransaction(
         key,
         version: (latest?.version ?? 0) + 1,
         name: `${contract.name} contract`.slice(0, 120),
-        mode: BillingTariffMode.CUSTOM,
-        collectionMode: BillingCollectionMode.MANUAL,
-        markupBps: version.usageMarkupBps,
-        monthlyAmountMinor: requested.amount,
-        currency: version.currency,
+        mode: normalized.mode,
+        collectionMode: normalized.collectionMode,
+        markupBps: normalized.markupBps,
+        monthlyAmountMinor: normalized.monthlyAmountMinor,
+        monthlyChargeBasis: normalized.monthlyChargeBasis,
+        seatPolicy: normalized.seatPolicy,
+        seatChargeTiming: normalized.seatChargeTiming,
+        usagePaymentMode: normalized.usagePaymentMode,
+        currency: normalized.currency,
         isDefault: false,
         createdByUserId: params.actor.userId ?? null,
         createdByEmail: params.actor.email,
       },
     });
-    createdTerms.push(
-      await tx.billingContractServiceTerm.create({
+    const term = await tx.billingContractServiceTerm.create({
         data: {
           contractVersionId: version.id,
           serviceId: requested.serviceId,
           tariffId: tariff.id,
           tariffAssignmentId: null,
           monthlyAmountMinor: requested.amount,
+          fixedSeatQuantity,
         },
-      }),
-    );
+      });
+    createdTerms.push(term);
+    await createManualSeatAgreement(tx, { serviceId: requested.serviceId,
+      tariffId: tariff.id, termId: term.id, orgId: contract.orgId,
+      monthlyChargeBasis: normalized.monthlyChargeBasis,
+      seatPolicy: normalized.seatPolicy, seatChargeTiming: normalized.seatChargeTiming,
+      amount: normalized.monthlyAmountMinor, currency: normalized.currency,
+      fixedSeatQuantity, commercialEffectiveAt });
+  }
+  for (const previous of previousTerms) {
+    if (previous.seatSubscription && !previous.seatSubscription.commercialEndsAt) {
+      await tx.billingSeatSubscription.update({ where: { id: previous.seatSubscription.id },
+        data: { commercialEndsAt: commercialEffectiveAt } });
+    }
   }
   const selectedServices = new Set(serviceIds);
   for (const previous of previousTerms) {
@@ -447,12 +446,12 @@ export async function activateBillingContractVersion(
   params: {
     contractId: string;
     contractVersionId: string;
-    services: ServiceActivation[];
+    services: ContractServiceActivation[];
     actor: Actor;
   },
   deps?: { prisma?: ContractClient; now?: () => Date },
 ) {
-  const services = normalizeServices(params.services);
+  const services = normalizeContractServices(params.services);
   const prisma = client(deps);
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {

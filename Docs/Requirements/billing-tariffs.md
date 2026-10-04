@@ -182,7 +182,7 @@ Each tariff contains:
 | `collection_mode`                   | `stripe`, `manual`, or `none`; independent of usage rating                  |
 | `markup_percent` (operator write)  | Exact decimal percentage string; `"20.00"` means 20%                       |
 | `markup_bps` (stored/read)          | Internal basis points; 2,000 means 20.00%                                   |
-| `monthly_subscription.amount_minor` | Monthly fixed charge in currency minor units; `"0"` means no monthly charge |
+| `monthly_subscription.amount_minor` | Flat monthly charge or per-seat monthly unit price in currency minor units; `"0"` means no monthly charge |
 | `monthly_subscription.currency`     | Three-letter uppercase ISO-style currency code                              |
 | `monthly_subscription.charge_basis` | `flat` for one scoped monthly charge or `per_seat` for each eligible human seat |
 | `monthly_subscription.seat_policy` | For per-seat plans, `automatic` active human members or `fixed` purchased capacity |
@@ -218,10 +218,30 @@ active overlap once. Fixed prorated seats integrate purchased quantity over
 time; fixed full-month charges the highest capacity effective in the month,
 so increases apply that month and decreases first reduce the following month.
 The full month's exact numerator is rounded only once to currency minor units.
-The quote retains interval/revision IDs for immutable invoice evidence. These
-models and the pure quote are the billing substrate; activation, membership
-writers, Stripe quantities and invoice freeze must consume it before per-seat
-plans can collect a charge.
+The quote retains interval/revision IDs for immutable invoice evidence. A
+future manual contract captures the current roster when its terms are scheduled
+and tracks changes until its distinct commercial effective month. It never
+backfills an uncaptured past roster. A scheduled fixed capacity constrains new
+admissions immediately, even though its monthly charge starts at the future
+commercial boundary. Manual activation freezes the per-seat terms and explicit
+fixed quantity in its service term; Stripe Checkout freezes the fixed quantity
+in the customer action, local lease and Stripe metadata. The first verified
+active Stripe projection captures the UOA baseline at the observed database
+time; terminal evidence closes it once. A missing baseline, unclosed month, or
+unproven Stripe billable period holds the finalized quote. The canonical cycle
+snapshot must freeze this quote before either Stripe invoice delivery or manual
+invoice issue; a live quote alone is never collection authority.
+When a later manual term replaces a fixed-capacity agreement, the old
+agreement's immutable commercial end removes its admission limit exactly at
+the boundary even if the evidence-ending sweep runs later. A newly scheduled
+fixed agreement constrains admission from its roster-capture time.
+The always-on seat transition scheduler closes the old evidence at its later
+observed sweep time, preserving the exact boundary and interval history.
+
+The manual invoice calculator uses the closed-month per-seat quote for its
+subscription line, never the per-seat unit price as a whole invoice fee. It
+excludes prepaid runtime usage from the manual pay-as-you-go total while
+retaining the raw Ledger snapshot reference for audit.
 
 Prepaid usage is funded from the existing scoped credit account before a paid
 provider dispatch. It cannot become a positive Stripe usage-meter export when

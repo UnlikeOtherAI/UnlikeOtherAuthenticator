@@ -95,12 +95,14 @@ export function setupStripeWebhookTest() {
     stripeCheckoutSessionId: 'cs_1',
     status: 'complete',
     completedAt: now,
+    fixedSeatQuantity: null,
     customer: {
       id: 'customer_1',
       accountId: account.id,
       stripeCustomerId: 'cus_1',
     },
     tariff: {
+      monthlyChargeBasis: 'FLAT',
       stripePrices: [
         {
           accountId: account.id,
@@ -115,6 +117,7 @@ export function setupStripeWebhookTest() {
   };
   const subscriptionModel = {
     findUnique: vi.fn().mockImplementation(async () => localSubscription),
+    findMany: vi.fn().mockImplementation(async () => localSubscription ? [localSubscription] : []),
     create: vi.fn().mockImplementation(async ({ data }) => {
       localSubscription = { id: 'local_sub_1', ...data };
       return localSubscription;
@@ -143,6 +146,7 @@ export function setupStripeWebhookTest() {
     return committedEvents.has(id) ? { id } : null;
   });
   const tx = {
+    $queryRaw: vi.fn().mockResolvedValue([{ observedAt: new Date('2026-07-20T00:00:00Z') }]),
     billingStripeWebhookEvent: {
       create: vi.fn().mockImplementation(async ({ data }) => {
         committedEvents.add(data.stripeEventId);
@@ -151,6 +155,7 @@ export function setupStripeWebhookTest() {
     },
     billingStripeCheckoutSession: checkoutModel,
     billingStripeSubscription: subscriptionModel,
+    billingSeatSubscription: { findUnique: vi.fn().mockResolvedValue(null) },
     billingRecurringAddonCheckout: {
       findUnique: vi.fn().mockResolvedValue(null),
       findFirst: vi.fn().mockResolvedValue(null),
@@ -225,6 +230,8 @@ export function setupStripeWebhookTest() {
         scopeKey: checkout.scopeKey,
         livemode: false,
         status: 'active',
+        billableFrom: now,
+        billableUntil: null,
         ...overrides,
       };
     },
