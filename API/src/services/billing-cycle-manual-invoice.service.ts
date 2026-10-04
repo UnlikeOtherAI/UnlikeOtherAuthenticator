@@ -17,8 +17,12 @@ import {
 
 const MAX_DOCUMENT_BYTES = 20 * 1024 * 1024;
 type IssuedInvoice = Prisma.BillingInvoiceGetPayload<{
-  include: { lines: true; paymentEvents: true };
+  include: { lines: true; paymentEvents: true; lineFinancialAllocations: true;
+    creditSettlementRefs: true; lineCreditAllocations: true };
 }>;
+
+const binaryOrder = (left: string, right: string): number =>
+  Buffer.compare(Buffer.from(left, 'utf8'), Buffer.from(right, 'utf8'));
 
 function hold(code: string): never {
   throw new AppError('INTERNAL', 409, code);
@@ -33,7 +37,7 @@ function paymentFacts(events: Array<{ id: string; kind: string;
   return events.map((event) => ({ id: event.id, kind: event.kind,
     amount_minor: event.amountMinor.toString(), currency: event.currency,
     occurred_at: event.occurredAt.toISOString() }))
-    .sort((left, right) => left.id.localeCompare(right.id));
+    .sort((left, right) => binaryOrder(left.id, right.id));
 }
 
 export function invoiceSourceFingerprint(invoice: IssuedInvoice): string {
@@ -51,7 +55,22 @@ export function invoiceSourceFingerprint(invoice: IssuedInvoice): string {
     pdf_key: invoice.pdfObjectKey, pdf_sha256: invoice.pdfSha256,
     lines: invoice.lines.map((line) => ({ id: line.id, service_id: line.serviceId,
       amount_minor: line.amountMinor.toString(), currency: line.currency,
-      position: line.position })).sort((a, b) => a.id.localeCompare(b.id)),
+      position: line.position })).sort((a, b) => binaryOrder(a.id, b.id)),
+    financial_allocations: invoice.lineFinancialAllocations.map((row) => ({
+      line_id: row.lineId, service_id: row.serviceId, month: row.billingMonth,
+      subscription: row.subscriptionMinor.toString(), usage: row.usageMinor.toString(),
+      tax: row.taxMinor.toString(), credit: row.invoiceCreditMinor.toString(),
+      gross: row.totalMinor.toString(), due: row.dueMinor.toString(),
+      currency: row.currency, calculation_digest: row.calculationDigest,
+    })).sort((a, b) => binaryOrder(a.line_id, b.line_id)),
+    credit_refs: invoice.creditSettlementRefs.map((row) => ({
+      id: row.id, service_id: row.serviceId, settlement_id: row.settlementId,
+      microcredits: row.creditsAppliedMicrocredits.toString(),
+    })).sort((a, b) => binaryOrder(a.id, b.id)),
+    line_credit_refs: invoice.lineCreditAllocations.map((row) => ({
+      reference_id: row.referenceId, line_id: row.lineId,
+      amount_minor: row.amountMinor.toString(),
+    })).sort((a, b) => binaryOrder(a.reference_id, b.reference_id)),
   }));
 }
 
@@ -104,7 +123,8 @@ export async function captureIssuedManualBillingCycle(
   const [cycle, invoice] = await Promise.all([
     prisma.billingCustomerCycle.findUnique({ where: { id: params.cycleId } }),
     prisma.billingInvoice.findUnique({ where: { id: params.invoiceId },
-      include: { lines: true, paymentEvents: true } }),
+      include: { lines: true, paymentEvents: true, lineFinancialAllocations: true,
+        creditSettlementRefs: true, lineCreditAllocations: true } }),
   ]);
   if (!cycle || !invoice) hold('BILLING_CYCLE_ISSUED_SOURCE_MISSING');
   const existingLine = invoice.lines[0];
@@ -291,7 +311,8 @@ export async function captureIssuedManualBillingCycle(
     if (latest?.id !== cycle.id) hold('BILLING_CYCLE_SOURCE_REVISION_CHANGED');
     const [currentInvoice, currentTerm] = await Promise.all([
       tx.billingInvoice.findUnique({ where: { id: invoice.id },
-        include: { lines: true, paymentEvents: true } }),
+        include: { lines: true, paymentEvents: true, lineFinancialAllocations: true,
+          creditSettlementRefs: true, lineCreditAllocations: true } }),
       tx.billingContractServiceTerm.findUnique({ where: { id: source.id },
         select: { serviceId: true, contractVersionId: true } }),
     ]);

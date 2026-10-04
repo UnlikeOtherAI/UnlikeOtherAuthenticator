@@ -7,7 +7,8 @@ import {
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { prepareBillingCycleClose } from '../../src/services/billing-cycle-close.service.js';
-import { captureIssuedManualBillingCycle } from '../../src/services/billing-cycle-manual-invoice.service.js';
+import { captureIssuedManualBillingCycle,
+  invoiceSourceFingerprint } from '../../src/services/billing-cycle-manual-invoice.service.js';
 import { refreshIssuedManualBillingCyclePayment } from '../../src/services/billing-cycle-manual-payment.service.js';
 import { refreshVoidedManualBillingCycle } from '../../src/services/billing-cycle-manual-void.service.js';
 import { runManualCycleReconciliationBatch } from '../../src/services/billing-cycle-manual-reconciliation-scheduler.service.js';
@@ -217,6 +218,13 @@ describe.skipIf(!enabled)('issued manual invoice cycle persistence', () => {
   });
 
   it('records actual invoice line, immutable legal PDF and credits-only charge breakdown', async () => {
+    const frozen = await db.prisma.billingInvoice.findUniqueOrThrow({ where: { id: invoiceId },
+      include: { lines: true, paymentEvents: true, lineFinancialAllocations: true,
+        creditSettlementRefs: true, lineCreditAllocations: true } });
+    expect(invoiceSourceFingerprint({ ...frozen,
+      lineFinancialAllocations: frozen.lineFinancialAllocations.map((line) => ({
+        ...line, dueMinor: line.dueMinor + 1n,
+      })) })).not.toBe(invoiceSourceFingerprint(frozen));
     const result = await captureIssuedManualBillingCycle({ cycleId: pendingCycleId,
       invoiceId }, { prisma: db.prisma, storage });
     finalizedCycleId = result.cycleId;

@@ -26,7 +26,7 @@ function paymentFacts(events: Array<{ id: string; kind: string;
   return events.map((event) => ({ id: event.id, kind: event.kind,
     amount_minor: event.amountMinor.toString(), currency: event.currency,
     occurred_at: event.occurredAt.toISOString() }))
-    .sort((left, right) => left.id.localeCompare(right.id));
+    .sort((left, right) => Buffer.compare(Buffer.from(left.id), Buffer.from(right.id)));
 }
 
 function paymentTotal(events: Array<{ kind: string; amountMinor: bigint;
@@ -53,7 +53,8 @@ export async function refreshIssuedManualBillingCyclePayment(
       sourceKind: 'manual', sourceInvoiceId: params.invoiceId,
     }, include: { cycle: true } }),
     prisma.billingInvoice.findUnique({ where: { id: params.invoiceId },
-      include: { lines: true, paymentEvents: true } }),
+      include: { lines: true, paymentEvents: true, lineFinancialAllocations: true,
+        creditSettlementRefs: true, lineCreditAllocations: true } }),
   ]);
   if (!invoice || allocations.length !== 1) hold('BILLING_CYCLE_MANUAL_ALLOCATION_MISSING');
   const allocation = allocations[0];
@@ -136,7 +137,9 @@ export async function refreshIssuedManualBillingCyclePayment(
     }, orderBy: { revision: 'desc' } });
     if (current?.id !== latest.id) hold('BILLING_CYCLE_PAYMENT_REVISION_CHANGED');
     const currentInvoice = await tx.billingInvoice.findUnique({
-      where: { id: invoice.id }, include: { lines: true, paymentEvents: true },
+      where: { id: invoice.id }, include: { lines: true, paymentEvents: true,
+        lineFinancialAllocations: true, creditSettlementRefs: true,
+        lineCreditAllocations: true },
     });
     const currentLine = currentInvoice?.lines[0];
     if (!currentInvoice || currentInvoice.status !== BillingInvoiceStatus.ISSUED ||
