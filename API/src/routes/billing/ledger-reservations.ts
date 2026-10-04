@@ -16,6 +16,18 @@ const JobCompute = z.object({
   scope_turn_id: Identifier.nullable(),
   purpose: z.enum(['research_compute', 'scope_turn_compute']),
 }).strict();
+const BillingContext = z.object({
+  context_id: Identifier,
+  origin_product: Identifier,
+  origin_source_domain: z.string().min(1).max(255),
+  project_id: Identifier.nullable(),
+  run_id: Identifier.nullable(),
+  run_started_at: z.string().datetime({ offset: true }).nullable().optional(),
+  run_owner_sub: Identifier.nullable().optional(),
+  budget_run_id: Identifier.nullable().optional(),
+  budget_run_started_at: z.string().datetime({ offset: true }).nullable().optional(),
+  budget_run_owner_sub: Identifier.nullable().optional(),
+}).strict();
 const ReserveSchema = z.object({
   dispatch_id: Identifier,
   request_fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
@@ -28,6 +40,7 @@ const ReserveSchema = z.object({
   raw_cost_bound: Decimal.nullable(),
   currency: z.string().regex(/^[A-Z]{3}$/),
   job_compute: JobCompute.nullish(),
+  billing_context: BillingContext.nullish(),
 }).strict();
 const ParamsSchema = z.object({ dispatchId: Identifier }).strict();
 const SettleSchema = z.object({
@@ -75,6 +88,18 @@ export function registerLedgerReservationRoutes(app: FastifyInstance): void {
         product: body.product, providerServiceId: body.provider_service_id,
         organisationId: body.organisation_id, teamId: body.team_id, userId: body.user_id,
         rawCostBound: body.raw_cost_bound, currency: body.currency,
+        billingContext: body.billing_context ? {
+          contextId: body.billing_context.context_id,
+          originProduct: body.billing_context.origin_product,
+          originSourceDomain: body.billing_context.origin_source_domain,
+          projectId: body.billing_context.project_id,
+          runId: body.billing_context.run_id,
+          runStartedAt: body.billing_context.run_started_at ?? null,
+          runOwnerSub: body.billing_context.run_owner_sub ?? null,
+          budgetRunId: body.billing_context.budget_run_id ?? null,
+          budgetRunStartedAt: body.billing_context.budget_run_started_at ?? null,
+          budgetRunOwnerSub: body.billing_context.budget_run_owner_sub ?? null,
+        } : null,
         jobCompute: body.job_compute ? {
           grantId: body.job_compute.grant_id,
           originInvocationId: body.job_compute.origin_invocation_id,

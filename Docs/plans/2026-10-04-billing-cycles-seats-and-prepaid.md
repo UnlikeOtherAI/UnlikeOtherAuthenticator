@@ -72,6 +72,28 @@ usage is excluded from pay-as-you-go Stripe export and the older credit collecto
 to prevent duplicate charges, but remains present in customer credits, cycle
 usage and incomplete-liability status. Monthly fees are separate from usage.
 
+Credit budgets are UOA-owned for organization, team, verified product-native
+project and run scopes. A product registers an immutable native project or run
+ID, source creation time and run owner using its lifecycle key and a fresh
+endpoint-bound signed actor assertion before setting a cap. Replay cannot
+change its team, owner or birth time. Ledger's verified invocation lineage
+supplies the physical run and original budget root on every paid attempt,
+including delayed research. Missing root evidence holds a finite run cap.
+UOA checks all applicable finite ancestor caps atomically against settled
+credits and outstanding maximum reservations. This includes PAYG, PREPAID and
+human calls; unbounded paid attempts cannot pass a finite cap. `warn`, `off`
+and `unlimited` are the explicit nonblocking modes.
+
+All paid dispatches create immutable UOA-rated receipt liability in customer
+microcredits even without an active budget. Frozen PREPAID account or PAYG
+organization/team lifetime rating carries sub-microcredit fractions. One
+receipt delta feeds wallet debit, budget scopes and cycle evidence. Historical
+PREPAID debit proof stays separate; a late old receipt cannot rerate or rebill
+earlier receipts. For pre-cutover windows, `evidence_complete=false` and
+remaining credits and percent used stay unknown until signed Ledger receipt
+coverage and frozen historical UOA rating prove the full cohort. Unknown
+ancestry or unresolved paid attempts are holds, never zero spend.
+
 Long-running jobs must preserve renewable original-actor authority, not only a
 subject/team snapshot. Nessie and Deep Test already have renewable per-call
 delegation providers; Water's delayed compute context lacks that carrier and
@@ -164,6 +186,18 @@ comes from Stripe's signed payment-success event. Document issuance can remain
 pending when issuer, buyer, tax or PDF evidence is unavailable; a pending charge
 is visible as pending, with no invented invoice number, tax or download. Prepaid
 credit consumption never produces a second demand for payment.
+The Stripe billing scheduler retries pending and held payment documents. It
+first checks whether the exact PaymentIntent paid an existing Stripe invoice;
+only a verified matching invoice, parties, tax and immutable Stripe PDF may be
+used. Otherwise UOA issues one PDF from a frozen legal issuer and organisation
+buyer profile under an append-only, superadmin-authored account/jurisdiction
+tax policy. The policy records inclusive rate or documented no-tax treatment,
+legal basis, UTC effective time and author. Tax is contained in the accepted
+payment amount, never charged again. Missing or ambiguous facts leave the
+accepted payment in pending-document history. Issuance freezes the number,
+tax provenance, parties, PDF object key and SHA-256; a restart resumes the
+same source, and an issued document cannot be changed or deleted. The
+operator doorway is Billing → Contracts & invoices → Prepaid invoice tax policy.
 Manual and Stripe collection must both supply real monthly documents. Fetching
 historical months must not create charges, recalculate current terms or invent
 old invoices. Stripe invoice PDFs may not contain the full measured usage/seat

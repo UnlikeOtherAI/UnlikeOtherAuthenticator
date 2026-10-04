@@ -18,6 +18,7 @@ import { BillingServiceDialog } from '../features/admin/BillingServiceDialog';
 import { BillingServicePanel } from '../features/admin/BillingServicePanel';
 import { BillingTariffDialog } from '../features/admin/BillingTariffDialog';
 import { BillingContractsPanel } from '../features/admin/BillingContractsPanel';
+import { BillingCreditInvoiceTaxPolicyPanel } from '../features/admin/BillingCreditInvoiceTaxPolicyPanel';
 import type { CreatedBillingAppKey } from '../schemas/billing';
 
 export function BillingPage() {
@@ -164,11 +165,14 @@ export function BillingPage() {
           ) : null}
         </>
       ) : (
-        <BillingContractsPanel
-          services={services}
-          servicesError={isError}
-          servicesLoading={isLoading}
-        />
+        <div className="space-y-4">
+          <BillingContractsPanel
+            services={services}
+            servicesError={isError}
+            servicesLoading={isLoading}
+          />
+          <BillingCreditInvoiceTaxPolicyPanel />
+        </div>
       )}
 
       <BillingServiceDialog open={createServiceOpen} onClose={() => setCreateServiceOpen(false)} />

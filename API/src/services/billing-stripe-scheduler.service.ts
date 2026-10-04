@@ -21,6 +21,10 @@ import {
   runCreditAutoTopUpCycle,
   startCreditAutoTopUpScheduler,
 } from './billing-credit-auto-top-up-runtime.service.js';
+import {
+  runCreditPaymentInvoiceCycle,
+  startCreditPaymentInvoiceScheduler,
+} from './billing-credit-payment-invoice-scheduler.service.js';
 
 type StripeSchedulerClient = Pick<Stripe, 'accounts' | 'billing'>;
 
@@ -256,6 +260,7 @@ export function startStripeBillingScheduler(params: {
   runUsageCycle?: typeof runStripeUsageExportCycle;
   runAutoTopUpCycle?: typeof runCreditAutoTopUpCycle;
   runInvoiceCloseCycle?: typeof runStripeInvoiceCloseCycle;
+  runPaymentInvoiceCycle?: typeof runCreditPaymentInvoiceCycle;
 }): { stop: () => void } {
   const usage = startStripeUsageExportScheduler({
     log: params.log,
@@ -269,11 +274,17 @@ export function startStripeBillingScheduler(params: {
     log: params.log,
     ...(params.runInvoiceCloseCycle ? { runCycle: params.runInvoiceCloseCycle } : {}),
   });
+  const paymentInvoices = startCreditPaymentInvoiceScheduler({
+    log: params.log,
+    ...(params.runPaymentInvoiceCycle
+      ? { runCycle: params.runPaymentInvoiceCycle } : {}),
+  });
   return {
     stop: () => {
       usage.stop();
       automaticTopUp.stop();
       invoiceClose.stop();
+      paymentInvoices.stop();
     },
   };
 }

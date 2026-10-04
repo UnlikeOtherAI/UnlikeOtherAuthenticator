@@ -71,6 +71,28 @@ export const billingContractInvoiceEndpoints: EndpointSchema[] = [
     auth: adminAuth,
   },
   {
+    method: 'GET',
+    path: '/internal/admin/billing/credit-invoice-tax-policies',
+    description: 'List Stripe accounts and append-only legal issuer tax policies for accepted prepaid payment invoices. Platform superuser only.',
+    auth: adminAuth,
+  },
+  {
+    method: 'POST',
+    path: '/internal/admin/billing/credit-invoice-tax-policies',
+    description: 'Append a versioned issuer tax treatment effective at a UTC payment time. The tax amount is included within the actual accepted gross; this action never charges the payer.',
+    auth: adminAuth,
+    body: {
+      account_id: 'exact Stripe account row ID',
+      issuer_profile_id: 'active explicit issuer with the same tax jurisdiction',
+      jurisdiction_country: 'two-letter uppercase issuer jurisdiction',
+      treatment: 'INCLUSIVE_RATE or NO_TAX_CHARGED',
+      rate_bps: 'integer inclusive tax rate 1-10000, or 0 for explicit no-tax treatment',
+      legal_basis_reference: 'operator-attested legal rule or exemption reference',
+      effective_from: 'UTC ISO timestamp, exact effective start',
+    },
+    response: { 201: 'Created immutable policy version and actor audit event' },
+  },
+  {
     method: 'POST',
     path: '/internal/admin/billing/invoice-issuer-profiles',
     description: 'Create an explicit legal issuer and invoice-number prefix.',

@@ -74,6 +74,7 @@ export async function installFixtures(page: Page) {
   );
   const billing = createBillingFixtures();
   const invoices: unknown[] = [billing.invoice];
+  const taxPolicies: Array<Record<string, unknown>> = [];
   const calculations: unknown[] = [];
   const payments: unknown[] = [];
   const activations: unknown[] = [];
@@ -108,6 +109,25 @@ export async function installFixtures(page: Page) {
       route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
     if (path.startsWith('/lifecycle/')) return lifecycle.handle(route, path);
     if (req.method() !== 'GET') {
+      if (path === '/billing/credit-invoice-tax-policies' && req.method() === 'POST') {
+        const input = req.postDataJSON();
+        if (input.account_id !== 'account-1' ||
+            input.issuer_profile_id !== billing.issuer.id ||
+            input.jurisdiction_country !== 'GB' ||
+            input.treatment !== 'INCLUSIVE_RATE' ||
+            input.rate_bps !== 2000 ||
+            input.legal_basis_reference !== 'Verified UK VAT treatment' ||
+            input.effective_from !== '2026-10-04T00:00:00Z') {
+          unexpected.push('Invalid tax policy payload');
+          return json({ error: 'Invalid tax policy' }, 400);
+        }
+        const created = {
+          ...input, id: 'tax-policy-1', version: 1, created_at: now,
+          created_by_email: 'operator@example.test',
+        };
+        taxPolicies.push(created);
+        return json(created, 201);
+      }
       if (path === '/billing/seat-subscriptions/seat-fixture-1/capacity') {
         const input = req.postDataJSON();
         seatCapacityWrites.push(input);
@@ -261,6 +281,11 @@ export async function installFixtures(page: Page) {
       return json([seatSubscription]);
     if (path === '/billing/contracts') return json(billing.contracts);
     if (path === '/billing/invoice-issuer-profiles') return json([billing.issuer]);
+    if (path === '/billing/credit-invoice-tax-policies') return json({
+      accounts: [{ id: 'account-1', stripe_account_id: 'acct_fixture',
+        livemode: false }],
+      policies: taxPolicies,
+    });
     if (path === '/billing/invoices') return json(invoices);
     if (path.endsWith('/invoice-profile'))
       return json({ error: 'No synthetic buyer profile' }, 404);
@@ -278,6 +303,7 @@ export async function installFixtures(page: Page) {
     payments,
     activations,
     seatCapacityWrites,
+    taxPolicies,
     memberships,
     failNextNativeSave: () => {
       nativeFailures = 1;

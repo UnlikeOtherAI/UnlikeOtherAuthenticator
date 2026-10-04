@@ -14,6 +14,11 @@ import { runBillingSerializableTransaction } from './billing-serializable-transa
 import { resolveBillingTariffForMonth, utcBillingMonth } from './billing-tariff-history.service.js';
 import { verifyLedgerRuntimeKey } from './billing-ledger-runtime-key.service.js';
 import { assertLiveJobComputeDispatch, type JobComputeDispatchIdentity } from './billing-job-compute-renewal.service.js';
+import { assertLedgerBudgetContext, attachLegacyBudgetDispatch,
+  lockBudgetOrganisation, releaseBudgetDispatch, reserveBudgetDispatch,
+  type VerifiedBudgetContext } from './billing-credit-budget-dispatch.service.js';
+import { recordLegacyPrepaidLiability,
+  recordPaidUsageLiability } from './billing-paid-liability.service.js';
 
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/;
 const DECIMAL_PATTERN = /^(?:0|[1-9]\d*)(?:\.\d{1,18})?$/;
@@ -69,6 +74,7 @@ export type ReservePrepaidDispatchInput = {
   rawCostBound: string | null;
   currency: string;
   jobCompute?: JobComputeDispatchIdentity | null;
+  billingContext?: VerifiedBudgetContext | null;
 };
 
 async function assertActiveSubject(
@@ -155,6 +161,10 @@ export async function reservePrepaidDispatch(
       identity: input.jobCompute ?? null, runtimeKeyId: key.id,
       subjectId: input.userId, orgId: input.organisationId,
       teamId: input.teamId, tokenVersion: actor.tv, now });
+    await assertLedgerBudgetContext(tx, { product: input.product,
+      sourceDomain: actor.source_domain, context: input.billingContext ?? null,
+      jobGrantId: input.jobCompute?.grantId ?? null,
+      originInvocationId: input.jobCompute?.originInvocationId ?? null });
     const previous = await tx.billingLedgerDispatchDecision.findUnique({
       where: { dispatchId: input.dispatchId },
     });
@@ -203,6 +213,14 @@ export async function reservePrepaidDispatch(
     })).tariff;
     if (tariff.usagePaymentMode === BillingUsagePaymentMode.PAY_AS_YOU_GO ||
       tariff.mode === BillingTariffMode.FREE) {
+      await reserveBudgetDispatch(tx, { dispatchId: input.dispatchId, startedAt: dispatchStartedAt,
+        product: input.product, serviceId: key.serviceId,
+        providerServiceId: input.providerServiceId,
+        orgId: input.organisationId, teamId: input.teamId, userId: input.userId,
+        billingMonth, currency: input.currency, tariffId: tariff.id,
+        tariffMode: tariff.mode, markupBps: tariff.markupBps,
+        paymentMode: 'PAY_AS_YOU_GO', rawCostBound: bound,
+        context: input.billingContext ?? null });
       await tx.billingLedgerDispatchDecision.create({ data: {
         dispatchId: input.dispatchId, requestFingerprint: input.requestFingerprint,
         runtimeKeyId: key.id, serviceId: key.serviceId,
@@ -241,6 +259,10 @@ export async function reservePrepaidDispatch(
       identity: input.jobCompute ?? null, runtimeKeyId: key.id,
       subjectId: input.userId, orgId: input.organisationId,
       teamId: input.teamId, tokenVersion: actor.tv, now });
+    await assertLedgerBudgetContext(tx, { product: input.product,
+      sourceDomain: actor.source_domain, context: input.billingContext ?? null,
+      jobGrantId: input.jobCompute?.grantId ?? null,
+      originInvocationId: input.jobCompute?.originInvocationId ?? null });
     const cancelled = await tx.billingLedgerDispatchDecision.findUnique({
       where: { dispatchId: input.dispatchId }, select: { status: true },
     });
@@ -276,6 +298,14 @@ export async function reservePrepaidDispatch(
       throw new AppError('FORBIDDEN', 403, 'PREPAID_TARIFF_REQUIRED');
     }
     const reserved = ratedMicrocredits(bound, tariff.markupBps);
+    await reserveBudgetDispatch(tx, { dispatchId: input.dispatchId, startedAt: dispatchStartedAt,
+      product: input.product, serviceId: key.serviceId,
+      providerServiceId: input.providerServiceId,
+      orgId: input.organisationId, teamId: input.teamId, userId: input.userId,
+      billingMonth, currency: input.currency, tariffId: tariff.id,
+      tariffMode: tariff.mode, markupBps: tariff.markupBps,
+      paymentMode: 'PREPAID', rawCostBound: bound,
+      context: input.billingContext ?? null });
     const balance = await lockCreditBalance(tx, creditAccount.id);
     const held = await tx.billingPrepaidReservation.aggregate({
       where: { creditAccountId: creditAccount.id, status: BillingPrepaidReservationStatus.ACTIVE },
@@ -336,7 +366,8 @@ export async function getLedgerDispatchDecision(
   }
   return { payment_mode: decision.status === 'PAY_AS_YOU_GO' ? 'pay_as_you_go' : 'cancelled',
     reservation_id: null, dispatch_id: decision.dispatchId,
-    request_fingerprint: decision.requestFingerprint, status: decision.status,
+    request_fingerprint: decision.requestFingerprint,
+    status: decision.status === 'PAY_AS_YOU_GO' && decision.receiptId ? 'SETTLED' : decision.status,
     receipt_id: decision.receiptId,
     billing_month: decision.billingMonth, currency: decision.currency };
 }
@@ -361,12 +392,50 @@ export async function finalizePrepaidDispatch(params: {
       include: { tariff: { select: { markupBps: true, mode: true } },
         runtimeKey: { select: { serviceId: true, ledgerAudience: true, sourceDomain: true } } },
     });
+    if (!reservation && params.kind === 'settle') {
+      const prior = await tx.billingLedgerDispatchDecision.findUnique({
+        where: { dispatchId: params.dispatchId },
+      });
+      if (!prior || prior.status !== 'PAY_AS_YOU_GO' || prior.serviceId !== key.serviceId
+        || prior.runtimeKeyId !== key.id || !actual) {
+        throw new AppError('NOT_FOUND', 404, 'PAID_DISPATCH_NOT_FOUND');
+      }
+      if (prior.receiptId && prior.receiptId !== params.receiptId) {
+        throw new AppError('BAD_REQUEST', 409, 'PAID_RECEIPT_CONFLICT');
+      }
+      if (prior.rawCostBound && actual.greaterThan(prior.rawCostBound)) {
+        throw new AppError('BAD_REQUEST', 409, 'PAID_RECEIPT_EXCEEDS_BOUND');
+      }
+      if (!prior.orgId) throw new AppError('BAD_REQUEST', 409, 'PAID_DISPATCH_EVIDENCE_MISSING');
+      await lockBudgetOrganisation(tx, prior.orgId);
+      if (!await tx.billingCreditBudgetDispatch.findUnique({
+        where: { dispatchId: params.dispatchId }, select: { dispatchId: true },
+      })) {
+        // A pre-cutover PAYG dispatch has no frozen per-receipt UOA rating.
+        // It enters the explicit historical reconciliation queue; applying
+        // today's tariff would rewrite an earlier customer's liability.
+        throw new AppError('BAD_REQUEST', 409, 'LEGACY_PAYG_RECONCILIATION_REQUIRED');
+      }
+      const liability = await recordPaidUsageLiability(tx, {
+        dispatchId: params.dispatchId, receiptId: params.receiptId, actual,
+      });
+      if (!prior.receiptId) await tx.billingLedgerDispatchDecision.update({
+        where: { dispatchId: params.dispatchId }, data: { receiptId: params.receiptId },
+      });
+      return { dispatch_id: params.dispatchId, receipt_id: params.receiptId,
+        status: 'SETTLED', debited_microcredits: '0',
+        rated_microcredits: liability.ratedMicrocredits.toString() };
+    }
     if (!reservation && params.kind === 'release') {
       const prior = await tx.billingLedgerDispatchDecision.findUnique({
         where: { dispatchId: params.dispatchId },
       });
       if (prior?.status === 'PAY_AS_YOU_GO' && prior.serviceId === key.serviceId &&
         prior.runtimeKeyId === key.id) {
+        if (prior.receiptId) throw new AppError('BAD_REQUEST', 409, 'PAID_RECEIPT_CONFLICT');
+        await releaseBudgetDispatch(tx, params.dispatchId);
+        await tx.billingLedgerDispatchDecision.update({ where: { dispatchId: params.dispatchId },
+          data: { status: 'CANCELLED', receiptId: params.receiptId } });
         return { dispatch_id: params.dispatchId, receipt_id: params.receiptId,
           status: 'RELEASED', debited_microcredits: '0' };
       }
@@ -396,23 +465,58 @@ export async function finalizePrepaidDispatch(params: {
         status: reservation.status,
         debited_microcredits: (reservation.debitedMicrocredits ?? 0n).toString() };
     }
+    await lockBudgetOrganisation(tx, reservation.orgId);
     const balance = await lockCreditBalance(tx, reservation.creditAccountId);
-    const bucket = actual === null ? null : await tx.billingPrepaidRatingBucket.findUnique({
-      where: { creditAccountId: reservation.creditAccountId },
-    });
-    if (bucket && bucket.currency !== reservation.currency) {
-      throw new AppError('BAD_REQUEST', 409, 'PREPAID_CURRENCY_UNSUPPORTED');
-    }
-    const oldQuanta = bucket ? BigInt(bucket.cumulativeRatedQuanta.toFixed(0)) : 0n;
-    const newQuanta = actual === null || reservation.tariff.mode === BillingTariffMode.FREE
-      ? oldQuanta : oldQuanta + scaledRaw(actual) * BigInt(10_000 + reservation.tariff.markupBps);
-    const target = ratedMicrocreditsFromQuanta(newQuanta);
-    const debited = actual === null ? null : target - (bucket?.debitedMicrocredits ?? 0n);
-    if (debited !== null && actual !== null &&
-      (debited > reservation.reservedMicrocredits ||
-      actual.greaterThan(reservation.rawCostBound))) {
+    if (actual !== null && actual.greaterThan(reservation.rawCostBound)) {
       throw new AppError('BAD_REQUEST', 409, 'PREPAID_RECEIPT_EXCEEDS_BOUND');
     }
+    let budgetDispatch = await tx.billingCreditBudgetDispatch.findUnique({
+      where: { dispatchId: params.dispatchId },
+    });
+    if (!budgetDispatch) {
+      await attachLegacyBudgetDispatch(tx, { dispatchId: reservation.dispatchId,
+        startedAt: reservation.dispatchStartedAt, product: key.service.identifier,
+        serviceId: reservation.serviceId, providerServiceId: reservation.providerServiceId,
+        orgId: reservation.orgId, teamId: reservation.teamId, userId: reservation.userId,
+        billingMonth: reservation.billingMonth, currency: reservation.currency,
+        tariffId: reservation.tariffId, tariffMode: reservation.tariff.mode,
+        markupBps: reservation.tariff.markupBps, paymentMode: 'PREPAID',
+        reservedMicrocredits: reservation.reservedMicrocredits });
+      budgetDispatch = await tx.billingCreditBudgetDispatch.findUnique({
+        where: { dispatchId: params.dispatchId },
+      });
+    }
+    let debited: bigint | null = null;
+    let legacyQuanta: bigint | null = null;
+    let legacyTarget: bigint | null = null;
+    if (actual !== null && budgetDispatch?.isLegacy) {
+      const bucket = await tx.billingPrepaidRatingBucket.findUnique({
+        where: { creditAccountId: reservation.creditAccountId },
+      });
+      if (bucket && bucket.currency !== reservation.currency) {
+        throw new AppError('BAD_REQUEST', 409, 'PREPAID_CURRENCY_UNSUPPORTED');
+      }
+      const oldQuanta = bucket ? BigInt(bucket.cumulativeRatedQuanta.toFixed(0)) : 0n;
+      legacyQuanta = reservation.tariff.mode === BillingTariffMode.FREE
+        ? oldQuanta : oldQuanta + scaledRaw(actual) * BigInt(10_000 + reservation.tariff.markupBps);
+      legacyTarget = ratedMicrocreditsFromQuanta(legacyQuanta);
+      debited = legacyTarget - (bucket?.debitedMicrocredits ?? 0n);
+      if (debited > reservation.reservedMicrocredits) {
+        throw new AppError('BAD_REQUEST', 409, 'PREPAID_RECEIPT_EXCEEDS_BOUND');
+      }
+      await recordLegacyPrepaidLiability(tx, { dispatchId: params.dispatchId,
+        receiptId: params.receiptId, reservationId: reservation.id,
+        ratedMicrocredits: debited, occurredAt: reservation.dispatchStartedAt });
+    } else if (actual !== null) {
+      const liability = await recordPaidUsageLiability(tx, {
+        dispatchId: params.dispatchId, receiptId: params.receiptId, actual,
+        creditAccountId: reservation.creditAccountId,
+      });
+      debited = liability.ratedMicrocredits;
+      if (debited > reservation.reservedMicrocredits) {
+        throw new AppError('BAD_REQUEST', 409, 'PREPAID_RECEIPT_EXCEEDS_BOUND');
+      }
+    } else await releaseBudgetDispatch(tx, params.dispatchId);
     const status = actual === null
       ? BillingPrepaidReservationStatus.RELEASED : BillingPrepaidReservationStatus.SETTLED;
     await tx.billingPrepaidReservation.update({
@@ -420,12 +524,12 @@ export async function finalizePrepaidDispatch(params: {
       data: { status, receiptId: params.receiptId, terminalAt: new Date(),
         rawCostActual: actual, debitedMicrocredits: debited },
     });
-    if (actual !== null) {
+    if (legacyQuanta !== null && legacyTarget !== null) {
       await tx.billingPrepaidRatingBucket.upsert({
         where: { creditAccountId: reservation.creditAccountId },
         create: { creditAccountId: reservation.creditAccountId, currency: reservation.currency,
-          cumulativeRatedQuanta: newQuanta.toString(), debitedMicrocredits: target },
-        update: { cumulativeRatedQuanta: newQuanta.toString(), debitedMicrocredits: target },
+          cumulativeRatedQuanta: legacyQuanta.toString(), debitedMicrocredits: legacyTarget },
+        update: { cumulativeRatedQuanta: legacyQuanta.toString(), debitedMicrocredits: legacyTarget },
       });
     }
     if (debited !== null && debited > 0n) {
