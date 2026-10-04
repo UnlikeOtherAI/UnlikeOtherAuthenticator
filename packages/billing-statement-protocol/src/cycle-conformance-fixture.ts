@@ -27,7 +27,8 @@ const summary = {
   product: { id: 'service_example', identifier: 'deepwater', name: 'DeepWater' },
   totals: [{
     currency: 'USD', subscription: money('20', '2000'),
-    usage_charge: money('13', '1300'), credits_applied: money('-13', '-1300'),
+    usage_charge: money('13', '1300'), tax: money('0', '0'),
+    gross_total: money('33', '3300'), credits_applied: money('-13', '-1300'),
     total_due: money('20', '2000'), total_paid: money('20', '2000'),
     outstanding: money('0', '0'),
   }],

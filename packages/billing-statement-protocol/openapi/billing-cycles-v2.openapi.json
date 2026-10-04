@@ -266,6 +266,8 @@
                       "currency",
                       "subscription",
                       "usage_charge",
+                      "tax",
+                      "gross_total",
                       "credits_applied",
                       "total_due",
                       "total_paid",
@@ -304,6 +306,60 @@
                         }
                       },
                       "usage_charge": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "amount",
+                          "amount_minor",
+                          "currency",
+                          "display"
+                        ],
+                        "properties": {
+                          "amount": {
+                            "type": "string",
+                            "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                          },
+                          "amount_minor": {
+                            "type": "string",
+                            "pattern": "^-?(0|[1-9][0-9]*)$"
+                          },
+                          "currency": {
+                            "type": "string",
+                            "pattern": "^[A-Z]{3}$"
+                          },
+                          "display": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "tax": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "amount",
+                          "amount_minor",
+                          "currency",
+                          "display"
+                        ],
+                        "properties": {
+                          "amount": {
+                            "type": "string",
+                            "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                          },
+                          "amount_minor": {
+                            "type": "string",
+                            "pattern": "^-?(0|[1-9][0-9]*)$"
+                          },
+                          "currency": {
+                            "type": "string",
+                            "pattern": "^[A-Z]{3}$"
+                          },
+                          "display": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "gross_total": {
                         "type": "object",
                         "additionalProperties": false,
                         "required": [
@@ -669,6 +725,8 @@
                 "currency",
                 "subscription",
                 "usage_charge",
+                "tax",
+                "gross_total",
                 "credits_applied",
                 "total_due",
                 "total_paid",
@@ -707,6 +765,60 @@
                   }
                 },
                 "usage_charge": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "amount",
+                    "amount_minor",
+                    "currency",
+                    "display"
+                  ],
+                  "properties": {
+                    "amount": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                    },
+                    "amount_minor": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9][0-9]*)$"
+                    },
+                    "currency": {
+                      "type": "string",
+                      "pattern": "^[A-Z]{3}$"
+                    },
+                    "display": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "tax": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "amount",
+                    "amount_minor",
+                    "currency",
+                    "display"
+                  ],
+                  "properties": {
+                    "amount": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                    },
+                    "amount_minor": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9][0-9]*)$"
+                    },
+                    "currency": {
+                      "type": "string",
+                      "pattern": "^[A-Z]{3}$"
+                    },
+                    "display": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "gross_total": {
                   "type": "object",
                   "additionalProperties": false,
                   "required": [
@@ -1455,6 +1567,18 @@
                     "currency": "USD",
                     "display": "US$13"
                   },
+                  "tax": {
+                    "amount": "0",
+                    "amount_minor": "0",
+                    "currency": "USD",
+                    "display": "US$0"
+                  },
+                  "gross_total": {
+                    "amount": "33",
+                    "amount_minor": "3300",
+                    "currency": "USD",
+                    "display": "US$33"
+                  },
                   "credits_applied": {
                     "amount": "-13",
                     "amount_minor": "-1300",
@@ -1522,6 +1646,18 @@
                 "amount_minor": "1300",
                 "currency": "USD",
                 "display": "US$13"
+              },
+              "tax": {
+                "amount": "0",
+                "amount_minor": "0",
+                "currency": "USD",
+                "display": "US$0"
+              },
+              "gross_total": {
+                "amount": "33",
+                "amount_minor": "3300",
+                "currency": "USD",
+                "display": "US$33"
               },
               "credits_applied": {
                 "amount": "-13",

@@ -37,6 +37,8 @@ export type BillingCycleTotals = {
   currency: string;
   subscription: BillingCycleMoney;
   usage_charge: BillingCycleMoney;
+  tax: BillingCycleMoney;
+  gross_total: BillingCycleMoney;
   credits_applied: BillingCycleMoney;
   total_due: BillingCycleMoney;
   total_paid: BillingCycleMoney;

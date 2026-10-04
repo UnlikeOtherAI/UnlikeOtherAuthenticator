@@ -36,7 +36,8 @@ export function renderBillingCycleBreakdownCsv(detail: BillingCycleDetailV2): Bu
   const columns = [
     'record_type', 'id', 'description', 'period_start', 'period_end', 'quantity',
     'unit', 'unit_price', 'seat_policy', 'seat_timing', 'customer_charge',
-    'currency', 'credits_consumed', 'total_paid', 'outstanding',
+    'currency', 'credits_consumed', 'tax', 'gross_total', 'credits_applied',
+    'total_paid', 'outstanding',
     'opening_balance', 'closing_balance', 'billing_status',
   ] as const;
   type Column = typeof columns[number];
@@ -70,6 +71,8 @@ export function renderBillingCycleBreakdownCsv(detail: BillingCycleDetailV2): Bu
     rows.push({ record_type: 'total', id: detail.cycle_id,
       description: 'Amount due', ...period, customer_charge: total.total_due.amount,
       currency: total.currency, credits_consumed: detail.credits.consumed ?? 'pending',
+      tax: total.tax.amount, gross_total: total.gross_total.amount,
+      credits_applied: total.credits_applied.amount,
       total_paid: total.total_paid.amount, outstanding: total.outstanding.amount,
       opening_balance: detail.credits.opening_balance ?? 'pending',
       closing_balance: detail.credits.closing_balance ?? 'pending',
@@ -195,7 +198,8 @@ export async function renderBillingCycleBreakdownPdf(detail: BillingCycleDetailV
     ? 'Pending totals' : detail.state === 'voided' ? 'Voided totals' : 'Confirmed totals',
   { bold: true, size: 12 });
   for (const total of detail.totals) {
-    draw(context, `Subscription ${total.subscription.display}; usage ${total.usage_charge.display}; credits ${total.credits_applied.display}`);
+    draw(context, `Subscription ${total.subscription.display}; usage ${total.usage_charge.display}; tax ${total.tax.display}`);
+    draw(context, `Gross ${total.gross_total.display}; credits ${total.credits_applied.display}`);
     draw(context, `Due ${total.total_due.display}; paid ${total.total_paid.display}; outstanding ${total.outstanding.display}`,
       { bold: true });
   }
