@@ -14,6 +14,8 @@ import type { BillingInvoicePdfStorage } from
   '../../src/services/billing-invoice-storage.service.js';
 import type { NormalizedMeteringPortfolio, NormalizedMeteringUsage } from
   '../../src/services/billing-metering.types.js';
+import { afterPayerLock, deferred, waitForPayerWait } from
+  '../helpers/manual-invoice-payer-race.js';
 import { createTestDb } from '../helpers/test-db.js';
 
 const enabled = process.env.BILLING_FUNDING_DATABASE_TESTS === 'true' &&
@@ -42,7 +44,6 @@ describe.skipIf(!enabled)('manual invoice paid receipt wallet cap', () => {
   const ids = { user: '', userEmail: '', org: '', team: '', service: '', tariff: '', account: '',
     creditAccount: '', contract: '', invoice: '' };
   const receipts: Array<{ dispatchId: string; receiptId: string; cost: string }> = [];
-
   beforeAll(async () => {
     const created = await createTestDb();
     if (!created) throw new Error('DATABASE_URL_REQUIRED');
@@ -160,9 +161,7 @@ describe.skipIf(!enabled)('manual invoice paid receipt wallet cap', () => {
       authorizeAdminEffect: vi.fn().mockResolvedValue(undefined),
     });
   });
-
   afterAll(async () => { await db?.cleanup(); });
-
   function proof(product: string) {
     const digest = createHash('sha256').update('ledger-paid-receipt-set-v1:paid\n');
     for (const row of receipts) digest.update(JSON.stringify([
@@ -179,7 +178,6 @@ describe.skipIf(!enabled)('manual invoice paid receipt wallet cap', () => {
       unresolved_paid_attempts: '0', signature: 'synthetic-signature',
     };
   }
-
   function line(cost: string) {
     return { serviceId: 'provider-test', usageUnit: 'tokens', calls: '1',
       inputUnits: '1', cachedInputUnits: '0', outputUnits: '1',
@@ -189,7 +187,6 @@ describe.skipIf(!enabled)('manual invoice paid receipt wallet cap', () => {
       callerProduct: credential.service.identifier,
       originProduct: credential.service.identifier, userId: ids.user };
   }
-
   function usage(product: string): NormalizedMeteringUsage {
     return { schemaVersion: 1, product, groupBy: 'service',
       scope: { organizationId: ids.org, teamId: null, userId: null,
@@ -198,7 +195,6 @@ describe.skipIf(!enabled)('manual invoice paid receipt wallet cap', () => {
       snapshot: { id: 'manual-coverage', cursor: 'manual-coverage',
         capturedAt: endsAt, immutable: true, sha256: 'a'.repeat(64) } };
   }
-
   function portfolio(cursor: string, cost: string, capturedAt: string):
   NormalizedMeteringPortfolio {
     return { schemaVersion: 1, contract: 'metering-portfolio-v1',
@@ -209,47 +205,6 @@ describe.skipIf(!enabled)('manual invoice paid receipt wallet cap', () => {
       snapshot: { id: cursor, cursor, capturedAt, immutable: true,
         sha256: 'a'.repeat(64) } };
   }
-
-  function deferred() {
-    let release!: () => void;
-    const promise = new Promise<void>((resolve) => { release = resolve; });
-    return { promise, release };
-  }
-
-  function afterPayerLock(client: PrismaClient, action: () => Promise<void>): PrismaClient {
-    return new Proxy(client, { get(target, property, receiver) {
-      if (property !== '$transaction') return Reflect.get(target, property, receiver);
-      return (callback: (tx: Prisma.TransactionClient) => Promise<unknown>, options?: object) =>
-        target.$transaction(async (tx) => callback(new Proxy(tx, {
-          get(transaction, method, transactionReceiver) {
-            if (method !== '$queryRaw') return Reflect.get(transaction, method, transactionReceiver);
-            return async (...args: unknown[]) => {
-              const result = await (transaction.$queryRaw as (...values: unknown[]) =>
-                Promise<unknown>)(...args);
-              const sql = String((args[0] as { strings?: readonly string[] })?.strings?.join('') ?? '');
-              if (sql.includes('billing_credit_accounts') && sql.includes('FOR UPDATE')) {
-                await action();
-              }
-              return result;
-            };
-          },
-        })), options as never);
-    } });
-  }
-
-  async function waitForPayerWait() {
-    for (let attempt = 0; attempt < 100; attempt += 1) {
-      const waiting = await db.prisma.$queryRaw<Array<{ count: bigint }>>(Prisma.sql`
-        SELECT count(*)::bigint AS count FROM pg_stat_activity
-        WHERE pid <> pg_backend_pid() AND datname = current_database()
-          AND wait_event_type = 'Lock'
-          AND query LIKE '%billing_credit_accounts%FOR UPDATE%'`);
-      if ((waiting[0]?.count ?? 0n) > 0n) return;
-      await new Promise((resolve) => setTimeout(resolve, 20));
-    }
-    throw new Error('invoice did not wait on the credit payer row');
-  }
-
   it('keeps a late top-up off invoiced receipts but funds new paid receipts', async () => {
     const fundingId = randomUUID();
     const entryId = randomUUID();
@@ -297,7 +252,6 @@ describe.skipIf(!enabled)('manual invoice paid receipt wallet cap', () => {
       id: ids.creditAccount,
     } })).balanceMicrocredits).toBe(1_300_000_000n);
   });
-
   it('holds a missing historical cohort instead of guessing a team share', async () => {
     const original = await db.prisma.billingInvoice.findUniqueOrThrow({ where: {
       id: ids.invoice,
@@ -361,7 +315,6 @@ describe.skipIf(!enabled)('manual invoice paid receipt wallet cap', () => {
       billingMonth: month, creditAccountId: ids.creditAccount,
     }))).rejects.toThrow('BILLING_CREDIT_MANUAL_INVOICE_COHORT_UNPROVEN');
   });
-
   it('rejects a stale draft when concurrent wallet settlement wins the payer lock', async () => {
     const dispatchId = `dispatch-${randomUUID()}`;
     const receiptId = `receipt-${randomUUID()}`;
@@ -427,7 +380,7 @@ describe.skipIf(!enabled)('manual invoice paid receipt wallet cap', () => {
         now: () => new Date('2026-10-03T00:02:00.000Z'),
         authorizeAdminEffect: vi.fn().mockResolvedValue(undefined),
       });
-      await waitForPayerWait();
+      await waitForPayerWait(db.prisma);
       unlock.release();
       await settlement;
       await expect(issue).rejects.toThrow('BILLING_INVOICE_WALLET_CHANGED_BEFORE_ISSUE');
@@ -437,6 +390,111 @@ describe.skipIf(!enabled)('manual invoice paid receipt wallet cap', () => {
     } finally {
       unlock.release();
       await Promise.all([settlementClient.$disconnect(), issueClient.$disconnect()]);
+    }
+  });
+  it('reserves an issued cohort when invoice claim wins the payer lock', async () => {
+    const october = '2026-10';
+    const dispatchId = `dispatch-${randomUUID()}`;
+    const receiptId = `receipt-${randomUUID()}`;
+    await db.prisma.billingPaidUsageLiability.create({ data: {
+      dispatchId, receiptId, serviceId: ids.service, providerServiceId: 'provider-test',
+      orgId: ids.org, teamId: ids.team, userId: ids.user, billingMonth: october,
+      currency: 'USD', tariffId: ids.tariff, frozenMarkupBps: 3000,
+      paymentMode: 'PAY_AS_YOU_GO', rawCostActual: '1', ratedQuanta: '0',
+      ratedMicrocredits: 1_300_000_000n,
+    } });
+    const original = await db.prisma.billingInvoice.findUniqueOrThrow({ where: {
+      id: ids.invoice,
+    } });
+    const invoice = await db.prisma.billingInvoice.create({ data: {
+      orgId: ids.org, contractId: ids.contract,
+      contractVersionId: original.contractVersionId,
+      issuerProfileId: original.issuerProfileId, buyerProfileId: original.buyerProfileId,
+      billingMonth: october, revision: 1, currency: 'USD',
+      subtotalMinor: 130n, taxAmountMinor: 0n, totalMinor: 130n,
+      taxTreatment: 'NO_TAX_CHARGED', taxRateBps: 0,
+      taxLegalBasis: 'Fixture tax treatment',
+      issuerSnapshot: original.issuerSnapshot as Prisma.InputJsonValue,
+      buyerSnapshot: original.buyerSnapshot as Prisma.InputJsonValue,
+      calculationDigest: 'd'.repeat(64),
+      lines: { create: { serviceId: ids.service,
+        serviceIdentifier: credential.service.identifier,
+        serviceName: credential.service.name,
+        amountMinor: 130n, currency: 'USD', position: 1 } },
+      meteringRefs: { create: { serviceId: ids.service,
+        ledgerSnapshotCursor: 'october-cohort',
+        ledgerSnapshotSha256: 'd'.repeat(64),
+        capturedAt: new Date('2026-11-01T00:00:00.000Z') } },
+    }, include: { lines: true } });
+    const line = invoice.lines[0];
+    if (!line) throw new Error('OCTOBER_LINE_MISSING');
+    await db.prisma.billingInvoiceLineFinancialAllocation.create({ data: {
+      lineId: line.id, invoiceId: invoice.id, serviceId: ids.service,
+      billingMonth: october, subscriptionMinor: 0n, usageMinor: 130n,
+      taxMinor: 0n, invoiceCreditMinor: 0n, totalMinor: 130n,
+      dueMinor: 130n, currency: 'USD', calculationDigest: invoice.calculationDigest,
+    } });
+    await db.prisma.billingInvoicePaidReceipt.create({ data: {
+      invoiceId: invoice.id, serviceId: ids.service, orgId: ids.org,
+      teamId: ids.team, billingMonth: october, dispatchId, receiptId,
+      ratedMicrocredits: 1_300_000_000n, proofSha256: 'd'.repeat(64),
+    } });
+    const fundingId = randomUUID();
+    const entryId = randomUUID();
+    await db.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw(Prisma.sql`SELECT set_config(
+        'app.admin_auth_domain', ${getAdminAuthDomain()}, true)`);
+      await tx.billingCreditAdminAdjustment.create({ data: {
+        id: fundingId, accountId: ids.account, creditAccountId: ids.creditAccount,
+        orgId: ids.org, teamId: ids.team, signedAmountMicrocredits: 1_300_000_000n,
+        reason: 'Concurrent invoice funding fixture', idempotencyKey: fundingId,
+        createdByUserId: ids.user, createdByEmail: ids.userEmail,
+        createdByAdminDomain: getAdminAuthDomain(), creditEntryId: entryId,
+      } });
+      await tx.billingCreditEntry.create({ data: {
+        id: entryId, creditAccountId: ids.creditAccount, direction: 'CREDIT',
+        kind: 'ADJUSTMENT', amountMicrocredits: 1_300_000_000n,
+        balanceAfterMicrocredits: 1_300_000_000n, currency: 'USD',
+        idempotencyKey: fundingId, sourceType: 'credit_admin_adjustment',
+        sourceId: fundingId, occurredAt: new Date('2026-11-03T00:00:00.000Z'),
+      } });
+    });
+    const issuerClient = new PrismaClient({ datasources: { db: { url: db.databaseUrl } } });
+    const settlementClient = new PrismaClient({ datasources: { db: { url: db.databaseUrl } } });
+    const locked = deferred();
+    const unlock = deferred();
+    try {
+      const issue = issueBillingInvoice({ invoiceId: invoice.id,
+        actor: { email: 'operator@example.test' } }, {
+        prisma: afterPayerLock(issuerClient, async () => {
+          locked.release();
+          await unlock.promise;
+        }), storage: new MemoryStorage(),
+        now: () => new Date('2026-11-03T00:01:00.000Z'),
+        authorizeAdminEffect: vi.fn().mockResolvedValue(undefined),
+      });
+      await locked.promise;
+      const octoberPortfolio = { ...portfolio('mup_manual_issue_wins_1234567890123',
+        '1', '2026-11-03T00:02:00.000Z'), scope: {
+        organizationId: ids.org, teamId: ids.team, month: october,
+        startsAt: '2026-10-01T00:00:00.000Z', endsAt: '2026-11-01T00:00:00.000Z',
+      } };
+      const settlement = settleCreditPortfolio({ creditAccountId: ids.creditAccount,
+        credential, portfolio: octoberPortfolio }, { prisma: settlementClient });
+      await waitForPayerWait(db.prisma);
+      unlock.release();
+      await Promise.all([issue, settlement]);
+      const consumed = await db.prisma.billingCreditUsageSettlement.findFirstOrThrow({ where: {
+        creditAccountId: ids.creditAccount, serviceId: ids.service,
+        billingMonth: october,
+      } });
+      expect(consumed.cumulativeCreditsConsumedMicrocredits).toBe(0n);
+      expect((await db.prisma.billingCreditAccount.findUniqueOrThrow({ where: {
+        id: ids.creditAccount,
+      } })).balanceMicrocredits).toBe(1_300_000_000n);
+    } finally {
+      unlock.release();
+      await Promise.all([issuerClient.$disconnect(), settlementClient.$disconnect()]);
     }
   });
 });
