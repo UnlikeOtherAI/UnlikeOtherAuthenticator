@@ -24,7 +24,7 @@ function source(status: BillingInvoiceStatus): ManualInvoiceSource {
     lines: [
       { id: 'line-nessie', serviceIdentifier: 'nessie', serviceName: 'Nessie',
         amountMinor: 2000n, currency: 'USD', position: 1 },
-      { id: 'line-water', serviceIdentifier: 'water', serviceName: 'Water',
+      { id: 'line-second', serviceIdentifier: 'nessie', serviceName: 'Nessie seats',
         amountMinor: 1000n, currency: 'USD', position: 2 },
     ],
     paymentEvents: [],
@@ -32,11 +32,11 @@ function source(status: BillingInvoiceStatus): ManualInvoiceSource {
 }
 
 describe('customer manual invoice source projection', () => {
-  it('shows actual multi-product legal charges and explicit gross/tax/credit arithmetic', () => {
+  it('shows actual product-bound legal charges and explicit gross/tax/credit arithmetic', () => {
     const invoice = source(BillingInvoiceStatus.ISSUED);
     const summary = projectManualCustomerInvoiceSummary(invoice);
     const detail = projectManualCustomerInvoiceDetail(invoice, subject);
-    expect(summary.product_identifiers).toEqual(['nessie', 'water']);
+    expect(summary.product_identifiers).toEqual(['nessie']);
     expect(summary.totals).toMatchObject({
       gross_total: { amount_minor: '3300' }, tax: { amount_minor: '300' },
       credits_applied: { amount_minor: '500' }, voided_amount: { amount_minor: '0' },
@@ -61,7 +61,34 @@ describe('customer manual invoice source projection', () => {
     const invoice = source(BillingInvoiceStatus.ISSUED);
     expect(() => projectManualCustomerInvoiceDetail(invoice,
       { ...subject, product: 'other' })).toThrow();
+    invoice.lines[1]!.serviceIdentifier = 'water';
+    expect(() => projectManualCustomerInvoiceDetail(invoice, subject)).toThrow();
+    invoice.lines[1]!.serviceIdentifier = 'nessie';
     invoice.totalMinor = 1n;
     expect(() => projectManualCustomerInvoiceSummary(invoice)).toThrow();
+  });
+
+  it('keeps accepted payment and original PDF frozen across full and partial refunds', () => {
+    const invoice = source(BillingInvoiceStatus.ISSUED);
+    const payment = { id: 'payment', kind: 'PAYMENT', amountMinor: 2800n,
+      currency: 'USD' } as ManualInvoiceSource['paymentEvents'][number];
+    const refund = { ...payment, id: 'refund', kind: 'REFUND', amountMinor: 800n };
+    invoice.paymentEvents = [payment, refund];
+    const partial = projectManualCustomerInvoiceSummary(invoice);
+    expect(partial.status).toBe('partially_refunded');
+    expect(partial.totals).toMatchObject({ total_paid: { amount_minor: '2800' },
+      refunded_amount: { amount_minor: '800' }, outstanding: { amount_minor: '0' } });
+    invoice.paymentEvents = [payment, { ...refund, amountMinor: 2800n }];
+    const full = projectManualCustomerInvoiceSummary(invoice);
+    expect(full.status).toBe('refunded');
+    expect(full.number).toBe(partial.number);
+    expect(full.totals.outstanding.amount_minor).toBe('0');
+
+    invoice.paymentEvents = [{ ...payment, amountMinor: 1000n },
+      { ...refund, amountMinor: 400n }];
+    const partlyPaid = projectManualCustomerInvoiceSummary(invoice);
+    expect(partlyPaid.status).toBe('partially_refunded');
+    expect(partlyPaid.totals.total_paid.amount_minor).toBe('1000');
+    expect(partlyPaid.totals.outstanding.amount_minor).toBe('1800');
   });
 });

@@ -30,22 +30,21 @@ function financials(invoice: ManualInvoiceSource) {
   for (const event of invoice.paymentEvents) {
     if (event.currency !== invoice.currency || event.amountMinor <= 0n) hold();
     if (event.kind === 'PAYMENT') paid += event.amountMinor;
-    else if (event.kind === 'REFUND') {
-      paid -= event.amountMinor;
-      refunded += event.amountMinor;
-    } else if (event.kind === 'WRITE_OFF') writeOff += event.amountMinor;
+    else if (event.kind === 'REFUND') refunded += event.amountMinor;
+    else if (event.kind === 'WRITE_OFF') writeOff += event.amountMinor;
     else hold();
   }
   const originalDue = invoice.totalMinor - invoice.creditsAppliedMinor;
   const voided = invoice.status === BillingInvoiceStatus.VOID;
   const due = voided ? 0n : originalDue;
   const outstanding = due - paid - writeOff;
-  if (originalDue < 0n || paid < 0n || outstanding < 0n ||
+  if (originalDue < 0n || paid < 0n || refunded > paid || outstanding < 0n ||
     (voided && invoice.paymentEvents.length > 0)) hold();
   const status = voided ? 'voided' :
+    refunded > 0n ? refunded === paid && outstanding === 0n ? 'refunded' :
+      'partially_refunded' :
     writeOff > 0n && outstanding === 0n ? 'written_off' :
       paid === due ? 'paid' :
-        refunded > 0n && paid === 0n ? 'refunded' :
           paid > 0n ? 'partially_paid' : 'issued';
   return { paid, refunded, writeOff, due, outstanding,
     voidedAmount: voided ? originalDue : 0n, status } as const;
@@ -96,7 +95,7 @@ export function projectManualCustomerInvoiceDetail(
   const issuedAt = summary.issued_at;
   if (!number || !issuedAt) hold();
   if (subject.organisation_id !== invoice.orgId ||
-    !invoice.lines.some((line) => line.serviceIdentifier === subject.product)) hold();
+    invoice.lines.some((line) => line.serviceIdentifier !== subject.product)) hold();
   return { ...summary, schema_version: 1,
     charges: [...invoice.lines].sort((a, b) => a.position - b.position)
       .map((line) => ({ line_id: line.id, kind: 'service_charge' as const,

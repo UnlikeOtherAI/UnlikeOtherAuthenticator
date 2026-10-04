@@ -134,6 +134,12 @@ Verified refund and dispute effects are shown separately from the original
 accepted payment; partial effects retain their exact amount and the issued
 legal PDF stays immutable. A legal credit note appears only from an actual
 issuer source, never from a projected refund label.
+Manual invoice refunds likewise keep the original accepted payment and the
+original receivable history; the refund amount is a separate positive effect
+and does not make an already-paid legal invoice newly overdue. A product-bound
+credential can relay a legal manual invoice only when every line belongs to
+that product. Mixed-product legal documents require UOA's separate organisation
+finance authority and are not projected as partial legal invoices.
 For multi-service legal invoices, the issuer freezes one allocation per service
 line before issue: subscription and payable usage, tax, invoice credit, gross
 total and net due. Database checks require all line allocations to sum exactly
@@ -147,6 +153,9 @@ determines the minor-unit delta at each reference; it preserves fractional
 carry and prevents a funded usage credit from reducing a seat or flat fee.
 The customer cycle totals show tax and gross explicitly: subscription plus
 usage plus tax equals gross, and gross less applied usage credits equals due.
+An organisation cycle groups prepaid and payable usage credits by their actual
+source payment mode, so one source cohort's credit consumption is never shown
+again on the other cohort's line.
 The canonical monthly legal invoice retains its original gross convention.
 Each accepted prepaid top-up or automatic recharge creates one immutable
 payment-invoice source in the same transaction as its credit entry. The source

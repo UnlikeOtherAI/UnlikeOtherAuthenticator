@@ -4,7 +4,8 @@ import {
   BillingAppKeyPurpose, BillingAssignmentScope, BillingCreditEntryDirection,
   BillingCreditEntryKind, BillingCreditPaymentInvoiceSource,
   BillingCreditPaymentInvoiceState, BillingCreditPaymentInvoiceTaxSource,
-  MembershipStatus,
+  BillingCollectionMode, BillingInvoiceStatus, BillingTariffMode,
+  BillingOrganisationContractStatus, MembershipStatus,
 } from '@prisma/client';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
@@ -33,6 +34,7 @@ describe.skipIf(!enabled)('actual customer invoice persistence and scope', () =>
   let serviceId: string;
   let serviceIdentifier: string;
   let paymentIds: string[];
+  let mixedInvoiceId: string;
   let legalBytes: Buffer;
 
   function context(userId: string, selectedTeamId = teamId): BillingCycleContext {
@@ -187,6 +189,75 @@ describe.skipIf(!enabled)('actual customer invoice persistence and scope', () =>
       orgId, legalName: 'Buyer Ltd', billingEmail: 'buyer@example.com',
       billingAddress: { line1: '2 Example Road' },
     } });
+    const otherService = await db.prisma.billingService.create({ data: {
+      identifier: `other-${randomUUID()}`, name: 'Other Product',
+    } });
+    const contract = await db.prisma.billingOrganisationContract.create({ data: {
+      orgId, reference: `invoice-${randomUUID()}`, name: 'Mixed source',
+      createdByEmail: 'admin@example.com',
+    } });
+    const version = await db.prisma.billingOrganisationContractVersion.create({ data: {
+      contractId: contract.id, version: 1, usageMarkupBps: 3000,
+      currency: 'USD', paymentTermsDays: 30, effectiveFromMonth: '2026-09',
+      createdByEmail: 'admin@example.com',
+    } });
+    for (const current of [service, otherService]) {
+      const tariff = await db.prisma.billingTariff.create({ data: {
+        serviceId: current.id, key: 'manual', version: 1, name: 'Manual',
+        mode: BillingTariffMode.CUSTOM, collectionMode: BillingCollectionMode.MANUAL,
+        markupBps: 3000, currency: 'USD',
+        monthlyAmountMinor: current.id === serviceId ? 1000n : 500n,
+      } });
+      const assignment = await db.prisma.billingTariffAssignment.create({ data: {
+        serviceId: current.id, tariffId: tariff.id, orgId,
+        scope: BillingAssignmentScope.ORGANISATION, scopeKey: orgId,
+        createdByEmail: 'admin@example.com',
+      } });
+      await db.prisma.billingContractServiceTerm.create({ data: {
+        contractVersionId: version.id, serviceId: current.id, tariffId: tariff.id,
+        tariffAssignmentId: assignment.id,
+        monthlyAmountMinor: current.id === serviceId ? 1000n : 500n,
+      } });
+    }
+    await db.prisma.billingOrganisationContract.update({ where: { id: contract.id },
+      data: { status: BillingOrganisationContractStatus.ACTIVE,
+        activatedAt: new Date('2026-09-01T00:00:00.000Z') } });
+    const mixed = await db.prisma.$transaction(async (tx) => {
+      const created = await tx.billingInvoice.create({ data: {
+      orgId, contractId: contract.id, contractVersionId: version.id,
+      issuerProfileId: issuer.id, buyerProfileId: buyer.id,
+      billingMonth: '2026-09', currency: 'USD',
+      subtotalMinor: 1500n, totalMinor: 1500n,
+      issuerSnapshot: { legal_name: 'UOA Ltd' }, buyerSnapshot: { legal_name: 'Buyer Ltd' },
+      calculationDigest: 'c'.repeat(64),
+      } });
+      await tx.billingInvoiceLine.createMany({ data: [
+        { serviceId, serviceIdentifier, serviceName: 'Invoice Proof',
+          invoiceId: created.id, amountMinor: 1000n, currency: 'USD', position: 1 },
+        { serviceId: otherService.id, serviceIdentifier: otherService.identifier,
+          invoiceId: created.id, serviceName: 'Other Product', amountMinor: 500n,
+          currency: 'USD', position: 2 },
+      ] });
+      await tx.billingInvoiceMeteringReference.createMany({ data: [service, otherService]
+        .map((current) => ({ invoiceId: created.id, serviceId: current.id,
+          ledgerSnapshotCursor: `proof-${current.id}`,
+          ledgerSnapshotSha256: 'e'.repeat(64),
+          capturedAt: new Date('2026-10-01T00:00:00.000Z'),
+        })) });
+      return created;
+    });
+    await db.prisma.billingInvoice.update({ where: { id: mixed.id }, data: {
+      status: BillingInvoiceStatus.ISSUING, invoiceNumber: `MIX-${randomUUID()}`,
+      issueDate: new Date('2026-09-30T00:00:00.000Z'),
+      dueDate: new Date('2026-10-30T00:00:00.000Z'),
+    } });
+    await db.prisma.billingInvoice.update({ where: { id: mixed.id }, data: {
+      status: BillingInvoiceStatus.ISSUED,
+      issuedAt: new Date('2026-09-30T00:00:00.000Z'),
+      pdfObjectKey: `billing-invoices/${randomUUID()}.pdf`,
+      pdfSha256: 'd'.repeat(64), pdfTemplateVersion: 'proof-v1',
+    } });
+    mixedInvoiceId = mixed.id;
     await db.prisma.billingCreditPaymentInvoice.update({ where: { id: paymentIds[0] }, data: {
       state: BillingCreditPaymentInvoiceState.ISSUED,
       taxAmountMinor: 0n, taxSource: BillingCreditPaymentInvoiceTaxSource.ISSUER_POLICY,
@@ -249,5 +320,19 @@ describe.skipIf(!enabled)('actual customer invoice persistence and scope', () =>
     } }, data: { status: MembershipStatus.REMOVED } });
     unblock?.(legalBytes);
     await expect(pending).rejects.toMatchObject({ statusCode: 403 });
+  });
+
+  it('never discloses a mixed-product legal invoice through one product key', async () => {
+    const viewer = context(ownerId);
+    const list = await listCustomerInvoices(viewer, { chargeMonth: '2026-09' },
+      { prisma: db.prisma });
+    expect(list.invoices.some((invoice) => invoice.invoice_id ===
+      `manual:${mixedInvoiceId}`)).toBe(false);
+    await expect(getCustomerInvoiceDetail(viewer, `manual:${mixedInvoiceId}`,
+      { prisma: db.prisma })).rejects.toMatchObject({ statusCode: 404 });
+    await expect(downloadCustomerInvoice(viewer, `manual:${mixedInvoiceId}`,
+      `manual:${mixedInvoiceId}`, { prisma: db.prisma, storage: {
+        putImmutable: async () => {}, read: async () => legalBytes,
+      } })).rejects.toMatchObject({ statusCode: 404 });
   });
 });

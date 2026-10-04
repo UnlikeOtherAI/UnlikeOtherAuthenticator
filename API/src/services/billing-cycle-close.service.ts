@@ -100,21 +100,27 @@ export async function prepareBillingCycleClose(
     ledgerSnapshots.push(projected.evidence);
     const ratedAmount = projected.ratedAmount;
     ratedByTeam.set(teamId, ratedAmount);
-    creditEvidence.push(await readCycleCreditEvidence(prisma, {
+    const teamCreditEvidence = await readCycleCreditEvidence(prisma, {
       orgId: initial.organisationId, teamId, serviceId: service.id,
       billingMonth: params.billingMonth, payer: initial.scope, tariff,
       ratedAmount, rawLines: projected.evidence.raw_lines,
-    }));
+    });
+    creditEvidence.push(teamCreditEvidence);
     if (initial.teamId !== null) usageLines = projected.lines;
-    else organisationUsageLines.push(...projected.lines);
+    else organisationUsageLines.push(...projected.lines.map((line) => ({ ...line,
+      credits_consumed: teamCreditEvidence.covered ?
+        decimalCredits(BigInt(teamCreditEvidence.consumed_microcredits ?? '0')) : null,
+    })));
   }
   const consumedMicrocredits = creditEvidence.every((row) => row.covered) ?
     creditEvidence.reduce((sum, row) => sum + BigInt(row.consumed_microcredits ?? '0'), 0n) : null;
   if (initial.teamId === null) {
     usageLines = aggregateOrganisationCycleUsage(organisationUsageLines);
   }
-  usageLines = usageLines.map((line) => ({ ...line,
-    credits_consumed: consumedMicrocredits === null ? null : decimalCredits(consumedMicrocredits) }));
+  if (initial.teamId !== null) {
+    usageLines = usageLines.map((line) => ({ ...line,
+      credits_consumed: consumedMicrocredits === null ? null : decimalCredits(consumedMicrocredits) }));
+  }
 
   const closeInTransaction = () => prisma.$transaction(async (tx) => {
     // Seat admission and financial source changes share the organisation lock.

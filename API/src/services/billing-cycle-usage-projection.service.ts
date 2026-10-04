@@ -10,6 +10,7 @@ import {
 } from './billing-metering.types.js';
 import { exactMoney } from './billing-money.service.js';
 import { rateProviderCost } from './billing-rating.service.js';
+import { decimalCredits } from './billing-cycle-credit-evidence.service.js';
 
 function hold(code: string): never {
   throw new AppError('INTERNAL', 409, code);
@@ -90,14 +91,26 @@ export function aggregateOrganisationCycleUsage(
   const prepaid = sourceLines.filter((line) => line.usage_payment_mode === 'prepaid');
   const amount = sumBillingDecimals(payable.flatMap((line) =>
     line.customer_charge ? [line.customer_charge.amount] : []));
+  const creditsByMode = (lines: BillingCycleUsageLine[]): string | null => {
+    if (lines.some((line) => line.credits_consumed === null)) return null;
+    const microcredits = lines.reduce((sum, line) => {
+      const value = line.credits_consumed;
+      if (value === null || !/^\d+(?:\.\d{1,6})?$/.test(value)) {
+        hold('BILLING_CYCLE_CREDIT_SOURCE_CONFLICT');
+      }
+      const [whole, fraction = ''] = value.split('.');
+      return sum + BigInt(whole ?? '0') * 1_000_000n + BigInt(fraction.padEnd(6, '0'));
+    }, 0n);
+    return decimalCredits(microcredits);
+  };
   return [
     ...(payable.length ? [{ id: 'usage:organisation:payg', label: 'Metered usage',
       usage_payment_mode: 'pay_as_you_go' as const,
       customer_charge: currency ? exactMoney(amount, currency) : null,
-      credits_consumed: null }] : []),
+      credits_consumed: creditsByMode(payable) }] : []),
     ...(prepaid.length ? [{ id: 'usage:organisation:prepaid', label: 'Prepaid usage',
       usage_payment_mode: 'prepaid' as const,
-      customer_charge: null, credits_consumed: null }] : []),
+      customer_charge: null, credits_consumed: creditsByMode(prepaid) }] : []),
   ];
 }
 
