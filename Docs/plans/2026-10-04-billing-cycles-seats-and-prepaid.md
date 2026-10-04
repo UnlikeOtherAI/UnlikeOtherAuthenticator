@@ -98,7 +98,7 @@ table shadowing, alongside the membership and invitation races.
 UOA supplies a paginated, manager-authorized cycle list and exact-scope cycle
 detail. The public protocol publishes validated DTOs, fixed actions and synthetic
 fixtures. Each cycle identifies its UTC month, payer scope, products, state,
-measured usage by real unit, customer credit consumption, recurring/seat lines,
+customer credit consumption and charges, recurring/seat lines,
 due/paid amounts by currency and invoice/download metadata. It does not expose
 other teams' named usage through an organisation payer. Member projections retain
 existing privacy rules; financial invoices require the payer's billing authority.
@@ -119,7 +119,13 @@ evidence, so UOA also provides its frozen detailed breakdown download.
 Products validate the canonical contract and proxy only fixed same-product
 actions. Download authorization rechecks current payer scope; no arbitrary URL
 proxying, public storage URLs, cross-product invoice IDs or billing secrets.
-Documents and JSON contain customer amounts and measured units only. History
+Documents and JSON contain customer charges, credits and seats only; measured
+provider units remain in private billing evidence. Actual manual invoice
+payment and void events enqueue a durable reconciliation task in the same
+database transaction as the financial change. Multiple workers claim bounded
+batches with a lease and generation check, so a restart or newer event cannot
+lose a pending customer revision. Historical allocations are queued once during
+migration at lower priority than fresh events. History
 links stay reachable from the current billing page, with loading, empty, pending,
 download and failure states. No duplicate local identity, membership or billing
 authority is added.
