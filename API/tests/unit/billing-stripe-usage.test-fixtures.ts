@@ -108,6 +108,7 @@ export function usageFixture(
 ): NormalizedMeteringUsage {
   return {
     schemaVersion: 1,
+    billingCompleteness: { state: 'complete', unresolvedPaidAttempts: '0' },
     product: 'deepwater',
     groupBy: 'service',
     scope: {
@@ -132,6 +133,7 @@ export function usageFixture(
         selectedProviderCost: rawProviderCost,
         currency: 'USD',
         costProvenance: 'provider_invoice',
+        billingDisposition: 'paid',
         billingProduct: 'deepwater',
         callerProduct: 'deepsignal',
         originProduct: 'nessie',

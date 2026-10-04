@@ -17,9 +17,9 @@ const defaults: BillingTariffFormValues = {
   name: 'Standard',
   mode: 'standard',
   collectionMode: 'none',
-  markupBps: 2000,
+  markupBps: 3000,
   monthlyAmountMinor: '0',
-  currency: 'GBP',
+  currency: 'USD',
   setAsDefault: false,
 };
 

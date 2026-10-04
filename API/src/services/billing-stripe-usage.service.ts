@@ -1,10 +1,11 @@
-import { Prisma, type PrismaClient } from '@prisma/client';
+import { BillingStripeMeterEventState, Prisma, type PrismaClient } from '@prisma/client';
 import { createHash } from 'node:crypto';
 import type Stripe from 'stripe';
 
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import { fetchLedgerMeteringUsage } from './billing-ledger-collector.service.js';
+import { settleSubscriptionCreditLiability } from './billing-credit-liability.service.js';
 import type { NormalizedMeteringUsage } from './billing-metering.types.js';
 import {
   assertStripeObjectLivemode,
@@ -15,6 +16,7 @@ import {
 import {
   assertStripeUsageScope,
   assertStripeUsageSubscription,
+  applyCreditOffsetToStripeCharges,
   stripeUsageChargeKey,
   stripeUsageMeterTimestamp,
   stripeUsageMonthBounds,
@@ -24,6 +26,8 @@ import {
 
 type UsageExportRow = Prisma.BillingStripeUsageExportGetPayload<Record<string, never>>;
 type StripeUsageClient = Pick<Stripe, 'accounts' | 'billing'>;
+const METER_EVENT_RETRY_DELAY_MS = 2 * 60_000;
+const METER_EVENT_SAFE_RETRY_MS = 23 * 60 * 60_000;
 
 export { stripeMeterQuantityFromMajorAmount } from './billing-stripe-usage-validation.service.js';
 
@@ -83,6 +87,7 @@ async function prepareExports(
     subscriptionId: string;
     billingMonth: string;
     usage: NormalizedMeteringUsage;
+    creditOffsetMicroMinor: bigint;
     invoicePeriod?: { startsAt: Date; endsAt: Date };
   },
   prisma: PrismaClient,
@@ -114,7 +119,35 @@ async function prepareExports(
       allowCanceledInvoicePeriod: Boolean(params.invoicePeriod),
     });
     assertStripeUsageScope(params.usage, subscription, params.billingMonth, params.invoicePeriod);
-    const charges = validatedStripeCumulativeCharges(params.usage, subscription);
+    // Share the same payer row lock used by credit settlement. The offset was
+    // refreshed before this transaction; rechecking under the lock makes the
+    // meter reservation and prepaid allocation one serializable decision.
+    const creditAccounts = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      SELECT "id" FROM "billing_credit_accounts"
+      WHERE "account_id" = ${subscription.accountId}
+        AND "org_id" = ${subscription.orgId}
+        AND ("team_id" = ${subscription.teamId} OR "team_id" IS NULL)
+      ORDER BY "id" FOR UPDATE
+    `);
+    const confirmedSettlements = await tx.billingCreditUsageSettlement.findMany({
+      where: {
+        creditAccountId: { in: creditAccounts.map((row) => row.id) },
+        serviceId: subscription.serviceId,
+        billingMonth: params.billingMonth,
+        ...(subscription.teamId ? { teamId: subscription.teamId } : {}),
+      },
+      select: { cumulativeCreditsConsumedMicrocredits: true },
+    });
+    const confirmedOffset = confirmedSettlements.reduce(
+      (sum, row) => sum + row.cumulativeCreditsConsumedMicrocredits / 10n, 0n,
+    );
+    if (confirmedOffset !== params.creditOffsetMicroMinor) {
+      throw new AppError('INTERNAL', 409, 'BILLING_CREDIT_ALLOCATION_CHANGED_DURING_EXPORT');
+    }
+    const charges = applyCreditOffsetToStripeCharges(
+      validatedStripeCumulativeCharges(params.usage, subscription),
+      params.creditOffsetMicroMinor,
+    );
     const capturedAt = new Date(params.usage.snapshot.capturedAt);
     const previousRows = await tx.billingStripeUsageExport.findMany({
       where: {
@@ -172,6 +205,9 @@ async function prepareExports(
       const previousQuantity = latestByKey.get(key)?.cumulativeMeterQuantity ?? 0n;
       const delta = charge.quantity - previousQuantity;
       if (delta === 0n) continue;
+      if (delta < 0n) {
+        throw new AppError('INTERNAL', 409, 'STRIPE_METER_NEGATIVE_CORRECTION_REQUIRES_RECONCILIATION');
+      }
       await tx.billingStripeUsageExport.create({
         data: {
           accountId: subscription.accountId,
@@ -231,6 +267,43 @@ async function sendPendingExports(
   prisma: PrismaClient,
 ): Promise<void> {
   for (const row of params.pending) {
+    if (row.stripeMeterEventState === BillingStripeMeterEventState.RECONCILIATION_REQUIRED) {
+      throw new AppError('INTERNAL', 409, 'STRIPE_METER_EVENT_RECONCILIATION_REQUIRED');
+    }
+    const age = row.stripeMeterEventAttemptedAt
+      ? params.now.getTime() - row.stripeMeterEventAttemptedAt.getTime()
+      : null;
+    if (age !== null && age >= METER_EVENT_SAFE_RETRY_MS) {
+      await prisma.billingStripeUsageExport.updateMany({
+        where: {
+          id: row.id,
+          stripeMeterEventCreatedAt: null,
+          stripeMeterEventState: BillingStripeMeterEventState.UNCERTAIN,
+        },
+        data: { stripeMeterEventState: BillingStripeMeterEventState.RECONCILIATION_REQUIRED },
+      });
+      throw new AppError('INTERNAL', 409, 'STRIPE_METER_EVENT_RECONCILIATION_REQUIRED');
+    }
+    if (age !== null && age < METER_EVENT_RETRY_DELAY_MS) {
+      throw new AppError('INTERNAL', 409, 'STRIPE_METER_EVENT_DELIVERY_UNCERTAIN');
+    }
+    // Reserve the attempt durably before contacting Stripe. A crash after
+    // acceptance but before the sent marker remains an uncertain attempt.
+    const claimed = await prisma.billingStripeUsageExport.updateMany({
+      where: {
+        id: row.id,
+        stripeMeterEventCreatedAt: null,
+        stripeMeterEventState: row.stripeMeterEventState,
+        stripeMeterEventAttemptedAt: row.stripeMeterEventAttemptedAt,
+      },
+      data: {
+        stripeMeterEventAttemptedAt: params.now,
+        stripeMeterEventState: BillingStripeMeterEventState.UNCERTAIN,
+      },
+    });
+    if (claimed.count !== 1) {
+      throw new AppError('INTERNAL', 409, 'STRIPE_METER_EVENT_DELIVERY_UNCERTAIN');
+    }
     const timestamp = stripeUsageMeterTimestamp(row.createdAt, row.billingMonth, params.now);
     const event = await stripe.billing.meterEvents.create(
       {
@@ -245,15 +318,20 @@ async function sendPendingExports(
       { idempotencyKey: row.stripeMeterEventIdentifier },
     );
     assertStripeObjectLivemode(event, params.account.livemode);
-    await prisma.billingStripeUsageExport.updateMany({
+    const accepted = await prisma.billingStripeUsageExport.updateMany({
       where: {
         id: row.id,
         stripeMeterEventCreatedAt: null,
+        stripeMeterEventState: BillingStripeMeterEventState.UNCERTAIN,
       },
       data: {
         stripeMeterEventCreatedAt: new Date(event.created * 1000),
+        stripeMeterEventState: BillingStripeMeterEventState.ACCEPTED,
       },
     });
+    if (accepted.count !== 1) {
+      throw new AppError('INTERNAL', 409, 'STRIPE_METER_EVENT_ACCEPTANCE_UNCERTAIN');
+    }
   }
 }
 
@@ -268,6 +346,7 @@ export async function exportStripeUsage(
     stripe?: StripeUsageClient;
     stripeLivemode?: boolean;
     fetchUsage?: typeof fetchLedgerMeteringUsage;
+    settleCredits?: typeof settleSubscriptionCreditLiability;
     now?: () => Date;
     invoicePeriod?: { startsAt: Date; endsAt: Date };
   },
@@ -284,6 +363,8 @@ export async function exportStripeUsage(
       },
       orgId: true,
       teamId: true,
+      serviceId: true,
+      tariffId: true,
       service: { select: { identifier: true } },
     },
   });
@@ -319,11 +400,15 @@ export async function exportStripeUsage(
   ) {
     throw new AppError('BAD_REQUEST', 409, 'STRIPE_ACCOUNT_MISMATCH');
   }
+  const creditOffsetMicroMinor = await (
+    deps?.settleCredits ?? settleSubscriptionCreditLiability
+  )({ subscription, account, billingMonth: params.billingMonth }, { prisma });
   const prepared = await prepareExports(
     {
       subscriptionId: subscription.id,
       billingMonth: params.billingMonth,
       usage,
+      creditOffsetMicroMinor,
       invoicePeriod: deps?.invoicePeriod,
     },
     prisma,

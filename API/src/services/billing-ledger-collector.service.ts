@@ -18,6 +18,12 @@ import type {
 import { fetchLedgerJsonResponse } from './billing-ledger-http.service.js';
 
 const ProductSchema = z.enum(['nessie', 'deepwater', 'deepsignal', 'deeptest', 'docgen']);
+const BillingCompletenessSchema = z.object({
+  state: z.enum(['complete', 'unresolved']),
+  unresolvedPaidAttempts: z.string().regex(/^(0|[1-9][0-9]*)$/),
+}).strict().refine((value) =>
+  (value.state === 'complete') === (value.unresolvedPaidAttempts === '0'),
+);
 const IntegerSchema = z.string().regex(/^(0|[1-9][0-9]*)$/);
 const DecimalSchema = z.string().regex(/^-?(0|[1-9][0-9]*)(\.[0-9]+)?$/);
 const MonthSchema = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/);
@@ -55,11 +61,13 @@ const CostFieldsSchema = {
 const CostRowSchema = ProductDimensionsSchema.extend({
   serviceId: z.string().trim().min(1).max(512),
   calls: IntegerSchema,
+  billingDisposition: z.enum(['paid', 'nonbillable']),
   ...CostFieldsSchema,
 }).strict();
 
 const BreakdownRowSchema = UsageRowSchema.extend({
   dimension: z.string().trim().min(1).max(512).nullable(),
+  billingDisposition: z.enum(['paid', 'nonbillable']),
   ...CostFieldsSchema,
 }).strict();
 
@@ -99,6 +107,7 @@ export const LedgerMeteringUsageSchema = z
     scope: MeteringScopeSchema,
     totals: MeteringTotalsSchema,
     groupBy: z.enum(['service', 'user']),
+    billingCompleteness: BillingCompletenessSchema,
     breakdown: z.array(BreakdownRowSchema),
     snapshot: z
       .object({
@@ -130,6 +139,7 @@ export const LedgerMeteringPortfolioSchema = z
     scope: MeteringPortfolioScopeSchema,
     totals: MeteringTotalsSchema,
     groupBy: z.enum(['service', 'user']),
+    billingCompleteness: BillingCompletenessSchema,
     breakdown: z.array(BreakdownRowSchema),
     snapshot: z
       .object({
@@ -291,6 +301,7 @@ function normalizeLine(
     callerProduct: line.callerProduct,
     originProduct: line.originProduct,
     userId: groupBy === 'user' ? line.dimension : null,
+    billingDisposition: line.billingDisposition,
   };
 }
 
@@ -302,6 +313,7 @@ function normalizeUsage(usage: LedgerMeteringUsage, sha256: string): NormalizedM
     scope: usage.scope,
     calls: usage.totals.calls,
     lines: usage.breakdown.map((line) => normalizeLine(line, usage.groupBy)),
+    billingCompleteness: usage.billingCompleteness,
     snapshot: {
       cursor: usage.snapshot.cursor,
       id: usage.snapshot.id,
@@ -324,6 +336,7 @@ function normalizePortfolio(
     scope: usage.scope,
     calls: usage.totals.calls,
     lines: usage.breakdown.map((line) => normalizeLine(line, usage.groupBy)),
+    billingCompleteness: usage.billingCompleteness,
     snapshot: {
       cursor: usage.snapshot.cursor,
       id: usage.snapshot.id,

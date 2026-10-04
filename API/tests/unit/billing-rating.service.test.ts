@@ -11,6 +11,7 @@ import {
 function metering(): NormalizedMeteringUsage {
   return {
     schemaVersion: 1,
+    billingCompleteness: { state: 'complete', unresolvedPaidAttempts: '0' },
     product: 'deepwater',
     groupBy: 'service',
     scope: {
@@ -35,6 +36,7 @@ function metering(): NormalizedMeteringUsage {
         selectedProviderCost: '1.111111',
         currency: 'USD',
         costProvenance: 'provider_invoice',
+        billingDisposition: 'paid',
         billingProduct: 'deepwater',
         callerProduct: 'nessie',
         originProduct: 'nessie',
@@ -52,6 +54,7 @@ function metering(): NormalizedMeteringUsage {
         selectedProviderCost: '0.222222',
         currency: 'USD',
         costProvenance: 'provider_pricebook',
+        billingDisposition: 'paid',
         billingProduct: 'deepwater',
         callerProduct: null,
         originProduct: 'deepwater',
@@ -163,5 +166,23 @@ describe('shared billing rating core', () => {
       total: '5',
       currency: 'GBP',
     });
+  });
+
+  it('holds paid rows without cost and unresolved dispatches, but skips explicit nonbillable rows', () => {
+    const usage = metering();
+    usage.billingCompleteness = { state: 'unresolved', unresolvedPaidAttempts: '1' };
+    expect(() => rateMeteringTotal({
+      usage, product: 'deepwater', currency: 'USD', terms: { mode: 'standard', markupBps: 3000 },
+    })).toThrow('LEDGER_METERING_UNRESOLVED_PAID_USAGE');
+    usage.billingCompleteness = { state: 'complete', unresolvedPaidAttempts: '0' };
+    usage.lines[0]!.selectedProviderCost = null;
+    usage.lines[0]!.currency = null;
+    expect(() => rateMeteringTotal({
+      usage, product: 'deepwater', currency: 'USD', terms: { mode: 'standard', markupBps: 3000 },
+    })).toThrow('LEDGER_METERING_COST_MISSING');
+    usage.lines[0]!.billingDisposition = 'nonbillable';
+    expect(rateMeteringTotal({
+      usage, product: 'deepwater', currency: 'USD', terms: { mode: 'standard', markupBps: 3000 },
+    }).total).toBe('0.2888886');
   });
 });

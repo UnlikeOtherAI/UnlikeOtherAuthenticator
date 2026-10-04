@@ -18,6 +18,7 @@ const context = {
 function portfolio(teamId: string, cost: string, userId: string): NormalizedMeteringPortfolio {
   return {
     schemaVersion: 1,
+    billingCompleteness: { state: 'complete', unresolvedPaidAttempts: '0' },
     contract: 'metering-portfolio-v1',
     perspectiveProduct: 'deepwater',
     groupBy: 'user',
@@ -42,6 +43,7 @@ function portfolio(teamId: string, cost: string, userId: string): NormalizedMete
         selectedProviderCost: cost,
         currency: 'USD',
         costProvenance: 'provider_invoice',
+        billingDisposition: 'paid',
         billingProduct: 'deepwater',
         callerProduct: 'deepwater',
         originProduct: 'deepwater',

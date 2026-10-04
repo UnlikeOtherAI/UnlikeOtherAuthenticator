@@ -28,6 +28,7 @@ export function currentBillingCreditPeriod(now: Date): BillingCreditPeriod {
 export async function loadBillingCreditProjectionData(
   params: {
     creditAccountId: string;
+    teamId: string;
     accountId: string;
     storefrontServiceId: string;
     period: BillingCreditPeriod;
@@ -77,6 +78,7 @@ export async function loadBillingCreditProjectionData(
     prisma.billingCreditUsageSettlement.findMany({
       where: {
         creditAccountId: params.creditAccountId,
+        teamId: params.teamId,
         billingMonth: params.period.key,
       },
       orderBy: { service: { identifier: 'asc' } },

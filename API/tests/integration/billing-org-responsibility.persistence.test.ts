@@ -53,9 +53,10 @@ const request = {
 
 const actor = { jti: 'actor_org_billing', tv: 0, exp: Math.floor(Date.now() / 1000) + 45 };
 
-function lifecycleDeps(prisma: PrismaClient) {
+function lifecycleDeps(prisma: PrismaClient, now?: Date) {
   return {
     prisma,
+    ...(now ? { now: () => now } : {}),
     // The actor assertion, its TTL, the `tv` epoch and membership are the
     // entitlement path's job and are unit-tested there; this suite is about
     // what the database does.
@@ -145,6 +146,7 @@ async function seed(prisma: PrismaClient): Promise<void> {
 function portfolio(teamId: string, cursor: string): NormalizedMeteringPortfolio {
   return {
     schemaVersion: 1,
+    billingCompleteness: { state: 'complete', unresolvedPaidAttempts: '0' },
     contract: 'metering-portfolio-v1',
     perspectiveProduct: 'deepwater',
     groupBy: 'user',
@@ -169,6 +171,7 @@ function portfolio(teamId: string, cursor: string): NormalizedMeteringPortfolio 
         selectedProviderCost: '1000',
         currency: 'USD',
         costProvenance: 'actual',
+        billingDisposition: 'paid',
         billingProduct: 'deepwater',
         callerProduct: 'deepwater',
         originProduct: 'deepwater',
@@ -286,7 +289,7 @@ describe.skipIf(!databaseTestsEnabled)('organisation billing responsibility pers
   it('moves every team onto the organisation account once billing is assumed', async () => {
     const assumed = await assumeOrgBillingResponsibility(
       { request, actorToken: 'signed-actor', credential },
-      lifecycleDeps(prisma),
+      lifecycleDeps(prisma, new Date('2026-06-01T00:00:00.000Z')),
     );
     expect(assumed).toMatchObject({ organisation_id: ids.org, active: true });
 

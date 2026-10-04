@@ -43,6 +43,7 @@ function line(product: string, userId: string | null, cost: string) {
     selectedProviderCost: cost,
     currency: 'USD',
     costProvenance: 'actual',
+    billingDisposition: 'paid',
     billingProduct: product,
     callerProduct: product,
     originProduct: product,
@@ -53,6 +54,7 @@ function line(product: string, userId: string | null, cost: string) {
 function portfolio(lines: NormalizedMeteringPortfolio['lines']): NormalizedMeteringPortfolio {
   return {
     schemaVersion: 1,
+    billingCompleteness: { state: 'complete', unresolvedPaidAttempts: '0' },
     contract: 'metering-portfolio-v1',
     perspectiveProduct: 'deepwater',
     groupBy: 'user',
@@ -76,6 +78,35 @@ function portfolio(lines: NormalizedMeteringPortfolio['lines']): NormalizedMeter
 }
 
 describe('canonical all-service credit rating', () => {
+  it('caps a later top-up at the new usage not already reserved by Stripe', () => {
+    const [result] = rateCreditPortfolio({
+      portfolio: portfolio([line('deepwater', 'user_1', '1')]),
+      services: [deepwater],
+      previousAllocations: [],
+      balanceMicrocredits: 1_300_000_000n,
+      validTeamUserIds: new Set(['user_1']),
+      maxAdditionalCreditsByService: new Map([[deepwater.id, 0n]]),
+    });
+    expect(result).toMatchObject({
+      ratedMicroMinor: 100_000_000n,
+      consumedMicrocredits: 0n,
+      remainingMicroMinor: 100_000_000n,
+    });
+    const [later] = rateCreditPortfolio({
+      portfolio: portfolio([line('deepwater', 'user_1', '2')]),
+      services: [deepwater],
+      previousAllocations: [],
+      balanceMicrocredits: 2_000_000_000n,
+      validTeamUserIds: new Set(['user_1']),
+      maxAdditionalCreditsByService: new Map([[deepwater.id, 1_000n]]),
+    });
+    expect(later).toMatchObject({
+      ratedMicroMinor: 200_000_000n,
+      consumedMicrocredits: 1_000_000_000n,
+      remainingMicroMinor: 100_000_000n,
+    });
+  });
+
   it('records the full rated liability while scarce credits stop exactly at zero', () => {
     const result = rateCreditPortfolio({
       portfolio: portfolio([line('deepwater', 'user_1', '1'), line('nessie', null, '1')]),
@@ -236,6 +267,18 @@ describe('canonical all-service credit rating', () => {
         validTeamUserIds: new Set(['user_1']),
       }),
     ).toThrow('LEDGER_CREDIT_USER_INVALID');
+  });
+
+  it('holds an unresolved paid attempt before debiting any credit', () => {
+    const evidence = portfolio([line('deepwater', 'user_1', '1')]);
+    evidence.billingCompleteness = { state: 'unresolved', unresolvedPaidAttempts: '1' };
+    expect(() => rateCreditPortfolio({
+      portfolio: evidence,
+      services: [deepwater],
+      previousAllocations: [],
+      balanceMicrocredits: 1_000_000_000n,
+      validTeamUserIds: new Set(['user_1']),
+    })).toThrow('LEDGER_METERING_UNRESOLVED_PAID_USAGE');
   });
 });
 

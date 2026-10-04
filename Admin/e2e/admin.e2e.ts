@@ -293,6 +293,25 @@ test('billing product and contract selection, invoice guards and retry preserve 
   expect(fixture.unexpected).toEqual([]);
 });
 
+test('new billing terms show the prospective 30 percent default', async ({ page }) => {
+  const fixture = await installFixtures(page);
+  await page.goto('/billing?section=products');
+  await page.getByRole('button', { name: 'Add service' }).click();
+  const serviceDialog = page.getByRole('dialog', { name: 'Add billing service' });
+  await expect(serviceDialog).toBeVisible();
+  await expect(serviceDialog.getByLabel('Markup (basis points)')).toHaveValue('3000');
+  await serviceDialog.screenshot({ path: 'e2e/artifacts/billing-service-default.png' });
+  await page.keyboard.press('Escape');
+  await page.getByRole('link', { name: 'Fixture product', exact: true }).click();
+  await page.getByRole('button', { name: 'Tariff version' }).click();
+  const tariffDialog = page.getByRole('dialog', { name: /Add tariff version/ });
+  await expect(tariffDialog).toBeVisible();
+  await expect(tariffDialog.getByLabel('Markup (basis points)')).toHaveValue('3000');
+  await tariffDialog.screenshot({ path: 'e2e/artifacts/billing-tariff-default.png' });
+  expect(fixture.errors).toEqual([]);
+  expect(fixture.unexpected).toEqual([]);
+});
+
 
 test('user add-to-team retains organisation team and role on failed save, then refreshes membership', async ({ page }) => {
   const fixture = await installFixtures(page);

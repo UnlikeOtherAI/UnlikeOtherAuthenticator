@@ -4,6 +4,8 @@ import * as ajvFormats from 'ajv-formats';
 
 import {
   BILLING_CREDITS_READ_PATH,
+  BILLING_CREDITS_PROTOCOL_HEADER,
+  BILLING_CREDITS_PROTOCOL_VERSION,
   billingCreditsV1JsonSchema,
 } from '../../contracts/billing-statement-v1.js';
 import { requireBillingLifecycleAppKey } from '../../middleware/billing-app-auth.js';
@@ -36,6 +38,7 @@ export function registerBillingCreditsRoute(app: FastifyInstance): void {
         credential,
         actorToken: readBillingActorHeader(request.headers['x-uoa-actor']),
         endpoint: BILLING_CREDITS_READ_PATH,
+        supportsBillingStatus: request.headers[BILLING_CREDITS_PROTOCOL_HEADER] === BILLING_CREDITS_PROTOCOL_VERSION,
         request: {
           product: body.product,
           organisationId: body.organisation_id,

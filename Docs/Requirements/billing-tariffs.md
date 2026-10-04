@@ -28,6 +28,50 @@ A tariff is an immutable version row. Its identity is the tuple
 `(service, key, version)`; changing commercial terms creates the next version
 instead of modifying historical terms. Assignments point to one exact version.
 The `is_default` pointer may move between versions without changing their terms.
+New service and tariff dialogs prefill a 3,000 basis-point (30%) standard
+markup. The prefill is prospective; stored versions and negotiated custom or
+at-cost terms are never rewritten by that UI default. Stripe collection stays
+an explicit choice.
+
+## Paid usage completeness and settlement
+
+Ledger supplies immutable provider cost and attribution, including an explicit
+`billingCompleteness` signal for unresolved paid attempts and a
+`billingDisposition` for paid versus intentionally nonbillable rows. UOA holds
+all paid settlement and export while any paid attempt remains unresolved, and
+holds a paid row with missing selected cost or currency. Nonbillable telemetry
+is excluded only when Ledger marks it explicitly. UOA alone applies the
+tariff's basis points to exact selected provider cost; a 3,000 bps markup on
+US$1.00 is US$1.30 before the existing whole-credit and Stripe meter rounding.
+
+Credit portfolio snapshots and settlements identify the source team even when
+an organisation credit account pays multiple teams. Older ambiguous
+organisation settlement rows retain their recorded debit and receive no
+invented team lineage. The payer/month is held for explicit reconciliation.
+The append-only payer transition history records future assume/release actions;
+a monthly aggregate that crosses a payer transition, or predates reconstructable
+legacy history, is also held. A durable scheduler revisits source-team/month
+portfolios independently of customer page reads, including older periods, and
+records its next check, last cursor, and hold reason. Current and previous
+months have priority, while older months retain a separate fair work budget.
+
+For a Stripe subscription, UOA first allocates available prepaid credits to
+the rated liability, then reserves only the remaining amount as meter usage.
+The reservation and credit allocation share the payer account lock. Once a
+meter row is reserved or accepted, later top-ups can fund only new usage not
+already reserved for Stripe; refunds do not silently rewrite accepted usage.
+Stripe delivery records a durable attempt before the external call. An
+unconfirmed attempt is retried only inside the identifier safety window;
+after that it is held for reconciliation. UOA never assumes a timed-out event
+was rejected or sends an unverified negative meter correction.
+
+`BillingCreditsV1` 1.4.0 callers opt in with
+`x-uoa-billing-credits-protocol: 1.4.0`. On a Ledger or legacy reconciliation
+hold, UOA returns confirmed balance and entry history with
+`billing_status.settlement_state = pending_reconciliation`; its message says
+recent usage is not yet included in the confirmed total. Older strict-schema
+callers keep the previous response shape when current and receive a named
+503 hold instead of a misleading total when reconciliation is pending.
 
 Each tariff contains:
 
@@ -490,8 +534,9 @@ their derived billable units. Raw facts remain in Ledger; customer billable
 usage and display-ready totals belong to UOA and flow unchanged to product UIs.
 
 Snapshot cursors and cumulative/delta exports are stored so retries can be
-replayed and audited. A lower corrected cumulative total emits a negative
-delta; it does not rewrite prior raw usage.
+replayed and audited. If a corrected liability is lower than the amount already
+accepted by Stripe, UOA holds the export for reconciliation; it does not send
+an unverified negative meter event or rewrite prior raw usage.
 
 ### Recurring export, safety pass, and invoice reconciliation
 
@@ -561,7 +606,7 @@ remains blocked until all of the following are demonstrated:
    `invoice.finalization_failed` handling,
    the free initial alignment period, calendar-month renewal, cancellation,
    webhook retries,
-   negative corrections, and immutable-cursor replay are exercised in Stripe
+   correction reconciliation, and immutable-cursor replay are exercised in Stripe
    test mode;
 6. invoices visibly reconcile UOA tariff terms and Ledger customer charges.
 
@@ -966,10 +1011,11 @@ terms remain cancellable.
 `BillingCreditsV1` and the recurring-add-on protocol are public, MIT-licensed
 interfaces from `@unlikeotherai/billing-statement-protocol`. Their generated
 JSON Schema, fixtures, and OpenAPI 3.1 components are the consumer contract.
-The credits contract is still unreleased: this privacy-hardening shape replaces
-the earlier unpublished draft as one coordinated V1 update across UOA and its
-four initial consumers, rather than claiming a compatible semantic-version
-minor change. Its protocol version therefore remains `1.0.0` until launch.
+The credits contract is released at protocol version `1.4.0`. Clients that send
+`x-uoa-billing-credits-protocol: 1.4.0` can receive an optional
+`billing_status` for held reconciliation; older strict clients receive a named
+503 response while a billing hold is active, with no unnegotiated response
+property.
 UOA serves those artifacts under `/schemas/billing-credits-v1.*` and
 `/schemas/billing-recurring-addons-v1.*`. A product reads the current shared
 balance through `POST /billing/v1/credits` and its scoped add-on catalog through

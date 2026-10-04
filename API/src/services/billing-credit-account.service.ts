@@ -212,6 +212,7 @@ export async function resolveCreditAccount(
 export async function resolveCanonicalPortfolioProduct(
   params: {
     creditAccountId: string;
+    teamId: string;
     billingMonth: string;
     fallbackProduct: string;
   },
@@ -222,6 +223,7 @@ export async function resolveCanonicalPortfolioProduct(
     prisma.billingCreditPortfolioSnapshot.findFirst({
       where: {
         creditAccountId: params.creditAccountId,
+        teamId: params.teamId,
         billingMonth: params.billingMonth,
       },
       orderBy: [{ capturedAt: 'desc' }, { ledgerSnapshotCursor: 'desc' }],

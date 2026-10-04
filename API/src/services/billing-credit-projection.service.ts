@@ -116,6 +116,7 @@ export function buildBillingCreditsProjection(params: {
   now: Date;
   actionReadiness?: BillingCreditActionReadiness;
   controlledBy?: BillingControlledByV1 | null;
+  settlementPending?: boolean;
 }): BillingCreditsV1 {
   const { data, viewer } = params;
   const controlledBy = params.controlledBy ?? null;
@@ -197,6 +198,12 @@ export function buildBillingCreditsProjection(params: {
         'Pending credits await verified payment and are not included in remaining credits.',
     },
     ...(controlledBy ? { controlled_by: controlledBy } : {}),
+    ...(params.settlementPending ? {
+      billing_status: {
+        settlement_state: 'pending_reconciliation' as const,
+        message: 'Your confirmed credit balance is available. Recent usage is still being reconciled and is not included in the confirmed usage total yet.',
+      },
+    } : {}),
   };
   const summary = {
     credits_added: billingCreditAmount(creditsAdded),
