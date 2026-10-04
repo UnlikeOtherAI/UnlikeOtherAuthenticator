@@ -25,6 +25,9 @@ import {
   billingCreditsV1ConformanceFixture,
   billingCreditsV1JsonSchema,
   billingCreditsV1OpenApiDocument,
+  BILLING_CREDIT_PURCHASE_STATES,
+  BILLING_CREDIT_PURCHASE_STATUS_PATH,
+  billingCreditPurchaseStatusV1JsonSchema,
   billingStatementV1ConformanceFixture,
   billingStatementV1JsonSchema,
   billingStatementV1OpenApiDocument,
@@ -480,6 +483,46 @@ describe('public BillingCreditsV1 consumer protocol', () => {
     expect(fixtureArtifact).toEqual(billingCreditsV1ConformanceFixture);
     expect(openApiArtifact).toEqual(billingCreditsV1OpenApiDocument);
     expect(billingCreditsV1OpenApiDocument.info.version).toBe(BILLING_CREDITS_PROTOCOL_VERSION);
+  });
+});
+
+describe('localized credit purchase status protocol', () => {
+  it('validates every state with required localized copy and rejects extra fields', () => {
+    const ajv = new Ajv2020({ allErrors: true, strict: true });
+    const validate = ajv.compile(billingCreditPurchaseStatusV1JsonSchema);
+    for (const state of BILLING_CREDIT_PURCHASE_STATES) {
+      expect(validate({
+        schema_version: 1,
+        purchase_id: 'purchase_1',
+        state,
+        title: 'Payment status',
+        message: 'Payment message',
+        awaiting_confirmation: state === 'processing',
+      }), JSON.stringify(validate.errors)).toBe(true);
+    }
+    expect(BILLING_CREDIT_PURCHASE_STATUS_PATH).toBe('/billing/v1/credits/purchase-status');
+    expect(validate({
+      schema_version: 1,
+      purchase_id: 'purchase_1',
+      state: 'succeeded',
+      title: 'Payment confirmed',
+      message: 'Credits are ready',
+      awaiting_confirmation: false,
+      balance: '5000',
+    })).toBe(false);
+    expect(validate({
+      schema_version: 1,
+      purchase_id: 'purchase_1',
+      state: 'unknown',
+      title: 'Payment status',
+      message: 'Payment message',
+      awaiting_confirmation: false,
+    })).toBe(false);
+  });
+
+  it('keeps the published JSON Schema artifact equal to its runtime schema', async () => {
+    const schemaArtifact = await readJson('../schema/billing-credit-purchase-status-v1.json');
+    expect(schemaArtifact).toEqual(billingCreditPurchaseStatusV1JsonSchema);
   });
 });
 

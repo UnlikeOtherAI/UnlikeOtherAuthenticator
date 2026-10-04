@@ -161,6 +161,39 @@ describe('billing credit funding action routes', () => {
     });
   });
 
+  it('returns the resumed purchase id only when presentation support is negotiated', async () => {
+    topUpService.createBillingCreditTopUpCheckout.mockResolvedValue({
+      redirect_url: 'https://checkout.stripe.com/c/pay/resumed',
+      purchase_id: 'purchase_resumed',
+    });
+    await withApp(async (app) => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/billing/v1/credits/top-up-checkout',
+        headers: {
+          ...headers,
+          'x-uoa-billing-presentation': '1.5.0',
+          'x-uoa-billing-locale': 'cs',
+        },
+        payload: { ...subject, offer_id: 'offer_20k' },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({
+        redirect_url: 'https://checkout.stripe.com/c/pay/resumed',
+        purchase_id: 'purchase_resumed',
+      });
+      expect(topUpService.createBillingCreditTopUpCheckout).toHaveBeenCalledWith({
+        credential,
+        actorToken: 'signed-actor',
+        endpoint: '/billing/v1/credits/top-up-checkout',
+        includePurchaseId: true,
+        locale: 'cs',
+        request: { ...requestSubject, offerId: 'offer_20k' },
+      });
+    });
+  });
+
   it('runs setup, update, disable, and recovery with frozen option/subject bodies', async () => {
     await withApp(async (app) => {
       const setup = await app.inject({
