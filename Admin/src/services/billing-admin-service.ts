@@ -22,7 +22,7 @@ function tariffBody(input: BillingTariffFormValues | BillingServiceFormValues) {
     name: input.name,
     mode: input.mode,
     collection_mode: input.collectionMode,
-    markup_bps: input.markupBps,
+    markup_percent: input.markupPercent,
     monthly_subscription: {
       amount_minor: input.monthlyAmountMinor,
       currency: input.currency,

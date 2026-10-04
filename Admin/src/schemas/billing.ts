@@ -2,6 +2,9 @@ import { z } from 'zod';
 
 export const BillingModeSchema = z.enum(['standard', 'free', 'at_cost', 'custom']);
 export const BillingCollectionModeSchema = z.enum(['stripe', 'manual', 'none']);
+export const MarkupPercentFormSchema = z.string()
+  .regex(/^(0|[1-9]\d*)(?:\.\d{1,2})?$/, 'Enter a percentage with at most two decimals.')
+  .refine((value) => Number(value) <= 1000, 'Markup cannot exceed 1000%.');
 
 export const BillingTariffSchema = z.object({
   id: z.string(),
@@ -129,7 +132,7 @@ const tariffFields = {
   name: z.string().trim().min(1).max(120),
   mode: BillingModeSchema,
   collectionMode: BillingCollectionModeSchema,
-  markupBps: z.coerce.number().int().min(0).max(100_000),
+  markupPercent: MarkupPercentFormSchema,
   monthlyAmountMinor: z
     .string()
     .regex(/^(0|[1-9]\d*)$/, 'Enter an integer in minor currency units.'),
@@ -146,10 +149,10 @@ export const BillingTariffFormSchema = z
     setAsDefault: z.boolean(),
   })
   .superRefine((value, ctx) => {
-    if ((value.mode === 'free' || value.mode === 'at_cost') && value.markupBps !== 0) {
+    if ((value.mode === 'free' || value.mode === 'at_cost') && Number(value.markupPercent) !== 0) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ['markupBps'],
+        path: ['markupPercent'],
         message: 'Free and at-cost tariffs must use 0% markup.',
       });
     }
@@ -175,10 +178,10 @@ export const BillingServiceFormSchema = z
     ...tariffFields,
   })
   .superRefine((value, ctx) => {
-    if ((value.mode === 'free' || value.mode === 'at_cost') && value.markupBps !== 0) {
+    if ((value.mode === 'free' || value.mode === 'at_cost') && Number(value.markupPercent) !== 0) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ['markupBps'],
+        path: ['markupPercent'],
         message: 'Free and at-cost tariffs must use 0% markup.',
       });
     }

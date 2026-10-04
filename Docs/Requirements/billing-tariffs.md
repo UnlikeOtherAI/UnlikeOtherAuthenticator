@@ -76,8 +76,12 @@ settled rows require an explicit adjustment rather than a silent rerating.
 No operator endpoint exists yet, so an interval lacking this evidence stays
 held. A current pointer or the first statement read is not evidence of an
 earlier price.
-For a `standard` tariff, omitting `markup_bps` in the administrator API uses
-3,000 basis points centrally. `custom` requires an explicit value; `free` and
+The administrator write API accepts `markup_percent` as a decimal string with
+at most two decimal places (for example `"30.00"`); it converts exactly to
+internal basis points. The previous `markup_bps` write field is rejected, including
+requests that send both fields, so an operator cannot accidentally enter 30
+as basis points. For a `standard` tariff, omitting `markup_percent` uses
+30.00% centrally. `custom` requires an explicit value; `free` and
 `at_cost` default to zero. Provider cost is reported separately from the
 customer rated charge, so free rated base, markup, and total are all zero.
 
@@ -176,7 +180,8 @@ Each tariff contains:
 | ----------------------------------- | --------------------------------------------------------------------------- |
 | `mode`                              | `standard`, `free`, `at_cost`, or `custom`                                  |
 | `collection_mode`                   | `stripe`, `manual`, or `none`; independent of usage rating                  |
-| `markup_bps`                        | Price markup in basis points; 2,000 means 20.00%                            |
+| `markup_percent` (operator write)  | Exact decimal percentage string; `"20.00"` means 20%                       |
+| `markup_bps` (stored/read)          | Internal basis points; 2,000 means 20.00%                                   |
 | `monthly_subscription.amount_minor` | Monthly fixed charge in currency minor units; `"0"` means no monthly charge |
 | `monthly_subscription.currency`     | Three-letter uppercase ISO-style currency code                              |
 | `monthly_subscription.charge_basis` | `flat` for one scoped monthly charge or `per_seat` for each eligible human seat |

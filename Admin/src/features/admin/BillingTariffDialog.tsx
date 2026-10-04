@@ -17,7 +17,7 @@ const defaults: BillingTariffFormValues = {
   name: 'Standard',
   mode: 'standard',
   collectionMode: 'none',
-  markupBps: 3000,
+  markupPercent: '30.00',
   monthlyAmountMinor: '0',
   currency: 'USD',
   setAsDefault: false,
@@ -104,11 +104,11 @@ export function BillingTariffDialog({
             </SelectField>
           </FieldShell>
           <FieldShell
-            label="Markup (basis points)"
-            hint="100 basis points = 1%."
-            error={form.formState.errors.markupBps?.message}
+            label="Markup (%)"
+            hint="30.00% is the standard rate."
+            error={form.formState.errors.markupPercent?.message}
           >
-            <TextField {...form.register('markupBps')} type="number" min="0" step="1" />
+            <TextField {...form.register('markupPercent')} inputMode="decimal" />
           </FieldShell>
           <FieldShell
             label="Monthly subscription"

@@ -320,7 +320,7 @@ test('new billing terms show the prospective 30 percent default', async ({ page 
   await page.getByRole('button', { name: 'Add service' }).click();
   const serviceDialog = page.getByRole('dialog', { name: 'Add billing service' });
   await expect(serviceDialog).toBeVisible();
-  await expect(serviceDialog.getByLabel('Markup (basis points)')).toHaveValue('3000');
+  await expect(serviceDialog.getByLabel('Markup (%)')).toHaveValue('30.00');
   await serviceDialog.screenshot({ path: 'e2e/artifacts/billing-service-default.png' });
   await page.keyboard.press('Escape');
   await page.getByRole('link', { name: 'Fixture product', exact: true }).click();
@@ -330,7 +330,7 @@ test('new billing terms show the prospective 30 percent default', async ({ page 
   await page.getByRole('button', { name: 'Tariff version' }).click();
   const tariffDialog = page.getByRole('dialog', { name: /Add tariff version/ });
   await expect(tariffDialog).toBeVisible();
-  await expect(tariffDialog.getByLabel('Markup (basis points)')).toHaveValue('3000');
+  await expect(tariffDialog.getByLabel('Markup (%)')).toHaveValue('30.00');
   await tariffDialog.screenshot({ path: 'e2e/artifacts/billing-tariff-default.png' });
   expect(fixture.errors).toEqual([]);
   expect(fixture.unexpected).toEqual([]);

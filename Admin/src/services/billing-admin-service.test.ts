@@ -41,7 +41,7 @@ describe('billingAdminService', () => {
       name: 'Standard',
       mode: 'standard',
       collectionMode: 'stripe',
-      markupBps: 2000,
+      markupPercent: '20.00',
       monthlyAmountMinor: '2000',
       currency: 'GBP',
       setAsDefault: true,
@@ -52,7 +52,7 @@ describe('billingAdminService', () => {
       name: 'Standard',
       mode: 'standard',
       collection_mode: 'stripe',
-      markup_bps: 2000,
+      markup_percent: '20.00',
       monthly_subscription: { amount_minor: '2000', currency: 'GBP' },
       set_as_default: true,
     });

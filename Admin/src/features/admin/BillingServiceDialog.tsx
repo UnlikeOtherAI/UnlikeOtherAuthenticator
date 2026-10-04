@@ -15,7 +15,7 @@ const defaults: BillingServiceFormValues = {
   name: 'Standard',
   mode: 'standard',
   collectionMode: 'none',
-  markupBps: 3000,
+  markupPercent: '30.00',
   monthlyAmountMinor: '0',
   currency: 'USD',
 };
@@ -111,11 +111,11 @@ export function BillingServiceDialog({ onClose, open }: { onClose: () => void; o
               </SelectField>
             </FieldShell>
             <FieldShell
-              label="Markup (basis points)"
-              hint="3,000 = 30%; each tariff stores its own negotiated rate."
-              error={form.formState.errors.markupBps?.message}
+              label="Markup (%)"
+              hint="30.00% is the standard rate; each tariff stores its own negotiated rate."
+              error={form.formState.errors.markupPercent?.message}
             >
-              <TextField {...form.register('markupBps')} type="number" min="0" step="1" />
+              <TextField {...form.register('markupPercent')} inputMode="decimal" />
             </FieldShell>
             <FieldShell
               label="Monthly amount (minor units)"
