@@ -176,7 +176,7 @@ describe('billing cancellation preview', () => {
       indirect_services: [
         {
           product: 'deepsignal',
-          impact: 'No separate subscription will be cancelled.',
+          impact: 'Indirectly used products do not have a separate subscription to cancel.',
         },
       ],
       confirm_action: {
@@ -243,7 +243,7 @@ describe('billing cancellation preview', () => {
         product: 'nessie',
         name: 'Nessie',
         display_name: 'Nessie',
-        impact: 'No separate subscription will be cancelled.',
+        impact: 'Indirectly used products do not have a separate subscription to cancel.',
       },
     ]);
     expect(create).toHaveBeenCalledWith({

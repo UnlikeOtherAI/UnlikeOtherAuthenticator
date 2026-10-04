@@ -11,6 +11,8 @@ import {
 } from '../contracts/billing-statement-v1.js';
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
+import type { BillingCustomerLocale } from './billing-copy-locale.js';
+import { billingAddonCopy } from './billing-addon-copy.catalog.js';
 import type { BillingActorEndpoint } from './billing-actor-audience.service.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
 import {
@@ -193,12 +195,14 @@ async function claimCancellation(
 function resultFor(
   subscription: RecurringAddonSubscriptionWithBinding,
   alreadyScheduled: boolean,
+  locale?: BillingCustomerLocale,
 ): BillingRecurringAddonCancellationConfirmationV1 {
+  const copy = billingAddonCopy(locale);
   return {
     schema_version: BILLING_RECURRING_ADDONS_SCHEMA_VERSION,
     status: alreadyScheduled ? 'already_scheduled' : 'scheduled',
-    title: alreadyScheduled ? 'Cancellation already scheduled' : 'Cancellation scheduled',
-    description: 'The paid add-on remains available until its current period ends.',
+    title: alreadyScheduled ? copy.confirmationAlreadyScheduled : copy.confirmationScheduled,
+    description: copy.confirmationDescription,
     cancellation_effective_at: subscription.currentPeriodEnd?.toISOString() ?? null,
   };
 }
@@ -209,6 +213,7 @@ export async function confirmRecurringAddonCancellation(
     actorToken: string;
     credential: VerifiedBillingAppKey;
     endpoint: BillingActorEndpoint;
+    locale?: BillingCustomerLocale;
   },
   deps?: {
     prisma?: PrismaClient;
@@ -358,7 +363,7 @@ export async function confirmRecurringAddonCancellation(
   ) {
     throw new AppError('INTERNAL', 503, 'STRIPE_RECURRING_ADDON_CANCELLATION_DRIFT');
   }
-  const result = resultFor(refreshed.local, alreadyScheduled);
+  const result = resultFor(refreshed.local, alreadyScheduled, params.locale);
   return prisma.$transaction(async (tx) => {
     const updated = await tx.billingRecurringAddonCancellationIntent.updateMany({
       where: {

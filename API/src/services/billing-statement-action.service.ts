@@ -3,6 +3,8 @@ import type {
   BillingStatementV1,
 } from '../contracts/billing-statement-v1.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
+import type { BillingCustomerLocale } from './billing-copy-locale.js';
+import { billingSubscriptionCopy } from './billing-subscription-copy.catalog.js';
 import { pinnedBillingReturnUrls } from './billing-return-url-policy.service.js';
 import {
   getStripeSubscriptionSummary,
@@ -24,6 +26,7 @@ export function billingStatementActions(
   summary: SubscriptionSummary,
   request: BillingSubscriptionRequest,
   credential: VerifiedBillingAppKey,
+  locale?: BillingCustomerLocale,
 ): {
   capabilities: BillingStatementV1['capabilities'];
   actions: BillingStatementAction[];
@@ -45,6 +48,7 @@ export function billingStatementActions(
   );
   const returns = pinnedBillingReturnUrls(credential.checkoutReturnOrigins);
   const body = actionBody(request);
+  const copy = billingSubscriptionCopy(locale);
   return {
     capabilities: {
       can_upgrade: canUpgrade,
@@ -55,16 +59,16 @@ export function billingStatementActions(
       {
         id: 'upgrade',
         kind: 'hosted_redirect',
-        label: 'Upgrade plan',
-        description: 'Choose and pay for this product through Stripe Checkout.',
+        label: copy.upgradeAction,
+        description: copy.upgradeDescription,
         enabled: canUpgrade,
         disabled_reason: canUpgrade
           ? null
           : subscription
-            ? 'A subscription is already active.'
+            ? copy.activeSubscription
             : !canManage
-              ? 'Only a billing manager can upgrade.'
-              : 'Online payment is not available for this plan.',
+              ? copy.onlyManagerUpgrade
+              : copy.upgradeUnavailable,
         request: {
           method: 'POST',
           path: '/billing/v1/stripe/checkout-session',
@@ -78,14 +82,14 @@ export function billingStatementActions(
       {
         id: 'portal',
         kind: 'hosted_redirect',
-        label: 'Manage payment',
-        description: 'Open Stripe’s hosted billing portal.',
+        label: copy.managePaymentAction,
+        description: copy.portalDescription,
         enabled: canOpenPortal,
         disabled_reason: canOpenPortal
           ? null
           : !canManage
-            ? 'Only a billing manager can manage payment.'
-            : 'No manageable Stripe subscription is active.',
+            ? copy.onlyManagerPayment
+            : copy.portalUnavailable,
         request: {
           method: 'POST',
           path: '/billing/v1/stripe/portal-session',
@@ -95,16 +99,16 @@ export function billingStatementActions(
       {
         id: 'cancel',
         kind: 'confirmation_dialog',
-        label: 'Cancel subscription',
-        description: 'Preview the exact direct products affected before confirming cancellation.',
+        label: copy.cancelSubscriptionAction,
+        description: copy.cancelDescription,
         enabled: canCancel,
         disabled_reason: canCancel
           ? null
           : subscription?.cancel_at_period_end
-            ? 'Cancellation is already scheduled.'
+            ? copy.cancellationAlreadyScheduled
             : !canManage
-              ? 'Only a billing manager can cancel.'
-              : 'No cancellable Stripe subscription is active.',
+              ? copy.onlyManagerCancel
+              : copy.noCancellableSubscription,
         request: {
           method: 'POST',
           path: '/billing/v1/cancellation/preview',

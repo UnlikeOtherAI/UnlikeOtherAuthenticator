@@ -42,6 +42,9 @@ import {
   getStripeSubscriptionSummary,
   type BillingSubscriptionRequest,
 } from './billing-stripe-subscription.service.js';
+import type { BillingCustomerLocale } from './billing-copy-locale.js';
+import { billingAddonCopy, billingAddonSubscriptionStatus } from './billing-addon-copy.catalog.js';
+import { billingSubscriptionCopy, billingSubscriptionText } from './billing-subscription-copy.catalog.js';
 
 type SubscriptionSummary = Awaited<ReturnType<typeof getStripeSubscriptionSummary>>;
 
@@ -51,6 +54,7 @@ type StatementContext = {
   credential: VerifiedBillingAppKey;
   endpoint: BillingActorEndpoint;
   billingMonth?: string;
+  locale?: BillingCustomerLocale;
 };
 
 type Dependencies = {
@@ -140,12 +144,12 @@ function serviceGraph(
     });
 }
 
-function subscriptionProjection(summary: SubscriptionSummary): BillingStatementV1['subscription'] {
+function subscriptionProjection(summary: SubscriptionSummary, locale?: BillingCustomerLocale): BillingStatementV1['subscription'] {
   const subscription = summary.subscription;
   if (!subscription) return null;
   const displayStatus = subscription.cancel_at_period_end
-    ? 'Cancels at period end'
-    : subscription.status.replaceAll('_', ' ');
+    ? billingAddonCopy(locale).cancelsAtPeriodEnd
+    : billingAddonSubscriptionStatus(subscription.status, locale);
   return {
     id: subscription.id,
     status: subscription.status,
@@ -264,6 +268,7 @@ async function buildCanonicalBillingStatement(
     users: members.map((member) => member.user),
   });
   const currency = summary.tariff.monthly_subscription.currency;
+  const copy = billingSubscriptionCopy(context.locale);
   const monthlyAmount = minorAmountToMajor(
     summary.tariff.monthly_subscription.amount_minor,
     currency,
@@ -273,8 +278,8 @@ async function buildCanonicalBillingStatement(
       id: `monthly_${summary.tariff.id}`,
       kind: 'monthly_subscription',
       product: statementProduct,
-      label: `${tariff.name} monthly subscription`,
-      detail: `Tariff ${summary.tariff.key} v${summary.tariff.version}`,
+      label: `${tariff.name} ${copy.monthlySubscription}`,
+      detail: billingSubscriptionText(copy.tariffDetails, { key: summary.tariff.key, version: summary.tariff.version }),
       amount: exactMoney(monthlyAmount, currency),
     },
     ...rated.commercialLines,
@@ -290,13 +295,13 @@ async function buildCanonicalBillingStatement(
             : ('add_on' as const),
         product: statementProduct,
         label: adjustment.name,
-        detail: adjustment.cadence === 'MONTHLY' ? 'Monthly adjustment' : 'One-time adjustment',
+        detail: adjustment.cadence === 'MONTHLY' ? copy.monthlyAdjustment : copy.oneTimeAdjustment,
         amount: exactMoney(signed, adjustment.currency),
       };
     }),
   ];
   const controlledBy = await (deps?.resolveControlledBy ?? resolveBillingControlledBy)(
-    { organisationId: context.request.organisationId, userId: context.request.userId },
+    { organisationId: context.request.organisationId, userId: context.request.userId, locale: context.locale },
     { prisma },
   );
   // Old-client safety is part of the contract, not an afterthought
@@ -310,7 +315,7 @@ async function buildCanonicalBillingStatement(
           capabilities: { can_upgrade: false, can_open_portal: false, can_cancel: false },
           actions: [],
         }
-      : billingStatementActions(summary, canonicalRequest, context.credential);
+      : billingStatementActions(summary, canonicalRequest, context.credential, context.locale);
   const markupPercent = (summary.tariff.markup_bps / 100).toFixed(2);
 
   const statement: BillingStatementV1 = {
@@ -362,7 +367,7 @@ async function buildCanonicalBillingStatement(
       stripe_collection_enabled: summary.stripe_collection_enabled,
       stripe_mode: summary.stripe_mode,
     },
-    subscription: subscriptionProjection(summary),
+    subscription: subscriptionProjection(summary, context.locale),
     services: serviceGraph(
       version === 'v2'
         ? (userMetering as NormalizedMeteringPortfolio).lines
@@ -416,6 +421,7 @@ async function buildCanonicalBillingStatement(
               periodStartsAt: period.startsAtDate,
               periodEndsAt: period.endsAtDate,
               products,
+              locale: context.locale,
             },
             { prisma, fetchPortfolio: deps?.fetchPortfolio, listDirectAccess: deps?.listDirectAccess },
           ),

@@ -41,4 +41,11 @@ describe('customer billing copy catalogs', () => {
       );
     }
   });
+
+  it('keeps customer billing actions in the selected language', () => {
+    expect(BILLING_SUBSCRIPTION_COPY.cs.upgradeAction).toBe('Změnit tarif');
+    expect(BILLING_SUBSCRIPTION_COPY.cs.managePaymentAction).toBe('Spravovat platby');
+    expect(BILLING_SUBSCRIPTION_COPY.cs.cancelSubscriptionAction).toBe('Zrušit předplatné');
+    expect(BILLING_SUBSCRIPTION_COPY.cs.organisationManagerMessage).not.toContain('Billing');
+  });
 });
