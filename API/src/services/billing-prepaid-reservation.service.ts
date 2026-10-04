@@ -119,6 +119,15 @@ async function assertActiveRuntimeKey(tx: Prisma.TransactionClient, keyId: strin
   if (keys.length !== 1) throw new AppError('UNAUTHORIZED', 401, 'INVALID_LEDGER_RUNTIME_KEY');
 }
 
+async function withBudgetContextDigest<T extends { dispatch_id: string }>(
+  prisma: PrismaClient, decision: T,
+) {
+  const hold = await prisma.billingCreditBudgetDispatch.findUnique({
+    where: { dispatchId: decision.dispatch_id }, select: { contextDigest: true },
+  });
+  return { ...decision, context_digest: hold?.contextDigest ?? null };
+}
+
 export async function reservePrepaidDispatch(
   params: { runtimeSecret: string; delegation: string; input: ReservePrepaidDispatchInput },
   deps?: { prisma?: PrismaClient; now?: Date },
@@ -238,7 +247,7 @@ export async function reservePrepaidDispatch(
     }
     return null;
   }, 'BILLING_CREDIT_ACCOUNT_RETRY_EXHAUSTED');
-  if (decision) return decision;
+  if (decision) return withBudgetContextDigest(prisma, decision);
   if (bound === null) throw new AppError('BAD_REQUEST', 422, 'PREPAID_BOUND_REQUIRED');
   if (input.currency !== 'USD') {
     throw new AppError('BAD_REQUEST', 409, 'PREPAID_CURRENCY_UNSUPPORTED');
@@ -251,7 +260,7 @@ export async function reservePrepaidDispatch(
     organisationId: input.organisationId, teamId: input.teamId,
   }, { prisma });
 
-  return runBillingSerializableTransaction(prisma, async (tx) => {
+  const prepaid = await runBillingSerializableTransaction(prisma, async (tx) => {
     await lockDispatchId(tx, input.dispatchId);
     await assertActiveRuntimeKey(tx, key.id);
     await assertActiveSubject(tx, input, actor.tv);
@@ -328,6 +337,7 @@ export async function reservePrepaidDispatch(
       reserved_microcredits: reserved.toString(), billing_month: billingMonth,
       currency: reservation.currency };
   }, 'BILLING_CREDIT_ACCOUNT_RETRY_EXHAUSTED');
+  return withBudgetContextDigest(prisma, prepaid);
 }
 
 export async function getLedgerDispatchDecision(
@@ -347,13 +357,13 @@ export async function getLedgerDispatchDecision(
       reservation.runtimeKey.sourceDomain !== key.sourceDomain) {
       throw new AppError('NOT_FOUND', 404, 'LEDGER_DISPATCH_DECISION_NOT_FOUND');
     }
-    return { payment_mode: 'prepaid', reservation_id: reservation.id,
+    return withBudgetContextDigest(prisma, { payment_mode: 'prepaid', reservation_id: reservation.id,
       dispatch_id: reservation.dispatchId,
       request_fingerprint: reservation.requestFingerprint, status: reservation.status,
       receipt_id: reservation.receiptId,
       reserved_microcredits: reservation.reservedMicrocredits.toString(),
       debited_microcredits: reservation.debitedMicrocredits?.toString() ?? null,
-      billing_month: reservation.billingMonth, currency: reservation.currency };
+      billing_month: reservation.billingMonth, currency: reservation.currency });
   }
   const decision = await prisma.billingLedgerDispatchDecision.findUnique({
     where: { dispatchId: params.dispatchId },
@@ -364,12 +374,13 @@ export async function getLedgerDispatchDecision(
     decision.runtimeKey.sourceDomain !== key.sourceDomain) {
     throw new AppError('NOT_FOUND', 404, 'LEDGER_DISPATCH_DECISION_NOT_FOUND');
   }
-  return { payment_mode: decision.status === 'PAY_AS_YOU_GO' ? 'pay_as_you_go' : 'cancelled',
+  return withBudgetContextDigest(prisma, {
+    payment_mode: decision.status === 'PAY_AS_YOU_GO' ? 'pay_as_you_go' : 'cancelled',
     reservation_id: null, dispatch_id: decision.dispatchId,
     request_fingerprint: decision.requestFingerprint,
     status: decision.status === 'PAY_AS_YOU_GO' && decision.receiptId ? 'SETTLED' : decision.status,
     receipt_id: decision.receiptId,
-    billing_month: decision.billingMonth, currency: decision.currency };
+    billing_month: decision.billingMonth, currency: decision.currency });
 }
 
 export async function finalizePrepaidDispatch(params: {
