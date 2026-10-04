@@ -2308,6 +2308,7 @@ model BillingStripeSubscription {
   team               Team?                          @relation(fields: [teamId], references: [id], onDelete: Restrict)
   usageExports       BillingStripeUsageExport[]
   invoiceCloses      BillingStripeInvoiceClose[]
+  monthlyCharges     BillingStripeMonthlyCharge[]
   creditSettlements  BillingCreditUsageSettlement[]
   creditInvoiceLines BillingCreditInvoiceLine[]
   seatSubscription   BillingSeatSubscription?
@@ -2396,6 +2397,36 @@ model BillingStripeInvoiceClose {
   @@unique([subscriptionId, billingMonth])
   @@index([state, nextCheckAt])
   @@map("billing_stripe_invoice_closes")
+}
+
+// One actual draft-invoice seat fee for a frozen subscription month. A source
+// row exists before provider egress so lost acknowledgements can reconcile the
+// remote invoice item without trusting an expired Stripe idempotency key.
+model BillingStripeMonthlyCharge {
+  id                  String   @id @default(cuid())
+  subscriptionId      String   @map("subscription_id")
+  accountId           String   @map("account_id")
+  stripeInvoiceId     String   @unique @map("stripe_invoice_id") @db.VarChar(255)
+  stripeInvoiceItemId String?  @unique @map("stripe_invoice_item_id") @db.VarChar(255)
+  billingMonth        String   @map("billing_month") @db.Char(7)
+  periodStartsAt      DateTime @map("period_starts_at")
+  periodEndsAt        DateTime @map("period_ends_at")
+  amountMinor         BigInt   @map("amount_minor")
+  currency            String   @db.Char(3)
+  authorityKey        String   @unique @map("authority_key") @db.Char(64)
+  sourceDigest        String   @map("source_digest") @db.Char(64)
+  idempotencyKey      String   @map("idempotency_key") @db.VarChar(255)
+  state               String   @db.VarChar(24)
+  firstAttemptAt      DateTime? @map("first_attempt_at")
+  lastErrorCode       String?  @map("last_error_code") @db.VarChar(120)
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  subscription BillingStripeSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+
+  @@unique([subscriptionId, billingMonth])
+  @@index([state, updatedAt])
+  @@map("billing_stripe_monthly_charges")
 }
 
 model BillingStripeInvoiceCloseResolution {
