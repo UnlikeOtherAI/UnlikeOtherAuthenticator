@@ -21,6 +21,10 @@ commercial rate, with no product-side money or credit calculations.
 Immutable tariffs select flat monthly or per-seat monthly charges, independently
 of prepaid or pay-as-you-go usage, and apply to a team or organisation payer.
 Per-seat tariffs select `AUTOMATIC` or `FIXED` and `FULL_MONTH` or `PRORATED`.
+`FULL_MONTH` charges each distinct eligible person once if they are present for
+any positive interval in that UTC month; leaving and rejoining never charges a
+second seat. `PRORATED` charges the union of eligible presence intervals divided
+by the actual UTC month's duration, with exact integer cumulative rounding.
 New per-seat plans default to automatic/prorated; existing assignments retain
 their frozen terms. Purchased fixed capacity belongs to a scoped subscription,
 not a shared tariff. A flat subscription charges once per selected scope.
