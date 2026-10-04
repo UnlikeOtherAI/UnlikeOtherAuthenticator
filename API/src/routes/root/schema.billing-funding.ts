@@ -95,13 +95,35 @@ export const billingFundingEndpoints: EndpointSchema[] = [
       'Settlement is deterministic, serializable, and cursor-idempotent. Available credits stop at zero while UOA retains the full centrally rated service/user liability; only a verified reversal may create debt. Products render the returned model and never rate or reallocate credits locally.',
   },
   {
+    method: 'GET',
+    path: '/schemas/billing-credit-purchase-status-v1.json',
+    description: 'Strict schema for exact authorized credit purchase status.',
+    auth: 'public',
+    response: { 200: 'BillingCreditPurchaseStatusV1 JSON Schema' },
+  },
+  {
+    method: 'POST',
+    path: '/billing/v1/credits/purchase-status',
+    description: 'Read one opaque credit purchase after current billing authority and exact subject binding checks.',
+    auth: lifecycleAuth,
+    body: { ...fundingSubject, purchase_id: 'exact opaque ID from a negotiated credit Checkout' },
+    response: {
+      200: 'BillingCreditPurchaseStatusV1',
+      '401/403': 'Current actor or billing authority denied',
+      404: 'Purchase is not visible in this exact account, customer, service and app key',
+      '502/503': 'Current billing context is unavailable',
+    },
+    notes:
+      'Read-only financial status. Succeeded requires a durable credit entry and its verified completion event; Stripe payment success alone remains processing. No charge or synthetic webhook is created. Presentation 1.5.0 headers select customer language; responses are private, no-store.',
+  },
+  {
     method: 'POST',
     path: '/billing/v1/credits/top-up-checkout',
     description: 'Create or recover secure Stripe Checkout for one exact active UOA credit offer.',
     auth: lifecycleAuth,
     body: { ...fundingSubject, offer_id: 'exact offer ID from the latest BillingCreditsV1' },
     response: {
-      200: '{ redirect_url } for the exact UOA-hosted Checkout',
+      200: '{ redirect_url } for legacy clients; negotiated presentation adds the opaque purchase_id',
       '401/403': 'Invalid app key, actor, exact-team manager, or subject',
       409: 'Offer/catalog unavailable or another exact-team Checkout is pending',
       '502/503': 'Stripe binding invalid or reconciliation pending',

@@ -450,4 +450,22 @@ Automatic top-up disable remains available during an unresolved payment. Only th
 original verified lifecycle event may settle that older attempt; settlement never
 restores disabled consent. Recovery uses a bounded exact-account Stripe Events
 scan and the existing validation and deduplication path, never a replacement charge.
+
+### Customer language and exact credit purchase status
+
+Presentation-capable clients send \`x-uoa-billing-presentation: 1.5.0\` and
+\`x-uoa-billing-locale\` (cs, en-US, en-GB, de, es, fr, it) on billing reads,
+previews and actions. These headers affect display only; signed subjects and frozen
+action bodies stay unchanged. Legacy clients retain English and the old redirect
+envelope. Negotiated credit Checkout additionally returns an opaque \`purchase_id\`.
+Read it via \`POST /billing/v1/credits/purchase-status\` with the exact subject and
+fresh endpoint-bound actor. The strict public schema is
+\`/schemas/billing-credit-purchase-status-v1.json\`. A successful redirect or
+Stripe PaymentIntent does not prove that credits were added: only the durable
+credit entry plus its verified completion event yields \`succeeded\`. Read failures
+must not be presented as declined payments. Poll only \`awaiting_confirmation\`
+within a finite return window. Current authority, account/customer/service/app-key
+binding and private no-store responses prevent cross-context disclosure.
+New hosted Stripe sessions receive the requested language. Resuming an existing
+session preserves it; subscription Checkout retries reuse their saved locale.
 `;
