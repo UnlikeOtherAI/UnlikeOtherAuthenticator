@@ -8,6 +8,10 @@ import {
   stripeCalendarBillingMonth,
 } from './billing-stripe-period.service.js';
 import { exportStripeUsage } from './billing-stripe-usage.service.js';
+import {
+  runStripeInvoiceCloseCycle,
+  startStripeInvoiceCloseScheduler,
+} from './billing-stripe-invoice-close-scheduler.service.js';
 import { STRIPE_METERABLE_SUBSCRIPTION_STATUSES } from './billing-stripe-usage-validation.service.js';
 import {
   requireStripeBillingEnabled,
@@ -251,6 +255,7 @@ export function startStripeBillingScheduler(params: {
   };
   runUsageCycle?: typeof runStripeUsageExportCycle;
   runAutoTopUpCycle?: typeof runCreditAutoTopUpCycle;
+  runInvoiceCloseCycle?: typeof runStripeInvoiceCloseCycle;
 }): { stop: () => void } {
   const usage = startStripeUsageExportScheduler({
     log: params.log,
@@ -260,10 +265,15 @@ export function startStripeBillingScheduler(params: {
     log: params.log,
     ...(params.runAutoTopUpCycle ? { runCycle: params.runAutoTopUpCycle } : {}),
   });
+  const invoiceClose = startStripeInvoiceCloseScheduler({
+    log: params.log,
+    ...(params.runInvoiceCloseCycle ? { runCycle: params.runInvoiceCloseCycle } : {}),
+  });
   return {
     stop: () => {
       usage.stop();
       automaticTopUp.stop();
+      invoiceClose.stop();
     },
   };
 }

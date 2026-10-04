@@ -2207,6 +2207,7 @@ model BillingStripeSubscription {
   org                Organisation                   @relation(fields: [orgId], references: [id], onDelete: Restrict)
   team               Team?                          @relation(fields: [teamId], references: [id], onDelete: Restrict)
   usageExports       BillingStripeUsageExport[]
+  invoiceCloses      BillingStripeInvoiceClose[]
   creditSettlements  BillingCreditUsageSettlement[]
   creditInvoiceLines BillingCreditInvoiceLine[]
 
@@ -2266,6 +2267,51 @@ model BillingStripeUsageReconciliation {
 
   @@index([exportId, createdAt])
   @@map("billing_stripe_usage_reconciliations")
+}
+
+model BillingStripeInvoiceClose {
+  id                           String   @id @default(cuid())
+  accountId                    String   @map("account_id")
+  subscriptionId               String   @map("subscription_id")
+  stripeInvoiceId              String   @unique @map("stripe_invoice_id") @db.VarChar(255)
+  billingMonth                 String   @map("billing_month") @db.Char(7)
+  periodStartsAt               DateTime @map("period_starts_at")
+  periodEndsAt                 DateTime @map("period_ends_at")
+  state                        String   @db.VarChar(32)
+  ledgerSnapshotCursor         String?  @map("ledger_snapshot_cursor") @db.VarChar(80)
+  unbilledAmountMicroMinor     BigInt?  @map("unbilled_amount_micro_minor")
+  invoicedUsageAmountMinor     BigInt?  @map("invoiced_usage_amount_minor")
+  invoicedUsageLineIds         String[] @default([]) @map("invoiced_usage_line_ids")
+  currency                     String   @db.Char(3)
+  readyAt                      DateTime? @map("ready_at")
+  nextCheckAt                  DateTime @default(now()) @map("next_check_at")
+  lastError                    String?  @map("last_error") @db.VarChar(160)
+  createdAt                    DateTime @default(now()) @map("created_at")
+  updatedAt                    DateTime @updatedAt @map("updated_at")
+
+  subscription BillingStripeSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+  resolutions BillingStripeInvoiceCloseResolution[]
+
+  @@unique([subscriptionId, billingMonth])
+  @@index([state, nextCheckAt])
+  @@map("billing_stripe_invoice_closes")
+}
+
+model BillingStripeInvoiceCloseResolution {
+  id                       String   @id @default(cuid())
+  closeId                  String   @map("close_id")
+  stripeAdjustmentInvoiceId String @unique(map: "billing_close_resolution_invoice_key") @map("stripe_adjustment_invoice_id") @db.VarChar(255)
+  stripeAdjustmentLineId    String @unique(map: "billing_close_resolution_line_key") @map("stripe_adjustment_line_id") @db.VarChar(255)
+  amountMicroMinor         BigInt   @map("amount_micro_minor")
+  paidAmountMinor          BigInt   @map("paid_amount_minor")
+  ledgerSnapshotCursor     String   @map("ledger_snapshot_cursor") @db.VarChar(80)
+  actorEmail               String   @map("actor_email") @db.VarChar(255)
+  observedAt               DateTime @map("observed_at")
+  createdAt                DateTime @default(now()) @map("created_at")
+
+  close BillingStripeInvoiceClose @relation(fields: [closeId], references: [id], onDelete: Restrict)
+
+  @@map("billing_stripe_invoice_close_resolutions")
 }
 
 model BillingStripeWebhookEvent {

@@ -8,6 +8,10 @@ import {
   listUncertainStripeUsageExports,
   reconcileStripeUsageExport,
 } from '../../../services/billing-stripe-reconciliation.service.js';
+import {
+  compensateFinalizedStripeInvoice,
+  listHeldStripeInvoiceCloses,
+} from '../../../services/billing-stripe-invoice-close-resolution.service.js';
 
 const StripeUsageExportSchema = z
   .object({
@@ -39,10 +43,33 @@ const ReconcileBodySchema = z.object({
   evidence_reference: z.string().trim().min(1).max(255),
   observed_at: z.string().datetime(),
 }).strict();
+const CloseParamsSchema = z.object({ closeId: z.string().trim().min(1) }).strict();
+const CompensateBodySchema = z.object({
+  adjustment_invoice_id: z.string().regex(/^in_[A-Za-z0-9_]+$/),
+  observed_at: z.string().datetime(),
+}).strict();
 
 export function registerInternalAdminBillingStripeUsageRoute(
   app: FastifyInstance,
 ): void {
+  app.get('/internal/admin/billing/stripe/invoice-closes', {
+    preHandler: [requireAdminSuperuser],
+    schema: { response: { 200: { type: 'array', items: { type: 'object', additionalProperties: true } } } },
+  }, async () => listHeldStripeInvoiceCloses());
+
+  app.post('/internal/admin/billing/stripe/invoice-closes/:closeId/compensate', {
+    preHandler: [requireAdminSuperuser],
+    schema: { response: { 200: { type: 'object', additionalProperties: true } } },
+  }, async (request) => {
+    const { closeId } = CloseParamsSchema.parse(request.params);
+    const body = CompensateBodySchema.parse(request.body);
+    return compensateFinalizedStripeInvoice({
+      closeId, adjustmentInvoiceId: body.adjustment_invoice_id,
+      observedAt: new Date(body.observed_at),
+      actorEmail: request.adminAccessTokenClaims?.email ?? 'unknown',
+    });
+  });
+
   app.get('/internal/admin/billing/stripe/usage-reconciliations', {
     preHandler: [requireAdminSuperuser],
     schema: { response: { 200: { type: 'array', items: { type: 'object', additionalProperties: true } } } },

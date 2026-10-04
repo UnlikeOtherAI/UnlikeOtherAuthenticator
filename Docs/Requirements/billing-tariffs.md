@@ -88,6 +88,28 @@ automatic replay.
 An operator decision cannot race an active send lease, and an old response can
 mark acceptance only for the exact identifier, generation, and attempt it sent.
 
+Subscription-cycle invoices have a separate durable close record keyed by the
+Stripe invoice and service month. An unresolved export or incomplete Ledger
+coverage pauses a draft invoice's `auto_advance`; the background close cycle
+retries export and releases the draft only after it is current. If Stripe has
+already finalized the invoice, UOA compares the period's latest net liability
+with the **actual finalized usage lines**, rather than treating an accepted
+meter event as proof that its amount appeared on the invoice. The close stores
+the Ledger cursor, invoice-line IDs and amount, currency, period, and exact
+unbilled increment. Later Ledger receipts continue to recheck finalized and
+previously compensated closes, including older months. No expired meter event
+is replayed into a finalized invoice.
+
+`GET /internal/admin/billing/stripe/invoice-closes` is the machine-only
+operator queue. A positive finalized gap requires a paid manual Stripe invoice
+with one line, exact rounded amount, customer/account/currency, and metadata on
+both invoice and line binding the source close, source invoice, subscription,
+service, and period. `POST /internal/admin/billing/stripe/invoice-closes/:closeId/compensate`
+verifies that evidence and records the actor, line, paid amount, liability,
+and cursor in an append-only resolution. A paid invoice or line can resolve
+only one gap. If still later usage arrives, the next close cycle subtracts
+earlier paid adjustments and holds only the new incremental liability.
+
 `BillingCreditsV1` 1.4.0 callers opt in with
 `x-uoa-billing-credits-protocol: 1.4.0`. On a Ledger or legacy reconciliation
 hold, UOA returns confirmed balance and entry history with

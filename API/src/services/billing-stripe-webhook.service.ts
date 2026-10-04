@@ -52,6 +52,7 @@ const SUBSCRIPTION_EVENTS = new Set([
 const INVOICE_RECONCILIATION_EVENTS = new Set<StripeInvoiceWebhookType>([
   'invoice.created',
   'invoice.finalization_failed',
+  'invoice.finalized',
 ]);
 
 type CurrentEventState = {

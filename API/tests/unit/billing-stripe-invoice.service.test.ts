@@ -51,11 +51,23 @@ function setup(invoice = cycleInvoice()) {
     billingStripeSubscription: {
       findUnique: vi.fn().mockResolvedValue(subscription),
     },
+    billingStripeInvoiceClose: {
+      findUnique: vi.fn().mockResolvedValue(null),
+      upsert: vi.fn().mockImplementation(async ({ create, update }: { create: object; update: object }) => ({
+        ...create, ...update,
+      })),
+    },
+    $transaction: vi.fn(async (run: (tx: unknown) => Promise<unknown>) => run(prisma)),
   };
   const stripe = {
     accounts: {},
     billing: {},
-    invoices: { retrieve: vi.fn().mockResolvedValue(invoice) },
+    invoices: {
+      retrieve: vi.fn().mockResolvedValue(invoice),
+      update: vi.fn().mockImplementation(async (_id: string, data: { auto_advance: boolean }) => ({
+        ...invoice, auto_advance: data.auto_advance,
+      })),
+    },
   };
   const exportUsage = vi.fn().mockResolvedValue({
     ledgerSnapshotCursor: 'bus_post_period',
@@ -66,6 +78,38 @@ function setup(invoice = cycleInvoice()) {
 }
 
 describe('Stripe invoice grace-period reconciliation', () => {
+  it('durably holds a draft invoice and pauses finalization when Ledger coverage is unresolved', async () => {
+    const state = setup();
+    state.exportUsage.mockRejectedValue(new Error('LEDGER_METERING_UNRESOLVED_PAID_USAGE'));
+    await expect(reconcileStripeCycleInvoiceUsage({
+      invoiceId: 'in_renewal', eventType: 'invoice.created', account,
+    }, {
+      prisma: state.prisma as never, stripe: state.stripe as never,
+      exportUsage: state.exportUsage, manageClose: true,
+      now: () => new Date('2026-08-01T00:00:10.000Z'),
+    })).resolves.toBeNull();
+    expect(state.stripe.invoices.update).toHaveBeenCalledWith('in_renewal', {
+      auto_advance: false,
+    });
+    expect(state.prisma.billingStripeInvoiceClose.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ create: expect.objectContaining({ state: 'HELD' }) }),
+    );
+  });
+
+  it('marks an already finalized period for exact liability assessment', async () => {
+    const state = setup(cycleInvoice({ status: 'open', auto_advance: false }));
+    await expect(reconcileStripeCycleInvoiceUsage({
+      invoiceId: 'in_renewal', eventType: 'invoice.finalized', account,
+    }, {
+      prisma: state.prisma as never, stripe: state.stripe as never,
+      exportUsage: state.exportUsage, manageClose: true,
+    })).resolves.toBeNull();
+    expect(state.exportUsage).not.toHaveBeenCalled();
+    expect(state.prisma.billingStripeInvoiceClose.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ create: expect.objectContaining({ state: 'FINALIZED_HOLD' }) }),
+    );
+  });
+
   it('exports the exact just-ended calendar month after the subscription advances', async () => {
     const state = setup();
     const now = new Date('2026-08-01T00:00:10.000Z');
