@@ -3897,14 +3897,17 @@ model BillingRecurringAddonCancellationIntent {
   @@map("billing_recurring_addon_cancellation_intents")
 }
 
-// Each revision is a frozen product/team/month billing statement. Later receipts,
+// Each revision is a frozen product/scope/month billing statement. A null team
+// identifies the organisation-wide subscription and invoice cycle; team rows
+// contain only that team's measured usage, even when an organisation pays.
+// Later receipts,
 // payments and corrections append a new revision or adjustment; they never
 // rewrite the original invoice, price evidence or customer document.
 model BillingCustomerCycle {
   id              String   @id @default(cuid())
   serviceId       String   @map("service_id")
   orgId           String   @map("org_id")
-  teamId          String   @map("team_id")
+  teamId          String?  @map("team_id")
   billingMonth    String   @map("billing_month") @db.Char(7)
   revision        Int
   state           String   @db.VarChar(32)
@@ -3916,11 +3919,11 @@ model BillingCustomerCycle {
 
   service   BillingService @relation(fields: [serviceId], references: [id], onDelete: Restrict)
   org       Organisation @relation(fields: [orgId], references: [id], onDelete: Restrict)
-  team      Team @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  team      Team? @relation(fields: [teamId], references: [id], onDelete: Restrict)
   documents BillingCustomerCycleDocument[]
 
-  @@unique([serviceId, teamId, billingMonth, revision])
-  @@index([serviceId, teamId, billingMonth])
+  // Partial unique indexes for team and organisation scopes live in migration 163000.
+  @@index([serviceId, teamId, billingMonth], map: "billing_customer_cycles_scope_idx")
   @@map("billing_customer_cycles")
 }
 
@@ -3943,7 +3946,7 @@ model BillingCustomerCycleDocument {
 
   cycle BillingCustomerCycle @relation(fields: [cycleId], references: [id], onDelete: Restrict)
 
-  @@unique([sourceKind, sourceId])
-  @@unique([cycleId, kind, format])
+  @@unique([cycleId, sourceKind, sourceId, format], map: "billing_customer_cycle_documents_revision_source_key")
+  @@index([cycleId, kind, format], map: "billing_customer_cycle_documents_cycle_kind_idx")
   @@map("billing_customer_cycle_documents")
 }

@@ -1,18 +1,18 @@
 import {
-  billingCycleDetailV1ConformanceFixture,
-  billingCycleDownloadRequestV1ConformanceFixture,
-  billingCyclesListV1ConformanceFixture,
+  billingCycleDetailV2ConformanceFixture,
+  billingCycleDownloadRequestV2ConformanceFixture,
+  billingCyclesListV2ConformanceFixture,
 } from './cycle-conformance-fixture.js';
 import {
-  billingCycleDetailRequestV1JsonSchema,
-  billingCycleDetailV1JsonSchema,
-  billingCycleDownloadRequestV1JsonSchema,
-  billingCyclesListRequestV1JsonSchema,
-  billingCyclesListV1JsonSchema,
+  billingCycleDetailRequestV2JsonSchema,
+  billingCycleDetailV2JsonSchema,
+  billingCycleDownloadRequestV2JsonSchema,
+  billingCyclesListRequestV2JsonSchema,
+  billingCyclesListV2JsonSchema,
 } from './cycle-schema.js';
 import { BILLING_CYCLES_PROTOCOL_VERSION } from './cycle-types.js';
 
-export const billingCyclesV1OpenApiDocument = {
+export const billingCyclesV2OpenApiDocument = {
   openapi: '3.1.0',
   info: {
     title: 'UOA customer billing cycles protocol',
@@ -22,24 +22,24 @@ export const billingCyclesV1OpenApiDocument = {
   paths: {},
   components: {
     schemas: {
-      BillingCyclesListRequestV1: billingCyclesListRequestV1JsonSchema,
-      BillingCyclesListV1: billingCyclesListV1JsonSchema,
-      BillingCycleDetailRequestV1: billingCycleDetailRequestV1JsonSchema,
-      BillingCycleDetailV1: billingCycleDetailV1JsonSchema,
-      BillingCycleDownloadRequestV1: billingCycleDownloadRequestV1JsonSchema,
+      BillingCyclesListRequestV2: billingCyclesListRequestV2JsonSchema,
+      BillingCyclesListV2: billingCyclesListV2JsonSchema,
+      BillingCycleDetailRequestV2: billingCycleDetailRequestV2JsonSchema,
+      BillingCycleDetailV2: billingCycleDetailV2JsonSchema,
+      BillingCycleDownloadRequestV2: billingCycleDownloadRequestV2JsonSchema,
     },
     examples: {
-      BillingCyclesListV1Conformance: {
+      BillingCyclesListV2Conformance: {
         summary: 'Synthetic paid subscription with prepaid usage',
-        value: billingCyclesListV1ConformanceFixture,
+        value: billingCyclesListV2ConformanceFixture,
       },
-      BillingCycleDetailV1Conformance: {
+      BillingCycleDetailV2Conformance: {
         summary: 'Synthetic finalized cycle with invoice and measured-usage breakdown',
-        value: billingCycleDetailV1ConformanceFixture,
+        value: billingCycleDetailV2ConformanceFixture,
       },
-      BillingCycleDownloadRequestV1Conformance: {
+      BillingCycleDownloadRequestV2Conformance: {
         summary: 'Exact document download action body',
-        value: billingCycleDownloadRequestV1ConformanceFixture,
+        value: billingCycleDownloadRequestV2ConformanceFixture,
       },
     },
   },

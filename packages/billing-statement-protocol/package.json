@@ -1,6 +1,6 @@
 {
   "name": "@unlikeotherai/billing-statement-protocol",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "Public UOA billing statement and customer-action consumer contracts",
   "license": "MIT",
   "type": "module",
@@ -27,9 +27,9 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
-    "./schema/billing-cycles-v1.json": "./schema/billing-cycles-v1.json",
-    "./fixtures/billing-cycles-v1.example.json": "./fixtures/billing-cycles-v1.example.json",
-    "./openapi/billing-cycles-v1.openapi.json": "./openapi/billing-cycles-v1.openapi.json",
+    "./schema/billing-cycles-v2.json": "./schema/billing-cycles-v2.json",
+    "./fixtures/billing-cycles-v2.example.json": "./fixtures/billing-cycles-v2.example.json",
+    "./openapi/billing-cycles-v2.openapi.json": "./openapi/billing-cycles-v2.openapi.json",
     "./schema/billing-statement-v1.json": "./schema/billing-statement-v1.json",
     "./schema/billing-statement-v2.json": "./schema/billing-statement-v2.json",
     "./schema/billing-consumer-actions-v1.json": "./schema/billing-consumer-actions-v1.json",

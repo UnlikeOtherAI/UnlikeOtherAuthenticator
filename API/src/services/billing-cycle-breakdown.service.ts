@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 
 import { PDFDocument, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
 
-import type { BillingCycleDetailV1 } from '../contracts/billing-statement-v1.js';
+import type { BillingCycleDetailV2 } from '../contracts/billing-statement-v1.js';
 import { AppError } from '../utils/errors.js';
 
 const regularFont = new URL('../../../assets/fonts/DejaVuSans.ttf', import.meta.url);
@@ -29,7 +29,7 @@ function csvRow(values: string[]): string {
   return values.map(csvCell).join(',');
 }
 
-export function renderBillingCycleBreakdownCsv(detail: BillingCycleDetailV1): Buffer {
+export function renderBillingCycleBreakdownCsv(detail: BillingCycleDetailV2): Buffer {
   const rows: string[][] = [[
     'record_type', 'id', 'description', 'period_start', 'period_end', 'quantity',
     'unit', 'customer_charge', 'currency', 'credits_consumed',
@@ -115,7 +115,7 @@ function draw(context: DrawContext, value: string, options?: { bold?: boolean; s
   }
 }
 
-export async function renderBillingCycleBreakdownPdf(detail: BillingCycleDetailV1): Promise<Buffer> {
+export async function renderBillingCycleBreakdownPdf(detail: BillingCycleDetailV2): Promise<Buffer> {
   if (detail.state === 'open_preview') {
     throw new AppError('BAD_REQUEST', 409, 'BILLING_CYCLE_PREVIEW_NOT_FINAL');
   }

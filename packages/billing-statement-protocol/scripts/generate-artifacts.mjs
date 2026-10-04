@@ -3,11 +3,11 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
-  billingCyclesProtocolV1JsonSchema,
-  billingCyclesListV1ConformanceFixture,
-  billingCycleDetailV1ConformanceFixture,
-  billingCycleDownloadRequestV1ConformanceFixture,
-  billingCyclesV1OpenApiDocument,
+  billingCyclesProtocolV2JsonSchema,
+  billingCyclesListV2ConformanceFixture,
+  billingCycleDetailV2ConformanceFixture,
+  billingCycleDownloadRequestV2ConformanceFixture,
+  billingCyclesV2OpenApiDocument,
   billingConsumerActionProtocolV1JsonSchema,
   billingConsumerActionV1ConformanceFixtures,
   billingConsumerActionV1OpenApiDocument,
@@ -27,9 +27,9 @@ import {
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const artifacts = new Map([
-  [resolve(packageRoot, 'schema/billing-cycles-v1.json'), billingCyclesProtocolV1JsonSchema],
-  [resolve(packageRoot, 'fixtures/billing-cycles-v1.example.json'), { list: billingCyclesListV1ConformanceFixture, detail: billingCycleDetailV1ConformanceFixture, download_request: billingCycleDownloadRequestV1ConformanceFixture }],
-  [resolve(packageRoot, 'openapi/billing-cycles-v1.openapi.json'), billingCyclesV1OpenApiDocument],
+  [resolve(packageRoot, 'schema/billing-cycles-v2.json'), billingCyclesProtocolV2JsonSchema],
+  [resolve(packageRoot, 'fixtures/billing-cycles-v2.example.json'), { list: billingCyclesListV2ConformanceFixture, detail: billingCycleDetailV2ConformanceFixture, download_request: billingCycleDownloadRequestV2ConformanceFixture }],
+  [resolve(packageRoot, 'openapi/billing-cycles-v2.openapi.json'), billingCyclesV2OpenApiDocument],
   [resolve(packageRoot, 'schema/billing-credits-v1.json'), billingCreditsV1JsonSchema],
   [
     resolve(packageRoot, 'fixtures/billing-credits-v1.example.json'),

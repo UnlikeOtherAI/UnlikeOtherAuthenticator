@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "/schemas/billing-cycles-v1.json",
+  "$id": "/schemas/billing-cycles-v2.json",
   "title": "UOA customer billing cycles protocol",
   "type": "object",
   "additionalProperties": false,
@@ -42,14 +42,13 @@
         },
         "cursor": {
           "type": "string",
-          "minLength": 1,
-          "maxLength": 256
+          "pattern": "^[0-9]{4}-(0[1-9]|1[0-2]):(team|organisation)$"
         }
       }
     },
     "list_response": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "$id": "/schemas/billing-cycles-v1-list.json",
+      "$id": "/schemas/billing-cycles-v2-list.json",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -61,7 +60,7 @@
       ],
       "properties": {
         "schema_version": {
-          "const": 1
+          "const": 2
         },
         "generated_at": {
           "type": "string",
@@ -156,6 +155,7 @@
                 "required": [
                   "organisation_id",
                   "team_id",
+                  "cycle_scope",
                   "payer_scope"
                 ],
                 "properties": {
@@ -165,9 +165,22 @@
                     "maxLength": 256
                   },
                   "team_id": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 256
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 256
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "cycle_scope": {
+                    "enum": [
+                      "team",
+                      "organisation"
+                    ]
                   },
                   "payer_scope": {
                     "enum": [
@@ -175,7 +188,46 @@
                       "organisation"
                     ]
                   }
-                }
+                },
+                "allOf": [
+                  {
+                    "if": {
+                      "properties": {
+                        "cycle_scope": {
+                          "const": "organisation"
+                        }
+                      }
+                    },
+                    "then": {
+                      "properties": {
+                        "team_id": {
+                          "type": "null"
+                        },
+                        "payer_scope": {
+                          "const": "organisation"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "cycle_scope": {
+                          "const": "team"
+                        }
+                      }
+                    },
+                    "then": {
+                      "properties": {
+                        "team_id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        }
+                      }
+                    }
+                  }
+                ]
               },
               "product": {
                 "type": "object",
@@ -392,9 +444,14 @@
           }
         },
         "next_cursor": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9]{4}-(0[1-9]|1[0-2]):(team|organisation)$"
+            },
+            {
+              "type": "null"
+            }
           ]
         }
       }
@@ -439,7 +496,7 @@
     },
     "detail_response": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "$id": "/schemas/billing-cycles-v1-detail.json",
+      "$id": "/schemas/billing-cycles-v2-detail.json",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -500,6 +557,7 @@
           "required": [
             "organisation_id",
             "team_id",
+            "cycle_scope",
             "payer_scope"
           ],
           "properties": {
@@ -509,9 +567,22 @@
               "maxLength": 256
             },
             "team_id": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 256
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "cycle_scope": {
+              "enum": [
+                "team",
+                "organisation"
+              ]
             },
             "payer_scope": {
               "enum": [
@@ -519,7 +590,46 @@
                 "organisation"
               ]
             }
-          }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "cycle_scope": {
+                    "const": "organisation"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "team_id": {
+                    "type": "null"
+                  },
+                  "payer_scope": {
+                    "const": "organisation"
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "cycle_scope": {
+                    "const": "team"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "team_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  }
+                }
+              }
+            }
+          ]
         },
         "product": {
           "type": "object",
@@ -733,7 +843,7 @@
           "type": "boolean"
         },
         "schema_version": {
-          "const": 1
+          "const": 2
         },
         "subscription_lines": {
           "type": "array",

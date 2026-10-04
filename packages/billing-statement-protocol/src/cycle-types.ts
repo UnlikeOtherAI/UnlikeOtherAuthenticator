@@ -1,11 +1,11 @@
 import type { ExactMoney } from './types.js';
 import type { BillingSubjectRequest } from './funding-schema-primitives.js';
 
-export const BILLING_CYCLES_PROTOCOL_VERSION = '1.0.0' as const;
-export const BILLING_CYCLES_SCHEMA_VERSION = 1 as const;
-export const BILLING_CYCLES_SCHEMA_PATH = '/schemas/billing-cycles-v1.json' as const;
-export const BILLING_CYCLES_EXAMPLE_PATH = '/schemas/billing-cycles-v1.example.json' as const;
-export const BILLING_CYCLES_OPENAPI_PATH = '/schemas/billing-cycles-v1.openapi.json' as const;
+export const BILLING_CYCLES_PROTOCOL_VERSION = '2.0.0' as const;
+export const BILLING_CYCLES_SCHEMA_VERSION = 2 as const;
+export const BILLING_CYCLES_SCHEMA_PATH = '/schemas/billing-cycles-v2.json' as const;
+export const BILLING_CYCLES_EXAMPLE_PATH = '/schemas/billing-cycles-v2.example.json' as const;
+export const BILLING_CYCLES_OPENAPI_PATH = '/schemas/billing-cycles-v2.openapi.json' as const;
 export const BILLING_CYCLES_LIST_PATH = '/billing/v1/cycles/list' as const;
 export const BILLING_CYCLES_DETAIL_PATH = '/billing/v1/cycles/detail' as const;
 export const BILLING_CYCLES_DOWNLOAD_PATH = '/billing/v1/cycles/download' as const;
@@ -18,7 +18,8 @@ export type BillingCycleState =
   | 'adjusted';
 export type BillingCycleScope = {
   organisation_id: string;
-  team_id: string;
+  team_id: string | null;
+  cycle_scope: 'team' | 'organisation';
   payer_scope: 'team' | 'organisation';
 };
 export type BillingCyclePeriod = {
@@ -40,7 +41,7 @@ export type BillingCycleTotals = {
   total_paid: BillingCycleMoney;
   outstanding: BillingCycleMoney;
 };
-export type BillingCycleSummaryV1 = {
+export type BillingCycleSummaryV2 = {
   cycle_id: string;
   period: BillingCyclePeriod;
   state: BillingCycleState;
@@ -49,18 +50,18 @@ export type BillingCycleSummaryV1 = {
   totals: BillingCycleTotals[];
   document_available: boolean;
 };
-export type BillingCyclesListRequestV1 = BillingSubjectRequest & {
+export type BillingCyclesListRequestV2 = BillingSubjectRequest & {
   limit?: number;
   cursor?: string;
 };
-export type BillingCyclesListV1 = {
+export type BillingCyclesListV2 = {
   schema_version: typeof BILLING_CYCLES_SCHEMA_VERSION;
   generated_at: string;
   subject: BillingSubjectRequest;
-  cycles: BillingCycleSummaryV1[];
+  cycles: BillingCycleSummaryV2[];
   next_cursor: string | null;
 };
-export type BillingCycleDetailRequestV1 = BillingSubjectRequest & { cycle_id: string };
+export type BillingCycleDetailRequestV2 = BillingSubjectRequest & { cycle_id: string };
 export type BillingCycleSeatInterval = {
   starts_at: string;
   ends_at: string;
@@ -124,7 +125,7 @@ export type BillingCycleAdjustment = {
   customer_amount: BillingCycleMoney;
   reason: string;
 };
-export type BillingCycleDetailV1 = BillingCycleSummaryV1 & {
+export type BillingCycleDetailV2 = BillingCycleSummaryV2 & {
   schema_version: typeof BILLING_CYCLES_SCHEMA_VERSION;
   subscription_lines: BillingCycleSubscriptionLine[];
   usage_lines: BillingCycleUsageLine[];
@@ -132,7 +133,7 @@ export type BillingCycleDetailV1 = BillingCycleSummaryV1 & {
   documents: BillingCycleDocument[];
   adjustments: BillingCycleAdjustment[];
 };
-export type BillingCycleDownloadRequestV1 = BillingSubjectRequest & {
+export type BillingCycleDownloadRequestV2 = BillingSubjectRequest & {
   cycle_id: string;
   document_id: string;
 };

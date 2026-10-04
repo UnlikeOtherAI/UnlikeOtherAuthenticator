@@ -30,10 +30,20 @@ const exactMoney = object(['amount', 'currency', 'display'], {
 });
 
 const subject = billingSubjectRequestJsonSchema;
-const scope = object(['organisation_id', 'team_id', 'payer_scope'], {
-  organisation_id: id, team_id: id,
+const scope = {
+  ...object(['organisation_id', 'team_id', 'cycle_scope', 'payer_scope'], {
+  organisation_id: id, team_id: { anyOf: [id, { type: 'null' }] },
+  cycle_scope: { enum: ['team', 'organisation'] },
   payer_scope: { enum: ['team', 'organisation'] },
-});
+  }),
+  allOf: [
+    { if: { properties: { cycle_scope: { const: 'organisation' } } },
+      then: { properties: { team_id: { type: 'null' },
+        payer_scope: { const: 'organisation' } } } },
+    { if: { properties: { cycle_scope: { const: 'team' } } },
+      then: { properties: { team_id: id } } },
+  ],
+};
 const period = object(['month', 'starts_at', 'ends_at'], {
   month, starts_at: datetime, ends_at: datetime,
 });
@@ -126,29 +136,33 @@ const adjustment = object([
   customer_amount: moneySchema({ signed: true }), reason: { type: 'string' },
 });
 
-export const billingCyclesListRequestV1JsonSchema = billingSubjectActionBodySchema({
-  limit: { type: 'integer', minimum: 1, maximum: 24 }, cursor: id,
+export const billingCyclesListRequestV2JsonSchema = billingSubjectActionBodySchema({
+  limit: { type: 'integer', minimum: 1, maximum: 24 },
+  cursor: { type: 'string', pattern: '^[0-9]{4}-(0[1-9]|1[0-2]):(team|organisation)$' },
 });
-export const billingCycleDetailRequestV1JsonSchema = billingSubjectActionBodySchema(
+export const billingCycleDetailRequestV2JsonSchema = billingSubjectActionBodySchema(
   { cycle_id: id }, ['cycle_id'],
 );
-export const billingCycleDownloadRequestV1JsonSchema = billingSubjectActionBodySchema(
+export const billingCycleDownloadRequestV2JsonSchema = billingSubjectActionBodySchema(
   { cycle_id: id, document_id: id }, ['cycle_id', 'document_id'],
 );
-export const billingCyclesListV1JsonSchema = {
+export const billingCyclesListV2JsonSchema = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',
-  $id: '/schemas/billing-cycles-v1-list.json',
+  $id: '/schemas/billing-cycles-v2-list.json',
   ...object(['schema_version', 'generated_at', 'subject', 'cycles', 'next_cursor'], {
     schema_version: { const: BILLING_CYCLES_SCHEMA_VERSION },
     generated_at: datetime,
     subject,
     cycles: { type: 'array', items: object(summaryRequired, summaryProperties) },
-    next_cursor: { type: ['string', 'null'] },
+    next_cursor: { anyOf: [
+      { type: 'string', pattern: '^[0-9]{4}-(0[1-9]|1[0-2]):(team|organisation)$' },
+      { type: 'null' },
+    ] },
   }),
 };
-export const billingCycleDetailV1JsonSchema = {
+export const billingCycleDetailV2JsonSchema = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',
-  $id: '/schemas/billing-cycles-v1-detail.json',
+  $id: '/schemas/billing-cycles-v2-detail.json',
   ...object([
     ...summaryRequired, 'schema_version', 'subscription_lines', 'usage_lines',
     'credits', 'documents', 'adjustments',
@@ -162,17 +176,17 @@ export const billingCycleDetailV1JsonSchema = {
     adjustments: { type: 'array', items: adjustment },
   }),
 };
-export const billingCyclesProtocolV1JsonSchema = {
+export const billingCyclesProtocolV2JsonSchema = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',
   $id: BILLING_CYCLES_SCHEMA_PATH,
   title: 'UOA customer billing cycles protocol',
   type: 'object',
   additionalProperties: false,
   properties: {
-    list_request: billingCyclesListRequestV1JsonSchema,
-    list_response: billingCyclesListV1JsonSchema,
-    detail_request: billingCycleDetailRequestV1JsonSchema,
-    detail_response: billingCycleDetailV1JsonSchema,
-    download_request: billingCycleDownloadRequestV1JsonSchema,
+    list_request: billingCyclesListRequestV2JsonSchema,
+    list_response: billingCyclesListV2JsonSchema,
+    detail_request: billingCycleDetailRequestV2JsonSchema,
+    detail_response: billingCycleDetailV2JsonSchema,
+    download_request: billingCycleDownloadRequestV2JsonSchema,
   },
 };
