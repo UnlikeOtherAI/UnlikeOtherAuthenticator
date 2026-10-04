@@ -220,8 +220,8 @@ describe('public billing consumer action protocol', () => {
 });
 
 describe('public BillingCreditsV1 consumer protocol', () => {
-  it('keeps the coordinated unreleased V1 contract version', () => {
-    expect(BILLING_CREDITS_PROTOCOL_VERSION).toBe('1.0.0');
+  it('names the opt-in reconciliation status revision', () => {
+    expect(BILLING_CREDITS_PROTOCOL_VERSION).toBe('1.4.0');
   });
 
   it('validates shared team credits, system adjustments, and fixed conversion', () => {
@@ -232,6 +232,13 @@ describe('public BillingCreditsV1 consumer protocol', () => {
     expect(validate(billingCreditsV1ConformanceFixture), JSON.stringify(validate.errors)).toBe(
       true,
     );
+    expect(validate({
+      ...billingCreditsV1ConformanceFixture,
+      billing_status: {
+        settlement_state: 'pending_reconciliation',
+        message: 'Your confirmed credit balance is available while recent usage is reconciled.',
+      },
+    }), JSON.stringify(validate.errors)).toBe(true);
     expect(billingCreditsV1ConformanceFixture.conversion).toEqual({
       credits_per_usd: '1000',
       settlement_currency: 'USD',
