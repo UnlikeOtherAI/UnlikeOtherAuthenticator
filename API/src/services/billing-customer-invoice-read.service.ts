@@ -17,6 +17,9 @@ import {
   projectManualCustomerInvoiceDetail, projectManualCustomerInvoiceSummary,
 } from './billing-customer-invoice-manual.service.js';
 import {
+  projectCustomerCreditNoteDetail, projectCustomerCreditNoteSummary,
+} from './billing-customer-invoice-credit-note.service.js';
+import {
   projectPrepaidCustomerInvoiceDetail, projectPrepaidCustomerInvoiceSummary,
 } from './billing-customer-invoice-prepaid.service.js';
 import {
@@ -24,7 +27,7 @@ import {
 } from './billing-customer-invoice-stripe.service.js';
 
 type Storage = ReturnType<typeof createBillingInvoicePdfStorage>;
-type SourceKind = 'manual' | 'prepaid' | 'stripe';
+type SourceKind = 'credit_note' | 'manual' | 'prepaid' | 'stripe';
 type Cursor = { at: string; kind: SourceKind; id: string };
 const monthPattern = /^\d{4}-(0[1-9]|1[0-2])$/;
 
@@ -46,7 +49,8 @@ function decodeCursor(value: string | undefined): Cursor | null {
     if (typeof parsed !== 'object' || parsed === null ||
       typeof parsed.at !== 'string' || Number.isNaN(Date.parse(parsed.at)) ||
       new Date(parsed.at).toISOString() !== parsed.at ||
-      (parsed.kind !== 'manual' && parsed.kind !== 'prepaid' && parsed.kind !== 'stripe') ||
+      (parsed.kind !== 'credit_note' && parsed.kind !== 'manual' &&
+        parsed.kind !== 'prepaid' && parsed.kind !== 'stripe') ||
       typeof parsed.id !== 'string' || !/^[a-zA-Z0-9_-]{1,128}$/.test(parsed.id) ||
       Buffer.from(JSON.stringify(parsed)).toString('base64url') !== value) throw new Error();
     return parsed;
@@ -77,7 +81,7 @@ function afterCursor(item: Cursor, cursor: Cursor | null): boolean {
 }
 
 function sourceId(invoiceId: string): { kind: SourceKind; id: string } {
-  const matched = /^(manual|prepaid|stripe):([a-zA-Z0-9_-]{1,128})$/.exec(invoiceId);
+  const matched = /^(credit_note|manual|prepaid|stripe):([a-zA-Z0-9_-]{1,128})$/.exec(invoiceId);
   if (!matched) notFound();
   return { kind: matched[1] as SourceKind, id: matched[2] ?? notFound() };
 }
@@ -135,12 +139,24 @@ export async function listCustomerInvoices(
   }
   const cursor = decodeCursor(params.cursor);
   const cursorDate = cursor ? new Date(cursor.at) : null;
+  const creditNotes = orgManager ? await prisma.billingManualCreditNote.findMany({ where: {
+    orgId: context.request.organisationId, serviceId: context.credential.service.id,
+    status: 'ISSUED', issuedAt: { gte: start, lt: end },
+    ...(cursorDate ? { OR: [{ issuedAt: { lt: cursorDate } },
+      ...(cursor?.kind === 'credit_note' ? [
+        { issuedAt: cursorDate, id: { lt: cursor.id } },
+      ] : [])] } : {}),
+    originalInvoice: { lines: { some: { serviceIdentifier: context.request.product },
+      every: { serviceIdentifier: context.request.product } } },
+  }, include: { originalInvoice: { include: { lines: true } } },
+  orderBy: [{ issuedAt: 'desc' }, { id: 'desc' }], take: limit + 1 }) : [];
   const manual = orgManager ? await prisma.billingInvoice.findMany({ where: {
     orgId: context.request.organisationId,
     status: { in: [BillingInvoiceStatus.ISSUED, BillingInvoiceStatus.VOID] },
     issuedAt: { gte: start, lt: end },
     ...(cursorDate ? { OR: [
       { issuedAt: { lt: cursorDate } },
+      ...(cursor?.kind === 'credit_note' ? [{ issuedAt: cursorDate }] : []),
       ...(cursor?.kind === 'manual' ? [
         { issuedAt: cursorDate, id: { lt: cursor.id } },
       ] : []),
@@ -149,7 +165,7 @@ export async function listCustomerInvoices(
       serviceIdentifier: context.request.product },
     every: { serviceId: context.credential.service.id,
       serviceIdentifier: context.request.product } },
-  }, include: { lines: true, paymentEvents: true },
+  }, include: { lines: true, paymentEvents: true, manualCreditNotes: true },
   orderBy: [{ issuedAt: 'desc' }, { id: 'desc' }], take: limit + 1 }) : [];
   const prepaid = await prisma.billingCreditPaymentInvoice.findMany({ where: {
     orgId: context.request.organisationId,
@@ -160,7 +176,8 @@ export async function listCustomerInvoices(
         [{ teamId: context.request.teamId }] },
       ...(cursorDate ? [{ OR: [
         { paidAt: { lt: cursorDate } },
-      ...(cursor?.kind === 'manual' ? [{ paidAt: cursorDate }] : cursor?.kind === 'prepaid' ? [
+      ...(['credit_note', 'manual'].includes(cursor?.kind ?? '') ?
+        [{ paidAt: cursorDate }] : cursor?.kind === 'prepaid' ? [
           { paidAt: cursorDate, id: { lt: cursor?.id ?? '' } },
         ] : []),
       ] }] : []),
@@ -177,6 +194,9 @@ export async function listCustomerInvoices(
     id: { in: stripeKeys.map((key) => key.invoiceId) },
   }, include: { lines: true, subscription: true, cashPayments: true, adjustments: true } });
   const results: Array<{ key: Cursor; summary: BillingCustomerInvoiceSummaryV1 }> = [
+    ...creditNotes.map((row) => ({ key: { at: row.issuedAt?.toISOString() ?? notFound(),
+      kind: 'credit_note' as const, id: row.id },
+    summary: projectCustomerCreditNoteSummary(row, params.chargeMonth) })),
     ...manual.map((row) => ({ key: { at: row.issuedAt?.toISOString() ?? notFound(), kind: 'manual' as const,
       id: row.id }, summary: projectManualCustomerInvoiceSummary(row, params.chargeMonth) })),
     ...prepaid.map((row) => ({ key: { at: row.paidAt.toISOString(), kind: 'prepaid' as const,
@@ -205,6 +225,19 @@ async function readCustomerInvoice(
 ): Promise<{ detail: BillingCustomerInvoiceDetailV1; pdfKey: string | null; sha256: string | null }> {
   await authorizeBillingCycle(context, { prisma });
   const source = sourceId(invoiceId);
+  if (source.kind === 'credit_note') {
+    const row = await prisma.billingManualCreditNote.findFirst({ where: {
+      id: source.id, orgId: context.request.organisationId,
+      serviceId: context.credential.service.id, status: 'ISSUED',
+      originalInvoice: { lines: { some: { serviceIdentifier: context.request.product },
+        every: { serviceIdentifier: context.request.product } } },
+    }, include: { originalInvoice: { include: { lines: true } } } });
+    if (!row) notFound();
+    await authorizeBillingCycle({ ...context, payerScope: BillingAssignmentScope.ORGANISATION },
+      { prisma });
+    return { detail: projectCustomerCreditNoteDetail(row, subject(context), chargeMonth),
+      pdfKey: row.pdfObjectKey, sha256: row.pdfSha256 };
+  }
   if (source.kind === 'manual') {
     const row = await prisma.billingInvoice.findFirst({ where: { id: source.id,
       orgId: context.request.organisationId,
@@ -213,7 +246,7 @@ async function readCustomerInvoice(
         serviceIdentifier: context.request.product },
       every: { serviceId: context.credential.service.id,
         serviceIdentifier: context.request.product } },
-    }, include: { lines: true, paymentEvents: true } });
+    }, include: { lines: true, paymentEvents: true, manualCreditNotes: true } });
     if (!row) notFound();
     if (chargeMonth && row.issuedAt?.toISOString().slice(0, 7) !== chargeMonth) notFound();
     await authorizeBillingCycle({ ...context, payerScope: BillingAssignmentScope.ORGANISATION },

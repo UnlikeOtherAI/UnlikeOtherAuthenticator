@@ -43,6 +43,8 @@ export type BillingCycleTotals = {
   total_due: BillingCycleMoney;
   total_paid: BillingCycleMoney;
   outstanding: BillingCycleMoney;
+  /** Real credit-note value owed after accepted cash exceeds corrected due. */
+  customer_credit_due?: BillingCycleMoney;
 };
 export type BillingCycleSummaryV2 = {
   cycle_id: string;

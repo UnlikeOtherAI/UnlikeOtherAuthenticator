@@ -2649,6 +2649,7 @@ model BillingInvoiceIssuerProfile {
   sequences BillingInvoiceNumberSequence[]
   creditPaymentInvoices BillingCreditPaymentInvoice[]
   creditInvoiceTaxPolicies BillingCreditInvoiceTaxPolicy[]
+  manualCreditNotes BillingManualCreditNote[]
 
   @@index([active])
   @@map("billing_invoice_issuer_profiles")
@@ -2721,6 +2722,7 @@ model BillingInvoice {
   lineFinancialAllocations BillingInvoiceLineFinancialAllocation[]
   lineCreditAllocations BillingInvoiceLineCreditReferenceAllocation[]
   cycleCorrection BillingCycleManualCorrection? @relation("CorrectionSupplementInvoice")
+  manualCreditNotes BillingManualCreditNote[]
 
   @@unique([contractId, billingMonth, revision])
   @@index([orgId, billingMonth, status])
@@ -4390,6 +4392,7 @@ model BillingCustomerCycle {
   invoiceAllocations BillingCustomerCycleInvoiceAllocation[]
   manualCorrection BillingCycleManualCorrection? @relation("CorrectionPendingCycle")
   correctedBy BillingCycleManualCorrection[] @relation("CorrectionOriginalCycle")
+  manualCreditNote BillingManualCreditNote?
 
   // Partial unique indexes for team and organisation scopes live in migration 163000.
   @@index([serviceId, teamId, billingMonth], map: "billing_customer_cycles_scope_idx")
@@ -4509,6 +4512,48 @@ model BillingCycleManualCorrection {
 
   @@index([originalCycleId])
   @@map("billing_cycle_manual_corrections")
+}
+
+// An issuer-authorized cancellation of an already issued, paid manual invoice.
+// Original cash and legal invoice bytes stay immutable; this separate numbered
+// credit note carries the exact full line and the original frozen tax policy.
+model BillingManualCreditNote {
+  id String @id @default(cuid())
+  originalInvoiceId String @unique @map("original_invoice_id")
+  originalCycleId String @unique @map("original_cycle_id")
+  issuerProfileId String @map("issuer_profile_id")
+  orgId String @map("org_id")
+  serviceId String @map("service_id")
+  billingMonth String @map("billing_month") @db.Char(7)
+  currency String @db.Char(3)
+  netCreditMinor BigInt @map("net_credit_minor")
+  taxCreditMinor BigInt @map("tax_credit_minor")
+  totalCreditMinor BigInt @map("total_credit_minor")
+  taxTreatment String @map("tax_treatment") @db.VarChar(32)
+  taxRateBps Int @map("tax_rate_bps")
+  taxLegalBasis String @map("tax_legal_basis") @db.VarChar(500)
+  issuerSnapshot Json @map("issuer_snapshot")
+  buyerSnapshot Json @map("buyer_snapshot")
+  originalSourceDigest String @map("original_source_digest") @db.Char(64)
+  reason String @db.VarChar(500)
+  evidenceDigest String @map("evidence_digest") @db.Char(64)
+  status String @default("PENDING") @db.VarChar(16)
+  creditNoteNumber String? @unique @map("credit_note_number") @db.VarChar(90)
+  issueDate DateTime? @map("issue_date")
+  pdfObjectKey String? @map("pdf_object_key") @db.VarChar(1024)
+  pdfSha256 String? @map("pdf_sha256") @db.Char(64)
+  issuedAt DateTime? @map("issued_at")
+  createdByUserId String? @map("created_by_user_id")
+  createdByEmail String @map("created_by_email") @db.VarChar(320)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  originalInvoice BillingInvoice @relation(fields: [originalInvoiceId], references: [id], onDelete: Restrict)
+  originalCycle BillingCustomerCycle @relation(fields: [originalCycleId], references: [id], onDelete: Restrict)
+  issuerProfile BillingInvoiceIssuerProfile @relation(fields: [issuerProfileId], references: [id], onDelete: Restrict)
+
+  @@index([status, createdAt])
+  @@map("billing_manual_credit_notes")
 }
 
 // Verified cash payment and its existing Stripe legal invoice. Financial

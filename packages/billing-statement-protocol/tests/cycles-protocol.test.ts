@@ -87,6 +87,19 @@ describe('customer billing cycles protocol', () => {
     assertPublic(detail);
   });
 
+  it('accepts a positive verified credit due while older immutable cycles omit it', () => {
+    const validate = ajv.compile(billingCycleDetailV2JsonSchema);
+    const original = structuredClone(billingCycleDetailV2ConformanceFixture);
+    expect(validate(original), JSON.stringify(validate.errors)).toBe(true);
+    const current = structuredClone(original);
+    current.totals[0] = { ...current.totals[0]!,
+      customer_credit_due: { amount: '1', amount_minor: '100',
+        currency: 'USD', display: 'US$1.00' } };
+    expect(validate(current), JSON.stringify(validate.errors)).toBe(true);
+    current.totals[0]!.customer_credit_due!.amount_minor = '-100';
+    expect(validate(current)).toBe(false);
+  });
+
   it('distinguishes team usage from organisation subscription scope and payer', () => {
     const validate = ajv.compile(billingCycleDetailV2JsonSchema);
     const org = structuredClone(billingCycleDetailV2ConformanceFixture);

@@ -83,9 +83,28 @@ name, accounts-payable email, and billing address. Tax identifier and purchase
 order reference are optional explicit values. Calculation snapshots the exact
 issuer and buyer values, so later profile edits cannot rewrite an invoice.
 
-UOA performs no tax determination and no FX conversion. The v1 calculator uses
-an explicit zero tax amount. Currency mismatch or a need for tax/FX handling is
-an operator-visible fail-closed condition, never an inferred conversion.
+UOA performs no FX conversion. A fresh financial superuser must supply an
+explicit tax treatment, rate, and legal basis for each manual draft. UOA
+freezes those terms, applies cumulative minor-unit rounding to the actual
+invoice lines, and holds issuance when the issuer or buyer tax evidence is
+missing. A zero tax rate requires the explicit `NO_TAX_CHARGED` policy; it is
+never a fallback for unknown treatment.
+
+An immutable paid provider receipt cannot later become a smaller receipt.
+UOA therefore holds apparent negative provider-cost changes until a distinct
+verified financial correction source exists. An issuer may separately cancel
+an already issued, paid, single-product manual invoice with no funded wallet
+offset. This full-line cancellation requires a fresh financial superuser,
+reason, original frozen invoice/line/tax source, and a separate numbered legal
+credit-note PDF. It preserves the original legal invoice and accepted cash;
+verified refunds reduce the positive customer credit still due. The note does
+not mint funded credits, rerate provider usage, or make a second invoice.
+The original invoice remains downloadable with its accepted payment intact;
+its current customer InvoiceV1 view shows the full amount voided and no
+outstanding debt. The separate credit note appears in the month it was issued
+with its own legal PDF. The latest monthly cycle exposes a positive
+`customer_credit_due` equal to accepted original cash less verified refunds,
+while earlier finalized cycle snapshots and document hashes remain frozen.
 
 ## Closed-month calculator
 

@@ -10,7 +10,7 @@ import { AppError } from '../utils/errors.js';
 import { cycleMoney } from './billing-cycle-quote-projection.service.js';
 
 export type ManualInvoiceSource = Prisma.BillingInvoiceGetPayload<{
-  include: { lines: true; paymentEvents: true };
+  include: { lines: true; paymentEvents: true; manualCreditNotes: true };
 }>;
 
 function hold(): never {
@@ -35,11 +35,18 @@ function financials(invoice: ManualInvoiceSource) {
     else hold();
   }
   const originalDue = invoice.totalMinor - invoice.creditsAppliedMinor;
-  const voided = invoice.status === BillingInvoiceStatus.VOID;
+  const issuedNotes = invoice.manualCreditNotes.filter((note) => note.status === 'ISSUED');
+  if (issuedNotes.length > 1 || issuedNotes.some((note) =>
+    !note.pdfSha256 || !note.pdfObjectKey || !note.creditNoteNumber ||
+    note.totalCreditMinor !== invoice.totalMinor ||
+    note.netCreditMinor !== invoice.subtotalMinor ||
+    note.taxCreditMinor !== invoice.taxAmountMinor ||
+    note.currency !== invoice.currency)) hold();
+  const voided = invoice.status === BillingInvoiceStatus.VOID || issuedNotes.length === 1;
   const due = voided ? 0n : originalDue;
-  const outstanding = due - paid - writeOff;
+  const outstanding = voided ? 0n : due - paid - writeOff;
   if (originalDue < 0n || paid < 0n || refunded > paid || outstanding < 0n ||
-    (voided && invoice.paymentEvents.length > 0)) hold();
+    (invoice.status === BillingInvoiceStatus.VOID && invoice.paymentEvents.length > 0)) hold();
   const status = voided ? 'voided' :
     refunded > 0n ? refunded === paid && outstanding === 0n ? 'refunded' :
       'partially_refunded' :

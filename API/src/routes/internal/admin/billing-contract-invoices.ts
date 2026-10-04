@@ -23,6 +23,7 @@ import {
   recordBillingInvoicePayment,
   voidBillingInvoice,
 } from '../../../services/billing-invoice-lifecycle.service.js';
+import { registerManualCreditNoteRoutes } from './billing-manual-credit-notes.js';
 import {
   createBillingInvoiceIssuerProfile,
   getOrganisationInvoiceProfile,
@@ -127,7 +128,9 @@ async function serializeInvoice(invoice: CustomerSafeInvoice) {
   return serializeCustomerSafeInvoice(invoice, issueActions.get(invoice.id) ?? null);
 }
 
+
 export function registerInternalAdminBillingContractInvoiceRoutes(app: FastifyInstance): void {
+  registerManualCreditNoteRoutes(app);
   app.get(
     '/internal/admin/billing/contracts',
     { ...adminRoute, schema: { response: { 200: contractArrayResponseSchema } } },

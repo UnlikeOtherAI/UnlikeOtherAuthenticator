@@ -375,7 +375,17 @@ basis before draft calculation; those facts and cumulative per-line tax are froz
 UOA performs no FX inference. A later manual usage correction creates only a
 delta-only supplemental invoice through
 \`/internal/admin/billing/cycle-corrections\`, with the original issued tax policy
-and legal invoice retained. Negative differences require a real credit note.
+and legal invoice retained. Negative provider-cost differences remain held
+without a separate verified correction source; immutable paid receipts do not
+decrease. For an issuer-authorized cancellation of a paid, single-product manual
+invoice with no wallet offset, Admin can prepare a separate legal credit note
+against the exact original amount and frozen tax policy with a required reason.
+POST /internal/admin/billing/invoices/:invoiceId/credit-note/prepare freezes it,
+POST /internal/admin/billing/credit-notes/:id/issue allocates a separate legal
+number/PDF, and GET /internal/admin/billing/credit-notes/:id/pdf downloads it.
+The original invoice and accepted payment stay immutable. Verified refunds and
+customer credit still due appear in an append-only customer cycle revision;
+the note never mints prepaid wallet credits.
 
 \`POST /internal/admin/billing/invoices/calculate\` and every invoice list/detail/mutation
 return only final customer price per service, legal profile snapshots, totals, and

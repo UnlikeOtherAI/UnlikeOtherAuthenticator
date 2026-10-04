@@ -14,6 +14,7 @@ import {
   type BillingInvoicePaymentFormValues,
 } from '../schemas/billing-contracts';
 import { z } from 'zod';
+import { BillingManualCreditNoteSchema } from '../schemas/billing-manual-credit-note';
 import { ApiRequestError, createApiClient } from './api-client';
 
 const api = createApiClient();
@@ -189,6 +190,33 @@ export const billingContractAdminService = {
 
   async downloadInvoicePdf(invoiceId: string) {
     return api.getBlob(`/internal/admin/billing/invoices/${encodeURIComponent(invoiceId)}/pdf`);
+  },
+
+  async getManualCreditNote(invoiceId: string) {
+    const result = await api.get<unknown>(
+      `/internal/admin/billing/invoices/${encodeURIComponent(invoiceId)}/credit-note`);
+    return z.object({ credit_note: BillingManualCreditNoteSchema.nullable() }).strict()
+      .parse(result).credit_note;
+  },
+
+  async prepareManualCreditNote(invoiceId: string, reason: string) {
+    const result = await api.post<unknown>(
+      `/internal/admin/billing/invoices/${encodeURIComponent(invoiceId)}/credit-note/prepare`,
+      { reason });
+    return z.object({ credit_note: BillingManualCreditNoteSchema }).strict()
+      .parse(result).credit_note;
+  },
+
+  async issueManualCreditNote(creditNoteId: string) {
+    const result = await api.post<unknown>(
+      `/internal/admin/billing/credit-notes/${encodeURIComponent(creditNoteId)}/issue`, {});
+    return z.object({ credit_note: BillingManualCreditNoteSchema }).strict()
+      .parse(result).credit_note;
+  },
+
+  async downloadManualCreditNotePdf(creditNoteId: string) {
+    return api.getBlob(
+      `/internal/admin/billing/credit-notes/${encodeURIComponent(creditNoteId)}/pdf`);
   },
 
   async voidInvoice(invoiceId: string, reason: string) {

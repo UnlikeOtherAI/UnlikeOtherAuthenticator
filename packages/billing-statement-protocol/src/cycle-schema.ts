@@ -63,6 +63,7 @@ const totals = object(
     total_due: moneySchema({ signed: true }),
     total_paid: moneySchema({ signed: true }),
     outstanding: moneySchema({ signed: true }),
+    customer_credit_due: moneySchema(),
   },
 );
 const summaryProperties = {

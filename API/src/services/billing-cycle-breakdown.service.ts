@@ -37,7 +37,7 @@ export function renderBillingCycleBreakdownCsv(detail: BillingCycleDetailV2): Bu
     'record_type', 'id', 'description', 'period_start', 'period_end', 'quantity',
     'unit', 'unit_price', 'seat_policy', 'seat_timing', 'usage_payment_mode', 'customer_charge',
     'currency', 'credits_consumed', 'credits_waived', 'tax', 'gross_total', 'credits_applied',
-    'total_paid', 'outstanding',
+    'total_paid', 'outstanding', 'customer_credit_due',
     'opening_balance', 'closing_balance', 'billing_status',
   ] as const;
   type Column = typeof columns[number];
@@ -76,6 +76,7 @@ export function renderBillingCycleBreakdownCsv(detail: BillingCycleDetailV2): Bu
       tax: total.tax.amount, gross_total: total.gross_total.amount,
       credits_applied: total.credits_applied.amount,
       total_paid: total.total_paid.amount, outstanding: total.outstanding.amount,
+      customer_credit_due: total.customer_credit_due?.amount ?? '',
       opening_balance: detail.credits.opening_balance ?? 'pending',
       closing_balance: detail.credits.closing_balance ?? 'pending',
       billing_status: detail.state });
@@ -206,6 +207,10 @@ export async function renderBillingCycleBreakdownPdf(detail: BillingCycleDetailV
     draw(context, `Gross ${total.gross_total.display}; credits ${total.credits_applied.display}`);
     draw(context, `Due ${total.total_due.display}; paid ${total.total_paid.display}; outstanding ${total.outstanding.display}`,
       { bold: true });
+    if (total.customer_credit_due) {
+      draw(context, `Customer credit due ${total.customer_credit_due.display}`,
+        { bold: true });
+    }
   }
   draw(context, `Credits consumed: ${detail.credits.consumed ?? 'pending'}`);
   if (detail.credits.waived && detail.credits.waived !== '0') {

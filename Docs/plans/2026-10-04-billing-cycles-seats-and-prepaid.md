@@ -200,6 +200,13 @@ Verified refund and dispute effects are shown separately from the original
 accepted payment; partial effects retain their exact amount and the issued
 legal PDF stays immutable. A legal credit note appears only from an actual
 issuer source, never from a projected refund label.
+For a verified full-line manual cancellation, an issuer-authorized, separately
+numbered credit note is an actual legal source. InvoiceV1 keeps the original
+invoice and accepted cash, presents its current receivable as voided, and
+lists the credit note separately in its issue month. The latest cycle names
+positive `customer_credit_due` after verified refunds; the original PDF and
+prior finalized cycle remain immutable. Neither note nor public projection
+changes a signed paid provider receipt or mints wallet credits.
 Manual invoice refunds likewise keep the original accepted payment and the
 original receivable history; the refund amount is a separate positive effect
 and does not make an already-paid legal invoice newly overdue. A product-bound

@@ -186,6 +186,35 @@ export const billingContractInvoiceEndpoints: EndpointSchema[] = [
     response: { 200: 'Customer-safe invoice. ' + invoiceActionProjection },
   },
   {
+    method: 'GET',
+    path: '/internal/admin/billing/invoices/:invoiceId/credit-note',
+    description: 'Read the separate issuer cancellation credit note for one issued manual invoice.',
+    auth: adminAuth,
+    response: { 200: 'Credit-note status, number, date, original invoice, exact customer credit and reason; or null.' },
+  },
+  {
+    method: 'POST',
+    path: '/internal/admin/billing/invoices/:invoiceId/credit-note/prepare',
+    description: 'Prepare one full-line legal cancellation note for a paid, issued, single-product manual invoice without wallet offsets. The original invoice remains immutable.',
+    auth: adminAuth,
+    body: { reason: 'required operator cancellation reason, max 500 characters' },
+    response: { 201: 'Frozen pending credit note with exact original charge and tax.' },
+  },
+  {
+    method: 'POST',
+    path: '/internal/admin/billing/credit-notes/:creditNoteId/issue',
+    description: 'Allocate a separate legal number and immutable PDF to the prepared issuer cancellation; durable cycle reconciliation follows.',
+    auth: adminAuth,
+    body: {},
+    response: { 200: 'Issued credit-note metadata; original accepted payment is preserved.' },
+  },
+  {
+    method: 'GET',
+    path: '/internal/admin/billing/credit-notes/:creditNoteId/pdf',
+    description: 'Download the numbered legal credit note after bounded PDF SHA-256 verification.',
+    auth: adminAuth,
+  },
+  {
     method: 'POST',
     path: '/internal/admin/billing/invoices/:invoiceId/issue',
     description:

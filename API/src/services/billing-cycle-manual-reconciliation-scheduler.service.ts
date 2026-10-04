@@ -10,6 +10,8 @@ import { refreshIssuedManualBillingCyclePayment } from './billing-cycle-manual-p
 import { refreshVoidedManualBillingCycle } from './billing-cycle-manual-void.service.js';
 import { captureIssuedManualBillingCycleCorrection } from
   './billing-cycle-manual-correction-capture.service.js';
+import { captureIssuedManualCreditNote } from
+  './billing-cycle-manual-credit-note-capture.service.js';
 
 const INTERVAL_MS = 30_000;
 const BATCH_SIZE = 50;
@@ -118,7 +120,8 @@ export async function runManualCycleReconciliationBatch(
     refreshVoid?: typeof refreshVoidedManualBillingCycle;
     prepareClose?: typeof prepareBillingCycleClose;
     captureIssued?: typeof captureIssuedManualBillingCycle;
-    captureCorrection?: typeof captureIssuedManualBillingCycleCorrection },
+    captureCorrection?: typeof captureIssuedManualBillingCycleCorrection;
+    captureCreditNote?: typeof captureIssuedManualCreditNote },
 ): Promise<{ checked: number; held: number; failures: Array<{ invoiceId: string; code: string }> }> {
   const prisma = deps?.prisma ?? getAdminPrisma();
   const rows = await claimDue(prisma);
@@ -134,13 +137,21 @@ export async function runManualCycleReconciliationBatch(
           { invoiceId: row.invoiceId }, { prisma });
         if (!refreshed) throw new AppError('INTERNAL', 409, 'BILLING_CYCLE_ALLOCATION_MISSING');
       } else if (invoice?.status === 'ISSUED') {
-        const kind = await captureMissingIssuedLines(row.invoiceId, prisma,
-          deps?.prepareClose ?? prepareBillingCycleClose,
-          deps?.captureIssued ?? captureIssuedManualBillingCycle,
-          deps?.captureCorrection ?? captureIssuedManualBillingCycleCorrection);
-        if (kind === 'ordinary') {
-          await (deps?.refreshPayment ?? refreshIssuedManualBillingCyclePayment)(
-            { invoiceId: row.invoiceId }, { prisma });
+        const note = await prisma.billingManualCreditNote.findUnique({ where: {
+          originalInvoiceId: row.invoiceId,
+        }, select: { id: true, status: true } });
+        if (note?.status === 'ISSUED') {
+          await (deps?.captureCreditNote ?? captureIssuedManualCreditNote)(
+            { creditNoteId: note.id }, { prisma });
+        } else {
+          const kind = await captureMissingIssuedLines(row.invoiceId, prisma,
+            deps?.prepareClose ?? prepareBillingCycleClose,
+            deps?.captureIssued ?? captureIssuedManualBillingCycle,
+            deps?.captureCorrection ?? captureIssuedManualBillingCycleCorrection);
+          if (kind === 'ordinary') {
+            await (deps?.refreshPayment ?? refreshIssuedManualBillingCyclePayment)(
+              { invoiceId: row.invoiceId }, { prisma });
+          }
         }
       } else {
         throw new AppError('INTERNAL', 409, 'BILLING_CYCLE_INVOICE_STATE_UNRESOLVED');

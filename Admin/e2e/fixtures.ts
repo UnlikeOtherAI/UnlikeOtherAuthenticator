@@ -73,7 +73,20 @@ export async function installFixtures(page: Page) {
     org.teams.map((team) => ({ ...team, orgName: org.name })),
   );
   const billing = createBillingFixtures();
-  const invoices: unknown[] = [billing.invoice];
+  const creditNoteInvoice = structuredClone(billing.invoice);
+  creditNoteInvoice.id = 'invoice-credit-note';
+  creditNoteInvoice.invoice_number = 'UOA-2026-000002';
+  creditNoteInvoice.lines = creditNoteInvoice.lines.slice(0, 1);
+  const noteLine = creditNoteInvoice.lines[0];
+  const notePayment = creditNoteInvoice.payments[0];
+  if (!noteLine || !notePayment) throw new Error('Credit note fixture source missing');
+  creditNoteInvoice.totals.subtotal = noteLine.price;
+  creditNoteInvoice.totals.total = noteLine.price;
+  creditNoteInvoice.totals.paid = noteLine.price;
+  notePayment.amount = noteLine.price;
+  creditNoteInvoice.actions.payment_limits.refund = noteLine.price;
+  const invoices: unknown[] = [billing.invoice, creditNoteInvoice];
+  let creditNote: Record<string, unknown> | null = null;
   const taxPolicies: Array<Record<string, unknown>> = [];
   const calculations: unknown[] = [];
   const payments: unknown[] = [];
@@ -212,6 +225,27 @@ export async function installFixtures(page: Page) {
         invoices.push(draft);
         return json(draft);
       }
+      if (path === '/billing/invoices/invoice-credit-note/credit-note/prepare') {
+        const reason = req.postDataJSON()?.reason;
+        if (typeof reason !== 'string' || !reason.trim()) {
+          unexpected.push('Invalid credit note reason');
+          return json({ error: 'Invalid credit note reason' }, 400);
+        }
+        creditNote = { id: 'note-1', original_invoice_id: 'invoice-credit-note',
+          status: 'pending', number: null, issued_at: null,
+          net_credit_minor: '12500', tax_credit_minor: '0',
+          total_credit_minor: '12500', currency: 'USD', reason };
+        return json({ credit_note: creditNote });
+      }
+      if (path === '/billing/credit-notes/note-1/issue') {
+        if (!creditNote) {
+          unexpected.push('Missing prepared credit note');
+          return json({ error: 'Missing credit note' }, 404);
+        }
+        creditNote = { ...creditNote, status: 'issued', number: 'CN-UOA-2026-000001',
+          issued_at: '2026-10-04T00:00:00.000Z' };
+        return json({ credit_note: creditNote });
+      }
       if (path === '/billing/invoices/invoice-1/payments') {
         payments.push(req.postDataJSON());
         if (paymentFailures-- > 0) return json({ error: 'Synthetic payment failure' }, 503);
@@ -312,6 +346,9 @@ export async function installFixtures(page: Page) {
       policies: taxPolicies,
     });
     if (path === '/billing/invoices') return json(invoices);
+    if (path === '/billing/cycle-corrections') return json({ corrections: [] });
+    if (path === '/billing/invoices/invoice-credit-note/credit-note')
+      return json({ credit_note: creditNote });
     if (path === '/billing/paid-usage-exceptions')
       return json({ exceptions: paidUsageExceptions, has_more: false });
     if (path.endsWith('/invoice-profile'))
