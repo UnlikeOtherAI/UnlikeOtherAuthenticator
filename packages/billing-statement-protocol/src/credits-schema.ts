@@ -150,6 +150,15 @@ export const billingCreditsV1JsonSchema = {
     credit_summary: {
       anyOf: [billingCreditsManagerSummaryJsonSchema, billingCreditsMemberSummaryJsonSchema],
     },
+    billing_status: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['settlement_state', 'message'],
+      properties: {
+        settlement_state: { enum: ['current', 'pending_reconciliation'] },
+        message: { type: 'string', minLength: 1 },
+      },
+    },
     funding_policy: {
       oneOf: [
         {
