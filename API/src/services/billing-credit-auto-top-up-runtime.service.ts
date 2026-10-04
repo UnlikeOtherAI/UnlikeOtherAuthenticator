@@ -2,19 +2,29 @@ import {
   BillingAppKeyPurpose,
   BillingAssignmentScope,
   BillingCreditAutoTopUpAttemptStatus,
+  BillingCreditAutoTopUpState,
   Prisma,
   type PrismaClient,
 } from '@prisma/client';
 import type Stripe from 'stripe';
 
-import { getEnv } from '../config/env.js';
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import {
   claimCreditAutoTopUpAttempt,
   listCreditAutoTopUpCandidateIds,
-  type CreditAutoTopUpClaim,
+  listCreditAutoTopUpWebhookCandidates,
+  type CreditAutoTopUpWebhookCandidate,
 } from './billing-credit-auto-top-up-attempt.service.js';
+import {
+  recoverCreditAutoTopUpEvents,
+  type CreditAutoTopUpEventRecoveryResult,
+} from './billing-credit-auto-top-up-event-recovery.service.js';
+import type {
+  CreditAutoTopUpAccountResult as AccountResult,
+  CreditAutoTopUpCycleResult,
+  CreditAutoTopUpDispatchResult,
+} from './billing-credit-auto-top-up-runtime.types.js';
 import {
   assertCreditFundingMetadata,
   creditFundingMetadata,
@@ -34,39 +44,21 @@ const AUTO_TOP_UP_CONCURRENCY = 10;
 // replica cannot start the same durable attempt while the SDK is still retrying.
 const DISPATCH_TRANSACTION_TIMEOUT_MS = 75_000;
 
-type CreditAutoTopUpStripeClient = Pick<Stripe, 'accounts' | 'paymentIntents'>;
+type CreditAutoTopUpStripeClient = Pick<
+  Stripe,
+  | 'accounts'
+  | 'checkout'
+  | 'disputes'
+  | 'events'
+  | 'paymentIntents'
+  | 'paymentMethods'
+  | 'prices'
+  | 'products'
+  | 'refunds'
+  | 'setupIntents'
+>;
 
-type AccountResult =
-  | {
-      creditAccountId: string;
-      outcome: 'submitted' | 'awaiting_webhook' | 'terminal';
-      attemptId: string;
-      stripePaymentIntentId: string | null;
-      stripeStatus?: Stripe.PaymentIntent.Status;
-      recoveredAttempt?: boolean;
-    }
-  | {
-      creditAccountId: string;
-      outcome: 'skipped';
-      reason: Extract<CreditAutoTopUpClaim, { kind: 'skipped' }>['reason'];
-    }
-  | {
-      creditAccountId: string;
-      outcome: 'failed';
-      attemptId?: string;
-      error: string;
-    };
-
-export type CreditAutoTopUpCycleResult = {
-  accountId: string;
-  attempted: number;
-  submitted: number;
-  awaitingWebhook: number;
-  terminal: number;
-  skipped: number;
-  failed: number;
-  results: AccountResult[];
-};
+export type { CreditAutoTopUpCycleResult } from './billing-credit-auto-top-up-runtime.types.js';
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'BILLING_CREDIT_AUTO_TOP_UP_UNKNOWN_FAILURE';
@@ -142,6 +134,15 @@ function loadAttempt(tx: Prisma.TransactionClient, attemptId: string) {
 }
 
 type DispatchAttempt = NonNullable<Awaited<ReturnType<typeof loadAttempt>>>;
+
+export function attemptCanStartPaymentIntent(
+  attempt: Pick<DispatchAttempt, 'consentRevisionId' | 'creditAccount'>,
+): boolean {
+  return (
+    attempt.creditAccount.autoTopUpState === BillingCreditAutoTopUpState.ACTIVE &&
+    attempt.creditAccount.autoTopUpConsentRevisionId === attempt.consentRevisionId
+  );
+}
 
 function assertAttemptBinding(attempt: DispatchAttempt, account: StripeAccountContext): void {
   const revision = attempt.consentRevision;
@@ -239,7 +240,7 @@ async function createPaymentIntent(
           appKeyId: attempt.appKeyId,
           creditAccountId: attempt.creditAccountId,
         }),
-        description: 'UOA automatic credit top-up',
+        description: 'Automatic credit top-up',
       },
       { idempotencyKey: attempt.idempotencyKey },
     );
@@ -254,7 +255,7 @@ async function createPaymentIntent(
 async function dispatchCreditAutoTopUpAttempt(
   params: { account: StripeAccountContext; creditAccountId: string; attemptId: string },
   deps: { prisma: PrismaClient; stripe: Pick<Stripe, 'paymentIntents'> },
-): Promise<Extract<AccountResult, { outcome: 'submitted' | 'awaiting_webhook' | 'terminal' }>> {
+): Promise<CreditAutoTopUpDispatchResult> {
   return deps.prisma.$transaction(
     async (tx) => {
       await lockDispatchSnapshot(tx, params);
@@ -284,6 +285,15 @@ async function dispatchCreditAutoTopUpAttempt(
           outcome: 'awaiting_webhook',
           attemptId: attempt.id,
           stripePaymentIntentId: attempt.stripePaymentIntentId,
+        };
+      }
+      if (!attemptCanStartPaymentIntent(attempt)) {
+        return {
+          creditAccountId: params.creditAccountId,
+          outcome: 'skipped',
+          reason: 'consent_changed',
+          attemptId: attempt.id,
+          stripePaymentIntentId: null,
         };
       }
       const intent = await createPaymentIntent(deps.stripe, attempt, params.account);
@@ -377,6 +387,9 @@ export async function runCreditAutoTopUpCycle(deps?: {
   stripeLivemode?: boolean;
   listCandidates?: typeof listCreditAutoTopUpCandidateIds;
   runAccount?: typeof runCreditAutoTopUpAccount;
+  listWebhookCandidates?: typeof listCreditAutoTopUpWebhookCandidates;
+  recoverEvents?: typeof recoverCreditAutoTopUpEvents;
+  now?: () => Date;
   batchSize?: number;
 }): Promise<CreditAutoTopUpCycleResult> {
   const configured = deps?.stripe ? undefined : requireStripeBillingEnabled();
@@ -392,76 +405,74 @@ export async function runCreditAutoTopUpCycle(deps?: {
     { accountId: account.id, limit: deps?.batchSize ?? AUTO_TOP_UP_BATCH_SIZE },
     { prisma },
   );
-  const results = await runInBatches(creditAccountIds, (creditAccountId) =>
-    (deps?.runAccount ?? runCreditAutoTopUpAccount)(
+  const webhookCandidates: CreditAutoTopUpWebhookCandidate[] = await (
+    deps?.listWebhookCandidates ?? listCreditAutoTopUpWebhookCandidates
+  )(
+    {
+      accountId: account.id,
+      creditAccountIds,
+      limit: deps?.batchSize ?? AUTO_TOP_UP_BATCH_SIZE,
+    },
+    { prisma },
+  );
+  const eventRecovery: CreditAutoTopUpEventRecoveryResult = await (
+    deps?.recoverEvents ?? recoverCreditAutoTopUpEvents
+  )({
+    account,
+    now: deps?.now?.() ?? new Date(),
+    candidates: webhookCandidates,
+    stripe,
+    prisma,
+  });
+  const webhookCandidateByCreditAccount = new Map(
+    webhookCandidates.map((candidate) => [candidate.creditAccountId, candidate]),
+  );
+  const results = await runInBatches(creditAccountIds, async (creditAccountId) => {
+    const webhookCandidate = webhookCandidateByCreditAccount.get(creditAccountId);
+    if (webhookCandidate) {
+      const paymentIntentId = webhookCandidate.stripePaymentIntentId;
+      const recoveredPaymentIntentId = eventRecovery.recoveredAttemptPaymentIntents.get(
+        webhookCandidate.attemptId,
+      );
+      if (recoveredPaymentIntentId) {
+        return {
+          creditAccountId,
+          outcome: 'recovered' as const,
+          attemptId: webhookCandidate.attemptId,
+          stripePaymentIntentId: recoveredPaymentIntentId,
+        };
+      }
+      return {
+        creditAccountId,
+        outcome: 'awaiting_webhook' as const,
+        attemptId: webhookCandidate.attemptId,
+        stripePaymentIntentId: paymentIntentId,
+        recoveryDiagnostic:
+          eventRecovery.diagnostics.get(webhookCandidate.attemptId) ?? 'event_not_found',
+      };
+    }
+    const result = await (deps?.runAccount ?? runCreditAutoTopUpAccount)(
       { account, creditAccountId },
       { prisma, stripe },
-    ),
-  );
+    );
+    if (result.outcome === 'awaiting_webhook' && result.stripePaymentIntentId) {
+      return {
+        ...result,
+        recoveryDiagnostic:
+          eventRecovery.diagnostics.get(result.attemptId) ?? 'event_not_found',
+      };
+    }
+    return result;
+  });
   return {
     accountId: account.id,
     attempted: results.length,
     submitted: results.filter((result) => result.outcome === 'submitted').length,
     awaitingWebhook: results.filter((result) => result.outcome === 'awaiting_webhook').length,
+    recovered: results.filter((result) => result.outcome === 'recovered').length,
     terminal: results.filter((result) => result.outcome === 'terminal').length,
     skipped: results.filter((result) => result.outcome === 'skipped').length,
     failed: results.filter((result) => result.outcome === 'failed').length,
     results,
-  };
-}
-
-export function startCreditAutoTopUpScheduler(params: {
-  log: {
-    info: (details: object, message: string) => void;
-    error: (details: object, message: string) => void;
-  };
-  runCycle?: typeof runCreditAutoTopUpCycle;
-}): { stop: () => void } {
-  const env = getEnv();
-  let running = false;
-  let stopped = false;
-  let rerunRequested = false;
-  const run = async (): Promise<void> => {
-    if (stopped) return;
-    if (running) {
-      rerunRequested = true;
-      return;
-    }
-    running = true;
-    try {
-      const result = await (params.runCycle ?? runCreditAutoTopUpCycle)();
-      const details = {
-        attempted: result.attempted,
-        submitted: result.submitted,
-        awaitingWebhook: result.awaitingWebhook,
-        terminal: result.terminal,
-        skipped: result.skipped,
-        failed: result.failed,
-        failures: result.results.filter((item) => item.outcome === 'failed'),
-      };
-      if (result.failed > 0) {
-        params.log.error(details, 'Stripe credit auto-top-up cycle completed');
-      } else {
-        params.log.info(details, 'Stripe credit auto-top-up cycle completed');
-      }
-    } catch (error) {
-      params.log.error({ err: error }, 'Stripe credit auto-top-up cycle failed');
-    } finally {
-      running = false;
-      if (rerunRequested && !stopped) {
-        rerunRequested = false;
-        queueMicrotask(() => void run());
-      }
-    }
-  };
-
-  void run();
-  const timer = setInterval(() => void run(), env.STRIPE_AUTO_TOP_UP_INTERVAL_MINUTES * 60_000);
-  timer.unref();
-  return {
-    stop: () => {
-      stopped = true;
-      clearInterval(timer);
-    },
   };
 }

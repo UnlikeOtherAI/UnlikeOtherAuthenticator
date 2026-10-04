@@ -3,11 +3,15 @@ import type Stripe from 'stripe';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import {
+  claimCreditAutoTopUpAttempt,
   listCreditAutoTopUpCandidateIds,
+  listCreditAutoTopUpWebhookCandidates,
 } from '../../src/services/billing-credit-auto-top-up-attempt.service.js';
 import {
+  runCreditAutoTopUpCycle,
   runCreditAutoTopUpAccount,
 } from '../../src/services/billing-credit-auto-top-up-runtime.service.js';
+import { applyTrustedCreditFundingStripeEvent } from '../../src/services/billing-stripe-webhook-event.service.js';
 import { createTestDb } from '../helpers/test-db.js';
 
 const databaseTestsEnabled =
@@ -46,6 +50,7 @@ const recovery = scopedIds('recovery');
 const embeddedError = scopedIds('embedded');
 const aboveThreshold = scopedIds('above');
 const disabled = scopedIds('disabled');
+const pendingDisabled = scopedIds('pending-disabled');
 
 async function seedCreditAccount(
   tx: Prisma.TransactionClient,
@@ -219,6 +224,7 @@ async function seed(prisma: PrismaClient): Promise<void> {
     await seedCreditAccount(tx, 'embedded', 100_000_000n, true);
     await seedCreditAccount(tx, 'above', 300_000_000n, true);
     await seedCreditAccount(tx, 'disabled', 100_000_000n, false);
+    await seedCreditAccount(tx, 'pending-disabled', 100_000_000n, true);
   });
 }
 
@@ -261,7 +267,12 @@ describe.skipIf(!databaseTestsEnabled)('credit automatic top-up PostgreSQL runti
     );
 
     expect(candidates).toEqual(
-      [concurrency.creditAccount, recovery.creditAccount, embeddedError.creditAccount].sort(),
+      [
+        concurrency.creditAccount,
+        recovery.creditAccount,
+        embeddedError.creditAccount,
+        pendingDisabled.creditAccount,
+      ].sort(),
     );
     expect(candidates).not.toContain(aboveThreshold.creditAccount);
     expect(candidates).not.toContain(disabled.creditAccount);
@@ -323,7 +334,7 @@ describe.skipIf(!databaseTestsEnabled)('credit automatic top-up PostgreSQL runti
           uoa_app_key_id: ids.appKey,
           uoa_credit_account_id: concurrency.creditAccount,
         },
-        description: 'UOA automatic credit top-up',
+        description: 'Automatic credit top-up',
       },
       { idempotencyKey: attempts[0].idempotencyKey },
     );
@@ -392,5 +403,144 @@ describe.skipIf(!databaseTestsEnabled)('credit automatic top-up PostgreSQL runti
       stripePaymentIntentId: 'pi_auto_top_up_embedded',
       stripeStatus: 'processing',
     });
+  }, 20_000);
+
+  it('recovers the original PaymentIntent after a lost create response and credits it once under concurrent scans', async () => {
+    const claim = await claimCreditAutoTopUpAttempt(
+      { accountId: ids.account, creditAccountId: pendingDisabled.creditAccount },
+      { prisma: handle!.prisma },
+    );
+    expect(claim.kind).toBe('dispatch');
+    if (claim.kind !== 'dispatch') throw new Error('Expected a pending attempt');
+    const intentId = 'pi_auto_top_up_pending_disabled';
+    const candidateIds = await listCreditAutoTopUpCandidateIds(
+      { accountId: ids.account, limit: 20 },
+      { prisma: handle!.prisma },
+    );
+    expect(candidateIds).toContain(pendingDisabled.creditAccount);
+    const webhookCandidates = await listCreditAutoTopUpWebhookCandidates(
+      {
+        accountId: ids.account,
+        creditAccountIds: [pendingDisabled.creditAccount],
+        limit: 20,
+      },
+      { prisma: handle!.prisma },
+    );
+    expect(webhookCandidates).toMatchObject([
+      {
+        attemptId: claim.attemptId,
+        creditAccountId: pendingDisabled.creditAccount,
+        stripePaymentIntentId: null,
+      },
+    ]);
+
+    const now = new Date();
+    const metadata = {
+      uoa_credit_auto_top_up_attempt_id: claim.attemptId,
+      uoa_service_id: ids.service,
+      uoa_app_key_id: ids.appKey,
+      uoa_credit_account_id: pendingDisabled.creditAccount,
+    };
+    const paidIntent = {
+      id: intentId,
+      object: 'payment_intent',
+      amount: 500,
+      amount_received: 500,
+      currency: 'usd',
+      customer: `cus_auto_top_up_pending-disabled`,
+      payment_method: `pm_auto_top_up_pending-disabled`,
+      latest_charge: 'ch_auto_top_up_pending_disabled',
+      livemode: false,
+      status: 'succeeded',
+      metadata,
+    } as Stripe.PaymentIntent;
+    const successEvent = {
+      id: 'evt_auto_top_up_pending_disabled_success',
+      type: 'payment_intent.succeeded',
+      api_version: '2026-06-24.dahlia',
+      account: stripeAccount.stripeAccountId,
+      livemode: false,
+      created: Math.floor(now.getTime() / 1000),
+      data: { object: paidIntent },
+    } as Stripe.Event;
+    const failedEvent = {
+      ...successEvent,
+      id: 'evt_auto_top_up_pending_disabled_failure',
+      type: 'payment_intent.payment_failed',
+      created: Math.floor(now.getTime() / 1000) - 1,
+      data: {
+        object: {
+          ...paidIntent,
+          status: 'requires_payment_method',
+          last_payment_error: { code: 'card_declined' },
+        },
+      },
+    } as Stripe.Event;
+    const stripe = {
+      accounts: {
+        retrieveCurrent: vi.fn().mockResolvedValue({ id: stripeAccount.stripeAccountId }),
+      },
+      events: {
+        list: vi.fn().mockResolvedValue({ data: [successEvent, failedEvent], has_more: false }),
+      },
+      paymentIntents: {
+        create: vi.fn(),
+        retrieve: vi.fn().mockResolvedValue(paidIntent),
+      },
+      checkout: { sessions: { retrieve: vi.fn(), list: vi.fn() } },
+      paymentMethods: { retrieve: vi.fn() },
+      prices: { retrieve: vi.fn() },
+      products: { retrieve: vi.fn() },
+      disputes: { retrieve: vi.fn() },
+      refunds: { retrieve: vi.fn() },
+      setupIntents: { retrieve: vi.fn() },
+    } as never;
+    const runCycle = () =>
+      runCreditAutoTopUpCycle({
+        prisma: handle!.prisma,
+        stripe,
+        stripeLivemode: false,
+        listCandidates: vi.fn().mockResolvedValue([pendingDisabled.creditAccount]),
+        now: () => now,
+      });
+    const [first, second] = await Promise.all([runCycle(), runCycle()]);
+    const attempt = await handle!.prisma.billingCreditAutoTopUpAttempt.findUniqueOrThrow({
+      where: { id: claim.attemptId },
+    });
+    const entries = await handle!.prisma.billingCreditEntry.findMany({
+      where: {
+        sourceType: 'credit_auto_top_up_attempt',
+        sourceId: claim.attemptId,
+      },
+    });
+    const creditAccount = await handle!.prisma.billingCreditAccount.findUniqueOrThrow({
+      where: { id: pendingDisabled.creditAccount },
+    });
+
+    expect(attempt.status).toBe('SUCCEEDED');
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.amountMicrocredits).toBe(5_000_000_000n);
+    expect(creditAccount.balanceMicrocredits).toBe(5_100_000_000n);
+    expect(creditAccount.autoTopUpState).toBe('ACTIVE');
+    expect(stripe.paymentIntents.create).not.toHaveBeenCalled();
+    expect(stripe.events.list).toHaveBeenCalledTimes(2);
+    expect([first, second].map((result) => result.recovered).sort()).toEqual([0, 1]);
+
+    const replay = await applyTrustedCreditFundingStripeEvent({
+      event: successEvent,
+      expectedPaymentIntentId: intentId,
+      stripe,
+      account: stripeAccount,
+      prisma: handle!.prisma,
+    });
+    expect(replay).toEqual({ duplicate: true, applied: false });
+    await expect(
+      handle!.prisma.billingCreditEntry.count({
+        where: {
+          sourceType: 'credit_auto_top_up_attempt',
+          sourceId: claim.attemptId,
+        },
+      }),
+    ).resolves.toBe(1);
   }, 20_000);
 });

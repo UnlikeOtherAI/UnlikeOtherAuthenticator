@@ -917,6 +917,26 @@ charge, SetupIntent, refund, and dispute binding drift also fails retryably.
 Invoice reconciliation events received while collection is disabled remain
 unconsumed so an operator can replay/reconcile them before enabling collection.
 
+For a pending automatic attempt, the scheduler also performs one account-level
+Stripe Events API scan to recover original payment lifecycle events missed by
+webhook delivery, including when Stripe created the PaymentIntent but its ID
+was not persisted. The scan is
+bounded to five pages of 100 events and to the attempt window (with a five-minute
+clock allowance), capped at Stripe's 30-day event retention. It considers only
+the original Stripe events returned for the configured account and mode, then
+uses the same event version/account checks, freshly retrieved PaymentIntent
+binding validation, durable event deduplication, and atomic funding apply as a
+signed webhook. An unbound attempt can match only an original Event whose
+reserved attempt metadata exactly identifies it; full Stripe object binding
+checks then establish the PaymentIntent ID. It never creates a replacement
+PaymentIntent. Recovery continues
+for an already-pending attempt even if auto-top-up consent was later disabled;
+turning off automatic top-ups prevents new attempts, while a payment already
+started may still complete.
+An absent event, expired window, incomplete/failed scan, or invalid event remains
+unresolved and is reported as a bounded diagnostic; it does not mark the attempt
+paid or add credits. Replaying an event cannot add credits twice.
+
 The public credit view is a manager/member discriminated union. A manager may
 receive per-user usage, payment-method display data, consent actor details, and
 enabled funding actions. An ordinary member receives the shared remaining and
