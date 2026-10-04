@@ -15,8 +15,8 @@ import {
 } from './billing-stripe-client.service.js';
 import {
   runCreditAutoTopUpCycle,
-  startCreditAutoTopUpScheduler,
 } from './billing-credit-auto-top-up-runtime.service.js';
+import { startCreditAutoTopUpScheduler } from './billing-credit-auto-top-up-scheduler.service.js';
 
 type StripeSchedulerClient = Pick<Stripe, 'accounts' | 'billing'>;
 

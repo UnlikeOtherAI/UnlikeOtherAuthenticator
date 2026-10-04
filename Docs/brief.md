@@ -2631,7 +2631,13 @@ below their UOA consent threshold, rechecks current policy/offer/catalog and the
 UTC monthly cap under a database lock, and commits one attributed attempt before
 any off-session payment. A second per-account PostgreSQL lock serializes Stripe
 dispatch across replicas. Lost responses reuse that attempt's deterministic
-Stripe idempotency key; only signed webhooks terminalize it or add credits.
+Stripe idempotency key. Signed webhooks or a bounded, account-scoped Stripe
+Events API scan can apply its original lifecycle event through the same
+validation, deduplication, and atomic funding path. An unbound attempt matches
+only an original Event carrying its exact attempt metadata, then validates the
+retrieved PaymentIntent fully. Recovery never creates a replacement PaymentIntent
+and does not depend on current auto-top-up consent; missing, expired, incomplete,
+or invalid event history leaves the attempt unresolved.
 
 Recurring add-ons are UOA subscriptions scoped to an organisation, team, or
 subscribing user. DeepWater privacy is a versioned US$50/month offer.
@@ -2710,6 +2716,17 @@ after the Setup Checkout opens remains bound to its original consent revision
 and may dispatch only once with its existing idempotency key. Payment-card
 expiry is projected from a fresh, exact customer-bound Stripe card using its
 UTC valid-through month; a failed or mismatched read never means expired.
+Managers may turn off future automatic charges while an older attempt is
+unresolved. This clears current consent and card pointers but leaves the old
+attempt tied to its immutable consent; only its exact late payment evidence can
+settle it, once, and it cannot restore automatic top-up. A timed-out request
+whose payment ID was not saved is not retried after disable. The projection
+shows automatic top-up as paused when the exact monthly remainder cannot cover
+one full saved refill, and shows the reset date from the UTC period end.
+The manager may revoke the shared account through any currently authorized
+lifecycle app key for that team, including another connected service or a
+rotated key; the audit records the acting app while the old attempt remains
+bound to its original consent app and service.
 Missing policy, catalog, payment, consent, or Stripe evidence fails closed and
 keeps the corresponding projected action disabled.
 

@@ -316,13 +316,6 @@ export async function resolveBillingCreditActionReadiness(params: {
   );
   const selectedCatalog = selected ? catalogForOffer(data, selected.refillOffer) : undefined;
   const selectedCatalogReady = Boolean(selectedCatalog && catalogs.has(selectedCatalog.id));
-  const unresolvedPayment = data.unresolvedAttempts.some(
-    (attempt) =>
-      attempt.status === BillingCreditAutoTopUpAttemptStatus.PENDING ||
-      attempt.status === BillingCreditAutoTopUpAttemptStatus.PROCESSING ||
-      attempt.status === BillingCreditAutoTopUpAttemptStatus.REQUIRES_ACTION ||
-      attempt.status === BillingCreditAutoTopUpAttemptStatus.NEEDS_REVIEW,
-  );
   return {
     executableCatalogIds: catalogs,
     paymentMethodReady: paymentMethod.ready,
@@ -336,7 +329,7 @@ export async function resolveBillingCreditActionReadiness(params: {
       returnUrlsReady &&
       data.unresolvedSetupCheckouts.length === 0 &&
       data.unresolvedTopUpCheckouts.length === 0,
-    disableReady: !unresolvedPayment,
+    disableReady: true,
     recoverReady: await currentRecoveryReady(
       stripe,
       collection,

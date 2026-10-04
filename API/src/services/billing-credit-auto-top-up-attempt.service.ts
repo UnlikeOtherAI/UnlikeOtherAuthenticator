@@ -41,6 +41,13 @@ export type CreditAutoTopUpClaim =
         | 'threshold_not_reached';
     };
 
+export type CreditAutoTopUpWebhookCandidate = {
+  attemptId: string;
+  creditAccountId: string;
+  stripePaymentIntentId: string | null;
+  createdAt: Date;
+};
+
 type BillingClock = {
   billingMonth: string;
   currentTime: Date;
@@ -80,60 +87,60 @@ function activeConfigurationIsExact(
   const customer = credit.customer;
   return Boolean(
     revision &&
-      policy &&
-      option &&
-      offer &&
-      appKey &&
-      credit.accountId === accountId &&
-      credit.currency === 'USD' &&
-      credit.autoTopUpState === BillingCreditAutoTopUpState.ACTIVE &&
-      customer.accountId === accountId &&
-      customer.orgId === credit.orgId &&
-      customer.teamId === credit.teamId &&
-      customer.scope === BillingAssignmentScope.TEAM &&
-      customer.scopeKey === `${credit.orgId}:${credit.teamId}` &&
-      Boolean(customer.stripeCustomerId) &&
-      credit.autoTopUpPolicyId === policy.id &&
-      credit.autoTopUpServiceId === policy.serviceId &&
-      credit.autoTopUpAppKeyId === appKey.id &&
-      credit.autoTopUpConsentRevisionId === revision.id &&
-      credit.autoTopUpOptionId === option.id &&
-      credit.autoTopUpRefillOfferId === offer.id &&
-      credit.autoTopUpThresholdMicrocredits === revision.thresholdMicrocredits &&
-      credit.autoTopUpMonthlyChargeCapMinor === revision.monthlyChargeCapMinor &&
-      credit.autoTopUpConsentVersion === revision.consentVersion &&
-      credit.autoTopUpConsentedAt?.getTime() === revision.consentedAt.getTime() &&
-      credit.autoTopUpConsentedByUserId === revision.consentedByUserId &&
-      credit.stripePaymentMethodId === revision.stripePaymentMethodId &&
-      revision.accountId === accountId &&
-      revision.creditAccountId === credit.id &&
-      revision.orgId === credit.orgId &&
-      revision.teamId === credit.teamId &&
-      revision.serviceId === policy.serviceId &&
-      revision.appKeyId === appKey.id &&
-      revision.policyId === policy.id &&
-      revision.optionId === option.id &&
-      revision.refillOfferId === offer.id &&
-      policy.currency === 'USD' &&
-      policy.active &&
-      policy.automaticTopUpEnabled &&
-      policy.automaticConsentVersion === revision.consentVersion &&
-      option.active &&
-      option.policyId === policy.id &&
-      option.serviceId === policy.serviceId &&
-      option.refillOfferId === offer.id &&
-      option.thresholdMicrocredits === revision.thresholdMicrocredits &&
-      option.monthlyChargeCapMinor === revision.monthlyChargeCapMinor &&
-      offer.active &&
-      offer.policyId === policy.id &&
-      offer.serviceId === policy.serviceId &&
-      offer.automaticTopUpEligible &&
-      offer.paymentAmountMinor === revision.refillPaymentAmountMinor &&
-      offer.creditsReceivedMicrocredits === revision.refillCreditsMicrocredits &&
-      appKey.serviceId === policy.serviceId &&
-      appKey.purpose === BillingAppKeyPurpose.CUSTOMER_LIFECYCLE &&
-      !appKey.revokedAt &&
-      (!appKey.expiresAt || appKey.expiresAt > currentTime),
+    policy &&
+    option &&
+    offer &&
+    appKey &&
+    credit.accountId === accountId &&
+    credit.currency === 'USD' &&
+    credit.autoTopUpState === BillingCreditAutoTopUpState.ACTIVE &&
+    customer.accountId === accountId &&
+    customer.orgId === credit.orgId &&
+    customer.teamId === credit.teamId &&
+    customer.scope === BillingAssignmentScope.TEAM &&
+    customer.scopeKey === `${credit.orgId}:${credit.teamId}` &&
+    Boolean(customer.stripeCustomerId) &&
+    credit.autoTopUpPolicyId === policy.id &&
+    credit.autoTopUpServiceId === policy.serviceId &&
+    credit.autoTopUpAppKeyId === appKey.id &&
+    credit.autoTopUpConsentRevisionId === revision.id &&
+    credit.autoTopUpOptionId === option.id &&
+    credit.autoTopUpRefillOfferId === offer.id &&
+    credit.autoTopUpThresholdMicrocredits === revision.thresholdMicrocredits &&
+    credit.autoTopUpMonthlyChargeCapMinor === revision.monthlyChargeCapMinor &&
+    credit.autoTopUpConsentVersion === revision.consentVersion &&
+    credit.autoTopUpConsentedAt?.getTime() === revision.consentedAt.getTime() &&
+    credit.autoTopUpConsentedByUserId === revision.consentedByUserId &&
+    credit.stripePaymentMethodId === revision.stripePaymentMethodId &&
+    revision.accountId === accountId &&
+    revision.creditAccountId === credit.id &&
+    revision.orgId === credit.orgId &&
+    revision.teamId === credit.teamId &&
+    revision.serviceId === policy.serviceId &&
+    revision.appKeyId === appKey.id &&
+    revision.policyId === policy.id &&
+    revision.optionId === option.id &&
+    revision.refillOfferId === offer.id &&
+    policy.currency === 'USD' &&
+    policy.active &&
+    policy.automaticTopUpEnabled &&
+    policy.automaticConsentVersion === revision.consentVersion &&
+    option.active &&
+    option.policyId === policy.id &&
+    option.serviceId === policy.serviceId &&
+    option.refillOfferId === offer.id &&
+    option.thresholdMicrocredits === revision.thresholdMicrocredits &&
+    option.monthlyChargeCapMinor === revision.monthlyChargeCapMinor &&
+    offer.active &&
+    offer.policyId === policy.id &&
+    offer.serviceId === policy.serviceId &&
+    offer.automaticTopUpEligible &&
+    offer.paymentAmountMinor === revision.refillPaymentAmountMinor &&
+    offer.creditsReceivedMicrocredits === revision.refillCreditsMicrocredits &&
+    appKey.serviceId === policy.serviceId &&
+    appKey.purpose === BillingAppKeyPurpose.CUSTOMER_LIFECYCLE &&
+    !appKey.revokedAt &&
+    (!appKey.expiresAt || appKey.expiresAt > currentTime),
   );
 }
 
@@ -177,8 +184,16 @@ export async function listCreditAutoTopUpCandidateIds(
         AND attempt."stripe_payment_intent_id" IS NULL
       UNION ALL
       SELECT
-        credit."id" AS "creditAccountId",
+        attempt."credit_account_id" AS "creditAccountId",
         1::integer AS "priority"
+      FROM "billing_credit_auto_top_up_attempts" AS attempt
+      WHERE attempt."account_id" = ${params.accountId}
+        AND attempt."status" IN ('PENDING', 'PROCESSING', 'REQUIRES_ACTION', 'NEEDS_REVIEW')
+        AND attempt."stripe_payment_intent_id" IS NOT NULL
+      UNION ALL
+      SELECT
+        credit."id" AS "creditAccountId",
+        2::integer AS "priority"
       FROM "billing_credit_accounts" AS credit
       WHERE credit."account_id" = ${params.accountId}
         AND credit."currency" = 'USD'
@@ -196,6 +211,34 @@ export async function listCreditAutoTopUpCandidateIds(
     LIMIT ${params.limit}
   `);
   return rows.map((row) => row.creditAccountId);
+}
+
+export async function listCreditAutoTopUpWebhookCandidates(
+  params: { accountId: string; creditAccountIds: string[]; limit: number },
+  deps: { prisma: PrismaClient },
+): Promise<CreditAutoTopUpWebhookCandidate[]> {
+  if (params.creditAccountIds.length === 0) return [];
+  const attempts = await deps.prisma.billingCreditAutoTopUpAttempt.findMany({
+    where: {
+      accountId: params.accountId,
+      creditAccountId: { in: params.creditAccountIds },
+      status: { in: [...OPEN_ATTEMPT_STATUSES] },
+    },
+    select: {
+      id: true,
+      creditAccountId: true,
+      stripePaymentIntentId: true,
+      createdAt: true,
+    },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    take: params.limit,
+  });
+  return attempts.map((attempt) => ({
+    attemptId: attempt.id,
+    creditAccountId: attempt.creditAccountId,
+    stripePaymentIntentId: attempt.stripePaymentIntentId,
+    createdAt: attempt.createdAt,
+  }));
 }
 
 export async function claimCreditAutoTopUpAttempt(

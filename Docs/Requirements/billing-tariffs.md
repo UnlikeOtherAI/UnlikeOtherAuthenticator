@@ -917,6 +917,26 @@ charge, SetupIntent, refund, and dispute binding drift also fails retryably.
 Invoice reconciliation events received while collection is disabled remain
 unconsumed so an operator can replay/reconcile them before enabling collection.
 
+For a pending automatic attempt, the scheduler also performs one account-level
+Stripe Events API scan to recover original payment lifecycle events missed by
+webhook delivery, including when Stripe created the PaymentIntent but its ID
+was not persisted. The scan is
+bounded to five pages of 100 events and to the attempt window (with a five-minute
+clock allowance), capped at Stripe's 30-day event retention. It considers only
+the original Stripe events returned for the configured account and mode, then
+uses the same event version/account checks, freshly retrieved PaymentIntent
+binding validation, durable event deduplication, and atomic funding apply as a
+signed webhook. An unbound attempt can match only an original Event whose
+reserved attempt metadata exactly identifies it; full Stripe object binding
+checks then establish the PaymentIntent ID. It never creates a replacement
+PaymentIntent. Recovery continues
+for an already-pending attempt even if auto-top-up consent was later disabled;
+turning off automatic top-ups prevents new attempts, while a payment already
+started may still complete.
+An absent event, expired window, incomplete/failed scan, or invalid event remains
+unresolved and is reported as a bounded diagnostic; it does not mark the attempt
+paid or add credits. Replaying an event cannot add credits twice.
+
 The public credit view is a manager/member discriminated union. A manager may
 receive per-user usage, payment-method display data, consent actor details, and
 enabled funding actions. An ordinary member receives the shared remaining and
@@ -1034,6 +1054,27 @@ last day of that month in UTC; only an earlier expiry month is `expired`. A
 failed or mismatched Stripe read disables the affected action but never
 classifies the card as expired. The existing credit protocol status field
 carries this projection; no route or protocol shape is added.
+
+Turning off automatic top-up revokes future consent even while an older
+attempt is unresolved. The disable transaction advances the generation,
+removes the current account consent and card pointer, and leaves that attempt
+and its immutable consent revision intact. An attempt with a persisted Payment
+Intent waits for its matching webhook; an attempt whose Stripe request timed
+out before its Payment Intent ID was saved is never retried after disable, but
+an exact late event may still settle it once. Neither path can restore consent
+or activate automatic top-up.
+
+The manager who disables a shared credit account may use any currently
+authorized lifecycle app key for that exact team, including one from another
+connected service or a rotated key. The disable audit records the acting app
+and service; the unresolved attempt and later Stripe event stay bound to the
+original consent's app and service.
+
+The projected automatic-top-up state is `paused` when the saved monthly limit
+cannot cover one full refill, including when a positive remainder is smaller
+than that refill. The projection keeps the exact charged and remaining money
+values and gives the reset date from the current UTC billing period end; it
+does not infer a smaller refill or alter the saved limit.
 
 When a team already has one pending top-up Checkout, the read projection may
 offer **Continue payment** only for that Checkout's exact active offer after

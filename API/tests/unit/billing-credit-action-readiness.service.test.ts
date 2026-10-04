@@ -146,6 +146,33 @@ function recoveryIntent() {
 }
 
 describe('credit funding action readiness', () => {
+  it('allows managers to turn off future top-ups with an unknown older attempt', async () => {
+    const client = stripe();
+    const data = projectionData({
+      autoTopUpState: BillingCreditAutoTopUpState.ACTIVE,
+      autoTopUpOptionId: 'option_1',
+      stripePaymentMethodId: 'pm_current',
+    });
+    data.unresolvedAttempts = [
+      { id: 'attempt_pending', status: 'PENDING', stripePaymentIntentId: null },
+    ] as never;
+    client.paymentMethods.retrieve.mockResolvedValue({
+      id: 'pm_current',
+      livemode: false,
+      type: 'card',
+      customer: 'cus_1',
+      card: { brand: 'visa', last4: '4242', exp_month: 12, exp_year: 2030 },
+    });
+
+    const result = await resolveBillingCreditActionReadiness({
+      collection: { account, stripeCollectionEnabled: true, stripe: client as never },
+      credential: credential as never,
+      data: data as never,
+    });
+
+    expect(result.disableReady).toBe(true);
+  });
+
   it('uses current active Stripe Price/Product evidence and freezes stale catalog actions', async () => {
     const client = stripe();
     const ready = await resolveBillingCreditActionReadiness({
