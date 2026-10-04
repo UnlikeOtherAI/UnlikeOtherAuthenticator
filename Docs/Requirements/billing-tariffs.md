@@ -1005,6 +1005,11 @@ is silently assigned to one service. A second attempt with the same immutable
 effect is idempotent, while a verified payment or refund appends a new cycle
 revision with updated paid and outstanding amounts. The original legal PDF
 and its single invoice-line allocation remain immutable.
+An actual issuer VOID appends an explicit `voided` customer cycle with zero
+current liability, preserving the prior issued cycle and legal PDF bytes.
+The five-minute manual reconciliation scheduler revisits issued allocations
+for later payments/refunds and voids independent of customer page reads;
+failures remain held and retried with their source invoice IDs and codes.
 If Ledger adds a late receipt before finalization, preparation appends a new
 pending revision and retains the original snapshot. A late receipt after
 finalization holds for a separately evidenced financial adjustment. Customer

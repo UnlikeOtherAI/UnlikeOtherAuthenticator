@@ -15,7 +15,8 @@ export type BillingCycleState =
   | 'open_preview'
   | 'pending_reconciliation'
   | 'finalized'
-  | 'adjusted';
+  | 'adjusted'
+  | 'voided';
 export type BillingCycleScope = {
   organisation_id: string;
   team_id: string | null;

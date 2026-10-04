@@ -146,7 +146,8 @@
                   "open_preview",
                   "pending_reconciliation",
                   "finalized",
-                  "adjusted"
+                  "adjusted",
+                  "voided"
                 ]
               },
               "scope": {
@@ -548,7 +549,8 @@
             "open_preview",
             "pending_reconciliation",
             "finalized",
-            "adjusted"
+            "adjusted",
+            "voided"
           ]
         },
         "scope": {

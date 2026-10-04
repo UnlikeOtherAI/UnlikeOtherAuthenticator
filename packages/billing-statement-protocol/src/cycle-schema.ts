@@ -66,7 +66,7 @@ const totals = object(
 const summaryProperties = {
   cycle_id: id,
   period,
-  state: { enum: ['open_preview', 'pending_reconciliation', 'finalized', 'adjusted'] },
+  state: { enum: ['open_preview', 'pending_reconciliation', 'finalized', 'adjusted', 'voided'] },
   scope,
   product,
   totals: { type: 'array', items: totals },
