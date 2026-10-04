@@ -72,7 +72,7 @@ export const billingEndpoints: EndpointSchema[] = [
     method: 'GET',
     path: '/schemas/billing-statement-v2.json',
     description:
-      'Public Draft 2020-12 schema for the SSO-filled customer statement and team-wide connected-service portfolio. V1 remains frozen and available.',
+      'Public Draft 2020-12 schema for the SSO-filled customer statement and team-wide connected-service portfolio. Both statement routes use the privacy-revised customer contract.',
     auth: 'public',
     response: {
       200: 'BillingStatementV2 JSON Schema',
@@ -133,7 +133,7 @@ export const billingEndpoints: EndpointSchema[] = [
     method: 'POST',
     path: '/billing/v1/effective-tariff',
     description:
-      'Resolve team > organisation > service-default tariff precedence, re-check active UOA membership, and return a signed content-free snapshot. Raw metered quantities remain immutable; the signed multiplier rates money and separately labeled customer billable units.',
+      'Resolve team > organisation > service-default tariff precedence, re-check active UOA membership, and return a signed content-free entitlement snapshot. UOA rates money privately; products receive collection and subscription terms, not provider cost or price adjustment.',
     auth: 'X-UOA-App-Key: uoa_app_… credential dedicated to the requested product, plus X-UOA-Actor: short-lived RS256 actor JWT bound to that credential, aud = this exact endpoint URL',
     body: {
       product: 'string (required) — exact global billing service identifier bound to the app key',
@@ -142,18 +142,18 @@ export const billingEndpoints: EndpointSchema[] = [
       user_id: 'string (required)',
     },
     response: {
-      200: '{ snapshot, payload } — snapshot is RS256 typ=uoa-tariff+jwt; payload contains schema/product/authorized app-key/subject, immutable tariff id+key+version, pricing mode, collection_mode, markup_bps, usage_price_multiplier_bps, monthly amount/currency, usage_billing_enabled, payment_collection_enabled, assignment scope, raw_usage_preserved=true, issued/expires timestamps',
+      200: '{ snapshot, payload } — snapshot is RS256 typ=uoa-tariff+jwt; payload contains schema/product/authorized app-key/subject, opaque tariff ID for UOA Checkout binding, collection_mode, monthly amount/currency, usage_billing_enabled, payment_collection_enabled, assignment scope, raw_usage_preserved=true, issued/expires timestamps; no private price basis',
       '401/403':
         'Generic error for invalid/revoked/wrong-product app key, invalid actor signature, actor/body mismatch, or inactive membership',
     },
     notes:
-      'Actor claims: iss/aud exact credential values, sub=user_id, product, organisation_id, team_id, unique jti, iat/exp with maximum 60-second lifetime. Snapshot iss is PUBLIC_BASE_URL; aud is the credential actor_issuer. Consumers must verify the signature and require exact signed product ID+identifier, authorized app-key ID, and user/organisation/team subject binding; shared actor signers never make snapshots portable across products. usage_billing_enabled controls rating; payment_collection_enabled and collection_mode independently describe whether/how payment is collected. Customer billable units are raw_metered_units × usage_price_multiplier_bps / 10000 and remain separately labeled from immutable raw units: token-equivalent for token-metered AI, search-equivalent for SERP, and research-equivalent for DeepWater.',
+      'Actor claims: iss/aud exact credential values, sub=user_id, product, organisation_id, team_id, unique jti, iat/exp with maximum 60-second lifetime. Snapshot iss is PUBLIC_BASE_URL; aud is the credential actor_issuer. Consumers must verify the signature and require exact signed product ID+identifier, authorized app-key ID, and user/organisation/team subject binding; shared actor signers never make snapshots portable across products. UOA alone rates usage; payment_collection_enabled and collection_mode describe whether/how payment is collected.',
   },
   {
     method: 'POST',
     path: '/billing/v1/customer-statement',
     description:
-      'Return UOA’s display-ready canonical plan, subscription, raw and centrally rated usage, cross-service and per-user attribution, exact commercial lines/totals, capabilities, and server-pinned actions. The statement pins immutable Ledger service/user snapshots and the exact UOA tariff version.',
+      'Return UOA’s display-ready canonical plan, subscription, raw usage, customer charges, cross-service and per-user attribution, exact commercial lines/totals, capabilities, and server-pinned actions. Private provider costs and markup are omitted. The statement pins immutable Ledger service/user snapshots and the exact UOA tariff version.',
     auth: 'The requested product’s customer_lifecycle X-UOA-App-Key plus a fresh credential-bound X-UOA-Actor assertion whose aud is this exact endpoint URL; both remain backend-only',
     body: {
       product: 'exact product identifier bound to the app key',
@@ -169,7 +169,7 @@ export const billingEndpoints: EndpointSchema[] = [
         'Ledger raw metering is invalid/unavailable or its dedicated reader is unconfigured',
     },
     notes:
-      'Products render this model and proxy only whitelisted action ID/path pairs. They never derive totals, markup wording, direct access, or cancellation choices. The browser receives neither app key nor actor JWT.',
+      'Products render this model and proxy only whitelisted action ID/path pairs. They never derive totals, private price terms, direct access, or cancellation choices. The browser receives neither app key nor actor JWT.',
   },
   {
     method: 'POST',

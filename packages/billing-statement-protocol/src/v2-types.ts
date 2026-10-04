@@ -1,7 +1,7 @@
-import type { BillingStatementV1, ExactMoney } from './types.js';
+import type { BillingStatementV1 } from './types.js';
 
 export const BILLING_STATEMENT_V2_SCHEMA_VERSION = 2 as const;
-export const BILLING_STATEMENT_V2_PROTOCOL_VERSION = '2.0.0' as const;
+export const BILLING_STATEMENT_V2_PROTOCOL_VERSION = '3.0.0' as const;
 export const BILLING_STATEMENT_V2_SCHEMA_PATH = '/schemas/billing-statement-v2.json' as const;
 export const BILLING_STATEMENT_V2_EXAMPLE_PATH =
   '/schemas/billing-statement-v2.example.json' as const;
@@ -24,20 +24,9 @@ export type BillingPortfolioUsageContribution = BillingPortfolioUsageTotal & {
   share: BillingUsageShare;
 };
 
-export type BillingPortfolioCostTotal = {
-  currency: string;
-  provider_cost: ExactMoney;
-  display: string;
-};
-
-export type BillingPortfolioCostContribution = BillingPortfolioCostTotal & {
-  share: BillingUsageShare | null;
-};
-
 export type BillingPortfolioTotals = {
   calls: string;
   usage: BillingPortfolioUsageTotal[];
-  provider_costs: BillingPortfolioCostTotal[];
 };
 
 export type BillingPortfolioOrigin = {
@@ -48,7 +37,6 @@ export type BillingPortfolioOrigin = {
   calls: string;
   call_share: BillingUsageShare;
   usage: BillingPortfolioUsageContribution[];
-  provider_costs: BillingPortfolioCostContribution[];
 };
 
 export type BillingPortfolioUser = {
@@ -59,7 +47,6 @@ export type BillingPortfolioUser = {
   calls: string;
   call_share: BillingUsageShare;
   usage: BillingPortfolioUsageContribution[];
-  provider_costs: BillingPortfolioCostContribution[];
 };
 
 export type BillingConnectedServiceUsage = {

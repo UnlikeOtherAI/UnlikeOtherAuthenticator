@@ -104,41 +104,13 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "id",
-        "key",
-        "version",
-        "mode",
         "collection_mode",
-        "markup_bps",
-        "markup_percent",
-        "usage_price_multiplier_bps",
         "monthly_subscription",
         "usage_billing_enabled",
         "payment_collection_enabled",
         "raw_usage_preserved"
       ],
       "properties": {
-        "id": {
-          "type": "string",
-          "minLength": 1
-        },
-        "key": {
-          "type": "string",
-          "minLength": 1
-        },
-        "version": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "mode": {
-          "type": "string",
-          "enum": [
-            "standard",
-            "free",
-            "at_cost",
-            "custom"
-          ]
-        },
         "collection_mode": {
           "type": "string",
           "enum": [
@@ -146,18 +118,6 @@
             "manual",
             "none"
           ]
-        },
-        "markup_bps": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "markup_percent": {
-          "type": "string",
-          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
-        },
-        "usage_price_multiplier_bps": {
-          "type": "integer",
-          "minimum": 0
         },
         "monthly_subscription": {
           "type": "object",
@@ -215,41 +175,13 @@
           "type": "object",
           "additionalProperties": false,
           "required": [
-            "id",
-            "key",
-            "version",
-            "mode",
             "collection_mode",
-            "markup_bps",
-            "markup_percent",
-            "usage_price_multiplier_bps",
             "monthly_subscription",
             "usage_billing_enabled",
             "payment_collection_enabled",
             "raw_usage_preserved"
           ],
           "properties": {
-            "id": {
-              "type": "string",
-              "minLength": 1
-            },
-            "key": {
-              "type": "string",
-              "minLength": 1
-            },
-            "version": {
-              "type": "integer",
-              "minimum": 0
-            },
-            "mode": {
-              "type": "string",
-              "enum": [
-                "standard",
-                "free",
-                "at_cost",
-                "custom"
-              ]
-            },
             "collection_mode": {
               "type": "string",
               "enum": [
@@ -257,18 +189,6 @@
                 "manual",
                 "none"
               ]
-            },
-            "markup_bps": {
-              "type": "integer",
-              "minimum": 0
-            },
-            "markup_percent": {
-              "type": "string",
-              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
-            },
-            "usage_price_multiplier_bps": {
-              "type": "integer",
-              "minimum": 0
             },
             "monthly_subscription": {
               "type": "object",

@@ -1,6 +1,6 @@
 {
   "name": "@unlikeotherai/billing-statement-protocol",
-  "version": "1.4.0",
+  "version": "2.0.0",
   "description": "Public UOA billing statement and customer-action consumer contracts",
   "license": "MIT",
   "type": "module",

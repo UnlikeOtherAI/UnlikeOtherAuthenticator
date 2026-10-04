@@ -49,7 +49,13 @@ const summary = {
     organisation_id: 'org-1',
     team_id: 'team-1',
   },
-  tariff: { id: 'tariff-1' },
+  tariff: {
+    collection_mode: 'stripe',
+    monthly_subscription: { amount_minor: '2000', currency: 'GBP' },
+    usage_billing_enabled: true,
+    payment_collection_enabled: true,
+    raw_usage_preserved: true,
+  },
   assignment: { scope: 'team', id: 'assignment-1' },
   stripe_collection_enabled: true,
   stripe_mode: 'test',
@@ -104,6 +110,7 @@ describe('Stripe customer subscription routes', () => {
       });
 
       expect(response.statusCode).toBe(200);
+      expect(response.json().tariff).toEqual(summary.tariff);
       expect(response.headers['cache-control']).toBe('private, no-store');
       expect(subscriptionService.getStripeSubscriptionSummary).toHaveBeenCalledWith({
         request: {

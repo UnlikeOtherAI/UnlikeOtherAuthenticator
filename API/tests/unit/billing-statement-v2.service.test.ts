@@ -260,10 +260,8 @@ describe('canonical UOA BillingStatementV2', () => {
       billingMonth: '2026-07',
       groupBy: 'user',
     });
-    expect(statement.usage.cost_totals).toEqual([
+    expect(statement.usage.charge_totals).toEqual([
       expect.objectContaining({
-        provider_cost: expect.objectContaining({ amount: '10' }),
-        markup: expect.objectContaining({ amount: '2' }),
         usage_charge: expect.objectContaining({ amount: '12' }),
       }),
     ]);
@@ -331,6 +329,9 @@ describe('canonical UOA BillingStatementV2', () => {
     addFormats(ajv);
     const validate = ajv.compile(billingStatementV2JsonSchema);
     expect(validate(statement), JSON.stringify(validate.errors)).toBe(true);
+    expect(JSON.stringify(statement)).not.toMatch(
+      /markup|provider[_ ]cost|multiplier|billable_units|rated_charge|cost_totals/i,
+    );
   });
 
   it('preserves unknown provenance and canonicalizes the statement product once', async () => {

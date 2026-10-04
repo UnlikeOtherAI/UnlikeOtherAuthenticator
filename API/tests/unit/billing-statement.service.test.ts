@@ -71,7 +71,7 @@ const effectiveTerm = {
   tariffId: 'tariff_standard_v4', assignmentId: 'assignment_1',
   tariff: {
     id: 'tariff_standard_v4', serviceId: 'service_deepwater', key: 'standard',
-    version: 4, name: 'Standard', mode: 'STANDARD', collectionMode: 'STRIPE',
+    version: 4, name: 'Provider cost plus 20% markup', mode: 'STANDARD', collectionMode: 'STRIPE',
     markupBps: 2_000, monthlyAmountMinor: 2000n, currency: 'GBP',
   },
 };
@@ -222,7 +222,7 @@ describe('canonical UOA billing statement', () => {
             kind: BillingAdjustmentKind.ADD_ON,
             cadence: BillingAdjustmentCadence.MONTHLY,
             active: true,
-            name: 'Priority support',
+            name: 'Provider cost markup adjustment',
             amountMinor: 1000n,
             currency: 'GBP',
           },
@@ -281,9 +281,7 @@ describe('canonical UOA billing statement', () => {
       product: { identifier: 'deepwater', name: 'DeepWater' },
       period: { key: '2026-07', state: 'open' },
       plan: {
-        display_name: 'Standard · v4',
-        markup_bps: 2_000,
-        markup_display: '20.00%',
+        display_name: 'Monthly subscription',
         monthly_subscription: {
           amount_minor: '2000',
           amount: '20',
@@ -309,21 +307,17 @@ describe('canonical UOA billing statement', () => {
       {
         usage_unit: 'requests',
         raw_units: '10',
-        billable_units: '12',
-        display: '12 billable requests (10 raw)',
+        display: '10 requests used',
       },
       {
         usage_unit: 'tokens',
         raw_units: '150',
-        billable_units: '180',
-        display: '180 billable tokens (150 raw)',
+        display: '150 tokens used',
       },
     ]);
-    expect(statement.usage.cost_totals).toEqual([
+    expect(statement.usage.charge_totals).toEqual([
       {
         currency: 'USD',
-        provider_cost: { amount: '3', currency: 'USD', display: '$3' },
-        markup: { amount: '0.6', currency: 'USD', display: '$0.6' },
         usage_charge: { amount: '3.6', currency: 'USD', display: '$3.6' },
       },
     ]);
@@ -331,7 +325,7 @@ describe('canonical UOA billing statement', () => {
       expect.objectContaining({
         user_id: 'user_1',
         email: 'ada@example.com',
-        costs: [
+        charges: [
           expect.objectContaining({
             usage_charge: expect.objectContaining({ amount: '1.2' }),
           }),
@@ -340,7 +334,7 @@ describe('canonical UOA billing statement', () => {
       expect.objectContaining({
         user_id: 'user_2',
         email: 'lin@example.com',
-        costs: [
+        charges: [
           expect.objectContaining({
             usage_charge: expect.objectContaining({ amount: '1.2' }),
           }),
@@ -399,6 +393,10 @@ describe('canonical UOA billing statement', () => {
     addFormats(ajv);
     const validate = ajv.compile(billingStatementV1JsonSchema);
     expect(validate(statement), JSON.stringify(validate.errors)).toBe(true);
+    expect(JSON.stringify(statement)).not.toMatch(
+      /markup|provider[_ ]cost|multiplier|billable_units|rated_charge|cost_totals/i,
+    );
+    expect(statement.usage.lines[0]?.customer_charge?.amount).toBe('2.4');
   });
 
   it('offers no action at all while the organisation pays and the caller cannot manage it', async () => {

@@ -5,31 +5,13 @@ tariff snapshots; they do not maintain independent tariff truth.
 
 ### Commercial semantics
 
-- Precedence is deterministic: **team assignment → organisation assignment → service default**.
-- Tariff versions are immutable. A new revision appends a version; changing a default or
-  assignment changes only the pointer used for later snapshots.
-- Modes are \`standard\`, \`free\`, \`at_cost\`, and \`custom\`.
-- Payment collection is an independent immutable tariff term:
-  \`collection_mode=stripe|manual|none\`. \`none\` keeps usage rating and cost
-  visibility while explicitly collecting no payment. \`free\` always requires
-  \`none\`; \`at_cost + none + monthly amount 0\` is the canonical
-  "provider cost visible, no payment" plan.
-- \`markup_bps\` is a price adjustment. Omitted \`standard\` defaults centrally to
-  3,000 bps (30.00%); \`custom\` requires an explicit value. \`free\` has a usage-price
-  multiplier of 0; \`at_cost\` has 10,000; \`standard\`/\`custom\` have
-  \`10,000 + markup_bps\`.
-- The optional monthly component is an exact integer minor-unit string plus ISO currency.
-  A \`free\` tariff has zero markup and zero monthly amount. An \`at_cost\` tariff may have a
-  separate monthly subscription, but its usage component remains provider cost.
-- **Raw token, request, byte, and search counts are never multiplied, rewritten, or
-  relabeled.** Ledger keeps immutable raw usage/provider cost and attribution only.
-  UOA applies the signed \`usage_price_multiplier_bps\` when rating money and deriving
-  separately labeled customer billable units:
-  \`raw_metered_units × usage_price_multiplier_bps / 10000\`. The result is a commercial
-  unit, not provider output; Ledger retains exact decimal-safe operands and consumers
-  show raw usage, billable units, and money separately. Its label follows the underlying
-  meter: token-equivalent for token-metered AI, search-equivalent for SERP, and
-  research-equivalent for DeepWater.
+- UOA resolves immutable monthly terms by team assignment, organisation assignment,
+  then service default. Only UOA rates selected Ledger provider cost.
+- The customer receives raw usage, exact usage charges, credit consumption,
+  monthly subscription price, collection status, and payer scope. Provider cost,
+  markup, margin, rate multipliers, and cost-basis modes stay inside UOA.
+- Product backends verify signed entitlement binding and render UOA-authored
+  customer statements. They do not calculate a customer price or credit debit.
 
 ### Dedicated product app keys
 
@@ -103,13 +85,7 @@ expiry. Its business claims mirror \`payload\`:
   },
   "tariff": {
     "id": "tariff_123",
-    "key": "standard",
-    "version": 2,
-    "mode": "standard",
     "collection_mode": "stripe",
-    "markup_bps": 3000,
-    "markup_percent": "30.00",
-    "usage_price_multiplier_bps": 13000,
     "monthly_subscription": { "amount_minor": "2000", "currency": "USD" },
     "usage_billing_enabled": true,
     "payment_collection_enabled": true,
@@ -154,9 +130,10 @@ UOA is the sole commercial billing engine. Ledger returns only immutable
 \`metering-usage-v1\` facts; it never returns tariff, subscription, markup,
 billable-unit, customer-charge, add-on, credit, payment, or cancellation fields.
 
-\`GET /schemas/billing-statement-v1.json\` publishes the frozen Draft 2020-12 response
+\`GET /schemas/billing-statement-v1.json\` publishes the Draft 2020-12 response
 schema. \`GET /schemas/billing-statement-v2.json\` adds the complete SSO-filled,
-team-wide connected-service portfolio without mutating v1. The open-source-safe
+team-wide connected-service portfolio. Package 2.0.0 is a breaking privacy
+revision; strict consumers must update before UOA serves the revised schemas. The open-source-safe
 \`@unlikeotherai/billing-statement-protocol\` package
 is the TypeScript source used by UOA itself; it has no private server imports or
 credentials. Until registry publication, consumers can vendor/pack that package
@@ -169,8 +146,8 @@ call:
 
 with their own \`customer_lifecycle\` app key, a fresh bound \`X-UOA-Actor\`, and the
 same product/organisation/team/user subject body (plus optional \`billing_month\`).
-The response is display-ready: exact current plan and subscription, raw and billable
-usage, service/caller/origin attribution, per-user totals, monthly/usage/add-on/credit
+The response is display-ready: exact current plan and subscription, raw usage
+and customer charges, service/caller/origin attribution, per-user totals, monthly/usage/add-on/credit
 lines, exact currency totals, capabilities, and action descriptors. V2 additionally
 contains team-wide raw totals for every connected billing product, complete
 \`origin_product\` contributions and shares, and per-user service shares. UOA rates
@@ -180,7 +157,7 @@ line items or charges on the current statement. One pinned, user-grouped
 commercial rating plus all service, origin, and user totals from it.
 
 Products render the supplied labels, descriptions, totals, shares, and actions
-unchanged. They never derive totals, markup wording, direct access, cancellation
+unchanged. They never derive totals, private price terms, direct access, cancellation
 choices, or a missing-origin remainder. A Nessie-originated DeepWater call therefore
 appears in Nessie’s DeepWater origin share but remains indirect access and cannot
 create a related cancellation choice. A null legacy origin renders as

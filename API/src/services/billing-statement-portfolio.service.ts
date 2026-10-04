@@ -1,7 +1,5 @@
 import type {
   BillingConnectedServicePortfolio,
-  BillingPortfolioCostContribution,
-  BillingPortfolioCostTotal,
   BillingPortfolioUsageContribution,
   BillingPortfolioUsageTotal,
   BillingStatementV2,
@@ -10,7 +8,6 @@ import type {
 import {
   addBillingDecimals,
   billingDecimalRatioBasisPoints,
-  exactMoney,
   sumBillingDecimals,
 } from './billing-money.service.js';
 import type {
@@ -26,11 +23,6 @@ type PortfolioService = BillingStatementV2['connected_service_usage']['services'
 
 function rawTotal(line: RawMeteringLine): string {
   return sumBillingDecimals([line.inputUnits, line.cachedInputUnits, line.outputUnits]);
-}
-
-function selectedCost(line: RawMeteringLine): { amount: string; currency: string } | null {
-  if (!line.currency || line.selectedProviderCost === null) return null;
-  return { amount: line.selectedProviderCost, currency: line.currency };
 }
 
 function groupLines<Key>(
@@ -54,16 +46,6 @@ function usageTotals(lines: RawMeteringLine[]): Map<string, string> {
       line.usageUnit,
       addBillingDecimals(totals.get(line.usageUnit) ?? '0', rawTotal(line)),
     );
-  }
-  return totals;
-}
-
-function costTotals(lines: RawMeteringLine[]): Map<string, string> {
-  const totals = new Map<string, string>();
-  for (const line of lines) {
-    const cost = selectedCost(line);
-    if (!cost) continue;
-    totals.set(cost.currency, addBillingDecimals(totals.get(cost.currency) ?? '0', cost.amount));
   }
   return totals;
 }
@@ -92,19 +74,6 @@ function usageTotalRows(lines: RawMeteringLine[]): BillingPortfolioUsageTotal[] 
     }));
 }
 
-function costTotalRows(lines: RawMeteringLine[]): BillingPortfolioCostTotal[] {
-  return [...costTotals(lines).entries()]
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([currency, amount]) => {
-      const providerCost = exactMoney(amount, currency);
-      return {
-        currency,
-        provider_cost: providerCost,
-        display: `${providerCost.display} raw provider cost across this team`,
-      };
-    });
-}
-
 function usageContributionRows(
   lines: RawMeteringLine[],
   serviceLines: RawMeteringLine[],
@@ -122,38 +91,6 @@ function usageContributionRows(
         raw_units: rawUnits,
         share: unitShare,
         display: `${contributorName} used ${displayInteger(rawUnits)} raw ${usageUnit} (${unitShare.percent}%)`,
-      };
-    });
-}
-
-function costContributionRows(
-  lines: RawMeteringLine[],
-  serviceLines: RawMeteringLine[],
-  contributorName: string,
-  serviceName: string,
-): BillingPortfolioCostContribution[] {
-  const contributor = costTotals(lines);
-  return [...costTotals(serviceLines).entries()]
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([currency, total]) => {
-      const amount = contributor.get(currency) ?? '0';
-      const providerCost = exactMoney(amount, currency);
-      const basisPoints = billingDecimalRatioBasisPoints(amount, total);
-      const costShare =
-        basisPoints === null
-          ? null
-          : {
-              basis_points: basisPoints,
-              percent: percentage(basisPoints),
-              display: `${percentage(basisPoints)}% of ${serviceName} ${currency} provider cost`,
-            };
-      return {
-        currency,
-        provider_cost: providerCost,
-        share: costShare,
-        display: costShare
-          ? `${contributorName} used ${providerCost.display} raw provider cost (${costShare.percent}%)`
-          : `${contributorName} used ${providerCost.display} raw provider cost; share unavailable after corrections`,
       };
     });
 }
@@ -187,7 +124,6 @@ function originRows(params: {
         calls: originCalls,
         call_share: share(originCalls, calls, `${params.serviceName} calls`),
         usage: usageContributionRows(lines, params.lines, displayName, params.serviceName),
-        provider_costs: costContributionRows(lines, params.lines, displayName, params.serviceName),
       };
     });
 }
@@ -217,7 +153,6 @@ function userRows(params: {
         calls: userCalls,
         call_share: share(userCalls, calls, `${params.serviceName} calls`),
         usage: usageContributionRows(lines, params.lines, displayName, params.serviceName),
-        provider_costs: costContributionRows(lines, params.lines, displayName, params.serviceName),
       };
     });
 }
@@ -305,7 +240,6 @@ export function buildConnectedServicePortfolio(params: {
         totals: {
           calls: sumBillingDecimals(lines.map((line) => line.calls)),
           usage: totals,
-          provider_costs: costTotalRows(lines),
         },
         origins,
         users: userRows({

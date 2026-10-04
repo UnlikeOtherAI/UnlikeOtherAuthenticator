@@ -66,8 +66,6 @@ export type {
   BillingConnectedServiceUsage,
   BillingOrganisationScopeV1,
   BillingOrganisationTeamUsageV1,
-  BillingPortfolioCostContribution,
-  BillingPortfolioCostTotal,
   BillingPortfolioOrigin,
   BillingPortfolioSnapshot,
   BillingPortfolioTotals,

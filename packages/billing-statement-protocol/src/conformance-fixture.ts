@@ -43,17 +43,8 @@ export const billingStatementV1ConformanceFixture: BillingStatementV1 = {
     },
   },
   plan: {
-    tariff_id: 'tariff_standard_example',
-    key: 'standard',
-    version: 4,
-    name: 'Standard',
-    display_name: 'Standard · v4',
-    mode: 'standard',
+    display_name: 'Monthly subscription',
     collection_mode: 'stripe',
-    markup_bps: 2000,
-    markup_percent: '20.00',
-    markup_display: '20.00%',
-    usage_multiplier_bps: 12000,
     monthly_subscription: {
       amount: '20',
       amount_minor: '2000',
@@ -116,39 +107,15 @@ export const billingStatementV1ConformanceFixture: BillingStatementV1 = {
           output: '50',
           total: '150',
         },
-        billable_units: {
-          input: '120',
-          cached_input: '0',
-          output: '60',
-          total: '180',
-        },
         share: {
           basis_points: 10000,
           percent: '100.00',
           display: '100.00%',
         },
-        provider_cost: {
-          amount: '3',
+        customer_charge: {
+          amount: '3.6',
           currency: 'USD',
-          display: '$3',
-          provenance: 'provider_invoice',
-        },
-        rated_charge: {
-          base: {
-            amount: '3',
-            currency: 'USD',
-            display: '$3',
-          },
-          markup: {
-            amount: '0.6',
-            currency: 'USD',
-            display: '$0.6',
-          },
-          total: {
-            amount: '3.6',
-            currency: 'USD',
-            display: '$3.6',
-          },
+          display: '$3.6',
         },
       },
     ],
@@ -156,23 +123,12 @@ export const billingStatementV1ConformanceFixture: BillingStatementV1 = {
       {
         usage_unit: 'tokens',
         raw_units: '150',
-        billable_units: '180',
-        display: '180 billable tokens (150 raw)',
+        display: '150 tokens used',
       },
     ],
-    cost_totals: [
+    charge_totals: [
       {
         currency: 'USD',
-        provider_cost: {
-          amount: '3',
-          currency: 'USD',
-          display: '$3',
-        },
-        markup: {
-          amount: '0.6',
-          currency: 'USD',
-          display: '$0.6',
-        },
         usage_charge: {
           amount: '3.6',
           currency: 'USD',
@@ -190,22 +146,11 @@ export const billingStatementV1ConformanceFixture: BillingStatementV1 = {
           {
             usage_unit: 'tokens',
             raw_units: '150',
-            billable_units: '180',
           },
         ],
-        costs: [
+        charges: [
           {
             currency: 'USD',
-            provider_cost: {
-              amount: '3',
-              currency: 'USD',
-              display: '$3',
-            },
-            markup: {
-              amount: '0.6',
-              currency: 'USD',
-              display: '$0.6',
-            },
             usage_charge: {
               amount: '3.6',
               currency: 'USD',
@@ -221,8 +166,8 @@ export const billingStatementV1ConformanceFixture: BillingStatementV1 = {
       id: 'monthly_subscription_example',
       kind: 'monthly_subscription',
       product: 'deepwater',
-      label: 'Standard monthly subscription',
-      detail: 'Standard · v4',
+      label: 'Monthly subscription',
+      detail: 'Subscription charge for this billing period',
       amount: {
         amount: '20',
         currency: 'GBP',
@@ -234,7 +179,7 @@ export const billingStatementV1ConformanceFixture: BillingStatementV1 = {
       kind: 'usage',
       product: 'deepwater',
       label: 'Usage',
-      detail: 'Provider cost plus 20.00% markup',
+      detail: 'Metered usage charge for this billing period',
       amount: {
         amount: '3.6',
         currency: 'USD',

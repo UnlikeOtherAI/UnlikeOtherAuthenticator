@@ -4,11 +4,13 @@ Public, open-source-safe consumer contracts for UOA's display-ready
 `BillingStatementV1`, `BillingStatementV2`, shared `BillingCreditsV1`, recurring
 add-ons, and customer billing actions.
 
-V1 remains frozen for existing consumers. V2 adds a complete team-wide
-connected-service portfolio, already aggregated and labelled by UOA, while
-retaining the same UOA-owned commercial statement. Products render either
-version without calculating usage shares, customer prices, markup, totals, or
-cancellation choices.
+Package 2.0.0 is a breaking customer-privacy revision. The v1 and v2 route
+names remain, but both statement schemas omit raw provider cost, markup,
+cost-basis mode, multipliers and derived billable units. V2 adds a team-wide
+connected-service portfolio of raw usage and attribution shares. Products
+render UOA-authored customer charges, subscription prices and credit balances
+without calculating prices, totals or cancellation choices. Strict consumers
+must update their validators and field mappings before the producer deploys.
 
 The action contract covers the normalized hosted redirect response,
 cancellation selection, exact preview and `confirm_action`, confirmation
@@ -69,7 +71,7 @@ New consumers request `POST /billing/v2/customer-statement`. Its
 metered service in the exact team and month, the service's origin-product
 shares, and per-user shares. UOA derives the requested product's rating and all
 of those totals from one pinned user-grouped Ledger portfolio snapshot.
-Other-service totals are explanatory only and never become line items on the
+Other-service raw usage totals are explanatory only and never become line items on the
 requested product's commercial statement.
 Indirect use such as Nessie calling DeepWater can appear as a Nessie origin
 share, but it is not direct DeepWater access and cannot create a related

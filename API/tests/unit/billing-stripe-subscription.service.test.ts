@@ -169,6 +169,14 @@ describe('Stripe customer subscription lifecycle', () => {
       },
     });
     expect(result.subscription).not.toHaveProperty('stripe_subscription_id');
+    expect(result.tariff).toEqual({
+      collection_mode: payload.tariff.collection_mode,
+      monthly_subscription: payload.tariff.monthly_subscription,
+      usage_billing_enabled: payload.tariff.usage_billing_enabled,
+      payment_collection_enabled: payload.tariff.payment_collection_enabled,
+      raw_usage_preserved: true,
+    });
+    expect(JSON.stringify(result.tariff)).not.toMatch(/markup|provider[_ ]cost|multiplier|at_cost/i);
     expect(state.refreshSubscription).toHaveBeenCalledWith(
       { subscriptionId: 'sub_123', account },
       expect.objectContaining({ prisma: state.prisma, stripe: state.stripe }),

@@ -131,32 +131,14 @@ export const billingStatementV1JsonSchema = {
       type: 'object',
       additionalProperties: false,
       required: [
-        'tariff_id',
-        'key',
-        'version',
-        'name',
         'display_name',
-        'mode',
         'collection_mode',
-        'markup_bps',
-        'markup_percent',
-        'markup_display',
-        'usage_multiplier_bps',
         'monthly_subscription',
         'assignment',
       ],
       properties: {
-        tariff_id: { type: 'string' },
-        key: { type: 'string' },
-        version: { type: 'integer', minimum: 1 },
-        name: { type: 'string' },
         display_name: { type: 'string' },
-        mode: { type: 'string', enum: ['standard', 'free', 'at_cost', 'custom'] },
         collection_mode: { type: 'string', enum: ['stripe', 'manual', 'none'] },
-        markup_bps: { type: 'integer', minimum: 0 },
-        markup_percent: { type: 'string' },
-        markup_display: { type: 'string' },
-        usage_multiplier_bps: { type: 'integer', minimum: 0 },
         monthly_subscription: {
           type: 'object',
           additionalProperties: false,
@@ -238,7 +220,7 @@ export const billingStatementV1JsonSchema = {
     usage: {
       type: 'object',
       additionalProperties: false,
-      required: ['lines', 'totals', 'cost_totals', 'user_totals'],
+      required: ['lines', 'totals', 'charge_totals', 'user_totals'],
       properties: {
         lines: {
           type: 'array',
@@ -252,10 +234,8 @@ export const billingStatementV1JsonSchema = {
               'calls',
               'attribution',
               'raw_units',
-              'billable_units',
               'share',
-              'provider_cost',
-              'rated_charge',
+              'customer_charge',
             ],
             properties: {
               id: { type: 'string' },
@@ -274,7 +254,6 @@ export const billingStatementV1JsonSchema = {
                 },
               },
               raw_units: unitSetSchema,
-              billable_units: unitSetSchema,
               share: {
                 type: 'object',
                 additionalProperties: false,
@@ -285,30 +264,7 @@ export const billingStatementV1JsonSchema = {
                   display: { type: 'string' },
                 },
               },
-              provider_cost: {
-                anyOf: [
-                  { type: 'null' },
-                  {
-                    type: 'object',
-                    additionalProperties: false,
-                    required: ['amount', 'currency', 'display', 'provenance'],
-                    properties: {
-                      ...exactMoneyProperties,
-                      provenance: { type: 'string' },
-                    },
-                  },
-                ],
-              },
-              rated_charge: {
-                type: ['object', 'null'],
-                additionalProperties: false,
-                required: ['base', 'markup', 'total'],
-                properties: {
-                  base: exactMoneySchema,
-                  markup: exactMoneySchema,
-                  total: exactMoneySchema,
-                },
-              },
+              customer_charge: { anyOf: [exactMoneySchema, { type: 'null' }] },
             },
           },
         },
@@ -317,25 +273,22 @@ export const billingStatementV1JsonSchema = {
           items: {
             type: 'object',
             additionalProperties: false,
-            required: ['usage_unit', 'raw_units', 'billable_units', 'display'],
+            required: ['usage_unit', 'raw_units', 'display'],
             properties: {
               usage_unit: { type: 'string' },
               raw_units: { type: 'string' },
-              billable_units: { type: 'string' },
               display: { type: 'string' },
             },
           },
         },
-        cost_totals: {
+        charge_totals: {
           type: 'array',
           items: {
             type: 'object',
             additionalProperties: false,
-            required: ['currency', 'provider_cost', 'markup', 'usage_charge'],
+            required: ['currency', 'usage_charge'],
             properties: {
               currency: { type: 'string' },
-              provider_cost: exactMoneySchema,
-              markup: exactMoneySchema,
               usage_charge: exactMoneySchema,
             },
           },
@@ -345,7 +298,7 @@ export const billingStatementV1JsonSchema = {
           items: {
             type: 'object',
             additionalProperties: false,
-            required: ['user_id', 'name', 'email', 'calls', 'usage', 'costs'],
+            required: ['user_id', 'name', 'email', 'calls', 'usage', 'charges'],
             properties: {
               user_id: { type: 'string' },
               name: { type: ['string', 'null'] },
@@ -356,24 +309,21 @@ export const billingStatementV1JsonSchema = {
                 items: {
                   type: 'object',
                   additionalProperties: false,
-                  required: ['usage_unit', 'raw_units', 'billable_units'],
+                  required: ['usage_unit', 'raw_units'],
                   properties: {
                     usage_unit: { type: 'string' },
                     raw_units: { type: 'string' },
-                    billable_units: { type: 'string' },
                   },
                 },
               },
-              costs: {
+              charges: {
                 type: 'array',
                 items: {
                   type: 'object',
                   additionalProperties: false,
-                  required: ['currency', 'provider_cost', 'markup', 'usage_charge'],
+                  required: ['currency', 'usage_charge'],
                   properties: {
                     currency: { type: 'string' },
-                    provider_cost: exactMoneySchema,
-                    markup: exactMoneySchema,
                     usage_charge: exactMoneySchema,
                   },
                 },
