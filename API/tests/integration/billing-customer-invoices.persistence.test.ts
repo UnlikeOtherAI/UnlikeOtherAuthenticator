@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 
 import {
   BillingAppKeyPurpose, BillingAssignmentScope, BillingCreditEntryDirection,
-  BillingCreditEntryKind, BillingCreditPaymentInvoiceSource,
+  BillingCreditEntryKind, BillingCreditInvoiceTaxTreatment, BillingCreditPaymentInvoiceSource,
   BillingCreditPaymentInvoiceState, BillingCreditPaymentInvoiceTaxSource,
   BillingCollectionMode, BillingInvoiceStatus, BillingTariffMode,
   BillingOrganisationContractStatus, MembershipStatus,
@@ -258,10 +258,17 @@ describe.skipIf(!enabled)('actual customer invoice persistence and scope', () =>
       pdfSha256: 'd'.repeat(64), pdfTemplateVersion: 'proof-v1',
     } });
     mixedInvoiceId = mixed.id;
+    const taxPolicy = await db.prisma.billingCreditInvoiceTaxPolicy.create({ data: {
+      accountId: account.id, version: 1, issuerProfileId: issuer.id,
+      jurisdictionCountry: 'GB', treatment: BillingCreditInvoiceTaxTreatment.NO_TAX_CHARGED,
+      rateBps: 0, legalBasisReference: 'Explicit local invoice-reader fixture policy',
+      effectiveFrom: new Date('2026-09-01T00:00:00.000Z'),
+      createdByUserId: ownerId, createdByEmail: owner.email,
+    } });
     await db.prisma.billingCreditPaymentInvoice.update({ where: { id: paymentIds[0] }, data: {
       state: BillingCreditPaymentInvoiceState.ISSUED,
       taxAmountMinor: 0n, taxSource: BillingCreditPaymentInvoiceTaxSource.ISSUER_POLICY,
-      taxEvidenceReference: 'synthetic-policy-v1',
+      taxEvidenceReference: taxPolicy.id, taxPolicyId: taxPolicy.id,
       issuerProfileId: issuer.id, buyerProfileId: buyer.id,
       issuerSnapshot: { legal_name: 'UOA Ltd' }, buyerSnapshot: { legal_name: 'Buyer Ltd' },
       invoiceNumber: `INV-${randomUUID()}`, issuedAt: new Date('2026-10-01T01:00:00.000Z'),
