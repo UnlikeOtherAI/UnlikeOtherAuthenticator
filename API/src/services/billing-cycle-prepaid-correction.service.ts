@@ -13,10 +13,12 @@ import {
   renderBillingCycleBreakdownCsv, renderBillingCycleBreakdownPdf,
 } from './billing-cycle-breakdown.service.js';
 import { readVerifiedCycleCreditEvidence,
-  type VerifiedCycleCreditEvidence } from './billing-cycle-paid-credit-evidence.service.js';
+  usdFromRatedMicrocredits, type VerifiedCycleCreditEvidence } from
+  './billing-cycle-paid-credit-evidence.service.js';
 import { billingCycleSnapshotDigest } from './billing-cycle-read.service.js';
 import { cycleMoney } from './billing-cycle-quote-projection.service.js';
 import { readCycleWalletBoundary } from './billing-cycle-wallet-boundary.service.js';
+import { addBillingDecimals, majorAmountToMinorRounded } from './billing-money.service.js';
 import { copyVerifiedDocument, invoiceSourceFingerprint } from
   './billing-cycle-manual-invoice.service.js';
 import {
@@ -77,11 +79,7 @@ function manualPaymentDigest(invoice: {
   })).digest('hex');
 }
 
-/**
- * PREPAID receipts have already produced immutable wallet debits. A zero-fee
- * first cycle has no monthly invoice to await; a late receipt changes only
- * the breakdown and never reissues the prior invoice's cash liability.
- */
+/** A zero-fee wallet-funded month has no new cash invoice to await. */
 export async function finalizePrepaidBillingCycle(
   params: { cycleId: string },
   deps?: { prisma?: PrismaClient; storage?: BillingInvoicePdfStorage },
@@ -129,22 +127,29 @@ export async function finalizePrepaidBillingCycle(
     (evidence.quote as Record<string, unknown> | undefined)?.tariff_id;
   const tariff = typeof tariffId === 'string' ?
     await prisma.billingTariff.findUnique({ where: { id: tariffId } }) : null;
-  if (!tariff || tariff.usagePaymentMode !== BillingUsagePaymentMode.PREPAID ||
+  const prepaid = tariff?.usagePaymentMode === BillingUsagePaymentMode.PREPAID;
+  const fundedPayg = tariff?.usagePaymentMode === BillingUsagePaymentMode.PAY_AS_YOU_GO;
+  if (!tariff || (!prepaid && !fundedPayg) ||
     (prior && (priorEvidence?.quote_fingerprint !== evidence.quote_fingerprint ||
       priorEvidence?.tariff_id !== evidence.tariff_id ||
       prior.scope.team_id !== revised.scope.team_id ||
       prior.scope.payer_scope !== revised.scope.payer_scope ||
       JSON.stringify(prior.subscription_lines) !== JSON.stringify(revised.subscription_lines) ||
-      prior.usage_lines.some((line) => line.usage_payment_mode !== 'prepaid' ||
-        line.customer_charge !== null))) ||
-    (!prior && revised.subscription_lines.some((line) =>
+      prior.usage_lines.some((line) => line.usage_payment_mode !==
+        (prepaid ? 'prepaid' : 'pay_as_you_go') ||
+        (prepaid ? line.customer_charge !== null : line.customer_charge === null)))) ||
+    ((!prior || fundedPayg) && revised.subscription_lines.some((line) =>
       line.customer_charge.amount_minor !== '0')) ||
-    revised.usage_lines.some((line) => line.usage_payment_mode !== 'prepaid' ||
-      line.customer_charge !== null)) return null;
+    revised.usage_lines.some((line) => line.usage_payment_mode !==
+      (prepaid ? 'prepaid' : 'pay_as_you_go') ||
+      (prepaid ? line.customer_charge !== null : line.customer_charge === null))) return null;
   const oldCredits = priorEvidence?.credit_evidence ?? [];
   const newCredits = evidence.credit_evidence;
   const snapshots = evidence.ledger_snapshots;
   const proofs = evidence.paid_receipt_proofs;
+  if (fundedPayg && (newCredits?.some((row) =>
+    row.funded_debit_microcredits === null) || oldCredits.some((row) =>
+    row.funded_debit_microcredits === null))) return null;
   if (!newCredits || !snapshots || !proofs ||
     newCredits.length !== snapshots.length || newCredits.length !== proofs.length ||
     total(newCredits, 'consumed_microcredits') <
@@ -160,8 +165,30 @@ export async function finalizePrepaidBillingCycle(
   const allocation = priorEvidence?.invoice_allocation as
     { source_kind?: string; source_invoice_id?: string; source_line_id?: string } | undefined;
   if (allocation && allocation.source_kind !== 'manual') return null;
+  if (fundedPayg && allocation) return null;
   if (!allocation && prior?.totals.some((row) =>
-    row.gross_total.amount_minor !== '0')) return null;
+    prepaid ? row.gross_total.amount_minor !== '0' :
+      row.gross_total.amount_minor !== row.credits_applied.amount_minor ||
+      row.total_due.amount_minor !== '0' || row.total_paid.amount_minor !== '0')) return null;
+  let fundedPaygTotals: BillingCycleDetailV2['totals'] | null = null;
+  if (fundedPayg) {
+    const payable = revised.usage_lines.map((line) =>
+      line.customer_charge?.amount ?? hold('BILLING_CYCLE_FUNDED_PAYG_CHARGE_MISSING'));
+    const usageMinor = majorAmountToMinorRounded(payable.reduce(addBillingDecimals, '0'),
+      tariff.currency);
+    const debitMinor = majorAmountToMinorRounded(usdFromRatedMicrocredits(
+      total(newCredits, 'funded_debit_microcredits')), tariff.currency);
+    if (usageMinor !== debitMinor) return null;
+    fundedPaygTotals = [{ currency: tariff.currency,
+      subscription: cycleMoney(0n, tariff.currency),
+      usage_charge: cycleMoney(usageMinor, tariff.currency),
+      tax: cycleMoney(0n, tariff.currency),
+      gross_total: cycleMoney(usageMinor, tariff.currency),
+      credits_applied: cycleMoney(debitMinor, tariff.currency),
+      total_due: cycleMoney(0n, tariff.currency),
+      total_paid: cycleMoney(0n, tariff.currency),
+      outstanding: cycleMoney(0n, tariff.currency) }];
+  }
 
   const newId = randomUUID();
   const existingDocuments = (previous?.documents ?? []).filter((row) =>
@@ -179,7 +206,7 @@ export async function finalizePrepaidBillingCycle(
       customer_total: null, download_action: null }];
   const next: BillingCycleDetailV2 = {
     ...revised, cycle_id: newId, state: prior ? 'adjusted' : 'finalized',
-    totals: prior?.totals ?? [{ currency: tariff.currency,
+    totals: fundedPaygTotals ?? prior?.totals ?? [{ currency: tariff.currency,
       subscription: cycleMoney(0n, tariff.currency),
       usage_charge: cycleMoney(0n, tariff.currency),
       tax: cycleMoney(0n, tariff.currency),
@@ -208,6 +235,22 @@ export async function finalizePrepaidBillingCycle(
   return prisma.$transaction(async (tx) => {
     await tx.$queryRaw(Prisma.sql`SELECT id FROM organisations
       WHERE id = ${pending.orgId} FOR UPDATE`);
+    if (fundedPayg) {
+      // Stripe export and credit settlement take these same payer locks. An
+      // already reserved meter charge cannot be disguised as wallet funding.
+      await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "billing_credit_accounts"
+        WHERE "org_id" = ${pending.orgId}
+          AND ("team_id" = ${pending.teamId} OR "team_id" IS NULL)
+        ORDER BY "id" FOR UPDATE`);
+      const exported = await tx.billingStripeUsageExport.findFirst({ where: {
+        billingMonth: pending.billingMonth,
+        subscription: { serviceId: pending.serviceId, orgId: pending.orgId,
+          ...(pending.teamId ? { OR: [{ teamId: pending.teamId }, { teamId: null }] } :
+            { teamId: null }) },
+        cumulativeMeterQuantity: { gt: 0n },
+      }, select: { id: true } });
+      if (exported) return null;
+    }
     const latest = await tx.billingCustomerCycle.findFirst({ where: {
       serviceId: pending.serviceId, orgId: pending.orgId,
       teamId: pending.teamId, billingMonth: pending.billingMonth,

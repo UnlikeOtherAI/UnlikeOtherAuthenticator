@@ -251,9 +251,14 @@ receipt cohort, because consumption is not a new cash invoice. A later
 prepaid-only receipt can append an adjusted breakdown while carrying the
 original legal invoice liability and byte-identical document forward. The
 same payer/month wallet boundary and every receipt are rechecked inside the
-final transaction. Pay-as-you-go corrections remain pending until an actual
-separate issuer or processor financial line proves the changed collectible
-amount; an observation or quote alone does not finalize or charge it.
+final transaction. A zero-fee pay-as-you-go month can also finalize without a
+new cash invoice when exact settled wallet debits cover every collectible
+usage receipt. It records gross usage and an equal funded credit offset, with
+due and paid both zero. A later fully funded receipt adds an immutable adjusted
+breakdown; an existing Stripe meter reservation or unfunded usage holds it.
+Other pay-as-you-go corrections remain pending until an actual separate issuer
+or processor financial line proves the changed collectible amount; an
+observation or quote alone does not finalize or charge it.
 Manual invoice calculation now requires an explicit operator-attested tax
 treatment, rate and legal basis. The draft freezes those facts and allocated
 line tax before issuance; historical invoices with no tax policy evidence
