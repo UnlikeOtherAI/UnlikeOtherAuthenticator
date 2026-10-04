@@ -109,7 +109,15 @@ async function signServiceAssertion(
     organisationId: string;
     teamId: string | null;
     billingMonth: string;
-    view?: 'team_portfolio' | 'paid_receipt_set';
+    view?: 'team_portfolio' | 'paid_receipt_set' | 'budget_receipt_set';
+    excludeDispatchId?: string;
+    excludeRequestFingerprint?: string;
+    excludeTeamId?: string;
+    budgetScopeType?: 'organization';
+    nativeScopeType?: 'project' | 'run';
+    nativeScopeId?: string;
+    nativeBornAt?: string;
+    nativeOwnerSub?: string;
   },
   config: CollectorConfig,
   deps?: { now?: () => number },
@@ -123,6 +131,17 @@ async function signServiceAssertion(
     organization_id: params.organisationId,
     ...(params.teamId ? { team_id: params.teamId } : {}),
     ...(params.view ? { view: params.view } : {}),
+    ...(params.view === 'budget_receipt_set' && params.excludeDispatchId
+      ? { exclude_dispatch_id: params.excludeDispatchId,
+        exclude_request_fingerprint: params.excludeRequestFingerprint,
+        exclude_team_id: params.excludeTeamId } : {}),
+    ...(params.view === 'budget_receipt_set' && params.budgetScopeType
+      ? { budget_scope_type: params.budgetScopeType } : {}),
+    ...(params.view === 'budget_receipt_set' && params.nativeScopeType
+      ? { native_scope_type: params.nativeScopeType,
+        native_scope_id: params.nativeScopeId,
+        native_born_at: params.nativeBornAt,
+        ...(params.nativeOwnerSub ? { native_owner_sub: params.nativeOwnerSub } : {}) } : {}),
     billing_month: params.billingMonth,
   })
     .setProtectedHeader({
@@ -281,6 +300,33 @@ export async function fetchLedgerRawPaidReceiptSet(
     requestFailed: 'LEDGER_PAID_RECEIPT_SET_REQUEST_FAILED',
     responseTooLarge: 'LEDGER_PAID_RECEIPT_SET_RESPONSE_TOO_LARGE',
     responseInvalid: 'LEDGER_PAID_RECEIPT_SET_RESPONSE_INVALID',
+  } }, { fetch: deps?.fetch });
+  return response.value;
+}
+
+/** Budget ancestry includes proven origin-product descendants across billed products. */
+export async function fetchLedgerRawBudgetReceiptSet(
+  params: { product: string; organisationId: string; teamId: string | null;
+    billingMonth: string; excludeDispatchId?: string;
+    excludeRequestFingerprint?: string; excludeTeamId?: string;
+    budgetScopeType?: 'organization';
+    nativeScopeType?: 'project' | 'run'; nativeScopeId?: string;
+    nativeBornAt?: string; nativeOwnerSub?: string; cursor?: string },
+  deps?: { env?: Env; fetch?: typeof fetch; now?: () => number },
+): Promise<unknown> {
+  billingMonthBounds(params.billingMonth);
+  const config = await collectorConfig(deps?.env, deps?.env === undefined);
+  const assertion = await signServiceAssertion({ ...params, view: 'budget_receipt_set' },
+    config, { now: deps?.now });
+  const url = new URL(`${config.baseUrl}/v1/metering/budget-receipt-set`);
+  if (params.cursor) url.searchParams.set('cursor', params.cursor);
+  const response = await fetchLedgerJsonResponse({ url, headers: {
+    Accept: 'application/json', 'X-Ledger-App-Key': config.appKey,
+    'X-UOA-Service-Assertion': assertion,
+  }, errors: {
+    requestFailed: 'LEDGER_BUDGET_RECEIPT_SET_REQUEST_FAILED',
+    responseTooLarge: 'LEDGER_BUDGET_RECEIPT_SET_RESPONSE_TOO_LARGE',
+    responseInvalid: 'LEDGER_BUDGET_RECEIPT_SET_RESPONSE_INVALID',
   } }, { fetch: deps?.fetch });
   return response.value;
 }

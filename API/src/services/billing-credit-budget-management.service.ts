@@ -6,6 +6,7 @@ import { AppError } from '../utils/errors.js';
 import { type BillingActor, verifyBillingActor } from './billing-actor.service.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
 import { budgetScopeTotals, lockBudgetOrganisation } from './billing-credit-budget-dispatch.service.js';
+import { memoizedBudgetProof } from './billing-credit-budget-baseline.service.js';
 import { resolveBillingFundingViewer } from './billing-funding-viewer.service.js';
 import { isBillingManager } from './billing-stripe-manager.service.js';
 import { billingActorAudience, type BillingActorEndpoint } from './billing-actor-audience.service.js';
@@ -92,7 +93,6 @@ export async function registerNativeBudgetScope(auth: Auth, input: NativeBudgetS
     || input.product !== auth.request.product
     || input.organization_id !== auth.request.organisationId
     || input.team_id !== auth.request.teamId
-    || (input.scope_type === 'run' && input.owner_sub !== actor.sub)
     || (input.scope_type === 'project' && input.owner_sub !== null)) {
     throw new AppError('FORBIDDEN', 403, 'BUDGET_NATIVE_SCOPE_MISMATCH');
   }
@@ -104,6 +104,11 @@ export async function registerNativeBudgetScope(auth: Auth, input: NativeBudgetS
   return prisma.$transaction(async (tx) => {
     await lockBudgetOrganisation(tx, input.organization_id);
     const role = await lockLiveManager(tx, auth, actor);
+    if (input.scope_type === 'run' && input.owner_sub !== actor.sub
+      && !isBillingManager({ scope: BillingAssignmentScope.TEAM,
+        orgRole: role.org_role, teamRole: role.team_role })) {
+      throw new AppError('FORBIDDEN', 403, 'BUDGET_RUN_OWNER_REQUIRED');
+    }
     if (input.scope_type === 'project' && !isBillingManager({
       scope: BillingAssignmentScope.TEAM,
       orgRole: role.org_role, teamRole: role.team_role,
@@ -148,14 +153,13 @@ function validatePolicy(input: BillingCreditBudgetWriteV1) {
   return limit;
 }
 
-async function present(tx: Prisma.TransactionClient, row: BillingCreditBudgetPolicy, at: Date) {
+async function present(tx: Prisma.TransactionClient, row: BillingCreditBudgetPolicy, at: Date,
+  proofDeps?: Parameters<typeof budgetScopeTotals>[4]) {
   const scope = { product: row.product, orgId: row.orgId, teamId: row.teamId ?? '',
     scopeType: row.scopeType as 'organization' | 'team' | 'project' | 'run',
     scopeId: row.scopeId };
-  const totals = await budgetScopeTotals(tx, scope, row.period, at);
-  const cutover = await tx.billingCreditBudgetCutover.findUnique({ where: { id: 1 } });
-  if (!cutover) throw new AppError('INTERNAL', 503, 'BUDGET_CUTOVER_MISSING');
-  const evidenceComplete = totals.start >= cutover.occurredAt && totals.unknown === 0n;
+  const totals = await budgetScopeTotals(tx, scope, row.period, at, proofDeps);
+  const evidenceComplete = totals.historicalComplete && totals.unknown === 0n;
   const used = totals.spent + totals.held;
   const remaining = row.limitMicrocredits === null || !evidenceComplete ? null
     : row.limitMicrocredits > used ? row.limitMicrocredits - used : 0n;
@@ -179,9 +183,11 @@ async function present(tx: Prisma.TransactionClient, row: BillingCreditBudgetPol
   };
 }
 
-export async function listCreditBudgets(auth: Auth, deps?: { prisma?: PrismaClient; now?: Date }) {
+export async function listCreditBudgets(auth: Auth, deps?: { prisma?: PrismaClient; now?: Date;
+  proofDeps?: Parameters<typeof budgetScopeTotals>[4] }) {
   const prisma = deps?.prisma ?? getAdminPrisma();
   const { actor } = await authorize(auth, prisma);
+  const proofDeps = { fetchProof: memoizedBudgetProof(deps?.proofDeps?.fetchProof) };
   return prisma.$transaction(async (tx) => {
     const role = await lockLiveManager(tx, auth, actor);
     const orgManager = isBillingManager({ scope: BillingAssignmentScope.ORGANISATION,
@@ -203,12 +209,14 @@ export async function listCreditBudgets(auth: Auth, deps?: { prisma?: PrismaClie
     }, orderBy: [{ scopeType: 'asc' }, { scopeId: 'asc' }, { period: 'asc' }] });
     return { schema_version: 1 as const, product: auth.request.product,
       organization_id: auth.request.organisationId, team_id: auth.request.teamId,
-      budgets: await Promise.all(rows.map((row) => present(tx, row, deps?.now ?? new Date()))) };
-  });
+      budgets: await Promise.all(rows.map((row) => present(tx, row,
+        deps?.now ?? new Date(), proofDeps))) };
+  }, { timeout: 30_000 });
 }
 
 export async function putCreditBudget(auth: Auth, input: BillingCreditBudgetWriteV1,
-  deps?: { prisma?: PrismaClient; now?: Date }) {
+  deps?: { prisma?: PrismaClient; now?: Date;
+    proofDeps?: Parameters<typeof budgetScopeTotals>[4] }) {
   const prisma = deps?.prisma ?? getAdminPrisma();
   const { actor } = await authorize(auth, prisma);
   if (input.product !== auth.request.product || input.organization_id !== auth.request.organisationId
@@ -216,6 +224,7 @@ export async function putCreditBudget(auth: Auth, input: BillingCreditBudgetWrit
     throw new AppError('FORBIDDEN', 403, 'BUDGET_SCOPE_MISMATCH');
   }
   const limit = validatePolicy(input);
+  const proofDeps = { fetchProof: memoizedBudgetProof(deps?.proofDeps?.fetchProof) };
   return prisma.$transaction(async (tx) => {
     await lockBudgetOrganisation(tx, auth.request.organisationId);
     const role = await lockLiveManager(tx, auth, actor);
@@ -274,8 +283,8 @@ export async function putCreditBudget(auth: Auth, input: BillingCreditBudgetWrit
       ? await tx.billingCreditBudgetPolicy.update({ where: { id: existing.id },
         data: { ...data, version: { increment: 1 } } })
       : await tx.billingCreditBudgetPolicy.create({ data: { ...key, ...data } });
-    return present(tx, row, deps?.now ?? new Date());
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    return present(tx, row, deps?.now ?? new Date(), proofDeps);
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30_000 });
 }
 
 export async function deleteCreditBudget(auth: Auth, policyId: string,

@@ -3441,6 +3441,36 @@ model BillingCreditBudgetCutover {
   @@map("billing_credit_budget_cutover")
 }
 
+// Private append-only record of each signed Ledger cohort accepted for a
+// credit-budget decision. A complete policy window may require several rows.
+model BillingCreditBudgetReceiptProofAudit {
+  id String @id @default(cuid())
+  product String @db.VarChar(100)
+  orgId String @map("org_id")
+  teamId String? @map("team_id")
+  budgetScopeType String? @map("budget_scope_type") @db.VarChar(24)
+  excludedTeamId String? @map("excluded_team_id")
+  billingMonth String @map("billing_month") @db.Char(7)
+  excludedDispatchId String? @map("excluded_dispatch_id") @db.VarChar(160)
+  nativeScopeType String? @map("native_scope_type") @db.VarChar(24)
+  nativeScopeId String? @map("native_scope_id") @db.VarChar(256)
+  nativeBornAt DateTime? @map("native_born_at")
+  nativeOwnerSub String? @map("native_owner_sub")
+  ledgerCursor String @unique @map("ledger_cursor") @db.VarChar(64)
+  signatureSha256 String @map("signature_sha256") @db.Char(64)
+  capturedAt DateTime @map("captured_at")
+  paidReceiptCount Int @map("paid_receipt_count")
+  paidReceiptSha256 String @map("paid_receipt_sha256") @db.Char(64)
+  zeroIncrementalCount Int @map("zero_incremental_count")
+  zeroIncrementalSha256 String @map("zero_incremental_sha256") @db.Char(64)
+  pendingDispatchCount Int @map("pending_dispatch_count")
+  pendingDispatchSha256 String @map("pending_dispatch_sha256") @db.Char(64)
+  verifiedAt DateTime @default(now()) @map("verified_at")
+
+  @@index([product, orgId, teamId, billingMonth, verifiedAt])
+  @@map("billing_credit_budget_receipt_proof_audit")
+}
+
 model BillingCreditEntry {
   id                       String                      @id @default(cuid())
   creditAccountId          String                      @map("credit_account_id")

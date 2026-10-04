@@ -1,6 +1,7 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { BillingAppKeyPurpose, BillingAssignmentScope, Prisma, type PrismaClient } from '@prisma/client';
-import { exportJWK, generateKeyPair, SignJWT, type KeyLike } from 'jose';
+import { CompactSign, createLocalJWKSet, exportJWK, generateKeyPair, SignJWT,
+  type KeyLike } from 'jose';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import {
@@ -16,6 +17,10 @@ import { recordPaidUsageLiability } from '../../src/services/billing-paid-liabil
 import { listCreditBudgets, putCreditBudget, registerNativeBudgetScope } from
   '../../src/services/billing-credit-budget-management.service.js';
 import type { VerifiedBillingAppKey } from '../../src/services/billing-app-key.service.js';
+import { proveHistoricalBudgetScope } from
+  '../../src/services/billing-credit-budget-baseline.service.js';
+import { verifyLedgerBudgetReceiptSet, type BudgetReceiptScope } from
+  '../../src/services/billing-ledger-paid-receipt-proof.service.js';
 
 const enabled = Boolean(process.env.DATABASE_URL);
 const ids = {
@@ -54,6 +59,69 @@ function admissionInput(dispatchId: string) {
     dispatchStartedAt: '2026-10-04T12:00:00.000Z', product: 'deepwater',
     providerServiceId: 'openai', organisationId: ids.org, teamId: ids.team,
     userId: ids.user, rawCostBound: '0.00000001', currency: 'USD' };
+}
+
+async function signedCurrentBudgetProof(scope: BudgetReceiptScope) {
+  const [year, month] = scope.billingMonth.split('-').map(Number);
+  const born = new Date(Date.UTC(year, month - 1, 1));
+  const end = new Date(Date.UTC(year, month, 1));
+  const ancestry = await prisma.billingCreditBudgetDispatchScope.findMany({ where: {
+    product: scope.product, orgId: scope.organisationId,
+    ...(scope.teamId ? { teamId: scope.teamId } : {}),
+    scopeType: scope.nativeScopeType ?? (scope.budgetScopeType ?? 'team'),
+    scopeId: scope.nativeScopeId ??
+      (scope.budgetScopeType === 'organization' ? scope.organisationId : scope.teamId ?? ''),
+    occurredAt: { gte: born, lt: end },
+  }, select: { dispatchId: true } });
+  const idsInScope = ancestry.map((row) => row.dispatchId);
+  const [holds, forward, legacy] = await Promise.all([
+    prisma.billingCreditBudgetDispatch.findMany({ where: {
+      dispatchId: { in: idsInScope },
+    }, select: { dispatchId: true, status: true } }),
+    prisma.billingPaidUsageLiability.findMany({ where: {
+      dispatchId: { in: idsInScope },
+    }, select: { dispatchId: true, receiptId: true, rawCostActual: true } }),
+    prisma.billingCreditBudgetLegacyLiability.findMany({ where: {
+      dispatchId: { in: idsInScope },
+    }, select: { dispatchId: true, receiptId: true, sourceId: true } }),
+  ]);
+  const reservations = await prisma.billingPrepaidReservation.findMany({ where: {
+    id: { in: legacy.map((row) => row.sourceId) },
+  }, select: { id: true, rawCostActual: true } });
+  const byReservation = new Map(reservations.map((row) => [row.id, row]));
+  const rows = [...forward.map((row) => [row.dispatchId, row.receiptId,
+    row.rawCostActual.toFixed(18)]), ...legacy.map((row) => [row.dispatchId,
+    row.receiptId, byReservation.get(row.sourceId)?.rawCostActual?.toFixed(18) ?? 'missing'])]
+    .sort((a, b) => Buffer.compare(Buffer.from(a[0] ?? ''), Buffer.from(b[0] ?? '')));
+  const paid = createHash('sha256').update('ledger-budget-receipt-set-v1:paid\n');
+  for (const row of rows) paid.update(JSON.stringify(row)).update('\n');
+  const active = holds.filter((row) => row.status === 'ACTIVE').map((row) => row.dispatchId)
+    .sort((a, b) => Buffer.compare(Buffer.from(a), Buffer.from(b)));
+  const pending = createHash('sha256').update('ledger-budget-receipt-set-v1:pending\n');
+  for (const id of active) pending.update(JSON.stringify([id])).update('\n');
+  const body = { contract: 'ledger-budget-receipt-set-v1' as const,
+    scope: { billing_product: scope.product,
+      organization_id: scope.organisationId, team_id: scope.teamId,
+      billing_month: scope.billingMonth,
+      ...(scope.budgetScopeType ? { budget_scope_type: scope.budgetScopeType } : {}),
+      ...(scope.excludeDispatchId ? { exclude_dispatch_id: scope.excludeDispatchId,
+        exclude_request_fingerprint: scope.excludeRequestFingerprint!,
+        exclude_team_id: scope.excludeTeamId! } : {}),
+      ...(scope.nativeScopeType ? { native_scope_type: scope.nativeScopeType,
+        native_scope_id: scope.nativeScopeId!, native_born_at: scope.nativeBornAt!,
+        ...(scope.nativeOwnerSub ? { native_owner_sub: scope.nativeOwnerSub } : {}) } : {}) },
+    snapshot: { cursor: `mpr_${randomUUID().replaceAll('-', '')}`,
+      captured_at: new Date().toISOString(), immutable: true as const },
+    paid_receipt_count: String(rows.length), paid_receipt_sha256: paid.digest('hex'),
+    zero_incremental_count: '0', zero_incremental_sha256: createHash('sha256')
+      .update('ledger-budget-receipt-set-v1:zero\n').digest('hex'),
+    pending_dispatch_count: String(active.length), pending_dispatch_sha256: pending.digest('hex'),
+    unresolved_paid_attempts: '0' };
+  const signature = await new CompactSign(Buffer.from(JSON.stringify(body)))
+    .setProtectedHeader({ alg: 'RS256', typ: 'ledger-budget-receipt-set+jws',
+      kid: 'prepaid-test-key' }).sign(signingKey);
+  const keys = createLocalJWKSet({ keys: [actorCredential.actorPublicJwk] });
+  return verifyLedgerBudgetReceiptSet({ ...body, signature }, scope, keys);
 }
 
 function beforeFinalAdmission(action: () => Promise<unknown>) {
@@ -218,6 +286,69 @@ describe.skipIf(!enabled)('prepaid dispatch liability in PostgreSQL', () => {
     }))._sum.ratedMicrocredits).toBe(2n);
   });
 
+  it('backfills frozen prepaid history only under an exact signed budget cohort', async () => {
+    const startedAt = new Date('2026-09-09T12:00:00.000Z');
+    const dispatchId = 'dispatch-prepaid-historical-proof';
+    const receiptId = 'receipt-prepaid-historical-proof';
+    const reservation = await prisma.billingPrepaidReservation.create({ data: {
+      dispatchId, requestFingerprint: 'f'.repeat(64), receiptId,
+      creditAccountId: ids.credit, tariffId: ids.tariff, serviceId: ids.service,
+      providerServiceId: 'openai', appKeyId: ids.key, orgId: ids.org,
+      teamId: ids.team, userId: ids.user, billingMonth: '2026-09',
+      dispatchStartedAt: startedAt, currency: 'USD', rawCostBound: '0.000000001',
+      reservedMicrocredits: 2n, rawCostActual: '0.00000000013',
+      debitedMicrocredits: 1n, status: 'SETTLED', terminalAt: startedAt,
+    } });
+    const scope = { product: 'deepwater', organisationId: ids.org,
+      teamId: ids.team, billingMonth: '2026-09' };
+    const digest = createHash('sha256').update('ledger-budget-receipt-set-v1:paid\n')
+      .update(JSON.stringify([dispatchId, receiptId, '0.000000000130000000']) + '\n')
+      .digest('hex');
+    const body = { contract: 'ledger-budget-receipt-set-v1',
+      scope: { billing_product: scope.product, organization_id: scope.organisationId,
+        team_id: scope.teamId, billing_month: scope.billingMonth },
+      snapshot: { cursor: `mpr_${'c'.repeat(32)}`,
+        captured_at: '2026-10-04T19:00:00.000Z', immutable: true },
+      paid_receipt_count: '1', paid_receipt_sha256: digest,
+      zero_incremental_count: '0', zero_incremental_sha256: createHash('sha256')
+        .update('ledger-budget-receipt-set-v1:zero\n').digest('hex'),
+      pending_dispatch_count: '0', pending_dispatch_sha256: createHash('sha256')
+        .update('ledger-budget-receipt-set-v1:pending\n').digest('hex'),
+      unresolved_paid_attempts: '0' };
+    const signature = await new CompactSign(Buffer.from(JSON.stringify(body)))
+      .setProtectedHeader({ alg: 'RS256', typ: 'ledger-budget-receipt-set+jws',
+        kid: 'prepaid-test-key' }).sign(signingKey);
+    const keys = createLocalJWKSet({ keys: [actorCredential.actorPublicJwk] });
+    const proof = await verifyLedgerBudgetReceiptSet({ ...body, signature }, scope, keys);
+    const budgetScope = { product: scope.product, orgId: ids.org, teamId: ids.team,
+      scopeType: 'team', scopeId: ids.team };
+    const prove = () => prisma.$transaction((tx) => proveHistoricalBudgetScope(tx,
+      budgetScope, new Date('2026-09-01T00:00:00.000Z'),
+      new Date('2026-10-01T00:00:00.000Z'),
+      { fetchProof: async () => proof }));
+    expect(await prove()).toBe(true);
+    expect(await prove()).toBe(true);
+    expect(await prisma.billingCreditBudgetLegacyLiability.findUniqueOrThrow({
+      where: { dispatchId },
+    })).toMatchObject({ receiptId, sourceId: reservation.id,
+      ratedMicrocredits: 1n, sourceType: 'prepaid_wallet_debit' });
+    expect(await prisma.billingCreditBudgetDispatch.findUniqueOrThrow({
+      where: { dispatchId },
+    })).toMatchObject({ isLegacy: true, status: 'SETTLED' });
+    const totals = await prisma.$transaction((tx) => budgetScopeTotals(tx,
+      budgetScope, 'monthly', new Date('2026-09-20T00:00:00.000Z'),
+      { fetchProof: async () => proof }));
+    expect(totals).toMatchObject({ spent: 1n, held: 0n, unknown: 0n,
+      historicalComplete: true });
+    const empty = { ...proof, paid_receipt_count: '0',
+      paid_receipt_sha256: createHash('sha256')
+        .update('ledger-budget-receipt-set-v1:paid\n').digest('hex') };
+    expect(await prisma.$transaction((tx) => proveHistoricalBudgetScope(tx,
+      budgetScope, new Date('2026-09-01T00:00:00.000Z'),
+      new Date('2026-10-01T00:00:00.000Z'),
+      { fetchProof: async () => empty }))).toBe(false);
+  });
+
   it('projects one cumulative-rated PAYG liability into a finite team cap', async () => {
     const originalCutover = await prisma.billingCreditBudgetCutover.findUniqueOrThrow({
       where: { id: 1 },
@@ -235,7 +366,8 @@ describe.skipIf(!enabled)('prepaid dispatch liability in PostgreSQL', () => {
         const dispatchId = `dispatch-forward-${index}`;
         const startedAt = new Date('2026-10-04T18:00:00.000Z');
         await prisma.$transaction(async (tx) => {
-          await reserveBudgetDispatch(tx, { dispatchId, startedAt,
+          await reserveBudgetDispatch(tx, { dispatchId,
+            requestFingerprint: 'a'.repeat(64), startedAt,
             product: 'deepwater', serviceId: ids.service, providerServiceId: 'openai',
             orgId: ids.org, teamId: ids.team, userId: ids.user,
             billingMonth: '2026-10', currency: 'USD', tariffId: ids.tariff,
@@ -243,7 +375,7 @@ describe.skipIf(!enabled)('prepaid dispatch liability in PostgreSQL', () => {
             rawCostBound: new Prisma.Decimal('0.00000000013'),
             context: { contextId: `ctx-${index}`, originProduct: 'deepwater',
               originSourceDomain: 'deepwater.example.com', projectId: null, runId: null },
-          });
+          }, { fetchProof: signedCurrentBudgetProof });
           await recordPaidUsageLiability(tx, { dispatchId,
             receiptId: `receipt-forward-${index}`,
             actual: new Prisma.Decimal('0.00000000013') });
@@ -261,23 +393,74 @@ describe.skipIf(!enabled)('prepaid dispatch liability in PostgreSQL', () => {
       const totals = await prisma.$transaction((tx) => budgetScopeTotals(tx, {
         product: 'deepwater', orgId: ids.org, teamId: ids.team,
         scopeType: 'team', scopeId: ids.team,
-      }, 'monthly', new Date('2026-10-04T18:00:00.000Z')));
+      }, 'monthly', new Date('2026-10-04T18:00:00.000Z'),
+      { fetchProof: signedCurrentBudgetProof }));
       expect(totals.spent).toBe(4n); // Two already charged legacy credits + two forward.
       await prisma.billingCreditBudgetPolicy.update({ where: { id: policy.id },
         data: { limitMicrocredits: 4n, version: { increment: 1 } } });
       await expect(prisma.$transaction((tx) => reserveBudgetDispatch(tx, {
         dispatchId: 'dispatch-forward-denied',
+        requestFingerprint: 'a'.repeat(64),
         startedAt: new Date('2026-10-04T18:00:00.000Z'),
         product: 'deepwater', serviceId: ids.service, providerServiceId: 'openai',
         orgId: ids.org, teamId: ids.team, userId: ids.user,
         billingMonth: '2026-10', currency: 'USD', tariffId: ids.tariff,
         tariffMode: 'STANDARD', markupBps: 0, paymentMode: 'PAY_AS_YOU_GO',
         rawCostBound: new Prisma.Decimal('0.00000000013'), context: null,
-      }))).rejects.toThrow('BUDGET_CREDITS_EXHAUSTED');
+      }, { fetchProof: signedCurrentBudgetProof }))).rejects.toThrow('BUDGET_CREDITS_EXHAUSTED');
     } finally {
       await prisma.billingCreditBudgetPolicy.delete({ where: { id: policy.id } });
       await prisma.billingCreditBudgetCutover.update({ where: { id: 1 },
         data: { occurredAt: originalCutover.occurredAt } });
+    }
+  });
+
+  it('proves an organization cap once per month across two teams', async () => {
+    const secondTeam = 'team_prepaid_rating_other';
+    const policy = await prisma.billingCreditBudgetPolicy.create({ data: {
+      product: 'deepwater', orgId: ids.org, teamId: null,
+      scopeType: 'organization', scopeId: ids.org, period: 'monthly',
+      mode: 'enforce', limitMicrocredits: 1_000_000n,
+      warnThresholdPercent: 80, blockHumansWhenOver: true,
+      degradeModel: null, degradeProvider: null,
+    } });
+    const seen: BudgetReceiptScope[] = [];
+    const fetchProof = async (scope: BudgetReceiptScope) => {
+      seen.push(scope);
+      return signedCurrentBudgetProof(scope);
+    };
+    const startedAt = new Date('2026-10-04T19:00:00.000Z');
+    const input = { requestFingerprint: 'a'.repeat(64), startedAt,
+      product: 'deepwater', serviceId: ids.service, providerServiceId: 'openai',
+      orgId: ids.org, userId: ids.user, billingMonth: '2026-10',
+      currency: 'USD', tariffId: ids.tariff, tariffMode: 'STANDARD' as const,
+      markupBps: 0, paymentMode: 'PAY_AS_YOU_GO' as const,
+      rawCostBound: new Prisma.Decimal('0.00000000013'), context: null };
+    try {
+      await prisma.$transaction((tx) => reserveBudgetDispatch(tx, {
+        ...input, dispatchId: 'dispatch-org-team-one', teamId: ids.team,
+      }, { fetchProof }));
+      await prisma.$transaction((tx) => reserveBudgetDispatch(tx, {
+        ...input, dispatchId: 'dispatch-org-team-two', teamId: secondTeam,
+      }, { fetchProof }));
+      expect(seen).toEqual([
+        expect.objectContaining({ budgetScopeType: 'organization', teamId: null,
+          excludeTeamId: ids.team }),
+        expect.objectContaining({ budgetScopeType: 'organization', teamId: null,
+          excludeTeamId: secondTeam }),
+      ]);
+      const totals = await prisma.$transaction((tx) => budgetScopeTotals(tx, {
+        product: 'deepwater', orgId: ids.org, teamId: ids.team,
+        scopeType: 'organization', scopeId: ids.org,
+      }, 'monthly', startedAt, { fetchProof }));
+      expect(totals.historicalComplete).toBe(true);
+      expect(totals.held).toBeGreaterThanOrEqual(2n);
+    } finally {
+      await prisma.$transaction(async (tx) => {
+        await releaseBudgetDispatch(tx, 'dispatch-org-team-one');
+        await releaseBudgetDispatch(tx, 'dispatch-org-team-two');
+      });
+      await prisma.billingCreditBudgetPolicy.delete({ where: { id: policy.id } });
     }
   });
 
@@ -304,9 +487,10 @@ describe.skipIf(!enabled)('prepaid dispatch liability in PostgreSQL', () => {
     });
     const cutover = await prisma.billingCreditBudgetCutover.findUniqueOrThrow({ where: { id: 1 } });
     await prisma.billingCreditBudgetCutover.update({ where: { id: 1 },
-      data: { occurredAt: new Date('2026-10-04T13:00:00.000Z') } });
+      data: { occurredAt: new Date('2026-10-04T11:00:00.000Z') } });
     try {
-      await reserveFixture(300); // Pre-cutover request intentionally settles after forward receipts.
+      // This frozen old-path request starts after migration, before full rollout.
+      await reserveFixture(300);
       const opening = (await prisma.billingCreditAccount.findUniqueOrThrow({
         where: { id: ids.credit },
       })).balanceMicrocredits;
@@ -320,7 +504,8 @@ describe.skipIf(!enabled)('prepaid dispatch liability in PostgreSQL', () => {
         await reserveFixture(index, '0.00000000013', tariffId, 1n,
           { serviceId, keyId, startedAt });
         await prisma.$transaction((tx) => reserveBudgetDispatch(tx, {
-          dispatchId, startedAt, product: other ? 'deeptest' : 'deepwater',
+          dispatchId, requestFingerprint: 'a'.repeat(64), startedAt,
+          product: other ? 'deeptest' : 'deepwater',
           serviceId, providerServiceId: 'openai', orgId: ids.org, teamId: ids.team,
           userId: ids.user, billingMonth: startedAt.toISOString().slice(0, 7),
           currency: 'USD', tariffId, tariffMode: 'STANDARD',
@@ -412,11 +597,13 @@ describe.skipIf(!enabled)('prepaid dispatch liability in PostgreSQL', () => {
         limit_credits: '0.000001', warn_threshold_percent: 80,
         block_humans_when_over: false, degrade_model: null, degrade_provider: null };
       const policy = await putCreditBudget(await makeAuth('/billing/v1/credit-budgets'),
-        write, { prisma, now: new Date('2026-10-04T18:00:00.000Z') });
+        write, { prisma, now: new Date('2026-10-04T18:00:00.000Z'),
+          proofDeps: { fetchProof: signedCurrentBudgetProof } });
       expect(policy).toMatchObject({ evidence_complete: true,
         spent_credits: '0', held_credits: '0', remaining_credits: '0.000001' });
       const listed = await listCreditBudgets(await makeAuth('/billing/v1/credit-budgets'),
-        { prisma, now: new Date('2026-10-04T18:00:00.000Z') });
+        { prisma, now: new Date('2026-10-04T18:00:00.000Z'),
+          proofDeps: { fetchProof: signedCurrentBudgetProof } });
       expect(listed.budgets).toEqual([expect.objectContaining({
         policy_id: policy.policy_id, scope_id: scope.scope_id,
       })]);
@@ -424,7 +611,8 @@ describe.skipIf(!enabled)('prepaid dispatch liability in PostgreSQL', () => {
         created_at: '2026-10-04T17:01:00.000Z' };
       await registerNativeBudgetScope(
         await makeAuth('/billing/v1/credit-budgets/scopes', child), child, { prisma });
-      const admission = { startedAt: new Date('2026-10-04T18:00:00.000Z'),
+      const admission = { requestFingerprint: 'a'.repeat(64),
+        startedAt: new Date('2026-10-04T18:00:00.000Z'),
         product: 'deepwater', serviceId: ids.service, providerServiceId: 'openai',
         orgId: ids.org, teamId: ids.team, userId: ids.user, billingMonth: '2026-10',
         currency: 'USD', tariffId: ids.tariff, tariffMode: 'STANDARD' as const,
@@ -438,14 +626,14 @@ describe.skipIf(!enabled)('prepaid dispatch liability in PostgreSQL', () => {
         } };
       await prisma.$transaction((tx) => reserveBudgetDispatch(tx, {
         ...admission, dispatchId: 'dispatch-child-first',
-      }));
+      }, { fetchProof: signedCurrentBudgetProof }));
       await expect(prisma.$transaction((tx) => reserveBudgetDispatch(tx, {
         ...admission, dispatchId: 'dispatch-child-over-cap',
-      }))).rejects.toThrow('BUDGET_CREDITS_EXHAUSTED');
+      }, { fetchProof: signedCurrentBudgetProof }))).rejects.toThrow('BUDGET_CREDITS_EXHAUSTED');
       await expect(prisma.$transaction((tx) => reserveBudgetDispatch(tx, {
         ...admission, dispatchId: 'dispatch-child-wrong-birth',
         context: { ...admission.context, budgetRunStartedAt: child.created_at },
-      }))).rejects.toThrow('BUDGET_NATIVE_SCOPE_MISMATCH');
+      }, { fetchProof: signedCurrentBudgetProof }))).rejects.toThrow('BUDGET_NATIVE_SCOPE_MISMATCH');
       await prisma.$transaction((tx) => releaseBudgetDispatch(tx, 'dispatch-child-first'));
       await expect(registerNativeBudgetScope(
         await makeAuth('/billing/v1/credit-budgets/scopes', {
@@ -494,8 +682,25 @@ describe.skipIf(!enabled)('prepaid dispatch liability in PostgreSQL', () => {
         VALUES ('team-member-budget', ${ids.team}, ${member}, 'member', CURRENT_TIMESTAMP)`);
     });
     try {
-      await registerNativeBudgetScope(await auth(member,
+      for (const foreign of [
+        { ...scope, product: 'deeptest' },
+        { ...scope, organization_id: 'org_foreign' },
+        { ...scope, team_id: 'team_foreign' },
+      ]) {
+        await expect(registerNativeBudgetScope(await auth(ids.user,
+          '/billing/v1/credit-budgets/scopes', foreign), foreign, { prisma }))
+          .rejects.toThrow('BUDGET_NATIVE_SCOPE_MISMATCH');
+      }
+      await expect(registerNativeBudgetScope(await auth(member,
+        '/billing/v1/credit-budgets/scopes', { ...scope, owner_sub: ids.user }),
+      { ...scope, owner_sub: ids.user }, { prisma }))
+        .rejects.toThrow('BUDGET_RUN_OWNER_REQUIRED');
+      await registerNativeBudgetScope(await auth(ids.user,
         '/billing/v1/credit-budgets/scopes', scope), scope, { prisma });
+      await expect(registerNativeBudgetScope(await auth(ids.user,
+        '/billing/v1/credit-budgets/scopes', { ...scope, owner_sub: ids.user }),
+      { ...scope, owner_sub: ids.user }, { prisma }))
+        .rejects.toThrow('BUDGET_NATIVE_SCOPE_CONFLICT');
       const write = { product: scope.product, organization_id: scope.organization_id,
         team_id: scope.team_id, scope_type: scope.scope_type, scope_id: scope.scope_id,
         period: 'per_run' as const, mode: 'enforce' as const,

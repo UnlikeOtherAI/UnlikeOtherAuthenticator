@@ -3,6 +3,8 @@ import { BillingTariffMode, Prisma } from '@prisma/client';
 
 import { AppError } from '../utils/errors.js';
 import { maximumRatedMicrocredits } from './billing-paid-liability.service.js';
+import { memoizedBudgetProof, proveHistoricalBudgetScope } from
+  './billing-credit-budget-baseline.service.js';
 
 export type VerifiedBudgetContext = {
   contextId: string;
@@ -90,7 +92,8 @@ function windowAt(period: string, date: Date, runBirth?: Date) {
 }
 
 export async function budgetScopeTotals(tx: Prisma.TransactionClient,
-  scope: Scope, period: string, at: Date) {
+  scope: Scope, period: string, at: Date,
+  deps?: Parameters<typeof proveHistoricalBudgetScope>[4]) {
   const native = period === 'per_run'
     ? await tx.billingCreditBudgetNativeScope.findUnique({ where: {
       product_orgId_scopeType_scopeId: { product: scope.product,
@@ -98,6 +101,8 @@ export async function budgetScopeTotals(tx: Prisma.TransactionClient,
     } }) : null;
   const window = windowAt(period, at,
     native?.teamId === scope.teamId ? native.sourceCreatedAt : undefined);
+  const historicalComplete = await proveHistoricalBudgetScope(tx, scope,
+    window.start, window.end, deps);
   const rows = await tx.$queryRaw<Array<{ spent: bigint; held: bigint; unknown: bigint }>>(
     Prisma.sql`SELECT
       COALESCE(SUM(CASE WHEN d.status = 'SETTLED'
@@ -117,7 +122,7 @@ export async function budgetScopeTotals(tx: Prisma.TransactionClient,
         AND s.occurred_at >= ${window.start}
         ${window.end ? Prisma.sql`AND s.occurred_at < ${window.end}` : Prisma.empty}`);
   return { ...window, spent: rows[0]?.spent ?? 0n, held: rows[0]?.held ?? 0n,
-    unknown: rows[0]?.unknown ?? 0n };
+    unknown: rows[0]?.unknown ?? 0n, historicalComplete };
 }
 
 async function assertCompleteBudgetContext(tx: Prisma.TransactionClient, input: {
@@ -160,18 +165,20 @@ async function assertCompleteBudgetContext(tx: Prisma.TransactionClient, input: 
 }
 
 export async function reserveBudgetDispatch(tx: Prisma.TransactionClient, input: {
-  dispatchId: string; startedAt: Date; product: string; serviceId: string;
+  dispatchId: string; requestFingerprint: string; startedAt: Date; product: string; serviceId: string;
   providerServiceId: string;
   orgId: string; teamId: string; userId: string; billingMonth: string;
   currency: string; tariffId: string; tariffMode: BillingTariffMode;
   markupBps: number; paymentMode: 'PREPAID' | 'PAY_AS_YOU_GO';
   rawCostBound: Prisma.Decimal | null; context: VerifiedBudgetContext | null;
-}) {
+}, deps?: { fetchProof?: Parameters<typeof budgetScopeTotals>[4] extends
+    { fetchProof?: infer T } ? T : never }) {
   await lockBudgetOrganisation(tx, input.orgId);
   await assertCompleteBudgetContext(tx, input);
   const scopes = budgetScopes(input);
   const contextDigest = createHash('sha256').update(JSON.stringify({
-    dispatchId: input.dispatchId, startedAt: input.startedAt.toISOString(),
+    dispatchId: input.dispatchId, requestFingerprint: input.requestFingerprint,
+    startedAt: input.startedAt.toISOString(),
     product: input.product, serviceId: input.serviceId,
     providerServiceId: input.providerServiceId,
     orgId: input.orgId, teamId: input.teamId, userId: input.userId,
@@ -194,16 +201,20 @@ export async function reserveBudgetDispatch(tx: Prisma.TransactionClient, input:
     }
     return prior;
   }
-  const cutover = await tx.billingCreditBudgetCutover.findUnique({ where: { id: 1 } });
-  if (!cutover) throw new AppError('INTERNAL', 503, 'BUDGET_CUTOVER_MISSING');
+  const fetchProof = memoizedBudgetProof(deps?.fetchProof);
   for (const scope of scopes) {
     const policies = await tx.billingCreditBudgetPolicy.findMany({ where: {
       product: scope.product, orgId: scope.orgId, scopeType: scope.scopeType,
       scopeId: scope.scopeId, disabledAt: null, mode: { in: ['enforce', 'degrade'] },
     } });
     for (const policy of policies) {
-      const totals = await budgetScopeTotals(tx, scope, policy.period, input.startedAt);
-      if (totals.start < cutover.occurredAt || totals.unknown > 0n) {
+      const totals = await budgetScopeTotals(tx, scope, policy.period, input.startedAt, {
+        fetchProof,
+        excludeDispatchId: input.dispatchId,
+        excludeRequestFingerprint: input.requestFingerprint,
+        excludedAt: input.startedAt,
+      });
+      if (!totals.historicalComplete || totals.unknown > 0n) {
         throw new AppError('FORBIDDEN', 403, 'BUDGET_EVIDENCE_INCOMPLETE');
       }
       if (reserved === null) throw new AppError('BAD_REQUEST', 422, 'BUDGET_COST_BOUND_REQUIRED');
@@ -238,7 +249,9 @@ export async function releaseBudgetDispatch(tx: Prisma.TransactionClient,
   });
 }
 
-/** Pre-cutover reservations may settle after deployment. Their org/team
+/** Frozen reservations created by the old path may settle after deployment.
+ * A migration timestamp cannot identify that path during a rolling rollout.
+ * Their org/team
  * liability remains visible; absent project/run evidence still fences finite
  * historical budgets until an explicit Ledger proof backfills those scopes. */
 export async function attachLegacyBudgetDispatch(tx: Prisma.TransactionClient, input: {
@@ -246,13 +259,25 @@ export async function attachLegacyBudgetDispatch(tx: Prisma.TransactionClient, i
   providerServiceId: string; orgId: string; teamId: string; userId: string;
   billingMonth: string; currency: string; tariffId: string;
   tariffMode: BillingTariffMode; markupBps: number;
-  paymentMode: 'PREPAID' | 'PAY_AS_YOU_GO'; reservedMicrocredits: bigint | null;
+  paymentMode: 'PREPAID'; reservedMicrocredits: bigint | null;
 }) {
-  const cutover = await tx.billingCreditBudgetCutover.findUnique({ where: { id: 1 } });
-  if (!cutover || input.startedAt >= cutover.occurredAt) {
+  await lockBudgetOrganisation(tx, input.orgId);
+  const source = await tx.billingPrepaidReservation.findUnique({
+    where: { dispatchId: input.dispatchId },
+  });
+  const service = await tx.billingService.findUnique({
+    where: { id: input.serviceId }, select: { identifier: true },
+  });
+  if (!source || source.serviceId !== input.serviceId
+    || service?.identifier !== input.product
+    || source.providerServiceId !== input.providerServiceId
+    || source.orgId !== input.orgId || source.teamId !== input.teamId
+    || source.userId !== input.userId || source.billingMonth !== input.billingMonth
+    || source.dispatchStartedAt.getTime() !== input.startedAt.getTime()
+    || source.currency !== input.currency || source.tariffId !== input.tariffId
+    || source.reservedMicrocredits !== input.reservedMicrocredits) {
     throw new AppError('BAD_REQUEST', 409, 'PAID_DISPATCH_EVIDENCE_MISSING');
   }
-  await lockBudgetOrganisation(tx, input.orgId);
   const prior = await tx.billingCreditBudgetDispatch.findUnique({
     where: { dispatchId: input.dispatchId },
   });

@@ -90,10 +90,25 @@ microcredits even without an active budget. Frozen PREPAID account or PAYG
 organization/team lifetime rating carries sub-microcredit fractions. One
 receipt delta feeds wallet debit, budget scopes and cycle evidence. Historical
 PREPAID debit proof stays separate; a late old receipt cannot rerate or rebill
-earlier receipts. For pre-cutover windows, `evidence_complete=false` and
-remaining credits and percent used stay unknown until signed Ledger receipt
-coverage and frozen historical UOA rating prove the full cohort. Unknown
-ancestry or unresolved paid attempts are holds, never zero spend.
+earlier receipts. Every capped decision verifies a fresh, signed Ledger cohort
+for the full relevant month, including the interval after UOA migration and
+before all Ledger instances enforce holds. A legacy PREPAID debit is imported
+only from its existing frozen reservation and absent forward hold, irrespective
+of the migration timestamp; the timestamp never proves financial coverage.
+Ledger's paid receipt IDs and costs must match immutable UOA liabilities, and
+its other authorized, receipt-free dispatch IDs must match active maximum-credit
+holds. Organization caps use one signed all-team cohort per month, with no
+customer-visible cross-team raw usage; team and native caps retain exact team
+scope. Repeated policies in one decision reuse the same verified cohort, while
+each new decision fetches fresh proof. During first admission the only excluded
+dispatch is named with its request fingerprint and selected team in the signed
+UOA assertion and receives its own hold in that transaction. Product-native
+project/run proof also binds the signed
+scope ID, birth and run owner; unproven post-birth ancestry leaves the cap held.
+Accepted signed snapshot cursors and cohort hashes are kept in a private
+append-only audit. Missing frozen historical PAYG rating, unknown ancestry, or
+unresolved paid attempts keep `evidence_complete=false` with unknown remaining
+credits and percent used; none are inferred as zero.
 
 Long-running jobs must preserve renewable original-actor authority, not only a
 subject/team snapshot. Nessie and Deep Test already have renewable per-call
