@@ -132,8 +132,9 @@ billable-unit, customer-charge, add-on, credit, payment, or cancellation fields.
 
 \`GET /schemas/billing-statement-v1.json\` publishes the Draft 2020-12 response
 schema. \`GET /schemas/billing-statement-v2.json\` adds the complete SSO-filled,
-team-wide connected-service portfolio. Package 3.0.0 is a breaking privacy
-revision; strict consumers must update before UOA serves the revised schemas. The open-source-safe
+team-wide connected-service portfolio. Package 3.0.0 removes the public pinned
+tariff identity and adds monthly cycles; strict consumers must update before UOA
+serves the revised schemas. The open-source-safe
 \`@unlikeotherai/billing-statement-protocol\` package
 is the TypeScript source used by UOA itself; it has no private server imports or
 credentials. Until registry publication, consumers can vendor/pack that package
@@ -155,6 +156,21 @@ only the requested product. Other-service totals are explanatory and never becom
 line items or charges on the current statement. One pinned, user-grouped
 \`metering-portfolio-v1\` snapshot covers the exact team and month; UOA derives
 commercial rating plus all service, origin, and user totals from it.
+
+### Monthly billing cycles and documents
+
+The canonical BillingCyclesV1 contract is published at
+\`/schemas/billing-cycles-v1.json\`, \`/schemas/billing-cycles-v1.example.json\`, and
+\`/schemas/billing-cycles-v1.openapi.json\`. A product's billing page calls
+\`POST /billing/v1/cycles/list\` and \`/detail\` with its exact lifecycle app key,
+fresh endpoint-audience actor assertion, and product/organisation/team/user body.
+The caller must be a current billing manager for the cycle's frozen payer
+scope. The detail contains customer seat charges, measured units, credits,
+and persisted invoice/breakdown metadata, never provider cost or markup.
+An open preview has no final invoice download. Only a document's server-authored
+\`download_action\` may be relayed to \`POST /billing/v1/cycles/download\`; UOA
+rechecks the same authority and streams immutable SHA-verified bytes. Products
+must not build a storage URL or invoice ID locally.
 
 Products render the supplied labels, descriptions, totals, shares, and actions
 unchanged. They never derive totals, private price terms, direct access, cancellation

@@ -920,7 +920,6 @@
                 "usage_unit",
                 "calls",
                 "raw_units",
-                "modalities",
                 "customer_charge",
                 "credits_consumed"
               ],
@@ -1538,7 +1537,6 @@
                 "output": "50",
                 "total": "150"
               },
-              "modalities": [],
               "customer_charge": {
                 "amount": "13",
                 "currency": "USD",

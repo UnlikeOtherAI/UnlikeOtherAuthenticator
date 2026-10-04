@@ -62,7 +62,6 @@ export const billingCycleDetailV1ConformanceFixture: BillingCycleDetailV1 = {
   usage_lines: [{
     id: 'usage_example', service_id: 'openai', usage_unit: 'tokens', calls: '2',
     raw_units: { input: '100', cached_input: '0', output: '50', total: '150' },
-    modalities: [],
     customer_charge: { amount: '13', currency: 'USD', display: 'US$13' },
     credits_consumed: '13000',
   }],

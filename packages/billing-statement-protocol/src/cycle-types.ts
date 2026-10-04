@@ -92,7 +92,7 @@ export type BillingCycleUsageLine = {
     reasoning?: string;
     cache_write?: string;
   };
-  modalities: Array<{ modality: string; raw_units: string }>;
+  modalities?: Array<{ modality: string; raw_units: string }>;
   customer_charge: ExactMoney | null;
   credits_consumed: string;
 };

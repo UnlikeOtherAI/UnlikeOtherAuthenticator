@@ -1312,12 +1312,15 @@ Issued-invoice views expose gross calculated customer price grouped by service,
 then one separate canonical funded-credit settlement, ordinary fixed
 subscriptions, adjustments, taxes, payments, and totals as applicable. Paid
 recurring add-ons remain on their canonical Stripe subscription, are labelled
-as collected separately, and are excluded from the manual amount due. They must
-not expose token counts, raw API/search/
-research units, raw provider cost, cost-token equivalents, tariff markup, or
-the margin calculation. Even operator-created descriptions must not encode
-those prohibited facts. Product applications receive only UOA's display-ready
-invoice view model and never reproduce the calculator.
+as collected separately, and are excluded from the manual amount due. The
+payment invoice remains distinct from the frozen cycle usage breakdown: the
+breakdown may show measured token/API/search/research units, cache and modality
+counts when the Ledger receipt actually supplies them, plus final customer
+charges and credit consumption. Neither document exposes raw provider cost,
+cost-token equivalents, tariff markup, or the margin calculation. Even
+operator-created descriptions must not encode those prohibited financial
+facts. Product applications receive only UOA's display-ready documents and
+never reproduce the calculator.
 
 Stripe invoice-close catch-up verifies the configured Stripe account identifier
 against the immutable account binding before reading or advancing any invoice.

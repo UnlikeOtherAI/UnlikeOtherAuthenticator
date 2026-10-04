@@ -917,7 +917,6 @@
               "usage_unit",
               "calls",
               "raw_units",
-              "modalities",
               "customer_charge",
               "credits_consumed"
             ],
