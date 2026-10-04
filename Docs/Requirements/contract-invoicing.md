@@ -90,6 +90,17 @@ invoice lines, and holds issuance when the issuer or buyer tax evidence is
 missing. A zero tax rate requires the explicit `NO_TAX_CHARGED` policy; it is
 never a fallback for unknown treatment.
 
+A late manual cycle supplement inherits that frozen tax treatment and taxes
+only its new gross usage line. Settled wallet credits are payment against the
+supplement's usage liability, after tax; they never discount a seat or flat
+fee. Each new credit reference freezes both the latest cumulative settlement
+and the amount already applied by a prior issued invoice in the same contract,
+month and service. The issuer and database independently allocate only the
+incremental cents by cumulative rounding, so two half-cent debits across two
+invoices cannot become two credited cents. The prior issuer reference must
+exist and match exactly. An offset larger than the new usage line needs a
+separate legal credit-note path and remains held by the positive supplement.
+
 An immutable paid provider receipt cannot later become a smaller receipt.
 UOA therefore holds apparent negative provider-cost changes until a distinct
 verified financial correction source exists. An issuer may separately cancel

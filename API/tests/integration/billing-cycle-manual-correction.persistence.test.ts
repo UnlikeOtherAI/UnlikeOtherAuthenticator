@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 
 import { BillingAssignmentScope, BillingCollectionMode, BillingMonthlyChargeBasis,
-  BillingTariffMode, BillingUsagePaymentMode } from '@prisma/client';
+  BillingTariffMode, BillingUsagePaymentMode, Prisma } from '@prisma/client';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { getAdminAuthDomain } from '../../src/config/env.js';
@@ -278,5 +278,149 @@ describe.skipIf(!enabled)('issued manual late receipt correction', () => {
     } });
     expect(createHash('sha256').update(await storage.read(original.pdfObjectKey ?? ''))
       .digest('hex')).toBe(original.pdfSha256);
+  });
+
+  it('carries two settled half-cent wallet offsets across separate VAT supplements', async () => {
+    const stripe = await db.prisma.billingStripeAccount.create({ data: {
+      stripeAccountId: `acct_${randomUUID()}`, livemode: false } });
+    const customer = await db.prisma.billingStripeCustomer.create({ data: {
+      accountId: stripe.id, orgId: ids.org, teamId: null,
+      scope: BillingAssignmentScope.ORGANISATION, scopeKey: ids.org } });
+    const wallet = await db.prisma.billingCreditAccount.create({ data: {
+      accountId: stripe.id, customerId: customer.id, orgId: ids.org,
+      teamId: null, scope: BillingAssignmentScope.ORGANISATION,
+      scopeKey: ids.org, currency: 'USD' } });
+    const service = await db.prisma.billingService.findUniqueOrThrow({ where: {
+      id: ids.service } });
+    const appKey = await db.prisma.billingAppKey.create({ data: {
+      serviceId: ids.service, purpose: 'CUSTOMER_LIFECYCLE', name: 'Manual funded test',
+      keyPrefix: `funded_${randomUUID().slice(0, 8)}`, secretDigest: randomUUID(),
+      actorIssuer: 'https://test.example', actorAudience: 'https://uoa.example',
+      actorKeyId: randomUUID(), actorPublicJwk: { kty: 'RSA', n: 'AQAB', e: 'AQAB' },
+      checkoutReturnOrigins: ['https://test.example'],
+    } });
+    const fundingId = randomUUID();
+    const fundingEntryId = randomUUID();
+    await db.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw(Prisma.sql`SELECT set_config(
+        'app.admin_auth_domain', ${getAdminAuthDomain()}, true)`);
+      await tx.billingCreditAdminAdjustment.create({ data: {
+        id: fundingId, accountId: stripe.id, creditAccountId: wallet.id,
+        orgId: ids.org, teamId: null, signedAmountMicrocredits: 20_000_000n,
+        reason: 'Manual funded correction test', idempotencyKey: fundingId,
+        createdByUserId: ids.user, createdByEmail: (await tx.user.findUniqueOrThrow({
+          where: { id: ids.user } })).email,
+        createdByAdminDomain: getAdminAuthDomain(), creditEntryId: fundingEntryId,
+      } });
+      await tx.billingCreditEntry.create({ data: {
+        id: fundingEntryId, creditAccountId: wallet.id, direction: 'CREDIT',
+        kind: 'ADJUSTMENT', amountMicrocredits: 20_000_000n,
+        balanceAfterMicrocredits: 20_000_000n, currency: 'USD',
+        idempotencyKey: fundingId, sourceType: 'credit_admin_adjustment',
+        sourceId: fundingId, occurredAt: new Date('2026-08-01T00:00:01.000Z'),
+      } });
+    });
+    const settlement = await db.prisma.billingCreditUsageSettlement.create({ data: {
+      accountId: stripe.id, creditAccountId: wallet.id, teamId: ids.team,
+      tariffId: ids.tariff, serviceId: ids.service, appKeyId: appKey.id,
+      billingMonth: month, currency: 'USD',
+    } });
+    const actor = { userId: ids.user, tokenVersion: 0,
+      email: (await db.prisma.user.findUniqueOrThrow({ where: { id: ids.user } })).email };
+    const supplementIds: string[] = [];
+    for (const sequence of [1, 2]) {
+      await settle('0.5', 650_000_000n);
+      const snapshotId = `mup_${randomUUID().replaceAll('-', '')}`;
+      const snapshot = await db.prisma.billingCreditPortfolioSnapshot.create({ data: {
+        accountId: stripe.id, creditAccountId: wallet.id, orgId: ids.org,
+        teamId: ids.team, perspectiveServiceId: ids.service,
+        perspectiveProduct: service.identifier, billingMonth: month,
+        ledgerSnapshotId: snapshotId, ledgerSnapshotCursor: snapshotId,
+        capturedAt: new Date(`2026-09-0${sequence + 5}T00:00:00.000Z`),
+        sha256: 'e'.repeat(64),
+      } });
+      const adjustmentId = randomUUID();
+      const debitId = randomUUID();
+      const cumulativeCredits = BigInt(sequence) * 5_000_000n;
+      const cumulativeRated = sequence === 1 ? 260_000_000n : 325_000_000n;
+      await db.prisma.$transaction(async (tx) => {
+        await tx.billingCreditEntry.create({ data: {
+          id: debitId, creditAccountId: wallet.id, serviceId: ids.service,
+          appKeyId: appKey.id, direction: 'DEBIT',
+          kind: sequence === 1 ? 'USAGE_SETTLEMENT' : 'USAGE_SETTLEMENT_CORRECTION',
+          amountMicrocredits: 5_000_000n,
+          balanceAfterMicrocredits: 20_000_000n - cumulativeCredits,
+          currency: 'USD', idempotencyKey: randomUUID(),
+          sourceType: 'credit_usage_settlement_adjustment', sourceId: adjustmentId,
+          occurredAt: new Date(`2026-08-${sequence + 20}T00:00:00.000Z`),
+        } });
+        await tx.billingCreditUsageSettlementAdjustment.create({ data: {
+          id: adjustmentId, settlementId: settlement.id, accountId: stripe.id,
+          creditAccountId: wallet.id, serviceId: ids.service, appKeyId: appKey.id,
+          portfolioSnapshotId: snapshot.id, sequence,
+          deltaRatedUsageAmountMicroMinor: sequence === 1 ? 260_000_000n : 65_000_000n,
+          deltaCreditsConsumedMicrocredits: 5_000_000n,
+          deltaRemainingUsageAmountMicroMinor: sequence === 1 ?
+            259_500_000n : 64_500_000n,
+          cumulativeRatedUsageAmountMicroMinor: cumulativeRated,
+          cumulativeCreditsConsumedMicrocredits: cumulativeCredits,
+          cumulativeRemainingUsageAmountMicroMinor: cumulativeRated -
+            cumulativeCredits / 10n,
+          creditEntryId: debitId,
+        } });
+        await tx.billingCreditUsageAllocation.create({ data: {
+          settlementId: settlement.id, adjustmentId, serviceId: ids.service,
+          appKeyId: appKey.id, attributedUserId: null,
+          deltaRatedUsageAmountMicroMinor: sequence === 1 ? 260_000_000n : 65_000_000n,
+          deltaCreditsConsumedMicrocredits: 5_000_000n,
+          deltaRemainingUsageAmountMicroMinor: sequence === 1 ?
+            259_500_000n : 64_500_000n,
+          cumulativeRatedUsageAmountMicroMinor: cumulativeRated,
+          cumulativeCreditsConsumedMicrocredits: cumulativeCredits,
+          cumulativeRemainingUsageAmountMicroMinor: cumulativeRated -
+            cumulativeCredits / 10n,
+        } });
+      });
+      const pending = await close();
+      const prepared = await prepareManualBillingCycleCorrection({
+        pendingCycleId: pending.cycleId, actor,
+      }, { prisma: db.prisma });
+      const supplement = await db.prisma.billingInvoice.findUniqueOrThrow({ where: {
+        id: prepared.invoiceId,
+      }, include: { creditSettlementRefs: true, lineFinancialAllocations: true } });
+      expect([supplement.subtotalMinor, supplement.taxAmountMinor,
+        supplement.creditsAppliedMinor]).toEqual([65n, 13n, sequence === 1 ? 1n : 0n]);
+      expect(supplement.creditSettlementRefs[0]).toMatchObject({
+        creditsAppliedMicrocredits: cumulativeCredits,
+        priorCreditsAppliedMicrocredits: cumulativeCredits - 5_000_000n,
+      });
+      await issueBillingInvoice({ invoiceId: supplement.id,
+        actor: { email: actor.email } }, { prisma: db.prisma, storage,
+        now: () => new Date(`2026-09-0${sequence + 5}T00:00:00.000Z`),
+        authorizeAdminEffect: vi.fn().mockResolvedValue(undefined) });
+      supplementIds.push(supplement.id);
+      const captured = await captureIssuedManualBillingCycleCorrection({
+        invoiceId: supplement.id,
+      }, { prisma: db.prisma, storage });
+      const cycle = await db.prisma.billingCustomerCycle.findUniqueOrThrow({ where: {
+        id: captured.cycleId,
+      } });
+      const totals = (cycle.publicSnapshot as Record<string, unknown>).totals as Array<{
+        credits_applied: { amount_minor: string }; total_due: { amount_minor: string } }>;
+      expect(totals[0]?.credits_applied.amount_minor).toBe('1');
+      expect(totals[0]?.total_due.amount_minor)
+        .toBe(sequence === 1 ? '311' : '389');
+    }
+    for (const invoiceId of supplementIds) {
+      const [result] = await db.prisma.$queryRaw<Array<{ valid: boolean }>>(
+        Prisma.sql`SELECT uoa_invoice_credit_carry_valid(${invoiceId}) AS valid`);
+      expect(result?.valid).toBe(true);
+    }
+    const latest = await db.prisma.billingInvoiceCreditSettlementReference.findFirstOrThrow({
+      where: { invoiceId: supplementIds[1] },
+    });
+    await expect(db.prisma.billingInvoiceCreditSettlementReference.update({
+      where: { id: latest.id }, data: { priorCreditsAppliedMicrocredits: 0n },
+    })).rejects.toThrow();
   });
 });

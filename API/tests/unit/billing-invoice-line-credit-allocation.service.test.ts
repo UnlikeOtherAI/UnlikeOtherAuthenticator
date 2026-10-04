@@ -29,4 +29,21 @@ describe('invoice credit reference allocation', () => {
         creditsAppliedMicrocredits: -1n },
     ])).toThrow('BILLING_INVOICE_CREDIT_REFERENCE_INVALID');
   });
+
+  it('carries an issued half-cent across a later cumulative settlement', () => {
+    const original = allocateInvoiceCreditReferenceMinor([{ id: 'original',
+      serviceId: 'service-a', settlementId: 'settlement-a',
+      creditsAppliedMicrocredits: 5_000_000n }]);
+    const supplement = allocateInvoiceCreditReferenceMinor([{ id: 'supplement',
+      serviceId: 'service-a', settlementId: 'settlement-a',
+      priorCreditsAppliedMicrocredits: 5_000_000n,
+      creditsAppliedMicrocredits: 10_000_000n }]);
+    expect(original[0]?.amountMinor).toBe(1n);
+    expect(supplement[0]?.amountMinor).toBe(0n);
+    expect(() => allocateInvoiceCreditReferenceMinor([{ id: 'invalid',
+      serviceId: 'service-a', settlementId: 'settlement-a',
+      priorCreditsAppliedMicrocredits: 10_000_000n,
+      creditsAppliedMicrocredits: 5_000_000n }]))
+      .toThrow('BILLING_INVOICE_CREDIT_REFERENCE_INVALID');
+  });
 });

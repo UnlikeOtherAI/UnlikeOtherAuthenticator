@@ -28,7 +28,8 @@ export function verifiedManualInvoiceLine(invoice: FinancialInvoice,
   const calculatedCredits = allocateInvoiceCreditReferenceMinor(
     invoice.creditSettlementRefs.map((row) => ({ id: row.id, serviceId: row.serviceId,
       settlementId: row.settlementId,
-      creditsAppliedMicrocredits: row.creditsAppliedMicrocredits })));
+      creditsAppliedMicrocredits: row.creditsAppliedMicrocredits,
+      priorCreditsAppliedMicrocredits: row.priorCreditsAppliedMicrocredits })));
   const recordedCredits = new Map(invoice.lineCreditAllocations.map((row) =>
     [row.referenceId, row]));
   if (recordedCredits.size !== calculatedCredits.length ||

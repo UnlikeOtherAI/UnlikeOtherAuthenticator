@@ -102,7 +102,7 @@ Promise<{ cycleId: string; snapshotSha256: string }> {
   if (invoice.lines.length !== 1 || verified.allocation.subscriptionMinor !== 0n ||
     verified.allocation.usageMinor !== correction.netDeltaMinor ||
     verified.allocation.taxMinor !== correction.taxDeltaMinor ||
-    verified.allocation.invoiceCreditMinor !== 0n ||
+    verified.allocation.invoiceCreditMinor !== correction.creditDeltaMinor ||
     verified.allocation.totalMinor !== correction.netDeltaMinor + correction.taxDeltaMinor) {
     hold('BILLING_CYCLE_MANUAL_CORRECTION_LINE_CHANGED');
   }
@@ -188,11 +188,16 @@ Promise<{ cycleId: string; snapshotSha256: string }> {
         'BILLING_CYCLE_MANUAL_CORRECTION_TOTAL_INVALID'), invoice.currency),
       gross_total: cycleMoney(added(total.gross_total.amount_minor, amount,
         'BILLING_CYCLE_MANUAL_CORRECTION_TOTAL_INVALID'), invoice.currency),
-      total_due: cycleMoney(added(total.total_due.amount_minor, amount,
+      credits_applied: cycleMoney(added(total.credits_applied.amount_minor,
+        correction.creditDeltaMinor,
+        'BILLING_CYCLE_MANUAL_CORRECTION_TOTAL_INVALID'), invoice.currency),
+      total_due: cycleMoney(added(total.total_due.amount_minor,
+        amount - correction.creditDeltaMinor,
         'BILLING_CYCLE_MANUAL_CORRECTION_TOTAL_INVALID'), invoice.currency),
       total_paid: cycleMoney(added(total.total_paid.amount_minor, paid,
         'BILLING_CYCLE_MANUAL_CORRECTION_TOTAL_INVALID'), invoice.currency),
-      outstanding: cycleMoney(added(total.outstanding.amount_minor, amount - paid,
+      outstanding: cycleMoney(added(total.outstanding.amount_minor,
+        amount - correction.creditDeltaMinor - paid,
         'BILLING_CYCLE_MANUAL_CORRECTION_TOTAL_INVALID'), invoice.currency),
     }], documents, document_available: true,
     adjustments: [...prior.adjustments, { source_cycle_id: original.id,

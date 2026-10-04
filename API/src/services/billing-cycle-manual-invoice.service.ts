@@ -67,6 +67,9 @@ export function invoiceSourceFingerprint(invoice: FinancialInvoice): string {
     credit_refs: invoice.creditSettlementRefs.map((row) => ({
       id: row.id, service_id: row.serviceId, settlement_id: row.settlementId,
       microcredits: row.creditsAppliedMicrocredits.toString(),
+      ...(row.priorCreditsAppliedMicrocredits > 0n ? {
+        prior_microcredits: row.priorCreditsAppliedMicrocredits.toString(),
+      } : {}),
     })).sort((a, b) => binaryOrder(a.id, b.id)),
     line_credit_refs: invoice.lineCreditAllocations.map((row) => ({
       reference_id: row.referenceId, line_id: row.lineId,

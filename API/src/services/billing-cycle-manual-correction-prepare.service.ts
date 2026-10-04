@@ -15,7 +15,11 @@ import { billingCycleSnapshotDigest } from './billing-cycle-read.service.js';
 import { invoiceSourceFingerprint } from './billing-cycle-manual-invoice.service.js';
 import { readCycleWalletBoundary } from './billing-cycle-wallet-boundary.service.js';
 import { verifiedManualInvoiceLine } from './billing-cycle-manual-allocation.service.js';
+import { verifiedManualFundedOffset } from
+  './billing-cycle-manual-funded-offset.service.js';
 import { assertInvoiceTaxTerms } from './billing-invoice-tax.service.js';
+import { writeInvoiceFinancialAllocations } from
+  './billing-invoice-financial-allocation.service.js';
 import { addBillingDecimals, majorAmountToMinorRounded } from './billing-money.service.js';
 import type { CycleUsageEvidence } from './billing-cycle-usage-projection.service.js';
 import type { LedgerPaidReceiptSet, PaidReceiptScope } from
@@ -156,16 +160,6 @@ export async function prepareManualBillingCycleCorrection(params: {
     };
     const currentFunded = fundedTotal(evidence);
     const priorFunded = fundedTotal(priorEvidence);
-    const payerAccount = currentFunded === null || priorFunded === null ?
-      await tx.billingCreditAccount.findFirst({ where: { orgId: pending.orgId,
-        teamId: pending.payerScope === BillingAssignmentScope.TEAM ? pending.teamId : null,
-        scope: pending.payerScope, currency: 'USD' }, select: { id: true } }) : null;
-    // An account without a settled offset can acquire one later. The only
-    // provable zero is an account that did not exist at this frozen close.
-    if (currentFunded !== priorFunded ||
-      (currentFunded === null && payerAccount)) {
-      hold('BILLING_CYCLE_MANUAL_CORRECTION_FUNDED_OFFSET_REQUIRED');
-    }
     const invoice = await tx.billingInvoice.findUnique({ where: {
       id: allocation.source_invoice_id,
     }, include: { lines: true, paymentEvents: true, lineFinancialAllocations: true,
@@ -212,6 +206,22 @@ export async function prepareManualBillingCycleCorrection(params: {
     if (bound.allocation.usageMinor + priorCorrectionNet !== oldUsage) {
       hold('BILLING_CYCLE_MANUAL_CORRECTION_HISTORY_MISMATCH');
     }
+    const capturedCredits = evidence.credit_evidence as Array<{
+      source_ids?: string[]; funded_debit_microcredits?: string | null }> | undefined;
+    if (!capturedCredits) hold('BILLING_CYCLE_MANUAL_FUNDED_SOURCE_UNPROVEN');
+    const funded = currentFunded !== null || priorFunded !== null ?
+      await verifiedManualFundedOffset(tx, { orgId: pending.orgId,
+        teamId: pending.teamId, serviceId: pending.serviceId,
+        month: pending.billingMonth, contractId: invoice.contractId,
+        payer: pending.payerScope, creditEvidence: capturedCredits,
+        originalInvoiceId: invoice.id }) : null;
+    if ((funded && currentFunded !== funded.currentMicrocredits) ||
+      (!funded && invoice.creditSettlementRefs.some((row) =>
+        row.serviceId === pending.serviceId))) {
+      hold('BILLING_CYCLE_MANUAL_FUNDED_SOURCE_UNPROVEN');
+    }
+    const creditDelta = funded?.creditMinor ?? 0n;
+    if (creditDelta > netDelta) hold('BILLING_CYCLE_MANUAL_CREDIT_NOTE_REQUIRED');
     const taxableBefore = invoice.subtotalMinor + priorCorrectionNet;
     const taxBefore = invoice.taxAmountMinor + priorCorrectionTax;
     const taxAfter = ((taxableBefore + netDelta) * BigInt(taxTerms.rateBps) + 5000n) / 10000n;
@@ -230,7 +240,12 @@ export async function prepareManualBillingCycleCorrection(params: {
       original_id: previous.id, original_sha: previous.snapshotSha256,
       original_invoice_id: invoice.id, original_digest: sourceDigest,
       original_line_id: bound.line.id, net_delta: netDelta.toString(),
-      tax_delta: taxDelta.toString(), tax_terms: taxTerms });
+      tax_delta: taxDelta.toString(), credit_delta: creditDelta.toString(),
+      credit_refs: funded?.references.map((row) => ({
+        settlement_id: row.settlementId, adjustment_id: row.adjustmentId,
+        cumulative_microcredits: row.creditsAppliedMicrocredits.toString(),
+        prior_microcredits: row.priorCreditsAppliedMicrocredits.toString(),
+      })) ?? [], tax_terms: taxTerms });
     const term = await tx.billingContractServiceTerm.findUnique({ where: { id: source.id },
       select: { serviceId: true, contractVersionId: true } });
     if (term?.serviceId !== pending.serviceId ||
@@ -245,7 +260,7 @@ export async function prepareManualBillingCycleCorrection(params: {
     const supplementId = randomUUID();
     const lineId = randomUUID();
     const correctionId = randomUUID();
-    await tx.billingInvoice.create({ data: {
+    const supplement = await tx.billingInvoice.create({ data: {
       id: supplementId, orgId: invoice.orgId, contractId: invoice.contractId,
       isCycleSupplement: true,
       contractVersionId: invoice.contractVersionId,
@@ -253,7 +268,7 @@ export async function prepareManualBillingCycleCorrection(params: {
       billingMonth: invoice.billingMonth, revision: (latestInvoice?.revision ?? 0) + 1,
       currency: invoice.currency, subtotalMinor: netDelta,
       taxAmountMinor: taxDelta, totalMinor: netDelta + taxDelta,
-      creditsAppliedMinor: 0n, taxTreatment: taxTerms.treatment,
+      creditsAppliedMinor: creditDelta, taxTreatment: taxTerms.treatment,
       taxRateBps: taxTerms.rateBps, taxLegalBasis: taxTerms.legalBasis,
       issuerSnapshot: invoice.issuerSnapshot as Prisma.InputJsonValue,
       buyerSnapshot: invoice.buyerSnapshot as Prisma.InputJsonValue,
@@ -268,18 +283,24 @@ export async function prepareManualBillingCycleCorrection(params: {
         ledgerSnapshotCursor: meteringReference.cursor,
         ledgerSnapshotSha256: meteringReference.sha256,
         capturedAt: new Date(meteringReference.captured_at) } },
-    } });
-    await tx.billingInvoiceLineFinancialAllocation.create({ data: {
-      lineId, invoiceId: supplementId, serviceId: pending.serviceId,
-      billingMonth: pending.billingMonth, subscriptionMinor: 0n,
-      usageMinor: netDelta, taxMinor: taxDelta, invoiceCreditMinor: 0n,
-      totalMinor: netDelta + taxDelta, dueMinor: netDelta + taxDelta,
-      currency: invoice.currency, calculationDigest: evidenceDigest,
-    } });
+    }, include: { lines: true } });
+    for (const reference of funded?.references ?? []) {
+      await tx.billingInvoiceCreditSettlementReference.create({ data: {
+        id: reference.id, invoiceId: supplementId, serviceId: pending.serviceId,
+        settlementId: reference.settlementId, adjustmentId: reference.adjustmentId,
+        creditsAppliedMicrocredits: reference.creditsAppliedMicrocredits,
+        priorCreditsAppliedMicrocredits: reference.priorCreditsAppliedMicrocredits,
+      } });
+    }
+    await writeInvoiceFinancialAllocations(tx, supplement, [{
+      serviceId: pending.serviceId, subscriptionMinor: 0n,
+      usageMinor: netDelta, taxMinor: taxDelta,
+    }]);
     await tx.billingCycleManualCorrection.create({ data: {
       id: correctionId, pendingCycleId: pending.id, originalCycleId: previous.id,
       supplementInvoiceId: supplementId, kind: 'debit',
       netDeltaMinor: netDelta, taxDeltaMinor: taxDelta,
+      creditDeltaMinor: creditDelta,
       currency: invoice.currency, originalLineId: bound.line.id,
       originalSourceDigest: sourceDigest, taxTreatment: taxTerms.treatment,
       taxRateBps: taxTerms.rateBps, taxLegalBasis: taxTerms.legalBasis,

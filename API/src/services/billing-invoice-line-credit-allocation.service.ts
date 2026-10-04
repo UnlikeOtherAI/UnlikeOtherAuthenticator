@@ -9,6 +9,7 @@ export type InvoiceCreditReference = {
   serviceId: string;
   settlementId: string;
   creditsAppliedMicrocredits: bigint;
+  priorCreditsAppliedMicrocredits?: bigint;
 };
 
 /**
@@ -19,7 +20,13 @@ export type InvoiceCreditReference = {
 export function allocateInvoiceCreditReferenceMinor(
   references: readonly InvoiceCreditReference[],
 ): Array<{ referenceId: string; serviceId: string; amountMinor: bigint }> {
-  let cumulative = 0n;
+  let cumulative = references.reduce((sum, reference) => {
+    const prior = reference.priorCreditsAppliedMicrocredits ?? 0n;
+    if (prior < 0n || prior > reference.creditsAppliedMicrocredits) {
+      throw new AppError('BAD_REQUEST', 409, 'BILLING_INVOICE_CREDIT_REFERENCE_INVALID');
+    }
+    return sum + prior;
+  }, 0n);
   const seen = new Set<string>();
   return [...references].sort((a, b) =>
     binaryCompare(a.serviceId, b.serviceId) ||
@@ -31,7 +38,8 @@ export function allocateInvoiceCreditReferenceMinor(
       seen.add(reference.id);
       const before = (cumulative + MICROCREDITS_PER_USD_MINOR / 2n) /
         MICROCREDITS_PER_USD_MINOR;
-      cumulative += reference.creditsAppliedMicrocredits;
+      cumulative += reference.creditsAppliedMicrocredits -
+        (reference.priorCreditsAppliedMicrocredits ?? 0n);
       const after = (cumulative + MICROCREDITS_PER_USD_MINOR / 2n) /
         MICROCREDITS_PER_USD_MINOR;
       return { referenceId: reference.id, serviceId: reference.serviceId,

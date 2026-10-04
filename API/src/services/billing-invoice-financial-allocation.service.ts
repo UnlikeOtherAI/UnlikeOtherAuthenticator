@@ -24,7 +24,8 @@ export async function writeInvoiceFinancialAllocations(
 ): Promise<void> {
   const references = await tx.billingInvoiceCreditSettlementReference.findMany({
     where: { invoiceId: invoice.id },
-    select: { id: true, serviceId: true, settlementId: true, creditsAppliedMicrocredits: true },
+    select: { id: true, serviceId: true, settlementId: true,
+      creditsAppliedMicrocredits: true, priorCreditsAppliedMicrocredits: true },
   });
   const allocations = allocateInvoiceCreditReferenceMinor(references);
   const lineByService = new Map(invoice.lines.map((line) => [line.serviceId, line]));

@@ -268,11 +268,16 @@ prepares a delta-only supplemental draft against the original issued line.
 The ordinary invoice issuer assigns its own legal number and immutable PDF;
 the reconciliation queue then verifies the issued line, inherited tax policy,
 signed receipt cohort and original source before appending an adjusted cycle.
-The original invoice, its accepted payments and bytes remain intact. Database
+The original invoice, its accepted payments and bytes remain intact. A later
+confirmed funded offset is frozen as the latest UOA settlement reference on
+that supplemental invoice, with the prior issued cumulative amount separately
+bound. Only the incremental cents reduce its new usage line after gross VAT;
+the issuer and PostgreSQL both verify the carry across invoices. Two
+half-cent debits cannot each become a full cent. Offsets above the new usage
+liability remain held for a distinct legal credit-note source. Database
 readiness and partial uniqueness permit a second issued invoice in that month
-only when the draft has an immutable correction binding. A negative change
-requires a separately issued credit note; a funded-credit change needs its
-exact settlement-reference allocation rather than a presumed zero.
+only when the draft has an immutable correction binding. A negative usage
+change requires a separately issued credit note.
 Each funded settlement reference is assigned to its own service line in stable
 service and settlement order. The invoice-wide cumulative microcredit rounding
 determines the minor-unit delta at each reference; it preserves fractional

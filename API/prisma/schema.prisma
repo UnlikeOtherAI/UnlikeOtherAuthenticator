@@ -2854,6 +2854,7 @@ model BillingInvoiceCreditSettlementReference {
   settlementId               String   @map("settlement_id")
   adjustmentId               String   @map("adjustment_id")
   creditsAppliedMicrocredits BigInt   @map("credits_applied_microcredits")
+  priorCreditsAppliedMicrocredits BigInt @default(0) @map("prior_credits_applied_microcredits")
   createdAt                  DateTime @default(now()) @map("created_at")
 
   invoice    BillingInvoice                         @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
@@ -4519,6 +4520,7 @@ model BillingCycleManualCorrection {
   kind               String   @db.VarChar(16) // debit or credit
   netDeltaMinor      BigInt   @map("net_delta_minor")
   taxDeltaMinor      BigInt   @map("tax_delta_minor")
+  creditDeltaMinor   BigInt   @default(0) @map("credit_delta_minor")
   currency           String   @db.Char(3)
   originalLineId     String   @map("original_line_id")
   originalSourceDigest String @map("original_source_digest") @db.Char(64)
