@@ -110,8 +110,8 @@ function fundingPolicy(
           : pendingCheckoutBlocksOffer
           ? 'A payment is already in progress. Resolve it before starting another.'
             : policy?.topUpEnabled
-              ? 'This offer is not configured for the active Stripe account.'
-              : 'Top-ups are disabled for this service.',
+              ? 'This offer is unavailable right now.'
+              : 'This team cannot add credits right now.',
         action: manager
           ? {
               id: 'top_up' as const,
@@ -126,10 +126,10 @@ function fundingPolicy(
               disabled_reason: available
                 ? null
                 : !collectionEnabled
-                  ? 'Stripe credit collection is unavailable.'
+                  ? 'Card payments are unavailable right now.'
                   : pendingCheckoutBlocksOffer
                     ? 'A payment is already in progress. Resolve it before starting another.'
-                    : 'This offer is not available for the active Stripe account.',
+                    : 'This offer is unavailable right now.',
               request: {
                 method: 'POST' as const,
                 path: '/billing/v1/credits/top-up-checkout' as const,
@@ -183,7 +183,7 @@ function optionActions(
     return {
       selected: account.autoTopUpOptionId === option.id,
       label: `${billingCreditAmount(option.refillOffer.creditsReceivedMicrocredits).display} below ${billingCreditAmount(option.thresholdMicrocredits).display}`,
-      description: 'A bounded UOA option; products cannot submit arbitrary amounts.',
+      description: 'This option sets a monthly limit for automatic top-ups.',
       threshold: billingCreditAmount(option.thresholdMicrocredits),
       refill_offer_id: option.refillOfferId,
       refill_payment_amount: billingCreditsPaymentMoney(option.refillOffer.paymentAmountMinor),
@@ -194,11 +194,11 @@ function optionActions(
             id: 'auto_top_up_setup' as const,
             kind: 'hosted_redirect' as const,
             label: 'Set up automatic top-up',
-            description: 'Review and consent to this exact option in secure Checkout.',
+            description: 'Review and confirm this exact option on the secure payment page.',
             enabled: setupEnabled,
             disabled_reason: setupEnabled
               ? null
-              : 'Setup requires an available UOA option and no existing payment method.',
+              : 'Choose an available option and save a card first.',
             request: {
               method: 'POST' as const,
               path: '/billing/v1/credits/auto-top-up/setup' as const,
@@ -211,11 +211,11 @@ function optionActions(
             id: 'auto_top_up_update' as const,
             kind: 'mutation' as const,
             label: 'Use this automatic top-up option',
-            description: 'Select this UOA-defined threshold, refill, and cap.',
+            description: 'Use this threshold, refill amount, and monthly limit.',
             enabled: updateEnabled,
             disabled_reason: updateEnabled
               ? null
-              : 'Updating requires active consent, a verified payment method, and an available option.',
+              : 'Choose an available option and save a card first.',
             request: {
               method: 'POST' as const,
               path: '/billing/v1/credits/auto-top-up/update' as const,
@@ -233,12 +233,26 @@ function automaticTopUp(
   manager: boolean,
   collectionEnabled: boolean,
   readiness: BillingCreditActionReadiness,
+  capResetsAt: Date | undefined,
 ) {
   const account = data.creditAccount;
   const policy = data.policy;
-  const state = account.autoTopUpState.toLowerCase() as Lowercase<BillingCreditAutoTopUpState>;
   const charged = data.autoTopUpChargedMinor;
   const cap = account.autoTopUpMonthlyChargeCapMinor;
+  const remainingCap = cap === null ? null : cap > charged ? cap - charged : 0n;
+  const selectedRefill = policy?.autoTopUpOptions.find(
+    (option) => option.id === account.autoTopUpOptionId,
+  )?.refillOffer.paymentAmountMinor;
+  const pausedForCap = Boolean(
+    account.autoTopUpState === BillingCreditAutoTopUpState.ACTIVE &&
+      remainingCap !== null &&
+      selectedRefill !== undefined &&
+      remainingCap < selectedRefill,
+  );
+  const state = pausedForCap
+    ? 'paused'
+    : (account.autoTopUpState.toLowerCase() as Lowercase<BillingCreditAutoTopUpState>);
+  const resetDate = capResetsAt?.toISOString().slice(0, 10);
   const recoverableState =
     account.autoTopUpState === BillingCreditAutoTopUpState.REQUIRES_ACTION ||
     account.autoTopUpState === BillingCreditAutoTopUpState.NEEDS_REVIEW ||
@@ -254,10 +268,11 @@ function automaticTopUp(
   return {
     state,
     display_status: `Automatic top-up is ${state.replaceAll('_', ' ')}`,
-    description:
-      state === 'disabled'
+    description: pausedForCap
+      ? `The monthly limit cannot cover another refill.${resetDate ? ` It resets on ${resetDate}.` : ''}`
+      : state === 'disabled'
         ? 'Automatic top-up is not enabled for this team.'
-        : 'UOA applies the saved threshold, refill offer, and monthly charge cap.',
+        : 'The saved threshold, refill offer, and monthly limit apply.',
     threshold:
       account.autoTopUpThresholdMicrocredits === null
         ? null
@@ -266,7 +281,7 @@ function automaticTopUp(
     monthly_cap: cap === null ? null : billingCreditsPaymentMoney(cap),
     charged_this_month: billingCreditsPaymentMoney(charged),
     remaining_monthly_cap:
-      cap === null ? null : billingCreditsPaymentMoney(cap > charged ? cap - charged : 0n),
+      remainingCap === null ? null : billingCreditsPaymentMoney(remainingCap),
     payment_method: manager
       ? paymentMethod(data, readiness)
       : { status: paymentMethod(data, readiness).status },
@@ -278,7 +293,7 @@ function automaticTopUp(
           consented_by: account.autoTopUpConsentedBy
             ? { display_name: account.autoTopUpConsentedBy.name ?? 'Team member' }
             : null,
-          description: 'Consent covers the saved threshold, refill offer, and monthly cap.',
+          description: 'Your agreement covers the saved threshold, refill amount, and monthly limit.',
         }
       : {
           status: consentStatus,
@@ -297,7 +312,7 @@ function automaticTopUp(
             disabled_reason:
               collectionEnabled && readiness.disableReady
                 ? null
-                : 'The current automatic top-up policy is unavailable.',
+                : 'Automatic top-up is unavailable right now.',
             request: {
               method: 'POST' as const,
               path: '/billing/v1/credits/auto-top-up/disable' as const,
@@ -313,11 +328,11 @@ function automaticTopUp(
             account.autoTopUpState === BillingCreditAutoTopUpState.ACTIVE
               ? 'Change card'
               : 'Review payment',
-          description: 'Open UOA recovery when a payment requires customer action or review.',
+          description: 'Open the secure payment page to review or change your card.',
           enabled: recoverEnabled,
           disabled_reason: recoverEnabled
             ? null
-            : 'No automatic top-up currently has verified recovery evidence.',
+            : 'This action is not available right now.',
           request: {
             method: 'POST' as const,
             path: '/billing/v1/credits/auto-top-up/recover' as const,
@@ -333,10 +348,18 @@ export function buildManagerCreditActionsProjection(
   body: BillingCreditActionSubject,
   collectionEnabled: boolean,
   readiness: BillingCreditActionReadiness,
+  capResetsAt?: Date,
 ): Pick<BillingCreditsManagerV1, 'funding_policy' | 'automatic_top_up'> {
   return {
     funding_policy: fundingPolicy(data, body, true, collectionEnabled, readiness),
-    automatic_top_up: automaticTopUp(data, body, true, collectionEnabled, readiness),
+    automatic_top_up: automaticTopUp(
+      data,
+      body,
+      true,
+      collectionEnabled,
+      readiness,
+      capResetsAt,
+    ),
   } as Pick<BillingCreditsManagerV1, 'funding_policy' | 'automatic_top_up'>;
 }
 

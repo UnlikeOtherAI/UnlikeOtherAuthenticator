@@ -582,7 +582,7 @@ describe('UOA credit funding mutation services', () => {
     });
   });
 
-  it('disables future charges only when no automatic payment remains unresolved', async () => {
+  it('disables future consent while leaving an older unresolved attempt independent', async () => {
     const state = baseContext({
       autoTopUpState: BillingCreditAutoTopUpState.ACTIVE,
       autoTopUpConsentRevisionId: 'consent_1',
@@ -603,13 +603,11 @@ describe('UOA credit funding mutation services', () => {
       billingCreditAccount: {
         update: accountUpdate,
       },
-      billingCreditAutoTopUpAttempt: { findFirst: vi.fn().mockResolvedValue(null) },
       billingCreditAutoTopUpDisableEvent: { create: vi.fn() },
       billingCreditSetupCheckout: { updateMany: vi.fn() },
       orgAuditLog: { create: vi.fn() },
     };
     const prisma = {
-      billingCreditAutoTopUpAttempt: { findFirst: vi.fn().mockResolvedValue(null) },
       $transaction: vi.fn((callback) => callback(tx)),
     } as unknown as PrismaClient;
 
@@ -626,16 +624,28 @@ describe('UOA credit funding mutation services', () => {
         stripePaymentMethodId: null,
       }),
     });
+    expect(tx.billingCreditAutoTopUpDisableEvent.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        previousConsentRevisionId: 'consent_1',
+        previousGeneration: 0,
+      }),
+    });
   });
 
-  it('keeps disable blocked for ambiguous review evidence', async () => {
+  it('keeps disable safe when an unknown pending attempt has no persisted Stripe id', async () => {
     const state = baseContext({
-      autoTopUpState: BillingCreditAutoTopUpState.NEEDS_REVIEW,
+      autoTopUpState: BillingCreditAutoTopUpState.ACTIVE,
       autoTopUpConsentRevisionId: 'consent_1',
       autoTopUpOptionId: option.id,
       stripePaymentMethodId: 'pm_1',
     });
     const disableCreate = vi.fn();
+    const accountUpdate = vi.fn();
+    const attemptRead = vi.fn().mockResolvedValue({
+      id: 'attempt_pending',
+      status: 'PENDING',
+      stripePaymentIntentId: null,
+    });
     const tx = {
       $queryRaw: vi.fn().mockResolvedValue([
         {
@@ -646,24 +656,32 @@ describe('UOA credit funding mutation services', () => {
           stripePaymentMethodId: 'pm_1',
         },
       ]),
-      billingCreditAutoTopUpAttempt: {
-        findFirst: vi.fn().mockResolvedValue({ id: 'attempt_ambiguous' }),
-      },
       billingCreditAutoTopUpDisableEvent: { create: disableCreate },
+      billingCreditAutoTopUpAttempt: { findFirst: attemptRead },
+      billingCreditSetupCheckout: { updateMany: vi.fn() },
+      billingCreditAccount: { update: accountUpdate },
+      orgAuditLog: { create: vi.fn() },
     };
     const prisma = {
-      billingCreditAutoTopUpAttempt: {
-        findFirst: vi.fn().mockResolvedValue({ id: 'attempt_ambiguous' }),
-      },
+      billingCreditAutoTopUpAttempt: { findFirst: attemptRead },
       $transaction: vi.fn((callback) => callback(tx)),
     } as unknown as PrismaClient;
 
-    await expect(
-      disableBillingCreditAutoTopUp(
-        { request, actorToken: 'actor', credential },
-        { prisma, resolveContext: vi.fn().mockResolvedValue(state.context) },
-      ),
-    ).rejects.toThrow('BILLING_CREDIT_AUTO_TOP_UP_PAYMENT_PENDING');
-    expect(disableCreate).not.toHaveBeenCalled();
+    await disableBillingCreditAutoTopUp(
+      { request, actorToken: 'actor', credential },
+      { prisma, resolveContext: vi.fn().mockResolvedValue(state.context) },
+    );
+
+    expect(disableCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({ previousConsentRevisionId: 'consent_1' }),
+    });
+    expect(accountUpdate).toHaveBeenCalledWith({
+      where: { id: 'credit_account_1' },
+      data: expect.objectContaining({
+        autoTopUpState: BillingCreditAutoTopUpState.DISABLED,
+        autoTopUpConsentRevisionId: null,
+      }),
+    });
+    expect(attemptRead).not.toHaveBeenCalled();
   });
 });

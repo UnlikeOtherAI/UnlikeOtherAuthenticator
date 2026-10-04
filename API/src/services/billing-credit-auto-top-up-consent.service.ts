@@ -1,5 +1,4 @@
 import {
-  BillingCreditAutoTopUpAttemptStatus,
   BillingCreditAutoTopUpConsentSource,
   BillingCreditAutoTopUpState,
   BillingCreditCheckoutStatus,
@@ -329,23 +328,6 @@ export async function disableBillingCreditAutoTopUp(
     { prisma },
   );
   if (context.creditAccount.autoTopUpState === BillingCreditAutoTopUpState.DISABLED) return;
-  const unresolvedBeforeAuthorization = await prisma.billingCreditAutoTopUpAttempt.findFirst({
-    where: {
-      creditAccountId: context.creditAccount.id,
-      status: {
-        in: [
-          BillingCreditAutoTopUpAttemptStatus.PENDING,
-          BillingCreditAutoTopUpAttemptStatus.PROCESSING,
-          BillingCreditAutoTopUpAttemptStatus.REQUIRES_ACTION,
-          BillingCreditAutoTopUpAttemptStatus.NEEDS_REVIEW,
-        ],
-      },
-    },
-    select: { id: true },
-  });
-  if (unresolvedBeforeAuthorization) {
-    throw new AppError('BAD_REQUEST', 409, 'BILLING_CREDIT_AUTO_TOP_UP_PAYMENT_PENDING');
-  }
   if (!context.creditAccount.autoTopUpConsentRevisionId) {
     throw new AppError('BAD_REQUEST', 409, 'BILLING_CREDIT_CONSENT_PREDECESSOR_MISSING');
   }
@@ -353,23 +335,6 @@ export async function disableBillingCreditAutoTopUp(
     async (tx) => {
       const account = await lockConsentSnapshot(tx, context.creditAccount.id);
       if (account.autoTopUpState === BillingCreditAutoTopUpState.DISABLED) return;
-      const unresolved = await tx.billingCreditAutoTopUpAttempt.findFirst({
-        where: {
-          creditAccountId: account.id,
-          status: {
-            in: [
-              BillingCreditAutoTopUpAttemptStatus.PENDING,
-              BillingCreditAutoTopUpAttemptStatus.PROCESSING,
-              BillingCreditAutoTopUpAttemptStatus.REQUIRES_ACTION,
-              BillingCreditAutoTopUpAttemptStatus.NEEDS_REVIEW,
-            ],
-          },
-        },
-        select: { id: true },
-      });
-      if (unresolved) {
-        throw new AppError('BAD_REQUEST', 409, 'BILLING_CREDIT_AUTO_TOP_UP_PAYMENT_PENDING');
-      }
       if (!account.autoTopUpConsentRevisionId) {
         throw new AppError('BAD_REQUEST', 409, 'BILLING_CREDIT_CONSENT_PREDECESSOR_MISSING');
       }
