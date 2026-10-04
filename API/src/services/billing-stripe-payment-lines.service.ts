@@ -21,7 +21,7 @@ export async function verifyStripePaymentInvoiceLines(params: {
   const subscriptions = await prisma.billingStripeSubscription.findMany({
     where: { accountId: params.accountId, orgId: params.orgId,
       customer: { stripeCustomerId: params.stripeCustomerId } },
-    include: { service: true },
+    include: { service: true, tariff: { select: { currency: true } } },
   });
   const monthlies = await prisma.billingStripeMonthlyCharge.findMany({
     where: { accountId: params.accountId, stripeInvoiceId: params.invoice.id, state: 'ACCEPTED' },
@@ -49,6 +49,7 @@ export async function verifyStripePaymentInvoiceLines(params: {
       const subscription = monthly ? subscriptions.find((row) => row.id === monthly.subscriptionId) :
         subscriptions.find((row) => row.stripeSubscriptionId === details?.subscription);
       if (!subscription || subscription.livemode !== params.invoice.livemode ||
+        subscription.tariff.currency !== params.invoice.currency.toUpperCase() ||
         (details && details.subscription_item !== subscription.stripeUsageItemId &&
           details.subscription_item !== subscription.stripeMonthlyItemId) ||
         (!details && !monthly)) hold();

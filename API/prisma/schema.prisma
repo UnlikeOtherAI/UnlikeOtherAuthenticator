@@ -4478,6 +4478,8 @@ model BillingStripePaymentInvoice {
   account      BillingStripeAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
   subscription BillingStripeSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
   lines        BillingStripePaymentInvoiceLine[]
+  adjustments  BillingStripePaymentInvoiceAdjustment[]
+  cashPayments BillingStripePaymentInvoiceCashPayment[]
 
   @@unique([accountId, livemode, stripeInvoiceId])
   @@index([orgId, teamId, paidAt, id])
@@ -4506,4 +4508,52 @@ model BillingStripePaymentInvoiceLine {
   @@unique([invoiceId, stripeLineId])
   @@index([serviceId, billingMonth])
   @@map("billing_stripe_payment_invoice_lines")
+}
+
+
+// Provider-confirmed cash movements against an accepted regular invoice.
+// Refunds do not erase the original paid amount or reopen service debt.
+model BillingStripePaymentInvoiceAdjustment {
+  id                     String   @id @default(cuid())
+  invoiceId              String   @map("invoice_id")
+  stripePaymentIntentId  String   @map("stripe_payment_intent_id") @db.VarChar(255)
+  stripeChargeId         String   @map("stripe_charge_id") @db.VarChar(255)
+  kind                   String   @db.VarChar(24)
+  stripeObjectId         String   @map("stripe_object_id") @db.VarChar(255)
+  amountMinor            BigInt   @map("amount_minor")
+  currency               String   @db.Char(3)
+  occurredAt             DateTime @map("occurred_at")
+  evidenceDigest         String   @map("evidence_digest") @db.Char(64)
+  stripeEventId          String   @map("stripe_event_id") @db.VarChar(255)
+  createdAt              DateTime @default(now()) @map("created_at")
+
+  invoice BillingStripePaymentInvoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+
+  @@unique([invoiceId, kind, stripeObjectId])
+  @@index([invoiceId, occurredAt, id])
+  @@map("billing_stripe_payment_invoice_adjustments")
+}
+
+
+model BillingStripePaymentInvoiceCashPayment {
+  id                     String   @id @default(cuid())
+  invoiceId              String   @map("invoice_id")
+  accountId              String   @map("account_id")
+  livemode               Boolean
+  stripeInvoicePaymentId String   @map("stripe_invoice_payment_id") @db.VarChar(255)
+  stripePaymentIntentId  String   @map("stripe_payment_intent_id") @db.VarChar(255)
+  stripeChargeId         String   @map("stripe_charge_id") @db.VarChar(255)
+  amountMinor            BigInt   @map("amount_minor")
+  currency               String   @db.Char(3)
+  paidAt                 DateTime @map("paid_at")
+  evidenceDigest         String   @map("evidence_digest") @db.Char(64)
+  createdAt              DateTime @default(now()) @map("created_at")
+
+  invoice BillingStripePaymentInvoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+
+  @@unique([accountId, livemode, stripeInvoicePaymentId], map: "stripe_cash_invoice_payment_key")
+  @@unique([accountId, livemode, stripePaymentIntentId], map: "stripe_cash_intent_key")
+  @@index([invoiceId, paidAt, id])
+  @@index([paidAt, invoiceId])
+  @@map("billing_stripe_payment_invoice_cash_payments")
 }

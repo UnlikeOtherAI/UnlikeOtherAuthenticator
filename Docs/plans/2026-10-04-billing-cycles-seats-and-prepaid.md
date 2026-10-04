@@ -396,14 +396,27 @@ relative to the admission trigger. Read-side current capacity uses the same cloc
 
 Regular Stripe subscription payments have their own immutable
 `BillingStripePaymentInvoice` source and per-service line allocations. A signed
-`invoice.paid` event is accepted only after the exact account/live mode,
+`invoice.paid`, `invoice.payment_succeeded` or `invoice_payment.paid` event
+is accepted only after the exact account/live mode,
 subscription/customer, complete InvoicePayment set, succeeded PaymentIntents
 and captured charges are verified. A manually marked-paid invoice or ambiguous
 cash allocation is held for reconciliation. The cash date comes from the
 provider's InvoicePayment `paid_at`; earning periods and legal issue dates are
 separate. The source records actual amounts and never charges or credits a
 wallet a second time. Existing prepaid invoice/PaymentIntent bindings cannot
-be reused as regular subscription sources.
+be reused as regular subscription sources. PostgreSQL serializes this check
+across both source tables and normalized cash entries; one captured payment
+cannot fund two legal invoices.
+
+Each verified payment is an append-only `BillingStripePaymentInvoiceCashPayment`
+row with an opaque UOA identifier, original cash timestamp and frozen evidence
+digest. Partial payments in different months reference the same legal invoice
+while each month lists only the cash actually received then. Public paid totals
+sum these rows; the original invoice header payment snapshot remains immutable.
+Further payments change neither the frozen legal debt nor the document. A zero
+activation invoice with no cash payment creates no payment invoice. Refund and
+dispute principal effects use a separate append-only adjustment source and never
+reopen the invoice debt or debit a prepaid wallet.
 
 Invoice lines bind through persisted subscription-item IDs or the exact accepted
 monthly seat-charge item. Unknown lines, incomplete pagination, inconsistent

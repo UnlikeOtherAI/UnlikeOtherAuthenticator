@@ -248,9 +248,13 @@ export async function handleStripeWebhook(
     ? { checkoutSession: null, subscriptionId: null, subscription: null }
     : await currentEventState(event, stripe, account);
   const creditFunding = await prepareCreditFundingWebhook(event, stripe, account, prisma);
-  const subscriptionPaymentInvoice = !recurringAddon && !creditFunding && event.type === 'invoice.paid'
-    ? await prepareStripePaymentInvoice((event.data.object as Stripe.Invoice).id, account, prisma, stripe)
-    : null;
+  const cashEvent = event.type === 'invoice.paid' || event.type === 'invoice.payment_succeeded' ||
+    event.type === 'invoice_payment.paid';
+  const cashInvoiceId = event.type === 'invoice_payment.paid'
+    ? stripeExternalId((event.data.object as Stripe.InvoicePayment).invoice)
+    : cashEvent ? (event.data.object as Stripe.Invoice).id : null;
+  const subscriptionPaymentInvoice = !recurringAddon && !creditFunding && cashInvoiceId
+    ? await prepareStripePaymentInvoice(cashInvoiceId, account, prisma, stripe) : null;
   if (recurringAddon && creditFunding) {
     throw new AppError('INTERNAL', 503, 'STRIPE_WEBHOOK_BINDING_AMBIGUOUS');
   }

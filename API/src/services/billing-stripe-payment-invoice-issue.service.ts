@@ -28,7 +28,7 @@ export async function issueStripePaymentInvoice(id: string, deps: {
   }
   const invoice = verified.invoice;
   if (invoice.id !== source.stripeInvoiceId || invoice.livemode !== source.livemode ||
-    invoice.status !== 'paid' || !invoice.number || !invoice.account_name || !invoice.account_country ||
+    (invoice.status !== 'paid' && invoice.status !== 'open') || !invoice.number || !invoice.account_name || !invoice.account_country ||
     !invoice.customer_name || !invoice.customer_address?.country ||
     !invoice.status_transitions.finalized_at || invoice.number.length > 80) {
     throw new AppError('INTERNAL', 409, 'STRIPE_SUBSCRIPTION_INVOICE_LEGAL_FACTS_PENDING');

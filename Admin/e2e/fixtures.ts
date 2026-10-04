@@ -77,6 +77,15 @@ export async function installFixtures(page: Page) {
   const taxPolicies: Array<Record<string, unknown>> = [];
   const calculations: unknown[] = [];
   const payments: unknown[] = [];
+  const paidUsageExceptions: Array<Record<string, unknown>> = [{
+    dispatch_id: 'dispatch-overbound-1', receipt_id: 'le_dispatch-overbound-1',
+    status: 'HELD_OPERATOR_RECONCILIATION', evidence_digest: 'a'.repeat(64),
+    product: 'deepwater', raw_cost_actual: '0.003000000000000000',
+    raw_cost_bound: '0.002000000000000000', max_collectible_microcredits: '200',
+    currency: 'USD', created_at: now, gross_rated_microcredits: null,
+    collectible_microcredits: null, waived_microcredits: null,
+  }];
+  const paidUsageDecisions: Array<Record<string, unknown>> = [];
   const activations: unknown[] = [];
   const seatCapacityWrites: unknown[] = [];
   const seatSubscription = {
@@ -109,6 +118,22 @@ export async function installFixtures(page: Page) {
       route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
     if (path.startsWith('/lifecycle/')) return lifecycle.handle(route, path);
     if (req.method() !== 'GET') {
+      if (path === '/billing/paid-usage-exceptions/dispatch-overbound-1/write-off'
+        && req.method() === 'POST') {
+        const input = req.postDataJSON();
+        if (input.evidence_digest !== 'a'.repeat(64)
+          || !/^[a-f0-9]{64}$/.test(input.idempotency_key)
+          || typeof input.reason !== 'string' || input.reason.trim().length < 12) {
+          unexpected.push('Invalid paid usage write-off');
+          return json({ error: 'Invalid write-off' }, 400);
+        }
+        paidUsageDecisions.push(input);
+        paidUsageExceptions.length = 0;
+        return json({ dispatch_id: 'dispatch-overbound-1', receipt_id: 'le_dispatch-overbound-1',
+          status: 'WRITTEN_OFF', evidence_digest: input.evidence_digest,
+          gross_rated_microcredits: '300', collectible_microcredits: '200',
+          waived_microcredits: '100' });
+      }
       if (path === '/billing/credit-invoice-tax-policies' && req.method() === 'POST') {
         const input = req.postDataJSON();
         if (input.account_id !== 'account-1' ||
@@ -287,6 +312,8 @@ export async function installFixtures(page: Page) {
       policies: taxPolicies,
     });
     if (path === '/billing/invoices') return json(invoices);
+    if (path === '/billing/paid-usage-exceptions')
+      return json({ exceptions: paidUsageExceptions, has_more: false });
     if (path.endsWith('/invoice-profile'))
       return json({ error: 'No synthetic buyer profile' }, 404);
     if (path === '/bans') return json([...data.bans.emails, ...data.bans.ips]);
@@ -301,6 +328,7 @@ export async function installFixtures(page: Page) {
     native,
     calculations,
     payments,
+    paidUsageDecisions,
     activations,
     seatCapacityWrites,
     taxPolicies,
