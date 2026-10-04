@@ -385,11 +385,8 @@ describe.skipIf(!enabled)('issued manual invoice cycle persistence', () => {
         teamId: null, scope: BillingAssignmentScope.ORGANISATION,
         scopeKey: orgId,
       } });
-      const contract = await db.prisma.billingOrganisationContract.create({ data: {
-        orgId, reference: `allocated-${randomUUID()}`, name: 'Allocation proof',
-      } });
       const version = await db.prisma.billingOrganisationContractVersion.create({ data: {
-        contractId: contract.id, version: 1, usageMarkupBps: 3000,
+        contractId: original.contractId, version: 2, usageMarkupBps: 3000,
         currency: 'USD', paymentTermsDays: 30, effectiveFromMonth: '2026-05',
       } });
       const originalTerm = await db.prisma.billingContractServiceTerm.findUniqueOrThrow({
@@ -403,8 +400,11 @@ describe.skipIf(!enabled)('issued manual invoice cycle persistence', () => {
           tariffId: secondTariff.id, tariffAssignmentId: secondAssignment.id,
           monthlyAmountMinor: 0n },
       ] });
+      const firstTerm = await db.prisma.billingContractServiceTerm.findFirstOrThrow({
+        where: { contractVersionId: version.id, serviceId },
+      });
       const invoice = await db.prisma.billingInvoice.create({ data: {
-        orgId, contractId: contract.id, contractVersionId: version.id,
+        orgId, contractId: original.contractId, contractVersionId: version.id,
         issuerProfileId: original.issuerProfileId,
         buyerProfileId: original.buyerProfileId,
         billingMonth: '2026-05', revision: 1, currency: 'USD',
@@ -420,6 +420,12 @@ describe.skipIf(!enabled)('issued manual invoice cycle persistence', () => {
             serviceName: secondService.name, amountMinor: 1000n,
             currency: 'USD', position: 2 },
         ] },
+        meteringRefs: { create: [{ serviceId, ledgerSnapshotCursor: 'mixed-first',
+          ledgerSnapshotSha256: 'a'.repeat(64),
+          capturedAt: new Date('2026-06-01T00:00:00.000Z') },
+        { serviceId: secondService.id, ledgerSnapshotCursor: 'mixed-second',
+          ledgerSnapshotSha256: 'b'.repeat(64),
+          capturedAt: new Date('2026-06-01T00:00:00.000Z') }] },
       }, include: { lines: true } });
       const firstLine = invoice.lines.find((line) => line.serviceId === serviceId);
       const secondLine = invoice.lines.find((line) => line.serviceId === secondService.id);
@@ -442,6 +448,44 @@ describe.skipIf(!enabled)('issued manual invoice cycle persistence', () => {
       });
       expect(lines.reduce((sum, line) => sum + line.totalMinor, 0n)).toBe(3300n);
       expect(lines.reduce((sum, line) => sum + line.dueMinor, 0n)).toBe(3300n);
+      await issueBillingInvoice({ invoiceId: invoice.id,
+        actor: { email: 'admin@example.com' } }, { prisma: db.prisma, storage,
+        now: () => new Date('2026-06-01T00:00:00.000Z'),
+        authorizeAdminEffect: vi.fn().mockResolvedValue(undefined) });
+      const source = { kind: 'manual' as const, id: firstTerm.id };
+      const quote = { source, serviceId, tariffId, organisationId: orgId, teamId: null,
+        scope: BillingAssignmentScope.ORGANISATION, agreementId: null,
+        billingMonth: '2026-05', chargeBasis: BillingMonthlyChargeBasis.FLAT,
+        seatPolicy: null, seatChargeTiming: null, amountMinor: 2000n,
+        unitAmountMinor: 2000n, uniqueHumanSeats: null, seatMilliseconds: null,
+        monthMilliseconds: null, currency: 'USD', baselineCapturedAt: null,
+        baselineMemberCount: null, intervals: [], capacityRevisions: [], evidenceIds: [],
+        commercialEffectiveAt: null, commercialEndsAt: null, endedAt: null };
+      const pending = await prepareBillingCycleClose({ source, billingMonth: '2026-05' }, {
+        prisma: db.prisma, now: () => new Date('2026-06-02T00:00:00.000Z'),
+        quote: vi.fn().mockResolvedValue(quote),
+        discoverTeams: vi.fn().mockResolvedValue({ teamIds: [], snapshot: {
+          id: 'mixed-empty', cursor: 'mixed-empty',
+          capturedAt: '2026-06-02T00:00:00.000Z', sha256: 'c'.repeat(64),
+        } }),
+      });
+      const captured = await captureIssuedManualBillingCycle({ cycleId: pending.cycleId,
+        invoiceId: invoice.id }, { prisma: db.prisma, storage });
+      await db.prisma.orgMember.updateMany({ where: { orgId, userId: ownerId },
+        data: { role: 'owner' } });
+      const detail = await getBillingCycleDetail(context(), captured.cycleId,
+        { prisma: db.prisma });
+      expect(detail.totals[0]).toMatchObject({ subscription: { amount_minor: '2000' },
+        tax: { amount_minor: '200' }, gross_total: { amount_minor: '2200' },
+        total_due: { amount_minor: '2200' }, outstanding: { amount_minor: '2200' } });
+      expect(detail.documents.map((item) => item.kind))
+        .toEqual(['usage_breakdown', 'usage_breakdown']);
+      expect(JSON.stringify(detail)).not.toContain(secondService.identifier);
+      await db.prisma.$executeRaw`
+        UPDATE billing_manual_cycle_reconciliation_queue
+        SET due_at = '2030-01-01T00:00:00.000Z'::timestamptz
+        WHERE invoice_id = ${invoice.id}
+      `;
       await expect(db.prisma.billingInvoiceLineFinancialAllocation.update({
         where: { lineId: secondLine.id }, data: { invoiceCreditMinor: 1n },
       })).rejects.toThrow();
@@ -449,7 +493,7 @@ describe.skipIf(!enabled)('issued manual invoice cycle persistence', () => {
         where: { lineId: secondLine.id },
       })).rejects.toThrow();
       const partial = await db.prisma.billingInvoice.create({ data: {
-        orgId, contractId: contract.id, contractVersionId: version.id,
+        orgId, contractId: original.contractId, contractVersionId: version.id,
         issuerProfileId: original.issuerProfileId,
         buyerProfileId: original.buyerProfileId,
         billingMonth: '2026-05', revision: 2, currency: 'USD',
@@ -502,6 +546,15 @@ describe.skipIf(!enabled)('issued manual invoice cycle persistence', () => {
           ledgerSnapshotCursor: 'issuer-april-coverage',
           ledgerSnapshotSha256: 'f'.repeat(64),
           capturedAt: new Date('2026-05-01T00:00:00.000Z') } },
+      } });
+      const aprilLine = await db.prisma.billingInvoiceLine.findFirstOrThrow({
+        where: { invoiceId: april.id },
+      });
+      await db.prisma.billingInvoiceLineFinancialAllocation.create({ data: {
+        lineId: aprilLine.id, invoiceId: april.id, serviceId,
+        billingMonth: '2026-04', subscriptionMinor: 2000n, usageMinor: 0n,
+        taxMinor: 0n, invoiceCreditMinor: 0n, totalMinor: 2000n,
+        dueMinor: 2000n, currency: 'USD', calculationDigest: 'e'.repeat(64),
       } });
       await issueBillingInvoice({ invoiceId: april.id,
         actor: { email: 'admin@example.com' } }, { prisma: db.prisma, storage,

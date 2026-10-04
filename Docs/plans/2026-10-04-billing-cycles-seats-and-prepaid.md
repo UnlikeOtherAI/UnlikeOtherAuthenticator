@@ -187,6 +187,12 @@ to the invoice's gross and credit totals. An old invoice without allocation
 evidence remains a valid legal document but its ambiguous product cycle stays
 pending. A partial whole-invoice payment is never split among products by a
 ratio; product paid/outstanding needs actual line payment evidence.
+For an issued mixed-product invoice, UOA can freeze each verified service
+line's tax, gross, credit and net due into that product's separate cycle.
+The product cycle offers its own breakdown PDF/CSV but does not relay the
+whole mixed-product legal PDF; that document remains in UOA organisation
+finance. An invoice-wide payment without per-line allocation is attributable
+only when it is zero or the entire invoice's net due, never by proportion.
 Manual cycle replay fingerprints every frozen line allocation and credit
 reference binding, in binary identifier order, along with the original legal
 invoice facts. A different allocation cannot be accepted by replaying the
