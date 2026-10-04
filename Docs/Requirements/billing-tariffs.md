@@ -952,6 +952,13 @@ metadata fails retryably rather than consuming the webhook event. For Stripe's
 `2026-06-24.dahlia` contract, the canonical invoice-line subscription proof is
 `parent.subscription_item_details`; the omitted legacy line-level subscription
 alias is tolerated, but when Stripe supplies it the alias must match exactly.
+Paid `subscription_cycle` invoices use the same exact customer, subscription,
+item, Price, quantity, amount, currency, and no-discount/no-tax/no-credit/no-
+shipping/no-proration proof. They update the current period only after the
+immutable paid initial-invoice proof exists; a cycle delivered first remains
+uncommitted and retryable until that prerequisite arrives. Renewal processing
+never changes the initial invoice, activation event, or activation timestamp,
+and a late renewal cannot restore a terminal subscription.
 
 Cancellation preview refreshes Stripe before minting an opaque five-minute
 capability, stores only its digest, and permits one unresolved intent per exact

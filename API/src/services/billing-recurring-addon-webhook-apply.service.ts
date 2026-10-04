@@ -125,6 +125,32 @@ export async function applyRecurringAddonWebhook(
     });
     return;
   }
+  if (prepared.kind === 'invoice_renewal') {
+    if (
+      ['canceled', 'incomplete_expired'].includes(prepared.local.status) ||
+      prepared.local.entitlementDeactivatedAt
+    ) {
+      return;
+    }
+    // Preparation happens before the transaction. A cancellation committed in
+    // between must remain terminal instead of failing against the DB guard.
+    await tx.billingRecurringAddonSubscription.updateMany({
+      where: {
+        id: prepared.local.id,
+        status: { notIn: ['canceled', 'incomplete_expired'] },
+        entitlementDeactivatedAt: null,
+      },
+      data: {
+        ...subscriptionMutable(prepared.remote),
+        entitlementDeactivatedAt: deactivation(
+          prepared.local,
+          prepared.remote.status,
+          prepared.eventAt,
+        ),
+      },
+    });
+    return;
+  }
   if (['canceled', 'incomplete_expired'].includes(prepared.local.status)) return;
   await tx.billingRecurringAddonSubscription.update({
     where: { id: prepared.local.id },
