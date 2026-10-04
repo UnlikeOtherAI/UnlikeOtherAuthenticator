@@ -164,9 +164,12 @@ export async function createBillingCreditAutoTopUpSetup(
     state === BillingCreditAutoTopUpState.REQUIRES_ACTION ||
     state === BillingCreditAutoTopUpState.NEEDS_REVIEW ||
     state === BillingCreditAutoTopUpState.PAUSED;
+  const activeCardReplacement =
+    state === BillingCreditAutoTopUpState.ACTIVE &&
+    Boolean(context.creditAccount.stripePaymentMethodId);
   if (
     params.recovery
-      ? !recoveryState
+      ? !recoveryState && !activeCardReplacement
       : state !== BillingCreditAutoTopUpState.DISABLED ||
         Boolean(context.creditAccount.stripePaymentMethodId)
   ) {

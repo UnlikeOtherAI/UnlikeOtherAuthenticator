@@ -1,157 +1,143 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { BillingAppKeyPurpose, BillingCreditAutoTopUpAttemptStatus } from '@prisma/client';
+import { describe, expect, it, vi } from 'vitest';
 
-import {
-  runCreditAutoTopUpCycle,
-  startCreditAutoTopUpScheduler,
-} from '../../src/services/billing-credit-auto-top-up-runtime.service.js';
+import { runCreditAutoTopUpAccount } from '../../src/services/billing-credit-auto-top-up-runtime.service.js';
 
-const account = {
-  id: 'stripe_account_row',
-  stripeAccountId: 'acct_auto_top_up',
-  livemode: false,
-};
-
-describe('credit automatic top-up runtime', () => {
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  it('processes only the exact Stripe account candidates and isolates account failures', async () => {
+describe('automatic credit top-up dispatch', () => {
+  it('dispatches a pending attempt once with its original consent after the saved card changes', async () => {
+    const account = { id: 'account_1', stripeAccountId: 'acct_1', livemode: false };
+    const attempt = {
+      id: 'attempt_1',
+      accountId: account.id,
+      creditAccountId: 'credit_1',
+      catalogId: 'catalog_1',
+      serviceId: 'service_1',
+      appKeyId: 'app_key_1',
+      attributedUserId: 'user_1',
+      optionId: 'option_1',
+      offerId: 'offer_1',
+      consentRevisionId: 'consent_old',
+      consentVersion: 'credits-v1',
+      thresholdMicrocredits: 200_000_000n,
+      monthlyChargeCapMinor: 1_500n,
+      chargedThisMonthBeforeMinor: 0n,
+      observedBalanceMicrocredits: 100_000_000n,
+      paymentAmountMinor: 500n,
+      creditsReceivedMicrocredits: 5_000_000_000n,
+      billingMonth: '2026-10',
+      idempotencyKey: 'uoa:auto-top-up:attempt_1',
+      stripePaymentIntentId: null,
+      status: BillingCreditAutoTopUpAttemptStatus.PENDING,
+      consentRevision: {
+        serviceId: 'service_1',
+        appKeyId: 'app_key_1',
+        policyId: 'policy_1',
+        optionId: 'option_1',
+        refillOfferId: 'offer_1',
+        consentedByUserId: 'user_1',
+        consentVersion: 'credits-v1',
+        thresholdMicrocredits: 200_000_000n,
+        monthlyChargeCapMinor: 1_500n,
+        refillPaymentAmountMinor: 500n,
+        refillCreditsMicrocredits: 5_000_000_000n,
+        stripePaymentMethodId: 'pm_old',
+      },
+      creditAccount: {
+        id: 'credit_1',
+        accountId: account.id,
+        orgId: 'org_1',
+        teamId: 'team_1',
+        stripePaymentMethodId: 'pm_new',
+        customer: {
+          accountId: account.id,
+          orgId: 'org_1',
+          teamId: 'team_1',
+          scope: 'TEAM',
+          scopeKey: 'org_1:team_1',
+          stripeCustomerId: 'cus_1',
+        },
+      },
+      catalog: {
+        accountId: account.id,
+        currency: 'USD',
+        paymentAmountMinor: 500n,
+        creditsReceivedMicrocredits: 5_000_000_000n,
+        key: 'credits-5k',
+        version: 1,
+      },
+      appKey: {
+        id: 'app_key_1',
+        serviceId: 'service_1',
+        purpose: BillingAppKeyPurpose.CUSTOMER_LIFECYCLE,
+      },
+      option: {
+        id: 'option_1',
+        policyId: 'policy_1',
+        serviceId: 'service_1',
+        refillOfferId: 'offer_1',
+      },
+      offer: {
+        id: 'offer_1',
+        policyId: 'policy_1',
+        serviceId: 'service_1',
+        catalogKey: 'credits-5k',
+        catalogVersion: 1,
+        paymentAmountMinor: 500n,
+        creditsReceivedMicrocredits: 5_000_000_000n,
+      },
+    };
+    const transaction = {
+      $queryRaw: vi.fn().mockResolvedValue([{ id: attempt.id }]),
+      billingCreditAutoTopUpAttempt: {
+        findUnique: vi.fn().mockResolvedValue(attempt),
+        update: vi.fn(),
+      },
+    };
     const prisma = {
-      billingStripeAccount: { upsert: vi.fn().mockResolvedValue(account) },
+      $transaction: vi.fn(async (run: (tx: typeof transaction) => Promise<unknown>) => run(transaction)),
     };
-    const stripe = {
-      accounts: { retrieveCurrent: vi.fn().mockResolvedValue({ id: account.stripeAccountId }) },
-      paymentIntents: { create: vi.fn() },
-    };
-    const listCandidates = vi.fn().mockResolvedValue(['credit_a', 'credit_b', 'credit_c']);
-    const runAccount = vi
+    const create = vi.fn().mockResolvedValue({
+      id: 'pi_attempt_1',
+      object: 'payment_intent',
+      amount: 500,
+      currency: 'usd',
+      customer: 'cus_1',
+      payment_method: 'pm_old',
+      metadata: {
+        uoa_credit_auto_top_up_attempt_id: attempt.id,
+        uoa_service_id: attempt.serviceId,
+        uoa_app_key_id: attempt.appKeyId,
+        uoa_credit_account_id: attempt.creditAccountId,
+      },
+      livemode: false,
+      status: 'processing',
+    });
+    const claim = vi
       .fn()
+      .mockResolvedValueOnce({ kind: 'dispatch', creditAccountId: 'credit_1', attemptId: attempt.id, created: false })
       .mockResolvedValueOnce({
-        creditAccountId: 'credit_a',
-        outcome: 'submitted',
-        attemptId: 'attempt_a',
-        stripePaymentIntentId: 'pi_a',
-        stripeStatus: 'processing',
-      })
-      .mockResolvedValueOnce({
-        creditAccountId: 'credit_b',
-        outcome: 'skipped',
-        reason: 'monthly_cap_reached',
-      })
-      .mockResolvedValueOnce({
-        creditAccountId: 'credit_c',
-        outcome: 'failed',
-        attemptId: 'attempt_c',
-        error: 'STRIPE_CONNECTION_ERROR',
+        kind: 'awaiting_webhook',
+        creditAccountId: 'credit_1',
+        attemptId: attempt.id,
+        stripePaymentIntentId: 'pi_attempt_1',
       });
 
-    const result = await runCreditAutoTopUpCycle({
-      prisma: prisma as never,
-      stripe: stripe as never,
-      stripeLivemode: false,
-      listCandidates,
-      runAccount: runAccount as never,
-      batchSize: 25,
-    });
-
-    expect(listCandidates).toHaveBeenCalledWith({ accountId: account.id, limit: 25 }, { prisma });
-    expect(runAccount).toHaveBeenCalledTimes(3);
-    expect(runAccount).toHaveBeenNthCalledWith(
-      1,
-      { account, creditAccountId: 'credit_a' },
-      { prisma, stripe },
+    const submitted = await runCreditAutoTopUpAccount(
+      { account, creditAccountId: 'credit_1' },
+      { prisma: prisma as never, stripe: { paymentIntents: { create } } as never, claim: claim as never },
     );
-    expect(result).toMatchObject({
-      accountId: account.id,
-      attempted: 3,
-      submitted: 1,
-      awaitingWebhook: 0,
-      terminal: 0,
-      skipped: 1,
-      failed: 1,
+    const replay = await runCreditAutoTopUpAccount(
+      { account, creditAccountId: 'credit_1' },
+      { prisma: prisma as never, stripe: { paymentIntents: { create } } as never, claim: claim as never },
+    );
+
+    expect(submitted).toMatchObject({ outcome: 'submitted', attemptId: attempt.id });
+    expect(replay).toMatchObject({ outcome: 'awaiting_webhook', attemptId: attempt.id });
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(create.mock.calls[0]?.[0]).toMatchObject({
+      customer: 'cus_1',
+      payment_method: 'pm_old',
     });
-  });
-
-  it('fails closed under the Stripe billing kill switch', async () => {
-    const previous = process.env.STRIPE_BILLING_ENABLED;
-    process.env.STRIPE_BILLING_ENABLED = 'false';
-    try {
-      await expect(runCreditAutoTopUpCycle()).rejects.toThrow('STRIPE_BILLING_DISABLED');
-    } finally {
-      if (previous === undefined) delete process.env.STRIPE_BILLING_ENABLED;
-      else process.env.STRIPE_BILLING_ENABLED = previous;
-    }
-  });
-
-  it('never overlaps cycles and requests one immediate recovery pass', async () => {
-    vi.useFakeTimers();
-    let finishFirst: ((value: never) => void) | undefined;
-    const first = new Promise((resolve) => {
-      finishFirst = resolve;
-    });
-    const emptyResult = {
-      accountId: account.id,
-      attempted: 0,
-      submitted: 0,
-      awaitingWebhook: 0,
-      terminal: 0,
-      skipped: 0,
-      failed: 0,
-      results: [],
-    };
-    const runCycle = vi.fn().mockReturnValueOnce(first).mockResolvedValue(emptyResult);
-    const scheduler = startCreditAutoTopUpScheduler({
-      log: { info: vi.fn(), error: vi.fn() },
-      runCycle,
-    });
-
-    await vi.advanceTimersByTimeAsync(0);
-    expect(runCycle).toHaveBeenCalledTimes(1);
-    await vi.advanceTimersByTimeAsync(60_000);
-    expect(runCycle).toHaveBeenCalledTimes(1);
-    finishFirst?.(emptyResult as never);
-    await vi.advanceTimersByTimeAsync(0);
-    expect(runCycle).toHaveBeenCalledTimes(2);
-    scheduler.stop();
-  });
-
-  it('preserves the logger receiver when a cycle reports failures', async () => {
-    vi.useFakeTimers();
-    const receivers: unknown[] = [];
-    const log = {
-      info: vi.fn(function (this: unknown) {
-        receivers.push(this);
-      }),
-      error: vi.fn(function (this: unknown) {
-        receivers.push(this);
-      }),
-    };
-    const scheduler = startCreditAutoTopUpScheduler({
-      log,
-      runCycle: vi.fn().mockResolvedValue({
-        accountId: account.id,
-        attempted: 1,
-        submitted: 0,
-        awaitingWebhook: 0,
-        terminal: 0,
-        skipped: 0,
-        failed: 1,
-        results: [
-          {
-            creditAccountId: 'credit_failed',
-            outcome: 'failed',
-            error: 'STRIPE_CONNECTION_ERROR',
-          },
-        ],
-      }),
-    });
-
-    await vi.advanceTimersByTimeAsync(0);
-
-    expect(log.error).toHaveBeenCalledOnce();
-    expect(log.info).not.toHaveBeenCalled();
-    expect(receivers).toEqual([log]);
-    scheduler.stop();
+    expect(create.mock.calls[0]?.[1]).toEqual({ idempotencyKey: attempt.idempotencyKey });
   });
 });

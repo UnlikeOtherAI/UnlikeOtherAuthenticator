@@ -236,7 +236,10 @@ export function buildBillingCreditsProjection(params: {
       recent_entries: buildManagerCreditRecentEntries(data),
     } satisfies BillingCreditsManagerV1;
   }
-  const actions = buildMemberCreditActionsProjection(data);
+  const actions = buildMemberCreditActionsProjection(
+    data,
+    params.actionReadiness ?? unavailableBillingCreditActions(),
+  );
   return {
     ...common,
     pending_credits: { ...common.pending_credits, payment_amount: null },
