@@ -132,6 +132,27 @@ describe.skipIf(!enabled)('customer cycle scope persistence', () => {
       .rejects.toMatchObject({ statusCode: 403 });
   });
 
+  it('pages a preview before both real scopes without hiding an organisation cycle', async () => {
+    const team = await insertCycle('2026-10', 'team', BillingAssignmentScope.ORGANISATION);
+    const org = await insertCycle('2026-10', 'organisation', BillingAssignmentScope.ORGANISATION);
+    const owner = context(ownerId);
+    const now = new Date('2026-11-15T00:00:00.000Z');
+    const seen: string[] = [];
+    let cursor: string | undefined;
+    for (let pageNumber = 0; pageNumber < 8; pageNumber += 1) {
+      const page = await listBillingCycles(owner, { limit: 1, cursor },
+        { prisma: db.prisma, now });
+      expect(page.cycles).toHaveLength(1);
+      seen.push(page.cycles[0]!.cycle_id);
+      if (pageNumber === 0) expect(page.next_cursor).toBe('2026-11:preview');
+      if (!page.next_cursor) break;
+      cursor = page.next_cursor;
+    }
+    expect(seen[0]).toMatch(/^preview:2026-11:/);
+    expect(seen.slice(1, 3)).toEqual([team.id, org.id]);
+    expect(new Set(seen).size).toBe(seen.length);
+  });
+
   it('rejects a mismatched frozen snapshot and preserves the first revision', async () => {
     const row = await insertCycle('2026-05', 'team', BillingAssignmentScope.TEAM);
     const owner = context(ownerId);
