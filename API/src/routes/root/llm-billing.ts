@@ -1,5 +1,13 @@
 export const llmBillingMarkdown = `## Canonical tariff and entitlement control plane
 
+Platform superusers configure append-only prepaid legal invoice tax policy at
+\`GET/POST /internal/admin/billing/credit-invoice-tax-policies\`. A policy binds
+one Stripe account, active legal issuer, issuer jurisdiction, inclusive tax
+rate or documented no-tax treatment, legal basis and UTC effective time.
+Accepted credit payments fund the wallet once and create one durable invoice
+obligation. Missing buyer, issuer or tax facts leave a pending document; UOA
+never adds tax to the already charged amount or fabricates a legal invoice.
+
 Tariffs live in UOA. Ledger and product backends consume signed, content-free effective
 tariff snapshots; they do not maintain independent tariff truth.
 

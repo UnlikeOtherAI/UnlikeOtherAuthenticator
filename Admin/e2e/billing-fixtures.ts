@@ -67,7 +67,7 @@ export function createBillingFixtures() {
       postal_code: 'N1 1AA',
       country: 'GB',
     },
-    tax_identifier: null,
+    tax_identifier: 'GB123456789',
     company_registration_number: null,
     invoice_number_prefix: 'UOA',
     active: true,

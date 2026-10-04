@@ -164,6 +164,18 @@ comes from Stripe's signed payment-success event. Document issuance can remain
 pending when issuer, buyer, tax or PDF evidence is unavailable; a pending charge
 is visible as pending, with no invented invoice number, tax or download. Prepaid
 credit consumption never produces a second demand for payment.
+The Stripe billing scheduler retries pending and held payment documents. It
+first checks whether the exact PaymentIntent paid an existing Stripe invoice;
+only a verified matching invoice, parties, tax and immutable Stripe PDF may be
+used. Otherwise UOA issues one PDF from a frozen legal issuer and organisation
+buyer profile under an append-only, superadmin-authored account/jurisdiction
+tax policy. The policy records inclusive rate or documented no-tax treatment,
+legal basis, UTC effective time and author. Tax is contained in the accepted
+payment amount, never charged again. Missing or ambiguous facts leave the
+accepted payment in pending-document history. Issuance freezes the number,
+tax provenance, parties, PDF object key and SHA-256; a restart resumes the
+same source, and an issued document cannot be changed or deleted. The
+operator doorway is Billing → Contracts & invoices → Prepaid invoice tax policy.
 Manual and Stripe collection must both supply real monthly documents. Fetching
 historical months must not create charges, recalculate current terms or invent
 old invoices. Stripe invoice PDFs may not contain the full measured usage/seat

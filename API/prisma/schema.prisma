@@ -362,6 +362,11 @@ enum BillingCreditPaymentInvoiceTaxSource {
   ISSUER_POLICY
 }
 
+enum BillingCreditInvoiceTaxTreatment {
+  INCLUSIVE_RATE
+  NO_TAX_CHARGED
+}
+
 enum BillingCreditUsageSettlementStatus {
   PENDING
   APPLIED
@@ -2135,6 +2140,7 @@ model BillingStripeAccount {
   creditConsentRevisions            BillingCreditAutoTopUpConsentRevision[]
   creditAutoTopUpDisables           BillingCreditAutoTopUpDisableEvent[]
   creditPaymentInvoices            BillingCreditPaymentInvoice[]
+  creditInvoiceTaxPolicies         BillingCreditInvoiceTaxPolicy[]
   recurringAddonCatalogs            BillingRecurringAddonCatalog[]
   recurringAddonCheckouts           BillingRecurringAddonCheckout[]
   recurringAddonSubscriptions       BillingRecurringAddonSubscription[]
@@ -2603,6 +2609,7 @@ model BillingInvoiceIssuerProfile {
   invoices  BillingInvoice[]
   sequences BillingInvoiceNumberSequence[]
   creditPaymentInvoices BillingCreditPaymentInvoice[]
+  creditInvoiceTaxPolicies BillingCreditInvoiceTaxPolicy[]
 
   @@index([active])
   @@map("billing_invoice_issuer_profiles")
@@ -3634,6 +3641,7 @@ model BillingCreditPaymentInvoice {
   taxAmountMinor               BigInt?                               @map("tax_amount_minor")
   taxSource                    BillingCreditPaymentInvoiceTaxSource? @map("tax_source")
   taxEvidenceReference         String?                               @map("tax_evidence_reference") @db.VarChar(255)
+  taxPolicyId                  String?                               @map("tax_policy_id")
   issuerProfileId              String?                               @map("issuer_profile_id")
   buyerProfileId               String?                               @map("buyer_profile_id")
   issuerSnapshot               Json?                                 @map("issuer_snapshot")
@@ -3652,12 +3660,40 @@ model BillingCreditPaymentInvoice {
   autoAttempt   BillingCreditAutoTopUpAttempt?      @relation(fields: [autoTopUpAttemptId], references: [id], onDelete: Restrict)
   issuerProfile BillingInvoiceIssuerProfile?       @relation(fields: [issuerProfileId], references: [id], onDelete: Restrict)
   buyerProfile  BillingOrganisationInvoiceProfile? @relation(fields: [buyerProfileId], references: [id], onDelete: Restrict)
+  taxPolicy     BillingCreditInvoiceTaxPolicy?      @relation(fields: [taxPolicyId], references: [id], onDelete: Restrict)
 
   @@unique([accountId, livemode, stripePaymentIntentId])
   @@index([orgId, teamId, paidAt, id])
   @@index([serviceId, paidAt])
   @@index([state, paidAt])
   @@map("billing_credit_payment_invoices")
+}
+
+// An operator attests one legal issuer, buyer jurisdiction and inclusive tax
+// rule for a Stripe account. Revisions are append-only; prior legal documents
+// retain the policy ID and exact tax amount that was used to issue them.
+model BillingCreditInvoiceTaxPolicy {
+  id                    String                           @id @default(cuid())
+  accountId             String                           @map("account_id")
+  version               Int
+  issuerProfileId       String                           @map("issuer_profile_id")
+  jurisdictionCountry   String                           @map("jurisdiction_country") @db.Char(2)
+  treatment             BillingCreditInvoiceTaxTreatment
+  rateBps               Int                              @map("rate_bps")
+  legalBasisReference   String                           @map("legal_basis_reference") @db.VarChar(500)
+  effectiveFrom         DateTime                         @map("effective_from")
+  createdByUserId       String                           @map("created_by_user_id")
+  createdByEmail        String                           @map("created_by_email") @db.VarChar(320)
+  createdAt             DateTime                         @default(now()) @map("created_at")
+
+  account       BillingStripeAccount        @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  issuerProfile BillingInvoiceIssuerProfile @relation(fields: [issuerProfileId], references: [id], onDelete: Restrict)
+  paymentInvoices BillingCreditPaymentInvoice[]
+
+  @@unique([accountId, version])
+  @@unique([accountId, jurisdictionCountry, effectiveFrom])
+  @@index([accountId, jurisdictionCountry, effectiveFrom])
+  @@map("billing_credit_invoice_tax_policies")
 }
 
 // UOA alone converts one exact Ledger USD-rated snapshot into credits. Each row
