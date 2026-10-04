@@ -235,6 +235,8 @@ When a later manual term replaces a fixed-capacity agreement, the old
 agreement's immutable commercial end removes its admission limit exactly at
 the boundary even if the evidence-ending sweep runs later. A newly scheduled
 fixed agreement constrains admission from its roster-capture time.
+The always-on seat transition scheduler closes the old evidence at its later
+observed sweep time, preserving the exact boundary and interval history.
 
 The manual invoice calculator uses the closed-month per-seat quote for its
 subscription line, never the per-seat unit price as a whole invoice fee. It

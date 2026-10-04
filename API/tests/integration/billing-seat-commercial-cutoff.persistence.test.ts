@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { observedBillingTime } from '../../src/services/billing-seat-observed-time.service.js';
+import { runSeatTransitionCycle } from '../../src/services/billing-seat-transition-scheduler.service.js';
 import { createTestDb } from '../helpers/test-db.js';
 
 type TestDb = NonNullable<Awaited<ReturnType<typeof createTestDb>>>;
@@ -44,12 +45,14 @@ describe.skipIf(!process.env.DATABASE_URL)('superseded fixed seat capacity', () 
     const contract = await db.prisma.billingOrganisationContract.create({ data: {
       orgId, reference: 'capacity-change', name: 'Capacity change',
     } });
-    const versions = await Promise.all([1, 2].map((version) =>
-      db.prisma.billingOrganisationContractVersion.create({ data: {
+    const versions = [];
+    for (const version of [1, 2]) {
+      versions.push(await db.prisma.billingOrganisationContractVersion.create({ data: {
         contractId: contract.id, version, usageMarkupBps: 3000,
         currency: 'USD', paymentTermsDays: 30,
         effectiveFromMonth: version === 1 ? '2026-11' : '2026-12',
-      } })));
+      } }));
+    }
     const terms = [];
     for (const version of versions) {
       terms.push(await db.prisma.billingContractServiceTerm.create({ data: {
@@ -91,5 +94,16 @@ describe.skipIf(!process.env.DATABASE_URL)('superseded fixed seat capacity', () 
     if (remaining > 0) await new Promise((resolve) => setTimeout(resolve, remaining));
     await db.prisma.orgMember.create({ data: { orgId, userId: memberId } });
     expect(await db.prisma.orgMember.count({ where: { orgId } })).toBe(2);
+    expect(await runSeatTransitionCycle({ prisma: db.prisma })).toMatchObject({
+      checked: 1, closed: 1,
+    });
+    const closed = await db.prisma.billingSeatSubscription.findFirstOrThrow({
+      where: { orgId, commercialEndsAt: { not: null } },
+      select: { endedAt: true },
+    });
+    expect(closed.endedAt).not.toBeNull();
+    expect(await runSeatTransitionCycle({ prisma: db.prisma })).toMatchObject({
+      checked: 0, closed: 0,
+    });
   });
 });
