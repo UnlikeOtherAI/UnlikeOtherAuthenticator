@@ -190,6 +190,16 @@ enum BillingCollectionMode {
   NONE
 }
 
+enum BillingMonthlyChargeBasis {
+  FLAT
+  PER_SEAT
+}
+
+enum BillingUsagePaymentMode {
+  PAY_AS_YOU_GO
+  PREPAID
+}
+
 enum BillingStripeMeterEventState {
   PENDING
   UNCERTAIN
@@ -1750,6 +1760,8 @@ model BillingTariff {
   collectionMode     BillingCollectionMode @default(NONE) @map("collection_mode")
   markupBps          Int                   @map("markup_bps")
   monthlyAmountMinor BigInt                @default(0) @map("monthly_amount_minor")
+  monthlyChargeBasis BillingMonthlyChargeBasis @default(FLAT) @map("monthly_charge_basis")
+  usagePaymentMode BillingUsagePaymentMode @default(PAY_AS_YOU_GO) @map("usage_payment_mode")
   currency           String                @db.Char(3)
   isDefault          Boolean               @default(false) @map("is_default")
   createdByUserId    String?               @map("created_by_user_id")

@@ -2449,6 +2449,14 @@ collecting no payment; specifically, `at_cost` + `none` + a zero monthly amount
 represents 100% provider-cost visibility with no charge. Free tariffs require
 `none`, zero markup, and zero monthly amount.
 
+An immutable plan also distinguishes a flat scope-level monthly subscription
+from a monthly per-seat charge, and prepaid usage from pay-as-you-go usage.
+The existing team/organisation assignment still determines the payer and credit
+pool. Historical tariffs retain their original flat, pay-as-you-go terms;
+newly configured plans explicitly default to prepaid usage. A prepaid plan
+requires reserved funding before paid provider dispatch and never rolls an
+unfunded token remainder into an automatic Stripe usage charge.
+
 The optional Stripe collection foundation is fail-closed behind an explicit
 process gate. It maps exact immutable tariff versions to calendar-month
 subscriptions, accepts Checkout initiation only from the product's own app key

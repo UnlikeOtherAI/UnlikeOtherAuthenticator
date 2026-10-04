@@ -52,6 +52,21 @@ describe.skipIf(!enabled)('effective tariff history with PostgreSQL', () => {
 
   afterAll(async () => { if (cleanup) await cleanup(); });
 
+  it('persists immutable prepaid per-seat terms without changing historical tariff defaults', async () => {
+    const historical = await prisma.billingTariff.findUniqueOrThrow({ where: { id: 'default' } });
+    expect(historical.monthlyChargeBasis).toBe('FLAT');
+    expect(historical.usagePaymentMode).toBe('PAY_AS_YOU_GO');
+    const plan = await prisma.billingTariff.create({ data: {
+      id: 'prepaid-seat', serviceId, key: 'prepaid-seat', version: 1, name: 'Prepaid seat',
+      mode: 'STANDARD', collectionMode: 'STRIPE', markupBps: 3000,
+      monthlyAmountMinor: 2500n, monthlyChargeBasis: 'PER_SEAT',
+      usagePaymentMode: 'PREPAID', currency: 'USD',
+    } });
+    expect(plan.monthlyAmountMinor).toBe(2500n);
+    expect(plan.monthlyChargeBasis).toBe('PER_SEAT');
+    expect(plan.usagePaymentMode).toBe('PREPAID');
+  });
+
   it('keeps old months fixed through future override, removal, and mutable pointer changes', async () => {
     await prisma.$transaction(async (tx) => {
       await lockTariffHistoryService(tx, serviceId);

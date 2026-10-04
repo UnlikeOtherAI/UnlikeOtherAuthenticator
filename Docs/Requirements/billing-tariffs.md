@@ -179,6 +179,19 @@ Each tariff contains:
 | `markup_bps`                        | Price markup in basis points; 2,000 means 20.00%                            |
 | `monthly_subscription.amount_minor` | Monthly fixed charge in currency minor units; `"0"` means no monthly charge |
 | `monthly_subscription.currency`     | Three-letter uppercase ISO-style currency code                              |
+| `monthly_subscription.charge_basis` | `flat` for one scoped monthly charge or `per_seat` for each eligible human seat |
+| `usage_payment_mode`                | `pay_as_you_go` or `prepaid`; independent of the monthly charge               |
+
+Existing immutable tariff versions retain `flat` and `pay_as_you_go` through
+the additive migration. Newly configured plans must explicitly choose their
+monthly charge basis and usage payment mode. The Admin creation default is
+`prepaid`, and a team or organisation assignment continues to determine the
+payer scope. A per-seat amount is the price of one eligible seat per month;
+seat quantity is frozen for the billing month, separate from usage credits.
+Prepaid usage is funded from the existing scoped credit account before a paid
+provider dispatch. It cannot become a positive Stripe usage-meter export when
+credits are exhausted or provider liability remains unresolved; the monthly
+subscription charge remains separate.
 
 Mode rules:
 

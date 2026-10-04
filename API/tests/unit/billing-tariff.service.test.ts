@@ -38,6 +38,23 @@ describe('billing tariff validation', () => {
     });
   });
 
+  it('keeps omitted legacy terms flat and PAYG while accepting explicit prepaid seat plans', () => {
+    const base = {
+      key: 'standard', name: 'Standard', mode: 'standard' as const,
+      collectionMode: 'stripe' as const, monthlyAmountMinor: '2500', currency: 'USD',
+    };
+    expect(normalizeTariffInput(base)).toMatchObject({
+      monthlyChargeBasis: 'FLAT', usagePaymentMode: 'PAY_AS_YOU_GO', markupBps: 3000,
+    });
+    expect(normalizeTariffInput({ ...base, monthlyChargeBasis: 'per_seat',
+      usagePaymentMode: 'prepaid' })).toMatchObject({
+      monthlyChargeBasis: 'PER_SEAT', usagePaymentMode: 'PREPAID',
+      monthlyAmountMinor: 2500n,
+    });
+    expect(() => normalizeTariffInput({ ...base, usagePaymentMode: 'invalid' as never }))
+      .toThrowError('INVALID_USAGE_PAYMENT_MODE');
+  });
+
   it('requires free tariffs to have no usage markup or subscription', () => {
     expect(() =>
       normalizeTariffInput({
