@@ -1275,6 +1275,7 @@ model Organisation {
   billingInvoices                   BillingInvoice[]
   billingOrgResponsibility          BillingOrgResponsibility?
   billingSeatSubscriptions          BillingSeatSubscription[]
+  customerBillingCycles             BillingCustomerCycle[]
 
   @@unique([domain, slug])
   @@index([domain])
@@ -1465,6 +1466,7 @@ model Team {
   billingStripeCheckouts                   BillingStripeCheckoutSession[]
   billingStripeSubscriptions               BillingStripeSubscription[]
   billingSeatSubscriptions                 BillingSeatSubscription[]
+  customerBillingCycles                    BillingCustomerCycle[]
   billingServiceAccesses                   BillingServiceAccess[]
   billingAdjustments                       BillingCommercialAdjustment[]
   billingCancellationIntents               BillingCancellationIntent[]
@@ -1774,6 +1776,7 @@ model BillingService {
   invoiceCreditSettlementRefs       BillingInvoiceCreditSettlementReference[]
   invoiceAddonLines                 BillingInvoiceAddonLine[]
   seatSubscriptions                 BillingSeatSubscription[]
+  customerBillingCycles             BillingCustomerCycle[]
 
   @@map("billing_services")
 }
@@ -2645,8 +2648,9 @@ model BillingInvoice {
   @@map("billing_invoices")
 }
 
-// Customer-facing invoice lines contain only the final calculated price for a
-// service. Provider cost, usage units, and token detail never enter this table.
+// Payment invoice lines contain the final customer price for a service.
+// Measured units and token detail belong in the separate frozen cycle usage
+// breakdown; provider cost and private rating terms enter neither document.
 model BillingInvoiceLine {
   id                String   @id @default(cuid())
   invoiceId         String   @map("invoice_id")
@@ -3882,4 +3886,55 @@ model BillingRecurringAddonCancellationIntent {
   @@index([orgId, requestedTeamId, requestedByUserId])
   @@index([subscribingUserId])
   @@map("billing_recurring_addon_cancellation_intents")
+}
+
+// Each revision is a frozen product/team/month billing statement. Later receipts,
+// payments and corrections append a new revision or adjustment; they never
+// rewrite the original invoice, price evidence or customer document.
+model BillingCustomerCycle {
+  id              String   @id @default(cuid())
+  serviceId       String   @map("service_id")
+  orgId           String   @map("org_id")
+  teamId          String   @map("team_id")
+  billingMonth    String   @map("billing_month") @db.Char(7)
+  revision        Int
+  state           String   @db.VarChar(32)
+  payerScope      BillingAssignmentScope @map("payer_scope")
+  publicSnapshot  Json     @map("public_snapshot")
+  privateEvidence Json     @map("private_evidence")
+  snapshotSha256  String   @map("snapshot_sha256") @db.Char(64)
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  service   BillingService @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  org       Organisation @relation(fields: [orgId], references: [id], onDelete: Restrict)
+  team      Team @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  documents BillingCustomerCycleDocument[]
+
+  @@unique([serviceId, teamId, billingMonth, revision])
+  @@index([serviceId, teamId, billingMonth])
+  @@map("billing_customer_cycles")
+}
+
+// Document metadata points only at immutable bytes copied from a verified
+// payment authority, or at UOA's frozen measured-usage breakdown.
+model BillingCustomerCycleDocument {
+  id             String   @id @default(cuid())
+  cycleId        String   @map("cycle_id")
+  kind           String   @db.VarChar(32)
+  format         String   @db.VarChar(8)
+  sourceKind     String   @map("source_kind") @db.VarChar(32)
+  sourceId       String   @map("source_id") @db.VarChar(255)
+  invoiceNumber  String?  @map("invoice_number") @db.VarChar(120)
+  issuedAt       DateTime? @map("issued_at")
+  amountMinor    BigInt?  @map("amount_minor")
+  currency       String?  @db.Char(3)
+  objectKey      String   @map("object_key") @db.VarChar(1024)
+  sha256         String   @db.Char(64)
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  cycle BillingCustomerCycle @relation(fields: [cycleId], references: [id], onDelete: Restrict)
+
+  @@unique([sourceKind, sourceId])
+  @@unique([cycleId, kind, format])
+  @@map("billing_customer_cycle_documents")
 }

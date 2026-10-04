@@ -85,7 +85,7 @@ const rawUnits = object(['input', 'cached_input', 'output', 'total'], {
   reasoning: decimal, cache_write: decimal,
 });
 const usageLine = object([
-  'id', 'service_id', 'usage_unit', 'calls', 'raw_units', 'modalities',
+  'id', 'service_id', 'usage_unit', 'calls', 'raw_units',
   'customer_charge', 'credits_consumed',
 ], {
   id, service_id: id, usage_unit: id, calls: decimal, raw_units: rawUnits,
