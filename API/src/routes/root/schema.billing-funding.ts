@@ -149,9 +149,11 @@ export const billingFundingEndpoints: EndpointSchema[] = [
     response: {
       204: 'Automatic top-up disabled idempotently',
       '401/403': 'Invalid app key, actor, exact-team manager, or subject',
-      409: 'A payment attempt is still unresolved',
+      409: 'Current consent or authorization conflicts with the requested change',
       503: 'Stripe collection context unavailable',
     },
+    notes:
+      'An unresolved payment does not prevent disabling future automatic charges. The original attempt stays bound to its immutable consent; late verified settlement cannot reactivate automatic top-up.',
   },
   {
     method: 'POST',
