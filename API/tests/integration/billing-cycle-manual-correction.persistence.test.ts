@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { writeFileSync } from 'node:fs';
 
 import { BillingAssignmentScope, BillingCollectionMode, BillingMonthlyChargeBasis,
   BillingTariffMode, BillingUsagePaymentMode, Prisma } from '@prisma/client';
@@ -6,6 +7,8 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { getAdminAuthDomain } from '../../src/config/env.js';
 import { prepareBillingCycleClose } from '../../src/services/billing-cycle-close.service.js';
+import { getBillingCycleDetail, type BillingCycleContext } from
+  '../../src/services/billing-cycle-read.service.js';
 import { captureIssuedManualBillingCycleCorrection } from
   '../../src/services/billing-cycle-manual-correction-capture.service.js';
 import { prepareManualBillingCycleCorrection } from
@@ -16,6 +19,10 @@ import type { BillingInvoicePdfStorage } from
   '../../src/services/billing-invoice-storage.service.js';
 import { issueBillingInvoice } from '../../src/services/billing-invoice-lifecycle.service.js';
 import { createTestDb } from '../helpers/test-db.js';
+
+vi.mock('../../src/services/billing-actor.service.js', () => ({
+  verifyBillingActor: vi.fn().mockResolvedValue({}),
+}));
 
 const enabled = process.env.BILLING_FUNDING_DATABASE_TESTS === 'true' &&
   Boolean(process.env.DATABASE_URL);
@@ -64,8 +71,13 @@ describe.skipIf(!enabled)('issued manual late receipt correction', () => {
     const team = await db.prisma.team.create({ data: { orgId: org.id,
       name: 'Usage team', slug: `usage-${randomUUID().slice(0, 10)}` } });
     ids.team = team.id;
+    await db.prisma.orgMember.create({ data: { orgId: org.id, userId: user.id,
+      role: 'owner' } });
+    await db.prisma.teamMember.create({ data: { teamId: team.id, userId: user.id,
+      teamRole: 'owner' } });
     const service = await db.prisma.billingService.create({ data: {
-      identifier: `manual-correction-${randomUUID()}`, name: 'Customer service',
+      identifier: process.env.BILLING_CONFORMANCE_PRODUCT ??
+        `manual-correction-${randomUUID()}`, name: 'Customer service',
       tariffHistoryFromMonth: '2026-01',
     } });
     ids.service = service.id;
@@ -328,6 +340,7 @@ describe.skipIf(!enabled)('issued manual late receipt correction', () => {
     const actor = { userId: ids.user, tokenVersion: 0,
       email: (await db.prisma.user.findUniqueOrThrow({ where: { id: ids.user } })).email };
     const supplementIds: string[] = [];
+    let latestCycleId = '';
     for (const sequence of [1, 2]) {
       await settle('0.5', 650_000_000n);
       const snapshotId = `mup_${randomUUID().replaceAll('-', '')}`;
@@ -402,6 +415,7 @@ describe.skipIf(!enabled)('issued manual late receipt correction', () => {
       const captured = await captureIssuedManualBillingCycleCorrection({
         invoiceId: supplement.id,
       }, { prisma: db.prisma, storage });
+      latestCycleId = captured.cycleId;
       const cycle = await db.prisma.billingCustomerCycle.findUniqueOrThrow({ where: {
         id: captured.cycleId,
       } });
@@ -422,5 +436,21 @@ describe.skipIf(!enabled)('issued manual late receipt correction', () => {
     await expect(db.prisma.billingInvoiceCreditSettlementReference.update({
       where: { id: latest.id }, data: { priorCreditsAppliedMicrocredits: 0n },
     })).rejects.toThrow();
+    if (process.env.BILLING_CONFORMANCE_OUTPUT) {
+      const service = await db.prisma.billingService.findUniqueOrThrow({ where: {
+        id: ids.service,
+      } });
+      const context: BillingCycleContext = {
+        credential: { service } as BillingCycleContext['credential'],
+        actorToken: 'synthetic-signed-actor', endpoint: '/billing/v1/cycles/detail',
+        request: { product: service.identifier, organisationId: ids.org,
+          teamId: ids.team, userId: ids.user },
+      };
+      const publicDetail = await getBillingCycleDetail(context, latestCycleId, {
+        prisma: db.prisma,
+      });
+      writeFileSync(process.env.BILLING_CONFORMANCE_OUTPUT,
+        `${JSON.stringify(publicDetail, null, 2)}\n`);
+    }
   });
 });

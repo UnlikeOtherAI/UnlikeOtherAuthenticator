@@ -1,0 +1,307 @@
+{
+  "scope": {
+    "team_id": null,
+    "cycle_scope": "organisation",
+    "payer_scope": "organisation",
+    "organisation_id": "cmuue4ien00027qveki3k0p0d"
+  },
+  "state": "adjusted",
+  "period": {
+    "month": "2026-08",
+    "ends_at": "2026-09-01T00:00:00.000Z",
+    "starts_at": "2026-08-01T00:00:00.000Z"
+  },
+  "totals": [
+    {
+      "tax": {
+        "amount": "0.65",
+        "display": "$0.65",
+        "currency": "USD",
+        "amount_minor": "65"
+      },
+      "currency": "USD",
+      "total_due": {
+        "amount": "3.89",
+        "display": "$3.89",
+        "currency": "USD",
+        "amount_minor": "389"
+      },
+      "total_paid": {
+        "amount": "0",
+        "display": "$0",
+        "currency": "USD",
+        "amount_minor": "0"
+      },
+      "gross_total": {
+        "amount": "3.9",
+        "display": "$3.9",
+        "currency": "USD",
+        "amount_minor": "390"
+      },
+      "outstanding": {
+        "amount": "3.89",
+        "display": "$3.89",
+        "currency": "USD",
+        "amount_minor": "389"
+      },
+      "subscription": {
+        "amount": "0",
+        "display": "$0",
+        "currency": "USD",
+        "amount_minor": "0"
+      },
+      "usage_charge": {
+        "amount": "3.25",
+        "display": "$3.25",
+        "currency": "USD",
+        "amount_minor": "325"
+      },
+      "credits_applied": {
+        "amount": "0.01",
+        "display": "$0.01",
+        "currency": "USD",
+        "amount_minor": "1"
+      }
+    }
+  ],
+  "credits": {
+    "status": "confirmed",
+    "waived": "0",
+    "consumed": "3250",
+    "closing_balance": "10",
+    "opening_balance": "0"
+  },
+  "product": {
+    "id": "cmuue4iew00097qvegxbxxz2s",
+    "name": "Customer service",
+    "identifier": "nessie"
+  },
+  "cycle_id": "9e6e12ff-66c5-4408-ad99-2987a4b9993d",
+  "documents": [
+    {
+      "kind": "monthly_invoice",
+      "state": "available",
+      "format": "pdf",
+      "number": "C9CFD99-2026-000001",
+      "issued_at": "2026-09-04T00:00:00.000Z",
+      "document_id": "21e945d0-5d02-4d75-a745-2ed1c2c1bd44",
+      "customer_total": {
+        "amount": "1.56",
+        "display": "$1.56",
+        "currency": "USD",
+        "amount_minor": "156"
+      },
+      "download_action": {
+        "method": "POST",
+        "path": "/billing/v1/cycles/download",
+        "body": {
+          "product": "nessie",
+          "organisation_id": "cmuue4ien00027qveki3k0p0d",
+          "team_id": "cmuue4ieo00047qvep77w22po",
+          "user_id": "cmuue4iec00007qvezdnn9lko",
+          "cycle_id": "9e6e12ff-66c5-4408-ad99-2987a4b9993d",
+          "document_id": "21e945d0-5d02-4d75-a745-2ed1c2c1bd44"
+        }
+      }
+    },
+    {
+      "kind": "monthly_invoice",
+      "state": "available",
+      "format": "pdf",
+      "number": "C9CFD99-2026-000002",
+      "issued_at": "2026-09-05T00:00:00.000Z",
+      "document_id": "d5c982c0-044b-4ea8-93e7-e6fedccc69fe",
+      "customer_total": {
+        "amount": "0.78",
+        "display": "$0.78",
+        "currency": "USD",
+        "amount_minor": "78"
+      },
+      "download_action": {
+        "method": "POST",
+        "path": "/billing/v1/cycles/download",
+        "body": {
+          "product": "nessie",
+          "organisation_id": "cmuue4ien00027qveki3k0p0d",
+          "team_id": "cmuue4ieo00047qvep77w22po",
+          "user_id": "cmuue4iec00007qvezdnn9lko",
+          "cycle_id": "9e6e12ff-66c5-4408-ad99-2987a4b9993d",
+          "document_id": "d5c982c0-044b-4ea8-93e7-e6fedccc69fe"
+        }
+      }
+    },
+    {
+      "kind": "monthly_invoice",
+      "state": "available",
+      "format": "pdf",
+      "number": "C9CFD99-2026-000003",
+      "issued_at": "2026-09-06T00:00:00.000Z",
+      "document_id": "3f7001c3-578d-40f6-bfaf-1a36c4e0b3d1",
+      "customer_total": {
+        "amount": "0.78",
+        "display": "$0.78",
+        "currency": "USD",
+        "amount_minor": "78"
+      },
+      "download_action": {
+        "method": "POST",
+        "path": "/billing/v1/cycles/download",
+        "body": {
+          "product": "nessie",
+          "organisation_id": "cmuue4ien00027qveki3k0p0d",
+          "team_id": "cmuue4ieo00047qvep77w22po",
+          "user_id": "cmuue4iec00007qvezdnn9lko",
+          "cycle_id": "9e6e12ff-66c5-4408-ad99-2987a4b9993d",
+          "document_id": "3f7001c3-578d-40f6-bfaf-1a36c4e0b3d1"
+        }
+      }
+    },
+    {
+      "kind": "monthly_invoice",
+      "state": "available",
+      "format": "pdf",
+      "number": "C9CFD99-2026-000004",
+      "issued_at": "2026-09-07T00:00:00.000Z",
+      "document_id": "2d428571-7043-48c5-bdfb-ee85e868f5cc",
+      "customer_total": {
+        "amount": "0.78",
+        "display": "$0.78",
+        "currency": "USD",
+        "amount_minor": "78"
+      },
+      "download_action": {
+        "method": "POST",
+        "path": "/billing/v1/cycles/download",
+        "body": {
+          "product": "nessie",
+          "organisation_id": "cmuue4ien00027qveki3k0p0d",
+          "team_id": "cmuue4ieo00047qvep77w22po",
+          "user_id": "cmuue4iec00007qvezdnn9lko",
+          "cycle_id": "9e6e12ff-66c5-4408-ad99-2987a4b9993d",
+          "document_id": "2d428571-7043-48c5-bdfb-ee85e868f5cc"
+        }
+      }
+    },
+    {
+      "kind": "usage_breakdown",
+      "state": "available",
+      "format": "pdf",
+      "number": null,
+      "issued_at": "2026-09-07T00:00:00.000Z",
+      "document_id": "1588d8cf-0f45-4980-a375-713c468700d8",
+      "customer_total": null,
+      "download_action": {
+        "method": "POST",
+        "path": "/billing/v1/cycles/download",
+        "body": {
+          "product": "nessie",
+          "organisation_id": "cmuue4ien00027qveki3k0p0d",
+          "team_id": "cmuue4ieo00047qvep77w22po",
+          "user_id": "cmuue4iec00007qvezdnn9lko",
+          "cycle_id": "9e6e12ff-66c5-4408-ad99-2987a4b9993d",
+          "document_id": "1588d8cf-0f45-4980-a375-713c468700d8"
+        }
+      }
+    },
+    {
+      "kind": "usage_breakdown",
+      "state": "available",
+      "format": "csv",
+      "number": null,
+      "issued_at": "2026-09-07T00:00:00.000Z",
+      "document_id": "02e23ae8-0163-4a53-b772-678a563dc1b9",
+      "customer_total": null,
+      "download_action": {
+        "method": "POST",
+        "path": "/billing/v1/cycles/download",
+        "body": {
+          "product": "nessie",
+          "organisation_id": "cmuue4ien00027qveki3k0p0d",
+          "team_id": "cmuue4ieo00047qvep77w22po",
+          "user_id": "cmuue4iec00007qvezdnn9lko",
+          "cycle_id": "9e6e12ff-66c5-4408-ad99-2987a4b9993d",
+          "document_id": "02e23ae8-0163-4a53-b772-678a563dc1b9"
+        }
+      }
+    }
+  ],
+  "adjustments": [
+    {
+      "kind": "charge",
+      "reason": "Additional settled usage from the closed billing month",
+      "document_id": "08027b2d-f96a-46cb-8efa-e042f22c8e34",
+      "customer_amount": {
+        "amount": "0.78",
+        "display": "$0.78",
+        "currency": "USD",
+        "amount_minor": "78"
+      },
+      "source_cycle_id": "2bf8d067-5926-4d35-8ce2-7d9db2d7bff1"
+    },
+    {
+      "kind": "charge",
+      "reason": "Additional settled usage from the closed billing month",
+      "document_id": "eee5fea1-8ca4-4837-b698-177dd04d4745",
+      "customer_amount": {
+        "amount": "0.78",
+        "display": "$0.78",
+        "currency": "USD",
+        "amount_minor": "78"
+      },
+      "source_cycle_id": "0ef62eed-bc88-4489-8d19-1d86498aaed3"
+    },
+    {
+      "kind": "charge",
+      "reason": "Additional settled usage from the closed billing month",
+      "document_id": "2d428571-7043-48c5-bdfb-ee85e868f5cc",
+      "customer_amount": {
+        "amount": "0.78",
+        "display": "$0.78",
+        "currency": "USD",
+        "amount_minor": "78"
+      },
+      "source_cycle_id": "5adc58a4-ece4-4a60-8a70-3922dda9ba9e"
+    }
+  ],
+  "usage_lines": [
+    {
+      "id": "usage:organisation:payg",
+      "label": "Metered usage",
+      "customer_charge": {
+        "amount": "3.25",
+        "display": "$3.25",
+        "currency": "USD"
+      },
+      "credits_consumed": "3250",
+      "usage_payment_mode": "pay_as_you_go"
+    }
+  ],
+  "schema_version": 2,
+  "document_available": true,
+  "subscription_lines": [
+    {
+      "id": "cmuue4if1000h7qvejoaipgqf",
+      "label": "Monthly subscription",
+      "quantity": "1",
+      "intervals": [],
+      "unit_price": {
+        "amount": "0",
+        "display": "$0",
+        "currency": "USD",
+        "amount_minor": "0"
+      },
+      "seat_policy": null,
+      "seat_timing": null,
+      "charge_basis": "flat",
+      "month_seconds": null,
+      "customer_charge": {
+        "amount": "0",
+        "display": "$0",
+        "currency": "USD",
+        "amount_minor": "0"
+      },
+      "active_seat_seconds": null
+    }
+  ],
+  "correction_of_cycle_id": "5adc58a4-ece4-4a60-8a70-3922dda9ba9e"
+}
