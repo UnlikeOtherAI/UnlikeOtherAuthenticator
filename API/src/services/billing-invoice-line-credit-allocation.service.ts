@@ -1,6 +1,8 @@
 import { AppError } from '../utils/errors.js';
 
 const MICROCREDITS_PER_USD_MINOR = 10_000_000n;
+const binaryCompare = (left: string, right: string): number =>
+  Buffer.compare(Buffer.from(left, 'utf8'), Buffer.from(right, 'utf8'));
 
 export type InvoiceCreditReference = {
   id: string;
@@ -20,8 +22,8 @@ export function allocateInvoiceCreditReferenceMinor(
   let cumulative = 0n;
   const seen = new Set<string>();
   return [...references].sort((a, b) =>
-    a.serviceId.localeCompare(b.serviceId) ||
-    a.settlementId.localeCompare(b.settlementId) || a.id.localeCompare(b.id))
+    binaryCompare(a.serviceId, b.serviceId) ||
+    binaryCompare(a.settlementId, b.settlementId) || binaryCompare(a.id, b.id))
     .map((reference) => {
       if (reference.creditsAppliedMicrocredits < 0n || seen.has(reference.id)) {
         throw new AppError('BAD_REQUEST', 409, 'BILLING_INVOICE_CREDIT_REFERENCE_INVALID');
