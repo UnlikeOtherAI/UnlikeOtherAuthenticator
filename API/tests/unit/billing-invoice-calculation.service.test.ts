@@ -109,6 +109,7 @@ describe('contract invoice calculator', () => {
               currency: 'USD',
               serviceTerms: [
                 {
+                  id: 'term_1',
                   serviceId: 'service_1',
                   tariffId: 'tariff_1',
                   monthlyAmountMinor: 1000n,
@@ -118,6 +119,8 @@ describe('contract invoice calculator', () => {
                     collectionMode: BillingCollectionMode.MANUAL,
                     markupBps: 2500,
                     monthlyAmountMinor: 1000n,
+                    monthlyChargeBasis: 'FLAT',
+                    usagePaymentMode: 'PAY_AS_YOU_GO',
                     currency: 'USD',
                   },
                 },
@@ -178,6 +181,10 @@ describe('contract invoice calculator', () => {
         },
       ],
     });
+    const quoteMonthly = vi.fn().mockResolvedValue({
+      serviceId: 'service_1', tariffId: 'tariff_1', currency: 'USD',
+      chargeBasis: 'FLAT', amountMinor: 1000n,
+    });
 
     await calculateBillingContractInvoice(
       {
@@ -186,7 +193,7 @@ describe('contract invoice calculator', () => {
         billingMonth: '2026-06',
         actor: { email: 'admin@example.com' },
       },
-      { prisma: prisma as never, fetchMetering, collectFunding, now: () => now },
+      { prisma: prisma as never, fetchMetering, collectFunding, quoteMonthly, now: () => now },
     );
 
     expect(fetchMetering).toHaveBeenCalledWith(
@@ -197,6 +204,9 @@ describe('contract invoice calculator', () => {
       expect.objectContaining({ tariffId: 'tariff_1', organisationId: 'org_1' }),
       { prisma },
     );
+    expect(quoteMonthly).toHaveBeenCalledWith({
+      source: { kind: 'manual', id: 'term_1' }, billingMonth: '2026-06',
+    }, { prisma, now: expect.any(Function) });
     expect(data.subtotalMinor).toBe(1250n);
     expect(data.creditsAppliedMinor).toBe(50n);
     expect(data.revision).toBe(4);
@@ -285,24 +295,36 @@ describe('contract invoice calculator', () => {
       $transaction: vi.fn(async (run: (value: typeof tx) => unknown) => run(tx)),
     };
     const quoteMonthly = vi.fn().mockResolvedValue({ agreementId: 'seat_1',
+      serviceId: 'service_1', tariffId: 'tariff_1', currency: 'USD', chargeBasis: 'PER_SEAT',
       amountMinor: 1500n, seatMilliseconds: 1_500n,
       evidenceIds: ['interval_1', 'interval_2'] });
-    await calculateBillingContractInvoice({ contractId: 'contract_1',
+    const fetchMetering = vi.fn().mockResolvedValue(usage());
+    const collectFunding = vi.fn().mockResolvedValue({ credits: [], addons: [] });
+    const request = { contractId: 'contract_1',
       issuerProfileId: 'issuer_1', billingMonth: '2026-06',
-      actor: { email: 'admin@example.com' } }, {
-      prisma: prisma as never, now: () => now,
-      fetchMetering: vi.fn().mockResolvedValue(usage()),
-      collectFunding: vi.fn().mockResolvedValue({ credits: [], addons: [] }),
-      quoteMonthly,
-    });
+      actor: { email: 'admin@example.com' } };
+    const deps = { prisma: prisma as never, now: () => now,
+      fetchMetering, collectFunding, quoteMonthly };
+    await calculateBillingContractInvoice(request, deps);
     expect(quoteMonthly).toHaveBeenCalledWith({
       source: { kind: 'manual', id: 'term_1' }, billingMonth: '2026-06',
-    }, { prisma });
+    }, { prisma, now: expect.any(Function) });
     const invoice = createInvoice.mock.calls[0]![0].data;
     expect(invoice.subtotalMinor).toBe(1500n);
     expect(invoice.lines.create).toEqual([expect.objectContaining({
       amountMinor: 1500n, serviceIdentifier: 'deepwater',
     })]);
     expect(invoice.calculationDigest).toMatch(/^[a-f0-9]{64}$/);
+    collectFunding.mockResolvedValue({ credits: [{ settlementId: 'legacy_prepaid_overlap' }],
+      addons: [] });
+    await expect(calculateBillingContractInvoice(request, deps))
+      .rejects.toThrow('BILLING_INVOICE_PREPAID_CREDIT_CONFLICT');
+    expect(createInvoice).toHaveBeenCalledOnce();
+    collectFunding.mockResolvedValue({ credits: [], addons: [] });
+    fetchMetering.mockResolvedValue({ ...usage(), billingCompleteness: {
+      state: 'unresolved', unresolvedPaidAttempts: '1',
+    } });
+    await expect(calculateBillingContractInvoice(request, deps))
+      .rejects.toThrow('LEDGER_METERING_UNRESOLVED_PAID_USAGE');
   });
 });

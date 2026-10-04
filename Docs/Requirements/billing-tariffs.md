@@ -248,10 +248,18 @@ fixed agreement constrains admission from its roster-capture time.
 The always-on seat transition scheduler closes the old evidence at its later
 observed sweep time, preserving the exact boundary and interval history.
 
-The manual invoice calculator uses the closed-month per-seat quote for its
-subscription line, never the per-seat unit price as a whole invoice fee. It
-excludes prepaid runtime usage from the manual pay-as-you-go total while
-retaining the raw Ledger snapshot reference for audit.
+The manual invoice calculator uses the closed-month source quote for flat and
+per-seat subscription lines, never the per-seat unit price as a whole invoice
+fee. A flat contract activated partway through its first month holds that
+month because it has no partial-month policy; later whole months can be billed
+from its observed activation. A closed month remains billable after later
+termination, but no month after the termination boundary can be charged.
+Complete Ledger coverage is required for prepaid and pay-as-you-go alike.
+Prepaid runtime usage is excluded from the manual usage total, and any legacy
+credit settlement found against a prepaid tariff holds calculation for
+reconciliation instead of reducing the separate subscription fee. Only a
+pay-as-you-go term can apply a collector credit as an invoice offset. The raw
+Ledger snapshot reference remains private audit evidence.
 
 Prepaid usage is funded from the existing scoped credit account before a paid
 provider dispatch. It cannot become a positive Stripe usage-meter export when
