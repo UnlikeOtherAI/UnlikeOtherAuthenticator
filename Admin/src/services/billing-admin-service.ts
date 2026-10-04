@@ -13,6 +13,7 @@ import {
   type BillingTariffFormValues,
 } from '../schemas/billing';
 import { createApiClient } from './api-client';
+import { billingMajorToMinor } from '../features/admin/billing-money';
 
 const api = createApiClient();
 
@@ -23,9 +24,14 @@ function tariffBody(input: BillingTariffFormValues | BillingServiceFormValues) {
     mode: input.mode,
     collection_mode: input.collectionMode,
     markup_percent: input.markupPercent,
+    usage_payment_mode: input.usagePaymentMode,
     monthly_subscription: {
-      amount_minor: input.monthlyAmountMinor,
+      amount_minor: billingMajorToMinor(input.monthlyAmount, input.currency),
       currency: input.currency,
+      charge_basis: input.monthlyChargeBasis,
+      ...(input.monthlyChargeBasis === 'per_seat'
+        ? { seat_policy: input.seatPolicy, seat_charge_timing: input.seatChargeTiming }
+        : {}),
     },
   };
 }

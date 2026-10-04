@@ -194,10 +194,12 @@ the additive migration. Newly configured plans must explicitly choose their
 monthly charge basis and usage payment mode. The Admin creation default is
 `prepaid`, and a team or organisation assignment continues to determine the
 payer scope. A per-seat amount is the price of one eligible seat per month;
-per-seat terms default to automatic/prorated when omitted and are forbidden on
-flat plans. Purchased fixed capacity belongs to each scoped subscription,
-not to the reusable tariff. Historical flat tariffs retain null seat terms.
-Seat quantity evidence is separate from usage credits.
+the Admin form enters that amount in natural currency units and converts it
+exactly to the integer `amount_minor` write contract. New per-seat forms
+default to automatic quantity with prorated seat changes. Per-seat terms are
+forbidden on flat plans; historical flat tariffs retain null seat terms. Fixed
+purchased capacity belongs to each scoped subscription, not to the reusable
+tariff. Seat quantity evidence is separate from usage credits.
 Prepaid usage is funded from the existing scoped credit account before a paid
 provider dispatch. It cannot become a positive Stripe usage-meter export when
 credits are exhausted or provider liability remains unresolved; the monthly

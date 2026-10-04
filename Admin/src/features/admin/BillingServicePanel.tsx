@@ -133,7 +133,7 @@ export function BillingServicePanel({
       </div>
       {tab === 'tariffs' ? (
         <DataTable
-          headers={['Tariff', 'Mode', 'Collection', 'Markup', 'Monthly', 'Created', 'Default']}
+          headers={['Tariff', 'Mode', 'Collection', 'Markup', 'Usage', 'Monthly', 'Created', 'Default']}
         >
           {service.tariffs.map((tariff) => (
             <tr key={tariff.id}>
@@ -162,12 +162,18 @@ export function BillingServicePanel({
                 </Badge>
               </Td>
               <Td>{(tariff.markup_bps / 100).toFixed(2)}%</Td>
+              <Td>{tariff.usage_payment_mode === 'prepaid' ? 'Prepaid pool' : 'Pay as you go'}</Td>
               <Td>
                 <span className="font-mono text-xs">
                   {billingMoney(
                     tariff.monthly_subscription.amount_minor,
                     tariff.monthly_subscription.currency,
                   )}
+                </span>
+                <span className="block text-xs text-gray-500">
+                  {tariff.monthly_subscription.charge_basis === 'per_seat'
+                    ? `per seat · ${tariff.monthly_subscription.seat_policy} · ${tariff.monthly_subscription.seat_charge_timing?.replace('_', ' ')}`
+                    : 'per team or organisation'}
                 </span>
               </Td>
               <Td className="text-xs text-gray-400">
