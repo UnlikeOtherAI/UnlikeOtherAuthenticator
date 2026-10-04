@@ -124,7 +124,7 @@ export async function getBillingCredits(
       { prisma },
     ),
     (deps?.resolveControlledBy ?? resolveBillingControlledBy)(
-      { organisationId: params.request.organisationId, userId: params.request.userId },
+      { organisationId: params.request.organisationId, userId: params.request.userId, locale: params.locale },
       { prisma },
     ),
   ]);
