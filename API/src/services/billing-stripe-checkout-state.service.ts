@@ -107,6 +107,7 @@ export function assertCheckoutBinding(
     scope: ReturnType<typeof billingScope>;
     successUrlDigest: string;
     cancelUrlDigest: string;
+    fixedSeatQuantity: number | null;
   },
 ): void {
   if (
@@ -122,7 +123,8 @@ export function assertCheckoutBinding(
     checkout.scope !== expected.scope.scope ||
     checkout.scopeKey !== expected.scope.scopeKey ||
     checkout.successUrlDigest !== expected.successUrlDigest ||
-    checkout.cancelUrlDigest !== expected.cancelUrlDigest
+    checkout.cancelUrlDigest !== expected.cancelUrlDigest ||
+    (checkout.fixedSeatQuantity ?? null) !== expected.fixedSeatQuantity
   ) {
     throw new AppError('BAD_REQUEST', 409, 'STRIPE_CHECKOUT_SCOPE_CONFLICT');
   }

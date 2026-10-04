@@ -21,6 +21,8 @@ export type SeatMonthQuoteInput = {
   seatChargeTiming: BillingSeatChargeTiming;
   unitAmountMinor: bigint;
   activatedAt: Date;
+  commercialEffectiveAt?: Date;
+  commercialEndsAt?: Date | null;
   endedAt: Date | null;
   membershipIntervals: MembershipInterval[];
   capacityRevisions: CapacityRevision[];
@@ -155,9 +157,16 @@ export function quoteMonthlySeatCharge(input: SeatMonthQuoteInput): SeatMonthQuo
   const monthMilliseconds = BigInt(end - start);
   const activatedAt = millis(input.activatedAt);
   const endedAt = input.endedAt === null ? Number.MAX_SAFE_INTEGER : millis(input.endedAt);
+  const commercialEffectiveAt = input.commercialEffectiveAt
+    ? millis(input.commercialEffectiveAt) : activatedAt;
+  const commercialEndsAt = input.commercialEndsAt
+    ? millis(input.commercialEndsAt) : Number.MAX_SAFE_INTEGER;
   if (endedAt <= activatedAt) invalidEvidence();
-  const from = Math.max(start, activatedAt);
-  const to = Math.min(end, endedAt);
+  if (commercialEffectiveAt < activatedAt || commercialEndsAt <= commercialEffectiveAt) {
+    invalidEvidence();
+  }
+  const from = Math.max(start, activatedAt, commercialEffectiveAt);
+  const to = Math.min(end, endedAt, commercialEndsAt);
   if (from >= to) {
     return { amountMinor: 0n, unitAmountMinor: input.unitAmountMinor,
       uniqueHumanSeats: input.seatPolicy === BillingSeatPolicy.AUTOMATIC ? 0 : null,

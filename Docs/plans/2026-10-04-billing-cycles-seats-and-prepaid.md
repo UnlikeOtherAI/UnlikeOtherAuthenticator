@@ -146,3 +146,25 @@ deployment configuration and real payment proof remain separate evidence tiers.
 Provider references: [Stripe prorations](https://docs.stripe.com/billing/subscriptions/prorations),
 [finalized invoices](https://docs.stripe.com/api/invoices/update),
 [invoice PDF fields](https://docs.stripe.com/api/invoices/object).
+
+### Seat admission evidence implementation
+
+UOA serializes membership, invitation, lifecycle, seat activation and capacity
+writes on the organisation's `billing_seat_guard_version` row. Deferred database
+checks observe the final transaction state, so an invitation converted into a
+membership is counted once and parallel grants cannot exceed any active team or
+organisation fixed limit. This covers direct, admin, import, SSO and invitation
+writers without separate product membership copies. A conflict returns the
+machine code `SEAT_CAPACITY_EXCEEDED` with HTTP 409. An expired, revoked,
+declined or denied invitation no longer reserves a seat.
+
+Each seat subscription records `baseline_member_count` at observed activation,
+including zero. Automatic membership intervals begin at the same observed
+activation and follow active UOA users and memberships; organisation scope
+counts each person once across its teams. A pending future commercial month may
+start evidence capture earlier, with its billable start bounded by the separate
+commercial effective instant. Historical rows without a captured baseline stay
+unquotable until reconciled. Fixed capacity revisions are append-only, and all
+future scheduled lower capacities must still fit the current occupied and
+reserved roster. A subscription's `ended_at` closes its open evidence intervals;
+quote boundaries and invoice close remain the financial producer's authority.

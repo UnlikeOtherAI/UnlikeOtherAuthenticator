@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@prisma/client';
+import { BillingMonthlyChargeBasis, type PrismaClient } from '@prisma/client';
 import { createHash } from 'node:crypto';
 import Stripe from 'stripe';
 
@@ -200,6 +200,7 @@ export async function ensureStripeTariffPrice(
       key: string;
       version: number;
       monthlyAmountMinor: bigint;
+      monthlyChargeBasis?: BillingMonthlyChargeBasis;
     };
     catalog: Awaited<ReturnType<typeof ensureStripeCatalog>>;
     account: StripeAccountContext;
@@ -208,6 +209,7 @@ export async function ensureStripeTariffPrice(
   deps?: { prisma?: CatalogPrisma },
 ) {
   const prisma = client(deps);
+  const licensedMonthly = params.tariff.monthlyChargeBasis !== BillingMonthlyChargeBasis.PER_SEAT;
   let mapping = await prisma.billingStripeTariffPrice.upsert({
     where: {
       accountId_tariffId: {
@@ -227,12 +229,13 @@ export async function ensureStripeTariffPrice(
     mapping.catalogId !== params.catalog.id ||
     mapping.accountId !== params.account.id ||
     mapping.monthlyAmountMinor !== params.tariff.monthlyAmountMinor ||
-    (params.tariff.monthlyAmountMinor === 0n && mapping.stripeMonthlyPriceId !== null)
+    ((!licensedMonthly || params.tariff.monthlyAmountMinor === 0n) &&
+      mapping.stripeMonthlyPriceId !== null)
   ) {
     throw new AppError('INTERNAL', 500, 'STRIPE_TARIFF_PRICE_MISMATCH');
   }
 
-  if (params.tariff.monthlyAmountMinor > 0n && !mapping.stripeMonthlyPriceId) {
+  if (licensedMonthly && params.tariff.monthlyAmountMinor > 0n && !mapping.stripeMonthlyPriceId) {
     if (!params.catalog.stripeProductId) {
       throw new AppError('INTERNAL', 500, 'STRIPE_CATALOG_INCOMPLETE');
     }

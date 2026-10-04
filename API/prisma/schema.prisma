@@ -1223,6 +1223,7 @@ model OrgAuditLog {
 
 model Organisation {
   id                  String       @id @default(cuid())
+  billingSeatGuardVersion BigInt   @default(0) @map("billing_seat_guard_version")
   lifecycleStatus     EntityLifecycleStatus @default(ACTIVE) @map("lifecycle_status")
   lifecycleChangedAt  DateTime? @map("lifecycle_changed_at")
   lifecycleReason     String? @map("lifecycle_reason") @db.VarChar(2000)
@@ -2215,6 +2216,7 @@ model BillingStripeCheckoutSession {
   scope                   BillingAssignmentScope
   scopeKey                String                 @map("scope_key") @db.VarChar(520)
   actorJti                String                 @map("actor_jti") @db.VarChar(256)
+  fixedSeatQuantity       Int?                   @map("fixed_seat_quantity")
   requestedByUserId       String                 @map("requested_by_user_id")
   successUrlDigest        String                 @map("success_url_digest") @db.Char(64)
   cancelUrlDigest         String                 @map("cancel_url_digest") @db.Char(64)
@@ -2478,6 +2480,7 @@ model BillingContractServiceTerm {
   tariffId           String   @map("tariff_id")
   tariffAssignmentId String?  @map("tariff_assignment_id")
   monthlyAmountMinor BigInt   @map("monthly_amount_minor")
+  fixedSeatQuantity  Int?     @map("fixed_seat_quantity")
   createdAt          DateTime @default(now()) @map("created_at")
 
   contractVersion  BillingOrganisationContractVersion @relation(fields: [contractVersionId], references: [id], onDelete: Restrict)
@@ -2510,8 +2513,12 @@ model BillingSeatSubscription {
   unitAmountMinor       BigInt                   @map("unit_amount_minor")
   currency              String                   @db.Char(3)
   activatedAt           DateTime                 @map("activated_at")
+  commercialEffectiveAt DateTime                 @map("commercial_effective_at")
+  commercialEndsAt      DateTime?                @map("commercial_ends_at")
   endedAt               DateTime?                @map("ended_at")
   baselineCapturedAt    DateTime                 @map("baseline_captured_at")
+  // Non-null proves that activation captured the roster, including a real zero-seat baseline.
+  baselineMemberCount   Int?                     @map("baseline_member_count")
   createdAt             DateTime                 @default(now()) @map("created_at")
 
   stripeSubscription  BillingStripeSubscription? @relation(fields: [stripeSubscriptionId], references: [id], onDelete: Restrict)

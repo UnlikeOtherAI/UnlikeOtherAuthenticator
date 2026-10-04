@@ -10,6 +10,7 @@ import { BillingSubjectRequestSchema, readBillingActorHeader } from './billing-r
 const CheckoutRequestSchema = BillingSubjectRequestSchema.extend({
   success_url: z.string().trim().url().max(2048),
   cancel_url: z.string().trim().url().max(2048),
+  fixed_seat_quantity: z.number().int().positive().max(1_000_000).optional(),
 }).strict();
 
 const responseSchema = {
@@ -42,6 +43,7 @@ export function registerStripeCheckoutRoute(app: FastifyInstance): void {
           userId: body.user_id,
           successUrl: body.success_url,
           cancelUrl: body.cancel_url,
+          fixedSeatQuantity: body.fixed_seat_quantity ?? null,
         },
         actorToken: readBillingActorHeader(request.headers['x-uoa-actor']),
         endpoint: '/billing/v1/stripe/checkout-session',

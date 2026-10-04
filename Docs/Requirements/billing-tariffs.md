@@ -613,16 +613,25 @@ Stripe receives the winner's stable account/mode/Checkout idempotency key.
 
 UOA creates one currency-specific Stripe catalog for each product, including:
 
-- an immutable monthly Price for the exact tariff version when its monthly
-  amount is non-zero;
+- an immutable licensed monthly Price for a flat tariff when its monthly amount
+  is non-zero; a per-seat tariff keeps its unit price in UOA and has no licensed
+  quantity-one Stripe item;
 - one metered Price for rated customer money;
 - a calendar-month billing anchor aligned to Ledger's UTC month;
 - no promotion codes, because discounts must be explicit UOA tariff versions.
 
 The hosted Checkout sets Stripe's billing-cycle anchor to the first day of the
 next UTC month and sets `proration_behavior=none`. The partial alignment period
-between Checkout and that boundary is free; the first invoice covers the first
-complete UTC calendar month, and subsequent renewals remain calendar-aligned.
+between Checkout and that boundary is free for legacy flat subscriptions.
+Per-seat liability is computed by UOA from frozen terms and effective-dated
+membership or purchased-capacity evidence, then collected on a subsequent
+calendar-cycle invoice. Stripe's live item quantity and proration cannot
+replace that evidence. Automatic seats count unique active humans across the
+subscribed scope; fixed seats charge contracted capacity. `FULL_MONTH` counts
+any active automatic seat once and the greatest fixed capacity in the month;
+`PRORATED` sums exact UTC interval overlap and rounds once at the final
+currency minor unit. Checkout freezes an explicit positive purchased quantity
+only for a fixed per-seat tariff. Later renewals remain calendar-aligned.
 This follows Stripe's documented
 [billing-cycle anchor](https://docs.stripe.com/billing/subscriptions/billing-cycle)
 and [no-proration](https://docs.stripe.com/billing/subscriptions/prorations)
@@ -644,10 +653,12 @@ Lifecycle events are notifications, not authoritative snapshots. UOA verifies
 the signature first, resolves the exact account/mode, then retrieves the current
 Checkout or Subscription from Stripe. Reordered updates cannot resurrect a
 canceled subscription, and a subscription missing at Stripe deterministically
-tombstones an existing local row. The current subscription must contain exactly
-the UOA monthly item (quantity one, when non-zero) and exactly one metered usage
-item, with no extra/duplicate items and no subscription- or item-level
-discounts.
+tombstones an existing local row. A flat subscription must contain exactly the
+UOA monthly item (quantity one, when non-zero) and one metered usage item. A
+per-seat subscription contains only the metered usage item; its exact monthly
+fee is attached to the draft invoice after UOA closes and freezes the prior
+month's seat evidence. No extra/duplicate items or subscription- or item-level
+discounts are accepted.
 
 ### Customer subscription lifecycle API
 

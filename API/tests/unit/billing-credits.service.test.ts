@@ -46,6 +46,8 @@ describe('shared credit reads while Stripe collection is disabled', () => {
       policy: null,
       catalogs: [],
       settlements: [],
+      prepaidReservations: [],
+      activeReservedMicrocredits: 0n,
       allocations: [],
       entries: [],
       periodEntries: [],

@@ -3,6 +3,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 
 import { createApp } from '../../src/app.js';
 import {
+  BILLING_STATEMENT_PROTOCOL_VERSION,
+  BILLING_STATEMENT_V2_PROTOCOL_VERSION,
   billingConsumerActionV1ConformanceFixtures,
   billingStatementV2ConformanceFixture,
 } from '../../src/contracts/billing-statement-v1.js';
@@ -165,7 +167,7 @@ describe('canonical customer billing routes', () => {
       expect(openApiResponse.headers['cache-control']).toBe('public, max-age=300');
       expect(openApiResponse.json()).toMatchObject({
         openapi: '3.1.0',
-        info: { version: '2.0.0' },
+        info: { version: BILLING_STATEMENT_PROTOCOL_VERSION },
         components: {
           schemas: {
             BillingStatementV1: {
@@ -221,7 +223,7 @@ describe('canonical customer billing routes', () => {
       expect(openApiResponse.statusCode).toBe(200);
       expect(openApiResponse.json()).toMatchObject({
         openapi: '3.1.0',
-        info: { version: '3.0.0' },
+        info: { version: BILLING_STATEMENT_V2_PROTOCOL_VERSION },
         components: {
           schemas: { BillingStatementV2: { properties: { schema_version: { const: 2 } } } },
         },
