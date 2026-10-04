@@ -430,6 +430,7 @@ model User {
   billingCreditUsageAllocations        BillingCreditUsageAllocation[]            @relation("CreditUsageAllocationAttribution")
   billingCreditAdminAdjustments        BillingCreditAdminAdjustment[]            @relation("CreditAdminAdjustmentCreator")
   billingCreditAutoTopUpDisables       BillingCreditAutoTopUpDisableEvent[]      @relation("CreditAutoTopUpDisabler")
+  billingSeatMembershipIntervals       BillingSeatMembershipInterval[]
   billingOrgResponsibilitiesAssumed    BillingOrgResponsibility[]                @relation("BillingOrgResponsibilityAssumer")
   billingOrgResponsibilitiesReleased   BillingOrgResponsibility[]                @relation("BillingOrgResponsibilityReleaser")
   recurringAddonCheckouts              BillingRecurringAddonCheckout[]           @relation("RecurringAddonCheckoutRequester")
@@ -1273,6 +1274,7 @@ model Organisation {
   billingInvoiceProfiles            BillingOrganisationInvoiceProfile[]
   billingInvoices                   BillingInvoice[]
   billingOrgResponsibility          BillingOrgResponsibility?
+  billingSeatSubscriptions          BillingSeatSubscription[]
 
   @@unique([domain, slug])
   @@index([domain])
@@ -1462,6 +1464,7 @@ model Team {
   billingStripeCustomers                   BillingStripeCustomer[]
   billingStripeCheckouts                   BillingStripeCheckoutSession[]
   billingStripeSubscriptions               BillingStripeSubscription[]
+  billingSeatSubscriptions                 BillingSeatSubscription[]
   billingServiceAccesses                   BillingServiceAccess[]
   billingAdjustments                       BillingCommercialAdjustment[]
   billingCancellationIntents               BillingCancellationIntent[]
@@ -1770,6 +1773,7 @@ model BillingService {
   invoiceMeteringRefs               BillingInvoiceMeteringReference[]
   invoiceCreditSettlementRefs       BillingInvoiceCreditSettlementReference[]
   invoiceAddonLines                 BillingInvoiceAddonLine[]
+  seatSubscriptions                 BillingSeatSubscription[]
 
   @@map("billing_services")
 }
@@ -1803,6 +1807,7 @@ model BillingTariff {
   creditSettlements    BillingCreditUsageSettlement[]
   prepaidReservations  BillingPrepaidReservation[]
   contractServiceTerms BillingContractServiceTerm[]
+  seatSubscriptions    BillingSeatSubscription[]
 
   @@unique([serviceId, key, version])
   @@index([serviceId, isDefault])
@@ -2274,6 +2279,7 @@ model BillingStripeSubscription {
   invoiceCloses      BillingStripeInvoiceClose[]
   creditSettlements  BillingCreditUsageSettlement[]
   creditInvoiceLines BillingCreditInvoiceLine[]
+  seatSubscription   BillingSeatSubscription?
 
   @@unique([accountId, stripeSubscriptionId])
   @@index([accountId])
@@ -2475,12 +2481,78 @@ model BillingContractServiceTerm {
   service          BillingService                     @relation(fields: [serviceId], references: [id], onDelete: Restrict)
   tariff           BillingTariff                      @relation(fields: [tariffId], references: [id], onDelete: Restrict)
   tariffAssignment BillingTariffAssignment?           @relation(fields: [tariffAssignmentId], references: [id], onDelete: SetNull)
+  seatSubscription BillingSeatSubscription?
 
   @@unique([contractVersionId, serviceId])
   @@index([serviceId])
   @@index([tariffId])
   @@index([tariffAssignmentId])
   @@map("billing_contract_service_terms")
+}
+
+// Private evidence for one purchased per-seat subscription, regardless of
+// whether Stripe or a manual organisation contract collects its monthly fee.
+// Activation must write the current-member baseline in the same transaction.
+model BillingSeatSubscription {
+  id                    String                   @id @default(cuid())
+  stripeSubscriptionId  String?                  @unique @map("stripe_subscription_id")
+  contractServiceTermId String?                  @unique @map("contract_service_term_id")
+  serviceId             String                   @map("service_id")
+  tariffId              String                   @map("tariff_id")
+  orgId                 String                   @map("org_id")
+  teamId                String?                  @map("team_id")
+  scope                 BillingAssignmentScope
+  seatPolicy            BillingSeatPolicy        @map("seat_policy")
+  seatChargeTiming      BillingSeatChargeTiming  @map("seat_charge_timing")
+  unitAmountMinor       BigInt                   @map("unit_amount_minor")
+  currency              String                   @db.Char(3)
+  activatedAt           DateTime                 @map("activated_at")
+  endedAt               DateTime?                @map("ended_at")
+  baselineCapturedAt    DateTime                 @map("baseline_captured_at")
+  createdAt             DateTime                 @default(now()) @map("created_at")
+
+  stripeSubscription  BillingStripeSubscription? @relation(fields: [stripeSubscriptionId], references: [id], onDelete: Restrict)
+  contractServiceTerm BillingContractServiceTerm? @relation(fields: [contractServiceTermId], references: [id], onDelete: Restrict)
+  service             BillingService             @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  tariff              BillingTariff              @relation(fields: [tariffId], references: [id], onDelete: Restrict)
+  org                 Organisation               @relation(fields: [orgId], references: [id], onDelete: Restrict)
+  team                Team?                      @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  membershipIntervals BillingSeatMembershipInterval[]
+  capacityRevisions   BillingFixedSeatCapacityRevision[]
+
+  @@index([serviceId, orgId, teamId, activatedAt])
+  @@map("billing_seat_subscriptions")
+}
+
+// These are billing evidence in UOA, not a second membership authority.
+model BillingSeatMembershipInterval {
+  id                 String                   @id @default(cuid())
+  seatSubscriptionId String                   @map("seat_subscription_id")
+  userId             String                   @map("user_id")
+  startsAt           DateTime                 @map("starts_at")
+  endsAt             DateTime?                @map("ends_at")
+  baseline           Boolean                  @default(false)
+  createdAt          DateTime                 @default(now()) @map("created_at")
+
+  seatSubscription BillingSeatSubscription @relation(fields: [seatSubscriptionId], references: [id], onDelete: Restrict)
+  user             User                    @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([seatSubscriptionId, userId, startsAt])
+  @@index([seatSubscriptionId, startsAt, endsAt])
+  @@map("billing_seat_membership_intervals")
+}
+
+model BillingFixedSeatCapacityRevision {
+  id                 String                  @id @default(cuid())
+  seatSubscriptionId String                  @map("seat_subscription_id")
+  quantity           Int
+  effectiveAt        DateTime                @map("effective_at")
+  createdAt          DateTime                @default(now()) @map("created_at")
+
+  seatSubscription BillingSeatSubscription @relation(fields: [seatSubscriptionId], references: [id], onDelete: Restrict)
+
+  @@unique([seatSubscriptionId, effectiveAt])
+  @@map("billing_fixed_seat_capacity_revisions")
 }
 
 model BillingInvoiceIssuerProfile {

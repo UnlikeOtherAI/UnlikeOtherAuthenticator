@@ -200,6 +200,29 @@ default to automatic quantity with prorated seat changes. Per-seat terms are
 forbidden on flat plans; historical flat tariffs retain null seat terms. Fixed
 purchased capacity belongs to each scoped subscription, not to the reusable
 tariff. Seat quantity evidence is separate from usage credits.
+Each active per-seat agreement has one exact Stripe subscription or manual
+contract service-term source, frozen scope, tariff version, unit price, seat
+policy and charge timing. Activation captures the current UOA human roster at
+that instant; it never treats historical membership creation timestamps as
+billing intervals. Automatic billing stores effective-dated UOA membership
+intervals once per subject per subscription, so organisation seats deduplicate
+the same person across teams. Fixed billing stores explicit positive capacity
+revisions; pending invitation capacity and grant enforcement use the effective
+revision under an account/scope lock. A missing activation baseline or capacity
+revision holds the seat quote.
+
+`quoteMonthlySeatCharge` uses the actual UTC month duration. For automatic
+prorated seats it sums each person's non-overlapping active milliseconds,
+including leave and rejoin. Full-month automatic counts every person with any
+active overlap once. Fixed prorated seats integrate purchased quantity over
+time; fixed full-month charges the highest capacity effective in the month,
+so increases apply that month and decreases first reduce the following month.
+The full month's exact numerator is rounded only once to currency minor units.
+The quote retains interval/revision IDs for immutable invoice evidence. These
+models and the pure quote are the billing substrate; activation, membership
+writers, Stripe quantities and invoice freeze must consume it before per-seat
+plans can collect a charge.
+
 Prepaid usage is funded from the existing scoped credit account before a paid
 provider dispatch. It cannot become a positive Stripe usage-meter export when
 credits are exhausted or provider liability remains unresolved; the monthly
