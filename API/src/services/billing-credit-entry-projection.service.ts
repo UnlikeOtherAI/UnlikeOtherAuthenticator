@@ -31,6 +31,11 @@ function entryCopy(
         label: `${product} usage`,
         detail: `Team-rated ${product} usage consumed ${creditDisplay}; see the usage breakdown.`,
       };
+    case BillingCreditEntryKind.PREPAID_USAGE:
+      return {
+        label: `${product} prepaid usage`,
+        detail: `Confirmed ${product} usage consumed ${creditDisplay} from the prepaid balance.`,
+      };
     case BillingCreditEntryKind.USAGE_SETTLEMENT_CORRECTION:
       return {
         label: `${product} usage correction`,
@@ -79,7 +84,9 @@ function commonEntry(entry: BillingCreditProjectionData['entries'][number]) {
     service: entry.service
       ? { id: entry.service.id, identifier: entry.service.identifier, name: entry.service.name }
       : null,
-    kind: entry.kind.toLowerCase() as Lowercase<BillingCreditEntryKind>,
+    kind: (entry.kind === BillingCreditEntryKind.PREPAID_USAGE
+      ? 'usage_settlement' : entry.kind.toLowerCase()) as Exclude<
+        Lowercase<BillingCreditEntryKind>, 'prepaid_usage'>,
     direction:
       entry.direction === BillingCreditEntryDirection.CREDIT
         ? ('credit' as const)

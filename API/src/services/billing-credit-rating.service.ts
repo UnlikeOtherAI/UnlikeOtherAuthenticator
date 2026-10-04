@@ -1,4 +1,4 @@
-import { BillingTariffMode } from '@prisma/client';
+import { BillingTariffMode, BillingUsagePaymentMode } from '@prisma/client';
 
 import { AppError } from '../utils/errors.js';
 import { meteringIsComplete, type NormalizedMeteringPortfolio } from './billing-metering.types.js';
@@ -14,6 +14,7 @@ export type CreditRatingService = {
     mode: BillingTariffMode;
     markupBps: number;
     currency: string;
+    usagePaymentMode?: BillingUsagePaymentMode;
   };
 };
 
@@ -186,6 +187,7 @@ export function rateCreditPortfolio(params: {
       throw new AppError('INTERNAL', 502, 'LEDGER_CREDIT_USER_INVALID');
     }
     const cost = selectedCost(line);
+    if (service.tariff.usagePaymentMode === BillingUsagePaymentMode.PREPAID) continue;
     if (cost === null) continue;
     const key = bucketKey(service.id, line.userId);
     const current = baseCosts.get(key);

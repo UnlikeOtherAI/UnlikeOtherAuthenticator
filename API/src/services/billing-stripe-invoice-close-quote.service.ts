@@ -1,9 +1,10 @@
-import type { PrismaClient } from '@prisma/client';
+import { BillingUsagePaymentMode, type PrismaClient } from '@prisma/client';
 
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import { fetchLedgerMeteringUsage } from './billing-ledger-collector.service.js';
 import { settleSubscriptionCreditLiability } from './billing-credit-liability.service.js';
+import { assertPrepaidUsageCovered } from './billing-prepaid-coverage.service.js';
 import {
   applyCreditOffsetToStripeCharges,
   stripeUsageChargeKey,
@@ -40,6 +41,17 @@ export async function quoteUnexportedClosedPeriodLiability(
       usage.scope.organizationId !== subscription.orgId ||
       usage.scope.teamId !== subscription.teamId) {
     throw new AppError('INTERNAL', 502, 'LEDGER_BILLING_SCOPE_MISMATCH');
+  }
+  if (subscription.tariff.usagePaymentMode === BillingUsagePaymentMode.PREPAID) {
+    await assertPrepaidUsageCovered({ usage, serviceId: subscription.serviceId,
+      product: subscription.service.identifier, organisationId: subscription.orgId,
+      teamId: subscription.teamId, billingMonth: params.billingMonth }, prisma);
+    const prior = await prisma.billingStripeUsageExport.count({
+      where: { subscriptionId: subscription.id, billingMonth: params.billingMonth },
+    });
+    if (prior !== 0) throw new AppError('INTERNAL', 409, 'PREPAID_STRIPE_EXPORT_CONFLICT');
+    return { ledgerSnapshotCursor: usage.snapshot.cursor,
+      amountMicroMinor: 0n, currency: subscription.tariff.currency };
   }
   const offset = await (deps?.settleCredits ?? settleSubscriptionCreditLiability)({
     subscription,

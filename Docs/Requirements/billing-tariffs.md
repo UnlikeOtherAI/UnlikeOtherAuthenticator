@@ -205,6 +205,41 @@ provider dispatch. It cannot become a positive Stripe usage-meter export when
 credits are exhausted or provider liability remains unresolved; the monthly
 subscription charge remains separate.
 
+Ledger uses a separately issued, product-bound runtime key for prepaid
+admission. A superuser provisions and revokes keys through
+`/internal/admin/billing/ledger-runtime-keys`; creation returns the secret
+once. Each key pins the product, exact Ledger audience, and original product
+source domain. The reserve request carries the original short-lived UOA
+delegation with `ai.invoke`, its live subject/team and credential epoch, an
+immutable physical dispatch ID, start time, request fingerprint, provider
+service ID, and an exact raw-cost upper bound. UOA rechecks the subject on
+every POST, including replay, and freezes the tariff, payer account, and UTC
+month. A null bound is permitted only to obtain a durable pay-as-you-go mode
+decision; prepaid admission rejects it. Prepaid credits support USD without
+inventing currency conversion. A billable call may reach the provider only
+after the reservation response is confirmed.
+Admission holds the live user, organisation, and team membership rows through
+its final transaction so credential-epoch and membership revocations serialize
+with the decision. A free tariff remains customer-free even when its raw
+provider receipt records a positive cost.
+
+`GET /billing/v1/ledger/reservations/:dispatchId` lets the product-bound
+runtime key recover a committed decision after a lost HTTP response. If
+absent, Ledger's no-egress release creates a durable cancellation tombstone
+under the same dispatch lock, so a delayed reserve cannot strand funds. An
+unresolved paid provider attempt retains its reservation; elapsed time never
+releases it. Settlement accepts only Ledger's authenticated immutable receipt,
+checks actual cost against the frozen bound, and debits the credit account
+through an append-only `PREPAID_USAGE` entry linked to the exact reservation.
+The account-wide cumulative rated numerator carries sub-microcredit remainders
+across dispatches, tariff versions, teams, and months; each new debit is the
+delta of the cumulative liability rounded up once to a microcredit. Per-call
+reservation bounds round up separately for safety, but do not determine the
+customer's debit. Pending holds reduce available credits without changing
+confirmed balance. The old portfolio credit allocator and Stripe usage meter
+exclude prepaid usage; invoice closure requires complete Ledger usage and
+matching settled raw-cost receipts.
+
 Mode rules:
 
 - `standard` and `custom` may apply a non-negative markup.

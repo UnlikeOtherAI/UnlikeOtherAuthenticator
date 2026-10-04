@@ -60,6 +60,7 @@ describe.skipIf(!enabled)('effective tariff history with PostgreSQL', () => {
       id: 'prepaid-seat', serviceId, key: 'prepaid-seat', version: 1, name: 'Prepaid seat',
       mode: 'STANDARD', collectionMode: 'STRIPE', markupBps: 3000,
       monthlyAmountMinor: 2500n, monthlyChargeBasis: 'PER_SEAT',
+      seatPolicy: 'AUTOMATIC', seatChargeTiming: 'PRORATED',
       usagePaymentMode: 'PREPAID', currency: 'USD',
     } });
     expect(plan.monthlyAmountMinor).toBe(2500n);

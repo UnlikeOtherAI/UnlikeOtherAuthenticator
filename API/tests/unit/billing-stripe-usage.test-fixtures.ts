@@ -3,6 +3,7 @@ import {
   BillingCollectionMode,
   BillingTariffMode,
   BillingTariffSource,
+  BillingUsagePaymentMode,
 } from '@prisma/client';
 
 import type { NormalizedMeteringUsage } from '../../src/services/billing-metering.types.js';
@@ -68,6 +69,7 @@ export function subscriptionFixture() {
       name: 'Standard',
       mode: BillingTariffMode.STANDARD,
       collectionMode: BillingCollectionMode.STRIPE,
+      usagePaymentMode: BillingUsagePaymentMode.PAY_AS_YOU_GO,
       markupBps: 2500,
       monthlyAmountMinor: 2999n,
       currency: 'USD',

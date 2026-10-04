@@ -8,6 +8,7 @@ import { registerEffectiveTariffRoute } from './effective-tariff.js';
 import { registerBillingOrgResponsibilityRoutes } from './org-responsibility.js';
 import { registerBillingFundingArtifactRoutes } from './funding-artifacts.js';
 import { registerBillingJwksRoute } from './jwks.js';
+import { registerLedgerReservationRoutes } from './ledger-reservations.js';
 import { registerBillingServiceAccessRoutes } from './service-access.js';
 import { registerBillingServiceJwksRoute } from './service-jwks.js';
 import { registerBillingRecurringAddonsRoute } from './recurring-addons.js';
@@ -24,6 +25,7 @@ export function registerBillingRoutes(app: FastifyInstance): void {
   registerCustomerStatementRoutes(app);
   registerBillingServiceAccessRoutes(app);
   registerBillingJwksRoute(app);
+  registerLedgerReservationRoutes(app);
   registerBillingServiceJwksRoute(app);
   registerEffectiveTariffRoute(app);
   registerBillingOrgResponsibilityRoutes(app);
