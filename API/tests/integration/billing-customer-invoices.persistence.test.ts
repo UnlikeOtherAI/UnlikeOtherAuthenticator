@@ -342,4 +342,64 @@ describe.skipIf(!enabled)('actual customer invoice persistence and scope', () =>
         putImmutable: async () => {}, read: async () => legalBytes,
       } })).rejects.toMatchObject({ statusCode: 404 });
   });
+
+  it('lists later manual payments in their month and downloads the same legal invoice', async () => {
+    const original = await db.prisma.billingInvoice.findUniqueOrThrow({ where: {
+      id: mixedInvoiceId,
+    } });
+    const term = await db.prisma.billingContractServiceTerm.findFirstOrThrow({ where: {
+      contractVersionId: original.contractVersionId, serviceId,
+    } });
+    const version = await db.prisma.billingOrganisationContractVersion.create({ data: {
+      contractId: original.contractId, version: 2, usageMarkupBps: 3000,
+      currency: 'USD', paymentTermsDays: 30, effectiveFromMonth: '2026-10',
+      createdByEmail: 'admin@example.com',
+      serviceTerms: { create: { serviceId, tariffId: term.tariffId,
+        tariffAssignmentId: term.tariffAssignmentId, monthlyAmountMinor: 1000n } },
+    } });
+    const invoice = await db.prisma.billingInvoice.create({ data: {
+      orgId, contractId: original.contractId, contractVersionId: version.id,
+      issuerProfileId: original.issuerProfileId, buyerProfileId: original.buyerProfileId,
+      billingMonth: '2026-10', revision: 1, currency: 'USD',
+      subtotalMinor: 1000n, totalMinor: 1000n,
+      issuerSnapshot: { legal_name: 'UOA Ltd' }, buyerSnapshot: { legal_name: 'Buyer Ltd' },
+      calculationDigest: 'b'.repeat(64),
+      lines: { create: { serviceId, serviceIdentifier, serviceName: 'Invoice Proof',
+        amountMinor: 1000n, currency: 'USD', position: 1 } },
+      meteringRefs: { create: { serviceId, ledgerSnapshotCursor: 'manual-month-proof',
+        ledgerSnapshotSha256: 'e'.repeat(64), capturedAt: new Date('2026-10-01T00:00:00.000Z') } },
+    } });
+    await db.prisma.billingInvoice.update({ where: { id: invoice.id }, data: {
+      status: BillingInvoiceStatus.ISSUING, invoiceNumber: `PAY-${randomUUID()}`,
+      issueDate: new Date('2026-10-31T00:00:00.000Z'),
+      dueDate: new Date('2026-11-30T00:00:00.000Z'),
+    } });
+    await db.prisma.billingInvoice.update({ where: { id: invoice.id }, data: {
+      status: BillingInvoiceStatus.ISSUED, issuedAt: new Date('2026-10-31T00:00:00.000Z'),
+      pdfObjectKey: `billing-invoices/${invoice.id}.pdf`,
+      pdfSha256: createHash('sha256').update(legalBytes).digest('hex'),
+      pdfTemplateVersion: 'proof-v1',
+    } });
+    await db.prisma.billingInvoicePaymentEvent.createMany({ data: [
+      { invoiceId: invoice.id, kind: 'PAYMENT', source: 'MANUAL', amountMinor: 400n,
+        currency: 'USD', idempotencyKey: 'october-payment',
+        occurredAt: new Date('2026-11-05T12:00:00.000Z') },
+      { invoiceId: invoice.id, kind: 'PAYMENT', source: 'MANUAL', amountMinor: 300n,
+        currency: 'USD', idempotencyKey: 'november-payment',
+        occurredAt: new Date('2026-12-05T12:00:00.000Z') },
+    ] });
+    const id = `manual:${invoice.id}`;
+    for (const [month, paid] of [['2026-11', '400'], ['2026-12', '300']]) {
+      const list = await listCustomerInvoices(context(ownerId), { chargeMonth: month },
+        { prisma: db.prisma });
+      expect(list.invoices.find((row) => row.invoice_id === id))
+        .toMatchObject({ payments_in_charge_month: { amount_minor: paid } });
+      expect((await downloadCustomerInvoice(context(ownerId), id, id, {
+        prisma: db.prisma, chargeMonth: month,
+        storage: { putImmutable: async () => {}, read: async () => legalBytes },
+      })).bytes).toEqual(legalBytes);
+    }
+    await expect(getCustomerInvoiceDetail(context(ownerId), id,
+      { prisma: db.prisma, chargeMonth: '2027-01' })).rejects.toMatchObject({ statusCode: 404 });
+  });
 });

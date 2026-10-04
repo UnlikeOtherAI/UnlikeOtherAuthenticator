@@ -151,11 +151,15 @@ export function exactMoney(amount: string, currency: string): ExactMoney {
     throw new AppError('INTERNAL', 502, 'BILLING_CURRENCY_INVALID');
   }
   const symbol = CURRENCY_SYMBOLS[currency];
+  const [whole, fraction = ''] = normalized.split('.');
+  const digits = currencyMinorDigits(currency);
+  const displayAmount = digits > 0
+    ? `${whole}.${fraction.padEnd(digits, '0')}` : normalized;
   return {
     amount: normalized,
     currency,
     display: symbol
-      ? `${normalized.startsWith('-') ? '-' : ''}${symbol}${groupedDigits(normalized).replace('-', '')}`
-      : `${currency} ${groupedDigits(normalized)}`,
+      ? `${normalized.startsWith('-') ? '-' : ''}${symbol}${groupedDigits(displayAmount).replace('-', '')}`
+      : `${currency} ${groupedDigits(displayAmount)}`,
   };
 }

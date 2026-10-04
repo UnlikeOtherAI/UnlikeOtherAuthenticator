@@ -94,7 +94,8 @@ describe.skipIf(!enabled)('manual legal credit note', () => {
     await db.prisma.teamMember.create({ data: { teamId: team.id, userId: user.id,
       teamRole: 'owner' } });
     const service = await db.prisma.billingService.create({ data: {
-      identifier: 'nessie', name: 'Customer service',
+      identifier: process.env.BILLING_CREDIT_NOTE_FIXTURE_PRODUCT ?? 'nessie',
+      name: 'Customer service',
       tariffHistoryFromMonth: '2026-01' } });
     ids.service = service.id;
     const tariff = await db.prisma.billingTariff.create({ data: {

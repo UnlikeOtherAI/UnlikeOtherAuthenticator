@@ -3,7 +3,7 @@
 The retained [Kimix report](billing-kimix-2026-10-04.md) reviewed a frozen
 five-repository cohort. Its findings are source-level; the fixes below have
 separate executable evidence. Final review is pending integration of the
-remaining consumer and tender-reconciliation work.
+remaining consumer completion and review corrections.
 
 | Finding | Disposition |
 | --- | --- |
@@ -32,7 +32,7 @@ Current gates:
 - Complete reachable per-payment invoice flows and credit budget controls in
   Nessie, Deepwater and DeepTest, with headless responsive proof.
 - Prevent wallet debits for receipts already represented by manual invoices;
-  reconcile historical double tender without rewriting the legal invoice.
+  keep ambiguous historical double tender held without rewriting the legal invoice.
 - Freeze the shared public schema only after every consumer accepts actual
   producer exports and refuses cross-product/scope/action substitution.
 - Fresh Astra review of the fully integrated five-repository result, followed
@@ -54,3 +54,17 @@ Executable evidence uses isolated PostgreSQL databases and synthetic provider
 and payment transports. It proves arithmetic, durable source/lease behavior and
 rendered customer flows. It does not claim real paid-provider calls, real Stripe
 payments, production financial writes or deployment of the follow-up tranche.
+
+The fresh [Kimix CLI report](billing-kimix-2026-10-05.md) is retained verbatim.
+It confirms three presentation defects: currency display precision, misleading
+voided-cycle empty copy, and raw ISO timestamps. Currency display is corrected
+centrally without changing exact values. Consumer copy/date fixes and their
+rendered checks are being completed. No new functionality is part of this pass.
+
+Astra's confirmed Ledger defects now have focused PostgreSQL/gateway proof:
+Anthropic streams retain complete priced cache/output evidence; recovered
+non-dispatch receipts retain their immutable financial origin; included
+subscription receipts use the production writer's metered/nonbillable path.
+A non-dispatch release still requires proof that no provider egress occurred.
+Manual invoices now retain their legal PDF while appearing in later actual
+payment months, with durable reader and scope tests.

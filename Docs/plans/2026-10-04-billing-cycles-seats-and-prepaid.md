@@ -621,3 +621,16 @@ Processor retry windows use database time, independently of service-month quote
 time and application-host clock drift. Supplement workers verify their database
 lease immediately before creating invoices/items, finalizing, or enabling
 collection; a stale worker holds instead of issuing another payment operation.
+
+
+### Scope-frozen review corrections
+
+New customer credit-budget writes accept enforced limits, disabled policies or
+unlimited spending. Warning-only and model-fallback modes have no supported
+customer action and are rejected centrally; existing rows remain readable.
+
+A manual invoice is listed in its issue month and in each month with an actual
+payment against it. Those later payments reuse the original immutable legal PDF
+and show only the payments made in the selected month. No new charge or invoice
+is inferred from consumption. Money displays include currency minor-unit
+precision without changing exact amounts or rounding intermediate provider costs.

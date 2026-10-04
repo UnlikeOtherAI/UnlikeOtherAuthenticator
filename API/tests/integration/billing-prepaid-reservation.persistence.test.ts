@@ -631,6 +631,13 @@ describe.skipIf(!enabled)('prepaid dispatch liability in PostgreSQL', () => {
         period: 'per_run' as const, mode: 'enforce' as const,
         limit_credits: '0.000001', warn_threshold_percent: 80,
         block_humans_when_over: false, degrade_model: null, degrade_provider: null };
+      for (const mode of ['warn', 'degrade'] as const) {
+        await expect(putCreditBudget(await makeAuth('/billing/v1/credit-budgets'),
+          { ...write, mode }, { prisma })).rejects.toThrow('BUDGET_MODE_UNSUPPORTED');
+      }
+      expect(await prisma.billingCreditBudgetPolicy.count({ where: {
+        product: scope.product, orgId: ids.org, scopeId: scope.scope_id,
+      } })).toBe(0);
       const policy = await putCreditBudget(await makeAuth('/billing/v1/credit-budgets'),
         write, { prisma, now: new Date('2026-10-04T18:00:00.000Z'),
           proofDeps: { fetchProof: signedCurrentBudgetProof } });

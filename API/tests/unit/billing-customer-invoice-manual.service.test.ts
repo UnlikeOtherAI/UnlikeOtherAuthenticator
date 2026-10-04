@@ -27,7 +27,7 @@ function source(status: BillingInvoiceStatus): ManualInvoiceSource {
       { id: 'line-second', serviceIdentifier: 'nessie', serviceName: 'Nessie seats',
         amountMinor: 1000n, currency: 'USD', position: 2 },
     ],
-    paymentEvents: [],
+    paymentEvents: [], manualCreditNotes: [],
   } as unknown as ManualInvoiceSource;
 }
 
@@ -55,6 +55,19 @@ describe('customer manual invoice source projection', () => {
     expect(detail.charges[0]?.amount.amount_minor).toBe('2000');
     expect(detail.totals).toMatchObject({ voided_amount: { amount_minor: '2800' },
       total_due: { amount_minor: '0' }, outstanding: { amount_minor: '0' } });
+  });
+
+  it('includes a later payment month without changing the original legal document', () => {
+    const invoice = source(BillingInvoiceStatus.ISSUED);
+    invoice.paymentEvents = [{ id: 'later-payment', kind: 'PAYMENT', amountMinor: 1000n,
+      currency: 'USD', occurredAt: new Date('2026-12-05T12:00:00.000Z'),
+    } as ManualInvoiceSource['paymentEvents'][number]];
+    const detail = projectManualCustomerInvoiceDetail(invoice, subject, '2026-12');
+    expect(detail).toMatchObject({ invoice_id: 'manual:invoice', charge_month: '2026-12',
+      issued_at: '2026-11-01T00:00:00.000Z',
+      payments_in_charge_month: { amount_minor: '1000' } });
+    expect(detail.document.document_id).toBe('manual:invoice');
+    expect(() => projectManualCustomerInvoiceDetail(invoice, subject, '2027-01')).toThrow();
   });
 
   it('rejects unsigned service disclosure and unproven invoice totals', () => {

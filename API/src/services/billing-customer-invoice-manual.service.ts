@@ -71,10 +71,11 @@ export function projectManualCustomerInvoiceSummary(
       invoice.subtotalMinor ||
     invoice.subtotalMinor + invoice.taxAmountMinor !== invoice.totalMinor) hold();
   const amounts = financials(invoice);
-  if (!chargeMonth || chargeMonth !== invoice.issuedAt.toISOString().slice(0, 7)) hold();
+  if (!chargeMonth) hold();
   const monthPaid = invoice.paymentEvents.filter((event) => event.kind === 'PAYMENT' &&
     event.occurredAt.toISOString().slice(0, 7) === chargeMonth)
     .reduce((sum, event) => sum + event.amountMinor, 0n);
+  if (chargeMonth !== invoice.issuedAt.toISOString().slice(0, 7) && monthPaid === 0n) hold();
   return {
     invoice_id: `manual:${invoice.id}`, kind: 'monthly_service', status: amounts.status,
     number: invoice.invoiceNumber, charged_at: invoice.issuedAt.toISOString(),

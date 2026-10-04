@@ -223,6 +223,9 @@ export async function putCreditBudget(auth: Auth, input: BillingCreditBudgetWrit
     || input.team_id !== auth.request.teamId) {
     throw new AppError('FORBIDDEN', 403, 'BUDGET_SCOPE_MISMATCH');
   }
+  if (input.mode === 'warn' || input.mode === 'degrade') {
+    throw new AppError('BAD_REQUEST', 400, 'BUDGET_MODE_UNSUPPORTED');
+  }
   const limit = validatePolicy(input);
   const proofDeps = { fetchProof: memoizedBudgetProof(deps?.proofDeps?.fetchProof) };
   return prisma.$transaction(async (tx) => {

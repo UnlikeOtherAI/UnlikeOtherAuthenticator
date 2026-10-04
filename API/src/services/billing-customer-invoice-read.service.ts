@@ -153,14 +153,15 @@ export async function listCustomerInvoices(
   const manual = orgManager ? await prisma.billingInvoice.findMany({ where: {
     orgId: context.request.organisationId,
     status: { in: [BillingInvoiceStatus.ISSUED, BillingInvoiceStatus.VOID] },
-    issuedAt: { gte: start, lt: end },
-    ...(cursorDate ? { OR: [
+    OR: [{ issuedAt: { gte: start, lt: end } },
+      { paymentEvents: { some: { kind: 'PAYMENT', occurredAt: { gte: start, lt: end } } } }],
+    ...(cursorDate ? { AND: [{ OR: [
       { issuedAt: { lt: cursorDate } },
       ...(cursor?.kind === 'credit_note' ? [{ issuedAt: cursorDate }] : []),
       ...(cursor?.kind === 'manual' ? [
         { issuedAt: cursorDate, id: { lt: cursor.id } },
       ] : []),
-    ] } : {}),
+    ] }] } : {}),
     lines: { some: { serviceId: context.credential.service.id,
       serviceIdentifier: context.request.product },
     every: { serviceId: context.credential.service.id,
@@ -248,7 +249,9 @@ async function readCustomerInvoice(
         serviceIdentifier: context.request.product } },
     }, include: { lines: true, paymentEvents: true, manualCreditNotes: true } });
     if (!row) notFound();
-    if (chargeMonth && row.issuedAt?.toISOString().slice(0, 7) !== chargeMonth) notFound();
+    if (chargeMonth && row.issuedAt?.toISOString().slice(0, 7) !== chargeMonth &&
+      !row.paymentEvents.some((event) => event.kind === 'PAYMENT' &&
+        event.occurredAt.toISOString().slice(0, 7) === chargeMonth)) notFound();
     await authorizeBillingCycle({ ...context, payerScope: BillingAssignmentScope.ORGANISATION },
       { prisma });
     return { detail: projectManualCustomerInvoiceDetail(row, subject(context), chargeMonth),
