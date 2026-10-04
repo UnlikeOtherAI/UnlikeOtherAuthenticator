@@ -529,3 +529,29 @@ verifying the prepared cycle's service, organisation, team and month. They retai
 the resulting finalized revision as their last cycle. A late settled debit
 produces a new immutable breakdown revision while retaining the original legal
 documents and cash liability; this requires no customer request to finalize it.
+
+
+### Actual Stripe line allocation into a closed cycle
+
+The durable financial-source watch invokes `captureIssuedStripeBillingCycle`
+after the receipt/seat snapshot is prepared. It allocates actual issued Stripe
+service lines by their frozen service month, rather than the invoice header's
+cash month. A service cycle can contain lines from multiple real invoices.
+Every processor line is allocated once globally; later immutable views reuse
+that allocation and retain the original legal document bytes.
+
+Whole-invoice cash is allocated by exact due amounts with binary UTF-8
+largest-remainder ties. A payment cannot be counted twice or lose a penny
+when an invoice covers multiple service months. The product receives a legal
+PDF only when all invoice lines belong to that product. Mixed-product source
+PDFs are privately hash-verified but remain on UOA's organisation finance
+surface; product breakdowns reveal only that product's cycle.
+
+The expected charge uses immutable signed paid-liability evidence and separately
+verified wallet offsets. PREPAID usage creates no second usage charge. PAYG
+funded offsets reduce the payable amount without erasing consumed credits or
+the gross liability. The locked close transaction rechecks the subscription
+quote, complete receipt cohort, wallet boundary, actual cash source and source
+line allocation. Missing legal documents or a changed net charge hold the
+cycle rather than creating a quote-derived invoice. A later payable receipt
+still requires a genuine supplemental financial line before finalization.
