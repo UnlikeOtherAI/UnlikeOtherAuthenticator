@@ -64,6 +64,10 @@ the rated liability, then reserves only the remaining amount as meter usage.
 The reservation and credit allocation share the payer account lock. Once a
 meter row is reserved or accepted, later top-ups can fund only new usage not
 already reserved for Stripe; refunds do not silently rewrite accepted usage.
+Stripe reservation also advances the locked payer row version. This makes a
+serializable credit settlement that was already waiting for the row retry with
+a fresh snapshot of the newly reserved liability; a lock without a row write
+can otherwise let that settlement debit credits for the same usage.
 Each exported caller bucket stores gross and net cumulative quantity. Existing
 bucket allocations stay fixed, and newly consumed credits are applied only to
 new gross usage in that bucket. A legacy export without gross evidence holds

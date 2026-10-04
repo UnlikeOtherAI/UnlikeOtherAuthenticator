@@ -129,6 +129,16 @@ async function prepareExports(
         AND ("team_id" = ${subscription.teamId} OR "team_id" IS NULL)
       ORDER BY "id" FOR UPDATE
     `);
+    // Credit settlement uses SERIALIZABLE isolation. A waiter can acquire
+    // this lock after our commit while retaining a snapshot from before the
+    // export. Advancing the payer row version forces PostgreSQL to retry that
+    // settlement against the newly reserved Stripe liability.
+    if (creditAccounts.length > 0) {
+      await tx.billingCreditAccount.updateMany({
+        where: { id: { in: creditAccounts.map((row) => row.id) } },
+        data: { updatedAt: new Date() },
+      });
+    }
     const confirmedSettlements = await tx.billingCreditUsageSettlement.findMany({
       where: {
         creditAccountId: { in: creditAccounts.map((row) => row.id) },

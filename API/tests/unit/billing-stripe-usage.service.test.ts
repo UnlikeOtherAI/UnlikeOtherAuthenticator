@@ -119,12 +119,14 @@ function setup(existing: ExportRow[] = [], confirmedOffset = 0n) {
       return { count: 1 };
     },
   );
+  const payerVersionBump = vi.fn().mockResolvedValue({ count: 1 });
   const tx = {
     $queryRaw: vi.fn().mockImplementation(async (query: { strings?: string[] }) =>
       query.strings?.join('').includes('billing_credit_accounts')
         ? [{ id: 'credit_account_1' }]
         : [{ id: fullSubscription.id }]),
     billingStripeSubscription: { findUnique: findSubscription },
+    billingCreditAccount: { updateMany: payerVersionBump },
     billingCreditUsageSettlement: { findMany: vi.fn().mockResolvedValue(
       confirmedOffset ? [{ cumulativeCreditsConsumedMicrocredits: confirmedOffset * 10n }] : [],
     ) },
@@ -160,6 +162,7 @@ function setup(existing: ExportRow[] = [], confirmedOffset = 0n) {
     prisma,
     stripe,
     meterCreate,
+    payerVersionBump,
     createExport,
     updateExports,
   };
@@ -174,7 +177,7 @@ describe('Stripe usage export', () => {
   });
 
   it('persists a cumulative delta under lock and emits one stable Stripe event', async () => {
-    const { prisma, stripe, meterCreate, createExport, updateExports } = setup();
+    const { prisma, stripe, meterCreate, payerVersionBump, createExport, updateExports } = setup();
 
     const result = await exportStripeUsage(
       { subscriptionId: 'subscription_1', billingMonth: '2026-07' },
@@ -195,6 +198,10 @@ describe('Stripe usage export', () => {
         deltaMeterQuantity: 250_000_000n,
         createdAt: capturedAt,
       }),
+    });
+    expect(payerVersionBump).toHaveBeenCalledWith({
+      where: { id: { in: ['credit_account_1'] } },
+      data: { updatedAt: expect.any(Date) },
     });
     expect(meterCreate).toHaveBeenCalledWith(
       {
