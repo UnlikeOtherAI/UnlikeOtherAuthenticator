@@ -138,6 +138,16 @@ amount before a customer credit number is confirmed. Unknown coverage stays
 pending; proven zero usage is zero. Opening and closing funded-wallet balances
 remain pending until immutable account-entry boundaries establish them.
 Unknown paid usage holds final settlement rather than yielding a zero invoice.
+Closed-month reconciliation uses durable source/month watches, independent of
+customer page reads. A fresh closed month is seeded ahead of a persisted,
+bounded historical source cursor; workers claim disjoint leases with a
+generation fence, retry held financial evidence, and report the due backlog.
+An organisation-scoped Ledger read discovers historical billed team IDs without
+recreating identity rows or granting access. An organisation payer's fee and
+each selected team's usage remain separate watches, so a team fee is not copied
+to every team. A watch is evidence of work due, not an invoice or proof of
+financial completion; the signed receipt cohort, issuer allocation and actual
+payment source must still validate before finalization.
 Prepaid consumption is a credit-balance/account breakdown and never a second
 demand for payment. Every successful prepaid payment, including each automatic
 recharge, produces its own actual charge invoice; the monthly customer view

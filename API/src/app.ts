@@ -22,6 +22,7 @@ import { startStripeBillingScheduler } from './services/billing-stripe-scheduler
 import { startCreditSettlementScheduler } from './services/billing-credit-settlement-scheduler.service.js';
 import { startSeatTransitionScheduler } from './services/billing-seat-transition-scheduler.service.js';
 import { startManualCycleReconciliationScheduler } from './services/billing-cycle-manual-reconciliation-scheduler.service.js';
+import { startBillingCycleCloseScheduler } from './services/billing-cycle-close-scheduler.service.js';
 import { preloadBillingAssertionSigningKey } from './services/billing-ledger-collector.service.js';
 import { sweepExpiredClaims } from './services/integration-claim.service.js';
 import { pruneExpiredSecurityData } from './services/retention-pruning.service.js';
@@ -273,6 +274,10 @@ export async function createApp(): Promise<FastifyInstance> {
       const manualCycleScheduler = startManualCycleReconciliationScheduler({ log: app.log });
       app.addHook('onClose', async () => {
         manualCycleScheduler.stop();
+      });
+      const closedCycleScheduler = startBillingCycleCloseScheduler({ log: app.log });
+      app.addHook('onClose', async () => {
+        closedCycleScheduler.stop();
       });
     }
   } else {
