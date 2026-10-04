@@ -45,6 +45,7 @@ function source(state: BillingCreditPaymentInvoiceState): PrepaidInvoiceSource {
       kind: BillingCreditEntryKind.AUTOMATIC_TOP_UP,
       sourceType: 'credit_auto_top_up_attempt', sourceId: 'attempt',
       amountMicrocredits: 50_000_000_000n, currency: 'USD' },
+    autoAttempt: { id: 'attempt', currency: 'USD' },
   } as unknown as PrepaidInvoiceSource;
 }
 
@@ -105,6 +106,10 @@ describe('accepted prepaid invoice customer projection', () => {
     const issued = source(BillingCreditPaymentInvoiceState.ISSUED);
     issued.creditEntry.sourceId = 'other-attempt';
     expect(() => projectPrepaidCustomerInvoiceSummary(issued, [], 'nessie')).toThrow();
+    const otherCurrency = source(BillingCreditPaymentInvoiceState.ISSUED);
+    if (otherCurrency.autoAttempt) otherCurrency.autoAttempt.currency = 'EUR';
+    expect(() => projectPrepaidCustomerInvoiceSummary(otherCurrency, [], 'nessie'))
+      .toThrow('BILLING_CUSTOMER_PREPAID_SOURCE_UNPROVEN');
     expect(() => projectPrepaidCustomerInvoiceDetail(source(
       BillingCreditPaymentInvoiceState.ISSUED), [], 'nessie',
     { ...subject, team_id: 'other-team' })).toThrow();

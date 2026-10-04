@@ -15,7 +15,7 @@ import { decimalCredits } from './billing-cycle-credit-evidence.service.js';
 import { cycleMoney } from './billing-cycle-quote-projection.service.js';
 
 export type PrepaidInvoiceSource = Prisma.BillingCreditPaymentInvoiceGetPayload<{
-  include: { creditEntry: true };
+  include: { creditEntry: true; autoAttempt: { select: { id: true; currency: true } } };
 }>;
 type Adjustment = Prisma.BillingCreditPaymentAdjustmentGetPayload<Record<string, never>>;
 
@@ -69,7 +69,9 @@ export function projectPrepaidCustomerInvoiceSummary(
     (row.source === BillingCreditPaymentInvoiceSource.AUTO_RECHARGE &&
       (row.creditEntry.kind !== BillingCreditEntryKind.AUTOMATIC_TOP_UP ||
         row.creditEntry.sourceType !== 'credit_auto_top_up_attempt' ||
-        row.creditEntry.sourceId !== row.autoTopUpAttemptId)) ||
+        row.creditEntry.sourceId !== row.autoTopUpAttemptId ||
+        row.autoAttempt?.id !== row.autoTopUpAttemptId ||
+        row.autoAttempt.currency !== row.currency)) ||
     row.creditEntry.currency !== row.currency ||
     row.paidAt.getTime() > Date.now() + 5 * 60_000 ||
     !row.stripePaymentIntentId || !row.stripeChargeId || !row.stripeCustomerId ||
