@@ -481,6 +481,38 @@ describe.skipIf(!enabled)('issued manual invoice cycle persistence', () => {
       expect(detail.documents.map((item) => item.kind))
         .toEqual(['usage_breakdown', 'usage_breakdown']);
       expect(JSON.stringify(detail)).not.toContain(secondService.identifier);
+      await db.prisma.billingInvoicePaymentEvent.create({ data: {
+        invoiceId: invoice.id, kind: 'PAYMENT', source: 'MANUAL',
+        amountMinor: 1000n, currency: 'USD', idempotencyKey: randomUUID(),
+        occurredAt: new Date('2026-06-03T00:00:00.000Z'),
+      } });
+      await expect(refreshIssuedManualBillingCyclePayment({ invoiceId: invoice.id },
+        { prisma: db.prisma, storage })).rejects
+        .toThrow('BILLING_CYCLE_MANUAL_PAYMENT_UNALLOCATABLE');
+      await db.prisma.billingInvoicePaymentEvent.create({ data: {
+        invoiceId: invoice.id, kind: 'PAYMENT', source: 'MANUAL',
+        amountMinor: 2300n, currency: 'USD', idempotencyKey: randomUUID(),
+        occurredAt: new Date('2026-06-04T00:00:00.000Z'),
+      } });
+      const paid = await refreshIssuedManualBillingCyclePayment({ invoiceId: invoice.id },
+        { prisma: db.prisma, storage });
+      const paidView = await getBillingCycleDetail(context(), paid.cycleId,
+        { prisma: db.prisma });
+      expect(paidView.totals[0]).toMatchObject({ total_paid: { amount_minor: '2200' },
+        outstanding: { amount_minor: '0' } });
+      expect(paidView.documents.map((item) => item.kind))
+        .toEqual(['usage_breakdown', 'usage_breakdown']);
+      await db.prisma.billingInvoicePaymentEvent.create({ data: {
+        invoiceId: invoice.id, kind: 'REFUND', source: 'MANUAL',
+        amountMinor: 500n, currency: 'USD', idempotencyKey: randomUUID(),
+        occurredAt: new Date('2026-06-05T00:00:00.000Z'),
+      } });
+      const refunded = await refreshIssuedManualBillingCyclePayment({ invoiceId: invoice.id },
+        { prisma: db.prisma, storage });
+      const refundedView = await getBillingCycleDetail(context(), refunded.cycleId,
+        { prisma: db.prisma });
+      expect(refundedView.totals[0]).toMatchObject({ total_paid: { amount_minor: '2200' },
+        outstanding: { amount_minor: '0' } });
       await db.prisma.$executeRaw`
         UPDATE billing_manual_cycle_reconciliation_queue
         SET due_at = '2030-01-01T00:00:00.000Z'::timestamptz

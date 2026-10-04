@@ -11,6 +11,7 @@ import { copyVerifiedDocument,
   invoiceSourceFingerprint } from './billing-cycle-manual-invoice.service.js';
 import { cycleMoney } from './billing-cycle-quote-projection.service.js';
 import { billingCycleSnapshotDigest } from './billing-cycle-read.service.js';
+import { verifiedManualInvoiceLine } from './billing-cycle-manual-allocation.service.js';
 import { createBillingInvoicePdfStorage,
   type BillingInvoicePdfStorage } from './billing-invoice-storage.service.js';
 
@@ -23,14 +24,14 @@ function hash(value: string): string {
 }
 
 /** An actual issuer void creates a new customer view and preserves the issued PDF. */
-export async function refreshVoidedManualBillingCycle(
-  params: { invoiceId: string },
+async function refreshOneVoidedManualBillingCycle(
+  params: { invoiceId: string; authorityKey: string },
   deps?: { prisma?: PrismaClient; storage?: BillingInvoicePdfStorage },
 ): Promise<{ cycleId: string; snapshotSha256: string } | null> {
   const prisma = deps?.prisma ?? getAdminPrisma();
   const storage = deps?.storage ?? createBillingInvoicePdfStorage();
-  const allocation = await prisma.billingCustomerCycleInvoiceAllocation.findFirst({
-    where: { sourceKind: 'manual', sourceInvoiceId: params.invoiceId },
+  const allocation = await prisma.billingCustomerCycleInvoiceAllocation.findUnique({
+    where: { authorityKey: params.authorityKey },
     include: { cycle: true },
   });
   if (!allocation) return null;
@@ -42,10 +43,17 @@ export async function refreshVoidedManualBillingCycle(
   });
   if (!invoice || invoice.status !== BillingInvoiceStatus.VOID || !invoice.voidedAt ||
     invoice.paymentEvents.length !== 0 || invoice._count.creditSettlementRefs !== 0 ||
-    invoice.lines.length !== 1 || invoice.lines[0]?.id !== allocation.sourceLineId ||
+    allocation.sourceKind !== 'manual' || allocation.sourceInvoiceId !== invoice.id ||
+    !invoice.lines.some((line) => line.id === allocation.sourceLineId) ||
     invoice.orgId !== allocation.cycle.orgId ||
     invoice.billingMonth !== allocation.cycle.billingMonth ||
-    invoice.lines[0]?.serviceId !== allocation.cycle.serviceId) {
+    !invoice.lines.some((line) => line.id === allocation.sourceLineId &&
+      line.serviceId === allocation.cycle.serviceId)) {
+    hold('BILLING_CYCLE_VOID_SOURCE_UNPROVEN');
+  }
+  const selected = verifiedManualInvoiceLine(invoice, allocation.cycle.serviceId,
+    allocation.cycle.billingMonth);
+  if (selected.allocation.totalMinor !== allocation.amountMinor) {
     hold('BILLING_CYCLE_VOID_SOURCE_UNPROVEN');
   }
   const voidedAt = invoice.voidedAt;
@@ -76,9 +84,10 @@ export async function refreshVoidedManualBillingCycle(
   const original = latest.documents.find((document) => document.kind === 'monthly_invoice' &&
     document.format === 'pdf' && document.sourceKind === 'manual_invoice' &&
     document.sourceId === invoice.id);
-  if (!original || original.sha256 !== invoice.pdfSha256 ||
+  if ((selected.soleProduct && (!original || original.sha256 !== invoice.pdfSha256 ||
     original.objectKey === null || original.amountMinor !== invoice.totalMinor ||
-    original.invoiceNumber !== invoice.invoiceNumber) {
+    original.invoiceNumber !== invoice.invoiceNumber)) ||
+    (!selected.soleProduct && original)) {
     hold('BILLING_CYCLE_VOID_DOCUMENT_INVALID');
   }
   const id = randomUUID();
@@ -145,11 +154,12 @@ export async function refreshVoidedManualBillingCycle(
       privateEvidence: nextEvidence as Prisma.InputJsonValue, snapshotSha256,
     } });
     await tx.billingCustomerCycleDocument.createMany({ data: [
-      { id: invoiceDocumentId, cycleId: id, kind: 'monthly_invoice', format: 'pdf',
+      ...(original ? [{ id: invoiceDocumentId, cycleId: id,
+        kind: 'monthly_invoice', format: 'pdf',
         sourceKind: 'manual_invoice', sourceId: invoice.id,
         invoiceNumber: original.invoiceNumber, issuedAt: original.issuedAt,
         amountMinor: original.amountMinor, currency: original.currency,
-        objectKey: original.objectKey, sha256: original.sha256 },
+        objectKey: original.objectKey, sha256: original.sha256 }] : []),
       { id: breakdownPdfId, cycleId: id, kind: 'usage_breakdown', format: 'pdf',
         sourceKind: 'cycle', sourceId: id, issuedAt: invoice.voidedAt,
         objectKey: `${prefix}/usage.pdf`, sha256: pdfSha },
@@ -159,4 +169,20 @@ export async function refreshVoidedManualBillingCycle(
     ] });
     return { cycleId: id, snapshotSha256 };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+}
+
+export async function refreshVoidedManualBillingCycle(
+  params: { invoiceId: string },
+  deps?: { prisma?: PrismaClient; storage?: BillingInvoicePdfStorage },
+): Promise<{ cycleId: string; snapshotSha256: string } | null> {
+  const prisma = deps?.prisma ?? getAdminPrisma();
+  const rows = await prisma.billingCustomerCycleInvoiceAllocation.findMany({ where: {
+    sourceKind: 'manual', sourceInvoiceId: params.invoiceId,
+  }, orderBy: { authorityKey: 'asc' }, select: { authorityKey: true } });
+  let result: { cycleId: string; snapshotSha256: string } | null = null;
+  for (const row of rows) {
+    result = await refreshOneVoidedManualBillingCycle({ ...params,
+      authorityKey: row.authorityKey }, deps);
+  }
+  return result;
 }

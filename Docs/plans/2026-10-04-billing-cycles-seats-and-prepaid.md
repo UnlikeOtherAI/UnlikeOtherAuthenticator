@@ -193,6 +193,9 @@ The product cycle offers its own breakdown PDF/CSV but does not relay the
 whole mixed-product legal PDF; that document remains in UOA organisation
 finance. An invoice-wide payment without per-line allocation is attributable
 only when it is zero or the entire invoice's net due, never by proportion.
+An actual payment or refund appends a new cycle view for every previously
+allocated service line. A refund is a separate financial effect: it does not
+erase the originally accepted payment or reopen the original receivable.
 Manual cycle replay fingerprints every frozen line allocation and credit
 reference binding, in binary identifier order, along with the original legal
 invoice facts. A different allocation cannot be accepted by replaying the
