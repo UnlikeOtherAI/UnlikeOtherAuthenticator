@@ -208,8 +208,37 @@ describe('privacy-safe shared credit projection', () => {
     expect(result.credit_balance.label).toBe('Zbývající kredity');
     expect(result.credit_balance.display).toContain('kreditů');
     expect(result.viewer.description).toContain('tým');
+    expect(result.automatic_top_up.display_status).toBe('Zapnuto');
+    expect(result.automatic_top_up.payment_method.display).toBe('Visa končící na 4242');
+    expect(result.automatic_top_up.consent.description).toContain('Souhlas platí');
     expect(result.recent_entries[0]?.label).toBe('Kredity přidané službou DeepWater');
     expect(result.recent_entries[0]?.credits.display).toContain('kreditů');
+  });
+
+  it('localizes built-in credit offers and automatic top-up choices', () => {
+    const result = buildBillingCreditsProjection({
+      credential,
+      collection,
+      viewer: viewer(true),
+      period,
+      data: productionFreshAccountData(),
+      now,
+      locale: 'cs',
+    });
+
+    if (result.viewer.role !== 'billing_manager' || !result.funding_policy) {
+      throw new Error('Expected manager funding actions');
+    }
+    expect(result.funding_policy.title).toBe('Doplnit týmové kredity');
+    expect(result.funding_policy.offers[0]).toMatchObject({
+      name: 'Malé dobití kreditů',
+      description: 'Jednorázové dobití. Nezapíná automatické dobíjení.',
+    });
+    expect(result.funding_policy.offers[0]?.action?.label).toMatch(/^Koupit /);
+    expect(result.automatic_top_up.options[0]?.label).toContain('Dobít');
+    expect(result.automatic_top_up.options[0]?.setup_action?.label).toBe(
+      'Nastavit automatické dobíjení',
+    );
   });
 
   it('keeps English as the default when no customer locale is supplied', () => {
@@ -423,8 +452,8 @@ describe('privacy-safe shared credit projection', () => {
     expect(() => assertBillingCreditsContract(result)).not.toThrow();
     expect(result.automatic_top_up).toMatchObject({
       state: 'paused',
-      display_status: 'Automatic top-up is paused',
-      description: 'The monthly limit cannot cover another refill. It resets on 2026-08-01.',
+      display_status: 'Paused',
+      description: 'The monthly limit cannot cover another refill. It resets on August 1, 2026.',
       charged_this_month: { amount_minor: '8500', currency: 'USD' },
       remaining_monthly_cap: { amount_minor: '1500', currency: 'USD' },
     });

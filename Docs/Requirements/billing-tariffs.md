@@ -803,7 +803,12 @@ fixed top-up offers, but a successful Stripe payment funds that same team
 balance. Stripe Products/Prices may be reused when their immutable currency,
 payment amount, and credit quantity match; product provenance remains the
 calling service's individual `customer_lifecycle` app key and actor assertion.
-The customer-facing heading is exactly **Remaining credits**.
+The customer-facing balance heading and source-authored credit and automatic
+top-up controls use the selected supported billing locale (`cs`, `en-US`,
+`en-GB`, `de`, `es`, `fr`, or `it`), with English (`en-US`) as the default.
+Built-in offer names are localized by their catalog keys; custom offer and
+service names remain operator-authored. The action request bodies and exact
+financial amounts remain the same in every locale.
 
 UOA alone converts and settles Ledger raw usage into credits. Each settlement
 pins one immutable team-wide, user-grouped Ledger portfolio snapshot. One

@@ -1,9 +1,18 @@
 import { BillingCreditAutoTopUpState } from '@prisma/client';
 
 import type {
+  BillingCreditAmount,
   BillingCreditsManagerV1,
   BillingCreditsMemberV1,
 } from '../contracts/billing-statement-v1.js';
+import type { BillingCustomerLocale } from './billing-copy-locale.js';
+import { billingLocale, formatBillingCopy } from './billing-copy-locale.js';
+import {
+  billingBuiltInCreditOfferCopy,
+  billingLocalizedCreditDisplay,
+} from './billing-credit-copy.catalog.js';
+import { billingCreditAutoTopUpCopy } from './billing-credit-auto-top-up-copy.catalog.js';
+import { billingCreditFundingCopy } from './billing-credit-funding-copy.catalog.js';
 import {
   billingCreditAmount,
   billingCreditsPaymentMoney,
@@ -41,10 +50,20 @@ function configuredCatalog(
   );
 }
 
+function creditAmount(microcredits: bigint, locale?: BillingCustomerLocale): BillingCreditAmount {
+  const amount = billingCreditAmount(microcredits);
+  return {
+    ...amount,
+    display: billingLocalizedCreditDisplay(amount.credits, locale),
+  };
+}
+
 function paymentMethod(
   data: BillingCreditProjectionData,
   readiness: BillingCreditActionReadiness,
+  locale?: BillingCustomerLocale,
 ) {
+  const copy = billingCreditAutoTopUpCopy(locale);
   const account = data.creditAccount;
   const status = !account.stripePaymentMethodId
     ? ('missing' as const)
@@ -58,14 +77,15 @@ function paymentMethod(
   if (!summary || typeof summary !== 'object' || Array.isArray(summary)) {
     return {
       status,
-      display: status === 'missing' ? 'No payment method saved' : 'Saved payment method',
+      display:
+        status === 'missing' ? copy.noSavedPaymentMethod : copy.savedPaymentMethod,
     };
   }
   const record = summary as Record<string, unknown>;
-  const brand = typeof record.brand === 'string' ? record.brand : 'Card';
+  const brand = typeof record.brand === 'string' ? record.brand : copy.cardFallback;
   const last4 =
     typeof record.last4 === 'string' && /^\d{4}$/.test(record.last4)
-      ? ` ending in ${record.last4}`
+      ? formatBillingCopy(copy.cardEnding, { last4: record.last4 })
       : '';
   return { status, display: `${brand}${last4}` };
 }
@@ -76,14 +96,15 @@ function fundingPolicy(
   manager: boolean,
   collectionEnabled: boolean,
   readiness: BillingCreditActionReadiness,
+  locale?: BillingCustomerLocale,
 ) {
+  const copy = billingCreditFundingCopy(locale);
   const policy = data.policy;
   return {
     top_up_enabled: Boolean(policy?.topUpEnabled && collectionEnabled),
     automatic_top_up_enabled: Boolean(policy?.automaticTopUpEnabled && collectionEnabled),
-    title: 'Add team credits',
-    description:
-      'Credits fund metered usage across connected services. Subscriptions and add-ons remain separate.',
+    title: copy.title,
+    description: copy.description,
     offers: (policy?.topUpOffers ?? []).map((offer) => {
       const catalogExecutable = configuredCatalog(data, offer, readiness);
       const canResume = readiness.resumableTopUpOfferId === offer.id && catalogExecutable;
@@ -97,39 +118,44 @@ function fundingPolicy(
         (readiness.topUpCheckoutReady || canResume) &&
         catalogExecutable,
       );
+      const builtInCopy = billingBuiltInCreditOfferCopy(offer.key, locale);
+      const creditDisplay = billingLocalizedCreditDisplay(
+        creditAmount(offer.creditsReceivedMicrocredits, locale).credits,
+        locale,
+      );
       return {
         id: offer.id,
         key: offer.key,
-        name: offer.name,
-        description: offer.description,
+        name: builtInCopy?.name ?? offer.name,
+        description: builtInCopy?.description ?? offer.description,
         payment_amount: billingCreditsPaymentMoney(offer.paymentAmountMinor),
-        credits_received: billingCreditAmount(offer.creditsReceivedMicrocredits),
+        credits_received: creditAmount(offer.creditsReceivedMicrocredits, locale),
         available,
         unavailable_reason: available
           ? null
           : pendingCheckoutBlocksOffer
-          ? 'A payment is already in progress. Resolve it before starting another.'
+          ? copy.paymentPending
             : policy?.topUpEnabled
-              ? 'This offer is unavailable right now.'
-              : 'This team cannot add credits right now.',
+              ? copy.offerUnavailable
+              : copy.topUpsDisabled,
         action: manager
           ? {
               id: 'top_up' as const,
               kind: 'hosted_redirect' as const,
               label: canResume
-                ? 'Continue payment'
-                : `Buy ${billingCreditAmount(offer.creditsReceivedMicrocredits).display}`,
+                ? copy.continuePayment
+                : formatBillingCopy(copy.buyOffer, { credits: creditDisplay }),
               description: canResume
-                ? 'Continue your payment for this offer.'
-                : 'Start a secure payment for this offer.',
+                ? copy.continuePaymentDescription
+                : copy.buyOfferDescription,
               enabled: available,
               disabled_reason: available
                 ? null
                 : !collectionEnabled
-                  ? 'Card payments are unavailable right now.'
+                  ? copy.collectionUnavailable
                   : pendingCheckoutBlocksOffer
-                    ? 'A payment is already in progress. Resolve it before starting another.'
-                    : 'This offer is unavailable right now.',
+                    ? copy.paymentPending
+                    : copy.unavailableForPayment,
               request: {
                 method: 'POST' as const,
                 path: '/billing/v1/credits/top-up-checkout' as const,
@@ -148,7 +174,9 @@ function optionActions(
   manager: boolean,
   collectionEnabled: boolean,
   readiness: BillingCreditActionReadiness,
+  locale?: BillingCustomerLocale,
 ) {
+  const copy = billingCreditAutoTopUpCopy(locale);
   const account = data.creditAccount;
   const policy = data.policy;
   const canChange =
@@ -182,23 +210,35 @@ function optionActions(
     );
     return {
       selected: account.autoTopUpOptionId === option.id,
-      label: `${billingCreditAmount(option.refillOffer.creditsReceivedMicrocredits).display} below ${billingCreditAmount(option.thresholdMicrocredits).display}`,
-      description: 'This option sets a monthly limit for automatic top-ups.',
-      threshold: billingCreditAmount(option.thresholdMicrocredits),
+      label: formatBillingCopy(copy.optionLabel, {
+        refill: billingLocalizedCreditDisplay(
+          billingCreditAmount(option.refillOffer.creditsReceivedMicrocredits).credits,
+          locale,
+        ),
+        threshold: billingLocalizedCreditDisplay(
+          billingCreditAmount(option.thresholdMicrocredits).credits,
+          locale,
+        ),
+      }),
+      description: copy.optionDescription,
+      threshold: creditAmount(option.thresholdMicrocredits, locale),
       refill_offer_id: option.refillOfferId,
       refill_payment_amount: billingCreditsPaymentMoney(option.refillOffer.paymentAmountMinor),
-      refill_credits_received: billingCreditAmount(option.refillOffer.creditsReceivedMicrocredits),
+      refill_credits_received: creditAmount(
+        option.refillOffer.creditsReceivedMicrocredits,
+        locale,
+      ),
       monthly_cap: billingCreditsPaymentMoney(option.monthlyChargeCapMinor),
       setup_action: manager
         ? {
             id: 'auto_top_up_setup' as const,
             kind: 'hosted_redirect' as const,
-            label: 'Set up automatic top-up',
-            description: 'Review and confirm this exact option on the secure payment page.',
+            label: copy.setupAction,
+            description: copy.setupDescription,
             enabled: setupEnabled,
             disabled_reason: setupEnabled
               ? null
-              : 'Choose an available option and save a card first.',
+              : copy.setupUnavailable,
             request: {
               method: 'POST' as const,
               path: '/billing/v1/credits/auto-top-up/setup' as const,
@@ -210,12 +250,12 @@ function optionActions(
         ? {
             id: 'auto_top_up_update' as const,
             kind: 'mutation' as const,
-            label: 'Use this automatic top-up option',
-            description: 'Use this threshold, refill amount, and monthly limit.',
+            label: copy.updateAction,
+            description: copy.updateDescription,
             enabled: updateEnabled,
             disabled_reason: updateEnabled
               ? null
-              : 'Choose an available option and save a card first.',
+              : copy.updateUnavailable,
             request: {
               method: 'POST' as const,
               path: '/billing/v1/credits/auto-top-up/update' as const,
@@ -234,7 +274,9 @@ function automaticTopUp(
   collectionEnabled: boolean,
   readiness: BillingCreditActionReadiness,
   capResetsAt: Date | undefined,
+  locale?: BillingCustomerLocale,
 ) {
+  const copy = billingCreditAutoTopUpCopy(locale);
   const account = data.creditAccount;
   const policy = data.policy;
   const charged = data.autoTopUpChargedMinor;
@@ -252,7 +294,12 @@ function automaticTopUp(
   const state = pausedForCap
     ? 'paused'
     : (account.autoTopUpState.toLowerCase() as Lowercase<BillingCreditAutoTopUpState>);
-  const resetDate = capResetsAt?.toISOString().slice(0, 10);
+  const resetDate = capResetsAt
+    ? new Intl.DateTimeFormat(billingLocale(locale), {
+        dateStyle: 'long',
+        timeZone: 'UTC',
+      }).format(capResetsAt)
+    : undefined;
   const recoverableState =
     account.autoTopUpState === BillingCreditAutoTopUpState.REQUIRES_ACTION ||
     account.autoTopUpState === BillingCreditAutoTopUpState.NEEDS_REVIEW ||
@@ -267,52 +314,57 @@ function automaticTopUp(
       : ('outdated' as const);
   return {
     state,
-    display_status: `Automatic top-up is ${state.replaceAll('_', ' ')}`,
+    display_status: copy.status[state],
     description: pausedForCap
-      ? `The monthly limit cannot cover another refill.${resetDate ? ` It resets on ${resetDate}.` : ''}`
+      ? resetDate
+        ? formatBillingCopy(copy.pausedForCapDescription, { date: resetDate })
+        : copy.pausedForCapNoResetDescription
       : state === 'disabled'
-        ? 'Automatic top-up is not enabled for this team.'
-        : 'The saved threshold, refill offer, and monthly limit apply.',
+        ? copy.disabledDescription
+        : copy.activeDescription,
     threshold:
       account.autoTopUpThresholdMicrocredits === null
         ? null
-        : billingCreditAmount(account.autoTopUpThresholdMicrocredits),
+        : creditAmount(account.autoTopUpThresholdMicrocredits, locale),
     refill_offer_id: account.autoTopUpRefillOfferId,
     monthly_cap: cap === null ? null : billingCreditsPaymentMoney(cap),
     charged_this_month: billingCreditsPaymentMoney(charged),
     remaining_monthly_cap:
       remainingCap === null ? null : billingCreditsPaymentMoney(remainingCap),
     payment_method: manager
-      ? paymentMethod(data, readiness)
-      : { status: paymentMethod(data, readiness).status },
+      ? paymentMethod(data, readiness, locale)
+      : { status: paymentMethod(data, readiness, locale).status },
     consent: manager
       ? {
           status: consentStatus,
           version: account.autoTopUpConsentVersion,
           consented_at: account.autoTopUpConsentedAt?.toISOString() ?? null,
           consented_by: account.autoTopUpConsentedBy
-            ? { display_name: account.autoTopUpConsentedBy.name ?? 'Team member' }
+            ? {
+                display_name:
+                  account.autoTopUpConsentedBy.name ?? copy.consentedByFallback,
+              }
             : null,
-          description: 'Your agreement covers the saved threshold, refill amount, and monthly limit.',
+          description: copy.consentDescription,
         }
       : {
           status: consentStatus,
           version: account.autoTopUpConsentVersion,
           consented_at: account.autoTopUpConsentedAt?.toISOString() ?? null,
         },
-    options: optionActions(data, requestBody, manager, collectionEnabled, readiness),
+    options: optionActions(data, requestBody, manager, collectionEnabled, readiness, locale),
     disable_action:
       manager && account.autoTopUpState !== BillingCreditAutoTopUpState.DISABLED
         ? {
             id: 'auto_top_up_disable' as const,
             kind: 'mutation' as const,
-            label: 'Turn off automatic top-up',
-            description: 'Stop future automatic charges without changing available credits.',
+            label: copy.disableAction,
+            description: copy.disableDescription,
             enabled: Boolean(collectionEnabled && readiness.disableReady),
             disabled_reason:
               collectionEnabled && readiness.disableReady
                 ? null
-                : 'Automatic top-up is unavailable right now.',
+                : copy.disableUnavailable,
             request: {
               method: 'POST' as const,
               path: '/billing/v1/credits/auto-top-up/disable' as const,
@@ -326,13 +378,13 @@ function automaticTopUp(
           kind: 'hosted_redirect' as const,
           label:
             account.autoTopUpState === BillingCreditAutoTopUpState.ACTIVE
-              ? 'Change card'
-              : 'Review payment',
-          description: 'Open the secure payment page to review or change your card.',
+              ? copy.changeCardAction
+              : copy.reviewPaymentAction,
+          description: copy.recoveryDescription,
           enabled: recoverEnabled,
           disabled_reason: recoverEnabled
             ? null
-            : 'This action is not available right now.',
+            : copy.recoveryUnavailable,
           request: {
             method: 'POST' as const,
             path: '/billing/v1/credits/auto-top-up/recover' as const,
@@ -349,9 +401,10 @@ export function buildManagerCreditActionsProjection(
   collectionEnabled: boolean,
   readiness: BillingCreditActionReadiness,
   capResetsAt?: Date,
+  locale?: BillingCustomerLocale,
 ): Pick<BillingCreditsManagerV1, 'funding_policy' | 'automatic_top_up'> {
   return {
-    funding_policy: fundingPolicy(data, body, true, collectionEnabled, readiness),
+    funding_policy: fundingPolicy(data, body, true, collectionEnabled, readiness, locale),
     automatic_top_up: automaticTopUp(
       data,
       body,
@@ -359,6 +412,7 @@ export function buildManagerCreditActionsProjection(
       collectionEnabled,
       readiness,
       capResetsAt,
+      locale,
     ),
   } as Pick<BillingCreditsManagerV1, 'funding_policy' | 'automatic_top_up'>;
 }
@@ -366,12 +420,13 @@ export function buildManagerCreditActionsProjection(
 export function buildMemberCreditActionsProjection(
   data: BillingCreditProjectionData,
   readiness: BillingCreditActionReadiness,
+  locale?: BillingCustomerLocale,
 ): Pick<BillingCreditsMemberV1, 'funding_policy' | 'automatic_top_up'> {
   return {
     funding_policy: null,
     automatic_top_up: {
       payment_method: {
-        status: paymentMethod(data, readiness).status,
+        status: paymentMethod(data, readiness, locale).status,
       },
     },
   };

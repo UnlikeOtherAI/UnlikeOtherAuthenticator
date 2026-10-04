@@ -20,7 +20,7 @@ export const BILLING_CREDIT_ENTRY_COPY = {
     USAGE_SETTLEMENT_CORRECTION: { label: 'Oprava využití služby {product}', detail: 'Ověřený přehled využití služby {product} změnil sdílený zůstatek o {credits}.' },
     REFUND: { label: 'Vrácení platby za službu {product}', detail: 'Ověřené vrácení platby odečetlo {credits} ze sdíleného týmového zůstatku.' },
     DISPUTE: { label: 'Spor o platbu za službu {product}', detail: 'Ověřený spor o platbu odečetl {credits} ze sdíleného týmového zůstatku.' },
-    REFUND_REVERSAL: { label: 'Vrácení odečtu za refundaci služby {product}', detail: 'Neúspěšná nebo zrušená refundace vrátila {credits} do sdíleného týmového zůstatku.' },
+    REFUND_REVERSAL: { label: 'Obnovené kredity', detail: 'Vrácení platby se neprovedlo. {credits} se vrátilo do týmového zůstatku.' },
     DISPUTE_REVERSAL: { label: 'Obnovení kreditů po sporu služby {product}', detail: 'Ověřené obnovení platby ve sporu vrátilo {credits} do sdíleného týmového zůstatku.' },
     ADJUSTMENT: { label: 'Úprava kreditů na účtu', detail: 'Podpora upravila sdílený týmový zůstatek o {credits}.' },
   },
