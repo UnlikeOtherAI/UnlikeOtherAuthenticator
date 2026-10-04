@@ -201,12 +201,31 @@ Each funded settlement reference is assigned to its own service line in stable
 service and settlement order. The invoice-wide cumulative microcredit rounding
 determines the minor-unit delta at each reference; it preserves fractional
 carry and prevents a funded usage credit from reducing a seat or flat fee.
+The manual calculator now writes these service-line and settled-reference
+allocations in the same serializable transaction as each draft revision.
+Reopening an identical draft with no allocations completes that frozen
+evidence before issue; a new calculation never reassigns an already issued
+line or silently transfers a reference to another service.
+The `ISSUED` transition also enqueues initial product-cycle capture in that
+same database commit, even before an allocation exists. A leased worker
+prepares and captures each frozen service line, preserving failed Ledger or
+document projection for backoff retry. Already issued historical invoices
+enter the same queue through an idempotent backfill.
 The customer cycle totals show tax and gross explicitly: subscription plus
 usage plus tax equals gross, and gross less applied usage credits equals due.
 An organisation cycle groups prepaid and payable usage credits by their actual
 source payment mode, so one source cohort's credit consumption is never shown
 again on the other cohort's line.
 The canonical monthly legal invoice retains its original gross convention.
+For Stripe renewal collection, the closed month comes from the verified
+subscription invoice-line period, not Stripe's invoice header period. Flat
+subscriptions already charge through their licensed recurring price. A
+per-seat subscription adds its frozen closed-month amount to the exact DRAFT
+invoice once, with a source key stable across customer cycle revisions.
+The source and first provider-attempt time persist before invoice-item egress;
+replay checks the actual remote item and never blindly recreates one after
+the provider idempotency key can expire. Missing line-period or remote
+evidence holds invoice finalization for reconciliation.
 Each accepted prepaid top-up or automatic recharge creates one immutable
 payment-invoice source in the same transaction as its credit entry. The source
 is keyed by Stripe account, live mode and PaymentIntent, and its charge month
