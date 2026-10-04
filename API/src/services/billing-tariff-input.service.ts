@@ -1,6 +1,8 @@
 import {
   BillingCollectionMode,
   BillingMonthlyChargeBasis,
+  BillingSeatChargeTiming,
+  BillingSeatPolicy,
   BillingTariffMode,
   BillingUsagePaymentMode,
 } from '@prisma/client';
@@ -18,6 +20,8 @@ export type PublicTariffMode = 'standard' | 'free' | 'at_cost' | 'custom';
 export type PublicBillingCollectionMode = 'stripe' | 'manual' | 'none';
 export type PublicMonthlyChargeBasis = 'flat' | 'per_seat';
 export type PublicUsagePaymentMode = 'pay_as_you_go' | 'prepaid';
+export type PublicSeatPolicy = 'automatic' | 'fixed';
+export type PublicSeatChargeTiming = 'full_month' | 'prorated';
 
 export type TariffInput = {
   key: string;
@@ -27,17 +31,21 @@ export type TariffInput = {
   markupBps?: number;
   monthlyAmountMinor: string;
   monthlyChargeBasis?: PublicMonthlyChargeBasis;
+  seatPolicy?: PublicSeatPolicy;
+  seatChargeTiming?: PublicSeatChargeTiming;
   usagePaymentMode?: PublicUsagePaymentMode;
   currency: string;
 };
 
 type NormalizedTariffInput = Omit<TariffInput,
-  'mode' | 'collectionMode' | 'monthlyAmountMinor' | 'monthlyChargeBasis' | 'usagePaymentMode' | 'markupBps'> & {
+  'mode' | 'collectionMode' | 'monthlyAmountMinor' | 'monthlyChargeBasis' | 'seatPolicy' | 'seatChargeTiming' | 'usagePaymentMode' | 'markupBps'> & {
   mode: BillingTariffMode;
   collectionMode: BillingCollectionMode;
   markupBps: number;
   monthlyAmountMinor: bigint;
   monthlyChargeBasis: BillingMonthlyChargeBasis;
+  seatPolicy: BillingSeatPolicy | null;
+  seatChargeTiming: BillingSeatChargeTiming | null;
   usagePaymentMode: BillingUsagePaymentMode;
 };
 
@@ -80,6 +88,18 @@ function toUsagePaymentMode(value: PublicUsagePaymentMode | undefined): BillingU
   throw new AppError('BAD_REQUEST', 400, 'INVALID_USAGE_PAYMENT_MODE');
 }
 
+function toSeatPolicy(value: PublicSeatPolicy | undefined): BillingSeatPolicy {
+  if (value === undefined || value === 'automatic') return BillingSeatPolicy.AUTOMATIC;
+  if (value === 'fixed') return BillingSeatPolicy.FIXED;
+  throw new AppError('BAD_REQUEST', 400, 'INVALID_SEAT_POLICY');
+}
+
+function toSeatChargeTiming(value: PublicSeatChargeTiming | undefined): BillingSeatChargeTiming {
+  if (value === undefined || value === 'prorated') return BillingSeatChargeTiming.PRORATED;
+  if (value === 'full_month') return BillingSeatChargeTiming.FULL_MONTH;
+  throw new AppError('BAD_REQUEST', 400, 'INVALID_SEAT_CHARGE_TIMING');
+}
+
 export function normalizeTariffInput(input: TariffInput): NormalizedTariffInput {
   const key = input.key.trim().toLowerCase();
   const name = input.name.trim();
@@ -116,6 +136,14 @@ export function normalizeTariffInput(input: TariffInput): NormalizedTariffInput 
 
   const collectionMode = toDatabaseCollectionMode(input.collectionMode);
   const monthlyChargeBasis = toMonthlyChargeBasis(input.monthlyChargeBasis);
+  if (monthlyChargeBasis === BillingMonthlyChargeBasis.FLAT &&
+    (input.seatPolicy !== undefined || input.seatChargeTiming !== undefined)) {
+    throw new AppError('BAD_REQUEST', 400, 'INVALID_FLAT_SEAT_TERMS');
+  }
+  const seatPolicy = monthlyChargeBasis === BillingMonthlyChargeBasis.PER_SEAT
+    ? toSeatPolicy(input.seatPolicy) : null;
+  const seatChargeTiming = monthlyChargeBasis === BillingMonthlyChargeBasis.PER_SEAT
+    ? toSeatChargeTiming(input.seatChargeTiming) : null;
   const usagePaymentMode = toUsagePaymentMode(input.usagePaymentMode);
   if (
     ((mode === BillingTariffMode.FREE || mode === BillingTariffMode.AT_COST) &&
@@ -135,6 +163,8 @@ export function normalizeTariffInput(input: TariffInput): NormalizedTariffInput 
     markupBps,
     monthlyAmountMinor,
     monthlyChargeBasis,
+    seatPolicy,
+    seatChargeTiming,
     usagePaymentMode,
     currency,
   };
