@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import {
-  BillingAssignmentScope, BillingCollectionMode, BillingMonthlyChargeBasis,
+  BillingAppKeyPurpose, BillingAssignmentScope, BillingCollectionMode, BillingMonthlyChargeBasis,
   BillingTariffMode, BillingTariffSource,
 } from '@prisma/client';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -149,7 +149,7 @@ describe.skipIf(!enabled)('customer cycle scope persistence', () => {
       .rejects.toMatchObject({ message: 'BILLING_CYCLE_SNAPSHOT_INTEGRITY' });
   });
 
-  it('freezes a closed quote once while keeping usage and credits pending', async () => {
+  it('freezes a closed quote once and proves zero usage credits from empty coverage', async () => {
     const source = { kind: 'manual' as const, id: 'manual-source' };
     const quote = {
       source, serviceId, tariffId, organisationId: orgId, teamId: null,
@@ -194,7 +194,7 @@ describe.skipIf(!enabled)('customer cycle scope persistence', () => {
       { prisma: db.prisma });
     expect(detail).toMatchObject({ state: 'pending_reconciliation',
       scope: { cycle_scope: 'organisation', team_id: null }, document_available: false,
-      credits: { consumed: null, status: 'pending_reconciliation' },
+      credits: { consumed: '0', status: 'pending_reconciliation' },
       subscription_lines: [{ customer_charge: { amount_minor: '2000' } }],
     });
     quoteFn.mockResolvedValue({ ...quote, amountMinor: 3000n });
@@ -292,6 +292,90 @@ describe.skipIf(!enabled)('customer cycle scope persistence', () => {
       where: { id: first.cycleId },
     });
     expect(JSON.stringify(privateRow.privateEvidence)).toContain('cacheWrite5mTokens');
+
+    // A completed PAYG settlement proves 13,000 credits of rated usage even
+    // when the customer paid from an invoice and no funded wallet was debited.
+    const account = await db.prisma.billingStripeAccount.create({ data: {
+      stripeAccountId: `acct_${randomUUID()}`, livemode: false,
+    } });
+    const customer = await db.prisma.billingStripeCustomer.create({ data: {
+      accountId: account.id, orgId, teamId, scope: BillingAssignmentScope.TEAM,
+      scopeKey: `${orgId}:${teamId}`,
+    } });
+    const wallet = await db.prisma.billingCreditAccount.create({ data: {
+      accountId: account.id, customerId: customer.id, orgId, teamId,
+      scope: BillingAssignmentScope.TEAM, scopeKey: `${orgId}:${teamId}`,
+      currency: 'USD',
+    } });
+    const key = await db.prisma.billingAppKey.create({ data: {
+      serviceId, purpose: BillingAppKeyPurpose.CUSTOMER_LIFECYCLE,
+      name: 'Cycle credit proof', keyPrefix: 'cycle_credit',
+      secretDigest: randomUUID(), actorIssuer: 'https://test.example',
+      actorAudience: 'https://uoa.example', actorKeyId: randomUUID(),
+      actorPublicJwk: { kty: 'RSA', n: 'AQAB', e: 'AQAB' },
+      checkoutReturnOrigins: ['https://test.example'],
+    } });
+    const portfolio = await db.prisma.billingCreditPortfolioSnapshot.create({ data: {
+      accountId: account.id, creditAccountId: wallet.id, orgId, teamId,
+      perspectiveServiceId: serviceId, perspectiveProduct: serviceIdentifier,
+      billingMonth: '2026-09', ledgerSnapshotId: 'mup_cycle_credit_september',
+      ledgerSnapshotCursor: 'mup_cycle_credit_september',
+      capturedAt: new Date('2026-10-03T00:00:00.000Z'), sha256: 'd'.repeat(64),
+    } });
+    const settlement = await db.prisma.billingCreditUsageSettlement.create({ data: {
+      accountId: account.id, creditAccountId: wallet.id, teamId, tariffId,
+      serviceId, appKeyId: key.id, billingMonth: '2026-09', currency: 'USD',
+    } });
+    await db.prisma.$transaction(async (tx) => {
+      const adjustment = await tx.billingCreditUsageSettlementAdjustment.create({ data: {
+        settlementId: settlement.id, accountId: account.id,
+        creditAccountId: wallet.id, serviceId, appKeyId: key.id,
+        portfolioSnapshotId: portfolio.id, sequence: 1,
+        deltaRatedUsageAmountMicroMinor: 1_300_000_000n,
+        deltaCreditsConsumedMicrocredits: 0n,
+        deltaRemainingUsageAmountMicroMinor: 1_300_000_000n,
+        cumulativeRatedUsageAmountMicroMinor: 1_300_000_000n,
+        cumulativeCreditsConsumedMicrocredits: 0n,
+        cumulativeRemainingUsageAmountMicroMinor: 1_300_000_000n,
+      } });
+      await tx.billingCreditUsageAllocation.create({ data: {
+        settlementId: settlement.id, adjustmentId: adjustment.id,
+        serviceId, appKeyId: key.id, attributedUserId: ownerId,
+        deltaRatedUsageAmountMicroMinor: 1_300_000_000n,
+        deltaCreditsConsumedMicrocredits: 0n,
+        deltaRemainingUsageAmountMicroMinor: 1_300_000_000n,
+        cumulativeRatedUsageAmountMicroMinor: 1_300_000_000n,
+        cumulativeCreditsConsumedMicrocredits: 0n,
+        cumulativeRemainingUsageAmountMicroMinor: 1_300_000_000n,
+      } });
+    });
+    const credited = await prepareBillingCycleClose(params, deps);
+    expect(credited.cycleId).not.toBe(first.cycleId);
+    const rated = await getBillingCycleDetail(viewer, credited.cycleId,
+      { prisma: db.prisma });
+    expect(rated.usage_lines[0]?.credits_consumed).toBe('13000');
+    expect(rated.credits).toMatchObject({ consumed: '13000',
+      opening_balance: null, closing_balance: null });
+    expect(JSON.stringify(rated)).not.toMatch(/markup|provider_cost|raw_units|tokens/i);
+    const duplicateObservation = await db.prisma.billingCreditPortfolioSnapshot.create({
+      data: { accountId: account.id, creditAccountId: wallet.id, orgId, teamId,
+        perspectiveServiceId: serviceId, perspectiveProduct: serviceIdentifier,
+        billingMonth: '2026-09', ledgerSnapshotId: 'mup_cycle_credit_september_replay',
+        ledgerSnapshotCursor: 'mup_cycle_credit_september_replay',
+        capturedAt: new Date('2026-10-04T00:00:00.000Z'), sha256: 'e'.repeat(64) },
+    });
+    await db.prisma.billingCreditUsageSettlementAdjustment.create({ data: {
+      settlementId: settlement.id, accountId: account.id,
+      creditAccountId: wallet.id, serviceId, appKeyId: key.id,
+      portfolioSnapshotId: duplicateObservation.id, sequence: 2,
+      deltaRatedUsageAmountMicroMinor: 0n,
+      deltaCreditsConsumedMicrocredits: 0n,
+      deltaRemainingUsageAmountMicroMinor: 0n,
+      cumulativeRatedUsageAmountMicroMinor: 1_300_000_000n,
+      cumulativeCreditsConsumedMicrocredits: 0n,
+      cumulativeRemainingUsageAmountMicroMinor: 1_300_000_000n,
+    } });
+    expect(await prepareBillingCycleClose(params, deps)).toEqual(credited);
   });
 
   it('prepares a team usage cycle without a subscription source or current-member inference',

@@ -198,7 +198,7 @@ describe.skipIf(!enabled)('issued manual invoice cycle persistence', () => {
     expect(await captureIssuedManualBillingCycle({ cycleId: finalizedCycleId,
       invoiceId }, { prisma: db.prisma, storage })).toEqual(result);
     expect(await db.prisma.billingCustomerCycleInvoiceAllocation.count()).toBe(1);
-    expect(detail.credits.consumed).toBeNull();
+    expect(detail.credits.consumed).toBe('0');
     const csv = detail.documents.find((item) => item.format === 'csv');
     if (!csv) throw new Error('CYCLE_CSV_MISSING');
     const text = (await downloadBillingCycleDocument(context(), result.cycleId,
@@ -267,7 +267,7 @@ describe.skipIf(!enabled)('issued manual invoice cycle persistence', () => {
     expect(oldDetail.totals[0]?.outstanding.amount_minor).toBe('2000');
     expect(newDetail.totals[0]?.total_paid.amount_minor).toBe('1500');
     expect(newDetail.totals[0]?.outstanding.amount_minor).toBe('500');
-    expect(newDetail.credits.consumed).toBeNull();
+    expect(newDetail.credits.consumed).toBe('0');
     expect(await db.prisma.billingCustomerCycleInvoiceAllocation.count()).toBe(1);
     expect(await db.prisma.billingCustomerCycleDocument.count()).toBe(6);
     expect(await captureIssuedManualBillingCycle({ cycleId: pendingCycleId,

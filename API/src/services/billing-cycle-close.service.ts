@@ -7,6 +7,9 @@ import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import { billingCycleSnapshotDigest } from './billing-cycle-read.service.js';
 import {
+  decimalCredits, readCycleCreditEvidence, type CycleCreditEvidence,
+} from './billing-cycle-credit-evidence.service.js';
+import {
   monthlyFinancialQuoteEvidence, privateMonthlyQuoteEvidence,
   projectMonthlySubscriptionLine,
 } from './billing-cycle-quote-projection.service.js';
@@ -80,6 +83,8 @@ export async function prepareBillingCycleClose(
   const teams = initial.teamId ? [initial.teamId] : discovery?.teamIds ?? [];
 
   const ledgerSnapshots: CycleUsageEvidence[] = [];
+  const creditEvidence: CycleCreditEvidence[] = [];
+  const ratedByTeam = new Map<string, string>();
   let usageLines: BillingCycleUsageLine[] = [];
   const organisationUsageLines: BillingCycleUsageLine[] = [];
   for (const teamId of teams) {
@@ -93,12 +98,23 @@ export async function prepareBillingCycleClose(
       currency: initial.currency,
     }, tariff);
     ledgerSnapshots.push(projected.evidence);
+    const ratedAmount = projected.lines[0]?.customer_charge?.amount ?? '0';
+    ratedByTeam.set(teamId, ratedAmount);
+    creditEvidence.push(await readCycleCreditEvidence(prisma, {
+      orgId: initial.organisationId, teamId, serviceId: service.id,
+      billingMonth: params.billingMonth, payer: initial.scope, tariff,
+      ratedAmount, rawLines: projected.evidence.raw_lines,
+    }));
     if (initial.teamId !== null) usageLines = projected.lines;
     else organisationUsageLines.push(...projected.lines);
   }
+  const consumedMicrocredits = creditEvidence.every((row) => row.covered) ?
+    creditEvidence.reduce((sum, row) => sum + BigInt(row.consumed_microcredits ?? '0'), 0n) : null;
   if (initial.teamId === null) {
     usageLines = aggregateOrganisationCycleUsage(organisationUsageLines);
   }
+  usageLines = usageLines.map((line) => ({ ...line,
+    credits_consumed: consumedMicrocredits === null ? null : decimalCredits(consumedMicrocredits) }));
 
   const closeInTransaction = () => prisma.$transaction(async (tx) => {
     // Seat admission and financial source changes share the organisation lock.
@@ -111,6 +127,23 @@ export async function prepareBillingCycleClose(
     if (quoteFingerprint(initial, startsAt, endsAt) !==
       quoteFingerprint(quote, startsAt, endsAt)) hold('BILLING_CYCLE_QUOTE_CHANGED');
     const fingerprint = quoteFingerprint(quote, startsAt, endsAt);
+    const lockedCreditEvidence = await Promise.all(teams.map((teamId) => {
+      const raw = ledgerSnapshots.find((row) => row.team_id === teamId)?.raw_lines;
+      const ratedAmount = ratedByTeam.get(teamId);
+      if (!raw || ratedAmount === undefined) hold('BILLING_CYCLE_LEDGER_SCOPE_MISMATCH');
+      return readCycleCreditEvidence(tx, {
+        orgId: quote.organisationId, teamId, serviceId: service.id,
+        billingMonth: params.billingMonth, payer: quote.scope, tariff,
+        ratedAmount, rawLines: raw,
+      });
+    }));
+    if (lockedCreditEvidence.some((row, index) =>
+      row.fingerprint !== creditEvidence[index]?.fingerprint)) {
+      hold('BILLING_CYCLE_CREDIT_SOURCE_CHANGED');
+    }
+    const creditFingerprint = billingCycleSnapshotDigest(creditEvidence.map((row) => ({
+      team_id: row.team_id, fingerprint: row.fingerprint,
+    })), {});
     const existing = await tx.billingCustomerCycle.findFirst({ where: {
       serviceId: quote.serviceId, orgId: quote.organisationId,
       teamId: quote.teamId, billingMonth: params.billingMonth,
@@ -127,7 +160,8 @@ export async function prepareBillingCycleClose(
       }
       const oldLedgerFingerprint = cycleUsageContentFingerprint(oldEvidence as CycleUsageEvidence[]);
       const newLedgerFingerprint = cycleUsageContentFingerprint(ledgerSnapshots);
-      if (oldLedgerFingerprint === newLedgerFingerprint) {
+      if (oldLedgerFingerprint === newLedgerFingerprint &&
+        evidence.credit_fingerprint === creditFingerprint) {
         return { cycleId: existing.id, amountMinor: quote.amountMinor,
           currency: quote.currency, snapshotSha256: existing.snapshotSha256 };
       }
@@ -148,14 +182,16 @@ export async function prepareBillingCycleClose(
       product: { id: service.id, identifier: service.identifier, name: service.name },
       totals: [], document_available: false, subscription_lines: [subscription],
       usage_lines: usageLines,
-      credits: { consumed: null, opening_balance: null, closing_balance: null,
+      credits: { consumed: consumedMicrocredits === null ? null :
+        decimalCredits(consumedMicrocredits), opening_balance: null, closing_balance: null,
         status: 'pending_reconciliation' },
       documents: [], adjustments: [],
     };
     const privateEvidence = { source: quote.source, quote_fingerprint: fingerprint,
       previous_cycle_id: existing?.id ?? null,
       team_discovery: discovery,
-      quote: privateMonthlyQuoteEvidence(quote), ledger_snapshots: ledgerSnapshots };
+      quote: privateMonthlyQuoteEvidence(quote), ledger_snapshots: ledgerSnapshots,
+      credit_evidence: creditEvidence, credit_fingerprint: creditFingerprint };
     const digest = billingCycleSnapshotDigest(publicSnapshot, privateEvidence);
     await tx.billingCustomerCycle.create({ data: {
       id, serviceId: quote.serviceId, orgId: quote.organisationId,
