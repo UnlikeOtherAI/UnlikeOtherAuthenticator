@@ -27,6 +27,8 @@ import {
   billingCommercialTotals,
   rateBillingStatementUsage,
 } from './billing-statement-rating.service.js';
+import type { BillingCustomerLocale } from './billing-copy-locale.js';
+import { billingSubscriptionCopy, billingSubscriptionText } from './billing-subscription-copy.catalog.js';
 
 /**
  * The organisation roll-up (Docs/plans/2026-08-15-org-billing-override.md §3).
@@ -50,6 +52,7 @@ export type OrganisationStatementContext = {
   periodStartsAt: Date;
   periodEndsAt: Date;
   products: Array<{ identifier: string; name: string }>;
+  locale?: BillingCustomerLocale;
 };
 
 type Dependencies = {
@@ -133,7 +136,9 @@ function teamCommercialLines(params: {
   tariff: TeamTariff;
   ratedLines: BillingStatementV1['commercial_lines'];
   adjustments: Awaited<ReturnType<typeof listApplicableCommercialAdjustments>>;
+  locale?: BillingCustomerLocale;
 }): BillingStatementV1['commercial_lines'] {
+  const copy = billingSubscriptionCopy(params.locale);
   const monthlyAmount = minorAmountToMajor(
     params.tariff.monthlyAmountMinor.toString(),
     params.tariff.currency,
@@ -143,8 +148,8 @@ function teamCommercialLines(params: {
       id: `monthly_${params.tariff.id}_${params.teamId}`,
       kind: 'monthly_subscription',
       product: params.statementProduct,
-      label: `${params.tariff.name} monthly subscription`,
-      detail: `Tariff ${params.tariff.key} v${params.tariff.version}`,
+      label: `${params.tariff.name} ${copy.monthlySubscription}`,
+      detail: billingSubscriptionText(copy.tariffDetails, { key: params.tariff.key, version: params.tariff.version }),
       amount: exactMoney(monthlyAmount, params.tariff.currency),
     },
     ...params.ratedLines.map((line) => ({ ...line, id: `${line.id}_${params.teamId}` })),
@@ -160,7 +165,7 @@ function teamCommercialLines(params: {
             : ('add_on' as const),
         product: params.statementProduct,
         label: adjustment.name,
-        detail: adjustment.cadence === 'MONTHLY' ? 'Monthly adjustment' : 'One-time adjustment',
+        detail: adjustment.cadence === 'MONTHLY' ? copy.monthlyAdjustment : copy.oneTimeAdjustment,
         amount: exactMoney(signed, adjustment.currency),
       };
     }),
@@ -234,6 +239,7 @@ async function buildTeamUsage(
     tariff,
     ratedLines: rated.commercialLines,
     adjustments,
+    locale: context.locale,
   });
   return {
     team_id: team.id,
@@ -275,11 +281,12 @@ export async function buildOrganisationStatementScope(
   });
   const teamUsage = await Promise.all(teams.map((team) => buildTeamUsage(context, team, deps)));
   const commercialLines = teamUsage.flatMap((team) => team.commercial_lines);
+  const copy = billingSubscriptionCopy(context.locale);
   return {
     organisation_id: organisation.id,
     organisation_name: organisation.name,
-    title: 'Organisation billing',
-    description: `Every team in ${organisation.name}, billed together.`,
+    title: copy.organisationTitle,
+    description: billingSubscriptionText(copy.organisationDescription, { organisation: organisation.name }),
     teams: teamUsage,
     commercial_lines: commercialLines,
     totals: billingCommercialTotals(commercialLines),

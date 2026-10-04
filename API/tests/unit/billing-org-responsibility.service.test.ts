@@ -92,6 +92,20 @@ function prismaDouble() {
 }
 
 describe('organisation billing responsibility', () => {
+  it('uses one selected locale for controlled-by copy and preserves the organisation name', () => {
+    const manager = buildBillingControlledBy({
+      organisationId: 'org_1',
+      organisationName: 'Acme Research',
+      canManage: true,
+      locale: 'cs',
+    });
+
+    expect(manager.organisation_name).toBe('Acme Research');
+    expect(manager.message).toContain('Fakturaci tohoto týmu');
+    expect(manager.message).toContain('Acme Research');
+    expect(manager.message).not.toContain('Billing for this team');
+  });
+
   it('composes the controlled-by copy in UOA, and names an action only for a manager', () => {
     const manager = buildBillingControlledBy({
       organisationId: 'org_1',

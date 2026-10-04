@@ -6,6 +6,8 @@ import {
 } from '../contracts/billing-statement-v1.js';
 import { getAdminPrisma } from '../db/prisma.js';
 import { isBillingManager } from './billing-stripe-manager.service.js';
+import type { BillingCustomerLocale } from './billing-copy-locale.js';
+import { billingSubscriptionCopy, billingSubscriptionText } from './billing-subscription-copy.catalog.js';
 
 /**
  * Who pays for a team's usage, and who may say so.
@@ -80,15 +82,18 @@ export function buildBillingControlledBy(params: {
   organisationId: string;
   organisationName: string;
   canManage: boolean;
+  locale?: BillingCustomerLocale;
 }): BillingControlledByV1 {
-  const organisation = params.organisationName.trim() || 'this organisation';
+  const copy = billingSubscriptionCopy(params.locale);
+  const organisation = params.organisationName.trim() || copy.organisationFallback;
   return {
     scope: 'organisation',
     organisation_id: params.organisationId,
     organisation_name: organisation,
-    message: params.canManage
-      ? `Billing for this team is managed for the whole of ${organisation}. Open organisation billing to see spend, credits, payment method and invoices for every team.`
-      : `Billing for this team is managed for the whole of ${organisation}. An organisation billing manager looks after spend, credits and payment.`,
+    message: billingSubscriptionText(
+      params.canManage ? copy.organisationManagerMessage : copy.organisationMemberMessage,
+      { organisation },
+    ),
     can_manage: params.canManage,
     manage_action_id: params.canManage ? BILLING_ORG_BILLING_MANAGE_ACTION_ID : null,
   };
@@ -100,7 +105,7 @@ export function buildBillingControlledBy(params: {
  * statement or credits view simply omits the block.
  */
 export async function resolveBillingControlledBy(
-  params: { organisationId: string; userId: string },
+  params: { organisationId: string; userId: string; locale?: BillingCustomerLocale },
   deps?: { prisma?: PrismaClient },
 ): Promise<BillingControlledByV1 | null> {
   const prisma = deps?.prisma ?? getAdminPrisma();
@@ -111,5 +116,6 @@ export async function resolveBillingControlledBy(
     organisationId: responsibility.organisationId,
     organisationName: responsibility.organisationName,
     canManage,
+    locale: params.locale,
   });
 }

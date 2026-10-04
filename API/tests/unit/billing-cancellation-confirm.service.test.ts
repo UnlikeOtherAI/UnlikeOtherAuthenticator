@@ -189,7 +189,7 @@ describe('billing cancellation confirmation', () => {
       indirect_services: [
         {
           product: 'deepsignal',
-          impact: 'No separate subscription was cancelled.',
+          impact: 'No separate subscription was canceled.',
         },
       ],
     });

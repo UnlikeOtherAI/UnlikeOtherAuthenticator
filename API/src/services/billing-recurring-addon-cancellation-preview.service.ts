@@ -16,6 +16,8 @@ import {
 } from '../contracts/billing-statement-v1.js';
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
+import type { BillingCustomerLocale } from './billing-copy-locale.js';
+import { billingAddonCancelTitle, billingAddonCopy, billingAddonSubscriptionStatus } from './billing-addon-copy.catalog.js';
 import type { BillingActorEndpoint } from './billing-actor-audience.service.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
 import { resolveEffectiveTariffContext } from './billing-entitlement.service.js';
@@ -122,6 +124,7 @@ export async function createRecurringAddonCancellationPreview(
     actorToken: string;
     credential: VerifiedBillingAppKey;
     endpoint: BillingActorEndpoint;
+    locale?: BillingCustomerLocale;
   },
   deps?: {
     prisma?: PrismaClient;
@@ -228,19 +231,25 @@ export async function createRecurringAddonCancellationPreview(
     }
     throw error;
   }
+  const copy = billingAddonCopy(params.locale);
+  const localizedPrivacyOffer =
+    params.credential.service.identifier === 'deepwater' &&
+    subscription.offer.key === 'privacy' &&
+    subscription.offer.version === 1;
+  const offerName = localizedPrivacyOffer ? copy.privacyOfferName : subscription.offer.name;
   return {
     schema_version: BILLING_RECURRING_ADDONS_SCHEMA_VERSION,
     preview_token: previewToken,
     idempotency_key: idempotencyKey,
     expires_at: expiresAt.toISOString(),
-    title: `Cancel ${subscription.offer.name}?`,
-    description: 'The paid add-on will remain available until the current period ends.',
+    title: billingAddonCancelTitle(offerName, params.locale),
+    description: copy.cancelDescription,
     subscription: {
       id: subscription.id,
-      offer_name: subscription.offer.name,
+      offer_name: offerName,
       display_status: subscription.cancelAtPeriodEnd
-        ? 'Cancels at period end'
-        : subscription.status.replaceAll('_', ' '),
+        ? copy.cancelsAtPeriodEnd
+        : billingAddonSubscriptionStatus(subscription.status, params.locale),
       cancellation_effective_at: subscription.currentPeriodEnd?.toISOString() ?? null,
     },
     confirm_action: {
