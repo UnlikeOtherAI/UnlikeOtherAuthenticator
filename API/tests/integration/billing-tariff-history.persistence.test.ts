@@ -146,7 +146,8 @@ describe.skipIf(!enabled)('populated tariff-history migration', () => {
         INSERT INTO "billing_services" ("id", "identifier", "name", "created_at", "updated_at")
         VALUES
           ('old-stable', 'old-stable', 'Stable', '2026-05-10', '2026-05-10'),
-          ('old-changed', 'old-changed', 'Changed', '2026-05-10', '2026-08-09')
+          ('old-changed', 'old-changed', 'Changed', '2026-05-10', '2026-08-09'),
+          ('old-ambiguous', 'old-ambiguous', 'Ambiguous', '2026-05-10', '2026-06-09')
       `);
       await db.prisma.$executeRawUnsafe(`
         INSERT INTO "billing_tariffs" ("id", "service_id", "key", "version", "name",
@@ -155,7 +156,11 @@ describe.skipIf(!enabled)('populated tariff-history migration', () => {
           ('old-stable-tariff', 'old-stable', 'standard', 1, 'Grandfathered',
             'STANDARD', 'NONE', 1250, 'USD', true, '2026-05-10'),
           ('old-changed-tariff', 'old-changed', 'custom', 2, 'Negotiated',
-            'CUSTOM', 'NONE', 1750, 'USD', true, '2026-08-09')
+            'CUSTOM', 'NONE', 1750, 'USD', true, '2026-08-09'),
+          ('old-ambiguous-first', 'old-ambiguous', 'standard', 1, 'First',
+            'STANDARD', 'NONE', 1250, 'USD', false, '2026-05-10'),
+          ('old-ambiguous-current', 'old-ambiguous', 'standard', 2, 'Current',
+            'STANDARD', 'NONE', 3000, 'USD', true, '2026-06-09')
       `);
       await db.prisma.$executeRawUnsafe(`
         INSERT INTO "admin_audit_log" ("id", "actor_email", "action", "metadata", "created_at")
@@ -173,10 +178,26 @@ describe.skipIf(!enabled)('populated tariff-history migration', () => {
         env: { ...process.env, DATABASE_URL: db.databaseUrl },
         stdio: 'pipe',
       });
+      const conservativeCutoff = path.resolve(here,
+        '../../prisma/migrations/20261004130200_conservative_legacy_tariff_cutoff/migration.sql');
+      execFileSync(process.execPath, [prismaCli, 'db', 'execute', '--schema',
+        'prisma/schema.prisma', '--file', conservativeCutoff], {
+        cwd: path.resolve(here, '../..'),
+        env: { ...process.env, DATABASE_URL: db.databaseUrl },
+        stdio: 'pipe',
+      });
       const stable = await db.prisma.billingService.findUniqueOrThrow({ where: { id: 'old-stable' } });
       const changed = await db.prisma.billingService.findUniqueOrThrow({ where: { id: 'old-changed' } });
       expect(stable.tariffHistoryFromMonth).toBe('2026-05');
       expect(changed.tariffHistoryFromMonth).toBe('2026-09');
+      const ambiguous = await db.prisma.billingService.findUniqueOrThrow({
+        where: { id: 'old-ambiguous' },
+      });
+      expect(ambiguous.tariffHistoryFromMonth > '2026-06').toBe(true);
+      await expect(resolveBillingTariffForMonth(db.prisma, {
+        serviceId: 'old-ambiguous', organisationId: 'org', teamId: 'team',
+        billingMonth: '2026-06',
+      })).rejects.toThrow('BILLING_TARIFF_HISTORY_RECONCILIATION_REQUIRED');
       const stableTerm = await resolveBillingTariffForMonth(db.prisma, {
         serviceId: 'old-stable', organisationId: 'org', teamId: 'team', billingMonth: '2026-06',
       });

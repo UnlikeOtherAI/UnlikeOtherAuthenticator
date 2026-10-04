@@ -50,13 +50,32 @@ versions may only be activated for a future UTC billing month. Activation
 records their immutable terms without moving the live assignment, so already
 dispatched but not yet settled usage in the current month keeps its price.
 Legacy activated versions retain their original effective months and terms.
+For a terminated manual contract, its explicit terms remain authoritative for
+whole UTC months before `terminated_at`. If termination is exactly at a UTC
+month start, that month uses the next evidenced ordinary term. A termination
+within a month cannot be split from monthly Ledger usage, so that month is
+held as `BILLING_CONTRACT_TERMINATION_MONTH_RECONCILIATION_REQUIRED`. Later
+months must not inherit a stale assignment to the terminated contract tariff:
+they use a separately evidenced effective term or remain held.
 
 The migration starts legacy history only at a month for which the current
 pointer can be supported by the service creation, assignment update, and
-administrator audit timestamps. It retains existing tariffs unchanged. Older
+administrator audit timestamps. A later tariff version moves that boundary
+forward; multiple versions without a pricing audit cannot prove the old
+default and remain held until a month after migration. It retains existing
+tariffs unchanged. Older
 months without reliable evidence return
 `BILLING_TARIFF_HISTORY_RECONCILIATION_REQUIRED` and require an audited
 operator reconciliation; UOA must not infer their price from today's pointer.
+Reconciliation needs the executed agreement and activation/termination dates
+(if contractual), the contemporaneous tariff or assignment change and its
+administrator audit record, and the exact organisation, team, service, and
+month in Ledger. The operator must compare existing credits, Stripe exports,
+and issued invoices before recording a new append-only effective decision;
+settled rows require an explicit adjustment rather than a silent rerating.
+No operator endpoint exists yet, so an interval lacking this evidence stays
+held. A current pointer or the first statement read is not evidence of an
+earlier price.
 For a `standard` tariff, omitting `markup_bps` in the administrator API uses
 3,000 basis points centrally. `custom` requires an explicit value; `free` and
 `at_cost` default to zero. Provider cost is reported separately from the

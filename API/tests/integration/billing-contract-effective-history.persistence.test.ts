@@ -81,5 +81,35 @@ describe.skipIf(!process.env.DATABASE_URL)('manual contract effective history', 
     });
     expect(delayedAugust.tariff.id).toBe(inAugust.tariff.id);
     expect(inSeptember.tariff.markupBps).toBe(900);
+
+    // A legacy current pointer can still name the old manual tariff. It must
+    // not extend that discount after the agreement is terminated.
+    await db.prisma.billingTariffTermEvent.create({
+      data: { serviceId, source: 'ORGANISATION', scopeKey: orgId,
+        effectiveFromMonth: '2026-09', tariffId: inSeptember.tariff.id,
+        reason: 'legacy-contract-pointer' },
+    });
+    await db.prisma.billingOrganisationContract.update({
+      where: { id: contractId },
+      data: { status: 'TERMINATED', terminatedAt: new Date('2026-10-15T12:00:00Z') },
+    });
+    const historical = await resolveBillingTariffForMonth(db.prisma, {
+      serviceId, organisationId: orgId, teamId: 'team', billingMonth: '2026-09',
+    });
+    expect(historical.tariff.id).toBe(inSeptember.tariff.id);
+    await expect(resolveBillingTariffForMonth(db.prisma, {
+      serviceId, organisationId: orgId, teamId: 'team', billingMonth: '2026-10',
+    })).rejects.toThrow('BILLING_CONTRACT_TERMINATION_MONTH_RECONCILIATION_REQUIRED');
+    await expect(resolveBillingTariffForMonth(db.prisma, {
+      serviceId, organisationId: orgId, teamId: 'team', billingMonth: '2026-11',
+    })).rejects.toThrow('BILLING_TARIFF_HISTORY_RECONCILIATION_REQUIRED');
+    await db.prisma.billingTariffTermEvent.create({
+      data: { serviceId, source: 'ORGANISATION', scopeKey: orgId,
+        effectiveFromMonth: '2026-12', tariffId: null, reason: 'reconciled-removal' },
+    });
+    const december = await resolveBillingTariffForMonth(db.prisma, {
+      serviceId, organisationId: orgId, teamId: 'team', billingMonth: '2026-12',
+    });
+    expect(december.tariff.markupBps).toBe(3000);
   }, 120_000);
 });

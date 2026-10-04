@@ -81,6 +81,7 @@ export async function resolveBillingTariffForMonth(
       serviceTerms: { some: {} },
     },
     include: {
+      contract: { select: { status: true, terminatedAt: true } },
       serviceTerms: {
         where: { serviceId: params.serviceId },
         include: { tariff: true },
@@ -92,7 +93,23 @@ export async function resolveBillingTariffForMonth(
   for (const item of contractVersions) {
     if (!latestByContract.has(item.contractId)) latestByContract.set(item.contractId, item);
   }
-  const claims = [...latestByContract.values()].filter((item) => item.serviceTerms.length > 0);
+  const terminatedTariffIds = new Set(contractVersions
+    .filter((item) => item.contract.status === 'TERMINATED' && item.contract.terminatedAt &&
+      params.billingMonth >= utcBillingMonth(item.contract.terminatedAt))
+    .flatMap((item) => item.serviceTerms.map((term) => term.tariffId)));
+  const claims = [...latestByContract.values()].filter((item) => {
+    if (item.serviceTerms.length === 0) return false;
+    if (item.contract.status !== 'TERMINATED') return true;
+    const terminatedAt = item.contract.terminatedAt;
+    if (!terminatedAt) throw new AppError('INTERNAL', 500, 'BILLING_CONTRACT_TERMINATION_CORRUPT');
+    const terminationMonth = utcBillingMonth(terminatedAt);
+    if (params.billingMonth < terminationMonth) return true;
+    if (params.billingMonth > terminationMonth) return false;
+    const monthStart = new Date(`${terminationMonth}-01T00:00:00.000Z`);
+    if (terminatedAt.getTime() === monthStart.getTime()) return false;
+    throw new AppError('INTERNAL', 409,
+      'BILLING_CONTRACT_TERMINATION_MONTH_RECONCILIATION_REQUIRED');
+  });
   if (claims.length > 1) {
     throw new AppError('INTERNAL', 409, 'BILLING_CONTRACT_TERMS_CONFLICT');
   }
@@ -125,6 +142,9 @@ export async function resolveBillingTariffForMonth(
     if (event.tariffId === null) continue;
     if (!event.tariff || event.tariff.serviceId !== params.serviceId) {
       throw new AppError('INTERNAL', 500, 'BILLING_TARIFF_HISTORY_CORRUPT');
+    }
+    if (terminatedTariffIds.has(event.tariffId)) {
+      throw new AppError('INTERNAL', 409, 'BILLING_TARIFF_HISTORY_RECONCILIATION_REQUIRED');
     }
     return { tariff: event.tariff, source: choice.source, assignmentId: event.assignmentId };
   }
