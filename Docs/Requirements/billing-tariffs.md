@@ -1198,3 +1198,31 @@ leases persist the initial locale so even a lost-response retry in another
 language retains identical Stripe idempotency parameters. Legacy leases keep
 NULL and omit locale. Portal locale variants have separate session idempotency
 keys; opening a portal does not create a purchase.
+
+### Credit attention and member funding help (2026-10-04)
+
+Billing Presentation 1.5.0 credit reads may include source-confirmed attention
+events with opaque event keys and one of five stable kinds: low credits, no
+credits, payment action required, expired card, or paused automatic top-up.
+Low-credit attention requires an explicit positive threshold from the active
+consent or an active configured automatic option. Free or non-metered billing
+does not produce a balance warning. Event keys bind the source credit account,
+kind, current UTC billing period, and the last funding credit entry or consent
+generation as appropriate; changing balance text alone cannot create a new
+event.
+
+The negotiated credit projection may offer a member a localized action to ask
+for funding help for metered billing with payment collection enabled, when a
+currently authorized billing manager is reachable.
+The consumer POSTs the exact projected subject to
+`/billing/v1/credits/funding-request`; it cannot choose recipient IDs. UOA
+rechecks the fresh endpoint-bound actor, active user and exact org/team
+memberships, current organization billing responsibility, and current billing
+manager roles. For organization-funded accounts, only active organization
+owners/admins are eligible recipients; otherwise active organization or
+selected-team billing managers are eligible. The response returns a source
+account/team/requester/UTC-day-scoped opaque request ID and the current
+eligible recipient IDs. It neither sends a message nor claims a notification
+was delivered. Consumers map only those exact IDs to active local users and
+deduplicate any local alert by request ID. The strict response schema is
+`/schemas/billing-credit-funding-request-v1.json`.

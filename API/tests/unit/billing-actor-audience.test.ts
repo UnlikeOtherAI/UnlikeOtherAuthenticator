@@ -97,6 +97,7 @@ describe('billing actor endpoint registry', () => {
     const files = [
       'cancellation.ts',
       'credit-funding-actions.ts',
+      'credit-funding-request.ts',
       'credits.ts',
       'customer-statement.ts',
       'effective-tariff.ts',

@@ -2,6 +2,8 @@ import { BillingCreditEntryDirection, BillingCreditEntryKind } from '@prisma/cli
 
 import type {
   BillingControlledByV1,
+  BillingCreditAttentionV1,
+  BillingCreditFundingRequestActionV1,
   BillingCreditsManagerV1,
   BillingCreditsMemberV1,
   BillingCreditsV1,
@@ -126,6 +128,8 @@ export function buildBillingCreditsProjection(params: {
   actionReadiness?: BillingCreditActionReadiness;
   controlledBy?: BillingControlledByV1 | null;
   locale?: BillingCustomerLocale;
+  attention?: BillingCreditAttentionV1[];
+  fundingRequest?: BillingCreditFundingRequestActionV1;
 }): BillingCreditsV1 {
   const { data, viewer } = params;
   const controlledBy = params.controlledBy ?? null;
@@ -206,6 +210,8 @@ export function buildBillingCreditsProjection(params: {
       description: copy.pendingCreditsDescription,
     },
     ...(controlledBy ? { controlled_by: controlledBy } : {}),
+    ...(params.attention ? { attention: params.attention } : {}),
+    ...(params.fundingRequest ? { funding_request: params.fundingRequest } : {}),
   };
   const summary = {
     credits_added: creditAmount(creditsAdded, params.locale),

@@ -54,6 +54,14 @@ export const billingFundingEndpoints: EndpointSchema[] = [
   },
   {
     method: 'GET',
+    path: '/schemas/billing-credit-funding-request-v1.json',
+    description:
+      'Public Draft 2020-12 schema for the exact-scope funding-help acknowledgement; it lists eligible UOA user IDs but does not claim a notification was delivered.',
+    auth: 'public',
+    response: { 200: 'BillingCreditFundingRequestV1 JSON Schema' },
+  },
+  {
+    method: 'GET',
     path: '/schemas/billing-recurring-addons-v1.json',
     description:
       'Public Draft 2020-12 schema for UOA’s display-ready recurring add-on offers and exact-scope subscriptions.',
@@ -93,6 +101,22 @@ export const billingFundingEndpoints: EndpointSchema[] = [
     },
     notes:
       'Settlement is deterministic, serializable, and cursor-idempotent. Available credits stop at zero while UOA retains the full centrally rated service/user liability; only a verified reversal may create debt. Products render the returned model and never rate or reallocate credits locally.',
+  },
+  {
+    method: 'POST',
+    path: '/billing/v1/credits/funding-request',
+    description:
+      'Resolve current eligible billing managers for a member’s exact team credit account without sending a message or claiming one was sent.',
+    auth: lifecycleAuth,
+    body: fundingSubject,
+    response: {
+      200: 'BillingCreditFundingRequestV1: stable opaque request_id and current recipient_user_ids',
+      '401/403': 'Invalid app key, actor, active membership, payer authority, or no eligible recipient',
+      400: 'Billing Presentation 1.5.0 is required',
+      '502/503': 'Current billing context is unavailable',
+    },
+    notes:
+      'The caller cannot choose recipient IDs. UOA rechecks the active organisation/team membership, current payer responsibility, and manager roles on every call. The HMAC request ID is deduplicable by account, selected team, requester, and UTC day. Products map only the returned IDs to active local users before creating their own alerts; this source endpoint sends nothing.',
   },
   {
     method: 'GET',
