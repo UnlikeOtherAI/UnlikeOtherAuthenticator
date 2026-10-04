@@ -23,6 +23,13 @@ type SerializableContractVersion = {
     serviceId: string;
     tariffId: string;
     monthlyAmountMinor: bigint;
+    fixedSeatQuantity?: number | null;
+    tariff: {
+      monthlyChargeBasis: 'FLAT' | 'PER_SEAT';
+      seatPolicy: 'AUTOMATIC' | 'FIXED' | null;
+      seatChargeTiming: 'FULL_MONTH' | 'PRORATED' | null;
+      usagePaymentMode: 'PAY_AS_YOU_GO' | 'PREPAID';
+    };
     service?: { identifier: string; name: string };
   }>;
 };
@@ -49,6 +56,11 @@ export function serializeContractVersion(
       service_name: term.service?.name ?? null,
       tariff_id: term.tariffId,
       monthly_amount_minor: term.monthlyAmountMinor.toString(),
+      monthly_charge_basis: term.tariff.monthlyChargeBasis.toLowerCase(),
+      seat_policy: term.tariff.seatPolicy?.toLowerCase() ?? null,
+      seat_charge_timing: term.tariff.seatChargeTiming?.toLowerCase() ?? null,
+      usage_payment_mode: term.tariff.usagePaymentMode.toLowerCase(),
+      fixed_seat_quantity: term.fixedSeatQuantity ?? null,
       monthly_price: {
         amount_minor: term.monthlyAmountMinor.toString(),
         ...exactMoney(

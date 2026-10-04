@@ -3,6 +3,7 @@ import type { FastifyInstance, FastifyRequest, RouteShorthandOptions } from 'fas
 import { z } from 'zod';
 
 import { requireAdminSuperuser } from '../../../middleware/admin-superuser.js';
+import { AppError } from '../../../utils/errors.js';
 import {
   activateBillingContractVersion,
   createBillingContract,
@@ -66,6 +67,28 @@ const VersionParamsSchema = ContractParamsSchema.extend({ versionId: IdentifierS
 const InvoiceParamsSchema = z.object({ invoiceId: IdentifierSchema }).strict();
 const OrganisationParamsSchema = z.object({ organisationId: IdentifierSchema }).strict();
 const ActorBodySchema = z.object({}).strict();
+const ContractActivationServiceSchema = z.object({
+  service_id: IdentifierSchema,
+  monthly_amount_minor: z.string().regex(/^(0|[1-9]\d*)$/),
+  monthly_charge_basis: z.enum(['flat', 'per_seat']).optional(),
+  seat_policy: z.enum(['automatic', 'fixed']).optional(),
+  seat_charge_timing: z.enum(['full_month', 'prorated']).optional(),
+  usage_payment_mode: z.enum(['pay_as_you_go', 'prepaid']).optional(),
+  fixed_seat_quantity: z.number().int().min(1).max(1_000_000).optional(),
+}).strict().superRefine((value, context) => {
+  const perSeat = value.monthly_charge_basis === 'per_seat';
+  if ((perSeat && (!value.seat_policy || !value.seat_charge_timing)) ||
+    (!perSeat && (value.seat_policy !== undefined ||
+      value.seat_charge_timing !== undefined))) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['seat_policy'],
+      message: 'Seat policy and timing must match the per-seat basis.' });
+  }
+  if ((perSeat && value.seat_policy === 'fixed') !==
+    (value.fixed_seat_quantity !== undefined)) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['fixed_seat_quantity'],
+      message: 'Purchased seats are required only for fixed per-seat terms.' });
+  }
+});
 
 const adminRoute: RouteShorthandOptions = {
   preHandler: [requireAdminSuperuser],
@@ -81,6 +104,12 @@ function actor(request: FastifyRequest) {
     tokenVersion: request.adminAccessTokenClaims?.tokenVersion ?? null,
     email: request.adminAccessTokenClaims?.email ?? 'unknown',
   };
+}
+
+function financialActor(request: FastifyRequest) {
+  const claims = request.adminAccessTokenClaims;
+  if (!claims) throw new AppError('UNAUTHORIZED', 401, 'MISSING_ACCESS_TOKEN');
+  return { userId: claims.userId, tokenVersion: claims.tokenVersion, email: claims.email };
 }
 
 async function serializeInvoices(invoices: CustomerSafeInvoice[]) {
@@ -149,7 +178,7 @@ export function registerInternalAdminBillingContractInvoiceRoutes(app: FastifyIn
         currency: body.currency,
         paymentTermsDays: body.payment_terms_days,
         effectiveFromMonth: body.effective_from_month,
-        actor: actor(request),
+        actor: financialActor(request),
       });
       return reply
         .status(201)
@@ -169,17 +198,7 @@ export function registerInternalAdminBillingContractInvoiceRoutes(app: FastifyIn
       const { contractId, versionId } = VersionParamsSchema.parse(request.params);
       const body = z
         .object({
-          services: z
-            .array(
-              z
-                .object({
-                  service_id: IdentifierSchema,
-                  monthly_amount_minor: z.string().regex(/^(0|[1-9]\d*)$/),
-                })
-                .strict(),
-            )
-            .min(1)
-            .max(100),
+          services: ContractActivationServiceSchema.array().min(1).max(100),
         })
         .strict()
         .parse(request.body);
@@ -189,8 +208,13 @@ export function registerInternalAdminBillingContractInvoiceRoutes(app: FastifyIn
         services: body.services.map((service) => ({
           serviceId: service.service_id,
           monthlyAmountMinor: service.monthly_amount_minor,
+          monthlyChargeBasis: service.monthly_charge_basis,
+          seatPolicy: service.seat_policy,
+          seatChargeTiming: service.seat_charge_timing,
+          usagePaymentMode: service.usage_payment_mode,
+          fixedSeatQuantity: service.fixed_seat_quantity,
         })),
-        actor: actor(request),
+        actor: financialActor(request),
       });
       return serializeContractVersion(version, 'active');
     },

@@ -5,15 +5,21 @@ import { useForm } from 'react-hook-form';
 import { Button } from '../../components/ui/Button';
 import { FieldShell, SelectField, TextField } from '../../components/ui/FormFields';
 import { Modal } from '../../components/ui/Modal';
+import { billingMajorToMinor } from './billing-money';
 import type { BillingService } from '../../schemas/billing';
 import {
   BillingContractFormSchema,
+  BillingContractServiceActivationSchema,
   BillingContractVersionFormSchema,
   type BillingContract,
   type BillingContractFormValues,
   type BillingContractVersion,
   type BillingContractVersionFormValues,
 } from '../../schemas/billing-contracts';
+import {
+  BillingContractServiceTermsRow, defaultServiceSelection,
+  type ServiceSelection,
+} from './BillingContractServiceTermsRow';
 import { useOrganisationsQuery } from './admin-queries';
 import {
   useActivateBillingContractVersionMutation,
@@ -45,6 +51,14 @@ function ErrorMessage({ error }: { error: unknown }) {
       {error instanceof Error ? error.message : 'The billing change could not be saved.'}
     </p>
   );
+}
+
+function monthlyAmountMinor(amount: string, currency: string): string {
+  try {
+    return billingMajorToMinor(amount, currency);
+  } catch {
+    return ''; // Invalid form value stays local; the activation schema rejects it.
+  }
 }
 
 export function CreateBillingContractDialog({
@@ -207,8 +221,6 @@ export function AddBillingContractVersionDialog({
   );
 }
 
-type ServiceSelection = Record<string, { enabled: boolean; amount: string }>;
-
 export function ActivateBillingContractVersionDialog({
   contract,
   onClose,
@@ -222,25 +234,35 @@ export function ActivateBillingContractVersionDialog({
 }) {
   const activate = useActivateBillingContractVersionMutation(contract?.id ?? '', version?.id ?? '');
   const activeServices = useMemo(() => services.filter((service) => service.active), [services]);
-  const initialSelection = useMemo<ServiceSelection>(
+  const initialSelection = useMemo<Record<string, ServiceSelection>>(
     () =>
       Object.fromEntries(
-        activeServices.map((service) => [service.id, { enabled: false, amount: '' }]),
+        activeServices.map((service) => [service.id, defaultServiceSelection()]),
       ),
     [activeServices],
   );
-  const [selection, setSelection] = useState<ServiceSelection>(initialSelection);
+  const [selection, setSelection] = useState<Record<string, ServiceSelection>>(initialSelection);
   const [validationError, setValidationError] = useState('');
   const [confirmed, setConfirmed] = useState(false);
-  const selectedServices = activeServices
+  const selectedInputs = activeServices
     .filter((service) => selection[service.id]?.enabled)
-    .map((service) => ({
-      serviceId: service.id,
-      monthlyAmountMinor: selection[service.id]?.amount ?? '',
-    }));
-  const selectionIsValid =
-    selectedServices.length > 0 &&
-    selectedServices.every((item) => /^(0|[1-9]\d*)$/.test(item.monthlyAmountMinor));
+    .map((service) => {
+      const value = selection[service.id];
+      return {
+        serviceId: service.id,
+        monthlyAmountMinor: monthlyAmountMinor(value.amount, version?.currency ?? ''),
+        monthlyChargeBasis: value.monthlyChargeBasis,
+        ...(value.monthlyChargeBasis === 'per_seat'
+          ? { seatPolicy: value.seatPolicy, seatChargeTiming: value.seatChargeTiming }
+          : {}),
+        usagePaymentMode: value.usagePaymentMode,
+        ...(value.monthlyChargeBasis === 'per_seat' && value.seatPolicy === 'fixed'
+          ? { fixedSeatQuantity: Number(value.fixedSeatQuantity) } : {}),
+      };
+    });
+  const parsedSelection = BillingContractServiceActivationSchema.array().min(1)
+    .safeParse(selectedInputs);
+  const selectionIsValid = parsedSelection.success;
 
   useEffect(() => {
     if (version) {
@@ -251,14 +273,14 @@ export function ActivateBillingContractVersionDialog({
   }, [initialSelection, version]);
 
   async function submit() {
-    if (!selectionIsValid || !confirmed) {
+    if (!parsedSelection.success || !confirmed) {
       setValidationError(
-        'Select at least one service, enter every monthly price, and confirm the immutable terms.',
+        'Select services, enter each monthly price and required seat quantity, then confirm.',
       );
       return;
     }
     try {
-      await activate.mutateAsync(selectedServices);
+      await activate.mutateAsync(parsedSelection.data);
       onClose();
     } catch {
       /* Preserve selected services and show the mutation error. */
@@ -270,7 +292,7 @@ export function ActivateBillingContractVersionDialog({
       isOpen={Boolean(contract && version)}
       onClose={onClose}
       isPending={activate.isPending}
-      isDirty={selectedServices.length > 0}
+      isDirty={selectedInputs.length > 0}
       title={`Activate version ${version?.version ?? ''}`}
       widthClassName="max-w-2xl"
       footer={
@@ -287,50 +309,26 @@ export function ActivateBillingContractVersionDialog({
     >
       <div className="space-y-4">
         <p className="text-sm text-gray-600">
-          Set the customer-facing monthly amount for each contracted service. Invoices show only
-          these calculated prices; raw token cost and margin stay private inside UOA.
+          Set each flat monthly fee or price per seat in {version?.currency ?? 'the chosen currency'},
+          seat policy, and usage payment mode.
+          Invoices show the calculated customer prices; raw token cost stays private inside UOA.
         </p>
         <p className="text-sm text-gray-600">
           These terms start in {version?.effective_from_month ?? 'the chosen future month'}.
           Current and earlier billing months keep their existing prices.
         </p>
         <div className="divide-y divide-gray-100 rounded-xl border border-gray-200">
-          {activeServices.map((service) => {
-            const current = selection[service.id] ?? { enabled: false, amount: '' };
-            return (
-              <div key={service.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
-                <label className="flex min-w-52 flex-1 items-center gap-2 text-sm font-medium text-gray-800">
-                  <input
-                    type="checkbox"
-                    checked={current.enabled}
-                    onChange={(event) => {
-                      setConfirmed(false);
-                      setSelection((value) => ({
-                        ...value,
-                        [service.id]: { ...current, enabled: event.target.checked },
-                      }));
-                    }}
-                  />
-                  {service.name}
-                  <span className="text-xs font-normal text-gray-400">{service.identifier}</span>
-                </label>
-                <TextField
-                  aria-label={`${service.name} monthly amount in minor units`}
-                  className="w-48"
-                  disabled={!current.enabled}
-                  inputMode="numeric"
-                  value={current.amount}
-                  onChange={(event) => {
-                    setConfirmed(false);
-                    setSelection((value) => ({
-                      ...value,
-                      [service.id]: { ...current, amount: event.target.value },
-                    }));
-                  }}
-                />
-              </div>
-            );
-          })}
+          {activeServices.map((service) => (
+            <BillingContractServiceTermsRow key={service.id} service={service}
+              value={selection[service.id] ?? defaultServiceSelection()}
+              currency={version?.currency ?? ''}
+              onChange={(patch) => {
+                setConfirmed(false);
+                setSelection((value) => ({ ...value,
+                  [service.id]: { ...(value[service.id] ?? defaultServiceSelection()), ...patch },
+                }));
+              }} />
+          ))}
           {activeServices.length === 0 ? (
             <p className="px-4 py-5 text-sm text-gray-500">
               No active billing services are available.
@@ -339,7 +337,7 @@ export function ActivateBillingContractVersionDialog({
         </div>
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-950">
           <p className="font-medium">
-            {selectedServices.length} service{selectedServices.length === 1 ? '' : 's'} selected ·{' '}
+            {selectedInputs.length} service{selectedInputs.length === 1 ? '' : 's'} selected ·{' '}
             {version?.currency ?? '—'}
           </p>
           <label className="mt-2 flex items-start gap-2 text-xs">
@@ -349,8 +347,8 @@ export function ActivateBillingContractVersionDialog({
               checked={confirmed}
               onChange={(event) => setConfirmed(event.target.checked)}
             />
-            I confirm these exact monthly prices and understand activation freezes this contract
-            version.
+            I confirm these exact subscription and usage payment terms. Fixed seat capacity
+            applies when activated, even if billing starts in a future month.
           </label>
         </div>
         {validationError ? <p className="text-sm text-red-600">{validationError}</p> : null}

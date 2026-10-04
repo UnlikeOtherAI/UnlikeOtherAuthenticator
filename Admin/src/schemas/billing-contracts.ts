@@ -34,6 +34,11 @@ export const BillingContractVersionSchema = z.object({
       tariff_id: z.string(),
       monthly_amount_minor: z.string(),
       monthly_price: MoneySchema,
+      monthly_charge_basis: z.enum(['flat', 'per_seat']),
+      seat_policy: z.enum(['automatic', 'fixed']).nullable(),
+      seat_charge_timing: z.enum(['full_month', 'prorated']).nullable(),
+      usage_payment_mode: z.enum(['pay_as_you_go', 'prepaid']),
+      fixed_seat_quantity: z.number().int().positive().nullable(),
     }),
   ),
   actions: z.object({
@@ -208,6 +213,32 @@ export const BillingContractVersionFormSchema = z.object({
   effectiveFromMonth: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
 });
 
+export const BillingContractServiceActivationSchema = z.object({
+  serviceId: IdentifierSchema,
+  monthlyAmountMinor: z.string().regex(/^(0|[1-9]\d*)$/),
+  monthlyChargeBasis: z.enum(['flat', 'per_seat']),
+  seatPolicy: z.enum(['automatic', 'fixed']).optional(),
+  seatChargeTiming: z.enum(['full_month', 'prorated']).optional(),
+  usagePaymentMode: z.enum(['pay_as_you_go', 'prepaid']),
+  fixedSeatQuantity: z.number().int().min(1).max(1_000_000).optional(),
+}).superRefine((value, ctx) => {
+  if (value.monthlyChargeBasis === 'flat' &&
+    (value.seatPolicy || value.seatChargeTiming || value.fixedSeatQuantity !== undefined)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['monthlyChargeBasis'],
+      message: 'Flat fees cannot have seat terms.' });
+  }
+  if (value.monthlyChargeBasis === 'per_seat' &&
+    (!value.seatPolicy || !value.seatChargeTiming)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['seatPolicy'],
+      message: 'Choose seat count and charge timing.' });
+  }
+  if ((value.monthlyChargeBasis === 'per_seat' && value.seatPolicy === 'fixed') !==
+    (value.fixedSeatQuantity !== undefined)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['fixedSeatQuantity'],
+      message: 'Purchased seats are required only for fixed seat terms.' });
+  }
+});
+
 export const BillingInvoiceIssuerFormSchema = z.object({
   key: z
     .string()
@@ -264,6 +295,8 @@ export type BillingInvoiceIssuerProfile = z.infer<typeof BillingInvoiceIssuerPro
 export type BillingInvoiceBuyerProfile = z.infer<typeof BillingInvoiceBuyerProfileSchema>;
 export type BillingContractFormValues = z.infer<typeof BillingContractFormSchema>;
 export type BillingContractVersionFormValues = z.infer<typeof BillingContractVersionFormSchema>;
+export type BillingContractServiceActivation =
+  z.infer<typeof BillingContractServiceActivationSchema>;
 export type BillingInvoiceIssuerFormValues = z.infer<typeof BillingInvoiceIssuerFormSchema>;
 export type BillingInvoiceBuyerFormValues = z.infer<typeof BillingInvoiceBuyerFormSchema>;
 export type BillingInvoiceCalculateFormValues = z.infer<typeof BillingInvoiceCalculateFormSchema>;

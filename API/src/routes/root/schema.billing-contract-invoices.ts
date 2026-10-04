@@ -56,11 +56,11 @@ export const billingContractInvoiceEndpoints: EndpointSchema[] = [
     method: 'POST',
     path: '/internal/admin/billing/contracts/:contractId/versions/:versionId/activate',
     description:
-      'On or after its effective UTC month, atomically activate the version and project one immutable CUSTOM+MANUAL org tariff per selected service. Rejects carried-assignment drift, team overrides, and nonterminal Stripe state.',
+      'Schedule future-effective immutable CUSTOM+MANUAL organisation terms per selected service. Capture the UOA seat baseline now and track it until the commercial month. Reject carried-assignment drift, team overrides, and nonterminal Stripe state.',
     auth: adminAuth,
     body: {
       services:
-        'non-empty [{ service_id, monthly_amount_minor }]; service set is pinned to the version',
+        'non-empty [{ service_id, monthly_amount_minor, monthly_charge_basis?, seat_policy?, seat_charge_timing?, usage_payment_mode?, fixed_seat_quantity? }]. New operator writes choose the basis and usage mode; fixed quantity is required only for fixed per-seat terms. Omitted fields retain legacy flat/pay-as-you-go semantics.',
     },
     response: { 200: 'Activated contract version with service terms. ' + versionActionProjection },
   },

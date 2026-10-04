@@ -3,6 +3,12 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { activateBillingContractVersion } from '../../src/services/billing-contract.service.js';
 
+vi.mock('../../src/services/internal-admin-lifecycle.service.js', () => ({
+  requireLifecycleActor: vi.fn().mockResolvedValue('verified-admin@example.com'),
+}));
+
+const actor = { userId: 'admin_1', tokenVersion: 0, email: 'admin@example.com' };
+
 function version(values?: Record<string, unknown>) {
   return {
     id: 'version_1',
@@ -112,7 +118,7 @@ describe('organisation contract activation', () => {
           { serviceId: 'service_1', monthlyAmountMinor: '5000' },
           { serviceId: 'service_2', monthlyAmountMinor: '1000' },
         ],
-        actor: { email: 'admin@example.com' },
+        actor,
       },
       { prisma: prisma as never, now: () => new Date('2026-07-20T00:00:00.000Z') },
     );
@@ -151,7 +157,7 @@ describe('organisation contract activation', () => {
             { serviceId: 'service_1', monthlyAmountMinor: '5000' },
             { serviceId: 'service_2', monthlyAmountMinor: '1000' },
           ],
-          actor: { email: 'admin@example.com' },
+          actor,
         },
         { prisma: prisma as never, now: () => new Date('2026-07-20T00:00:00.000Z') },
       ),
@@ -171,7 +177,7 @@ describe('organisation contract activation', () => {
             { serviceId: 'service_2', monthlyAmountMinor: '1000' },
             { serviceId: 'service_1', monthlyAmountMinor: '5000' },
           ],
-          actor: { email: 'admin@example.com' },
+          actor,
         },
         { prisma: prisma as never, now: () => new Date('2026-07-20T00:00:00.000Z') },
       ),
@@ -205,7 +211,7 @@ describe('organisation contract activation', () => {
           contractId: 'contract_1',
           contractVersionId: 'version_1',
           services: [{ serviceId: 'service_1', monthlyAmountMinor: '5000' }],
-          actor: { email: 'admin@example.com' },
+          actor,
         },
         { prisma: prisma as never, now: () => new Date('2026-07-31T23:59:59.999Z') },
       );
@@ -218,14 +224,14 @@ describe('organisation contract activation', () => {
     await expect(activateBillingContractVersion({
       contractId: 'contract_1', contractVersionId: 'version_1',
       services: [{ serviceId: 'service_1', monthlyAmountMinor: '5000' }],
-      actor: { email: 'admin@example.com' },
+      actor,
     }, { prisma: past.prisma as never, now: () => new Date('2026-08-01T00:00:00Z') }))
       .rejects.toThrow('BILLING_CONTRACT_RETROACTIVE_TERMS_RECONCILIATION_REQUIRED');
     const frozen = setup({ versions: [version({ effectiveFromMonth: '2026-07' })] });
     await expect(activateBillingContractVersion({
       contractId: 'contract_1', contractVersionId: 'version_1',
       services: [{ serviceId: 'service_1', monthlyAmountMinor: '5000' }],
-      actor: { email: 'admin@example.com' },
+      actor,
     }, { prisma: frozen.prisma as never, now: () => new Date('2026-07-20T00:00:00Z') }))
       .rejects.toThrow('BILLING_CONTRACT_RETROACTIVE_TERMS_RECONCILIATION_REQUIRED');
   });
@@ -257,7 +263,7 @@ describe('organisation contract activation', () => {
         contractId: 'contract_1',
         contractVersionId: 'version_2',
         services: [{ serviceId: 'service_1', monthlyAmountMinor: '2000' }],
-        actor: { email: 'admin@example.com' },
+        actor,
       },
       { prisma: prisma as never, now: () => new Date('2026-08-01T00:00:00.000Z') },
     );
@@ -298,7 +304,7 @@ describe('organisation contract activation', () => {
           contractId: 'contract_1',
           contractVersionId: 'version_2',
           services: [{ serviceId: 'service_1', monthlyAmountMinor: '2000' }],
-          actor: { email: 'admin@example.com' },
+          actor,
         },
         { prisma: prisma as never, now: () => new Date('2026-08-01T00:00:00.000Z') },
       ),

@@ -41,6 +41,9 @@ const version = {
       service_name: 'DeepWater',
       tariff_id: 'tariff-1',
       monthly_amount_minor: '5000',
+      monthly_charge_basis: 'flat', seat_policy: null,
+      seat_charge_timing: null, usage_payment_mode: 'pay_as_you_go',
+      fixed_seat_quantity: null,
       monthly_price: {
         amount_minor: '5000',
         amount: '50',
@@ -189,7 +192,8 @@ describe('billingContractAdminService', () => {
       effectiveFromMonth: '2026-07',
     });
     await billingContractAdminService.activateVersion('contract/1', 'version/1', [
-      { serviceId: 'service-1', monthlyAmountMinor: '5000' },
+      { serviceId: 'service-1', monthlyAmountMinor: '5000',
+        monthlyChargeBasis: 'flat', usagePaymentMode: 'prepaid' },
     ]);
 
     expect(api.get).toHaveBeenCalledWith(
@@ -213,7 +217,8 @@ describe('billingContractAdminService', () => {
     expect(api.post).toHaveBeenNthCalledWith(
       3,
       '/internal/admin/billing/contracts/contract%2F1/versions/version%2F1/activate',
-      { services: [{ service_id: 'service-1', monthly_amount_minor: '5000' }] },
+      { services: [{ service_id: 'service-1', monthly_amount_minor: '5000',
+        monthly_charge_basis: 'flat', usage_payment_mode: 'prepaid' }] },
     );
   });
 

@@ -231,6 +231,16 @@ time; terminal evidence closes it once. A missing baseline, unclosed month, or
 unproven Stripe billable period holds the finalized quote. The canonical cycle
 snapshot must freeze this quote before either Stripe invoice delivery or manual
 invoice issue; a live quote alone is never collection authority.
+The existing Admin Billing → Contracts → Activate version doorway collects each
+service's monthly flat fee or per-seat unit price in natural currency units,
+converted exactly to stored minor units, automatic or fixed quantity
+policy, full-month or prorated timing, and independent prepaid or pay-as-you-go
+usage mode. Fixed terms require an explicit purchased quantity. Activation
+readback labels a per-seat amount as a unit price and shows the saved capacity
+and payment mode. New operator terms default to prepaid; an older two-field
+activation request retains flat/pay-as-you-go semantics on replay. This
+operator action rechecks the superuser role and token epoch inside the final
+terms transaction, including idempotent replay.
 When a later manual term replaces a fixed-capacity agreement, the old
 agreement's immutable commercial end removes its admission limit exactly at
 the boundary even if the evidence-ending sweep runs later. A newly scheduled

@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { getAdminAuthDomain } from '../../src/config/env.js';
 import { activateBillingContractVersion } from '../../src/services/billing-contract.service.js';
 import { resolveBillingTariffForMonth } from '../../src/services/billing-tariff-history.service.js';
 import { createTestDb } from '../helpers/test-db.js';
@@ -11,6 +12,7 @@ describe.skipIf(!process.env.DATABASE_URL)('manual contract effective history', 
   let orgId: string;
   let serviceId: string;
   let contractId: string;
+  let actor: { userId: string; tokenVersion: number; email: string };
 
   beforeAll(async () => {
     const created = await createTestDb();
@@ -19,6 +21,10 @@ describe.skipIf(!process.env.DATABASE_URL)('manual contract effective history', 
     const owner = await db.prisma.user.create({
       data: { email: 'owner@terms.example', userKey: 'owner@terms.example', name: 'Owner' },
     });
+    actor = { userId: owner.id, tokenVersion: owner.tokenVersion, email: owner.email! };
+    await db.prisma.domainRole.create({ data: {
+      userId: owner.id, domain: getAdminAuthDomain(), role: 'SUPERUSER',
+    } });
     const org = await db.prisma.organisation.create({
       data: { ownerId: owner.id, name: 'Terms', slug: 'terms', domain: 'terms.example' },
     });
@@ -51,7 +57,7 @@ describe.skipIf(!process.env.DATABASE_URL)('manual contract effective history', 
     await activateBillingContractVersion({
       contractId, contractVersionId: august.id,
       services: [{ serviceId, monthlyAmountMinor: '500' }],
-      actor: { email: 'admin@terms.example' },
+      actor,
     }, { prisma: db.prisma, now: () => new Date('2026-07-20T00:00:00Z') });
     expect(await db.prisma.billingTariffAssignment.count({ where: { serviceId } })).toBe(0);
     const july = await resolveBillingTariffForMonth(db.prisma, {
@@ -71,7 +77,7 @@ describe.skipIf(!process.env.DATABASE_URL)('manual contract effective history', 
     await activateBillingContractVersion({
       contractId, contractVersionId: september.id,
       services: [{ serviceId, monthlyAmountMinor: '600' }],
-      actor: { email: 'admin@terms.example' },
+      actor,
     }, { prisma: db.prisma, now: () => new Date('2026-08-20T00:00:00Z') });
     const delayedAugust = await resolveBillingTariffForMonth(db.prisma, {
       serviceId, organisationId: orgId, teamId: 'team', billingMonth: '2026-08',
