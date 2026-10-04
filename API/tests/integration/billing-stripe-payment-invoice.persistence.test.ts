@@ -17,7 +17,14 @@ import { prepareStripePaymentInvoice, persistStripePaymentInvoice }
 import { issueStripePaymentInvoice } from '../../src/services/billing-stripe-payment-invoice-issue.service.js';
 import { runStripePaymentInvoiceCycle } from '../../src/services/billing-stripe-payment-invoice-scheduler.service.js';
 import { handleStripeWebhook } from '../../src/services/billing-stripe-webhook.service.js';
+import { prepareStripePaymentAdjustment, persistStripePaymentAdjustment }
+  from '../../src/services/billing-stripe-payment-adjustment-source.service.js';
 import { createTestDb } from '../helpers/test-db.js';
+import { createStripeInvoiceFixture } from '../helpers/stripe-payment-invoice-fixture.js';
+
+vi.mock('../../src/services/billing-actor.service.js', () => ({
+  verifyBillingActor: vi.fn().mockResolvedValue({}),
+}));
 
 vi.mock('../../src/services/billing-actor.service.js', () => ({
   verifyBillingActor: vi.fn().mockResolvedValue({}),
@@ -111,45 +118,7 @@ describe.skipIf(!process.env.DATABASE_URL)('regular Stripe payment legal source'
   });
   afterAll(async () => { if (db) await db.cleanup(); });
 
-  async function setup(id = `in_${randomUUID().replaceAll('-', '')}`) {
-    const account = await db.prisma.billingStripeAccount.findUniqueOrThrow({ where: { id: accountId } });
-    const invoice = { id, livemode: false, status: 'paid', customer: 'cus_monthly', currency: 'usd',
-      parent: { type: 'subscription_details', subscription_details: { subscription: 'sub_monthly' } },
-      billing_reason: 'subscription_create', amount_paid: 2000, amount_due: 2000, amount_remaining: 0,
-      total: 2500, total_taxes: [{ amount: 500 }], number: `INV-${id}`,
-      account_name: 'Verified seller', account_country: 'GB', customer_name: 'Verified buyer',
-      customer_email: 'finance@example.test', customer_address: { country: 'GB', line1: '1 Road',
-        line2: null, city: 'London', postal_code: 'SW1A 1AA', state: null },
-      status_transitions: { finalized_at: endsAt.getTime() / 1000, paid_at: paidAt.getTime() / 1000 },
-      effective_at: null, invoice_pdf: 'https://pay.stripe.com/invoice/test.pdf',
-    };
-    const paymentId = `inpay_${id}`; const intentId = `pi_${id}`; const chargeId = `ch_${id}`;
-    const lines = [{ id: `il_${id}`, invoice: id, currency: 'usd', livemode: false, amount: 2500,
-      parent: { type: 'subscription_item_details', subscription_item_details: {
-        subscription: 'sub_monthly', subscription_item: 'si_monthly', proration: false } },
-      period: { start: startsAt.getTime() / 1000, end: endsAt.getTime() / 1000 },
-      discount_amounts: [], pretax_credit_amounts: [], taxes: [{ amount: 500, tax_behavior: 'inclusive' }],
-    }];
-    const stripe = { accounts: { retrieveCurrent: vi.fn().mockResolvedValue({ id: account.stripeAccountId }) },
-      invoices: { retrieve: vi.fn().mockResolvedValue(invoice),
-        listLineItems: vi.fn().mockResolvedValue({ data: lines, has_more: false }) },
-      invoicePayments: { list: vi.fn().mockResolvedValue({ data: [{ id: paymentId,
-        invoice: id, livemode: false, currency: 'usd', status: 'paid', amount_paid: 2000,
-        payment: { type: 'payment_intent', payment_intent: intentId },
-        status_transitions: { paid_at: paidAt.getTime() / 1000 } }], has_more: false }) },
-      paymentIntents: { retrieve: vi.fn().mockResolvedValue({ id: intentId, latest_charge: chargeId,
-        customer: 'cus_monthly', currency: 'usd', livemode: false, status: 'succeeded', amount_received: 2000 }) },
-      charges: { retrieve: vi.fn().mockResolvedValue({ id: chargeId, payment_intent: intentId,
-        customer: 'cus_monthly', currency: 'usd', livemode: false, status: 'succeeded',
-        paid: true, captured: true, amount_captured: 2000 }) },
-      subscriptions: { retrieve: vi.fn() }, webhooks: { constructEvent: vi.fn().mockReturnValue({
-        id: `evt_${id}`, type: 'invoice.paid', api_version: '2026-06-24.dahlia',
-        livemode: false, account: account.stripeAccountId, created: paidAt.getTime() / 1000 + 300,
-        data: { object: invoice } }) },
-    };
-    return { account, invoice, lines, stripe: stripe as unknown as Stripe,
-      intentId, paymentId, chargeId };
-  }
+  const setup = (id?: string) => createStripeInvoiceFixture(db.prisma, accountId, id);
 
   async function prepare(fixture: Awaited<ReturnType<typeof setup>>) {
     const prepared = await prepareStripePaymentInvoice(fixture.invoice.id, fixture.account,
@@ -433,4 +402,80 @@ describe.skipIf(!process.env.DATABASE_URL)('regular Stripe payment legal source'
     expect(held.state).toBe('HELD'); expect(held.nextIssueAttemptAt.getTime()).toBeGreaterThan(now.getTime());
     expect(held.issueAttemptCount).toBe(1);
   });
+
+  it('records proven refund cash once, retains invoice debt and leaves prepaid credits alone', async () => {
+    const fixture = await setup();
+    const refund = { id: `re_${fixture.invoice.id}`, livemode: false, amount: 300, currency: 'usd',
+      status: 'succeeded', payment_intent: fixture.intentId, charge: fixture.chargeId,
+      balance_transaction: `bt_${fixture.invoice.id}` };
+    fixture.stripe.refunds = { retrieve: vi.fn().mockResolvedValue(refund) } as unknown as Stripe['refunds'];
+    fixture.stripe.balanceTransactions = { retrieve: vi.fn().mockResolvedValue({
+      id: refund.balance_transaction, amount: -300, currency: 'usd', source: refund.id,
+      exchange_rate: null, created: paidAt.getTime() / 1000 + 100,
+    }) } as unknown as Stripe['balanceTransactions'];
+    const event = { id: `evt_refund_${fixture.invoice.id}`, type: 'refund.updated',
+      api_version: '2026-06-24.dahlia', livemode: false, account: fixture.account.stripeAccountId,
+      created: paidAt.getTime() / 1000 + 900, data: { object: refund } } as unknown as Stripe.Event;
+    (fixture.stripe.webhooks.constructEvent as unknown as ReturnType<typeof vi.fn>).mockReturnValue(event);
+    const request = { rawBody: Buffer.from('{}'), signature: 'verified-fixture' };
+    const deps = { prisma: db.prisma, stripe: fixture.stripe, stripeLivemode: false,
+      webhookSecret: 'fixture-secret', collectionEnabled: true };
+    expect(await handleStripeWebhook(request, deps)).toEqual({ duplicate: false });
+    expect(await handleStripeWebhook(request, deps)).toEqual({ duplicate: true });
+    const source = await db.prisma.billingStripePaymentInvoice.findFirstOrThrow({
+      where: { stripeInvoiceId: fixture.invoice.id } });
+    const adjustment = await db.prisma.billingStripePaymentInvoiceAdjustment.findFirstOrThrow({
+      where: { invoiceId: source.id } });
+    expect(adjustment).toMatchObject({ kind: 'REFUND', amountMinor: 300n,
+      occurredAt: new Date(paidAt.getTime() + 100_000) });
+    const unchanged = await db.prisma.billingStripePaymentInvoice.findUniqueOrThrow({ where: { id: source.id } });
+    expect([unchanged.dueAmountMinor, unchanged.paidAmountMinor]).toEqual([2000n, 2000n]);
+    expect(await db.prisma.billingCreditEntry.count({ where: { creditAccount: { orgId } } })).toBe(0);
+    await expect(db.prisma.billingStripePaymentInvoiceAdjustment.update({ where: { id: adjustment.id },
+      data: { amountMinor: 301n } })).rejects.toThrow();
+    const changed = { ...event, id: `evt_again_${fixture.invoice.id}` };
+    const same = await prepareStripePaymentAdjustment(changed, fixture.stripe, fixture.account, db.prisma);
+    if (!same) throw new Error('ADJUSTMENT_REQUIRED');
+    expect((await db.prisma.$transaction((tx) => persistStripePaymentAdjustment(tx, same))).id)
+      .toBe(adjustment.id);
+    await expect(db.prisma.$transaction((tx) => persistStripePaymentAdjustment(tx,
+      { ...same, stripeObjectId: `re_second_${fixture.invoice.id}`, amountMinor: 1800n })))
+      .rejects.toThrow('REFUND_TOTAL_UNPROVEN');
+    const pending = { ...refund, status: 'pending' };
+    (fixture.stripe.refunds.retrieve as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(pending);
+    expect(await prepareStripePaymentAdjustment({ ...event, data: { object: pending } } as Stripe.Event,
+      fixture.stripe, fixture.account, db.prisma)).toBeNull();
+  });
+
+  it('records actual dispute withdrawal and reinstatement without erasing the original cash', async () => {
+    const fixture = await setup(); const prepared = await prepare(fixture);
+    const source = await db.prisma.$transaction((tx) => persistStripePaymentInvoice(tx, prepared));
+    const withdrawn = { id: `dp_${fixture.invoice.id}`, livemode: false, amount: 700,
+      currency: 'usd', payment_intent: fixture.intentId, charge: fixture.chargeId,
+      status: 'needs_response', balance_transactions: [{ id: `bt_out_${fixture.invoice.id}`,
+        amount: -850, currency: 'usd', exchange_rate: null, created: paidAt.getTime() / 1000 + 100 }] };
+    fixture.stripe.disputes = { retrieve: vi.fn().mockResolvedValue(withdrawn) } as unknown as Stripe['disputes'];
+    const event = { id: `evt_dispute_${fixture.invoice.id}`, type: 'charge.dispute.funds_withdrawn',
+      created: paidAt.getTime() / 1000 + 900, data: { object: withdrawn } } as unknown as Stripe.Event;
+    const withdrawal = await prepareStripePaymentAdjustment(event, fixture.stripe, fixture.account, db.prisma);
+    if (!withdrawal) throw new Error('ADJUSTMENT_REQUIRED');
+    // Deliver reinstatement first; the same verified balance movement set
+    // must recover the earlier withdrawal rather than invent a cash gain.
+    expect(withdrawal.amountMinor).toBe(700n); // Provider dispute fee is not customer principal.
+    const reinstated = { ...withdrawn, status: 'won', balance_transactions: [
+      ...withdrawn.balance_transactions, { id: `bt_in_${fixture.invoice.id}`, amount: 700,
+        currency: 'usd', exchange_rate: null, created: paidAt.getTime() / 1000 + 200 }] };
+    (fixture.stripe.disputes.retrieve as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(reinstated);
+    const restored = await prepareStripePaymentAdjustment({ ...event,
+      id: `evt_restore_${fixture.invoice.id}`, type: 'charge.dispute.funds_reinstated',
+      data: { object: reinstated } } as unknown as Stripe.Event, fixture.stripe, fixture.account, db.prisma);
+    if (!restored) throw new Error('ADJUSTMENT_REQUIRED');
+    await db.prisma.$transaction((tx) => persistStripePaymentAdjustment(tx, restored));
+    expect(restored).toMatchObject({ kind: 'DISPUTE_REVERSAL', amountMinor: 700n,
+      occurredAt: new Date(paidAt.getTime() + 200_000) });
+    expect(await prepareStripePaymentAdjustment(event, fixture.stripe, fixture.account, db.prisma)).toBeNull();
+    expect(await db.prisma.billingStripePaymentInvoiceCashPayment.count({ where: { invoiceId: source.id } })).toBe(1);
+    expect(await db.prisma.billingStripePaymentInvoiceAdjustment.count({ where: { invoiceId: source.id } })).toBe(2);
+  });
+
 });

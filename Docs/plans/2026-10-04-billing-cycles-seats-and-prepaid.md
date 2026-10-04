@@ -440,7 +440,19 @@ freezes the legal fields atomically with all line totals. A lost storage
 acknowledgement recovers the same document. These are machine-only source and
 worker services; their customer doorway is the common InvoiceV1 API and the
 three product Billing cycles pages. Product readers must bind every line before
-returning a whole legal document.
+returning a whole legal document. Each source line also binds the exact header
+payer team, local Stripe customer, scope type and scope key.
+
+Regular invoice refunds require a succeeded refund, exact original normalized
+cash row and provider balance transaction; the cash timestamp comes from that
+transaction. Dispute withdrawal and reinstatement use verified principal
+movements, excluding dispute fees. A reinstatement received first atomically
+records its proven earlier withdrawal as well. The same original payment
+validator repairs out-of-order payment projection before accepting an adjustment.
+These append-only effects retain original paid totals and legal debt; they never
+reopen the invoice balance or alter prepaid credits. PostgreSQL serializes and
+bounds refund totals and requires an exact withdrawal for reinstatement.
+
 The customer invoice list selects a month by verified cash payment time for
 Stripe subscription and prepaid sources. A legal invoice with multiple accepted
 payments can be referenced in each payment month, but each monthly row exposes
