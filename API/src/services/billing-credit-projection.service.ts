@@ -17,6 +17,7 @@ import {
   billingCreditsPaymentMoney,
   billingWholeCredits,
 } from './billing-credit-display.service.js';
+import { billingLocalizedCreditDisplay } from './billing-credit-copy.catalog.js';
 import {
   buildManagerCreditRecentEntries,
   buildMemberCreditRecentEntries,
@@ -31,9 +32,16 @@ import {
   type BillingCreditActionReadiness,
 } from './billing-credit-action-readiness.service.js';
 import type { BillingFundingViewer } from './billing-funding-viewer.service.js';
+import type { BillingCustomerLocale } from './billing-copy-locale.js';
+import { billingCreditCopy, billingPendingCreditsLabel } from './billing-credit-copy.catalog.js';
 
 function sum(values: bigint[]): bigint {
   return values.reduce((total, value) => total + value, 0n);
+}
+
+function creditAmount(value: bigint, locale?: BillingCustomerLocale) {
+  const amount = billingCreditAmount(value);
+  return { ...amount, display: billingLocalizedCreditDisplay(amount.credits, locale) };
 }
 
 function service(value: { id: string; identifier: string; name: string }) {
@@ -49,16 +57,17 @@ function latestAllocations(data: BillingCreditProjectionData) {
   return [...rows.values()];
 }
 
-function managerBreakdown(data: BillingCreditProjectionData) {
+function managerBreakdown(data: BillingCreditProjectionData, locale?: BillingCustomerLocale) {
   const allocations = latestAllocations(data);
   return data.settlements.map((settlement) => {
     const rows = allocations.filter((row) => row.settlementId === settlement.id);
     return {
       service: service(settlement.service),
-      credits_consumed: billingCreditAmount(settlement.cumulativeCreditsConsumedMicrocredits),
-      unattributed_credits_consumed: billingCreditAmount(
+      credits_consumed: creditAmount(settlement.cumulativeCreditsConsumedMicrocredits, locale),
+      unattributed_credits_consumed: creditAmount(
         rows.find((row) => row.attributedUserId === null)?.cumulativeCreditsConsumedMicrocredits ??
           0n,
+        locale,
       ),
       users: rows
         .filter(
@@ -75,15 +84,15 @@ function managerBreakdown(data: BillingCreditProjectionData) {
           }
           return {
             user_id: row.attributedUserId,
-            display_name: row.attributedUser?.name ?? 'Team member',
-            credits_consumed: billingCreditAmount(row.cumulativeCreditsConsumedMicrocredits),
+            display_name: row.attributedUser?.name ?? billingCreditCopy(locale).teamMember,
+            credits_consumed: creditAmount(row.cumulativeCreditsConsumedMicrocredits, locale),
           };
         }),
     };
   });
 }
 
-function memberBreakdown(data: BillingCreditProjectionData, viewerId: string) {
+function memberBreakdown(data: BillingCreditProjectionData, viewerId: string, locale?: BillingCustomerLocale) {
   const allocations = latestAllocations(data);
   return data.settlements.map((settlement) => {
     const rows = allocations.filter((row) => row.settlementId === settlement.id);
@@ -99,10 +108,10 @@ function memberBreakdown(data: BillingCreditProjectionData, viewerId: string) {
     }
     return {
       service: service(settlement.service),
-      credits_consumed: billingCreditAmount(settlement.cumulativeCreditsConsumedMicrocredits),
-      viewer_credits_consumed: billingCreditAmount(viewer),
-      other_team_members_credits_consumed: billingCreditAmount(other),
-      unattributed_credits_consumed: billingCreditAmount(unattributed),
+      credits_consumed: creditAmount(settlement.cumulativeCreditsConsumedMicrocredits, locale),
+      viewer_credits_consumed: creditAmount(viewer, locale),
+      other_team_members_credits_consumed: creditAmount(other, locale),
+      unattributed_credits_consumed: creditAmount(unattributed, locale),
     };
   });
 }
@@ -116,6 +125,7 @@ export function buildBillingCreditsProjection(params: {
   now: Date;
   actionReadiness?: BillingCreditActionReadiness;
   controlledBy?: BillingControlledByV1 | null;
+  locale?: BillingCustomerLocale;
 }): BillingCreditsV1 {
   const { data, viewer } = params;
   const controlledBy = params.controlledBy ?? null;
@@ -129,6 +139,7 @@ export function buildBillingCreditsProjection(params: {
   const pendingCount = data.pending.length;
   const pendingPayment = sum(data.pending.map((row) => row.paymentAmountMinor));
   const pendingCredits = sum(data.pending.map((row) => row.creditsReceivedMicrocredits));
+  const copy = billingCreditCopy(params.locale);
   const creditsAdded = sum(
     data.periodEntries
       .filter(
@@ -167,8 +178,7 @@ export function buildBillingCreditsProjection(params: {
     conversion: {
       credits_per_usd: '1000' as const,
       settlement_currency: 'USD' as const,
-      description:
-        '1,000 credits always equal US$1.00. Usage is accumulated exactly, but only complete credits are deducted.',
+      description: copy.conversionDescription,
     },
     current_period: {
       starts_at: params.period.startsAt.toISOString(),
@@ -179,29 +189,28 @@ export function buildBillingCreditsProjection(params: {
       stripe_mode: params.collection.account.livemode ? ('live' as const) : ('test' as const),
     },
     credit_balance: {
-      ...billingCreditAmount(data.creditAccount.balanceMicrocredits),
+      ...creditAmount(data.creditAccount.balanceMicrocredits, params.locale),
       state:
         wholeCreditBalance > 0n
           ? ('available' as const)
           : wholeCreditBalance < 0n
             ? ('debt' as const)
             : ('zero' as const),
-      label: 'Remaining credits' as const,
-      description: 'This balance is shared by the exact team across connected services.',
+      label: copy.balanceLabel,
+      description: copy.balanceDescription,
     },
     pending_credits: {
       top_up_count: pendingCount,
-      credits_received: billingCreditAmount(pendingCredits),
-      label: pendingCount === 1 ? 'One top-up pending' : `${pendingCount} top-ups pending`,
-      description:
-        'Pending credits await verified payment and are not included in remaining credits.',
+      credits_received: creditAmount(pendingCredits, params.locale),
+      label: billingPendingCreditsLabel(pendingCount, params.locale),
+      description: copy.pendingCreditsDescription,
     },
     ...(controlledBy ? { controlled_by: controlledBy } : {}),
   };
   const summary = {
-    credits_added: billingCreditAmount(creditsAdded),
-    credits_consumed: billingCreditAmount(creditsConsumed),
-    pending_credits: billingCreditAmount(pendingCredits),
+    credits_added: creditAmount(creditsAdded, params.locale),
+    credits_consumed: creditAmount(creditsConsumed, params.locale),
+    pending_credits: creditAmount(pendingCredits, params.locale),
   };
   if (canFund) {
     const actions = buildManagerCreditActionsProjection(
@@ -224,7 +233,7 @@ export function buildBillingCreditsProjection(params: {
       viewer: {
         role: 'billing_manager',
         usage_visibility: 'full_team',
-        description: 'This viewer may see the full team breakdown and manage funding.',
+        description: copy.managerViewerDescription,
       },
       pending_credits: {
         ...common.pending_credits,
@@ -232,8 +241,8 @@ export function buildBillingCreditsProjection(params: {
       },
       funding_policy: funding,
       automatic_top_up: automatic,
-      credit_summary: { ...summary, consumed_breakdown: managerBreakdown(data) },
-      recent_entries: buildManagerCreditRecentEntries(data),
+      credit_summary: { ...summary, consumed_breakdown: managerBreakdown(data, params.locale) },
+      recent_entries: buildManagerCreditRecentEntries(data, params.locale),
     } satisfies BillingCreditsManagerV1;
   }
   const actions = buildMemberCreditActionsProjection(
@@ -250,14 +259,14 @@ export function buildBillingCreditsProjection(params: {
     viewer: {
       role: 'member',
       usage_visibility: 'own_plus_team_aggregate',
-      description: 'This viewer may see their usage and privacy-safe team aggregates.',
+      description: copy.memberViewerDescription,
     },
     funding_policy: actions.funding_policy,
     automatic_top_up: actions.automatic_top_up,
     credit_summary: {
       ...summary,
-      consumed_breakdown: memberBreakdown(data, viewer.userId),
+      consumed_breakdown: memberBreakdown(data, viewer.userId, params.locale),
     },
-    recent_entries: buildMemberCreditRecentEntries(data, viewer.userId),
+    recent_entries: buildMemberCreditRecentEntries(data, viewer.userId, params.locale),
   } satisfies BillingCreditsMemberV1;
 }

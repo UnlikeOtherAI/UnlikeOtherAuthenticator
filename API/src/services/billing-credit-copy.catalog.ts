@@ -12,6 +12,9 @@ export type BillingCreditCopy = Readonly<{
   pendingCreditsDescription: string;
   managerViewerDescription: string;
   memberViewerDescription: string;
+  teamName: string;
+  teamMember: string;
+  creditUnit: BillingCopyPluralForms;
   creditOfferNames: Readonly<Record<'credits_usd_10' | 'credits_usd_25' | 'credits_usd_50' | 'credits_usd_100', string>>;
   oneTimeOfferDescription: string;
   smallestOfferHint: string;
@@ -28,6 +31,9 @@ export const BILLING_CREDIT_COPY = {
       'Čekající kredity se přičtou až po ověření platby a nejsou součástí zbývajícího zůstatku.',
     managerViewerDescription: 'Zobrazí se vám využití celého týmu a můžete spravovat dobíjení.',
     memberViewerDescription: 'Zobrazí se vám vaše využití a souhrnné údaje o týmu.',
+    teamName: 'Tým',
+    teamMember: 'Člen týmu',
+    creditUnit: { one: 'kredit', few: 'kredity', other: 'kreditů' },
     creditOfferNames: { credits_usd_10: 'Malé dobití kreditů', credits_usd_25: 'Střední dobití kreditů', credits_usd_50: 'Velké dobití kreditů', credits_usd_100: 'Největší dobití kreditů' },
     oneTimeOfferDescription: 'Jednorázové dobití. Automatické dobíjení zůstane vypnuté.',
     smallestOfferHint: 'Začněte nejmenším dostupným dobitím.',
@@ -42,6 +48,9 @@ export const BILLING_CREDIT_COPY = {
       'Pending credits are added after payment is verified. They are not included in the remaining balance.',
     managerViewerDescription: 'You can see your team’s usage and manage credit top-ups.',
     memberViewerDescription: 'You can see your usage and a summary of team usage.',
+    teamName: 'Team',
+    teamMember: 'Team member',
+    creditUnit: { one: 'credit', other: 'credits' },
     creditOfferNames: { credits_usd_10: 'Small credit top-up', credits_usd_25: 'Medium credit top-up', credits_usd_50: 'Large credit top-up', credits_usd_100: 'Extra-large credit top-up' },
     oneTimeOfferDescription: 'One-time purchase. Automatic top-up stays off.',
     smallestOfferHint: 'Start with the smallest available top-up.',
@@ -56,6 +65,9 @@ export const BILLING_CREDIT_COPY = {
       'Pending credits are added after payment is verified. They are not included in the remaining balance.',
     managerViewerDescription: 'You can see your team’s usage and manage credit top-ups.',
     memberViewerDescription: 'You can see your usage and a summary of team usage.',
+    teamName: 'Team',
+    teamMember: 'Team member',
+    creditUnit: { one: 'credit', other: 'credits' },
     creditOfferNames: { credits_usd_10: 'Small credit top-up', credits_usd_25: 'Medium credit top-up', credits_usd_50: 'Large credit top-up', credits_usd_100: 'Extra-large credit top-up' },
     oneTimeOfferDescription: 'One-time purchase. Automatic top-up stays off.',
     smallestOfferHint: 'Start with the smallest available top-up.',
@@ -70,6 +82,9 @@ export const BILLING_CREDIT_COPY = {
       'Ausstehende Credits werden nach bestätigter Zahlung gutgeschrieben. Sie sind nicht im verfügbaren Guthaben enthalten.',
     managerViewerDescription: 'Sie sehen die Nutzung Ihres Teams und können Credits aufladen.',
     memberViewerDescription: 'Sie sehen Ihre Nutzung und eine Zusammenfassung der Teamnutzung.',
+    teamName: 'Team',
+    teamMember: 'Teammitglied',
+    creditUnit: { one: 'Credit', other: 'Credits' },
     creditOfferNames: { credits_usd_10: 'Kleine Credit-Aufladung', credits_usd_25: 'Mittlere Credit-Aufladung', credits_usd_50: 'Große Credit-Aufladung', credits_usd_100: 'Sehr große Credit-Aufladung' },
     oneTimeOfferDescription: 'Einmaliger Kauf. Automatische Aufladungen bleiben ausgeschaltet.',
     smallestOfferHint: 'Beginnen Sie mit der kleinsten verfügbaren Aufladung.',
@@ -84,6 +99,9 @@ export const BILLING_CREDIT_COPY = {
       'Los créditos pendientes se añaden cuando se verifica el pago. No se incluyen en el saldo restante.',
     managerViewerDescription: 'Puedes ver el uso del equipo y gestionar las recargas de créditos.',
     memberViewerDescription: 'Puedes ver tu uso y un resumen del uso del equipo.',
+    teamName: 'Equipo',
+    teamMember: 'Miembro del equipo',
+    creditUnit: { one: 'crédito', other: 'créditos' },
     creditOfferNames: { credits_usd_10: 'Recarga pequeña de créditos', credits_usd_25: 'Recarga mediana de créditos', credits_usd_50: 'Recarga grande de créditos', credits_usd_100: 'Recarga extragrande de créditos' },
     oneTimeOfferDescription: 'Compra única. La recarga automática seguirá desactivada.',
     smallestOfferHint: 'Empieza con la recarga más pequeña disponible.',
@@ -98,6 +116,9 @@ export const BILLING_CREDIT_COPY = {
       'Les crédits en attente sont ajoutés après vérification du paiement. Ils ne sont pas inclus dans le solde restant.',
     managerViewerDescription: 'Vous pouvez consulter l’utilisation de l’équipe et gérer ses recharges de crédits.',
     memberViewerDescription: 'Vous pouvez consulter votre utilisation et un résumé de celle de l’équipe.',
+    teamName: 'Équipe',
+    teamMember: 'Membre de l’équipe',
+    creditUnit: { one: 'crédit', other: 'crédits' },
     creditOfferNames: { credits_usd_10: 'Petite recharge de crédits', credits_usd_25: 'Recharge moyenne de crédits', credits_usd_50: 'Grande recharge de crédits', credits_usd_100: 'Très grande recharge de crédits' },
     oneTimeOfferDescription: 'Achat ponctuel. La recharge automatique reste désactivée.',
     smallestOfferHint: 'Commencez par la plus petite recharge disponible.',
@@ -112,6 +133,9 @@ export const BILLING_CREDIT_COPY = {
       'I crediti in sospeso vengono aggiunti dopo la verifica del pagamento. Non sono inclusi nel saldo rimanente.',
     managerViewerDescription: 'Puoi vedere l’utilizzo del team e gestire le ricariche di crediti.',
     memberViewerDescription: 'Puoi vedere il tuo utilizzo e un riepilogo dell’utilizzo del team.',
+    teamName: 'Team',
+    teamMember: 'Membro del team',
+    creditUnit: { one: 'credito', other: 'crediti' },
     creditOfferNames: { credits_usd_10: 'Ricarica piccola di crediti', credits_usd_25: 'Ricarica media di crediti', credits_usd_50: 'Ricarica grande di crediti', credits_usd_100: 'Ricarica extra grande di crediti' },
     oneTimeOfferDescription: 'Acquisto singolo. La ricarica automatica resta disattivata.',
     smallestOfferHint: 'Inizia dalla ricarica disponibile più piccola.',
@@ -124,4 +148,12 @@ export function billingCreditCopy(locale?: BillingCustomerLocale): BillingCredit
 
 export function billingPendingCreditsLabel(count: number, locale?: BillingCustomerLocale): string {
   return billingPluralCopy(billingCreditCopy(locale).pendingCreditsLabel, count, locale);
+}
+
+export function billingLocalizedCreditDisplay(credits: string, locale?: BillingCustomerLocale): string {
+  const copy = billingCreditCopy(locale);
+  const amount = BigInt(credits);
+  const count = Number(amount < 0n ? -amount : amount);
+  const formatted = new Intl.NumberFormat(locale).format(amount);
+  return `${formatted} ${billingPluralCopy(copy.creditUnit, count, locale)}`;
 }

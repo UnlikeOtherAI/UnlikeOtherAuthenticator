@@ -1,0 +1,44 @@
+import { describe, expect, it } from 'vitest';
+
+import { BILLING_ADDON_COPY } from '../../src/services/billing-addon-copy.catalog.js';
+import {
+  billingCreditCopy,
+  billingLocalizedCreditDisplay,
+  billingPendingCreditsLabel,
+} from '../../src/services/billing-credit-copy.catalog.js';
+import { BILLING_PAYMENT_COPY } from '../../src/services/billing-payment-copy.catalog.js';
+import { BILLING_SUBSCRIPTION_COPY } from '../../src/services/billing-subscription-copy.catalog.js';
+import type { BillingCustomerLocale } from '../../src/services/billing-copy-locale.js';
+
+const locales: BillingCustomerLocale[] = ['cs', 'en-US', 'en-GB', 'de', 'es', 'fr', 'it'];
+
+describe('customer billing copy catalogs', () => {
+  it('provides complete non-empty copy for every supported locale', () => {
+    for (const locale of locales) {
+      expect(Object.values(BILLING_ADDON_COPY[locale]).every(Boolean)).toBe(true);
+      expect(Object.values(BILLING_SUBSCRIPTION_COPY[locale]).every(Boolean)).toBe(true);
+      expect(Object.values(BILLING_PAYMENT_COPY[locale]).every((state) => state.title && state.message)).toBe(true);
+      expect(JSON.stringify(BILLING_ADDON_COPY[locale])).not.toContain('UOA');
+    }
+  });
+
+  it('formats credit counts with the selected language while retaining the exact count', () => {
+    expect(billingLocalizedCreditDisplay('1', 'cs')).toBe('1 kredit');
+    expect(billingLocalizedCreditDisplay('2', 'cs')).toBe('2 kredity');
+    expect(billingLocalizedCreditDisplay('5', 'cs')).toBe('5 kreditů');
+    expect(billingLocalizedCreditDisplay('2', 'de')).toBe('2 Credits');
+    expect(billingPendingCreditsLabel(2, 'cs')).toBe('Čekají 2 dobití');
+    expect(billingCreditCopy('cs').balanceLabel).toBe('Zbývající kredity');
+  });
+
+  it('keeps payment success language distinct from an unverified payment', () => {
+    for (const locale of locales) {
+      expect(BILLING_PAYMENT_COPY[locale].succeeded.message).not.toBe(
+        BILLING_PAYMENT_COPY[locale].needs_review.message,
+      );
+      expect(BILLING_PAYMENT_COPY[locale].processing.message).not.toBe(
+        BILLING_PAYMENT_COPY[locale].succeeded.message,
+      );
+    }
+  });
+});

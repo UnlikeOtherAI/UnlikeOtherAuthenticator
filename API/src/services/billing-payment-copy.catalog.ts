@@ -1,14 +1,10 @@
+import type {
+  BillingCreditPurchaseState as ProtocolBillingCreditPurchaseState,
+} from '@unlikeotherai/billing-statement-protocol';
 import type { BillingCustomerLocale, BillingLocaleCatalog } from './billing-copy-locale.js';
 import { billingLocaleText } from './billing-copy-locale.js';
 
-export type BillingCreditPurchaseState =
-  | 'open'
-  | 'processing'
-  | 'requires_action'
-  | 'succeeded'
-  | 'failed'
-  | 'expired'
-  | 'needs_review';
+export type BillingCreditPurchaseState = ProtocolBillingCreditPurchaseState;
 
 export type BillingPaymentStateCopy = Readonly<{ title: string; message: string }>;
 export type BillingPaymentCopy = Readonly<Record<BillingCreditPurchaseState, BillingPaymentStateCopy>>;
@@ -62,7 +58,7 @@ export const BILLING_PAYMENT_COPY = {
   fr: {
     open: { title: 'Paiement non terminé', message: 'Terminez le paiement dans la page de paiement ouverte.' },
     processing: { title: 'Vérification du paiement', message: 'Nous vérifions encore votre paiement.' },
-    requires_action: { title: 'Confirmez votre paiement', message: 'Votre banque doit confirmer ce paiement. Revenez à la page de paiement pour le terminer.' },
+    requires_action: { title: 'Confirmez votre paiement', message: 'Votre banque vous demande de confirmer ce paiement. Revenez à la page de paiement pour le terminer.' },
     succeeded: { title: 'Paiement confirmé', message: 'Votre paiement est confirmé. Vos crédits sont disponibles.' },
     failed: { title: 'Le paiement a échoué', message: 'Vérifiez les informations de votre carte ou de votre banque avant de lancer un autre achat.' },
     expired: { title: 'La page de paiement a expiré', message: 'Cette page de paiement a expiré. Lancez un nouvel achat quand vous le souhaitez.' },
