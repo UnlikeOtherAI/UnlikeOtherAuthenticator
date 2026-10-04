@@ -74,6 +74,13 @@ describe.skipIf(!hasDatabase)('team-invite actionable invariants migration', () 
     if (!handle) throw new Error('DATABASE_URL is required for DB-backed tests');
     const { prisma } = handle;
 
+    // This replays the August migration, before seat billing existed. Later
+    // deferred seat triggers would leave events pending across its UPDATE/DDL
+    // sequence; they belong to the later upgrade, not this historical shape.
+    for (const trigger of ['billing_seat_touch', 'billing_seat_refresh']) {
+      await prisma.$executeRawUnsafe(`DROP TRIGGER IF EXISTS "${trigger}" ON "team_invites"`);
+    }
+
     // Undo this migration's DDL so the pre-migration shape can be seeded underneath it.
     await prisma.$executeRawUnsafe(
       'DROP INDEX IF EXISTS "team_invites_one_actionable_per_team_email"',
