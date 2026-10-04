@@ -116,8 +116,16 @@ amount before a customer credit number is confirmed. Unknown coverage stays
 pending; proven zero usage is zero. Opening and closing funded-wallet balances
 remain pending until immutable account-entry boundaries establish them.
 Unknown paid usage holds final settlement rather than yielding a zero invoice.
-Prepaid consumption is a usage breakdown and never a second demand for payment:
-paid top-up invoices and monthly subscription invoices remain distinct documents.
+Prepaid consumption is a credit-balance/account breakdown and never a second
+demand for payment. Every successful prepaid payment, including each automatic
+recharge, produces its own actual charge invoice; the monthly customer view
+groups those invoices by their frozen charge month. A delayed legal issue does
+not move an October payment into November. No invoice is synthesized
+from a later usage read. Legal invoice PDFs list actual charges and tax, while
+credit consumption and seat evidence remain in a separate customer breakdown.
+An accepted payment with missing legal issuer/tax evidence remains a durable
+pending document in the charge history: its verified payment and credits are
+visible, but no legal number, tax amount or download is invented.
 For multi-service legal invoices, the issuer freezes one allocation per service
 line before issue: subscription and payable usage, tax, invoice credit, gross
 total and net due. Database checks require all line allocations to sum exactly

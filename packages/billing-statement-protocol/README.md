@@ -2,7 +2,7 @@
 
 Public, open-source-safe consumer contracts for UOA's display-ready
 `BillingStatementV1`, `BillingStatementV2`, shared `BillingCreditsV1`, recurring
-add-ons, customer billing actions, and monthly billing cycles.
+add-ons, customer billing actions, monthly billing cycles, and actual charge invoices.
 
 Package 5.0.0 exposes customer charges, exact consumed credits, and monthly
 subscription/seat terms. Statement V1/V2 and cycle responses omit raw token,
@@ -52,6 +52,9 @@ The public HTTP artifacts are:
 - `/schemas/billing-cycles-v2.json`
 - `/schemas/billing-cycles-v2.example.json`
 - `/schemas/billing-cycles-v2.openapi.json`
+- `/schemas/billing-customer-invoices-v1.json`
+- `/schemas/billing-customer-invoices-v1.example.json`
+- `/schemas/billing-customer-invoices-v1.openapi.json`
 
 TypeScript consumers use the package root:
 
@@ -89,6 +92,23 @@ adjustments. Available documents carry exact server-authored POST actions for
 never has a final invoice download. Consumed prepaid credits reduce outstanding
 usage liability and do not create a second payment invoice. Public payloads
 contain customer charges and seat prices, never provider cost or markup.
+
+`POST /billing/v1/invoices/list` groups actual issued charge documents by
+their immutable charge month. A prepaid payment uses its accepted payment time
+even if legal issuance finishes in the next month. Each successful prepaid purchase, including every
+automatic recharge, has its own invoice; reading this API never creates one.
+`/detail` contains legal customer charge lines only, and `/download` returns
+only verified immutable PDF bytes after fresh payer authorization. Usage and
+credit consumption remain in the separate cycle/account view and are never
+re-invoiced when prepaid credits are spent. A multi-product legal invoice is
+available only to a current organisation billing manager.
+An accepted payment awaiting legal issuer or tax evidence appears as
+`pending_document`: the actual charged amount and purchased credits remain
+visible, while number, issuance time, tax, and PDF download are unavailable.
+Invoice totals use positive deductions: gross less credits applied and voided
+amount equals due; due less actual paid and written-off amounts equals
+outstanding. The original legal PDF and charge lines stay immutable after a
+void or later payment event.
 
 New consumers request `POST /billing/v2/customer-statement`. Its
 `usage.lines` and `usage.user_totals` contain customer charges only, rated by
