@@ -46,6 +46,8 @@ export type BillingCycleTotals = {
 };
 export type BillingCycleSummaryV2 = {
   cycle_id: string;
+  /** Prior immutable view replaced by a late receipt or financial correction. */
+  correction_of_cycle_id?: string;
   period: BillingCyclePeriod;
   state: BillingCycleState;
   scope: BillingCycleScope;

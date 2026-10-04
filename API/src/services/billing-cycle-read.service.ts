@@ -70,6 +70,7 @@ function hydrate(row: CycleRow, context: BillingCycleContext): BillingCycleDetai
       value.scope.organisation_id !== row.orgId || value.scope.team_id !== row.teamId ||
       value.scope.cycle_scope !== (row.teamId === null ? 'organisation' : 'team') ||
       value.scope.payer_scope !== row.payerScope.toLowerCase() ||
+      value.correction_of_cycle_id === row.id ||
       value.state !== row.state || value.product.id !== row.serviceId ||
       value.product.identifier !== context.credential.service.identifier ||
       value.documents.length !== row.documents.length ||
@@ -108,6 +109,8 @@ function hydrate(row: CycleRow, context: BillingCycleContext): BillingCycleDetai
 function summary(detail: BillingCycleDetailV2): BillingCycleSummaryV2 {
   return {
     cycle_id: detail.cycle_id,
+    ...(detail.correction_of_cycle_id ?
+      { correction_of_cycle_id: detail.correction_of_cycle_id } : {}),
     period: detail.period,
     state: detail.state,
     scope: detail.scope,

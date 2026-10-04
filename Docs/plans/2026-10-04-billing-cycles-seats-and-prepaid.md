@@ -217,6 +217,17 @@ those frozen UOA rating deltas; wallet debit is separate, and an operator's
 verified excess-cost waiver remains explicit private financial evidence.
 An absent receipt, unresolved attempt or mismatched aggregate raw cost holds
 the cycle rather than creating a confirmed zero or rerating the current tariff.
+When an already finalized cycle gains a late verified receipt, preparation
+appends a pending revision with a public `correction_of_cycle_id`; it never
+rewrites the original cycle or its legal document. A zero-fee prepaid month
+can finalize directly from its exact settled reservation debits and signed
+receipt cohort, because consumption is not a new cash invoice. A later
+prepaid-only receipt can append an adjusted breakdown while carrying the
+original legal invoice liability and byte-identical document forward. The
+same payer/month wallet boundary and every receipt are rechecked inside the
+final transaction. Pay-as-you-go corrections remain pending until an actual
+separate issuer or processor financial line proves the changed collectible
+amount; an observation or quote alone does not finalize or charge it.
 Each funded settlement reference is assigned to its own service line in stable
 service and settlement order. The invoice-wide cumulative microcredit rounding
 determines the minor-unit delta at each reference; it preserves fractional

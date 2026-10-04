@@ -183,13 +183,18 @@ export async function prepareBillingTeamUsageCycle(
             prior.wallet_fingerprint === walletBoundary.fingerprint) {
             return { cycleId: existing.id, snapshotSha256: existing.snapshotSha256 };
           }
-          if (existing.state !== 'pending_reconciliation') {
-            hold('BILLING_CYCLE_FINALIZED_RECEIPT_ADJUSTMENT_REQUIRED');
-          }
+          // Preserve the prior finalized view and append a pending correction.
+          // A wallet or issuer effect must close that revision independently.
         }
         const id = randomUUID();
         const publicSnapshot: BillingCycleDetailV2 = {
           schema_version: 2, cycle_id: id,
+          ...(existing?.state === 'pending_reconciliation' ?
+            ((existing.publicSnapshot as { correction_of_cycle_id?: string })
+              .correction_of_cycle_id ?
+              { correction_of_cycle_id: (existing.publicSnapshot as {
+                correction_of_cycle_id: string }).correction_of_cycle_id } : {}) :
+            existing ? { correction_of_cycle_id: existing.id } : {}),
           period: { month: params.billingMonth, starts_at: startsAt.toISOString(),
             ends_at: endsAt.toISOString() },
           state: 'pending_reconciliation',
