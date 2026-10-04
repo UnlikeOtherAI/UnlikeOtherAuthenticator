@@ -62,6 +62,8 @@ describe('customer billing cycles protocol', () => {
     detail.totals = detail.totals.map((total) => ({ ...total,
       subscription: { ...total.subscription, amount: '0', amount_minor: '0', display: 'US$0' },
       usage_charge: { ...total.usage_charge, amount: '0', amount_minor: '0', display: 'US$0' },
+      tax: { ...total.tax, amount: '0', amount_minor: '0', display: 'US$0' },
+      gross_total: { ...total.gross_total, amount: '0', amount_minor: '0', display: 'US$0' },
       credits_applied: { ...total.credits_applied, amount: '0', amount_minor: '0', display: 'US$0' },
       total_due: { ...total.total_due, amount: '0', amount_minor: '0', display: 'US$0' },
       total_paid: { ...total.total_paid, amount: '0', amount_minor: '0', display: 'US$0' },

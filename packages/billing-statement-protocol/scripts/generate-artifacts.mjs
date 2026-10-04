@@ -6,6 +6,12 @@ import {
   billingCreditBudgetV1ConformanceFixture,
   billingCreditBudgetV1JsonSchema,
   billingCreditBudgetV1OpenApiDocument,
+  billingCustomerInvoicesProtocolV1JsonSchema,
+  billingCustomerInvoicesListV1ConformanceFixture,
+  billingCustomerInvoiceDetailV1ConformanceFixture,
+  billingCustomerInvoicePendingDetailV1ConformanceFixture,
+  billingCustomerInvoiceDownloadRequestV1ConformanceFixture,
+  billingCustomerInvoicesV1OpenApiDocument,
   billingCyclesProtocolV2JsonSchema,
   billingCyclesListV2ConformanceFixture,
   billingCycleDetailV2ConformanceFixture,
@@ -30,6 +36,14 @@ import {
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const artifacts = new Map([
+  [resolve(packageRoot, 'schema/billing-customer-invoices-v1.json'), billingCustomerInvoicesProtocolV1JsonSchema],
+  [resolve(packageRoot, 'fixtures/billing-customer-invoices-v1.example.json'), {
+    list: billingCustomerInvoicesListV1ConformanceFixture,
+    detail: billingCustomerInvoiceDetailV1ConformanceFixture,
+    pending_detail: billingCustomerInvoicePendingDetailV1ConformanceFixture,
+    download_request: billingCustomerInvoiceDownloadRequestV1ConformanceFixture,
+  }],
+  [resolve(packageRoot, 'openapi/billing-customer-invoices-v1.openapi.json'), billingCustomerInvoicesV1OpenApiDocument],
   [resolve(packageRoot, 'schema/billing-credit-budgets-v1.json'), billingCreditBudgetV1JsonSchema],
   [resolve(packageRoot, 'fixtures/billing-credit-budgets-v1.example.json'), billingCreditBudgetV1ConformanceFixture],
   [resolve(packageRoot, 'openapi/billing-credit-budgets-v1.openapi.json'), billingCreditBudgetV1OpenApiDocument],

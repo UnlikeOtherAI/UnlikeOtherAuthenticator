@@ -1,0 +1,1673 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "UOA actual customer charge invoices",
+    "version": "1.0.0",
+    "description": "One actual issued document per payment source; no usage breakdown on legal invoices."
+  },
+  "paths": {},
+  "components": {
+    "schemas": {
+      "BillingCustomerInvoicesListRequestV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "product",
+          "organisation_id",
+          "team_id",
+          "user_id",
+          "charge_month"
+        ],
+        "properties": {
+          "product": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "organisation_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "team_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "user_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "charge_month": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50
+          },
+          "cursor": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        }
+      },
+      "BillingCustomerInvoicesListV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schema_version",
+          "generated_at",
+          "subject",
+          "charge_month",
+          "invoices",
+          "next_cursor"
+        ],
+        "properties": {
+          "schema_version": {
+            "const": 1
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "subject": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "product",
+              "organisation_id",
+              "team_id",
+              "user_id"
+            ],
+            "properties": {
+              "product": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "organisation_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "team_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "user_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              }
+            }
+          },
+          "charge_month": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"
+          },
+          "invoices": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "invoice_id",
+                "kind",
+                "status",
+                "number",
+                "charged_at",
+                "issued_at",
+                "scope",
+                "product_identifiers",
+                "totals",
+                "document_available"
+              ],
+              "properties": {
+                "invoice_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "kind": {
+                  "enum": [
+                    "prepaid_purchase",
+                    "monthly_service",
+                    "adjustment",
+                    "credit_note"
+                  ]
+                },
+                "status": {
+                  "enum": [
+                    "pending_document",
+                    "issued",
+                    "paid",
+                    "partially_paid",
+                    "voided",
+                    "refunded",
+                    "written_off"
+                  ]
+                },
+                "number": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "charged_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "issued_at": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "scope": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "organisation_id",
+                    "team_id",
+                    "scope_type"
+                  ],
+                  "properties": {
+                    "organisation_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "team_id": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "scope_type": {
+                      "enum": [
+                        "team",
+                        "organisation"
+                      ]
+                    }
+                  },
+                  "allOf": [
+                    {
+                      "if": {
+                        "properties": {
+                          "scope_type": {
+                            "const": "organisation"
+                          }
+                        }
+                      },
+                      "then": {
+                        "properties": {
+                          "team_id": {
+                            "type": "null"
+                          }
+                        }
+                      },
+                      "else": {
+                        "properties": {
+                          "team_id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 256
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                "product_identifiers": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "uniqueItems": true
+                },
+                "totals": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "currency",
+                    "gross_total",
+                    "tax",
+                    "credits_applied",
+                    "voided_amount",
+                    "total_due",
+                    "total_paid",
+                    "write_off",
+                    "outstanding"
+                  ],
+                  "properties": {
+                    "currency": {
+                      "type": "string",
+                      "pattern": "^[A-Z]{3}$"
+                    },
+                    "gross_total": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "amount",
+                        "amount_minor",
+                        "currency",
+                        "display"
+                      ],
+                      "properties": {
+                        "amount": {
+                          "type": "string",
+                          "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                        },
+                        "amount_minor": {
+                          "type": "string",
+                          "pattern": "^[0-9]+$"
+                        },
+                        "currency": {
+                          "type": "string",
+                          "pattern": "^[A-Z]{3}$"
+                        },
+                        "display": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "tax": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "amount",
+                            "amount_minor",
+                            "currency",
+                            "display"
+                          ],
+                          "properties": {
+                            "amount": {
+                              "type": "string",
+                              "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                            },
+                            "amount_minor": {
+                              "type": "string",
+                              "pattern": "^[0-9]+$"
+                            },
+                            "currency": {
+                              "type": "string",
+                              "pattern": "^[A-Z]{3}$"
+                            },
+                            "display": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "credits_applied": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "amount",
+                        "amount_minor",
+                        "currency",
+                        "display"
+                      ],
+                      "properties": {
+                        "amount": {
+                          "type": "string",
+                          "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                        },
+                        "amount_minor": {
+                          "type": "string",
+                          "pattern": "^[0-9]+$"
+                        },
+                        "currency": {
+                          "type": "string",
+                          "pattern": "^[A-Z]{3}$"
+                        },
+                        "display": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "voided_amount": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "amount",
+                        "amount_minor",
+                        "currency",
+                        "display"
+                      ],
+                      "properties": {
+                        "amount": {
+                          "type": "string",
+                          "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                        },
+                        "amount_minor": {
+                          "type": "string",
+                          "pattern": "^[0-9]+$"
+                        },
+                        "currency": {
+                          "type": "string",
+                          "pattern": "^[A-Z]{3}$"
+                        },
+                        "display": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "total_due": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "amount",
+                        "amount_minor",
+                        "currency",
+                        "display"
+                      ],
+                      "properties": {
+                        "amount": {
+                          "type": "string",
+                          "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                        },
+                        "amount_minor": {
+                          "type": "string",
+                          "pattern": "^[0-9]+$"
+                        },
+                        "currency": {
+                          "type": "string",
+                          "pattern": "^[A-Z]{3}$"
+                        },
+                        "display": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "total_paid": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "amount",
+                        "amount_minor",
+                        "currency",
+                        "display"
+                      ],
+                      "properties": {
+                        "amount": {
+                          "type": "string",
+                          "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                        },
+                        "amount_minor": {
+                          "type": "string",
+                          "pattern": "^[0-9]+$"
+                        },
+                        "currency": {
+                          "type": "string",
+                          "pattern": "^[A-Z]{3}$"
+                        },
+                        "display": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "write_off": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "amount",
+                        "amount_minor",
+                        "currency",
+                        "display"
+                      ],
+                      "properties": {
+                        "amount": {
+                          "type": "string",
+                          "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                        },
+                        "amount_minor": {
+                          "type": "string",
+                          "pattern": "^[0-9]+$"
+                        },
+                        "currency": {
+                          "type": "string",
+                          "pattern": "^[A-Z]{3}$"
+                        },
+                        "display": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "outstanding": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "amount",
+                        "amount_minor",
+                        "currency",
+                        "display"
+                      ],
+                      "properties": {
+                        "amount": {
+                          "type": "string",
+                          "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                        },
+                        "amount_minor": {
+                          "type": "string",
+                          "pattern": "^[0-9]+$"
+                        },
+                        "currency": {
+                          "type": "string",
+                          "pattern": "^[A-Z]{3}$"
+                        },
+                        "display": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "document_available": {
+                  "type": "boolean"
+                }
+              },
+              "allOf": [
+                {
+                  "if": {
+                    "properties": {
+                      "status": {
+                        "const": "pending_document"
+                      }
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "number": {
+                        "type": "null"
+                      },
+                      "issued_at": {
+                        "type": "null"
+                      },
+                      "document_available": {
+                        "const": false
+                      }
+                    }
+                  },
+                  "else": {
+                    "properties": {
+                      "number": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 256
+                      },
+                      "issued_at": {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      "totals": {
+                        "type": "object",
+                        "properties": {
+                          "tax": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "amount",
+                              "amount_minor",
+                              "currency",
+                              "display"
+                            ],
+                            "properties": {
+                              "amount": {
+                                "type": "string",
+                                "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                              },
+                              "amount_minor": {
+                                "type": "string",
+                                "pattern": "^[0-9]+$"
+                              },
+                              "currency": {
+                                "type": "string",
+                                "pattern": "^[A-Z]{3}$"
+                              },
+                              "display": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "document_available": {
+                        "const": true
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "BillingCustomerInvoiceDetailRequestV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "product",
+          "organisation_id",
+          "team_id",
+          "user_id",
+          "invoice_id"
+        ],
+        "properties": {
+          "product": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "organisation_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "team_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "user_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "invoice_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        }
+      },
+      "BillingCustomerInvoiceDetailV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "const": "pending_document"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "number": {
+                  "type": "null"
+                },
+                "issued_at": {
+                  "type": "null"
+                },
+                "document_available": {
+                  "const": false
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "number": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "issued_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "totals": {
+                  "type": "object",
+                  "properties": {
+                    "tax": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "amount",
+                        "amount_minor",
+                        "currency",
+                        "display"
+                      ],
+                      "properties": {
+                        "amount": {
+                          "type": "string",
+                          "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                        },
+                        "amount_minor": {
+                          "type": "string",
+                          "pattern": "^[0-9]+$"
+                        },
+                        "currency": {
+                          "type": "string",
+                          "pattern": "^[A-Z]{3}$"
+                        },
+                        "display": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "document_available": {
+                  "const": true
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "const": "pending_document"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "document": {
+                  "type": "null"
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "document": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        ],
+        "required": [
+          "invoice_id",
+          "kind",
+          "status",
+          "number",
+          "charged_at",
+          "issued_at",
+          "scope",
+          "product_identifiers",
+          "totals",
+          "document_available",
+          "schema_version",
+          "charges",
+          "document"
+        ],
+        "properties": {
+          "invoice_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "kind": {
+            "enum": [
+              "prepaid_purchase",
+              "monthly_service",
+              "adjustment",
+              "credit_note"
+            ]
+          },
+          "status": {
+            "enum": [
+              "pending_document",
+              "issued",
+              "paid",
+              "partially_paid",
+              "voided",
+              "refunded",
+              "written_off"
+            ]
+          },
+          "number": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "charged_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "issued_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "scope": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "organisation_id",
+              "team_id",
+              "scope_type"
+            ],
+            "properties": {
+              "organisation_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "team_id": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "scope_type": {
+                "enum": [
+                  "team",
+                  "organisation"
+                ]
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "scope_type": {
+                      "const": "organisation"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "team_id": {
+                      "type": "null"
+                    }
+                  }
+                },
+                "else": {
+                  "properties": {
+                    "team_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "product_identifiers": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "uniqueItems": true
+          },
+          "totals": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "currency",
+              "gross_total",
+              "tax",
+              "credits_applied",
+              "voided_amount",
+              "total_due",
+              "total_paid",
+              "write_off",
+              "outstanding"
+            ],
+            "properties": {
+              "currency": {
+                "type": "string",
+                "pattern": "^[A-Z]{3}$"
+              },
+              "gross_total": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "amount",
+                  "amount_minor",
+                  "currency",
+                  "display"
+                ],
+                "properties": {
+                  "amount": {
+                    "type": "string",
+                    "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                  },
+                  "amount_minor": {
+                    "type": "string",
+                    "pattern": "^[0-9]+$"
+                  },
+                  "currency": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{3}$"
+                  },
+                  "display": {
+                    "type": "string"
+                  }
+                }
+              },
+              "tax": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "amount",
+                      "amount_minor",
+                      "currency",
+                      "display"
+                    ],
+                    "properties": {
+                      "amount": {
+                        "type": "string",
+                        "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                      },
+                      "amount_minor": {
+                        "type": "string",
+                        "pattern": "^[0-9]+$"
+                      },
+                      "currency": {
+                        "type": "string",
+                        "pattern": "^[A-Z]{3}$"
+                      },
+                      "display": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "credits_applied": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "amount",
+                  "amount_minor",
+                  "currency",
+                  "display"
+                ],
+                "properties": {
+                  "amount": {
+                    "type": "string",
+                    "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                  },
+                  "amount_minor": {
+                    "type": "string",
+                    "pattern": "^[0-9]+$"
+                  },
+                  "currency": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{3}$"
+                  },
+                  "display": {
+                    "type": "string"
+                  }
+                }
+              },
+              "voided_amount": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "amount",
+                  "amount_minor",
+                  "currency",
+                  "display"
+                ],
+                "properties": {
+                  "amount": {
+                    "type": "string",
+                    "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                  },
+                  "amount_minor": {
+                    "type": "string",
+                    "pattern": "^[0-9]+$"
+                  },
+                  "currency": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{3}$"
+                  },
+                  "display": {
+                    "type": "string"
+                  }
+                }
+              },
+              "total_due": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "amount",
+                  "amount_minor",
+                  "currency",
+                  "display"
+                ],
+                "properties": {
+                  "amount": {
+                    "type": "string",
+                    "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                  },
+                  "amount_minor": {
+                    "type": "string",
+                    "pattern": "^[0-9]+$"
+                  },
+                  "currency": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{3}$"
+                  },
+                  "display": {
+                    "type": "string"
+                  }
+                }
+              },
+              "total_paid": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "amount",
+                  "amount_minor",
+                  "currency",
+                  "display"
+                ],
+                "properties": {
+                  "amount": {
+                    "type": "string",
+                    "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                  },
+                  "amount_minor": {
+                    "type": "string",
+                    "pattern": "^[0-9]+$"
+                  },
+                  "currency": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{3}$"
+                  },
+                  "display": {
+                    "type": "string"
+                  }
+                }
+              },
+              "write_off": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "amount",
+                  "amount_minor",
+                  "currency",
+                  "display"
+                ],
+                "properties": {
+                  "amount": {
+                    "type": "string",
+                    "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                  },
+                  "amount_minor": {
+                    "type": "string",
+                    "pattern": "^[0-9]+$"
+                  },
+                  "currency": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{3}$"
+                  },
+                  "display": {
+                    "type": "string"
+                  }
+                }
+              },
+              "outstanding": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "amount",
+                  "amount_minor",
+                  "currency",
+                  "display"
+                ],
+                "properties": {
+                  "amount": {
+                    "type": "string",
+                    "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                  },
+                  "amount_minor": {
+                    "type": "string",
+                    "pattern": "^[0-9]+$"
+                  },
+                  "currency": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{3}$"
+                  },
+                  "display": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "document_available": {
+            "type": "boolean"
+          },
+          "schema_version": {
+            "const": 1
+          },
+          "charges": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "line_id",
+                "kind",
+                "label",
+                "amount",
+                "credits_purchased"
+              ],
+              "properties": {
+                "line_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "kind": {
+                  "enum": [
+                    "prepaid_credits",
+                    "service_charge",
+                    "adjustment"
+                  ]
+                },
+                "label": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "amount": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "amount",
+                    "amount_minor",
+                    "currency",
+                    "display"
+                  ],
+                  "properties": {
+                    "amount": {
+                      "type": "string",
+                      "pattern": "^-?[0-9]+(\\.[0-9]+)?$"
+                    },
+                    "amount_minor": {
+                      "type": "string",
+                      "pattern": "^-?[0-9]+$"
+                    },
+                    "currency": {
+                      "type": "string",
+                      "pattern": "^[A-Z]{3}$"
+                    },
+                    "display": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "credits_purchased": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "document": {
+            "anyOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "document_id",
+                  "format",
+                  "number",
+                  "issued_at",
+                  "download_action"
+                ],
+                "properties": {
+                  "document_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "format": {
+                    "const": "pdf"
+                  },
+                  "number": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "issued_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "download_action": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "method",
+                      "path",
+                      "body"
+                    ],
+                    "properties": {
+                      "method": {
+                        "const": "POST"
+                      },
+                      "path": {
+                        "const": "/billing/v1/invoices/download"
+                      },
+                      "body": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "product",
+                          "organisation_id",
+                          "team_id",
+                          "user_id",
+                          "invoice_id",
+                          "document_id"
+                        ],
+                        "properties": {
+                          "product": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 256
+                          },
+                          "organisation_id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 256
+                          },
+                          "team_id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 256
+                          },
+                          "user_id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 256
+                          },
+                          "invoice_id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 256
+                          },
+                          "document_id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 256
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "BillingCustomerInvoiceDownloadRequestV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "product",
+          "organisation_id",
+          "team_id",
+          "user_id",
+          "invoice_id",
+          "document_id"
+        ],
+        "properties": {
+          "product": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "organisation_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "team_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "user_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "invoice_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "document_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        }
+      }
+    },
+    "examples": {
+      "BillingCustomerInvoicesListV1": {
+        "value": {
+          "schema_version": 1,
+          "generated_at": "2026-11-01T12:00:00.000Z",
+          "subject": {
+            "product": "nessie",
+            "organisation_id": "org_example",
+            "team_id": "team_example",
+            "user_id": "user_example"
+          },
+          "charge_month": "2026-10",
+          "invoices": [
+            {
+              "invoice_id": "invoice_topup_1",
+              "kind": "prepaid_purchase",
+              "status": "paid",
+              "number": "UOA-2026-000001",
+              "charged_at": "2026-10-03T23:59:59.000Z",
+              "issued_at": "2026-10-04T10:00:00.000Z",
+              "scope": {
+                "organisation_id": "org_example",
+                "team_id": "team_example",
+                "scope_type": "team"
+              },
+              "product_identifiers": [
+                "nessie"
+              ],
+              "totals": {
+                "currency": "USD",
+                "gross_total": {
+                  "amount": "50",
+                  "amount_minor": "5000",
+                  "currency": "USD",
+                  "display": "US$50"
+                },
+                "tax": {
+                  "amount": "0",
+                  "amount_minor": "0",
+                  "currency": "USD",
+                  "display": "US$0"
+                },
+                "credits_applied": {
+                  "amount": "0",
+                  "amount_minor": "0",
+                  "currency": "USD",
+                  "display": "US$0"
+                },
+                "voided_amount": {
+                  "amount": "0",
+                  "amount_minor": "0",
+                  "currency": "USD",
+                  "display": "US$0"
+                },
+                "total_due": {
+                  "amount": "50",
+                  "amount_minor": "5000",
+                  "currency": "USD",
+                  "display": "US$50"
+                },
+                "total_paid": {
+                  "amount": "50",
+                  "amount_minor": "5000",
+                  "currency": "USD",
+                  "display": "US$50"
+                },
+                "write_off": {
+                  "amount": "0",
+                  "amount_minor": "0",
+                  "currency": "USD",
+                  "display": "US$0"
+                },
+                "outstanding": {
+                  "amount": "0",
+                  "amount_minor": "0",
+                  "currency": "USD",
+                  "display": "US$0"
+                }
+              },
+              "document_available": true
+            },
+            {
+              "invoice_id": "payment_auto_2",
+              "kind": "prepaid_purchase",
+              "status": "pending_document",
+              "number": null,
+              "charged_at": "2026-10-31T23:59:59.000Z",
+              "issued_at": null,
+              "scope": {
+                "organisation_id": "org_example",
+                "team_id": "team_example",
+                "scope_type": "team"
+              },
+              "product_identifiers": [
+                "nessie"
+              ],
+              "totals": {
+                "currency": "USD",
+                "gross_total": {
+                  "amount": "50",
+                  "amount_minor": "5000",
+                  "currency": "USD",
+                  "display": "US$50"
+                },
+                "tax": null,
+                "credits_applied": {
+                  "amount": "0",
+                  "amount_minor": "0",
+                  "currency": "USD",
+                  "display": "US$0"
+                },
+                "voided_amount": {
+                  "amount": "0",
+                  "amount_minor": "0",
+                  "currency": "USD",
+                  "display": "US$0"
+                },
+                "total_due": {
+                  "amount": "50",
+                  "amount_minor": "5000",
+                  "currency": "USD",
+                  "display": "US$50"
+                },
+                "total_paid": {
+                  "amount": "50",
+                  "amount_minor": "5000",
+                  "currency": "USD",
+                  "display": "US$50"
+                },
+                "write_off": {
+                  "amount": "0",
+                  "amount_minor": "0",
+                  "currency": "USD",
+                  "display": "US$0"
+                },
+                "outstanding": {
+                  "amount": "0",
+                  "amount_minor": "0",
+                  "currency": "USD",
+                  "display": "US$0"
+                }
+              },
+              "document_available": false
+            }
+          ],
+          "next_cursor": null
+        }
+      },
+      "BillingCustomerInvoiceDetailV1": {
+        "value": {
+          "invoice_id": "invoice_topup_1",
+          "kind": "prepaid_purchase",
+          "status": "paid",
+          "number": "UOA-2026-000001",
+          "charged_at": "2026-10-03T23:59:59.000Z",
+          "issued_at": "2026-10-04T10:00:00.000Z",
+          "scope": {
+            "organisation_id": "org_example",
+            "team_id": "team_example",
+            "scope_type": "team"
+          },
+          "product_identifiers": [
+            "nessie"
+          ],
+          "totals": {
+            "currency": "USD",
+            "gross_total": {
+              "amount": "50",
+              "amount_minor": "5000",
+              "currency": "USD",
+              "display": "US$50"
+            },
+            "tax": {
+              "amount": "0",
+              "amount_minor": "0",
+              "currency": "USD",
+              "display": "US$0"
+            },
+            "credits_applied": {
+              "amount": "0",
+              "amount_minor": "0",
+              "currency": "USD",
+              "display": "US$0"
+            },
+            "voided_amount": {
+              "amount": "0",
+              "amount_minor": "0",
+              "currency": "USD",
+              "display": "US$0"
+            },
+            "total_due": {
+              "amount": "50",
+              "amount_minor": "5000",
+              "currency": "USD",
+              "display": "US$50"
+            },
+            "total_paid": {
+              "amount": "50",
+              "amount_minor": "5000",
+              "currency": "USD",
+              "display": "US$50"
+            },
+            "write_off": {
+              "amount": "0",
+              "amount_minor": "0",
+              "currency": "USD",
+              "display": "US$0"
+            },
+            "outstanding": {
+              "amount": "0",
+              "amount_minor": "0",
+              "currency": "USD",
+              "display": "US$0"
+            }
+          },
+          "document_available": true,
+          "schema_version": 1,
+          "charges": [
+            {
+              "line_id": "line_topup_1",
+              "kind": "prepaid_credits",
+              "label": "Prepaid credits purchase",
+              "amount": {
+                "amount": "50",
+                "amount_minor": "5000",
+                "currency": "USD",
+                "display": "US$50"
+              },
+              "credits_purchased": "50000"
+            }
+          ],
+          "document": {
+            "document_id": "document_topup_1",
+            "format": "pdf",
+            "number": "UOA-2026-000001",
+            "issued_at": "2026-10-04T10:00:00.000Z",
+            "download_action": {
+              "method": "POST",
+              "path": "/billing/v1/invoices/download",
+              "body": {
+                "product": "nessie",
+                "organisation_id": "org_example",
+                "team_id": "team_example",
+                "user_id": "user_example",
+                "invoice_id": "invoice_topup_1",
+                "document_id": "document_topup_1"
+              }
+            }
+          }
+        }
+      },
+      "BillingCustomerInvoicePendingDetailV1": {
+        "value": {
+          "invoice_id": "payment_auto_2",
+          "kind": "prepaid_purchase",
+          "status": "pending_document",
+          "number": null,
+          "charged_at": "2026-10-31T23:59:59.000Z",
+          "issued_at": null,
+          "scope": {
+            "organisation_id": "org_example",
+            "team_id": "team_example",
+            "scope_type": "team"
+          },
+          "product_identifiers": [
+            "nessie"
+          ],
+          "totals": {
+            "currency": "USD",
+            "gross_total": {
+              "amount": "50",
+              "amount_minor": "5000",
+              "currency": "USD",
+              "display": "US$50"
+            },
+            "tax": null,
+            "credits_applied": {
+              "amount": "0",
+              "amount_minor": "0",
+              "currency": "USD",
+              "display": "US$0"
+            },
+            "voided_amount": {
+              "amount": "0",
+              "amount_minor": "0",
+              "currency": "USD",
+              "display": "US$0"
+            },
+            "total_due": {
+              "amount": "50",
+              "amount_minor": "5000",
+              "currency": "USD",
+              "display": "US$50"
+            },
+            "total_paid": {
+              "amount": "50",
+              "amount_minor": "5000",
+              "currency": "USD",
+              "display": "US$50"
+            },
+            "write_off": {
+              "amount": "0",
+              "amount_minor": "0",
+              "currency": "USD",
+              "display": "US$0"
+            },
+            "outstanding": {
+              "amount": "0",
+              "amount_minor": "0",
+              "currency": "USD",
+              "display": "US$0"
+            }
+          },
+          "document_available": false,
+          "schema_version": 1,
+          "charges": [
+            {
+              "line_id": "line_auto_2",
+              "kind": "prepaid_credits",
+              "label": "Automatic prepaid credits purchase",
+              "amount": {
+                "amount": "50",
+                "amount_minor": "5000",
+                "currency": "USD",
+                "display": "US$50"
+              },
+              "credits_purchased": "50000"
+            }
+          ],
+          "document": null
+        }
+      },
+      "BillingCustomerInvoiceDownloadRequestV1": {
+        "value": {
+          "product": "nessie",
+          "organisation_id": "org_example",
+          "team_id": "team_example",
+          "user_id": "user_example",
+          "invoice_id": "invoice_topup_1",
+          "document_id": "document_topup_1"
+        }
+      }
+    }
+  }
+}
