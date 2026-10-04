@@ -66,9 +66,9 @@ export function budgetScopes(input: {
   if (input.context?.projectId) add(origin, 'project', input.context.projectId);
   if (input.context?.runId) add(origin, 'run', input.context.runId);
   if (input.context?.budgetRunId) add(origin, 'run', input.context.budgetRunId);
-  return [...result.values()].sort((a, b) =>
-    `${a.product}\0${a.scopeType}\0${a.scopeId}`.localeCompare(
-      `${b.product}\0${b.scopeType}\0${b.scopeId}`));
+  return [...result.values()].sort((a, b) => Buffer.compare(
+    Buffer.from(`${a.product}\0${a.scopeType}\0${a.scopeId}`),
+    Buffer.from(`${b.product}\0${b.scopeType}\0${b.scopeId}`)));
 }
 
 function windowAt(period: string, date: Date, runBirth?: Date) {

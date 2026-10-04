@@ -6,8 +6,9 @@ UOA owns commercial terms, memberships, seat capacity, prepaid credits, monthly
 cycles and invoices. Ledger owns every physical provider attempt and immutable
 measured usage/cost. Nessie, Deepwater and Deep Test provide a Billing cycles
 page reached from Credits & billing and their existing navigation framework.
-Customers can select a month, see its subscription/seat charges, measured token
-usage and credits consumed, and download its invoice and usage breakdown.
+Customers can select a month, see its subscription/seat charges and credits
+consumed, and download actual-payment invoices separately from usage breakdowns.
+Provider tokens remain private on every customer surface and download.
 
 The customer contract contains no markup, provider cost, rate card, multiplier
 or internal tariff formula. Operators enter markup as a decimal percentage:
@@ -389,3 +390,36 @@ Fixed capacity revisions also use PostgreSQL's observed UTC clock after the
 organisation/subscription locks have been acquired. Application-host clock skew
 or a long wait for those locks cannot make a just-created revision future-dated
 relative to the admission trigger. Read-side current capacity uses the same clock.
+
+
+## Verified regular subscription payment documents
+
+Regular Stripe subscription payments have their own immutable
+`BillingStripePaymentInvoice` source and per-service line allocations. A signed
+`invoice.paid` event is accepted only after the exact account/live mode,
+subscription/customer, complete InvoicePayment set, succeeded PaymentIntents
+and captured charges are verified. A manually marked-paid invoice or ambiguous
+cash allocation is held for reconciliation. The cash date comes from the
+provider's InvoicePayment `paid_at`; earning periods and legal issue dates are
+separate. The source records actual amounts and never charges or credits a
+wallet a second time. Existing prepaid invoice/PaymentIntent bindings cannot
+be reused as regular subscription sources.
+
+Invoice lines bind through persisted subscription-item IDs or the exact accepted
+monthly seat-charge item. Unknown lines, incomplete pagination, inconsistent
+inclusive/exclusive tax, discounts without proven allocations, or changed
+financial facts hold the source. Credit offsets use exact integer allocation
+with UTF-8 identifier order. The document worker leases due sources with
+PostgreSQL row locks and backoff, verifies the existing Stripe legal parties and
+bounded HTTPS PDF, stores its SHA-256 under an immutable private object key, and
+freezes the legal fields atomically with all line totals. A lost storage
+acknowledgement recovers the same document. These are machine-only source and
+worker services; their customer doorway is the common InvoiceV1 API and the
+three product Billing cycles pages. Product readers must bind every line before
+returning a whole legal document.
+
+The final consumer contract is not frozen while boundary balances, late usage
+adjustments and invoice-reader integration remain in progress. Parallel payment
+UX work in UOA #80 and Nessie #1116 retains ownership of localization and resuming
+an existing incomplete purchase; it must rebase its canonical package after
+this billing source is final. No competing payment UX is introduced here.

@@ -15,6 +15,10 @@ rawBoundFixed18,contextDigest]`. UOA recomputes the digest from its frozen
 admission and refuses a missing bound, incomplete historical authority,
 product-key mismatch, non-overbound actual, or changed evidence. Exact retries
 return the same held or terminal result; a conflicting receipt remains held.
+Paid reserve and product-bound decision lookup return that private frozen
+`context_digest` (lowercase 64-hex) to Ledger. Missing digest refuses a new
+paid admission; an older attempt may recover it only from the exact original
+UOA decision, never by guessing restarted project/run ancestry.
 
 The platform operator's home is Admin Billing → Usage exceptions. It shows
 the oldest 100 held receipts, selected receipt IDs, observed provider cost,

@@ -191,7 +191,8 @@ export function applyCreditOffsetToStripeCharges(
   if (offsetMicroMinor < 0n) {
     throw new AppError('INTERNAL', 500, 'BILLING_CREDIT_OFFSET_INVALID');
   }
-  const entries = [...charges.entries()].sort(([left], [right]) => left.localeCompare(right));
+  const entries = [...charges.entries()].sort(([left], [right]) =>
+    Buffer.compare(Buffer.from(left, 'utf8'), Buffer.from(right, 'utf8')));
   const gross = entries.reduce((sum, [, charge]) => sum + charge.quantity, 0n);
   if (gross < offsetMicroMinor) {
     throw new AppError('INTERNAL', 409, 'BILLING_CREDIT_OFFSET_EXCEEDS_USAGE');
@@ -225,7 +226,7 @@ export function applyCreditOffsetToStripeCharges(
   let unallocated = additionalOffset - allocations.reduce((sum, row) => sum + row.offset, 0n);
   for (const row of [...allocations].sort((left, right) =>
     left.remainder === right.remainder
-      ? left.key.localeCompare(right.key)
+      ? Buffer.compare(Buffer.from(left.key, 'utf8'), Buffer.from(right.key, 'utf8'))
       : left.remainder > right.remainder ? -1 : 1,
   )) {
     if (unallocated === 0n) break;

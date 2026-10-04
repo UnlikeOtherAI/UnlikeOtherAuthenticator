@@ -1802,6 +1802,8 @@ model BillingService {
   customerBillingCycles             BillingCustomerCycle[]
 
   @@map("billing_services")
+  stripePaymentInvoiceLines         BillingStripePaymentInvoiceLine[]
+
 }
 
 model BillingTariff {
@@ -2139,6 +2141,7 @@ model BillingStripeAccount {
   creditPaymentAdjustments          BillingCreditPaymentAdjustment[]
   creditConsentRevisions            BillingCreditAutoTopUpConsentRevision[]
   creditAutoTopUpDisables           BillingCreditAutoTopUpDisableEvent[]
+  stripePaymentInvoices            BillingStripePaymentInvoice[]
   creditPaymentInvoices            BillingCreditPaymentInvoice[]
   creditInvoiceTaxPolicies         BillingCreditInvoiceTaxPolicy[]
   recurringAddonCatalogs            BillingRecurringAddonCatalog[]
@@ -2308,6 +2311,7 @@ model BillingStripeSubscription {
   team               Team?                          @relation(fields: [teamId], references: [id], onDelete: Restrict)
   usageExports       BillingStripeUsageExport[]
   invoiceCloses      BillingStripeInvoiceClose[]
+  paymentInvoices    BillingStripePaymentInvoice[]
   monthlyCharges     BillingStripeMonthlyCharge[]
   creditSettlements  BillingCreditUsageSettlement[]
   creditInvoiceLines BillingCreditInvoiceLine[]
@@ -4435,4 +4439,71 @@ model BillingCustomerCycleInvoiceAllocation {
 
   @@index([cycleId])
   @@map("billing_customer_cycle_invoice_allocations")
+}
+
+// Verified cash payment and its existing Stripe legal invoice. Financial
+// provenance is immutable; incomplete legal documents remain pending.
+model BillingStripePaymentInvoice {
+  id                     String   @id @default(cuid())
+  accountId              String   @map("account_id")
+  subscriptionId         String   @map("subscription_id")
+  livemode               Boolean
+  stripeInvoiceId        String   @map("stripe_invoice_id") @db.VarChar(255)
+  stripeCustomerId       String   @map("stripe_customer_id") @db.VarChar(255)
+  stripePaymentIntentIds String[] @map("stripe_payment_intent_ids")
+  paymentEvidence        Json     @map("payment_evidence")
+  orgId                  String   @map("org_id")
+  teamId                 String?  @map("team_id")
+  paidAt                 DateTime @map("paid_at")
+  currency               String   @db.Char(3)
+  grossAmountMinor       BigInt   @map("gross_amount_minor")
+  taxAmountMinor         BigInt   @map("tax_amount_minor")
+  creditAmountMinor      BigInt   @map("credit_amount_minor")
+  dueAmountMinor         BigInt   @map("due_amount_minor")
+  paidAmountMinor        BigInt   @map("paid_amount_minor")
+  sourceDigest           String   @map("source_digest") @db.Char(64)
+  state                  String   @default("PENDING") @db.VarChar(24)
+  holdReason             String?  @map("hold_reason") @db.VarChar(160)
+  issueAttemptCount      Int      @default(0) @map("issue_attempt_count")
+  nextIssueAttemptAt     DateTime @default(now()) @map("next_issue_attempt_at")
+  invoiceNumber          String?  @map("invoice_number") @db.VarChar(80)
+  issuedAt               DateTime? @map("issued_at")
+  issuerSnapshot         Json?    @map("issuer_snapshot")
+  buyerSnapshot          Json?    @map("buyer_snapshot")
+  pdfObjectKey           String?  @map("pdf_object_key") @db.VarChar(1024)
+  pdfSha256              String?  @map("pdf_sha256") @db.Char(64)
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
+
+  account      BillingStripeAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  subscription BillingStripeSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+  lines        BillingStripePaymentInvoiceLine[]
+
+  @@unique([accountId, livemode, stripeInvoiceId])
+  @@index([orgId, teamId, paidAt, id])
+  @@index([state, nextIssueAttemptAt, id])
+  @@map("billing_stripe_payment_invoices")
+}
+
+model BillingStripePaymentInvoiceLine {
+  id                String @id @default(cuid())
+  invoiceId         String @map("invoice_id")
+  stripeLineId      String @map("stripe_line_id") @db.VarChar(255)
+  serviceId         String @map("service_id")
+  serviceIdentifier String @map("service_identifier") @db.VarChar(100)
+  billingMonth      String @map("billing_month") @db.Char(7)
+  label             String @db.VarChar(240)
+  subscriptionMinor BigInt @map("subscription_minor")
+  usageMinor        BigInt @map("usage_minor")
+  taxMinor          BigInt @map("tax_minor")
+  creditMinor       BigInt @map("credit_minor")
+  grossMinor        BigInt @map("gross_minor")
+  dueMinor          BigInt @map("due_minor")
+
+  invoice BillingStripePaymentInvoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  service BillingService @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+
+  @@unique([invoiceId, stripeLineId])
+  @@index([serviceId, billingMonth])
+  @@map("billing_stripe_payment_invoice_lines")
 }

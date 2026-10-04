@@ -400,7 +400,8 @@ async function settleInTransaction(
     const rightDelta =
       right.target.consumedMicrocredits - right.settlement.cumulativeCreditsConsumedMicrocredits;
     if (leftDelta < 0n !== rightDelta < 0n) return leftDelta < 0n ? -1 : 1;
-    return left.target.service.identifier.localeCompare(right.target.service.identifier);
+    return Buffer.compare(Buffer.from(left.target.service.identifier, 'utf8'),
+      Buffer.from(right.target.service.identifier, 'utf8'));
   });
   let balance = account.balanceMicrocredits;
   for (const item of work) {

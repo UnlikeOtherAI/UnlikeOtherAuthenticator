@@ -8,6 +8,8 @@ RuntimeKey calls \`POST /billing/v1/ledger/reservations/:dispatchId/exception\`
 with the selected receipt, exact USD actual cost and lowercase SHA-256 digest.
 The digest is over compact JSON of
 \`[dispatchId,receiptId,rawActualFixed18,"USD",requestFingerprint,rawBoundFixed18,contextDigest]\`.
+Paid reserve and original product-bound decision lookup expose the exact
+private frozen \`context_digest\`; Ledger persists it before provider egress.
 It creates only a held private exception, never a customer debit or release.
 \`GET\` at the same path returns the held or exact terminal decision to Ledger.
 

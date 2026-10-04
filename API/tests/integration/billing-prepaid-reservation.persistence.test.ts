@@ -593,6 +593,10 @@ describe.skipIf(!enabled)('prepaid dispatch liability in PostgreSQL', () => {
     const first = await reservePrepaidDispatch({ runtimeSecret: secret, delegation: token, input }, deps);
     expect(first.payment_mode).toBe('prepaid');
     expect(first.reserved_microcredits).toBe('10');
+    expect(first.context_digest).toMatch(/^[a-f0-9]{64}$/);
+    expect((await getLedgerDispatchDecision({ runtimeSecret: secret,
+      dispatchId: input.dispatchId }, { prisma })).context_digest)
+      .toBe(first.context_digest);
     await prisma.user.update({ where: { id: ids.user }, data: { tokenVersion: 1 } });
     await expect(reservePrepaidDispatch({ runtimeSecret: secret, delegation: token, input }, deps))
       .rejects.toThrow('PREPAID_SUBJECT_NOT_ENTITLED');
