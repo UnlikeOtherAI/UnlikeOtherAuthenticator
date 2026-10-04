@@ -80,6 +80,8 @@ describe.skipIf(!process.env.DATABASE_URL)('historical manual monthly invoice', 
     } });
     const fetchMetering = vi.fn().mockResolvedValue(metering());
     const params = { contractId, issuerProfileId, billingMonth: '2026-10',
+      taxTerms: { treatment: 'NO_TAX_CHARGED' as const, rateBps: 0,
+        legalBasis: 'Customer transaction outside tax scope' },
       actor: { email: 'operator@example.test' } };
     const deps = { prisma: db.prisma, fetchMetering,
       collectFunding: vi.fn().mockResolvedValue({ credits: [], addons: [] }),
@@ -125,6 +127,8 @@ describe.skipIf(!process.env.DATABASE_URL)('historical manual monthly invoice', 
         monthlyAmountMinor: 700n },
     ] });
     const params = { contractId: contract.id, issuerProfileId, billingMonth: '2026-09',
+      taxTerms: { treatment: 'STANDARD_RATE' as const, rateBps: 2000,
+        legalBasis: 'Standard VAT on taxable services' },
       actor: { email: 'operator@example.test' } };
     const deps = { prisma: db.prisma,
       fetchMetering: vi.fn().mockImplementation(async (input: { product: string }) => ({
@@ -137,12 +141,14 @@ describe.skipIf(!process.env.DATABASE_URL)('historical manual monthly invoice', 
     const replay = await calculateBillingContractInvoice(params, deps);
     expect(replay.id).toBe(first.id);
     expect(first.subtotalMinor).toBe(2000n);
+    expect(first.taxAmountMinor).toBe(400n);
+    expect(first.totalMinor).toBe(2400n);
     const allocations = await db.prisma.billingInvoiceLineFinancialAllocation.findMany({
       where: { invoiceId: first.id }, orderBy: { subscriptionMinor: 'desc' },
     });
     expect(allocations.map((line) => [line.subscriptionMinor, line.usageMinor,
       line.invoiceCreditMinor, line.dueMinor])).toEqual([
-      [1300n, 0n, 0n, 1300n], [700n, 0n, 0n, 700n],
+      [1300n, 0n, 0n, 1560n], [700n, 0n, 0n, 840n],
     ]);
   });
 });

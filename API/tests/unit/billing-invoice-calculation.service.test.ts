@@ -197,6 +197,8 @@ describe('contract invoice calculator', () => {
         contractId: 'contract_1',
         issuerProfileId: 'issuer_1',
         billingMonth: '2026-06',
+        taxTerms: { treatment: 'NO_TAX_CHARGED', rateBps: 0,
+          legalBasis: 'Customer transaction outside tax scope' },
         actor: { email: 'admin@example.com' },
       },
       { prisma: prisma as never, fetchMetering, collectFunding, quoteMonthly, now: () => now },
@@ -270,6 +272,8 @@ describe('contract invoice calculator', () => {
           contractId: 'contract_1',
           issuerProfileId: 'issuer_1',
           billingMonth: '2026-07',
+          taxTerms: { treatment: 'NO_TAX_CHARGED', rateBps: 0,
+            legalBasis: 'Customer transaction outside tax scope' },
           actor: { email: 'admin@example.com' },
         },
         { prisma: {} as never, now: () => now },
@@ -320,6 +324,8 @@ describe('contract invoice calculator', () => {
     const collectFunding = vi.fn().mockResolvedValue({ credits: [], addons: [] });
     const request = { contractId: 'contract_1',
       issuerProfileId: 'issuer_1', billingMonth: '2026-06',
+      taxTerms: { treatment: 'NO_TAX_CHARGED' as const, rateBps: 0,
+        legalBasis: 'Customer transaction outside tax scope' },
       actor: { email: 'admin@example.com' } };
     const deps = { prisma: prisma as never, now: () => now,
       fetchMetering, collectFunding, quoteMonthly };

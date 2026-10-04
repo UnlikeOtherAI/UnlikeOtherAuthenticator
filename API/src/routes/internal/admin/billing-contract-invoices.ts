@@ -11,6 +11,9 @@ import {
   listBillingContracts,
 } from '../../../services/billing-contract.service.js';
 import { calculateBillingContractInvoice } from '../../../services/billing-invoice-calculation.service.js';
+import { listPendingManualBillingCycleCorrections,
+  prepareManualBillingCycleCorrection } from
+  '../../../services/billing-cycle-manual-correction-prepare.service.js';
 import { markupPercentToBps } from '../../../services/billing-markup-percent.service.js';
 import {
   getBillingInvoice,
@@ -305,6 +308,9 @@ export function registerInternalAdminBillingContractInvoiceRoutes(app: FastifyIn
           contract_id: IdentifierSchema,
           issuer_profile_id: IdentifierSchema,
           billing_month: MonthSchema,
+          tax_treatment: z.enum(['no_tax_charged', 'standard_rate']),
+          tax_rate_percent: z.string().regex(/^(0|[1-9]\d*)(?:\.\d{1,2})?$/),
+          tax_legal_basis: z.string().trim().min(1).max(500),
         })
         .strict()
         .parse(request.body);
@@ -312,11 +318,35 @@ export function registerInternalAdminBillingContractInvoiceRoutes(app: FastifyIn
         contractId: body.contract_id,
         issuerProfileId: body.issuer_profile_id,
         billingMonth: body.billing_month,
+        taxTerms: {
+          treatment: body.tax_treatment.toUpperCase() as
+            'NO_TAX_CHARGED' | 'STANDARD_RATE',
+          rateBps: markupPercentToBps(body.tax_rate_percent),
+          legalBasis: body.tax_legal_basis,
+        },
         actor: actor(request),
       });
       return reply.status(201).send(await serializeInvoice(invoice));
     },
   );
+
+  app.get('/internal/admin/billing/cycle-corrections', adminRoute, async () => ({
+    corrections: (await listPendingManualBillingCycleCorrections()).map((item) => ({
+      cycle_id: item.cycleId, organisation_id: item.orgId,
+      service_id: item.serviceId, billing_month: item.billingMonth,
+      direction: item.direction, supplement_invoice_id: item.supplementInvoiceId,
+    })),
+  }));
+
+  app.post('/internal/admin/billing/cycle-corrections/:cycleId/prepare',
+    { ...adminRoute, schema: { response: { 201: invoiceResponseSchema } } },
+    async (request, reply) => {
+      const cycleId = IdentifierSchema.parse((request.params as { cycleId?: unknown }).cycleId);
+      ActorBodySchema.parse(request.body ?? {});
+      const prepared = await prepareManualBillingCycleCorrection({ pendingCycleId: cycleId,
+        actor: financialActor(request) });
+      return reply.status(201).send(serializeInvoice(await getBillingInvoice(prepared.invoiceId)));
+    });
 
   app.get(
     '/internal/admin/billing/invoices',

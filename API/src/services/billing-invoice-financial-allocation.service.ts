@@ -7,6 +7,7 @@ type LineAmount = {
   serviceId: string;
   subscriptionMinor: bigint;
   usageMinor: bigint;
+  taxMinor?: bigint;
 };
 
 /** Freeze every service's actual liability and its settled-credit cents with the draft. */
@@ -53,10 +54,10 @@ export async function writeInvoiceFinancialAllocations(
       billingMonth: invoice.billingMonth,
       subscriptionMinor: amount.subscriptionMinor,
       usageMinor: amount.usageMinor,
-      taxMinor: 0n,
+      taxMinor: amount.taxMinor ?? 0n,
       invoiceCreditMinor: credit,
-      totalMinor: line.amountMinor,
-      dueMinor: line.amountMinor - credit,
+      totalMinor: line.amountMinor + (amount.taxMinor ?? 0n),
+      dueMinor: line.amountMinor + (amount.taxMinor ?? 0n) - credit,
       currency: invoice.currency,
       calculationDigest: invoice.calculationDigest,
     } });

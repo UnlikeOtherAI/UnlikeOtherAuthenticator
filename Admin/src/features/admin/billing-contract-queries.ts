@@ -14,6 +14,7 @@ import { billingContractAdminService } from '../../services/billing-contract-adm
 const contractsKey = ['admin', 'billing', 'contracts'] as const;
 const issuersKey = ['admin', 'billing', 'invoice-issuers'] as const;
 const invoicesKey = ['admin', 'billing', 'invoices'] as const;
+const correctionsKey = ['admin', 'billing', 'cycle-corrections'] as const;
 
 function useRefresh(keys: ReadonlyArray<readonly unknown[]>) {
   const queryClient = useQueryClient();
@@ -38,6 +39,17 @@ export function useBillingInvoiceIssuersQuery() {
 
 export function useBillingInvoicesQuery() {
   return useQuery({ queryKey: invoicesKey, queryFn: billingContractAdminService.listInvoices });
+}
+
+export function useBillingCycleCorrectionsQuery() {
+  return useQuery({ queryKey: correctionsKey,
+    queryFn: billingContractAdminService.listCycleCorrections });
+}
+
+export function usePrepareBillingCycleCorrectionMutation() {
+  const refresh = useRefresh([correctionsKey, invoicesKey]);
+  return useMutation({ mutationFn: (cycleId: string) =>
+    billingContractAdminService.prepareCycleCorrection(cycleId), onSuccess: refresh });
 }
 
 export function useBillingInvoiceBuyerQuery(organisationId: string, enabled: boolean) {

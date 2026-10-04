@@ -136,12 +136,30 @@ export const billingContractInvoiceEndpoints: EndpointSchema[] = [
       contract_id: 'active organisation contract ID',
       issuer_profile_id: 'active explicit issuer profile ID',
       billing_month: 'closed UTC YYYY-MM',
+      tax_treatment: 'no_tax_charged | standard_rate',
+      tax_rate_percent: 'exact 0..100 with at most two fractional digits',
+      tax_legal_basis: 'required legal basis frozen with the invoice',
     },
     response: {
       201:
         'Customer-safe draft invoice; never markup, cost, units, calls, cursor/hash, digest, or private PDF storage identity. ' +
         invoiceActionProjection,
     },
+  },
+  {
+    method: 'GET',
+    path: '/internal/admin/billing/cycle-corrections',
+    description: 'List closed-month manual billing cycle corrections awaiting a real legal financial effect.',
+    auth: adminAuth,
+    response: { 200: 'Pending correction cycles with direction and optional supplement invoice id.' },
+  },
+  {
+    method: 'POST',
+    path: '/internal/admin/billing/cycle-corrections/:cycleId/prepare',
+    description: 'Freeze a delta-only supplemental invoice from signed paid receipts, the original issued line and its tax evidence. No original monthly fee is repeated.',
+    auth: adminAuth,
+    body: {},
+    response: { 201: 'Customer-safe draft supplemental invoice ready for ordinary issue.' },
   },
   {
     method: 'GET',

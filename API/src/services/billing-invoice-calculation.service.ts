@@ -22,6 +22,8 @@ import {
 } from './billing-money.service.js';
 import { rateMeteringTotal } from './billing-rating.service.js';
 import { quoteSubscriptionMonthlyCharge } from './billing-monthly-subscription-quote.service.js';
+import { allocateInvoiceTaxMinor, assertInvoiceTaxTerms,
+  type BillingInvoiceTaxTerms } from './billing-invoice-tax.service.js';
 
 const MAX_INT64 = 9_223_372_036_854_775_807n;
 const MICROCREDITS_PER_USD_MINOR = 10_000_000n;
@@ -111,11 +113,13 @@ export async function calculateBillingContractInvoice(
     contractId: string;
     issuerProfileId: string;
     billingMonth: string;
+    taxTerms: BillingInvoiceTaxTerms;
     actor: Actor;
   },
   deps?: CalculationDeps,
 ) {
   const now = deps?.now?.() ?? new Date();
+  const taxTerms = assertInvoiceTaxTerms(params.taxTerms);
   const period = closedBillingMonthPeriod(params.billingMonth, now);
   const prisma = deps?.prisma ?? getAdminPrisma();
   const contract = await prisma.billingOrganisationContract.findFirst({
@@ -246,6 +250,10 @@ export async function calculateBillingContractInvoice(
   );
   calculated.sort((left, right) => Buffer.compare(Buffer.from(left.serviceIdentifier), Buffer.from(right.serviceIdentifier)));
   const subtotalMinor = calculated.reduce((total, line) => total + line.amountMinor, 0n);
+  const taxByService = allocateInvoiceTaxMinor(calculated.map((line) => ({
+    id: line.serviceId, netMinor: line.amountMinor,
+  })), taxTerms);
+  const taxAmountMinor = [...taxByService.values()].reduce((sum, value) => sum + value, 0n);
   const creditEvidence = calculated.flatMap((line) => line.credits);
   const creditsAppliedMicrocredits = creditEvidence.reduce(
     (total, reference) => total + reference.creditsAppliedMicrocredits,
@@ -264,7 +272,7 @@ export async function calculateBillingContractInvoice(
         Buffer.from(`${right.offerKey}:${right.scope}:${right.subscriptionId}`),
       ),
     );
-  if (subtotalMinor > MAX_INT64) {
+  if (subtotalMinor + taxAmountMinor > MAX_INT64) {
     throw new AppError('BAD_REQUEST', 409, 'BILLING_INVOICE_TOTAL_INVALID');
   }
   if (creditsAppliedMinor > subtotalMinor) {
@@ -279,6 +287,8 @@ export async function calculateBillingContractInvoice(
     currency: version.currency,
     issuer: issuerData,
     buyer: buyerData,
+    tax: { treatment: taxTerms.treatment, rate_bps: taxTerms.rateBps,
+      legal_basis: taxTerms.legalBasis, amount_minor: taxAmountMinor.toString() },
     lines: calculated.map((line) => ({
       service_id: line.serviceId,
       amount_minor: line.amountMinor.toString(),
@@ -343,6 +353,7 @@ export async function calculateBillingContractInvoice(
                 serviceId: line.serviceId,
                 subscriptionMinor: line.monthlyAmountMinor,
                 usageMinor: line.usageMinor,
+                taxMinor: taxByService.get(line.serviceId) ?? 0n,
               })));
             }
             return existing;
@@ -363,8 +374,11 @@ export async function calculateBillingContractInvoice(
               revision: (latest?.revision ?? 0) + 1,
               currency: version.currency,
               subtotalMinor,
-              taxAmountMinor: 0n,
-              totalMinor: subtotalMinor,
+              taxAmountMinor,
+              taxTreatment: taxTerms.treatment,
+              taxRateBps: taxTerms.rateBps,
+              taxLegalBasis: taxTerms.legalBasis,
+              totalMinor: subtotalMinor + taxAmountMinor,
               creditsAppliedMinor,
               issuerSnapshot: issuerData,
               buyerSnapshot: buyerData,
@@ -425,8 +439,9 @@ export async function calculateBillingContractInvoice(
           });
           await writeInvoiceFinancialAllocations(tx, invoice, calculated.map((line) => ({
             serviceId: line.serviceId,
-            subscriptionMinor: line.monthlyAmountMinor,
-            usageMinor: line.usageMinor,
+                subscriptionMinor: line.monthlyAmountMinor,
+                usageMinor: line.usageMinor,
+                taxMinor: taxByService.get(line.serviceId) ?? 0n,
           })));
           await tx.adminAuditLog.create({
             data: {

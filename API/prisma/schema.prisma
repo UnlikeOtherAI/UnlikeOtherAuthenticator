@@ -2682,12 +2682,16 @@ model BillingInvoice {
   billingMonth        String               @map("billing_month") @db.Char(7)
   revision            Int                  @default(1)
   status              BillingInvoiceStatus @default(DRAFT)
+  isCycleSupplement   Boolean              @default(false) @map("is_cycle_supplement")
   invoiceNumber       String?              @unique @map("invoice_number") @db.VarChar(80)
   issueDate           DateTime?            @map("issue_date")
   dueDate             DateTime?            @map("due_date")
   currency            String               @db.Char(3)
   subtotalMinor       BigInt               @map("subtotal_minor")
   taxAmountMinor      BigInt               @default(0) @map("tax_amount_minor")
+  taxTreatment        String?              @map("tax_treatment") @db.VarChar(32)
+  taxRateBps          Int?                 @map("tax_rate_bps")
+  taxLegalBasis       String?              @map("tax_legal_basis") @db.VarChar(500)
   totalMinor          BigInt               @map("total_minor")
   creditsAppliedMinor BigInt               @default(0) @map("credits_applied_minor")
   issuerSnapshot      Json                 @map("issuer_snapshot")
@@ -2716,6 +2720,7 @@ model BillingInvoice {
   paymentEvents        BillingInvoicePaymentEvent[]
   lineFinancialAllocations BillingInvoiceLineFinancialAllocation[]
   lineCreditAllocations BillingInvoiceLineCreditReferenceAllocation[]
+  cycleCorrection BillingCycleManualCorrection? @relation("CorrectionSupplementInvoice")
 
   @@unique([contractId, billingMonth, revision])
   @@index([orgId, billingMonth, status])
@@ -4383,6 +4388,8 @@ model BillingCustomerCycle {
   org       Organisation @relation(fields: [orgId], references: [id], onDelete: Restrict)
   documents BillingCustomerCycleDocument[]
   invoiceAllocations BillingCustomerCycleInvoiceAllocation[]
+  manualCorrection BillingCycleManualCorrection? @relation("CorrectionPendingCycle")
+  correctedBy BillingCycleManualCorrection[] @relation("CorrectionOriginalCycle")
 
   // Partial unique indexes for team and organisation scopes live in migration 163000.
   @@index([serviceId, teamId, billingMonth], map: "billing_customer_cycles_scope_idx")
@@ -4473,6 +4480,35 @@ model BillingCustomerCycleInvoiceAllocation {
 
   @@index([cycleId])
   @@map("billing_customer_cycle_invoice_allocations")
+}
+
+// A supplemental legal invoice or credit note is bound to one changed frozen
+// cycle liability. The original document is never edited or reissued.
+model BillingCycleManualCorrection {
+  id                 String   @id @default(cuid())
+  pendingCycleId     String   @unique @map("pending_cycle_id")
+  originalCycleId    String   @map("original_cycle_id")
+  supplementInvoiceId String? @unique @map("supplement_invoice_id")
+  kind               String   @db.VarChar(16) // debit or credit
+  netDeltaMinor      BigInt   @map("net_delta_minor")
+  taxDeltaMinor      BigInt   @map("tax_delta_minor")
+  currency           String   @db.Char(3)
+  originalLineId     String   @map("original_line_id")
+  originalSourceDigest String @map("original_source_digest") @db.Char(64)
+  taxTreatment       String   @map("tax_treatment") @db.VarChar(32)
+  taxRateBps         Int      @map("tax_rate_bps")
+  taxLegalBasis      String   @map("tax_legal_basis") @db.VarChar(500)
+  evidenceDigest     String   @map("evidence_digest") @db.Char(64)
+  createdByUserId    String?  @map("created_by_user_id")
+  createdByEmail     String   @map("created_by_email") @db.VarChar(320)
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  pendingCycle BillingCustomerCycle @relation("CorrectionPendingCycle", fields: [pendingCycleId], references: [id], onDelete: Restrict)
+  originalCycle BillingCustomerCycle @relation("CorrectionOriginalCycle", fields: [originalCycleId], references: [id], onDelete: Restrict)
+  supplementInvoice BillingInvoice? @relation("CorrectionSupplementInvoice", fields: [supplementInvoiceId], references: [id], onDelete: Restrict)
+
+  @@index([originalCycleId])
+  @@map("billing_cycle_manual_corrections")
 }
 
 // Verified cash payment and its existing Stripe legal invoice. Financial

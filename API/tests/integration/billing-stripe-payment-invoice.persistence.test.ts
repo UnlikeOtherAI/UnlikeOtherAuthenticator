@@ -26,6 +26,10 @@ vi.mock('../../src/services/billing-actor.service.js', () => ({
   verifyBillingActor: vi.fn().mockResolvedValue({}),
 }));
 
+vi.mock('../../src/services/billing-actor.service.js', () => ({
+  verifyBillingActor: vi.fn().mockResolvedValue({}),
+}));
+
 type TestDb = NonNullable<Awaited<ReturnType<typeof createTestDb>>>;
 const startsAt = new Date('2026-08-01T00:00:00.000Z');
 const endsAt = new Date('2026-09-01T00:00:00.000Z');
