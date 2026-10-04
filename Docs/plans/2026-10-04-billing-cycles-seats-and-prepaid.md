@@ -430,6 +430,13 @@ acknowledgement recovers the same document. These are machine-only source and
 worker services; their customer doorway is the common InvoiceV1 API and the
 three product Billing cycles pages. Product readers must bind every line before
 returning a whole legal document.
+The customer invoice list selects a month by verified cash payment time for
+Stripe subscription and prepaid sources. A legal invoice with multiple accepted
+payments can be referenced in each payment month, but each monthly row exposes
+only that month's actual cash; its frozen whole-invoice totals and PDF retain
+one legal identity. Detail supplies the complete verified payment history and
+the selected month context. A product key never relays a mixed-product legal
+PDF, even for an organisation manager; UOA organisation finance owns that view.
 
 The final consumer contract is not frozen while boundary balances, late usage
 adjustments and invoice-reader integration remain in progress. Parallel payment

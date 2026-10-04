@@ -51,7 +51,7 @@ function financials(invoice: ManualInvoiceSource) {
 }
 
 export function projectManualCustomerInvoiceSummary(
-  invoice: ManualInvoiceSource,
+  invoice: ManualInvoiceSource, chargeMonth = invoice.issuedAt?.toISOString().slice(0, 7),
 ): BillingCustomerInvoiceSummaryV1 {
   if ((invoice.status !== BillingInvoiceStatus.ISSUED &&
     invoice.status !== BillingInvoiceStatus.VOID) ||
@@ -64,9 +64,14 @@ export function projectManualCustomerInvoiceSummary(
       invoice.subtotalMinor ||
     invoice.subtotalMinor + invoice.taxAmountMinor !== invoice.totalMinor) hold();
   const amounts = financials(invoice);
+  if (!chargeMonth || chargeMonth !== invoice.issuedAt.toISOString().slice(0, 7)) hold();
+  const monthPaid = invoice.paymentEvents.filter((event) => event.kind === 'PAYMENT' &&
+    event.occurredAt.toISOString().slice(0, 7) === chargeMonth)
+    .reduce((sum, event) => sum + event.amountMinor, 0n);
   return {
     invoice_id: `manual:${invoice.id}`, kind: 'monthly_service', status: amounts.status,
     number: invoice.invoiceNumber, charged_at: invoice.issuedAt.toISOString(),
+    charge_month: chargeMonth, payments_in_charge_month: cycleMoney(monthPaid, invoice.currency),
     issued_at: invoice.issuedAt.toISOString(),
     scope: { organisation_id: invoice.orgId, team_id: null,
       scope_type: 'organisation' },
@@ -88,15 +93,20 @@ export function projectManualCustomerInvoiceSummary(
 }
 
 export function projectManualCustomerInvoiceDetail(
-  invoice: ManualInvoiceSource, subject: BillingSubjectRequest,
+  invoice: ManualInvoiceSource, subject: BillingSubjectRequest, chargeMonth?: string,
 ): BillingCustomerInvoiceDetailV1 {
-  const summary = projectManualCustomerInvoiceSummary(invoice);
+  const summary = projectManualCustomerInvoiceSummary(invoice, chargeMonth);
   const number = summary.number;
   const issuedAt = summary.issued_at;
   if (!number || !issuedAt) hold();
   if (subject.organisation_id !== invoice.orgId ||
     invoice.lines.some((line) => line.serviceIdentifier !== subject.product)) hold();
   return { ...summary, schema_version: 1,
+    payments: invoice.paymentEvents.filter((event) => event.kind === 'PAYMENT')
+      .sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime() ||
+        Buffer.compare(Buffer.from(a.id), Buffer.from(b.id)))
+      .map((event) => ({ payment_id: event.id, paid_at: event.occurredAt.toISOString(),
+        amount: cycleMoney(event.amountMinor, invoice.currency) })),
     charges: [...invoice.lines].sort((a, b) => a.position - b.position)
       .map((line) => ({ line_id: line.id, kind: 'service_charge' as const,
         label: line.serviceName, amount: cycleMoney(line.amountMinor, invoice.currency),

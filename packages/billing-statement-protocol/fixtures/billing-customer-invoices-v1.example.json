@@ -16,6 +16,13 @@
         "status": "paid",
         "number": "UOA-2026-000001",
         "charged_at": "2026-10-03T23:59:59.000Z",
+        "charge_month": "2026-10",
+        "payments_in_charge_month": {
+          "amount": "50",
+          "amount_minor": "5000",
+          "currency": "USD",
+          "display": "US$50"
+        },
         "issued_at": "2026-10-04T10:00:00.000Z",
         "scope": {
           "organisation_id": "org_example",
@@ -96,6 +103,13 @@
         "status": "pending_document",
         "number": null,
         "charged_at": "2026-10-31T23:59:59.000Z",
+        "charge_month": "2026-10",
+        "payments_in_charge_month": {
+          "amount": "50",
+          "amount_minor": "5000",
+          "currency": "USD",
+          "display": "US$50"
+        },
         "issued_at": null,
         "scope": {
           "organisation_id": "org_example",
@@ -174,6 +188,13 @@
     "status": "paid",
     "number": "UOA-2026-000001",
     "charged_at": "2026-10-03T23:59:59.000Z",
+    "charge_month": "2026-10",
+    "payments_in_charge_month": {
+      "amount": "50",
+      "amount_minor": "5000",
+      "currency": "USD",
+      "display": "US$50"
+    },
     "issued_at": "2026-10-04T10:00:00.000Z",
     "scope": {
       "organisation_id": "org_example",
@@ -248,6 +269,18 @@
     },
     "document_available": true,
     "schema_version": 1,
+    "payments": [
+      {
+        "payment_id": "payment_topup_1",
+        "paid_at": "2026-10-03T23:59:59.000Z",
+        "amount": {
+          "amount": "50",
+          "amount_minor": "5000",
+          "currency": "USD",
+          "display": "US$50"
+        }
+      }
+    ],
     "charges": [
       {
         "line_id": "line_topup_1",
@@ -287,6 +320,13 @@
     "status": "pending_document",
     "number": null,
     "charged_at": "2026-10-31T23:59:59.000Z",
+    "charge_month": "2026-10",
+    "payments_in_charge_month": {
+      "amount": "50",
+      "amount_minor": "5000",
+      "currency": "USD",
+      "display": "US$50"
+    },
     "issued_at": null,
     "scope": {
       "organisation_id": "org_example",
@@ -356,6 +396,18 @@
     },
     "document_available": false,
     "schema_version": 1,
+    "payments": [
+      {
+        "payment_id": "payment_auto_2",
+        "paid_at": "2026-10-31T23:59:59.000Z",
+        "amount": {
+          "amount": "50",
+          "amount_minor": "5000",
+          "currency": "USD",
+          "display": "US$50"
+        }
+      }
+    ],
     "charges": [
       {
         "line_id": "line_auto_2",

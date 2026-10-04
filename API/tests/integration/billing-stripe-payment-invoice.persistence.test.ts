@@ -4,12 +4,24 @@ import type Stripe from 'stripe';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { AppError } from '../../src/utils/errors.js';
+import { stripeInvoiceCashDigest } from '../../src/services/billing-stripe-payment-evidence.service.js';
+import {
+  downloadCustomerInvoice, getCustomerInvoiceDetail, listCustomerInvoices,
+} from '../../src/services/billing-customer-invoice-read.service.js';
+import type { BillingCycleContext } from '../../src/services/billing-cycle-read.service.js';
+import {
+  projectStripeCustomerInvoiceDetail, projectStripeCustomerInvoiceSummary,
+} from '../../src/services/billing-customer-invoice-stripe.service.js';
 import { prepareStripePaymentInvoice, persistStripePaymentInvoice }
   from '../../src/services/billing-stripe-payment-invoice-source.service.js';
 import { issueStripePaymentInvoice } from '../../src/services/billing-stripe-payment-invoice-issue.service.js';
 import { runStripePaymentInvoiceCycle } from '../../src/services/billing-stripe-payment-invoice-scheduler.service.js';
 import { handleStripeWebhook } from '../../src/services/billing-stripe-webhook.service.js';
 import { createTestDb } from '../helpers/test-db.js';
+
+vi.mock('../../src/services/billing-actor.service.js', () => ({
+  verifyBillingActor: vi.fn().mockResolvedValue({}),
+}));
 
 type TestDb = NonNullable<Awaited<ReturnType<typeof createTestDb>>>;
 const startsAt = new Date('2026-08-01T00:00:00.000Z');
@@ -19,7 +31,14 @@ const pdf = Buffer.from('%PDF-1.7\nverified invoice\n%%EOF');
 
 describe.skipIf(!process.env.DATABASE_URL)('regular Stripe payment legal source', () => {
   let db: TestDb; let accountId: string;
-  let serviceId: string; let tariffId: string; let orgId: string;
+  let serviceId: string; let tariffId: string; let orgId: string; let product: string;
+  let ownerId: string; let teamManagerId: string; let selectedTeamId: string;
+  function context(userId = ownerId): BillingCycleContext {
+    return { credential: { service: { id: serviceId, identifier: product,
+      name: 'Monthly service' } } as BillingCycleContext['credential'],
+    actorToken: 'verified-test-actor', endpoint: '/billing/v1/invoices/list',
+    request: { product, organisationId: orgId, teamId: selectedTeamId, userId } };
+  }
   beforeAll(async () => {
     const created = await createTestDb();
     if (!created) throw new Error('DATABASE_URL_REQUIRED');
@@ -27,15 +46,30 @@ describe.skipIf(!process.env.DATABASE_URL)('regular Stripe payment legal source'
     const owner = await db.prisma.user.create({ data: {
       email: `${randomUUID()}@example.test`, userKey: `${randomUUID()}@example.test`,
     } });
+    ownerId = owner.id;
+    const teamManager = await db.prisma.user.create({ data: {
+      email: `${randomUUID()}@example.test`, userKey: `${randomUUID()}@example.test`,
+    } });
+    teamManagerId = teamManager.id;
     const org = await db.prisma.organisation.create({ data: {
       ownerId: owner.id, domain: `${randomUUID()}.example.test`,
       slug: `monthly-${randomUUID().slice(0, 8)}`, name: 'Monthly seat customer',
     } });
     orgId = org.id;
+    const team = await db.prisma.team.create({ data: { orgId,
+      name: 'Selected team', slug: `selected-${randomUUID().slice(0, 8)}` } });
+    selectedTeamId = team.id;
+    await db.prisma.orgMember.create({ data: { orgId, userId: owner.id, role: 'owner' } });
+    await db.prisma.teamMember.create({ data: { teamId: team.id, userId: owner.id,
+      teamRole: 'owner' } });
+    await db.prisma.orgMember.create({ data: { orgId, userId: teamManager.id, role: 'member' } });
+    await db.prisma.teamMember.create({ data: { teamId: team.id, userId: teamManager.id,
+      teamRole: 'admin' } });
     const service = await db.prisma.billingService.create({ data: {
       identifier: `monthly-${randomUUID()}`, name: 'Monthly service',
     } });
     serviceId = service.id;
+    product = service.identifier;
     const tariff = await db.prisma.billingTariff.create({ data: {
       serviceId, key: 'seat', version: 1, name: 'Seats',
       mode: 'STANDARD', collectionMode: 'STRIPE', markupBps: 3000,
@@ -132,7 +166,8 @@ describe.skipIf(!process.env.DATABASE_URL)('regular Stripe payment legal source'
     expect(await handleStripeWebhook(request, deps)).toEqual({ duplicate: false });
     expect(await handleStripeWebhook(request, deps)).toEqual({ duplicate: true });
     const row = await db.prisma.billingStripePaymentInvoice.findFirstOrThrow({
-      where: { stripeInvoiceId: fixture.invoice.id }, include: { lines: true } });
+      where: { stripeInvoiceId: fixture.invoice.id },
+      include: { lines: true, subscription: true, cashPayments: true, adjustments: true } });
     expect(row.paidAt).toEqual(paidAt);
     expect(row.state).toBe('PENDING');
     expect(row.paymentEvidence).toEqual([{ invoice_payment_id: fixture.paymentId,
@@ -143,6 +178,52 @@ describe.skipIf(!process.env.DATABASE_URL)('regular Stripe payment legal source'
     expect(row.lines[0]).toMatchObject({ billingMonth: '2026-08',
       subscriptionMinor: 2000n, usageMinor: 0n, taxMinor: 500n,
       creditMinor: 500n, grossMinor: 2500n, dueMinor: 2000n });
+    const pending = projectStripeCustomerInvoiceSummary(row, product, serviceId);
+    expect(pending).toMatchObject({ invoice_id: `stripe:${row.id}`,
+      status: 'pending_document', charged_at: paidAt.toISOString(),
+      number: null, document_available: false,
+      totals: { gross_total: { amount_minor: '2500' }, tax: { amount_minor: '500' },
+        credits_applied: { amount_minor: '500' }, total_paid: { amount_minor: '2000' } } });
+    expect(projectStripeCustomerInvoiceDetail(row, product, serviceId, { product,
+      organisation_id: orgId, team_id: 'selected-team', user_id: 'owner' }).document).toBeNull();
+    const prior = { invoice_payment_id: 'inpay_prior', payment_intent_id: 'pi_prior',
+      charge_id: 'ch_prior', amount_minor: '1000', paid_at: '2026-09-30T23:59:59.000Z' };
+    const current = { invoice_payment_id: 'inpay_current', payment_intent_id: 'pi_current',
+      charge_id: 'ch_current', amount_minor: '1000', paid_at: paidAt.toISOString() };
+    const cash = [prior, current].map((payment, index) => ({ ...row.cashPayments[0]!,
+      id: `uoa_cash_${index}`, stripeInvoicePaymentId: payment.invoice_payment_id,
+      stripePaymentIntentId: payment.payment_intent_id,
+      stripeChargeId: payment.charge_id, amountMinor: 1000n,
+      paidAt: new Date(payment.paid_at), evidenceDigest: stripeInvoiceCashDigest(payment) }));
+    const splitPayments = { ...row, paymentEvidence: [prior], paidAmountMinor: 1000n,
+      paidAt: new Date(prior.paid_at), stripePaymentIntentIds: [prior.payment_intent_id],
+      cashPayments: cash };
+    expect(projectStripeCustomerInvoiceSummary(splitPayments, product, serviceId, '2026-09')
+      .payments_in_charge_month.amount_minor).toBe('1000');
+    expect(projectStripeCustomerInvoiceSummary(splitPayments, product, serviceId, '2026-10')
+      .payments_in_charge_month.amount_minor).toBe('1000');
+    expect(projectStripeCustomerInvoiceDetail(splitPayments, product, serviceId, { product,
+      organisation_id: orgId, team_id: 'selected-team', user_id: 'owner' }, '2026-09')
+      .payments.map((payment) => payment.amount.amount_minor)).toEqual(['1000', '1000']);
+    const customerDetail = await getCustomerInvoiceDetail(context(), `stripe:${row.id}`,
+      { prisma: db.prisma });
+    expect(customerDetail.status).toBe('pending_document');
+    await expect(getCustomerInvoiceDetail(context(), `stripe:${row.id}`,
+      { prisma: db.prisma, chargeMonth: '2026-09' }))
+      .rejects.toMatchObject({ statusCode: 404 });
+    expect(JSON.stringify(customerDetail)).not.toMatch(
+      /provider_cost|markup|raw_units|token_count|stripe_customer_id|payment_intent_id/i);
+    await expect(getCustomerInvoiceDetail(context(teamManagerId), `stripe:${row.id}`,
+      { prisma: db.prisma })).rejects.toMatchObject({ statusCode: 403 });
+    expect((await listCustomerInvoices(context(), { chargeMonth: '2026-10' },
+      { prisma: db.prisma })).invoices.some((item) => item.invoice_id === `stripe:${row.id}`))
+      .toBe(true);
+    expect(() => projectStripeCustomerInvoiceSummary({ ...row,
+      lines: [{ ...row.lines[0]!, serviceIdentifier: 'another-product' }] }, product, serviceId))
+      .toThrow('BILLING_CUSTOMER_STRIPE_INVOICE_SOURCE_UNPROVEN');
+    expect(() => projectStripeCustomerInvoiceSummary({ ...row,
+      lines: [{ ...row.lines[0]!, serviceId: 'other-service' }] }, product, serviceId))
+      .toThrow('BILLING_CUSTOMER_STRIPE_INVOICE_SOURCE_UNPROVEN');
     expect(await db.prisma.billingStripePaymentInvoice.count({
       where: { stripeInvoiceId: fixture.invoice.id } })).toBe(1);
     expect(await db.prisma.billingCreditEntry.count({ where: { creditAccount: { orgId } } })).toBe(0);
@@ -211,6 +292,23 @@ describe.skipIf(!process.env.DATABASE_URL)('regular Stripe payment legal source'
     expect(issued.pdfSha256).toBe(createHash('sha256').update(pdf).digest('hex'));
     expect(issued.issuerSnapshot).toMatchObject({ legal_name: 'Verified seller' });
     expect(issued.buyerSnapshot).toMatchObject({ legal_name: 'Verified buyer' });
+    const issuedWithLines = await db.prisma.billingStripePaymentInvoice.findUniqueOrThrow({
+      where: { id: source.id },
+      include: { lines: true, subscription: true, cashPayments: true, adjustments: true } });
+    const detail = projectStripeCustomerInvoiceDetail(issuedWithLines, product, serviceId, { product,
+      organisation_id: orgId, team_id: 'selected-team', user_id: 'owner' });
+    expect(detail.status).toBe('paid');
+    expect(JSON.stringify(detail)).not.toMatch(
+      /provider_cost|markup|raw_units|token_count|stripe_customer_id|payment_intent_id/i);
+    expect(detail.document?.download_action.body.invoice_id).toBe(`stripe:${source.id}`);
+    expect(detail.charges).toMatchObject([{ kind: 'service_charge',
+      amount: { amount_minor: '2000' } }]);
+    const downloaded = await downloadCustomerInvoice(context(), `stripe:${source.id}`,
+      `stripe:${source.id}`, { prisma: db.prisma, storage });
+    expect(downloaded.bytes).toEqual(pdf);
+    await expect(downloadCustomerInvoice(context(teamManagerId), `stripe:${source.id}`,
+      `stripe:${source.id}`, { prisma: db.prisma, storage }))
+      .rejects.toMatchObject({ statusCode: 403 });
     expect(files.size).toBe(1);
     await expect(db.prisma.billingStripePaymentInvoiceLine.create({ data: {
       invoiceId: source.id, stripeLineId: 'il_extra', serviceId,
@@ -253,6 +351,12 @@ describe.skipIf(!process.env.DATABASE_URL)('regular Stripe payment legal source'
     const download = vi.fn().mockImplementation(async () => new Response(pdf)) as unknown as typeof fetch;
     await issueStripePaymentInvoice(source.id, { prisma: db.prisma, stripe: fixture.stripe,
       account: fixture.account, storage, download });
+    const firstMonth = await listCustomerInvoices(context(), { chargeMonth: '2026-09', limit: 1 },
+      { prisma: db.prisma });
+    expect(firstMonth.invoices).toMatchObject([{ invoice_id: `stripe:${source.id}`,
+      status: 'partially_paid', charge_month: '2026-09',
+      payments_in_charge_month: { amount_minor: '1000' },
+      totals: { total_paid: { amount_minor: '1000' }, outstanding: { amount_minor: '1000' } } }]);
     const secondIntentId = `${fixture.intentId}_second`; const secondChargeId = `${fixture.chargeId}_second`;
     const second = { ...first, id: `${first.id}_second`,
       payment: { type: 'payment_intent', payment_intent: secondIntentId },
@@ -278,6 +382,32 @@ describe.skipIf(!process.env.DATABASE_URL)('regular Stripe payment legal source'
     expect(final.cashPayments.map((row) => [row.paidAt.toISOString(), row.amountMinor]))
       .toEqual([[firstAt, 1000n], [paidAt.toISOString(), 1000n]]);
     expect(final.cashPayments.reduce((sum, row) => sum + row.amountMinor, 0n)).toBe(2000n);
+    const september = await listCustomerInvoices(context(), { chargeMonth: '2026-09', limit: 1 },
+      { prisma: db.prisma });
+    const october = await listCustomerInvoices(context(), { chargeMonth: '2026-10', limit: 1 },
+      { prisma: db.prisma });
+    for (const [month, page] of [['2026-09', september], ['2026-10', october]] as const) {
+      const item = page.invoices.find((invoice) => invoice.invoice_id === `stripe:${source.id}`);
+      expect(item).toMatchObject({ charge_month: month, status: 'paid',
+        payments_in_charge_month: { amount_minor: '1000' },
+        totals: { total_paid: { amount_minor: '2000' }, outstanding: { amount_minor: '0' } } });
+    }
+    const historical = await getCustomerInvoiceDetail(context(), `stripe:${source.id}`,
+      { prisma: db.prisma, chargeMonth: '2026-09' });
+    expect(historical.payments.map((payment) => payment.payment_id))
+      .toEqual(final.cashPayments.map((payment) => payment.id));
+    expect(historical.payments_in_charge_month.amount_minor).toBe('1000');
+    const octoberIds: string[] = [];
+    let cursor: string | undefined;
+    for (let page = 0; page < 10; page += 1) {
+      const next = await listCustomerInvoices(context(), { chargeMonth: '2026-10', limit: 1,
+        cursor }, { prisma: db.prisma });
+      octoberIds.push(...next.invoices.map((invoice) => invoice.invoice_id));
+      if (!next.next_cursor) break;
+      cursor = next.next_cursor;
+    }
+    expect(octoberIds).toContain(`stripe:${source.id}`);
+    expect(new Set(octoberIds).size).toBe(octoberIds.length);
     expect(storage.putImmutable).toHaveBeenCalledTimes(1);
   });
 

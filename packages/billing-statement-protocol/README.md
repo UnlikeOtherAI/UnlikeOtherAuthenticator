@@ -94,14 +94,19 @@ usage liability and do not create a second payment invoice. Public payloads
 contain customer charges and seat prices, never provider cost or markup.
 
 `POST /billing/v1/invoices/list` groups accepted charges and actual issued documents by
-their immutable charge month. A prepaid payment uses its accepted payment time
-even if legal issuance finishes in the next month. Each successful prepaid purchase, including every
-automatic recharge, has its own invoice; reading this API never creates one.
+their immutable charge month. Each row carries `payments_in_charge_month` so an
+invoice paid in several months never counts its full legal total as fresh cash
+in each month. `/detail` returns the verified payment history and accepts an
+optional `charge_month` to preserve the selected list context. A prepaid
+payment uses its accepted payment time even if legal issuance finishes in the
+next month. Each successful prepaid purchase, including every automatic
+recharge, has its own invoice; reading this API never creates one.
 `/detail` contains legal customer charge lines only, and `/download` returns
 only verified immutable PDF bytes after fresh payer authorization. Usage and
 credit consumption remain in the separate cycle/account view and are never
-re-invoiced when prepaid credits are spent. A multi-product legal invoice is
-available only to a current organisation billing manager.
+re-invoiced when prepaid credits are spent. A multi-product legal invoice stays
+in UOA organisation finance; a single-product credential never relays its whole
+PDF or other-product lines.
 An accepted payment awaiting legal issuer or tax evidence appears as
 `pending_document`: the actual charged amount and purchased credits remain
 visible, while number, issuance time, tax, and PDF download are unavailable.

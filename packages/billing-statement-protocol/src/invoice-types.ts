@@ -40,6 +40,8 @@ export type BillingCustomerInvoiceSummaryV1 = {
     'partially_disputed' | 'written_off';
   number: string | null;
   charged_at: string;
+  charge_month: string;
+  payments_in_charge_month: BillingCustomerInvoiceMoney;
   issued_at: string | null;
   scope: BillingCustomerInvoiceScope;
   product_identifiers: string[];
@@ -61,6 +63,12 @@ export type BillingCustomerInvoicesListV1 = {
 };
 export type BillingCustomerInvoiceDetailRequestV1 = BillingSubjectRequest & {
   invoice_id: string;
+  charge_month?: string;
+};
+export type BillingCustomerInvoicePaymentV1 = {
+  payment_id: string;
+  paid_at: string;
+  amount: BillingCustomerInvoiceMoney;
 };
 export type BillingCustomerInvoiceChargeV1 = {
   line_id: string;
@@ -83,6 +91,7 @@ export type BillingCustomerInvoiceDocumentV1 = {
 };
 export type BillingCustomerInvoiceDetailV1 = BillingCustomerInvoiceSummaryV1 & {
   schema_version: typeof BILLING_CUSTOMER_INVOICES_SCHEMA_VERSION;
+  payments: BillingCustomerInvoicePaymentV1[];
   charges: BillingCustomerInvoiceChargeV1[];
   document: BillingCustomerInvoiceDocumentV1 | null;
 };

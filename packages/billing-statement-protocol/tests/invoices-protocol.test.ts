@@ -66,6 +66,26 @@ describe('actual customer charge invoice protocol', () => {
     expect(validate(detail)).toBe(false);
   });
 
+  it('keeps one legal invoice while exposing only selected-month accepted cash', () => {
+    const validate = ajv.compile(billingCustomerInvoiceDetailV1JsonSchema);
+    const detail = structuredClone(billingCustomerInvoiceDetailV1ConformanceFixture);
+    detail.charge_month = '2026-09';
+    detail.payments_in_charge_month.amount_minor = '2000';
+    detail.payments_in_charge_month.amount = '20';
+    detail.payments = [
+      { payment_id: 'uoa_payment_1', paid_at: '2026-09-30T23:59:59.000Z',
+        amount: { ...detail.totals.total_paid, amount_minor: '2000', amount: '20' } },
+      { payment_id: 'uoa_payment_2', paid_at: '2026-10-03T23:59:59.000Z',
+        amount: { ...detail.totals.total_paid, amount_minor: '3000', amount: '30' } },
+    ];
+    expect(validate(detail), JSON.stringify(validate.errors)).toBe(true);
+    expect(detail.totals.total_paid.amount_minor).toBe('5000');
+    expect(detail.payments_in_charge_month.amount_minor).toBe('2000');
+    const request = { ...billingCustomerInvoiceDownloadRequestV1ConformanceFixture,
+      charge_month: '2026-09' };
+    expect(ajv.compile(billingCustomerInvoiceDownloadRequestV1JsonSchema)(request)).toBe(false);
+  });
+
   it('pins schema, examples and OpenAPI artifacts to the same draft contract', async () => {
     const root = new URL('../', import.meta.url);
     const read = async (path: string) => JSON.parse(await readFile(new URL(path, root), 'utf8'));

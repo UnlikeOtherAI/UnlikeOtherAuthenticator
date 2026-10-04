@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 
 import {
-  BillingAssignmentScope, BillingInvoiceStatus, type PrismaClient,
+  BillingAssignmentScope, BillingInvoiceStatus, Prisma, type PrismaClient,
 } from '@prisma/client';
 
 import {
@@ -19,9 +19,12 @@ import {
 import {
   projectPrepaidCustomerInvoiceDetail, projectPrepaidCustomerInvoiceSummary,
 } from './billing-customer-invoice-prepaid.service.js';
+import {
+  projectStripeCustomerInvoiceDetail, projectStripeCustomerInvoiceSummary,
+} from './billing-customer-invoice-stripe.service.js';
 
 type Storage = ReturnType<typeof createBillingInvoicePdfStorage>;
-type SourceKind = 'manual' | 'prepaid';
+type SourceKind = 'manual' | 'prepaid' | 'stripe';
 type Cursor = { at: string; kind: SourceKind; id: string };
 const monthPattern = /^\d{4}-(0[1-9]|1[0-2])$/;
 
@@ -43,7 +46,7 @@ function decodeCursor(value: string | undefined): Cursor | null {
     if (typeof parsed !== 'object' || parsed === null ||
       typeof parsed.at !== 'string' || Number.isNaN(Date.parse(parsed.at)) ||
       new Date(parsed.at).toISOString() !== parsed.at ||
-      (parsed.kind !== 'manual' && parsed.kind !== 'prepaid') ||
+      (parsed.kind !== 'manual' && parsed.kind !== 'prepaid' && parsed.kind !== 'stripe') ||
       typeof parsed.id !== 'string' || !/^[a-zA-Z0-9_-]{1,128}$/.test(parsed.id) ||
       Buffer.from(JSON.stringify(parsed)).toString('base64url') !== value) throw new Error();
     return parsed;
@@ -64,7 +67,8 @@ function inMonth(month: string): { start: Date; end: Date } {
 
 function order(a: { at: string; kind: SourceKind; id: string },
   b: { at: string; kind: SourceKind; id: string }): number {
-  return b.at.localeCompare(a.at) || a.kind.localeCompare(b.kind) ||
+  return Buffer.compare(Buffer.from(b.at), Buffer.from(a.at)) ||
+    Buffer.compare(Buffer.from(a.kind), Buffer.from(b.kind)) ||
     Buffer.compare(Buffer.from(b.id), Buffer.from(a.id));
 }
 
@@ -73,7 +77,7 @@ function afterCursor(item: Cursor, cursor: Cursor | null): boolean {
 }
 
 function sourceId(invoiceId: string): { kind: SourceKind; id: string } {
-  const matched = /^(manual|prepaid):([a-zA-Z0-9_-]{1,128})$/.exec(invoiceId);
+  const matched = /^(manual|prepaid|stripe):([a-zA-Z0-9_-]{1,128})$/.exec(invoiceId);
   if (!matched) notFound();
   return { kind: matched[1] as SourceKind, id: matched[2] ?? notFound() };
 }
@@ -85,6 +89,36 @@ async function prepaidAdjustments(prisma: PrismaClient, rows: Array<{
   return prisma.billingCreditPaymentAdjustment.findMany({ where: { OR: rows.map((row) => ({
     accountId: row.accountId, stripePaymentIntentId: row.stripePaymentIntentId,
   })) }, orderBy: [{ occurredAt: 'asc' }, { id: 'asc' }] });
+}
+
+async function stripePaymentMonthKeys(prisma: PrismaClient, params: {
+  orgId: string; teamId: string; serviceId: string; product: string;
+  orgManager: boolean; start: Date; end: Date; cursor: Cursor | null; limit: number;
+}): Promise<Array<{ invoiceId: string; at: Date }>> {
+  const scope = params.orgManager ? Prisma.sql`
+    (invoice.team_id = ${params.teamId} OR invoice.team_id IS NULL)` : Prisma.sql`
+    invoice.team_id = ${params.teamId}`;
+  const cursor = params.cursor ? params.cursor.kind === 'stripe' ? Prisma.sql`
+    HAVING MAX(cash.paid_at) < ${new Date(params.cursor.at)} OR
+      (MAX(cash.paid_at) = ${new Date(params.cursor.at)} AND cash.invoice_id < ${params.cursor.id})`
+    : Prisma.sql`HAVING MAX(cash.paid_at) <= ${new Date(params.cursor.at)}` : Prisma.empty;
+  return prisma.$queryRaw<Array<{ invoiceId: string; at: Date }>>(Prisma.sql`
+    SELECT cash.invoice_id AS "invoiceId", MAX(cash.paid_at) AS "at"
+    FROM billing_stripe_payment_invoice_cash_payments cash
+    JOIN billing_stripe_payment_invoices invoice ON invoice.id = cash.invoice_id
+    WHERE cash.paid_at >= ${params.start} AND cash.paid_at < ${params.end}
+      AND invoice.org_id = ${params.orgId} AND ${scope}
+      AND EXISTS (SELECT 1 FROM billing_stripe_payment_invoice_lines line
+        WHERE line.invoice_id = invoice.id AND line.service_id = ${params.serviceId}
+          AND line.service_identifier = ${params.product})
+      AND NOT EXISTS (SELECT 1 FROM billing_stripe_payment_invoice_lines line
+        WHERE line.invoice_id = invoice.id AND
+          (line.service_id <> ${params.serviceId} OR line.service_identifier <> ${params.product}))
+    GROUP BY cash.invoice_id
+    ${cursor}
+    ORDER BY MAX(cash.paid_at) DESC, cash.invoice_id DESC
+    LIMIT ${params.limit + 1}
+  `);
 }
 
 export async function listCustomerInvoices(
@@ -111,8 +145,10 @@ export async function listCustomerInvoices(
         { issuedAt: cursorDate, id: { lt: cursor.id } },
       ] : []),
     ] } : {}),
-    lines: { some: { serviceIdentifier: context.request.product },
-      every: { serviceIdentifier: context.request.product } },
+    lines: { some: { serviceId: context.credential.service.id,
+      serviceIdentifier: context.request.product },
+    every: { serviceId: context.credential.service.id,
+      serviceIdentifier: context.request.product } },
   }, include: { lines: true, paymentEvents: true },
   orderBy: [{ issuedAt: 'desc' }, { id: 'desc' }], take: limit + 1 }) : [];
   const prepaid = await prisma.billingCreditPaymentInvoice.findMany({ where: {
@@ -124,21 +160,35 @@ export async function listCustomerInvoices(
         [{ teamId: context.request.teamId }] },
       ...(cursorDate ? [{ OR: [
         { paidAt: { lt: cursorDate } },
-        ...(cursor?.kind === 'manual' ? [{ paidAt: cursorDate }] : [
+      ...(cursor?.kind === 'manual' ? [{ paidAt: cursorDate }] : cursor?.kind === 'prepaid' ? [
           { paidAt: cursorDate, id: { lt: cursor?.id ?? '' } },
-        ]),
+        ] : []),
       ] }] : []),
     ],
   }, include: { creditEntry: true, autoAttempt: { select: { id: true, currency: true } } },
   orderBy: [{ paidAt: 'desc' }, { id: 'desc' }], take: limit + 1 });
   const changes = await prepaidAdjustments(prisma, prepaid);
+  const stripeKeys = await stripePaymentMonthKeys(prisma, {
+    orgId: context.request.organisationId, teamId: context.request.teamId,
+    serviceId: context.credential.service.id, product: context.request.product,
+    orgManager, start, end, cursor, limit,
+  });
+  const stripe = await prisma.billingStripePaymentInvoice.findMany({ where: {
+    id: { in: stripeKeys.map((key) => key.invoiceId) },
+  }, include: { lines: true, subscription: true, cashPayments: true, adjustments: true } });
   const results: Array<{ key: Cursor; summary: BillingCustomerInvoiceSummaryV1 }> = [
     ...manual.map((row) => ({ key: { at: row.issuedAt?.toISOString() ?? notFound(), kind: 'manual' as const,
-      id: row.id }, summary: projectManualCustomerInvoiceSummary(row) })),
+      id: row.id }, summary: projectManualCustomerInvoiceSummary(row, params.chargeMonth) })),
     ...prepaid.map((row) => ({ key: { at: row.paidAt.toISOString(), kind: 'prepaid' as const,
       id: row.id }, summary: projectPrepaidCustomerInvoiceSummary(row,
       changes.filter((change) => change.accountId === row.accountId &&
-        change.stripePaymentIntentId === row.stripePaymentIntentId), context.request.product) })),
+        change.stripePaymentIntentId === row.stripePaymentIntentId), context.request.product,
+      params.chargeMonth) })),
+    ...stripe.map((row) => ({ key: { at: stripeKeys.find((key) => key.invoiceId === row.id)?.at
+      .toISOString() ?? notFound(), kind: 'stripe' as const,
+      id: row.id }, summary: projectStripeCustomerInvoiceSummary(row, context.request.product,
+      context.credential.service.id,
+      params.chargeMonth) })),
   ];
   const selected = results.filter((item) => afterCursor(item.key, cursor))
     .sort((a, b) => order(a.key, b.key));
@@ -151,7 +201,7 @@ export async function listCustomerInvoices(
 }
 
 async function readCustomerInvoice(
-  context: BillingCycleContext, invoiceId: string, prisma: PrismaClient,
+  context: BillingCycleContext, invoiceId: string, prisma: PrismaClient, chargeMonth?: string,
 ): Promise<{ detail: BillingCustomerInvoiceDetailV1; pdfKey: string | null; sha256: string | null }> {
   await authorizeBillingCycle(context, { prisma });
   const source = sourceId(invoiceId);
@@ -159,14 +209,37 @@ async function readCustomerInvoice(
     const row = await prisma.billingInvoice.findFirst({ where: { id: source.id,
       orgId: context.request.organisationId,
       status: { in: [BillingInvoiceStatus.ISSUED, BillingInvoiceStatus.VOID] },
-      lines: { some: { serviceIdentifier: context.request.product },
-        every: { serviceIdentifier: context.request.product } },
+      lines: { some: { serviceId: context.credential.service.id,
+        serviceIdentifier: context.request.product },
+      every: { serviceId: context.credential.service.id,
+        serviceIdentifier: context.request.product } },
     }, include: { lines: true, paymentEvents: true } });
     if (!row) notFound();
+    if (chargeMonth && row.issuedAt?.toISOString().slice(0, 7) !== chargeMonth) notFound();
     await authorizeBillingCycle({ ...context, payerScope: BillingAssignmentScope.ORGANISATION },
       { prisma });
-    return { detail: projectManualCustomerInvoiceDetail(row, subject(context)),
+    return { detail: projectManualCustomerInvoiceDetail(row, subject(context), chargeMonth),
       pdfKey: row.pdfObjectKey, sha256: row.pdfSha256 };
+  }
+  if (source.kind === 'stripe') {
+    const row = await prisma.billingStripePaymentInvoice.findFirst({ where: {
+      id: source.id, orgId: context.request.organisationId,
+      OR: [{ teamId: context.request.teamId }, { teamId: null }],
+      lines: { some: { serviceId: context.credential.service.id,
+        serviceIdentifier: context.request.product },
+      every: { serviceId: context.credential.service.id,
+        serviceIdentifier: context.request.product } },
+    }, include: { lines: true, subscription: true, cashPayments: true, adjustments: true } });
+    if (!row) notFound();
+    if (chargeMonth && !row.cashPayments.some((payment) =>
+      payment.paidAt.toISOString().slice(0, 7) === chargeMonth)) notFound();
+    if (row.teamId === null) {
+      await authorizeBillingCycle({ ...context, payerScope: BillingAssignmentScope.ORGANISATION },
+        { prisma });
+    }
+    return { detail: projectStripeCustomerInvoiceDetail(row, context.request.product,
+      context.credential.service.id, subject(context), chargeMonth),
+    pdfKey: row.pdfObjectKey, sha256: row.pdfSha256 };
   }
   const row = await prisma.billingCreditPaymentInvoice.findFirst({ where: {
     id: source.id, orgId: context.request.organisationId,
@@ -174,20 +247,23 @@ async function readCustomerInvoice(
     OR: [{ teamId: context.request.teamId }, { teamId: null }],
   }, include: { creditEntry: true, autoAttempt: { select: { id: true, currency: true } } } });
   if (!row) notFound();
+  if (chargeMonth && row.paidAt.toISOString().slice(0, 7) !== chargeMonth) notFound();
   if (row.teamId === null) {
     await authorizeBillingCycle({ ...context, payerScope: BillingAssignmentScope.ORGANISATION },
       { prisma });
   }
   const changes = await prepaidAdjustments(prisma, [row]);
   return { detail: projectPrepaidCustomerInvoiceDetail(row, changes,
-    context.request.product, subject(context)),
+    context.request.product, subject(context), chargeMonth),
   pdfKey: row.pdfObjectKey, sha256: row.pdfSha256 };
 }
 
 export async function getCustomerInvoiceDetail(
-  context: BillingCycleContext, invoiceId: string, deps?: { prisma?: PrismaClient },
+  context: BillingCycleContext, invoiceId: string,
+  deps?: { prisma?: PrismaClient; chargeMonth?: string },
 ): Promise<BillingCustomerInvoiceDetailV1> {
-  return (await readCustomerInvoice(context, invoiceId, deps?.prisma ?? getAdminPrisma())).detail;
+  return (await readCustomerInvoice(context, invoiceId, deps?.prisma ?? getAdminPrisma(),
+    deps?.chargeMonth)).detail;
 }
 
 export async function downloadCustomerInvoice(

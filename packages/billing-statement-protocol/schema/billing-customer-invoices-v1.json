@@ -119,6 +119,8 @@
               "status",
               "number",
               "charged_at",
+              "charge_month",
+              "payments_in_charge_month",
               "issued_at",
               "scope",
               "product_identifiers",
@@ -168,6 +170,37 @@
               "charged_at": {
                 "type": "string",
                 "format": "date-time"
+              },
+              "charge_month": {
+                "type": "string",
+                "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"
+              },
+              "payments_in_charge_month": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "amount",
+                  "amount_minor",
+                  "currency",
+                  "display"
+                ],
+                "properties": {
+                  "amount": {
+                    "type": "string",
+                    "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                  },
+                  "amount_minor": {
+                    "type": "string",
+                    "pattern": "^[0-9]+$"
+                  },
+                  "currency": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{3}$"
+                  },
+                  "display": {
+                    "type": "string"
+                  }
+                }
               },
               "issued_at": {
                 "anyOf": [
@@ -678,6 +711,10 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 256
+        },
+        "charge_month": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"
         }
       }
     },
@@ -785,12 +822,15 @@
         "status",
         "number",
         "charged_at",
+        "charge_month",
+        "payments_in_charge_month",
         "issued_at",
         "scope",
         "product_identifiers",
         "totals",
         "document_available",
         "schema_version",
+        "payments",
         "charges",
         "document"
       ],
@@ -837,6 +877,37 @@
         "charged_at": {
           "type": "string",
           "format": "date-time"
+        },
+        "charge_month": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"
+        },
+        "payments_in_charge_month": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "amount",
+            "amount_minor",
+            "currency",
+            "display"
+          ],
+          "properties": {
+            "amount": {
+              "type": "string",
+              "pattern": "^[0-9]+(\\.[0-9]+)?$"
+            },
+            "amount_minor": {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            },
+            "currency": {
+              "type": "string",
+              "pattern": "^[A-Z]{3}$"
+            },
+            "display": {
+              "type": "string"
+            }
+          }
         },
         "issued_at": {
           "anyOf": [
@@ -1225,6 +1296,56 @@
         },
         "schema_version": {
           "const": 1
+        },
+        "payments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "payment_id",
+              "paid_at",
+              "amount"
+            ],
+            "properties": {
+              "payment_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "paid_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "amount": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "amount",
+                  "amount_minor",
+                  "currency",
+                  "display"
+                ],
+                "properties": {
+                  "amount": {
+                    "type": "string",
+                    "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                  },
+                  "amount_minor": {
+                    "type": "string",
+                    "pattern": "^[0-9]+$"
+                  },
+                  "currency": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{3}$"
+                  },
+                  "display": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
         },
         "charges": {
           "type": "array",
