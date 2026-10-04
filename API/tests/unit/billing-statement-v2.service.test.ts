@@ -72,6 +72,8 @@ const effectiveTerm = {
     id: 'tariff_standard_v4', serviceId: 'service_deepwater', key: 'standard',
     version: 4, name: 'Standard', mode: 'STANDARD', collectionMode: 'STRIPE',
     markupBps: 2_000, monthlyAmountMinor: 2000n, currency: 'GBP',
+    monthlyChargeBasis: 'FLAT', seatPolicy: null, seatChargeTiming: null,
+    usagePaymentMode: 'PAY_AS_YOU_GO',
   },
 };
 
