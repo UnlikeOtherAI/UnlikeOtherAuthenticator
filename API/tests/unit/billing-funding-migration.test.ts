@@ -14,6 +14,14 @@ const raceGuardMigrationUrl = new URL(
   '../../prisma/migrations/20260721181000_guard_credit_setup_and_disable_races/migration.sql',
   import.meta.url,
 );
+const auditedCrossServiceDisableMigrationUrl = new URL(
+  '../../prisma/migrations/20261004193000_allow_cross_service_audited_auto_top_up_disable/migration.sql',
+  import.meta.url,
+);
+const unresolvedAttemptDisableMigrationUrl = new URL(
+  '../../prisma/migrations/20261004180000_allow_audited_disable_during_auto_top_up_attempt/migration.sql',
+  import.meta.url,
+);
 
 describe('billing funding foundation migration', () => {
   it('keeps one exact shared team credit account and fixed public conversion', async () => {
@@ -116,6 +124,29 @@ describe('billing funding foundation migration', () => {
     }
     expect(sql).toContain("EXECUTE format('ALTER TABLE %I FORCE ROW LEVEL SECURITY', table_name)");
     expect(sql).toContain("'CREATE POLICY %I ON %I FOR ALL TO uoa_app USING (false)");
+  });
+});
+
+describe('audited cross-service automatic top-up disable migration', () => {
+  it('relaxes only actor-to-old-consent service and app equality checks', async () => {
+    const [sql, previous] = await Promise.all([
+      readFile(auditedCrossServiceDisableMigrationUrl, 'utf8'),
+      readFile(unresolvedAttemptDisableMigrationUrl, 'utf8'),
+    ]);
+
+    expect(sql).toContain('billing_credit_block_consent_change_during_attempt');
+    expect(sql).toContain('billing_credit_auto_top_up_attempt_coherence');
+    expect(sql).toContain('disable_event."service_id" = OLD."auto_top_up_service_id"');
+    expect(sql).toContain('disable_event."service_id" = NEW."service_id"');
+    expect(sql).toContain('disable_event."app_key_id" = NEW."app_key_id"');
+    expect(sql).toContain('pg_get_functiondef');
+    expect(sql).toContain('IF strpos(function_definition, obsolete_clause) = 0 THEN');
+    expect(previous).toContain('billing_customer_action_intents');
+    expect(previous).toContain("action_intent.\"operation\" = 'credit_auto_top_up_disable'");
+    expect(previous).toContain('disable_event."previous_generation" + 1 = credit_row."auto_top_up_generation"');
+    expect(previous).toContain('disable_event."previous_consent_revision_id" = NEW."consent_revision_id"');
+    expect(previous).toContain('disable_event."account_id" = NEW."account_id"');
+    expect(previous).toContain('disable_event."team_id" IS NOT DISTINCT FROM credit_row."team_id"');
   });
 });
 

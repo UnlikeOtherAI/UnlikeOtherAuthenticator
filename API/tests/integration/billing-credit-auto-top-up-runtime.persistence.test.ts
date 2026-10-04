@@ -28,6 +28,10 @@ const ids = {
   org: 'org_auto_top_up_runtime',
   service: 'svc_auto_top_up_runtime',
   appKey: 'bak_auto_top_up_runtime',
+  otherService: 'svc_auto_top_up_other',
+  otherAppKey: 'bak_auto_top_up_other',
+  rotatedAppKey: 'bak_auto_top_up_rotated',
+  nonManagerUser: 'usr_auto_top_up_non_manager',
   account: 'bsa_auto_top_up_runtime',
   policy: 'bcfp_auto_top_up_runtime',
   offer: 'bcto_auto_top_up_runtime',
@@ -168,6 +172,10 @@ async function seed(prisma: PrismaClient): Promise<void> {
       VALUES (${ids.service}, 'auto-top-up-test', 'Auto Top Up Test', CURRENT_TIMESTAMP)
     `);
     await tx.$executeRaw(Prisma.sql`
+      INSERT INTO "billing_services" ("id", "identifier", "name", "updated_at")
+      VALUES (${ids.otherService}, 'auto-top-up-other-test', 'Other Top Up Test', CURRENT_TIMESTAMP)
+    `);
+    await tx.$executeRaw(Prisma.sql`
       INSERT INTO "billing_app_keys" (
         "id", "service_id", "purpose", "name", "key_prefix", "secret_digest",
         "actor_issuer", "actor_audience", "actor_key_id", "actor_public_jwk",
@@ -179,6 +187,27 @@ async function seed(prisma: PrismaClient): Promise<void> {
         ${JSON.stringify({ kty: 'RSA' })}::jsonb,
         ARRAY['https://auto-top-up.example.com'], CURRENT_TIMESTAMP
       )
+    `);
+    await tx.$executeRaw(Prisma.sql`
+      INSERT INTO "billing_app_keys" (
+        "id", "service_id", "purpose", "name", "key_prefix", "secret_digest",
+        "actor_issuer", "actor_audience", "actor_key_id", "actor_public_jwk",
+        "checkout_return_origins", "updated_at"
+      ) VALUES
+        (
+          ${ids.otherAppKey}, ${ids.otherService}, 'CUSTOMER_LIFECYCLE', 'Other top-up service',
+          'uoa_auto_other', ${'b'.repeat(64)}, 'https://other-auto-top-up.example.com',
+          'https://uoa.example.com', 'other-auto-top-up-key',
+          ${JSON.stringify({ kty: 'RSA' })}::jsonb,
+          ARRAY['https://other-auto-top-up.example.com'], CURRENT_TIMESTAMP
+        ),
+        (
+          ${ids.rotatedAppKey}, ${ids.service}, 'CUSTOMER_LIFECYCLE', 'Rotated top-up key',
+          'uoa_auto_rotated', ${'c'.repeat(64)}, 'https://auto-top-up.example.com',
+          'https://uoa.example.com', 'rotated-auto-top-up-key',
+          ${JSON.stringify({ kty: 'RSA' })}::jsonb,
+          ARRAY['https://auto-top-up.example.com'], CURRENT_TIMESTAMP
+        )
     `);
     await tx.$executeRaw(Prisma.sql`
       INSERT INTO "billing_stripe_accounts" (
@@ -231,6 +260,29 @@ async function seed(prisma: PrismaClient): Promise<void> {
     await seedCreditAccount(tx, 'above', 300_000_000n, true);
     await seedCreditAccount(tx, 'disabled', 100_000_000n, false);
     await seedCreditAccount(tx, 'pending-disabled', 100_000_000n, true);
+    await tx.$executeRaw(Prisma.sql`
+      INSERT INTO "users" ("id", "email", "user_key", "name")
+      VALUES (
+        ${ids.nonManagerUser}, 'auto-top-up-member@example.com',
+        'auto-top-up-member@example.com', 'Auto Top Up Member'
+      )
+    `);
+    await tx.$executeRaw(Prisma.sql`
+      INSERT INTO "org_members" (
+        "id", "org_id", "user_id", "role", "status", "updated_at"
+      ) VALUES (
+        'om_auto_top_up_non_manager', ${ids.org}, ${ids.nonManagerUser}, 'member',
+        'ACTIVE', CURRENT_TIMESTAMP
+      )
+    `);
+    await tx.$executeRaw(Prisma.sql`
+      INSERT INTO "team_members" (
+        "id", "team_id", "user_id", "team_role", "status", "updated_at"
+      ) VALUES (
+        'tm_auto_top_up_non_manager', ${embeddedError.team}, ${ids.nonManagerUser},
+        'member', 'ACTIVE', CURRENT_TIMESTAMP
+      )
+    `);
   });
 }
 
@@ -259,21 +311,23 @@ async function disableCreditAccountWithAuditEvidence(
   actorJti: string,
   requestTeamId: string,
   authorityScope: 'TEAM' | 'ORGANISATION' = 'TEAM',
+  actor = { serviceId: ids.service, appKeyId: ids.appKey, product: 'auto-top-up-test' },
+  userId = ids.user,
 ): Promise<void> {
   const original = await prisma.billingCreditAccount.findUniqueOrThrow({
     where: { id: creditAccountId },
   });
   const request = {
-    product: 'auto-top-up-test',
+    product: actor.product,
     organisationId: ids.org,
     teamId: requestTeamId,
-    userId: ids.user,
+    userId,
   };
   await disableBillingCreditAutoTopUp(
     {
       request,
       actorToken: 'synthetic-manager-token',
-      credential: { id: ids.appKey, service: { id: ids.service } } as never,
+      credential: { id: actor.appKeyId, service: { id: actor.serviceId } } as never,
       endpoint: '/billing/v1/credits/auto-top-up/disable' as never,
     },
     {
@@ -285,11 +339,11 @@ async function disableCreditAccountWithAuditEvidence(
         authorizeAction: async (tx: Prisma.TransactionClient) =>
           tx.billingCustomerActionIntent.create({
             data: {
-              appKeyId: ids.appKey,
-              serviceId: ids.service,
+              appKeyId: actor.appKeyId,
+              serviceId: actor.serviceId,
               orgId: ids.org,
               teamId: requestTeamId,
-              requestedByUserId: ids.user,
+              requestedByUserId: userId,
               authorityScope,
               operation: 'credit_auto_top_up_disable',
               actorJti,
@@ -468,6 +522,9 @@ describe.skipIf(!databaseTestsEnabled)('credit automatic top-up PostgreSQL runti
     );
     expect(claim.kind).toBe('dispatch');
     if (claim.kind !== 'dispatch') throw new Error('Expected a pending attempt');
+    const attemptBeforeDisable = await handle!.prisma.billingCreditAutoTopUpAttempt.findUniqueOrThrow({
+      where: { id: claim.attemptId },
+    });
     const intentId = 'pi_auto_top_up_pending_disabled';
     const candidateIds = await listCreditAutoTopUpCandidateIds(
       { accountId: ids.account, limit: 20 },
@@ -527,7 +584,23 @@ describe.skipIf(!databaseTestsEnabled)('credit automatic top-up PostgreSQL runti
       pendingDisabled.creditAccount,
       disableActorJti,
       pendingDisabled.team,
+      'TEAM',
+      {
+        serviceId: ids.otherService,
+        appKeyId: ids.otherAppKey,
+        product: 'auto-top-up-other-test',
+      },
     );
+    const disableEvent = await handle!.prisma.billingCreditAutoTopUpDisableEvent.findUniqueOrThrow({
+      where: { appKeyId_actorJti: { appKeyId: ids.otherAppKey, actorJti: disableActorJti } },
+    });
+    expect(disableEvent).toMatchObject({
+      serviceId: ids.otherService,
+      appKeyId: ids.otherAppKey,
+      teamId: pendingDisabled.team,
+      previousConsentRevisionId: attemptBeforeDisable.consentRevisionId,
+      previousGeneration: 0,
+    });
 
     const now = new Date();
     const metadata = {
@@ -639,7 +712,7 @@ describe.skipIf(!databaseTestsEnabled)('credit automatic top-up PostgreSQL runti
     ).resolves.toBe(1);
   }, 20_000);
 
-  it('allows audited disable after the original PaymentIntent ID was saved', async () => {
+  it('requires current manager authority and allows an audited disable with a rotated key', async () => {
     const attempt = await handle!.prisma.billingCreditAutoTopUpAttempt.findFirstOrThrow({
       where: { creditAccountId: embeddedError.creditAccount },
     });
@@ -652,20 +725,54 @@ describe.skipIf(!databaseTestsEnabled)('credit automatic top-up PostgreSQL runti
       }),
     ).rejects.toBeDefined();
 
+    await expect(
+      disableCreditAccountWithAuditEvidence(
+        handle!.prisma,
+        embeddedError.creditAccount,
+        'actor_auto_top_up_non_manager_disable',
+        embeddedError.team,
+        'TEAM',
+        undefined,
+        ids.nonManagerUser,
+      ),
+    ).rejects.toBeDefined();
+    await expect(
+      handle!.prisma.billingCreditAccount.findUniqueOrThrow({
+        where: { id: embeddedError.creditAccount },
+      }),
+    ).resolves.toMatchObject({ autoTopUpState: 'ACTIVE' });
+
     await disableCreditAccountWithAuditEvidence(
       handle!.prisma,
       embeddedError.creditAccount,
       'actor_auto_top_up_embedded_disable',
       embeddedError.team,
+      'TEAM',
+      { serviceId: ids.service, appKeyId: ids.rotatedAppKey, product: 'auto-top-up-test' },
     );
 
-    const [creditAccount, savedAttempt] = await Promise.all([
+    const [creditAccount, savedAttempt, disableEvent] = await Promise.all([
       handle!.prisma.billingCreditAccount.findUniqueOrThrow({
         where: { id: embeddedError.creditAccount },
       }),
       handle!.prisma.billingCreditAutoTopUpAttempt.findUniqueOrThrow({ where: { id: attempt.id } }),
+      handle!.prisma.billingCreditAutoTopUpDisableEvent.findUniqueOrThrow({
+        where: {
+          appKeyId_actorJti: {
+            appKeyId: ids.rotatedAppKey,
+            actorJti: 'actor_auto_top_up_embedded_disable',
+          },
+        },
+      }),
     ]);
     expect(creditAccount.autoTopUpState).toBe('DISABLED');
+    expect(disableEvent).toMatchObject({
+      serviceId: ids.service,
+      appKeyId: ids.rotatedAppKey,
+      teamId: embeddedError.team,
+      previousConsentRevisionId: attempt.consentRevisionId,
+      previousGeneration: 0,
+    });
     expect(savedAttempt).toMatchObject({
       consentRevisionId: attempt.consentRevisionId,
       stripePaymentIntentId: 'pi_auto_top_up_embedded',
