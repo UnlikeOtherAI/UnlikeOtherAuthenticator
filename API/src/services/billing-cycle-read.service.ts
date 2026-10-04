@@ -146,7 +146,7 @@ function preview(
     product: { id: context.credential.service.id, identifier: context.request.product,
       name: context.credential.service.name },
     totals: [], document_available: false, subscription_lines: [], usage_lines: [],
-    credits: { consumed: '0', opening_balance: null, closing_balance: null,
+    credits: { consumed: null, opening_balance: null, closing_balance: null,
       status: 'pending_reconciliation' },
     documents: [], adjustments: [],
   };

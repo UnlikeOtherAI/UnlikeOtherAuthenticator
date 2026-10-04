@@ -47,7 +47,7 @@ export function renderBillingCycleBreakdownCsv(detail: BillingCycleDetailV2): Bu
     rows.push(['usage', line.id, line.service_id, detail.period.starts_at,
       detail.period.ends_at, line.raw_units.total, line.usage_unit,
       line.customer_charge?.amount ?? '', line.customer_charge?.currency ?? '',
-      line.credits_consumed]);
+      line.credits_consumed ?? 'pending']);
     for (const [kind, quantity] of Object.entries(line.raw_units)) {
       if (kind === 'total') continue;
       rows.push(['measured_dimension', line.id, kind, detail.period.starts_at,
@@ -61,7 +61,7 @@ export function renderBillingCycleBreakdownCsv(detail: BillingCycleDetailV2): Bu
   for (const total of detail.totals) {
     rows.push(['total', detail.cycle_id, 'Amount due', detail.period.starts_at,
       detail.period.ends_at, '', '', total.total_due.amount, total.currency,
-      detail.credits.consumed]);
+      detail.credits.consumed ?? 'pending']);
   }
   return Buffer.from(`\uFEFF${rows.map(csvRow).join('\r\n')}\r\n`, 'utf8');
 }
@@ -156,7 +156,7 @@ export async function renderBillingCycleBreakdownPdf(detail: BillingCycleDetailV
     if (line.raw_units.cache_write) draw(context, `Cache write ${line.raw_units.cache_write}`);
     for (const modality of line.modalities ?? []) draw(context,
       `${modality.modality}: ${modality.raw_units} ${line.usage_unit}`);
-    draw(context, `Customer charge ${line.customer_charge?.display ?? 'pending'}; credits used ${line.credits_consumed}`);
+    draw(context, `Customer charge ${line.customer_charge?.display ?? 'pending'}; credits used ${line.credits_consumed ?? 'pending'}`);
   }
   context.y -= 8;
   draw(context, 'Confirmed totals', { bold: true, size: 12 });
@@ -165,7 +165,7 @@ export async function renderBillingCycleBreakdownPdf(detail: BillingCycleDetailV
     draw(context, `Due ${total.total_due.display}; paid ${total.total_paid.display}; outstanding ${total.outstanding.display}`,
       { bold: true });
   }
-  draw(context, `Credits consumed: ${detail.credits.consumed}`);
+  draw(context, `Credits consumed: ${detail.credits.consumed ?? 'pending'}`);
   if (detail.credits.status === 'pending_reconciliation') {
     draw(context, 'Some usage or credit evidence remains under reconciliation.');
   }

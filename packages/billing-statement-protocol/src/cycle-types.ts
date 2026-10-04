@@ -95,10 +95,10 @@ export type BillingCycleUsageLine = {
   };
   modalities?: Array<{ modality: string; raw_units: string }>;
   customer_charge: ExactMoney | null;
-  credits_consumed: string;
+  credits_consumed: string | null;
 };
 export type BillingCycleCredits = {
-  consumed: string;
+  consumed: string | null;
   opening_balance: string | null;
   closing_balance: string | null;
   status: 'confirmed' | 'pending_reconciliation';

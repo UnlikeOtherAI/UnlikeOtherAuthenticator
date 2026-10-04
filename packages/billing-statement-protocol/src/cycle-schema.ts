@@ -103,12 +103,12 @@ const usageLine = object([
     modality: id, raw_units: decimal,
   }) },
   customer_charge: { anyOf: [exactMoney, { type: 'null' }] },
-  credits_consumed: credits,
+  credits_consumed: nullableCredits,
 });
 const creditSummary = object([
   'consumed', 'opening_balance', 'closing_balance', 'status',
 ], {
-  consumed: credits, opening_balance: nullableCredits, closing_balance: nullableCredits,
+  consumed: nullableCredits, opening_balance: nullableCredits, closing_balance: nullableCredits,
   status: { enum: ['confirmed', 'pending_reconciliation'] },
 });
 const downloadAction = object(['method', 'path', 'body'], {
