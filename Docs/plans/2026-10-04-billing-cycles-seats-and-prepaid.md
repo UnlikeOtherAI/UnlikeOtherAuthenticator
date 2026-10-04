@@ -456,3 +456,27 @@ adjustments and invoice-reader integration remain in progress. Parallel payment
 UX work in UOA #80 and Nessie #1116 retains ownership of localization and resuming
 an existing incomplete purchase; it must rebase its canonical package after
 this billing source is final. No competing payment UX is introduced here.
+
+
+### Earned final seat month after Stripe cancellation
+
+The durable closed-month source watch collects a cancelled per-seat subscription's
+last earned UTC month even when Stripe produces no further renewal invoice.
+`BillingStripeMonthlyCharge` remains the unique subscription/month obligation;
+its quote freezes before processor egress. Renewal and closing allocation compete
+for this same source, so they cannot collect the fee twice. A closing allocation
+has an explicit invoice lease and immutable first-attempt time. Bounded remote
+metadata recovery handles a lost creation acknowledgement; an expired uncertain
+idempotency window holds rather than creating another invoice.
+
+The collector verifies the original checkout, Stripe account/mode/customer and
+cancelled subscription, creates a standalone draft excluding unrelated pending
+items and inherits the original subscription's explicit tax configuration. It
+adds the exact earned fee once and verifies that the draft contains only that
+accepted item before finalization enables automatic collection. Zero fees create
+no legal invoice. Actual paid cash still enters the
+common payment source only after InvoicePayment/PaymentIntent/captured-charge
+proof. A standalone invoice binds to its accepted monthly source and exact payer;
+neither its quote nor its finalization is evidence of payment. These are
+machine-only collection paths behind the existing Billing cycles and InvoiceV1
+customer surfaces.

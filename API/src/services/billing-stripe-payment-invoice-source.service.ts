@@ -22,8 +22,18 @@ export async function prepareStripePaymentInvoice(
   if (invoice.id !== invoiceId) {
     throw new AppError('INTERNAL', 409, 'STRIPE_SUBSCRIPTION_INVOICE_BINDING_INVALID');
   }
-  const stripeSubscriptionId = invoice.parent?.type === 'subscription_details' ?
+  let stripeSubscriptionId = invoice.parent?.type === 'subscription_details' ?
     stripeExternalId(invoice.parent.subscription_details?.subscription ?? null) : null;
+  if (!stripeSubscriptionId && invoice.parent === null) {
+    const closing = await prisma.billingStripeMonthlyCharge.findFirst({ where: {
+      accountId: account.id, stripeInvoiceId: invoice.id, allocationKind: 'CLOSING', state: 'ACCEPTED',
+    }, include: { subscription: true } });
+    if (closing && invoice.metadata?.uoa_monthly_charge_key === closing.authorityKey &&
+      invoice.metadata?.uoa_monthly_subscription_id === closing.subscriptionId &&
+      closing.subscription.livemode === account.livemode) {
+      stripeSubscriptionId = closing.subscription.stripeSubscriptionId;
+    }
+  }
   if (!stripeSubscriptionId) return null;
   let subscription = await prisma.billingStripeSubscription.findUnique({
     where: { accountId_stripeSubscriptionId: { accountId: account.id, stripeSubscriptionId } },

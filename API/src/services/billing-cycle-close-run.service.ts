@@ -4,6 +4,7 @@ import { Prisma, type PrismaClient } from '@prisma/client';
 
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
+import { collectStripeClosingSeatInvoice } from './billing-stripe-closing-seat-invoice.service.js';
 import { prepareBillingCycleClose } from './billing-cycle-close.service.js';
 import { prepareBillingTeamUsageCycle } from './billing-cycle-team-usage.service.js';
 import { fetchLedgerHistoricalBillingTeams } from './billing-ledger-team-discovery.service.js';
@@ -79,6 +80,9 @@ async function runOne(prisma: PrismaClient, row: Claimed,
     select: { identifier: true } });
   if (!service) throw new AppError('INTERNAL', 409, 'BILLING_CYCLE_SOURCE_SERVICE_MISSING');
   if (row.sourceKind === 'stripe' || row.sourceKind === 'manual') {
+    if (row.sourceKind === 'stripe') await collectStripeClosingSeatInvoice({
+      subscriptionId: row.sourceId, billingMonth: row.billingMonth,
+    }, { prisma });
     const result = await (deps.close ?? prepareBillingCycleClose)({
       source: { kind: row.sourceKind, id: row.sourceId }, billingMonth: row.billingMonth,
     }, { prisma });
