@@ -6,7 +6,7 @@ export const BILLING_CREDITS_SCHEMA_VERSION = 1 as const;
 // BillingCreditsV1 is shared by UOA and pinned consumer package revisions.
 // Additive fields require an explicit read capability header while older
 // consumers still validate the previous strict schema.
-export const BILLING_CREDITS_PROTOCOL_VERSION = '1.4.0' as const;
+export const BILLING_CREDITS_PROTOCOL_VERSION = '2.0.0' as const;
 export const BILLING_CREDITS_PROTOCOL_HEADER = 'x-uoa-billing-credits-protocol' as const;
 export const BILLING_CREDITS_SCHEMA_PATH = '/schemas/billing-credits-v1.json' as const;
 export const BILLING_CREDITS_EXAMPLE_PATH = '/schemas/billing-credits-v1.example.json' as const;

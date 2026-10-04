@@ -253,7 +253,7 @@ describe('public billing consumer action protocol', () => {
 
 describe('public BillingCreditsV1 consumer protocol', () => {
   it('names the opt-in reconciliation status revision', () => {
-    expect(BILLING_CREDITS_PROTOCOL_VERSION).toBe('1.4.0');
+    expect(BILLING_CREDITS_PROTOCOL_VERSION).toBe('2.0.0');
   });
 
   it('validates shared team credits, system adjustments, and fixed conversion', () => {
@@ -275,7 +275,7 @@ describe('public BillingCreditsV1 consumer protocol', () => {
       credits_per_usd: '1000',
       settlement_currency: 'USD',
       description:
-        '1,000 credits always equal US$1.00. Usage is accumulated exactly, but only complete credits are deducted.',
+        '1,000 credits always equal US$1.00. Usage and balances retain microcredit precision.',
     });
     expect(
       billingCreditsV1ConformanceFixture.recent_entries.some(
@@ -307,7 +307,7 @@ describe('public BillingCreditsV1 consumer protocol', () => {
     );
   });
 
-  it('rejects zero positive prices, fractional credits, excess precision, and caller-controlled billing context', () => {
+  it('rejects zero positive prices, sub-microcredit amounts, excess precision, and caller-controlled billing context', () => {
     const ajv = new Ajv2020({ allErrors: true, strict: true });
     addFormats(ajv);
     const validate = ajv.compile(billingCreditsV1JsonSchema);
@@ -318,14 +318,16 @@ describe('public BillingCreditsV1 consumer protocol', () => {
 
     const fractionalCredits = structuredClone(billingCreditsV1ConformanceFixture);
     fractionalCredits.credit_balance.credits = '34125.1';
+    expect(validate(fractionalCredits)).toBe(true);
+    fractionalCredits.credit_balance.credits = '34125.0000001';
     expect(validate(fractionalCredits)).toBe(false);
 
     const precisionBoundary = structuredClone(billingCreditsV1ConformanceFixture);
-    precisionBoundary.credit_balance.usd_equivalent.amount = '34.12500001';
+    precisionBoundary.credit_balance.usd_equivalent.amount = '34.125000001';
     expect(validate(precisionBoundary), JSON.stringify(validate.errors)).toBe(true);
 
     const excessUsdPrecision = structuredClone(precisionBoundary);
-    excessUsdPrecision.credit_balance.usd_equivalent.amount = '34.125000001';
+    excessUsdPrecision.credit_balance.usd_equivalent.amount = '34.1250000001';
     expect(validate(excessUsdPrecision)).toBe(false);
 
     const callerContext = structuredClone(billingCreditsV1ConformanceFixture);

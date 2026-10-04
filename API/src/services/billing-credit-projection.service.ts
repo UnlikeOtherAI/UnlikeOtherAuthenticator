@@ -15,7 +15,6 @@ import {
 import {
   billingCreditAmount,
   billingCreditsPaymentMoney,
-  billingWholeCredits,
 } from './billing-credit-display.service.js';
 import {
   buildManagerCreditRecentEntries,
@@ -193,7 +192,6 @@ export function buildBillingCreditsProjection(params: {
   );
   const availableBalance = data.creditAccount.balanceMicrocredits -
     data.activeReservedMicrocredits;
-  const wholeCreditBalance = billingWholeCredits(availableBalance);
   const requestBody = {
     product: params.credential.service.identifier,
     organisation_id: viewer.organisationId,
@@ -214,7 +212,7 @@ export function buildBillingCreditsProjection(params: {
       credits_per_usd: '1000' as const,
       settlement_currency: 'USD' as const,
       description:
-        '1,000 credits always equal US$1.00. Usage is accumulated exactly, but only complete credits are deducted.',
+        '1,000 credits always equal US$1.00. Usage and balances retain microcredit precision.',
     },
     current_period: {
       starts_at: params.period.startsAt.toISOString(),
@@ -227,9 +225,9 @@ export function buildBillingCreditsProjection(params: {
     credit_balance: {
       ...billingCreditAmount(availableBalance),
       state:
-        wholeCreditBalance > 0n
+        availableBalance > 0n
           ? ('available' as const)
-          : wholeCreditBalance < 0n
+          : availableBalance < 0n
             ? ('debt' as const)
             : ('zero' as const),
       label: 'Remaining credits' as const,

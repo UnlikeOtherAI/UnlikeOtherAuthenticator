@@ -94,7 +94,7 @@ all paid settlement and export while any paid attempt remains unresolved, and
 holds a paid row with missing selected cost or currency. Nonbillable telemetry
 is excluded only when Ledger marks it explicitly. UOA alone applies the
 tariff's basis points to exact selected provider cost; a 3,000 bps markup on
-US$1.00 is US$1.30 before the existing whole-credit and Stripe meter rounding.
+US$1.00 is US$1.30 before the collection path’s exact credit or Stripe meter rounding.
 
 Credit portfolio snapshots and settlements identify the source team even when
 an organisation credit account pays multiple teams. Older ambiguous
@@ -166,8 +166,8 @@ and cursor in an append-only resolution. A paid invoice or line can resolve
 only one gap. If still later usage arrives, the next close cycle subtracts
 earlier paid adjustments and holds only the new incremental liability.
 
-`BillingCreditsV1` 1.4.0 callers opt in with
-`x-uoa-billing-credits-protocol: 1.4.0`. On a Ledger or legacy reconciliation
+`BillingCreditsV1` 2.0.0 callers opt in with
+`x-uoa-billing-credits-protocol: 2.0.0`. On a Ledger or legacy reconciliation
 hold, UOA returns confirmed balance and entry history with
 `billing_status.settlement_state = pending_reconciliation`; its message says
 recent usage is not yet included in the confirmed total. Older strict-schema
@@ -984,13 +984,14 @@ service or tariff:
 1 Ledger USD micro-minor = 10 internal microcredits
 ```
 
-Every new customer balance-changing usage target is an integer credit, or one
-million microcredits. UOA retains sub-credit rated usage in the settlement's
+The older portfolio collector targets complete credits. Prepaid dispatch
+settlement can debit an exact microcredit quantity. UOA retains sub-credit rated usage in the settlement's
 exact micro-minor remainder until the same service/user bucket reaches another
-whole credit. Public credit values are therefore integers; their exact USD
-equivalents may contain the three decimal places implied by 1,000 credits per
-dollar. Microcredits, raw Ledger token counts, and provider cost never appear in
-the public credit protocol.
+whole credit. The older collector settles complete credits, while new prepaid reservations
+can settle exact microcredit amounts. Public credit values therefore retain up to
+six decimal places and their exact USD equivalents up to nine. The public
+contract exposes credits, never internal microcredit counters, raw provider
+cost, or private markup.
 
 There is one exact-team credit account per Stripe account/mode and currency,
 shared across all connected services. A product can present its own versioned,
@@ -1161,8 +1162,8 @@ terms remain cancellable.
 `BillingCreditsV1` and the recurring-add-on protocol are public, MIT-licensed
 interfaces from `@unlikeotherai/billing-statement-protocol`. Their generated
 JSON Schema, fixtures, and OpenAPI 3.1 components are the consumer contract.
-The credits contract is released at protocol version `1.4.0`. Clients that send
-`x-uoa-billing-credits-protocol: 1.4.0` can receive an optional
+The credits contract is at protocol version `2.0.0`. Clients that send
+`x-uoa-billing-credits-protocol: 2.0.0` can receive an optional
 `billing_status` for held reconciliation; older strict clients receive a named
 503 response while a billing hold is active, with no unnegotiated response
 property.

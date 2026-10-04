@@ -264,7 +264,7 @@ describe('privacy-safe shared credit projection', () => {
     expect(member.credit_summary.credits_consumed.credits).toBe('502');
   });
 
-  it('projects historical fractional usage as the whole-credit amount and balance', () => {
+  it('shows historical fractional entries without hiding microcredit changes', () => {
     const data = projectionData(49_999_000_000n);
     data.settlements[0]!.cumulativeCreditsConsumedMicrocredits = 1_000_000n;
     data.allocations = [
@@ -319,7 +319,7 @@ describe('privacy-safe shared credit projection', () => {
     });
     expect(result.recent_entries).toEqual([
       expect.objectContaining({
-        credits: expect.objectContaining({ credits: '1', display: '1 credit' }),
+        credits: expect.objectContaining({ credits: '1.08365', display: '1.08365 credits' }),
         credit_balance_after: expect.objectContaining({
           credits: '49999',
           display: '49,999 credits',

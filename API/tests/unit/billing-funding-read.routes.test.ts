@@ -188,7 +188,7 @@ describe('shared credits and recurring add-on read routes', () => {
         headers: {
           'x-uoa-app-key': 'uoa_app_key',
           'x-uoa-actor': 'signed-actor',
-          'x-uoa-billing-credits-protocol': '1.4.0',
+          'x-uoa-billing-credits-protocol': '2.0.0',
         },
         payload: body,
       });
