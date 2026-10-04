@@ -1,4 +1,5 @@
-export type BillingCustomerLocale = 'cs' | 'en-US' | 'en-GB' | 'de' | 'es' | 'fr' | 'it';
+import type { BillingCustomerLocale } from '@unlikeotherai/billing-statement-protocol';
+export type { BillingCustomerLocale };
 
 export const DEFAULT_BILLING_CUSTOMER_LOCALE: BillingCustomerLocale = 'en-US';
 

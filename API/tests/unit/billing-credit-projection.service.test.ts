@@ -193,6 +193,39 @@ function productionFreshAccountData(): BillingCreditProjectionData {
 }
 
 describe('privacy-safe shared credit projection', () => {
+  it('localizes source-owned credit balance and ledger copy as one language', () => {
+    const result = buildBillingCreditsProjection({
+      credential,
+      collection,
+      viewer: viewer(true),
+      period,
+      data: projectionData(),
+      now,
+      locale: 'cs',
+    });
+
+    expect(result.conversion.description).toContain('1 000 kredit');
+    expect(result.credit_balance.label).toBe('Zbývající kredity');
+    expect(result.credit_balance.display).toContain('kreditů');
+    expect(result.viewer.description).toContain('tým');
+    expect(result.recent_entries[0]?.label).toBe('Kredity přidané službou DeepWater');
+    expect(result.recent_entries[0]?.credits.display).toContain('kreditů');
+  });
+
+  it('keeps English as the default when no customer locale is supplied', () => {
+    const result = buildBillingCreditsProjection({
+      credential,
+      collection,
+      viewer: viewer(true),
+      period,
+      data: projectionData(),
+      now,
+    });
+
+    expect(result.credit_balance.label).toBe('Remaining credits');
+    expect(result.recent_entries[0]?.label).toBe('Credits added from DeepWater');
+  });
+
   it('validates the production-provisioned manager projection for a fresh zero-balance team', () => {
     const result = buildBillingCreditsProjection({
       credential,
