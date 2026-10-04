@@ -4,6 +4,8 @@ import { Prisma, type PrismaClient } from '@prisma/client';
 
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
+import { prepareBillingCycleClose } from './billing-cycle-close.service.js';
+import { captureIssuedManualBillingCycle } from './billing-cycle-manual-invoice.service.js';
 import { refreshIssuedManualBillingCyclePayment } from './billing-cycle-manual-payment.service.js';
 import { refreshVoidedManualBillingCycle } from './billing-cycle-manual-void.service.js';
 
@@ -12,6 +14,44 @@ const BATCH_SIZE = 50;
 const MAX_BATCHES_PER_TICK = 4;
 
 type Claimed = { invoiceId: string; generation: bigint; leaseToken: string; attempts: number };
+
+async function captureMissingIssuedLines(
+  invoiceId: string,
+  prisma: PrismaClient,
+  prepareClose: typeof prepareBillingCycleClose,
+  captureIssued: typeof captureIssuedManualBillingCycle,
+): Promise<void> {
+  const invoice = await prisma.billingInvoice.findUnique({
+    where: { id: invoiceId },
+    include: { lines: { include: { financialAllocation: true } } },
+  });
+  if (!invoice || invoice.status !== 'ISSUED' || !invoice.pdfSha256 ||
+    !invoice.pdfObjectKey || invoice.lines.length === 0) {
+    throw new AppError('INTERNAL', 409, 'BILLING_CYCLE_ISSUED_SOURCE_MISSING');
+  }
+  const existing = await prisma.billingCustomerCycleInvoiceAllocation.findMany({
+    where: { sourceKind: 'manual', sourceInvoiceId: invoiceId },
+    select: { sourceLineId: true },
+  });
+  const allocated = new Set(existing.map((row) => row.sourceLineId));
+  for (const line of invoice.lines) {
+    if (allocated.has(line.id)) continue;
+    if (!line.financialAllocation ||
+      line.financialAllocation.billingMonth !== invoice.billingMonth ||
+      line.financialAllocation.serviceId !== line.serviceId) {
+      throw new AppError('INTERNAL', 409, 'BILLING_CYCLE_LINE_FINANCIAL_SOURCE_MISSING');
+    }
+    const term = await prisma.billingContractServiceTerm.findFirst({
+      where: { contractVersionId: invoice.contractVersionId, serviceId: line.serviceId },
+      select: { id: true },
+    });
+    if (!term) throw new AppError('INTERNAL', 409, 'BILLING_CYCLE_MANUAL_TERM_MISSING');
+    const pending = await prepareClose({
+      source: { kind: 'manual', id: term.id }, billingMonth: invoice.billingMonth,
+    }, { prisma });
+    await captureIssued({ cycleId: pending.cycleId, invoiceId }, { prisma });
+  }
+}
 
 async function claimDue(prisma: PrismaClient): Promise<Claimed[]> {
   const leaseToken = randomUUID();
@@ -64,7 +104,9 @@ async function retry(prisma: PrismaClient, item: Claimed, code: string): Promise
 export async function runManualCycleReconciliationBatch(
   deps?: { prisma?: PrismaClient;
     refreshPayment?: typeof refreshIssuedManualBillingCyclePayment;
-    refreshVoid?: typeof refreshVoidedManualBillingCycle },
+    refreshVoid?: typeof refreshVoidedManualBillingCycle;
+    prepareClose?: typeof prepareBillingCycleClose;
+    captureIssued?: typeof captureIssuedManualBillingCycle },
 ): Promise<{ checked: number; held: number; failures: Array<{ invoiceId: string; code: string }> }> {
   const prisma = deps?.prisma ?? getAdminPrisma();
   const rows = await claimDue(prisma);
@@ -80,6 +122,9 @@ export async function runManualCycleReconciliationBatch(
           { invoiceId: row.invoiceId }, { prisma });
         if (!refreshed) throw new AppError('INTERNAL', 409, 'BILLING_CYCLE_ALLOCATION_MISSING');
       } else if (invoice?.status === 'ISSUED') {
+        await captureMissingIssuedLines(row.invoiceId, prisma,
+          deps?.prepareClose ?? prepareBillingCycleClose,
+          deps?.captureIssued ?? captureIssuedManualBillingCycle);
         await (deps?.refreshPayment ?? refreshIssuedManualBillingCyclePayment)(
           { invoiceId: row.invoiceId }, { prisma });
       } else {
