@@ -200,6 +200,8 @@ Manual cycle replay fingerprints every frozen line allocation and credit
 reference binding, in binary identifier order, along with the original legal
 invoice facts. A different allocation cannot be accepted by replaying the
 same invoice ID or PDF hash.
+New cycle snapshot keys, team receipt facts and seat evidence IDs use binary
+UTF-8 ordering before hashing, independent of the worker host locale.
 Each funded settlement reference is assigned to its own service line in stable
 service and settlement order. The invoice-wide cumulative microcredit rounding
 determines the minor-unit delta at each reference; it preserves fractional

@@ -4,6 +4,7 @@ import { BillingUsagePaymentMode, type BillingTariff } from '@prisma/client';
 
 import type { BillingCycleUsageLine } from '../contracts/billing-statement-v1.js';
 import { AppError } from '../utils/errors.js';
+import { compareBillingCycleUtf8 } from './billing-cycle-binary-order.service.js';
 import { sumBillingDecimals } from './billing-money.service.js';
 import {
   meteringIsComplete, type NormalizedMeteringUsage, type RawMeteringLine,
@@ -39,7 +40,7 @@ export function projectCycleUsage(
   // identical receipts. Financial replay identity is the rated source facts,
   // not the assertion, capture time or delivery snapshot hash.
   const contentSha256 = createHash('sha256').update(JSON.stringify({
-    calls: usage.calls, lines: usage.lines.map((line) => JSON.stringify(line)).sort(),
+    calls: usage.calls, lines: usage.lines.map((line) => JSON.stringify(line)).sort(compareBillingCycleUtf8),
     billingCompleteness: usage.billingCompleteness,
   })).digest('hex');
   const ratedCharges = usage.lines.flatMap((line) => {
@@ -118,5 +119,5 @@ export function aggregateOrganisationCycleUsage(
 export function cycleUsageContentFingerprint(rows: CycleUsageEvidence[]): string {
   return createHash('sha256').update(JSON.stringify(rows.map((row) => ({
     team_id: row.team_id, content_sha256: row.content_sha256,
-  })).sort((a, b) => a.team_id.localeCompare(b.team_id)))).digest('hex');
+  })).sort((a, b) => compareBillingCycleUtf8(a.team_id, b.team_id)))).digest('hex');
 }

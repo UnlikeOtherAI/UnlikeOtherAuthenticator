@@ -5,6 +5,7 @@ import type {
 } from '../contracts/billing-statement-v1.js';
 import { exactMoney, minorAmountToMajor } from './billing-money.service.js';
 import type { quoteSubscriptionMonthlyCharge } from './billing-monthly-subscription-quote.service.js';
+import { compareBillingCycleUtf8 } from './billing-cycle-binary-order.service.js';
 
 type MonthlyQuote = Awaited<ReturnType<typeof quoteSubscriptionMonthlyCharge>>;
 
@@ -51,8 +52,8 @@ function seatIntervals(quote: MonthlyQuote, periodStart: Date,
   }
   return [...groups.values()].map((item) => ({ ...item.interval,
     quantity: item.quantity.toString() }))
-    .sort((a, b) => a.starts_at.localeCompare(b.starts_at) ||
-      a.ends_at.localeCompare(b.ends_at));
+    .sort((a, b) => compareBillingCycleUtf8(a.starts_at, b.starts_at) ||
+      compareBillingCycleUtf8(a.ends_at, b.ends_at));
 }
 
 export function projectMonthlySubscriptionLine(
@@ -101,11 +102,11 @@ export function privateMonthlyQuoteEvidence(quote: MonthlyQuote) {
     ended_at: quote.endedAt?.toISOString() ?? null,
     seat_milliseconds: quote.seatMilliseconds?.toString() ?? null,
     month_milliseconds: quote.monthMilliseconds?.toString() ?? null,
-    evidence_ids: [...quote.evidenceIds].sort(),
-    intervals: [...quote.intervals].sort((a, b) => a.id.localeCompare(b.id))
+    evidence_ids: [...quote.evidenceIds].sort(compareBillingCycleUtf8),
+    intervals: [...quote.intervals].sort((a, b) => compareBillingCycleUtf8(a.id, b.id))
       .map((item) => ({ id: item.id, user_id: item.userId,
       starts_at: item.startsAt.toISOString(), ends_at: item.endsAt?.toISOString() ?? null })),
-    capacity_revisions: [...quote.capacityRevisions].sort((a, b) => a.id.localeCompare(b.id))
+    capacity_revisions: [...quote.capacityRevisions].sort((a, b) => compareBillingCycleUtf8(a.id, b.id))
       .map((item) => ({ id: item.id,
       quantity: item.quantity, effective_at: item.effectiveAt.toISOString() })),
   };

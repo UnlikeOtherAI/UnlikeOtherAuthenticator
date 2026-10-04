@@ -16,6 +16,7 @@ import { AppError } from '../utils/errors.js';
 import type { BillingActorEndpoint } from './billing-actor-audience.service.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
 import { authorizeBillingCycle, type BillingCycleSubject } from './billing-cycle-authority.service.js';
+import { compareBillingCycleUtf8 } from './billing-cycle-binary-order.service.js';
 import { createBillingInvoicePdfStorage } from './billing-invoice-storage.service.js';
 import { resolveBillingControlledBy } from './billing-org-responsibility.service.js';
 
@@ -46,7 +47,7 @@ function publicSubject(context: BillingCycleContext) {
 function canonicalJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
   if (value && typeof value === 'object') {
-    return `{${Object.entries(value).sort(([a], [b]) => a.localeCompare(b))
+    return `{${Object.entries(value).sort(([a], [b]) => compareBillingCycleUtf8(a, b))
       .map(([key, child]) => `${JSON.stringify(key)}:${canonicalJson(child)}`).join(',')}}`;
   }
   return JSON.stringify(value);
