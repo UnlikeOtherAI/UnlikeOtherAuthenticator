@@ -8,6 +8,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { prepareBillingCycleClose } from '../../src/services/billing-cycle-close.service.js';
 import { captureIssuedManualBillingCycle } from '../../src/services/billing-cycle-manual-invoice.service.js';
+import { refreshIssuedManualBillingCyclePayment } from '../../src/services/billing-cycle-manual-payment.service.js';
 import {
   downloadBillingCycleDocument, getBillingCycleDetail, type BillingCycleContext,
 } from '../../src/services/billing-cycle-read.service.js';
@@ -164,7 +165,7 @@ describe.skipIf(!enabled)('issued manual invoice cycle persistence', () => {
     request: { product: serviceIdentifier, organisationId: orgId, teamId, userId: ownerId } };
   }
 
-  it('records actual invoice line, immutable legal PDF and separate token breakdown', async () => {
+  it('records actual invoice line, immutable legal PDF and credits-only charge breakdown', async () => {
     const result = await captureIssuedManualBillingCycle({ cycleId: pendingCycleId,
       invoiceId }, { prisma: db.prisma, storage });
     finalizedCycleId = result.cycleId;
@@ -192,7 +193,42 @@ describe.skipIf(!enabled)('issued manual invoice cycle persistence', () => {
     })).rejects.toThrow();
     expect(await captureIssuedManualBillingCycle({ cycleId: pendingCycleId,
       invoiceId }, { prisma: db.prisma, storage })).toEqual(result);
+    expect(await captureIssuedManualBillingCycle({ cycleId: finalizedCycleId,
+      invoiceId }, { prisma: db.prisma, storage })).toEqual(result);
     expect(await db.prisma.billingCustomerCycleInvoiceAllocation.count()).toBe(1);
+    expect(detail.credits.consumed).toBeNull();
+    const csv = detail.documents.find((item) => item.format === 'csv');
+    if (!csv) throw new Error('CYCLE_CSV_MISSING');
+    const text = (await downloadBillingCycleDocument(context(), result.cycleId,
+      csv.document_id, { prisma: db.prisma, storage })).bytes.toString();
+    expect(text).toContain('credits_consumed');
+    expect(text).not.toMatch(/raw_units|usage_unit|token_count|provider_cost|markup/i);
+  });
+
+  it('appends payment evidence without duplicating the legal invoice allocation', async () => {
+    await db.prisma.billingInvoicePaymentEvent.create({ data: {
+      invoiceId, kind: 'PAYMENT', source: 'MANUAL', amountMinor: 1000n,
+      currency: 'USD', idempotencyKey: randomUUID(),
+      occurredAt: new Date('2026-04-03T00:00:00.000Z'),
+    } });
+    const previousId = finalizedCycleId;
+    const revised = await refreshIssuedManualBillingCyclePayment({ invoiceId },
+      { prisma: db.prisma, storage });
+    finalizedCycleId = revised.cycleId;
+    const oldDetail = await getBillingCycleDetail(context(), previousId,
+      { prisma: db.prisma });
+    const newDetail = await getBillingCycleDetail(context(), finalizedCycleId,
+      { prisma: db.prisma });
+    expect(oldDetail.totals[0]?.outstanding.amount_minor).toBe('2000');
+    expect(newDetail.totals[0]?.total_paid.amount_minor).toBe('1000');
+    expect(newDetail.totals[0]?.outstanding.amount_minor).toBe('1000');
+    expect(newDetail.credits.consumed).toBeNull();
+    expect(await db.prisma.billingCustomerCycleInvoiceAllocation.count()).toBe(1);
+    expect(await db.prisma.billingCustomerCycleDocument.count()).toBe(6);
+    expect(await captureIssuedManualBillingCycle({ cycleId: pendingCycleId,
+      invoiceId }, { prisma: db.prisma, storage })).toEqual(revised);
+    expect(await refreshIssuedManualBillingCyclePayment({ invoiceId },
+      { prisma: db.prisma, storage })).toEqual(revised);
   });
 
   it('denies bytes when org billing authority is revoked during storage read', async () => {

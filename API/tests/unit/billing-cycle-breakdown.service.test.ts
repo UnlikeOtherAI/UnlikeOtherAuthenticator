@@ -11,18 +11,18 @@ import {
 } from '../../src/services/billing-cycle-breakdown.service.js';
 
 describe('frozen customer billing breakdown', () => {
-  it('exports measured usage, seats, credits, and customer charges without private terms', async () => {
+  it('exports seats, consumed credits, and customer charges without private usage', async () => {
     const csv = renderBillingCycleBreakdownCsv(billingCycleDetailV2ConformanceFixture)
       .toString('utf8');
     expect(csv).toContain('"seat_interval"');
-    expect(csv).toContain('"cached_input"');
+    expect(csv).toContain('"Metered usage"');
     expect(csv).toContain('"13000"');
     expect(csv).toContain('"20"');
     expect(csv).toContain('"unit_price"');
     expect(csv).toContain('"seat_policy"');
     expect(csv).toContain('"total_paid"');
     expect(csv).toContain('"opening_balance"');
-    expect(csv).not.toMatch(/markup|provider_cost|cost_basis|multiplier/i);
+    expect(csv).not.toMatch(/markup|provider_cost|cost_basis|multiplier|raw_units|usage_unit|cached_input|token_count/i);
 
     const pdf = await renderBillingCycleBreakdownPdf(billingCycleDetailV2ConformanceFixture);
     expect(pdf.subarray(0, 5).toString('ascii')).toBe('%PDF-');
@@ -43,12 +43,13 @@ describe('frozen customer billing breakdown', () => {
           name: longLabel },
         usage_lines: Array.from({ length: 80 }, (_, index) => ({
           ...billingCycleDetailV2ConformanceFixture.usage_lines[0]!,
-          id: `usage-${index}`, service_id: index === 0 ? `\n  ${longLabel}` : longLabel,
+          id: `usage-${index}`, label: index === 0 ? `\n  ${longLabel}` : longLabel,
         })),
       };
       const csv = renderBillingCycleBreakdownCsv(detail).toString('utf8');
       expect(csv).toContain('"\'\n  =');
       expect(csv).toContain('"\'=' );
+      expect(csv).not.toMatch(/raw_units|usage_unit|token_count|provider_cost|markup/i);
       const pdf = await renderBillingCycleBreakdownPdf(detail);
       expect((await PDFDocument.load(pdf)).getPageCount()).toBeGreaterThan(1);
       const document = await PDFDocument.create();
