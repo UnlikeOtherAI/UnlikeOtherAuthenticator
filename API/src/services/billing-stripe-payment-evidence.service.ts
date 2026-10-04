@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import type Stripe from 'stripe';
 
 import { AppError } from '../utils/errors.js';
@@ -9,6 +11,12 @@ export type StripeInvoiceCashEvidence = {
   invoice_payment_id: string; payment_intent_id: string; charge_id: string;
   amount_minor: string; paid_at: string;
 };
+
+export function stripeInvoiceCashDigest(payment: StripeInvoiceCashEvidence): string {
+  return createHash('sha256').update([payment.invoice_payment_id, payment.payment_intent_id,
+    payment.charge_id, payment.amount_minor, payment.paid_at]
+    .map((value) => `${Buffer.byteLength(value)}:${value}`).join('')).digest('hex');
+}
 
 export function stripeInvoiceMinor(value: number): bigint {
   if (!Number.isSafeInteger(value) || value < 0) {

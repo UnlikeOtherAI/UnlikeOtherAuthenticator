@@ -170,6 +170,24 @@ describe.skipIf(!process.env.DATABASE_URL)('regular Stripe payment legal source'
       where: { stripeInvoiceId: fixture.invoice.id } })).toBe(0);
   });
 
+  it('refuses concurrent reuse of one captured payment across different legal invoices', async () => {
+    const first = await setup(); const second = await setup();
+    const payment = await first.stripe.invoicePayments.list();
+    (second.stripe.invoicePayments.list as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: [{ ...payment.data[0], id: second.paymentId, invoice: second.invoice.id }], has_more: false });
+    second.stripe.paymentIntents.retrieve = first.stripe.paymentIntents.retrieve;
+    second.stripe.charges.retrieve = first.stripe.charges.retrieve;
+    const [a, b] = await Promise.all([prepare(first), prepare(second)]);
+    const results = await Promise.allSettled([
+      db.prisma.$transaction((tx) => persistStripePaymentInvoice(tx, a)),
+      db.prisma.$transaction((tx) => persistStripePaymentInvoice(tx, b)),
+    ]);
+    expect(results.filter((row) => row.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter((row) => row.status === 'rejected')).toHaveLength(1);
+    expect(await db.prisma.billingStripePaymentInvoice.count({
+      where: { stripePaymentIntentIds: { has: first.intentId } } })).toBe(1);
+  });
+
   it('rolls the source and its lines back together then recovers a persisted PDF lost acknowledgement', async () => {
     const fixture = await setup(); const prepared = await prepare(fixture);
     await expect(db.prisma.$transaction(async (tx) => {
@@ -201,6 +219,73 @@ describe.skipIf(!process.env.DATABASE_URL)('regular Stripe payment legal source'
       grossMinor: 1n, dueMinor: 1n } })).rejects.toThrow();
     await expect(db.prisma.billingStripePaymentInvoice.update({ where: { id: source.id },
       data: { pdfSha256: 'a'.repeat(64) } })).rejects.toThrow();
+  });
+
+  it('records partial cash in each actual month beneath one immutable legal invoice', async () => {
+    const fixture = await setup();
+    const firstAt = '2026-09-10T12:00:00.000Z';
+    const firstPayment = (await fixture.stripe.invoicePayments.list()).data[0]!;
+    const initialIntent = await fixture.stripe.paymentIntents.retrieve(fixture.intentId);
+    const initialCharge = await fixture.stripe.charges.retrieve(fixture.chargeId);
+    const first = { ...firstPayment, amount_paid: 1000,
+      status_transitions: { ...firstPayment.status_transitions, paid_at: Date.parse(firstAt) / 1000 } };
+    fixture.invoice.status = 'open'; fixture.invoice.amount_paid = 1000;
+    fixture.invoice.amount_remaining = 1000;
+    (fixture.stripe.invoicePayments.list as unknown as ReturnType<typeof vi.fn>)
+      .mockResolvedValue({ data: [first], has_more: false });
+    (fixture.stripe.paymentIntents.retrieve as unknown as ReturnType<typeof vi.fn>)
+      .mockResolvedValue({ ...initialIntent, amount_received: 1000 });
+    (fixture.stripe.charges.retrieve as unknown as ReturnType<typeof vi.fn>)
+      .mockResolvedValue({ ...initialCharge, amount_captured: 1000 });
+    const event = { id: `evt_partial_${fixture.invoice.id}`, type: 'invoice_payment.paid',
+      api_version: '2026-06-24.dahlia', livemode: false, account: fixture.account.stripeAccountId,
+      created: Date.parse(firstAt) / 1000 + 100, data: { object: first } };
+    (fixture.stripe.webhooks.constructEvent as unknown as ReturnType<typeof vi.fn>).mockReturnValue(event);
+    const request = { rawBody: Buffer.from('{}'), signature: 'verified-fixture' };
+    const deps = { prisma: db.prisma, stripe: fixture.stripe, stripeLivemode: false,
+      webhookSecret: 'fixture-secret', collectionEnabled: true };
+    await handleStripeWebhook(request, deps);
+    const source = await db.prisma.billingStripePaymentInvoice.findFirstOrThrow({
+      where: { stripeInvoiceId: fixture.invoice.id }, include: { cashPayments: true } });
+    expect(source.paidAmountMinor).toBe(1000n); expect(source.cashPayments).toHaveLength(1);
+    const initialDigest = source.sourceDigest;
+    const storage = { putImmutable: vi.fn().mockResolvedValue(undefined), read: vi.fn() };
+    const download = vi.fn().mockImplementation(async () => new Response(pdf)) as unknown as typeof fetch;
+    await issueStripePaymentInvoice(source.id, { prisma: db.prisma, stripe: fixture.stripe,
+      account: fixture.account, storage, download });
+    const secondIntentId = `${fixture.intentId}_second`; const secondChargeId = `${fixture.chargeId}_second`;
+    const second = { ...first, id: `${first.id}_second`,
+      payment: { type: 'payment_intent', payment_intent: secondIntentId },
+      status_transitions: { ...first.status_transitions, paid_at: paidAt.getTime() / 1000 } };
+    fixture.invoice.status = 'paid'; fixture.invoice.amount_paid = 2000;
+    fixture.invoice.amount_remaining = 0;
+    (fixture.stripe.invoicePayments.list as unknown as ReturnType<typeof vi.fn>)
+      .mockResolvedValue({ data: [first, second], has_more: false });
+    (fixture.stripe.paymentIntents.retrieve as unknown as ReturnType<typeof vi.fn>)
+      .mockImplementation(async (id: string) => ({ ...initialIntent, id, amount_received: 1000,
+        latest_charge: id === fixture.intentId ? fixture.chargeId : secondChargeId }));
+    (fixture.stripe.charges.retrieve as unknown as ReturnType<typeof vi.fn>)
+      .mockImplementation(async (id: string) => ({ ...initialCharge, id, amount_captured: 1000,
+        payment_intent: id === fixture.chargeId ? fixture.intentId : secondIntentId }));
+    (fixture.stripe.webhooks.constructEvent as unknown as ReturnType<typeof vi.fn>)
+      .mockReturnValue({ ...event, id: `${event.id}_second`, created: paidAt.getTime() / 1000,
+        data: { object: second } });
+    await handleStripeWebhook(request, deps);
+    const final = await db.prisma.billingStripePaymentInvoice.findUniqueOrThrow({
+      where: { id: source.id }, include: { cashPayments: { orderBy: { paidAt: 'asc' } } } });
+    expect(final.sourceDigest).toBe(initialDigest); expect(final.paidAmountMinor).toBe(1000n);
+    expect(final.state).toBe('ISSUED'); expect(final.cashPayments).toHaveLength(2);
+    expect(final.cashPayments.map((row) => [row.paidAt.toISOString(), row.amountMinor]))
+      .toEqual([[firstAt, 1000n], [paidAt.toISOString(), 1000n]]);
+    expect(final.cashPayments.reduce((sum, row) => sum + row.amountMinor, 0n)).toBe(2000n);
+    expect(storage.putImmutable).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not create a cash invoice for a zero-charge subscription activation', async () => {
+    const fixture = await setup(); fixture.invoice.amount_due = 0; fixture.invoice.amount_paid = 0;
+    expect(await prepareStripePaymentInvoice(fixture.invoice.id, fixture.account, db.prisma,
+      fixture.stripe)).toBeNull();
+    expect(fixture.stripe.invoicePayments.list).not.toHaveBeenCalled();
   });
 
   it('leases concurrent document workers and defers failures instead of starving later sources', async () => {

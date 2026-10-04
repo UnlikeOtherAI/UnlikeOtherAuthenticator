@@ -7,7 +7,7 @@ import { AppError } from '../utils/errors.js';
 import { assertStripeObjectLivemode, type StripeAccountContext } from './billing-stripe-client.service.js';
 import { syncBaseStripeSubscription } from './billing-stripe-subscription-projection.service.js';
 import { stripeExternalId } from './billing-stripe-webhook-utils.service.js';
-import { stripeInvoiceMinor, verifyStripeInvoiceCash,
+import { stripeInvoiceMinor, stripeInvoiceCashDigest, verifyStripeInvoiceCash,
   type StripeInvoiceCashClient } from './billing-stripe-payment-evidence.service.js';
 import { verifyStripePaymentInvoiceLines } from './billing-stripe-payment-lines.service.js';
 
@@ -27,7 +27,7 @@ export async function prepareStripePaymentInvoice(
   if (!stripeSubscriptionId) return null;
   let subscription = await prisma.billingStripeSubscription.findUnique({
     where: { accountId_stripeSubscriptionId: { accountId: account.id, stripeSubscriptionId } },
-    include: { customer: true },
+    include: { customer: true, tariff: { select: { currency: true } } },
   });
   if (!subscription) {
     const remote = await stripe.subscriptions.retrieve(stripeSubscriptionId);
@@ -41,13 +41,23 @@ export async function prepareStripePaymentInvoice(
     await prisma.$transaction((tx) => syncBaseStripeSubscription(tx, remote, account));
     subscription = await prisma.billingStripeSubscription.findUniqueOrThrow({
       where: { accountId_stripeSubscriptionId: { accountId: account.id, stripeSubscriptionId } },
-      include: { customer: true },
+      include: { customer: true, tariff: { select: { currency: true } } },
     });
   }
   if (subscription.livemode !== account.livemode ||
+    subscription.tariff.currency !== invoice.currency.toUpperCase() ||
+    subscription.customer.accountId !== account.id ||
+    subscription.customer.orgId !== subscription.orgId ||
+    subscription.customer.teamId !== subscription.teamId ||
     subscription.customer.stripeCustomerId !== stripeExternalId(invoice.customer) ||
-    invoice.status !== 'paid' || invoice.amount_remaining !== 0 || invoice.amount_paid <= 0 ||
-    stripeInvoiceMinor(invoice.amount_paid) !== stripeInvoiceMinor(invoice.amount_due)) {
+    (invoice.status !== 'paid' && invoice.status !== 'open') ||
+    stripeInvoiceMinor(invoice.amount_paid) > stripeInvoiceMinor(invoice.amount_due) ||
+    stripeInvoiceMinor(invoice.amount_remaining) !==
+      stripeInvoiceMinor(invoice.amount_due) - stripeInvoiceMinor(invoice.amount_paid)) {
+    throw new AppError('INTERNAL', 409, 'STRIPE_SUBSCRIPTION_INVOICE_PAYMENT_UNPROVEN');
+  }
+  if (invoice.amount_paid === 0 && invoice.amount_due === 0) return null;
+  if (invoice.amount_paid <= 0) {
     throw new AppError('INTERNAL', 409, 'STRIPE_SUBSCRIPTION_INVOICE_PAYMENT_UNPROVEN');
   }
   const existingPrepaid = await prisma.billingCreditPaymentInvoice.findFirst({
@@ -82,7 +92,12 @@ export async function prepareStripePaymentInvoice(
     dueAmountMinor: stripeInvoiceMinor(invoice.amount_due),
     paidAmountMinor: stripeInvoiceMinor(invoice.amount_paid),
   };
-  const sourceDigest = createHash('sha256').update(JSON.stringify({ facts, lines: lines.map(({ label: _label, ...line }) => line) },
+  // Financial invoice facts are fixed; additional verified cash payments append
+  // beneath them without changing the original legal liability or source.
+  const { stripePaymentIntentIds: _intents, paymentEvidence: _payments,
+    paidAt: _paidAt, paidAmountMinor: _paidAmount, ...financialFacts } = facts;
+  const sourceDigest = createHash('sha256').update(JSON.stringify({ facts: financialFacts,
+    lines: lines.map(({ label: _label, ...line }) => line) },
     (_key, value) => typeof value === 'bigint' ? value.toString() : value)).digest('hex');
   return { facts, lines, sourceDigest, invoice };
 }
@@ -99,6 +114,29 @@ export async function persistStripePaymentInvoice(
       lines: { create: prepared.lines } }, update: {}, include: { lines: true } });
   if (row.sourceDigest !== prepared.sourceDigest || row.lines.length !== prepared.lines.length) {
     throw new AppError('INTERNAL', 409, 'STRIPE_SUBSCRIPTION_INVOICE_SOURCE_CHANGED');
+  }
+  const observed = prepared.facts.paymentEvidence.map((payment) => ({
+    invoiceId: row.id, accountId: row.accountId, livemode: row.livemode,
+    stripeInvoicePaymentId: payment.invoice_payment_id,
+    stripePaymentIntentId: payment.payment_intent_id, stripeChargeId: payment.charge_id,
+    amountMinor: BigInt(payment.amount_minor), currency: row.currency,
+    paidAt: new Date(payment.paid_at), evidenceDigest: stripeInvoiceCashDigest(payment),
+  }));
+  const prior = await tx.billingStripePaymentInvoiceCashPayment.findMany({ where: { invoiceId: row.id } });
+  if (prior.some((payment) => !observed.some((current) =>
+    current.stripeInvoicePaymentId === payment.stripeInvoicePaymentId &&
+    current.evidenceDigest === payment.evidenceDigest))) {
+    throw new AppError('INTERNAL', 409, 'STRIPE_SUBSCRIPTION_PAYMENT_HISTORY_CHANGED');
+  }
+  for (const payment of observed) {
+    const saved = await tx.billingStripePaymentInvoiceCashPayment.upsert({
+      where: { accountId_livemode_stripeInvoicePaymentId: { accountId: row.accountId,
+        livemode: row.livemode, stripeInvoicePaymentId: payment.stripeInvoicePaymentId } },
+      create: payment, update: {},
+    });
+    if (saved.invoiceId !== row.id || saved.evidenceDigest !== payment.evidenceDigest) {
+      throw new AppError('INTERNAL', 409, 'STRIPE_SUBSCRIPTION_PAYMENT_HISTORY_CHANGED');
+    }
   }
   return row;
 }
