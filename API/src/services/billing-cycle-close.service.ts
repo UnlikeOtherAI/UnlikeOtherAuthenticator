@@ -11,7 +11,7 @@ import {
   projectMonthlySubscriptionLine,
 } from './billing-cycle-quote-projection.service.js';
 import {
-  cycleUsageContentFingerprint, projectCycleUsage,
+  aggregateOrganisationCycleUsage, cycleUsageContentFingerprint, projectCycleUsage,
   type CycleUsageEvidence,
 } from './billing-cycle-usage-projection.service.js';
 import { fetchLedgerMeteringUsage } from './billing-ledger-collector.service.js';
@@ -81,6 +81,7 @@ export async function prepareBillingCycleClose(
 
   const ledgerSnapshots: CycleUsageEvidence[] = [];
   let usageLines: BillingCycleUsageLine[] = [];
+  const organisationUsageLines: BillingCycleUsageLine[] = [];
   for (const teamId of teams) {
     const usage = await (deps?.fetchMetering ?? fetchLedgerMeteringUsage)({
       product: service.identifier, organisationId: initial.organisationId,
@@ -93,6 +94,10 @@ export async function prepareBillingCycleClose(
     }, tariff);
     ledgerSnapshots.push(projected.evidence);
     if (initial.teamId !== null) usageLines = projected.lines;
+    else organisationUsageLines.push(...projected.lines);
+  }
+  if (initial.teamId === null) {
+    usageLines = aggregateOrganisationCycleUsage(organisationUsageLines);
   }
 
   const closeInTransaction = () => prisma.$transaction(async (tx) => {

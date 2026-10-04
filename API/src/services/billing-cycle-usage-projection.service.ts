@@ -102,6 +102,55 @@ export function projectCycleUsage(
 
 export type CycleUsageEvidence = ReturnType<typeof projectCycleUsage>['evidence'];
 
+/** Organisation finance sees a combined service view, never source team/user IDs. */
+export function aggregateOrganisationCycleUsage(
+  sourceLines: BillingCycleUsageLine[],
+): BillingCycleUsageLine[] {
+  const groups = new Map<string, BillingCycleUsageLine[]>();
+  for (const line of sourceLines) {
+    const key = `${line.service_id}\0${line.usage_unit}`;
+    groups.set(key, [...groups.get(key) ?? [], line]);
+  }
+  return [...groups.entries()].sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, lines]) => {
+      const first = lines[0];
+      if (!first) hold('BILLING_CYCLE_USAGE_GROUP_EMPTY');
+      const sum = (values: Array<string | undefined>): string | undefined =>
+        values.every((value) => value !== undefined) ?
+          sumBillingDecimals(values as string[]) : undefined;
+      const base = {
+        input: sum(lines.map((line) => line.raw_units.input)) ?? '0',
+        cached_input: sum(lines.map((line) => line.raw_units.cached_input)) ?? '0',
+        output: sum(lines.map((line) => line.raw_units.output)) ?? '0',
+        total: sum(lines.map((line) => line.raw_units.total)) ?? '0',
+      };
+      const optional = ['reasoning', 'cache_write', 'cache_write_5m', 'cache_write_1h'] as const;
+      const rawUnits = { ...base, ...Object.fromEntries(optional.flatMap((field) => {
+        const value = sum(lines.map((line) => line.raw_units[field]));
+        return value === undefined ? [] : [[field, value]];
+      })) };
+      const currency = lines.find((line) => line.customer_charge)?.customer_charge?.currency;
+      if (lines.some((line) => line.customer_charge &&
+        line.customer_charge.currency !== currency)) hold('BILLING_CYCLE_FX_RECONCILIATION_REQUIRED');
+      const amount = sumBillingDecimals(lines.flatMap((line) =>
+        line.customer_charge ? [line.customer_charge.amount] : []));
+      const modalities = (first.modalities ?? []).flatMap((item) => {
+        const value = sum(lines.map((line) => line.modalities
+          ?.find((candidate) => candidate.modality === item.modality)?.raw_units));
+        return value === undefined ? [] : [{ modality: item.modality, raw_units: value }];
+      });
+      return {
+        id: `usage:org:${createHash('sha256').update(key).digest('hex')}`,
+        service_id: first.service_id, usage_unit: first.usage_unit,
+        calls: sumBillingDecimals(lines.map((line) => line.calls)),
+        raw_units: rawUnits,
+        ...(modalities.length === 0 ? {} : { modalities }),
+        customer_charge: currency ? exactMoney(amount, currency) : null,
+        credits_consumed: null,
+      };
+    });
+}
+
 /** Assertion/cursor changes do not change the underlying financial receipts. */
 export function cycleUsageContentFingerprint(rows: CycleUsageEvidence[]): string {
   return createHash('sha256').update(JSON.stringify(rows.map((row) => ({
