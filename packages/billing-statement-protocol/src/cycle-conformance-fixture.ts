@@ -1,7 +1,7 @@
 import type {
-  BillingCycleDetailV1,
-  BillingCycleDownloadRequestV1,
-  BillingCyclesListV1,
+  BillingCycleDetailV2,
+  BillingCycleDownloadRequestV2,
+  BillingCyclesListV2,
 } from './cycle-types.js';
 import { BILLING_CYCLES_DOWNLOAD_PATH } from './cycle-types.js';
 
@@ -21,7 +21,8 @@ const summary = {
   },
   state: 'finalized' as const,
   scope: {
-    organisation_id: 'org_example', team_id: 'team_example', payer_scope: 'team' as const,
+    organisation_id: 'org_example', team_id: 'team_example',
+    cycle_scope: 'team' as const, payer_scope: 'team' as const,
   },
   product: { id: 'service_example', identifier: 'deepwater', name: 'DeepWater' },
   totals: [{
@@ -38,16 +39,16 @@ const action = (documentId: string) => ({
   body: { ...subject, cycle_id: summary.cycle_id, document_id: documentId },
 });
 
-export const billingCyclesListV1ConformanceFixture: BillingCyclesListV1 = {
-  schema_version: 1,
+export const billingCyclesListV2ConformanceFixture: BillingCyclesListV2 = {
+  schema_version: 2,
   generated_at: '2026-08-03T12:00:00.000Z',
   subject,
   cycles: [summary],
   next_cursor: null,
 };
-export const billingCycleDetailV1ConformanceFixture: BillingCycleDetailV1 = {
+export const billingCycleDetailV2ConformanceFixture: BillingCycleDetailV2 = {
   ...summary,
-  schema_version: 1,
+  schema_version: 2,
   subscription_lines: [{
     id: 'subscription_example', label: 'Monthly subscription',
     charge_basis: 'per_seat', seat_policy: 'automatic', seat_timing: 'full_month',
@@ -85,5 +86,5 @@ export const billingCycleDetailV1ConformanceFixture: BillingCycleDetailV1 = {
   ],
   adjustments: [],
 };
-export const billingCycleDownloadRequestV1ConformanceFixture: BillingCycleDownloadRequestV1 =
+export const billingCycleDownloadRequestV2ConformanceFixture: BillingCycleDownloadRequestV2 =
   action('document_breakdown_example').body;

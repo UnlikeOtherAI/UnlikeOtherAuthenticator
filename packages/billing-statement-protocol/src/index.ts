@@ -163,8 +163,8 @@ export {
   BILLING_RECURRING_ADDONS_SCHEMA_VERSION,
 } from './recurring-addon-types.js';
 
-export { billingCyclesListV1ConformanceFixture, billingCycleDetailV1ConformanceFixture, billingCycleDownloadRequestV1ConformanceFixture } from './cycle-conformance-fixture.js';
-export { billingCyclesV1OpenApiDocument } from './cycle-openapi.js';
-export { billingCyclesProtocolV1JsonSchema, billingCyclesListRequestV1JsonSchema, billingCyclesListV1JsonSchema, billingCycleDetailRequestV1JsonSchema, billingCycleDetailV1JsonSchema, billingCycleDownloadRequestV1JsonSchema } from './cycle-schema.js';
-export type { BillingCycleMoney, BillingCycleState, BillingCycleScope, BillingCyclePeriod, BillingCycleProduct, BillingCycleTotals, BillingCycleSummaryV1, BillingCyclesListRequestV1, BillingCyclesListV1, BillingCycleDetailRequestV1, BillingCycleSeatInterval, BillingCycleSubscriptionLine, BillingCycleUsageLine, BillingCycleCredits, BillingCycleDownloadAction, BillingCycleDocument, BillingCycleAdjustment, BillingCycleDetailV1, BillingCycleDownloadRequestV1 } from './cycle-types.js';
+export { billingCyclesListV2ConformanceFixture, billingCycleDetailV2ConformanceFixture, billingCycleDownloadRequestV2ConformanceFixture } from './cycle-conformance-fixture.js';
+export { billingCyclesV2OpenApiDocument } from './cycle-openapi.js';
+export { billingCyclesProtocolV2JsonSchema, billingCyclesListRequestV2JsonSchema, billingCyclesListV2JsonSchema, billingCycleDetailRequestV2JsonSchema, billingCycleDetailV2JsonSchema, billingCycleDownloadRequestV2JsonSchema } from './cycle-schema.js';
+export type { BillingCycleMoney, BillingCycleState, BillingCycleScope, BillingCyclePeriod, BillingCycleProduct, BillingCycleTotals, BillingCycleSummaryV2, BillingCyclesListRequestV2, BillingCyclesListV2, BillingCycleDetailRequestV2, BillingCycleSeatInterval, BillingCycleSubscriptionLine, BillingCycleUsageLine, BillingCycleCredits, BillingCycleDownloadAction, BillingCycleDocument, BillingCycleAdjustment, BillingCycleDetailV2, BillingCycleDownloadRequestV2 } from './cycle-types.js';
 export { BILLING_CYCLES_PROTOCOL_VERSION, BILLING_CYCLES_SCHEMA_VERSION, BILLING_CYCLES_SCHEMA_PATH, BILLING_CYCLES_EXAMPLE_PATH, BILLING_CYCLES_OPENAPI_PATH, BILLING_CYCLES_LIST_PATH, BILLING_CYCLES_DETAIL_PATH, BILLING_CYCLES_DOWNLOAD_PATH } from './cycle-types.js';

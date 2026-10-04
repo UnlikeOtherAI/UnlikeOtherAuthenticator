@@ -2,13 +2,13 @@
   "openapi": "3.1.0",
   "info": {
     "title": "UOA customer billing cycles protocol",
-    "version": "1.0.0",
+    "version": "2.0.0",
     "description": "Exact product-scoped monthly history, documents, and download actions."
   },
   "paths": {},
   "components": {
     "schemas": {
-      "BillingCyclesListRequestV1": {
+      "BillingCyclesListRequestV2": {
         "type": "object",
         "additionalProperties": false,
         "required": [
@@ -45,14 +45,13 @@
           },
           "cursor": {
             "type": "string",
-            "minLength": 1,
-            "maxLength": 256
+            "pattern": "^[0-9]{4}-(0[1-9]|1[0-2]):(team|organisation)$"
           }
         }
       },
-      "BillingCyclesListV1": {
+      "BillingCyclesListV2": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "/schemas/billing-cycles-v1-list.json",
+        "$id": "/schemas/billing-cycles-v2-list.json",
         "type": "object",
         "additionalProperties": false,
         "required": [
@@ -64,7 +63,7 @@
         ],
         "properties": {
           "schema_version": {
-            "const": 1
+            "const": 2
           },
           "generated_at": {
             "type": "string",
@@ -159,6 +158,7 @@
                   "required": [
                     "organisation_id",
                     "team_id",
+                    "cycle_scope",
                     "payer_scope"
                   ],
                   "properties": {
@@ -168,9 +168,22 @@
                       "maxLength": 256
                     },
                     "team_id": {
-                      "type": "string",
-                      "minLength": 1,
-                      "maxLength": 256
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "cycle_scope": {
+                      "enum": [
+                        "team",
+                        "organisation"
+                      ]
                     },
                     "payer_scope": {
                       "enum": [
@@ -178,7 +191,46 @@
                         "organisation"
                       ]
                     }
-                  }
+                  },
+                  "allOf": [
+                    {
+                      "if": {
+                        "properties": {
+                          "cycle_scope": {
+                            "const": "organisation"
+                          }
+                        }
+                      },
+                      "then": {
+                        "properties": {
+                          "team_id": {
+                            "type": "null"
+                          },
+                          "payer_scope": {
+                            "const": "organisation"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "if": {
+                        "properties": {
+                          "cycle_scope": {
+                            "const": "team"
+                          }
+                        }
+                      },
+                      "then": {
+                        "properties": {
+                          "team_id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 256
+                          }
+                        }
+                      }
+                    }
+                  ]
                 },
                 "product": {
                   "type": "object",
@@ -395,14 +447,19 @@
             }
           },
           "next_cursor": {
-            "type": [
-              "string",
-              "null"
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9]{4}-(0[1-9]|1[0-2]):(team|organisation)$"
+              },
+              {
+                "type": "null"
+              }
             ]
           }
         }
       },
-      "BillingCycleDetailRequestV1": {
+      "BillingCycleDetailRequestV2": {
         "type": "object",
         "additionalProperties": false,
         "required": [
@@ -440,9 +497,9 @@
           }
         }
       },
-      "BillingCycleDetailV1": {
+      "BillingCycleDetailV2": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "/schemas/billing-cycles-v1-detail.json",
+        "$id": "/schemas/billing-cycles-v2-detail.json",
         "type": "object",
         "additionalProperties": false,
         "required": [
@@ -503,6 +560,7 @@
             "required": [
               "organisation_id",
               "team_id",
+              "cycle_scope",
               "payer_scope"
             ],
             "properties": {
@@ -512,9 +570,22 @@
                 "maxLength": 256
               },
               "team_id": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 256
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "cycle_scope": {
+                "enum": [
+                  "team",
+                  "organisation"
+                ]
               },
               "payer_scope": {
                 "enum": [
@@ -522,7 +593,46 @@
                   "organisation"
                 ]
               }
-            }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "cycle_scope": {
+                      "const": "organisation"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "team_id": {
+                      "type": "null"
+                    },
+                    "payer_scope": {
+                      "const": "organisation"
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "cycle_scope": {
+                      "const": "team"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "team_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    }
+                  }
+                }
+              }
+            ]
           },
           "product": {
             "type": "object",
@@ -736,7 +846,7 @@
             "type": "boolean"
           },
           "schema_version": {
-            "const": 1
+            "const": 2
           },
           "subscription_lines": {
             "type": "array",
@@ -1308,7 +1418,7 @@
           }
         }
       },
-      "BillingCycleDownloadRequestV1": {
+      "BillingCycleDownloadRequestV2": {
         "type": "object",
         "additionalProperties": false,
         "required": [
@@ -1354,10 +1464,10 @@
       }
     },
     "examples": {
-      "BillingCyclesListV1Conformance": {
+      "BillingCyclesListV2Conformance": {
         "summary": "Synthetic paid subscription with prepaid usage",
         "value": {
-          "schema_version": 1,
+          "schema_version": 2,
           "generated_at": "2026-08-03T12:00:00.000Z",
           "subject": {
             "product": "deepwater",
@@ -1377,6 +1487,7 @@
               "scope": {
                 "organisation_id": "org_example",
                 "team_id": "team_example",
+                "cycle_scope": "team",
                 "payer_scope": "team"
               },
               "product": {
@@ -1431,7 +1542,7 @@
           "next_cursor": null
         }
       },
-      "BillingCycleDetailV1Conformance": {
+      "BillingCycleDetailV2Conformance": {
         "summary": "Synthetic finalized cycle with invoice and measured-usage breakdown",
         "value": {
           "cycle_id": "cycle_example_2026_07",
@@ -1444,6 +1555,7 @@
           "scope": {
             "organisation_id": "org_example",
             "team_id": "team_example",
+            "cycle_scope": "team",
             "payer_scope": "team"
           },
           "product": {
@@ -1493,7 +1605,7 @@
             }
           ],
           "document_available": true,
-          "schema_version": 1,
+          "schema_version": 2,
           "subscription_lines": [
             {
               "id": "subscription_example",
@@ -1603,7 +1715,7 @@
           "adjustments": []
         }
       },
-      "BillingCycleDownloadRequestV1Conformance": {
+      "BillingCycleDownloadRequestV2Conformance": {
         "summary": "Exact document download action body",
         "value": {
           "product": "deepwater",

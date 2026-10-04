@@ -10,13 +10,13 @@ import {
   BILLING_CYCLES_LIST_PATH,
   BILLING_CYCLES_OPENAPI_PATH,
   BILLING_CYCLES_SCHEMA_PATH,
-  billingCycleDetailV1ConformanceFixture,
-  billingCycleDetailV1JsonSchema,
-  billingCycleDownloadRequestV1ConformanceFixture,
-  billingCyclesListV1ConformanceFixture,
-  billingCyclesListV1JsonSchema,
-  billingCyclesProtocolV1JsonSchema,
-  billingCyclesV1OpenApiDocument,
+  billingCycleDetailV2ConformanceFixture,
+  billingCycleDetailV2JsonSchema,
+  billingCycleDownloadRequestV2ConformanceFixture,
+  billingCyclesListV2ConformanceFixture,
+  billingCyclesListV2JsonSchema,
+  billingCyclesProtocolV2JsonSchema,
+  billingCyclesV2OpenApiDocument,
 } from '../../contracts/billing-statement-v1.js';
 import { requireBillingLifecycleAppKey } from '../../middleware/billing-app-auth.js';
 import {
@@ -29,11 +29,11 @@ import { BillingSubjectRequestSchema, readBillingActorHeader } from './billing-r
 
 const validator = new Ajv2020({ allErrors: true, strict: true });
 ajvFormats.default.default(validator);
-const validateList = validator.compile(billingCyclesListV1JsonSchema);
-const validateDetail = validator.compile(billingCycleDetailV1JsonSchema);
+const validateList = validator.compile(billingCyclesListV2JsonSchema);
+const validateDetail = validator.compile(billingCycleDetailV2JsonSchema);
 const listRequest = BillingSubjectRequestSchema.extend({
   limit: z.number().int().min(1).max(24).optional(),
-  cursor: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).optional(),
+  cursor: z.string().regex(/^\d{4}-(0[1-9]|1[0-2]):(team|organisation)$/).optional(),
 }).strict();
 const detailRequest = BillingSubjectRequestSchema.extend({
   cycle_id: z.string().min(1).max(256),
@@ -68,17 +68,17 @@ function assertContract(validate: (value: unknown) => boolean, value: unknown): 
 export function registerBillingCycleRoutes(app: FastifyInstance): void {
   app.get(BILLING_CYCLES_SCHEMA_PATH, async (_request, reply) => {
     reply.header('Cache-Control', 'public, max-age=300');
-    return reply.type('application/schema+json').send(billingCyclesProtocolV1JsonSchema);
+    return reply.type('application/schema+json').send(billingCyclesProtocolV2JsonSchema);
   });
   app.get(BILLING_CYCLES_EXAMPLE_PATH, async (_request, reply) => {
     reply.header('Cache-Control', 'public, max-age=300');
-    return reply.type('application/json').send({ list: billingCyclesListV1ConformanceFixture,
-      detail: billingCycleDetailV1ConformanceFixture,
-      download_request: billingCycleDownloadRequestV1ConformanceFixture });
+    return reply.type('application/json').send({ list: billingCyclesListV2ConformanceFixture,
+      detail: billingCycleDetailV2ConformanceFixture,
+      download_request: billingCycleDownloadRequestV2ConformanceFixture });
   });
   app.get(BILLING_CYCLES_OPENAPI_PATH, async (_request, reply) => {
     reply.header('Cache-Control', 'public, max-age=300');
-    return reply.type('application/json').send(billingCyclesV1OpenApiDocument);
+    return reply.type('application/json').send(billingCyclesV2OpenApiDocument);
   });
   app.post(BILLING_CYCLES_LIST_PATH, { preHandler: [requireBillingLifecycleAppKey] },
     async (request, reply) => {

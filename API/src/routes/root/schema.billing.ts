@@ -19,19 +19,19 @@ const tariffBody = {
 
 export const billingEndpoints: EndpointSchema[] = [
   {
-    method: 'GET', path: '/schemas/billing-cycles-v1.json', auth: 'public',
+    method: 'GET', path: '/schemas/billing-cycles-v2.json', auth: 'public',
     description: 'Strict customer-safe monthly cycle list, detail, and download request schema.',
-    response: { 200: 'BillingCyclesV1 Draft 2020-12 JSON Schema' },
+    response: { 200: 'BillingCyclesV2 Draft 2020-12 JSON Schema' },
   },
   {
-    method: 'GET', path: '/schemas/billing-cycles-v1.example.json', auth: 'public',
+    method: 'GET', path: '/schemas/billing-cycles-v2.example.json', auth: 'public',
     description: 'Synthetic monthly cycle fixture with seat evidence, measured usage, credits and real document metadata.',
-    response: { 200: 'BillingCyclesV1 conformance examples' },
+    response: { 200: 'BillingCyclesV2 conformance examples' },
   },
   {
-    method: 'GET', path: '/schemas/billing-cycles-v1.openapi.json', auth: 'public',
+    method: 'GET', path: '/schemas/billing-cycles-v2.openapi.json', auth: 'public',
     description: 'Versioned OpenAPI 3.1 monthly billing cycle contract.',
-    response: { 200: 'BillingCyclesV1 OpenAPI 3.1 components' },
+    response: { 200: 'BillingCyclesV2 OpenAPI 3.1 components' },
   },
   {
     method: 'POST', path: '/billing/v1/cycles/list',
@@ -39,7 +39,7 @@ export const billingEndpoints: EndpointSchema[] = [
     auth: 'Product customer_lifecycle app key plus exact endpoint-audience X-UOA-Actor; active billing manager for the frozen payer scope',
     body: { product: 'string', organisation_id: 'string', team_id: 'string', user_id: 'string',
       limit: 'optional integer 1–24', cursor: 'optional earlier YYYY-MM month' },
-    response: { 200: 'BillingCyclesListV1; no private cost or markup' },
+    response: { 200: 'BillingCyclesListV2; no private cost or markup' },
   },
   {
     method: 'POST', path: '/billing/v1/cycles/detail',
@@ -47,7 +47,7 @@ export const billingEndpoints: EndpointSchema[] = [
     auth: 'Product customer_lifecycle app key plus exact endpoint-audience X-UOA-Actor and current payer billing-manager authority',
     body: { product: 'string', organisation_id: 'string', team_id: 'string', user_id: 'string',
       cycle_id: 'string (from the list)' },
-    response: { 200: 'BillingCycleDetailV1; an open preview has no final invoice download' },
+    response: { 200: 'BillingCycleDetailV2; an open preview has no final invoice download' },
   },
   {
     method: 'POST', path: '/billing/v1/cycles/download',

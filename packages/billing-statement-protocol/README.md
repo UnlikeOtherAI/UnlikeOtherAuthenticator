@@ -4,8 +4,8 @@ Public, open-source-safe consumer contracts for UOA's display-ready
 `BillingStatementV1`, `BillingStatementV2`, shared `BillingCreditsV1`, recurring
 add-ons, customer billing actions, and monthly billing cycles.
 
-Package 3.0.0 removes the public pinned tariff identity and adds a monthly
-cycle contract. The v1 and v2 route
+Package 3.1.0 removes the public pinned tariff identity and adds the version 2
+monthly cycle contract. The v1 and v2 statement route
 names remain, but both statement schemas omit raw provider cost, markup,
 cost-basis mode, multipliers and derived billable units. V2 adds a team-wide
 connected-service portfolio of raw usage and attribution shares. Products
@@ -47,9 +47,9 @@ The public HTTP artifacts are:
 - `/schemas/billing-recurring-addons-v1.json`
 - `/schemas/billing-recurring-addons-v1.example.json`
 - `/schemas/billing-recurring-addons-v1.openapi.json`
-- `/schemas/billing-cycles-v1.json`
-- `/schemas/billing-cycles-v1.example.json`
-- `/schemas/billing-cycles-v1.openapi.json`
+- `/schemas/billing-cycles-v2.json`
+- `/schemas/billing-cycles-v2.example.json`
+- `/schemas/billing-cycles-v2.openapi.json`
 
 TypeScript consumers use the package root:
 
@@ -62,8 +62,8 @@ import {
   type BillingRecurringAddonsV1,
   type BillingStatementV1,
   type BillingStatementV2,
-  type BillingCycleDetailV1,
-  billingCycleDetailV1JsonSchema,
+  type BillingCycleDetailV2,
+  billingCycleDetailV2JsonSchema,
   billingCreditsV1JsonSchema,
   billingCancellationPreviewV1JsonSchema,
   billingRecurringAddonProtocolV1JsonSchema,
@@ -72,7 +72,14 @@ import {
 } from '@unlikeotherai/billing-statement-protocol';
 ```
 
-`POST /billing/v1/cycles/list` returns product- and team-scoped monthly summaries.
+`POST /billing/v1/cycles/list` returns product-scoped monthly summaries for the
+selected team, plus organisation-wide subscription cycles to verified
+organisation billing managers. `scope.cycle_scope` identifies which kind;
+`scope.payer_scope` separately identifies who pays. An organisation-paid team
+cycle still contains only the selected team's measured usage. A nullable
+`scope.team_id` denotes only the organisation-wide subscription cycle, never
+a wildcard over other teams. The cursor includes both month and cycle scope
+so both rows in one month remain reachable.
 `POST /billing/v1/cycles/detail` returns frozen subscription seat evidence,
 measured usage, credit movements, actual payment documents, and explicit later
 adjustments. Available documents carry exact server-authored POST actions for

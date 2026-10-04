@@ -132,7 +132,7 @@ billable-unit, customer-charge, add-on, credit, payment, or cancellation fields.
 
 \`GET /schemas/billing-statement-v1.json\` publishes the Draft 2020-12 response
 schema. \`GET /schemas/billing-statement-v2.json\` adds the complete SSO-filled,
-team-wide connected-service portfolio. Package 3.0.0 removes the public pinned
+team-wide connected-service portfolio. Package 3.1.0 removes the public pinned
 tariff identity and adds monthly cycles; strict consumers must update before UOA
 serves the revised schemas. The open-source-safe
 \`@unlikeotherai/billing-statement-protocol\` package
@@ -159,13 +159,17 @@ commercial rating plus all service, origin, and user totals from it.
 
 ### Monthly billing cycles and documents
 
-The canonical BillingCyclesV1 contract is published at
-\`/schemas/billing-cycles-v1.json\`, \`/schemas/billing-cycles-v1.example.json\`, and
-\`/schemas/billing-cycles-v1.openapi.json\`. A product's billing page calls
+The canonical BillingCyclesV2 contract is published at
+\`/schemas/billing-cycles-v2.json\`, \`/schemas/billing-cycles-v2.example.json\`, and
+\`/schemas/billing-cycles-v2.openapi.json\`. A product's billing page calls
 \`POST /billing/v1/cycles/list\` and \`/detail\` with its exact lifecycle app key,
 fresh endpoint-audience actor assertion, and product/organisation/team/user body.
 The caller must be a current billing manager for the cycle's frozen payer
-scope. The detail contains customer seat charges, measured units, credits,
+scope. The requested team can have a measured-usage cycle even when its payer
+is the organisation. Verified organisation billing managers also see a
+separate organisation subscription cycle with null team id; that null is never
+permission to expose another team's named usage. The list cursor includes
+month and cycle scope. The detail contains customer seat charges, measured units, credits,
 and persisted invoice/breakdown metadata, never provider cost or markup.
 An open preview has no final invoice download. Only a document's server-authored
 \`download_action\` may be relayed to \`POST /billing/v1/cycles/download\`; UOA

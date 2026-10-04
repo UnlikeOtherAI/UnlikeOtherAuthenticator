@@ -1,6 +1,6 @@
 {
   "list": {
-    "schema_version": 1,
+    "schema_version": 2,
     "generated_at": "2026-08-03T12:00:00.000Z",
     "subject": {
       "product": "deepwater",
@@ -20,6 +20,7 @@
         "scope": {
           "organisation_id": "org_example",
           "team_id": "team_example",
+          "cycle_scope": "team",
           "payer_scope": "team"
         },
         "product": {
@@ -84,6 +85,7 @@
     "scope": {
       "organisation_id": "org_example",
       "team_id": "team_example",
+      "cycle_scope": "team",
       "payer_scope": "team"
     },
     "product": {
@@ -133,7 +135,7 @@
       }
     ],
     "document_available": true,
-    "schema_version": 1,
+    "schema_version": 2,
     "subscription_lines": [
       {
         "id": "subscription_example",

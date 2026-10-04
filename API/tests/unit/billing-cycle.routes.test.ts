@@ -3,8 +3,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 
 import { createApp } from '../../src/app.js';
 import {
-  billingCycleDetailV1ConformanceFixture,
-  billingCyclesListV1ConformanceFixture,
+  billingCycleDetailV2ConformanceFixture,
+  billingCyclesListV2ConformanceFixture,
 } from '../../src/contracts/billing-statement-v1.js';
 
 const appKey = vi.hoisted(() => ({ verifyBillingAppKey: vi.fn() }));
@@ -52,8 +52,8 @@ afterAll(() => {
 beforeEach(() => {
   vi.clearAllMocks();
   appKey.verifyBillingAppKey.mockResolvedValue(credential);
-  cycles.listBillingCycles.mockResolvedValue(billingCyclesListV1ConformanceFixture);
-  cycles.getBillingCycleDetail.mockResolvedValue(billingCycleDetailV1ConformanceFixture);
+  cycles.listBillingCycles.mockResolvedValue(billingCyclesListV2ConformanceFixture);
+  cycles.getBillingCycleDetail.mockResolvedValue(billingCycleDetailV2ConformanceFixture);
   cycles.downloadBillingCycleDocument.mockResolvedValue({
     bytes: Buffer.from('%PDF-1.7'), contentType: 'application/pdf',
     filename: 'billing-2026-07-monthly_invoice.pdf',
@@ -71,13 +71,13 @@ const headers = { 'x-uoa-app-key': 'uoa_app_key', 'x-uoa-actor': 'signed-actor' 
 describe('customer billing cycle routes', () => {
   it('publishes strict public schema, fixture, and OpenAPI without credentials', async () => {
     await withApp(async (app) => {
-      const urls = ['/schemas/billing-cycles-v1.json',
-        '/schemas/billing-cycles-v1.example.json',
-        '/schemas/billing-cycles-v1.openapi.json'];
+      const urls = ['/schemas/billing-cycles-v2.json',
+        '/schemas/billing-cycles-v2.example.json',
+        '/schemas/billing-cycles-v2.openapi.json'];
       const results = await Promise.all(urls.map((url) => app.inject({ method: 'GET', url })));
       expect(results.map((result) => result.statusCode)).toEqual([200, 200, 200]);
-      expect(results[0]!.json()).toMatchObject({ $id: '/schemas/billing-cycles-v1.json' });
-      expect(results[1]!.json()).toMatchObject({ detail: { schema_version: 1 } });
+      expect(results[0]!.json()).toMatchObject({ $id: '/schemas/billing-cycles-v2.json' });
+      expect(results[1]!.json()).toMatchObject({ detail: { schema_version: 2 } });
       expect(results[2]!.json()).toMatchObject({ openapi: '3.1.0' });
     });
   });
