@@ -118,6 +118,13 @@ remain pending until immutable account-entry boundaries establish them.
 Unknown paid usage holds final settlement rather than yielding a zero invoice.
 Prepaid consumption is a usage breakdown and never a second demand for payment:
 paid top-up invoices and monthly subscription invoices remain distinct documents.
+For multi-service legal invoices, the issuer freezes one allocation per service
+line before issue: subscription and payable usage, tax, invoice credit, gross
+total and net due. Database checks require all line allocations to sum exactly
+to the invoice's gross and credit totals. An old invoice without allocation
+evidence remains a valid legal document but its ambiguous product cycle stays
+pending. A partial whole-invoice payment is never split among products by a
+ratio; product paid/outstanding needs actual line payment evidence.
 Manual and Stripe collection must both supply real monthly documents. Fetching
 historical months must not create charges, recalculate current terms or invent
 old invoices. Stripe invoice PDFs may not contain the full measured usage/seat
