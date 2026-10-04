@@ -266,6 +266,7 @@ async function buildCanonicalBillingStatement(
       markupBps: summary.tariff.markup_bps,
     },
     users: members.map((member) => member.user),
+    locale: context.locale,
   });
   const currency = summary.tariff.monthly_subscription.currency;
   const copy = billingSubscriptionCopy(context.locale);
@@ -405,6 +406,7 @@ async function buildCanonicalBillingStatement(
       products,
       accesses,
       users: members.map((member) => member.user),
+      locale: context.locale,
     }),
     // The organisation roll-up goes only to an organisation billing manager,
     // and only while the organisation is actually paying.

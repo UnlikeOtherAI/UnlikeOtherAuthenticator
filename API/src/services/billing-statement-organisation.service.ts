@@ -232,6 +232,7 @@ async function buildTeamUsage(
       markupBps: tariff.markupBps,
     },
     users: members.map((member) => member.user),
+    locale: context.locale,
   });
   const commercialLines = teamCommercialLines({
     statementProduct: context.statementProduct,
@@ -259,6 +260,7 @@ async function buildTeamUsage(
       products: context.products,
       accesses,
       users: members.map((member) => member.user),
+      locale: context.locale,
     }),
     commercial_lines: commercialLines,
     totals: billingCommercialTotals(commercialLines),
