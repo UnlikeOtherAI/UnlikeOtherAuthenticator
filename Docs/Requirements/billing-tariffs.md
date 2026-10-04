@@ -638,7 +638,17 @@ assignment, customer, scope, and return URLs recovers the open session. If UOA
 crashes after Stripe creates a session but before recording its ID, retry
 searches the exact Stripe customer and UOA Checkout metadata and reattaches the
 single match. A stale creating lease with no Stripe session is marked abandoned
-and releases the scope. Concurrent lease creation recovers the database winner;
+and releases the billing scope for a new attempt. A fixed-seat capacity claim
+starts in the same transaction as the local Checkout row, before Stripe egress.
+It remains in force for creating, open, complete, and locally abandoned rows:
+the original Stripe create may finish after a lease lookup found no session.
+Verified Checkout expiry or a terminal canceled/incomplete-expired subscription
+releases the claim. A paid subscription transfers the claim to the activated
+seat subscription; an activation that cannot satisfy capacity remains held for
+payment reconciliation, never represented as an active UOA licence. Checkout
+creation and membership/invitation writes serialize on the organisation row,
+so a fixed quantity below occupied plus reserved seats fails before Stripe is
+called. Concurrent lease creation recovers the database winner;
 Stripe receives the winner's stable account/mode/Checkout idempotency key.
 
 UOA creates one currency-specific Stripe catalog for each product, including:
