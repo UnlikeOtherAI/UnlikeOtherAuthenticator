@@ -132,7 +132,7 @@ billable-unit, customer-charge, add-on, credit, payment, or cancellation fields.
 
 \`GET /schemas/billing-statement-v1.json\` publishes the Draft 2020-12 response
 schema. \`GET /schemas/billing-statement-v2.json\` adds the complete SSO-filled,
-team-wide connected-service portfolio. Package 2.0.0 is a breaking privacy
+team-wide connected-service portfolio. Package 3.0.0 is a breaking privacy
 revision; strict consumers must update before UOA serves the revised schemas. The open-source-safe
 \`@unlikeotherai/billing-statement-protocol\` package
 is the TypeScript source used by UOA itself; it has no private server imports or
