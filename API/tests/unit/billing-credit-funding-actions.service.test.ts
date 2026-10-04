@@ -366,7 +366,7 @@ describe('UOA credit funding mutation services', () => {
     });
   });
 
-  it('recovers the exact open team Checkout across a fresh manager actor', async () => {
+  it.each([false, true])('recovers the same open team Checkout across a fresh manager actor (includePurchaseId=%s)', async (includePurchaseId) => {
     const state = baseContext();
     const existing = {
       ...checkoutRow('top_up', 'actor_jti_old'),
@@ -390,6 +390,7 @@ describe('UOA credit funding mutation services', () => {
         request: { ...request, userId: 'new_manager', offerId: offer.id },
         actorToken: 'fresh-actor',
         credential,
+        includePurchaseId,
       },
       {
         prisma,
@@ -400,7 +401,10 @@ describe('UOA credit funding mutation services', () => {
       },
     );
 
-    expect(result).toEqual({ redirect_url: session.url });
+    expect(result).toEqual({
+      redirect_url: session.url,
+      ...(includePurchaseId ? { purchase_id: existing.id } : {}),
+    });
     expect(state.sessionsCreate).not.toHaveBeenCalled();
     expect(state.context.authorizeAction).not.toHaveBeenCalled();
   });
