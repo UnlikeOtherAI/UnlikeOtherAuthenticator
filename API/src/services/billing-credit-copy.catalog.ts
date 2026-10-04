@@ -2,7 +2,7 @@ import type {
   BillingCopyPluralForms,
   BillingCustomerLocale,
 } from './billing-copy-locale.js';
-import { billingLocaleText, billingPluralCopy } from './billing-copy-locale.js';
+import { billingLocale, billingLocaleText, billingPluralCopy } from './billing-copy-locale.js';
 
 export type BillingCreditCopy = Readonly<{
   conversionDescription: string;
@@ -23,7 +23,7 @@ export type BillingCreditCopy = Readonly<{
 export const BILLING_CREDIT_COPY = {
   cs: {
     conversionDescription:
-      '1 000 kredit vždy odpovídá 1,00 USD. Spotřeba se počítá přesně, odečítají se však pouze celé kredity.',
+      '1 000 kreditů vždy odpovídá 1,00 USD. Spotřeba se počítá přesně, odečítají se však pouze celé kredity.',
     balanceLabel: 'Zbývající kredity',
     balanceDescription: 'Tento zůstatek sdílí celý tým napříč připojenými službami.',
     pendingCreditsLabel: { one: 'Čeká {count} dobití', few: 'Čekají {count} dobití', other: 'Čeká {count} dobití' },
@@ -35,7 +35,7 @@ export const BILLING_CREDIT_COPY = {
     teamMember: 'Člen týmu',
     creditUnit: { one: 'kredit', few: 'kredity', other: 'kreditů' },
     creditOfferNames: { credits_usd_10: 'Malé dobití kreditů', credits_usd_25: 'Střední dobití kreditů', credits_usd_50: 'Velké dobití kreditů', credits_usd_100: 'Největší dobití kreditů' },
-    oneTimeOfferDescription: 'Jednorázové dobití. Automatické dobíjení zůstane vypnuté.',
+    oneTimeOfferDescription: 'Jednorázové dobití. Nezapíná automatické dobíjení.',
     smallestOfferHint: 'Začněte nejmenším dostupným dobitím.',
   },
   'en-US': {
@@ -52,7 +52,7 @@ export const BILLING_CREDIT_COPY = {
     teamMember: 'Team member',
     creditUnit: { one: 'credit', other: 'credits' },
     creditOfferNames: { credits_usd_10: 'Small credit top-up', credits_usd_25: 'Medium credit top-up', credits_usd_50: 'Large credit top-up', credits_usd_100: 'Extra-large credit top-up' },
-    oneTimeOfferDescription: 'One-time purchase. Automatic top-up stays off.',
+    oneTimeOfferDescription: 'One-time purchase. This does not enable automatic top-up.',
     smallestOfferHint: 'Start with the smallest available top-up.',
   },
   'en-GB': {
@@ -69,7 +69,7 @@ export const BILLING_CREDIT_COPY = {
     teamMember: 'Team member',
     creditUnit: { one: 'credit', other: 'credits' },
     creditOfferNames: { credits_usd_10: 'Small credit top-up', credits_usd_25: 'Medium credit top-up', credits_usd_50: 'Large credit top-up', credits_usd_100: 'Extra-large credit top-up' },
-    oneTimeOfferDescription: 'One-time purchase. Automatic top-up stays off.',
+    oneTimeOfferDescription: 'One-time purchase. This does not enable automatic top-up.',
     smallestOfferHint: 'Start with the smallest available top-up.',
   },
   de: {
@@ -86,7 +86,7 @@ export const BILLING_CREDIT_COPY = {
     teamMember: 'Teammitglied',
     creditUnit: { one: 'Credit', other: 'Credits' },
     creditOfferNames: { credits_usd_10: 'Kleine Credit-Aufladung', credits_usd_25: 'Mittlere Credit-Aufladung', credits_usd_50: 'Große Credit-Aufladung', credits_usd_100: 'Sehr große Credit-Aufladung' },
-    oneTimeOfferDescription: 'Einmaliger Kauf. Automatische Aufladungen bleiben ausgeschaltet.',
+    oneTimeOfferDescription: 'Einmaliger Kauf. Dadurch wird die automatische Aufladung nicht aktiviert.',
     smallestOfferHint: 'Beginnen Sie mit der kleinsten verfügbaren Aufladung.',
   },
   es: {
@@ -103,7 +103,7 @@ export const BILLING_CREDIT_COPY = {
     teamMember: 'Miembro del equipo',
     creditUnit: { one: 'crédito', other: 'créditos' },
     creditOfferNames: { credits_usd_10: 'Recarga pequeña de créditos', credits_usd_25: 'Recarga mediana de créditos', credits_usd_50: 'Recarga grande de créditos', credits_usd_100: 'Recarga extragrande de créditos' },
-    oneTimeOfferDescription: 'Compra única. La recarga automática seguirá desactivada.',
+    oneTimeOfferDescription: 'Compra única. Esto no activa la recarga automática.',
     smallestOfferHint: 'Empieza con la recarga más pequeña disponible.',
   },
   fr: {
@@ -120,7 +120,7 @@ export const BILLING_CREDIT_COPY = {
     teamMember: 'Membre de l’équipe',
     creditUnit: { one: 'crédit', other: 'crédits' },
     creditOfferNames: { credits_usd_10: 'Petite recharge de crédits', credits_usd_25: 'Recharge moyenne de crédits', credits_usd_50: 'Grande recharge de crédits', credits_usd_100: 'Très grande recharge de crédits' },
-    oneTimeOfferDescription: 'Achat ponctuel. La recharge automatique reste désactivée.',
+    oneTimeOfferDescription: 'Achat ponctuel. Cela n’active pas la recharge automatique.',
     smallestOfferHint: 'Commencez par la plus petite recharge disponible.',
   },
   it: {
@@ -137,7 +137,7 @@ export const BILLING_CREDIT_COPY = {
     teamMember: 'Membro del team',
     creditUnit: { one: 'credito', other: 'crediti' },
     creditOfferNames: { credits_usd_10: 'Ricarica piccola di crediti', credits_usd_25: 'Ricarica media di crediti', credits_usd_50: 'Ricarica grande di crediti', credits_usd_100: 'Ricarica extra grande di crediti' },
-    oneTimeOfferDescription: 'Acquisto singolo. La ricarica automatica resta disattivata.',
+    oneTimeOfferDescription: 'Acquisto singolo. Questo non attiva la ricarica automatica.',
     smallestOfferHint: 'Inizia dalla ricarica disponibile più piccola.',
   },
 } satisfies Record<BillingCustomerLocale, BillingCreditCopy>;
@@ -150,10 +150,17 @@ export function billingPendingCreditsLabel(count: number, locale?: BillingCustom
   return billingPluralCopy(billingCreditCopy(locale).pendingCreditsLabel, count, locale);
 }
 
+export function billingBuiltInCreditOfferCopy(key: string, locale?: BillingCustomerLocale) {
+  const copy = billingCreditCopy(locale);
+  if (!Object.prototype.hasOwnProperty.call(copy.creditOfferNames, key)) return null;
+  const offerKey = key as keyof BillingCreditCopy['creditOfferNames'];
+  return { name: copy.creditOfferNames[offerKey], description: copy.oneTimeOfferDescription };
+}
+
 export function billingLocalizedCreditDisplay(credits: string, locale?: BillingCustomerLocale): string {
   const copy = billingCreditCopy(locale);
   const amount = BigInt(credits);
   const count = Number(amount < 0n ? -amount : amount);
-  const formatted = new Intl.NumberFormat(locale).format(amount);
+  const formatted = new Intl.NumberFormat(billingLocale(locale)).format(amount);
   return `${formatted} ${billingPluralCopy(copy.creditUnit, count, locale)}`;
 }

@@ -219,6 +219,7 @@ export function buildBillingCreditsProjection(params: {
       params.collection.stripeCollectionEnabled,
       params.actionReadiness ?? unavailableBillingCreditActions(),
       params.period.endsAt,
+      params.locale,
     );
     const funding = actions.funding_policy;
     const automatic = actions.automatic_top_up;
@@ -249,6 +250,7 @@ export function buildBillingCreditsProjection(params: {
   const actions = buildMemberCreditActionsProjection(
     data,
     params.actionReadiness ?? unavailableBillingCreditActions(),
+    params.locale,
   );
   return {
     ...common,

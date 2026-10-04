@@ -11,7 +11,7 @@ export type BillingPaymentCopy = Readonly<Record<BillingCreditPurchaseState, Bil
 
 export const BILLING_PAYMENT_COPY = {
   cs: {
-    open: { title: 'Platba čeká na dokončení', message: 'Dokončete platbu v otevřeném platebním okně.' },
+    open: { title: 'Platba čeká na dokončení', message: 'Platbu znovu otevřete a dokončete ji.' },
     processing: { title: 'Platbu ověřujeme', message: 'Platbu ještě ověřujeme.' },
     requires_action: { title: 'Potvrďte platbu', message: 'Vaše banka potřebuje, abyste tuto platbu potvrdili. Vraťte se do platebního okna a dokončete ji.' },
     succeeded: { title: 'Platba potvrzena', message: 'Platba je potvrzená. Kredity jsou připravené.' },
@@ -20,7 +20,7 @@ export const BILLING_PAYMENT_COPY = {
     needs_review: { title: 'Stav platby zatím nelze ověřit', message: 'Stav platby teď nemůžeme ověřit. Ověřte ho znovu za chvíli.' },
   },
   'en-US': {
-    open: { title: 'Payment not complete', message: 'Finish your payment in the open checkout.' },
+    open: { title: 'Payment not complete', message: 'Open the payment again to finish it.' },
     processing: { title: 'Checking your payment', message: 'We’re still checking your payment.' },
     requires_action: { title: 'Confirm your payment', message: 'Your bank needs you to confirm this payment. Return to checkout to finish.' },
     succeeded: { title: 'Payment confirmed', message: 'Your payment is confirmed. Your credits are ready.' },
@@ -29,7 +29,7 @@ export const BILLING_PAYMENT_COPY = {
     needs_review: { title: 'Payment status unavailable', message: 'We can’t verify the payment right now. Check again in a little while.' },
   },
   'en-GB': {
-    open: { title: 'Payment not complete', message: 'Finish your payment in the open checkout.' },
+    open: { title: 'Payment not complete', message: 'Open the payment again to finish it.' },
     processing: { title: 'Checking your payment', message: 'We’re still checking your payment.' },
     requires_action: { title: 'Confirm your payment', message: 'Your bank needs you to confirm this payment. Return to checkout to finish.' },
     succeeded: { title: 'Payment confirmed', message: 'Your payment is confirmed. Your credits are ready.' },
@@ -38,7 +38,7 @@ export const BILLING_PAYMENT_COPY = {
     needs_review: { title: 'Payment status unavailable', message: 'We can’t verify the payment right now. Check again in a little while.' },
   },
   de: {
-    open: { title: 'Zahlung noch nicht abgeschlossen', message: 'Schließen Sie die Zahlung im geöffneten Checkout ab.' },
+    open: { title: 'Zahlung noch nicht abgeschlossen', message: 'Öffnen Sie die Zahlung erneut, um sie abzuschließen.' },
     processing: { title: 'Zahlung wird geprüft', message: 'Wir prüfen Ihre Zahlung noch.' },
     requires_action: { title: 'Zahlung bestätigen', message: 'Ihre Bank benötigt eine Bestätigung. Kehren Sie zum Checkout zurück, um die Zahlung abzuschließen.' },
     succeeded: { title: 'Zahlung bestätigt', message: 'Ihre Zahlung ist bestätigt. Ihre Credits sind verfügbar.' },
@@ -47,7 +47,7 @@ export const BILLING_PAYMENT_COPY = {
     needs_review: { title: 'Zahlungsstatus nicht verfügbar', message: 'Wir können die Zahlung gerade nicht prüfen. Versuchen Sie es in Kürze erneut.' },
   },
   es: {
-    open: { title: 'Pago sin completar', message: 'Termina el pago en la página de pago abierta.' },
+    open: { title: 'Pago sin completar', message: 'Vuelve a abrir el pago para terminarlo.' },
     processing: { title: 'Comprobando el pago', message: 'Todavía estamos comprobando el pago.' },
     requires_action: { title: 'Confirma el pago', message: 'Tu banco necesita que confirmes este pago. Vuelve a la página de pago para terminar.' },
     succeeded: { title: 'Pago confirmado', message: 'El pago está confirmado. Tus créditos ya están disponibles.' },
@@ -56,7 +56,7 @@ export const BILLING_PAYMENT_COPY = {
     needs_review: { title: 'Estado del pago no disponible', message: 'Ahora no podemos comprobar el pago. Vuelve a comprobarlo dentro de un momento.' },
   },
   fr: {
-    open: { title: 'Paiement non terminé', message: 'Terminez le paiement dans la page de paiement ouverte.' },
+    open: { title: 'Paiement non terminé', message: 'Rouvrez le paiement pour le terminer.' },
     processing: { title: 'Vérification du paiement', message: 'Nous vérifions encore votre paiement.' },
     requires_action: { title: 'Confirmez votre paiement', message: 'Votre banque vous demande de confirmer ce paiement. Revenez à la page de paiement pour le terminer.' },
     succeeded: { title: 'Paiement confirmé', message: 'Votre paiement est confirmé. Vos crédits sont disponibles.' },
@@ -65,7 +65,7 @@ export const BILLING_PAYMENT_COPY = {
     needs_review: { title: 'Statut du paiement indisponible', message: 'Nous ne pouvons pas vérifier le paiement pour le moment. Réessayez dans quelques instants.' },
   },
   it: {
-    open: { title: 'Pagamento non completato', message: 'Completa il pagamento nella pagina di pagamento aperta.' },
+    open: { title: 'Pagamento non completato', message: 'Riapri il pagamento per completarlo.' },
     processing: { title: 'Verifica del pagamento', message: 'Stiamo ancora verificando il pagamento.' },
     requires_action: { title: 'Conferma il pagamento', message: 'La tua banca deve confermare questo pagamento. Torna alla pagina di pagamento per completarlo.' },
     succeeded: { title: 'Pagamento confermato', message: 'Il pagamento è confermato. I tuoi crediti sono disponibili.' },
