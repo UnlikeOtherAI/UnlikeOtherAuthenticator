@@ -20,6 +20,8 @@ import { verifiedManualFundedOffset } from
 import { assertInvoiceTaxTerms } from './billing-invoice-tax.service.js';
 import { writeInvoiceFinancialAllocations } from
   './billing-invoice-financial-allocation.service.js';
+import { writeManualInvoicePaidCohort } from
+  './billing-invoice-paid-receipt-cohort.service.js';
 import { addBillingDecimals, majorAmountToMinorRounded } from './billing-money.service.js';
 import type { CycleUsageEvidence } from './billing-cycle-usage-projection.service.js';
 import type { LedgerPaidReceiptSet, PaidReceiptScope } from
@@ -206,6 +208,24 @@ export async function prepareManualBillingCycleCorrection(params: {
     if (bound.allocation.usageMinor + priorCorrectionNet !== oldUsage) {
       hold('BILLING_CYCLE_MANUAL_CORRECTION_HISTORY_MISMATCH');
     }
+    const priorInvoiceIds = [invoice.id, ...previousCorrections.map((row) =>
+      row.supplementInvoiceId ?? hold('BILLING_CYCLE_MANUAL_CORRECTION_HISTORY_MISMATCH'))];
+    const invoicedReceipts = await tx.billingInvoicePaidReceipt.findMany({ where: {
+      invoiceId: { in: priorInvoiceIds }, serviceId: pending.serviceId,
+    }, select: { dispatchId: true, invoiceId: true } });
+    if (priorInvoiceIds.some((id) => !invoicedReceipts.some((row) => row.invoiceId === id)) ||
+      new Set(invoicedReceipts.map((row) => row.dispatchId)).size !==
+        invoicedReceipts.length) {
+      hold('BILLING_CYCLE_MANUAL_CORRECTION_RECEIPT_HISTORY_UNPROVEN');
+    }
+    const paidProofs = evidence.paid_receipt_proofs;
+    if (!paidProofs || paidProofs.length === 0 || paidProofs.some((proof) =>
+      proof.scope.billing_product !== bound.line.serviceIdentifier ||
+      proof.scope.organization_id !== pending.orgId ||
+      proof.scope.billing_month !== pending.billingMonth)) {
+      hold('BILLING_CYCLE_MANUAL_CORRECTION_RECEIPT_PROOF_UNPROVEN');
+    }
+    const priorDispatchIds = new Set(invoicedReceipts.map((row) => row.dispatchId));
     const capturedCredits = evidence.credit_evidence as Array<{
       source_ids?: string[]; funded_debit_microcredits?: string | null }> | undefined;
     if (!capturedCredits) hold('BILLING_CYCLE_MANUAL_FUNDED_SOURCE_UNPROVEN');
@@ -296,6 +316,15 @@ export async function prepareManualBillingCycleCorrection(params: {
       serviceId: pending.serviceId, subscriptionMinor: 0n,
       usageMinor: netDelta, taxMinor: taxDelta,
     }]);
+    await writeManualInvoicePaidCohort(tx, supplement, {
+      id: pending.serviceId, product: bound.line.serviceIdentifier,
+      usageMinor: netDelta, excludeDispatchIds: priorDispatchIds,
+      proofs: paidProofs.map((proof) => ({ scope: {
+        product: bound.line.serviceIdentifier, organisationId: pending.orgId,
+        teamId: proof.scope.team_id, billingMonth: pending.billingMonth,
+        serviceId: pending.serviceId,
+      }, proof })),
+    });
     await tx.billingCycleManualCorrection.create({ data: {
       id: correctionId, pendingCycleId: pending.id, originalCycleId: previous.id,
       supplementInvoiceId: supplementId, kind: 'debit',

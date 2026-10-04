@@ -141,13 +141,15 @@ function binaryOrder(left: string, right: string): number {
 export async function matchUoaPaidReceiptSet(reader: Reader,
   scope: PaidReceiptScope, proof: LedgerPaidReceiptSet,
 ): Promise<{ ratedMicrocredits: bigint; forwardMicrocredits: bigint;
-  legacyMicrocredits: bigint; receiptCount: number; rawCostTotal: string }> {
+  legacyMicrocredits: bigint; receiptCount: number; rawCostTotal: string;
+  forwardReceipts: Array<{ dispatchId: string; receiptId: string;
+    ratedMicrocredits: bigint; paymentMode: string }> }> {
   const where = { serviceId: scope.serviceId, orgId: scope.organisationId,
     teamId: scope.teamId, billingMonth: scope.billingMonth };
   const [forward, legacy] = await Promise.all([
     reader.billingPaidUsageLiability.findMany({ where, take: 100_001,
       select: { dispatchId: true, receiptId: true, rawCostActual: true,
-        ratedMicrocredits: true } }),
+        ratedMicrocredits: true, paymentMode: true } }),
     reader.billingCreditBudgetLegacyLiability.findMany({ where, take: 100_001,
       select: { dispatchId: true, receiptId: true, sourceId: true,
         sourceType: true, ratedMicrocredits: true } }),
@@ -196,7 +198,10 @@ export async function matchUoaPaidReceiptSet(reader: Reader,
   const rawCostTotal = rows.reduce((sum, row) => sum.add(new Prisma.Decimal(row.rawCost)),
     new Prisma.Decimal(0)).toFixed(18);
   return { ratedMicrocredits: forwardMicrocredits + legacyMicrocredits,
-    forwardMicrocredits, legacyMicrocredits, receiptCount: rows.length, rawCostTotal };
+    forwardMicrocredits, legacyMicrocredits, receiptCount: rows.length, rawCostTotal,
+    forwardReceipts: forward.map((row) => ({ dispatchId: row.dispatchId,
+      receiptId: row.receiptId, ratedMicrocredits: row.ratedMicrocredits,
+      paymentMode: row.paymentMode })) };
 }
 
 export async function fetchVerifiedLedgerPaidReceiptSet(

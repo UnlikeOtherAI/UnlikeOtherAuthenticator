@@ -18,6 +18,8 @@ import { captureIssuedManualBillingCycle } from
 import type { BillingInvoicePdfStorage } from
   '../../src/services/billing-invoice-storage.service.js';
 import { issueBillingInvoice } from '../../src/services/billing-invoice-lifecycle.service.js';
+import { manualInvoiceReservedMicroMinor } from
+  '../../src/services/billing-credit-manual-invoice-cap.service.js';
 import { createTestDb } from '../helpers/test-db.js';
 
 vi.mock('../../src/services/billing-actor.service.js', () => ({
@@ -229,6 +231,15 @@ describe.skipIf(!enabled)('issued manual late receipt correction', () => {
       taxMinor: 26n, invoiceCreditMinor: 0n, totalMinor: 156n,
       dueMinor: 156n, currency: 'USD', calculationDigest: 'c'.repeat(64),
     } });
+    const firstReceipt = rows[0];
+    if (!firstReceipt) throw new Error('FIRST_PAID_RECEIPT_MISSING');
+    await db.prisma.billingInvoicePaidReceipt.create({ data: {
+      invoiceId: original.id, serviceId: ids.service, orgId: ids.org,
+      teamId: ids.team, billingMonth: month,
+      dispatchId: firstReceipt.dispatchId, receiptId: firstReceipt.receiptId,
+      ratedMicrocredits: 1_300_000_000n,
+      proofSha256: proof(line.serviceIdentifier).paid_receipt_sha256,
+    } });
     await issueBillingInvoice({ invoiceId: original.id,
       actor: { email: 'operator@example.test' } }, { prisma: db.prisma,
       storage, now: () => new Date('2026-09-04T00:00:00.000Z'),
@@ -430,6 +441,10 @@ describe.skipIf(!enabled)('issued manual late receipt correction', () => {
         Prisma.sql`SELECT uoa_invoice_credit_carry_valid(${invoiceId}) AS valid`);
       expect(result?.valid).toBe(true);
     }
+    expect(await db.prisma.$transaction((tx) => manualInvoiceReservedMicroMinor(tx, {
+      orgId: ids.org, teamId: ids.team, serviceId: ids.service,
+      billingMonth: month, creditAccountId: wallet.id,
+    }))).toBe(324_000_000n);
     const latest = await db.prisma.billingInvoiceCreditSettlementReference.findFirstOrThrow({
       where: { invoiceId: supplementIds[1] },
     });

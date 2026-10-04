@@ -13,6 +13,11 @@ import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import { collectContractFundingEvidence } from './billing-contract-funding-evidence.service.js';
 import { writeInvoiceFinancialAllocations } from './billing-invoice-financial-allocation.service.js';
+import { collectManualInvoicePaidCohort, writeManualInvoicePaidCohort } from
+  './billing-invoice-paid-receipt-cohort.service.js';
+import { fetchLedgerHistoricalBillingTeams } from './billing-ledger-team-discovery.service.js';
+import { fetchVerifiedLedgerPaidReceiptSet } from
+  './billing-ledger-paid-receipt-proof.service.js';
 import { fetchLedgerMeteringUsage } from './billing-ledger-collector.service.js';
 import { meteringIsComplete, type FetchMeteringUsage } from './billing-metering.types.js';
 import {
@@ -35,6 +40,8 @@ type CalculationDeps = {
   fetchMetering?: FetchMeteringUsage;
   collectFunding?: typeof collectContractFundingEvidence;
   quoteMonthly?: typeof quoteSubscriptionMonthlyCharge;
+  discoverTeams?: typeof fetchLedgerHistoricalBillingTeams;
+  fetchPaidReceiptSet?: typeof fetchVerifiedLedgerPaidReceiptSet;
   now?: () => Date;
 };
 
@@ -228,6 +235,13 @@ export async function calculateBillingContractInvoice(
       if (usageMinor < 0n) {
         throw new AppError('BAD_REQUEST', 409, 'BILLING_INVOICE_USAGE_TOTAL_INVALID');
       }
+      const paidCohort = usageMinor > 0n ?
+        await collectManualInvoicePaidCohort({ serviceId: term.serviceId,
+          product: term.service.identifier, orgId: contract.orgId,
+          billingMonth: params.billingMonth }, {
+          discoverTeams: deps?.discoverTeams,
+          fetchPaidReceiptSet: deps?.fetchPaidReceiptSet,
+        }) : [];
       return {
         serviceId: term.serviceId,
         serviceIdentifier: term.service.identifier,
@@ -235,6 +249,7 @@ export async function calculateBillingContractInvoice(
         amountMinor,
         monthlyAmountMinor,
         usageMinor,
+        paidCohort,
         seatQuote: term.tariff.monthlyChargeBasis === BillingMonthlyChargeBasis.PER_SEAT
           ? monthlyQuote : null,
         credits: funding.credits,
@@ -299,6 +314,10 @@ export async function calculateBillingContractInvoice(
         evidence_ids: line.seatQuote.evidenceIds,
       } : null,
       snapshot: line.snapshot,
+      paid_cohort: line.paidCohort.map(({ scope, proof }) => ({
+        team_id: scope.teamId, count: proof.paid_receipt_count,
+        sha256: proof.paid_receipt_sha256,
+      })),
     })),
     credit_settlements: creditEvidence.map((reference) => ({
       account_id: reference.accountId,
@@ -355,6 +374,12 @@ export async function calculateBillingContractInvoice(
                 usageMinor: line.usageMinor,
                 taxMinor: taxByService.get(line.serviceId) ?? 0n,
               })));
+            }
+            for (const line of calculated) {
+              await writeManualInvoicePaidCohort(tx, existing, {
+                id: line.serviceId, product: line.serviceIdentifier,
+                usageMinor: line.usageMinor, proofs: line.paidCohort,
+              });
             }
             return existing;
           }
@@ -443,6 +468,12 @@ export async function calculateBillingContractInvoice(
                 usageMinor: line.usageMinor,
                 taxMinor: taxByService.get(line.serviceId) ?? 0n,
           })));
+          for (const line of calculated) {
+            await writeManualInvoicePaidCohort(tx, invoice, {
+              id: line.serviceId, product: line.serviceIdentifier,
+              usageMinor: line.usageMinor, proofs: line.paidCohort,
+            });
+          }
           await tx.adminAuditLog.create({
             data: {
               actorEmail: params.actor.email,

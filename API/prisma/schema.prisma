@@ -2741,6 +2741,7 @@ model BillingInvoice {
   lines                BillingInvoiceLine[]
   meteringRefs         BillingInvoiceMeteringReference[]
   creditSettlementRefs BillingInvoiceCreditSettlementReference[]
+  paidReceipts         BillingInvoicePaidReceipt[]
   addonLines           BillingInvoiceAddonLine[]
   paymentEvents        BillingInvoicePaymentEvent[]
   lineFinancialAllocations BillingInvoiceLineFinancialAllocation[]
@@ -2824,6 +2825,30 @@ model BillingInvoiceLineCreditReferenceAllocation {
 
   @@index([invoiceId, lineId])
   @@map("billing_invoice_line_credit_reference_allocations")
+}
+
+// Exact signed Ledger paid cohort frozen with a manual invoice. Credit
+// settlement uses these immutable dispatch identities to distinguish already
+// invoiced usage from genuinely new receipts in the same billing month.
+model BillingInvoicePaidReceipt {
+  id String @id @default(cuid())
+  invoiceId String @map("invoice_id")
+  serviceId String @map("service_id")
+  orgId String @map("org_id")
+  teamId String @map("team_id")
+  billingMonth String @map("billing_month") @db.Char(7)
+  dispatchId String @map("dispatch_id") @db.VarChar(160)
+  receiptId String @map("receipt_id") @db.VarChar(160)
+  ratedMicrocredits BigInt @map("rated_microcredits")
+  proofSha256 String @map("proof_sha256") @db.Char(64)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  invoice BillingInvoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  liability BillingPaidUsageLiability @relation(fields: [dispatchId], references: [dispatchId], onDelete: Restrict)
+
+  @@unique([invoiceId, dispatchId])
+  @@index([serviceId, orgId, teamId, billingMonth])
+  @@map("billing_invoice_paid_receipts")
 }
 
 // Ledger evidence is private calculation provenance and is never part of the
@@ -3323,6 +3348,7 @@ model BillingPaidUsageLiability {
   ratedQuanta Decimal @map("rated_quanta") @db.Decimal(80, 0)
   ratedMicrocredits BigInt @map("rated_microcredits")
   settledAt DateTime @default(now()) @map("settled_at")
+  invoiceReceipts BillingInvoicePaidReceipt[]
 
   @@index([serviceId, orgId, teamId, billingMonth])
   @@index([receiptId])

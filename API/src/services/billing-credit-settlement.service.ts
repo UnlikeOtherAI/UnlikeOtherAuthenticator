@@ -15,6 +15,7 @@ import {
 import type { NormalizedMeteringPortfolio } from './billing-metering.types.js';
 import { runBillingSerializableTransaction } from './billing-serializable-transaction.service.js';
 import { assertUnambiguousCreditPayer } from './billing-credit-payer-period.service.js';
+import { manualInvoiceReservedMicroMinor } from './billing-credit-manual-invoice-cap.service.js';
 import {
   lockTariffHistoryService,
   resolveBillingTariffForMonth,
@@ -319,14 +320,24 @@ async function settleInTransaction(
     const reserved = reservedExports
       .filter((row) => row.subscription.serviceId === service.service.id)
       .reduce((sum, row) => sum + row.deltaMeterQuantity, 0n);
-    if (reserved === 0n) continue;
+    const manualReserved = await manualInvoiceReservedMicroMinor(tx, {
+      orgId: account.orgId, teamId: settlementTeamId,
+      serviceId: service.service.id, billingMonth: params.portfolio.scope.month,
+      creditAccountId: account.id,
+    });
+    if (reserved > 0n && manualReserved > 0n) {
+      throw new AppError('INTERNAL', 409, 'BILLING_CREDIT_MULTIPLE_COLLECTORS_UNPROVEN');
+    }
+    if (reserved === 0n && manualReserved === 0n) continue;
     const other = otherSettlements.filter((row) => row.serviceId === service.service.id);
     const otherGross = other.reduce((sum, row) => sum + row.cumulativeRatedUsageAmountMicroMinor, 0n);
     const otherCredits = other.reduce((sum, row) => sum + row.cumulativeCreditsConsumedMicrocredits / 10n, 0n);
     const currentCredits = previousAllocations
       .filter((row) => row.serviceId === service.service.id)
       .reduce((sum, row) => sum + row.consumedMicrocredits / 10n, 0n);
-    const unreserved = service.ratedMicroMinor + otherGross - reserved - otherCredits - currentCredits;
+    const unreserved = reserved > 0n ?
+      service.ratedMicroMinor + otherGross - reserved - otherCredits - currentCredits :
+      service.ratedMicroMinor - manualReserved - currentCredits;
     maxAdditionalCreditsByService.set(service.service.id, unreserved > 0n ? unreserved / 100_000n : 0n);
   }
   const rated = rateCreditPortfolio({

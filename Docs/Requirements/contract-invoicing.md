@@ -326,3 +326,18 @@ The guarded migration independently enforces:
 These controls are not replaced by route validation. Migration tests apply all
 migrations to fresh PostgreSQL and exercise the state transitions and rejection
 paths.
+
+Manual usage invoices also freeze the exact paid Ledger dispatch and receipt
+cohort by source team. The signed monthly cohort must match UOA's immutable
+paid-liability rows, including the unrounded credit amount. The issuer takes
+the same payer-account lock as wallet settlement before claiming a draft and
+rechecks its credit references; a wallet debit after calculation therefore
+holds a stale draft instead of collecting that usage twice. An issued manual
+line reserves only the part of its frozen cohort not already covered by that
+line's wallet references. Supplements subtract their incremental reference
+offset, not the cumulative prior carry. Later receipts outside the issued
+cohort can still consume newly purchased credits. A historical issued line
+without a provable receipt cohort holds automatic wallet allocation for that
+service and month; organisation-wide totals are never divided among teams by
+current membership or by a guessed percentage. Voided unpaid invoices release
+their reservation, while their immutable legal history remains visible.
