@@ -10,6 +10,7 @@ import { prepareBillingTeamUsageCycle } from './billing-cycle-team-usage.service
 import { fetchLedgerHistoricalBillingTeams } from './billing-ledger-team-discovery.service.js';
 import { billingCycleSnapshotDigest } from './billing-cycle-read.service.js';
 import { finalizePrepaidBillingCycle } from './billing-cycle-prepaid-correction.service.js';
+import { captureIssuedStripeBillingCycle } from './billing-cycle-stripe-invoice.service.js';
 
 const BATCH_SIZE = 50;
 type Claimed = { id: string; sourceKind: string; sourceId: string;
@@ -77,6 +78,7 @@ async function runOne(prisma: PrismaClient, row: Claimed,
   deps: { close?: typeof prepareBillingCycleClose;
     team?: typeof prepareBillingTeamUsageCycle;
     finalizePrepaid?: typeof finalizePrepaidBillingCycle;
+    captureStripe?: typeof captureIssuedStripeBillingCycle;
     discover?: typeof fetchLedgerHistoricalBillingTeams }): Promise<string | null> {
   const service = await prisma.billingService.findUnique({ where: { id: row.serviceId },
     select: { identifier: true } });
@@ -96,7 +98,13 @@ async function runOne(prisma: PrismaClient, row: Claimed,
     }
     const finalized = await (deps.finalizePrepaid ?? finalizePrepaidBillingCycle)(
       { cycleId: result.cycleId }, { prisma });
-    return finalized?.cycleId ?? result.cycleId;
+    if (finalized) return finalized.cycleId;
+    if (row.sourceKind === 'stripe') {
+      const issued = await (deps.captureStripe ?? captureIssuedStripeBillingCycle)(
+        { cycleId: result.cycleId }, { prisma });
+      return issued?.cycleId ?? result.cycleId;
+    }
+    return result.cycleId;
   }
   if (row.sourceKind === 'team_discovery') {
     if (row.teamId !== null || row.sourceId !== `${row.serviceId}:${row.orgId}`) {
@@ -182,6 +190,7 @@ export async function runBillingCycleCloseBatch(deps?: {
   close?: typeof prepareBillingCycleClose;
   team?: typeof prepareBillingTeamUsageCycle;
   finalizePrepaid?: typeof finalizePrepaidBillingCycle;
+    captureStripe?: typeof captureIssuedStripeBillingCycle;
   discover?: typeof fetchLedgerHistoricalBillingTeams;
 }): Promise<{ checked: number; held: number; backlog: number;
   failures: Array<{ id: string; code: string }> }> {

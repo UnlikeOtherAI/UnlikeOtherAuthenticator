@@ -101,10 +101,8 @@ function verifiedAdjustments(row: StripePaymentInvoiceSource, paid: bigint) {
   return { refunded, disputed };
 }
 
-export function projectStripeCustomerInvoiceSummary(
-  row: StripePaymentInvoiceSource, product: string, serviceId: string,
-  chargeMonth?: string,
-): BillingCustomerInvoiceSummaryV1 {
+/** The same immutable financial and cash proof gates invoices and cycle allocations. */
+export function verifyStripeInvoiceFinancialSource(row: StripePaymentInvoiceSource) {
   if (row.subscription.id !== row.subscriptionId ||
     row.subscription.accountId !== row.accountId ||
     row.subscription.livemode !== row.livemode ||
@@ -116,8 +114,7 @@ export function projectStripeCustomerInvoiceSummary(
     row.dueAmountMinor !== row.grossAmountMinor - row.creditAmountMinor ||
     row.paidAmountMinor > row.dueAmountMinor || row.paidAmountMinor <= 0n ||
     row.lines.length === 0 || row.lines.some((line) =>
-      line.invoiceId !== row.id || line.serviceIdentifier !== product ||
-      line.serviceId !== serviceId ||
+      line.invoiceId !== row.id || !line.serviceIdentifier || !line.serviceId ||
       line.subscriptionMinor < 0n || line.usageMinor < 0n || line.taxMinor < 0n ||
       line.creditMinor < 0n || line.grossMinor < 0n || line.dueMinor < 0n ||
       line.grossMinor !== line.subscriptionMinor + line.usageMinor + line.taxMinor ||
@@ -126,6 +123,22 @@ export function projectStripeCustomerInvoiceSummary(
     row.lines.reduce((sum, line) => sum + line.taxMinor, 0n) !== row.taxAmountMinor ||
     row.lines.reduce((sum, line) => sum + line.creditMinor, 0n) !== row.creditAmountMinor ||
     row.lines.reduce((sum, line) => sum + line.dueMinor, 0n) !== row.dueAmountMinor) hold();
+  const payments = verifiedPayments(row);
+  const paid = payments.reduce((sum, payment) => sum + payment.amount, 0n);
+  const adjustments = verifiedAdjustments(row, paid);
+  if (row.state === 'ISSUED' && (!row.invoiceNumber || !row.issuedAt ||
+    !row.pdfObjectKey || !row.pdfSha256 || !legalParty(row.issuerSnapshot) ||
+    !legalParty(row.buyerSnapshot))) hold();
+  return { payments, paid, ...adjustments };
+}
+
+export function projectStripeCustomerInvoiceSummary(
+  row: StripePaymentInvoiceSource, product: string, serviceId: string,
+  chargeMonth?: string,
+): BillingCustomerInvoiceSummaryV1 {
+  verifyStripeInvoiceFinancialSource(row);
+  if (row.lines.some((line) => line.serviceIdentifier !== product ||
+    line.serviceId !== serviceId)) hold();
   const payments = verifiedPayments(row);
   const paid = payments.reduce((sum, payment) => sum + payment.amount, 0n);
   const selectedMonth = chargeMonth ?? payments.at(-1)?.at.slice(0, 7);
