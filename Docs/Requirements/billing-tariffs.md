@@ -660,6 +660,11 @@ UOA creates one currency-specific Stripe catalog for each product, including:
 - a calendar-month billing anchor aligned to Ledger's UTC month;
 - no promotion codes, because discounts must be explicit UOA tariff versions.
 
+Customer-visible Stripe product and monthly Price labels use the product name
+and “Monthly subscription”; internal tariff keys and versions stay in Stripe
+metadata for binding only. Existing catalog labels are normalized when reused,
+so a private operator key cannot appear in a hosted Checkout or invoice label.
+
 The hosted Checkout sets Stripe's billing-cycle anchor to the first day of the
 next UTC month and sets `proration_behavior=none`. The partial alignment period
 between Checkout and that boundary is free for legacy flat subscriptions.
