@@ -15,6 +15,7 @@ test('operator can review and append legal prepaid invoice tax policy', async ({
   await expect(panel).toContainText('pending document');
   await panel.getByLabel('Stripe account').selectOption('account-1');
   await panel.getByLabel('Legal issuer').selectOption('issuer-1');
+  await panel.getByLabel('Buyer tax jurisdiction').fill('GB');
   await panel.getByLabel('Inclusive rate (basis points)').fill('2000');
   await panel.getByLabel('Effective from (UTC)').fill('2026-10-04T00:00:00Z');
   await panel.getByLabel('Legal basis reference').fill('Verified UK VAT treatment');

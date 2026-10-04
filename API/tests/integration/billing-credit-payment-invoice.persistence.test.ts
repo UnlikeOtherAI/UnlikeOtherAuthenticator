@@ -16,6 +16,7 @@ import {
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { recordAcceptedCreditPaymentInvoice } from '../../src/services/billing-credit-payment-invoice-source.service.js';
+import { appendCreditInvoiceTaxPolicy } from '../../src/services/billing-credit-invoice-tax-policy.service.js';
 import { issueCreditPaymentInvoice } from '../../src/services/billing-credit-payment-invoice-issue.service.js';
 import type { BillingInvoicePdfStorage } from '../../src/services/billing-invoice-storage.service.js';
 import { createTestDb } from '../helpers/test-db.js';
@@ -341,6 +342,13 @@ describe.skipIf(!process.env.DATABASE_URL)('prepaid payment invoice PostgreSQL s
     ]);
     expect(invoices.every((row) => row.state === BillingCreditPaymentInvoiceState.PENDING))
       .toBe(true);
+    const attempts = await handle!.prisma.billingCreditAutoTopUpAttempt.findMany({
+      where: { id: { in: autoIds } },
+    });
+    expect(attempts.every((attempt) => attempt.currency === 'USD')).toBe(true);
+    await expect(handle!.prisma.billingCreditAutoTopUpAttempt.update({
+      where: { id: autoIds[0] }, data: { currency: 'EUR' },
+    })).rejects.toBeDefined();
     await expect(handle!.prisma.billingCreditPaymentInvoice.update({
       where: { id: invoices[0]!.id },
       data: { paidAt: issuedAt },
@@ -360,23 +368,37 @@ describe.skipIf(!process.env.DATABASE_URL)('prepaid payment invoice PostgreSQL s
     expect(held.state).toBe(BillingCreditPaymentInvoiceState.HELD);
     expect(held.taxAmountMinor).toBeNull();
     expect(held.invoiceNumber).toBeNull();
-    await handle!.prisma.billingCreditInvoiceTaxPolicy.create({
-      data: {
-        accountId: ids.account,
-        version: 1,
-        issuerProfileId: `issuer_${prefix}`,
-        jurisdictionCountry: 'GB',
-        treatment: BillingCreditInvoiceTaxTreatment.INCLUSIVE_RATE,
-        rateBps: 2000,
-        legalBasisReference: 'operator-approved GB inclusive VAT policy',
-        effectiveFrom: new Date('2026-08-01T00:00:00.000Z'),
-        createdByUserId: ids.user,
-        createdByEmail: 'funding-race@example.com',
-      },
+    await handle!.prisma.billingOrganisationInvoiceProfile.update({
+      where: { orgId: ids.org },
+      data: { billingAddress: {
+        line1: '2 Customer Road', city: 'New York', postal_code: '10001', country: 'US',
+      } },
     });
+    await appendCreditInvoiceTaxPolicy({
+      accountId: ids.account,
+      issuerProfileId: `issuer_${prefix}`,
+      jurisdictionCountry: 'US',
+      treatment: BillingCreditInvoiceTaxTreatment.INCLUSIVE_RATE,
+      rateBps: 2000,
+      legalBasisReference: 'operator-approved US buyer tax treatment',
+      effectiveFrom: new Date('2026-08-01T00:00:00.000Z'),
+      actor: { userId: ids.user, email: 'funding-race@example.com', tokenVersion: 0 },
+    }, { prisma: handle!.prisma, authorize: vi.fn().mockResolvedValue(undefined) });
     const rows = await handle!.prisma.billingCreditPaymentInvoice.findMany({
       where: { accountId: ids.account },
     });
+    resolveProvider.mockImplementation(async (source: { id: string }) =>
+      source.id === first.id ? {
+        invoiceId: `in_${prefix}`,
+        number: `STRIPE-${prefix}`,
+        issuedAt,
+        taxMinor: 83n,
+        accountName: 'Example Billing Limited', accountCountry: 'GB',
+        buyerName: 'Funding Race Org', buyerEmail: 'accounts@funding-race.example',
+        buyerCountry: 'US',
+        buyerAddress: { line1: '2 Customer Road', city: 'New York', postal_code: '10001' },
+        pdf: new TextEncoder().encode('%PDF-1.7 verified-provider-fixture'),
+      } : null);
     const issued = await Promise.all(rows.map((row) => issueCreditPaymentInvoice(row.id, {
       prisma: handle!.prisma, storage, provider, resolveProvider,
       now: () => issuedAt,
@@ -385,13 +407,15 @@ describe.skipIf(!process.env.DATABASE_URL)('prepaid payment invoice PostgreSQL s
       .toBe(true);
     expect(new Set(issued.map((row) => row.invoiceNumber)).size).toBe(3);
     expect(issued.every((row) => row.taxAmountMinor === 83n)).toBe(true);
+    expect(issued.some((row) => row.stripeInvoiceId === `in_${prefix}`)).toBe(true);
+    expect(issued.some((row) => row.taxPolicyId && !row.stripeInvoiceId)).toBe(true);
     expect(issued.every((row) => row.pdfSha256 && row.pdfObjectKey)).toBe(true);
     expect(stored.size).toBe(3);
     const proofDir = process.env.BILLING_COLLECTION_PROOF_DIR;
     if (proofDir) {
       await mkdir(proofDir, { recursive: true });
       await writeFile(path.join(proofDir, 'prepaid-payment-invoice.pdf'),
-        stored.get(issued[0]!.pdfObjectKey!)!);
+        stored.get(issued.find((row) => !row.stripeInvoiceId)!.pdfObjectKey!)!);
     }
     await expect(handle!.prisma.billingCreditPaymentInvoice.update({
       where: { id: issued[0]!.id },

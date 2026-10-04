@@ -66,12 +66,13 @@ export function BillingCreditInvoiceTaxPolicyPanel() {
   const [basis, setBasis] = useState('');
   const [effectiveFrom, setEffectiveFrom] = useState('');
   const issuer = issuers.data?.find((item) => item.id === issuerId);
-  const country = issuer?.address.country.toUpperCase() ?? '';
+  const [country, setCountry] = useState('');
   const numericRate = treatment === 'NO_TAX_CHARGED' ? 0 : Number(rateBps);
   const validRate = treatment === 'NO_TAX_CHARGED' ||
     (/^\d+$/.test(rateBps) && Number.isSafeInteger(numericRate) &&
       numericRate >= 1 && numericRate <= 10_000);
-  const canSave = Boolean(accountId && issuer && country && basis.trim().length >= 8 &&
+  const canSave = Boolean(accountId && issuer && /^[A-Z]{2}$/.test(country) &&
+    basis.trim().length >= 8 &&
     /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(effectiveFrom) &&
     Number.isFinite(Date.parse(effectiveFrom)) && validRate && !create.isPending);
 
@@ -132,8 +133,9 @@ export function BillingCreditInvoiceTaxPolicyPanel() {
             onChange={(event) => setEffectiveFrom(event.target.value)}
           />
         </FieldShell>
-        <FieldShell label="Issuer tax jurisdiction">
-          <TextField readOnly value={country} placeholder="Choose an issuer" />
+    <FieldShell label="Buyer tax jurisdiction" hint="ISO country code for the buyer's applicable tax treatment">
+      <TextField value={country} maxLength={2} onChange={(event) =>
+        setCountry(event.target.value.toUpperCase())} placeholder="GB" />
         </FieldShell>
       </div>
       <div className="mt-3">
