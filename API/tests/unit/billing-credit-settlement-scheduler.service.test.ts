@@ -47,7 +47,7 @@ describe('durable credit settlement catch-up', () => {
       fetchPortfolio: fetchPortfolio as never,
       settlePortfolio: settlePortfolio as never,
     });
-    expect(months).toEqual(['2026-08', '2026-09', '2026-10']);
+    expect(months).toEqual(['2026-07', '2026-08', '2026-09', '2026-10']);
     expect(fetchPortfolio).toHaveBeenCalledWith(expect.objectContaining({ billingMonth: '2026-09' }));
     expect(settlePortfolio).toHaveBeenCalledTimes(1);
     expect(prisma.billingCreditSettlementWatch.update).toHaveBeenCalledWith({
@@ -59,7 +59,7 @@ describe('durable credit settlement catch-up', () => {
         lastError: null,
       },
     });
-    expect(result).toEqual({ seeded: 3, checked: 1, settled: 1, held: 0, backlog: 0 });
+    expect(result).toEqual({ seeded: 4, checked: 1, settled: 1, held: 0, backlog: 0 });
   });
 
   it('leases one persisted watch across two workers and revisits it after restart', async () => {
