@@ -7,7 +7,7 @@ import { AppError } from '../utils/errors.js';
 import { cycleMoney } from './billing-cycle-quote-projection.service.js';
 
 export type CreditNoteSource = Prisma.BillingManualCreditNoteGetPayload<{
-  include: { originalInvoice: { include: { lines: true } } };
+  include: { originalInvoice: { include: { lines: true; paymentEvents: true } } };
 }>;
 
 function hold(): never {
@@ -32,6 +32,15 @@ export function projectCustomerCreditNoteSummary(note: CreditNoteSource,
   chargeMonth: string): BillingCustomerInvoiceSummaryV1 {
   checked(note);
   if (note.issuedAt.toISOString().slice(0, 7) !== chargeMonth) hold();
+  let paid = 0n;
+  let refunded = 0n;
+  for (const event of note.originalInvoice.paymentEvents) {
+    if (event.currency !== note.currency || event.amountMinor <= 0n) hold();
+    if (event.kind === 'PAYMENT') paid += event.amountMinor;
+    else if (event.kind === 'REFUND') refunded += event.amountMinor;
+    else if (event.kind !== 'WRITE_OFF') hold();
+  }
+  if (refunded > paid || paid > note.totalCreditMinor) hold();
   const money = (amount: bigint) => cycleMoney(amount, note.currency);
   return {
     invoice_id: `credit_note:${note.id}`, kind: 'credit_note', status: 'issued',
@@ -44,7 +53,8 @@ export function projectCustomerCreditNoteSummary(note: CreditNoteSource,
       tax: money(note.taxCreditMinor), credits_applied: money(0n),
       voided_amount: money(note.totalCreditMinor), total_due: money(0n),
       total_paid: money(0n), refunded_amount: money(0n), disputed_amount: money(0n),
-      write_off: money(0n), outstanding: money(0n) },
+      write_off: money(0n), outstanding: money(0n),
+      customer_credit_due: money(paid - refunded) },
     document_available: true,
   };
 }

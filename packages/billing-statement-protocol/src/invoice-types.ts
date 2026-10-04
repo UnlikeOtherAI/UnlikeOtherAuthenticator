@@ -31,6 +31,9 @@ export type BillingCustomerInvoiceTotals = {
   disputed_amount: BillingCustomerInvoiceMoney;
   write_off: BillingCustomerInvoiceMoney;
   outstanding: BillingCustomerInvoiceMoney;
+  /** Verified cash still owed back after a legal cancellation and refunds.
+   * Absent for an invoice without an established repayment obligation. */
+  customer_credit_due?: BillingCustomerInvoiceMoney;
 };
 export type BillingCustomerInvoiceSummaryV1 = {
   invoice_id: string;

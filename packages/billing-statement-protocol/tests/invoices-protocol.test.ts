@@ -66,6 +66,17 @@ describe('actual customer charge invoice protocol', () => {
     expect(validate(detail)).toBe(false);
   });
 
+  it('shows only verified refundable cash on a cancellation note', () => {
+    const validate = ajv.compile(billingCustomerInvoiceDetailV1JsonSchema);
+    const note = structuredClone(billingCustomerInvoiceDetailV1ConformanceFixture);
+    note.kind = 'credit_note';
+    note.totals.customer_credit_due = { ...note.totals.total_paid,
+      amount: '60', amount_minor: '6000' };
+    expect(validate(note), JSON.stringify(validate.errors)).toBe(true);
+    note.totals.customer_credit_due.amount_minor = '-6000';
+    expect(validate(note)).toBe(false);
+  });
+
   it('keeps one legal invoice while exposing only selected-month accepted cash', () => {
     const validate = ajv.compile(billingCustomerInvoiceDetailV1JsonSchema);
     const detail = structuredClone(billingCustomerInvoiceDetailV1ConformanceFixture);

@@ -1,7 +1,12 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { writeFileSync } from 'node:fs';
 
 import { BillingAssignmentScope, BillingCollectionMode, BillingMonthlyChargeBasis,
   BillingTariffMode, BillingUsagePaymentMode } from '@prisma/client';
+import { billingCustomerInvoiceDetailV1JsonSchema } from
+  '@unlikeotherai/billing-statement-protocol';
+import Ajv2020 from 'ajv/dist/2020.js';
+import addFormats from 'ajv-formats';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { getAdminAuthDomain } from '../../src/config/env.js';
@@ -16,6 +21,10 @@ import { projectManualCustomerInvoiceSummary } from
   '../../src/services/billing-customer-invoice-manual.service.js';
 import { projectCustomerCreditNoteSummary } from
   '../../src/services/billing-customer-invoice-credit-note.service.js';
+import { getCustomerInvoiceDetail } from
+  '../../src/services/billing-customer-invoice-read.service.js';
+import type { BillingCycleContext } from
+  '../../src/services/billing-cycle-read.service.js';
 import { issueManualCreditNote } from
   '../../src/services/billing-manual-credit-note-issuer.service.js';
 import { issueBillingInvoice, recordBillingInvoicePayment } from
@@ -24,6 +33,10 @@ import type { BillingInvoicePdfStorage } from
   '../../src/services/billing-invoice-storage.service.js';
 import { createTestDb } from '../helpers/test-db.js';
 import { AppError } from '../../src/utils/errors.js';
+
+vi.mock('../../src/services/billing-actor.service.js', () => ({
+  verifyBillingActor: vi.fn().mockResolvedValue({}),
+}));
 
 const enabled = process.env.BILLING_FUNDING_DATABASE_TESTS === 'true' &&
   Boolean(process.env.DATABASE_URL);
@@ -47,7 +60,7 @@ class MemoryStorage implements BillingInvoicePdfStorage {
 describe.skipIf(!enabled)('manual legal credit note', () => {
   let db: TestDb;
   const storage = new MemoryStorage();
-  const ids = { user: '', org: '', service: '', tariff: '', term: '',
+  const ids = { user: '', org: '', team: '', service: '', tariff: '', term: '',
     contract: '', version: '', issuer: '', buyer: '', invoice: '', originalCycle: '' };
   const month = '2026-08';
   const actor = { userId: '', tokenVersion: 0, email: '' };
@@ -73,8 +86,15 @@ describe.skipIf(!enabled)('manual legal credit note', () => {
       domain: `${randomUUID()}.example.test`,
       slug: `note-${randomUUID().slice(0, 10)}` } });
     ids.org = org.id;
+    const team = await db.prisma.team.create({ data: { orgId: org.id,
+      name: 'Selected team', slug: `note-${randomUUID().slice(0, 10)}` } });
+    ids.team = team.id;
+    await db.prisma.orgMember.create({ data: { orgId: org.id, userId: user.id,
+      role: 'owner' } });
+    await db.prisma.teamMember.create({ data: { teamId: team.id, userId: user.id,
+      teamRole: 'owner' } });
     const service = await db.prisma.billingService.create({ data: {
-      identifier: `manual-note-${randomUUID()}`, name: 'Customer service',
+      identifier: 'nessie', name: 'Customer service',
       tariffHistoryFromMonth: '2026-01' } });
     ids.service = service.id;
     const tariff = await db.prisma.billingTariff.create({ data: {
@@ -208,7 +228,8 @@ describe.skipIf(!enabled)('manual legal credit note', () => {
       totals[0]?.customer_credit_due.amount_minor]).toEqual(['0', '100', '100']);
     expect(row.documents.filter((doc) => doc.kind === 'credit_note')).toHaveLength(1);
     const legalSource = await db.prisma.billingManualCreditNote.findUniqueOrThrow({
-      where: { id: prepared.id }, include: { originalInvoice: { include: { lines: true } } },
+      where: { id: prepared.id }, include: { originalInvoice: { include: {
+        lines: true, paymentEvents: true } } },
     });
     const legalView = projectCustomerCreditNoteSummary(legalSource, '2026-09');
     expect([legalView.kind, legalView.totals.gross_total.amount_minor,
@@ -216,6 +237,7 @@ describe.skipIf(!enabled)('manual legal credit note', () => {
       legalView.totals.total_due.amount_minor]).toEqual([
       'credit_note', '156', '156', '0',
     ]);
+    expect(legalView.totals.customer_credit_due?.amount_minor).toBe('100');
     const originalView = projectManualCustomerInvoiceSummary(
       await db.prisma.billingInvoice.findUniqueOrThrow({ where: { id: ids.invoice },
         include: { lines: true, paymentEvents: true, manualCreditNotes: true } }),
@@ -241,6 +263,23 @@ describe.skipIf(!enabled)('manual legal credit note', () => {
     const laterTotals = (later.publicSnapshot as Record<string, unknown>).totals as Array<{
       customer_credit_due: { amount_minor: string } }>;
     expect(laterTotals[0]?.customer_credit_due.amount_minor).toBe('60');
+    const context: BillingCycleContext = { credential: { service: {
+      id: ids.service, identifier: product, name: 'Customer service',
+    } } as BillingCycleContext['credential'],
+    actorToken: 'fixture-signed-actor', endpoint: '/billing/v1/invoices/detail',
+    request: { product, organisationId: ids.org, teamId: ids.team,
+      userId: ids.user } };
+    const detail = await getCustomerInvoiceDetail(context, `credit_note:${prepared.id}`,
+      { prisma: db.prisma });
+    expect(detail.totals.customer_credit_due?.amount_minor).toBe('60');
+    const ajv = new Ajv2020({ allErrors: true, strict: true });
+    addFormats(ajv);
+    const validate = ajv.compile(billingCustomerInvoiceDetailV1JsonSchema);
+    expect(validate(detail), JSON.stringify(validate.errors)).toBe(true);
+    if (process.env.BILLING_CREDIT_NOTE_CONFORMANCE_OUTPUT) {
+      writeFileSync(process.env.BILLING_CREDIT_NOTE_CONFORMANCE_OUTPUT,
+        `${JSON.stringify(detail, null, 2)}\n`);
+    }
     expect(later.documents.filter((doc) => doc.kind === 'credit_note')).toHaveLength(1);
     expect(await storage.read(originalInvoice.pdfObjectKey ?? '')).toEqual(originalPdf);
     expect(await captureIssuedManualCreditNote({ creditNoteId: prepared.id }, {

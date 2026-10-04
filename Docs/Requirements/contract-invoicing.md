@@ -116,6 +116,10 @@ outstanding debt. The separate credit note appears in the month it was issued
 with its own legal PDF. The latest monthly cycle exposes a positive
 `customer_credit_due` equal to accepted original cash less verified refunds,
 while earlier finalized cycle snapshots and document hashes remain frozen.
+The credit note's customer InvoiceV1 totals expose that same verified
+`customer_credit_due` as an optional repayment fact; its legal gross amount
+is the canceled charge, not cash due back. A refund changes the repayment
+fact without editing either original legal PDF.
 
 ## Closed-month calculator
 

@@ -148,7 +148,7 @@ export async function listCustomerInvoices(
       ] : [])] } : {}),
     originalInvoice: { lines: { some: { serviceIdentifier: context.request.product },
       every: { serviceIdentifier: context.request.product } } },
-  }, include: { originalInvoice: { include: { lines: true } } },
+  }, include: { originalInvoice: { include: { lines: true, paymentEvents: true } } },
   orderBy: [{ issuedAt: 'desc' }, { id: 'desc' }], take: limit + 1 }) : [];
   const manual = orgManager ? await prisma.billingInvoice.findMany({ where: {
     orgId: context.request.organisationId,
@@ -231,7 +231,7 @@ async function readCustomerInvoice(
       serviceId: context.credential.service.id, status: 'ISSUED',
       originalInvoice: { lines: { some: { serviceIdentifier: context.request.product },
         every: { serviceIdentifier: context.request.product } } },
-    }, include: { originalInvoice: { include: { lines: true } } } });
+    }, include: { originalInvoice: { include: { lines: true, paymentEvents: true } } } });
     if (!row) notFound();
     await authorizeBillingCycle({ ...context, payerScope: BillingAssignmentScope.ORGANISATION },
       { prisma });

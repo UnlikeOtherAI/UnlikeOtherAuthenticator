@@ -49,6 +49,7 @@ const totals = {
     total_due: nonnegativeMoney, total_paid: nonnegativeMoney,
     refunded_amount: nonnegativeMoney, disputed_amount: nonnegativeMoney,
     write_off: nonnegativeMoney, outstanding: nonnegativeMoney,
+    customer_credit_due: nonnegativeMoney,
   },
 } as const;
 const summaryProperties = {

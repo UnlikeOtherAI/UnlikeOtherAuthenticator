@@ -117,6 +117,10 @@ void or later payment event.
 Refunds and disputes are positive, separately named verified effects; the
 original accepted payment and legal PDF remain visible. A partial effect has
 its own status and never becomes an invented legal credit note.
+A verified manual cancellation credit note may include positive
+`totals.customer_credit_due`: accepted original cash less actual refunds.
+Its `gross_total` describes canceled charges, not a promise to repay that
+gross amount. The field is absent when no repayment obligation is established.
 
 New consumers request `POST /billing/v2/customer-statement`. Its
 `usage.lines` and `usage.user_totals` contain customer charges only, rated by
