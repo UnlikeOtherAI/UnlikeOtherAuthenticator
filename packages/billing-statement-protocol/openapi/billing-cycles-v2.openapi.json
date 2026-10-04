@@ -1669,7 +1669,7 @@
                 "input": "100",
                 "cached_input": "0",
                 "output": "50",
-                "total": "150",
+                "total": "180",
                 "cache_write": "30",
                 "cache_write_5m": "20",
                 "cache_write_1h": "10"

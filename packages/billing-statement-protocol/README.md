@@ -166,8 +166,10 @@ adds the customer's explicitly selected `fixed_seat_quantity` (integer 1 to
 for the plan. All other body fields remain UOA-authored.
 
 Billing cycles protocol 2.1.0 optionally carries measured `cache_write_5m`
-and `cache_write_1h` raw token subtotals when Ledger supplied them. They are
-dimensions within measured input, not extra tokens added to `total`.
+and `cache_write_1h` raw token subtotals when Ledger supplied them. The two
+durations make up `cache_write`, which is disjoint from ordinary input and
+included once in `total`; reasoning and modality dimensions are subsets and
+do not increase `total`.
 Consumers omit absent dimensions rather than displaying zero.
 
 Run `pnpm generate` after an intentional protocol change. Build and test fail if
