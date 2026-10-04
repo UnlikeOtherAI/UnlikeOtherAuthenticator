@@ -168,3 +168,23 @@ unquotable until reconciled. Fixed capacity revisions are append-only, and all
 future scheduled lower capacities must still fit the current occupied and
 reserved roster. A subscription's `ended_at` closes its open evidence intervals;
 quote boundaries and invoice close remain the financial producer's authority.
+
+The operator changes a fixed subscription from its product's existing
+**Subscriptions** tab in UOA Admin. `GET
+/internal/admin/billing/services/:serviceId/seat-subscriptions` shows the
+captured baseline, current purchased quantity and revision history for each
+team or organisation source. `POST
+/internal/admin/billing/seat-subscriptions/:subscriptionId/capacity` appends an
+audited positive quantity revision. Prorated changes and full-month increases
+start at the observed instant; a full-month decrease starts on the next UTC
+month boundary. Database admission checks reject a shrink below active members
+and unexpired pending invitations. The operator sees HTTP 409
+`SEAT_CAPACITY_EXCEEDED`; no roster is changed by a capacity request.
+
+Seat intervals are private append-only billing evidence. A same-millisecond
+join/leave retains a zero-duration marker, preserving a captured baseline but
+charging nothing. The database denies direct interval edits, changed captured
+baseline counts and reversal or backdating of a subscription end. It also
+updates both old and new scopes when an authoritative membership row moves,
+using ordered organisation locks. Public callers cannot invoke the privileged
+roster functions directly.

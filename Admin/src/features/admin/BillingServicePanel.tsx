@@ -2,6 +2,7 @@ import { Link } from 'react-router';
 import { useBillingNavigation } from './billing-navigation';
 import { billingMoney } from './billing-money';
 import { BillingSubscriptionsTable } from './BillingSubscriptionsTable';
+import { BillingSeatCapacityPanel } from './BillingSeatCapacityPanel';
 import { BillingRecordDetail } from './BillingRecordDetail';
 
 import { Badge, type BadgeVariant } from '../../components/ui/Badge';
@@ -124,7 +125,7 @@ export function BillingServicePanel({
             },
             { label: 'App keys', value: 'app-keys', count: service.app_keys.length },
             {
-              label: 'Stripe subscriptions',
+              label: 'Subscriptions',
               value: 'subscriptions',
               count: service.stripe_subscriptions.length,
             },
@@ -448,7 +449,10 @@ export function BillingServicePanel({
         </DataTable>
       ) : null}
 
-      {tab === 'subscriptions' ? <BillingSubscriptionsTable service={service} /> : null}
+      {tab === 'subscriptions' ? <>
+        <BillingSubscriptionsTable service={service} />
+        <BillingSeatCapacityPanel serviceId={service.id} />
+      </> : null}
       <BillingRecordDetail service={service} />
     </Card>
   );

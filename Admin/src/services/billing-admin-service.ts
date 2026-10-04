@@ -13,6 +13,7 @@ import {
   type BillingTariffFormValues,
 } from '../schemas/billing';
 import { createApiClient } from './api-client';
+import { BillingSeatSubscriptionsSchema } from '../schemas/billing-seat-capacity';
 import { billingMajorToMinor } from '../features/admin/billing-money';
 
 const api = createApiClient();
@@ -63,6 +64,19 @@ function returnOrigins(value: string): string[] {
 }
 
 export const billingAdminService = {
+  async listSeatSubscriptions(serviceId: string) {
+    return BillingSeatSubscriptionsSchema.parse(await api.get<unknown>(
+      `/internal/admin/billing/services/${encodeURIComponent(serviceId)}/seat-subscriptions`,
+    ));
+  },
+
+  async changeSeatCapacity(subscriptionId: string, quantity: number) {
+    await api.post<unknown>(
+      `/internal/admin/billing/seat-subscriptions/${encodeURIComponent(subscriptionId)}/capacity`,
+      { quantity },
+    );
+  },
+
   async listServices() {
     return BillingServicesSchema.parse(await api.get<unknown>('/internal/admin/billing/services'));
   },

@@ -77,6 +77,15 @@ export async function installFixtures(page: Page) {
   const calculations: unknown[] = [];
   const payments: unknown[] = [];
   const activations: unknown[] = [];
+  const seatCapacityWrites: unknown[] = [];
+  const seatSubscription = {
+    id: 'seat-fixture-1', service_id: 'billing-1',
+    organisation: { id: 'o1', name: 'Acme Research' }, team: null,
+    source: 'manual' as const, seat_policy: 'fixed' as const,
+    seat_charge_timing: 'full_month' as const, baseline_member_count: 4,
+    activated_at: now, ended_at: null, current_capacity: 5,
+    capacity_revisions: [{ id: 'revision-1', quantity: 5, effective_at: now }],
+  };
   const memberships: unknown[] = [];
   let paymentFailures = 1;
   const native = structuredClone(nativeApp);
@@ -99,6 +108,13 @@ export async function installFixtures(page: Page) {
       route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
     if (path.startsWith('/lifecycle/')) return lifecycle.handle(route, path);
     if (req.method() !== 'GET') {
+      if (path === '/billing/seat-subscriptions/seat-fixture-1/capacity') {
+        const input = req.postDataJSON();
+        seatCapacityWrites.push(input);
+        if (input.quantity !== 6) return json({ error: 'Invalid capacity' }, 400);
+        seatSubscription.current_capacity = input.quantity;
+        return json({ id: 'revision-2', quantity: input.quantity, effective_at: now });
+      }
       if (path === '/billing/contracts/contract-1/versions/version-2/activate'
           && req.method() === 'POST') {
         const input = req.postDataJSON();
@@ -236,6 +252,8 @@ export async function installFixtures(page: Page) {
           updated_at: now,
         },
       ]);
+    if (path === '/billing/services/billing-1/seat-subscriptions')
+      return json([seatSubscription]);
     if (path === '/billing/contracts') return json(billing.contracts);
     if (path === '/billing/invoice-issuer-profiles') return json([billing.issuer]);
     if (path === '/billing/invoices') return json(invoices);
@@ -254,6 +272,7 @@ export async function installFixtures(page: Page) {
     calculations,
     payments,
     activations,
+    seatCapacityWrites,
     memberships,
     failNextNativeSave: () => {
       nativeFailures = 1;

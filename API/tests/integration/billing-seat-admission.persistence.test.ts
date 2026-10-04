@@ -2,6 +2,9 @@ import { Prisma, PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { createTestDb } from '../helpers/test-db.js';
+import {
+  changeFixedSeatCapacity, listSeatSubscriptions,
+} from '../../src/services/billing-seat-capacity.service.js';
 
 const enabled = Boolean(process.env.DATABASE_URL);
 let db: NonNullable<Awaited<ReturnType<typeof createTestDb>>>;
@@ -19,7 +22,7 @@ async function addUser(id: string): Promise<void> {
 async function makeSeatSubscription(
   id: string,
   options: { policy: 'AUTOMATIC' | 'FIXED'; scope: 'TEAM' | 'ORGANISATION';
-    quantity?: number; team?: string },
+    quantity?: number; team?: string; timing?: 'FULL_MONTH' | 'PRORATED' },
 ): Promise<void> {
   const service = await prisma.billingService.create({
     data: { identifier: `seat-${id}`, name: id },
@@ -28,7 +31,7 @@ async function makeSeatSubscription(
     serviceId: service.id, key: id, version: 1, name: id, mode: 'CUSTOM',
     collectionMode: 'MANUAL', markupBps: 3000, currency: 'USD',
     monthlyChargeBasis: 'PER_SEAT', seatPolicy: options.policy,
-    seatChargeTiming: 'PRORATED', monthlyAmountMinor: 1000n,
+    seatChargeTiming: options.timing ?? 'PRORATED', monthlyAmountMinor: 1000n,
   } });
   const contract = await prisma.billingOrganisationContract.create({
     data: { orgId, reference: id, name: id },
@@ -46,8 +49,10 @@ async function makeSeatSubscription(
     await tx.billingSeatSubscription.create({ data: {
       id, contractServiceTermId: term.id, serviceId: service.id, tariffId: tariff.id,
       orgId, teamId: options.scope === 'TEAM' ? (options.team ?? teamId) : null,
-      scope: options.scope, seatPolicy: options.policy, seatChargeTiming: 'PRORATED',
+      scope: options.scope, seatPolicy: options.policy,
+      seatChargeTiming: options.timing ?? 'PRORATED',
       unitAmountMinor: 1000n, currency: 'USD', activatedAt: now, baselineCapturedAt: now,
+      commercialEffectiveAt: now,
     } });
     if (options.policy === 'FIXED') {
       await tx.billingFixedSeatCapacityRevision.create({ data: {
@@ -166,5 +171,101 @@ describe.skipIf(!enabled)('authoritative seat admission and evidence', () => {
       release();
       await second.$disconnect();
     }
+  });
+
+  it('keeps captured evidence immutable and closes the old scope on a membership move', async () => {
+    const interval = await prisma.billingSeatMembershipInterval.findFirstOrThrow({
+      where: { seatSubscriptionId: 'seat_auto_org', userId: 'seat_person_one' },
+    });
+    await expect(prisma.billingSeatMembershipInterval.delete({ where: { id: interval.id } }))
+      .rejects.toThrow('Seat membership evidence is immutable');
+    await expect(prisma.billingSeatSubscription.update({
+      where: { id: 'seat_auto_org' }, data: { baselineMemberCount: 999 },
+    })).rejects.toThrow('Captured seat baseline is immutable');
+    await expect(prisma.billingSeatSubscription.update({
+      where: { id: 'seat_auto_org' }, data: { endedAt: new Date('2020-01-01') },
+    })).rejects.toThrow('Seat subscription must end at observed time');
+
+    const newOrg = await prisma.organisation.create({ data: {
+      ownerId, name: 'Other seat org', slug: 'other-seat-org', domain: 'other.seat.example',
+    } });
+    await prisma.orgMember.update({
+      where: { orgId_userId: { orgId, userId: 'seat_person_one' } },
+      data: { orgId: newOrg.id },
+    });
+    expect(await prisma.billingSeatMembershipInterval.count({
+      where: { seatSubscriptionId: 'seat_auto_org', userId: 'seat_person_one', endsAt: null },
+    })).toBe(0);
+
+    await prisma.billingFixedSeatCapacityRevision.create({ data: {
+      seatSubscriptionId: 'seat_fixed_team', quantity: 2, effectiveAt: new Date(),
+    } });
+    await addUser('seat_person_two');
+    await prisma.teamMember.create({ data: {
+      teamId: otherTeamId, userId: 'seat_person_two',
+    } });
+    await prisma.teamMember.update({
+      where: { teamId_userId: { teamId: otherTeamId, userId: 'seat_person_two' } },
+      data: { teamId },
+    });
+    expect(await prisma.billingSeatMembershipInterval.count({ where: {
+      seatSubscriptionId: 'seat_auto_team', userId: 'seat_person_two', endsAt: null,
+    } })).toBe(1);
+    await prisma.teamMember.update({
+      where: { teamId_userId: { teamId, userId: 'seat_person_two' } },
+      data: { teamId: otherTeamId },
+    });
+    expect(await prisma.billingSeatMembershipInterval.count({ where: {
+      seatSubscriptionId: 'seat_auto_team', userId: 'seat_person_two', endsAt: null,
+    } })).toBe(0);
+  });
+
+  it('records a genuine zero-member baseline and schedules full-month reductions', async () => {
+    const emptyTeam = await prisma.team.create({ data: {
+      orgId, name: 'Empty team', slug: 'empty-team',
+    } });
+    await makeSeatSubscription('seat_auto_empty', {
+      policy: 'AUTOMATIC', scope: 'TEAM', team: emptyTeam.id,
+    });
+    expect((await prisma.billingSeatSubscription.findUniqueOrThrow({
+      where: { id: 'seat_auto_empty' },
+    })).baselineMemberCount).toBe(0);
+    expect(await prisma.billingSeatMembershipInterval.count({
+      where: { seatSubscriptionId: 'seat_auto_empty' },
+    })).toBe(0);
+
+    await expect(changeFixedSeatCapacity({
+      subscriptionId: 'seat_fixed_org', quantity: 1, actorEmail: 'admin@seat.example',
+    }, { prisma })).rejects.toThrow('Fixed seat capacity exceeded');
+    const increase = await changeFixedSeatCapacity({
+      subscriptionId: 'seat_fixed_org', quantity: 5, actorEmail: 'admin@seat.example',
+    }, { prisma });
+    expect(increase.quantity).toBe(5);
+    const serviceId = (await prisma.billingSeatSubscription.findUniqueOrThrow({
+      where: { id: 'seat_fixed_org' },
+    })).serviceId;
+    const [summary] = await listSeatSubscriptions(serviceId, { prisma });
+    expect(summary.current_capacity).toBe(5);
+
+    await makeSeatSubscription('seat_fixed_full_month', {
+      policy: 'FIXED', scope: 'TEAM', team: emptyTeam.id,
+      quantity: 5, timing: 'FULL_MONTH',
+    });
+    const now = new Date();
+    const reduced = await changeFixedSeatCapacity({
+      subscriptionId: 'seat_fixed_full_month', quantity: 4,
+      actorEmail: 'admin@seat.example',
+    }, { prisma, now: () => now });
+    expect(reduced.effective_at.slice(0, 10)).toBe(
+      new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1))
+        .toISOString().slice(0, 10),
+    );
+    const endedAt = new Date();
+    await prisma.billingSeatSubscription.update({
+      where: { id: 'seat_auto_empty' }, data: { endedAt },
+    });
+    await expect(prisma.billingSeatSubscription.update({
+      where: { id: 'seat_auto_empty' }, data: { endedAt: null },
+    })).rejects.toThrow('Seat subscription ending is immutable');
   });
 });
