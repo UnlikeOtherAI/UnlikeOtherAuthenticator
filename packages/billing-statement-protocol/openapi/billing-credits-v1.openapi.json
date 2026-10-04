@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "UOA BillingCreditsV1 consumer API",
-    "version": "1.0.0",
+    "version": "1.4.0",
     "description": "Exact customer-facing shared team credits API. UOA returns display-ready values and capabilities; products never calculate balances, conversion, privacy filtering, or authorization."
   },
   "paths": {
@@ -5081,6 +5081,26 @@
                     "type": "null"
                   }
                 ]
+              }
+            }
+          },
+          "billing_status": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "settlement_state",
+              "message"
+            ],
+            "properties": {
+              "settlement_state": {
+                "enum": [
+                  "current",
+                  "pending_reconciliation"
+                ]
+              },
+              "message": {
+                "type": "string",
+                "minLength": 1
               }
             }
           },

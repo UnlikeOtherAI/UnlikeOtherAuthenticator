@@ -223,8 +223,8 @@ describe('public billing consumer action protocol', () => {
 });
 
 describe('public BillingCreditsV1 consumer protocol', () => {
-  it('keeps the coordinated unreleased V1 contract version', () => {
-    expect(BILLING_CREDITS_PROTOCOL_VERSION).toBe('1.0.0');
+  it('keeps the existing reconciliation capability version', () => {
+    expect(BILLING_CREDITS_PROTOCOL_VERSION).toBe('1.4.0');
   });
 
   it('validates shared team credits, system adjustments, and fixed conversion', () => {

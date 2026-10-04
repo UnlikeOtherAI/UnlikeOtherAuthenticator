@@ -4,9 +4,10 @@ import type { BillingControlledByV1 } from './org-billing-types.js';
 import type { BillingCreditAttentionV1, BillingCreditFundingRequestActionV1 } from './credits-attention-types.js';
 
 export const BILLING_CREDITS_SCHEMA_VERSION = 1 as const;
-// BillingCreditsV1 has not been released yet. This remains the coordinated V1
-// contract consumed by UOA and its four launch consumers.
-export const BILLING_CREDITS_PROTOCOL_VERSION = '1.0.0' as const;
+// The existing reconciliation capability remains 1.4.0. Localized presentation
+// is negotiated separately, so upgrading the package cannot remove that contract.
+export const BILLING_CREDITS_PROTOCOL_VERSION = '1.4.0' as const;
+export const BILLING_CREDITS_PROTOCOL_HEADER = 'x-uoa-billing-credits-protocol' as const;
 export const BILLING_CREDITS_SCHEMA_PATH = '/schemas/billing-credits-v1.json' as const;
 export const BILLING_CREDITS_EXAMPLE_PATH = '/schemas/billing-credits-v1.example.json' as const;
 export const BILLING_CREDITS_OPENAPI_PATH = '/schemas/billing-credits-v1.openapi.json' as const;
@@ -123,6 +124,11 @@ type BillingCreditsCommonV1<PendingPayment> = {
     credits_received: BillingCreditAmount;
     label: string;
     description: string;
+  };
+  /** Confirmed balance and entries remain visible while unconfirmed usage is held. */
+  billing_status?: {
+    settlement_state: 'current' | 'pending_reconciliation';
+    message: string;
   };
   /**
    * Present only while the organisation has taken billing over from its teams

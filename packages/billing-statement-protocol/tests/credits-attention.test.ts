@@ -4,6 +4,8 @@ import addFormats from 'ajv-formats';
 import { describe, expect, it } from 'vitest';
 import {
   BILLING_CREDIT_FUNDING_REQUEST_PATH,
+  BILLING_CREDITS_PROTOCOL_HEADER,
+  BILLING_CREDITS_PROTOCOL_VERSION,
   billingCreditFundingRequestV1JsonSchema,
   billingCreditsV1ConformanceFixture,
   billingCreditsV1JsonSchema,
@@ -16,6 +18,19 @@ const validateCredits = ajv.compile(billingCreditsV1JsonSchema);
 const validateRequest = ajv.compile(billingCreditFundingRequestV1JsonSchema);
 
 describe('negotiated billing attention and funding requests', () => {
+  it('preserves the reconciliation capability already consumed by package 1.4', () => {
+    expect(BILLING_CREDITS_PROTOCOL_VERSION).toBe('1.4.0');
+    expect(BILLING_CREDITS_PROTOCOL_HEADER).toBe('x-uoa-billing-credits-protocol');
+    for (const settlement_state of ['current', 'pending_reconciliation']) {
+      expect(validateCredits({ ...billingCreditsV1ConformanceFixture,
+        billing_status: { settlement_state, message: 'Spotřebu ještě ověřujeme.' },
+      }), JSON.stringify(validateCredits.errors)).toBe(true);
+    }
+    expect(validateCredits({ ...billingCreditsV1ConformanceFixture,
+      billing_status: { settlement_state: 'paid', message: 'invalid' },
+    })).toBe(false);
+  });
+
   it('accepts legacy credits and the new safe source facts without recipient disclosure', () => {
     expect(validateCredits(billingCreditsV1ConformanceFixture)).toBe(true);
     const credits = {

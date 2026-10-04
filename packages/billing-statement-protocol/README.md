@@ -145,6 +145,13 @@ major; additive non-breaking package changes use normal semantic versioning.
 
 ## Localized presentation and credit purchase return (1.5.0)
 
+Package 1.5 preserves the optional `billing_status` shape and
+`x-uoa-billing-credits-protocol: 1.4.0` capability already consumed by Nessie.
+Presentation negotiation is independent of that reconciliation capability.
+This additive contract integration changes no reconciliation, tariff, seat or
+storage implementation; the source that owns reconciliation continues to own
+when that optional status is returned.
+
 Consumers opt in with `x-uoa-billing-presentation: 1.5.0` and may select
 `x-uoa-billing-locale: cs|en-US|en-GB|de|es|fr|it`. Requests without presentation
 negotiation retain English display and the original strict redirect envelope.
