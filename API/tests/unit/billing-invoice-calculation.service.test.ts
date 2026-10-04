@@ -84,7 +84,7 @@ describe('contract invoice calculator', () => {
       createdByEmail: null,
       createdAt: now,
       updatedAt: now,
-      lines: [],
+      lines: [{ id: 'line_1', serviceId: 'service_1', amountMinor: 1250n }],
       addonLines: [],
       paymentEvents: [],
     };
@@ -95,6 +95,12 @@ describe('contract invoice calculator', () => {
         findFirst: vi.fn().mockResolvedValueOnce(null).mockResolvedValueOnce({ revision: 3 }),
         create: createInvoice,
       },
+      billingInvoiceCreditSettlementReference: { findMany: vi.fn().mockResolvedValue([{
+        id: 'reference_1', serviceId: 'service_1', settlementId: 'settlement_1',
+        creditsAppliedMicrocredits: 500_000_000n,
+      }]) },
+      billingInvoiceLineFinancialAllocation: { create: vi.fn() },
+      billingInvoiceLineCreditReferenceAllocation: { create: vi.fn() },
       adminAuditLog: { create: vi.fn() },
     };
     const prisma = {
@@ -209,6 +215,13 @@ describe('contract invoice calculator', () => {
     }, { prisma, now: expect.any(Function) });
     expect(data.subtotalMinor).toBe(1250n);
     expect(data.creditsAppliedMinor).toBe(50n);
+    expect(tx.billingInvoiceLineFinancialAllocation.create).toHaveBeenCalledWith({ data:
+      expect.objectContaining({ lineId: 'line_1', subscriptionMinor: 1000n,
+        usageMinor: 250n, invoiceCreditMinor: 50n, dueMinor: 1200n }),
+    });
+    expect(tx.billingInvoiceLineCreditReferenceAllocation.create).toHaveBeenCalledWith({ data:
+      expect.objectContaining({ referenceId: 'reference_1', lineId: 'line_1', amountMinor: 50n }),
+    });
     expect(data.revision).toBe(4);
     expect(tx.$queryRaw).toHaveBeenCalledOnce();
     expect(tx.$queryRaw.mock.calls[0]?.[0]?.sql).toContain('::text AS "locked"');
@@ -265,9 +278,14 @@ describe('contract invoice calculator', () => {
   });
 
   it('stores the frozen per-seat quote as the manual monthly line and excludes prepaid usage', async () => {
-    const createInvoice = vi.fn().mockResolvedValue({ id: 'draft_per_seat' });
+    const createInvoice = vi.fn().mockResolvedValue({ id: 'draft_per_seat',
+      billingMonth: '2026-06', currency: 'USD', calculationDigest: 'a'.repeat(64),
+      lines: [{ id: 'line_1', serviceId: 'service_1', amountMinor: 1500n }] });
     const tx = { $queryRaw: vi.fn().mockResolvedValue([{ locked: '' }]),
       billingInvoice: { findFirst: vi.fn().mockResolvedValue(null), create: createInvoice },
+      billingInvoiceCreditSettlementReference: { findMany: vi.fn().mockResolvedValue([]) },
+      billingInvoiceLineFinancialAllocation: { create: vi.fn() },
+      billingInvoiceLineCreditReferenceAllocation: { create: vi.fn() },
       adminAuditLog: { create: vi.fn() } };
     const prisma = {
       billingOrganisationContract: { findFirst: vi.fn().mockResolvedValue({

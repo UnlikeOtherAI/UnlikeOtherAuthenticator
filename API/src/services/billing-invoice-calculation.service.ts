@@ -12,6 +12,7 @@ import {
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import { collectContractFundingEvidence } from './billing-contract-funding-evidence.service.js';
+import { writeInvoiceFinancialAllocations } from './billing-invoice-financial-allocation.service.js';
 import { fetchLedgerMeteringUsage } from './billing-ledger-collector.service.js';
 import { meteringIsComplete, type FetchMeteringUsage } from './billing-metering.types.js';
 import {
@@ -219,11 +220,17 @@ export async function calculateBillingContractInvoice(
       if (amountMinor < 0n || amountMinor > MAX_INT64) {
         throw new AppError('BAD_REQUEST', 409, 'BILLING_INVOICE_SERVICE_TOTAL_INVALID');
       }
+      const usageMinor = amountMinor - monthlyAmountMinor;
+      if (usageMinor < 0n) {
+        throw new AppError('BAD_REQUEST', 409, 'BILLING_INVOICE_USAGE_TOTAL_INVALID');
+      }
       return {
         serviceId: term.serviceId,
         serviceIdentifier: term.service.identifier,
         serviceName: term.service.name,
         amountMinor,
+        monthlyAmountMinor,
+        usageMinor,
         seatQuote: term.tariff.monthlyChargeBasis === BillingMonthlyChargeBasis.PER_SEAT
           ? monthlyQuote : null,
         credits: funding.credits,
@@ -327,7 +334,19 @@ export async function calculateBillingContractInvoice(
               _count: { select: { creditSettlementRefs: true } },
             },
           });
-          if (existing) return existing;
+          if (existing) {
+            const frozenCount = await tx.billingInvoiceLineFinancialAllocation.count({
+              where: { invoiceId: existing.id },
+            });
+            if (frozenCount === 0) {
+              await writeInvoiceFinancialAllocations(tx, existing, calculated.map((line) => ({
+                serviceId: line.serviceId,
+                subscriptionMinor: line.monthlyAmountMinor,
+                usageMinor: line.usageMinor,
+              })));
+            }
+            return existing;
+          }
           const latest = await tx.billingInvoice.findFirst({
             where: { contractId: contract.id, billingMonth: params.billingMonth },
             orderBy: { revision: 'desc' },
@@ -404,6 +423,11 @@ export async function calculateBillingContractInvoice(
               _count: { select: { creditSettlementRefs: true } },
             },
           });
+          await writeInvoiceFinancialAllocations(tx, invoice, calculated.map((line) => ({
+            serviceId: line.serviceId,
+            subscriptionMinor: line.monthlyAmountMinor,
+            usageMinor: line.usageMinor,
+          })));
           await tx.adminAuditLog.create({
             data: {
               actorEmail: params.actor.email,

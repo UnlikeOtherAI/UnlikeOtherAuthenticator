@@ -88,8 +88,61 @@ describe.skipIf(!process.env.DATABASE_URL)('historical manual monthly invoice', 
     expect(invoice.subtotalMinor).toBe(1300n);
     expect(invoice.creditsAppliedMinor).toBe(0n);
     expect(invoice.lines).toEqual([expect.objectContaining({ serviceId, amountMinor: 1300n })]);
+    expect(await db.prisma.billingInvoiceLineFinancialAllocation.findMany({
+      where: { invoiceId: invoice.id },
+    })).toEqual([expect.objectContaining({ serviceId, subscriptionMinor: 1300n,
+      usageMinor: 0n, invoiceCreditMinor: 0n, totalMinor: 1300n, dueMinor: 1300n })]);
     await expect(calculateBillingContractInvoice({ ...params, billingMonth: '2026-11' }, deps))
       .rejects.toThrow('BILLING_MONTHLY_SOURCE_NOT_EFFECTIVE');
     expect(fetchMetering).toHaveBeenCalledTimes(2);
+  });
+
+  it('freezes two different service liabilities in one draft without repeating a monthly fee', async () => {
+    const service = await db.prisma.billingService.create({ data: {
+      identifier: 'historical-second-product', name: 'Second product',
+    } });
+    const tariff = await db.prisma.billingTariff.create({ data: {
+      serviceId: service.id, key: 'historical-second', version: 1, name: 'Second product',
+      mode: 'CUSTOM', collectionMode: 'MANUAL', markupBps: 3000,
+      currency: 'USD', monthlyAmountMinor: 700n, monthlyChargeBasis: 'FLAT',
+      usagePaymentMode: 'PREPAID',
+    } });
+    const contract = await db.prisma.billingOrganisationContract.create({ data: {
+      orgId, reference: 'two-service-invoice', name: 'Two products', status: 'ACTIVE',
+      activatedAt: new Date('2026-08-01T00:00:00Z'),
+    } });
+    const version = await db.prisma.billingOrganisationContractVersion.create({ data: {
+      contractId: contract.id, version: 1, usageMarkupBps: 3000, currency: 'USD',
+      paymentTermsDays: 30, effectiveFromMonth: '2026-08',
+    } });
+    const original = await db.prisma.billingContractServiceTerm.findFirstOrThrow({
+      where: { serviceId },
+    });
+    await db.prisma.billingContractServiceTerm.createMany({ data: [
+      { contractVersionId: version.id, serviceId, tariffId: original.tariffId,
+        monthlyAmountMinor: 1300n },
+      { contractVersionId: version.id, serviceId: service.id, tariffId: tariff.id,
+        monthlyAmountMinor: 700n },
+    ] });
+    const params = { contractId: contract.id, issuerProfileId, billingMonth: '2026-09',
+      actor: { email: 'operator@example.test' } };
+    const deps = { prisma: db.prisma,
+      fetchMetering: vi.fn().mockImplementation(async (input: { product: string }) => ({
+        ...metering(), product: input.product,
+      })),
+      collectFunding: vi.fn().mockResolvedValue({ credits: [], addons: [] }),
+      now: () => new Date('2026-12-01T00:00:00Z'),
+    };
+    const first = await calculateBillingContractInvoice(params, deps);
+    const replay = await calculateBillingContractInvoice(params, deps);
+    expect(replay.id).toBe(first.id);
+    expect(first.subtotalMinor).toBe(2000n);
+    const allocations = await db.prisma.billingInvoiceLineFinancialAllocation.findMany({
+      where: { invoiceId: first.id }, orderBy: { subscriptionMinor: 'desc' },
+    });
+    expect(allocations.map((line) => [line.subscriptionMinor, line.usageMinor,
+      line.invoiceCreditMinor, line.dueMinor])).toEqual([
+      [1300n, 0n, 0n, 1300n], [700n, 0n, 0n, 700n],
+    ]);
   });
 });
