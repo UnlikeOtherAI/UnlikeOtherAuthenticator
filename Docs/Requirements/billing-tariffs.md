@@ -1016,6 +1016,25 @@ before funding or consent is committed. A policy, catalog, payment method,
 consent, or Stripe binding gap disables the corresponding projected action and
 fails a forged direct request closed.
 
+An active automatic-top-up account with a saved card may replace that card
+through the existing recovery action only when there is no unresolved payment
+attempt. It opens the same Setup Checkout for the currently selected option.
+The saved card and immutable consent revision remain current until a verified
+`setup_intent.succeeded` event passes the exact Checkout, customer, metadata,
+generation, and consent-predecessor checks; canceling or expiring the Checkout
+does not change either. An automatic attempt created while replacement Checkout
+is open remains bound to its original immutable consent revision and payment
+method. Its durable attempt identity permits one Stripe dispatch and subsequent
+recovery uses that same idempotency key; card replacement cannot rebind or
+repeat the charge.
+
+Payment-card expiry is derived from a freshly retrieved, exact customer-bound
+Stripe card's `exp_year` and `exp_month`. The card remains valid through the
+last day of that month in UTC; only an earlier expiry month is `expired`. A
+failed or mismatched Stripe read disables the affected action but never
+classifies the card as expired. The existing credit protocol status field
+carries this projection; no route or protocol shape is added.
+
 When a team already has one pending top-up Checkout, the read projection may
 offer **Continue payment** only for that Checkout's exact active offer after
 rechecking its current Stripe session and the immutable account, team credit

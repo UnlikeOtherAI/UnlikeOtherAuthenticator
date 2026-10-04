@@ -41,15 +41,20 @@ function configuredCatalog(
   );
 }
 
-function paymentMethod(data: BillingCreditProjectionData) {
+function paymentMethod(
+  data: BillingCreditProjectionData,
+  readiness: BillingCreditActionReadiness,
+) {
   const account = data.creditAccount;
   const status = !account.stripePaymentMethodId
     ? ('missing' as const)
+    : readiness.paymentMethodExpired
+      ? ('expired' as const)
     : account.autoTopUpState === BillingCreditAutoTopUpState.REQUIRES_ACTION ||
         account.autoTopUpState === BillingCreditAutoTopUpState.NEEDS_REVIEW
       ? ('requires_action' as const)
       : ('ready' as const);
-  const summary = account.paymentMethodSummary;
+  const summary = readiness.paymentMethodSummary ?? account.paymentMethodSummary;
   if (!summary || typeof summary !== 'object' || Array.isArray(summary)) {
     return {
       status,
@@ -237,7 +242,9 @@ function automaticTopUp(
   const recoverableState =
     account.autoTopUpState === BillingCreditAutoTopUpState.REQUIRES_ACTION ||
     account.autoTopUpState === BillingCreditAutoTopUpState.NEEDS_REVIEW ||
-    account.autoTopUpState === BillingCreditAutoTopUpState.PAUSED;
+    account.autoTopUpState === BillingCreditAutoTopUpState.PAUSED ||
+    (account.autoTopUpState === BillingCreditAutoTopUpState.ACTIVE &&
+      Boolean(account.stripePaymentMethodId));
   const recoverEnabled = Boolean(collectionEnabled && recoverableState && readiness.recoverReady);
   const consentStatus = !account.autoTopUpConsentVersion
     ? ('missing' as const)
@@ -260,7 +267,9 @@ function automaticTopUp(
     charged_this_month: billingCreditsPaymentMoney(charged),
     remaining_monthly_cap:
       cap === null ? null : billingCreditsPaymentMoney(cap > charged ? cap - charged : 0n),
-    payment_method: manager ? paymentMethod(data) : { status: paymentMethod(data).status },
+    payment_method: manager
+      ? paymentMethod(data, readiness)
+      : { status: paymentMethod(data, readiness).status },
     consent: manager
       ? {
           status: consentStatus,
@@ -300,7 +309,10 @@ function automaticTopUp(
       ? {
           id: 'auto_top_up_recover' as const,
           kind: 'hosted_redirect' as const,
-          label: 'Review payment',
+          label:
+            account.autoTopUpState === BillingCreditAutoTopUpState.ACTIVE
+              ? 'Change card'
+              : 'Review payment',
           description: 'Open UOA recovery when a payment requires customer action or review.',
           enabled: recoverEnabled,
           disabled_reason: recoverEnabled
@@ -330,9 +342,14 @@ export function buildManagerCreditActionsProjection(
 
 export function buildMemberCreditActionsProjection(
   data: BillingCreditProjectionData,
+  readiness: BillingCreditActionReadiness,
 ): Pick<BillingCreditsMemberV1, 'funding_policy' | 'automatic_top_up'> {
   return {
     funding_policy: null,
-    automatic_top_up: { payment_method: { status: paymentMethod(data).status } },
+    automatic_top_up: {
+      payment_method: {
+        status: paymentMethod(data, readiness).status,
+      },
+    },
   };
 }

@@ -206,6 +206,37 @@ describe('privacy-safe shared credit projection', () => {
     expect(() => assertBillingCreditsContract(result)).not.toThrow();
   });
 
+  it('uses a fresh Stripe card summary and exposes expiry only when verified', () => {
+    const data = projectionData();
+    const result = buildBillingCreditsProjection({
+      credential,
+      collection,
+      viewer: viewer(true),
+      period,
+      data,
+      now,
+      actionReadiness: {
+        executableCatalogIds: new Set(),
+        paymentMethodReady: false,
+        paymentMethodVerified: true,
+        paymentMethodExpired: true,
+        paymentMethodSummary: { brand: 'Mastercard', last4: '1881' },
+        topUpCheckoutReady: false,
+        resumableTopUpOfferId: null,
+        setupCheckoutReady: false,
+        disableReady: false,
+        recoverReady: true,
+      },
+    });
+
+    expect(result.viewer.role).toBe('billing_manager');
+    if (result.viewer.role !== 'billing_manager') throw new Error('Expected manager view');
+    expect(result.automatic_top_up.payment_method).toEqual({
+      status: 'expired',
+      display: 'Mastercard ending in 1881',
+    });
+  });
+
   it('labels only the exact pending offer as Continue payment for a different manager', () => {
     const data = productionFreshAccountData();
     const resumableOffer = data.policy?.topUpOffers[0];

@@ -302,6 +302,70 @@ describe('UOA credit funding mutation services', () => {
     expect(input).not.toHaveProperty('line_items');
   });
 
+  it('pins active-card replacement to the current immutable consent predecessor', async () => {
+    const state = baseContext({
+      autoTopUpState: BillingCreditAutoTopUpState.ACTIVE,
+      autoTopUpGeneration: 4,
+      autoTopUpConsentRevisionId: 'consent_previous',
+      autoTopUpOptionId: option.id,
+      stripePaymentMethodId: 'pm_previous',
+    });
+    const create = vi.fn().mockImplementation(async ({ data }) => ({
+      ...checkoutRow('setup'),
+      ...data,
+      id: 'checkout_setup_replacement',
+    }));
+    const prisma = {
+      billingCreditSetupCheckout: {
+        findUnique: vi.fn().mockResolvedValue(null),
+        findFirst: vi.fn().mockResolvedValue(null),
+        create,
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      },
+    } as unknown as PrismaClient;
+    state.sessionsCreate.mockImplementation(async (input) => ({
+      id: 'cs_setup_replacement',
+      livemode: false,
+      mode: 'setup',
+      status: 'open',
+      url: 'https://checkout.stripe.com/c/setup/replacement',
+      customer: input.customer,
+      client_reference_id: input.client_reference_id,
+      metadata: input.metadata,
+      expires_at: 1_784_470_800,
+    }));
+
+    await createBillingCreditAutoTopUpSetup(
+      {
+        request: { ...request, optionId: option.id },
+        actorToken: 'actor',
+        credential,
+        endpoint: 'credits_auto_top_up_recover' as never,
+        recovery: true,
+      },
+      {
+        prisma,
+        now: () => now,
+        resolveContext: vi.fn().mockResolvedValue(state.context),
+        resolveOption: vi.fn().mockResolvedValue(selections().option),
+        validateCatalog: vi.fn(),
+      },
+    );
+
+    expect(create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        expectedGeneration: 4,
+        expectedConsentRevisionId: 'consent_previous',
+        optionId: option.id,
+      }),
+    });
+    expect(state.context.creditAccount).toMatchObject({
+      autoTopUpGeneration: 4,
+      autoTopUpConsentRevisionId: 'consent_previous',
+      stripePaymentMethodId: 'pm_previous',
+    });
+  });
+
   it('recovers the exact open team Checkout across a fresh manager actor', async () => {
     const state = baseContext();
     const existing = {

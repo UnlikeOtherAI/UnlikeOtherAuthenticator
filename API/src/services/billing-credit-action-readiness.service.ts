@@ -16,6 +16,9 @@ import { stripeExternalId } from './billing-stripe-webhook-utils.service.js';
 export type BillingCreditActionReadiness = {
   executableCatalogIds: ReadonlySet<string>;
   paymentMethodReady: boolean;
+  paymentMethodVerified?: boolean;
+  paymentMethodExpired?: boolean;
+  paymentMethodSummary?: { brand: string | null; last4: string | null } | null;
   topUpCheckoutReady: boolean;
   resumableTopUpOfferId: string | null;
   setupCheckoutReady: boolean;
@@ -27,6 +30,9 @@ export function unavailableBillingCreditActions(): BillingCreditActionReadiness 
   return {
     executableCatalogIds: new Set(),
     paymentMethodReady: false,
+    paymentMethodVerified: false,
+    paymentMethodExpired: false,
+    paymentMethodSummary: null,
     topUpCheckoutReady: false,
     resumableTopUpOfferId: null,
     setupCheckoutReady: false,
@@ -159,25 +165,59 @@ async function executableCatalogs(
   return catalogs;
 }
 
-async function currentPaymentMethodReady(
+function expiredInUtcMonth(card: Stripe.PaymentMethod.Card, now: Date): boolean {
+  const month = card.exp_month;
+  const year = card.exp_year;
+  if (!Number.isInteger(month) || month < 1 || month > 12 || !Number.isInteger(year)) {
+    return false;
+  }
+  const currentYear = now.getUTCFullYear();
+  const currentMonth = now.getUTCMonth() + 1;
+  return year < currentYear || (year === currentYear && month < currentMonth);
+}
+
+async function currentPaymentMethodEvidence(
   stripe: NonNullable<CreditCollectionContext['stripe']>,
   collection: CreditCollectionContext,
   data: BillingCreditProjectionData,
-): Promise<boolean> {
+  now: Date,
+): Promise<{
+  ready: boolean;
+  verified: boolean;
+  expired: boolean;
+  summary: { brand: string | null; last4: string | null } | null;
+}> {
   const methodId = data.creditAccount.stripePaymentMethodId;
   const customerId = data.creditAccount.customer.stripeCustomerId;
-  if (!methodId || !customerId) return false;
+  if (!methodId || !customerId) {
+    return { ready: false, verified: false, expired: false, summary: null };
+  }
   try {
     const method = await stripe.paymentMethods.retrieve(methodId);
     assertStripeObjectLivemode(method, collection.account.livemode);
-    return (
+    const verified =
       method.id === methodId &&
       method.type === 'card' &&
       Boolean(method.card) &&
-      stripeExternalId(method.customer) === customerId
-    );
+      stripeExternalId(method.customer) === customerId;
+    if (!verified || !method.card) {
+      return { ready: false, verified: false, expired: false, summary: null };
+    }
+    const expired = expiredInUtcMonth(method.card, now);
+    const actionRequired =
+      data.creditAccount.autoTopUpState === BillingCreditAutoTopUpState.REQUIRES_ACTION ||
+      data.creditAccount.autoTopUpState === BillingCreditAutoTopUpState.NEEDS_REVIEW;
+    return {
+      ready: !expired && !actionRequired,
+      verified: true,
+      expired,
+      summary: {
+        brand: typeof method.card.brand === 'string' ? method.card.brand : null,
+        last4: typeof method.card.last4 === 'string' ? method.card.last4 : null,
+      },
+    };
   } catch {
-    return false;
+    return { ready: false, verified: false, expired: false, summary: null };
   }
 }
 
@@ -187,12 +227,19 @@ async function currentRecoveryReady(
   data: BillingCreditProjectionData,
   selectedCatalogReady: boolean,
   returnUrlsReady: boolean,
+  paymentMethodVerified: boolean,
 ): Promise<boolean> {
   const state = data.creditAccount.autoTopUpState;
+  const activeReplacement =
+    state === BillingCreditAutoTopUpState.ACTIVE &&
+    Boolean(data.creditAccount.stripePaymentMethodId) &&
+    data.unresolvedAttempts.length === 0 &&
+    paymentMethodVerified;
   if (
     state !== BillingCreditAutoTopUpState.REQUIRES_ACTION &&
     state !== BillingCreditAutoTopUpState.NEEDS_REVIEW &&
-    state !== BillingCreditAutoTopUpState.PAUSED
+    state !== BillingCreditAutoTopUpState.PAUSED &&
+    !activeReplacement
   )
     return false;
   const attempt = data.unresolvedAttempts.at(0);
@@ -239,6 +286,7 @@ export async function resolveBillingCreditActionReadiness(params: {
   collection: CreditCollectionContext;
   credential: VerifiedBillingAppKey;
   data: BillingCreditProjectionData;
+  now?: Date;
 }): Promise<BillingCreditActionReadiness> {
   const { collection, credential, data } = params;
   const stripe = collection.stripe;
@@ -257,7 +305,12 @@ export async function resolveBillingCreditActionReadiness(params: {
   const pendingTopUp = data.unresolvedTopUpCheckouts.length
     ? await pendingTopUpState(stripe, collection, credential, data)
     : { resumableTopUpOfferId: null, expired: false };
-  const paymentMethodReady = await currentPaymentMethodReady(stripe, collection, data);
+  const paymentMethod = await currentPaymentMethodEvidence(
+    stripe,
+    collection,
+    data,
+    params.now ?? new Date(),
+  );
   const selected = data.policy?.autoTopUpOptions.find(
     (option) => option.id === data.creditAccount.autoTopUpOptionId,
   );
@@ -272,7 +325,10 @@ export async function resolveBillingCreditActionReadiness(params: {
   );
   return {
     executableCatalogIds: catalogs,
-    paymentMethodReady,
+    paymentMethodReady: paymentMethod.ready,
+    paymentMethodVerified: paymentMethod.verified,
+    paymentMethodExpired: paymentMethod.expired,
+    paymentMethodSummary: paymentMethod.summary,
     topUpCheckoutReady:
       returnUrlsReady && (data.unresolvedTopUpCheckouts.length === 0 || pendingTopUp.expired),
     resumableTopUpOfferId: pendingTopUp.resumableTopUpOfferId,
@@ -287,6 +343,7 @@ export async function resolveBillingCreditActionReadiness(params: {
       data,
       selectedCatalogReady,
       returnUrlsReady,
+      paymentMethod.verified,
     ),
   };
 }

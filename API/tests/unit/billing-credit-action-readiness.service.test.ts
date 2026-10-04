@@ -284,6 +284,83 @@ describe('credit funding action readiness', () => {
     expect(result.setupCheckoutReady).toBe(false);
   });
 
+  it('classifies payment-card expiry through the UTC valid-through month and enables replacement', async () => {
+    const client = stripe();
+    const data = projectionData({
+      autoTopUpState: BillingCreditAutoTopUpState.ACTIVE,
+      autoTopUpOptionId: 'option_1',
+      stripePaymentMethodId: 'pm_current',
+    });
+    data.policy.autoTopUpOptions = [{ id: 'option_1', refillOffer: offer }] as never;
+    client.paymentMethods.retrieve.mockResolvedValue({
+      id: 'pm_current',
+      livemode: false,
+      type: 'card',
+      customer: 'cus_1',
+      card: { brand: 'visa', last4: '4242', exp_month: 9, exp_year: 2026 },
+    });
+
+    const expired = await resolveBillingCreditActionReadiness({
+      collection: { account, stripeCollectionEnabled: true, stripe: client as never },
+      credential: credential as never,
+      data: data as never,
+      now: new Date('2026-10-01T00:15:00.000Z'),
+    });
+
+    expect(expired).toMatchObject({
+      paymentMethodReady: false,
+      paymentMethodVerified: true,
+      paymentMethodExpired: true,
+      paymentMethodSummary: { brand: 'visa', last4: '4242' },
+      recoverReady: true,
+    });
+
+    client.paymentMethods.retrieve.mockResolvedValueOnce({
+      id: 'pm_current',
+      livemode: false,
+      type: 'card',
+      customer: 'cus_1',
+      card: { brand: 'mastercard', last4: '1881', exp_month: 10, exp_year: 2026 },
+    });
+    const validThroughCurrentMonth = await resolveBillingCreditActionReadiness({
+      collection: { account, stripeCollectionEnabled: true, stripe: client as never },
+      credential: credential as never,
+      data: data as never,
+      now: new Date('2026-10-31T23:59:59.999Z'),
+    });
+    expect(validThroughCurrentMonth).toMatchObject({
+      paymentMethodReady: true,
+      paymentMethodExpired: false,
+      paymentMethodSummary: { brand: 'mastercard', last4: '1881' },
+      recoverReady: true,
+    });
+  });
+
+  it('does not infer card expiry or offer replacement when the fresh Stripe read fails', async () => {
+    const client = stripe();
+    client.paymentMethods.retrieve.mockRejectedValue(new Error('Stripe unavailable'));
+    const data = projectionData({
+      autoTopUpState: BillingCreditAutoTopUpState.ACTIVE,
+      autoTopUpOptionId: 'option_1',
+      stripePaymentMethodId: 'pm_current',
+    });
+    data.policy.autoTopUpOptions = [{ id: 'option_1', refillOffer: offer }] as never;
+
+    const result = await resolveBillingCreditActionReadiness({
+      collection: { account, stripeCollectionEnabled: true, stripe: client as never },
+      credential: credential as never,
+      data: data as never,
+      now: new Date('2026-10-01T00:15:00.000Z'),
+    });
+
+    expect(result).toMatchObject({
+      paymentMethodReady: false,
+      paymentMethodVerified: false,
+      paymentMethodExpired: false,
+      recoverReady: false,
+    });
+  });
+
   it('resumes only one exactly bound, current open top-up Checkout', async () => {
     const client = stripe();
     client.checkout.sessions.retrieve.mockResolvedValue(openTopUpSession());
