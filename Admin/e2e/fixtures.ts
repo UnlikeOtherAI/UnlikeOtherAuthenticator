@@ -76,6 +76,7 @@ export async function installFixtures(page: Page) {
   const invoices: unknown[] = [billing.invoice];
   const calculations: unknown[] = [];
   const payments: unknown[] = [];
+  const activations: unknown[] = [];
   const memberships: unknown[] = [];
   let paymentFailures = 1;
   const native = structuredClone(nativeApp);
@@ -98,6 +99,24 @@ export async function installFixtures(page: Page) {
       route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
     if (path.startsWith('/lifecycle/')) return lifecycle.handle(route, path);
     if (req.method() !== 'GET') {
+      if (path === '/billing/contracts/contract-1/versions/version-2/activate'
+          && req.method() === 'POST') {
+        const input = req.postDataJSON();
+        activations.push(input);
+        const draft = billing.contracts[0]?.versions[1];
+        if (!draft || input.services?.length !== 1
+            || input.services[0].service_id !== 'billing-1') {
+          unexpected.push('Invalid future contract activation');
+          return json({ error: 'Invalid activation' }, 400);
+        }
+        draft.actions = { activation_state: 'scheduled', activate: false };
+        draft.services = [{ service_id: 'billing-1', service_identifier: 'deepwater',
+          service_name: 'Fixture product', tariff_id: 'future-tariff',
+          monthly_amount_minor: input.services[0].monthly_amount_minor,
+          monthly_price: { amount_minor: input.services[0].monthly_amount_minor,
+            amount: '60', currency: 'USD', display: '$60.00' } }];
+        return json(draft);
+      }
       if (path === '/users/u101/teams' && req.method() === 'POST') {
         const input = req.postDataJSON();
         memberships.push(input);
@@ -234,6 +253,7 @@ export async function installFixtures(page: Page) {
     native,
     calculations,
     payments,
+    activations,
     memberships,
     failNextNativeSave: () => {
       nativeFailures = 1;

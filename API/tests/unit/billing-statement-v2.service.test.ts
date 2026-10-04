@@ -66,6 +66,14 @@ const summary = {
     synced_at: now.toISOString(),
   },
 };
+const effectiveTerm = {
+  tariffId: 'tariff_standard_v4', assignmentId: 'assignment_1',
+  tariff: {
+    id: 'tariff_standard_v4', serviceId: 'service_deepwater', key: 'standard',
+    version: 4, name: 'Standard', mode: 'STANDARD', collectionMode: 'STRIPE',
+    markupBps: 2_000, monthlyAmountMinor: 2000n, currency: 'GBP',
+  },
+};
 
 function line(overrides: Partial<RawMeteringLine> = {}): RawMeteringLine {
   const result: RawMeteringLine = {
@@ -132,12 +140,15 @@ function prisma() {
       findUnique: vi.fn().mockResolvedValue({ name: 'Standard' }),
     },
     billingService: {
+      findUnique: vi.fn().mockResolvedValue({ tariffHistoryFromMonth: '2026-01' }),
       findMany: vi.fn().mockResolvedValue([
         { identifier: 'deepwater', name: 'DeepWater' },
         { identifier: 'nessie', name: 'Nessie' },
         { identifier: 'deeptest', name: 'DeepTest' },
       ]),
     },
+    billingTariffTermEvent: { findFirst: vi.fn().mockResolvedValue(effectiveTerm) },
+    billingOrganisationContractVersion: { findMany: vi.fn().mockResolvedValue([]) },
     billingCommercialAdjustment: {
       findMany: vi.fn().mockResolvedValue([]),
     },

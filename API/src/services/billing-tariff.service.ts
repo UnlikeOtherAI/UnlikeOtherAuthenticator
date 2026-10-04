@@ -1,12 +1,14 @@
 import {
   BillingAssignmentScope,
-  BillingCollectionMode,
-  BillingTariffMode,
+  BillingTariffSource,
   Prisma,
   type PrismaClient,
 } from '@prisma/client';
 
 import { getAdminPrisma } from '../db/prisma.js';
+import { normalizeBillingServiceIdentifier, normalizeTariffInput, type TariffInput } from './billing-tariff-input.service.js';
+export { normalizeBillingServiceIdentifier, normalizeTariffInput, DEFAULT_STANDARD_MARKUP_BPS } from './billing-tariff-input.service.js';
+export type { TariffInput, PublicTariffMode, PublicBillingCollectionMode } from './billing-tariff-input.service.js';
 import { AppError } from '../utils/errors.js';
 import {
   assertContractAssignmentRemovalAllowed,
@@ -18,31 +20,12 @@ import {
   assertTariffAssignmentRemovalAllowed,
 } from './billing-stripe-tariff-guard.service.js';
 import { lockProductTeamPolicyExclusive } from './product-team-policy-lock.service.js';
-
-const IDENTIFIER_PATTERN = /^[a-z0-9][a-z0-9._-]{0,99}$/;
-const TARIFF_KEY_PATTERN = /^[a-z0-9][a-z0-9._-]{0,79}$/;
-const CURRENCY_PATTERN = /^[A-Z]{3}$/;
-const MAX_MARKUP_BPS = 100_000;
-const MAX_INT64 = 9_223_372_036_854_775_807n;
-
-export type PublicTariffMode = 'standard' | 'free' | 'at_cost' | 'custom';
-export type PublicBillingCollectionMode = 'stripe' | 'manual' | 'none';
-
-export type TariffInput = {
-  key: string;
-  name: string;
-  mode: PublicTariffMode;
-  collectionMode: PublicBillingCollectionMode;
-  markupBps: number;
-  monthlyAmountMinor: string;
-  currency: string;
-};
-
-type NormalizedTariffInput = Omit<TariffInput, 'mode' | 'collectionMode' | 'monthlyAmountMinor'> & {
-  mode: BillingTariffMode;
-  collectionMode: BillingCollectionMode;
-  monthlyAmountMinor: bigint;
-};
+import {
+  appendTariffTermEvent,
+  lockTariffHistoryService,
+  nextUtcBillingMonth,
+  utcBillingMonth,
+} from './billing-tariff-history.service.js';
 
 type MutationActor = {
   userId?: string | null;
@@ -51,87 +34,6 @@ type MutationActor = {
 
 function client(deps?: { prisma?: PrismaClient }): PrismaClient {
   return deps?.prisma ?? getAdminPrisma();
-}
-
-export function normalizeBillingServiceIdentifier(value: string): string {
-  const identifier = value.trim().toLowerCase();
-  if (!IDENTIFIER_PATTERN.test(identifier)) {
-    throw new AppError('BAD_REQUEST', 400, 'INVALID_BILLING_SERVICE_IDENTIFIER');
-  }
-  return identifier;
-}
-
-function toDatabaseMode(mode: PublicTariffMode): BillingTariffMode {
-  const mapped = {
-    standard: BillingTariffMode.STANDARD,
-    free: BillingTariffMode.FREE,
-    at_cost: BillingTariffMode.AT_COST,
-    custom: BillingTariffMode.CUSTOM,
-  } as const;
-  return mapped[mode];
-}
-
-function toDatabaseCollectionMode(mode: PublicBillingCollectionMode): BillingCollectionMode {
-  const mapped = {
-    stripe: BillingCollectionMode.STRIPE,
-    manual: BillingCollectionMode.MANUAL,
-    none: BillingCollectionMode.NONE,
-  } as const;
-  return mapped[mode];
-}
-
-export function normalizeTariffInput(input: TariffInput): NormalizedTariffInput {
-  const key = input.key.trim().toLowerCase();
-  const name = input.name.trim();
-  const currency = input.currency.trim().toUpperCase();
-  if (!TARIFF_KEY_PATTERN.test(key) || !name || name.length > 120) {
-    throw new AppError('BAD_REQUEST', 400, 'INVALID_TARIFF_INPUT');
-  }
-  if (
-    !Number.isInteger(input.markupBps) ||
-    input.markupBps < 0 ||
-    input.markupBps > MAX_MARKUP_BPS
-  ) {
-    throw new AppError('BAD_REQUEST', 400, 'INVALID_TARIFF_MARKUP');
-  }
-  if (!CURRENCY_PATTERN.test(currency)) {
-    throw new AppError('BAD_REQUEST', 400, 'INVALID_TARIFF_CURRENCY');
-  }
-
-  let monthlyAmountMinor: bigint;
-  try {
-    monthlyAmountMinor = BigInt(input.monthlyAmountMinor);
-  } catch {
-    throw new AppError('BAD_REQUEST', 400, 'INVALID_MONTHLY_AMOUNT');
-  }
-  if (
-    monthlyAmountMinor < 0n ||
-    monthlyAmountMinor > MAX_INT64 ||
-    !/^(0|[1-9]\d*)$/.test(input.monthlyAmountMinor)
-  ) {
-    throw new AppError('BAD_REQUEST', 400, 'INVALID_MONTHLY_AMOUNT');
-  }
-
-  const mode = toDatabaseMode(input.mode);
-  const collectionMode = toDatabaseCollectionMode(input.collectionMode);
-  if (
-    ((mode === BillingTariffMode.FREE || mode === BillingTariffMode.AT_COST) &&
-      input.markupBps !== 0) ||
-    (mode === BillingTariffMode.FREE &&
-      (monthlyAmountMinor !== 0n || collectionMode !== BillingCollectionMode.NONE))
-  ) {
-    throw new AppError('BAD_REQUEST', 400, 'INVALID_TARIFF_MODE_VALUES');
-  }
-
-  return {
-    key,
-    name,
-    mode,
-    collectionMode,
-    markupBps: input.markupBps,
-    monthlyAmountMinor,
-    currency,
-  };
 }
 
 function auditActor(actor: MutationActor) {
@@ -168,7 +70,7 @@ export async function createBillingService(
         throw new AppError('BAD_REQUEST', 400, 'BILLING_SERVICE_EXISTS');
       }
       const service = await tx.billingService.create({
-        data: { identifier, name },
+        data: { identifier, name, tariffHistoryFromMonth: utcBillingMonth(new Date()) },
       });
       const createdTariff = await tx.billingTariff.create({
         data: {
@@ -178,6 +80,15 @@ export async function createBillingService(
           ...tariff,
           ...auditActor(params.actor),
         },
+      });
+      await appendTariffTermEvent(tx, {
+        serviceId: service.id,
+        source: BillingTariffSource.SERVICE_DEFAULT,
+        scopeKey: service.id,
+        effectiveFromMonth: service.tariffHistoryFromMonth,
+        tariffId: createdTariff.id,
+        reason: 'service-created',
+        actorEmail: params.actor.email,
       });
       await tx.adminAuditLog.create({
         data: {
@@ -224,6 +135,7 @@ export async function createBillingTariffVersion(
           if (!service?.active) {
             throw new AppError('NOT_FOUND', 404, 'BILLING_SERVICE_NOT_FOUND');
           }
+          await lockTariffHistoryService(tx, service.id);
           const latest = await tx.billingTariff.findFirst({
             where: { serviceId: service.id, key: tariff.key },
             orderBy: { version: 'desc' },
@@ -245,6 +157,17 @@ export async function createBillingTariffVersion(
               ...auditActor(params.actor),
             },
           });
+          if (params.setAsDefault) {
+            await appendTariffTermEvent(tx, {
+              serviceId: service.id,
+              source: BillingTariffSource.SERVICE_DEFAULT,
+              scopeKey: service.id,
+              effectiveFromMonth: nextUtcBillingMonth(new Date()),
+              tariffId: created.id,
+              reason: 'default-version-created',
+              actorEmail: params.actor.email,
+            });
+          }
           await tx.adminAuditLog.create({
             data: {
               actorEmail: params.actor.email,
@@ -287,6 +210,7 @@ export async function setDefaultBillingTariff(
           });
           if (!tariff) throw new AppError('NOT_FOUND', 404, 'BILLING_TARIFF_NOT_FOUND');
           if (tariff.isDefault) return tariff;
+          await lockTariffHistoryService(tx, params.serviceId);
           await assertDefaultTariffChangeAllowed(tx, params.serviceId, tariff.id);
           await tx.billingTariff.updateMany({
             where: { serviceId: params.serviceId, isDefault: true },
@@ -295,6 +219,15 @@ export async function setDefaultBillingTariff(
           const updated = await tx.billingTariff.update({
             where: { id: tariff.id },
             data: { isDefault: true },
+          });
+          await appendTariffTermEvent(tx, {
+            serviceId: params.serviceId,
+            source: BillingTariffSource.SERVICE_DEFAULT,
+            scopeKey: params.serviceId,
+            effectiveFromMonth: nextUtcBillingMonth(new Date()),
+            tariffId: tariff.id,
+            reason: 'default-changed',
+            actorEmail: params.actor.email,
           });
           await tx.adminAuditLog.create({
             data: {
@@ -325,6 +258,7 @@ export async function upsertBillingTariffAssignment(
   deps?: { prisma?: PrismaClient },
 ) {
   return client(deps).$transaction(async (tx) => {
+    await lockTariffHistoryService(tx, params.serviceId);
     const [service, tariff, org, team] = await Promise.all([
       tx.billingService.findUnique({
         where: { id: params.serviceId },
@@ -401,6 +335,18 @@ export async function upsertBillingTariffAssignment(
       },
       include: { tariff: true },
     });
+    if (current?.tariffId !== params.tariffId) {
+      await appendTariffTermEvent(tx, {
+        serviceId: params.serviceId,
+        source: params.teamId ? BillingTariffSource.TEAM : BillingTariffSource.ORGANISATION,
+        scopeKey,
+        effectiveFromMonth: nextUtcBillingMonth(new Date()),
+        tariffId: params.tariffId,
+        assignmentId: assignment.id,
+        reason: 'assignment-changed',
+        actorEmail: params.actor.email,
+      });
+    }
     await tx.adminAuditLog.create({
       data: {
         actorEmail: params.actor.email,
@@ -428,6 +374,7 @@ export async function removeBillingTariffAssignment(
   deps?: { prisma?: PrismaClient },
 ): Promise<void> {
   await client(deps).$transaction(async (tx) => {
+    await lockTariffHistoryService(tx, params.serviceId);
     const assignment = await tx.billingTariffAssignment.findFirst({
       where: { id: params.assignmentId, serviceId: params.serviceId },
       select: { id: true, tariffId: true, scope: true, orgId: true, teamId: true },
@@ -438,6 +385,17 @@ export async function removeBillingTariffAssignment(
     await assertContractAssignmentRemovalAllowed(tx, assignment.id);
     await assertTariffAssignmentRemovalAllowed(tx, assignment.id);
     await tx.billingTariffAssignment.delete({ where: { id: assignment.id } });
+    await appendTariffTermEvent(tx, {
+      serviceId: params.serviceId,
+      source: assignment.scope === BillingAssignmentScope.TEAM
+        ? BillingTariffSource.TEAM : BillingTariffSource.ORGANISATION,
+      scopeKey: assignment.teamId
+        ? `${assignment.orgId}:${assignment.teamId}` : assignment.orgId,
+      effectiveFromMonth: nextUtcBillingMonth(new Date()),
+      tariffId: null,
+      reason: 'assignment-removed',
+      actorEmail: params.actor.email,
+    });
     await tx.adminAuditLog.create({
       data: {
         actorEmail: params.actor.email,

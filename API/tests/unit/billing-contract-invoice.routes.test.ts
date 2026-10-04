@@ -199,8 +199,19 @@ describe('contract invoice admin routes', () => {
           {
             ...baseVersion,
             id: 'version_future',
-            version: 4,
+            version: 5,
             effectiveFromMonth: '9999-12',
+          },
+          {
+            ...baseVersion,
+            id: 'version_scheduled',
+            version: 4,
+            effectiveFromMonth: '9999-10',
+            serviceTerms: [
+              { serviceId: 'service_1', tariffId: 'tariff_future',
+                monthlyAmountMinor: 6000n,
+                service: { identifier: 'deepwater', name: 'DeepWater' } },
+            ],
           },
           {
             ...baseVersion,
@@ -278,8 +289,9 @@ describe('contract invoice admin routes', () => {
           ]),
         ),
       ).toEqual({
-        version_future: { activation_state: 'scheduled', activate: false },
-        version_ready: { activation_state: 'ready', activate: true },
+        version_future: { activation_state: 'ready', activate: true },
+        version_scheduled: { activation_state: 'scheduled', activate: false },
+        version_ready: { activation_state: 'superseded', activate: false },
         version_active: { activation_state: 'active', activate: false },
         version_old: { activation_state: 'superseded', activate: false },
       });

@@ -44,7 +44,7 @@ const state = vi.hoisted(() => {
     version: 2,
     usage_markup_bps: 4500,
     usage_markup_percent: '45.00',
-    effective_from_month: '2026-07',
+    effective_from_month: '9999-12',
     services: [],
     actions: { activation_state: 'ready' as const, activate: true },
     created_at: '2026-07-20T00:00:00.000Z',

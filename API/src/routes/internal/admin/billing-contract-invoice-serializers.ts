@@ -71,10 +71,11 @@ function versionActivationState(
   contractTerminated: boolean,
 ): ContractVersionActivationState {
   if ((version.serviceTerms?.length ?? 0) > 0) {
+    if (version.effectiveFromMonth > currentBillingMonth()) return 'scheduled';
     return version.id === currentActive?.id ? 'active' : 'superseded';
   }
   if (contractTerminated) return 'contract_terminated';
-  if (version.effectiveFromMonth > currentBillingMonth()) return 'scheduled';
+  if (version.effectiveFromMonth <= currentBillingMonth()) return 'superseded';
   if (currentActive && version.effectiveFromMonth <= currentActive.effectiveFromMonth) {
     return 'superseded';
   }
@@ -98,6 +99,7 @@ export function serializeBillingContract(contract: {
   const currentActive =
     [...versions]
       .filter((version) => (version.serviceTerms?.length ?? 0) > 0)
+      .filter((version) => version.effectiveFromMonth <= currentBillingMonth())
       .sort(
         (left, right) =>
           right.effectiveFromMonth.localeCompare(left.effectiveFromMonth) ||

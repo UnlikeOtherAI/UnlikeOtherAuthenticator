@@ -333,7 +333,8 @@ describe.skipIf(!databaseTestsEnabled)('organisation billing responsibility pers
     const invoice = { id: close.stripeInvoiceId, livemode: false, status: 'paid' };
     const cycle = await runStripeInvoiceCloseCycle({
       prisma, now: () => new Date('2026-10-04T13:01:00.000Z'),
-      stripe: { invoices: { retrieve: async () => invoice } } as never,
+      stripe: { accounts: { retrieveCurrent: async () => ({ id: 'acct_org_billing' }) },
+        invoices: { retrieve: async () => invoice } } as never,
       quote: async () => ({
         ledgerSnapshotCursor: 'bus_late_july_123456789',
         amountMicroMinor: 130_000_000n,
@@ -402,7 +403,8 @@ describe.skipIf(!databaseTestsEnabled)('organisation billing responsibility pers
     })).rejects.toThrow();
     const later = await runStripeInvoiceCloseCycle({
       prisma, now: () => new Date('2026-10-04T15:00:00.000Z'),
-      stripe: { invoices: { retrieve: async () => invoice } } as never,
+      stripe: { accounts: { retrieveCurrent: async () => ({ id: 'acct_org_billing' }) },
+        invoices: { retrieve: async () => invoice } } as never,
       quote: async (params) => ({
         ledgerSnapshotCursor: 'bus_later_july_123456789',
         amountMicroMinor: params.paidAdjustmentsAmountMinor === 130n ? 70_000_000n : 200_000_000n,

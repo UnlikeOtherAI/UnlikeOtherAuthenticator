@@ -32,9 +32,10 @@ function nextMonth(month: string): string {
 
 function nextEffectiveMonth(contract: BillingContract): string {
   const latest = [...contract.versions].sort((left, right) => right.version - left.version)[0];
-  if (!latest) return currentMonth();
+  if (!latest) return nextMonth(currentMonth());
   const afterLatest = nextMonth(latest.effective_from_month);
-  return afterLatest > currentMonth() ? afterLatest : currentMonth();
+  const next = nextMonth(currentMonth());
+  return afterLatest > next ? afterLatest : next;
 }
 
 function ErrorMessage({ error }: { error: unknown }) {
@@ -125,7 +126,7 @@ export function AddBillingContractVersionDialog({
       usageMarkupBps: 0,
       currency: 'USD',
       paymentTermsDays: 30,
-      effectiveFromMonth: currentMonth(),
+      effectiveFromMonth: nextMonth(currentMonth()),
     },
   });
 
@@ -141,6 +142,12 @@ export function AddBillingContractVersionDialog({
   }, [contract, form]);
 
   async function submit(values: BillingContractVersionFormValues) {
+    if (values.effectiveFromMonth <= currentMonth()) {
+      form.setError('effectiveFromMonth', {
+        type: 'manual', message: 'Choose a future billing month.',
+      });
+      return;
+    }
     try {
       await create.mutateAsync(values);
       onClose();
@@ -186,12 +193,13 @@ export function AddBillingContractVersionDialog({
             label="Effective from"
             error={form.formState.errors.effectiveFromMonth?.message}
           >
-            <TextField {...form.register('effectiveFromMonth')} type="month" />
+            <TextField {...form.register('effectiveFromMonth')}
+              type="month" min={nextMonth(currentMonth())} />
           </FieldShell>
         </div>
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-          Saving creates immutable draft terms. Monthly service prices are frozen when you activate
-          this version.
+          Choose a future billing month. Saving creates draft terms; activation freezes monthly
+          service prices for that month and later months.
         </div>
         <ErrorMessage error={create.error} />
       </form>
@@ -281,6 +289,10 @@ export function ActivateBillingContractVersionDialog({
         <p className="text-sm text-gray-600">
           Set the customer-facing monthly amount for each contracted service. Invoices show only
           these calculated prices; raw token cost and margin stay private inside UOA.
+        </p>
+        <p className="text-sm text-gray-600">
+          These terms start in {version?.effective_from_month ?? 'the chosen future month'}.
+          Current and earlier billing months keep their existing prices.
         </p>
         <div className="divide-y divide-gray-100 rounded-xl border border-gray-200">
           {activeServices.map((service) => {

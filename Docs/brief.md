@@ -2493,6 +2493,13 @@ in [Billing Tariffs and Product Entitlements](./Requirements/billing-tariffs.md)
 That document is incorporated into this build brief by reference and is
 authoritative for the billing tariff control plane.
 
+Commercial tariff selection is resolved for the requested UTC month from
+append-only effective decisions. Administrator changes start next month, while
+unknown legacy intervals are held for reconciliation instead of being priced
+from mutable current pointers. UOA centrally defaults omitted standard markup
+to 30%; existing explicit terms, free, at-cost, and manual contract versions
+retain their agreed values.
+
 Organisation contract invoicing is the manual-collection extension of that
 control plane. A contract pins one organisation-wide usage markup, currency,
 payment terms, service set, and monthly service prices in immutable effective

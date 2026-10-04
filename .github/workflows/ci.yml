@@ -88,3 +88,4 @@ jobs:
         run: pnpm --filter @uoa/api exec vitest run tests/integration
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+          BILLING_FUNDING_DATABASE_TESTS: 'true'

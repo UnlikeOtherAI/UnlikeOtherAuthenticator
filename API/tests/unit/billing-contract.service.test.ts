@@ -10,7 +10,7 @@ function version(values?: Record<string, unknown>) {
     usageMarkupBps: 4000,
     currency: 'USD',
     paymentTermsDays: 30,
-    effectiveFromMonth: '2026-07',
+    effectiveFromMonth: '2026-08',
     createdAt: new Date('2026-07-01T00:00:00.000Z'),
     serviceTerms: [],
     ...values,
@@ -21,6 +21,7 @@ function setup(overrides?: {
   teamOverride?: { id: string } | null;
   checkout?: { id: string } | null;
   subscription?: { id: string } | null;
+  settlement?: { id: string } | null;
   versions?: ReturnType<typeof version>[];
   assignmentDrift?: boolean;
 }) {
@@ -72,6 +73,11 @@ function setup(overrides?: {
     billingStripeSubscription: {
       findFirst: vi.fn().mockResolvedValue(overrides?.subscription ?? null),
     },
+    billingCreditUsageSettlement: {
+      findFirst: vi.fn().mockResolvedValue(overrides?.settlement ?? null),
+    },
+    billingStripeUsageExport: { findFirst: vi.fn().mockResolvedValue(null) },
+    billingInvoice: { findFirst: vi.fn().mockResolvedValue(null) },
     billingTariff: {
       findFirst: vi.fn().mockResolvedValue(null),
       create: vi.fn().mockImplementation(async ({ data }: { data: { serviceId: string } }) => ({
@@ -85,6 +91,7 @@ function setup(overrides?: {
         ...data,
       })),
     },
+    billingTariffTermEvent: { create: vi.fn() },
     adminAuditLog: { create: vi.fn() },
   };
   const prisma = {
@@ -94,7 +101,7 @@ function setup(overrides?: {
 }
 
 describe('organisation contract activation', () => {
-  it('atomically projects one immutable custom/manual tariff and org assignment per service', async () => {
+  it('records future custom/manual terms without changing the live assignment', async () => {
     const { tx, prisma } = setup();
 
     await activateBillingContractVersion(
@@ -122,11 +129,10 @@ describe('organisation contract activation', () => {
         isDefault: false,
       }),
     });
-    expect(tx.billingTariffAssignment.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        create: expect.objectContaining({ orgId: 'org_1', teamId: null, scopeKey: 'org_1' }),
-      }),
-    );
+    expect(tx.billingTariffAssignment.upsert).not.toHaveBeenCalled();
+    expect(tx.billingContractServiceTerm.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ tariffAssignmentId: null }),
+    });
     expect(tx.billingOrganisationContract.update).toHaveBeenCalledWith({
       where: { id: 'contract_1' },
       data: { status: 'ACTIVE', activatedAt: new Date('2026-07-20T00:00:00.000Z') },
@@ -147,7 +153,7 @@ describe('organisation contract activation', () => {
           ],
           actor: { email: 'admin@example.com' },
         },
-        { prisma: prisma as never },
+        { prisma: prisma as never, now: () => new Date('2026-07-20T00:00:00.000Z') },
       ),
     ).rejects.toThrow('BILLING_CONTRACT_TEAM_OVERRIDE_EXISTS');
     expect(tx.billingTariff.create).not.toHaveBeenCalled();
@@ -171,8 +177,8 @@ describe('organisation contract activation', () => {
       ),
     ).rejects.toThrow('BILLING_CONTRACT_STRIPE_CONFLICT');
 
-    expect(tx.$queryRaw).toHaveBeenCalledTimes(2);
-    for (const [query] of tx.$queryRaw.mock.calls) {
+    expect(tx.$queryRaw).toHaveBeenCalledTimes(4);
+    for (const [query] of tx.$queryRaw.mock.calls.slice(0, 2)) {
       expect(query.sql).toContain('::text AS "locked"');
     }
     expect(tx.billingStripeCheckoutSession.findFirst).toHaveBeenCalledWith({
@@ -189,13 +195,12 @@ describe('organisation contract activation', () => {
     expect(tx.billingTariff.create).not.toHaveBeenCalled();
   });
 
-  it('does not project a future-effective version early', async () => {
+  it('accepts a future-effective version without projecting its assignment early', async () => {
     const { tx, prisma } = setup({
       versions: [version({ effectiveFromMonth: '2026-08' })],
     });
 
-    await expect(
-      activateBillingContractVersion(
+    await activateBillingContractVersion(
         {
           contractId: 'contract_1',
           contractVersionId: 'version_1',
@@ -203,13 +208,29 @@ describe('organisation contract activation', () => {
           actor: { email: 'admin@example.com' },
         },
         { prisma: prisma as never, now: () => new Date('2026-07-31T23:59:59.999Z') },
-      ),
-    ).rejects.toThrow('BILLING_CONTRACT_VERSION_NOT_EFFECTIVE');
-    expect(tx.billingTariff.create).not.toHaveBeenCalled();
+      );
+    expect(tx.billingTariff.create).toHaveBeenCalledOnce();
     expect(tx.billingTariffAssignment.upsert).not.toHaveBeenCalled();
   });
 
-  it('removes a superseded live assignment when the next complete version drops a service', async () => {
+  it('holds past and current terms even when no financial row has been recorded yet', async () => {
+    const past = setup({ versions: [version({ effectiveFromMonth: '2026-07' })] });
+    await expect(activateBillingContractVersion({
+      contractId: 'contract_1', contractVersionId: 'version_1',
+      services: [{ serviceId: 'service_1', monthlyAmountMinor: '5000' }],
+      actor: { email: 'admin@example.com' },
+    }, { prisma: past.prisma as never, now: () => new Date('2026-08-01T00:00:00Z') }))
+      .rejects.toThrow('BILLING_CONTRACT_RETROACTIVE_TERMS_RECONCILIATION_REQUIRED');
+    const frozen = setup({ versions: [version({ effectiveFromMonth: '2026-07' })] });
+    await expect(activateBillingContractVersion({
+      contractId: 'contract_1', contractVersionId: 'version_1',
+      services: [{ serviceId: 'service_1', monthlyAmountMinor: '5000' }],
+      actor: { email: 'admin@example.com' },
+    }, { prisma: frozen.prisma as never, now: () => new Date('2026-07-20T00:00:00Z') }))
+      .rejects.toThrow('BILLING_CONTRACT_RETROACTIVE_TERMS_RECONCILIATION_REQUIRED');
+  });
+
+  it('keeps a legacy live assignment until the future version takes effect', async () => {
     const oldTariff = {
       mode: BillingTariffMode.CUSTOM,
       collectionMode: BillingCollectionMode.MANUAL,
@@ -226,8 +247,8 @@ describe('organisation contract activation', () => {
     }));
     const { tx, prisma } = setup({
       versions: [
-        version({ id: 'version_2', version: 2, effectiveFromMonth: '2026-08' }),
-        version({ serviceTerms: oldTerms }),
+        version({ id: 'version_2', version: 2, effectiveFromMonth: '2026-09' }),
+        version({ effectiveFromMonth: '2026-07', serviceTerms: oldTerms }),
       ],
     });
 
@@ -241,9 +262,11 @@ describe('organisation contract activation', () => {
       { prisma: prisma as never, now: () => new Date('2026-08-01T00:00:00.000Z') },
     );
 
-    expect(tx.billingTariffAssignment.delete).toHaveBeenCalledOnce();
-    expect(tx.billingTariffAssignment.delete).toHaveBeenCalledWith({
-      where: { id: 'assignment_service_2' },
+    expect(tx.billingTariffAssignment.delete).not.toHaveBeenCalled();
+    expect(tx.billingTariffTermEvent.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        serviceId: 'service_2', effectiveFromMonth: '2026-09', tariffId: null,
+      }),
     });
   });
 
@@ -264,8 +287,8 @@ describe('organisation contract activation', () => {
     const { tx, prisma } = setup({
       assignmentDrift: true,
       versions: [
-        version({ id: 'version_2', version: 2, effectiveFromMonth: '2026-08' }),
-        version({ serviceTerms: [oldTerm] }),
+        version({ id: 'version_2', version: 2, effectiveFromMonth: '2026-09' }),
+        version({ effectiveFromMonth: '2026-07', serviceTerms: [oldTerm] }),
       ],
     });
 

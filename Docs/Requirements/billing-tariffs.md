@@ -33,6 +33,54 @@ markup. The prefill is prospective; stored versions and negotiated custom or
 at-cost terms are never rewritten by that UI default. Stripe collection stays
 an explicit choice.
 
+Commercial selection now has an append-only monthly history as well as the
+operator's current default/assignment pointers. A new service's initial default
+applies from its creation UTC month. Later default and organisation/team
+assignment changes take effect on the first day of the next UTC month; a
+same-month edit to a scheduled change appends another decision, with the latest
+decision before that month governing it. Removing an assignment appends an
+explicit removal so the next lower-precedence term applies. UOA resolves the
+requested billing month before rating credits or a customer statement; a
+read cannot establish that month's terms. Stripe subscriptions continue to use
+their checkout-pinned tariff. Activated manual contract service terms are
+resolved by their immutable contract version's explicit effective month for
+credit and statement rating as well as manual invoices. Competing contracts
+claiming one service/month are held for reconciliation. New manual contract
+versions may only be activated for a future UTC billing month. Activation
+records their immutable terms without moving the live assignment, so already
+dispatched but not yet settled usage in the current month keeps its price.
+Legacy activated versions retain their original effective months and terms.
+For a terminated manual contract, its explicit terms remain authoritative for
+whole UTC months before `terminated_at`. If termination is exactly at a UTC
+month start, that month uses the next evidenced ordinary term. A termination
+within a month cannot be split from monthly Ledger usage, so that month is
+held as `BILLING_CONTRACT_TERMINATION_MONTH_RECONCILIATION_REQUIRED`. Later
+months must not inherit a stale assignment to the terminated contract tariff:
+they use a separately evidenced effective term or remain held.
+
+The migration starts legacy history only at a month for which the current
+pointer can be supported by the service creation, assignment update, and
+administrator audit timestamps. A later tariff version moves that boundary
+forward; multiple versions without a pricing audit cannot prove the old
+default and remain held until a month after migration. It retains existing
+tariffs unchanged. Older
+months without reliable evidence return
+`BILLING_TARIFF_HISTORY_RECONCILIATION_REQUIRED` and require an audited
+operator reconciliation; UOA must not infer their price from today's pointer.
+Reconciliation needs the executed agreement and activation/termination dates
+(if contractual), the contemporaneous tariff or assignment change and its
+administrator audit record, and the exact organisation, team, service, and
+month in Ledger. The operator must compare existing credits, Stripe exports,
+and issued invoices before recording a new append-only effective decision;
+settled rows require an explicit adjustment rather than a silent rerating.
+No operator endpoint exists yet, so an interval lacking this evidence stays
+held. A current pointer or the first statement read is not evidence of an
+earlier price.
+For a `standard` tariff, omitting `markup_bps` in the administrator API uses
+3,000 basis points centrally. `custom` requires an explicit value; `free` and
+`at_cost` default to zero. Provider cost is reported separately from the
+customer rated charge, so free rated base, markup, and total are all zero.
+
 ## Paid usage completeness and settlement
 
 Ledger supplies immutable provider cost and attribution, including an explicit
@@ -1180,3 +1228,8 @@ research units, raw provider cost, cost-token equivalents, tariff markup, or
 the margin calculation. Even operator-created descriptions must not encode
 those prohibited facts. Product applications receive only UOA's display-ready
 invoice view model and never reproduce the calculator.
+
+Stripe invoice-close catch-up verifies the configured Stripe account identifier
+against the immutable account binding before reading or advancing any invoice.
+Changing the configured Stripe account holds prior-account liabilities for
+reconciliation; matching test/live mode alone is insufficient authority.

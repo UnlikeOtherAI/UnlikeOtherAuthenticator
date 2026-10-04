@@ -87,9 +87,10 @@ async function seed(prisma: PrismaClient): Promise<void> {
         ('tm_credit_settlement_second', ${ids.team}, ${ids.second}, 'member', 'ACTIVE', CURRENT_TIMESTAMP)
     `);
     await tx.$executeRaw(Prisma.sql`
-      INSERT INTO "billing_services" ("id", "identifier", "name", "updated_at") VALUES
-        (${ids.deepwater}, 'deepwater', 'DeepWater', CURRENT_TIMESTAMP),
-        (${ids.nessie}, 'nessie', 'Nessie', CURRENT_TIMESTAMP)
+      INSERT INTO "billing_services"
+        ("id", "identifier", "name", "tariff_history_from_month", "updated_at") VALUES
+        (${ids.deepwater}, 'deepwater', 'DeepWater', '2026-07', CURRENT_TIMESTAMP),
+        (${ids.nessie}, 'nessie', 'Nessie', '2026-07', CURRENT_TIMESTAMP)
     `);
     await tx.$executeRaw(Prisma.sql`
       INSERT INTO "billing_tariffs" (
@@ -100,6 +101,15 @@ async function seed(prisma: PrismaClient): Promise<void> {
          'STANDARD', 'NONE', 0, 'USD', true),
         (${ids.nessieTariff}, ${ids.nessie}, 'standard', 1, 'Nessie standard',
          'STANDARD', 'NONE', 0, 'USD', true)
+    `);
+    await tx.$executeRaw(Prisma.sql`
+      INSERT INTO "billing_tariff_term_events"
+        ("id", "service_id", "source", "scope_key", "effective_from_month", "tariff_id", "reason")
+      VALUES
+        ('term_credit_deepwater', ${ids.deepwater}, 'SERVICE_DEFAULT', ${ids.deepwater},
+          '2026-07', ${ids.deepwaterTariff}, 'test-fixture'),
+        ('term_credit_nessie', ${ids.nessie}, 'SERVICE_DEFAULT', ${ids.nessie},
+          '2026-07', ${ids.nessieTariff}, 'test-fixture')
     `);
     await tx.$executeRaw(Prisma.sql`
       INSERT INTO "billing_app_keys" (
@@ -724,6 +734,11 @@ describe.skipIf(!databaseTestsEnabled)('credit settlement persistence', () => {
         serviceId: ids.deepwater, tariffId: 'tariff_credit_settlement_org_30',
         orgId: ids.org, teamId: null, scope: 'ORGANISATION', scopeKey: ids.org,
       },
+    });
+    await handle.prisma.billingTariffTermEvent.create({
+      data: { serviceId: ids.deepwater, source: 'ORGANISATION', scopeKey: ids.org,
+        effectiveFromMonth: '2026-07', tariffId: 'tariff_credit_settlement_org_30',
+        reason: 'test-fixture' },
     });
     const first = portfolio('mup_org_team_a_123456789012345678901234',
       '2026-07-21T13:00:00.000Z', [line('deepwater', ids.owner, '1')]);
