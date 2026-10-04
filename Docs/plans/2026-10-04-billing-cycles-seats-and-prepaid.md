@@ -89,6 +89,12 @@ be reviewed before implementation and covered by revocation/restart tests.
 
 ## Monthly cycles and invoices
 
+Privileged seat functions pin `pg_catalog`, their owning schema and `pg_temp`
+in that order. Every replacement must restore that setting and the revoked
+public execution privilege; PostgreSQL clears omitted function settings on
+replacement. Database regressions check the deployed settings and temporary
+table shadowing, alongside the membership and invitation races.
+
 UOA supplies a paginated, manager-authorized cycle list and exact-scope cycle
 detail. The public protocol publishes validated DTOs, fixed actions and synthetic
 fixtures. Each cycle identifies its UTC month, payer scope, products, state,
