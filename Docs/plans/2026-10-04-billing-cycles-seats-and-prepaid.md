@@ -201,8 +201,11 @@ Each accepted prepaid top-up or automatic recharge creates one immutable
 payment-invoice source in the same transaction as its credit entry. The source
 is keyed by Stripe account, live mode and PaymentIntent, and its charge month
 comes from Stripe's signed payment-success event. Document issuance can remain
-pending when issuer, buyer, tax or PDF evidence is unavailable; a pending charge
-is visible as pending, with no invented invoice number, tax or download. Prepaid
+pending when issuer, buyer, tax or PDF evidence is unavailable; the customer
+reader also verifies an automatic recharge's frozen attempt currency against
+the payment source and actual credit entry before showing it.
+An accepted charge remains visible as pending, with no invented invoice number,
+tax or download. Prepaid
 credit consumption never produces a second demand for payment.
 The Stripe billing scheduler retries pending and held payment documents. It
 first checks whether the exact PaymentIntent paid an existing Stripe invoice;

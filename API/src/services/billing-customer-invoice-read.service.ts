@@ -129,7 +129,7 @@ export async function listCustomerInvoices(
         ]),
       ] }] : []),
     ],
-  }, include: { creditEntry: true },
+  }, include: { creditEntry: true, autoAttempt: { select: { id: true, currency: true } } },
   orderBy: [{ paidAt: 'desc' }, { id: 'desc' }], take: limit + 1 });
   const changes = await prepaidAdjustments(prisma, prepaid);
   const results: Array<{ key: Cursor; summary: BillingCustomerInvoiceSummaryV1 }> = [
@@ -172,7 +172,7 @@ async function readCustomerInvoice(
     id: source.id, orgId: context.request.organisationId,
     serviceId: context.credential.service.id,
     OR: [{ teamId: context.request.teamId }, { teamId: null }],
-  }, include: { creditEntry: true } });
+  }, include: { creditEntry: true, autoAttempt: { select: { id: true, currency: true } } } });
   if (!row) notFound();
   if (row.teamId === null) {
     await authorizeBillingCycle({ ...context, payerScope: BillingAssignmentScope.ORGANISATION },
