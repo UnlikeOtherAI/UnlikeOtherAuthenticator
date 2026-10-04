@@ -8,6 +8,7 @@ import { registerInternalAdminBanRoutes } from './bans.js';
 import { registerInternalAdminBillingStripeUsageRoute } from './billing-stripe-usage.js';
 import { registerInternalAdminBillingContractInvoiceRoutes } from './billing-contract-invoices.js';
 import { registerInternalAdminBillingCreditInvoiceTaxPolicyRoutes } from './billing-credit-invoice-tax-policies.js';
+import { registerInternalAdminPaidUsageExceptionRoutes } from './billing-paid-usage-exceptions.js';
 import { registerInternalAdminBillingRoutes } from './billing.js';
 import { registerInternalAdminBillingSeatCapacityRoutes } from './billing-seat-capacity.js';
 import { registerInternalAdminLedgerRuntimeKeyRoutes } from './billing-ledger-runtime-keys.js';
@@ -40,6 +41,7 @@ export function registerInternalAdminRoutes(app: FastifyInstance): void {
   registerInternalAdminLedgerRuntimeKeyRoutes(app);
   registerInternalAdminBillingContractInvoiceRoutes(app);
   registerInternalAdminBillingCreditInvoiceTaxPolicyRoutes(app);
+  registerInternalAdminPaidUsageExceptionRoutes(app);
   registerInternalAdminBillingStripeUsageRoute(app);
   registerInternalAdminConfidentialDelegationRoutes(app);
   registerInternalAdminApiKeyRoutes(app);

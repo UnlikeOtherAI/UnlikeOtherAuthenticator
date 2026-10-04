@@ -19,6 +19,40 @@ const tariffBody = {
 
 export const billingEndpoints: EndpointSchema[] = [
   {
+    method: 'POST', path: '/billing/v1/ledger/reservations/:dispatchId/exception',
+    description: 'Record one selected immutable over-bound paid receipt as a held operator exception, without releasing the financial reservation.',
+    auth: 'Existing exact-product Ledger RuntimeKey bearer',
+    body: { receipt_id: 'selected immutable Ledger receipt ID',
+      raw_cost_actual: 'observed provider cost decimal, maximum 18 places',
+      currency: 'USD', evidence_digest: 'SHA-256 of frozen dispatch/receipt/cost/bound/context tuple',
+      source: 'ledger_selected_provider_receipt' },
+    response: { 200: 'HELD_OPERATOR_RECONCILIATION or idempotently replayed WRITTEN_OFF decision',
+      409: 'Missing frozen bound, mismatched evidence, stale/rebound receipt or ineligible dispatch' },
+  },
+  {
+    method: 'GET', path: '/billing/v1/ledger/reservations/:dispatchId/exception',
+    description: 'Read the exact operator decision for one product-bound Ledger dispatch before Ledger marks it settled.',
+    auth: 'Original exact-product Ledger RuntimeKey bearer',
+    response: { 200: 'HELD_OPERATOR_RECONCILIATION or WRITTEN_OFF with gross, collectible and waived microcredits',
+      404: 'No exception for this product-bound dispatch' },
+  },
+  {
+    method: 'GET', path: '/internal/admin/billing/paid-usage-exceptions',
+    description: 'Show the oldest 100 held selected receipts with frozen bounds and maximum original credit holds for platform reconciliation.',
+    auth: adminAuth,
+    response: { 200: '{ exceptions: private held receipt facts[], has_more }' },
+  },
+  {
+    method: 'POST', path: '/internal/admin/billing/paid-usage-exceptions/:dispatchId/write-off',
+    description: 'A recently authenticated platform superuser caps customer collection at the original hold, books gross rated usage and explicitly waives the excess once.',
+    auth: `${adminAuth}; access token iat within five minutes, live user epoch and role rechecked under row locks`,
+    body: { evidence_digest: 'exact held Ledger evidence SHA-256',
+      idempotency_key: 'lowercase 64-hex key stable across retries',
+      reason: 'operator explanation, 12–500 characters' },
+    response: { 200: 'WRITTEN_OFF with gross_rated_microcredits, collectible_microcredits and waived_microcredits',
+      409: 'Conflicting receipt, replay key or financial state' },
+  },
+  {
     method: 'GET', path: '/schemas/billing-customer-invoices-v1.json', auth: 'public',
     description: 'Strict customer-safe actual-charge invoice list, detail and download schema.',
     response: { 200: 'BillingCustomerInvoicesV1 Draft 2020-12 JSON Schema' },

@@ -29,7 +29,7 @@ export function maximumRatedMicrocredits(raw: Prisma.Decimal, markupBps: number)
 export async function recordPaidUsageLiability(
   tx: Prisma.TransactionClient,
   params: { dispatchId: string; receiptId: string; actual: Prisma.Decimal;
-    creditAccountId?: string },
+    creditAccountId?: string; operatorWaiver?: boolean },
 ) {
   const hold = await tx.billingCreditBudgetDispatch.findUnique({
     where: { dispatchId: params.dispatchId },
@@ -78,7 +78,8 @@ export async function recordPaidUsageLiability(
   const targetMicro = roundedCumulative(legacyQuanta + newQuanta);
   const alreadyPaid = legacyPaid + oldMicro;
   const deltaMicro = targetMicro > alreadyPaid ? targetMicro - alreadyPaid : 0n;
-  if (hold.reservedMicrocredits !== null && deltaMicro > hold.reservedMicrocredits) {
+  if (!params.operatorWaiver && hold.reservedMicrocredits !== null
+    && deltaMicro > hold.reservedMicrocredits) {
     throw new AppError('BAD_REQUEST', 409, 'PAID_RECEIPT_EXCEEDS_BOUND');
   }
   await tx.billingPaidRatingBucket.upsert({ where: { ratingScopeKey },

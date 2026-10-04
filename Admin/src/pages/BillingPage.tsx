@@ -19,6 +19,7 @@ import { BillingServicePanel } from '../features/admin/BillingServicePanel';
 import { BillingTariffDialog } from '../features/admin/BillingTariffDialog';
 import { BillingContractsPanel } from '../features/admin/BillingContractsPanel';
 import { BillingCreditInvoiceTaxPolicyPanel } from '../features/admin/BillingCreditInvoiceTaxPolicyPanel';
+import { BillingPaidUsageExceptionsPanel } from '../features/admin/BillingPaidUsageExceptionsPanel';
 import type { CreatedBillingAppKey } from '../schemas/billing';
 
 export function BillingPage() {
@@ -38,7 +39,8 @@ export function BillingPage() {
   const [appKeyOpen, setAppKeyOpen] = useState(false);
   const [adjustmentOpen, setAdjustmentOpen] = useState(false);
   const [createdKey, setCreatedKey] = useState<CreatedBillingAppKey | null>(null);
-  const section = params.get('section') === 'contracts' ? 'contracts' : 'products';
+  const section = params.get('section') === 'contracts' ? 'contracts'
+    : params.get('section') === 'exceptions' ? 'exceptions' : 'products';
   const selectedService = useMemo(
     () => services.find((service) => service.id === selectedServiceId) ?? null,
     [selectedServiceId, services],
@@ -62,6 +64,7 @@ export function BillingPage() {
         options={[
           { label: 'Product billing', value: 'products' },
           { label: 'Contracts & invoices', value: 'contracts' },
+          { label: 'Usage exceptions', value: 'exceptions' },
         ]}
       />
 
@@ -164,7 +167,7 @@ export function BillingPage() {
             </div>
           ) : null}
         </>
-      ) : (
+      ) : section === 'contracts' ? (
         <div className="space-y-4">
           <BillingContractsPanel
             services={services}
@@ -173,6 +176,8 @@ export function BillingPage() {
           />
           <BillingCreditInvoiceTaxPolicyPanel />
         </div>
+      ) : (
+        <BillingPaidUsageExceptionsPanel />
       )}
 
       <BillingServiceDialog open={createServiceOpen} onClose={() => setCreateServiceOpen(false)} />
