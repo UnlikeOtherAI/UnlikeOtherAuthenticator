@@ -395,12 +395,12 @@ export async function revokeJobComputeRenewal(
 }
 
 export async function revokeJobComputeRenewalFromOrigin(
-  params: { runtimeSecret: string; secret: string; grantId: string;
+  params: { runtimeSecret: string; grantId: string;
     issueKey: string; identity: JobComputeIdentity },
   deps: { prisma?: PrismaClient; now?: Date } = {},
 ) {
   validIdentity(params.identity);
-  if (!SECRET.test(params.secret) || !HEX.test(params.issueKey)) deny();
+  if (!HEX.test(params.issueKey)) deny();
   const db = deps.prisma ?? getAdminPrisma();
   const key = await verifyLedgerRuntimeKey(params.runtimeSecret, { prisma: db });
   const now = deps.now ?? new Date();
@@ -412,7 +412,6 @@ export async function revokeJobComputeRenewalFromOrigin(
     });
     if (!row || row.originRuntimeKeyId !== key.id || row.issueKey !== params.issueKey
       || row.identityKey !== immutableKey(params.identity)
-      || row.secretDigest !== hash(params.secret)
       || !identityMatches(row, params.identity)) deny();
     if (!row.revokedAt) await tx.billingJobComputeRenewal.update({
       where: { id: row.id }, data: { revokedAt: now },

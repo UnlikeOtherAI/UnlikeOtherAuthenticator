@@ -261,11 +261,15 @@ describe.skipIf(!enabled)('finite job-compute grant in PostgreSQL', () => {
       where: { issueKey: input.issueKey },
     });
     await expect(revokeJobComputeRenewalFromOrigin({ runtimeSecret,
-      secret: input.secret, issueKey: input.issueKey, grantId: row.id,
+      issueKey: input.issueKey, grantId: row.id,
       identity: { ...identity, ledgerJobId: 'wrong' } },
     { prisma: db })).rejects.toThrow('JOB_COMPUTE_RENEWAL_DENIED');
     await expect(revokeJobComputeRenewalFromOrigin({ runtimeSecret,
-      secret: input.secret, issueKey: input.issueKey, grantId: row.id,
+      issueKey: 'f'.repeat(64), grantId: row.id,
+      identity: { ...identity, ledgerJobId: input.ledgerJobId } },
+    { prisma: db })).rejects.toThrow('JOB_COMPUTE_RENEWAL_DENIED');
+    await expect(revokeJobComputeRenewalFromOrigin({ runtimeSecret,
+      issueKey: input.issueKey, grantId: row.id,
       identity: { ...identity, ledgerJobId: input.ledgerJobId } },
     { prisma: db })).resolves.toEqual({ revoked: true });
     expect((await db.billingJobComputeRenewal.findUniqueOrThrow({

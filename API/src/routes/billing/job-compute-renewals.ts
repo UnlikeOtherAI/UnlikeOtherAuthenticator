@@ -20,6 +20,7 @@ const Issue = Identity.extend({
   issue_key: z.string().regex(/^[a-f0-9]{64}$/),
   secret: z.string().regex(/^uoa_job_[A-Za-z0-9_-]{43}$/),
 }).strict();
+const OriginRevoke = Identity.extend({ issue_key: z.string().regex(/^[a-f0-9]{64}$/) }).strict();
 const Recipient = Identity.extend({
   secret: z.string().regex(/^uoa_job_[A-Za-z0-9_-]{43}$/),
 }).strict();
@@ -60,11 +61,11 @@ export function registerJobComputeRenewalRoutes(app: FastifyInstance): void {
     return result;
   });
   app.post('/billing/v1/ledger/job-compute-renewals/:grantId/revoke', async (request, reply) => {
-    const body = Issue.parse(request.body);
+    const body = OriginRevoke.parse(request.body);
     const { grantId } = Params.parse(request.params);
     const result = await revokeJobComputeRenewalFromOrigin({
       runtimeSecret: bearer(request), grantId, issueKey: body.issue_key,
-      secret: body.secret, identity: identity(body),
+      identity: identity(body),
     });
     reply.header('Cache-Control', 'no-store');
     return result;
