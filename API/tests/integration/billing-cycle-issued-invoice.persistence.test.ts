@@ -18,6 +18,7 @@ import {
 import type { BillingInvoicePdfStorage } from '../../src/services/billing-invoice-storage.service.js';
 import { issueBillingInvoice, voidBillingInvoice } from '../../src/services/billing-invoice-lifecycle.service.js';
 import { createTestDb } from '../helpers/test-db.js';
+import { exportBillingConformanceFixture } from '../helpers/billing-conformance-export.js';
 
 vi.mock('../../src/services/billing-actor.service.js', () => ({
   verifyBillingActor: vi.fn().mockResolvedValue({}),
@@ -74,7 +75,8 @@ describe.skipIf(!enabled)('issued manual invoice cycle persistence', () => {
     await db.prisma.orgMember.create({ data: { orgId, userId: ownerId, role: 'owner' } });
     await db.prisma.teamMember.create({ data: { teamId, userId: ownerId, teamRole: 'owner' } });
     const service = await db.prisma.billingService.create({ data: {
-      identifier: `cycle-issuer-${randomUUID()}`, name: 'Cycle Issuer Service',
+      identifier: process.env.BILLING_CONFORMANCE_PRODUCT ?? `cycle-issuer-${randomUUID()}`,
+      name: 'Cycle Issuer Service',
       tariffHistoryFromMonth: '2026-01',
     } });
     serviceId = service.id;
@@ -230,6 +232,7 @@ describe.skipIf(!enabled)('issued manual invoice cycle persistence', () => {
     finalizedCycleId = result.cycleId;
     const detail = await getBillingCycleDetail(context(), result.cycleId,
       { prisma: db.prisma });
+    await exportBillingConformanceFixture(`${serviceIdentifier}-finalized-manual-cycle`, detail);
     expect(detail).toMatchObject({ state: 'finalized', document_available: true,
       totals: [{ subscription: { amount_minor: '2000' },
         usage_charge: { amount_minor: '0' }, total_due: { amount_minor: '2000' },
@@ -478,6 +481,7 @@ describe.skipIf(!enabled)('issued manual invoice cycle persistence', () => {
       expect(detail.totals[0]).toMatchObject({ subscription: { amount_minor: '2000' },
         tax: { amount_minor: '200' }, gross_total: { amount_minor: '2200' },
         total_due: { amount_minor: '2200' }, outstanding: { amount_minor: '2200' } });
+      await exportBillingConformanceFixture(`${serviceIdentifier}-finalized-taxed-mixed-cycle`, detail);
       expect(detail.documents.map((item) => item.kind))
         .toEqual(['usage_breakdown', 'usage_breakdown']);
       expect(JSON.stringify(detail)).not.toContain(secondService.identifier);

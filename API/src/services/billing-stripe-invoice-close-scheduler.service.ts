@@ -6,11 +6,14 @@ import { AppError } from '../utils/errors.js';
 import { assertStripeObjectLivemode, requireStripeBillingEnabled } from './billing-stripe-client.service.js';
 import { reconcileStripeCycleInvoiceUsage } from './billing-stripe-invoice.service.js';
 import { quoteUnexportedClosedPeriodLiability } from './billing-stripe-invoice-close-quote.service.js';
+import { collectStripeCorrectionInvoice } from './billing-stripe-correction-invoice.service.js';
+import type { StripeInvoiceCashClient } from './billing-stripe-payment-evidence.service.js';
+import { stripeInvoiceMinor } from './billing-stripe-payment-evidence.service.js';
 
 const INTERVAL_MS = 5 * 60_000;
 const LEASE_MS = 10 * 60_000;
 
-async function invoicedUsageAmountMinor(
+export async function invoicedStripeUsageAmountMinor(
   stripe: Pick<Stripe, 'invoices'>,
   prisma: PrismaClient,
   invoiceId: string,
@@ -18,7 +21,7 @@ async function invoicedUsageAmountMinor(
   currency: string,
 ): Promise<{ amount: bigint; lineIds: string[] }> {
   const subscription = await prisma.billingStripeSubscription.findUniqueOrThrow({
-    where: { id: subscriptionId }, select: { stripeUsageItemId: true },
+    where: { id: subscriptionId }, select: { stripeUsageItemId: true, stripeSubscriptionId: true },
   });
   let amount = 0n;
   const lineIds: string[] = [];
@@ -30,10 +33,17 @@ async function invoicedUsageAmountMinor(
     for (const line of lines.data) {
       if (line.parent?.type !== 'subscription_item_details' ||
           line.parent.subscription_item_details?.subscription_item !== subscription.stripeUsageItemId) continue;
-      if (line.currency.toUpperCase() !== currency || line.amount < 0) {
+      if (line.invoice !== invoiceId || line.currency.toUpperCase() !== currency ||
+          line.parent.subscription_item_details.subscription !== subscription.stripeSubscriptionId ||
+          line.discount_amounts?.some((row) => row.amount !== 0) ||
+          line.pretax_credit_amounts?.some((row) => row.amount !== 0) || line.taxes === null) {
         throw new AppError('INTERNAL', 409, 'STRIPE_INVOICE_USAGE_LINE_INVALID');
       }
-      amount += BigInt(line.amount);
+      const inclusiveTax = line.taxes.filter((tax) => tax.tax_behavior === 'inclusive')
+        .reduce((sum, tax) => sum + stripeInvoiceMinor(tax.amount), 0n);
+      const base = stripeInvoiceMinor(line.amount);
+      if (inclusiveTax > base) throw new AppError('INTERNAL', 409, 'STRIPE_INVOICE_USAGE_LINE_INVALID');
+      amount += base - inclusiveTax;
       lineIds.push(line.id);
     }
     if (!lines.has_more) return { amount, lineIds };
@@ -45,10 +55,11 @@ async function invoicedUsageAmountMinor(
 
 export async function runStripeInvoiceCloseCycle(deps?: {
   prisma?: PrismaClient;
-  stripe?: Pick<Stripe, 'accounts' | 'billing' | 'invoices' | 'invoiceItems'>;
+  stripe?: Pick<Stripe, 'accounts' | 'billing' | 'invoiceItems' | 'taxRates' | 'subscriptions'> & StripeInvoiceCashClient;
   now?: () => Date;
   reconcileInvoice?: typeof reconcileStripeCycleInvoiceUsage;
   quote?: typeof quoteUnexportedClosedPeriodLiability;
+  collectCorrection?: typeof collectStripeCorrectionInvoice;
 }): Promise<{ checked: number; held: number; unbilled: number }> {
   const prisma = deps?.prisma ?? getAdminPrisma();
   const stripe = deps?.stripe ?? requireStripeBillingEnabled().client;
@@ -116,7 +127,7 @@ export async function runStripeInvoiceCloseCycle(deps?: {
         }
         continue;
       }
-      const billed = deps?.quote ? undefined : await invoicedUsageAmountMinor(
+      const billed = deps?.quote ? undefined : await invoicedStripeUsageAmountMinor(
         stripe, prisma, invoice.id, row.subscriptionId, row.currency,
       );
       const priorResolutions = await prisma.billingStripeInvoiceCloseResolution.findMany({
@@ -148,7 +159,16 @@ export async function runStripeInvoiceCloseCycle(deps?: {
           nextCheckAt: new Date(now.getTime() + 60 * 60_000),
         },
       });
-      if (quote.amountMicroMinor > 0n) unbilled += 1;
+      if (quote.amountMicroMinor > 0n) {
+        unbilled += 1;
+        // Production owns collection; legacy injected quote-only fixtures do
+        // not impersonate a processor payment client.
+        if (!deps?.quote || deps.collectCorrection) {
+          await (deps?.collectCorrection ?? collectStripeCorrectionInvoice)({
+            closeId: row.id, amountMicroMinor: quote.amountMicroMinor,
+            cursor: quote.ledgerSnapshotCursor }, { prisma, stripe });
+        }
+      }
     } catch (error) {
       held += 1;
       await prisma.billingStripeInvoiceClose.update({

@@ -36,6 +36,7 @@ export async function compensateFinalizedStripeInvoice(
     actorEmail: string;
     observedAt: Date;
     now?: Date;
+    correctionId?: string;
   },
   deps?: { prisma?: PrismaClient; stripe?: Pick<Stripe, 'accounts' | 'subscriptions'> & StripeInvoiceCashClient },
 ) {
@@ -58,6 +59,20 @@ export async function compensateFinalizedStripeInvoice(
       where: { id: params.closeId },
       include: { subscription: { include: { customer: true, account: true } } },
     });
+    const correction = params.correctionId ?
+      await tx.billingStripeCycleCorrection.findUnique({ where: { id: params.correctionId } }) : null;
+    if (params.correctionId && (!correction || correction.closeId !== close.id ||
+      correction.stripeInvoiceId !== remote.id || correction.currency !== close.currency)) {
+      throw new AppError('BAD_REQUEST', 409, 'STRIPE_CYCLE_CORRECTION_SOURCE_UNPROVEN');
+    }
+    if (correction?.paidAt) {
+      const prior = await tx.billingStripeInvoiceCloseResolution.findUnique({
+        where: { stripeAdjustmentInvoiceId: remote.id } });
+      if (!prior || prior.closeId !== close.id || prior.paidAmountMinor !== correction.amountMinor) {
+        throw new AppError('INTERNAL', 409, 'STRIPE_CYCLE_CORRECTION_PAYMENT_UNPROVEN');
+      }
+      return { close_id: close.id, state: 'compensated' as const };
+    }
     if (close.state !== 'FINALIZED_HOLD' || !close.unbilledAmountMicroMinor ||
         !close.ledgerSnapshotCursor) {
       throw new AppError('BAD_REQUEST', 409, 'STRIPE_INVOICE_ADJUSTMENT_NOT_READY');
@@ -65,7 +80,11 @@ export async function compensateFinalizedStripeInvoice(
     assertStripeObjectLivemode(remote, close.subscription.account.livemode);
     const remoteCustomer = typeof remote.customer === 'string'
       ? remote.customer : remote.customer?.id;
-    const expectedMinor = (close.unbilledAmountMicroMinor + 500_000n) / 1_000_000n;
+    const expectedMinor = correction?.amountMinor ??
+      (close.unbilledAmountMicroMinor + 500_000n) / 1_000_000n;
+    if (correction && expectedMinor > (close.unbilledAmountMicroMinor + 500_000n) / 1_000_000n) {
+      throw new AppError('BAD_REQUEST', 409, 'STRIPE_CYCLE_CORRECTION_EXCEEDS_CURRENT_LIABILITY');
+    }
     const expectedMetadata = {
       uoa_source_close_id: close.id,
       uoa_source_invoice_id: close.stripeInvoiceId,
@@ -116,9 +135,9 @@ export async function compensateFinalizedStripeInvoice(
         closeId: close.id,
         stripeAdjustmentInvoiceId: remote.id,
         stripeAdjustmentLineId: line.id,
-        amountMicroMinor: close.unbilledAmountMicroMinor,
+        amountMicroMinor: correction ? expectedMinor * 1_000_000n : close.unbilledAmountMicroMinor,
         paidAmountMinor: expectedMinor,
-        ledgerSnapshotCursor: close.ledgerSnapshotCursor,
+        ledgerSnapshotCursor: correction?.ledgerSnapshotCursor ?? close.ledgerSnapshotCursor,
         actorEmail: params.actorEmail,
         observedAt: params.observedAt,
       },
@@ -132,6 +151,10 @@ export async function compensateFinalizedStripeInvoice(
       close.subscription.account, tx as unknown as PrismaClient, stripe);
     if (!source) throw new AppError('INTERNAL', 409, 'STRIPE_INVOICE_ADJUSTMENT_SOURCE_UNPROVEN');
     await persistStripePaymentInvoice(tx, source);
+    if (correction) {
+      await tx.billingStripeCycleCorrection.update({ where: { id: correction.id },
+        data: { paidAt: params.observedAt } });
+    }
 
     await tx.adminAuditLog.create({
       data: {

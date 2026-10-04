@@ -579,3 +579,29 @@ When cancellation disabled collection on an already accepted renewal invoice,
 the closing collector resumes that same invoice after rechecking its complete
 service lines and earned fee. Unresolved usage or a foreign line holds it. This
 path creates neither a second monthly fee nor a replacement payment invoice.
+
+### Late earned Stripe usage supplements
+
+The invoice-close watch now collects a positive late usage difference through
+`BillingStripeCycleCorrection`, a durable immutable source created before any
+processor call. Its source freezes the original financial invoice, payer, actual
+tax-rate identifiers and treatment, signed liability cursor, and net amount.
+It contains no monthly subscription fee. The original invoice remains intact.
+
+One outstanding supplement per original close, a database-clock lease, permanent
+processor metadata and bounded remote recovery prevent repeated invoices or
+items after a lost acknowledgement. An expired uncertain idempotency window,
+unknown invoice line, changed liability or unverifiable tax evidence holds for
+the existing financial-operator invoice-close surface. Issued sources are never
+rewritten to resolve a discrepancy.
+
+The collector supports verified inclusive and exclusive percentage tax evidence.
+It finalizes with collection disabled, verifies the complete actual line, exact
+net/tax/gross and original buyer, and only then enables collection. Tax is never
+inferred from a rounded ratio or silently replaced with zero. Unsupported or
+archived rate authority requires an explicit issuer decision. Captured processor
+cash settles only the supplement's net usage through the existing immutable
+resolution source; the actual gross payment and legal invoice are recorded in
+the same transaction. A later signed usage difference creates its own supplement
+after the preceding payment is accepted. This scheduler is machine-only; the
+resulting actual payment invoice is reachable in the common InvoiceV1 history.
