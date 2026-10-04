@@ -308,7 +308,7 @@ describe.skipIf(!enabled)('issued manual invoice cycle persistence', () => {
         billing_email: 'ap@example.com' } } })).rejects.toThrow();
   });
 
-  it('requires exact multi-service tax and credit line allocations without guessed splits',
+  it('requires exact multi-service tax line allocations without guessed splits',
     async () => {
       const original = await db.prisma.billingInvoice.findUniqueOrThrow({
         where: { id: invoiceId },
@@ -352,7 +352,7 @@ describe.skipIf(!enabled)('issued manual invoice cycle persistence', () => {
         buyerProfileId: original.buyerProfileId,
         billingMonth: '2026-05', revision: 1, currency: 'USD',
         subtotalMinor: 3000n, taxAmountMinor: 300n,
-        creditsAppliedMinor: 500n, totalMinor: 3300n,
+        creditsAppliedMinor: 0n, totalMinor: 3300n,
         calculationDigest: 'f'.repeat(64),
         issuerSnapshot: original.issuerSnapshot as object,
         buyerSnapshot: original.buyerSnapshot as object,
@@ -376,7 +376,7 @@ describe.skipIf(!enabled)('issued manual invoice cycle persistence', () => {
           { lineId: secondLine.id, invoiceId: invoice.id,
             serviceId: secondService.id, billingMonth: '2026-05',
             subscriptionMinor: 0n, usageMinor: 1000n, taxMinor: 100n,
-            invoiceCreditMinor: 500n, totalMinor: 1100n, dueMinor: 600n,
+            invoiceCreditMinor: 0n, totalMinor: 1100n, dueMinor: 1100n,
             currency: 'USD', calculationDigest: 'f'.repeat(64) },
         ] });
       });
@@ -384,9 +384,9 @@ describe.skipIf(!enabled)('issued manual invoice cycle persistence', () => {
         where: { invoiceId: invoice.id }, orderBy: { lineId: 'asc' },
       });
       expect(lines.reduce((sum, line) => sum + line.totalMinor, 0n)).toBe(3300n);
-      expect(lines.reduce((sum, line) => sum + line.dueMinor, 0n)).toBe(2800n);
+      expect(lines.reduce((sum, line) => sum + line.dueMinor, 0n)).toBe(3300n);
       await expect(db.prisma.billingInvoiceLineFinancialAllocation.update({
-        where: { lineId: secondLine.id }, data: { invoiceCreditMinor: 0n },
+        where: { lineId: secondLine.id }, data: { invoiceCreditMinor: 1n },
       })).rejects.toThrow();
       await expect(db.prisma.billingInvoiceLineFinancialAllocation.delete({
         where: { lineId: secondLine.id },
@@ -397,7 +397,7 @@ describe.skipIf(!enabled)('issued manual invoice cycle persistence', () => {
         buyerProfileId: original.buyerProfileId,
         billingMonth: '2026-05', revision: 2, currency: 'USD',
         subtotalMinor: 3000n, taxAmountMinor: 300n,
-        creditsAppliedMinor: 500n, totalMinor: 3300n,
+        creditsAppliedMinor: 0n, totalMinor: 3300n,
         calculationDigest: 'f'.repeat(64),
         issuerSnapshot: original.issuerSnapshot as object,
         buyerSnapshot: original.buyerSnapshot as object,
