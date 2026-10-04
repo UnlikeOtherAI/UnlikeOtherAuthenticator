@@ -349,6 +349,41 @@ describe.skipIf(!enabled)('prepaid dispatch liability in PostgreSQL', () => {
       { fetchProof: async () => empty }))).toBe(false);
   });
 
+  it('does not require native registration for an unrelated uncapped project', async () => {
+    const policy = await prisma.billingCreditBudgetPolicy.create({ data: {
+      product: 'deepwater', orgId: ids.org, teamId: ids.team,
+      scopeType: 'project', scopeId: 'capped-project-A', period: 'monthly',
+      mode: 'enforce', limitMicrocredits: 1_000_000n, warnThresholdPercent: 80,
+      blockHumansWhenOver: true,
+    } });
+    const input = { dispatchId: 'dispatch-uncapped-project-B',
+      requestFingerprint: 'd'.repeat(64), startedAt: new Date('2026-10-04T18:00:00.000Z'),
+      product: 'deepwater', serviceId: ids.service, providerServiceId: 'openai',
+      orgId: ids.org, teamId: ids.team, userId: ids.user, billingMonth: '2026-10',
+      currency: 'USD', tariffId: ids.tariff, tariffMode: 'STANDARD' as const,
+      markupBps: 0, paymentMode: 'PAY_AS_YOU_GO' as const,
+      rawCostBound: new Prisma.Decimal('0.00000000013'), context: {
+        contextId: 'verified-project-B', originProduct: 'deepwater',
+        originSourceDomain: 'deepwater.example.com', projectId: 'uncapped-project-B',
+        runId: null,
+      } };
+    try {
+      await expect(prisma.$transaction((tx) => reserveBudgetDispatch(tx, input)))
+        .resolves.toMatchObject({ dispatchId: input.dispatchId });
+      await expect(prisma.$transaction((tx) => reserveBudgetDispatch(tx, {
+        ...input, dispatchId: 'dispatch-project-context-missing',
+        context: { ...input.context, projectId: null },
+      }))).rejects.toThrow('BUDGET_CONTEXT_INCOMPLETE');
+      await expect(prisma.$transaction((tx) => reserveBudgetDispatch(tx, {
+        ...input, dispatchId: 'dispatch-capped-native-missing',
+        context: { ...input.context, projectId: 'capped-project-A' },
+      }))).rejects.toThrow('BUDGET_NATIVE_SCOPE_MISMATCH');
+      await prisma.$transaction((tx) => releaseBudgetDispatch(tx, input.dispatchId));
+    } finally {
+      await prisma.billingCreditBudgetPolicy.delete({ where: { id: policy.id } });
+    }
+  });
+
   it('projects one cumulative-rated PAYG liability into a finite team cap', async () => {
     const originalCutover = await prisma.billingCreditBudgetCutover.findUniqueOrThrow({
       where: { id: 1 },

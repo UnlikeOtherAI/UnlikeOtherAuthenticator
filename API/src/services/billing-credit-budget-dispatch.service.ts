@@ -132,7 +132,7 @@ async function assertCompleteBudgetContext(tx: Prisma.TransactionClient, input: 
   const candidates = await tx.billingCreditBudgetPolicy.findMany({ where: {
     product: origin, orgId: input.orgId, teamId: input.teamId, disabledAt: null,
     mode: { in: ['enforce', 'degrade'] }, scopeType: { in: ['project', 'run'] },
-  }, select: { scopeType: true } });
+  }, select: { scopeType: true, scopeId: true } });
   const projectCapped = candidates.some((row) => row.scopeType === 'project');
   const runCapped = candidates.some((row) => row.scopeType === 'run');
   const context = input.context;
@@ -143,7 +143,8 @@ async function assertCompleteBudgetContext(tx: Prisma.TransactionClient, input: 
     throw new AppError('FORBIDDEN', 403, 'BUDGET_CONTEXT_INCOMPLETE');
   }
   const tuples = [
-    ...(projectCapped && context?.projectId ? [{ scopeType: 'project',
+    ...(context?.projectId && candidates.some((row) => row.scopeType === 'project'
+      && row.scopeId === context.projectId) ? [{ scopeType: 'project',
       scopeId: context.projectId, born: null, owner: null }] : []),
     ...(runCapped && context?.runId ? [{ scopeType: 'run', scopeId: context.runId,
       born: context.runStartedAt, owner: context.runOwnerSub }] : []),

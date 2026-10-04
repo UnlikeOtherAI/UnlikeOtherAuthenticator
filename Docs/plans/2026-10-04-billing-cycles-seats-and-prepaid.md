@@ -81,13 +81,19 @@ Credit budgets are UOA-owned for organization, team, verified product-native
 project and run scopes. A product registers an immutable native project or run
 ID, source creation time and run owner using its lifecycle key and a fresh
 endpoint-bound signed actor assertion before setting a cap. Replay cannot
-change its team, owner or birth time. Ledger's verified invocation lineage
+change its team, owner or birth time. A cap on one project requires a signed
+project ID on other work in that team, but native registration is checked only
+when that project's own policy applies. An uncapped sibling project does not
+inherit another project's registration prerequisite. Ledger's verified invocation lineage
 supplies the physical run and original budget root on every paid attempt,
 including delayed research. Missing root evidence holds a finite run cap.
 UOA checks all applicable finite ancestor caps atomically against settled
 credits and outstanding maximum reservations. This includes PAYG, PREPAID and
-human calls; unbounded paid attempts cannot pass a finite cap. `warn`, `off`
-and `unlimited` are the explicit nonblocking modes.
+human calls; unbounded paid attempts cannot pass a finite cap. Customer controls
+offer enforced limits, off and unlimited. Historical `warn` records do not stop
+work or deliver notifications; historical `degrade` records enforce the cap
+without model fallback. These inert warning and fallback choices are not
+offered to customers.
 
 All paid dispatches create immutable UOA-rated receipt liability in customer
 microcredits even without an active budget. Frozen PREPAID account or PAYG

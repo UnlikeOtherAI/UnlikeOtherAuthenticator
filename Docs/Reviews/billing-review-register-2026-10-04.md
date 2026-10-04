@@ -38,10 +38,17 @@ Current gates:
 - Fresh Astra review of the fully integrated five-repository result, followed
   by required checks and the repositories' normal green-PR workflow.
 
-Gemini Live currently remains commercially held: device-reported telemetry
-cannot prove billable provider usage or authorize enforced credit exhaustion.
-Changing the documented direct device/provider architecture requires the
-pending explicit architecture decision; no unverified usage is billed.
+The fresh [Astra CLI report](billing-astra-2026-10-05.md) is retained verbatim.
+It is not a final sign-off. Project-policy isolation now has PostgreSQL proof:
+a capped project does not require native registration of an uncapped sibling;
+missing signed project context and missing native scope for the capped project
+remain refused. Its other findings are still being integrated and verified.
+
+Gemini Live device telemetry cannot prove billable provider usage or authorize
+credit exhaustion. Ledger's follow-up branch now refuses commercial issuance
+before a reservation or Google credential is created. Existing telemetry stays
+nonbillable. No new voice architecture is included in this scope-frozen work;
+deployment of this refusal remains a delivery gate.
 
 Executable evidence uses isolated PostgreSQL databases and synthetic provider
 and payment transports. It proves arithmetic, durable source/lease behavior and
