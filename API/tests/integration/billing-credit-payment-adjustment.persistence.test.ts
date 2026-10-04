@@ -78,7 +78,7 @@ async function seedPaidCredits(prisma: PrismaClient): Promise<void> {
         "balance_microcredits", "updated_at"
       ) VALUES (
         ${ids.creditAccount}, ${ids.account}, ${ids.customer}, ${ids.org}, ${ids.team},
-        'TEAM', ${`${ids.org}:${ids.team}`}, 'USD', 20000000000, CURRENT_TIMESTAMP
+        'TEAM', ${`${ids.org}:${ids.team}`}, 'USD', 0, CURRENT_TIMESTAMP
       )
     `);
     for (const [suffix, balanceAfter] of [
@@ -114,6 +114,17 @@ async function seedPaidCredits(prisma: PrismaClient): Promise<void> {
           'credit_top_up_checkout', ${checkoutId}, CURRENT_TIMESTAMP
         )
       `);
+      await tx.$executeRaw(Prisma.sql`
+        INSERT INTO "billing_credit_entries" (
+          "id", "credit_account_id", "service_id", "app_key_id", "attributed_user_id",
+          "direction", "kind", "amount_microcredits", "balance_after_microcredits",
+          "currency", "idempotency_key", "source_type", "source_id", "occurred_at"
+        ) VALUES (
+          ${`spent_${suffix}`}, ${ids.creditAccount}, ${ids.service}, ${ids.appKey}, ${ids.user},
+          'DEBIT', 'USAGE_SETTLEMENT', 10000000000, ${balanceAfter - 10000000000n}, 'USD',
+          ${`spent_${suffix}`}, 'credit_usage_settlement', ${`settlement_${suffix}`}, CURRENT_TIMESTAMP
+        )
+      `);
     }
   });
 }
@@ -125,13 +136,14 @@ type AdjustmentInput = {
   amountMinor: bigint;
   eventType: string;
   status?: string;
+  eventId?: string;
 };
 
 async function applyAdjustment(prisma: PrismaClient, input: AdjustmentInput): Promise<void> {
   const paymentIntentId = `pi_${input.checkout}`;
   const chargeId = `ch_${input.checkout}`;
   const occurredAt = new Date(Date.now() + Math.floor(Math.random() * 10_000));
-  const eventId = `evt_${input.kind.toLowerCase()}_${input.objectId}`;
+  const eventId = input.eventId ?? `evt_${input.kind.toLowerCase()}_${input.objectId}`;
   await prisma.$transaction(async (tx) => {
     const webhook = await tx.billingStripeWebhookEvent.create({
       data: {
@@ -271,5 +283,83 @@ describe.skipIf(!databaseTestsEnabled)('credit payment adjustment persistence', 
       where: { id: ids.creditAccount },
     });
     expect(account.balanceMicrocredits).toBe(initial.balanceMicrocredits);
+  });
+
+  it('debits a partial refund even after the paid credits have been spent', async () => {
+    await applyAdjustment(handle.prisma, {
+      checkout: 'partial',
+      kind: BillingCreditPaymentAdjustmentKind.REFUND,
+      objectId: 're_spent',
+      amountMinor: 200n,
+      eventType: 'refund.updated',
+      status: 'succeeded',
+    });
+
+    const account = await handle.prisma.billingCreditAccount.findUniqueOrThrow({
+      where: { id: ids.creditAccount },
+    });
+    const adjustment = await handle.prisma.billingCreditPaymentAdjustment.findFirstOrThrow({
+      where: { stripeObjectId: 're_spent' },
+    });
+    expect(adjustment.amountMicrocredits).toBe(2_000_000_000n);
+    expect(account.balanceMicrocredits).toBe(-2_000_000_000n);
+  });
+
+  it('does not debit twice when the same adjustment arrives under a new event id', async () => {
+    const input = {
+      checkout: 'partial' as const,
+      kind: BillingCreditPaymentAdjustmentKind.REFUND,
+      objectId: 're_duplicate',
+      amountMinor: 200n,
+      eventType: 'refund.updated',
+      status: 'succeeded',
+    };
+    await applyAdjustment(handle.prisma, { ...input, eventId: 'evt_refund_first' });
+    await applyAdjustment(handle.prisma, { ...input, eventId: 'evt_refund_replay' });
+
+    const adjustments = await handle.prisma.billingCreditPaymentAdjustment.findMany({
+      where: { stripeObjectId: input.objectId },
+    });
+    const entries = await handle.prisma.billingCreditEntry.findMany({
+      where: { sourceType: 'credit_payment_adjustment', sourceId: adjustments[0]?.id },
+    });
+    const account = await handle.prisma.billingCreditAccount.findUniqueOrThrow({
+      where: { id: ids.creditAccount },
+    });
+    expect(adjustments).toHaveLength(1);
+    expect(entries).toHaveLength(1);
+    expect(account.balanceMicrocredits).toBe(-2_000_000_000n);
+  });
+
+  it('keeps the balance unchanged when a refund reversal arrives before its refund', async () => {
+    await applyAdjustment(handle.prisma, {
+      checkout: 'partial',
+      kind: BillingCreditPaymentAdjustmentKind.REFUND_REVERSAL,
+      objectId: 're_out_of_order',
+      amountMinor: 200n,
+      eventType: 'refund.failed',
+      status: 'failed',
+    });
+    await applyAdjustment(handle.prisma, {
+      checkout: 'partial',
+      kind: BillingCreditPaymentAdjustmentKind.REFUND,
+      objectId: 're_out_of_order',
+      amountMinor: 200n,
+      eventType: 'refund.updated',
+      status: 'succeeded',
+    });
+
+    const adjustments = await handle.prisma.billingCreditPaymentAdjustment.findMany({
+      where: { stripeObjectId: 're_out_of_order' },
+    });
+    const entries = await handle.prisma.billingCreditEntry.findMany({
+      where: { sourceType: 'credit_payment_adjustment' },
+    });
+    const account = await handle.prisma.billingCreditAccount.findUniqueOrThrow({
+      where: { id: ids.creditAccount },
+    });
+    expect(adjustments.map((row) => row.amountMicrocredits)).toEqual([0n, 0n]);
+    expect(entries).toHaveLength(0);
+    expect(account.balanceMicrocredits).toBe(0n);
   });
 });
