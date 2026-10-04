@@ -443,7 +443,13 @@ describe.skipIf(!enabled)('customer cycle scope persistence', () => {
       { prisma: db.prisma });
     expect(orgDetail.subscription_lines).toHaveLength(1);
     expect(orgDetail.subscription_lines[0]?.customer_charge.amount_minor).toBe('2000');
-    expect(orgDetail.usage_lines).toHaveLength(0);
+    expect(orgDetail.usage_lines).toHaveLength(1);
+    expect(orgDetail.usage_lines[0]).toMatchObject({ calls: '2',
+      raw_units: { input: '20', output: '20', total: '40' },
+      customer_charge: { amount: '3.9' } });
+    expect(JSON.stringify(orgDetail)).not.toContain(otherTeamId);
+    await expect(getBillingCycleDetail(context(teamManagerId), orgCycle.cycleId,
+      { prisma: db.prisma })).rejects.toMatchObject({ statusCode: 403 });
     expect(teamCycles).toHaveLength(2);
     for (const [index, cycle] of teamCycles.entries()) {
       const row = await db.prisma.billingCustomerCycle.findUniqueOrThrow({

@@ -1043,7 +1043,10 @@ the financial cycle retains the stable identifier after a live Team row is
 deleted without recreating identity or granting read access. One organisation
 subscription cycle freezes its fee once, while each discovered team can have a
 separate selected-team usage cycle bound to that organisation source. The
-organisation cycle does not reveal named usage from other teams. Missing
+organisation cycle combines measured service/unit totals and customer usage
+charges from all discovered teams for current organisation billing managers,
+without publishing team identifiers or member details. Team managers cannot
+open that cycle, and selected-team cycles contain only their own usage. Missing
 historical payer or tariff evidence holds reconciliation. Ledger may provide
 measured reasoning, cache-write duration and modality dimensions; public
 cycles omit unknown dimensions instead of manufacturing zero. Cache creation
