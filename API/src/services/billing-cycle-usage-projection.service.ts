@@ -60,12 +60,37 @@ export function projectCycleUsage(
       hold('BILLING_CYCLE_NONBILLABLE_COST_CONFLICT');
     }
     const id = createHash('sha256').update(`${usage.snapshot.id}\0${index}`).digest('hex');
+    const raw = line.breakdown;
+    const fiveMinute = raw?.cacheWrite5mTokens;
+    const oneHour = raw?.cacheWrite1hTokens;
+    if ((fiveMinute === undefined) !== (oneHour === undefined)) {
+      hold('BILLING_CYCLE_CACHE_WRITE_EVIDENCE_INCOMPLETE');
+    }
+    const cacheWrite = fiveMinute !== undefined && oneHour !== undefined
+      ? sumBillingDecimals([fiveMinute, oneHour]) : undefined;
+    const modalityFields = [
+      ['input_text', raw?.inputTextTokens], ['input_image', raw?.inputImageTokens],
+      ['input_audio', raw?.inputAudioTokens], ['output_image', raw?.outputImageTokens],
+      ['output_audio', raw?.outputAudioTokens], ['cached_image', raw?.cachedImageTokens],
+      ['cached_audio', raw?.cachedAudioTokens], ['tool_use_input', raw?.toolUseInputTokens],
+      ['raw_input', raw?.rawInputTokens], ['raw_output', raw?.rawOutputTokens],
+      ['unattributed', raw?.unattributedTokens],
+    ] as const;
+    const modalities = modalityFields.flatMap(([modality, rawUnits]) =>
+      rawUnits === undefined ? [] : [{ modality, raw_units: rawUnits }]);
     return {
       id: `usage:${id}`, service_id: line.serviceId, usage_unit: line.usageUnit,
       calls: line.calls,
       raw_units: { input: line.inputUnits, cached_input: line.cachedInputUnits,
         output: line.outputUnits,
-        total: sumBillingDecimals([line.inputUnits, line.cachedInputUnits, line.outputUnits]) },
+        total: sumBillingDecimals([line.inputUnits, line.cachedInputUnits,
+          line.outputUnits, ...(cacheWrite === undefined ? [] : [cacheWrite])]),
+        ...(raw?.thoughtOutputTokens === undefined ? {} :
+          { reasoning: raw.thoughtOutputTokens }),
+        ...(cacheWrite === undefined ? {} : { cache_write: cacheWrite,
+          cache_write_5m: fiveMinute, cache_write_1h: oneHour }),
+      },
+      ...(modalities.length === 0 ? {} : { modalities }),
       customer_charge: customerCharge, credits_consumed: null,
     };
   });

@@ -200,6 +200,10 @@ export async function renderBillingCycleBreakdownPdf(detail: BillingCycleDetailV
     draw(context, `Input ${line.raw_units.input}; cached input ${line.raw_units.cached_input}; output ${line.raw_units.output}`);
     if (line.raw_units.reasoning) draw(context, `Reasoning ${line.raw_units.reasoning}`);
     if (line.raw_units.cache_write) draw(context, `Cache write ${line.raw_units.cache_write}`);
+    if (line.raw_units.cache_write_5m) draw(context,
+      `Five-minute cache write ${line.raw_units.cache_write_5m}`);
+    if (line.raw_units.cache_write_1h) draw(context,
+      `One-hour cache write ${line.raw_units.cache_write_1h}`);
     for (const modality of line.modalities ?? []) draw(context,
       `${modality.modality}: ${modality.raw_units} ${line.usage_unit}`);
     draw(context, `Customer charge ${line.customer_charge?.display ?? 'pending'}; credits used ${line.credits_consumed ?? 'pending'}`);

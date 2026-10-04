@@ -1004,7 +1004,18 @@ assertion's cursor, capture time or response hash. A zero-monthly-charge team
 without a subscription source can still prepare its own pending measured-usage
 cycle from the historically effective tariff and payer; unresolved historical
 terms, payer changes and paid costs hold it. This path never checks current
-team membership to attribute old usage. Downloaded CSV includes per-seat unit
+team membership to attribute old usage. Organisation-scoped, signed Ledger
+`group_by=team` discovery supplies historical team identifiers for the close;
+the financial cycle retains the stable identifier after a live Team row is
+deleted without recreating identity or granting read access. One organisation
+subscription cycle freezes its fee once, while each discovered team can have a
+separate selected-team usage cycle bound to that organisation source. The
+organisation cycle does not reveal named usage from other teams. Missing
+historical payer or tariff evidence holds reconciliation. Ledger may provide
+measured reasoning, cache-write duration and modality dimensions; public
+cycles omit unknown dimensions instead of manufacturing zero. Cache creation
+tokens are disjoint from ordinary input and counted once in the raw total,
+while reasoning and modality figures are subsets. Downloaded CSV includes per-seat unit
 price/policy/timing, customer charges, paid/outstanding totals and credit
 boundaries; spreadsheet formula prefixes are neutralized. PDF labels pending
 totals honestly and wraps long source identifiers within the page.

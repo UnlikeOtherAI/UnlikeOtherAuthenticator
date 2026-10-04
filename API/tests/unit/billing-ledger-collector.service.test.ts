@@ -107,6 +107,8 @@ function rawMeteringResponse(groupBy: 'service' | 'user' = 'service') {
           unitsIn: '100',
           unitsCachedIn: '10',
           unitsOut: '25',
+          breakdown: { thoughtOutputTokens: '5', cacheWrite5mTokens: '20',
+            cacheWrite1hTokens: '10', inputTextTokens: '100' },
         },
         rawProviderEstimatedCost: '1.2',
         rawProviderActualCost: '1.1',
@@ -233,6 +235,8 @@ describe('Ledger raw metering collector', () => {
           billingProduct: 'deepwater',
           callerProduct: 'nessie',
           userId: null,
+          breakdown: { thoughtOutputTokens: '5', cacheWrite5mTokens: '20',
+            cacheWrite1hTokens: '10', inputTextTokens: '100' },
         },
       ],
       snapshot: {
