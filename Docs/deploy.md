@@ -672,12 +672,14 @@ changed immutable term, or remote mismatch aborts the whole operation. A second
 exact run reports no-op actions. Output contains IDs and decisions but no
 credentials.
 
-The opt-in PostgreSQL credit-settlement integration gate is:
+CI enables the PostgreSQL funding and credit-settlement integration gate against
+its disposable Postgres service. To run the same financial persistence checks
+locally:
 
 ```bash
 BILLING_FUNDING_DATABASE_TESTS=true DATABASE_URL='<isolated PostgreSQL URL>' \
   pnpm --filter @uoa/api exec vitest run \
-  tests/integration/billing-credit-settlement.persistence.test.ts
+  tests/integration/billing-*.persistence.test.ts
 ```
 
 Run it only against a disposable database: the shared test helper applies the
