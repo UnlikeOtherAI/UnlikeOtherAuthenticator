@@ -2,7 +2,9 @@ import { createHash } from 'node:crypto';
 
 import {
   BillingInvoiceStatus,
+  BillingMonthlyChargeBasis,
   BillingOrganisationContractStatus,
+  BillingUsagePaymentMode,
   Prisma,
   type PrismaClient,
 } from '@prisma/client';
@@ -18,6 +20,7 @@ import {
   minorAmountToMajor,
 } from './billing-money.service.js';
 import { rateMeteringTotal } from './billing-rating.service.js';
+import { quoteSubscriptionMonthlyCharge } from './billing-monthly-subscription-quote.service.js';
 
 const MAX_INT64 = 9_223_372_036_854_775_807n;
 const MICROCREDITS_PER_USD_MINOR = 10_000_000n;
@@ -28,6 +31,7 @@ type CalculationDeps = {
   prisma?: PrismaClient;
   fetchMetering?: FetchMeteringUsage;
   collectFunding?: typeof collectContractFundingEvidence;
+  quoteMonthly?: typeof quoteSubscriptionMonthlyCharge;
   now?: () => Date;
 };
 
@@ -183,15 +187,20 @@ export async function calculateBillingContractInvoice(
           { prisma },
         ),
       ]);
-      const rated = rateMeteringTotal({
-        usage: metering,
-        product: term.service.identifier,
-        currency: version.currency,
-        terms: { mode: 'custom', markupBps: version.usageMarkupBps },
-      });
+      const usageTotal = term.tariff.usagePaymentMode === BillingUsagePaymentMode.PREPAID
+        ? '0' : rateMeteringTotal({
+          usage: metering, product: term.service.identifier,
+          currency: version.currency,
+          terms: { mode: 'custom', markupBps: version.usageMarkupBps },
+        }).total;
+      const seatQuote = term.tariff.monthlyChargeBasis === BillingMonthlyChargeBasis.PER_SEAT
+        ? await (deps?.quoteMonthly ?? quoteSubscriptionMonthlyCharge)({
+          source: { kind: 'manual', id: term.id }, billingMonth: params.billingMonth,
+        }, { prisma }) : null;
+      const monthlyAmountMinor = seatQuote?.amountMinor ?? term.monthlyAmountMinor;
       const total = addBillingDecimals(
-        minorAmountToMajor(term.monthlyAmountMinor.toString(), version.currency),
-        rated.total,
+        minorAmountToMajor(monthlyAmountMinor.toString(), version.currency),
+        usageTotal,
       );
       const amountMinor = majorAmountToMinorRounded(total, version.currency);
       if (amountMinor < 0n || amountMinor > MAX_INT64) {
@@ -202,6 +211,7 @@ export async function calculateBillingContractInvoice(
         serviceIdentifier: term.service.identifier,
         serviceName: term.service.name,
         amountMinor,
+        seatQuote,
         credits: funding.credits,
         addons: funding.addons,
         snapshot: {
@@ -250,6 +260,12 @@ export async function calculateBillingContractInvoice(
     lines: calculated.map((line) => ({
       service_id: line.serviceId,
       amount_minor: line.amountMinor.toString(),
+      seat_quote: line.seatQuote ? {
+        agreement_id: line.seatQuote.agreementId,
+        amount_minor: line.seatQuote.amountMinor.toString(),
+        seat_milliseconds: line.seatQuote.seatMilliseconds?.toString(),
+        evidence_ids: line.seatQuote.evidenceIds,
+      } : null,
       snapshot: line.snapshot,
     })),
     credit_settlements: creditEvidence.map((reference) => ({

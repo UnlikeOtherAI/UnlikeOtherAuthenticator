@@ -231,6 +231,10 @@ time; terminal evidence closes it once. A missing baseline, unclosed month, or
 unproven Stripe billable period holds the finalized quote. The canonical cycle
 snapshot must freeze this quote before either Stripe invoice delivery or manual
 invoice issue; a live quote alone is never collection authority.
+The manual invoice calculator uses the closed-month per-seat quote for its
+subscription line, never the per-seat unit price as a whole invoice fee. It
+excludes prepaid runtime usage from the manual pay-as-you-go total while
+retaining the raw Ledger snapshot reference for audit.
 
 Prepaid usage is funded from the existing scoped credit account before a paid
 provider dispatch. It cannot become a positive Stripe usage-meter export when
