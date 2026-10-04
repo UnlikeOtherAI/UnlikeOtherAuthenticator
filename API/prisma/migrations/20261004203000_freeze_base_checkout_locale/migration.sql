@@ -1,3 +1,6 @@
+SET lock_timeout = '5s';
+SET statement_timeout = '120s';
+
 -- A retry of an open base subscription Checkout must keep the locale Stripe
 -- received with the original idempotency key.
 CREATE FUNCTION "billing_stripe_checkout_locale_immutable_guard"() RETURNS trigger

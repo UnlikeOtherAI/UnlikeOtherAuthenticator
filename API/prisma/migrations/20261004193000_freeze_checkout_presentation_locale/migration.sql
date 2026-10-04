@@ -1,3 +1,6 @@
+SET lock_timeout = '5s';
+SET statement_timeout = '120s';
+
 -- Keep retries on the original language so Stripe idempotency parameters stay identical.
 -- Existing attempts keep NULL and omit Stripe locale, exactly as at creation.
 ALTER TABLE "billing_stripe_checkout_sessions"
