@@ -4,7 +4,9 @@ import {
 } from '@prisma/client';
 import { describe, expect, it } from 'vitest';
 
-import { projectMonthlySubscriptionLine } from '../../src/services/billing-cycle-quote-projection.service.js';
+import {
+  monthlyFinancialQuoteEvidence, projectMonthlySubscriptionLine,
+} from '../../src/services/billing-cycle-quote-projection.service.js';
 import type { quoteSubscriptionMonthlyCharge } from '../../src/services/billing-monthly-subscription-quote.service.js';
 
 type MonthlyQuote = Awaited<ReturnType<typeof quoteSubscriptionMonthlyCharge>>;
@@ -40,5 +42,17 @@ describe('customer seat interval projection', () => {
         quantity: '2' },
     ]);
     expect(line.customer_charge.amount_minor).toBe('1000');
+    const oldFutureEnd = { ...quote,
+      commercialEndsAt: new Date('2026-10-20T00:00:00.000Z'),
+      endedAt: new Date('2026-10-15T00:00:00.000Z') };
+    const laterFutureEnd = { ...oldFutureEnd,
+      commercialEndsAt: new Date('2026-11-20T00:00:00.000Z'),
+      endedAt: new Date('2026-11-15T00:00:00.000Z') };
+    const start = new Date('2026-09-01T00:00:00.000Z');
+    const end = new Date('2026-10-01T00:00:00.000Z');
+    expect(monthlyFinancialQuoteEvidence(oldFutureEnd, start, end))
+      .toEqual(monthlyFinancialQuoteEvidence(laterFutureEnd, start, end));
+    expect(monthlyFinancialQuoteEvidence(quote, start, end))
+      .not.toEqual(monthlyFinancialQuoteEvidence(oldFutureEnd, start, end));
   });
 });

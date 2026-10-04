@@ -7,16 +7,19 @@ import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import { billingCycleSnapshotDigest } from './billing-cycle-read.service.js';
 import {
-  privateMonthlyQuoteEvidence, projectMonthlySubscriptionLine,
+  monthlyFinancialQuoteEvidence, privateMonthlyQuoteEvidence,
+  projectMonthlySubscriptionLine,
 } from './billing-cycle-quote-projection.service.js';
-import { projectCycleUsage } from './billing-cycle-usage-projection.service.js';
+import {
+  cycleUsageContentFingerprint, projectCycleUsage,
+  type CycleUsageEvidence,
+} from './billing-cycle-usage-projection.service.js';
 import { fetchLedgerMeteringUsage } from './billing-ledger-collector.service.js';
 import {
   quoteSubscriptionMonthlyCharge, type MonthlyChargeSource,
 } from './billing-monthly-subscription-quote.service.js';
 
 type MonthlyQuote = Awaited<ReturnType<typeof quoteSubscriptionMonthlyCharge>>;
-type UsageEvidence = ReturnType<typeof projectCycleUsage>['evidence'];
 
 export type PreparedBillingCycleClose = {
   cycleId: string;
@@ -35,9 +38,8 @@ function monthPeriod(month: string) {
   return { startsAt, endsAt };
 }
 
-function sameQuote(left: MonthlyQuote, right: MonthlyQuote): boolean {
-  return billingCycleSnapshotDigest(privateMonthlyQuoteEvidence(left), {}) ===
-    billingCycleSnapshotDigest(privateMonthlyQuoteEvidence(right), {});
+function quoteFingerprint(quote: MonthlyQuote, startsAt: Date, endsAt: Date): string {
+  return billingCycleSnapshotDigest(monthlyFinancialQuoteEvidence(quote, startsAt, endsAt), {});
 }
 
 /**
@@ -72,7 +74,7 @@ export async function prepareBillingCycleClose(
   if (!service || !tariff || tariff.serviceId !== service.id ||
     tariff.currency !== initial.currency) hold('BILLING_CYCLE_SOURCE_TERMS_INVALID');
 
-  const ledgerSnapshots: UsageEvidence[] = [];
+  const ledgerSnapshots: CycleUsageEvidence[] = [];
   let usageLines: BillingCycleUsageLine[] = [];
   for (const team of teams) {
     const usage = await (deps?.fetchMetering ?? fetchLedgerMeteringUsage)({
@@ -96,8 +98,9 @@ export async function prepareBillingCycleClose(
     if (locked.length !== 1) hold('BILLING_CYCLE_ORGANISATION_MISSING');
     const quote = await quoteFn(params, { prisma: tx as unknown as PrismaClient,
       now: deps?.now });
-    if (!sameQuote(initial, quote)) hold('BILLING_CYCLE_QUOTE_CHANGED');
-    const fingerprint = billingCycleSnapshotDigest(privateMonthlyQuoteEvidence(quote), {});
+    if (quoteFingerprint(initial, startsAt, endsAt) !==
+      quoteFingerprint(quote, startsAt, endsAt)) hold('BILLING_CYCLE_QUOTE_CHANGED');
+    const fingerprint = quoteFingerprint(quote, startsAt, endsAt);
     const existing = await tx.billingCustomerCycle.findFirst({ where: {
       serviceId: quote.serviceId, orgId: quote.organisationId,
       teamId: quote.teamId, billingMonth: params.billingMonth,
@@ -107,8 +110,13 @@ export async function prepareBillingCycleClose(
       if (evidence.quote_fingerprint !== fingerprint ||
         billingCycleSnapshotDigest(existing.publicSnapshot, existing.privateEvidence) !==
           existing.snapshotSha256) hold('BILLING_CYCLE_EXISTING_RECONCILIATION_REQUIRED');
-      const oldLedgerFingerprint = billingCycleSnapshotDigest(evidence.ledger_snapshots, {});
-      const newLedgerFingerprint = billingCycleSnapshotDigest(ledgerSnapshots, {});
+      const oldEvidence = evidence.ledger_snapshots;
+      if (!Array.isArray(oldEvidence) || oldEvidence.some((row) => !row ||
+        typeof row.team_id !== 'string' || typeof row.content_sha256 !== 'string')) {
+        hold('BILLING_CYCLE_EXISTING_RECONCILIATION_REQUIRED');
+      }
+      const oldLedgerFingerprint = cycleUsageContentFingerprint(oldEvidence as CycleUsageEvidence[]);
+      const newLedgerFingerprint = cycleUsageContentFingerprint(ledgerSnapshots);
       if (oldLedgerFingerprint === newLedgerFingerprint) {
         return { cycleId: existing.id, amountMinor: quote.amountMinor,
           currency: quote.currency, snapshotSha256: existing.snapshotSha256 };

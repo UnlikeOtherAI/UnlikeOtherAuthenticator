@@ -20,50 +20,81 @@ function text(value: string): string {
 }
 
 function csvCell(value: string): string {
-  const escaped = (/^[=+@\t\r]/.test(value) ||
-    (value.startsWith('-') && !/^-\d+(?:\.\d+)?$/.test(value))) ? `'${value}` : value;
+  let first = 0;
+  while (first < value.length && (value.charCodeAt(first) <= 32 ||
+    /\s/u.test(value[first] ?? ''))) first += 1;
+  const escaped = '=+@-'.includes(value[first] ?? '') && first < value.length
+    ? `'${value}` : value;
   return `"${escaped.replaceAll('"', '""')}"`;
 }
 
-function csvRow(values: string[]): string {
+function csvRow(values: readonly string[]): string {
   return values.map(csvCell).join(',');
 }
 
 export function renderBillingCycleBreakdownCsv(detail: BillingCycleDetailV2): Buffer {
-  const rows: string[][] = [[
+  const columns = [
     'record_type', 'id', 'description', 'period_start', 'period_end', 'quantity',
-    'unit', 'customer_charge', 'currency', 'credits_consumed',
-  ]];
+    'unit', 'unit_price', 'seat_policy', 'seat_timing', 'customer_charge',
+    'currency', 'credits_consumed', 'total_paid', 'outstanding',
+    'opening_balance', 'closing_balance', 'billing_status',
+  ] as const;
+  type Column = typeof columns[number];
+  const rows: Array<Partial<Record<Column, string>>> = [];
+  const period = { period_start: detail.period.starts_at,
+    period_end: detail.period.ends_at };
   for (const line of detail.subscription_lines) {
-    rows.push(['subscription', line.id, line.label, detail.period.starts_at,
-      detail.period.ends_at, line.quantity ?? '', line.charge_basis,
-      line.customer_charge.amount, line.customer_charge.currency, '']);
+    rows.push({ record_type: 'subscription', id: line.id, description: line.label,
+      ...period, quantity: line.quantity ?? 'pending', unit: line.charge_basis,
+      unit_price: line.unit_price.amount, seat_policy: line.seat_policy ?? '',
+      seat_timing: line.seat_timing ?? '', customer_charge: line.customer_charge.amount,
+      currency: line.customer_charge.currency, billing_status: detail.state });
     for (const interval of line.intervals) {
-      rows.push(['seat_interval', line.id, `${line.seat_policy ?? 'flat'} seats`,
-        interval.starts_at, interval.ends_at, interval.quantity, 'seats', '', '', '']);
+      rows.push({ record_type: 'seat_interval', id: line.id,
+        description: `${line.seat_policy ?? 'flat'} seats`,
+        period_start: interval.starts_at, period_end: interval.ends_at,
+        quantity: interval.quantity, unit: 'seats',
+        unit_price: line.unit_price.amount, seat_policy: line.seat_policy ?? '',
+        seat_timing: line.seat_timing ?? '', billing_status: detail.state });
     }
   }
   for (const line of detail.usage_lines) {
-    rows.push(['usage', line.id, line.service_id, detail.period.starts_at,
-      detail.period.ends_at, line.raw_units.total, line.usage_unit,
-      line.customer_charge?.amount ?? '', line.customer_charge?.currency ?? '',
-      line.credits_consumed ?? 'pending']);
+    rows.push({ record_type: 'usage', id: line.id, description: line.service_id,
+      ...period, quantity: line.raw_units.total, unit: line.usage_unit,
+      customer_charge: line.customer_charge?.amount ?? 'pending',
+      currency: line.customer_charge?.currency ?? '',
+      credits_consumed: line.credits_consumed ?? 'pending',
+      billing_status: detail.state });
     for (const [kind, quantity] of Object.entries(line.raw_units)) {
       if (kind === 'total') continue;
-      rows.push(['measured_dimension', line.id, kind, detail.period.starts_at,
-        detail.period.ends_at, quantity, line.usage_unit, '', '', '']);
+      rows.push({ record_type: 'measured_dimension', id: line.id,
+        description: kind, ...period, quantity, unit: line.usage_unit,
+        billing_status: detail.state });
     }
     for (const modality of line.modalities ?? []) {
-      rows.push(['modality', line.id, modality.modality, detail.period.starts_at,
-        detail.period.ends_at, modality.raw_units, line.usage_unit, '', '', '']);
+      rows.push({ record_type: 'modality', id: line.id,
+        description: modality.modality, ...period, quantity: modality.raw_units,
+        unit: line.usage_unit, billing_status: detail.state });
     }
   }
   for (const total of detail.totals) {
-    rows.push(['total', detail.cycle_id, 'Amount due', detail.period.starts_at,
-      detail.period.ends_at, '', '', total.total_due.amount, total.currency,
-      detail.credits.consumed ?? 'pending']);
+    rows.push({ record_type: 'total', id: detail.cycle_id,
+      description: 'Amount due', ...period, customer_charge: total.total_due.amount,
+      currency: total.currency, credits_consumed: detail.credits.consumed ?? 'pending',
+      total_paid: total.total_paid.amount, outstanding: total.outstanding.amount,
+      opening_balance: detail.credits.opening_balance ?? 'pending',
+      closing_balance: detail.credits.closing_balance ?? 'pending',
+      billing_status: detail.state });
   }
-  return Buffer.from(`\uFEFF${rows.map(csvRow).join('\r\n')}\r\n`, 'utf8');
+  rows.push({ record_type: 'status', id: detail.cycle_id,
+    description: detail.state === 'pending_reconciliation'
+      ? 'Pending reconciliation' : detail.state,
+    ...period, credits_consumed: detail.credits.consumed ?? 'pending',
+    opening_balance: detail.credits.opening_balance ?? 'pending',
+    closing_balance: detail.credits.closing_balance ?? 'pending',
+    billing_status: detail.state });
+  return Buffer.from(`\uFEFF${[columns, ...rows.map((row) =>
+    columns.map((column) => row[column] ?? ''))].map(csvRow).join('\r\n')}\r\n`, 'utf8');
 }
 
 type DrawContext = {
@@ -86,18 +117,33 @@ function newPage(context: DrawContext): void {
   context.y -= 28;
 }
 
-function wrap(value: string, font: PDFFont, size: number): string[] {
+export function wrapCycleBreakdownText(value: string, font: PDFFont, size: number): string[] {
   const width = pageWidth - margin * 2;
   const parts = text(value).split(/\s+/);
   const lines: string[] = [];
   let line = '';
   for (const part of parts) {
-    const candidate = line ? `${line} ${part}` : part;
-    if (font.widthOfTextAtSize(candidate, size) > width && line) {
-      lines.push(line);
-      line = part;
-    } else {
-      line = candidate;
+    let remainder = part;
+    while (remainder) {
+      const separator = line ? ' ' : '';
+      const candidate = `${line}${separator}${remainder}`;
+      if (font.widthOfTextAtSize(candidate, size) <= width) {
+        line = candidate;
+        break;
+      }
+      if (line) {
+        lines.push(line);
+        line = '';
+        continue;
+      }
+      let chunk = '';
+      for (const character of remainder) {
+        if (font.widthOfTextAtSize(chunk + character, size) > width) break;
+        chunk += character;
+      }
+      if (!chunk) throw new AppError('INTERNAL', 500, 'BILLING_CYCLE_PDF_GLYPH_TOO_WIDE');
+      lines.push(chunk);
+      remainder = remainder.slice(chunk.length);
     }
   }
   if (line) lines.push(line);
@@ -107,7 +153,7 @@ function wrap(value: string, font: PDFFont, size: number): string[] {
 function draw(context: DrawContext, value: string, options?: { bold?: boolean; size?: number }): void {
   const font = options?.bold ? context.bold : context.regular;
   const size = options?.size ?? 9;
-  for (const line of wrap(value, font, size)) {
+  for (const line of wrapCycleBreakdownText(value, font, size)) {
     if (context.y < bottom) newPage(context);
     context.page.drawText(line, { x: margin, y: context.y, font, size,
       color: rgb(0.14, 0.17, 0.22) });
@@ -138,9 +184,9 @@ export async function renderBillingCycleBreakdownPdf(detail: BillingCycleDetailV
   if (detail.subscription_lines.length === 0) draw(context, 'No confirmed subscription line.');
   for (const line of detail.subscription_lines) {
     draw(context, `${line.label}: ${line.customer_charge.display}`, { bold: true });
-    draw(context, `${line.charge_basis}; unit price ${line.unit_price.display}; quantity ${line.quantity ?? 'pending'}`);
+    draw(context, `${line.charge_basis === 'per_seat' ? 'Per seat' : 'Flat monthly'}; unit price ${line.unit_price.display}; quantity ${line.quantity ?? 'pending'}`);
     if (line.seat_policy) draw(context,
-      `${line.seat_policy} seats, ${line.seat_timing ?? 'timing pending'}; ${line.active_seat_seconds ?? 'pending'} active seat-seconds`);
+      `${line.seat_policy === 'fixed' ? 'Fixed' : 'Automatic'} seats, ${line.seat_timing === 'full_month' ? 'full month' : 'prorated'}; ${line.active_seat_seconds ?? 'pending'} active seat-seconds`);
     for (const interval of line.intervals) {
       draw(context, `${interval.starts_at} to ${interval.ends_at}: ${interval.quantity} seats`);
     }
@@ -159,13 +205,15 @@ export async function renderBillingCycleBreakdownPdf(detail: BillingCycleDetailV
     draw(context, `Customer charge ${line.customer_charge?.display ?? 'pending'}; credits used ${line.credits_consumed ?? 'pending'}`);
   }
   context.y -= 8;
-  draw(context, 'Confirmed totals', { bold: true, size: 12 });
+  draw(context, detail.state === 'pending_reconciliation'
+    ? 'Pending totals' : 'Confirmed totals', { bold: true, size: 12 });
   for (const total of detail.totals) {
     draw(context, `Subscription ${total.subscription.display}; usage ${total.usage_charge.display}; credits ${total.credits_applied.display}`);
     draw(context, `Due ${total.total_due.display}; paid ${total.total_paid.display}; outstanding ${total.outstanding.display}`,
       { bold: true });
   }
   draw(context, `Credits consumed: ${detail.credits.consumed ?? 'pending'}`);
+  draw(context, `Opening credit balance: ${detail.credits.opening_balance ?? 'pending'}; closing credit balance: ${detail.credits.closing_balance ?? 'pending'}`);
   if (detail.credits.status === 'pending_reconciliation') {
     draw(context, 'Some usage or credit evidence remains under reconciliation.');
   }

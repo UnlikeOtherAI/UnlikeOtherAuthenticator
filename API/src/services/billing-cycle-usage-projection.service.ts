@@ -21,7 +21,8 @@ export function projectCycleUsage(
     billingMonth: string; startsAt: Date; endsAt: Date; currency: string },
   tariff: BillingTariff,
 ): { lines: BillingCycleUsageLine[]; evidence: { team_id: string; snapshot_id: string;
-  cursor: string; sha256: string; captured_at: string; line_count: number } } {
+  cursor: string; sha256: string; captured_at: string; line_count: number;
+  content_sha256: string } } {
   if (usage.product !== expected.serviceIdentifier || usage.groupBy !== 'user' ||
     usage.scope.organizationId !== expected.organisationId ||
     usage.scope.teamId !== expected.teamId || usage.scope.userId !== null ||
@@ -33,6 +34,13 @@ export function projectCycleUsage(
   if (!meteringIsComplete(usage.billingCompleteness)) {
     hold('BILLING_CYCLE_LEDGER_COVERAGE_UNRESOLVED');
   }
+  // A new signed assertion can produce a new immutable observation cursor for
+  // identical receipts. Financial replay identity is the rated source facts,
+  // not the assertion, capture time or delivery snapshot hash.
+  const contentSha256 = createHash('sha256').update(JSON.stringify({
+    calls: usage.calls, lines: usage.lines.map((line) => JSON.stringify(line)).sort(),
+    billingCompleteness: usage.billingCompleteness,
+  })).digest('hex');
   const lines: BillingCycleUsageLine[] = usage.lines.map((line, index) => {
     if (line.billingProduct !== expected.serviceIdentifier) {
       hold('BILLING_CYCLE_LEDGER_PRODUCT_MISMATCH');
@@ -64,5 +72,14 @@ export function projectCycleUsage(
   return { lines, evidence: { team_id: expected.teamId,
     snapshot_id: usage.snapshot.id, cursor: usage.snapshot.cursor,
     sha256: usage.snapshot.sha256, captured_at: usage.snapshot.capturedAt,
-    line_count: lines.length } };
+    line_count: lines.length, content_sha256: contentSha256 } };
+}
+
+export type CycleUsageEvidence = ReturnType<typeof projectCycleUsage>['evidence'];
+
+/** Assertion/cursor changes do not change the underlying financial receipts. */
+export function cycleUsageContentFingerprint(rows: CycleUsageEvidence[]): string {
+  return createHash('sha256').update(JSON.stringify(rows.map((row) => ({
+    team_id: row.team_id, content_sha256: row.content_sha256,
+  })).sort((a, b) => a.team_id.localeCompare(b.team_id)))).digest('hex');
 }
