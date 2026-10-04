@@ -45,7 +45,7 @@ async function invoicedUsageAmountMinor(
 
 export async function runStripeInvoiceCloseCycle(deps?: {
   prisma?: PrismaClient;
-  stripe?: Pick<Stripe, 'accounts' | 'billing' | 'invoices'>;
+  stripe?: Pick<Stripe, 'accounts' | 'billing' | 'invoices' | 'invoiceItems'>;
   now?: () => Date;
   reconcileInvoice?: typeof reconcileStripeCycleInvoiceUsage;
   quote?: typeof quoteUnexportedClosedPeriodLiability;

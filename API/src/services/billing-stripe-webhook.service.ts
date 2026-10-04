@@ -37,7 +37,7 @@ export { refreshStripeSubscriptionProjection, syncStripeSubscriptionProjection }
 
 type StripeWebhookClient = Pick<
   Stripe,
-  'accounts' | 'billing' | 'checkout' | 'invoices' | 'subscriptions' | 'webhooks'
+  'accounts' | 'billing' | 'checkout' | 'invoices' | 'invoiceItems' | 'subscriptions' | 'webhooks'
 > &
   CreditFundingWebhookClient;
 

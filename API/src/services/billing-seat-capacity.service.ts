@@ -3,6 +3,7 @@ import type { PrismaClient } from '@prisma/client';
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import { requireLifecycleActor, type LifecycleActor } from './internal-admin-lifecycle.service.js';
+import { observedBillingTime } from './billing-seat-observed-time.service.js';
 
 function client(deps?: { prisma?: PrismaClient }): PrismaClient {
   return deps?.prisma ?? getAdminPrisma();
@@ -16,7 +17,7 @@ export async function listSeatSubscriptions(
   serviceId: string,
   deps?: { prisma?: PrismaClient; now?: () => Date },
 ) {
-  const now = deps?.now?.() ?? new Date();
+  const now = deps?.now?.() ?? await observedBillingTime(client(deps));
   const subscriptions = await client(deps).billingSeatSubscription.findMany({
     where: { serviceId },
     include: {
@@ -57,7 +58,6 @@ export async function changeFixedSeatCapacity(
   if (!Number.isSafeInteger(input.quantity) || input.quantity <= 0) {
     throw new AppError('BAD_REQUEST', 400, 'INVALID_SEAT_CAPACITY');
   }
-  const now = deps?.now?.() ?? new Date();
   return client(deps).$transaction(async (tx) => {
     // Recheck the token epoch and live superuser role at the final effect.
     const actorEmail = await requireLifecycleActor(tx as PrismaClient, input.actor);
@@ -73,6 +73,9 @@ export async function changeFixedSeatCapacity(
       WHERE id = ${input.subscriptionId} FOR UPDATE
     `;
     if (!locked.length) throw new AppError('NOT_FOUND', 404, 'SEAT_SUBSCRIPTION_NOT_FOUND');
+    // Financial effective time comes from the same clock as seat admission,
+    // after contention has cleared rather than from a skewed application host.
+    const now = deps?.now?.() ?? await observedBillingTime(tx);
     const subscription = await tx.billingSeatSubscription.findUniqueOrThrow({
       where: { id: input.subscriptionId },
       include: { capacityRevisions: { orderBy: { effectiveAt: 'desc' } } },

@@ -1,5 +1,27 @@
 export const llmBillingMarkdown = `## Canonical tariff and entitlement control plane
 
+### Private paid-usage exception recovery
+
+When a selected immutable Ledger provider receipt exceeds the original frozen
+cost bound, ordinary settlement remains held. The exact product-bound Ledger
+RuntimeKey calls \`POST /billing/v1/ledger/reservations/:dispatchId/exception\`
+with the selected receipt, exact USD actual cost and lowercase SHA-256 digest.
+The digest is over compact JSON of
+\`[dispatchId,receiptId,rawActualFixed18,"USD",requestFingerprint,rawBoundFixed18,contextDigest]\`.
+It creates only a held private exception, never a customer debit or release.
+\`GET\` at the same path returns the held or exact terminal decision to Ledger.
+
+Platform superusers review the oldest held receipts in Admin Billing → Usage
+exceptions or \`GET /internal/admin/billing/paid-usage-exceptions\`. A freshly
+issued (at most five minutes old), live-epoch superuser token may POST the exact
+evidence digest, stable idempotency key and written reason to
+\`/internal/admin/billing/paid-usage-exceptions/:dispatchId/write-off\`.
+UOA books the frozen gross rated liability once, charges at most the original
+reserved microcredits, explicitly waives the excess, and still counts gross
+usage against credit budgets. PREPAID wallet debits only the collectible part.
+Unknown actual cost, missing historical rating or a changed selected receipt
+remain held for further evidence; no operator can turn unknown into zero.
+
 Platform superusers configure append-only prepaid legal invoice tax policy at
 \`GET/POST /internal/admin/billing/credit-invoice-tax-policies\`. A policy binds
 one Stripe account, active legal issuer, issuer jurisdiction, inclusive tax

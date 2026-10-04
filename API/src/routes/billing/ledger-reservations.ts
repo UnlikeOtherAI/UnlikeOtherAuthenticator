@@ -4,6 +4,9 @@ import { z } from 'zod';
 import {
   finalizePrepaidDispatch, getLedgerDispatchDecision, reservePrepaidDispatch,
 } from '../../services/billing-prepaid-reservation.service.js';
+import {
+  getPaidUsageException, registerPaidUsageException,
+} from '../../services/billing-paid-usage-exception.service.js';
 import { AppError } from '../../utils/errors.js';
 
 const Identifier = z.string().min(1).max(160);
@@ -52,6 +55,13 @@ const ReleaseSchema = z.object({
   receipt_id: Identifier,
   proof: z.literal('provider_not_dispatched'),
 }).strict();
+const ExceptionSchema = z.object({
+  receipt_id: Identifier,
+  raw_cost_actual: Decimal,
+  currency: z.literal('USD'),
+  evidence_digest: z.string().regex(/^[a-f0-9]{64}$/),
+  source: z.literal('ledger_selected_provider_receipt'),
+}).strict();
 
 function runtimeSecret(request: FastifyRequest): string {
   const authorization = request.headers.authorization;
@@ -70,6 +80,23 @@ function delegation(request: FastifyRequest): string {
 }
 
 export function registerLedgerReservationRoutes(app: FastifyInstance): void {
+  app.get('/billing/v1/ledger/reservations/:dispatchId/exception', async (request, reply) => {
+    const { dispatchId } = ParamsSchema.parse(request.params);
+    const result = await getPaidUsageException({
+      runtimeSecret: runtimeSecret(request), dispatchId,
+    });
+    return reply.header('Cache-Control', 'no-store').send(result);
+  });
+  app.post('/billing/v1/ledger/reservations/:dispatchId/exception', async (request, reply) => {
+    const { dispatchId } = ParamsSchema.parse(request.params);
+    const body = ExceptionSchema.parse(request.body);
+    const result = await registerPaidUsageException({
+      runtimeSecret: runtimeSecret(request), dispatchId, receiptId: body.receipt_id,
+      rawCostActual: body.raw_cost_actual, currency: body.currency,
+      evidenceDigest: body.evidence_digest,
+    });
+    return reply.header('Cache-Control', 'no-store').send(result);
+  });
   app.get('/billing/v1/ledger/reservations/:dispatchId', async (request, reply) => {
     const { dispatchId } = ParamsSchema.parse(request.params);
     const result = await getLedgerDispatchDecision({

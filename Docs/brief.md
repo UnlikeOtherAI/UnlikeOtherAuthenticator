@@ -3025,3 +3025,11 @@ with authorized invoice and measured-usage/seat breakdown downloads. Final
 documents retain immutable amounts and explicit correction lineage. The ordered
 implementation and proof requirements are in
 [the billing delivery plan](plans/2026-10-04-billing-cycles-seats-and-prepaid.md).
+
+When a trusted provider receipt exceeds its pre-dispatch maximum, UOA keeps the
+financial hold until a current platform superuser reviews the exact private
+Ledger evidence. An explicit operator decision may collect only the original
+authorized credit hold and waive the excess; gross frozen-rated usage still
+counts against credit budgets. Unknown actual cost never becomes zero. The
+private route, operator doorway and immutable financial evidence are specified
+in [paid usage exception reconciliation](plans/2026-10-04-paid-usage-exception-reconciliation.md).

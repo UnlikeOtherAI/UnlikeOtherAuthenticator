@@ -9,12 +9,14 @@ import {
   type StripeAccountContext,
 } from './billing-stripe-client.service.js';
 import { stripeCalendarBillingMonth } from './billing-stripe-period.service.js';
+import { stripeSubscriptionInvoicePeriod } from './billing-stripe-invoice-period.service.js';
 import { exportStripeUsage, type StripeUsageExportResult } from './billing-stripe-usage.service.js';
 import { recordStripeInvoiceClose } from './billing-stripe-invoice-close-state.service.js';
+import { collectStripeMonthlyCharge } from './billing-stripe-monthly-charge.service.js';
 
 export type StripeInvoiceWebhookType = 'invoice.created' | 'invoice.finalization_failed' | 'invoice.finalized' | 'catchup';
 
-type StripeInvoiceClient = Pick<Stripe, 'accounts' | 'billing' | 'invoices'>;
+type StripeInvoiceClient = Pick<Stripe, 'accounts' | 'billing' | 'invoices' | 'invoiceItems'>;
 const MINIMUM_CYCLE_INVOICE_GRACE_SECONDS = 60 * 60;
 
 function externalId(value: string | { id: string } | null): string | null {
@@ -27,20 +29,6 @@ function invoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
     return null;
   }
   return externalId(invoice.parent.subscription_details.subscription);
-}
-
-function invoicePeriod(invoice: Stripe.Invoice): {
-  billingMonth: string;
-  startsAt: Date;
-  endsAt: Date;
-} {
-  const startsAt = new Date(invoice.period_start * 1000);
-  const endsAt = new Date(invoice.period_end * 1000);
-  const billingMonth = stripeCalendarBillingMonth(startsAt, endsAt);
-  if (!billingMonth) {
-    throw new AppError('INTERNAL', 502, 'STRIPE_INVOICE_PERIOD_INVALID');
-  }
-  return { billingMonth, startsAt, endsAt };
 }
 
 function logFinalizationFailure(
@@ -70,6 +58,7 @@ export async function reconcileStripeCycleInvoiceUsage(
     prisma: PrismaClient;
     stripe: StripeInvoiceClient;
     exportUsage?: typeof exportStripeUsage;
+    collectMonthlyCharge?: typeof collectStripeMonthlyCharge;
     manageClose?: boolean;
     now?: () => Date;
     log?: Pick<FastifyBaseLogger, 'error'>;
@@ -106,7 +95,6 @@ export async function reconcileStripeCycleInvoiceUsage(
   if (!subscriptionId) {
     throw new AppError('INTERNAL', 502, 'STRIPE_INVOICE_BINDING_INVALID');
   }
-  const period = invoicePeriod(invoice);
   const subscription = await deps.prisma.billingStripeSubscription.findUnique({
     where: {
       accountId_stripeSubscriptionId: {
@@ -120,10 +108,29 @@ export async function reconcileStripeCycleInvoiceUsage(
       livemode: true,
       currentPeriodStart: true,
       currentPeriodEnd: true,
+      stripeUsageItemId: true,
+      stripeMonthlyItemId: true,
+      status: true,
+      cancelAtPeriodEnd: true,
       customer: { select: { stripeCustomerId: true } },
       tariff: { select: { currency: true } },
     },
   });
+  if (!subscription || subscription.accountId !== params.account.id ||
+    subscription.livemode !== params.account.livemode ||
+    !subscription.customer.stripeCustomerId ||
+    externalId(invoice.customer) !== subscription.customer.stripeCustomerId ||
+    invoice.currency.toUpperCase() !== subscription.tariff.currency) {
+    throw new AppError('INTERNAL', 502, 'STRIPE_INVOICE_BINDING_INVALID');
+  }
+  const period = await stripeSubscriptionInvoicePeriod({
+    invoiceId: invoice.id,
+    subscriptionId,
+    usageItemId: subscription.stripeUsageItemId,
+    monthlyItemId: subscription.stripeMonthlyItemId,
+    livemode: params.account.livemode,
+    currency: subscription.tariff.currency,
+  }, deps.stripe);
   const samePeriod =
     subscription?.currentPeriodStart?.getTime() === period.startsAt.getTime() &&
     subscription.currentPeriodEnd?.getTime() === period.endsAt.getTime();
@@ -133,11 +140,6 @@ export async function reconcileStripeCycleInvoiceUsage(
       stripeCalendarBillingMonth(subscription.currentPeriodStart, subscription.currentPeriodEnd),
     );
   if (
-    !subscription ||
-    subscription.accountId !== params.account.id ||
-    subscription.livemode !== params.account.livemode ||
-    externalId(invoice.customer) !== subscription.customer.stripeCustomerId ||
-    invoice.currency.toUpperCase() !== subscription.tariff.currency ||
     (!samePeriod && !advancedToNextPeriod)
   ) {
     throw new AppError('INTERNAL', 502, 'STRIPE_INVOICE_BINDING_INVALID');
@@ -164,6 +166,20 @@ export async function reconcileStripeCycleInvoiceUsage(
   }
   try {
     if (graceInsufficient) throw new AppError('INTERNAL', 409, 'STRIPE_INVOICE_GRACE_PERIOD_INSUFFICIENT');
+    await (deps.collectMonthlyCharge ?? collectStripeMonthlyCharge)({
+      subscriptionId: subscription.id,
+      accountId: params.account.id,
+      invoiceId: invoice.id,
+      customerId: subscription.customer.stripeCustomerId,
+      livemode: params.account.livemode,
+      billingMonth: period.billingMonth,
+      periodStartsAt: period.startsAt,
+      periodEndsAt: period.endsAt,
+      currency: subscription.tariff.currency,
+      stripeMonthlyItemId: subscription.stripeMonthlyItemId,
+      monthlyLineObserved: period.monthlyLineObserved,
+      closingCancellation: subscription.status === 'canceled' || subscription.cancelAtPeriodEnd,
+    }, { prisma: deps.prisma, stripe: deps.stripe, now: deps.now });
     const result = await (deps.exportUsage ?? exportStripeUsage)(
       { subscriptionId: subscription.id, billingMonth: period.billingMonth },
       {
