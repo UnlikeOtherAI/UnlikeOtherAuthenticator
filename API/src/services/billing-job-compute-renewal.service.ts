@@ -97,6 +97,10 @@ async function assertCurrentGrantAuthority(
     | 'originProduct' | 'originSourceDomain' | 'ledgerAudience' | 'originRuntimeKeyId'>,
 ) {
   await lockProductTeamPolicyShared(tx);
+  const activeOriginKey = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+    SELECT id FROM billing_ledger_runtime_keys
+    WHERE id = ${row.originRuntimeKeyId} AND revoked_at IS NULL FOR SHARE`);
+  if (activeOriginKey.length !== 1) deny();
   await resolveConfidentialDelegationForSource({ sourceDomain: row.originSourceDomain,
     product: row.originProduct, resource: row.ledgerAudience, scope: 'ai.invoke' },
   { prisma: tx as unknown as PrismaClient });
@@ -150,6 +154,30 @@ async function assertRecipientAvailable(tx: Prisma.TransactionClient): Promise<v
     select: { id: true },
   });
   if (!current) deny('JOB_COMPUTE_RECIPIENT_UNAVAILABLE');
+  const locked = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+    SELECT id FROM billing_app_keys
+    WHERE id = ${current.id} AND revoked_at IS NULL
+      AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP) FOR SHARE`);
+  if (locked.length !== 1) deny('JOB_COMPUTE_RECIPIENT_UNAVAILABLE');
+}
+
+async function issueTransaction<T>(db: PrismaClient,
+  action: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      return await db.$transaction(action,
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    } catch (error) {
+      const candidate = error as { code?: string; meta?: { code?: string } };
+      if (!['P2002', 'P2034'].includes(candidate.code ?? '')
+        && !(candidate.code === 'P2010' && candidate.meta?.code === '40001')) throw error;
+      if (attempt === 4) {
+        throw new AppError('INTERNAL', 503, 'JOB_COMPUTE_ISSUE_RETRY_EXHAUSTED');
+      }
+      await new Promise((resolve) => setTimeout(resolve, 20 * (attempt + 1)));
+    }
+  }
+  throw new AppError('INTERNAL', 503, 'JOB_COMPUTE_ISSUE_RETRY_EXHAUSTED');
 }
 
 export async function issueJobComputeRenewal(
@@ -173,7 +201,7 @@ export async function issueJobComputeRenewal(
   const identityKey = immutableKey(input);
   const secretDigest = hash(input.secret);
   const identityDomain = originalIdentityDomain(original.source_domain, original.act);
-  const row = await db.$transaction(async (tx) => {
+  const row = await issueTransaction(db, async (tx) => {
     const frozen = { subjectId: original.sub, tokenVersion: original.tv,
       originTokenJti: original.jti,
       identityDomain, orgId: original.active.orgId, teamId: original.active.teamId,
@@ -203,7 +231,7 @@ export async function issueJobComputeRenewal(
       originalActorChain: original.act as Prisma.InputJsonValue | undefined,
       createdAt: now, expiresAt: new Date(now.getTime() + GRANT_TTL_MS),
     } });
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  });
   return { grant_id: row.id, expires_at: row.expiresAt.toISOString(),
     purpose: row.purpose, ledger_job_id: row.ledgerJobId,
     water_job_id: row.waterJobId, scope_turn_id: row.scopeTurnId };
@@ -250,11 +278,17 @@ async function recipientGrant(
 ) {
   validIdentity(params.identity);
   if (!SECRET.test(params.secret)) deny();
+  await lockProductTeamPolicyShared(tx);
   const recipient = await verifyBillingAppKey(params.appKey,
     { prisma: tx as unknown as PrismaClient, now: () => now });
   if (recipient.purpose !== BillingAppKeyPurpose.CUSTOMER_LIFECYCLE
     || recipient.service.identifier !== RECIPIENT_PRODUCT
     || recipient.actorIssuer !== RECIPIENT_ORIGIN) deny('JOB_COMPUTE_RECIPIENT_MISMATCH');
+  const activeRecipient = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+    SELECT id FROM billing_app_keys
+    WHERE id = ${recipient.id} AND revoked_at IS NULL
+      AND (expires_at IS NULL OR expires_at > ${now}) FOR SHARE`);
+  if (activeRecipient.length !== 1) deny('JOB_COMPUTE_RECIPIENT_MISMATCH');
   await tx.$queryRaw(Prisma.sql`SELECT id FROM billing_job_compute_renewals
     WHERE id = ${params.grantId} FOR UPDATE`);
   const row = await tx.billingJobComputeRenewal.findUnique({ where: { id: params.grantId } });
@@ -320,14 +354,17 @@ export async function renewJobComputeAuthority(
     const row = await recipientGrant(params, tx, now);
     if (row.revokedAt || row.expiresAt <= now) deny();
     const current = await assertCurrentGrantAuthority(tx, row);
+    const nowSeconds = Math.floor(now.getTime() / 1000);
+    const exp = Math.min(Math.floor(row.expiresAt.getTime() / 1000),
+      nowSeconds + TOKEN_TTL_SECONDS);
+    if (exp <= nowSeconds) deny();
     const actor = row.originalActorChain as ConfidentialActorChain | null;
     const jwt = await signConfidentialAccessToken({
       subject: row.subjectId, credentialEpoch: row.tokenVersion, email: current.email,
       sourceDomain: new URL(RECIPIENT_ORIGIN).hostname,
       product: RECIPIENT_PRODUCT, resource: row.ledgerAudience,
       issuer: getPublicBaseUrl(), ttlSeconds: TOKEN_TTL_SECONDS,
-      expiresAtEpochSeconds: Math.min(Math.floor(row.expiresAt.getTime() / 1000),
-        Math.floor(now.getTime() / 1000) + TOKEN_TTL_SECONDS),
+      expiresAtEpochSeconds: exp,
       scope: 'ai.invoke', org: current.org,
       active: { orgId: row.orgId, teamId: row.teamId },
       actor: { sub: row.originSourceDomain, product: row.originProduct,
@@ -338,7 +375,7 @@ export async function renewJobComputeAuthority(
         origin_product: row.originProduct, origin_source_domain: row.originSourceDomain },
     });
     return { access_token: jwt, token_type: 'Bearer' as const,
-      expires_in: TOKEN_TTL_SECONDS };
+      expires_in: exp - nowSeconds };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 
@@ -354,5 +391,32 @@ export async function revokeJobComputeRenewal(
       where: { id: row.id }, data: { revokedAt: now },
     });
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  return { revoked: true as const };
+}
+
+export async function revokeJobComputeRenewalFromOrigin(
+  params: { runtimeSecret: string; secret: string; grantId: string;
+    issueKey: string; identity: JobComputeIdentity },
+  deps: { prisma?: PrismaClient; now?: Date } = {},
+) {
+  validIdentity(params.identity);
+  if (!SECRET.test(params.secret) || !HEX.test(params.issueKey)) deny();
+  const db = deps.prisma ?? getAdminPrisma();
+  const key = await verifyLedgerRuntimeKey(params.runtimeSecret, { prisma: db });
+  const now = deps.now ?? new Date();
+  await db.$transaction(async (tx) => {
+    await tx.$queryRaw(Prisma.sql`SELECT id FROM billing_job_compute_renewals
+      WHERE id = ${params.grantId} FOR UPDATE`);
+    const row = await tx.billingJobComputeRenewal.findUnique({
+      where: { id: params.grantId },
+    });
+    if (!row || row.originRuntimeKeyId !== key.id || row.issueKey !== params.issueKey
+      || row.identityKey !== immutableKey(params.identity)
+      || row.secretDigest !== hash(params.secret)
+      || !identityMatches(row, params.identity)) deny();
+    if (!row.revokedAt) await tx.billingJobComputeRenewal.update({
+      where: { id: row.id }, data: { revokedAt: now },
+    });
+  });
   return { revoked: true as const };
 }

@@ -328,6 +328,10 @@ and epoch. A reservation carrying this token must include the exact
 transactions, including replays. Ledger separately verifies its own active
 job and turn before any provider dispatch. Older jobs with no grant hold for
 owner reauthentication; a retry under a new Ledger job cannot inherit a grant.
+The origin Ledger runtime key may revoke with the original issue key, secret,
+and frozen job tuple. The issuer locks live runtime and recipient keys against
+concurrent revocation. Concurrent identical issues converge on one grant.
+Near expiry, `expires_in` reports only the remaining whole seconds.
 
 Mode rules:
 

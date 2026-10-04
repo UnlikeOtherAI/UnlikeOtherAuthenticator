@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   assertLiveJobComputeDispatch, issueJobComputeRenewal, recoverJobComputeRenewal,
   renewJobComputeAuthority, revokeJobComputeRenewal,
+  revokeJobComputeRenewalFromOrigin,
   type JobComputeIdentity,
 } from '../../src/services/billing-job-compute-renewal.service.js';
 import { digestBillingAppKey } from '../../src/utils/billing-app-key.js';
@@ -182,6 +183,19 @@ describe.skipIf(!enabled)('finite job-compute grant in PostgreSQL', () => {
       { prisma: db })).rejects.toThrow('JOB_COMPUTE_RENEWAL_DENIED');
   });
 
+  it('concurrent identical issue requests converge to one durable grant', async () => {
+    const delegation = await freshOriginalDelegation();
+    const input = { ...identity, ledgerJobId: 'ledger-job-concurrent-test',
+      issueKey: '5'.repeat(64), secret: `uoa_job_${'g'.repeat(43)}` };
+    const [first, second] = await Promise.all([
+      issueJobComputeRenewal({ runtimeSecret, delegation, input }, { prisma: db }),
+      issueJobComputeRenewal({ runtimeSecret, delegation, input }, { prisma: db }),
+    ]);
+    expect(second).toEqual(first);
+    expect(await db.billingJobComputeRenewal.count({ where: { issueKey: input.issueKey } }))
+      .toBe(1);
+  });
+
   it('renews a live original grant with frozen epoch and refuses its token after revoke', async () => {
     const row = await db.billingJobComputeRenewal.findUniqueOrThrow({
       where: { issueKey: '3'.repeat(64) },
@@ -210,6 +224,12 @@ describe.skipIf(!enabled)('finite job-compute grant in PostgreSQL', () => {
       tokenVersion: row.tokenVersion, now: new Date() };
     await expect(db.$transaction((tx) => assertLiveJobComputeDispatch(tx, dispatch)))
       .resolves.toBeUndefined();
+    await db.billingJobComputeRenewal.update({ where: { id: row.id },
+      data: { expiresAt: new Date(Date.now() + 25_000) } });
+    const nearExpiry = await renewJobComputeAuthority({ appKey, secret: issuedSecret,
+      grantId: row.id, identity: issuedIdentity }, { prisma: db });
+    expect(nearExpiry.expires_in).toBeGreaterThan(0);
+    expect(nearExpiry.expires_in).toBeLessThanOrEqual(25);
     await revokeJobComputeRenewal({ appKey, secret: issuedSecret,
       grantId: row.id, identity: issuedIdentity }, { prisma: db });
     await expect(db.$transaction((tx) => assertLiveJobComputeDispatch(tx, dispatch)))
@@ -237,5 +257,19 @@ describe.skipIf(!enabled)('finite job-compute grant in PostgreSQL', () => {
       data: { tokenVersion: 1 } });
     await expect(recoverJobComputeRenewal({ runtimeSecret, input },
       { prisma: db })).rejects.toThrow('AUTHENTICATION_FAILED');
+    const row = await db.billingJobComputeRenewal.findUniqueOrThrow({
+      where: { issueKey: input.issueKey },
+    });
+    await expect(revokeJobComputeRenewalFromOrigin({ runtimeSecret,
+      secret: input.secret, issueKey: input.issueKey, grantId: row.id,
+      identity: { ...identity, ledgerJobId: 'wrong' } },
+    { prisma: db })).rejects.toThrow('JOB_COMPUTE_RENEWAL_DENIED');
+    await expect(revokeJobComputeRenewalFromOrigin({ runtimeSecret,
+      secret: input.secret, issueKey: input.issueKey, grantId: row.id,
+      identity: { ...identity, ledgerJobId: input.ledgerJobId } },
+    { prisma: db })).resolves.toEqual({ revoked: true });
+    expect((await db.billingJobComputeRenewal.findUniqueOrThrow({
+      where: { id: row.id },
+    })).revokedAt).not.toBeNull();
   });
 });

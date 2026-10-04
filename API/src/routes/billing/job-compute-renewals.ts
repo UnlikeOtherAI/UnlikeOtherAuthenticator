@@ -4,6 +4,7 @@ import { z } from 'zod';
 import {
   issueJobComputeRenewal, recoverJobComputeRenewal,
   renewJobComputeAuthority, revokeJobComputeRenewal,
+  revokeJobComputeRenewalFromOrigin,
 } from '../../services/billing-job-compute-renewal.service.js';
 import { AppError } from '../../utils/errors.js';
 
@@ -55,6 +56,16 @@ export function registerJobComputeRenewalRoutes(app: FastifyInstance): void {
     const body = Issue.parse(request.body);
     const result = await recoverJobComputeRenewal({ runtimeSecret: bearer(request),
       input: { ...identity(body), issueKey: body.issue_key, secret: body.secret } });
+    reply.header('Cache-Control', 'no-store');
+    return result;
+  });
+  app.post('/billing/v1/ledger/job-compute-renewals/:grantId/revoke', async (request, reply) => {
+    const body = Issue.parse(request.body);
+    const { grantId } = Params.parse(request.params);
+    const result = await revokeJobComputeRenewalFromOrigin({
+      runtimeSecret: bearer(request), grantId, issueKey: body.issue_key,
+      secret: body.secret, identity: identity(body),
+    });
     reply.header('Cache-Control', 'no-store');
     return result;
   });
