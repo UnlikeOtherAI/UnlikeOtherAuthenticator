@@ -4,6 +4,10 @@ import type Stripe from 'stripe';
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import { assertStripeObjectLivemode, requireStripeBillingEnabled } from './billing-stripe-client.service.js';
+import { prepareStripePaymentInvoice, persistStripePaymentInvoice }
+  from './billing-stripe-payment-invoice-source.service.js';
+import { stripeInvoiceMinor, verifyStripeInvoiceCash, type StripeInvoiceCashClient }
+  from './billing-stripe-payment-evidence.service.js';
 
 export async function listHeldStripeInvoiceCloses(deps?: { prisma?: PrismaClient }) {
   const prisma = deps?.prisma ?? getAdminPrisma();
@@ -33,7 +37,7 @@ export async function compensateFinalizedStripeInvoice(
     observedAt: Date;
     now?: Date;
   },
-  deps?: { prisma?: PrismaClient; stripe?: Pick<Stripe, 'accounts' | 'invoices'> },
+  deps?: { prisma?: PrismaClient; stripe?: Pick<Stripe, 'accounts' | 'subscriptions'> & StripeInvoiceCashClient },
 ) {
   const prisma = deps?.prisma ?? getAdminPrisma();
   const stripe = deps?.stripe ?? requireStripeBillingEnabled().client;
@@ -80,14 +84,33 @@ export async function compensateFinalizedStripeInvoice(
         remote.status !== 'paid' || remote.billing_reason !== 'manual' ||
         remoteCustomer !== close.subscription.customer.stripeCustomerId ||
         remote.currency.toUpperCase() !== close.currency ||
-        BigInt(remote.amount_paid) !== expectedMinor ||
+        remote.amount_paid !== remote.amount_due || remote.amount_remaining !== 0 ||
+        remote.amount_due !== remote.total ||
         !metadataMatches(remote.metadata) ||
         remoteLines.has_more || remoteLines.data.length !== 1 ||
-        !line || line.amount !== Number(expectedMinor) ||
+        !line || line.invoice !== remote.id || line.livemode !== remote.livemode ||
+        line.period.start !== close.periodStartsAt.getTime() / 1000 ||
+        line.period.end !== close.periodEndsAt.getTime() / 1000 ||
+        line.taxes === null ||
+        line.discount_amounts?.some((item) => item.amount !== 0) ||
+        line.pretax_credit_amounts?.some((item) => item.amount !== 0) ||
         line.currency.toUpperCase() !== close.currency ||
         !metadataMatches(line.metadata)) {
       throw new AppError('BAD_REQUEST', 409, 'STRIPE_INVOICE_ADJUSTMENT_EVIDENCE_MISMATCH');
     }
+    const taxes = line.taxes ?? [];
+    const inclusiveTax = taxes.filter((tax) => tax.tax_behavior === 'inclusive')
+      .reduce((sum, tax) => sum + stripeInvoiceMinor(tax.amount), 0n);
+    const tax = taxes.reduce((sum, row) => sum + stripeInvoiceMinor(row.amount), 0n);
+    if (stripeInvoiceMinor(line.amount) - inclusiveTax !== expectedMinor ||
+      stripeInvoiceMinor(remote.total) !== expectedMinor + tax ||
+      remote.total_taxes === null || tax !== remote.total_taxes.reduce((sum, row) =>
+        sum + stripeInvoiceMinor(row.amount), 0n)) {
+      throw new AppError('BAD_REQUEST', 409, 'STRIPE_INVOICE_ADJUSTMENT_EVIDENCE_MISMATCH');
+    }
+    // A paid status also permits out-of-band marking. Only captured processor
+    // cash can satisfy a late financial liability; tax does not reduce usage.
+    await verifyStripeInvoiceCash(remote, stripe);
     await tx.billingStripeInvoiceCloseResolution.create({
       data: {
         closeId: close.id,
@@ -103,6 +126,13 @@ export async function compensateFinalizedStripeInvoice(
     await tx.billingStripeInvoiceClose.update({
       where: { id: close.id }, data: { state: 'COMPENSATED', lastError: null },
     });
+    // Webhooks may precede the operator binding. Insert the verified legal
+    // invoice source in this transaction so document issuance cannot be lost.
+    const source = await prepareStripePaymentInvoice(remote.id,
+      close.subscription.account, tx as unknown as PrismaClient, stripe);
+    if (!source) throw new AppError('INTERNAL', 409, 'STRIPE_INVOICE_ADJUSTMENT_SOURCE_UNPROVEN');
+    await persistStripePaymentInvoice(tx, source);
+
     await tx.adminAuditLog.create({
       data: {
         actorEmail: params.actorEmail,
@@ -119,5 +149,5 @@ export async function compensateFinalizedStripeInvoice(
       },
     });
     return { close_id: close.id, state: 'compensated' as const };
-  });
+  }, { timeout: 30_000 });
 }

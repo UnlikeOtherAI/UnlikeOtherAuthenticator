@@ -11,6 +11,9 @@ import { assertStripeObjectLivemode, requireStripeBillingEnabled, resolveStripeA
 import { collectStripeMonthlyCharge } from './billing-stripe-monthly-charge.service.js';
 import { freezeStripeMonthlyChargeSource } from './billing-stripe-monthly-charge-source.service.js';
 import { stripeExternalId } from './billing-stripe-webhook-utils.service.js';
+import { resumeCanceledStripeRenewal } from './billing-stripe-canceled-renewal.service.js';
+import type { quoteUnexportedClosedPeriodLiability }
+  from './billing-stripe-invoice-close-quote.service.js';
 
 type Client = Pick<Stripe, 'accounts' | 'subscriptions' | 'invoices' | 'invoiceItems'>;
 type Source = Awaited<ReturnType<typeof freezeStripeMonthlyChargeSource>>;
@@ -70,7 +73,8 @@ async function verifyClosingDraftLines(stripe: Client, invoice: Stripe.Invoice,
 export async function collectStripeClosingSeatInvoice(params: {
   subscriptionId: string; billingMonth: string;
 }, deps: { prisma: PrismaClient; stripe?: Client; stripeLivemode?: boolean;
-  quote?: typeof quoteSubscriptionMonthlyCharge; now?: () => Date }) {
+  quote?: typeof quoteSubscriptionMonthlyCharge; now?: () => Date;
+  quoteUsage?: typeof quoteUnexportedClosedPeriodLiability }) {
   if (!deps.stripe && !getEnv().STRIPE_BILLING_ENABLED) return null;
   const row = await deps.prisma.billingStripeSubscription.findUnique({
     where: { id: params.subscriptionId }, include: { tariff: true, customer: true },
@@ -100,7 +104,13 @@ export async function collectStripeClosingSeatInvoice(params: {
     accountId: row.accountId, subscriptionId: row.id, billingMonth: lastMonth,
     periodStartsAt: start, periodEndsAt: end, currency: row.tariff.currency,
   }, deps.prisma);
-  if (source.allocationKind !== 'CLOSING' || source.state === 'NO_CHARGE') return source;
+  if (source.state === 'NO_CHARGE') return source;
+  if (source.allocationKind === 'RENEWAL') {
+    await resumeCanceledStripeRenewal({ sourceId: source.id, subscriptionId: row.id },
+      { prisma: deps.prisma, stripe, quoteUsage: deps.quoteUsage });
+    return source;
+  }
+  if (source.allocationKind !== 'CLOSING') hold('STRIPE_CLOSING_INVOICE_SOURCE_UNPROVEN');
   const token = randomUUID();
   const lease = await deps.prisma.$queryRaw<Array<{ firstInvoiceAttemptAt: Date }>>(Prisma.sql`
     UPDATE billing_stripe_monthly_charges SET invoice_lease_token = ${token}::uuid,

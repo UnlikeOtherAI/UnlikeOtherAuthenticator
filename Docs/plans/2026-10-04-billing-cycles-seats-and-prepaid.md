@@ -555,3 +555,15 @@ quote, complete receipt cohort, wallet boundary, actual cash source and source
 line allocation. Missing legal documents or a changed net charge hold the
 cycle rather than creating a quote-derived invoice. A later payable receipt
 still requires a genuine supplemental financial line before finalization.
+
+Manual binding of a paid supplemental Stripe invoice verifies captured cash,
+the exact original service period, payer and processor account, and the complete
+line tax amounts. Its net usage amount settles the usage liability; VAT remains
+a separate actual invoice charge. The same transaction records the legal invoice
+source and normalized payments, including when its webhook arrived before the
+operator binding. A processor invoice merely marked paid cannot settle it.
+
+When cancellation disabled collection on an already accepted renewal invoice,
+the closing collector resumes that same invoice after rechecking its complete
+service lines and earned fee. Unresolved usage or a foreign line holds it. This
+path creates neither a second monthly fee nor a replacement payment invoice.

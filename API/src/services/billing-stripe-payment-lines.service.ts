@@ -28,6 +28,10 @@ export async function verifyStripePaymentInvoiceLines(params: {
   const monthlies = await prisma.billingStripeMonthlyCharge.findMany({
     where: { accountId: params.accountId, stripeInvoiceId: params.invoice.id, state: 'ACCEPTED' },
   });
+  const corrections = await prisma.billingStripeInvoiceCloseResolution.findMany({
+    where: { stripeAdjustmentInvoiceId: params.invoice.id, close: { accountId: params.accountId } },
+    include: { close: true },
+  });
   const result: VerifiedStripeInvoiceLine[] = [];
   const seen = new Set<string>();
   let after: string | undefined;
@@ -48,7 +52,9 @@ export async function verifyStripePaymentInvoiceLines(params: {
       const itemId = line.parent?.type === 'invoice_item_details' ?
         line.parent.invoice_item_details?.invoice_item : null;
       const monthly = itemId ? monthlies.find((row) => row.stripeInvoiceItemId === itemId) : null;
-      const subscription = monthly ? subscriptions.find((row) => row.id === monthly.subscriptionId) :
+      const correction = corrections.find((row) => row.stripeAdjustmentLineId === line.id);
+      const subscription = correction ? subscriptions.find((row) =>
+        row.id === correction.close.subscriptionId) : monthly ? subscriptions.find((row) => row.id === monthly.subscriptionId) :
         subscriptions.find((row) => row.stripeSubscriptionId === details?.subscription);
       if (!subscription || subscription.teamId !== payer.teamId ||
         subscription.customerId !== payer.customerId || subscription.scope !== payer.scope ||
@@ -56,7 +62,7 @@ export async function verifyStripePaymentInvoiceLines(params: {
         subscription.tariff.currency !== params.invoice.currency.toUpperCase() ||
         (details && details.subscription_item !== subscription.stripeUsageItemId &&
           details.subscription_item !== subscription.stripeMonthlyItemId) ||
-        (!details && !monthly)) hold();
+        (!details && !monthly && !correction)) hold();
       if (monthly && (monthly.currency !== line.currency.toUpperCase() ||
         monthly.amountMinor !== stripeInvoiceMinor(line.amount) ||
         monthly.periodStartsAt.getTime() !== line.period.start * 1000 ||
@@ -68,12 +74,17 @@ export async function verifyStripePaymentInvoiceLines(params: {
       const amount = stripeInvoiceMinor(line.amount);
       if (inclusiveTax > amount) hold();
       const base = amount - inclusiveTax;
-      const usage = Boolean(details && details.subscription_item === subscription.stripeUsageItemId);
+      if (correction && (base !== correction.paidAmountMinor ||
+        correction.close.currency !== line.currency.toUpperCase() ||
+        correction.close.periodStartsAt.getTime() !== line.period.start * 1000 ||
+        correction.close.periodEndsAt.getTime() !== line.period.end * 1000)) hold();
+      const usage = Boolean(correction ||
+        (details && details.subscription_item === subscription.stripeUsageItemId));
       const at = new Date(line.period.start * 1000);
       if (Number.isNaN(at.getTime())) hold();
       result.push({ stripeLineId: line.id, serviceId: subscription.serviceId,
         serviceIdentifier: subscription.service.identifier,
-        billingMonth: monthly?.billingMonth ?? at.toISOString().slice(0, 7),
+        billingMonth: correction?.close.billingMonth ?? monthly?.billingMonth ?? at.toISOString().slice(0, 7),
         label: `${subscription.service.name} ${usage ? 'usage charge' : 'monthly subscription'}`,
         subscriptionMinor: usage ? 0n : base, usageMinor: usage ? base : 0n,
         taxMinor, creditMinor: 0n, grossMinor: base + taxMinor, dueMinor: base + taxMinor });

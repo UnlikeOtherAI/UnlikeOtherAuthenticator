@@ -207,6 +207,65 @@ describe.skipIf(!process.env.DATABASE_URL)('Stripe monthly seat charge source', 
     })).toBe(0);
   });
 
+  it('resumes an existing verified renewal after cancellation without a second fee', async () => {
+    const original = await db.prisma.billingStripeSubscription.findUniqueOrThrow({
+      where: { id: subscriptionId }, include: { checkout: true } });
+    const checkout = await db.prisma.billingStripeCheckoutSession.create({ data: {
+      accountId, appKeyId: original.checkout.appKeyId, customerId: original.customerId,
+      serviceId, tariffId, tariffSource: 'SERVICE_DEFAULT', orgId, teamId: null,
+      scope: 'ORGANISATION', scopeKey: orgId, actorJti: randomUUID(),
+      requestedByUserId: original.checkout.requestedByUserId, status: 'complete',
+      successUrlDigest: 'a'.repeat(64), cancelUrlDigest: 'b'.repeat(64),
+      leaseExpiresAt: new Date('2026-10-05T00:00:00Z') } });
+    const local = await db.prisma.billingStripeSubscription.create({ data: {
+      accountId, checkoutId: checkout.id, customerId: original.customerId,
+      serviceId, tariffId, tariffSource: 'SERVICE_DEFAULT', orgId, teamId: null,
+      scope: 'ORGANISATION', scopeKey: orgId, stripeSubscriptionId: 'sub_existing_renewal',
+      stripeUsageItemId: 'si_existing_renewal', status: 'canceled', livemode: false,
+      billableFrom: startsAt, billableUntil: new Date('2026-09-16T00:00:00Z') } });
+    const item = { id: 'ii_existing_renewal', invoice: 'in_existing_renewal', customer: 'cus_monthly',
+      amount: 5000, currency: 'usd', livemode: false, period: {
+        start: startsAt.getTime() / 1000, end: endsAt.getTime() / 1000 }, metadata: {} };
+    const frozenQuote = { ...quote(), source: { kind: 'stripe', id: local.id } };
+    await collectStripeMonthlyCharge({ ...params(item.invoice), subscriptionId: local.id }, {
+      prisma: db.prisma, quote: vi.fn().mockResolvedValue(frozenQuote), stripe: { invoiceItems: {
+        list: vi.fn().mockResolvedValue({ data: [], has_more: false }),
+        create: vi.fn().mockImplementation(async (input: Record<string, unknown>) =>
+          ({ ...item, metadata: input.metadata })) } } as never });
+    const account = await db.prisma.billingStripeAccount.findUniqueOrThrow({ where: { id: accountId } });
+    const source = await db.prisma.billingStripeMonthlyCharge.findUniqueOrThrow({
+      where: { subscriptionId_billingMonth: { subscriptionId: local.id, billingMonth: month } } });
+    const invoice = { id: source.stripeInvoiceId, livemode: false, status: 'open', auto_advance: false,
+      collection_method: 'charge_automatically', customer: 'cus_monthly', currency: 'usd',
+      total: 5000, amount_due: 5000, total_taxes: [],
+      parent: { type: 'subscription_details', subscription_details: { subscription: local.stripeSubscriptionId } } };
+    let foreign = true;
+    const stripe = { accounts: { retrieveCurrent: vi.fn().mockResolvedValue({ id: account.stripeAccountId }) },
+      subscriptions: { retrieve: vi.fn() }, invoiceItems: { list: vi.fn(), create: vi.fn() },
+      invoices: { retrieve: vi.fn().mockResolvedValue(invoice), create: vi.fn(), finalizeInvoice: vi.fn(),
+        update: vi.fn().mockImplementation(async () => Object.assign(invoice, { auto_advance: true })),
+        listLineItems: vi.fn().mockImplementation(async () => ({ has_more: false, data: [{
+          id: 'il_existing_monthly', invoice: invoice.id, livemode: false, currency: 'usd', amount: 5000,
+          period: { start: startsAt.getTime() / 1000, end: endsAt.getTime() / 1000 }, taxes: [],
+          parent: { type: 'invoice_item_details', invoice_item_details: { invoice_item: source.stripeInvoiceItemId } },
+          discount_amounts: [], pretax_credit_amounts: [],
+        }, ...(foreign ? [{ id: 'il_foreign' }] : [])] })) } };
+    const deps = { prisma: db.prisma, stripe: stripe as unknown as Stripe, stripeLivemode: false,
+      quote: vi.fn().mockResolvedValue(frozenQuote), quoteUsage: vi.fn().mockResolvedValue({
+        amountMicroMinor: 0n, currency: 'USD', ledgerSnapshotCursor: 'complete-proof' }) };
+    await expect(collectStripeClosingSeatInvoice({ subscriptionId: local.id, billingMonth: month }, deps))
+      .rejects.toThrow('STRIPE_SUBSCRIPTION_INVOICE_LINES_UNPROVEN');
+    expect(stripe.invoices.update).not.toHaveBeenCalled();
+    foreign = false;
+    await collectStripeClosingSeatInvoice({ subscriptionId: local.id, billingMonth: month }, deps);
+    await collectStripeClosingSeatInvoice({ subscriptionId: local.id, billingMonth: month }, deps);
+    expect(stripe.invoices.update).toHaveBeenCalledOnce();
+    expect(stripe.invoices.create).not.toHaveBeenCalled();
+    expect(stripe.invoiceItems.create).not.toHaveBeenCalled();
+    expect((await db.prisma.billingStripeMonthlyCharge.findUniqueOrThrow({ where: { id: source.id } }))
+      .stripeInvoiceId).toBe(source.stripeInvoiceId);
+  });
+
   it('recovers one earned closing invoice after cancellation and a lost creation acknowledgement', async () => {
     const closingMonth = '2026-07';
     const start = new Date('2026-07-01T00:00:00.000Z');

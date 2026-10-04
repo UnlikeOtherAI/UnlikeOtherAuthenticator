@@ -34,6 +34,18 @@ export async function prepareStripePaymentInvoice(
       stripeSubscriptionId = closing.subscription.stripeSubscriptionId;
     }
   }
+  if (!stripeSubscriptionId && invoice.parent === null) {
+    const resolution = await prisma.billingStripeInvoiceCloseResolution.findFirst({
+      where: { stripeAdjustmentInvoiceId: invoice.id, close: { accountId: account.id } },
+      include: { close: { include: { subscription: true } } },
+    });
+    if (resolution && invoice.metadata?.uoa_source_close_id === resolution.closeId &&
+      invoice.metadata?.uoa_source_invoice_id === resolution.close.stripeInvoiceId &&
+      invoice.metadata?.uoa_source_subscription_id === resolution.close.subscriptionId &&
+      resolution.close.subscription.livemode === account.livemode) {
+      stripeSubscriptionId = resolution.close.subscription.stripeSubscriptionId;
+    }
+  }
   if (!stripeSubscriptionId) return null;
   let subscription = await prisma.billingStripeSubscription.findUnique({
     where: { accountId_stripeSubscriptionId: { accountId: account.id, stripeSubscriptionId } },

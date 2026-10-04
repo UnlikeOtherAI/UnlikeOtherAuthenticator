@@ -354,18 +354,36 @@ describe.skipIf(!databaseTestsEnabled)('organisation billing responsibility pers
       uoa_source_period_start: close.periodStartsAt.toISOString(),
       uoa_source_period_end: close.periodEndsAt.toISOString(),
     };
-    const adjustmentStripe = (invoiceId: string, amount: number, lineId: string) => ({
+    const adjustmentStripe = (invoiceId: string, amount: number, lineId: string,
+      paidCash = true, taxAmount = 0) => ({
       accounts: { retrieveCurrent: async () => ({ id: 'acct_org_billing' }) },
       invoices: {
         retrieve: async () => ({
           id: invoiceId, livemode: false, status: 'paid', billing_reason: 'manual',
-          customer: 'cus_org_billing_team', currency: 'usd', amount_paid: amount,
-          metadata,
+          customer: 'cus_org_billing_team', currency: 'usd', amount_paid: amount + taxAmount,
+          amount_due: amount + taxAmount, amount_remaining: 0, total: amount + taxAmount,
+          total_taxes: taxAmount ? [{ amount: taxAmount }] : [], parent: null, metadata,
         }),
         listLineItems: async () => ({
-          has_more: false, data: [{ id: lineId, amount, currency: 'usd', metadata }],
+          has_more: false, data: [{ id: lineId, invoice: invoiceId, livemode: false,
+            amount, currency: 'usd', metadata, taxes: taxAmount ? [{ amount: taxAmount, tax_behavior: 'exclusive' }] : [], discount_amounts: [],
+            parent: { type: 'invoice_item_details', invoice_item_details: { invoice_item: `ii_${invoiceId}` } },
+            pretax_credit_amounts: [], period: { start: close.periodStartsAt.getTime() / 1000,
+              end: close.periodEndsAt.getTime() / 1000 } }],
         }),
       },
+      invoicePayments: { list: async () => ({ has_more: false, data: paidCash ? [{
+        id: `inpay_${invoiceId}`, invoice: invoiceId, livemode: false, currency: 'usd',
+        status: 'paid', amount_paid: amount + taxAmount,
+        payment: { type: 'payment_intent', payment_intent: `pi_${invoiceId}` },
+        status_transitions: { paid_at: 1791118800 },
+      }] : [] }) },
+      paymentIntents: { retrieve: async () => ({ id: `pi_${invoiceId}`, livemode: false,
+        customer: 'cus_org_billing_team', currency: 'usd', status: 'succeeded',
+        amount_received: amount + taxAmount, latest_charge: `ch_${invoiceId}` }) },
+      charges: { retrieve: async () => ({ id: `ch_${invoiceId}`, livemode: false,
+        customer: 'cus_org_billing_team', currency: 'usd', status: 'succeeded',
+        payment_intent: `pi_${invoiceId}`, paid: true, captured: true, amount_captured: amount + taxAmount }) },
     });
     await expect(compensateFinalizedStripeInvoice({
       closeId: close.id, adjustmentInvoiceId: 'in_manual_adjustment_wrong',
@@ -376,6 +394,11 @@ describe.skipIf(!databaseTestsEnabled)('organisation billing responsibility pers
     })).rejects.toThrow('STRIPE_INVOICE_ADJUSTMENT_EVIDENCE_MISMATCH');
     expect(await prisma.billingStripeInvoiceCloseResolution.count({ where: { closeId: close.id } }))
       .toBe(0);
+    await expect(compensateFinalizedStripeInvoice({
+      closeId: close.id, adjustmentInvoiceId: 'in_manual_no_cash',
+      actorEmail: 'billing-ops@example.test', observedAt: new Date('2026-10-04T13:30:00.000Z'),
+    }, { prisma, stripe: adjustmentStripe('in_manual_no_cash', 130, 'il_no_cash', false) as never }))
+      .rejects.toThrow('STRIPE_SUBSCRIPTION_PAYMENT_SET_UNPROVEN');
     await compensateFinalizedStripeInvoice({
       closeId: close.id, adjustmentInvoiceId: 'in_manual_adjustment_exact',
       actorEmail: 'billing-ops@example.test', observedAt: new Date('2026-10-04T13:30:00.000Z'),
@@ -417,6 +440,20 @@ describe.skipIf(!databaseTestsEnabled)('organisation billing responsibility pers
     });
     expect(reopened.state).toBe('FINALIZED_HOLD');
     expect(reopened.unbilledAmountMicroMinor).toBe(70_000_000n);
+    await compensateFinalizedStripeInvoice({ closeId: close.id,
+      adjustmentInvoiceId: 'in_manual_adjustment_vat', actorEmail: 'billing-ops@example.test',
+      observedAt: new Date('2026-10-04T15:30:00.000Z'),
+    }, { prisma, stripe: adjustmentStripe('in_manual_adjustment_vat', 70, 'il_vat', true, 14) as never });
+    const legalSource = await prisma.billingStripePaymentInvoice.findFirstOrThrow({
+      where: { stripeInvoiceId: 'in_manual_adjustment_vat' }, include: { lines: true, cashPayments: true } });
+    expect(legalSource).toMatchObject({ grossAmountMinor: 84n, taxAmountMinor: 14n,
+      paidAmountMinor: 84n, state: 'PENDING' });
+    expect(legalSource.lines[0]).toMatchObject({ usageMinor: 70n, subscriptionMinor: 0n,
+      taxMinor: 14n, billingMonth: '2026-07' });
+    expect(legalSource.cashPayments[0]?.amountMinor).toBe(84n);
+    expect((await prisma.billingStripeInvoiceCloseResolution.findFirstOrThrow({
+      where: { stripeAdjustmentInvoiceId: 'in_manual_adjustment_vat' } })).paidAmountMinor).toBe(70n);
+
     await expect(prisma.billingStripeInvoiceClose.update({
       where: { id: close.id }, data: { billingMonth: '2026-08' },
     })).rejects.toThrow();
