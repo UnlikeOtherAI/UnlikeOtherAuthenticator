@@ -32,7 +32,10 @@ async function seedSettlementWatches(prisma: PrismaClient, now: Date): Promise<n
       ? await prisma.team.findMany({ where: { id: account.teamId, orgId: account.orgId }, select: { id: true, createdAt: true } })
       : await prisma.team.findMany({ where: { orgId: account.orgId }, select: { id: true, createdAt: true } });
     for (const team of teams) {
-      const startsAt = new Date(Math.max(account.createdAt.getTime(), team.createdAt.getTime()));
+      // A payer account may be opened only after a prior month's provider
+      // receipt arrives. Its team creation is the earliest attributable month;
+      // payer-history checks below decide which account owned each period.
+      const startsAt = team.createdAt;
       const rows = monthDates(startsAt, now).map((billingMonth) => ({
         creditAccountId: account.id,
         teamId: team.id,

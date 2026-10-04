@@ -54,6 +54,10 @@ legacy history, is also held. A durable scheduler revisits source-team/month
 portfolios independently of customer page reads, including older periods, and
 records its next check, last cursor, and hold reason. Current and previous
 months have priority, while older months retain a separate fair work budget.
+Watches begin with the source team's creation month even when its credit
+account was opened later; dated payer lineage determines which account may
+settle each historical month. Existing Stripe reservations prevent later
+funding from debiting already exported charges.
 
 For a Stripe subscription, UOA first allocates available prepaid credits to
 the rated liability, then reserves only the remaining amount as meter usage.
