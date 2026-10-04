@@ -241,6 +241,41 @@ describe('privacy-safe shared credit projection', () => {
     );
   });
 
+  it('keeps source-authored credit actions in each supported billing locale', () => {
+    const cases = [
+      ['cs', 'Doplnit týmové kredity', 'Vypnuto', 'Malé dobití kreditů', 'kreditů'],
+      ['en-US', 'Add team credits', 'Off', 'Small credit top-up', 'credits'],
+      ['en-GB', 'Add team credits', 'Off', 'Small credit top-up', 'credits'],
+      ['de', 'Team-Credits aufladen', 'Aus', 'Kleine Credit-Aufladung', 'Credits'],
+      ['es', 'Añadir créditos al equipo', 'Desactivada', 'Recarga pequeña de créditos', 'créditos'],
+      ['fr', 'Ajouter des crédits à l’équipe', 'Désactivée', 'Petite recharge de crédits', 'crédits'],
+      ['it', 'Aggiungi crediti al team', 'Disattivata', 'Ricarica piccola di crediti', 'crediti'],
+    ] as const;
+
+    for (const [locale, fundingTitle, autoTopUpStatus, offerName, creditUnit] of cases) {
+      const result = buildBillingCreditsProjection({
+        credential,
+        collection,
+        viewer: viewer(true),
+        period,
+        data: productionFreshAccountData(),
+        now,
+        locale,
+      });
+
+      if (result.viewer.role !== 'billing_manager' || !result.funding_policy) {
+        throw new Error('Expected manager funding actions');
+      }
+      const offer = result.funding_policy.offers[0]!;
+      expect(result.funding_policy.title).toBe(fundingTitle);
+      expect(result.automatic_top_up.display_status).toBe(autoTopUpStatus);
+      expect(offer.name).toBe(offerName);
+      expect(offer.credits_received.display).toContain(creditUnit);
+      expect(offer.description).not.toMatch(/automatic top-up stays off|uoa/i);
+      expect(result.automatic_top_up.options[0]?.setup_action?.label).not.toMatch(/uoa/i);
+    }
+  });
+
   it('keeps English as the default when no customer locale is supplied', () => {
     const result = buildBillingCreditsProjection({
       credential,
@@ -699,6 +734,7 @@ describe('privacy-safe shared credit projection', () => {
       period,
       data,
       now,
+      locale: 'cs',
       actionReadiness: {
         executableCatalogIds: new Set(['catalog_1']),
         paymentMethodReady: false,
@@ -714,6 +750,12 @@ describe('privacy-safe shared credit projection', () => {
       funding_policy: { offers: [{ available: true, action: { enabled: true } }] },
       automatic_top_up: { options: [{ setup_action: { enabled: true } }] },
     });
+    if (available.viewer.role !== 'billing_manager') {
+      throw new Error('Expected manager funding actions');
+    }
+    expect(available.funding_policy?.description).toContain(
+      'Začněte nejmenším dostupným dobitím.',
+    );
 
     data.catalogs = [];
     const unavailable = buildBillingCreditsProjection({
@@ -738,5 +780,11 @@ describe('privacy-safe shared credit projection', () => {
       funding_policy: { offers: [{ available: false, action: { enabled: false } }] },
       automatic_top_up: { options: [{ setup_action: { enabled: false } }] },
     });
+    if (unavailable.viewer.role !== 'billing_manager') {
+      throw new Error('Expected manager funding actions');
+    }
+    expect(unavailable.funding_policy?.description).not.toContain(
+      'Start with the smallest available top-up.',
+    );
   });
 });

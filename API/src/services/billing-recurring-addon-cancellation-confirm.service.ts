@@ -192,19 +192,36 @@ async function claimCancellation(
   );
 }
 
+export function localizeRecurringAddonCancellationConfirmation(
+  result: BillingRecurringAddonCancellationConfirmationV1,
+  locale?: BillingCustomerLocale,
+): BillingRecurringAddonCancellationConfirmationV1 {
+  const copy = billingAddonCopy(locale);
+  return {
+    ...result,
+    title:
+      result.status === 'already_scheduled'
+        ? copy.confirmationAlreadyScheduled
+        : copy.confirmationScheduled,
+    description: copy.confirmationDescription,
+  };
+}
+
 function resultFor(
   subscription: RecurringAddonSubscriptionWithBinding,
   alreadyScheduled: boolean,
   locale?: BillingCustomerLocale,
 ): BillingRecurringAddonCancellationConfirmationV1 {
-  const copy = billingAddonCopy(locale);
-  return {
-    schema_version: BILLING_RECURRING_ADDONS_SCHEMA_VERSION,
-    status: alreadyScheduled ? 'already_scheduled' : 'scheduled',
-    title: alreadyScheduled ? copy.confirmationAlreadyScheduled : copy.confirmationScheduled,
-    description: copy.confirmationDescription,
-    cancellation_effective_at: subscription.currentPeriodEnd?.toISOString() ?? null,
-  };
+  return localizeRecurringAddonCancellationConfirmation(
+    {
+      schema_version: BILLING_RECURRING_ADDONS_SCHEMA_VERSION,
+      status: alreadyScheduled ? 'already_scheduled' : 'scheduled',
+      title: '',
+      description: '',
+      cancellation_effective_at: subscription.currentPeriodEnd?.toISOString() ?? null,
+    },
+    locale,
+  );
 }
 
 export async function confirmRecurringAddonCancellation(
@@ -294,7 +311,9 @@ export async function confirmRecurringAddonCancellation(
     },
     prisma,
   );
-  if (claimed.kind === 'completed') return claimed.result;
+  if (claimed.kind === 'completed') {
+    return localizeRecurringAddonCancellationConfirmation(claimed.result, params.locale);
+  }
   if (claimed.kind === 'expired') {
     throw new AppError('BAD_REQUEST', 410, 'BILLING_RECURRING_ADDON_CANCELLATION_EXPIRED');
   }
@@ -386,7 +405,10 @@ export async function confirmRecurringAddonCancellation(
         replay.confirmationRequestDigest === requestDigest &&
         replay.result
       ) {
-        return parseResult(replay.result);
+        return localizeRecurringAddonCancellationConfirmation(
+          parseResult(replay.result),
+          params.locale,
+        );
       }
       throw new AppError('BAD_REQUEST', 409, 'BILLING_RECURRING_ADDON_CANCELLATION_CHANGED');
     }

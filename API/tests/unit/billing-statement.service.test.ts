@@ -234,7 +234,7 @@ describe('canonical UOA billing statement', () => {
     };
 
     const statement = await getCanonicalBillingStatement(
-      { request, actorToken: 'signed-actor', credential, billingMonth: '2026-07' },
+      { request, actorToken: 'signed-actor', credential, billingMonth: '2026-07', locale: 'cs' },
       {
         prisma: prisma as never,
         now: () => now,
@@ -259,6 +259,10 @@ describe('canonical UOA billing statement', () => {
 
     expect(accessUpsert).not.toHaveBeenCalled();
     expect(fetchMetering).toHaveBeenCalledTimes(2);
+    expect(statement.commercial_lines[0]).toMatchObject({
+      label: 'Standard Měsíční předplatné',
+      detail: 'Součást vašeho aktuálního tarifu.',
+    });
     expect(statement).toMatchObject({
       schema_version: 1,
       product: { identifier: 'deepwater', name: 'DeepWater' },
@@ -276,7 +280,7 @@ describe('canonical UOA billing statement', () => {
       },
       subscription: {
         id: 'subscription_1',
-        display_status: 'Active',
+        display_status: 'Aktivní',
       },
       capabilities: {
         can_upgrade: false,

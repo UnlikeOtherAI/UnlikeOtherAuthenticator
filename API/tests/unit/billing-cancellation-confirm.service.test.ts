@@ -176,9 +176,13 @@ describe('billing cancellation confirmation', () => {
       selection: 'current_and_related_direct_services' as const,
     };
     const first = await confirmBillingCancellation(params, dependencies);
-    const replay = await confirmBillingCancellation(params, dependencies);
+    const replay = await confirmBillingCancellation({ ...params, locale: 'cs' }, dependencies);
 
-    expect(first).toEqual(replay);
+    expect(first).not.toEqual(replay);
+    expect(first.title).toBe('Cancellation scheduled');
+    expect(replay.title).toBe('Zrušení je naplánováno');
+    expect(replay.cancelled_services).toEqual(first.cancelled_services);
+    expect(replay.indirect_services[0]?.impact).toBe('Žádné samostatné předplatné nebylo zrušeno.');
     expect(first).toMatchObject({
       schema_version: 1,
       status: 'confirmed',

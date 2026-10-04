@@ -18,7 +18,7 @@ export type BillingCreditFundingCopy = Readonly<{
 export const BILLING_CREDIT_FUNDING_COPY = {
   cs: {
     title: 'Doplnit týmové kredity',
-    description: 'Kredity hradí měřenou spotřebu propojených služeb. Předplatná se účtují zvlášť.',
+    description: 'Kredity platí používání propojených služeb. Předplatná se účtují zvlášť.',
     paymentPending: 'Platba už probíhá. Dokončete ji před dalším nákupem.',
     offerUnavailable: 'Tuto nabídku teď nelze použít.',
     topUpsDisabled: 'Dobíjení pro tuto službu není dostupné.',
@@ -31,7 +31,7 @@ export const BILLING_CREDIT_FUNDING_COPY = {
   },
   'en-US': {
     title: 'Add team credits',
-    description: 'Credits pay for metered use across connected services. Subscriptions are separate.',
+    description: 'Credits pay for using connected services. Subscriptions are charged separately.',
     paymentPending: 'A payment is already in progress. Finish it before starting another purchase.',
     offerUnavailable: 'This offer is unavailable right now.',
     topUpsDisabled: 'Top-ups are unavailable for this service.',
@@ -44,7 +44,7 @@ export const BILLING_CREDIT_FUNDING_COPY = {
   },
   'en-GB': {
     title: 'Add team credits',
-    description: 'Credits pay for metered use across connected services. Subscriptions are separate.',
+    description: 'Credits pay for using connected services. Subscriptions are charged separately.',
     paymentPending: 'A payment is already in progress. Finish it before starting another purchase.',
     offerUnavailable: 'This offer is unavailable right now.',
     topUpsDisabled: 'Top-ups are unavailable for this service.',
@@ -57,7 +57,7 @@ export const BILLING_CREDIT_FUNDING_COPY = {
   },
   de: {
     title: 'Team-Credits aufladen',
-    description: 'Credits bezahlen die gemessene Nutzung verbundener Dienste. Abonnements sind separat.',
+    description: 'Credits bezahlen die Nutzung verbundener Dienste. Abonnements werden separat abgerechnet.',
     paymentPending: 'Eine Zahlung läuft bereits. Schließen Sie sie ab, bevor Sie einen weiteren Kauf starten.',
     offerUnavailable: 'Dieses Angebot ist derzeit nicht verfügbar.',
     topUpsDisabled: 'Aufladungen sind für diesen Dienst nicht verfügbar.',
@@ -70,7 +70,7 @@ export const BILLING_CREDIT_FUNDING_COPY = {
   },
   es: {
     title: 'Añadir créditos al equipo',
-    description: 'Los créditos pagan el uso medido de los servicios conectados. Las suscripciones se cobran aparte.',
+    description: 'Los créditos pagan el uso de los servicios conectados. Las suscripciones se cobran aparte.',
     paymentPending: 'Ya hay un pago en curso. Termínalo antes de iniciar otra compra.',
     offerUnavailable: 'Esta oferta no está disponible ahora.',
     topUpsDisabled: 'Las recargas no están disponibles para este servicio.',
@@ -83,7 +83,7 @@ export const BILLING_CREDIT_FUNDING_COPY = {
   },
   fr: {
     title: 'Ajouter des crédits à l’équipe',
-    description: 'Les crédits paient l’utilisation mesurée des services connectés. Les abonnements sont séparés.',
+    description: 'Les crédits paient l’utilisation des services connectés. Les abonnements sont facturés séparément.',
     paymentPending: 'Un paiement est déjà en cours. Terminez-le avant de lancer un autre achat.',
     offerUnavailable: 'Cette offre est indisponible pour le moment.',
     topUpsDisabled: 'Les recharges ne sont pas disponibles pour ce service.',
@@ -96,7 +96,7 @@ export const BILLING_CREDIT_FUNDING_COPY = {
   },
   it: {
     title: 'Aggiungi crediti al team',
-    description: 'I crediti pagano l’utilizzo misurato dei servizi collegati. Gli abbonamenti sono separati.',
+    description: 'I crediti pagano l’utilizzo dei servizi collegati. Gli abbonamenti vengono addebitati a parte.',
     paymentPending: 'È già in corso un pagamento. Completalo prima di iniziare un altro acquisto.',
     offerUnavailable: 'Questa offerta non è disponibile al momento.',
     topUpsDisabled: 'Le ricariche non sono disponibili per questo servizio.',
