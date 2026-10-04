@@ -1772,6 +1772,7 @@ model BillingService {
   recurringAddonCancellationIntents BillingRecurringAddonCancellationIntent[]
   contractServiceTerms              BillingContractServiceTerm[]
   invoiceLines                      BillingInvoiceLine[]
+  invoiceLineFinancialAllocations   BillingInvoiceLineFinancialAllocation[]
   invoiceMeteringRefs               BillingInvoiceMeteringReference[]
   invoiceCreditSettlementRefs       BillingInvoiceCreditSettlementReference[]
   invoiceAddonLines                 BillingInvoiceAddonLine[]
@@ -2647,6 +2648,7 @@ model BillingInvoice {
   creditSettlementRefs BillingInvoiceCreditSettlementReference[]
   addonLines           BillingInvoiceAddonLine[]
   paymentEvents        BillingInvoicePaymentEvent[]
+  lineFinancialAllocations BillingInvoiceLineFinancialAllocation[]
 
   @@unique([contractId, billingMonth, revision])
   @@index([orgId, billingMonth, status])
@@ -2672,11 +2674,39 @@ model BillingInvoiceLine {
 
   invoice BillingInvoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
   service BillingService @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  financialAllocation BillingInvoiceLineFinancialAllocation?
 
   @@unique([invoiceId, serviceId])
   @@unique([invoiceId, position])
   @@index([serviceId])
   @@map("billing_invoice_lines")
+}
+
+// An actual issuer line supplies one exact product/month liability. Tax and
+// wallet offsets are allocated by the issuer, never inferred proportionally
+// from invoice-wide totals. Missing legacy evidence keeps the cycle pending.
+model BillingInvoiceLineFinancialAllocation {
+  lineId               String   @id @map("line_id")
+  invoiceId            String   @map("invoice_id")
+  serviceId            String   @map("service_id")
+  billingMonth         String   @map("billing_month") @db.Char(7)
+  subscriptionMinor    BigInt   @map("subscription_minor")
+  usageMinor           BigInt   @map("usage_minor")
+  taxMinor             BigInt   @map("tax_minor")
+  invoiceCreditMinor   BigInt   @map("invoice_credit_minor")
+  totalMinor           BigInt   @map("total_minor")
+  dueMinor             BigInt   @map("due_minor")
+  currency             String   @db.Char(3)
+  calculationDigest    String   @map("calculation_digest") @db.Char(64)
+  createdAt            DateTime @default(now()) @map("created_at")
+
+  line    BillingInvoiceLine @relation(fields: [lineId], references: [id], onDelete: Restrict)
+  invoice BillingInvoice     @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  service BillingService     @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+
+  @@index([invoiceId])
+  @@index([serviceId, billingMonth])
+  @@map("billing_invoice_line_financial_allocations")
 }
 
 // Ledger evidence is private calculation provenance and is never part of the

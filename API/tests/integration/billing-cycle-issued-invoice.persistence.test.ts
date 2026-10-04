@@ -308,6 +308,120 @@ describe.skipIf(!enabled)('issued manual invoice cycle persistence', () => {
         billing_email: 'ap@example.com' } } })).rejects.toThrow();
   });
 
+  it('requires exact multi-service tax and credit line allocations without guessed splits',
+    async () => {
+      const original = await db.prisma.billingInvoice.findUniqueOrThrow({
+        where: { id: invoiceId },
+      });
+      const secondService = await db.prisma.billingService.create({ data: {
+        identifier: `other-${randomUUID()}`, name: 'Other product',
+      } });
+      const secondTariff = await db.prisma.billingTariff.create({ data: {
+        serviceId: secondService.id, key: 'standard', version: 1,
+        name: 'Other standard', mode: BillingTariffMode.CUSTOM,
+        collectionMode: BillingCollectionMode.MANUAL,
+        monthlyChargeBasis: BillingMonthlyChargeBasis.FLAT,
+        markupBps: 3000, monthlyAmountMinor: 0n, currency: 'USD',
+      } });
+      const secondAssignment = await db.prisma.billingTariffAssignment.create({ data: {
+        serviceId: secondService.id, tariffId: secondTariff.id, orgId,
+        teamId: null, scope: BillingAssignmentScope.ORGANISATION,
+        scopeKey: orgId,
+      } });
+      const contract = await db.prisma.billingOrganisationContract.create({ data: {
+        orgId, reference: `allocated-${randomUUID()}`, name: 'Allocation proof',
+      } });
+      const version = await db.prisma.billingOrganisationContractVersion.create({ data: {
+        contractId: contract.id, version: 1, usageMarkupBps: 3000,
+        currency: 'USD', paymentTermsDays: 30, effectiveFromMonth: '2026-05',
+      } });
+      const originalTerm = await db.prisma.billingContractServiceTerm.findUniqueOrThrow({
+        where: { id: termId },
+      });
+      await db.prisma.billingContractServiceTerm.createMany({ data: [
+        { contractVersionId: version.id, serviceId, tariffId,
+          tariffAssignmentId: originalTerm.tariffAssignmentId,
+          monthlyAmountMinor: 2000n },
+        { contractVersionId: version.id, serviceId: secondService.id,
+          tariffId: secondTariff.id, tariffAssignmentId: secondAssignment.id,
+          monthlyAmountMinor: 0n },
+      ] });
+      const invoice = await db.prisma.billingInvoice.create({ data: {
+        orgId, contractId: contract.id, contractVersionId: version.id,
+        issuerProfileId: original.issuerProfileId,
+        buyerProfileId: original.buyerProfileId,
+        billingMonth: '2026-05', revision: 1, currency: 'USD',
+        subtotalMinor: 3000n, taxAmountMinor: 300n,
+        creditsAppliedMinor: 500n, totalMinor: 3300n,
+        calculationDigest: 'f'.repeat(64),
+        issuerSnapshot: original.issuerSnapshot as object,
+        buyerSnapshot: original.buyerSnapshot as object,
+        lines: { create: [
+          { serviceId, serviceIdentifier, serviceName: 'Cycle Issuer Service',
+            amountMinor: 2000n, currency: 'USD', position: 1 },
+          { serviceId: secondService.id, serviceIdentifier: secondService.identifier,
+            serviceName: secondService.name, amountMinor: 1000n,
+            currency: 'USD', position: 2 },
+        ] },
+      }, include: { lines: true } });
+      const firstLine = invoice.lines.find((line) => line.serviceId === serviceId);
+      const secondLine = invoice.lines.find((line) => line.serviceId === secondService.id);
+      if (!firstLine || !secondLine) throw new Error('TEST_INVOICE_LINE_MISSING');
+      await db.prisma.$transaction(async (tx) => {
+        await tx.billingInvoiceLineFinancialAllocation.createMany({ data: [
+          { lineId: firstLine.id, invoiceId: invoice.id, serviceId,
+            billingMonth: '2026-05', subscriptionMinor: 2000n, usageMinor: 0n,
+            taxMinor: 200n, invoiceCreditMinor: 0n, totalMinor: 2200n,
+            dueMinor: 2200n, currency: 'USD', calculationDigest: 'f'.repeat(64) },
+          { lineId: secondLine.id, invoiceId: invoice.id,
+            serviceId: secondService.id, billingMonth: '2026-05',
+            subscriptionMinor: 0n, usageMinor: 1000n, taxMinor: 100n,
+            invoiceCreditMinor: 500n, totalMinor: 1100n, dueMinor: 600n,
+            currency: 'USD', calculationDigest: 'f'.repeat(64) },
+        ] });
+      });
+      const lines = await db.prisma.billingInvoiceLineFinancialAllocation.findMany({
+        where: { invoiceId: invoice.id }, orderBy: { lineId: 'asc' },
+      });
+      expect(lines.reduce((sum, line) => sum + line.totalMinor, 0n)).toBe(3300n);
+      expect(lines.reduce((sum, line) => sum + line.dueMinor, 0n)).toBe(2800n);
+      await expect(db.prisma.billingInvoiceLineFinancialAllocation.update({
+        where: { lineId: secondLine.id }, data: { invoiceCreditMinor: 0n },
+      })).rejects.toThrow();
+      await expect(db.prisma.billingInvoiceLineFinancialAllocation.delete({
+        where: { lineId: secondLine.id },
+      })).rejects.toThrow();
+      const partial = await db.prisma.billingInvoice.create({ data: {
+        orgId, contractId: contract.id, contractVersionId: version.id,
+        issuerProfileId: original.issuerProfileId,
+        buyerProfileId: original.buyerProfileId,
+        billingMonth: '2026-05', revision: 2, currency: 'USD',
+        subtotalMinor: 3000n, taxAmountMinor: 300n,
+        creditsAppliedMinor: 500n, totalMinor: 3300n,
+        calculationDigest: 'f'.repeat(64),
+        issuerSnapshot: original.issuerSnapshot as object,
+        buyerSnapshot: original.buyerSnapshot as object,
+        lines: { create: [
+          { serviceId, serviceIdentifier, serviceName: 'Cycle Issuer Service',
+            amountMinor: 2000n, currency: 'USD', position: 1 },
+          { serviceId: secondService.id, serviceIdentifier: secondService.identifier,
+            serviceName: secondService.name, amountMinor: 1000n,
+            currency: 'USD', position: 2 },
+        ] },
+      }, include: { lines: true } });
+      const partialLine = partial.lines.find((line) => line.serviceId === serviceId);
+      if (!partialLine) throw new Error('PARTIAL_TEST_LINE_MISSING');
+      await expect(db.prisma.billingInvoiceLineFinancialAllocation.create({ data: {
+        lineId: partialLine.id, invoiceId: partial.id, serviceId,
+        billingMonth: '2026-05', subscriptionMinor: 2000n, usageMinor: 0n,
+        taxMinor: 200n, invoiceCreditMinor: 0n, totalMinor: 2200n,
+        dueMinor: 2200n, currency: 'USD', calculationDigest: 'f'.repeat(64),
+      } })).rejects.toThrow();
+      expect(await db.prisma.billingInvoiceLineFinancialAllocation.count({
+        where: { invoiceId: partial.id },
+      })).toBe(0);
+    });
+
   it('catches up an actual void as a new zero-liability cycle without rewriting its legal PDF',
     async () => {
       await db.prisma.orgMember.updateMany({ where: { orgId, userId: ownerId },
