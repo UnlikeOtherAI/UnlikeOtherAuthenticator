@@ -44,7 +44,7 @@ describe('customer manual invoice source projection', () => {
     });
     expect(detail.charges.map((line) => line.amount.amount_minor)).toEqual(['2000', '1000']);
     expect(detail.document.download_action.body).toEqual({ ...subject,
-      invoice_id: 'invoice', document_id: 'invoice' });
+      invoice_id: 'manual:invoice', document_id: 'manual:invoice' });
     expect(JSON.stringify(detail)).not.toMatch(/provider_cost|markup|raw_units|token_count/i);
   });
 

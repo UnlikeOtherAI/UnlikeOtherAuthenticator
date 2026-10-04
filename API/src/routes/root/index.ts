@@ -65,6 +65,7 @@ export function registerRootRoute(app: FastifyInstance): void {
       config_validation: configValidationEndpointDocumentation,
       config_verification: configVerificationEndpointDocumentation,
       endpoints,
+      customer_invoices: 'Actual prepaid payment and monthly service charge invoices use the /billing/v1/invoices/* endpoints; their canonical JSON Schema and examples are at /schemas/billing-customer-invoices-v1.json.',
       lifecycle: lifecycleDocumentation,
       debug_login: {
         issue: { method: 'POST', path: '/auth/debug-login/issue', auth: 'domain bearer plus source refresh_token',

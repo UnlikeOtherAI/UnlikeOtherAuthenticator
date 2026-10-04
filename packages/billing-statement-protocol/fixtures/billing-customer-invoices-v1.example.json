@@ -63,6 +63,18 @@
             "currency": "USD",
             "display": "US$50"
           },
+          "refunded_amount": {
+            "amount": "0",
+            "amount_minor": "0",
+            "currency": "USD",
+            "display": "US$0"
+          },
+          "disputed_amount": {
+            "amount": "0",
+            "amount_minor": "0",
+            "currency": "USD",
+            "display": "US$0"
+          },
           "write_off": {
             "amount": "0",
             "amount_minor": "0",
@@ -125,6 +137,18 @@
             "amount_minor": "5000",
             "currency": "USD",
             "display": "US$50"
+          },
+          "refunded_amount": {
+            "amount": "0",
+            "amount_minor": "0",
+            "currency": "USD",
+            "display": "US$0"
+          },
+          "disputed_amount": {
+            "amount": "0",
+            "amount_minor": "0",
+            "currency": "USD",
+            "display": "US$0"
           },
           "write_off": {
             "amount": "0",
@@ -196,6 +220,18 @@
         "amount_minor": "5000",
         "currency": "USD",
         "display": "US$50"
+      },
+      "refunded_amount": {
+        "amount": "0",
+        "amount_minor": "0",
+        "currency": "USD",
+        "display": "US$0"
+      },
+      "disputed_amount": {
+        "amount": "0",
+        "amount_minor": "0",
+        "currency": "USD",
+        "display": "US$0"
       },
       "write_off": {
         "amount": "0",
@@ -292,6 +328,18 @@
         "amount_minor": "5000",
         "currency": "USD",
         "display": "US$50"
+      },
+      "refunded_amount": {
+        "amount": "0",
+        "amount_minor": "0",
+        "currency": "USD",
+        "display": "US$0"
+      },
+      "disputed_amount": {
+        "amount": "0",
+        "amount_minor": "0",
+        "currency": "USD",
+        "display": "US$0"
       },
       "write_off": {
         "amount": "0",

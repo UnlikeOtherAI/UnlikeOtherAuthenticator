@@ -130,6 +130,10 @@ amount still reconciles both modes against immutable paid usage evidence.
 An accepted payment with missing legal issuer/tax evidence remains a durable
 pending document in the charge history: its verified payment and credits are
 visible, but no legal number, tax amount or download is invented.
+Verified refund and dispute effects are shown separately from the original
+accepted payment; partial effects retain their exact amount and the issued
+legal PDF stays immutable. A legal credit note appears only from an actual
+issuer source, never from a projected refund label.
 For multi-service legal invoices, the issuer freezes one allocation per service
 line before issue: subscription and payable usage, tax, invoice credit, gross
 total and net due. Database checks require all line allocations to sum exactly

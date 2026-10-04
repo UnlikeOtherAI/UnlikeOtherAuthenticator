@@ -93,7 +93,7 @@ never has a final invoice download. Consumed prepaid credits reduce outstanding
 usage liability and do not create a second payment invoice. Public payloads
 contain customer charges and seat prices, never provider cost or markup.
 
-`POST /billing/v1/invoices/list` groups actual issued charge documents by
+`POST /billing/v1/invoices/list` groups accepted charges and actual issued documents by
 their immutable charge month. A prepaid payment uses its accepted payment time
 even if legal issuance finishes in the next month. Each successful prepaid purchase, including every
 automatic recharge, has its own invoice; reading this API never creates one.
@@ -109,6 +109,9 @@ Invoice totals use positive deductions: gross less credits applied and voided
 amount equals due; due less actual paid and written-off amounts equals
 outstanding. The original legal PDF and charge lines stay immutable after a
 void or later payment event.
+Refunds and disputes are positive, separately named verified effects; the
+original accepted payment and legal PDF remain visible. A partial effect has
+its own status and never becomes an invented legal credit note.
 
 New consumers request `POST /billing/v2/customer-statement`. Its
 `usage.lines` and `usage.user_totals` contain customer charges only, rated by

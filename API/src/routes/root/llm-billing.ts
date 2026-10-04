@@ -7,7 +7,7 @@ tariff snapshots; they do not maintain independent tariff truth.
 
 - UOA resolves immutable monthly terms by team assignment, organisation assignment,
   then service default. Only UOA rates selected Ledger provider cost.
-- The customer receives raw usage, exact usage charges, credit consumption,
+- The customer receives exact usage charges, credit consumption,
   monthly subscription price, collection status, and payer scope. Provider cost,
   markup, margin, rate multipliers, and cost-basis modes stay inside UOA.
 - Product backends verify signed entitlement binding and render UOA-authored
@@ -152,15 +152,29 @@ call:
 
 with their own \`customer_lifecycle\` app key, a fresh bound \`X-UOA-Actor\`, and the
 same product/organisation/team/user subject body (plus optional \`billing_month\`).
-The response is display-ready: exact current plan and subscription, raw usage
-and customer charges, service/caller/origin attribution, per-user totals, monthly/usage/add-on/credit
-lines, exact currency totals, capabilities, and action descriptors. V2 additionally
-contains team-wide raw totals for every connected billing product, complete
-\`origin_product\` contributions and shares, and per-user service shares. UOA rates
-only the requested product. Other-service totals are explanatory and never become
-line items or charges on the current statement. One pinned, user-grouped
-\`metering-portfolio-v1\` snapshot covers the exact team and month; UOA derives
-commercial rating plus all service, origin, and user totals from it.
+The response is display-ready: exact current plan and subscription, customer
+charges, credit consumption, monthly/usage/add-on/credit lines, exact currency
+totals, capabilities, and action descriptors. V2 includes connected-service
+customer credit totals without exposing token counts or provider costs. UOA
+rates only the requested product. Other-service totals are explanatory and
+never become line items or charges on the current statement. One pinned,
+user-grouped \`metering-portfolio-v1\` snapshot covers the exact team and month;
+UOA derives the private rating evidence and public credit totals from it.
+
+### Actual customer charge invoices
+Use the product's customer_lifecycle app key and a fresh exact-endpoint
+X-UOA-Actor assertion for POST /billing/v1/invoices/list, /detail, and
+/download. List by charge_month in UTC, then use only UOA's opaque invoice
+and document IDs. A prepaid purchase or automatic recharge appears in the month
+of Stripe's accepted payment event even if legal issue finishes later. Pending
+documents have verified payment and purchased credits but no invented tax,
+invoice number or download. An organisation invoice or pool purchase requires
+current organisation billing-manager authority; a team manager only sees the
+selected team's own charge. Legal PDFs list charges and tax, not private usage
+units, provider cost or markup. The strict contract and synthetic examples are
+at /schemas/billing-customer-invoices-v1.json and its example and OpenAPI
+siblings. Refund and dispute effects are shown separately from
+the original immutable legal PDF.
 
 ### Monthly billing cycles and documents
 
@@ -174,7 +188,7 @@ scope. The requested team can have a measured-usage cycle even when its payer
 is the organisation. Verified organisation billing managers also see a
 separate organisation subscription cycle with null team id; that null is never
 permission to expose another team's named usage. The list cursor includes
-month and cycle scope. The detail contains customer seat charges, measured units, credits,
+month and cycle scope. The detail contains customer seat charges, consumed credits,
 and persisted invoice/breakdown metadata, never provider cost or markup.
 An open preview has no final invoice download. Only a document's server-authored
 \`download_action\` may be relayed to \`POST /billing/v1/cycles/download\`; UOA

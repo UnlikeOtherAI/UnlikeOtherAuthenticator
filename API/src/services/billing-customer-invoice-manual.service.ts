@@ -47,7 +47,7 @@ function financials(invoice: ManualInvoiceSource) {
       paid === due ? 'paid' :
         refunded > 0n && paid === 0n ? 'refunded' :
           paid > 0n ? 'partially_paid' : 'issued';
-  return { paid, writeOff, due, outstanding,
+  return { paid, refunded, writeOff, due, outstanding,
     voidedAmount: voided ? originalDue : 0n, status } as const;
 }
 
@@ -66,7 +66,7 @@ export function projectManualCustomerInvoiceSummary(
     invoice.subtotalMinor + invoice.taxAmountMinor !== invoice.totalMinor) hold();
   const amounts = financials(invoice);
   return {
-    invoice_id: invoice.id, kind: 'monthly_service', status: amounts.status,
+    invoice_id: `manual:${invoice.id}`, kind: 'monthly_service', status: amounts.status,
     number: invoice.invoiceNumber, charged_at: invoice.issuedAt.toISOString(),
     issued_at: invoice.issuedAt.toISOString(),
     scope: { organisation_id: invoice.orgId, team_id: null,
@@ -80,6 +80,8 @@ export function projectManualCustomerInvoiceSummary(
       voided_amount: cycleMoney(amounts.voidedAmount, invoice.currency),
       total_due: cycleMoney(amounts.due, invoice.currency),
       total_paid: cycleMoney(amounts.paid, invoice.currency),
+      refunded_amount: cycleMoney(amounts.refunded, invoice.currency),
+      disputed_amount: cycleMoney(0n, invoice.currency),
       write_off: cycleMoney(amounts.writeOff, invoice.currency),
       outstanding: cycleMoney(amounts.outstanding, invoice.currency) },
     document_available: true,
@@ -100,9 +102,10 @@ export function projectManualCustomerInvoiceDetail(
       .map((line) => ({ line_id: line.id, kind: 'service_charge' as const,
         label: line.serviceName, amount: cycleMoney(line.amountMinor, invoice.currency),
         credits_purchased: null })),
-    document: { document_id: invoice.id, format: 'pdf',
+    document: { document_id: `manual:${invoice.id}`, format: 'pdf',
       number, issued_at: issuedAt,
       download_action: { method: 'POST', path: BILLING_CUSTOMER_INVOICES_DOWNLOAD_PATH,
-        body: { ...subject, invoice_id: invoice.id, document_id: invoice.id } } },
+        body: { ...subject, invoice_id: `manual:${invoice.id}`,
+          document_id: `manual:${invoice.id}` } } },
   };
 }

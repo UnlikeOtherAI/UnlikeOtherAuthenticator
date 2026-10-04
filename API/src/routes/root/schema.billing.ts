@@ -19,6 +19,45 @@ const tariffBody = {
 
 export const billingEndpoints: EndpointSchema[] = [
   {
+    method: 'GET', path: '/schemas/billing-customer-invoices-v1.json', auth: 'public',
+    description: 'Strict customer-safe actual-charge invoice list, detail and download schema.',
+    response: { 200: 'BillingCustomerInvoicesV1 Draft 2020-12 JSON Schema' },
+  },
+  {
+    method: 'GET', path: '/schemas/billing-customer-invoices-v1.example.json', auth: 'public',
+    description: 'Synthetic issued and pending prepaid charge invoice examples.',
+    response: { 200: 'BillingCustomerInvoicesV1 conformance examples' },
+  },
+  {
+    method: 'GET', path: '/schemas/billing-customer-invoices-v1.openapi.json', auth: 'public',
+    description: 'Versioned OpenAPI 3.1 actual-charge invoice contract.',
+    response: { 200: 'BillingCustomerInvoicesV1 OpenAPI 3.1 components' },
+  },
+  {
+    method: 'POST', path: '/billing/v1/invoices/list',
+    description: 'Lists accepted prepaid payments and actual monthly service invoices by the charge source month. A pending legal document remains visible without guessed tax or invoice number.',
+    auth: 'Product customer_lifecycle app key plus exact endpoint-audience X-UOA-Actor and current team or organisation billing-manager authority',
+    body: { product: 'string', organisation_id: 'string', team_id: 'string', user_id: 'string',
+      charge_month: 'YYYY-MM UTC', limit: 'optional integer 1–50', cursor: 'optional opaque cursor' },
+    response: { 200: 'BillingCustomerInvoicesListV1; no provider units or private markup' },
+  },
+  {
+    method: 'POST', path: '/billing/v1/invoices/detail',
+    description: 'Reads one actual invoice or accepted prepaid charge with only the issuer-proven customer charges and legal document state.',
+    auth: 'Product customer_lifecycle app key plus exact endpoint-audience X-UOA-Actor and current payer billing-manager authority',
+    body: { product: 'string', organisation_id: 'string', team_id: 'string', user_id: 'string',
+      invoice_id: 'string (from the list)' },
+    response: { 200: 'BillingCustomerInvoiceDetailV1; pending documents have no download' },
+  },
+  {
+    method: 'POST', path: '/billing/v1/invoices/download',
+    description: 'Streams the original verified legal PDF after exact payer reauthorization, never a projected or synthetic invoice.',
+    auth: 'Product customer_lifecycle app key plus exact endpoint-audience X-UOA-Actor and current payer billing-manager authority',
+    body: { product: 'string', organisation_id: 'string', team_id: 'string', user_id: 'string',
+      invoice_id: 'string', document_id: 'string (from the detail action)' },
+    response: { 200: 'Private application/pdf attachment' },
+  },
+  {
     method: 'GET', path: '/schemas/billing-cycles-v2.json', auth: 'public',
     description: 'Strict customer-safe monthly cycle list, detail, and download request schema.',
     response: { 200: 'BillingCyclesV2 Draft 2020-12 JSON Schema' },
@@ -194,7 +233,7 @@ export const billingEndpoints: EndpointSchema[] = [
     method: 'POST',
     path: '/billing/v1/customer-statement',
     description:
-      'Return UOA’s display-ready canonical plan, subscription, raw usage, customer charges, cross-service and per-user attribution, exact commercial lines/totals, capabilities, and server-pinned actions. Private provider costs and markup are omitted. The statement pins immutable Ledger service/user snapshots and the exact UOA tariff version.',
+      'Return UOA’s display-ready canonical plan, subscription, customer charges, credit consumption, connected-service credit totals, exact commercial lines/totals, capabilities, and server-pinned actions. Token counts, provider costs and markup remain private. The statement pins immutable Ledger service/user snapshots and the exact UOA tariff version.',
     auth: 'The requested product’s customer_lifecycle X-UOA-App-Key plus a fresh credential-bound X-UOA-Actor assertion whose aud is this exact endpoint URL; both remain backend-only',
     body: {
       product: 'exact product identifier bound to the app key',
