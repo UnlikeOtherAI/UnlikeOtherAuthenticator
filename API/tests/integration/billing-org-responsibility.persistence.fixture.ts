@@ -81,8 +81,8 @@ export async function seed(prisma: PrismaClient): Promise<void> {
         ('tm_org_billing_b_member', ${ids.teamB}, ${ids.member}, 'member', 'ACTIVE', CURRENT_TIMESTAMP)
     `);
     await tx.$executeRaw(Prisma.sql`
-      INSERT INTO "billing_services" ("id", "identifier", "name", "updated_at")
-      VALUES (${ids.service}, 'deepwater', 'DeepWater', CURRENT_TIMESTAMP)
+      INSERT INTO "billing_services" ("id", "identifier", "name", "tariff_history_from_month", "updated_at")
+      VALUES (${ids.service}, 'deepwater', 'DeepWater', '2026-07', CURRENT_TIMESTAMP)
     `);
     await tx.$executeRaw(Prisma.sql`
       INSERT INTO "billing_tariffs" (
@@ -92,6 +92,12 @@ export async function seed(prisma: PrismaClient): Promise<void> {
         ${ids.tariff}, ${ids.service}, 'standard', 1, 'DeepWater standard',
         'STANDARD', 'NONE', 0, 'USD', true
       )
+    `);
+    await tx.$executeRaw(Prisma.sql`
+      INSERT INTO "billing_tariff_term_events" ("id", "service_id", "source", "scope_key",
+        "effective_from_month", "tariff_id", "reason")
+      VALUES ('btte_org_billing_default', ${ids.service}, 'SERVICE_DEFAULT', ${ids.service},
+        '2026-07', ${ids.tariff}, 'test-fixture')
     `);
     await tx.$executeRaw(Prisma.sql`
       INSERT INTO "billing_app_keys" (
