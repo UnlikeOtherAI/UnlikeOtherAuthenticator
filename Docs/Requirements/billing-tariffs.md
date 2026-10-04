@@ -231,6 +231,11 @@ time; terminal evidence closes it once. A missing baseline, unclosed month, or
 unproven Stripe billable period holds the finalized quote. The canonical cycle
 snapshot must freeze this quote before either Stripe invoice delivery or manual
 invoice issue; a live quote alone is never collection authority.
+When a later manual term replaces a fixed-capacity agreement, the old
+agreement's immutable commercial end removes its admission limit exactly at
+the boundary even if the evidence-ending sweep runs later. A newly scheduled
+fixed agreement constrains admission from its roster-capture time.
+
 The manual invoice calculator uses the closed-month per-seat quote for its
 subscription line, never the per-seat unit price as a whole invoice fee. It
 excludes prepaid runtime usage from the manual pay-as-you-go total while
