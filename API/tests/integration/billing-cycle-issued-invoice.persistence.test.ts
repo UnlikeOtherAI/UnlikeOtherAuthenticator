@@ -213,6 +213,49 @@ describe.skipIf(!enabled)('issued manual invoice cycle persistence', () => {
       currency: 'USD', idempotencyKey: randomUUID(),
       occurredAt: new Date('2026-04-03T00:00:00.000Z'),
     } });
+    const queued = await db.prisma.$queryRaw<Array<{ generation: bigint }>>`
+      SELECT generation FROM billing_manual_cycle_reconciliation_queue
+      WHERE invoice_id = ${invoiceId}
+    `;
+    expect(queued).toHaveLength(1);
+    expect(queued[0]?.generation).toBeGreaterThan(1n);
+    let releaseWork: (() => void) | undefined;
+    let markStarted: (() => void) | undefined;
+    const started = new Promise<void>((resolve) => { markStarted = resolve; });
+    const workGate = new Promise<void>((resolve) => { releaseWork = resolve; });
+    const firstWorker = runManualCycleReconciliationBatch({
+      prisma: db.prisma,
+      refreshPayment: async (params) => {
+        markStarted?.();
+        await workGate;
+        return refreshIssuedManualBillingCyclePayment(params, { prisma: db.prisma, storage });
+      },
+    });
+    await started;
+    // A second instance cannot claim the in-flight invoice, even after a
+    // restart where neither worker retains an in-memory scan cursor.
+    const secondWorker = await runManualCycleReconciliationBatch({ prisma: db.prisma });
+    expect(secondWorker.checked).toBe(0);
+    await db.prisma.billingInvoicePaymentEvent.create({ data: {
+      invoiceId, kind: 'PAYMENT', source: 'MANUAL', amountMinor: 500n,
+      currency: 'USD', idempotencyKey: randomUUID(),
+      occurredAt: new Date('2026-04-04T00:00:00.000Z'),
+    } });
+    releaseWork?.();
+    const caughtUp = await firstWorker;
+    expect(caughtUp).toMatchObject({ checked: 1, held: 0 });
+    // The in-flight acknowledgment cannot remove a newer committed payment.
+    expect(await db.prisma.$queryRaw<Array<{ invoice_id: string }>>`
+      SELECT invoice_id FROM billing_manual_cycle_reconciliation_queue
+      WHERE invoice_id = ${invoiceId}
+    `).toHaveLength(1);
+    expect(await runManualCycleReconciliationBatch({ prisma: db.prisma,
+      refreshPayment: (params) => refreshIssuedManualBillingCyclePayment(params,
+        { prisma: db.prisma, storage }) })).toMatchObject({ checked: 1, held: 0 });
+    expect(await db.prisma.$queryRaw<Array<{ invoice_id: string }>>`
+      SELECT invoice_id FROM billing_manual_cycle_reconciliation_queue
+      WHERE invoice_id = ${invoiceId}
+    `).toHaveLength(0);
     const previousId = finalizedCycleId;
     const revised = await refreshIssuedManualBillingCyclePayment({ invoiceId },
       { prisma: db.prisma, storage });
@@ -222,8 +265,8 @@ describe.skipIf(!enabled)('issued manual invoice cycle persistence', () => {
     const newDetail = await getBillingCycleDetail(context(), finalizedCycleId,
       { prisma: db.prisma });
     expect(oldDetail.totals[0]?.outstanding.amount_minor).toBe('2000');
-    expect(newDetail.totals[0]?.total_paid.amount_minor).toBe('1000');
-    expect(newDetail.totals[0]?.outstanding.amount_minor).toBe('1000');
+    expect(newDetail.totals[0]?.total_paid.amount_minor).toBe('1500');
+    expect(newDetail.totals[0]?.outstanding.amount_minor).toBe('500');
     expect(newDetail.credits.consumed).toBeNull();
     expect(await db.prisma.billingCustomerCycleInvoiceAllocation.count()).toBe(1);
     expect(await db.prisma.billingCustomerCycleDocument.count()).toBe(6);
@@ -323,7 +366,7 @@ describe.skipIf(!enabled)('issued manual invoice cycle persistence', () => {
         actor: { email: 'admin@example.com' } }, { prisma: db.prisma,
         now: () => new Date('2026-05-03T00:00:00.000Z'),
         authorizeAdminEffect: vi.fn().mockResolvedValue(undefined) });
-      const caughtUp = await runManualCycleReconciliationBatch({}, {
+      const caughtUp = await runManualCycleReconciliationBatch({
         prisma: db.prisma,
         refreshPayment: (params) => refreshIssuedManualBillingCyclePayment(params,
           { prisma: db.prisma, storage }),
