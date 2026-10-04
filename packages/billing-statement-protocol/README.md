@@ -4,7 +4,7 @@ Public, open-source-safe consumer contracts for UOA's display-ready
 `BillingStatementV1`, `BillingStatementV2`, shared `BillingCreditsV1`, recurring
 add-ons, customer billing actions, and monthly billing cycles.
 
-Package 3.1.0 removes the public pinned tariff identity and adds the version 2
+Package 4.0.0 removes the public pinned tariff identity and adds the version 2
 monthly cycle contract. The v1 and v2 statement route
 names remain, but both statement schemas omit raw provider cost, markup,
 cost-basis mode, multipliers and derived billable units. V2 adds a team-wide
@@ -12,6 +12,10 @@ connected-service portfolio of raw usage and attribution shares. Products
 render UOA-authored customer charges, subscription prices and credit balances
 without calculating prices, totals or cancellation choices. Strict consumers
 must update their validators and field mappings before the producer deploys.
+`plan.monthly_subscription.amount_role` distinguishes a flat monthly total
+from a per-seat monthly unit price. `charge_basis`, seat policy/timing, and
+`usage_payment_mode` are customer plan facts; a seat unit amount is never an
+invoice total without a frozen seat quantity and billing period.
 
 The action contract covers the normalized hosted redirect response,
 cancellation selection, exact preview and `confirm_action`, confirmation

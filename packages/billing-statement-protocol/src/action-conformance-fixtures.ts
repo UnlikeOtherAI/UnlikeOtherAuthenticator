@@ -21,8 +21,13 @@ export const billingConsumerActionV1ConformanceFixtures = {
       monthly_subscription: {
         amount_minor: '4900',
         currency: 'USD',
+        charge_basis: 'per_seat',
+        seat_policy: 'fixed',
+        seat_timing: 'prorated',
+        amount_role: 'per_seat_unit',
       },
       usage_billing_enabled: true,
+      usage_payment_mode: 'prepaid',
       payment_collection_enabled: true,
       raw_usage_preserved: true,
     },

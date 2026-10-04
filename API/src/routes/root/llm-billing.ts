@@ -86,8 +86,13 @@ expiry. Its business claims mirror \`payload\`:
   "tariff": {
     "id": "tariff_123",
     "collection_mode": "stripe",
-    "monthly_subscription": { "amount_minor": "2000", "currency": "USD" },
+    "monthly_subscription": {
+      "amount_minor": "2000", "currency": "USD", "charge_basis": "per_seat",
+      "seat_policy": "fixed", "seat_timing": "prorated",
+      "amount_role": "per_seat_unit"
+    },
     "usage_billing_enabled": true,
+    "usage_payment_mode": "prepaid",
     "payment_collection_enabled": true,
     "raw_usage_preserved": true
   },
@@ -132,7 +137,7 @@ billable-unit, customer-charge, add-on, credit, payment, or cancellation fields.
 
 \`GET /schemas/billing-statement-v1.json\` publishes the Draft 2020-12 response
 schema. \`GET /schemas/billing-statement-v2.json\` adds the complete SSO-filled,
-team-wide connected-service portfolio. Package 3.1.0 removes the public pinned
+team-wide connected-service portfolio. Package 4.0.0 removes the public pinned
 tariff identity and adds monthly cycles; strict consumers must update before UOA
 serves the revised schemas. The open-source-safe
 \`@unlikeotherai/billing-statement-protocol\` package

@@ -68,6 +68,14 @@ describe('customer billing privacy boundary', () => {
       .toBe('3.6');
     expect(billingStatementV1ConformanceFixture.plan.monthly_subscription.amount_minor)
       .toBe('2000');
+    expect(billingStatementV1ConformanceFixture.plan.monthly_subscription.amount_role)
+      .toBe('monthly_total');
+    expect(billingStatementV1ConformanceFixture.plan.usage_payment_mode).toBe('prepaid');
+    expect(billingConsumerActionV1ConformanceFixtures.checkout_session_response
+      .tariff.monthly_subscription).toMatchObject({
+        charge_basis: 'per_seat', seat_policy: 'fixed', seat_timing: 'prorated',
+        amount_role: 'per_seat_unit',
+      });
   });
 });
 

@@ -41,11 +41,16 @@ export const billingStatementV1ConformanceFixture: BillingStatementV1 = {
   plan: {
     display_name: 'Monthly subscription',
     collection_mode: 'stripe',
+    usage_payment_mode: 'prepaid',
     monthly_subscription: {
       amount: '20',
       amount_minor: '2000',
       currency: 'GBP',
       display: '£20',
+      charge_basis: 'flat',
+      seat_policy: null,
+      seat_timing: null,
+      amount_role: 'monthly_total',
     },
     assignment: {
       scope: 'team',

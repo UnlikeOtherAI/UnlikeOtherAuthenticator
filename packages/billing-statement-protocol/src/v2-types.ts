@@ -1,7 +1,7 @@
 import type { BillingStatementV1 } from './types.js';
 
 export const BILLING_STATEMENT_V2_SCHEMA_VERSION = 2 as const;
-export const BILLING_STATEMENT_V2_PROTOCOL_VERSION = '4.0.0' as const;
+export const BILLING_STATEMENT_V2_PROTOCOL_VERSION = '5.0.0' as const;
 export const BILLING_STATEMENT_V2_SCHEMA_PATH = '/schemas/billing-statement-v2.json' as const;
 export const BILLING_STATEMENT_V2_EXAMPLE_PATH =
   '/schemas/billing-statement-v2.example.json' as const;

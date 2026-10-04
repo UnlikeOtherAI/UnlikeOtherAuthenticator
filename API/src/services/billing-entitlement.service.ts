@@ -1,5 +1,9 @@
 import {
   BillingCollectionMode,
+  BillingMonthlyChargeBasis,
+  type BillingSeatChargeTiming,
+  type BillingSeatPolicy,
+  type BillingUsagePaymentMode,
   BillingTariffSource,
   BillingTariffMode,
   MembershipStatus,
@@ -49,8 +53,13 @@ export type EffectiveTariffPayload = {
     monthly_subscription: {
       amount_minor: string;
       currency: string;
+      charge_basis: 'flat' | 'per_seat';
+      seat_policy: 'automatic' | 'fixed' | null;
+      seat_timing: 'full_month' | 'prorated' | null;
+      amount_role: 'monthly_total' | 'per_seat_unit';
     };
     usage_billing_enabled: boolean;
+    usage_payment_mode: 'prepaid' | 'pay_as_you_go';
     payment_collection_enabled: boolean;
     raw_usage_preserved: true;
   };
@@ -77,6 +86,10 @@ type TariffRow = {
   collectionMode: BillingCollectionMode;
   markupBps: number;
   monthlyAmountMinor: bigint;
+  monthlyChargeBasis: BillingMonthlyChargeBasis;
+  seatPolicy: BillingSeatPolicy | null;
+  seatChargeTiming: BillingSeatChargeTiming | null;
+  usagePaymentMode: BillingUsagePaymentMode;
   currency: string;
 };
 
@@ -99,6 +112,7 @@ export function customerBillingTariff(
   | 'collection_mode'
   | 'monthly_subscription'
   | 'usage_billing_enabled'
+  | 'usage_payment_mode'
   | 'payment_collection_enabled'
   | 'raw_usage_preserved'
 > {
@@ -106,6 +120,7 @@ export function customerBillingTariff(
     collection_mode: tariff.collection_mode,
     monthly_subscription: tariff.monthly_subscription,
     usage_billing_enabled: tariff.usage_billing_enabled,
+    usage_payment_mode: tariff.usage_payment_mode,
     payment_collection_enabled: tariff.payment_collection_enabled,
     raw_usage_preserved: tariff.raw_usage_preserved,
   };
@@ -147,8 +162,17 @@ function payloadFor(params: {
       monthly_subscription: {
         amount_minor: params.tariff.monthlyAmountMinor.toString(),
         currency: params.tariff.currency,
+        charge_basis: params.tariff.monthlyChargeBasis.toLowerCase() as 'flat' | 'per_seat',
+        seat_policy: params.tariff.seatPolicy?.toLowerCase() as 'automatic' | 'fixed' | undefined
+          ?? null,
+        seat_timing: params.tariff.seatChargeTiming?.toLowerCase() as
+          'full_month' | 'prorated' | undefined ?? null,
+        amount_role: params.tariff.monthlyChargeBasis === BillingMonthlyChargeBasis.PER_SEAT
+          ? 'per_seat_unit' : 'monthly_total',
       },
       usage_billing_enabled: params.tariff.mode !== BillingTariffMode.FREE,
+      usage_payment_mode: params.tariff.usagePaymentMode.toLowerCase() as
+        'prepaid' | 'pay_as_you_go',
       payment_collection_enabled: params.tariff.collectionMode !== BillingCollectionMode.NONE,
       raw_usage_preserved: true,
     },
