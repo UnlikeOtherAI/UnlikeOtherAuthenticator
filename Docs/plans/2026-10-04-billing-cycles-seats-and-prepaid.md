@@ -72,6 +72,21 @@ usage is excluded from pay-as-you-go Stripe export and the older credit collecto
 to prevent duplicate charges, but remains present in customer credits, cycle
 usage and incomplete-liability status. Monthly fees are separate from usage.
 
+Long-running jobs must preserve renewable original-actor authority, not only a
+subject/team snapshot. Nessie and Deep Test already have renewable per-call
+delegation providers; Water's delayed compute context lacks that carrier and
+credential epoch. First reuse an existing exact-scope relying-party refresh
+path where available. Indirect/background jobs otherwise require a UOA-issued
+job-scoped renewal capability minted from a fresh original delegation, bound to
+the stable job, subject, org/team, product, audience, purpose, credential epoch
+and authorized job expiry. UOA rechecks revocation and membership at renewal and
+reservation. A capability cannot broaden scope, resurrect a cancelled job, or
+outlive its authorization. Refresh credentials never go to Ledger or the browser;
+products retain only appropriately encrypted UOA-issued relying-party material.
+Old jobs without captured proof require owner reauthorization, never a current
+user-row epoch backfill or an expired launch JWT. The exact issuer contract must
+be reviewed before implementation and covered by revocation/restart tests.
+
 ## Monthly cycles and invoices
 
 UOA supplies a paginated, manager-authorized cycle list and exact-scope cycle
