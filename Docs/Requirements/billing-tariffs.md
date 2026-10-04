@@ -985,7 +985,7 @@ package rather than maintaining a private duplicate. Build and package tests
 fail when any committed JSON artifact drifts from the typed source. Until
 registry publication is approved, consumers may vendor the whole package
 directory or fetch the public artifacts above. The same package defines
-`BillingCyclesV2` (protocol 2.0.0): exact product/selected-team monthly history,
+`BillingCyclesV2` (protocol 2.1.0): exact product/selected-team monthly history,
 customer subscription and measured usage details, credit application, true
 payment documents and explicit later adjustments. The selected-team request
 can also return a separate organisation-wide subscription/document cycle to

@@ -4,7 +4,7 @@ Public, open-source-safe consumer contracts for UOA's display-ready
 `BillingStatementV1`, `BillingStatementV2`, shared `BillingCreditsV1`, recurring
 add-ons, customer billing actions, and monthly billing cycles.
 
-Package 4.1.0 removes the public pinned tariff identity and adds the version 2
+Package 4.2.0 removes the public pinned tariff identity and adds the version 2
 monthly cycle contract. The v1 and v2 statement route
 names remain, but both statement schemas omit raw provider cost, markup,
 cost-basis mode, multipliers and derived billable units. V2 adds a team-wide
@@ -164,6 +164,11 @@ a statement action's `request.body`. For a fixed-seat plan only, the product
 adds the customer's explicitly selected `fixed_seat_quantity` (integer 1 to
 1,000,000) before relaying checkout. UOA checks whether that field is required
 for the plan. All other body fields remain UOA-authored.
+
+Billing cycles protocol 2.1.0 optionally carries measured `cache_write_5m`
+and `cache_write_1h` raw token subtotals when Ledger supplied them. They are
+dimensions within measured input, not extra tokens added to `total`.
+Consumers omit absent dimensions rather than displaying zero.
 
 Run `pnpm generate` after an intentional protocol change. Build and test fail if
 the committed JSON Schema, example, or OpenAPI artifact drifts from the typed
