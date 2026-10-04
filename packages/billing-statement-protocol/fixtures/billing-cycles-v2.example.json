@@ -195,6 +195,7 @@
       {
         "id": "usage_example",
         "label": "Metered usage",
+        "usage_payment_mode": "pay_as_you_go",
         "customer_charge": {
           "amount": "13",
           "currency": "USD",

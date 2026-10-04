@@ -86,6 +86,7 @@ export type BillingCycleSubscriptionLine = {
 export type BillingCycleUsageLine = {
   id: string;
   label: string;
+  usage_payment_mode: 'prepaid' | 'pay_as_you_go';
   customer_charge: ExactMoney | null;
   credits_consumed: string | null;
 };

@@ -1141,6 +1141,7 @@
               "required": [
                 "id",
                 "label",
+                "usage_payment_mode",
                 "customer_charge",
                 "credits_consumed"
               ],
@@ -1153,6 +1154,12 @@
                 "label": {
                   "type": "string",
                   "minLength": 1
+                },
+                "usage_payment_mode": {
+                  "enum": [
+                    "prepaid",
+                    "pay_as_you_go"
+                  ]
                 },
                 "customer_charge": {
                   "anyOf": [
@@ -1194,7 +1201,25 @@
                     }
                   ]
                 }
-              }
+              },
+              "allOf": [
+                {
+                  "if": {
+                    "properties": {
+                      "usage_payment_mode": {
+                        "const": "prepaid"
+                      }
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "customer_charge": {
+                        "type": "null"
+                      }
+                    }
+                  }
+                }
+              ]
             }
           },
           "credits": {
@@ -1722,6 +1747,7 @@
             {
               "id": "usage_example",
               "label": "Metered usage",
+              "usage_payment_mode": "pay_as_you_go",
               "customer_charge": {
                 "amount": "13",
                 "currency": "USD",

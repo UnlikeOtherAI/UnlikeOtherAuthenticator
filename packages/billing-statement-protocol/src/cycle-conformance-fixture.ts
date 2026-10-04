@@ -63,6 +63,7 @@ export const billingCycleDetailV2ConformanceFixture: BillingCycleDetailV2 = {
   }],
   usage_lines: [{
     id: 'usage_example', label: 'Metered usage',
+    usage_payment_mode: 'pay_as_you_go',
     customer_charge: { amount: '13', currency: 'USD', display: 'US$13' },
     credits_consumed: '13000',
   }],

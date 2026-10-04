@@ -123,6 +123,10 @@ groups those invoices by their frozen charge month. A delayed legal issue does
 not move an October payment into November. No invoice is synthesized
 from a later usage read. Legal invoice PDFs list actual charges and tax, while
 credit consumption and seat evidence remain in a separate customer breakdown.
+Each usage line names its payment mode: `prepaid` shows consumed credits with
+no new customer money charge, while `pay_as_you_go` shows an actual payable
+usage charge only when its invoice source is proven. The private UOA-rated
+amount still reconciles both modes against immutable paid usage evidence.
 An accepted payment with missing legal issuer/tax evidence remains a durable
 pending document in the charge history: its verified payment and credits are
 visible, but no legal number, tax amount or download is invented.

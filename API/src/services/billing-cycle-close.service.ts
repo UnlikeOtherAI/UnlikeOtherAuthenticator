@@ -98,7 +98,7 @@ export async function prepareBillingCycleClose(
       currency: initial.currency,
     }, tariff);
     ledgerSnapshots.push(projected.evidence);
-    const ratedAmount = projected.lines[0]?.customer_charge?.amount ?? '0';
+    const ratedAmount = projected.ratedAmount;
     ratedByTeam.set(teamId, ratedAmount);
     creditEvidence.push(await readCycleCreditEvidence(prisma, {
       orgId: initial.organisationId, teamId, serviceId: service.id,

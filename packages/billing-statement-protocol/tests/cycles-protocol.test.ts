@@ -55,6 +55,19 @@ describe('customer billing cycles protocol', () => {
     expect(validate(detail)).toBe(false);
   });
 
+  it('labels prepaid consumption without presenting a second invoice charge', () => {
+    const validate = ajv.compile(billingCycleDetailV2JsonSchema);
+    const detail = structuredClone(billingCycleDetailV2ConformanceFixture);
+    detail.usage_lines[0]!.usage_payment_mode = 'prepaid';
+    expect(validate(detail)).toBe(false);
+    detail.usage_lines[0]!.customer_charge = null;
+    expect(validate(detail), JSON.stringify(validate.errors)).toBe(true);
+    detail.usage_lines[0]!.usage_payment_mode = 'pay_as_you_go';
+    expect(validate(detail)).toBe(true);
+    (detail.usage_lines[0] as unknown as Record<string, unknown>).raw_units = { input: '100' };
+    expect(validate(detail)).toBe(false);
+  });
+
   it('represents an actual void as zero current liability without a synthetic credit note', () => {
     const validate = ajv.compile(billingCycleDetailV2JsonSchema);
     const detail = structuredClone(billingCycleDetailV2ConformanceFixture);
