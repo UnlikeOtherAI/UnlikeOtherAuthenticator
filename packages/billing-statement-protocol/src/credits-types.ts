@@ -3,8 +3,9 @@ import type { BillingSubjectRequest } from './funding-schema-primitives.js';
 import type { BillingControlledByV1 } from './org-billing-types.js';
 
 export const BILLING_CREDITS_SCHEMA_VERSION = 1 as const;
-// BillingCreditsV1 has not been released yet. This remains the coordinated V1
-// contract consumed by UOA and its four launch consumers.
+// BillingCreditsV1 is shared by UOA and pinned consumer package revisions.
+// Additive fields require an explicit read capability header while older
+// consumers still validate the previous strict schema.
 export const BILLING_CREDITS_PROTOCOL_VERSION = '1.4.0' as const;
 export const BILLING_CREDITS_PROTOCOL_HEADER = 'x-uoa-billing-credits-protocol' as const;
 export const BILLING_CREDITS_SCHEMA_PATH = '/schemas/billing-credits-v1.json' as const;
