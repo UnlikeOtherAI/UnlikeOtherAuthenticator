@@ -46,8 +46,12 @@ type FrozenTerms = {
   unitAmountMinor: bigint;
   currency: string;
   agreement: SeatAgreement | null;
+  sourceStatus?: string;
+  billableFrom?: Date | null;
+  billableUntil?: Date | null;
   contractId?: string;
   contractVersionId?: string;
+  contractTerminatedAt?: Date | null;
 };
 
 function hold(code: string): never {
@@ -68,12 +72,13 @@ async function loadFrozenTerms(source: MonthlyChargeSource, prisma: PrismaClient
       chargeBasis: row.tariff.monthlyChargeBasis, seatPolicy: row.tariff.seatPolicy,
       seatChargeTiming: row.tariff.seatChargeTiming,
       unitAmountMinor: row.tariff.monthlyAmountMinor, currency: row.tariff.currency,
-      agreement: row.seatSubscription };
+      agreement: row.seatSubscription, sourceStatus: row.status,
+      billableFrom: row.billableFrom, billableUntil: row.billableUntil };
   }
   const row = await prisma.billingContractServiceTerm.findUnique({
     where: { id: source.id },
     include: { tariff: true, contractVersion: {
-      include: { contract: { select: { orgId: true } } },
+      include: { contract: { select: { orgId: true, terminatedAt: true } } },
     }, seatSubscription: {
       include: { membershipIntervals: true, capacityRevisions: true },
     } },
@@ -90,18 +95,25 @@ async function loadFrozenTerms(source: MonthlyChargeSource, prisma: PrismaClient
     seatChargeTiming: row.tariff.seatChargeTiming,
     unitAmountMinor: row.monthlyAmountMinor, currency: row.tariff.currency,
     agreement: row.seatSubscription, contractId: row.contractVersion.contractId,
-    contractVersionId: row.contractVersionId };
+    contractVersionId: row.contractVersionId,
+    contractTerminatedAt: row.contractVersion.contract.terminatedAt };
 }
 
 export async function quoteSubscriptionMonthlyCharge(
   params: { source: MonthlyChargeSource; billingMonth: string },
-  deps?: { prisma?: PrismaClient },
+  deps?: { prisma?: PrismaClient; now?: () => Date },
 ) {
   const prisma = deps?.prisma ?? getAdminPrisma();
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(params.billingMonth)) {
     hold('BILLING_MONTH_INVALID');
   }
+  const start = new Date(`${params.billingMonth}-01T00:00:00.000Z`);
+  const end = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 1));
+  if (end > (deps?.now?.() ?? new Date())) hold('BILLING_MONTH_NOT_CLOSED');
   const terms = await loadFrozenTerms(params.source, prisma);
+  if (terms.sourceStatus === 'paused' || terms.sourceStatus === 'unpaid') {
+    hold('BILLING_MONTHLY_SOURCE_STATUS_UNRESOLVED');
+  }
   if (terms.contractId) {
     const effective = await prisma.billingOrganisationContractVersion.findFirst({
       where: { contractId: terms.contractId,
@@ -110,10 +122,24 @@ export async function quoteSubscriptionMonthlyCharge(
       select: { id: true },
     });
     if (effective?.id !== terms.contractVersionId) hold('BILLING_MONTHLY_SOURCE_NOT_EFFECTIVE');
+    if (terms.contractTerminatedAt &&
+      terms.contractTerminatedAt <= new Date(`${params.billingMonth}-01T00:00:00.000Z`)) {
+      hold('BILLING_MONTHLY_SOURCE_NOT_EFFECTIVE');
+    }
   }
   if (terms.chargeBasis === BillingMonthlyChargeBasis.FLAT) {
     if (terms.agreement || terms.seatPolicy || terms.seatChargeTiming) {
       hold('BILLING_MONTHLY_SOURCE_DRIFT');
+    }
+    if (terms.source.kind === 'stripe') {
+      const monthStart = new Date(`${params.billingMonth}-01T00:00:00.000Z`);
+      const monthEnd = new Date(Date.UTC(monthStart.getUTCFullYear(),
+        monthStart.getUTCMonth() + 1, 1));
+      if (!terms.billableFrom || terms.billableFrom >= monthStart ||
+        (terms.billableUntil && terms.billableUntil <= monthStart) ||
+        terms.billableFrom >= monthEnd) {
+        hold('BILLING_MONTHLY_SOURCE_NOT_EFFECTIVE');
+      }
     }
     return { source: terms.source, serviceId: terms.serviceId, tariffId: terms.tariffId,
       organisationId: terms.orgId, teamId: terms.teamId, scope: terms.scope,
@@ -134,6 +160,10 @@ export async function quoteSubscriptionMonthlyCharge(
     agreement.seatChargeTiming !== terms.seatChargeTiming ||
     agreement.unitAmountMinor !== terms.unitAmountMinor ||
     agreement.currency !== terms.currency ||
+    (terms.source.kind === 'stripe' &&
+      (!terms.billableFrom ||
+        terms.billableFrom.getTime() !== agreement.activatedAt.getTime() ||
+        (terms.billableUntil && !agreement.endedAt))) ||
     (terms.source.kind === 'stripe'
       ? agreement.stripeSubscriptionId !== terms.source.id || agreement.contractServiceTermId !== null
       : agreement.contractServiceTermId !== terms.source.id || agreement.stripeSubscriptionId !== null)) {

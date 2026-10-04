@@ -70,7 +70,9 @@ function automaticSeatTime(
   for (const interval of input.membershipIntervals) {
     const start = millis(interval.startsAt);
     const end = interval.endsAt === null ? Number.MAX_SAFE_INTEGER : millis(interval.endsAt);
-    if (!interval.id || !interval.userId || start < millis(input.activatedAt) || end <= start) {
+    // A member who leaves in the same millisecond as baseline capture leaves
+    // an explicit zero-duration proof, never a billable seat.
+    if (!interval.id || !interval.userId || start < millis(input.activatedAt) || end < start) {
       invalidEvidence();
     }
     const list = byUser.get(interval.userId) ?? [];

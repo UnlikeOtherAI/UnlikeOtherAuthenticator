@@ -10,6 +10,8 @@ import {
   retrieveStripeSubscription,
   stripeExternalId,
 } from './billing-stripe-webhook-utils.service.js';
+import { syncStripeSeatActivation } from './billing-stripe-seat-activation.service.js';
+import { observedBillingTime } from './billing-seat-observed-time.service.js';
 
 function subscriptionPeriod(subscription: Stripe.Subscription): {
   start: Date | null;
@@ -163,9 +165,9 @@ export async function syncBaseStripeSubscription(
   });
   const fixedSeats = checkout.tariff.monthlyChargeBasis === BillingMonthlyChargeBasis.PER_SEAT &&
     checkout.tariff.seatPolicy === BillingSeatPolicy.FIXED;
-  if ((fixedSeats && (checkout.fixedSeatQuantity === null ||
+  if ((fixedSeats && (checkout.fixedSeatQuantity == null ||
     subscription.metadata.uoa_fixed_seat_quantity !== String(checkout.fixedSeatQuantity))) ||
-    (!fixedSeats && (checkout.fixedSeatQuantity !== null ||
+    (!fixedSeats && (checkout.fixedSeatQuantity != null ||
       subscription.metadata.uoa_fixed_seat_quantity))) {
     throw new AppError('INTERNAL', 502, 'STRIPE_SEAT_QUANTITY_BINDING_INVALID');
   }
@@ -187,11 +189,9 @@ export async function syncBaseStripeSubscription(
     currentPeriodStart: period.start,
     currentPeriodEnd: period.end,
   };
-  if (existing) {
-    await tx.billingStripeSubscription.update({ where: { id: existing.id }, data: mutable });
-    return;
-  }
-  await tx.billingStripeSubscription.create({
+  const row = existing ? await tx.billingStripeSubscription.update({
+    where: { id: existing.id }, data: mutable,
+  }) : await tx.billingStripeSubscription.create({
     data: {
       accountId: account.id,
       checkoutId: checkout.id,
@@ -209,6 +209,9 @@ export async function syncBaseStripeSubscription(
       ...mutable,
     },
   });
+  await syncStripeSeatActivation(tx, { row, tariff: checkout.tariff,
+    checkoutFixedSeatQuantity: checkout.fixedSeatQuantity ?? null,
+    subscription, observedAt: await observedBillingTime(tx) });
 }
 
 export async function terminalizeMissingBaseStripeSubscription(
@@ -216,14 +219,27 @@ export async function terminalizeMissingBaseStripeSubscription(
   account: StripeAccountContext,
   subscriptionId: string,
 ): Promise<void> {
-  await tx.billingStripeSubscription.updateMany({
+  const rows = await tx.billingStripeSubscription.findMany({
     where: {
       accountId: account.id,
       stripeSubscriptionId: subscriptionId,
       status: { notIn: ['canceled', 'incomplete_expired'] },
     },
-    data: { status: 'canceled', cancelAtPeriodEnd: true },
   });
+  for (const row of rows) {
+    const observedAt = await observedBillingTime(tx);
+    await tx.billingStripeSubscription.update({ where: { id: row.id },
+      data: { status: 'canceled', cancelAtPeriodEnd: true,
+        ...(row.billableFrom && !row.billableUntil ? { billableUntil: observedAt } : {}) } });
+    const seat = await tx.billingSeatSubscription.findUnique({
+      where: { stripeSubscriptionId: row.id },
+    });
+    if (seat && !seat.endedAt) {
+      await tx.billingSeatSubscription.update({ where: { id: seat.id },
+        data: { endedAt: observedAt,
+          ...(observedAt > seat.commercialEffectiveAt ? { commercialEndsAt: observedAt } : {}) } });
+    }
+  }
 }
 
 export async function refreshStripeSubscriptionProjection(

@@ -2269,6 +2269,8 @@ model BillingStripeSubscription {
   cancelAtPeriodEnd    Boolean                @default(false) @map("cancel_at_period_end")
   currentPeriodStart   DateTime?              @map("current_period_start")
   currentPeriodEnd     DateTime?              @map("current_period_end")
+  billableFrom         DateTime?              @map("billable_from")
+  billableUntil        DateTime?              @map("billable_until")
   livemode             Boolean
   createdAt            DateTime               @default(now()) @map("created_at")
   updatedAt            DateTime               @updatedAt @map("updated_at")

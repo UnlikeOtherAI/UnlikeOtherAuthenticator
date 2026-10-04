@@ -6,10 +6,13 @@ import { describe, expect, it, vi } from 'vitest';
 import { quoteSubscriptionMonthlyCharge } from '../../src/services/billing-monthly-subscription-quote.service.js';
 
 const at = (value: string) => new Date(value);
+const closed = (prisma: unknown) => ({ prisma: prisma as never,
+  now: () => at('2028-05-01T00:00:00Z') });
 
 function stripeSource() {
   return { id: 'stripe-sub-1', serviceId: 'service-1', tariffId: 'tariff-1',
     orgId: 'org-1', teamId: 'team-1', scope: BillingAssignmentScope.TEAM,
+    status: 'active', billableFrom: at('2028-01-25T12:00:00Z'), billableUntil: null,
     tariff: { monthlyChargeBasis: BillingMonthlyChargeBasis.PER_SEAT,
       seatPolicy: BillingSeatPolicy.AUTOMATIC,
       seatChargeTiming: BillingSeatChargeTiming.PRORATED,
@@ -33,7 +36,7 @@ describe('frozen monthly subscription quote', () => {
     const source = stripeSource();
     const prisma = { billingStripeSubscription: { findUnique: vi.fn().mockResolvedValue(source) } };
     const quote = await quoteSubscriptionMonthlyCharge({ source: { kind: 'stripe', id: source.id },
-      billingMonth: '2028-02' }, { prisma: prisma as never });
+      billingMonth: '2028-02' }, closed(prisma));
     expect(quote).toMatchObject({ amountMinor: 140n, unitAmountMinor: 290n,
       agreementId: 'seat-sub-1', uniqueHumanSeats: 1,
       baselineMemberCount: 1, evidenceIds: ['interval-1'], currency: 'USD' });
@@ -46,7 +49,7 @@ describe('frozen monthly subscription quote', () => {
     source.seatSubscription.membershipIntervals = [];
     const prisma = { billingStripeSubscription: { findUnique: vi.fn().mockResolvedValue(source) } };
     await expect(quoteSubscriptionMonthlyCharge({ source: { kind: 'stripe', id: source.id },
-      billingMonth: '2028-02' }, { prisma: prisma as never }))
+      billingMonth: '2028-02' }, closed(prisma)))
       .rejects.toThrow('BILLING_SEAT_EVIDENCE_UNRESOLVED');
   });
 
@@ -57,17 +60,34 @@ describe('frozen monthly subscription quote', () => {
         seatPolicy: null, seatChargeTiming: null,
         monthlyAmountMinor: 1200n, currency: 'USD' },
       contractVersion: { contractId: 'contract-1', currency: 'USD',
-        contract: { orgId: 'org-1' } }, seatSubscription: null };
+        contract: { orgId: 'org-1', terminatedAt: null } }, seatSubscription: null };
     const effective = vi.fn().mockResolvedValue({ id: 'version-1' });
     const prisma = { billingContractServiceTerm: { findUnique: vi.fn().mockResolvedValue(term) },
       billingOrganisationContractVersion: { findFirst: effective } };
     const quote = await quoteSubscriptionMonthlyCharge({ source: { kind: 'manual', id: term.id },
-      billingMonth: '2028-02' }, { prisma: prisma as never });
+      billingMonth: '2028-02' }, closed(prisma));
     expect(quote).toMatchObject({ amountMinor: 1200n,
       agreementId: null, evidenceIds: [], scope: BillingAssignmentScope.ORGANISATION });
     effective.mockResolvedValue({ id: 'version-2' });
     await expect(quoteSubscriptionMonthlyCharge({ source: { kind: 'manual', id: term.id },
-      billingMonth: '2028-03' }, { prisma: prisma as never }))
+      billingMonth: '2028-03' }, closed(prisma)))
       .rejects.toThrow('BILLING_MONTHLY_SOURCE_NOT_EFFECTIVE');
+  });
+
+  it('quotes flat Stripe only after observed activation and before termination', async () => {
+    const source = { ...stripeSource(), tariff: {
+      monthlyChargeBasis: BillingMonthlyChargeBasis.FLAT, seatPolicy: null,
+      seatChargeTiming: null, monthlyAmountMinor: 1200n, currency: 'USD' },
+    seatSubscription: null, billableFrom: at('2028-01-25T12:00:00Z'),
+    billableUntil: at('2028-03-15T00:00:00Z') };
+    const prisma = { billingStripeSubscription: { findUnique: vi.fn().mockResolvedValue(source) } };
+    const quote = (month: string) => quoteSubscriptionMonthlyCharge({
+      source: { kind: 'stripe', id: source.id }, billingMonth: month,
+    }, closed(prisma));
+    await expect(quote('2028-01')).rejects.toThrow('BILLING_MONTHLY_SOURCE_NOT_EFFECTIVE');
+    await expect(quote('2028-02')).resolves.toMatchObject({ amountMinor: 1200n });
+    await expect(quote('2028-04')).rejects.toThrow('BILLING_MONTHLY_SOURCE_NOT_EFFECTIVE');
+    source.billableFrom = null as never;
+    await expect(quote('2028-02')).rejects.toThrow('BILLING_MONTHLY_SOURCE_NOT_EFFECTIVE');
   });
 });
