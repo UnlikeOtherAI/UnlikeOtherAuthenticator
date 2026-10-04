@@ -3,6 +3,7 @@ import {
   BillingAppKeyPurpose,
   BillingCollectionMode,
   BillingTariffMode,
+  BillingTariffSource,
   MembershipStatus,
   type PrismaClient,
 } from '@prisma/client';
@@ -55,6 +56,7 @@ function fakePrisma(params: {
   const prisma = {
     billingService: {
       findFirst: vi.fn().mockResolvedValue(active ? { id: 'service_1' } : null),
+      findUnique: vi.fn().mockResolvedValue({ tariffHistoryFromMonth: '2026-01' }),
     },
     user: {
       findUnique: vi
@@ -75,6 +77,23 @@ function fakePrisma(params: {
     },
     billingTariff: {
       findFirst: vi.fn().mockResolvedValue(params.fallback ?? defaultTariff),
+    },
+    billingTariffTermEvent: {
+      findFirst: vi.fn().mockImplementation(async ({ where }: { where: { source: BillingTariffSource } }) => {
+        const assignment = where.source === BillingTariffSource.TEAM
+          ? params.teamAssignment
+          : where.source === BillingTariffSource.ORGANISATION
+            ? params.orgAssignment : null;
+        if (assignment) {
+          const row = assignment as { id: string; tariff: typeof defaultTariff };
+          return { tariffId: row.tariff.id, tariff: row.tariff, assignmentId: row.id };
+        }
+        if (where.source === BillingTariffSource.SERVICE_DEFAULT) {
+          const tariff = params.fallback ?? defaultTariff;
+          return tariff ? { tariffId: tariff.id, tariff, assignmentId: null } : null;
+        }
+        return null;
+      }),
     },
     billingServiceAccess: {
       upsert: vi.fn().mockResolvedValue({}),

@@ -78,6 +78,17 @@ function portfolio(lines: NormalizedMeteringPortfolio['lines']): NormalizedMeter
 }
 
 describe('canonical all-service credit rating', () => {
+  it('charges 1560 credits for $1.20 provider cost at the central 30% rate', () => {
+    const [result] = rateCreditPortfolio({
+      portfolio: portfolio([line('deepwater', 'user_1', '1.20')]),
+      services: [{ ...deepwater, tariff: { ...deepwater.tariff, markupBps: 3000 } }],
+      previousAllocations: [],
+      balanceMicrocredits: 2_000_000_000n,
+      validTeamUserIds: new Set(['user_1']),
+    });
+    expect(result.ratedMicroMinor).toBe(156_000_000n);
+    expect(result.consumedMicrocredits).toBe(1_560_000_000n);
+  });
   it('caps a later top-up at the new usage not already reserved by Stripe', () => {
     const [result] = rateCreditPortfolio({
       portfolio: portfolio([line('deepwater', 'user_1', '1')]),

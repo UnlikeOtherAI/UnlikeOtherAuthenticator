@@ -67,6 +67,14 @@ const summary = {
     synced_at: now.toISOString(),
   },
 };
+const effectiveTerm = {
+  tariffId: 'tariff_standard_v4', assignmentId: 'assignment_1',
+  tariff: {
+    id: 'tariff_standard_v4', serviceId: 'service_deepwater', key: 'standard',
+    version: 4, name: 'Standard', mode: 'STANDARD', collectionMode: 'STRIPE',
+    markupBps: 2_000, monthlyAmountMinor: 2000n, currency: 'GBP',
+  },
+};
 
 function metering(groupBy: 'service' | 'user'): NormalizedMeteringUsage {
   const shared = {
@@ -196,11 +204,15 @@ describe('canonical UOA billing statement', () => {
         findUnique: vi.fn().mockResolvedValue({ name: 'Acme', billingOrgResponsibility: null }),
       },
       billingService: {
+        findUnique: vi.fn().mockResolvedValue({ tariffHistoryFromMonth: '2026-01' }),
         findMany: vi.fn().mockResolvedValue([
           { identifier: 'deepwater', name: 'DeepWater' },
           { identifier: 'nessie', name: 'Nessie' },
           { identifier: 'deepsignal', name: 'DeepSignal' },
         ]),
+      },
+      billingTariffTermEvent: {
+        findFirst: vi.fn().mockResolvedValue(effectiveTerm),
       },
       billingCommercialAdjustment: {
         findMany: vi.fn().mockResolvedValue([
@@ -394,7 +406,11 @@ describe('canonical UOA billing statement', () => {
         findUnique: vi.fn().mockResolvedValue({ name: 'Acme', billingOrgResponsibility: null }),
       },
       billingTariff: { findUnique: vi.fn().mockResolvedValue({ name: 'Standard' }) },
-      billingService: { findMany: vi.fn().mockResolvedValue([]) },
+      billingService: {
+        findMany: vi.fn().mockResolvedValue([]),
+        findUnique: vi.fn().mockResolvedValue({ tariffHistoryFromMonth: '2026-01' }),
+      },
+      billingTariffTermEvent: { findFirst: vi.fn().mockResolvedValue(effectiveTerm) },
       billingCommercialAdjustment: { findMany: vi.fn().mockResolvedValue([]) },
       teamMember: { findMany: vi.fn().mockResolvedValue([]) },
     };

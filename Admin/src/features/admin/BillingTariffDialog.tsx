@@ -135,8 +135,8 @@ export function BillingTariffDialog({
               Make this the service default
             </span>
             <span className="mt-0.5 block text-xs text-gray-500">
-              Existing Stripe subscriptions pin their original immutable terms and may prevent a
-              default change.
+              The default changes next UTC month. Existing Stripe subscriptions pin their
+              original immutable terms and may prevent a default change.
             </span>
           </span>
         </label>

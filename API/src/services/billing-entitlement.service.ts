@@ -1,6 +1,6 @@
 import {
-  BillingAssignmentScope,
   BillingCollectionMode,
+  BillingTariffSource,
   BillingTariffMode,
   MembershipStatus,
   Prisma,
@@ -18,6 +18,7 @@ import {
   billingModeToPublic,
 } from './billing-tariff-serialization.service.js';
 import { normalizeBillingServiceIdentifier } from './billing-tariff.service.js';
+import { resolveBillingTariffForMonth, utcBillingMonth } from './billing-tariff-history.service.js';
 import {
   assertEffectiveTariffPayloadBinding,
   signEffectiveTariffSnapshot,
@@ -89,10 +90,10 @@ function client(deps?: { prisma?: PrismaClient }): PrismaClient {
 }
 
 function assignmentScope(
-  scope: BillingAssignmentScope | null,
+  scope: BillingTariffSource,
 ): EffectiveTariffPayload['assignment']['scope'] {
-  if (scope === BillingAssignmentScope.TEAM) return 'team';
-  if (scope === BillingAssignmentScope.ORGANISATION) return 'organisation';
+  if (scope === BillingTariffSource.TEAM) return 'team';
+  if (scope === BillingTariffSource.ORGANISATION) return 'organisation';
   return 'service_default';
 }
 
@@ -107,7 +108,7 @@ function payloadFor(params: {
   tariff: TariffRow;
   assignment: {
     id: string | null;
-    scope: BillingAssignmentScope | null;
+    scope: BillingTariffSource;
   };
   nowEpochSeconds: number;
 }): EffectiveTariffPayload {
@@ -182,10 +183,9 @@ export async function resolveEffectiveTariffContext(
   });
 
   const prisma = client(deps);
-  const teamScopeKey = `${request.organisationId}:${request.teamId}`;
   const resolution = await prisma.$transaction(
     async (tx) => {
-      const [service, user, orgMember, team, teamAssignment, orgAssignment, defaultTariff] =
+      const [service, user, orgMember, team] =
         await Promise.all([
           tx.billingService.findFirst({
             where: {
@@ -223,43 +223,12 @@ export async function resolveEffectiveTariffContext(
             },
             select: { id: true },
           }),
-          tx.billingTariffAssignment.findFirst({
-            where: {
-              serviceId: params.credential.service.id,
-              orgId: request.organisationId,
-              teamId: request.teamId,
-              scope: BillingAssignmentScope.TEAM,
-              scopeKey: teamScopeKey,
-              tariff: { serviceId: params.credential.service.id },
-            },
-            include: { tariff: true },
-          }),
-          tx.billingTariffAssignment.findFirst({
-            where: {
-              serviceId: params.credential.service.id,
-              orgId: request.organisationId,
-              teamId: null,
-              scope: BillingAssignmentScope.ORGANISATION,
-              scopeKey: request.organisationId,
-              tariff: { serviceId: params.credential.service.id },
-            },
-            include: { tariff: true },
-          }),
-          tx.billingTariff.findFirst({
-            where: {
-              serviceId: params.credential.service.id,
-              isDefault: true,
-            },
-          }),
         ]);
       return {
         service,
         user,
         orgMember,
         team,
-        teamAssignment,
-        orgAssignment,
-        defaultTariff,
       };
     },
     { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
@@ -275,11 +244,13 @@ export async function resolveEffectiveTariffContext(
     throw new AppError('FORBIDDEN', 403, 'BILLING_SUBJECT_NOT_ENTITLED');
   }
 
-  const selected = resolution.teamAssignment ?? resolution.orgAssignment;
-  const tariff = selected?.tariff ?? resolution.defaultTariff;
-  if (!tariff) {
-    throw new AppError('INTERNAL', 500, 'BILLING_DEFAULT_TARIFF_MISSING');
-  }
+  const effective = await resolveBillingTariffForMonth(prisma, {
+    serviceId: params.credential.service.id,
+    organisationId: request.organisationId,
+    teamId: request.teamId,
+    billingMonth: utcBillingMonth(new Date((deps?.now?.() ?? Math.floor(Date.now() / 1000)) * 1000)),
+  });
+  const tariff = effective.tariff;
 
   const now = deps?.now?.() ?? Math.floor(Date.now() / 1000);
   const payload = payloadFor({
@@ -287,8 +258,8 @@ export async function resolveEffectiveTariffContext(
     credential: params.credential,
     tariff,
     assignment: {
-      id: selected?.id ?? null,
-      scope: selected?.scope ?? null,
+      id: effective.assignmentId,
+      scope: effective.source,
     },
     nowEpochSeconds: now,
   });

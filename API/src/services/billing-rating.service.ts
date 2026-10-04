@@ -44,7 +44,9 @@ export function rateProviderCost(amount: string, currency: string, terms: Rating
   const multiplier = usagePriceMultiplierBps(terms);
   const total = multiplyBillingDecimalByBps(amount, multiplier);
   return {
-    base: amount,
+    // The raw provider cost is reported separately. A free customer's rated
+    // charge has no base, markup or total, preserving base + markup = total.
+    base: terms.mode === 'free' ? '0' : amount,
     markup: terms.mode === 'free' ? '0' : subtractBillingDecimals(total, amount),
     total,
     currency,

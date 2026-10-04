@@ -1,6 +1,5 @@
 import {
   BillingAdjustmentKind,
-  BillingAssignmentScope,
   MembershipStatus,
   type PrismaClient,
 } from '@prisma/client';
@@ -15,6 +14,7 @@ import { listApplicableCommercialAdjustments } from './billing-commercial-adjust
 import { fetchLedgerMeteringPortfolio } from './billing-ledger-collector.service.js';
 import type { FetchMeteringPortfolio } from './billing-metering.types.js';
 import { exactMoney, minorAmountToMajor } from './billing-money.service.js';
+import { resolveBillingTariffForMonth } from './billing-tariff-history.service.js';
 import {
   listDirectTeamBillingServiceAccess,
   type DirectBillingServiceAccess,
@@ -83,38 +83,10 @@ function publicMode(value: string): TeamTariff['mode'] {
  * organisation.
  */
 async function resolveTeamTariff(
-  params: { serviceId: string; organisationId: string; teamId: string },
+  params: { serviceId: string; organisationId: string; teamId: string; billingMonth: string },
   prisma: PrismaClient,
 ): Promise<TeamTariff> {
-  const [teamAssignment, orgAssignment, defaultTariff] = await Promise.all([
-    prisma.billingTariffAssignment.findFirst({
-      where: {
-        serviceId: params.serviceId,
-        orgId: params.organisationId,
-        teamId: params.teamId,
-        scope: BillingAssignmentScope.TEAM,
-        scopeKey: `${params.organisationId}:${params.teamId}`,
-        tariff: { serviceId: params.serviceId },
-      },
-      include: { tariff: true },
-    }),
-    prisma.billingTariffAssignment.findFirst({
-      where: {
-        serviceId: params.serviceId,
-        orgId: params.organisationId,
-        teamId: null,
-        scope: BillingAssignmentScope.ORGANISATION,
-        scopeKey: params.organisationId,
-        tariff: { serviceId: params.serviceId },
-      },
-      include: { tariff: true },
-    }),
-    prisma.billingTariff.findFirst({
-      where: { serviceId: params.serviceId, isDefault: true },
-    }),
-  ]);
-  const tariff = (teamAssignment ?? orgAssignment)?.tariff ?? defaultTariff;
-  if (!tariff) throw new AppError('INTERNAL', 500, 'BILLING_DEFAULT_TARIFF_MISSING');
+  const { tariff } = await resolveBillingTariffForMonth(prisma, params);
   return {
     id: tariff.id,
     key: tariff.key,
@@ -186,6 +158,7 @@ async function buildTeamUsage(
         serviceId: context.serviceId,
         organisationId: context.organisationId,
         teamId: team.id,
+        billingMonth: context.billingMonth,
       },
       deps.prisma,
     ),

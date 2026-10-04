@@ -83,7 +83,8 @@ export function BillingServicePanel({
             </code>
           </div>
           <p className="mt-1 text-xs text-gray-500">
-            Team overrides organisation, which overrides the immutable service default.
+            Team overrides organisation, which overrides the service default. Default and assignment
+            changes take effect next UTC month; earlier usage keeps its effective terms.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -183,7 +184,7 @@ export function BillingServicePanel({
                     onClick={() =>
                       confirm(
                         `Make ${tariff.name} v${tariff.version} the default?`,
-                        'Only subjects without a team or organisation override receive this tariff. Active Stripe subscriptions may pin the current default.',
+                        'This becomes effective next UTC month for subjects without a team or organisation override. Active Stripe subscriptions may pin the current default.',
                         async () => {
                           await setDefault.mutateAsync(tariff.id);
                         },
@@ -250,7 +251,7 @@ export function BillingServicePanel({
                   onClick={() =>
                     confirm(
                       'Remove tariff assignment?',
-                      'The subject will immediately fall back to the next applicable tariff. Active Stripe subscriptions may block this change.',
+                      'The subject falls back to the next applicable tariff next UTC month. Active Stripe subscriptions may block this change.',
                       () => removeAssignment.mutateAsync(assignment.id),
                     )
                   }

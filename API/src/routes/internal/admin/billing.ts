@@ -49,7 +49,7 @@ const TariffSchema = z
     name: z.string().trim().min(1).max(120),
     mode: z.enum(['standard', 'free', 'at_cost', 'custom']),
     collection_mode: z.enum(['stripe', 'manual', 'none']),
-    markup_bps: z.number().int().min(0).max(100_000),
+    markup_bps: z.number().int().min(0).max(100_000).optional(),
     monthly_subscription: MonthlySchema,
   })
   .strict();

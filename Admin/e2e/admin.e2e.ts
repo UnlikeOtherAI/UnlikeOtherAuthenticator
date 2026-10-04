@@ -303,6 +303,9 @@ test('new billing terms show the prospective 30 percent default', async ({ page 
   await serviceDialog.screenshot({ path: 'e2e/artifacts/billing-service-default.png' });
   await page.keyboard.press('Escape');
   await page.getByRole('link', { name: 'Fixture product', exact: true }).click();
+  await expect(page.getByText(/Default and assignment changes take effect next UTC month/))
+    .toBeVisible();
+  await page.screenshot({ path: 'e2e/artifacts/billing-effective-month.png' });
   await page.getByRole('button', { name: 'Tariff version' }).click();
   const tariffDialog = page.getByRole('dialog', { name: /Add tariff version/ });
   await expect(tariffDialog).toBeVisible();

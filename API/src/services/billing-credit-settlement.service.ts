@@ -1,4 +1,4 @@
-import { BillingAssignmentScope, Prisma, type PrismaClient } from '@prisma/client';
+import { Prisma, type PrismaClient } from '@prisma/client';
 
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
@@ -15,6 +15,7 @@ import {
 import type { NormalizedMeteringPortfolio } from './billing-metering.types.js';
 import { runBillingSerializableTransaction } from './billing-serializable-transaction.service.js';
 import { assertUnambiguousCreditPayer } from './billing-credit-payer-period.service.js';
+import { resolveBillingTariffForMonth } from './billing-tariff-history.service.js';
 
 function sameInstant(left: Date, right: string): boolean {
   return left.getTime() === Date.parse(right);
@@ -75,32 +76,6 @@ function latestAllocationMap(
     });
   }
   return latest;
-}
-
-function assignmentTariffs(
-  services: Array<{ id: string }>,
-  assignments: Array<Prisma.BillingTariffAssignmentGetPayload<{ include: { tariff: true } }>>,
-  defaults: Prisma.BillingTariffGetPayload<Record<string, never>>[],
-): Map<string, Prisma.BillingTariffGetPayload<Record<string, never>>> {
-  const selected = new Map<string, Prisma.BillingTariffGetPayload<Record<string, never>>>();
-  for (const service of services) {
-    const team = assignments.find(
-      (assignment) =>
-        assignment.serviceId === service.id && assignment.scope === BillingAssignmentScope.TEAM,
-    );
-    const organisation = assignments.find(
-      (assignment) =>
-        assignment.serviceId === service.id &&
-        assignment.scope === BillingAssignmentScope.ORGANISATION,
-    );
-    const tariff =
-      team?.tariff ??
-      organisation?.tariff ??
-      defaults.find((candidate) => candidate.serviceId === service.id);
-    if (!tariff) throw new AppError('INTERNAL', 500, 'BILLING_DEFAULT_TARIFF_MISSING');
-    selected.set(service.id, tariff);
-  }
-  return selected;
 }
 
 async function settleInTransaction(
@@ -259,36 +234,19 @@ async function settleInTransaction(
   const newServiceIds = services
     .filter((service) => !existingSettlements.some((row) => row.serviceId === service.id))
     .map((service) => service.id);
-  const [assignments, defaults, teamMembers] = await Promise.all([
-    tx.billingTariffAssignment.findMany({
-      where: {
-        serviceId: { in: newServiceIds },
-        orgId: account.orgId,
-        OR: [
-          {
-            scope: BillingAssignmentScope.TEAM,
-            teamId: settlementTeamId,
-            scopeKey: `${account.orgId}:${settlementTeamId}`,
-          },
-          {
-            scope: BillingAssignmentScope.ORGANISATION,
-            teamId: null,
-            scopeKey: account.orgId,
-          },
-        ],
-      },
-      include: { tariff: true },
-    }),
-    tx.billingTariff.findMany({
-      where: { serviceId: { in: newServiceIds }, isDefault: true },
-    }),
-    tx.teamMember.findMany({ where: { teamId: settlementTeamId }, select: { userId: true } }),
-  ]);
-  const resolvedTariffs = assignmentTariffs(
-    services.filter((service) => newServiceIds.includes(service.id)),
-    assignments,
-    defaults,
-  );
+  const teamMembers = await tx.teamMember.findMany({
+    where: { teamId: settlementTeamId }, select: { userId: true },
+  });
+  const resolvedTariffs = new Map();
+  for (const serviceId of newServiceIds) {
+    const resolved = await resolveBillingTariffForMonth(tx, {
+      serviceId,
+      organisationId: account.orgId,
+      teamId: settlementTeamId,
+      billingMonth: params.portfolio.scope.month,
+    });
+    resolvedTariffs.set(serviceId, resolved.tariff);
+  }
   const ratingServices: CreditRatingService[] = services.map((service) => {
     const existing = existingSettlements.find((row) => row.serviceId === service.id);
     const tariff = existing?.tariff ?? resolvedTariffs.get(service.id);

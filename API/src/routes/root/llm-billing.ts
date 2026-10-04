@@ -14,7 +14,8 @@ tariff snapshots; they do not maintain independent tariff truth.
   visibility while explicitly collecting no payment. \`free\` always requires
   \`none\`; \`at_cost + none + monthly amount 0\` is the canonical
   "provider cost visible, no payment" plan.
-- \`markup_bps\` is a price adjustment: 2,000 bps means 20.00%. \`free\` has a usage-price
+- \`markup_bps\` is a price adjustment. Omitted \`standard\` defaults centrally to
+  3,000 bps (30.00%); \`custom\` requires an explicit value. \`free\` has a usage-price
   multiplier of 0; \`at_cost\` has 10,000; \`standard\`/\`custom\` have
   \`10,000 + markup_bps\`.
 - The optional monthly component is an exact integer minor-unit string plus ISO currency.
@@ -106,9 +107,9 @@ expiry. Its business claims mirror \`payload\`:
     "version": 2,
     "mode": "standard",
     "collection_mode": "stripe",
-    "markup_bps": 2000,
-    "markup_percent": "20.00",
-    "usage_price_multiplier_bps": 12000,
+    "markup_bps": 3000,
+    "markup_percent": "30.00",
+    "usage_price_multiplier_bps": 13000,
     "monthly_subscription": { "amount_minor": "2000", "currency": "USD" },
     "usage_billing_enabled": true,
     "payment_collection_enabled": true,

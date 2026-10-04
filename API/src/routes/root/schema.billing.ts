@@ -10,7 +10,7 @@ const tariffBody = {
   mode: 'standard | free | at_cost | custom',
   collection_mode:
     'stripe | manual | none; free requires none; none preserves rating/visibility without collecting payment',
-  markup_bps: 'integer 0-100000; 100 basis points = 1%; must be 0 for free and at_cost',
+  markup_bps: 'optional integer 0-100000; omitted standard = 3000 (30%); custom requires explicit; free and at_cost = 0',
   monthly_subscription:
     '{ amount_minor: non-negative integer string, currency: three-letter uppercase ISO currency }',
 };

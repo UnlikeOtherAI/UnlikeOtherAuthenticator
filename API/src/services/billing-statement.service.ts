@@ -28,6 +28,11 @@ import {
   type DirectBillingServiceAccess,
 } from './billing-service-access.service.js';
 import { billingStatementActions } from './billing-statement-action.service.js';
+import { resolveBillingTariffForMonth } from './billing-tariff-history.service.js';
+import {
+  billingCollectionModeToPublic,
+  billingModeToPublic,
+} from './billing-tariff-serialization.service.js';
 import { resolveBillingControlledBy } from './billing-org-responsibility.service.js';
 import { buildOrganisationStatementScope } from './billing-statement-organisation.service.js';
 import {
@@ -165,10 +170,10 @@ async function buildCanonicalBillingStatement(
   const now = deps?.now?.() ?? new Date();
   const period = monthPeriod(context.billingMonth, now);
   const prisma = deps?.prisma ?? getAdminPrisma();
-  const summary = await (
+  const currentSummary = await (
     deps?.resolveSummary ?? ((params) => getStripeSubscriptionSummary(params, { prisma }))
   )(context);
-  const statementProduct = summary.product.identifier;
+  const statementProduct = currentSummary.product.identifier;
   const canonicalRequest = { ...context.request, product: statementProduct };
 
   const fetchMetering = deps?.fetchMetering ?? fetchLedgerMeteringUsage;
@@ -198,10 +203,12 @@ async function buildCanonicalBillingStatement(
             groupBy: 'user',
           }),
         ]).then(([service, user]) => ({ service, user }));
-  const [tariff, products, accesses, adjustments, members, metering] = await Promise.all([
-    prisma.billingTariff.findUnique({
-      where: { id: summary.tariff.id },
-      select: { name: true },
+  const [effective, products, accesses, adjustments, members, metering] = await Promise.all([
+    resolveBillingTariffForMonth(prisma, {
+      serviceId: context.credential.service.id,
+      organisationId: context.request.organisationId,
+      teamId: context.request.teamId,
+      billingMonth: period.key,
     }),
     prisma.billingService.findMany({
       where: { active: true },
@@ -241,8 +248,34 @@ async function buildCanonicalBillingStatement(
     }),
     meteringPromise,
   ]);
+  const tariff = effective.tariff;
+  const modeFromTerm = billingModeToPublic(tariff.mode);
+  const collectionMode = billingCollectionModeToPublic(tariff.collectionMode);
+  const summary = {
+    ...currentSummary,
+    tariff: {
+      ...currentSummary.tariff,
+      id: tariff.id,
+      key: tariff.key,
+      version: tariff.version,
+      mode: modeFromTerm,
+      collection_mode: collectionMode,
+      markup_bps: tariff.markupBps,
+      markup_percent: (tariff.markupBps / 100).toFixed(2),
+      usage_price_multiplier_bps: modeFromTerm === 'free' ? 0 : 10_000 + tariff.markupBps,
+      monthly_subscription: {
+        amount_minor: tariff.monthlyAmountMinor.toString(),
+        currency: tariff.currency,
+      },
+      payment_collection_enabled: collectionMode !== 'none',
+      usage_billing_enabled: modeFromTerm !== 'free',
+    },
+    assignment: {
+      scope: effective.source.toLowerCase() as 'team' | 'organisation' | 'service_default',
+      id: effective.assignmentId,
+    },
+  };
   const { service: serviceMetering, user: userMetering } = metering;
-  if (!tariff) throw new AppError('INTERNAL', 500, 'BILLING_TARIFF_NOT_FOUND');
 
   const mode = modeFromSummary(summary.tariff.mode);
   const ratedServiceMetering =
@@ -310,7 +343,7 @@ async function buildCanonicalBillingStatement(
           capabilities: { can_upgrade: false, can_open_portal: false, can_cancel: false },
           actions: [],
         }
-      : billingStatementActions(summary, canonicalRequest, context.credential);
+      : billingStatementActions(currentSummary, canonicalRequest, context.credential);
   const markupPercent = (summary.tariff.markup_bps / 100).toFixed(2);
 
   const statement: BillingStatementV1 = {

@@ -1697,8 +1697,10 @@ model BillingService {
   active     Boolean  @default(true)
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
+  tariffHistoryFromMonth String @default("9999-12") @map("tariff_history_from_month") @db.Char(7)
 
   tariffs                           BillingTariff[]
+  tariffTermEvents                  BillingTariffTermEvent[]
   assignments                       BillingTariffAssignment[]
   appKeys                           BillingAppKey[]
   stripeCatalogs                    BillingStripeCatalog[]
@@ -1756,6 +1758,7 @@ model BillingTariff {
 
   service              BillingService                 @relation(fields: [serviceId], references: [id], onDelete: Cascade)
   assignments          BillingTariffAssignment[]
+  termEvents           BillingTariffTermEvent[]
   stripePrices         BillingStripeTariffPrice[]
   stripeCheckouts      BillingStripeCheckoutSession[]
   stripeSubscriptions  BillingStripeSubscription[]
@@ -1765,6 +1768,28 @@ model BillingTariff {
   @@unique([serviceId, key, version])
   @@index([serviceId, isDefault])
   @@map("billing_tariffs")
+}
+
+// Append-only monthly commercial decisions. A null tariff is an explicit
+// removal; absence before the service's history boundary is never inferred.
+model BillingTariffTermEvent {
+  id                 String              @id @default(cuid())
+  sequence           BigInt              @unique @default(autoincrement())
+  serviceId          String              @map("service_id")
+  source             BillingTariffSource
+  scopeKey           String              @map("scope_key") @db.VarChar(520)
+  effectiveFromMonth String              @map("effective_from_month") @db.Char(7)
+  tariffId           String?             @map("tariff_id")
+  assignmentId       String?             @map("assignment_id")
+  reason             String              @db.VarChar(60)
+  actorEmail         String?             @map("actor_email") @db.VarChar(200)
+  createdAt          DateTime            @default(now()) @map("created_at")
+
+  service BillingService @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  tariff  BillingTariff? @relation(fields: [tariffId], references: [id], onDelete: Restrict)
+
+  @@index([serviceId, source, scopeKey, effectiveFromMonth, createdAt])
+  @@map("billing_tariff_term_events")
 }
 
 model BillingTariffAssignment {

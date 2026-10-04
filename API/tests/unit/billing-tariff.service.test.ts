@@ -7,6 +7,16 @@ import {
 } from '../../src/services/billing-tariff.service.js';
 
 describe('billing tariff validation', () => {
+  it('defaults omitted standard markup centrally while preserving explicit terms', () => {
+    const base = {
+      key: 'standard', name: 'Standard', mode: 'standard' as const,
+      collectionMode: 'none' as const, monthlyAmountMinor: '0', currency: 'USD',
+    };
+    expect(normalizeTariffInput(base).markupBps).toBe(3000);
+    expect(normalizeTariffInput({ ...base, markupBps: 1250 }).markupBps).toBe(1250);
+    expect(normalizeTariffInput({ ...base, mode: 'at_cost' }).markupBps).toBe(0);
+    expect(normalizeTariffInput({ ...base, mode: 'free' }).markupBps).toBe(0);
+  });
   it('stores explicit markup and exact monthly minor units', () => {
     expect(
       normalizeTariffInput({
@@ -102,6 +112,8 @@ describe('billing tariff validation', () => {
   it('retries a concurrent default update in a serializable transaction', async () => {
     const tariff = { id: 'tariff_2', serviceId: 'service_1', isDefault: false };
     const transactionClient = {
+      $queryRaw: vi.fn().mockResolvedValue([{ id: 'service_1' }]),
+      billingTariffTermEvent: { create: vi.fn().mockResolvedValue({}) },
       billingTariff: {
         findFirst: vi.fn().mockResolvedValue(tariff),
         updateMany: vi.fn().mockResolvedValue({ count: 1 }),

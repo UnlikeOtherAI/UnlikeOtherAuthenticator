@@ -33,6 +33,29 @@ markup. The prefill is prospective; stored versions and negotiated custom or
 at-cost terms are never rewritten by that UI default. Stripe collection stays
 an explicit choice.
 
+Commercial selection now has an append-only monthly history as well as the
+operator's current default/assignment pointers. A new service's initial default
+applies from its creation UTC month. Later default and organisation/team
+assignment changes take effect on the first day of the next UTC month; a
+same-month edit to a scheduled change appends another decision, with the latest
+decision before that month governing it. Removing an assignment appends an
+explicit removal so the next lower-precedence term applies. UOA resolves the
+requested billing month before rating credits or a customer statement; a
+read cannot establish that month's terms. Stripe subscriptions continue to use
+their checkout-pinned tariff, and manual invoices use their explicitly
+effective contract version.
+
+The migration starts legacy history only at a month for which the current
+pointer can be supported by the service creation, assignment update, and
+administrator audit timestamps. It retains existing tariffs unchanged. Older
+months without reliable evidence return
+`BILLING_TARIFF_HISTORY_RECONCILIATION_REQUIRED` and require an audited
+operator reconciliation; UOA must not infer their price from today's pointer.
+For a `standard` tariff, omitting `markup_bps` in the administrator API uses
+3,000 basis points centrally. `custom` requires an explicit value; `free` and
+`at_cost` default to zero. Provider cost is reported separately from the
+customer rated charge, so free rated base, markup, and total are all zero.
+
 ## Paid usage completeness and settlement
 
 Ledger supplies immutable provider cost and attribution, including an explicit
