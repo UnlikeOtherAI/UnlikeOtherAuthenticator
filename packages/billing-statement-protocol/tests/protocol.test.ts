@@ -259,10 +259,14 @@ describe('public BillingCreditsV1 consumer protocol', () => {
         ...billingCreditsV1ConformanceFixture,
         credit_balance: {
           ...billingCreditsV1ConformanceFixture.credit_balance,
-          label: 'Credit balance',
+          label: 'Zbývající kredity',
         },
       }),
-    ).toBe(false);
+    ).toBe(true);
+    expect(validate({
+      ...billingCreditsV1ConformanceFixture,
+      credit_balance: { ...billingCreditsV1ConformanceFixture.credit_balance, label: '' },
+    })).toBe(false);
     expect(validate({ ...billingCreditsV1ConformanceFixture, balance_microcredits: '1' })).toBe(
       false,
     );

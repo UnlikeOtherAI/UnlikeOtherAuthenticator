@@ -113,7 +113,7 @@ type BillingCreditsCommonV1<PendingPayment> = {
   };
   credit_balance: BillingCreditAmount & {
     state: 'available' | 'zero' | 'debt';
-    label: 'Remaining credits';
+    label: string;
     description: string;
   };
   pending_credits: {

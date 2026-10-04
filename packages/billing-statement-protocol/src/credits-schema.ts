@@ -131,7 +131,7 @@ export const billingCreditsV1JsonSchema = {
       properties: {
         ...signedCredits.properties,
         state: { enum: ['available', 'zero', 'debt'] },
-        label: { const: 'Remaining credits' },
+        label: { type: 'string', minLength: 1 },
         description: { type: 'string' },
       },
     },

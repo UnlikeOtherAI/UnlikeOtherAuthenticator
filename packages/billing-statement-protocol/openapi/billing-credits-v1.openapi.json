@@ -6,8 +6,239 @@
     "description": "Exact customer-facing shared team credits API. UOA returns display-ready values and capabilities; products never calculate balances, conversion, privacy filtering, or authorization."
   },
   "paths": {
+    "/billing/v1/credits/purchase-status": {
+      "post": {
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-uoa-billing-presentation",
+            "required": false,
+            "schema": {
+              "const": "1.5.0"
+            },
+            "description": "Opt in to localized display and opaque purchase references."
+          },
+          {
+            "in": "header",
+            "name": "x-uoa-billing-locale",
+            "required": false,
+            "schema": {
+              "enum": [
+                "cs",
+                "en-US",
+                "en-GB",
+                "de",
+                "es",
+                "fr",
+                "it"
+              ]
+            },
+            "description": "Display language; requires the presentation version header."
+          }
+        ],
+        "security": [
+          {
+            "UoaAppKey": [],
+            "UoaActor": []
+          },
+          {
+            "UoaBearerAppKey": [],
+            "UoaActor": []
+          }
+        ],
+        "operationId": "getBillingCreditPurchaseStatusV1",
+        "summary": "Read one authorized credit purchase after returning from checkout",
+        "description": "Only the committed credit entry proves success. Reads do not create charges or settle credits.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "product",
+                  "organisation_id",
+                  "team_id",
+                  "user_id",
+                  "purchase_id"
+                ],
+                "properties": {
+                  "product": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "organisation_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "team_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "user_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "purchase_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Exact purchase state and display-ready recovery copy.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Customer billing responses are never cacheable.",
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "$id": "/schemas/billing-credit-purchase-status-v1.json",
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "schema_version",
+                    "purchase_id",
+                    "state",
+                    "title",
+                    "message",
+                    "awaiting_confirmation"
+                  ],
+                  "properties": {
+                    "schema_version": {
+                      "const": 1
+                    },
+                    "purchase_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "state": {
+                      "enum": [
+                        "open",
+                        "processing",
+                        "requires_action",
+                        "succeeded",
+                        "failed",
+                        "expired",
+                        "needs_review"
+                      ]
+                    },
+                    "title": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "awaiting_confirmation": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "UOA billing error envelope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UOA billing error envelope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "UOA billing error envelope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "UOA billing error envelope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "UOA billing error envelope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/billing/v1/credits": {
       "post": {
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-uoa-billing-presentation",
+            "required": false,
+            "schema": {
+              "const": "1.5.0"
+            },
+            "description": "Opt in to localized display and opaque purchase references."
+          },
+          {
+            "in": "header",
+            "name": "x-uoa-billing-locale",
+            "required": false,
+            "schema": {
+              "enum": [
+                "cs",
+                "en-US",
+                "en-GB",
+                "de",
+                "es",
+                "fr",
+                "it"
+              ]
+            },
+            "description": "Display language; requires the presentation version header."
+          }
+        ],
         "security": [
           {
             "UoaAppKey": [],
@@ -124,6 +355,34 @@
     },
     "/billing/v1/credits/top-up-checkout": {
       "post": {
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-uoa-billing-presentation",
+            "required": false,
+            "schema": {
+              "const": "1.5.0"
+            },
+            "description": "Opt in to localized display and opaque purchase references."
+          },
+          {
+            "in": "header",
+            "name": "x-uoa-billing-locale",
+            "required": false,
+            "schema": {
+              "enum": [
+                "cs",
+                "en-US",
+                "en-GB",
+                "de",
+                "es",
+                "fr",
+                "it"
+              ]
+            },
+            "description": "Display language; requires the presentation version header."
+          }
+        ],
         "security": [
           {
             "UoaAppKey": [],
@@ -257,6 +516,34 @@
     },
     "/billing/v1/credits/auto-top-up/setup": {
       "post": {
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-uoa-billing-presentation",
+            "required": false,
+            "schema": {
+              "const": "1.5.0"
+            },
+            "description": "Opt in to localized display and opaque purchase references."
+          },
+          {
+            "in": "header",
+            "name": "x-uoa-billing-locale",
+            "required": false,
+            "schema": {
+              "enum": [
+                "cs",
+                "en-US",
+                "en-GB",
+                "de",
+                "es",
+                "fr",
+                "it"
+              ]
+            },
+            "description": "Display language; requires the presentation version header."
+          }
+        ],
         "security": [
           {
             "UoaAppKey": [],
@@ -390,6 +677,34 @@
     },
     "/billing/v1/credits/auto-top-up/update": {
       "post": {
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-uoa-billing-presentation",
+            "required": false,
+            "schema": {
+              "const": "1.5.0"
+            },
+            "description": "Opt in to localized display and opaque purchase references."
+          },
+          {
+            "in": "header",
+            "name": "x-uoa-billing-locale",
+            "required": false,
+            "schema": {
+              "enum": [
+                "cs",
+                "en-US",
+                "en-GB",
+                "de",
+                "es",
+                "fr",
+                "it"
+              ]
+            },
+            "description": "Display language; requires the presentation version header."
+          }
+        ],
         "security": [
           {
             "UoaAppKey": [],
@@ -516,6 +831,34 @@
     },
     "/billing/v1/credits/auto-top-up/disable": {
       "post": {
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-uoa-billing-presentation",
+            "required": false,
+            "schema": {
+              "const": "1.5.0"
+            },
+            "description": "Opt in to localized display and opaque purchase references."
+          },
+          {
+            "in": "header",
+            "name": "x-uoa-billing-locale",
+            "required": false,
+            "schema": {
+              "enum": [
+                "cs",
+                "en-US",
+                "en-GB",
+                "de",
+                "es",
+                "fr",
+                "it"
+              ]
+            },
+            "description": "Display language; requires the presentation version header."
+          }
+        ],
         "security": [
           {
             "UoaAppKey": [],
@@ -636,6 +979,34 @@
     },
     "/billing/v1/credits/auto-top-up/recover": {
       "post": {
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-uoa-billing-presentation",
+            "required": false,
+            "schema": {
+              "const": "1.5.0"
+            },
+            "description": "Opt in to localized display and opaque purchase references."
+          },
+          {
+            "in": "header",
+            "name": "x-uoa-billing-locale",
+            "required": false,
+            "schema": {
+              "enum": [
+                "cs",
+                "en-US",
+                "en-GB",
+                "de",
+                "es",
+                "fr",
+                "it"
+              ]
+            },
+            "description": "Display language; requires the presentation version header."
+          }
+        ],
         "security": [
           {
             "UoaAppKey": [],
@@ -2278,7 +2649,8 @@
                 ]
               },
               "label": {
-                "const": "Remaining credits"
+                "type": "string",
+                "minLength": 1
               },
               "description": {
                 "type": "string"
@@ -4540,6 +4912,11 @@
           "redirect_url"
         ],
         "properties": {
+          "purchase_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
           "redirect_url": {
             "type": "string",
             "format": "uri",

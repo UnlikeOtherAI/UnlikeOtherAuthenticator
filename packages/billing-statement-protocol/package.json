@@ -1,6 +1,6 @@
 {
   "name": "@unlikeotherai/billing-statement-protocol",
-  "version": "1.3.0",
+  "version": "1.5.0",
   "description": "Public UOA billing statement and customer-action consumer contracts",
   "license": "MIT",
   "type": "module",
@@ -22,6 +22,7 @@
     "README.md"
   ],
   "exports": {
+    "./schema/billing-credit-purchase-status-v1.json": "./schema/billing-credit-purchase-status-v1.json",
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",

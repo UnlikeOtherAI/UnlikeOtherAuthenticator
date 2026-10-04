@@ -12,6 +12,8 @@ export type BillingCancellationSelection =
 
 export type BillingHostedRedirectResponse = {
   redirect_url: string;
+  /** Opaque local credit purchase reference, only with presentation 1.5 negotiation. */
+  purchase_id?: string;
 };
 
 /**
