@@ -267,49 +267,8 @@ describe('canonical UOA BillingStatementV2', () => {
         usage_charge: expect.objectContaining({ amount: '12' }),
       }),
     ]);
-    const deepWater = statement.connected_service_usage.services.find(
-      (service) => service.billing_product === 'deepwater',
-    );
-    expect(deepWater).toMatchObject({
-      access: 'direct',
-      totals: { usage: [{ usage_unit: 'tokens', raw_units: '1000' }] },
-      users: [
-        expect.objectContaining({
-          user_id: 'user_1',
-          usage: [
-            expect.objectContaining({
-              raw_units: '600',
-              share: expect.objectContaining({ basis_points: 6000 }),
-            }),
-          ],
-        }),
-        expect.objectContaining({
-          user_id: 'user_2',
-          usage: [
-            expect.objectContaining({
-              raw_units: '400',
-              share: expect.objectContaining({ basis_points: 4000 }),
-            }),
-          ],
-        }),
-      ],
-    });
-    expect(deepWater?.origins.find((origin) => origin.product === 'nessie')).toMatchObject({
-      usage: [
-        expect.objectContaining({
-          raw_units: '440',
-          share: expect.objectContaining({ basis_points: 4400, percent: '44.00' }),
-        }),
-      ],
-    });
-    expect(
-      statement.connected_service_usage.services.find(
-        (service) => service.billing_product === 'deeptest',
-      ),
-    ).toMatchObject({
-      access: 'indirect',
-      totals: { usage: [{ usage_unit: 'test_runs', raw_units: '1' }] },
-    });
+    expect(statement).not.toHaveProperty('connected_service_usage');
+    expect(JSON.stringify(statement)).not.toMatch(/raw_units|usage_unit|call_share|provider_cost/i);
     expect(statement.commercial_lines.every((item) => item.product === 'deepwater')).toBe(true);
     expect(deps.database.teamMember.findMany).toHaveBeenCalledWith({
       where: {
@@ -369,18 +328,8 @@ describe('canonical UOA BillingStatementV2', () => {
       caller_product: 'unattributed',
       origin_product: 'unattributed',
     });
-    expect(
-      statement.connected_service_usage.services[0]?.origins.find(
-        (origin) => origin.product === null,
-      ),
-    ).toMatchObject({
-      display_name: 'Unattributed origin',
-      usage: [
-        expect.objectContaining({
-          share: expect.objectContaining({ basis_points: 10000 }),
-        }),
-      ],
-    });
+    expect(statement).not.toHaveProperty('connected_service_usage');
+    expect(JSON.stringify(statement)).not.toMatch(/raw_units|usage_unit|call_share|provider_cost/i);
     expect(statement.actions.find((action) => action.id === 'cancel')).toMatchObject({
       request: { body: { product: 'deepwater' } },
     });

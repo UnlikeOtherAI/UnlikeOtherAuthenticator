@@ -979,7 +979,7 @@ require strict consumers to update together:
 | `GET /schemas/billing-consumer-actions-v1.example.json` | Synthetic, credential-free fixtures for every billing consumer-action message                                                                                                  |
 | `GET /schemas/billing-consumer-actions-v1.openapi.json` | OpenAPI 3.1 components embedding the exact action schemas and fixtures                                                                                                         |
 | `POST /billing/v1/service-access/confirm`               | Records one direct product session after exact product-key, actor, and active membership verification                                                                          |
-| `POST /billing/v1/customer-statement`                   | Display-ready current/past-month plan, subscription, raw usage, customer charges, cross-service and per-user attribution, commercial lines, exact totals, capabilities, and actions |
+| `POST /billing/v1/customer-statement`                   | Display-ready current/past-month plan, subscription, customer charges and consumed credits, per-user customer charges, commercial lines, exact totals, capabilities, and actions |
 | `POST /billing/v2/customer-statement`                   | The same UOA-owned commercial statement plus complete display-ready totals, origins, and users across all services connected to the exact team                                 |
 | `POST /billing/v1/cancellation/preview`                 | Complete confirmation-dialog model plus opaque five-minute token and server-generated idempotency key                                                                          |
 | `POST /billing/v1/cancellation/confirm`                 | Locked, revalidated, idempotent confirmation for the preview's exact pinned direct subscriptions                                                                               |
@@ -994,7 +994,7 @@ The canonical UOA and Ledger product identifiers are `nessie`, `deepwater`,
 mapped at the product boundary and are never sent in billing subjects.
 
 Products render `BillingStatementV1` or `BillingStatementV2` unchanged. New
-consumers use v2. Package 4.0.0, V1 protocol 4.0.0, and V2 protocol 5.0.0
+consumers use v2. Package 5.0.0, V1 protocol 5.0.0, and V2 protocol 6.0.0
 retain the route names but remove the public pinned tariff identity, which is
 private financial authority. Consuming products must update their strict
 validators before the producer switches. Products must not derive tariff copy,
@@ -1035,7 +1035,7 @@ fail when any committed JSON artifact drifts from the typed source. Until
 registry publication is approved, consumers may vendor the whole package
 directory or fetch the public artifacts above. The same package defines
 `BillingCyclesV2` (protocol 2.1.0): exact product/selected-team monthly history,
-customer subscription and measured usage details, credit application, true
+customer subscription and usage charges, consumed credits, true
 payment documents and explicit later adjustments. The selected-team request
 can also return a separate organisation-wide subscription/document cycle to
 current organisation billing managers. Its `scope.team_id` is null and
@@ -1057,7 +1057,7 @@ For a manual organisation invoice, `captureIssuedManualBillingCycle` reads
 the actual issued UOA invoice and its immutable issuer PDF. It binds the exact
 single service line, contract version, month, legal parties, customer amount,
 payment events and verified PDF digest to one append-only allocation. It
-publishes the copied legal invoice and separate frozen PDF/CSV measured-usage
+publishes the copied legal invoice and separate frozen PDF/CSV customer-charge
 breakdown as a new cycle revision. Tax, credits and multi-service invoices
 without exact line-level settlement allocation hold; no whole-invoice amount
 is silently assigned to one service. A second attempt with the same immutable
@@ -1069,7 +1069,7 @@ seat intervals are clipped to the immutable commercial effective/end and
 termination window used by the monetary quote.
 Replay comparison uses the exact receipt facts, not a new signed Ledger
 assertion's cursor, capture time or response hash. A zero-monthly-charge team
-without a subscription source can still prepare its own pending measured-usage
+without a subscription source can still prepare its own pending customer-usage-charge
 cycle from the historically effective tariff and payer; unresolved historical
 terms, payer changes and paid costs hold it. This path never checks current
 team membership to attribute old usage. Organisation-scoped, signed Ledger
@@ -1078,15 +1078,13 @@ the financial cycle retains the stable identifier after a live Team row is
 deleted without recreating identity or granting read access. One organisation
 subscription cycle freezes its fee once, while each discovered team can have a
 separate selected-team usage cycle bound to that organisation source. The
-organisation cycle combines measured service/unit totals and customer usage
-charges from all discovered teams for current organisation billing managers,
+organisation cycle combines customer usage charges from all discovered teams for current organisation billing managers,
 without publishing team identifiers or member details. Team managers cannot
 open that cycle, and selected-team cycles contain only their own usage. Missing
-historical payer or tariff evidence holds reconciliation. Ledger may provide
-measured reasoning, cache-write duration and modality dimensions; public
-cycles omit unknown dimensions instead of manufacturing zero. Cache creation
-tokens are disjoint from ordinary input and counted once in the raw total,
-while reasoning and modality figures are subsets. Downloaded CSV includes per-seat unit
+historical payer or tariff evidence holds reconciliation. Ledger may provide measured reasoning, cache-write duration and modality
+dimensions; they stay in private evidence and never enter customer cycle JSON
+or downloads. Cache creation tokens are disjoint from ordinary input in
+private rated evidence, while reasoning and modality figures are subsets. Downloaded CSV includes per-seat unit
 price/policy/timing, customer charges, paid/outstanding totals and credit
 boundaries; spreadsheet formula prefixes are neutralized. PDF labels pending
 totals honestly and wraps long source identifiers within the page.
@@ -1452,9 +1450,9 @@ subscriptions, adjustments, taxes, payments, and totals as applicable. Paid
 recurring add-ons remain on their canonical Stripe subscription, are labelled
 as collected separately, and are excluded from the manual amount due. The
 payment invoice remains distinct from the frozen cycle usage breakdown: the
-breakdown may show measured token/API/search/research units, cache and modality
-counts when the Ledger receipt actually supplies them, plus final customer
-charges and credit consumption. Neither document exposes raw provider cost,
+breakdown shows customer charges, consumed credits and subscription/seat
+evidence. Private UOA/Ledger records retain measured token/API/search/research
+units, cache and modality counts when the Ledger receipt actually supplies them. Neither document exposes raw provider cost,
 cost-token equivalents, tariff markup, or the margin calculation. Even
 operator-created descriptions must not encode those prohibited financial
 facts. Product applications receive only UOA's display-ready documents and

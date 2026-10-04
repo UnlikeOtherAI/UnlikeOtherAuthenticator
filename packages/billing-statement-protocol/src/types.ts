@@ -4,7 +4,7 @@ export const BILLING_STATEMENT_SCHEMA_VERSION = 1 as const;
 export const BILLING_STATEMENT_SCHEMA_PATH = '/schemas/billing-statement-v1.json' as const;
 export const BILLING_STATEMENT_EXAMPLE_PATH = '/schemas/billing-statement-v1.example.json' as const;
 export const BILLING_STATEMENT_OPENAPI_PATH = '/schemas/billing-statement-v1.openapi.json' as const;
-export const BILLING_STATEMENT_PROTOCOL_VERSION = '4.1.0' as const;
+export const BILLING_STATEMENT_PROTOCOL_VERSION = '5.0.0' as const;
 
 export type ExactMoney = {
   amount: string;
@@ -88,32 +88,13 @@ export type BillingStatementV1 = {
   usage: {
     lines: Array<{
       id: string;
-      service_id: string;
-      usage_unit: string;
-      calls: string;
       attribution: {
         user_id: string | null;
         billing_product: string;
         caller_product: string;
         origin_product: string;
       };
-      raw_units: {
-        input: string;
-        cached_input: string;
-        output: string;
-        total: string;
-      };
-      share: {
-        basis_points: number;
-        percent: string;
-        display: string;
-      };
       customer_charge: ExactMoney | null;
-    }>;
-    totals: Array<{
-      usage_unit: string;
-      raw_units: string;
-      display: string;
     }>;
     charge_totals: Array<{
       currency: string;
@@ -123,11 +104,6 @@ export type BillingStatementV1 = {
       user_id: string;
       name: string | null;
       email: string;
-      calls: string;
-      usage: Array<{
-        usage_unit: string;
-        raw_units: string;
-      }>;
       charges: Array<{
         currency: string;
         usage_charge: ExactMoney;

@@ -93,38 +93,17 @@ export const billingStatementV1ConformanceFixture: BillingStatementV1 = {
     lines: [
       {
         id: 'usage_openai_example',
-        service_id: 'openai',
-        usage_unit: 'tokens',
-        calls: '2',
         attribution: {
           user_id: null,
           billing_product: 'deepwater',
           caller_product: 'nessie',
           origin_product: 'nessie',
         },
-        raw_units: {
-          input: '100',
-          cached_input: '0',
-          output: '50',
-          total: '150',
-        },
-        share: {
-          basis_points: 10000,
-          percent: '100.00',
-          display: '100.00%',
-        },
         customer_charge: {
           amount: '3.6',
           currency: 'USD',
           display: '$3.6',
         },
-      },
-    ],
-    totals: [
-      {
-        usage_unit: 'tokens',
-        raw_units: '150',
-        display: '150 tokens used',
       },
     ],
     charge_totals: [
@@ -142,13 +121,6 @@ export const billingStatementV1ConformanceFixture: BillingStatementV1 = {
         user_id: 'user_example',
         name: 'Example User',
         email: 'example@example.invalid',
-        calls: '2',
-        usage: [
-          {
-            usage_unit: 'tokens',
-            raw_units: '150',
-          },
-        ],
         charges: [
           {
             currency: 'USD',

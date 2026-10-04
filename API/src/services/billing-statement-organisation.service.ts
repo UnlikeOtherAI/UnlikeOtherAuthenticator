@@ -16,11 +16,6 @@ import type { FetchMeteringPortfolio } from './billing-metering.types.js';
 import { exactMoney, minorAmountToMajor } from './billing-money.service.js';
 import { resolveBillingTariffForMonth } from './billing-tariff-history.service.js';
 import {
-  listDirectTeamBillingServiceAccess,
-  type DirectBillingServiceAccess,
-} from './billing-service-access.service.js';
-import {
-  buildConnectedServicePortfolio,
   filterPortfolioForProduct,
 } from './billing-statement-portfolio.service.js';
 import {
@@ -55,7 +50,6 @@ export type OrganisationStatementContext = {
 type Dependencies = {
   prisma: PrismaClient;
   fetchPortfolio?: FetchMeteringPortfolio;
-  listDirectAccess?: typeof listDirectTeamBillingServiceAccess;
 };
 
 type TeamTariff = {
@@ -145,7 +139,7 @@ async function buildTeamUsage(
   deps: Dependencies,
 ): Promise<BillingOrganisationTeamUsageV1> {
   const fetchPortfolio = deps.fetchPortfolio ?? fetchLedgerMeteringPortfolio;
-  const [portfolio, tariff, accesses, adjustments, members] = await Promise.all([
+  const [portfolio, tariff, adjustments, members] = await Promise.all([
     fetchPortfolio({
       product: context.statementProduct,
       organisationId: context.organisationId,
@@ -162,10 +156,6 @@ async function buildTeamUsage(
       },
       deps.prisma,
     ),
-    (deps.listDirectAccess ?? listDirectTeamBillingServiceAccess)(
-      { organisationId: context.organisationId, teamId: team.id },
-      { prisma: deps.prisma },
-    ) as Promise<DirectBillingServiceAccess[]>,
     listApplicableCommercialAdjustments(
       {
         serviceId: context.serviceId,
@@ -220,13 +210,6 @@ async function buildTeamUsage(
       captured_at: portfolio.snapshot.capturedAt,
       sha256: portfolio.snapshot.sha256,
     },
-    connected_service_usage: buildConnectedServicePortfolio({
-      statementProduct: context.statementProduct,
-      userMetering: portfolio,
-      products: context.products,
-      accesses,
-      users: members.map((member) => member.user),
-    }),
     commercial_lines: commercialLines,
     totals: billingCommercialTotals(commercialLines),
   };

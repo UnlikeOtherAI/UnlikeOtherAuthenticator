@@ -47,6 +47,28 @@ export {
   type BillingStatementV1OpenApiDocument,
 } from './openapi.js';
 export { billingStatementV1JsonSchema } from './schema.js';
+export { billingCreditBudgetV1ConformanceFixture } from './budget-fixture.js';
+export { billingCreditBudgetV1OpenApiDocument } from './budget-openapi.js';
+export {
+  billingCreditBudgetV1JsonSchema,
+  billingCreditBudgetWriteV1JsonSchema,
+  billingCreditBudgetDeleteV1JsonSchema,
+} from './budget-schema.js';
+export type {
+  BillingCreditBudgetV1,
+  BillingCreditBudgetListV1,
+  BillingCreditBudgetWriteV1,
+  BillingCreditBudgetDeleteV1,
+  BillingCreditBudgetDisabledV1,
+} from './budget-types.js';
+export {
+  BILLING_CREDIT_BUDGET_PROTOCOL_VERSION,
+  BILLING_CREDIT_BUDGET_SCHEMA_VERSION,
+  BILLING_CREDIT_BUDGET_SCHEMA_PATH,
+  BILLING_CREDIT_BUDGET_EXAMPLE_PATH,
+  BILLING_CREDIT_BUDGET_OPENAPI_PATH,
+  BILLING_CREDIT_BUDGET_LIST_PATH,
+} from './budget-types.js';
 export type { BillingStatementAction, BillingStatementV1, ExactMoney } from './types.js';
 export {
   BILLING_STATEMENT_EXAMPLE_PATH,
@@ -62,18 +84,10 @@ export {
 } from './v2-openapi.js';
 export { billingStatementV2JsonSchema } from './v2-schema.js';
 export type {
-  BillingConnectedServicePortfolio,
-  BillingConnectedServiceUsage,
   BillingOrganisationScopeV1,
   BillingOrganisationTeamUsageV1,
-  BillingPortfolioOrigin,
   BillingPortfolioSnapshot,
-  BillingPortfolioTotals,
-  BillingPortfolioUsageContribution,
-  BillingPortfolioUsageTotal,
-  BillingPortfolioUser,
   BillingStatementV2,
-  BillingUsageShare,
 } from './v2-types.js';
 export {
   BILLING_STATEMENT_V2_EXAMPLE_PATH,

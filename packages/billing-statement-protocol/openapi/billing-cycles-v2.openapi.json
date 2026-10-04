@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "UOA customer billing cycles protocol",
-    "version": "2.1.0",
+    "version": "3.0.0",
     "description": "Exact product-scoped monthly history, documents, and download actions."
   },
   "paths": {},
@@ -1026,10 +1026,7 @@
               "additionalProperties": false,
               "required": [
                 "id",
-                "service_id",
-                "usage_unit",
-                "calls",
-                "raw_units",
+                "label",
                 "customer_charge",
                 "credits_consumed"
               ],
@@ -1039,85 +1036,9 @@
                   "minLength": 1,
                   "maxLength": 256
                 },
-                "service_id": {
+                "label": {
                   "type": "string",
-                  "minLength": 1,
-                  "maxLength": 256
-                },
-                "usage_unit": {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 256
-                },
-                "calls": {
-                  "type": "string",
-                  "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
-                },
-                "raw_units": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": [
-                    "input",
-                    "cached_input",
-                    "output",
-                    "total"
-                  ],
-                  "properties": {
-                    "input": {
-                      "type": "string",
-                      "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
-                    },
-                    "cached_input": {
-                      "type": "string",
-                      "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
-                    },
-                    "output": {
-                      "type": "string",
-                      "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
-                    },
-                    "total": {
-                      "type": "string",
-                      "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
-                    },
-                    "reasoning": {
-                      "type": "string",
-                      "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
-                    },
-                    "cache_write": {
-                      "type": "string",
-                      "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
-                    },
-                    "cache_write_5m": {
-                      "type": "string",
-                      "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
-                    },
-                    "cache_write_1h": {
-                      "type": "string",
-                      "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
-                    }
-                  }
-                },
-                "modalities": {
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "additionalProperties": false,
-                    "required": [
-                      "modality",
-                      "raw_units"
-                    ],
-                    "properties": {
-                      "modality": {
-                        "type": "string",
-                        "minLength": 1,
-                        "maxLength": 256
-                      },
-                      "raw_units": {
-                        "type": "string",
-                        "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
-                      }
-                    }
-                  }
+                  "minLength": 1
                 },
                 "customer_charge": {
                   "anyOf": [
@@ -1662,18 +1583,7 @@
           "usage_lines": [
             {
               "id": "usage_example",
-              "service_id": "openai",
-              "usage_unit": "tokens",
-              "calls": "2",
-              "raw_units": {
-                "input": "100",
-                "cached_input": "0",
-                "output": "50",
-                "total": "180",
-                "cache_write": "30",
-                "cache_write_5m": "20",
-                "cache_write_1h": "10"
-              },
+              "label": "Metered usage",
               "customer_charge": {
                 "amount": "13",
                 "currency": "USD",

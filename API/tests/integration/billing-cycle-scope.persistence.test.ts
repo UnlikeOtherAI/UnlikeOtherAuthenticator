@@ -282,15 +282,13 @@ describe.skipIf(!enabled)('customer cycle scope persistence', () => {
     viewer.credential.service.identifier = serviceIdentifier;
     const detail = await getBillingCycleDetail(viewer, first.cycleId,
       { prisma: db.prisma });
-    expect(detail.usage_lines[0]).toMatchObject({
-      raw_units: { input: '100', cached_input: '25', output: '50', total: '205',
-        reasoning: '5', cache_write: '30', cache_write_5m: '20',
-        cache_write_1h: '10' },
-      customer_charge: { amount: '13', currency: 'USD' }, credits_consumed: null,
-      modalities: [{ modality: 'input_text', raw_units: '100' },
-        { modality: 'input_audio', raw_units: '0' },
-        { modality: 'output_audio', raw_units: '0' }],
+    expect(detail.usage_lines[0]).toMatchObject({ label: 'Metered usage',
+      customer_charge: { amount: '13', currency: 'USD' }, credits_consumed: null });
+    expect(JSON.stringify(detail)).not.toMatch(/raw_units|cache_write|reasoning|model-synthetic/);
+    const privateRow = await db.prisma.billingCustomerCycle.findUniqueOrThrow({
+      where: { id: first.cycleId },
     });
+    expect(JSON.stringify(privateRow.privateEvidence)).toContain('cacheWrite5mTokens');
   });
 
   it('prepares a team usage cycle without a subscription source or current-member inference',
@@ -444,10 +442,10 @@ describe.skipIf(!enabled)('customer cycle scope persistence', () => {
     expect(orgDetail.subscription_lines).toHaveLength(1);
     expect(orgDetail.subscription_lines[0]?.customer_charge.amount_minor).toBe('2000');
     expect(orgDetail.usage_lines).toHaveLength(1);
-    expect(orgDetail.usage_lines[0]).toMatchObject({ calls: '2',
-      raw_units: { input: '20', output: '20', total: '40' },
+    expect(orgDetail.usage_lines[0]).toMatchObject({ label: 'Metered usage',
       customer_charge: { amount: '3.9' } });
     expect(JSON.stringify(orgDetail)).not.toContain(otherTeamId);
+    expect(JSON.stringify(orgDetail)).not.toMatch(/raw_units|usage_unit|calls|tokens/);
     await expect(getBillingCycleDetail(context(teamManagerId), orgCycle.cycleId,
       { prisma: db.prisma })).rejects.toMatchObject({ statusCode: 403 });
     expect(teamCycles).toHaveLength(2);
