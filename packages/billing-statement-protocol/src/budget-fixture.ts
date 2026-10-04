@@ -19,6 +19,7 @@ export const billingCreditBudgetV1ConformanceFixture: BillingCreditBudgetListV1 
     degrade_provider: null,
     spent_credits: '1234.5',
     held_credits: '12.125',
+    evidence_complete: true,
     remaining_credits: '8753.375',
     percent_used: 12.46625,
     effective_window_start: '2026-10-01T00:00:00.000Z',

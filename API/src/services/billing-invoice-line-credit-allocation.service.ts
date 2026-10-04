@@ -1,0 +1,38 @@
+import { AppError } from '../utils/errors.js';
+
+const MICROCREDITS_PER_USD_MINOR = 10_000_000n;
+
+export type InvoiceCreditReference = {
+  id: string;
+  serviceId: string;
+  settlementId: string;
+  creditsAppliedMicrocredits: bigint;
+};
+
+/**
+ * Invoice credits round only once across every settled reference. Stable
+ * reference order assigns each rounded cent to the same actual service line;
+ * the persisted rows are checked again by PostgreSQL before issue.
+ */
+export function allocateInvoiceCreditReferenceMinor(
+  references: readonly InvoiceCreditReference[],
+): Array<{ referenceId: string; serviceId: string; amountMinor: bigint }> {
+  let cumulative = 0n;
+  const seen = new Set<string>();
+  return [...references].sort((a, b) =>
+    a.serviceId.localeCompare(b.serviceId) ||
+    a.settlementId.localeCompare(b.settlementId) || a.id.localeCompare(b.id))
+    .map((reference) => {
+      if (reference.creditsAppliedMicrocredits < 0n || seen.has(reference.id)) {
+        throw new AppError('BAD_REQUEST', 409, 'BILLING_INVOICE_CREDIT_REFERENCE_INVALID');
+      }
+      seen.add(reference.id);
+      const before = (cumulative + MICROCREDITS_PER_USD_MINOR / 2n) /
+        MICROCREDITS_PER_USD_MINOR;
+      cumulative += reference.creditsAppliedMicrocredits;
+      const after = (cumulative + MICROCREDITS_PER_USD_MINOR / 2n) /
+        MICROCREDITS_PER_USD_MINOR;
+      return { referenceId: reference.id, serviceId: reference.serviceId,
+        amountMinor: after - before };
+    });
+}

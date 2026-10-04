@@ -35,7 +35,7 @@ export const billingCreditBudgetV1JsonSchema = {
         type: 'object',
         additionalProperties: false,
         required: [...policyRequired, 'policy_id', 'version', 'spent_credits',
-          'held_credits', 'remaining_credits', 'percent_used',
+          'held_credits', 'evidence_complete', 'remaining_credits', 'percent_used',
           'effective_window_start', 'effective_window_end'],
         properties: {
           ...policyProperties,
@@ -43,6 +43,7 @@ export const billingCreditBudgetV1JsonSchema = {
           version: { type: 'integer', minimum: 1 },
           spent_credits: credits,
           held_credits: credits,
+          evidence_complete: { type: 'boolean' },
           remaining_credits: { anyOf: [credits, { type: 'null' }] },
           percent_used: { type: ['number', 'null'], minimum: 0 },
           effective_window_start: { type: 'string', format: 'date-time' },

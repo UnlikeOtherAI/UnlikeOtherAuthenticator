@@ -25,6 +25,8 @@ export type BillingCreditBudgetV1 = BillingCreditBudgetPolicyV1 & {
   version: number;
   spent_credits: string;
   held_credits: string;
+  /** False means spent is only the known subset and remaining is unknown. */
+  evidence_complete: boolean;
   remaining_credits: string | null;
   percent_used: number | null;
   effective_window_start: string;
