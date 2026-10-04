@@ -808,7 +808,11 @@ top-up controls, add-on labels and prices, and statement copy use the selected
 supported billing locale (`cs`, `en-US`, `en-GB`, `de`, `es`, `fr`, or `it`),
 with English (`en-US`) as the default. Built-in offer names are localized by
 their catalog keys; custom offer and service names remain operator-authored.
-The action request bodies and exact financial amounts remain the same in every
+Statement usage summaries and source-generated connected-service explanations
+are localized too. Known metering units (`tokens`, `requests`, and `test_runs`)
+receive translated display names while their protocol identifiers remain
+unchanged; unrecognized operator-defined units keep their authored names. The
+action request bodies and exact financial amounts remain the same in every
 locale.
 
 UOA alone converts and settles Ledger raw usage into credits. Each settlement

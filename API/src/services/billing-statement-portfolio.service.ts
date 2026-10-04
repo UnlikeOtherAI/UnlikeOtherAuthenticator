@@ -19,6 +19,12 @@ import type {
   RawMeteringLine,
 } from './billing-metering.types.js';
 import type { DirectBillingServiceAccess } from './billing-service-access.service.js';
+import type { BillingCustomerLocale } from './billing-copy-locale.js';
+import {
+  billingStatementCopy,
+  billingStatementText,
+  billingStatementUsageUnit,
+} from './billing-statement-copy.catalog.js';
 
 type ProductIdentity = { identifier: string; name: string };
 type UserIdentity = { id: string; name: string | null; email: string | null };
@@ -68,31 +74,57 @@ function costTotals(lines: RawMeteringLine[]): Map<string, string> {
   return totals;
 }
 
-function displayInteger(value: string): string {
-  return BigInt(value).toLocaleString('en-GB');
+function displayInteger(value: string, locale?: BillingCustomerLocale): string {
+  return BigInt(value).toLocaleString(locale ?? 'en-GB');
 }
 
 function percentage(basisPoints: number): string {
   return (basisPoints / 100).toFixed(2);
 }
 
-function share(part: string, total: string, label: string): BillingUsageShare {
-  const basisPoints = billingDecimalRatioBasisPoints(part, total) ?? 0;
-  const percent = percentage(basisPoints);
-  return { basis_points: basisPoints, percent, display: `${percent}% of ${label}` };
+function displayPercentage(basisPoints: number, locale?: BillingCustomerLocale): string {
+  return new Intl.NumberFormat(locale ?? 'en-GB', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(basisPoints / 100);
 }
 
-function usageTotalRows(lines: RawMeteringLine[]): BillingPortfolioUsageTotal[] {
+function share(
+  part: string,
+  total: string,
+  label: string,
+  locale?: BillingCustomerLocale,
+): BillingUsageShare {
+  const basisPoints = billingDecimalRatioBasisPoints(part, total) ?? 0;
+  const percent = percentage(basisPoints);
+  return {
+    basis_points: basisPoints,
+    percent,
+    display: billingStatementText(billingStatementCopy(locale).share, {
+      percent: displayPercentage(basisPoints, locale), label,
+    }),
+  };
+}
+
+function usageTotalRows(
+  lines: RawMeteringLine[],
+  locale?: BillingCustomerLocale,
+): BillingPortfolioUsageTotal[] {
   return [...usageTotals(lines).entries()]
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([usageUnit, rawUnits]) => ({
       usage_unit: usageUnit,
       raw_units: rawUnits,
-      display: `${displayInteger(rawUnits)} raw ${usageUnit} across this team`,
+      display: billingStatementText(billingStatementCopy(locale).rawTeamUsage, {
+        count: displayInteger(rawUnits, locale), unit: billingStatementUsageUnit(usageUnit, locale),
+      }),
     }));
 }
 
-function costTotalRows(lines: RawMeteringLine[]): BillingPortfolioCostTotal[] {
+function costTotalRows(
+  lines: RawMeteringLine[],
+  locale?: BillingCustomerLocale,
+): BillingPortfolioCostTotal[] {
   return [...costTotals(lines).entries()]
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([currency, amount]) => {
@@ -100,7 +132,9 @@ function costTotalRows(lines: RawMeteringLine[]): BillingPortfolioCostTotal[] {
       return {
         currency,
         provider_cost: providerCost,
-        display: `${providerCost.display} raw provider cost across this team`,
+        display: billingStatementText(billingStatementCopy(locale).rawProviderCost, {
+          amount: providerCost.display,
+        }),
       };
     });
 }
@@ -110,18 +144,26 @@ function usageContributionRows(
   serviceLines: RawMeteringLine[],
   contributorName: string,
   serviceName: string,
+  locale?: BillingCustomerLocale,
 ): BillingPortfolioUsageContribution[] {
   const contributor = usageTotals(lines);
   return [...usageTotals(serviceLines).entries()]
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([usageUnit, total]) => {
       const rawUnits = contributor.get(usageUnit) ?? '0';
-      const unitShare = share(rawUnits, total, `${serviceName} ${usageUnit}`);
+      const copy = billingStatementCopy(locale);
+      const displayUnit = billingStatementUsageUnit(usageUnit, locale);
+      const unitShare = share(rawUnits, total, billingStatementText(copy.usageShareLabel, { unit: displayUnit }), locale);
       return {
         usage_unit: usageUnit,
         raw_units: rawUnits,
         share: unitShare,
-        display: `${contributorName} used ${displayInteger(rawUnits)} raw ${usageUnit} (${unitShare.percent}%)`,
+        display: billingStatementText(billingStatementCopy(locale).usageContribution, {
+          name: contributorName,
+          count: displayInteger(rawUnits, locale),
+          unit: displayUnit,
+          percent: unitShare.percent,
+        }),
       };
     });
 }
@@ -131,6 +173,7 @@ function costContributionRows(
   serviceLines: RawMeteringLine[],
   contributorName: string,
   serviceName: string,
+  locale?: BillingCustomerLocale,
 ): BillingPortfolioCostContribution[] {
   const contributor = costTotals(lines);
   return [...costTotals(serviceLines).entries()]
@@ -145,15 +188,22 @@ function costContributionRows(
           : {
               basis_points: basisPoints,
               percent: percentage(basisPoints),
-              display: `${percentage(basisPoints)}% of ${serviceName} ${currency} provider cost`,
+              display: billingStatementText(billingStatementCopy(locale).providerCostShare, {
+                percent: displayPercentage(basisPoints, locale), service: serviceName, currency,
+              }),
             };
       return {
         currency,
         provider_cost: providerCost,
         share: costShare,
         display: costShare
-          ? `${contributorName} used ${providerCost.display} raw provider cost (${costShare.percent}%)`
-          : `${contributorName} used ${providerCost.display} raw provider cost; share unavailable after corrections`,
+          ? billingStatementText(billingStatementCopy(locale).providerCostContribution, {
+            name: contributorName, amount: providerCost.display,
+            percent: displayPercentage(costShare.basis_points, locale),
+          })
+          : billingStatementText(billingStatementCopy(locale).providerCostContributionUnavailable, {
+            name: contributorName, amount: providerCost.display,
+          }),
       };
     });
 }
@@ -163,6 +213,7 @@ function originRows(params: {
   statementProduct: string;
   serviceName: string;
   productNames: Map<string, string>;
+  locale?: BillingCustomerLocale;
 }): PortfolioService['origins'] {
   const byOrigin = groupLines(params.lines, (line) => line.originProduct);
   if (!byOrigin.has(params.statementProduct)) byOrigin.set(params.statementProduct, []);
@@ -177,7 +228,9 @@ function originRows(params: {
     })
     .map(([product, lines]) => {
       const name = product === null ? null : (params.productNames.get(product) ?? null);
-      const displayName = product === null ? 'Unattributed origin' : (name ?? product);
+      const displayName = product === null
+        ? billingStatementCopy(params.locale).unattributedOrigin
+        : (name ?? product);
       const originCalls = sumBillingDecimals(lines.map((line) => line.calls));
       return {
         product,
@@ -185,9 +238,12 @@ function originRows(params: {
         display_name: displayName,
         is_statement_product: product === params.statementProduct,
         calls: originCalls,
-        call_share: share(originCalls, calls, `${params.serviceName} calls`),
-        usage: usageContributionRows(lines, params.lines, displayName, params.serviceName),
-        provider_costs: costContributionRows(lines, params.lines, displayName, params.serviceName),
+        call_share: share(originCalls, calls, billingStatementText(
+          billingStatementCopy(params.locale).callsShareLabel,
+          { name: params.serviceName },
+        ), params.locale),
+        usage: usageContributionRows(lines, params.lines, displayName, params.serviceName, params.locale),
+        provider_costs: costContributionRows(lines, params.lines, displayName, params.serviceName, params.locale),
       };
     });
 }
@@ -196,6 +252,7 @@ function userRows(params: {
   lines: RawMeteringLine[];
   serviceName: string;
   users: Map<string, UserIdentity>;
+  locale?: BillingCustomerLocale;
 }): PortfolioService['users'] {
   const byUser = groupLines(params.lines, (line) => line.userId);
   const calls = sumBillingDecimals(params.lines.map((line) => line.calls));
@@ -207,7 +264,8 @@ function userRows(params: {
     })
     .map(([userId, lines]) => {
       const identity = userId ? params.users.get(userId) : undefined;
-      const displayName = identity?.name ?? identity?.email ?? userId ?? 'Unattributed usage';
+      const displayName = identity?.name ?? identity?.email ?? userId
+        ?? billingStatementCopy(params.locale).unattributedUsage;
       const userCalls = sumBillingDecimals(lines.map((line) => line.calls));
       return {
         user_id: userId,
@@ -215,9 +273,12 @@ function userRows(params: {
         email: identity?.email ?? null,
         display_name: displayName,
         calls: userCalls,
-        call_share: share(userCalls, calls, `${params.serviceName} calls`),
-        usage: usageContributionRows(lines, params.lines, displayName, params.serviceName),
-        provider_costs: costContributionRows(lines, params.lines, displayName, params.serviceName),
+        call_share: share(userCalls, calls, billingStatementText(
+          billingStatementCopy(params.locale).callsShareLabel,
+          { name: params.serviceName },
+        ), params.locale),
+        usage: usageContributionRows(lines, params.lines, displayName, params.serviceName, params.locale),
+        provider_costs: costContributionRows(lines, params.lines, displayName, params.serviceName, params.locale),
       };
     });
 }
@@ -227,15 +288,22 @@ function serviceDescription(
   statementProductName: string,
   totals: BillingPortfolioUsageTotal[],
   statementOrigin: PortfolioService['origins'][number],
+  locale?: BillingCustomerLocale,
 ): string {
-  if (totals.length === 0) return `${serviceName} had no metered team usage in this period.`;
+  const copy = billingStatementCopy(locale);
+  if (totals.length === 0) return `${serviceName}. ${copy.noUsage}`;
   const usage = totals
-    .map((total) => `${displayInteger(total.raw_units)} ${total.usage_unit}`)
+    .map((total) => `${displayInteger(total.raw_units, locale)} ${billingStatementUsageUnit(total.usage_unit, locale)}`)
     .join(', ');
   const contribution = statementOrigin.usage
-    .map((item) => `${item.share.percent}% of ${item.usage_unit}`)
+    .map((item) => billingStatementText(copy.usageShareSummary, {
+      percent: displayPercentage(item.share.basis_points, locale),
+      unit: billingStatementUsageUnit(item.usage_unit, locale),
+    }))
     .join(', ');
-  return `${serviceName} recorded ${usage} across this team. ${statementProductName} originated ${contribution}. Other-service usage is informational and does not change this statement total.`;
+  return `${billingStatementText(copy.recordedUsage, {
+    usage, product: statementProductName, contribution,
+  })} ${copy.otherServiceUsage}`;
 }
 
 export function filterPortfolioForProduct(
@@ -261,7 +329,9 @@ export function buildConnectedServicePortfolio(params: {
   products: ProductIdentity[];
   accesses: DirectBillingServiceAccess[];
   users: UserIdentity[];
+  locale?: BillingCustomerLocale;
 }): BillingConnectedServicePortfolio {
+  const copy = billingStatementCopy(params.locale);
   const productNames = new Map(
     params.products.map((product) => [product.identifier, product.name]),
   );
@@ -284,15 +354,16 @@ export function buildConnectedServicePortfolio(params: {
         statementProduct: params.statementProduct,
         serviceName: displayName,
         productNames,
+        locale: params.locale,
       });
-      const totals = usageTotalRows(lines);
+      const totals = usageTotalRows(lines, params.locale);
       return {
         billing_product: billingProduct,
         name,
         display_name: displayName,
         access: access ? ('direct' as const) : ('indirect' as const),
         direct_user_count: access?.userIds.length ?? 0,
-        title: `${displayName} team usage`,
+        title: billingStatementText(copy.teamUsageTitle, { name: displayName }),
         description: serviceDescription(
           displayName,
           statementProductName,
@@ -300,24 +371,25 @@ export function buildConnectedServicePortfolio(params: {
           origins.find(
             (origin) => origin.is_statement_product,
           ) as PortfolioService['origins'][number],
+          params.locale,
         ),
         totals: {
           calls: sumBillingDecimals(lines.map((line) => line.calls)),
           usage: totals,
-          provider_costs: costTotalRows(lines),
+          provider_costs: costTotalRows(lines, params.locale),
         },
         origins,
         users: userRows({
           lines,
           serviceName: displayName,
           users,
+          locale: params.locale,
         }),
       };
     });
   return {
-    title: 'Connected-service usage',
-    description:
-      'Team-wide raw usage across connected services. Other services are shown for transparency and are not added to this statement total.',
+    title: copy.portfolioTitle,
+    description: copy.portfolioDescription,
     statement_product: params.statementProduct,
     services,
   };

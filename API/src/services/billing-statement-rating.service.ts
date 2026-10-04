@@ -1,4 +1,10 @@
 import type { BillingStatementV1 } from '../contracts/billing-statement-v1.js';
+import type { BillingCustomerLocale } from './billing-copy-locale.js';
+import {
+  billingStatementCopy,
+  billingStatementText,
+  billingStatementUsageUnit,
+} from './billing-statement-copy.catalog.js';
 import {
   addBillingDecimals,
   exactMoney,
@@ -92,7 +98,18 @@ function formatPercent(basisPoints: number): string {
   return (basisPoints / 100).toFixed(2);
 }
 
-function serviceLines(metering: NormalizedMeteringUsage, plan: RatingPlan): UsageLine[] {
+function displayPercent(basisPoints: number, locale?: BillingCustomerLocale): string {
+  return new Intl.NumberFormat(locale ?? 'en-GB', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(basisPoints / 100);
+}
+
+function serviceLines(
+  metering: NormalizedMeteringUsage,
+  plan: RatingPlan,
+  locale?: BillingCustomerLocale,
+): UsageLine[] {
   const rawTotalsByUnit = new Map<string, string>();
   for (const line of metering.lines) {
     rawTotalsByUnit.set(
@@ -121,7 +138,12 @@ function serviceLines(metering: NormalizedMeteringUsage, plan: RatingPlan): Usag
       share: {
         basis_points: basisPoints,
         percent: formatPercent(basisPoints),
-        display: `${formatPercent(basisPoints)}% of ${line.usageUnit} usage`,
+        display: billingStatementText(billingStatementCopy(locale).share, {
+          percent: displayPercent(basisPoints, locale),
+          label: billingStatementText(billingStatementCopy(locale).usageShareLabel, {
+            unit: billingStatementUsageUnit(line.usageUnit, locale),
+          }),
+        }),
       },
       provider_cost: cost
         ? { ...exactMoney(cost.amount, cost.currency), provenance: cost.provenance }
@@ -131,7 +153,10 @@ function serviceLines(metering: NormalizedMeteringUsage, plan: RatingPlan): Usag
   });
 }
 
-function usageTotals(lines: UsageLine[]): BillingStatementV1['usage']['totals'] {
+function usageTotals(
+  lines: UsageLine[],
+  locale?: BillingCustomerLocale,
+): BillingStatementV1['usage']['totals'] {
   const totals = new Map<string, { raw: string; billable: string }>();
   for (const line of lines) {
     const current = totals.get(line.usage_unit) ?? { raw: '0', billable: '0' };
@@ -146,7 +171,11 @@ function usageTotals(lines: UsageLine[]): BillingStatementV1['usage']['totals'] 
       usage_unit: usageUnit,
       raw_units: total.raw,
       billable_units: total.billable,
-      display: `${total.billable} billable ${usageUnit} (${total.raw} raw)`,
+      display: billingStatementText(billingStatementCopy(locale).billableUsage, {
+        billable: total.billable,
+        unit: billingStatementUsageUnit(usageUnit, locale),
+        raw: total.raw,
+      }),
     }));
 }
 
@@ -180,6 +209,7 @@ function userTotals(
   metering: NormalizedMeteringUsage,
   plan: RatingPlan,
   users: UserIdentity[],
+  locale?: BillingCustomerLocale,
 ): BillingStatementV1['usage']['user_totals'] {
   const identities = new Map(users.map((user) => [user.id, user]));
   const byUser = new Map<string, RawMeteringLine[]>();
@@ -192,14 +222,14 @@ function userTotals(
   return [...byUser.entries()]
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([userId, rows]) => {
-      const lines = serviceLines({ ...metering, lines: rows, groupBy: 'user' }, plan);
+      const lines = serviceLines({ ...metering, lines: rows, groupBy: 'user' }, plan, locale);
       const identity = identities.get(userId);
       return {
         user_id: userId,
         name: identity?.name ?? null,
         email: identity?.email ?? userId,
         calls: sumBillingDecimals(rows.map((row) => row.calls)),
-        usage: usageTotals(lines).map((total) => ({
+        usage: usageTotals(lines, locale).map((total) => ({
           usage_unit: total.usage_unit,
           raw_units: total.raw_units,
           billable_units: total.billable_units,
@@ -209,18 +239,25 @@ function userTotals(
     });
 }
 
-function usageCommercialLines(totals: CostTotal[], plan: RatingPlan): CommercialLine[] {
+function usageCommercialLines(
+  totals: CostTotal[],
+  plan: RatingPlan,
+  locale?: BillingCustomerLocale,
+): CommercialLine[] {
+  const copy = billingStatementCopy(locale);
   return totals.map((total) => ({
     id: `usage_${total.currency}`,
     kind: 'usage',
     product: plan.product,
-    label: 'Metered usage',
+    label: copy.meteredUsage,
     detail:
       plan.mode === 'free'
-        ? `Usage value ${total.provider_cost.display}; free tariff`
-        : `Provider cost ${total.provider_cost.display} + ${(plan.markupBps / 100).toFixed(
-            2,
-          )}% (${total.markup.display})`,
+        ? billingStatementText(copy.freeUsageDetails, { cost: total.provider_cost.display })
+        : billingStatementText(copy.providerCostDetails, {
+          cost: total.provider_cost.display,
+          percent: displayPercent(plan.markupBps, locale),
+          markup: total.markup.display,
+        }),
     amount: total.usage_charge,
   }));
 }
@@ -230,21 +267,22 @@ export function rateBillingStatementUsage(params: {
   userMetering: NormalizedMeteringUsage;
   plan: RatingPlan;
   users: UserIdentity[];
+  locale?: BillingCustomerLocale;
 }): {
   usage: BillingStatementV1['usage'];
   commercialLines: CommercialLine[];
 } {
-  const lines = serviceLines(params.serviceMetering, params.plan);
-  const totals = usageTotals(lines);
+  const lines = serviceLines(params.serviceMetering, params.plan, params.locale);
+  const totals = usageTotals(lines, params.locale);
   const costs = costTotals(lines);
   return {
     usage: {
       lines,
       totals,
       cost_totals: costs,
-      user_totals: userTotals(params.userMetering, params.plan, params.users),
+      user_totals: userTotals(params.userMetering, params.plan, params.users, params.locale),
     },
-    commercialLines: usageCommercialLines(costs, params.plan),
+    commercialLines: usageCommercialLines(costs, params.plan, params.locale),
   };
 }
 

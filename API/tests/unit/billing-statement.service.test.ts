@@ -297,13 +297,13 @@ describe('canonical UOA billing statement', () => {
         usage_unit: 'requests',
         raw_units: '10',
         billable_units: '12',
-        display: '12 billable requests (10 raw)',
+        display: '12 účtovaných požadavků (10 nezpracovaných)',
       },
       {
         usage_unit: 'tokens',
         raw_units: '150',
         billable_units: '180',
-        display: '180 billable tokens (150 raw)',
+        display: '180 účtovaných tokenů (150 nezpracovaných)',
       },
     ]);
     expect(statement.usage.cost_totals).toEqual([

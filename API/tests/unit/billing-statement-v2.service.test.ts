@@ -8,6 +8,7 @@ import type {
   NormalizedMeteringPortfolio,
   RawMeteringLine,
 } from '../../src/services/billing-metering.types.js';
+import { billingStatementUsageUnit } from '../../src/services/billing-statement-copy.catalog.js';
 import { getCanonicalBillingStatementV2 } from '../../src/services/billing-statement.service.js';
 
 const now = new Date('2026-07-20T12:00:00.000Z');
@@ -180,6 +181,59 @@ function dependencies(
 }
 
 describe('canonical UOA BillingStatementV2', () => {
+  it('localizes supported metering units and preserves operator-defined unit names', () => {
+    const cases = [
+      ['cs', 'tokenů', 'požadavků'],
+      ['en-US', 'tokens', 'requests'],
+      ['en-GB', 'tokens', 'requests'],
+      ['de', 'Tokens', 'Anfragen'],
+      ['es', 'tokens', 'solicitudes'],
+      ['fr', 'jetons', 'requêtes'],
+      ['it', 'token', 'richieste'],
+    ] as const;
+    for (const [locale, tokens, requests] of cases) {
+      expect(billingStatementUsageUnit('tokens', locale)).toBe(tokens);
+      expect(billingStatementUsageUnit('requests', locale)).toBe(requests);
+      expect(billingStatementUsageUnit('operator_defined_unit', locale)).toBe('operator_defined_unit');
+    }
+  });
+
+  it('localizes source-generated statement and connected-service presentation copy', async () => {
+    const fetchPortfolio = vi.fn(async ({ groupBy }: { groupBy: 'service' | 'user' }) =>
+      portfolio(groupBy, [line({
+        inputUnits: '1000',
+        estimatedProviderCost: '1.25',
+        selectedProviderCost: '1.25',
+        currency: 'USD',
+        userId: 'user_1',
+      })]),
+    );
+    const deps = dependencies(fetchPortfolio);
+    const statement = await getCanonicalBillingStatementV2(
+      { request, actorToken: 'signed-actor', credential, billingMonth: '2026-07', locale: 'cs' },
+      deps.values,
+    );
+
+    expect(statement.commercial_lines.find((line) => line.kind === 'usage')).toMatchObject({
+      label: 'Spotřeba podle využití',
+      detail: expect.stringContaining('Náklady poskytovatele'),
+    });
+    expect(statement.connected_service_usage.title).toBe('Využití připojených služeb');
+    const connectedService = statement.connected_service_usage.services[0]!;
+    expect(connectedService.title).toBe('Využití týmu: DeepWater');
+    expect(connectedService.totals.usage[0]?.display).toBe('1 000 nezpracovaných tokenů za celý tým');
+    expect(connectedService.description).toContain('Tým využil');
+    expect(connectedService.origins[0]?.call_share.percent).toBe('100.00');
+    expect(connectedService.origins[0]?.call_share.display).toContain('z volání služby DeepWater');
+    expect(connectedService.origins[0]?.usage[0]?.display).toContain('nezpracovaných tokenů');
+    expect(connectedService.users[0]?.call_share.display).toContain('z');
+    expect(connectedService.users[0]?.provider_costs[0]?.display).toContain('nákladů poskytovatele');
+    const ajv = new Ajv2020({ allErrors: true, strict: true });
+    addFormats(ajv);
+    const validate = ajv.compile(billingStatementV2JsonSchema);
+    expect(validate(statement), JSON.stringify(validate.errors)).toBe(true);
+  });
+
   it('rates only the statement product and emits a self-consistent user-snapshot portfolio', async () => {
     const userLines = [
       line({
