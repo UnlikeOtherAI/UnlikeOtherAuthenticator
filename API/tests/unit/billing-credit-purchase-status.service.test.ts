@@ -6,7 +6,6 @@ import { BILLING_CUSTOMER_LOCALES } from '../../src/contracts/billing-statement-
 import {
   getBillingCreditPurchaseStatus,
   readCreditPurchaseEvidence,
-  readCreditPurchaseState,
 } from '../../src/services/billing-credit-purchase-status.service.js';
 import { billingCreditPaymentCopy } from '../../src/services/billing-payment-copy.catalog.js';
 
@@ -19,6 +18,10 @@ const fundingMetadata = {
   uoa_app_key_id: 'app_key_1',
   uoa_credit_account_id: 'credit_account_1',
 };
+
+const readCreditPurchaseState = async (
+  params: Parameters<typeof readCreditPurchaseEvidence>[0],
+) => (await readCreditPurchaseEvidence(params)).state;
 
 function checkout(overrides: Record<string, unknown> = {}): BillingCreditTopUpCheckout {
   return {
@@ -202,6 +205,21 @@ describe('readCreditPurchaseState', () => {
     });
   });
 
+  it.each(['processing', 'succeeded'] as const)(
+    'does not return a continuation while the PaymentIntent is %s even if Checkout remains open',
+    async (intentStatus) => {
+      const evidence = await readCreditPurchaseEvidence({
+        checkout: checkout(), account, customerStripeId,
+        stripe: stripeFor({
+          session: session({ status: 'open', url: 'https://checkout.stripe.com/c/pay/cs_1' }),
+          intent: intent({ status: intentStatus }),
+        }).client,
+      });
+      expect(evidence.state).toBe('processing');
+      expect(evidence.continuation).toBeUndefined();
+    },
+  );
+
   it.each([
     'https://checkout.stripe.com.evil.example/c/pay/cs_1',
     'https://name:secret@checkout.stripe.com/c/pay/cs_1',
@@ -337,13 +355,13 @@ describe('getBillingCreditPurchaseStatus authorization and scope', () => {
     const isOrganisationManager = vi.fn().mockResolvedValue(params.orgManager ?? false);
     const resolveCollection = vi.fn().mockResolvedValue({ account, stripe: null });
     const resolveAccount = vi.fn().mockResolvedValue({ id: 'credit_account_1', customerId: 'customer_1' });
-    const readState = vi.fn().mockResolvedValue('processing');
+    const readEvidence = vi.fn().mockResolvedValue({ state: 'processing' });
     return {
       findFirst, prisma, resolveEntitlement, resolveViewer, resolveResponsibility,
-      isOrganisationManager, resolveCollection, resolveAccount, readState,
+      isOrganisationManager, resolveCollection, resolveAccount, readEvidence,
       deps: {
         prisma, resolveEntitlement, resolveViewer, resolveResponsibility, isOrganisationManager,
-        resolveCollection, resolveAccount, readState,
+        resolveCollection, resolveAccount, readEvidence,
       } as never,
     };
   }
@@ -412,14 +430,14 @@ describe('getBillingCreditPurchaseStatus authorization and scope', () => {
 
   it('localizes the status and only marks processing as awaiting confirmation', async () => {
     const state = setup();
-    state.readState.mockResolvedValue('processing');
+    state.readEvidence.mockResolvedValue({ state: 'processing' });
     const result = await getBillingCreditPurchaseStatus({
       request, credential, actorToken: 'actor', endpoint: '/billing/v1/credits/purchase-status', locale: 'cs',
     }, state.deps);
     expect(result).toMatchObject({ schema_version: 1, purchase_id: purchaseId, state: 'processing', awaiting_confirmation: true });
     expect(result.title).toBe('Platbu ověřujeme');
 
-    state.readState.mockResolvedValue('succeeded');
+    state.readEvidence.mockResolvedValue({ state: 'succeeded' });
     const completed = await getBillingCreditPurchaseStatus({
       request, credential, actorToken: 'actor', endpoint: '/billing/v1/credits/purchase-status',
     }, state.deps);

@@ -94,14 +94,11 @@ export async function readCreditPurchaseEvidence(params: {
       case 'requires_payment_method': state = intent.last_payment_error ? 'failed' : 'open'; break;
       default: state = session.status === 'open' ? 'open' : 'processing';
     }
-    return { state, ...(continuation ? { continuation } : {}) };
+    const canContinue = state === 'open' || state === 'requires_action' || state === 'failed';
+    return { state, ...(canContinue && continuation ? { continuation } : {}) };
   } catch {
     return { state: 'needs_review' };
   }
-}
-
-export async function readCreditPurchaseState(params: Parameters<typeof readCreditPurchaseEvidence>[0]): Promise<BillingCreditPurchaseState> {
-  return (await readCreditPurchaseEvidence(params)).state;
 }
 
 type Dependencies = {
@@ -112,7 +109,6 @@ type Dependencies = {
   isOrganisationManager?: typeof isOrganisationBillingManager;
   resolveCollection?: typeof resolveCreditCollectionContext;
   resolveAccount?: typeof resolveCreditAccount;
-  readState?: typeof readCreditPurchaseState;
   readEvidence?: typeof readCreditPurchaseEvidence;
 };
 
@@ -147,14 +143,10 @@ export async function getBillingCreditPurchaseStatus(params: {
     include: { customer: { select: { stripeCustomerId: true } } },
   });
   if (!checkout) throw new AppError('NOT_FOUND', 404, 'BILLING_PURCHASE_NOT_FOUND');
-  const evidence = deps.readEvidence
-    ? await deps.readEvidence({ checkout, account: collection.account,
-      customerStripeId: checkout.customer.stripeCustomerId, stripe: collection.stripe ?? null })
-    : deps.readState
-      ? { state: await deps.readState({ checkout, account: collection.account,
-        customerStripeId: checkout.customer.stripeCustomerId, stripe: collection.stripe ?? null }) }
-      : await readCreditPurchaseEvidence({ checkout, account: collection.account,
-        customerStripeId: checkout.customer.stripeCustomerId, stripe: collection.stripe ?? null });
+  const evidence = await (deps.readEvidence ?? readCreditPurchaseEvidence)({
+    checkout, account: collection.account,
+    customerStripeId: checkout.customer.stripeCustomerId, stripe: collection.stripe ?? null,
+  });
   const copy = billingCreditPaymentCopy(params.locale)[evidence.state];
   return {
     schema_version: 1, purchase_id: checkout.id, state: evidence.state,
