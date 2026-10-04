@@ -55,9 +55,10 @@ describe.skipIf(!process.env.DATABASE_URL)(
         data: { appId: app.id, key: 'private_content', defaultState: true },
       });
       const service = await db.prisma.billingService.create({
-        data: { identifier: `service-${suffix}`, name: 'Product' },
+        data: { identifier: `service-${suffix}`, name: 'Product',
+          tariffHistoryFromMonth: new Date().toISOString().slice(0, 7) },
       });
-      await db.prisma.billingTariff.create({
+      const createdTariff = await db.prisma.billingTariff.create({
         data: {
           serviceId: service.id,
           key: 'default',
@@ -69,6 +70,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
           currency: 'USD',
           isDefault: true,
         },
+      });
+      await db.prisma.billingTariffTermEvent.create({
+        data: { serviceId: service.id, source: 'SERVICE_DEFAULT', scopeKey: service.id,
+          effectiveFromMonth: service.tariffHistoryFromMonth, tariffId: createdTariff.id,
+          reason: 'test-fixture' },
       });
       const credential: VerifiedBillingAppKey = {
         id: `key-${suffix}`,

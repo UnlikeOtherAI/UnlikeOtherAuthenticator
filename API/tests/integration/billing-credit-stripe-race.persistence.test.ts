@@ -128,14 +128,20 @@ async function seed(prisma: PrismaClient) {
       VALUES ('tm_credit_stripe_race', ${ids.team}, ${ids.user}, 'owner', 'ACTIVE', CURRENT_TIMESTAMP)
     `);
     await tx.$executeRaw(Prisma.sql`
-      INSERT INTO "billing_services" ("id", "identifier", "name", "updated_at")
-      VALUES (${ids.service}, 'deepwater', 'DeepWater', CURRENT_TIMESTAMP)
+      INSERT INTO "billing_services" ("id", "identifier", "name", "tariff_history_from_month", "updated_at")
+      VALUES (${ids.service}, 'deepwater', 'DeepWater', '2026-10', CURRENT_TIMESTAMP)
     `);
     await tx.$executeRaw(Prisma.sql`
       INSERT INTO "billing_tariffs" ("id", "service_id", "key", "version", "name", "mode",
         "collection_mode", "markup_bps", "currency", "is_default")
       VALUES (${ids.tariff}, ${ids.service}, 'stripe', 1, 'Stripe race', 'STANDARD',
         'STRIPE', 0, 'USD', true)
+    `);
+    await tx.$executeRaw(Prisma.sql`
+      INSERT INTO "billing_tariff_term_events" ("id", "service_id", "source", "scope_key",
+        "effective_from_month", "tariff_id", "reason")
+      VALUES ('btte_credit_stripe_race', ${ids.service}, 'SERVICE_DEFAULT', ${ids.service},
+        '2026-10', ${ids.tariff}, 'test-fixture')
     `);
     await tx.$executeRaw(Prisma.sql`
       INSERT INTO "billing_app_keys" ("id", "service_id", "purpose", "name", "key_prefix",
