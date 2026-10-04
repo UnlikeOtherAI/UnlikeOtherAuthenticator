@@ -2,12 +2,13 @@ import { randomUUID } from 'node:crypto';
 
 import {
   BillingAssignmentScope, BillingCollectionMode, BillingMonthlyChargeBasis,
-  BillingTariffMode,
+  BillingTariffMode, BillingTariffSource,
 } from '@prisma/client';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { billingCycleDetailV2ConformanceFixture } from '../../src/contracts/billing-statement-v1.js';
 import { prepareBillingCycleClose } from '../../src/services/billing-cycle-close.service.js';
+import { prepareBillingTeamUsageCycle } from '../../src/services/billing-cycle-team-usage.service.js';
 import {
   billingCycleSnapshotDigest, getBillingCycleDetail, listBillingCycles,
   type BillingCycleContext,
@@ -49,6 +50,7 @@ describe.skipIf(!enabled)('customer cycle scope persistence', () => {
     teamId = team.id;
     const service = await db.prisma.billingService.create({ data: {
       identifier: `billing-scope-${randomUUID()}`, name: 'Scope Service',
+      tariffHistoryFromMonth: '2026-01',
     } });
     serviceId = service.id;
     serviceIdentifier = service.identifier;
@@ -59,6 +61,17 @@ describe.skipIf(!enabled)('customer cycle scope persistence', () => {
       monthlyChargeBasis: BillingMonthlyChargeBasis.FLAT, currency: 'USD',
     } });
     tariffId = tariff.id;
+    const usageOnlyTariff = await db.prisma.billingTariff.create({ data: {
+      serviceId, key: 'usage-only', version: 1, name: 'Usage only',
+      mode: BillingTariffMode.STANDARD, collectionMode: BillingCollectionMode.MANUAL,
+      markupBps: 3000, monthlyAmountMinor: 0n,
+      monthlyChargeBasis: BillingMonthlyChargeBasis.FLAT, currency: 'USD',
+    } });
+    await db.prisma.billingTariffTermEvent.create({ data: {
+      serviceId, source: BillingTariffSource.SERVICE_DEFAULT, scopeKey: serviceId,
+      effectiveFromMonth: '2026-01', tariffId: usageOnlyTariff.id,
+      reason: 'test_seed',
+    } });
     await db.prisma.orgMember.createMany({ data: [
       { orgId, userId: ownerId, role: 'owner' },
       { orgId, userId: teamManagerId, role: 'member' },
@@ -187,6 +200,18 @@ describe.skipIf(!enabled)('customer cycle scope persistence', () => {
     quoteFn.mockResolvedValue(quote);
     fetchMetering.mockResolvedValue({ ...usage, snapshot: { ...usage.snapshot,
       id: 'snapshot-august-late', cursor: 'cursor-august-late', sha256: 'd'.repeat(64) } });
+    const sameFactsNewCursor = await prepareBillingCycleClose(params, deps);
+    expect(sameFactsNewCursor).toEqual(first);
+    fetchMetering.mockResolvedValue({ ...usage, calls: '1', lines: [{
+      serviceId: 'telemetry-synthetic', usageUnit: 'events', calls: '1',
+      inputUnits: '0', cachedInputUnits: '0', outputUnits: '0',
+      estimatedProviderCost: null, actualProviderCost: null,
+      selectedProviderCost: null, currency: null, costProvenance: null,
+      billingProduct: serviceIdentifier, callerProduct: serviceIdentifier,
+      originProduct: serviceIdentifier, userId: ownerId,
+      billingDisposition: 'nonbillable' as const,
+    }], snapshot: { ...usage.snapshot, id: 'snapshot-august-new-receipt',
+      cursor: 'cursor-august-new-receipt', sha256: 'e'.repeat(64) } });
     const revised = await prepareBillingCycleClose(params, deps);
     expect(revised.cycleId).not.toBe(first.cycleId);
     const revisions = await db.prisma.billingCustomerCycle.findMany({ where: {
@@ -256,4 +281,52 @@ describe.skipIf(!enabled)('customer cycle scope persistence', () => {
       customer_charge: { amount: '13', currency: 'USD' }, credits_consumed: null,
     });
   });
+
+  it('prepares a team usage cycle without a subscription source or current-member inference',
+    async () => {
+      const usage = {
+        schemaVersion: 1 as const, product: serviceIdentifier, groupBy: 'user' as const,
+        scope: { organizationId: orgId, teamId, userId: null, month: '2026-02',
+          startsAt: '2026-02-01T00:00:00.000Z', endsAt: '2026-03-01T00:00:00.000Z' },
+        calls: '1', lines: [{ serviceId: 'model-synthetic', usageUnit: 'tokens',
+          calls: '1', inputUnits: '100', cachedInputUnits: '0', outputUnits: '50',
+          estimatedProviderCost: null, actualProviderCost: '10',
+          selectedProviderCost: '10', currency: 'USD', costProvenance: 'actual',
+          billingProduct: serviceIdentifier, callerProduct: serviceIdentifier,
+          originProduct: serviceIdentifier, userId: teamManagerId,
+          billingDisposition: 'paid' as const }],
+        billingCompleteness: { state: 'complete' as const, unresolvedPaidAttempts: '0' },
+        snapshot: { cursor: 'feb-cursor-1', id: 'feb-snapshot-1',
+          capturedAt: '2026-03-03T00:00:00.000Z', immutable: true as const,
+          sha256: 'f'.repeat(64) },
+      };
+      const fetchMetering = vi.fn().mockResolvedValue(usage);
+      const params = { serviceId, organisationId: orgId, teamId,
+        billingMonth: '2026-02' };
+      const deps = { prisma: db.prisma, now: () => new Date('2026-10-03T00:00:00.000Z'),
+        fetchMetering };
+      const first = await prepareBillingTeamUsageCycle(params, deps);
+      fetchMetering.mockResolvedValueOnce({ ...usage, snapshot: { ...usage.snapshot,
+        id: 'feb-snapshot-new-assertion', cursor: 'feb-cursor-new-assertion',
+        capturedAt: '2026-10-03T00:00:00.000Z', sha256: 'a'.repeat(64) } });
+      expect(await prepareBillingTeamUsageCycle(params, deps)).toEqual(first);
+      const viewer = context(ownerId);
+      viewer.request.product = serviceIdentifier;
+      viewer.credential.service.identifier = serviceIdentifier;
+      const detail = await getBillingCycleDetail(viewer, first.cycleId,
+        { prisma: db.prisma });
+      expect(detail).toMatchObject({ scope: { cycle_scope: 'team', payer_scope: 'team' },
+        subscription_lines: [], credits: { consumed: null },
+        usage_lines: [{ customer_charge: { amount: '13' } }],
+      });
+      fetchMetering.mockResolvedValue({ ...usage, lines: [{ ...usage.lines[0],
+        actualProviderCost: '12', selectedProviderCost: '12' }],
+      snapshot: { ...usage.snapshot, id: 'feb-snapshot-late', cursor: 'feb-cursor-late',
+        sha256: 'b'.repeat(64) } });
+      const revised = await prepareBillingTeamUsageCycle(params, deps);
+      expect(revised.cycleId).not.toBe(first.cycleId);
+      expect(await db.prisma.billingCustomerCycle.count({ where: {
+        serviceId, orgId, teamId, billingMonth: '2026-02',
+      } })).toBe(2);
+    });
 });

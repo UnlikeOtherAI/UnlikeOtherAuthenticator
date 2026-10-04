@@ -1009,6 +1009,15 @@ pending revision and retains the original snapshot. A late receipt after
 finalization holds for a separately evidenced financial adjustment. Customer
 seat intervals are clipped to the immutable commercial effective/end and
 termination window used by the monetary quote.
+Replay comparison uses the exact receipt facts, not a new signed Ledger
+assertion's cursor, capture time or response hash. A zero-monthly-charge team
+without a subscription source can still prepare its own pending measured-usage
+cycle from the historically effective tariff and payer; unresolved historical
+terms, payer changes and paid costs hold it. This path never checks current
+team membership to attribute old usage. Downloaded CSV includes per-seat unit
+price/policy/timing, customer charges, paid/outstanding totals and credit
+boundaries; spreadsheet formula prefixes are neutralized. PDF labels pending
+totals honestly and wraps long source identifiers within the page.
 
 `BillingStatementV1.capabilities` describes UOA-owned billing actions only. A
 product runtime capability such as `can_be_private` is not inferred from a

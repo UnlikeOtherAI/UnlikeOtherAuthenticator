@@ -110,3 +110,16 @@ export function privateMonthlyQuoteEvidence(quote: MonthlyQuote) {
       quantity: item.quantity, effective_at: item.effectiveAt.toISOString() })),
   };
 }
+
+/** Comparable closed-month liability, excluding future changes to live rows. */
+export function monthlyFinancialQuoteEvidence(
+  quote: MonthlyQuote, periodStart: Date, periodEnd: Date,
+) {
+  return {
+    source: quote.source, service_id: quote.serviceId, tariff_id: quote.tariffId,
+    organisation_id: quote.organisationId, team_id: quote.teamId,
+    agreement_id: quote.agreementId, billing_month: quote.billingMonth,
+    currency: quote.currency, subscription: projectMonthlySubscriptionLine(
+      quote, periodStart, periodEnd),
+  };
+}
