@@ -2631,7 +2631,13 @@ below their UOA consent threshold, rechecks current policy/offer/catalog and the
 UTC monthly cap under a database lock, and commits one attributed attempt before
 any off-session payment. A second per-account PostgreSQL lock serializes Stripe
 dispatch across replicas. Lost responses reuse that attempt's deterministic
-Stripe idempotency key; only signed webhooks terminalize it or add credits.
+Stripe idempotency key. Signed webhooks or a bounded, account-scoped Stripe
+Events API scan can apply its original lifecycle event through the same
+validation, deduplication, and atomic funding path. An unbound attempt matches
+only an original Event carrying its exact attempt metadata, then validates the
+retrieved PaymentIntent fully. Recovery never creates a replacement PaymentIntent
+and does not depend on current auto-top-up consent; missing, expired, incomplete,
+or invalid event history leaves the attempt unresolved.
 
 Recurring add-ons are UOA subscriptions scoped to an organisation, team, or
 subscribing user. DeepWater privacy is a versioned US$50/month offer.
