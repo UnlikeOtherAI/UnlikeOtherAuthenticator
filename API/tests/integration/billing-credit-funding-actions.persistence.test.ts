@@ -10,6 +10,7 @@ import {
   updateBillingCreditAutoTopUp,
 } from '../../src/services/billing-credit-auto-top-up-consent.service.js';
 import { applyCreditFundingWebhook } from '../../src/services/billing-credit-funding-webhook.service.js';
+import { reconcileCreditCheckout } from '../../src/services/billing-credit-checkout-recovery.service.js';
 import { createTestDb } from '../helpers/test-db.js';
 import {
   credential,
@@ -53,6 +54,152 @@ describe.skipIf(!databaseTestsEnabled)('credit funding PostgreSQL lifecycle race
       'billing_credit_top_up_checkouts_actor_offer_key',
     ]);
   });
+
+  it('does not restore a stale Checkout redirect after a verified payment webhook wins the race', async () => {
+    const checkoutId = 'bctc_funding_race_resume';
+    await handle!.prisma.billingCreditTopUpCheckout.create({
+      data: {
+        id: checkoutId,
+        accountId: ids.account,
+        creditAccountId: ids.creditAccount,
+        customerId: ids.customer,
+        catalogId: ids.catalog,
+        serviceId: ids.service,
+        appKeyId: ids.appKey,
+        offerId: ids.offer,
+        actorJti: 'actor-original-top-up',
+        requestedByUserId: ids.user,
+        paymentAmountMinor: 500n,
+        creditsReceivedMicrocredits: 5_000_000_000n,
+        currency: 'USD',
+        successUrlDigest: 'a'.repeat(64),
+        cancelUrlDigest: 'b'.repeat(64),
+        status: BillingCreditCheckoutStatus.CREATING,
+        leaseExpiresAt: new Date('2026-07-21T12:10:00.000Z'),
+      },
+    });
+    const openCheckout = await handle!.prisma.billingCreditTopUpCheckout.update({
+      where: { id: checkoutId },
+      data: {
+        stripeCheckoutSessionId: 'cs_funding_race_resume',
+        status: BillingCreditCheckoutStatus.OPEN,
+        expiresAt: new Date('2026-07-21T12:30:00.000Z'),
+      },
+    });
+    const eventAt = new Date('2026-07-21T12:02:00.000Z');
+    const stripeIntent = {
+      id: 'pi_funding_race_resume',
+      amount: 500,
+      amount_received: 500,
+      currency: 'usd',
+      customer: 'cus_funding_race',
+      latest_charge: 'ch_funding_race_resume',
+      payment_method: 'pm_funding_race',
+      livemode: false,
+      metadata: {
+        uoa_service_id: ids.service,
+        uoa_app_key_id: ids.appKey,
+        uoa_credit_account_id: ids.creditAccount,
+        uoa_credit_top_up_checkout_id: checkoutId,
+      },
+    };
+
+    const stripe = {
+      checkout: {
+        sessions: {
+          retrieve: vi.fn(async () => {
+            await handle!.prisma.$transaction(async (tx) => {
+              const webhook = await tx.billingStripeWebhookEvent.create({
+                data: {
+                  accountId: ids.account,
+                  stripeEventId: 'evt_funding_race_resume',
+                  type: 'payment_intent.succeeded',
+                  apiVersion: '2026-06-24.dahlia',
+                  livemode: false,
+                  stripeCreatedAt: eventAt,
+                  stripeObjectId: stripeIntent.id,
+                  stripeCustomerId: 'cus_funding_race',
+                  stripeCheckoutSessionId: 'cs_funding_race_resume',
+                  stripePaymentIntentId: stripeIntent.id,
+                  stripeChargeId: 'ch_funding_race_resume',
+                  amountMinor: 500n,
+                  currency: 'USD',
+                },
+              });
+              await applyCreditFundingWebhook(
+                tx,
+                {
+                  event: {
+                    kind: 'payment_succeeded',
+                    localType: 'top_up',
+                    localId: checkoutId,
+                    paymentIntent: stripeIntent as never,
+                    paymentMethodId: 'pm_funding_race',
+                    chargeId: 'ch_funding_race_resume',
+                    checkoutSessionId: 'cs_funding_race_resume',
+                    occurredAt: eventAt,
+                  },
+                  eventFields: {
+                    stripeCreatedAt: eventAt,
+                    stripeObjectId: stripeIntent.id,
+                    stripeCustomerId: 'cus_funding_race',
+                    stripePaymentIntentId: stripeIntent.id,
+                    stripeChargeId: 'ch_funding_race_resume',
+                    stripeCheckoutSessionId: 'cs_funding_race_resume',
+                    stripePaymentMethodId: 'pm_funding_race',
+                    amountMinor: 500n,
+                    currency: 'USD',
+                  },
+                },
+                webhook.id,
+                stripeAccount,
+              );
+            });
+            return {
+              id: 'cs_funding_race_resume',
+              livemode: false,
+              client_reference_id: checkoutId,
+              customer: 'cus_funding_race',
+              mode: 'payment',
+              status: 'open',
+              url: 'https://checkout.stripe.com/c/pay/funding-race',
+              expires_at: Math.floor(Date.now() / 1000) + 600,
+              metadata: {
+                uoa_service_id: ids.service,
+                uoa_app_key_id: ids.appKey,
+                uoa_credit_account_id: ids.creditAccount,
+                uoa_credit_top_up_checkout_id: checkoutId,
+              },
+            } as never;
+          }),
+          list: vi.fn(),
+        },
+      },
+    };
+
+    await expect(
+      reconcileCreditCheckout(
+        {
+          checkout: openCheckout,
+          kind: 'top_up',
+          customerStripeId: 'cus_funding_race',
+          account: stripeAccount,
+          now: eventAt,
+        },
+        { prisma: handle!.prisma, stripe: stripe as never },
+      ),
+    ).rejects.toThrow('BILLING_CREDIT_TOP_UP_PREDECESSOR_CHANGED');
+
+    const [savedCheckout, entries] = await Promise.all([
+      handle!.prisma.billingCreditTopUpCheckout.findUniqueOrThrow({ where: { id: checkoutId } }),
+      handle!.prisma.billingCreditEntry.findMany({
+        where: { sourceType: 'credit_top_up_checkout', sourceId: checkoutId },
+      }),
+    ]);
+    expect(savedCheckout.status).toBe(BillingCreditCheckoutStatus.COMPLETE);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({ amountMicrocredits: 5_000_000_000n });
+  }, 20_000);
 
   it('keeps a late SetupIntent from superseding a newer consent generation', async () => {
     const original = await handle!.prisma.billingCreditAccount.findUniqueOrThrow({

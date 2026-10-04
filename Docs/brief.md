@@ -2696,6 +2696,20 @@ return URL from UOA state. UOA persists the immutable local intent before
 calling Stripe, uses account/mode-scoped idempotency, recovers the same open
 Checkout across a fresh exact-scope actor, and applies webhooks only after
 current Stripe metadata matches the stored customer/catalog/intent binding.
+When one top-up payment is pending, its read action can continue only the same
+open payment for the unchanged offer, customer, product app key, service,
+amount, credit quantity, and return URLs. Other offers stay blocked until that
+payment is resolved. A Checkout completion snapshot does not add credits;
+verified PaymentIntent webhook evidence does.
+An active account with a saved card can use the existing recovery action to
+replace that card only when no payment attempt is unresolved. It reuses the
+selected option's Setup Checkout; the old card and immutable consent stay in
+force until the exact verified SetupIntent succeeds, while a canceled or
+expired replacement leaves them untouched. Any automatic attempt created
+after the Setup Checkout opens remains bound to its original consent revision
+and may dispatch only once with its existing idempotency key. Payment-card
+expiry is projected from a fresh, exact customer-bound Stripe card using its
+UTC valid-through month; a failed or mismatched read never means expired.
 Missing policy, catalog, payment, consent, or Stripe evidence fails closed and
 keeps the corresponding projected action disabled.
 

@@ -199,4 +199,145 @@ describe('credit funding Stripe webhook application', () => {
     expect(revisionCreate).not.toHaveBeenCalled();
     expect(accountUpdate).not.toHaveBeenCalled();
   });
+
+  it('binds a replacement card and appends consent only after the exact SetupIntent succeeds', async () => {
+    const checkoutUpdate = vi.fn();
+    const consentCreate = vi.fn().mockResolvedValue({ id: 'consent_new' });
+    const accountUpdate = vi.fn().mockResolvedValue({ count: 1 });
+    const setupCheckout = {
+      id: 'setup_replacement_1',
+      accountId: fundingStripeAccount.id,
+      creditAccountId: 'credit_account_1',
+      customerId: 'customer_1',
+      serviceId: 'service_deepwater',
+      appKeyId: 'app_key_deepwater',
+      policyId: 'policy_1',
+      optionId: 'option_1',
+      actorJti: 'actor_card_change',
+      requestedByUserId: 'user_1',
+      expectedGeneration: 3,
+      expectedConsentRevisionId: 'consent_old',
+      consentVersion: 'auto-v1',
+      thresholdMicrocredits: 200_000_000n,
+      refillOfferId: 'offer_1',
+      refillCreditsMicrocredits: 5_000_000_000n,
+      refillPaymentAmountMinor: 500n,
+      monthlyChargeCapMinor: 1_500n,
+      stripeCheckoutSessionId: 'cs_replacement_1',
+      status: BillingCreditCheckoutStatus.OPEN,
+      customer: { stripeCustomerId: 'cus_team_1' },
+      creditAccount: { orgId: 'org_1', teamId: 'team_1' },
+    };
+    const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([
+        { autoTopUpGeneration: 3, autoTopUpConsentRevisionId: 'consent_old' },
+      ]),
+      billingCreditSetupCheckout: {
+        findUnique: vi.fn().mockResolvedValue(setupCheckout),
+        update: checkoutUpdate,
+      },
+      billingCreditAutoTopUpConsentRevision: { create: consentCreate },
+      billingCreditAccount: { updateMany: accountUpdate },
+    };
+
+    await applyCreditFundingWebhook(
+      tx as never,
+      {
+        event: {
+          kind: 'setup_succeeded',
+          localId: setupCheckout.id,
+          setupIntent: { id: 'seti_replacement_1', customer: 'cus_team_1' } as never,
+          checkoutSessionId: setupCheckout.stripeCheckoutSessionId,
+          paymentMethodId: 'pm_new',
+          paymentMethodSummary: { type: 'card', brand: 'mastercard', last4: '1881' },
+          occurredAt: fundingOccurredAt,
+        },
+        eventFields: { stripeCreatedAt: fundingOccurredAt },
+      },
+      'webhook_replacement_succeeded',
+      fundingStripeAccount,
+    );
+
+    expect(checkoutUpdate).toHaveBeenCalledWith({
+      where: { id: setupCheckout.id },
+      data: expect.objectContaining({
+        status: BillingCreditCheckoutStatus.COMPLETE,
+        stripeSetupIntentId: 'seti_replacement_1',
+        stripePaymentMethodId: 'pm_new',
+        completionWebhookEventId: 'webhook_replacement_succeeded',
+      }),
+    });
+    expect(consentCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        setupCheckoutId: setupCheckout.id,
+        stripePaymentMethodId: 'pm_new',
+        actorJti: 'actor_card_change',
+      }),
+    });
+    expect(accountUpdate).toHaveBeenCalledWith({
+      where: {
+        id: 'credit_account_1',
+        autoTopUpGeneration: 3,
+        autoTopUpConsentRevisionId: 'consent_old',
+      },
+      data: expect.objectContaining({
+        autoTopUpGeneration: { increment: 1 },
+        autoTopUpConsentRevisionId: 'consent_new',
+        stripePaymentMethodId: 'pm_new',
+      }),
+    });
+  });
+
+  it('expires a canceled replacement Checkout without changing the saved consent or card', async () => {
+    const checkoutUpdate = vi.fn();
+    const consentCreate = vi.fn();
+    const accountUpdate = vi.fn();
+    const tx = {
+      billingCreditSetupCheckout: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: 'setup_canceled_1',
+          accountId: fundingStripeAccount.id,
+          creditAccountId: 'credit_account_1',
+          stripeCheckoutSessionId: 'cs_canceled_1',
+          status: BillingCreditCheckoutStatus.OPEN,
+        }),
+        updateMany: checkoutUpdate.mockResolvedValue({ count: 1 }),
+      },
+      billingCreditAutoTopUpConsentRevision: { create: consentCreate },
+      billingCreditAccount: { updateMany: accountUpdate },
+    };
+
+    await applyCreditFundingWebhook(
+      tx as never,
+      {
+        event: {
+          kind: 'checkout_expired',
+          localId: 'setup_canceled_1',
+          localType: 'setup',
+          checkoutSessionId: 'cs_canceled_1',
+          expiresAt: fundingOccurredAt,
+        },
+        eventFields: { stripeCreatedAt: fundingOccurredAt },
+      },
+      'webhook_setup_canceled',
+      fundingStripeAccount,
+    );
+
+    expect(checkoutUpdate).toHaveBeenCalledWith({
+      where: {
+        id: 'setup_canceled_1',
+        stripeCheckoutSessionId: 'cs_canceled_1',
+        status: {
+          in: [
+            BillingCreditCheckoutStatus.CREATING,
+            BillingCreditCheckoutStatus.OPEN,
+            BillingCreditCheckoutStatus.NEEDS_REVIEW,
+          ],
+        },
+      },
+      data: { status: BillingCreditCheckoutStatus.EXPIRED, expiresAt: fundingOccurredAt },
+    });
+    expect(consentCreate).not.toHaveBeenCalled();
+    expect(accountUpdate).not.toHaveBeenCalled();
+  });
 });

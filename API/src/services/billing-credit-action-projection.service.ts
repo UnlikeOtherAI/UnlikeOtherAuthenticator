@@ -41,15 +41,20 @@ function configuredCatalog(
   );
 }
 
-function paymentMethod(data: BillingCreditProjectionData) {
+function paymentMethod(
+  data: BillingCreditProjectionData,
+  readiness: BillingCreditActionReadiness,
+) {
   const account = data.creditAccount;
   const status = !account.stripePaymentMethodId
     ? ('missing' as const)
+    : readiness.paymentMethodExpired
+      ? ('expired' as const)
     : account.autoTopUpState === BillingCreditAutoTopUpState.REQUIRES_ACTION ||
         account.autoTopUpState === BillingCreditAutoTopUpState.NEEDS_REVIEW
       ? ('requires_action' as const)
       : ('ready' as const);
-  const summary = account.paymentMethodSummary;
+  const summary = readiness.paymentMethodSummary ?? account.paymentMethodSummary;
   if (!summary || typeof summary !== 'object' || Array.isArray(summary)) {
     return {
       status,
@@ -80,11 +85,17 @@ function fundingPolicy(
     description:
       'Credits fund metered usage across connected services. Subscriptions and add-ons remain separate.',
     offers: (policy?.topUpOffers ?? []).map((offer) => {
+      const catalogExecutable = configuredCatalog(data, offer, readiness);
+      const canResume = readiness.resumableTopUpOfferId === offer.id && catalogExecutable;
+      const pendingCheckoutBlocksOffer =
+        (data.unresolvedTopUpCheckouts ?? []).length > 0 &&
+        !canResume &&
+        !readiness.topUpCheckoutReady;
       const available = Boolean(
         policy?.topUpEnabled &&
         collectionEnabled &&
-        readiness.topUpCheckoutReady &&
-        configuredCatalog(data, offer, readiness),
+        (readiness.topUpCheckoutReady || canResume) &&
+        catalogExecutable,
       );
       return {
         id: offer.id,
@@ -96,21 +107,29 @@ function fundingPolicy(
         available,
         unavailable_reason: available
           ? null
-          : policy?.topUpEnabled
-            ? 'This offer is not configured for the active Stripe account.'
-            : 'Top-ups are disabled for this service.',
+          : pendingCheckoutBlocksOffer
+          ? 'A payment is already in progress. Resolve it before starting another.'
+            : policy?.topUpEnabled
+              ? 'This offer is not configured for the active Stripe account.'
+              : 'Top-ups are disabled for this service.',
         action: manager
           ? {
               id: 'top_up' as const,
               kind: 'hosted_redirect' as const,
-              label: `Buy ${billingCreditAmount(offer.creditsReceivedMicrocredits).display}`,
-              description: 'Open secure Checkout for this exact UOA-defined offer.',
+              label: canResume
+                ? 'Continue payment'
+                : `Buy ${billingCreditAmount(offer.creditsReceivedMicrocredits).display}`,
+              description: canResume
+                ? 'Continue your payment for this offer.'
+                : 'Start a secure payment for this offer.',
               enabled: available,
               disabled_reason: available
                 ? null
                 : !collectionEnabled
                   ? 'Stripe credit collection is unavailable.'
-                  : 'This offer is not available for the active Stripe account.',
+                  : pendingCheckoutBlocksOffer
+                    ? 'A payment is already in progress. Resolve it before starting another.'
+                    : 'This offer is not available for the active Stripe account.',
               request: {
                 method: 'POST' as const,
                 path: '/billing/v1/credits/top-up-checkout' as const,
@@ -223,7 +242,9 @@ function automaticTopUp(
   const recoverableState =
     account.autoTopUpState === BillingCreditAutoTopUpState.REQUIRES_ACTION ||
     account.autoTopUpState === BillingCreditAutoTopUpState.NEEDS_REVIEW ||
-    account.autoTopUpState === BillingCreditAutoTopUpState.PAUSED;
+    account.autoTopUpState === BillingCreditAutoTopUpState.PAUSED ||
+    (account.autoTopUpState === BillingCreditAutoTopUpState.ACTIVE &&
+      Boolean(account.stripePaymentMethodId));
   const recoverEnabled = Boolean(collectionEnabled && recoverableState && readiness.recoverReady);
   const consentStatus = !account.autoTopUpConsentVersion
     ? ('missing' as const)
@@ -246,7 +267,9 @@ function automaticTopUp(
     charged_this_month: billingCreditsPaymentMoney(charged),
     remaining_monthly_cap:
       cap === null ? null : billingCreditsPaymentMoney(cap > charged ? cap - charged : 0n),
-    payment_method: manager ? paymentMethod(data) : { status: paymentMethod(data).status },
+    payment_method: manager
+      ? paymentMethod(data, readiness)
+      : { status: paymentMethod(data, readiness).status },
     consent: manager
       ? {
           status: consentStatus,
@@ -286,7 +309,10 @@ function automaticTopUp(
       ? {
           id: 'auto_top_up_recover' as const,
           kind: 'hosted_redirect' as const,
-          label: 'Review payment',
+          label:
+            account.autoTopUpState === BillingCreditAutoTopUpState.ACTIVE
+              ? 'Change card'
+              : 'Review payment',
           description: 'Open UOA recovery when a payment requires customer action or review.',
           enabled: recoverEnabled,
           disabled_reason: recoverEnabled
@@ -316,9 +342,14 @@ export function buildManagerCreditActionsProjection(
 
 export function buildMemberCreditActionsProjection(
   data: BillingCreditProjectionData,
+  readiness: BillingCreditActionReadiness,
 ): Pick<BillingCreditsMemberV1, 'funding_policy' | 'automatic_top_up'> {
   return {
     funding_policy: null,
-    automatic_top_up: { payment_method: { status: paymentMethod(data).status } },
+    automatic_top_up: {
+      payment_method: {
+        status: paymentMethod(data, readiness).status,
+      },
+    },
   };
 }

@@ -37,6 +37,7 @@ function recoveryContext(
 ) {
   const stripe = {
     paymentIntents: { retrieve: vi.fn(), cancel: vi.fn() },
+    paymentMethods: { retrieve: vi.fn() },
   };
   return {
     stripe,
@@ -48,6 +49,7 @@ function recoveryContext(
         id: 'credit_account_1',
         autoTopUpState: state,
         autoTopUpOptionId,
+        stripePaymentMethodId: null,
       },
       customer: { id: 'customer_1', stripeCustomerId: 'cus_team_1' },
       stripe,
@@ -140,6 +142,68 @@ describe('automatic credit top-up recovery', () => {
         { prisma, resolveContext: vi.fn().mockResolvedValue(state.context) },
       ),
     ).rejects.toThrow('STRIPE_CREDIT_AUTO_TOP_UP_BINDING_INVALID');
+  });
+
+  it('opens the same saved-option setup flow to replace an active card with no unresolved attempt', async () => {
+    const state = recoveryContext(BillingCreditAutoTopUpState.ACTIVE, 'option_safe');
+    state.context.creditAccount.stripePaymentMethodId = 'pm_current';
+    state.stripe.paymentMethods.retrieve.mockResolvedValue({
+        id: 'pm_current',
+        livemode: false,
+        type: 'card',
+        customer: 'cus_team_1',
+        card: { brand: 'visa', last4: '4242', exp_month: 9, exp_year: 2026 },
+      });
+    const prisma = {
+      billingCreditAutoTopUpAttempt: { findFirst: vi.fn().mockResolvedValue(null) },
+    } as unknown as PrismaClient;
+    const createSetup = vi.fn().mockResolvedValue({
+      redirect_url: 'https://checkout.stripe.com/c/setup/change-card',
+    });
+
+    await expect(
+      recoverBillingCreditAutoTopUp(
+        { request, actorToken: 'actor', credential },
+        {
+          prisma,
+          resolveContext: vi.fn().mockResolvedValue(state.context),
+          createSetup,
+        },
+      ),
+    ).resolves.toEqual({ redirect_url: 'https://checkout.stripe.com/c/setup/change-card' });
+
+    expect(state.stripe.paymentMethods.retrieve).toHaveBeenCalledWith('pm_current');
+    expect(createSetup).toHaveBeenCalledWith(
+      expect.objectContaining({
+        request: expect.objectContaining({ optionId: 'option_safe' }),
+        recovery: true,
+      }),
+      { prisma },
+    );
+  });
+
+  it('does not start card replacement while an attempt is unresolved', async () => {
+    const state = recoveryContext(BillingCreditAutoTopUpState.ACTIVE, 'option_safe');
+    state.context.creditAccount.stripePaymentMethodId = 'pm_current';
+    const prisma = {
+      billingCreditAutoTopUpAttempt: {
+        findFirst: vi.fn().mockResolvedValue(unresolvedAttempt()),
+      },
+    } as unknown as PrismaClient;
+    const createSetup = vi.fn();
+
+    await expect(
+      recoverBillingCreditAutoTopUp(
+        { request, actorToken: 'actor', credential },
+        {
+          prisma,
+          resolveContext: vi.fn().mockResolvedValue(state.context),
+          createSetup,
+        },
+      ),
+    ).rejects.toThrow('BILLING_CREDIT_AUTO_TOP_UP_RECOVERY_PENDING');
+
+    expect(createSetup).not.toHaveBeenCalled();
   });
 
   it('cancels and terminalizes exact replaceable failure evidence before replacement setup', async () => {

@@ -50,6 +50,7 @@ function projectionData(balanceMicrocredits = 2_000_000_000n): BillingCreditProj
     creditAccount: {
       id: 'credit_account_1',
       accountId: collection.account.id,
+      customerId: 'customer_1',
       currency: 'USD',
       balanceMicrocredits,
       autoTopUpState: BillingCreditAutoTopUpState.ACTIVE,
@@ -203,6 +204,117 @@ describe('privacy-safe shared credit projection', () => {
     });
 
     expect(() => assertBillingCreditsContract(result)).not.toThrow();
+  });
+
+  it('uses a fresh Stripe card summary and exposes expiry only when verified', () => {
+    const data = projectionData();
+    const result = buildBillingCreditsProjection({
+      credential,
+      collection,
+      viewer: viewer(true),
+      period,
+      data,
+      now,
+      actionReadiness: {
+        executableCatalogIds: new Set(),
+        paymentMethodReady: false,
+        paymentMethodVerified: true,
+        paymentMethodExpired: true,
+        paymentMethodSummary: { brand: 'Mastercard', last4: '1881' },
+        topUpCheckoutReady: false,
+        resumableTopUpOfferId: null,
+        setupCheckoutReady: false,
+        disableReady: false,
+        recoverReady: true,
+      },
+    });
+
+    expect(result.viewer.role).toBe('billing_manager');
+    if (result.viewer.role !== 'billing_manager') throw new Error('Expected manager view');
+    expect(result.automatic_top_up.payment_method).toEqual({
+      status: 'expired',
+      display: 'Mastercard ending in 1881',
+    });
+  });
+
+  it('labels only the exact pending offer as Continue payment for a different manager', () => {
+    const data = productionFreshAccountData();
+    const resumableOffer = data.policy?.topUpOffers[0];
+    const resumableCatalog = data.catalogs.find(
+      (catalog) =>
+        catalog.key === resumableOffer?.catalogKey &&
+        catalog.version === resumableOffer.catalogVersion,
+    );
+    if (!resumableOffer || !resumableCatalog) {
+      throw new Error('Expected the first top-up offer and its catalog');
+    }
+    data.unresolvedTopUpCheckouts = [
+      {
+        id: 'checkout_pending',
+        accountId: collection.account.id,
+        creditAccountId: data.creditAccount.id,
+        customerId: data.creditAccount.customerId,
+        catalogId: resumableCatalog.id,
+        serviceId: service.id,
+        appKeyId: credential.id,
+        offerId: resumableOffer.id,
+        paymentAmountMinor: resumableOffer.paymentAmountMinor,
+        creditsReceivedMicrocredits: resumableOffer.creditsReceivedMicrocredits,
+        currency: 'USD',
+        successUrlDigest: 'a'.repeat(64),
+        cancelUrlDigest: 'b'.repeat(64),
+        stripeCheckoutSessionId: 'cs_pending',
+        status: 'OPEN',
+      },
+    ] as never;
+
+    const result = buildBillingCreditsProjection({
+      credential,
+      collection,
+      viewer: { ...viewer(true), userId: 'different_manager' },
+      period,
+      data,
+      now,
+      actionReadiness: {
+        executableCatalogIds: new Set([resumableCatalog.id]),
+        paymentMethodReady: false,
+        topUpCheckoutReady: false,
+        resumableTopUpOfferId: resumableOffer.id,
+        setupCheckoutReady: false,
+        disableReady: false,
+        recoverReady: false,
+      },
+    });
+
+    if (result.viewer.role !== 'billing_manager' || !result.funding_policy) {
+      throw new Error('Expected manager funding actions');
+    }
+    const [firstOffer, ...otherOffers] = result.funding_policy.offers;
+    expect(firstOffer).toMatchObject({
+      id: resumableOffer.id,
+      available: true,
+      action: {
+        label: 'Continue payment',
+        enabled: true,
+        request: {
+          method: 'POST',
+          path: '/billing/v1/credits/top-up-checkout',
+          body: {
+            product: service.identifier,
+            organisation_id: 'org_1',
+            team_id: 'team_1',
+            user_id: 'different_manager',
+            offer_id: resumableOffer.id,
+          },
+        },
+      },
+    });
+    expect(otherOffers.every((candidate) => !candidate.available)).toBe(true);
+    expect(
+      otherOffers.every((candidate) =>
+        candidate.unavailable_reason?.startsWith('A payment is already in progress.'),
+      ),
+    ).toBe(true);
   });
 
   it('gives managers full user, payment, consent, and service detail', () => {
@@ -483,6 +595,7 @@ describe('privacy-safe shared credit projection', () => {
         executableCatalogIds: new Set(['catalog_1']),
         paymentMethodReady: false,
         topUpCheckoutReady: true,
+        resumableTopUpOfferId: null,
         setupCheckoutReady: true,
         disableReady: true,
         recoverReady: false,
@@ -506,6 +619,7 @@ describe('privacy-safe shared credit projection', () => {
         executableCatalogIds: new Set(),
         paymentMethodReady: false,
         topUpCheckoutReady: true,
+        resumableTopUpOfferId: null,
         setupCheckoutReady: true,
         disableReady: true,
         recoverReady: false,
