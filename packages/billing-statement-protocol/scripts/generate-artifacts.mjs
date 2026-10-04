@@ -3,6 +3,11 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
+  billingCyclesProtocolV1JsonSchema,
+  billingCyclesListV1ConformanceFixture,
+  billingCycleDetailV1ConformanceFixture,
+  billingCycleDownloadRequestV1ConformanceFixture,
+  billingCyclesV1OpenApiDocument,
   billingConsumerActionProtocolV1JsonSchema,
   billingConsumerActionV1ConformanceFixtures,
   billingConsumerActionV1OpenApiDocument,
@@ -22,6 +27,9 @@ import {
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const artifacts = new Map([
+  [resolve(packageRoot, 'schema/billing-cycles-v1.json'), billingCyclesProtocolV1JsonSchema],
+  [resolve(packageRoot, 'fixtures/billing-cycles-v1.example.json'), { list: billingCyclesListV1ConformanceFixture, detail: billingCycleDetailV1ConformanceFixture, download_request: billingCycleDownloadRequestV1ConformanceFixture }],
+  [resolve(packageRoot, 'openapi/billing-cycles-v1.openapi.json'), billingCyclesV1OpenApiDocument],
   [resolve(packageRoot, 'schema/billing-credits-v1.json'), billingCreditsV1JsonSchema],
   [
     resolve(packageRoot, 'fixtures/billing-credits-v1.example.json'),

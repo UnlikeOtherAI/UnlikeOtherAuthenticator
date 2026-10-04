@@ -205,7 +205,7 @@ export const billingStatementV2JsonSchema = {
     pinned_inputs: {
       type: 'object',
       additionalProperties: false,
-      required: ['ledger_snapshots', 'tariff'],
+      required: ['ledger_snapshots'],
       properties: {
         ledger_snapshots: {
           type: 'array',
@@ -214,7 +214,6 @@ export const billingStatementV2JsonSchema = {
           prefixItems: [portfolioSnapshotSchema('user')],
           items: false,
         },
-        tariff: billingStatementV1JsonSchema.properties.pinned_inputs.properties.tariff,
       },
     },
     connected_service_usage: connectedServicePortfolioSchema,

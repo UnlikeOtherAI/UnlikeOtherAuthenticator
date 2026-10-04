@@ -20,7 +20,6 @@ export const billingStatementV2ConformanceFixture: BillingStatementV2 = {
           'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
       },
     ],
-    tariff: billingStatementV1ConformanceFixture.pinned_inputs.tariff,
   },
   connected_service_usage: {
     title: 'Connected-service usage',

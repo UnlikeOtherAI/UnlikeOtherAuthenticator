@@ -368,7 +368,6 @@ async function buildCanonicalBillingStatement(
         captured_at: metering.snapshot.capturedAt,
         sha256: metering.snapshot.sha256,
       })),
-      tariff: { id: summary.tariff.id, version: summary.tariff.version },
     },
     plan: {
       display_name: 'Monthly subscription',
@@ -414,7 +413,6 @@ async function buildCanonicalBillingStatement(
           sha256: portfolioUserMetering.snapshot.sha256,
         },
       ],
-      tariff: statement.pinned_inputs.tariff,
     },
     connected_service_usage: buildConnectedServicePortfolio({
       statementProduct,
