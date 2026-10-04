@@ -119,10 +119,10 @@ export function aggregateOrganisationCycleUsage(
         values.every((value) => value !== undefined) ?
           sumBillingDecimals(values as string[]) : undefined;
       const base = {
-        input: sum(lines.map((line) => line.raw_units.input)) ?? '0',
-        cached_input: sum(lines.map((line) => line.raw_units.cached_input)) ?? '0',
-        output: sum(lines.map((line) => line.raw_units.output)) ?? '0',
-        total: sum(lines.map((line) => line.raw_units.total)) ?? '0',
+        input: sumBillingDecimals(lines.map((line) => line.raw_units.input)),
+        cached_input: sumBillingDecimals(lines.map((line) => line.raw_units.cached_input)),
+        output: sumBillingDecimals(lines.map((line) => line.raw_units.output)),
+        total: sumBillingDecimals(lines.map((line) => line.raw_units.total)),
       };
       const optional = ['reasoning', 'cache_write', 'cache_write_5m', 'cache_write_1h'] as const;
       const rawUnits = { ...base, ...Object.fromEntries(optional.flatMap((field) => {

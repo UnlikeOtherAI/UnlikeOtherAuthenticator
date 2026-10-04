@@ -994,6 +994,15 @@ quote drift. Pending credits are represented as unknown, never zero. This
 preparation does not create a payment invoice, mark liability paid, or make
 documents downloadable; those transitions require verified collection and
 credit evidence in a later immutable revision.
+For a manual organisation invoice, `captureIssuedManualBillingCycle` reads
+the actual issued UOA invoice and its immutable issuer PDF. It binds the exact
+single service line, contract version, month, legal parties, customer amount,
+payment events and verified PDF digest to one append-only allocation. It
+publishes the copied legal invoice and separate frozen PDF/CSV measured-usage
+breakdown as a new cycle revision. Tax, credits and multi-service invoices
+without exact line-level settlement allocation hold; no whole-invoice amount
+is silently assigned to one service. A second attempt with the same immutable
+effect is idempotent, while changed payment evidence requires a new revision.
 If Ledger adds a late receipt before finalization, preparation appends a new
 pending revision and retains the original snapshot. A late receipt after
 finalization holds for a separately evidenced financial adjustment. Customer

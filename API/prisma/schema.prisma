@@ -3919,6 +3919,7 @@ model BillingCustomerCycle {
   service   BillingService @relation(fields: [serviceId], references: [id], onDelete: Restrict)
   org       Organisation @relation(fields: [orgId], references: [id], onDelete: Restrict)
   documents BillingCustomerCycleDocument[]
+  invoiceAllocations BillingCustomerCycleInvoiceAllocation[]
 
   // Partial unique indexes for team and organisation scopes live in migration 163000.
   @@index([serviceId, teamId, billingMonth], map: "billing_customer_cycles_scope_idx")
@@ -3947,4 +3948,28 @@ model BillingCustomerCycleDocument {
   @@unique([cycleId, sourceKind, sourceId, format], map: "billing_customer_cycle_documents_revision_source_key")
   @@index([cycleId, kind, format], map: "billing_customer_cycle_documents_cycle_kind_idx")
   @@map("billing_customer_cycle_documents")
+}
+
+// One verified issuer/processor line and financial month can satisfy only one
+// customer cycle. The line identity is global to its payment authority; a
+// later cycle revision must link a separate correction line, never reissue it.
+model BillingCustomerCycleInvoiceAllocation {
+  id                 String   @id @default(cuid())
+  cycleId            String   @map("cycle_id")
+  authorityKey       String   @unique @map("authority_key") @db.Char(64)
+  sourceKind         String   @map("source_kind") @db.VarChar(16)
+  sourceAccountId    String?  @map("source_account_id") @db.VarChar(255)
+  sourceInvoiceId    String   @map("source_invoice_id") @db.VarChar(255)
+  sourceLineId       String   @map("source_line_id") @db.VarChar(255)
+  periodStartsAt     DateTime @map("period_starts_at")
+  periodEndsAt       DateTime @map("period_ends_at")
+  amountMinor        BigInt   @map("amount_minor")
+  currency           String   @db.Char(3)
+  sourceDigest       String   @map("source_digest") @db.Char(64)
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  cycle BillingCustomerCycle @relation(fields: [cycleId], references: [id], onDelete: Restrict)
+
+  @@index([cycleId])
+  @@map("billing_customer_cycle_invoice_allocations")
 }
