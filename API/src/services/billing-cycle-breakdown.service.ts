@@ -166,6 +166,9 @@ export async function renderBillingCycleBreakdownPdf(detail: BillingCycleDetailV
   };
   newPage(context);
   draw(context, `Billing month ${detail.period.month}`, { bold: true, size: 17 });
+  if (detail.state === 'voided') {
+    draw(context, 'Voided invoice — no current amount due.', { bold: true, size: 12 });
+  }
   draw(context, `${detail.product.name} - ${detail.scope.payer_scope} billing`, { size: 10 });
   draw(context, 'Customer charges and credits. This breakdown is not a payment invoice.');
   context.y -= 12;
@@ -189,7 +192,8 @@ export async function renderBillingCycleBreakdownPdf(detail: BillingCycleDetailV
   }
   context.y -= 8;
   draw(context, detail.state === 'pending_reconciliation'
-    ? 'Pending totals' : 'Confirmed totals', { bold: true, size: 12 });
+    ? 'Pending totals' : detail.state === 'voided' ? 'Voided totals' : 'Confirmed totals',
+  { bold: true, size: 12 });
   for (const total of detail.totals) {
     draw(context, `Subscription ${total.subscription.display}; usage ${total.usage_charge.display}; credits ${total.credits_applied.display}`);
     draw(context, `Due ${total.total_due.display}; paid ${total.total_paid.display}; outstanding ${total.outstanding.display}`,

@@ -36,11 +36,10 @@ function paymentFacts(events: Array<{ id: string; kind: string;
     .sort((left, right) => left.id.localeCompare(right.id));
 }
 
-function invoiceSourceFingerprint(invoice: IssuedInvoice): string {
+export function invoiceSourceFingerprint(invoice: IssuedInvoice): string {
   return digest(JSON.stringify({
     id: invoice.id, org_id: invoice.orgId, contract_id: invoice.contractId,
     contract_version_id: invoice.contractVersionId, billing_month: invoice.billingMonth,
-    status: invoice.status, voided_at: invoice.voidedAt?.toISOString() ?? null,
     invoice_number: invoice.invoiceNumber, issue_date: invoice.issueDate?.toISOString() ?? null,
     issued_at: invoice.issuedAt?.toISOString() ?? null,
     currency: invoice.currency, subtotal_minor: invoice.subtotalMinor.toString(),
@@ -53,7 +52,6 @@ function invoiceSourceFingerprint(invoice: IssuedInvoice): string {
     lines: invoice.lines.map((line) => ({ id: line.id, service_id: line.serviceId,
       amount_minor: line.amountMinor.toString(), currency: line.currency,
       position: line.position })).sort((a, b) => a.id.localeCompare(b.id)),
-    payment_events: paymentFacts(invoice.paymentEvents),
   }));
 }
 
@@ -63,7 +61,7 @@ function legalParty(value: Prisma.JsonValue): boolean {
     Boolean((value as Record<string, unknown>).legal_name);
 }
 
-async function copyVerifiedDocument(
+export async function copyVerifiedDocument(
   storage: BillingInvoicePdfStorage, key: string, bytes: Buffer,
   contentType: 'application/pdf' | 'text/csv',
 ): Promise<string> {
@@ -136,6 +134,7 @@ export async function captureIssuedManualBillingCycle(
       const latestEvidence = latest?.privateEvidence as Record<string, unknown> | undefined;
       const allocation = latestEvidence?.invoice_allocation as Record<string, unknown> | undefined;
       if (!latest || allocation?.authority_key !== key ||
+        latestEvidence?.invoice_source_fingerprint !== invoiceSourceFingerprint(invoice) ||
         billingCycleSnapshotDigest(latest.publicSnapshot, latest.privateEvidence) !==
           latest.snapshotSha256) hold('BILLING_CYCLE_INVOICE_ALLOCATION_CONFLICT');
       const sourceDigest = digest(JSON.stringify({ invoice_id: invoice.id,
@@ -252,6 +251,7 @@ export async function captureIssuedManualBillingCycle(
         invoice.issuedAt, null, invoice.currency),
     ] };
   const evidence = { ...privateEvidence, previous_cycle_id: cycle.id,
+    invoice_source_fingerprint: sourceFingerprint,
     invoice_allocation: { authority_key: allocationKey,
       source_kind: 'manual', source_invoice_id: invoice.id,
       source_line_id: line.id, source_digest: sourceDigest } };

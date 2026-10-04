@@ -11,6 +11,7 @@ import {
   createBillingInvoicePdfStorage, type BillingInvoicePdfStorage,
 } from './billing-invoice-storage.service.js';
 import { cycleMoney } from './billing-cycle-quote-projection.service.js';
+import { copyVerifiedDocument, invoiceSourceFingerprint } from './billing-cycle-manual-invoice.service.js';
 
 function hold(code: string): never {
   throw new AppError('INTERNAL', 409, code);
@@ -38,24 +39,6 @@ function paymentTotal(events: Array<{ kind: string; amountMinor: bigint;
   }
   if (paid < 0n || paid > invoiceTotal) hold('BILLING_CYCLE_MANUAL_PAYMENT_UNALLOCATABLE');
   return paid;
-}
-
-async function storeBreakdown(storage: BillingInvoicePdfStorage, key: string,
-  bytes: Buffer, contentType: 'application/pdf' | 'text/csv'): Promise<string> {
-  if (bytes.length === 0 || bytes.length > 20 * 1024 * 1024) {
-    hold('BILLING_CYCLE_DOCUMENT_SIZE_INVALID');
-  }
-  const digest = sha256(bytes);
-  try {
-    await storage.putImmutable(key, bytes, contentType);
-  } catch (error) {
-    if (!(error instanceof AppError) ||
-      error.message !== 'BILLING_INVOICE_PDF_ALREADY_EXISTS') throw error;
-    if (sha256(await storage.read(key)) !== digest) {
-      hold('BILLING_CYCLE_DOCUMENT_REPLAY_CONFLICT');
-    }
-  }
-  return digest;
 }
 
 /** Payment/refund changes append a new view; invoice allocation and legal PDF stay fixed. */
@@ -99,7 +82,8 @@ export async function refreshIssuedManualBillingCyclePayment(
   const evidence = latest.privateEvidence as Record<string, unknown>;
   const invoiceEvidence = evidence.invoice_allocation as Record<string, unknown> | undefined;
   if (invoiceEvidence?.authority_key !== allocation.authorityKey ||
-    invoiceEvidence.source_invoice_id !== invoice.id) {
+    invoiceEvidence.source_invoice_id !== invoice.id ||
+    evidence.invoice_source_fingerprint !== invoiceSourceFingerprint(invoice)) {
     hold('BILLING_CYCLE_MANUAL_LATEST_RECONCILIATION_REQUIRED');
   }
   if (invoiceEvidence.latest_source_digest === sourceDigest ||
@@ -131,6 +115,7 @@ export async function refreshIssuedManualBillingCyclePayment(
       outstanding: cycleMoney(invoice.totalMinor - paid, invoice.currency),
     })), documents };
   const nextEvidence = { ...evidence, previous_cycle_id: latest.id,
+    invoice_source_fingerprint: invoiceSourceFingerprint(invoice),
     invoice_allocation: { ...invoiceEvidence, latest_source_digest: sourceDigest } };
   const snapshotSha256 = billingCycleSnapshotDigest(next, nextEvidence);
   const prefix = `billing-cycles/${id}`;
@@ -139,8 +124,8 @@ export async function refreshIssuedManualBillingCyclePayment(
     Promise.resolve(renderBillingCycleBreakdownCsv(next)),
   ]);
   const [pdfSha, csvSha] = await Promise.all([
-    storeBreakdown(storage, `${prefix}/usage.pdf`, pdf, 'application/pdf'),
-    storeBreakdown(storage, `${prefix}/usage.csv`, csv, 'text/csv'),
+    copyVerifiedDocument(storage, `${prefix}/usage.pdf`, pdf, 'application/pdf'),
+    copyVerifiedDocument(storage, `${prefix}/usage.csv`, csv, 'text/csv'),
   ]);
   return prisma.$transaction(async (tx) => {
     await tx.$queryRaw(Prisma.sql`SELECT id FROM organisations
@@ -156,6 +141,7 @@ export async function refreshIssuedManualBillingCyclePayment(
     const currentLine = currentInvoice?.lines[0];
     if (!currentInvoice || currentInvoice.status !== BillingInvoiceStatus.ISSUED ||
       currentInvoice.voidedAt || currentInvoice.orgId !== invoice.orgId ||
+      invoiceSourceFingerprint(currentInvoice) !== invoiceSourceFingerprint(invoice) ||
       currentInvoice.contractVersionId !== invoice.contractVersionId ||
       currentInvoice.billingMonth !== invoice.billingMonth ||
       currentInvoice.currency !== invoice.currency ||

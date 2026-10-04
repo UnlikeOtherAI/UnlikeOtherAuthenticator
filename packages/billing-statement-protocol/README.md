@@ -158,6 +158,8 @@ adds the customer's explicitly selected `fixed_seat_quantity` (integer 1 to
 for the plan. All other body fields remain UOA-authored.
 
 Customer cycles show subscription seats, rated usage charges and credits.
+An actual invoice void appends a `voided` cycle with zero current liability;
+the earlier issued invoice and its original PDF remain immutable history.
 `usage_lines` contain `id`, customer-facing `label`, `customer_charge`, and
 `credits_consumed`; no raw usage dimensions or provider/service pricing keys.
 Raw token counts, reasoning, cache and modality evidence remain private to

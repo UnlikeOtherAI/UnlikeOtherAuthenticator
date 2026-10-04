@@ -55,6 +55,23 @@ describe('customer billing cycles protocol', () => {
     expect(validate(detail)).toBe(false);
   });
 
+  it('represents an actual void as zero current liability without a synthetic credit note', () => {
+    const validate = ajv.compile(billingCycleDetailV2JsonSchema);
+    const detail = structuredClone(billingCycleDetailV2ConformanceFixture);
+    detail.state = 'voided';
+    detail.totals = detail.totals.map((total) => ({ ...total,
+      subscription: { ...total.subscription, amount: '0', amount_minor: '0', display: 'US$0' },
+      usage_charge: { ...total.usage_charge, amount: '0', amount_minor: '0', display: 'US$0' },
+      credits_applied: { ...total.credits_applied, amount: '0', amount_minor: '0', display: 'US$0' },
+      total_due: { ...total.total_due, amount: '0', amount_minor: '0', display: 'US$0' },
+      total_paid: { ...total.total_paid, amount: '0', amount_minor: '0', display: 'US$0' },
+      outstanding: { ...total.outstanding, amount: '0', amount_minor: '0', display: 'US$0' },
+    }));
+    detail.adjustments = [];
+    expect(validate(detail), JSON.stringify(validate.errors)).toBe(true);
+    assertPublic(detail);
+  });
+
   it('distinguishes team usage from organisation subscription scope and payer', () => {
     const validate = ajv.compile(billingCycleDetailV2JsonSchema);
     const org = structuredClone(billingCycleDetailV2ConformanceFixture);

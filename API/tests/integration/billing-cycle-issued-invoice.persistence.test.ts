@@ -9,11 +9,13 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { prepareBillingCycleClose } from '../../src/services/billing-cycle-close.service.js';
 import { captureIssuedManualBillingCycle } from '../../src/services/billing-cycle-manual-invoice.service.js';
 import { refreshIssuedManualBillingCyclePayment } from '../../src/services/billing-cycle-manual-payment.service.js';
+import { refreshVoidedManualBillingCycle } from '../../src/services/billing-cycle-manual-void.service.js';
+import { runManualCycleReconciliationBatch } from '../../src/services/billing-cycle-manual-reconciliation-scheduler.service.js';
 import {
   downloadBillingCycleDocument, getBillingCycleDetail, type BillingCycleContext,
 } from '../../src/services/billing-cycle-read.service.js';
 import type { BillingInvoicePdfStorage } from '../../src/services/billing-invoice-storage.service.js';
-import { issueBillingInvoice } from '../../src/services/billing-invoice-lifecycle.service.js';
+import { issueBillingInvoice, voidBillingInvoice } from '../../src/services/billing-invoice-lifecycle.service.js';
 import { createTestDb } from '../helpers/test-db.js';
 
 vi.mock('../../src/services/billing-actor.service.js', () => ({
@@ -256,4 +258,97 @@ describe.skipIf(!enabled)('issued manual invoice cycle persistence', () => {
     releaseRead?.();
     await expect(pending).rejects.toMatchObject({ statusCode: 403 });
   });
+
+  it('enforces immutable legal party facts on issued invoice rows', async () => {
+    await expect(db.prisma.billingInvoice.update({ where: { id: invoiceId },
+      data: { buyerSnapshot: { legal_name: 'Altered Customer',
+        billing_email: 'ap@example.com' } } })).rejects.toThrow();
+  });
+
+  it('catches up an actual void as a new zero-liability cycle without rewriting its legal PDF',
+    async () => {
+      await db.prisma.orgMember.updateMany({ where: { orgId, userId: ownerId },
+        data: { role: 'owner' } });
+      const original = await db.prisma.billingInvoice.findUniqueOrThrow({
+        where: { id: invoiceId }, include: { lines: true },
+      });
+      const april = await db.prisma.billingInvoice.create({ data: {
+        orgId, contractId: original.contractId,
+        contractVersionId: original.contractVersionId,
+        issuerProfileId: original.issuerProfileId, buyerProfileId: original.buyerProfileId,
+        billingMonth: '2026-04', revision: 1, status: BillingInvoiceStatus.DRAFT,
+        currency: 'USD', subtotalMinor: 2000n, totalMinor: 2000n,
+        issuerSnapshot: original.issuerSnapshot as object,
+        buyerSnapshot: original.buyerSnapshot as object,
+        calculationDigest: 'e'.repeat(64),
+        lines: { create: { serviceId, serviceIdentifier,
+          serviceName: 'Cycle Issuer Service', amountMinor: 2000n,
+          currency: 'USD', position: 1 } },
+        meteringRefs: { create: { serviceId,
+          ledgerSnapshotCursor: 'issuer-april-coverage',
+          ledgerSnapshotSha256: 'f'.repeat(64),
+          capturedAt: new Date('2026-05-01T00:00:00.000Z') } },
+      } });
+      await issueBillingInvoice({ invoiceId: april.id,
+        actor: { email: 'admin@example.com' } }, { prisma: db.prisma, storage,
+        now: () => new Date('2026-05-01T00:00:00.000Z'),
+        authorizeAdminEffect: vi.fn().mockResolvedValue(undefined) });
+      const source = { kind: 'manual' as const, id: termId };
+      const quote = { source, serviceId, tariffId, organisationId: orgId, teamId: null,
+        scope: BillingAssignmentScope.ORGANISATION, agreementId: null,
+        billingMonth: '2026-04', chargeBasis: BillingMonthlyChargeBasis.FLAT,
+        seatPolicy: null, seatChargeTiming: null, amountMinor: 2000n,
+        unitAmountMinor: 2000n, uniqueHumanSeats: null, seatMilliseconds: null,
+        monthMilliseconds: null, currency: 'USD', baselineCapturedAt: null,
+        baselineMemberCount: null, intervals: [], capacityRevisions: [], evidenceIds: [],
+        commercialEffectiveAt: null, commercialEndsAt: null, endedAt: null };
+      const pending = await prepareBillingCycleClose({ source, billingMonth: '2026-04' }, {
+        prisma: db.prisma, now: () => new Date('2026-05-02T00:00:00.000Z'),
+        quote: vi.fn().mockResolvedValue(quote),
+        discoverTeams: vi.fn().mockResolvedValue({ teamIds: [], snapshot: {
+          id: 'empty-april-coverage', cursor: 'empty-april-coverage',
+          capturedAt: '2026-05-02T00:00:00.000Z', sha256: 'a'.repeat(64),
+        } }),
+      });
+      const issued = await captureIssuedManualBillingCycle({ cycleId: pending.cycleId,
+        invoiceId: april.id }, { prisma: db.prisma, storage });
+      const issuedDetail = await getBillingCycleDetail(context(), issued.cycleId,
+        { prisma: db.prisma });
+      const originalDocument = issuedDetail.documents.find((item) =>
+        item.kind === 'monthly_invoice');
+      if (!originalDocument) throw new Error('ORIGINAL_INVOICE_DOCUMENT_MISSING');
+      const originalBytes = (await downloadBillingCycleDocument(context(), issued.cycleId,
+        originalDocument.document_id, { prisma: db.prisma, storage })).bytes;
+      await voidBillingInvoice({ invoiceId: april.id, reason: 'Cancelled duplicate issue',
+        actor: { email: 'admin@example.com' } }, { prisma: db.prisma,
+        now: () => new Date('2026-05-03T00:00:00.000Z'),
+        authorizeAdminEffect: vi.fn().mockResolvedValue(undefined) });
+      const caughtUp = await runManualCycleReconciliationBatch({}, {
+        prisma: db.prisma,
+        refreshPayment: (params) => refreshIssuedManualBillingCyclePayment(params,
+          { prisma: db.prisma, storage }),
+        refreshVoid: (params) => refreshVoidedManualBillingCycle(params,
+          { prisma: db.prisma, storage }),
+      });
+      expect(caughtUp.held, JSON.stringify(caughtUp.failures)).toBe(0);
+      const voided = await refreshVoidedManualBillingCycle({ invoiceId: april.id },
+        { prisma: db.prisma, storage });
+      if (!voided) throw new Error('VOIDED_CYCLE_MISSING');
+      const detail = await getBillingCycleDetail(context(), voided.cycleId,
+        { prisma: db.prisma });
+      expect(detail.state).toBe('voided');
+      expect(detail.totals[0]).toMatchObject({ total_due: { amount_minor: '0' },
+        total_paid: { amount_minor: '0' }, outstanding: { amount_minor: '0' } });
+      expect(issuedDetail.state).toBe('finalized');
+      expect(issuedDetail.totals[0]?.total_due.amount_minor).toBe('2000');
+      const voidDocument = detail.documents.find((item) =>
+        item.kind === 'monthly_invoice');
+      if (!voidDocument) throw new Error('VOID_INVOICE_DOCUMENT_MISSING');
+      const copied = (await downloadBillingCycleDocument(context(), voided.cycleId,
+        voidDocument.document_id, { prisma: db.prisma, storage })).bytes;
+      expect(copied).toEqual(originalBytes);
+      expect(await db.prisma.billingCustomerCycleInvoiceAllocation.count({ where: {
+        sourceInvoiceId: april.id,
+      } })).toBe(1);
+    });
 });
