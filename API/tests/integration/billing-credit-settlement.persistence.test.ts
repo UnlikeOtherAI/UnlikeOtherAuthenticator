@@ -575,9 +575,10 @@ describe.skipIf(!databaseTestsEnabled)('credit settlement persistence', () => {
       `);
       await tx.$executeRaw(Prisma.sql`
         INSERT INTO "billing_org_responsibilities"
-          ("id", "org_id", "active", "assumed_at", "assumed_by_user_id", "updated_at")
+          ("id", "org_id", "active", "assumed_at", "assumed_by_user_id", "created_at", "updated_at")
         VALUES ('bor_credit_settlement_org', ${ids.org}, true,
-          '2026-06-01T00:00:00.000Z', ${ids.owner}, CURRENT_TIMESTAMP)
+          '2026-06-01T00:00:00.000Z', ${ids.owner},
+          '2026-06-01T00:00:00.000Z', CURRENT_TIMESTAMP)
       `);
       await tx.$executeRaw(Prisma.sql`
         INSERT INTO "billing_org_responsibility_transitions"
@@ -585,6 +586,19 @@ describe.skipIf(!databaseTestsEnabled)('credit settlement persistence', () => {
         VALUES ('bort_credit_settlement_org', 'bor_credit_settlement_org', ${ids.org},
           'ASSUMED', '2026-06-01T00:00:00.000Z', ${ids.owner}, 'legacy_backfill')
       `);
+    });
+    await handle.prisma.billingTariff.create({
+      data: {
+        id: 'tariff_credit_settlement_org_30', serviceId: ids.deepwater,
+        key: 'org_standard', version: 1, name: 'Organisation standard 30%',
+        mode: 'STANDARD', collectionMode: 'NONE', markupBps: 3000, currency: 'USD',
+      },
+    });
+    await handle.prisma.billingTariffAssignment.create({
+      data: {
+        serviceId: ids.deepwater, tariffId: 'tariff_credit_settlement_org_30',
+        orgId: ids.org, teamId: null, scope: 'ORGANISATION', scopeKey: ids.org,
+      },
     });
     const first = portfolio('mup_org_team_a_123456789012345678901234',
       '2026-07-21T13:00:00.000Z', [line('deepwater', ids.owner, '1')]);
@@ -606,11 +620,11 @@ describe.skipIf(!databaseTestsEnabled)('credit settlement persistence', () => {
     expect(settlements).toHaveLength(2);
     expect(new Set(settlements.map((row) => row.teamId))).toEqual(new Set([ids.team, secondTeam]));
     expect(settlements.reduce((sum, row) => sum + row.cumulativeCreditsConsumedMicrocredits, 0n))
-      .toBe(1_200_000_000n);
+      .toBe(1_560_000_000n);
     const payer = await handle.prisma.billingCreditAccount.findUniqueOrThrow({
       where: { id: orgAccount },
     });
-    expect(payer.balanceMicrocredits).toBe(800_000_000n);
+    expect(payer.balanceMicrocredits).toBe(440_000_000n);
   });
 
   it('attributes delayed paid usage to the original user after membership becomes inactive', async () => {
@@ -636,7 +650,7 @@ describe.skipIf(!databaseTestsEnabled)('credit settlement persistence', () => {
     const allocation = await handle.prisma.billingCreditUsageAllocation.findFirstOrThrow({
       where: { attributedUserId: ids.second, settlement: { billingMonth: '2026-09' } },
     });
-    expect(allocation.cumulativeCreditsConsumedMicrocredits).toBe(200_000_000n);
+    expect(allocation.cumulativeCreditsConsumedMicrocredits).toBe(260_000_000n);
   });
 
   it('upgrades populated legacy history without altering totals and restores identity protection', async () => {

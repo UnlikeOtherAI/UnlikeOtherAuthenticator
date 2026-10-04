@@ -237,6 +237,7 @@ async function prepareExports(
         subscriptionId: subscription.id,
         billingMonth: params.billingMonth,
         stripeMeterEventCreatedAt: null,
+        stripeMeterEventState: { not: BillingStripeMeterEventState.MANUAL_SETTLED },
       },
       orderBy: [{ createdAt: 'asc' }, { callerProduct: 'asc' }, { currency: 'asc' }],
     });
@@ -270,10 +271,13 @@ async function sendPendingExports(
     if (row.stripeMeterEventState === BillingStripeMeterEventState.RECONCILIATION_REQUIRED) {
       throw new AppError('INTERNAL', 409, 'STRIPE_METER_EVENT_RECONCILIATION_REQUIRED');
     }
-    const age = row.stripeMeterEventAttemptedAt
+    const firstAttemptAge = row.stripeMeterEventFirstAttemptedAt
+      ? params.now.getTime() - row.stripeMeterEventFirstAttemptedAt.getTime()
+      : null;
+    const lastAttemptAge = row.stripeMeterEventAttemptedAt
       ? params.now.getTime() - row.stripeMeterEventAttemptedAt.getTime()
       : null;
-    if (age !== null && age >= METER_EVENT_SAFE_RETRY_MS) {
+    if (firstAttemptAge !== null && firstAttemptAge >= METER_EVENT_SAFE_RETRY_MS) {
       await prisma.billingStripeUsageExport.updateMany({
         where: {
           id: row.id,
@@ -284,7 +288,7 @@ async function sendPendingExports(
       });
       throw new AppError('INTERNAL', 409, 'STRIPE_METER_EVENT_RECONCILIATION_REQUIRED');
     }
-    if (age !== null && age < METER_EVENT_RETRY_DELAY_MS) {
+    if (lastAttemptAge !== null && lastAttemptAge < METER_EVENT_RETRY_DELAY_MS) {
       throw new AppError('INTERNAL', 409, 'STRIPE_METER_EVENT_DELIVERY_UNCERTAIN');
     }
     // Reserve the attempt durably before contacting Stripe. A crash after
@@ -295,9 +299,11 @@ async function sendPendingExports(
         stripeMeterEventCreatedAt: null,
         stripeMeterEventState: row.stripeMeterEventState,
         stripeMeterEventAttemptedAt: row.stripeMeterEventAttemptedAt,
+        stripeMeterEventFirstAttemptedAt: row.stripeMeterEventFirstAttemptedAt,
       },
       data: {
         stripeMeterEventAttemptedAt: params.now,
+        stripeMeterEventFirstAttemptedAt: row.stripeMeterEventFirstAttemptedAt ?? params.now,
         stripeMeterEventState: BillingStripeMeterEventState.UNCERTAIN,
       },
     });

@@ -15,7 +15,7 @@ export async function assertUnambiguousCreditPayer(
     where: { orgId: params.orgId },
     select: {
       createdAt: true,
-      transitions: { select: { kind: true, effectiveAt: true },
+      transitions: { select: { kind: true, effectiveAt: true, source: true },
         orderBy: [{ effectiveAt: 'asc' }, { id: 'asc' }] },
     },
   });
@@ -23,13 +23,25 @@ export async function assertUnambiguousCreditPayer(
   if (responsibility && transitions.length === 0) {
     throw new AppError('INTERNAL', 409, 'BILLING_CREDIT_PAYER_HISTORY_MISSING');
   }
+  if (transitions.some((row, index) => index > 0 && (
+    row.effectiveAt.getTime() === transitions[index - 1]?.effectiveAt.getTime() ||
+    row.kind === transitions[index - 1]?.kind
+  ))) {
+    throw new AppError('INTERNAL', 409, 'BILLING_CREDIT_PAYER_HISTORY_MISSING');
+  }
   if (transitions.some((row) => billingMonthKey(row.effectiveAt) === params.billingMonth)) {
     throw new AppError('INTERNAL', 409, 'BILLING_CREDIT_PAYER_TRANSITION_RECONCILIATION_REQUIRED');
   }
   const prior = transitions.filter((row) => billingMonthKey(row.effectiveAt) < params.billingMonth).at(-1);
   const first = transitions[0];
-  if (!prior && responsibility && first &&
-      responsibility.createdAt.getTime() + 1000 < first.effectiveAt.getTime()) {
+  const createdMonth = responsibility ? billingMonthKey(responsibility.createdAt) : null;
+  if (responsibility && first && createdMonth &&
+      params.billingMonth >= createdMonth &&
+      params.billingMonth < billingMonthKey(first.effectiveAt)) {
+    throw new AppError('INTERNAL', 409, 'BILLING_CREDIT_PAYER_PREHISTORY_UNCERTAIN');
+  }
+  if (responsibility && first?.source === 'legacy_backfill' && createdMonth &&
+      first.effectiveAt < responsibility.createdAt && params.billingMonth <= createdMonth && prior) {
     throw new AppError('INTERNAL', 409, 'BILLING_CREDIT_PAYER_PREHISTORY_UNCERTAIN');
   }
   const orgPays = prior?.kind === 'ASSUMED';

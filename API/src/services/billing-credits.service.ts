@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@prisma/client';
 
+import { getAdminPrisma } from '../db/prisma.js';
 import type { BillingActorEndpoint } from './billing-actor-audience.service.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
 import {
@@ -41,7 +42,22 @@ type Dependencies = {
   loadProjectionData?: typeof loadBillingCreditProjectionData;
   resolveActionReadiness?: typeof resolveBillingCreditActionReadiness;
   resolveControlledBy?: typeof resolveBillingControlledBy;
+  hasPendingSettlementWatch?: (creditAccountId: string, teamId: string) => Promise<boolean>;
 };
+
+async function hasPendingSettlementWatch(
+  creditAccountId: string,
+  teamId: string,
+  prisma: PrismaClient,
+): Promise<boolean> {
+  return (await prisma.billingCreditSettlementWatch.count({
+    where: {
+      creditAccountId,
+      teamId,
+      OR: [{ lastCheckedAt: null }, { lastError: { not: null } }],
+    },
+  })) > 0;
+}
 
 export async function getBillingCredits(
   params: {
@@ -118,6 +134,9 @@ export async function getBillingCredits(
     ].includes(error.message))) throw error;
     settlementPending = true;
   }
+  settlementPending ||= await (deps?.hasPendingSettlementWatch
+    ? deps.hasPendingSettlementWatch(creditAccount.id, params.request.teamId)
+    : hasPendingSettlementWatch(creditAccount.id, params.request.teamId, prisma ?? getAdminPrisma()));
   const [viewer, data, controlledBy] = await Promise.all([
     (deps?.resolveViewer ?? resolveBillingFundingViewer)(
       {
