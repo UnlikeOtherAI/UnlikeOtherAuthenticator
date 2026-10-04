@@ -38,8 +38,10 @@ const listRequest = BillingSubjectRequestSchema.extend({
 }).strict();
 const detailRequest = BillingSubjectRequestSchema.extend({
   invoice_id: z.string().min(1).max(256),
+  charge_month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).optional(),
 }).strict();
-const downloadRequest = detailRequest.extend({
+const downloadRequest = BillingSubjectRequestSchema.extend({
+  invoice_id: z.string().min(1).max(256),
   document_id: z.string().min(1).max(256),
 }).strict();
 
@@ -88,7 +90,8 @@ export function registerBillingCustomerInvoiceRoutes(app: FastifyInstance): void
     { preHandler: [requireBillingLifecycleAppKey] }, async (request, reply) => {
       const body = detailRequest.parse(request.body);
       const value = await getCustomerInvoiceDetail(context(request, body,
-        BILLING_CUSTOMER_INVOICES_DETAIL_PATH), body.invoice_id);
+        BILLING_CUSTOMER_INVOICES_DETAIL_PATH), body.invoice_id,
+      { chargeMonth: body.charge_month });
       contract(value, validateDetail);
       reply.header('Cache-Control', 'private, no-store');
       return reply.send(value);

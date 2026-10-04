@@ -58,6 +58,7 @@ const summaryProperties = {
     'voided', 'refunded', 'partially_refunded', 'disputed',
     'partially_disputed', 'written_off'] },
   number: { anyOf: [id, { type: 'null' }] }, charged_at: datetime,
+  charge_month: month, payments_in_charge_month: nonnegativeMoney,
   issued_at: { anyOf: [datetime, { type: 'null' }] }, scope,
   product_identifiers: { type: 'array', minItems: 1, items: id, uniqueItems: true },
   totals, document_available: { type: 'boolean' },
@@ -80,7 +81,7 @@ const listRequest = {
 const detailRequest = {
   type: 'object', additionalProperties: false,
   required: [...Object.keys(subject), 'invoice_id'],
-  properties: { ...subject, invoice_id: id },
+  properties: { ...subject, invoice_id: id, charge_month: month },
 } as const;
 const downloadRequest = {
   type: 'object', additionalProperties: false,
@@ -109,9 +110,13 @@ const detail = {
     then: { properties: { document: { type: 'null' } } },
     else: { properties: { document: { type: 'object' } } },
   }],
-  required: [...summaryRequired, 'schema_version', 'charges', 'document'],
+  required: [...summaryRequired, 'schema_version', 'payments', 'charges', 'document'],
   properties: {
     ...summaryProperties, schema_version: { const: 1 },
+    payments: { type: 'array', items: { type: 'object', additionalProperties: false,
+      required: ['payment_id', 'paid_at', 'amount'],
+      properties: { payment_id: id, paid_at: datetime, amount: nonnegativeMoney },
+    } },
     charges: { type: 'array', minItems: 1, items: {
       type: 'object', additionalProperties: false,
       required: ['line_id', 'kind', 'label', 'amount', 'credits_purchased'],

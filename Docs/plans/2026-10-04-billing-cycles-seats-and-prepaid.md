@@ -442,6 +442,15 @@ These append-only effects retain original paid totals and legal debt; they never
 reopen the invoice balance or alter prepaid credits. PostgreSQL serializes and
 bounds refund totals and requires an exact withdrawal for reinstatement.
 
+The customer invoice list selects a month by verified cash payment time for
+Stripe subscription and prepaid sources. A legal invoice with multiple accepted
+payments can be referenced in each payment month, but each monthly row exposes
+only that month's actual cash; its frozen whole-invoice totals and PDF retain
+one legal identity. Detail supplies the complete verified payment history and
+the selected month context. A product key never relays a mixed-product legal
+PDF, even for an organisation manager; UOA organisation finance owns that view.
+
+
 The final consumer contract is not frozen while boundary balances, late usage
 adjustments and invoice-reader integration remain in progress. Parallel payment
 UX work in UOA #80 and Nessie #1116 retains ownership of localization and resuming

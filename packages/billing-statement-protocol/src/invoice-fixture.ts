@@ -16,6 +16,7 @@ const summary = {
   invoice_id: 'invoice_topup_1', kind: 'prepaid_purchase' as const,
   status: 'paid' as const, number: 'UOA-2026-000001',
   charged_at: '2026-10-03T23:59:59.000Z',
+  charge_month: '2026-10', payments_in_charge_month: money('50', '5000'),
   issued_at: '2026-10-04T10:00:00.000Z',
   scope: { organisation_id: subject.organisation_id,
     team_id: subject.team_id, scope_type: 'team' as const },
@@ -41,6 +42,8 @@ export const billingCustomerInvoicesListV1ConformanceFixture: BillingCustomerInv
 };
 export const billingCustomerInvoiceDetailV1ConformanceFixture: BillingCustomerInvoiceDetailV1 = {
   ...summary, schema_version: 1,
+  payments: [{ payment_id: 'payment_topup_1', paid_at: summary.charged_at,
+    amount: money('50', '5000') }],
   charges: [{ line_id: 'line_topup_1', kind: 'prepaid_credits',
     label: 'Prepaid credits purchase', amount: money('50', '5000'),
     credits_purchased: '50000' }],
@@ -57,6 +60,8 @@ BillingCustomerInvoiceDownloadRequestV1 = {
 export const billingCustomerInvoicePendingDetailV1ConformanceFixture:
 BillingCustomerInvoiceDetailV1 = {
   ...pending, schema_version: 1,
+  payments: [{ payment_id: 'payment_auto_2', paid_at: pending.charged_at,
+    amount: money('50', '5000') }],
   charges: [{ line_id: 'line_auto_2', kind: 'prepaid_credits',
     label: 'Automatic prepaid credits purchase', amount: money('50', '5000'),
     credits_purchased: '50000' }],

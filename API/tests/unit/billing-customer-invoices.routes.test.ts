@@ -80,7 +80,14 @@ describe('actual customer charge invoice routes', () => {
         headers, payload: { ...body, invoice_id: 'prepaid:one' } });
       expect(detail.statusCode).toBe(200);
       expect(invoices.getCustomerInvoiceDetail).toHaveBeenCalledWith(
-        expect.objectContaining({ endpoint: '/billing/v1/invoices/detail' }), 'prepaid:one');
+        expect.objectContaining({ endpoint: '/billing/v1/invoices/detail' }),
+        'prepaid:one', { chargeMonth: undefined });
+      const selected = await app.inject({ method: 'POST', url: '/billing/v1/invoices/detail',
+        headers, payload: { ...body, invoice_id: 'prepaid:one', charge_month: '2026-10' } });
+      expect(selected.statusCode).toBe(200);
+      expect(invoices.getCustomerInvoiceDetail).toHaveBeenLastCalledWith(
+        expect.objectContaining({ endpoint: '/billing/v1/invoices/detail' }),
+        'prepaid:one', { chargeMonth: '2026-10' });
     });
   });
 

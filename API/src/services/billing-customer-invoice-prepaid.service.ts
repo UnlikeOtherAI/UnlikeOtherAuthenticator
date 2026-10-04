@@ -54,6 +54,7 @@ function adjustments(row: PrepaidInvoiceSource, rows: Adjustment[]) {
 
 export function projectPrepaidCustomerInvoiceSummary(
   row: PrepaidInvoiceSource, adjustmentRows: Adjustment[], serviceIdentifier: string,
+  chargeMonth = row.paidAt.toISOString().slice(0, 7),
 ): BillingCustomerInvoiceSummaryV1 {
   if (row.grossAmountMinor <= 0n || row.creditsPurchasedMicrocredits <= 0n ||
     row.creditEntryId !== row.creditEntry.id ||
@@ -66,6 +67,7 @@ export function projectPrepaidCustomerInvoiceSummary(
       (row.creditEntry.kind !== BillingCreditEntryKind.TOP_UP ||
         row.creditEntry.sourceType !== 'credit_top_up_checkout' ||
         row.creditEntry.sourceId !== row.topUpCheckoutId)) ||
+    chargeMonth !== row.paidAt.toISOString().slice(0, 7) ||
     (row.source === BillingCreditPaymentInvoiceSource.AUTO_RECHARGE &&
       (row.creditEntry.kind !== BillingCreditEntryKind.AUTOMATIC_TOP_UP ||
         row.creditEntry.sourceType !== 'credit_auto_top_up_attempt' ||
@@ -97,6 +99,7 @@ export function projectPrepaidCustomerInvoiceSummary(
     invoice_id: `prepaid:${row.id}`, kind: 'prepaid_purchase', status,
     number: issued ? row.invoiceNumber : null,
     charged_at: row.paidAt.toISOString(), issued_at: issued ? row.issuedAt?.toISOString() ?? null : null,
+    charge_month: chargeMonth, payments_in_charge_month: gross,
     scope: { organisation_id: row.orgId, team_id: row.teamId,
       scope_type: row.teamId === null ? 'organisation' : 'team' },
     product_identifiers: [serviceIdentifier],
@@ -112,14 +115,17 @@ export function projectPrepaidCustomerInvoiceSummary(
 
 export function projectPrepaidCustomerInvoiceDetail(
   row: PrepaidInvoiceSource, adjustmentRows: Adjustment[], serviceIdentifier: string,
-  subject: BillingSubjectRequest,
+  subject: BillingSubjectRequest, chargeMonth?: string,
 ): BillingCustomerInvoiceDetailV1 {
-  const summary = projectPrepaidCustomerInvoiceSummary(row, adjustmentRows, serviceIdentifier);
+  const summary = projectPrepaidCustomerInvoiceSummary(row, adjustmentRows, serviceIdentifier,
+    chargeMonth);
   if (subject.product !== serviceIdentifier ||
     subject.organisation_id !== row.orgId ||
     (row.teamId !== null && subject.team_id !== row.teamId)) hold();
   const issued = summary.document_available;
   return { ...summary, schema_version: 1,
+    payments: [{ payment_id: row.id, paid_at: row.paidAt.toISOString(),
+      amount: cycleMoney(row.grossAmountMinor, row.currency) }],
     charges: [{ line_id: row.creditEntryId, kind: 'prepaid_credits',
       label: row.source === BillingCreditPaymentInvoiceSource.AUTO_RECHARGE ?
         'Automatic prepaid credits purchase' : 'Prepaid credits purchase',

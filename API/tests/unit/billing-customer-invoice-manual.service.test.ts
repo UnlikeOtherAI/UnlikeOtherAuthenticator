@@ -71,11 +71,15 @@ describe('customer manual invoice source projection', () => {
   it('keeps accepted payment and original PDF frozen across full and partial refunds', () => {
     const invoice = source(BillingInvoiceStatus.ISSUED);
     const payment = { id: 'payment', kind: 'PAYMENT', amountMinor: 2800n,
-      currency: 'USD' } as ManualInvoiceSource['paymentEvents'][number];
+      currency: 'USD', occurredAt: new Date('2026-11-05T12:00:00.000Z'),
+    } as ManualInvoiceSource['paymentEvents'][number];
     const refund = { ...payment, id: 'refund', kind: 'REFUND', amountMinor: 800n };
     invoice.paymentEvents = [payment, refund];
     const partial = projectManualCustomerInvoiceSummary(invoice);
     expect(partial.status).toBe('partially_refunded');
+    expect(partial.payments_in_charge_month.amount_minor).toBe('2800');
+    expect(projectManualCustomerInvoiceDetail(invoice, subject).payments)
+      .toMatchObject([{ payment_id: 'payment', amount: { amount_minor: '2800' } }]);
     expect(partial.totals).toMatchObject({ total_paid: { amount_minor: '2800' },
       refunded_amount: { amount_minor: '800' }, outstanding: { amount_minor: '0' } });
     invoice.paymentEvents = [payment, { ...refund, amountMinor: 2800n }];
