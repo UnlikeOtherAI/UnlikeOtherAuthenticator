@@ -303,6 +303,32 @@ confirmed balance. The old portfolio credit allocator and Stripe usage meter
 exclude prepaid usage; invoice closure requires complete Ledger usage and
 matching settled raw-cost receipts.
 
+Delayed Ledger-owned research uses a separate, finite job-compute renewal
+grant. Ledger presents the fresh, original UOA `ai.invoke` delegation and its
+product-bound runtime key to `POST /billing/v1/ledger/job-compute-renewals`.
+The request identifies one immutable origin invocation, Ledger job, reserved
+Water UUID, optional open planner turn, and purpose. Ledger generates a
+256-bit opaque secret and stable issue key before the request; UOA stores only
+its digest and returns the same grant on an identical retry. If the original
+45-second JWT expires after the issue committed but before its HTTP response
+reached Ledger, the origin runtime key can recover the existing grant with
+the same secret, issue key, and exact frozen tuple at `/recover`; recovery
+never creates a grant. The seven-day
+expiry is fixed at the first committed issue and never extends on replay.
+UOA checks the original token's `tv`, product, source domain, active team,
+current membership, credential epoch, source delegation policy, and the
+DeepWater recipient app-key binding. Water may renew only with its existing
+DeepWater `customer_lifecycle` app key, the opaque secret, and the exact frozen
+job tuple at `POST /billing/v1/job-compute-renewals/:grantId/renew`; the
+RS256 Ledger-audience token lasts at most 120 seconds. Revocation uses the
+same recipient proof and tuple at the `/revoke` path. Every renewal checks
+current subject, membership, source and recipient policy, runtime-key state,
+and epoch. A reservation carrying this token must include the exact
+`job_compute` tuple; admission checks the live grant row again in both
+transactions, including replays. Ledger separately verifies its own active
+job and turn before any provider dispatch. Older jobs with no grant hold for
+owner reauthentication; a retry under a new Ledger job cannot inherit a grant.
+
 Mode rules:
 
 - `standard` and `custom` may apply a non-negative markup.

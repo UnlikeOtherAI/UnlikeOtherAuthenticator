@@ -3044,9 +3044,47 @@ model BillingLedgerRuntimeKey {
   reservations BillingPrepaidReservation[]
   dispatchDecisions BillingLedgerDispatchDecision[]
   creditEntries BillingCreditEntry[]
+  jobComputeRenewals BillingJobComputeRenewal[]
 
   @@index([serviceId, revokedAt])
   @@map("billing_ledger_runtime_keys")
+}
+
+// Opaque, finite authority to renew one originally authenticated research
+// job's compute calls. Only the digest is stored here; Ledger/Water keep the
+// caller-generated secret in scoped encrypted delivery carriers.
+model BillingJobComputeRenewal {
+  id                    String    @id @default(cuid())
+  issueKey              String    @unique @map("issue_key") @db.Char(64)
+  identityKey           String    @unique @map("identity_key") @db.Char(64)
+  secretDigest          String    @unique @map("secret_digest") @db.Char(64)
+  originRuntimeKeyId    String    @map("origin_runtime_key_id")
+  originProduct         String    @map("origin_product") @db.VarChar(100)
+  originSourceDomain    String    @map("origin_source_domain") @db.VarChar(255)
+  identityDomain        String    @map("identity_domain") @db.VarChar(255)
+  subjectId             String    @map("subject_id") @db.VarChar(256)
+  orgId                 String    @map("org_id") @db.VarChar(256)
+  teamId                String    @map("team_id") @db.VarChar(256)
+  tokenVersion          Int       @map("token_version")
+  originTokenJti        String    @map("origin_token_jti") @db.VarChar(256)
+  originInvocationId    String    @map("origin_invocation_id") @db.VarChar(160)
+  ledgerJobId           String    @map("ledger_job_id") @db.VarChar(160)
+  waterJobId            String    @map("water_job_id") @db.Uuid
+  scopeTurnId           String?   @map("scope_turn_id") @db.VarChar(160)
+  purpose               String    @db.VarChar(32)
+  recipientOrigin       String    @map("recipient_origin") @db.VarChar(255)
+  recipientProduct      String    @map("recipient_product") @db.VarChar(100)
+  ledgerAudience        String    @map("ledger_audience") @db.VarChar(255)
+  originalActorChain    Json?     @map("original_actor_chain")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  expiresAt             DateTime  @map("expires_at")
+  revokedAt             DateTime? @map("revoked_at")
+
+  originRuntimeKey BillingLedgerRuntimeKey @relation(fields: [originRuntimeKeyId], references: [id], onDelete: Restrict)
+
+  @@index([ledgerJobId, waterJobId, revokedAt])
+  @@index([subjectId, tokenVersion, expiresAt])
+  @@map("billing_job_compute_renewals")
 }
 
 model BillingPrepaidReservationEvent {
