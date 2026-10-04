@@ -159,6 +159,8 @@ function assertAttemptBinding(attempt: DispatchAttempt, account: StripeAccountCo
     attempt.creditAccountId !== credit.id ||
     attempt.catalog.accountId !== account.id ||
     attempt.catalog.currency !== 'USD' ||
+    attempt.currency !== 'USD' ||
+    attempt.catalog.currency !== attempt.currency ||
     attempt.catalog.paymentAmountMinor !== attempt.paymentAmountMinor ||
     attempt.catalog.creditsReceivedMicrocredits !== attempt.creditsReceivedMicrocredits ||
     attempt.serviceId !== revision.serviceId ||
@@ -210,7 +212,7 @@ function assertPaymentIntent(
     intent.object !== 'payment_intent' ||
     !intent.id.startsWith('pi_') ||
     intent.amount !== stripeAmount(attempt.paymentAmountMinor) ||
-    intent.currency.toUpperCase() !== 'USD' ||
+    intent.currency.toUpperCase() !== attempt.currency ||
     stripeExternalId(intent.customer) !== attempt.creditAccount.customer.stripeCustomerId ||
     stripeExternalId(intent.payment_method) !== attempt.consentRevision.stripePaymentMethodId
   ) {
@@ -227,7 +229,7 @@ async function createPaymentIntent(
     return await stripe.paymentIntents.create(
       {
         amount: stripeAmount(attempt.paymentAmountMinor),
-        currency: 'usd',
+        currency: attempt.currency.toLowerCase(),
         customer: attempt.creditAccount.customer.stripeCustomerId as string,
         payment_method: attempt.consentRevision.stripePaymentMethodId,
         confirm: true,

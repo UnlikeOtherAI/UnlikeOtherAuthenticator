@@ -3728,6 +3728,7 @@ model BillingCreditAutoTopUpAttempt {
   observedBalanceMicrocredits BigInt                              @map("observed_balance_microcredits")
   paymentAmountMinor          BigInt                              @map("payment_amount_minor")
   creditsReceivedMicrocredits BigInt                              @map("credits_received_microcredits")
+  currency                    String                              @default("USD") @db.Char(3)
   billingMonth                String                              @map("billing_month") @db.Char(7)
   idempotencyKey              String                              @map("idempotency_key") @db.VarChar(200)
   stripePaymentIntentId       String?                             @map("stripe_payment_intent_id") @db.VarChar(255)
@@ -3792,6 +3793,9 @@ model BillingCreditPaymentInvoice {
   paidAt                       DateTime                              @map("paid_at")
   state                        BillingCreditPaymentInvoiceState      @default(PENDING)
   holdReason                   String?                               @map("hold_reason") @db.VarChar(160)
+  issueAttemptCount            Int                                   @default(0) @map("issue_attempt_count")
+  nextIssueAttemptAt           DateTime                              @default(now()) @map("next_issue_attempt_at")
+  lastIssueError               String?                               @map("last_issue_error") @db.VarChar(160)
   taxAmountMinor               BigInt?                               @map("tax_amount_minor")
   taxSource                    BillingCreditPaymentInvoiceTaxSource? @map("tax_source")
   taxEvidenceReference         String?                               @map("tax_evidence_reference") @db.VarChar(255)
@@ -3820,6 +3824,7 @@ model BillingCreditPaymentInvoice {
   @@index([orgId, teamId, paidAt, id])
   @@index([serviceId, paidAt])
   @@index([state, paidAt])
+  @@index([accountId, state, nextIssueAttemptAt, id])
   @@map("billing_credit_payment_invoices")
 }
 

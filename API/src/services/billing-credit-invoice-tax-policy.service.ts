@@ -74,7 +74,8 @@ export async function appendCreditInvoiceTaxPolicy(
       select: { id: true, active: true, address: true, taxIdentifier: true },
     });
     const address = issuer?.address as Record<string, unknown> | null;
-    if (!issuer?.active || address?.country !== country ||
+    if (!issuer?.active || typeof address?.country !== 'string' ||
+      !/^[A-Z]{2}$/.test(address.country) ||
       (params.treatment === BillingCreditInvoiceTaxTreatment.INCLUSIVE_RATE &&
         !issuer.taxIdentifier)) {
       throw new AppError('BAD_REQUEST', 409, 'BILLING_CREDIT_INVOICE_ISSUER_TAX_SCOPE_INVALID');

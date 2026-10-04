@@ -161,8 +161,7 @@ async function freezeIssueFacts(
         where: { active: true, legalName: providerInvoice.accountName },
       })
       : policy?.issuerProfile;
-    if (!issuer?.active || !country(issuer.address) ||
-        country(issuer.address) !== buyerCountry) {
+    if (!issuer?.active || !country(issuer.address)) {
       return { hold: 'BILLING_CREDIT_INVOICE_ISSUER_MISSING' } as const;
     }
     if (providerInvoice && !verifiedProviderMatches(providerInvoice, issuer, buyer)) {

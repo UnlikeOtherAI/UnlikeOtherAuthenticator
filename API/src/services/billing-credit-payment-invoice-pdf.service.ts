@@ -75,16 +75,14 @@ function money(minor: bigint, currency: string): string {
   return exactMoney(minorAmountToMajor(minor.toString(), currency), currency).display;
 }
 
-function drawParty(
-  page: PDFPage,
+type PartyLine = { text: string; bold: boolean };
+
+function partyLines(
   regular: PDFFont,
   bold: PDFFont,
-  title: string,
   snapshot: Snapshot,
-  x: number,
-  top: number,
   buyer: boolean,
-) {
+): PartyLine[] {
   const values = [
     clean(snapshot.legal_name),
     ...address(snapshot, buyer),
@@ -94,14 +92,60 @@ function drawParty(
   if (!values[0] || !values[1] || !values.some((item) => item.includes('@'))) {
     throw new Error('BILLING_CREDIT_PAYMENT_INVOICE_PARTY_INVALID');
   }
+  return values.flatMap((value, index) => wrap(
+    value, index === 0 ? bold : regular, index === 0 ? 11 : 9, 225,
+  ).map((text) => ({ text, bold: index === 0 })));
+}
+
+function drawPartyRows(
+  page: PDFPage,
+  regular: PDFFont,
+  bold: PDFFont,
+  title: string,
+  lines: PartyLine[],
+  x: number,
+  top: number,
+  offset: number,
+  count: number,
+) {
   draw(page, bold, title, x, top, 9);
   let y = top - 20;
-  for (const [index, value] of values.entries()) {
-    for (const line of wrap(value, index === 0 ? bold : regular, index === 0 ? 11 : 9, 225)) {
-      draw(page, index === 0 ? bold : regular, line, x, y, index === 0 ? 11 : 9);
-      y -= 14;
-    }
+  for (const line of lines.slice(offset, offset + count)) {
+    draw(page, line.bold ? bold : regular, line.text, x, y, line.bold ? 11 : 9);
+    y -= 14;
   }
+}
+
+function drawCharges(
+  page: PDFPage,
+  regular: PDFFont,
+  bold: PDFFont,
+  input: PaymentInvoicePdfInput,
+  top: number,
+) {
+  page.drawLine({
+    start: { x: MARGIN, y: top }, end: { x: WIDTH - MARGIN, y: top },
+    thickness: 0.7, color: rgb(0.6, 0.65, 0.7),
+  });
+  draw(page, bold, 'Charge', MARGIN, top - 21, 10);
+  draw(page, bold, 'Amount', 440, top - 21, 10);
+  draw(page, regular, 'Prepaid credit purchase', MARGIN, top - 47, 10);
+  draw(page, regular, money(input.grossMinor, input.currency), 440, top - 47, 10);
+  const rows = [
+    ['Subtotal before included tax', input.grossMinor - input.taxMinor],
+    ['Included tax', input.taxMinor],
+    ['Total charged', input.grossMinor],
+    ['Paid', input.grossMinor],
+    ['Outstanding', 0n],
+  ] as const;
+  let y = top - 101;
+  for (const [label, value] of rows) {
+    draw(page, label === 'Total charged' ? bold : regular, label, 290, y, 9);
+    draw(page, label === 'Total charged' ? bold : regular, money(value, input.currency), 440, y, 9);
+    y -= 23;
+  }
+  draw(page, regular, 'This invoice records the successful payment shown above.', MARGIN, 93, 8);
+  draw(page, regular, 'Account usage and credit balances are documented separately.', MARGIN, 77, 8);
 }
 
 export async function generateCreditPaymentInvoicePdf(
@@ -126,35 +170,41 @@ export async function generateCreditPaymentInvoicePdf(
   document.setCreationDate(input.issuedAt);
   document.setModificationDate(input.issuedAt);
 
-  const page = document.addPage([WIDTH, HEIGHT]);
+  let page = document.addPage([WIDTH, HEIGHT]);
   draw(page, bold, 'INVOICE', MARGIN, 788, 22);
-  draw(page, bold, input.number, MARGIN, 756, 12);
-  draw(page, regular, `Issued: ${input.issuedAt.toISOString().slice(0, 10)} UTC`, MARGIN, 734, 9);
-  draw(page, regular, `Paid: ${input.paidAt.toISOString().slice(0, 10)} UTC`, MARGIN, 718, 9);
-  drawParty(page, regular, bold, 'ISSUED BY', input.issuerSnapshot, MARGIN, 676, false);
-  drawParty(page, regular, bold, 'BILL TO', input.buyerSnapshot, 310, 676, true);
-  page.drawLine({
-    start: { x: MARGIN, y: 490 }, end: { x: WIDTH - MARGIN, y: 490 },
-    thickness: 0.7, color: rgb(0.6, 0.65, 0.7),
-  });
-  draw(page, bold, 'Charge', MARGIN, 469, 10);
-  draw(page, bold, 'Amount', 440, 469, 10);
-  draw(page, regular, 'Prepaid credit purchase', MARGIN, 443, 10);
-  draw(page, regular, money(input.grossMinor, input.currency), 440, 443, 10);
-  const rows = [
-    ['Subtotal before included tax', input.grossMinor - input.taxMinor],
-    ['Included tax', input.taxMinor],
-    ['Total charged', input.grossMinor],
-    ['Paid', input.grossMinor],
-    ['Outstanding', 0n],
-  ] as const;
-  let y = 389;
-  for (const [label, value] of rows) {
-    draw(page, label === 'Total charged' ? bold : regular, label, 290, y, 9);
-    draw(page, label === 'Total charged' ? bold : regular, money(value, input.currency), 440, y, 9);
-    y -= 23;
+  const numberLines = wrap(input.number, bold, 12, WIDTH - 2 * MARGIN);
+  for (const [index, line] of numberLines.entries()) {
+    draw(page, bold, line, MARGIN, 756 - 15 * index, 12);
   }
-  draw(page, regular, 'This invoice records the successful payment shown above.', MARGIN, 93, 8);
-  draw(page, regular, 'Account usage and credit balances are documented separately.', MARGIN, 77, 8);
+  const shift = 15 * (numberLines.length - 1);
+  draw(page, regular, `Issued: ${input.issuedAt.toISOString().slice(0, 10)} UTC`, MARGIN, 734 - shift, 9);
+  draw(page, regular, `Paid: ${input.paidAt.toISOString().slice(0, 10)} UTC`, MARGIN, 718 - shift, 9);
+  const issuerLines = partyLines(regular, bold, input.issuerSnapshot, false);
+  const buyerLines = partyLines(regular, bold, input.buyerSnapshot, true);
+  let offset = 0;
+  let top = 676 - shift;
+  const compactCapacity = Math.floor((top - 20 - 520) / 14) + 1;
+  const compact = Math.max(issuerLines.length, buyerLines.length) <= compactCapacity;
+  while (offset < Math.max(issuerLines.length, buyerLines.length)) {
+    const capacity = Math.floor((top - 20 - 72) / 14) + 1;
+    drawPartyRows(page, regular, bold, offset ? 'ISSUED BY (CONTINUED)' : 'ISSUED BY',
+      issuerLines, MARGIN, top, offset, compact ? compactCapacity : capacity);
+    drawPartyRows(page, regular, bold, offset ? 'BILL TO (CONTINUED)' : 'BILL TO',
+      buyerLines, 310, top, offset, compact ? compactCapacity : capacity);
+    offset += compact ? compactCapacity : capacity;
+    if (offset < Math.max(issuerLines.length, buyerLines.length)) {
+      page = document.addPage([WIDTH, HEIGHT]);
+      draw(page, bold, 'INVOICE (CONTINUED)', MARGIN, 812, 12);
+      top = 780;
+    }
+  }
+  if (!compact) {
+    page = document.addPage([WIDTH, HEIGHT]);
+    for (const [index, line] of wrap(`INVOICE ${input.number}`, bold, 11,
+      WIDTH - 2 * MARGIN).entries()) {
+      draw(page, bold, line, MARGIN, 815 - 15 * index, 11);
+    }
+  }
+  drawCharges(page, regular, bold, input, compact ? 490 : 760);
   return document.save({ useObjectStreams: false });
 }

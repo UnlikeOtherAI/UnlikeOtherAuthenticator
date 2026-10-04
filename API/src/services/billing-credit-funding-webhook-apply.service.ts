@@ -134,7 +134,8 @@ async function applyAutomaticTopUpSucceeded(
     stripeExternalId(intent.customer) !== attempt.creditAccount.customer.stripeCustomerId ||
     event.paymentMethodId !== attempt.consentRevision.stripePaymentMethodId ||
     BigInt(intent.amount_received) !== attempt.paymentAmountMinor ||
-    intent.currency.toUpperCase() !== 'USD' ||
+    attempt.currency !== 'USD' ||
+    intent.currency.toUpperCase() !== attempt.currency ||
     !OPEN_AUTO_TOP_UP_STATES.has(attempt.status)
   ) {
     throw new AppError('INTERNAL', 502, 'STRIPE_CREDIT_AUTO_TOP_UP_BINDING_INVALID');
@@ -152,7 +153,7 @@ async function applyAutomaticTopUpSucceeded(
       kind: BillingCreditEntryKind.AUTOMATIC_TOP_UP,
       amountMicrocredits: attempt.creditsReceivedMicrocredits,
       balanceAfterMicrocredits: balance + attempt.creditsReceivedMicrocredits,
-      currency: 'USD',
+      currency: attempt.currency,
       idempotencyKey: `stripe:payment-intent:${intent.id}`,
       sourceType: 'credit_auto_top_up_attempt',
       sourceId: attempt.id,
@@ -181,7 +182,7 @@ async function applyAutomaticTopUpSucceeded(
       attributedUserId: attempt.attributedUserId,
       amountMinor: attempt.paymentAmountMinor,
       creditsMicrocredits: attempt.creditsReceivedMicrocredits,
-      currency: 'USD',
+      currency: attempt.currency,
       stripeCustomerId: attempt.creditAccount.customer.stripeCustomerId as string,
     },
   });
@@ -277,7 +278,8 @@ async function applyPaymentStateChange(
       event.paymentMethodId !== attempt.consentRevision.stripePaymentMethodId) ||
     (attempt.stripePaymentIntentId && attempt.stripePaymentIntentId !== event.paymentIntent.id) ||
     BigInt(event.paymentIntent.amount) !== attempt.paymentAmountMinor ||
-    event.paymentIntent.currency.toUpperCase() !== 'USD'
+    attempt.currency !== 'USD' ||
+    event.paymentIntent.currency.toUpperCase() !== attempt.currency
   ) {
     throw new AppError('INTERNAL', 502, 'STRIPE_CREDIT_AUTO_TOP_UP_BINDING_INVALID');
   }

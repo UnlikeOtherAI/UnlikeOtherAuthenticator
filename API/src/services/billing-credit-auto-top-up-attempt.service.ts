@@ -332,6 +332,7 @@ export async function claimCreditAutoTopUpAttempt(
         observedBalanceMicrocredits: credit.balanceMicrocredits,
         paymentAmountMinor: revision.refillPaymentAmountMinor,
         creditsReceivedMicrocredits: revision.refillCreditsMicrocredits,
+        currency: 'USD',
         billingMonth: clock.billingMonth,
         idempotencyKey: `uoa:auto-top-up:${attemptId}`,
       },

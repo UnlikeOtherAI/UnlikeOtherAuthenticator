@@ -198,6 +198,15 @@ accepted payment in pending-document history. Issuance freezes the number,
 tax provenance, parties, PDF object key and SHA-256; a restart resumes the
 same source, and an issued document cannot be changed or deleted. The
 operator doorway is Billing → Contracts & invoices → Prepaid invoice tax policy.
+The policy jurisdiction follows the buyer's tax treatment and may differ from
+the legal issuer's country; both addresses remain verified. The document worker
+claims due rows with PostgreSQL row locks, persists bounded retry dates and
+attempt errors, and lets later successful payments advance past held documents.
+Legal party text wraps across continuation pages before the charges-only table.
+Automatic top-up attempts freeze USD as an explicit source field; webhook,
+credit entry and customer invoice evidence must agree with it. Historical
+successful attempts are checked against their original webhook and credit
+entry before that field is backfilled.
 Manual and Stripe collection must both supply real monthly documents. Fetching
 historical months must not create charges, recalculate current terms or invent
 old invoices. Stripe invoice PDFs may not contain the full measured usage/seat
