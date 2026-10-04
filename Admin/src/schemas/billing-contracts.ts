@@ -273,6 +273,26 @@ export const BillingInvoiceCalculateFormSchema = z.object({
   contractId: IdentifierSchema,
   issuerProfileId: IdentifierSchema,
   billingMonth: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
+  taxTreatment: z.enum(['no_tax_charged', 'standard_rate']),
+  taxRatePercent: z.string().regex(/^(0|[1-9]\d*)(?:\.\d{1,2})?$/),
+  taxLegalBasis: z.string().trim().min(1).max(500),
+}).superRefine((value, context) => {
+  const percentage = Number(value.taxRatePercent);
+  if ((value.taxTreatment === 'no_tax_charged' && percentage !== 0) ||
+    (value.taxTreatment === 'standard_rate' &&
+      (percentage <= 0 || percentage > 100))) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['taxRatePercent'],
+      message: 'Rate must match the selected tax treatment.' });
+  }
+});
+
+export const BillingCycleCorrectionCandidateSchema = z.object({
+  cycle_id: z.string(),
+  organisation_id: z.string(),
+  service_id: z.string(),
+  billing_month: z.string(),
+  direction: z.enum(['debit', 'credit', 'unknown']),
+  supplement_invoice_id: z.string().nullable(),
 });
 
 export const BillingInvoicePaymentFormSchema = z.object({

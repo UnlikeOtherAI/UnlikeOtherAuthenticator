@@ -1,4 +1,5 @@
 import {
+  BillingCycleCorrectionCandidateSchema,
   BillingContractSchema,
   BillingContractVersionSchema,
   BillingInvoiceBuyerProfileSchema,
@@ -12,6 +13,7 @@ import {
   type BillingInvoiceIssuerFormValues,
   type BillingInvoicePaymentFormValues,
 } from '../schemas/billing-contracts';
+import { z } from 'zod';
 import { ApiRequestError, createApiClient } from './api-client';
 
 const api = createApiClient();
@@ -151,6 +153,9 @@ export const billingContractAdminService = {
         contract_id: input.contractId,
         issuer_profile_id: input.issuerProfileId,
         billing_month: input.billingMonth,
+        tax_treatment: input.taxTreatment,
+        tax_rate_percent: input.taxRatePercent,
+        tax_legal_basis: input.taxLegalBasis,
       }),
     );
   },
@@ -159,6 +164,18 @@ export const billingContractAdminService = {
     return BillingInvoiceSchema.array().parse(
       await api.get<unknown>('/internal/admin/billing/invoices'),
     );
+  },
+
+  async listCycleCorrections() {
+    const response = await api.get<unknown>('/internal/admin/billing/cycle-corrections');
+    return z.object({ corrections: BillingCycleCorrectionCandidateSchema.array() })
+      .parse(response).corrections;
+  },
+
+  async prepareCycleCorrection(cycleId: string) {
+    return BillingInvoiceSchema.parse(await api.post<unknown>(
+      `/internal/admin/billing/cycle-corrections/${encodeURIComponent(cycleId)}/prepare`, {},
+    ));
   },
 
   async issueInvoice(invoiceId: string) {

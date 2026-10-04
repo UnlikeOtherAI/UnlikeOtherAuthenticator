@@ -417,6 +417,9 @@ describe('contract invoice admin routes', () => {
           contract_id: 'contract_1',
           issuer_profile_id: 'issuer_1',
           billing_month: '2026-06',
+          tax_treatment: 'no_tax_charged',
+          tax_rate_percent: '0',
+          tax_legal_basis: 'Customer transaction outside tax scope',
         },
       });
       const body = response.json();
@@ -438,6 +441,8 @@ describe('contract invoice admin routes', () => {
         contractId: 'contract_1',
         issuerProfileId: 'issuer_1',
         billingMonth: '2026-06',
+        taxTerms: { treatment: 'NO_TAX_CHARGED', rateBps: 0,
+          legalBasis: 'Customer transaction outside tax scope' },
         actor: { userId: 'admin_1', tokenVersion: 3, email: 'admin@example.com' },
       });
     } finally {

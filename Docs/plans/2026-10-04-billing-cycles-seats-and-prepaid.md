@@ -228,6 +228,20 @@ same payer/month wallet boundary and every receipt are rechecked inside the
 final transaction. Pay-as-you-go corrections remain pending until an actual
 separate issuer or processor financial line proves the changed collectible
 amount; an observation or quote alone does not finalize or charge it.
+Manual invoice calculation now requires an explicit operator-attested tax
+treatment, rate and legal basis. The draft freezes those facts and allocated
+line tax before issuance; historical invoices with no tax policy evidence
+cannot silently be corrected at an assumed zero rate. For a positive late
+manual usage change, Billing → Contracts & invoices → Cycle corrections
+prepares a delta-only supplemental draft against the original issued line.
+The ordinary invoice issuer assigns its own legal number and immutable PDF;
+the reconciliation queue then verifies the issued line, inherited tax policy,
+signed receipt cohort and original source before appending an adjusted cycle.
+The original invoice, its accepted payments and bytes remain intact. Database
+readiness and partial uniqueness permit a second issued invoice in that month
+only when the draft has an immutable correction binding. A negative change
+requires a separately issued credit note; a funded-credit change needs its
+exact settlement-reference allocation rather than a presumed zero.
 Each funded settlement reference is assigned to its own service line in stable
 service and settlement order. The invoice-wide cumulative microcredit rounding
 determines the minor-unit delta at each reference; it preserves fractional

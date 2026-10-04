@@ -45,6 +45,10 @@ export function invoiceSourceFingerprint(invoice: FinancialInvoice): string {
     issued_at: invoice.issuedAt?.toISOString() ?? null,
     currency: invoice.currency, subtotal_minor: invoice.subtotalMinor.toString(),
     tax_minor: invoice.taxAmountMinor.toString(),
+    ...(invoice.taxTreatment === null ? {} : {
+      tax_treatment: invoice.taxTreatment, tax_rate_bps: invoice.taxRateBps,
+      tax_legal_basis: invoice.taxLegalBasis,
+    }),
     credits_minor: invoice.creditsAppliedMinor.toString(),
     total_minor: invoice.totalMinor.toString(),
     issuer_snapshot: invoice.issuerSnapshot, buyer_snapshot: invoice.buyerSnapshot,

@@ -308,6 +308,9 @@ describe('billingContractAdminService', () => {
       contractId: 'contract/1',
       issuerProfileId: 'issuer/1',
       billingMonth: '2026-07',
+      taxTreatment: 'standard_rate',
+      taxRatePercent: '20',
+      taxLegalBasis: 'Standard VAT on taxable services',
     });
     await expect(billingContractAdminService.listInvoices()).resolves.toEqual([invoice]);
 
@@ -315,6 +318,9 @@ describe('billingContractAdminService', () => {
       contract_id: 'contract/1',
       issuer_profile_id: 'issuer/1',
       billing_month: '2026-07',
+      tax_treatment: 'standard_rate',
+      tax_rate_percent: '20',
+      tax_legal_basis: 'Standard VAT on taxable services',
     });
     expect(calculated).toEqual(invoice);
     expect(JSON.stringify(calculated)).not.toMatch(/provider_cost|usage_markup|token_count/);
@@ -378,6 +384,9 @@ describe('billingContractAdminService', () => {
         contractId: 'contract-1',
         issuerProfileId: 'issuer-1',
         billingMonth: '2026-07',
+        taxTreatment: 'no_tax_charged',
+        taxRatePercent: '0',
+        taxLegalBasis: 'Outside scope of tax',
       }),
     ).rejects.toThrow();
   });

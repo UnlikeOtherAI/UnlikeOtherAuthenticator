@@ -370,7 +370,12 @@ from the latest canonical funded exact-team usage settlements, remain a separate
 labelled aggregate, and never alter a service line. Paid recurring add-ons are shown as
 collected separately and never enter the manual invoice total. Currency mismatch, missing selected provider
 cost, absent explicit issuer/buyer legal profiles, or unavailable Ledger evidence fails
-closed. UOA performs no tax or FX inference.
+closed. The operator must attest the invoice's tax treatment, exact rate and legal
+basis before draft calculation; those facts and cumulative per-line tax are frozen.
+UOA performs no FX inference. A later manual usage correction creates only a
+delta-only supplemental invoice through
+\`/internal/admin/billing/cycle-corrections\`, with the original issued tax policy
+and legal invoice retained. Negative differences require a real credit note.
 
 \`POST /internal/admin/billing/invoices/calculate\` and every invoice list/detail/mutation
 return only final customer price per service, legal profile snapshots, totals, and

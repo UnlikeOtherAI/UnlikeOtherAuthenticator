@@ -8,6 +8,8 @@ import { prepareBillingCycleClose } from './billing-cycle-close.service.js';
 import { captureIssuedManualBillingCycle } from './billing-cycle-manual-invoice.service.js';
 import { refreshIssuedManualBillingCyclePayment } from './billing-cycle-manual-payment.service.js';
 import { refreshVoidedManualBillingCycle } from './billing-cycle-manual-void.service.js';
+import { captureIssuedManualBillingCycleCorrection } from
+  './billing-cycle-manual-correction-capture.service.js';
 
 const INTERVAL_MS = 30_000;
 const BATCH_SIZE = 50;
@@ -20,7 +22,15 @@ async function captureMissingIssuedLines(
   prisma: PrismaClient,
   prepareClose: typeof prepareBillingCycleClose,
   captureIssued: typeof captureIssuedManualBillingCycle,
-): Promise<void> {
+  captureCorrection: typeof captureIssuedManualBillingCycleCorrection,
+): Promise<'ordinary' | 'correction'> {
+  const correction = await prisma.billingCycleManualCorrection.findUnique({ where: {
+    supplementInvoiceId: invoiceId,
+  } });
+  if (correction) {
+    await captureCorrection({ invoiceId }, { prisma });
+    return 'correction';
+  }
   const invoice = await prisma.billingInvoice.findUnique({
     where: { id: invoiceId },
     include: { lines: { include: { financialAllocation: true } } },
@@ -51,6 +61,7 @@ async function captureMissingIssuedLines(
     }, { prisma });
     await captureIssued({ cycleId: pending.cycleId, invoiceId }, { prisma });
   }
+  return 'ordinary';
 }
 
 async function claimDue(prisma: PrismaClient): Promise<Claimed[]> {
@@ -106,7 +117,8 @@ export async function runManualCycleReconciliationBatch(
     refreshPayment?: typeof refreshIssuedManualBillingCyclePayment;
     refreshVoid?: typeof refreshVoidedManualBillingCycle;
     prepareClose?: typeof prepareBillingCycleClose;
-    captureIssued?: typeof captureIssuedManualBillingCycle },
+    captureIssued?: typeof captureIssuedManualBillingCycle;
+    captureCorrection?: typeof captureIssuedManualBillingCycleCorrection },
 ): Promise<{ checked: number; held: number; failures: Array<{ invoiceId: string; code: string }> }> {
   const prisma = deps?.prisma ?? getAdminPrisma();
   const rows = await claimDue(prisma);
@@ -122,11 +134,14 @@ export async function runManualCycleReconciliationBatch(
           { invoiceId: row.invoiceId }, { prisma });
         if (!refreshed) throw new AppError('INTERNAL', 409, 'BILLING_CYCLE_ALLOCATION_MISSING');
       } else if (invoice?.status === 'ISSUED') {
-        await captureMissingIssuedLines(row.invoiceId, prisma,
+        const kind = await captureMissingIssuedLines(row.invoiceId, prisma,
           deps?.prepareClose ?? prepareBillingCycleClose,
-          deps?.captureIssued ?? captureIssuedManualBillingCycle);
-        await (deps?.refreshPayment ?? refreshIssuedManualBillingCyclePayment)(
-          { invoiceId: row.invoiceId }, { prisma });
+          deps?.captureIssued ?? captureIssuedManualBillingCycle,
+          deps?.captureCorrection ?? captureIssuedManualBillingCycleCorrection);
+        if (kind === 'ordinary') {
+          await (deps?.refreshPayment ?? refreshIssuedManualBillingCyclePayment)(
+            { invoiceId: row.invoiceId }, { prisma });
+        }
       } else {
         throw new AppError('INTERNAL', 409, 'BILLING_CYCLE_INVOICE_STATE_UNRESOLVED');
       }
