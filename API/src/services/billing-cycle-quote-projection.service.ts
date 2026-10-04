@@ -59,7 +59,12 @@ export function projectMonthlySubscriptionLine(
   quote: MonthlyQuote, periodStart: Date, periodEnd: Date,
 ): BillingCycleSubscriptionLine {
   const fixed = quote.seatPolicy === BillingSeatPolicy.FIXED;
-  const intervals = seatIntervals(quote, periodStart, periodEnd);
+  const chargeStart = new Date(Math.max(periodStart.getTime(),
+    quote.commercialEffectiveAt?.getTime() ?? periodStart.getTime()));
+  const chargeEnd = new Date(Math.min(periodEnd.getTime(),
+    quote.commercialEndsAt?.getTime() ?? periodEnd.getTime(),
+    quote.endedAt?.getTime() ?? periodEnd.getTime()));
+  const intervals = seatIntervals(quote, chargeStart, chargeEnd);
   const fixedQuantity = fixed && intervals.every((item) => item.quantity === intervals[0]?.quantity)
     ? intervals[0]?.quantity ?? null : null;
   return {
@@ -91,6 +96,11 @@ export function privateMonthlyQuoteEvidence(quote: MonthlyQuote) {
     seat_timing: quote.seatChargeTiming,
     baseline_captured_at: quote.baselineCapturedAt?.toISOString() ?? null,
     baseline_member_count: quote.baselineMemberCount,
+    commercial_effective_at: quote.commercialEffectiveAt?.toISOString() ?? null,
+    commercial_ends_at: quote.commercialEndsAt?.toISOString() ?? null,
+    ended_at: quote.endedAt?.toISOString() ?? null,
+    seat_milliseconds: quote.seatMilliseconds?.toString() ?? null,
+    month_milliseconds: quote.monthMilliseconds?.toString() ?? null,
     evidence_ids: [...quote.evidenceIds].sort(),
     intervals: [...quote.intervals].sort((a, b) => a.id.localeCompare(b.id))
       .map((item) => ({ id: item.id, user_id: item.userId,

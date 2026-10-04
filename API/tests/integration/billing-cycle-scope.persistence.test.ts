@@ -146,6 +146,7 @@ describe.skipIf(!enabled)('customer cycle scope persistence', () => {
       unitAmountMinor: 2000n, uniqueHumanSeats: null, seatMilliseconds: null,
       monthMilliseconds: null, currency: 'USD', baselineCapturedAt: null,
       baselineMemberCount: null, intervals: [], capacityRevisions: [], evidenceIds: [],
+      commercialEffectiveAt: null, commercialEndsAt: null, endedAt: null,
     };
     const usage = {
       schemaVersion: 1 as const, product: serviceIdentifier, groupBy: 'user' as const,
@@ -183,6 +184,18 @@ describe.skipIf(!enabled)('customer cycle scope persistence', () => {
     quoteFn.mockResolvedValue({ ...quote, amountMinor: 3000n });
     await expect(prepareBillingCycleClose(params, deps))
       .rejects.toMatchObject({ message: 'BILLING_CYCLE_EXISTING_RECONCILIATION_REQUIRED' });
+    quoteFn.mockResolvedValue(quote);
+    fetchMetering.mockResolvedValue({ ...usage, snapshot: { ...usage.snapshot,
+      id: 'snapshot-august-late', cursor: 'cursor-august-late', sha256: 'd'.repeat(64) } });
+    const revised = await prepareBillingCycleClose(params, deps);
+    expect(revised.cycleId).not.toBe(first.cycleId);
+    const revisions = await db.prisma.billingCustomerCycle.findMany({ where: {
+      serviceId, orgId, teamId: null, billingMonth: '2026-08',
+    }, orderBy: { revision: 'asc' } });
+    expect(revisions.map((row) => row.revision)).toEqual([1, 2]);
+    expect(revisions[0]?.snapshotSha256).toBe(first.snapshotSha256);
+    expect((revisions[1]?.privateEvidence as Record<string, unknown>).previous_cycle_id)
+      .toBe(first.cycleId);
   });
 
   it('holds uncertain paid usage and serializes concurrent close preparation', async () => {
@@ -195,6 +208,7 @@ describe.skipIf(!enabled)('customer cycle scope persistence', () => {
       unitAmountMinor: 2000n, uniqueHumanSeats: null, seatMilliseconds: null,
       monthMilliseconds: null, currency: 'USD', baselineCapturedAt: null,
       baselineMemberCount: null, intervals: [], capacityRevisions: [], evidenceIds: [],
+      commercialEffectiveAt: null, commercialEndsAt: null, endedAt: null,
     };
     const usage = {
       schemaVersion: 1 as const, product: serviceIdentifier, groupBy: 'user' as const,
