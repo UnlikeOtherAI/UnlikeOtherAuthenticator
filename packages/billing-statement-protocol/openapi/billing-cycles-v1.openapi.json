@@ -1,0 +1,1621 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "UOA customer billing cycles protocol",
+    "version": "1.0.0",
+    "description": "Exact product-scoped monthly history, documents, and download actions."
+  },
+  "paths": {},
+  "components": {
+    "schemas": {
+      "BillingCyclesListRequestV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "product",
+          "organisation_id",
+          "team_id",
+          "user_id"
+        ],
+        "properties": {
+          "product": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "organisation_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "team_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "user_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 24
+          },
+          "cursor": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        }
+      },
+      "BillingCyclesListV1": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "/schemas/billing-cycles-v1-list.json",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schema_version",
+          "generated_at",
+          "subject",
+          "cycles",
+          "next_cursor"
+        ],
+        "properties": {
+          "schema_version": {
+            "const": 1
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "subject": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "product",
+              "organisation_id",
+              "team_id",
+              "user_id"
+            ],
+            "properties": {
+              "product": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "organisation_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "team_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "user_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              }
+            }
+          },
+          "cycles": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "cycle_id",
+                "period",
+                "state",
+                "scope",
+                "product",
+                "totals",
+                "document_available"
+              ],
+              "properties": {
+                "cycle_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "period": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "month",
+                    "starts_at",
+                    "ends_at"
+                  ],
+                  "properties": {
+                    "month": {
+                      "type": "string",
+                      "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"
+                    },
+                    "starts_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "ends_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                },
+                "state": {
+                  "enum": [
+                    "open_preview",
+                    "pending_reconciliation",
+                    "finalized",
+                    "adjusted"
+                  ]
+                },
+                "scope": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "organisation_id",
+                    "team_id",
+                    "payer_scope"
+                  ],
+                  "properties": {
+                    "organisation_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "team_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "payer_scope": {
+                      "enum": [
+                        "team",
+                        "organisation"
+                      ]
+                    }
+                  }
+                },
+                "product": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id",
+                    "identifier",
+                    "name"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "identifier": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "totals": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "currency",
+                      "subscription",
+                      "usage_charge",
+                      "credits_applied",
+                      "total_due",
+                      "total_paid",
+                      "outstanding"
+                    ],
+                    "properties": {
+                      "currency": {
+                        "type": "string",
+                        "pattern": "^[A-Z]{3}$"
+                      },
+                      "subscription": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "amount",
+                          "amount_minor",
+                          "currency",
+                          "display"
+                        ],
+                        "properties": {
+                          "amount": {
+                            "type": "string",
+                            "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                          },
+                          "amount_minor": {
+                            "type": "string",
+                            "pattern": "^-?(0|[1-9][0-9]*)$"
+                          },
+                          "currency": {
+                            "type": "string",
+                            "pattern": "^[A-Z]{3}$"
+                          },
+                          "display": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "usage_charge": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "amount",
+                          "amount_minor",
+                          "currency",
+                          "display"
+                        ],
+                        "properties": {
+                          "amount": {
+                            "type": "string",
+                            "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                          },
+                          "amount_minor": {
+                            "type": "string",
+                            "pattern": "^-?(0|[1-9][0-9]*)$"
+                          },
+                          "currency": {
+                            "type": "string",
+                            "pattern": "^[A-Z]{3}$"
+                          },
+                          "display": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "credits_applied": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "amount",
+                          "amount_minor",
+                          "currency",
+                          "display"
+                        ],
+                        "properties": {
+                          "amount": {
+                            "type": "string",
+                            "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                          },
+                          "amount_minor": {
+                            "type": "string",
+                            "pattern": "^-?(0|[1-9][0-9]*)$"
+                          },
+                          "currency": {
+                            "type": "string",
+                            "pattern": "^[A-Z]{3}$"
+                          },
+                          "display": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "total_due": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "amount",
+                          "amount_minor",
+                          "currency",
+                          "display"
+                        ],
+                        "properties": {
+                          "amount": {
+                            "type": "string",
+                            "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                          },
+                          "amount_minor": {
+                            "type": "string",
+                            "pattern": "^-?(0|[1-9][0-9]*)$"
+                          },
+                          "currency": {
+                            "type": "string",
+                            "pattern": "^[A-Z]{3}$"
+                          },
+                          "display": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "total_paid": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "amount",
+                          "amount_minor",
+                          "currency",
+                          "display"
+                        ],
+                        "properties": {
+                          "amount": {
+                            "type": "string",
+                            "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                          },
+                          "amount_minor": {
+                            "type": "string",
+                            "pattern": "^-?(0|[1-9][0-9]*)$"
+                          },
+                          "currency": {
+                            "type": "string",
+                            "pattern": "^[A-Z]{3}$"
+                          },
+                          "display": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "outstanding": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "amount",
+                          "amount_minor",
+                          "currency",
+                          "display"
+                        ],
+                        "properties": {
+                          "amount": {
+                            "type": "string",
+                            "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                          },
+                          "amount_minor": {
+                            "type": "string",
+                            "pattern": "^-?(0|[1-9][0-9]*)$"
+                          },
+                          "currency": {
+                            "type": "string",
+                            "pattern": "^[A-Z]{3}$"
+                          },
+                          "display": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "document_available": {
+                  "type": "boolean"
+                }
+              }
+            }
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "BillingCycleDetailRequestV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "product",
+          "organisation_id",
+          "team_id",
+          "user_id",
+          "cycle_id"
+        ],
+        "properties": {
+          "product": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "organisation_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "team_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "user_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "cycle_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        }
+      },
+      "BillingCycleDetailV1": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "/schemas/billing-cycles-v1-detail.json",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "cycle_id",
+          "period",
+          "state",
+          "scope",
+          "product",
+          "totals",
+          "document_available",
+          "schema_version",
+          "subscription_lines",
+          "usage_lines",
+          "credits",
+          "documents",
+          "adjustments"
+        ],
+        "properties": {
+          "cycle_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "period": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "month",
+              "starts_at",
+              "ends_at"
+            ],
+            "properties": {
+              "month": {
+                "type": "string",
+                "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"
+              },
+              "starts_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "ends_at": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          },
+          "state": {
+            "enum": [
+              "open_preview",
+              "pending_reconciliation",
+              "finalized",
+              "adjusted"
+            ]
+          },
+          "scope": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "organisation_id",
+              "team_id",
+              "payer_scope"
+            ],
+            "properties": {
+              "organisation_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "team_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "payer_scope": {
+                "enum": [
+                  "team",
+                  "organisation"
+                ]
+              }
+            }
+          },
+          "product": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "identifier",
+              "name"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "identifier": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "name": {
+                "type": "string"
+              }
+            }
+          },
+          "totals": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "currency",
+                "subscription",
+                "usage_charge",
+                "credits_applied",
+                "total_due",
+                "total_paid",
+                "outstanding"
+              ],
+              "properties": {
+                "currency": {
+                  "type": "string",
+                  "pattern": "^[A-Z]{3}$"
+                },
+                "subscription": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "amount",
+                    "amount_minor",
+                    "currency",
+                    "display"
+                  ],
+                  "properties": {
+                    "amount": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                    },
+                    "amount_minor": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9][0-9]*)$"
+                    },
+                    "currency": {
+                      "type": "string",
+                      "pattern": "^[A-Z]{3}$"
+                    },
+                    "display": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "usage_charge": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "amount",
+                    "amount_minor",
+                    "currency",
+                    "display"
+                  ],
+                  "properties": {
+                    "amount": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                    },
+                    "amount_minor": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9][0-9]*)$"
+                    },
+                    "currency": {
+                      "type": "string",
+                      "pattern": "^[A-Z]{3}$"
+                    },
+                    "display": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "credits_applied": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "amount",
+                    "amount_minor",
+                    "currency",
+                    "display"
+                  ],
+                  "properties": {
+                    "amount": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                    },
+                    "amount_minor": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9][0-9]*)$"
+                    },
+                    "currency": {
+                      "type": "string",
+                      "pattern": "^[A-Z]{3}$"
+                    },
+                    "display": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "total_due": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "amount",
+                    "amount_minor",
+                    "currency",
+                    "display"
+                  ],
+                  "properties": {
+                    "amount": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                    },
+                    "amount_minor": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9][0-9]*)$"
+                    },
+                    "currency": {
+                      "type": "string",
+                      "pattern": "^[A-Z]{3}$"
+                    },
+                    "display": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "total_paid": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "amount",
+                    "amount_minor",
+                    "currency",
+                    "display"
+                  ],
+                  "properties": {
+                    "amount": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                    },
+                    "amount_minor": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9][0-9]*)$"
+                    },
+                    "currency": {
+                      "type": "string",
+                      "pattern": "^[A-Z]{3}$"
+                    },
+                    "display": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "outstanding": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "amount",
+                    "amount_minor",
+                    "currency",
+                    "display"
+                  ],
+                  "properties": {
+                    "amount": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                    },
+                    "amount_minor": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9][0-9]*)$"
+                    },
+                    "currency": {
+                      "type": "string",
+                      "pattern": "^[A-Z]{3}$"
+                    },
+                    "display": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "document_available": {
+            "type": "boolean"
+          },
+          "schema_version": {
+            "const": 1
+          },
+          "subscription_lines": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "label",
+                "charge_basis",
+                "seat_policy",
+                "seat_timing",
+                "unit_price",
+                "quantity",
+                "active_seat_seconds",
+                "month_seconds",
+                "intervals",
+                "customer_charge"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "label": {
+                  "type": "string"
+                },
+                "charge_basis": {
+                  "enum": [
+                    "flat",
+                    "per_seat"
+                  ]
+                },
+                "seat_policy": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "enum": [
+                    "automatic",
+                    "fixed",
+                    null
+                  ]
+                },
+                "seat_timing": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "enum": [
+                    "full_month",
+                    "prorated",
+                    null
+                  ]
+                },
+                "unit_price": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "amount",
+                    "amount_minor",
+                    "currency",
+                    "display"
+                  ],
+                  "properties": {
+                    "amount": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                    },
+                    "amount_minor": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9][0-9]*)$"
+                    },
+                    "currency": {
+                      "type": "string",
+                      "pattern": "^[A-Z]{3}$"
+                    },
+                    "display": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "quantity": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "active_seat_seconds": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "month_seconds": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "intervals": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "starts_at",
+                      "ends_at",
+                      "quantity"
+                    ],
+                    "properties": {
+                      "starts_at": {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      "ends_at": {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      "quantity": {
+                        "type": "string",
+                        "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                      }
+                    }
+                  }
+                },
+                "customer_charge": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "amount",
+                    "amount_minor",
+                    "currency",
+                    "display"
+                  ],
+                  "properties": {
+                    "amount": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                    },
+                    "amount_minor": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9][0-9]*)$"
+                    },
+                    "currency": {
+                      "type": "string",
+                      "pattern": "^[A-Z]{3}$"
+                    },
+                    "display": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "usage_lines": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "service_id",
+                "usage_unit",
+                "calls",
+                "raw_units",
+                "modalities",
+                "customer_charge",
+                "credits_consumed"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "service_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "usage_unit": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "calls": {
+                  "type": "string",
+                  "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                },
+                "raw_units": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "input",
+                    "cached_input",
+                    "output",
+                    "total"
+                  ],
+                  "properties": {
+                    "input": {
+                      "type": "string",
+                      "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                    },
+                    "cached_input": {
+                      "type": "string",
+                      "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                    },
+                    "output": {
+                      "type": "string",
+                      "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                    },
+                    "total": {
+                      "type": "string",
+                      "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                    },
+                    "reasoning": {
+                      "type": "string",
+                      "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                    },
+                    "cache_write": {
+                      "type": "string",
+                      "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                    }
+                  }
+                },
+                "modalities": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "modality",
+                      "raw_units"
+                    ],
+                    "properties": {
+                      "modality": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 256
+                      },
+                      "raw_units": {
+                        "type": "string",
+                        "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                      }
+                    }
+                  }
+                },
+                "customer_charge": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "amount",
+                        "currency",
+                        "display"
+                      ],
+                      "properties": {
+                        "amount": {
+                          "type": "string",
+                          "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                        },
+                        "currency": {
+                          "type": "string",
+                          "pattern": "^[A-Z]{3}$"
+                        },
+                        "display": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "credits_consumed": {
+                  "type": "string",
+                  "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                }
+              }
+            }
+          },
+          "credits": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "consumed",
+              "opening_balance",
+              "closing_balance",
+              "status"
+            ],
+            "properties": {
+              "consumed": {
+                "type": "string",
+                "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+              },
+              "opening_balance": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "closing_balance": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "status": {
+                "enum": [
+                  "confirmed",
+                  "pending_reconciliation"
+                ]
+              }
+            }
+          },
+          "documents": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "document_id",
+                "kind",
+                "format",
+                "state",
+                "number",
+                "issued_at",
+                "customer_total",
+                "download_action"
+              ],
+              "properties": {
+                "document_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "kind": {
+                  "enum": [
+                    "monthly_invoice",
+                    "top_up_invoice",
+                    "credit_note",
+                    "usage_breakdown"
+                  ]
+                },
+                "format": {
+                  "enum": [
+                    "pdf",
+                    "csv"
+                  ]
+                },
+                "state": {
+                  "enum": [
+                    "pending",
+                    "available"
+                  ]
+                },
+                "number": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "issued_at": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "customer_total": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "amount",
+                        "amount_minor",
+                        "currency",
+                        "display"
+                      ],
+                      "properties": {
+                        "amount": {
+                          "type": "string",
+                          "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                        },
+                        "amount_minor": {
+                          "type": "string",
+                          "pattern": "^-?(0|[1-9][0-9]*)$"
+                        },
+                        "currency": {
+                          "type": "string",
+                          "pattern": "^[A-Z]{3}$"
+                        },
+                        "display": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "download_action": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "method",
+                        "path",
+                        "body"
+                      ],
+                      "properties": {
+                        "method": {
+                          "const": "POST"
+                        },
+                        "path": {
+                          "const": "/billing/v1/cycles/download"
+                        },
+                        "body": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "product",
+                            "organisation_id",
+                            "team_id",
+                            "user_id",
+                            "cycle_id",
+                            "document_id"
+                          ],
+                          "properties": {
+                            "product": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 100
+                            },
+                            "organisation_id": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 256
+                            },
+                            "team_id": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 256
+                            },
+                            "user_id": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 256
+                            },
+                            "cycle_id": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 256
+                            },
+                            "document_id": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 256
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "adjustments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "source_cycle_id",
+                "document_id",
+                "kind",
+                "customer_amount",
+                "reason"
+              ],
+              "properties": {
+                "source_cycle_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "document_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "kind": {
+                  "enum": [
+                    "charge",
+                    "credit"
+                  ]
+                },
+                "customer_amount": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "amount",
+                    "amount_minor",
+                    "currency",
+                    "display"
+                  ],
+                  "properties": {
+                    "amount": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                    },
+                    "amount_minor": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9][0-9]*)$"
+                    },
+                    "currency": {
+                      "type": "string",
+                      "pattern": "^[A-Z]{3}$"
+                    },
+                    "display": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "reason": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "BillingCycleDownloadRequestV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "product",
+          "organisation_id",
+          "team_id",
+          "user_id",
+          "cycle_id",
+          "document_id"
+        ],
+        "properties": {
+          "product": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "organisation_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "team_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "user_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "cycle_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "document_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        }
+      }
+    },
+    "examples": {
+      "BillingCyclesListV1Conformance": {
+        "summary": "Synthetic paid subscription with prepaid usage",
+        "value": {
+          "schema_version": 1,
+          "generated_at": "2026-08-03T12:00:00.000Z",
+          "subject": {
+            "product": "deepwater",
+            "organisation_id": "org_example",
+            "team_id": "team_example",
+            "user_id": "user_example"
+          },
+          "cycles": [
+            {
+              "cycle_id": "cycle_example_2026_07",
+              "period": {
+                "month": "2026-07",
+                "starts_at": "2026-07-01T00:00:00.000Z",
+                "ends_at": "2026-08-01T00:00:00.000Z"
+              },
+              "state": "finalized",
+              "scope": {
+                "organisation_id": "org_example",
+                "team_id": "team_example",
+                "payer_scope": "team"
+              },
+              "product": {
+                "id": "service_example",
+                "identifier": "deepwater",
+                "name": "DeepWater"
+              },
+              "totals": [
+                {
+                  "currency": "USD",
+                  "subscription": {
+                    "amount": "20",
+                    "amount_minor": "2000",
+                    "currency": "USD",
+                    "display": "US$20"
+                  },
+                  "usage_charge": {
+                    "amount": "13",
+                    "amount_minor": "1300",
+                    "currency": "USD",
+                    "display": "US$13"
+                  },
+                  "credits_applied": {
+                    "amount": "-13",
+                    "amount_minor": "-1300",
+                    "currency": "USD",
+                    "display": "US$-13"
+                  },
+                  "total_due": {
+                    "amount": "20",
+                    "amount_minor": "2000",
+                    "currency": "USD",
+                    "display": "US$20"
+                  },
+                  "total_paid": {
+                    "amount": "20",
+                    "amount_minor": "2000",
+                    "currency": "USD",
+                    "display": "US$20"
+                  },
+                  "outstanding": {
+                    "amount": "0",
+                    "amount_minor": "0",
+                    "currency": "USD",
+                    "display": "US$0"
+                  }
+                }
+              ],
+              "document_available": true
+            }
+          ],
+          "next_cursor": null
+        }
+      },
+      "BillingCycleDetailV1Conformance": {
+        "summary": "Synthetic finalized cycle with invoice and measured-usage breakdown",
+        "value": {
+          "cycle_id": "cycle_example_2026_07",
+          "period": {
+            "month": "2026-07",
+            "starts_at": "2026-07-01T00:00:00.000Z",
+            "ends_at": "2026-08-01T00:00:00.000Z"
+          },
+          "state": "finalized",
+          "scope": {
+            "organisation_id": "org_example",
+            "team_id": "team_example",
+            "payer_scope": "team"
+          },
+          "product": {
+            "id": "service_example",
+            "identifier": "deepwater",
+            "name": "DeepWater"
+          },
+          "totals": [
+            {
+              "currency": "USD",
+              "subscription": {
+                "amount": "20",
+                "amount_minor": "2000",
+                "currency": "USD",
+                "display": "US$20"
+              },
+              "usage_charge": {
+                "amount": "13",
+                "amount_minor": "1300",
+                "currency": "USD",
+                "display": "US$13"
+              },
+              "credits_applied": {
+                "amount": "-13",
+                "amount_minor": "-1300",
+                "currency": "USD",
+                "display": "US$-13"
+              },
+              "total_due": {
+                "amount": "20",
+                "amount_minor": "2000",
+                "currency": "USD",
+                "display": "US$20"
+              },
+              "total_paid": {
+                "amount": "20",
+                "amount_minor": "2000",
+                "currency": "USD",
+                "display": "US$20"
+              },
+              "outstanding": {
+                "amount": "0",
+                "amount_minor": "0",
+                "currency": "USD",
+                "display": "US$0"
+              }
+            }
+          ],
+          "document_available": true,
+          "schema_version": 1,
+          "subscription_lines": [
+            {
+              "id": "subscription_example",
+              "label": "Monthly subscription",
+              "charge_basis": "per_seat",
+              "seat_policy": "automatic",
+              "seat_timing": "full_month",
+              "unit_price": {
+                "amount": "10",
+                "amount_minor": "1000",
+                "currency": "USD",
+                "display": "US$10"
+              },
+              "quantity": "2",
+              "active_seat_seconds": "5356800",
+              "month_seconds": "2678400",
+              "intervals": [
+                {
+                  "starts_at": "2026-07-01T00:00:00.000Z",
+                  "ends_at": "2026-08-01T00:00:00.000Z",
+                  "quantity": "2"
+                }
+              ],
+              "customer_charge": {
+                "amount": "20",
+                "amount_minor": "2000",
+                "currency": "USD",
+                "display": "US$20"
+              }
+            }
+          ],
+          "usage_lines": [
+            {
+              "id": "usage_example",
+              "service_id": "openai",
+              "usage_unit": "tokens",
+              "calls": "2",
+              "raw_units": {
+                "input": "100",
+                "cached_input": "0",
+                "output": "50",
+                "total": "150"
+              },
+              "modalities": [],
+              "customer_charge": {
+                "amount": "13",
+                "currency": "USD",
+                "display": "US$13"
+              },
+              "credits_consumed": "13000"
+            }
+          ],
+          "credits": {
+            "consumed": "13000",
+            "opening_balance": "25000",
+            "closing_balance": "12000",
+            "status": "confirmed"
+          },
+          "documents": [
+            {
+              "document_id": "document_monthly_example",
+              "kind": "monthly_invoice",
+              "format": "pdf",
+              "state": "available",
+              "number": "INV-2026-07-001",
+              "issued_at": "2026-08-03T12:00:00.000Z",
+              "customer_total": {
+                "amount": "20",
+                "amount_minor": "2000",
+                "currency": "USD",
+                "display": "US$20"
+              },
+              "download_action": {
+                "method": "POST",
+                "path": "/billing/v1/cycles/download",
+                "body": {
+                  "product": "deepwater",
+                  "organisation_id": "org_example",
+                  "team_id": "team_example",
+                  "user_id": "user_example",
+                  "cycle_id": "cycle_example_2026_07",
+                  "document_id": "document_monthly_example"
+                }
+              }
+            },
+            {
+              "document_id": "document_breakdown_example",
+              "kind": "usage_breakdown",
+              "format": "csv",
+              "state": "available",
+              "number": null,
+              "issued_at": "2026-08-03T12:00:00.000Z",
+              "customer_total": null,
+              "download_action": {
+                "method": "POST",
+                "path": "/billing/v1/cycles/download",
+                "body": {
+                  "product": "deepwater",
+                  "organisation_id": "org_example",
+                  "team_id": "team_example",
+                  "user_id": "user_example",
+                  "cycle_id": "cycle_example_2026_07",
+                  "document_id": "document_breakdown_example"
+                }
+              }
+            }
+          ],
+          "adjustments": []
+        }
+      },
+      "BillingCycleDownloadRequestV1Conformance": {
+        "summary": "Exact document download action body",
+        "value": {
+          "product": "deepwater",
+          "organisation_id": "org_example",
+          "team_id": "team_example",
+          "user_id": "user_example",
+          "cycle_id": "cycle_example_2026_07",
+          "document_id": "document_breakdown_example"
+        }
+      }
+    }
+  }
+}

@@ -1,7 +1,7 @@
 import type { BillingStatementV1 } from './types.js';
 
 export const BILLING_STATEMENT_V2_SCHEMA_VERSION = 2 as const;
-export const BILLING_STATEMENT_V2_PROTOCOL_VERSION = '3.0.0' as const;
+export const BILLING_STATEMENT_V2_PROTOCOL_VERSION = '4.0.0' as const;
 export const BILLING_STATEMENT_V2_SCHEMA_PATH = '/schemas/billing-statement-v2.json' as const;
 export const BILLING_STATEMENT_V2_EXAMPLE_PATH =
   '/schemas/billing-statement-v2.example.json' as const;
@@ -120,7 +120,6 @@ export type BillingStatementV2 = Omit<BillingStatementV1, 'schema_version' | 'pi
   schema_version: typeof BILLING_STATEMENT_V2_SCHEMA_VERSION;
   pinned_inputs: {
     ledger_snapshots: [BillingPortfolioSnapshot<'user'>];
-    tariff: { id: string; version: number };
   };
   connected_service_usage: BillingConnectedServicePortfolio;
   organisation_scope?: BillingOrganisationScopeV1;

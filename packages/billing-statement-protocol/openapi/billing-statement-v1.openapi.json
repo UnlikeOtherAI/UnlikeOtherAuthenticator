@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "UOA BillingStatementV1 consumer contract",
-    "version": "2.0.0",
+    "version": "3.0.0",
     "description": "OpenAPI 3.1 component and conformance fixture for the display-ready UOA customer billing statement."
   },
   "paths": {},
@@ -119,8 +119,7 @@
             "type": "object",
             "additionalProperties": false,
             "required": [
-              "ledger_snapshots",
-              "tariff"
+              "ledger_snapshots"
             ],
             "properties": {
               "ledger_snapshots": {
@@ -159,23 +158,6 @@
                       "type": "string",
                       "pattern": "^[a-f0-9]{64}$"
                     }
-                  }
-                }
-              },
-              "tariff": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": [
-                  "id",
-                  "version"
-                ],
-                "properties": {
-                  "id": {
-                    "type": "string"
-                  },
-                  "version": {
-                    "type": "integer",
-                    "minimum": 1
                   }
                 }
               }
@@ -1053,11 +1035,7 @@
                 "captured_at": "2026-07-20T11:59:00.000Z",
                 "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
               }
-            ],
-            "tariff": {
-              "id": "tariff_standard_example",
-              "version": 4
-            }
+            ]
           },
           "plan": {
             "display_name": "Monthly subscription",

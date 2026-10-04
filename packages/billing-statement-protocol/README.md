@@ -2,9 +2,10 @@
 
 Public, open-source-safe consumer contracts for UOA's display-ready
 `BillingStatementV1`, `BillingStatementV2`, shared `BillingCreditsV1`, recurring
-add-ons, and customer billing actions.
+add-ons, customer billing actions, and monthly billing cycles.
 
-Package 2.0.0 is a breaking customer-privacy revision. The v1 and v2 route
+Package 3.0.0 removes the public pinned tariff identity and adds a monthly
+cycle contract. The v1 and v2 route
 names remain, but both statement schemas omit raw provider cost, markup,
 cost-basis mode, multipliers and derived billable units. V2 adds a team-wide
 connected-service portfolio of raw usage and attribution shares. Products
@@ -46,6 +47,9 @@ The public HTTP artifacts are:
 - `/schemas/billing-recurring-addons-v1.json`
 - `/schemas/billing-recurring-addons-v1.example.json`
 - `/schemas/billing-recurring-addons-v1.openapi.json`
+- `/schemas/billing-cycles-v1.json`
+- `/schemas/billing-cycles-v1.example.json`
+- `/schemas/billing-cycles-v1.openapi.json`
 
 TypeScript consumers use the package root:
 
@@ -58,6 +62,8 @@ import {
   type BillingRecurringAddonsV1,
   type BillingStatementV1,
   type BillingStatementV2,
+  type BillingCycleDetailV1,
+  billingCycleDetailV1JsonSchema,
   billingCreditsV1JsonSchema,
   billingCancellationPreviewV1JsonSchema,
   billingRecurringAddonProtocolV1JsonSchema,
@@ -65,6 +71,15 @@ import {
   billingStatementV2JsonSchema,
 } from '@unlikeotherai/billing-statement-protocol';
 ```
+
+`POST /billing/v1/cycles/list` returns product- and team-scoped monthly summaries.
+`POST /billing/v1/cycles/detail` returns frozen subscription seat evidence,
+measured usage, credit movements, actual payment documents, and explicit later
+adjustments. Available documents carry exact server-authored POST actions for
+`/billing/v1/cycles/download`; clients relay them unchanged. An open preview
+never has a final invoice download. Consumed prepaid credits reduce outstanding
+usage liability and do not create a second payment invoice. Public payloads
+contain customer charges and seat prices, never provider cost or markup.
 
 New consumers request `POST /billing/v2/customer-statement`. Its
 `connected_service_usage` model contains display-ready totals for every
@@ -94,11 +109,9 @@ UOA supplies fixed top-up offers and every complete auto-top-up action. The
 consumer relays the frozen action body unchanged and never chooses an offer or
 option by rebuilding its subject.
 
-`BillingCreditsV1` is an unreleased, coordinated launch contract. Its four
-initial consumers must update from the earlier unpublished draft together. The
-privacy-hardening shape in this package supersedes that draft before the first
-release, so the protocol remains version `1.0.0`; this is not presented as a
-compatible minor update to a published contract.
+Credit protocol 1.4.0 callers opt in to UOA's reconciliation status with
+`x-uoa-billing-credits-protocol: 1.4.0`. Older consumers receive the legacy
+shape and a reconciliation hold until they negotiate the status revision.
 
 Both credits and recurring add-ons use manager/member discriminated unions.
 Managers can receive exact-user breakdowns, payment-method display data, and

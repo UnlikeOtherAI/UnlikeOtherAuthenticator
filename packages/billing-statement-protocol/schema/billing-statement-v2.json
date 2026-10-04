@@ -110,8 +110,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "ledger_snapshots",
-        "tariff"
+        "ledger_snapshots"
       ],
       "properties": {
         "ledger_snapshots": {
@@ -157,23 +156,6 @@
             }
           ],
           "items": false
-        },
-        "tariff": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "id",
-            "version"
-          ],
-          "properties": {
-            "id": {
-              "type": "string"
-            },
-            "version": {
-              "type": "integer",
-              "minimum": 1
-            }
-          }
         }
       }
     },

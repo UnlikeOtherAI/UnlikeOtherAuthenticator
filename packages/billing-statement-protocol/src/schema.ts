@@ -97,7 +97,7 @@ export const billingStatementV1JsonSchema = {
     pinned_inputs: {
       type: 'object',
       additionalProperties: false,
-      required: ['ledger_snapshots', 'tariff'],
+      required: ['ledger_snapshots'],
       properties: {
         ledger_snapshots: {
           type: 'array',
@@ -114,15 +114,6 @@ export const billingStatementV1JsonSchema = {
               captured_at: { type: 'string', format: 'date-time' },
               sha256: { type: 'string', pattern: '^[a-f0-9]{64}$' },
             },
-          },
-        },
-        tariff: {
-          type: 'object',
-          additionalProperties: false,
-          required: ['id', 'version'],
-          properties: {
-            id: { type: 'string' },
-            version: { type: 'integer', minimum: 1 },
           },
         },
       },

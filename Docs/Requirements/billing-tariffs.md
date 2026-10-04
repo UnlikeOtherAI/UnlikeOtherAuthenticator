@@ -904,9 +904,9 @@ The canonical UOA and Ledger product identifiers are `nessie`, `deepwater`,
 mapped at the product boundary and are never sent in billing subjects.
 
 Products render `BillingStatementV1` or `BillingStatementV2` unchanged. New
-consumers use v2. The statement protocol's privacy revision is breaking:
-package 2.0.0, V1 protocol 2.0.0 and V2 protocol 3.0.0 retain the route names
-but remove cost-basis fields. Consuming products must update their strict
+consumers use v2. Package 3.0.0, V1 protocol 3.0.0, and V2 protocol 4.0.0
+retain the route names but remove the public pinned tariff identity, which is
+private financial authority. Consuming products must update their strict
 validators before the producer switches. Products must not derive tariff copy,
 totals, usage shares, customer charges,
 cancellation scope, or action choices. The three action
@@ -934,7 +934,13 @@ It has no UOA server imports, credentials, or tenant data. The API imports this
 package rather than maintaining a private duplicate. Build and package tests
 fail when any committed JSON artifact drifts from the typed source. Until
 registry publication is approved, consumers may vendor the whole package
-directory or fetch the nine public artifacts above.
+directory or fetch the public artifacts above. The same package defines
+`BillingCyclesV1` (protocol 1.0.0): exact product/team monthly history,
+customer subscription and measured usage details, credit application, true
+payment documents and explicit later adjustments. The cycle read does not
+create a payment invoice. Only an available, persisted document receives a
+server-authored download action; open and unreconciled periods cannot claim a
+final invoice. Prepaid usage consumption is not a second payment invoice.
 
 `BillingStatementV1.capabilities` describes UOA-owned billing actions only. A
 product runtime capability such as `can_be_private` is not inferred from a

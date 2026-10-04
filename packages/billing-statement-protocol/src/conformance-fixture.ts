@@ -37,10 +37,6 @@ export const billingStatementV1ConformanceFixture: BillingStatementV1 = {
         sha256: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
       },
     ],
-    tariff: {
-      id: 'tariff_standard_example',
-      version: 4,
-    },
   },
   plan: {
     display_name: 'Monthly subscription',

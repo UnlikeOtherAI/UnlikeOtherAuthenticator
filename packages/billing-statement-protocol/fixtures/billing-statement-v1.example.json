@@ -34,11 +34,7 @@
         "captured_at": "2026-07-20T11:59:00.000Z",
         "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
       }
-    ],
-    "tariff": {
-      "id": "tariff_standard_example",
-      "version": 4
-    }
+    ]
   },
   "plan": {
     "display_name": "Monthly subscription",
