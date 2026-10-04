@@ -954,9 +954,11 @@ The frozen seat quote supplies a closed period's financial subscription line;
 an open per-seat statement leaves that line pending rather than displaying the
 unit price as a charged total. Provider cost, margin, and markup stay private.
 
-The statement supplies the exact request body, including server-pinned
-allowlisted return URLs. A product may whitelist these ID/path pairs and proxy
-the supplied body, but must reject unknown actions. The old
+The statement supplies the request body, including server-pinned
+allowlisted return URLs. For a fixed-seat plan, a product appends only the
+customer-selected `fixed_seat_quantity` (integer 1 to 1,000,000); UOA enforces
+that it is required only for this plan. A product may whitelist these ID/path
+pairs and proxy the supplied body, but must reject unknown actions. The old
 `POST /billing/v1/stripe/subscription/cancel` route no longer exists.
 
 The versioned, MIT-licensed
@@ -985,6 +987,13 @@ in team totals. The cycle read does not
 create a payment invoice. Only an available, persisted document receives a
 server-authored download action; open and unreconciled periods cannot claim a
 final invoice. Prepaid usage consumption is not a second payment invoice.
+For a closed source month, `prepareBillingCycleClose` freezes the contractual
+subscription quote and complete immutable Ledger coverage in a pending cycle.
+It holds unresolved paid attempts, missing paid costs, currency mismatches and
+quote drift. Pending credits are represented as unknown, never zero. This
+preparation does not create a payment invoice, mark liability paid, or make
+documents downloadable; those transitions require verified collection and
+credit evidence in a later immutable revision.
 
 `BillingStatementV1.capabilities` describes UOA-owned billing actions only. A
 product runtime capability such as `can_be_private` is not inferred from a
