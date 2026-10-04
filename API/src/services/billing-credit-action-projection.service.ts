@@ -80,11 +80,17 @@ function fundingPolicy(
     description:
       'Credits fund metered usage across connected services. Subscriptions and add-ons remain separate.',
     offers: (policy?.topUpOffers ?? []).map((offer) => {
+      const catalogExecutable = configuredCatalog(data, offer, readiness);
+      const canResume = readiness.resumableTopUpOfferId === offer.id && catalogExecutable;
+      const pendingCheckoutBlocksOffer =
+        (data.unresolvedTopUpCheckouts ?? []).length > 0 &&
+        !canResume &&
+        !readiness.topUpCheckoutReady;
       const available = Boolean(
         policy?.topUpEnabled &&
         collectionEnabled &&
-        readiness.topUpCheckoutReady &&
-        configuredCatalog(data, offer, readiness),
+        (readiness.topUpCheckoutReady || canResume) &&
+        catalogExecutable,
       );
       return {
         id: offer.id,
@@ -96,21 +102,29 @@ function fundingPolicy(
         available,
         unavailable_reason: available
           ? null
-          : policy?.topUpEnabled
-            ? 'This offer is not configured for the active Stripe account.'
-            : 'Top-ups are disabled for this service.',
+          : pendingCheckoutBlocksOffer
+          ? 'A payment is already in progress. Resolve it before starting another.'
+            : policy?.topUpEnabled
+              ? 'This offer is not configured for the active Stripe account.'
+              : 'Top-ups are disabled for this service.',
         action: manager
           ? {
               id: 'top_up' as const,
               kind: 'hosted_redirect' as const,
-              label: `Buy ${billingCreditAmount(offer.creditsReceivedMicrocredits).display}`,
-              description: 'Open secure Checkout for this exact UOA-defined offer.',
+              label: canResume
+                ? 'Continue payment'
+                : `Buy ${billingCreditAmount(offer.creditsReceivedMicrocredits).display}`,
+              description: canResume
+                ? 'Continue your payment for this offer.'
+                : 'Start a secure payment for this offer.',
               enabled: available,
               disabled_reason: available
                 ? null
                 : !collectionEnabled
                   ? 'Stripe credit collection is unavailable.'
-                  : 'This offer is not available for the active Stripe account.',
+                  : pendingCheckoutBlocksOffer
+                    ? 'A payment is already in progress. Resolve it before starting another.'
+                    : 'This offer is not available for the active Stripe account.',
               request: {
                 method: 'POST' as const,
                 path: '/billing/v1/credits/top-up-checkout' as const,

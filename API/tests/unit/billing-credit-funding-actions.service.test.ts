@@ -157,6 +157,29 @@ function checkoutRow(kind: 'setup' | 'top_up', actorJti = 'actor_jti_1') {
       };
 }
 
+function openTopUpSession(
+  checkout: ReturnType<typeof checkoutRow> & Record<string, unknown>,
+  overrides: Record<string, unknown> = {},
+) {
+  return {
+    id: 'cs_existing',
+    livemode: false,
+    mode: 'payment',
+    status: 'open',
+    url: 'https://checkout.stripe.com/c/pay/cs_existing',
+    customer: 'cus_team_1',
+    client_reference_id: checkout.id,
+    metadata: {
+      uoa_credit_top_up_checkout_id: checkout.id,
+      uoa_service_id: checkout.serviceId,
+      uoa_app_key_id: checkout.appKeyId,
+      uoa_credit_account_id: checkout.creditAccountId,
+    },
+    expires_at: 2_000_000_000,
+    ...overrides,
+  };
+}
+
 describe('UOA credit funding mutation services', () => {
   it('persists fixed top-up intent before creating exact-price Stripe Checkout', async () => {
     const state = baseContext();
@@ -286,29 +309,24 @@ describe('UOA credit funding mutation services', () => {
       status: BillingCreditCheckoutStatus.OPEN,
       stripeCheckoutSessionId: 'cs_existing',
     };
-    const session = {
-      id: 'cs_existing',
-      livemode: false,
-      mode: 'payment',
-      status: 'open',
-      url: 'https://checkout.stripe.com/c/pay/cs_existing',
-      customer: 'cus_team_1',
-      client_reference_id: existing.id,
-      metadata: fundingMetadata({ uoa_credit_top_up_checkout_id: existing.id }),
-      expires_at: 1_784_470_800,
-    };
+    const session = openTopUpSession(existing);
     state.stripe.checkout.sessions.retrieve.mockResolvedValue(session);
     const prisma = {
       billingCreditTopUpCheckout: {
         findUnique: vi.fn().mockResolvedValue(null),
         findFirst: vi.fn().mockResolvedValue(existing),
         update: vi.fn(),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
         create: vi.fn(),
       },
     } as unknown as PrismaClient;
 
     const result = await createBillingCreditTopUpCheckout(
-      { request: { ...request, offerId: offer.id }, actorToken: 'fresh-actor', credential },
+      {
+        request: { ...request, userId: 'new_manager', offerId: offer.id },
+        actorToken: 'fresh-actor',
+        credential,
+      },
       {
         prisma,
         now: () => now,
@@ -321,6 +339,100 @@ describe('UOA credit funding mutation services', () => {
     expect(result).toEqual({ redirect_url: session.url });
     expect(state.sessionsCreate).not.toHaveBeenCalled();
     expect(state.context.authorizeAction).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['different offer', { offerId: 'offer_other' }, undefined],
+    ['different app key', undefined, { appKeyId: 'app_key_other' }],
+    ['different service', undefined, { serviceId: 'service_other' }],
+    ['different customer', undefined, { customerId: 'customer_other' }],
+    ['changed payment amount', undefined, { paymentAmountMinor: 2_001n }],
+    ['changed credit quantity', undefined, { creditsReceivedMicrocredits: 20_000_000_001n }],
+    ['changed success return URL', undefined, { successUrlDigest: 'e'.repeat(64) }],
+    ['changed cancel return URL', undefined, { cancelUrlDigest: 'f'.repeat(64) }],
+  ])('does not resume an open checkout with %s', async (_label, selectionOverride, rowOverride) => {
+    const state = baseContext();
+    const existing = {
+      ...checkoutRow('top_up', 'actor_jti_old'),
+      status: BillingCreditCheckoutStatus.OPEN,
+      stripeCheckoutSessionId: 'cs_existing',
+      ...rowOverride,
+    };
+    state.stripe.checkout.sessions.retrieve.mockResolvedValue(openTopUpSession(existing));
+    const prisma = {
+      billingCreditTopUpCheckout: {
+        findUnique: vi.fn().mockResolvedValue(null),
+        findFirst: vi.fn().mockResolvedValue(existing),
+        update: vi.fn(),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+        create: vi.fn(),
+      },
+    } as unknown as PrismaClient;
+    const selected = selectionOverride
+      ? { ...selections().offer, offer: { ...offer, id: selectionOverride.offerId } }
+      : selections().offer;
+
+    await expect(
+      createBillingCreditTopUpCheckout(
+        {
+          request: { ...request, offerId: selectionOverride?.offerId ?? offer.id },
+          actorToken: 'fresh-actor',
+          credential,
+        },
+        {
+          prisma,
+          now: () => now,
+          resolveContext: vi.fn().mockResolvedValue(state.context),
+          resolveOffer: vi.fn().mockResolvedValue(selected),
+          validateCatalog: vi.fn(),
+        },
+      ),
+    ).rejects.toMatchObject({ message: 'BILLING_CREDIT_TOP_UP_PENDING' });
+    expect(state.sessionsCreate).not.toHaveBeenCalled();
+    expect(prisma.billingCreditTopUpCheckout.create).not.toHaveBeenCalled();
+  });
+
+  it('returns one exact resumed Checkout to concurrent clicks without creating another session', async () => {
+    const state = baseContext();
+    const existing = {
+      ...checkoutRow('top_up', 'actor_jti_old'),
+      status: BillingCreditCheckoutStatus.OPEN,
+      stripeCheckoutSessionId: 'cs_existing',
+    };
+    const session = openTopUpSession(existing);
+    state.stripe.checkout.sessions.retrieve.mockResolvedValue(session);
+    const prisma = {
+      billingCreditTopUpCheckout: {
+        findUnique: vi.fn().mockResolvedValue(null),
+        findFirst: vi.fn().mockResolvedValue(existing),
+        update: vi.fn(),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+        create: vi.fn(),
+      },
+    } as unknown as PrismaClient;
+    const deps = {
+      prisma,
+      now: () => now,
+      resolveContext: vi.fn().mockResolvedValue(state.context),
+      resolveOffer: vi.fn().mockResolvedValue(selections().offer),
+      validateCatalog: vi.fn(),
+    };
+
+    const results = await Promise.all([
+      createBillingCreditTopUpCheckout(
+        { request: { ...request, offerId: offer.id }, actorToken: 'click-1', credential },
+        deps,
+      ),
+      createBillingCreditTopUpCheckout(
+        { request: { ...request, offerId: offer.id }, actorToken: 'click-2', credential },
+        deps,
+      ),
+    ]);
+
+    expect(results).toEqual([{ redirect_url: session.url }, { redirect_url: session.url }]);
+    expect(state.stripe.checkout.sessions.retrieve).toHaveBeenCalledTimes(2);
+    expect(state.sessionsCreate).not.toHaveBeenCalled();
+    expect(prisma.billingCreditTopUpCheckout.create).not.toHaveBeenCalled();
   });
 
   it('does not append action evidence when automatic top-up is already disabled', async () => {
