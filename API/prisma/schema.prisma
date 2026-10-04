@@ -1223,6 +1223,7 @@ model OrgAuditLog {
 
 model Organisation {
   id                  String       @id @default(cuid())
+  billingSeatGuardVersion BigInt   @default(0) @map("billing_seat_guard_version")
   lifecycleStatus     EntityLifecycleStatus @default(ACTIVE) @map("lifecycle_status")
   lifecycleChangedAt  DateTime? @map("lifecycle_changed_at")
   lifecycleReason     String? @map("lifecycle_reason") @db.VarChar(2000)
