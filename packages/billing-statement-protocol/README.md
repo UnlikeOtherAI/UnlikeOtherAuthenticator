@@ -142,3 +142,27 @@ Run `pnpm generate` after an intentional protocol change. Build and test fail if
 the committed JSON Schema, example, or OpenAPI artifact drifts from the typed
 source. Breaking protocol changes require a new schema version and package
 major; additive non-breaking package changes use normal semantic versioning.
+
+## Localized presentation and credit purchase return (1.5.0)
+
+Consumers opt in with `x-uoa-billing-presentation: 1.5.0` and may select
+`x-uoa-billing-locale: cs|en-US|en-GB|de|es|fr|it`. Requests without presentation
+negotiation retain English display and the original strict redirect envelope.
+Unsupported versions or locales fail with 400. Locale changes display only:
+the actor subject, amounts and frozen action request bodies remain unchanged.
+All customer responses remain `private, no-store`.
+
+A negotiated credit top-up redirect may also carry `purchase_id`, an opaque
+reference to the exact existing checkout, including a resumed checkout. Keep it
+only in the person's API/organisation/team scope. POST the normal billing subject
+and this id to `/billing/v1/credits/purchase-status` using a fresh assertion for
+that exact endpoint. The read rechecks current billing-manager authority and exact
+account, team, storefront and app-key scope. It returns display-ready title and
+message, `state`, and `awaiting_confirmation`. Only the committed credit entry
+can yield `succeeded`; an open browser, success URL or Stripe intent alone cannot.
+Poll only while confirmation is pending, with a finite limit and an explicit
+retry. Reading a status never creates a payment or restarts the person's work.
+
+The purchase status schema is exported as
+`./schema/billing-credit-purchase-status-v1.json` and included in the credits
+OpenAPI document. Non-credit redirects retain their existing response shape.

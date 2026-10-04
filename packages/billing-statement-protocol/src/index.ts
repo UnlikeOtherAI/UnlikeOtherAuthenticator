@@ -1,4 +1,6 @@
 export { billingConsumerActionV1ConformanceFixtures } from './action-conformance-fixtures.js';
+export * from './presentation-types.js';
+export { billingCreditPurchaseStatusV1JsonSchema } from './presentation-schema.js';
 export {
   billingConsumerActionV1OpenApiDocument,
   type BillingConsumerActionV1OpenApiDocument,
