@@ -2649,6 +2649,7 @@ model BillingInvoice {
   addonLines           BillingInvoiceAddonLine[]
   paymentEvents        BillingInvoicePaymentEvent[]
   lineFinancialAllocations BillingInvoiceLineFinancialAllocation[]
+  lineCreditAllocations BillingInvoiceLineCreditReferenceAllocation[]
 
   @@unique([contractId, billingMonth, revision])
   @@index([orgId, billingMonth, status])
@@ -2675,6 +2676,7 @@ model BillingInvoiceLine {
   invoice BillingInvoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
   service BillingService @relation(fields: [serviceId], references: [id], onDelete: Restrict)
   financialAllocation BillingInvoiceLineFinancialAllocation?
+  creditReferenceAllocations BillingInvoiceLineCreditReferenceAllocation[]
 
   @@unique([invoiceId, serviceId])
   @@unique([invoiceId, position])
@@ -2707,6 +2709,24 @@ model BillingInvoiceLineFinancialAllocation {
   @@index([invoiceId])
   @@index([serviceId, billingMonth])
   @@map("billing_invoice_line_financial_allocations")
+}
+
+// The issuer attributes each actual funded settlement reference to its own
+// service line. Minor-unit rounding follows the invoice-wide cumulative
+// reference order, preserving fractional credit carry across services.
+model BillingInvoiceLineCreditReferenceAllocation {
+  referenceId String @id @map("reference_id")
+  invoiceId String @map("invoice_id")
+  lineId String @map("line_id")
+  amountMinor BigInt @map("amount_minor")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  reference BillingInvoiceCreditSettlementReference @relation(fields: [referenceId], references: [id], onDelete: Restrict)
+  invoice BillingInvoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  line BillingInvoiceLine @relation(fields: [lineId], references: [id], onDelete: Restrict)
+
+  @@index([invoiceId, lineId])
+  @@map("billing_invoice_line_credit_reference_allocations")
 }
 
 // Ledger evidence is private calculation provenance and is never part of the
@@ -2743,6 +2763,7 @@ model BillingInvoiceCreditSettlementReference {
   service    BillingService                         @relation(fields: [serviceId], references: [id], onDelete: Restrict)
   settlement BillingCreditUsageSettlement           @relation(fields: [settlementId], references: [id], onDelete: Restrict)
   adjustment BillingCreditUsageSettlementAdjustment @relation(fields: [adjustmentId], references: [id], onDelete: Restrict)
+  lineCreditAllocation BillingInvoiceLineCreditReferenceAllocation?
 
   @@unique([invoiceId, settlementId], map: "billing_invoice_credit_refs_invoice_settlement_key")
   @@unique([invoiceId, adjustmentId], map: "billing_invoice_credit_refs_invoice_adjustment_key")

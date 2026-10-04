@@ -125,6 +125,10 @@ to the invoice's gross and credit totals. An old invoice without allocation
 evidence remains a valid legal document but its ambiguous product cycle stays
 pending. A partial whole-invoice payment is never split among products by a
 ratio; product paid/outstanding needs actual line payment evidence.
+Each funded settlement reference is assigned to its own service line in stable
+service and settlement order. The invoice-wide cumulative microcredit rounding
+determines the minor-unit delta at each reference; it preserves fractional
+carry and prevents a funded usage credit from reducing a seat or flat fee.
 The customer cycle totals show tax and gross explicitly: subscription plus
 usage plus tax equals gross, and gross less applied usage credits equals due.
 The canonical monthly legal invoice retains its original gross convention.

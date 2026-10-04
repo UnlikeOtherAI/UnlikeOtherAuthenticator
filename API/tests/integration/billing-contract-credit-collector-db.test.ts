@@ -17,7 +17,6 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createTestDb } from '../helpers/test-db.js';
 
 type TestDb = NonNullable<Awaited<ReturnType<typeof createTestDb>>>;
-
 describe.skipIf(!process.env.DATABASE_URL)('contract invoice canonical credit collector', () => {
   let db: TestDb;
 
@@ -344,6 +343,32 @@ describe.skipIf(!process.env.DATABASE_URL)('contract invoice canonical credit co
       },
     });
 
+    const invoiceLine = await db.prisma.billingInvoiceLine.findFirstOrThrow({
+      where: { invoiceId: invoice.id, serviceId: service.id },
+    });
+    const invoiceCreditRef = await db.prisma.billingInvoiceCreditSettlementReference.findFirstOrThrow({
+      where: { invoiceId: invoice.id, settlementId: settlement.id },
+    });
+    const financialData = {
+      lineId: invoiceLine.id, invoiceId: invoice.id, serviceId: service.id,
+      billingMonth: '2026-06', subscriptionMinor: 1000n, usageMinor: 0n,
+      taxMinor: 0n, invoiceCreditMinor: 0n, totalMinor: 1000n,
+      dueMinor: 1000n, currency: 'USD', calculationDigest: invoice.calculationDigest,
+    };
+    await expect(db.prisma.$transaction(async (tx) => {
+      await tx.billingInvoiceLineFinancialAllocation.create({ data: financialData });
+      await tx.billingInvoiceLineCreditReferenceAllocation.create({ data: {
+        referenceId: invoiceCreditRef.id, invoiceId: invoice.id,
+        lineId: invoiceLine.id, amountMinor: 1n,
+      } });
+    })).rejects.toThrow();
+    await db.prisma.$transaction(async (tx) => {
+      await tx.billingInvoiceLineFinancialAllocation.create({ data: financialData });
+      await tx.billingInvoiceLineCreditReferenceAllocation.create({ data: {
+        referenceId: invoiceCreditRef.id, invoiceId: invoice.id,
+        lineId: invoiceLine.id, amountMinor: 0n,
+      } });
+    });
     const funded = await db.prisma.billingCreditAccount.findUniqueOrThrow({
       where: { id: creditAccount.id },
     });
