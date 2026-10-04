@@ -22,6 +22,7 @@
     "README.md"
   ],
   "exports": {
+    "./schema/billing-credit-funding-request-v1.json": "./schema/billing-credit-funding-request-v1.json",
     "./schema/billing-credit-purchase-status-v1.json": "./schema/billing-credit-purchase-status-v1.json",
     ".": {
       "types": "./dist/index.d.ts",

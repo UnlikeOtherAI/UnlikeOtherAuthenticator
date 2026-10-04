@@ -5,6 +5,8 @@ import {
 import { billingCreditsV1ConformanceFixture } from './credits-conformance-fixture.js';
 import { billingCreditsV1JsonSchema } from './credits-schema.js';
 import { billingCreditPurchaseStatusV1JsonSchema } from './presentation-schema.js';
+import { billingCreditFundingRequestV1JsonSchema } from './credits-attention-schema.js';
+import { BILLING_CREDIT_FUNDING_REQUEST_PATH } from './credits-attention-types.js';
 import {
   BILLING_CREDIT_PURCHASE_STATUS_PATH, BILLING_CUSTOMER_LOCALES,
   BILLING_LOCALE_HEADER, BILLING_PRESENTATION_HEADER, BILLING_PRESENTATION_VERSION,
@@ -94,6 +96,24 @@ export const billingCreditsV1OpenApiDocument = {
       'Exact customer-facing shared team credits API. UOA returns display-ready values and capabilities; products never calculate balances, conversion, privacy filtering, or authorization.',
   },
   paths: {
+    [BILLING_CREDIT_FUNDING_REQUEST_PATH]: {
+      post: {
+        ...authenticatedOperation,
+        operationId: 'requestBillingCreditFundingV1',
+        summary: 'Authorize a member request to current billing managers',
+        description: 'Rechecks live authority and returns authorized source user IDs to the product server. The product verifies local membership and reports actual notification delivery separately.',
+        requestBody: requestBody(null),
+        responses: {
+          200: {
+            description: 'Opaque request ID and authorized recipients; never returned directly to a browser.',
+            headers: { 'Cache-Control': noStoreHeader },
+            content: { 'application/json': { schema: billingCreditFundingRequestV1JsonSchema } },
+          },
+          400: errorResponse, 401: errorResponse, 403: errorResponse,
+          404: errorResponse, 503: errorResponse,
+        },
+      },
+    },
     [BILLING_CREDIT_PURCHASE_STATUS_PATH]: {
       post: {
         ...authenticatedOperation,

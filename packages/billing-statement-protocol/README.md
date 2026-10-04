@@ -166,3 +166,15 @@ retry. Reading a status never creates a payment or restarts the person's work.
 The purchase status schema is exported as
 `./schema/billing-credit-purchase-status-v1.json` and included in the credits
 OpenAPI document. Non-credit redirects retain their existing response shape.
+
+Negotiated credits may include `attention`: stable opaque event keys and safe
+reason enums, without amounts or card details. Consumers reconcile these facts
+into their existing team-scoped alerts and keep the person's read state.
+`funding_request` is an optional source-authorized action for a member who
+cannot fund the account. Its frozen body contains only the existing subject.
+The source rechecks live authority on POST and returns an opaque daily request
+ID plus authorized recipient IDs to the product server. The consumer maps only
+active identities and selected-team memberships, deduplicates delivery by the
+request ID and reports whether an alert was actually delivered. The result
+contains no promise of delivery and must never expose recipient IDs to a browser.
+The response schema is `./schema/billing-credit-funding-request-v1.json`.
