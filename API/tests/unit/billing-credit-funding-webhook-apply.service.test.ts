@@ -134,6 +134,79 @@ describe('credit funding Stripe webhook application', () => {
     });
   });
 
+  it('credits a late success for a disabled account from its older immutable attempt exactly once', async () => {
+    const intent = fundingPaymentIntent({ uoa_credit_auto_top_up_attempt_id: 'attempt_old' });
+    const attempt = {
+      id: 'attempt_old',
+      accountId: fundingStripeAccount.id,
+      creditAccountId: 'credit_account_1',
+      serviceId: 'service_1',
+      appKeyId: 'app_key_1',
+      attributedUserId: 'user_1',
+      paymentAmountMinor: 1_000n,
+      creditsReceivedMicrocredits: 10_000_000n,
+      stripePaymentIntentId: null,
+      status: BillingCreditAutoTopUpAttemptStatus.PENDING,
+      consentRevision: { stripePaymentMethodId: 'pm_credit_1' },
+      creditAccount: {
+        autoTopUpState: BillingCreditAutoTopUpState.DISABLED,
+        customer: { stripeCustomerId: 'cus_team_1' },
+      },
+    };
+    const entryCreate = vi.fn();
+    const attemptUpdate = vi.fn(({ data }: { data: Record<string, unknown> }) => {
+      Object.assign(attempt, data);
+      return Promise.resolve({});
+    });
+    const attemptFind = vi.fn().mockImplementation(async () => attempt);
+    const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([{ balanceMicrocredits: 5_000_000_000n }]),
+      billingCreditAutoTopUpAttempt: {
+        findUnique: attemptFind,
+        update: attemptUpdate,
+      },
+      billingCreditEntry: { create: entryCreate },
+      billingCreditAccount: { update: vi.fn() },
+    };
+    const event = {
+      kind: 'payment_succeeded' as const,
+      localId: attempt.id,
+      localType: 'automatic_top_up' as const,
+      paymentIntent: intent as never,
+      paymentMethodId: 'pm_credit_1',
+      chargeId: 'ch_credit_1',
+      checkoutSessionId: null,
+      occurredAt: fundingOccurredAt,
+    };
+
+    await applyCreditFundingWebhook(
+      tx as never,
+      { event, eventFields: { stripeCreatedAt: fundingOccurredAt } },
+      'late_success_webhook',
+      fundingStripeAccount,
+    );
+    await applyCreditFundingWebhook(
+      tx as never,
+      { event, eventFields: { stripeCreatedAt: fundingOccurredAt } },
+      'late_success_webhook_replay',
+      fundingStripeAccount,
+    );
+
+    expect(entryCreate).toHaveBeenCalledTimes(1);
+    expect(entryCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        kind: 'AUTOMATIC_TOP_UP',
+        amountMicrocredits: 10_000_000n,
+        sourceId: 'attempt_old',
+        idempotencyKey: `stripe:payment-intent:${intent.id}`,
+      }),
+    });
+    expect(attemptUpdate).toHaveBeenCalledTimes(1);
+    expect(attempt.status).toBe(BillingCreditAutoTopUpAttemptStatus.SUCCEEDED);
+    expect(attempt.stripePaymentIntentId).toBe(intent.id);
+    expect(tx.billingCreditAccount.update).not.toHaveBeenCalled();
+  });
+
   it('abandons a late SetupIntent when the consent generation already advanced', async () => {
     const abandon = vi.fn().mockResolvedValue({ count: 1 });
     const revisionCreate = vi.fn();
