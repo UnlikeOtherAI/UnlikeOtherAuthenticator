@@ -2986,3 +2986,14 @@ storage cannot enable it. The separate server-owned runtime bootstrap carries
 the same boolean to SSR and hydration. Enablement retains mailbox proof, enrolled
 TOTP, product membership/privacy filters, exact config binding and native app
 revision checks; it never grants a login session.
+
+
+### Paid recurring add-on renewals (2026-10-04)
+
+A verified `invoice.paid` with `billing_reason=subscription_cycle` advances the
+existing recurring add-on subscription after its initial paid activation. It
+uses the same exact amount, currency, customer, item and Price binding as the
+initial invoice, while retaining the initial invoice and activation proof. A
+renewal prepared before a concurrent cancellation cannot revive the terminated
+subscription; the apply write checks the current row inside the transaction.
+See [billing tariffs](Requirements/billing-tariffs.md).

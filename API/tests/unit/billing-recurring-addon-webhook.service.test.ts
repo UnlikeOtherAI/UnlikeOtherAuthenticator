@@ -356,7 +356,7 @@ describe('recurring add-on Stripe webhook proof', () => {
       const update = vi.fn();
       const tx = {
         billingRecurringAddonCheckout: { update: vi.fn(), updateMany: vi.fn() },
-        billingRecurringAddonSubscription: { create: vi.fn(), update },
+        billingRecurringAddonSubscription: { create: vi.fn(), updateMany: update },
       };
       await applyRecurringAddonWebhook(tx as never, prepared, 'webhook_renewal', account);
       const updateData = update.mock.calls[0]?.[0]?.data as Record<string, unknown>;
@@ -533,7 +533,7 @@ describe('recurring add-on Stripe webhook proof', () => {
     const update = vi.fn();
     const tx = {
       billingRecurringAddonCheckout: { update: vi.fn(), updateMany: vi.fn() },
-      billingRecurringAddonSubscription: { create: vi.fn(), update },
+      billingRecurringAddonSubscription: { create: vi.fn(), updateMany: update },
     };
     await applyRecurringAddonWebhook(tx as never, prepared, 'webhook_late_renewal', account);
     expect(update).not.toHaveBeenCalled();

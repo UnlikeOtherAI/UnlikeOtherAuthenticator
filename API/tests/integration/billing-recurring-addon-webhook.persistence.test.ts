@@ -263,10 +263,6 @@ describe.skipIf(!databaseTestsEnabled)('recurring add-on renewal database lifecy
       );
     });
 
-    const terminal = await handle.prisma.billingRecurringAddonSubscription.findUniqueOrThrow({
-      where: { id: ids.subscription },
-      include: recurringAddonSubscriptionInclude,
-    });
     const latePeriodEnd = Math.floor(new Date('2026-10-01T00:00:00.000Z').getTime() / 1000);
     await handle.prisma.$transaction(async (tx) => {
       const event = await tx.billingStripeWebhookEvent.create({
@@ -287,7 +283,8 @@ describe.skipIf(!databaseTestsEnabled)('recurring add-on renewal database lifecy
       });
       await applyRecurringAddonWebhook(
         tx,
-        renewalPrepared(terminal, 'active', latePeriodEnd, new Date('2026-09-01T00:00:00.000Z')),
+        // The renewal prepared against an active row before cancellation won.
+        renewalPrepared(terminalLocal, 'active', latePeriodEnd, new Date('2026-09-01T00:00:00.000Z')),
         event.id,
         account,
       );
