@@ -61,6 +61,7 @@ export async function runStripeInvoiceCloseCycle(deps?: {
     orderBy: [{ nextCheckAt: 'asc' }, { id: 'asc' }],
     take: 50,
   });
+  let currentStripeAccountId: string | undefined;
   let checked = 0;
   let held = 0;
   let unbilled = 0;
@@ -75,6 +76,10 @@ export async function runStripeInvoiceCloseCycle(deps?: {
       const account = await prisma.billingStripeAccount.findUniqueOrThrow({
         where: { id: row.accountId },
       });
+      currentStripeAccountId ??= (await stripe.accounts.retrieveCurrent()).id;
+      if (currentStripeAccountId !== account.stripeAccountId) {
+        throw new AppError('INTERNAL', 409, 'STRIPE_ACCOUNT_MISMATCH');
+      }
       const invoice = await stripe.invoices.retrieve(row.stripeInvoiceId);
       assertStripeObjectLivemode(invoice, account.livemode);
       if (invoice.id !== row.stripeInvoiceId) {

@@ -1180,3 +1180,8 @@ research units, raw provider cost, cost-token equivalents, tariff markup, or
 the margin calculation. Even operator-created descriptions must not encode
 those prohibited facts. Product applications receive only UOA's display-ready
 invoice view model and never reproduce the calculator.
+
+Stripe invoice-close catch-up verifies the configured Stripe account identifier
+against the immutable account binding before reading or advancing any invoice.
+Changing the configured Stripe account holds prior-account liabilities for
+reconciliation; matching test/live mode alone is insufficient authority.
