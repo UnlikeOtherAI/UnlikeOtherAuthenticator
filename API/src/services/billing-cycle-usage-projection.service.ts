@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 
-import type { BillingTariff } from '@prisma/client';
+import { BillingUsagePaymentMode, type BillingTariff } from '@prisma/client';
 
 import type { BillingCycleUsageLine } from '../contracts/billing-statement-v1.js';
 import { AppError } from '../utils/errors.js';
@@ -20,7 +20,7 @@ export function projectCycleUsage(
   expected: { serviceIdentifier: string; organisationId: string; teamId: string;
     billingMonth: string; startsAt: Date; endsAt: Date; currency: string },
   tariff: BillingTariff,
-): { lines: BillingCycleUsageLine[]; evidence: { team_id: string; snapshot_id: string;
+): { lines: BillingCycleUsageLine[]; ratedAmount: string; evidence: { team_id: string; snapshot_id: string;
   cursor: string; sha256: string; captured_at: string; line_count: number;
   content_sha256: string; raw_lines: RawMeteringLine[] } } {
   if (usage.product !== expected.serviceIdentifier || usage.groupBy !== 'user' ||
@@ -60,13 +60,16 @@ export function projectCycleUsage(
     }
     return [];
   });
+  const ratedAmount = sumBillingDecimals(ratedCharges);
+  const prepaid = tariff.usagePaymentMode === BillingUsagePaymentMode.PREPAID;
   const lines: BillingCycleUsageLine[] = usage.lines.length === 0 ? [] : [{
     id: `usage:${createHash('sha256').update(`${expected.serviceIdentifier}\0${expected.teamId}\0${expected.billingMonth}`).digest('hex')}`,
     label: 'Metered usage',
-    customer_charge: exactMoney(sumBillingDecimals(ratedCharges), expected.currency),
+    usage_payment_mode: prepaid ? 'prepaid' : 'pay_as_you_go',
+    customer_charge: prepaid ? null : exactMoney(ratedAmount, expected.currency),
     credits_consumed: null,
   }];
-  return { lines, evidence: { team_id: expected.teamId,
+  return { lines, ratedAmount, evidence: { team_id: expected.teamId,
     snapshot_id: usage.snapshot.id, cursor: usage.snapshot.cursor,
     sha256: usage.snapshot.sha256, captured_at: usage.snapshot.capturedAt,
     line_count: usage.lines.length, content_sha256: contentSha256,
@@ -83,11 +86,19 @@ export function aggregateOrganisationCycleUsage(
   const currency = sourceLines.find((line) => line.customer_charge)?.customer_charge?.currency;
   if (sourceLines.some((line) => line.customer_charge &&
     line.customer_charge.currency !== currency)) hold('BILLING_CYCLE_FX_RECONCILIATION_REQUIRED');
-  const amount = sumBillingDecimals(sourceLines.flatMap((line) =>
+  const payable = sourceLines.filter((line) => line.usage_payment_mode === 'pay_as_you_go');
+  const prepaid = sourceLines.filter((line) => line.usage_payment_mode === 'prepaid');
+  const amount = sumBillingDecimals(payable.flatMap((line) =>
     line.customer_charge ? [line.customer_charge.amount] : []));
-  return [{ id: 'usage:organisation', label: 'Metered usage',
-    customer_charge: currency ? exactMoney(amount, currency) : null,
-    credits_consumed: null }];
+  return [
+    ...(payable.length ? [{ id: 'usage:organisation:payg', label: 'Metered usage',
+      usage_payment_mode: 'pay_as_you_go' as const,
+      customer_charge: currency ? exactMoney(amount, currency) : null,
+      credits_consumed: null }] : []),
+    ...(prepaid.length ? [{ id: 'usage:organisation:prepaid', label: 'Prepaid usage',
+      usage_payment_mode: 'prepaid' as const,
+      customer_charge: null, credits_consumed: null }] : []),
+  ];
 }
 
 /** Assertion/cursor changes do not change the underlying financial receipts. */

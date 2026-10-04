@@ -35,7 +35,7 @@ function csvRow(values: readonly string[]): string {
 export function renderBillingCycleBreakdownCsv(detail: BillingCycleDetailV2): Buffer {
   const columns = [
     'record_type', 'id', 'description', 'period_start', 'period_end', 'quantity',
-    'unit', 'unit_price', 'seat_policy', 'seat_timing', 'customer_charge',
+    'unit', 'unit_price', 'seat_policy', 'seat_timing', 'usage_payment_mode', 'customer_charge',
     'currency', 'credits_consumed', 'tax', 'gross_total', 'credits_applied',
     'total_paid', 'outstanding',
     'opening_balance', 'closing_balance', 'billing_status',
@@ -61,8 +61,9 @@ export function renderBillingCycleBreakdownCsv(detail: BillingCycleDetailV2): Bu
   }
   for (const line of detail.usage_lines) {
     rows.push({ record_type: 'usage', id: line.id, description: line.label,
-      ...period,
-      customer_charge: line.customer_charge?.amount ?? 'pending',
+      ...period, usage_payment_mode: line.usage_payment_mode,
+      customer_charge: line.customer_charge?.amount ??
+        (line.usage_payment_mode === 'prepaid' ? 'covered by prepaid credits' : 'pending'),
       currency: line.customer_charge?.currency ?? '',
       credits_consumed: line.credits_consumed ?? 'pending',
       billing_status: detail.state });
@@ -191,7 +192,8 @@ export async function renderBillingCycleBreakdownPdf(detail: BillingCycleDetailV
   if (detail.usage_lines.length === 0) draw(context, 'No confirmed usage line.');
   for (const line of detail.usage_lines) {
     draw(context, line.label, { bold: true });
-    draw(context, `Customer charge ${line.customer_charge?.display ?? 'pending'}; credits used ${line.credits_consumed ?? 'pending'}`);
+    draw(context, `${line.usage_payment_mode === 'prepaid' ?
+      'Covered by prepaid credits' : `Customer charge ${line.customer_charge?.display ?? 'pending'}`}; credits used ${line.credits_consumed ?? 'pending'}`);
   }
   context.y -= 8;
   draw(context, detail.state === 'pending_reconciliation'

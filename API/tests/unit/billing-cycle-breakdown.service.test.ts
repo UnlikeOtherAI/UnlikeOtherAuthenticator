@@ -35,6 +35,17 @@ describe('frozen customer billing breakdown', () => {
     })).rejects.toThrow('BILLING_CYCLE_PREVIEW_NOT_FINAL');
   });
 
+  it('calls out prepaid credits as coverage rather than a second money demand', async () => {
+    const detail = structuredClone(billingCycleDetailV2ConformanceFixture);
+    detail.usage_lines[0]!.usage_payment_mode = 'prepaid';
+    detail.usage_lines[0]!.customer_charge = null;
+    const csv = renderBillingCycleBreakdownCsv(detail).toString('utf8');
+    expect(csv).toContain('covered by prepaid credits');
+    expect(csv).toContain('"prepaid"');
+    const pdf = await renderBillingCycleBreakdownPdf(detail);
+    expect(pdf.subarray(0, 5).toString('ascii')).toBe('%PDF-');
+  });
+
   it('neutralizes control-prefixed spreadsheet formulas and fits long labels across pages',
     async () => {
       const longLabel = `=${'A'.repeat(240)}`;

@@ -92,13 +92,15 @@ const subscriptionLine = object([
   intervals: { type: 'array', items: seatInterval },
   customer_charge: moneySchema({ signed: true }),
 });
-const usageLine = object([
-  'id', 'label', 'customer_charge', 'credits_consumed',
+const usageLine = { ...object([
+  'id', 'label', 'usage_payment_mode', 'customer_charge', 'credits_consumed',
 ], {
   id, label: { type: 'string', minLength: 1 },
+  usage_payment_mode: { enum: ['prepaid', 'pay_as_you_go'] },
   customer_charge: { anyOf: [exactMoney, { type: 'null' }] },
   credits_consumed: nullableCredits,
-});
+}), allOf: [{ if: { properties: { usage_payment_mode: { const: 'prepaid' } } },
+  then: { properties: { customer_charge: { type: 'null' } } } }] };
 const creditSummary = object([
   'consumed', 'opening_balance', 'closing_balance', 'status',
 ], {

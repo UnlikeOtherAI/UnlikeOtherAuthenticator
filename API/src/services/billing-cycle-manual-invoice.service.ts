@@ -192,7 +192,10 @@ export async function captureIssuedManualBillingCycle(
     // the actual settlement references before finalization.
     hold('BILLING_CYCLE_MANUAL_CREDIT_ALLOCATION_UNPROVEN');
   }
-  if (pending.usage_lines.some((usage) => usage.customer_charge === null) ||
+  if (pending.usage_lines.some((usage) =>
+    (usage.usage_payment_mode === 'pay_as_you_go' && usage.customer_charge === null) ||
+    (usage.usage_payment_mode === 'prepaid' &&
+      (usage.customer_charge !== null || usage.credits_consumed === null))) ||
     pending.subscription_lines.length !== 1 ||
     pending.subscription_lines[0]?.customer_charge.amount_minor !==
       subscriptionMinor.toString() ||

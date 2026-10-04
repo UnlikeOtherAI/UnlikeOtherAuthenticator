@@ -87,7 +87,7 @@ export async function prepareBillingTeamUsageCycle(
     organisationId: params.organisationId, teamId: params.teamId,
     billingMonth: params.billingMonth, startsAt, endsAt,
     currency: terms.tariff.currency }, terms.tariff);
-  const ratedAmount = projected.lines[0]?.customer_charge?.amount ?? '0';
+  const ratedAmount = projected.ratedAmount;
   const creditEvidence = await readCycleCreditEvidence(prisma, {
     orgId: params.organisationId, teamId: params.teamId, serviceId: params.serviceId,
     billingMonth: params.billingMonth, payer, tariff: terms.tariff,
