@@ -8,6 +8,8 @@ import { AppError } from '../utils/errors.js';
 import { renderBillingCycleBreakdownCsv, renderBillingCycleBreakdownPdf } from './billing-cycle-breakdown.service.js';
 import { cycleMoney } from './billing-cycle-quote-projection.service.js';
 import { billingCycleSnapshotDigest } from './billing-cycle-read.service.js';
+import { verifiedManualInvoiceLine,
+  type FinancialInvoice } from './billing-cycle-manual-allocation.service.js';
 import {
   createBillingInvoicePdfStorage, type BillingInvoicePdfStorage,
 } from './billing-invoice-storage.service.js';
@@ -16,11 +18,6 @@ import {
 } from './billing-money.service.js';
 
 const MAX_DOCUMENT_BYTES = 20 * 1024 * 1024;
-type IssuedInvoice = Prisma.BillingInvoiceGetPayload<{
-  include: { lines: true; paymentEvents: true; lineFinancialAllocations: true;
-    creditSettlementRefs: true; lineCreditAllocations: true };
-}>;
-
 const binaryOrder = (left: string, right: string): number =>
   Buffer.compare(Buffer.from(left, 'utf8'), Buffer.from(right, 'utf8'));
 
@@ -40,7 +37,7 @@ function paymentFacts(events: Array<{ id: string; kind: string;
     .sort((left, right) => binaryOrder(left.id, right.id));
 }
 
-export function invoiceSourceFingerprint(invoice: IssuedInvoice): string {
+export function invoiceSourceFingerprint(invoice: FinancialInvoice): string {
   return digest(JSON.stringify({
     id: invoice.id, org_id: invoice.orgId, contract_id: invoice.contractId,
     contract_version_id: invoice.contractVersionId, billing_month: invoice.billingMonth,
@@ -110,9 +107,9 @@ function document(id: string, kind: BillingCycleDocument['kind'],
 }
 
 /**
- * Records only an actually issued UOA manual invoice with one exact service
- * line. Ambiguous multi-service payment/credit/tax allocations remain held.
- * The original legal invoice and a separate measured breakdown are immutable.
+ * Records an actual issued UOA invoice's frozen service-line liability.
+ * A mixed-product legal PDF is restricted to UOA organisation finance;
+ * this product cycle contains only its own separately frozen breakdown.
  */
 export async function captureIssuedManualBillingCycle(
   params: { cycleId: string; invoiceId: string },
@@ -127,7 +124,8 @@ export async function captureIssuedManualBillingCycle(
         creditSettlementRefs: true, lineCreditAllocations: true } }),
   ]);
   if (!cycle || !invoice) hold('BILLING_CYCLE_ISSUED_SOURCE_MISSING');
-  const existingLine = invoice.lines[0];
+  const selected = verifiedManualInvoiceLine(invoice, cycle.serviceId, cycle.billingMonth);
+  const existingLine = selected.line;
   if (existingLine) {
     const key = digest(`manual\0${invoice.id}\0${existingLine.id}`);
     const existing = await prisma.billingCustomerCycleInvoiceAllocation.findUnique({
@@ -138,8 +136,8 @@ export async function captureIssuedManualBillingCycle(
         existing.cycle.billingMonth !== cycle.billingMonth ||
         existing.cycle.teamId !== cycle.teamId ||
         invoice.status !== BillingInvoiceStatus.ISSUED || invoice.voidedAt ||
-        invoice.lines.length !== 1 || existingLine.serviceId !== cycle.serviceId ||
-        existingLine.amountMinor !== existing.amountMinor ||
+        existingLine.serviceId !== cycle.serviceId ||
+        selected.allocation.totalMinor !== existing.amountMinor ||
         existingLine.currency !== existing.currency ||
         billingCycleSnapshotDigest(existing.cycle.publicSnapshot,
           existing.cycle.privateEvidence) !== existing.cycle.snapshotSha256) {
@@ -159,7 +157,7 @@ export async function captureIssuedManualBillingCycle(
           latest.snapshotSha256) hold('BILLING_CYCLE_INVOICE_ALLOCATION_CONFLICT');
       const sourceDigest = digest(JSON.stringify({ invoice_id: invoice.id,
         line_id: existingLine.id, invoice_number: invoice.invoiceNumber,
-        amount_minor: existingLine.amountMinor.toString(), currency: invoice.currency,
+        amount_minor: selected.allocation.totalMinor.toString(), currency: invoice.currency,
         pdf_sha256: invoice.pdfSha256, payment_events: paymentFacts(invoice.paymentEvents) }));
       if ((allocation.latest_source_digest ?? allocation.source_digest) !== sourceDigest) {
         const { refreshIssuedManualBillingCyclePayment } =
@@ -186,15 +184,13 @@ export async function captureIssuedManualBillingCycle(
   const term = await prisma.billingContractServiceTerm.findUnique({
     where: { id: source.id }, select: { serviceId: true, contractVersionId: true },
   });
-  const line = invoice.lines[0];
+  const { line, allocation: financial, invoiceDueMinor, soleProduct } = selected;
   if (!term || term.serviceId !== cycle.serviceId ||
     term.contractVersionId !== invoice.contractVersionId ||
     invoice.orgId !== cycle.orgId || invoice.billingMonth !== cycle.billingMonth ||
     cycle.teamId !== null || invoice.status !== BillingInvoiceStatus.ISSUED ||
-    invoice.lines.length !== 1 || !line || line.serviceId !== cycle.serviceId ||
+    line.serviceId !== cycle.serviceId ||
     line.currency !== invoice.currency || invoice.currency !== quote.currency ||
-    invoice.creditsAppliedMinor !== 0n || invoice.taxAmountMinor !== 0n ||
-    invoice.subtotalMinor !== line.amountMinor || invoice.totalMinor !== line.amountMinor ||
     !invoice.invoiceNumber || !invoice.issuedAt || !invoice.issueDate ||
     !invoice.pdfObjectKey || !invoice.pdfSha256 ||
     !legalParty(invoice.issuerSnapshot) || !legalParty(invoice.buyerSnapshot)) {
@@ -204,12 +200,12 @@ export async function captureIssuedManualBillingCycle(
   const usageAmount = pending.usage_lines.reduce((total, usage) =>
     addBillingDecimals(total, usage.customer_charge?.amount ?? '0'), '0');
   const creditEvidence = privateEvidence.credit_evidence;
-  if (usageAmount !== '0' && (!Array.isArray(creditEvidence) ||
+  const sourceIds = new Set(Array.isArray(creditEvidence) ? creditEvidence.flatMap((item) =>
+    item && Array.isArray(item.source_ids) ? item.source_ids : []) : []);
+  if (pending.usage_lines.length > 0 && (!Array.isArray(creditEvidence) ||
     pending.credits.consumed === null || creditEvidence.some((item) => !item ||
-      item.covered !== true || item.funded_debit_microcredits !== '0'))) {
-    // This strict one-line issuer path cannot demand payment again for usage
-    // already funded by wallet credits. A broader line allocation must bind
-    // the actual settlement references before finalization.
+      item.covered !== true)) || invoice.creditSettlementRefs.some((reference) =>
+    reference.serviceId === cycle.serviceId && !sourceIds.has(reference.settlementId))) {
     hold('BILLING_CYCLE_MANUAL_CREDIT_ALLOCATION_UNPROVEN');
   }
   if (pending.usage_lines.some((usage) =>
@@ -217,21 +213,26 @@ export async function captureIssuedManualBillingCycle(
     (usage.usage_payment_mode === 'prepaid' &&
       (usage.customer_charge !== null || usage.credits_consumed === null))) ||
     pending.subscription_lines.length !== 1 ||
-    pending.subscription_lines[0]?.customer_charge.amount_minor !==
-      subscriptionMinor.toString() ||
-    line.amountMinor !== subscriptionMinor +
-      majorAmountToMinorRounded(usageAmount, invoice.currency)) {
+    pending.subscription_lines[0]?.customer_charge.amount_minor !== subscriptionMinor.toString() ||
+    financial.subscriptionMinor !== subscriptionMinor ||
+    financial.usageMinor !== majorAmountToMinorRounded(usageAmount, invoice.currency) ||
+    line.amountMinor !== financial.subscriptionMinor + financial.usageMinor) {
     hold('BILLING_CYCLE_MANUAL_AMOUNT_MISMATCH');
   }
   let totalPaid = 0n;
+  let refunded = 0n;
   for (const event of invoice.paymentEvents) {
     if (event.currency !== invoice.currency || event.amountMinor < 0n ||
       event.kind === 'WRITE_OFF') hold('BILLING_CYCLE_MANUAL_PAYMENT_UNALLOCATABLE');
-    totalPaid += event.kind === 'PAYMENT' ? event.amountMinor : -event.amountMinor;
+    if (event.kind === 'PAYMENT') totalPaid += event.amountMinor;
+    else if (event.kind === 'REFUND') refunded += event.amountMinor;
+    else hold('BILLING_CYCLE_MANUAL_PAYMENT_UNALLOCATABLE');
   }
-  if (totalPaid < 0n || totalPaid > invoice.totalMinor) {
+  if (totalPaid > invoiceDueMinor || refunded > totalPaid ||
+    (!soleProduct && totalPaid !== 0n && totalPaid !== invoiceDueMinor)) {
     hold('BILLING_CYCLE_MANUAL_PAYMENT_UNALLOCATABLE');
   }
+  const linePaid = soleProduct ? totalPaid : totalPaid === 0n ? 0n : financial.dueMinor;
   const invoiceBytes = await storage.read(invoice.pdfObjectKey);
   if (invoiceBytes.length === 0 || invoiceBytes.length > MAX_DOCUMENT_BYTES ||
     invoiceBytes.subarray(0, 5).toString('ascii') !== '%PDF-' ||
@@ -242,7 +243,7 @@ export async function captureIssuedManualBillingCycle(
   const allocationKey = digest(`manual\0${invoice.id}\0${line.id}`);
   const sourceDigest = digest(JSON.stringify({ invoice_id: invoice.id,
     line_id: line.id, invoice_number: invoice.invoiceNumber,
-    amount_minor: line.amountMinor.toString(), currency: invoice.currency,
+    amount_minor: financial.totalMinor.toString(), currency: invoice.currency,
     pdf_sha256: invoice.pdfSha256, payment_events: paymentFacts(invoice.paymentEvents) }));
   const priorAllocation = await prisma.billingCustomerCycleInvoiceAllocation.findUnique({
     where: { authorityKey: allocationKey }, include: { cycle: true },
@@ -265,19 +266,19 @@ export async function captureIssuedManualBillingCycle(
   const breakdownCsvId = randomUUID();
   const next: BillingCycleDetailV2 = { ...pending, cycle_id: id, state: 'finalized',
     totals: [{ currency: invoice.currency,
-      subscription: cycleMoney(subscriptionMinor, invoice.currency),
-      usage_charge: cycleMoney(majorAmountToMinorRounded(usageAmount, invoice.currency), invoice.currency),
-      tax: cycleMoney(0n, invoice.currency),
-      gross_total: cycleMoney(invoice.totalMinor, invoice.currency),
-      credits_applied: cycleMoney(0n, invoice.currency),
-      total_due: cycleMoney(invoice.totalMinor, invoice.currency),
-      total_paid: cycleMoney(totalPaid, invoice.currency),
-      outstanding: cycleMoney(invoice.totalMinor - totalPaid, invoice.currency) }],
+      subscription: cycleMoney(financial.subscriptionMinor, invoice.currency),
+      usage_charge: cycleMoney(financial.usageMinor, invoice.currency),
+      tax: cycleMoney(financial.taxMinor, invoice.currency),
+      gross_total: cycleMoney(financial.totalMinor, invoice.currency),
+      credits_applied: cycleMoney(financial.invoiceCreditMinor, invoice.currency),
+      total_due: cycleMoney(financial.dueMinor, invoice.currency),
+      total_paid: cycleMoney(linePaid, invoice.currency),
+      outstanding: cycleMoney(financial.dueMinor - linePaid, invoice.currency) }],
     credits: pending.credits,
     document_available: true,
     documents: [
-      document(invoiceDocumentId, 'monthly_invoice', 'pdf', invoice.invoiceNumber,
-        invoice.issuedAt, invoice.totalMinor, invoice.currency),
+      ...(soleProduct ? [document(invoiceDocumentId, 'monthly_invoice', 'pdf', invoice.invoiceNumber,
+        invoice.issuedAt, invoice.totalMinor, invoice.currency)] : []),
       document(breakdownPdfId, 'usage_breakdown', 'pdf', null,
         invoice.issuedAt, null, invoice.currency),
       document(breakdownCsvId, 'usage_breakdown', 'csv', null,
@@ -291,7 +292,8 @@ export async function captureIssuedManualBillingCycle(
   const snapshotSha256 = billingCycleSnapshotDigest(next, evidence);
   const prefix = `billing-cycles/${id}`;
   const [invoiceSha, breakdownPdf, breakdownCsv] = await Promise.all([
-    copyVerifiedDocument(storage, `${prefix}/invoice.pdf`, invoiceBytes, 'application/pdf'),
+    soleProduct ? copyVerifiedDocument(storage, `${prefix}/invoice.pdf`, invoiceBytes,
+      'application/pdf') : Promise.resolve(null),
     renderBillingCycleBreakdownPdf(next),
     Promise.resolve(renderBillingCycleBreakdownCsv(next)),
   ]);
@@ -333,14 +335,15 @@ export async function captureIssuedManualBillingCycle(
       cycleId: id, authorityKey: allocationKey, sourceKind: 'manual',
       sourceInvoiceId: invoice.id, sourceLineId: line.id,
       periodStartsAt: startsAt, periodEndsAt: endsAt,
-      amountMinor: line.amountMinor, currency: invoice.currency, sourceDigest,
+      amountMinor: financial.totalMinor, currency: invoice.currency, sourceDigest,
     } });
     await tx.billingCustomerCycleDocument.createMany({ data: [
-      { id: invoiceDocumentId, cycleId: id, kind: 'monthly_invoice', format: 'pdf',
+      ...(soleProduct && invoiceSha ? [{ id: invoiceDocumentId, cycleId: id,
+        kind: 'monthly_invoice', format: 'pdf',
         sourceKind: 'manual_invoice', sourceId: invoice.id,
         invoiceNumber: invoice.invoiceNumber, issuedAt: invoice.issuedAt,
         amountMinor: invoice.totalMinor, currency: invoice.currency,
-        objectKey: `${prefix}/invoice.pdf`, sha256: invoiceSha },
+        objectKey: `${prefix}/invoice.pdf`, sha256: invoiceSha }] : []),
       { id: breakdownPdfId, cycleId: id, kind: 'usage_breakdown', format: 'pdf',
         sourceKind: 'cycle', sourceId: id, issuedAt: invoice.issuedAt,
         objectKey: `${prefix}/usage.pdf`, sha256: pdfSha },
