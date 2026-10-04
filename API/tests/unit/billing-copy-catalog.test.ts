@@ -42,6 +42,17 @@ describe('customer billing copy catalogs', () => {
     }
   });
 
+  it('guides a failed payment back to the same payment without suggesting a new purchase', () => {
+    for (const locale of locales) {
+      const message = BILLING_PAYMENT_COPY[locale].failed.message;
+      expect(message).toMatch(/payment|platbu|zahlung|pago|paiement|pagamento/i);
+      expect(message).not.toMatch(/another purchase|another buy|další nákup|weiteren kauf|otra compra|autre achat|altro acquisto/i);
+    }
+    expect(BILLING_PAYMENT_COPY.cs.failed.message).toBe(
+      'Zkontrolujte údaje o kartě nebo se obraťte na banku. Pak platbu zkuste znovu.',
+    );
+  });
+
   it('keeps customer billing actions in the selected language', () => {
     expect(BILLING_SUBSCRIPTION_COPY.cs.upgradeAction).toBe('Změnit tarif');
     expect(BILLING_SUBSCRIPTION_COPY.cs.managePaymentAction).toBe('Spravovat platby');
