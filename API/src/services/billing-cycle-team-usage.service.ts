@@ -20,6 +20,7 @@ import {
 import { fetchLedgerMeteringUsage } from './billing-ledger-collector.service.js';
 import { fetchVerifiedLedgerPaidReceiptSet } from './billing-ledger-paid-receipt-proof.service.js';
 import { fetchLedgerHistoricalBillingTeams } from './billing-ledger-team-discovery.service.js';
+import { readCycleWalletBoundary } from './billing-cycle-wallet-boundary.service.js';
 import { resolveBillingTariffForMonth } from './billing-tariff-history.service.js';
 
 function hold(code: string): never {
@@ -100,6 +101,10 @@ export async function prepareBillingTeamUsageCycle(
     scope, proof, payer, tariff: terms.tariff,
     rawLines: projected.evidence.raw_lines,
   });
+  const walletBoundary = await readCycleWalletBoundary(prisma, {
+    orgId: params.organisationId, teamId: params.teamId, payer,
+    startsAt, endsAt,
+  });
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       return await prisma.$transaction(async (tx) => {
@@ -121,6 +126,13 @@ export async function prepareBillingTeamUsageCycle(
         });
         if (lockedCredits.fingerprint !== creditEvidence.fingerprint) {
           hold('BILLING_CYCLE_CREDIT_SOURCE_CHANGED');
+        }
+        const lockedWallet = await readCycleWalletBoundary(tx, {
+          orgId: params.organisationId, teamId: params.teamId, payer,
+          startsAt, endsAt,
+        });
+        if (lockedWallet.fingerprint !== walletBoundary.fingerprint) {
+          hold('BILLING_CYCLE_WALLET_BOUNDARY_CHANGED');
         }
         if (organisationSubscription) {
           const orgCycleId = params.organisationCycleId;
@@ -167,7 +179,8 @@ export async function prepareBillingTeamUsageCycle(
           }
           if (cycleUsageContentFingerprint(snapshots as CycleUsageEvidence[]) ===
             cycleUsageContentFingerprint([projected.evidence]) &&
-            prior.credit_fingerprint === creditEvidence.fingerprint) {
+            prior.credit_fingerprint === creditEvidence.fingerprint &&
+            prior.wallet_fingerprint === walletBoundary.fingerprint) {
             return { cycleId: existing.id, snapshotSha256: existing.snapshotSha256 };
           }
           if (existing.state !== 'pending_reconciliation') {
@@ -194,8 +207,11 @@ export async function prepareBillingTeamUsageCycle(
           credits: { consumed: creditEvidence.covered ?
             decimalCredits(BigInt(creditEvidence.consumed_microcredits ?? '0')) : null,
             waived: decimalCredits(BigInt(creditEvidence.waived_microcredits)),
-            opening_balance: null, closing_balance: null,
-            status: 'pending_reconciliation' },
+            opening_balance: walletBoundary.opening_microcredits === null ? null :
+              decimalCredits(BigInt(walletBoundary.opening_microcredits)),
+            closing_balance: walletBoundary.closing_microcredits === null ? null :
+              decimalCredits(BigInt(walletBoundary.closing_microcredits)),
+            status: walletBoundary.status },
           documents: [], adjustments: [],
         };
         const privateEvidence = { source: 'team_usage_only', tariff_id: terms.tariff.id,
@@ -205,7 +221,8 @@ export async function prepareBillingTeamUsageCycle(
           previous_cycle_id: existing?.id ?? null,
           ledger_snapshots: [projected.evidence],
           paid_receipt_proofs: [proof],
-          credit_evidence: [creditEvidence], credit_fingerprint: creditEvidence.fingerprint };
+          credit_evidence: [creditEvidence], credit_fingerprint: creditEvidence.fingerprint,
+          wallet_boundary: walletBoundary, wallet_fingerprint: walletBoundary.fingerprint };
         const digest = billingCycleSnapshotDigest(publicSnapshot, privateEvidence);
         await tx.billingCustomerCycle.create({ data: {
           id, serviceId: params.serviceId, orgId: params.organisationId,

@@ -27,6 +27,7 @@ import {
   fetchVerifiedLedgerPaidReceiptSet, type LedgerPaidReceiptSet,
 } from './billing-ledger-paid-receipt-proof.service.js';
 import { fetchLedgerHistoricalBillingTeams } from './billing-ledger-team-discovery.service.js';
+import { readCycleWalletBoundary } from './billing-cycle-wallet-boundary.service.js';
 import {
   quoteSubscriptionMonthlyCharge, type MonthlyChargeSource,
 } from './billing-monthly-subscription-quote.service.js';
@@ -131,6 +132,10 @@ export async function prepareBillingCycleClose(
     creditEvidence.reduce((sum, row) => sum + BigInt(row.consumed_microcredits ?? '0'), 0n) : null;
   const waivedMicrocredits = creditEvidence.reduce((sum, row) =>
     sum + BigInt(row.waived_microcredits), 0n);
+  const walletBoundary = await readCycleWalletBoundary(prisma, {
+    orgId: initial.organisationId, teamId: initial.teamId, payer: initial.scope,
+    startsAt, endsAt,
+  });
   if (initial.teamId === null) {
     usageLines = aggregateOrganisationCycleUsage(organisationUsageLines);
   }
@@ -164,9 +169,16 @@ export async function prepareBillingCycleClose(
       row.fingerprint !== creditEvidence[index]?.fingerprint)) {
       hold('BILLING_CYCLE_CREDIT_SOURCE_CHANGED');
     }
+    const lockedWallet = await readCycleWalletBoundary(tx, {
+      orgId: quote.organisationId, teamId: quote.teamId, payer: quote.scope,
+      startsAt, endsAt,
+    });
+    if (lockedWallet.fingerprint !== walletBoundary.fingerprint) {
+      hold('BILLING_CYCLE_WALLET_BOUNDARY_CHANGED');
+    }
     const creditFingerprint = billingCycleSnapshotDigest(creditEvidence.map((row) => ({
       team_id: row.team_id, fingerprint: row.fingerprint,
-    })), {});
+    })), { wallet_boundary: walletBoundary.fingerprint });
     const existing = await tx.billingCustomerCycle.findFirst({ where: {
       serviceId: quote.serviceId, orgId: quote.organisationId,
       teamId: quote.teamId, billingMonth: params.billingMonth,
@@ -207,8 +219,11 @@ export async function prepareBillingCycleClose(
       usage_lines: usageLines,
       credits: { consumed: consumedMicrocredits === null ? null :
         decimalCredits(consumedMicrocredits), waived: decimalCredits(waivedMicrocredits),
-        opening_balance: null, closing_balance: null,
-        status: 'pending_reconciliation' },
+        opening_balance: walletBoundary.opening_microcredits === null ? null :
+          decimalCredits(BigInt(walletBoundary.opening_microcredits)),
+        closing_balance: walletBoundary.closing_microcredits === null ? null :
+          decimalCredits(BigInt(walletBoundary.closing_microcredits)),
+        status: walletBoundary.status },
       documents: [], adjustments: [],
     };
     const privateEvidence = { source: quote.source, quote_fingerprint: fingerprint,
@@ -216,6 +231,7 @@ export async function prepareBillingCycleClose(
       team_discovery: discovery,
       quote: privateMonthlyQuoteEvidence(quote), ledger_snapshots: ledgerSnapshots,
       paid_receipt_proofs: [...proofs.values()],
+      wallet_boundary: walletBoundary,
       credit_evidence: creditEvidence, credit_fingerprint: creditFingerprint };
     const digest = billingCycleSnapshotDigest(publicSnapshot, privateEvidence);
     await tx.billingCustomerCycle.create({ data: {
