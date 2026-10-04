@@ -1,10 +1,12 @@
-import { BillingAppKeyPurpose, Prisma, type PrismaClient } from '@prisma/client';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { Prisma, type PrismaClient } from '@prisma/client';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { resolveCreditAccount } from '../../src/services/billing-credit-account.service.js';
 import { settleCreditPortfolio } from '../../src/services/billing-credit-settlement.service.js';
 import { reconcileStripeUsageExport } from '../../src/services/billing-stripe-reconciliation.service.js';
-import type { NormalizedMeteringPortfolio } from '../../src/services/billing-metering.types.js';
+import { recordStripeInvoiceClose } from '../../src/services/billing-stripe-invoice-close-state.service.js';
+import { runStripeInvoiceCloseCycle } from '../../src/services/billing-stripe-invoice-close-scheduler.service.js';
+import { compensateFinalizedStripeInvoice } from '../../src/services/billing-stripe-invoice-close-resolution.service.js';
 import {
   assertOrgBillingAssumable,
   BillingOrgResponsibilityBlockedError,
@@ -14,180 +16,12 @@ import {
   releaseOrgBillingResponsibility,
 } from '../../src/services/billing-org-responsibility-lifecycle.service.js';
 import { createTestDb } from '../helpers/test-db.js';
+import {
+  credential, ids, lifecycleDeps, portfolio, request, seed, stripeAccount,
+} from './billing-org-responsibility.persistence.fixture.js';
 
 const databaseTestsEnabled =
   process.env.BILLING_FUNDING_DATABASE_TESTS === 'true' && Boolean(process.env.DATABASE_URL);
-
-const ids = {
-  owner: 'usr_org_billing_owner',
-  member: 'usr_org_billing_member',
-  org: 'org_org_billing',
-  teamA: 'team_org_billing_a',
-  teamB: 'team_org_billing_b',
-  service: 'svc_org_billing_deepwater',
-  tariff: 'tariff_org_billing_deepwater',
-  appKey: 'bak_org_billing_deepwater',
-  account: 'bsa_org_billing',
-  teamCustomer: 'bsc_org_billing_team_a',
-  teamCreditAccount: 'bca_org_billing_team_a',
-} as const;
-
-const credential = {
-  id: ids.appKey,
-  purpose: BillingAppKeyPurpose.CUSTOMER_LIFECYCLE,
-  actorIssuer: 'https://deepwater.example.com',
-  actorAudience: 'https://uoa.example.com/billing/v1/effective-tariff',
-  actorKeyId: 'dw-key',
-  actorPublicJwk: {},
-  checkoutReturnOrigins: ['https://deepwater.example.com'],
-  service: { id: ids.service, identifier: 'deepwater', name: 'DeepWater' },
-};
-
-const stripeAccount = { id: ids.account, stripeAccountId: 'acct_org_billing', livemode: false };
-
-const request = {
-  product: 'deepwater',
-  organisationId: ids.org,
-  teamId: ids.teamA,
-  userId: ids.owner,
-};
-
-const actor = { jti: 'actor_org_billing', tv: 0, exp: Math.floor(Date.now() / 1000) + 45 };
-
-function lifecycleDeps(prisma: PrismaClient, now?: Date) {
-  return {
-    prisma,
-    ...(now ? { now: () => now } : {}),
-    // The actor assertion, its TTL, the `tv` epoch and membership are the
-    // entitlement path's job and are unit-tested there; this suite is about
-    // what the database does.
-    resolveTariff: vi.fn().mockResolvedValue({ actor, payload: {} }) as never,
-    isOrganisationManager: vi.fn().mockResolvedValue(true) as never,
-    authorizeAction: vi.fn().mockResolvedValue({}) as never,
-  };
-}
-
-async function seed(prisma: PrismaClient): Promise<void> {
-  await prisma.$transaction(async (tx) => {
-    await tx.$executeRawUnsafe('SET LOCAL session_replication_role = replica');
-    await tx.$executeRaw(Prisma.sql`
-      INSERT INTO "users" ("id", "email", "user_key", "name") VALUES
-        (${ids.owner}, 'org-billing-owner@example.com', 'org-billing-owner@example.com', 'Owner'),
-        (${ids.member}, 'org-billing-member@example.com', 'org-billing-member@example.com', 'Member')
-    `);
-    await tx.$executeRaw(Prisma.sql`
-      INSERT INTO "organisations" ("id", "domain", "name", "slug", "owner_id", "updated_at")
-      VALUES (${ids.org}, 'org-billing.example.com', 'Acme', 'acme', ${ids.owner}, CURRENT_TIMESTAMP)
-    `);
-    await tx.$executeRaw(Prisma.sql`
-      INSERT INTO "org_members" ("id", "org_id", "user_id", "role", "status", "updated_at") VALUES
-        ('om_org_billing_owner', ${ids.org}, ${ids.owner}, 'owner', 'ACTIVE', CURRENT_TIMESTAMP),
-        ('om_org_billing_member', ${ids.org}, ${ids.member}, 'member', 'ACTIVE', CURRENT_TIMESTAMP)
-    `);
-    await tx.$executeRaw(Prisma.sql`
-      INSERT INTO "teams" ("id", "org_id", "name", "slug", "updated_at") VALUES
-        (${ids.teamA}, ${ids.org}, 'Research', 'research', CURRENT_TIMESTAMP),
-        (${ids.teamB}, ${ids.org}, 'Support', 'support', CURRENT_TIMESTAMP)
-    `);
-    await tx.$executeRaw(Prisma.sql`
-      INSERT INTO "team_members" ("id", "team_id", "user_id", "team_role", "status", "updated_at")
-      VALUES
-        ('tm_org_billing_a_owner', ${ids.teamA}, ${ids.owner}, 'owner', 'ACTIVE', CURRENT_TIMESTAMP),
-        ('tm_org_billing_b_member', ${ids.teamB}, ${ids.member}, 'member', 'ACTIVE', CURRENT_TIMESTAMP)
-    `);
-    await tx.$executeRaw(Prisma.sql`
-      INSERT INTO "billing_services" ("id", "identifier", "name", "updated_at")
-      VALUES (${ids.service}, 'deepwater', 'DeepWater', CURRENT_TIMESTAMP)
-    `);
-    await tx.$executeRaw(Prisma.sql`
-      INSERT INTO "billing_tariffs" (
-        "id", "service_id", "key", "version", "name", "mode",
-        "collection_mode", "markup_bps", "currency", "is_default"
-      ) VALUES (
-        ${ids.tariff}, ${ids.service}, 'standard', 1, 'DeepWater standard',
-        'STANDARD', 'NONE', 0, 'USD', true
-      )
-    `);
-    await tx.$executeRaw(Prisma.sql`
-      INSERT INTO "billing_app_keys" (
-        "id", "service_id", "purpose", "name", "key_prefix", "secret_digest",
-        "actor_issuer", "actor_audience", "actor_key_id", "actor_public_jwk",
-        "checkout_return_origins", "updated_at"
-      ) VALUES (
-        ${ids.appKey}, ${ids.service}, 'CUSTOMER_LIFECYCLE', 'DeepWater test',
-        'uoa_dw_test', ${'a'.repeat(64)}, 'https://deepwater.example.com',
-        'https://uoa.example.com', 'dw-key', ${JSON.stringify({ kty: 'RSA' })}::jsonb,
-        ARRAY['https://deepwater.example.com'], CURRENT_TIMESTAMP
-      )
-    `);
-    await tx.$executeRaw(Prisma.sql`
-      INSERT INTO "billing_stripe_accounts" ("id", "stripe_account_id", "livemode", "updated_at")
-      VALUES (${ids.account}, 'acct_org_billing', false, CURRENT_TIMESTAMP)
-    `);
-    await tx.$executeRaw(Prisma.sql`
-      INSERT INTO "billing_stripe_customers" (
-        "id", "account_id", "org_id", "team_id", "scope", "scope_key", "updated_at"
-      ) VALUES (
-        ${ids.teamCustomer}, ${ids.account}, ${ids.org}, ${ids.teamA}, 'TEAM',
-        ${`${ids.org}:${ids.teamA}`}, CURRENT_TIMESTAMP
-      )
-    `);
-    await tx.$executeRaw(Prisma.sql`
-      INSERT INTO "billing_credit_accounts" (
-        "id", "account_id", "customer_id", "org_id", "team_id", "scope", "scope_key",
-        "currency", "balance_microcredits", "updated_at"
-      ) VALUES (
-        ${ids.teamCreditAccount}, ${ids.account}, ${ids.teamCustomer}, ${ids.org}, ${ids.teamA},
-        'TEAM', ${`${ids.org}:${ids.teamA}`}, 'USD', 500000000, CURRENT_TIMESTAMP
-      )
-    `);
-  });
-}
-
-function portfolio(teamId: string, cursor: string): NormalizedMeteringPortfolio {
-  return {
-    schemaVersion: 1,
-    billingCompleteness: { state: 'complete', unresolvedPaidAttempts: '0' },
-    contract: 'metering-portfolio-v1',
-    perspectiveProduct: 'deepwater',
-    groupBy: 'user',
-    scope: {
-      organizationId: ids.org,
-      teamId,
-      month: '2026-07',
-      startsAt: '2026-07-01T00:00:00.000Z',
-      endsAt: '2026-08-01T00:00:00.000Z',
-    },
-    calls: '1',
-    lines: [
-      {
-        serviceId: 'provider_openai',
-        usageUnit: 'tokens',
-        calls: '1',
-        inputUnits: '0',
-        cachedInputUnits: '0',
-        outputUnits: '0',
-        estimatedProviderCost: '1000',
-        actualProviderCost: '1000',
-        selectedProviderCost: '1000',
-        currency: 'USD',
-        costProvenance: 'actual',
-        billingDisposition: 'paid',
-        billingProduct: 'deepwater',
-        callerProduct: 'deepwater',
-        originProduct: 'deepwater',
-        userId: teamId === ids.teamA ? ids.owner : ids.member,
-      },
-    ],
-    snapshot: {
-      id: cursor,
-      cursor,
-      capturedAt: '2026-07-20T11:59:00.000Z',
-      immutable: true,
-      sha256: 'c'.repeat(64),
-    },
-  };
-}
 
 describe.skipIf(!databaseTestsEnabled)('organisation billing responsibility persistence', () => {
   let prisma: PrismaClient;
@@ -478,5 +312,114 @@ describe.skipIf(!databaseTestsEnabled)('organisation billing responsibility pers
     expect((await prisma.billingStripeUsageReconciliation.findFirstOrThrow({
       where: { exportId: retryable.id },
     })).priorEventIdentifier).toBe('uoa_me_org_billing_retryable');
+  });
+
+  it('persists a finalized late-usage liability until a verified manual invoice compensates it', async () => {
+    const observedAt = new Date('2026-10-04T12:00:00.000Z');
+    await prisma.billingStripeCustomer.update({
+      where: { id: ids.teamCustomer },
+      data: { stripeCustomerId: 'cus_org_billing_team' },
+    });
+    const close = await recordStripeInvoiceClose({
+      accountId: ids.account,
+      subscriptionId: 'bss_org_billing_team',
+      invoiceId: 'in_org_billing_closed',
+      billingMonth: '2026-07',
+      periodStartsAt: new Date('2026-07-01T00:00:00.000Z'),
+      periodEndsAt: new Date('2026-08-01T00:00:00.000Z'),
+      currency: 'USD', state: 'FINALIZED_HOLD',
+      lastError: 'STRIPE_INVOICE_ALREADY_FINALIZED', now: observedAt,
+    }, prisma);
+    const invoice = { id: close.stripeInvoiceId, livemode: false, status: 'paid' };
+    const cycle = await runStripeInvoiceCloseCycle({
+      prisma, now: () => new Date('2026-10-04T13:01:00.000Z'),
+      stripe: { invoices: { retrieve: async () => invoice } } as never,
+      quote: async () => ({
+        ledgerSnapshotCursor: 'bus_late_july_123456789',
+        amountMicroMinor: 130_000_000n,
+        currency: 'USD',
+      }),
+    });
+    expect(cycle).toEqual({ checked: 1, held: 0, unbilled: 1 });
+    const held = await prisma.billingStripeInvoiceClose.findUniqueOrThrow({ where: { id: close.id } });
+    expect(held.state).toBe('FINALIZED_HOLD');
+    expect(held.unbilledAmountMicroMinor).toBe(130_000_000n);
+    const metadata = {
+      uoa_source_close_id: close.id,
+      uoa_source_invoice_id: close.stripeInvoiceId,
+      uoa_source_subscription_id: close.subscriptionId,
+      uoa_source_service_id: ids.service,
+      uoa_source_billing_month: close.billingMonth,
+      uoa_source_period_start: close.periodStartsAt.toISOString(),
+      uoa_source_period_end: close.periodEndsAt.toISOString(),
+    };
+    const adjustmentStripe = (invoiceId: string, amount: number, lineId: string) => ({
+      accounts: { retrieveCurrent: async () => ({ id: 'acct_org_billing' }) },
+      invoices: {
+        retrieve: async () => ({
+          id: invoiceId, livemode: false, status: 'paid', billing_reason: 'manual',
+          customer: 'cus_org_billing_team', currency: 'usd', amount_paid: amount,
+          metadata,
+        }),
+        listLineItems: async () => ({
+          has_more: false, data: [{ id: lineId, amount, currency: 'usd', metadata }],
+        }),
+      },
+    });
+    await expect(compensateFinalizedStripeInvoice({
+      closeId: close.id, adjustmentInvoiceId: 'in_manual_adjustment_wrong',
+      actorEmail: 'billing-ops@example.test', observedAt: new Date('2026-10-04T13:30:00.000Z'),
+      now: new Date('2026-10-04T13:31:00.000Z'),
+    }, {
+      prisma, stripe: adjustmentStripe('in_manual_adjustment_wrong', 129, 'il_manual_wrong') as never,
+    })).rejects.toThrow('STRIPE_INVOICE_ADJUSTMENT_EVIDENCE_MISMATCH');
+    expect(await prisma.billingStripeInvoiceCloseResolution.count({ where: { closeId: close.id } }))
+      .toBe(0);
+    await compensateFinalizedStripeInvoice({
+      closeId: close.id, adjustmentInvoiceId: 'in_manual_adjustment_exact',
+      actorEmail: 'billing-ops@example.test', observedAt: new Date('2026-10-04T13:30:00.000Z'),
+      now: new Date('2026-10-04T13:31:00.000Z'),
+    }, {
+      prisma, stripe: adjustmentStripe('in_manual_adjustment_exact', 130, 'il_manual_exact') as never,
+    });
+    const compensated = await prisma.billingStripeInvoiceClose.findUniqueOrThrow({
+      where: { id: close.id },
+    });
+    expect(compensated.state).toBe('COMPENSATED');
+    const evidence = await prisma.billingStripeInvoiceCloseResolution.findFirstOrThrow({
+      where: { closeId: close.id },
+    });
+    expect(evidence.amountMicroMinor).toBe(130_000_000n);
+    expect(evidence.stripeAdjustmentLineId).toBe('il_manual_exact');
+    await expect(prisma.billingStripeInvoiceCloseResolution.create({
+      data: {
+        closeId: close.id, stripeAdjustmentInvoiceId: 'in_manual_adjustment_exact',
+        stripeAdjustmentLineId: 'il_manual_duplicate', amountMicroMinor: 130_000_000n,
+        paidAmountMinor: 130n,
+        ledgerSnapshotCursor: held.ledgerSnapshotCursor!,
+        actorEmail: 'billing-ops@example.test', observedAt,
+      },
+    })).rejects.toThrow();
+    const later = await runStripeInvoiceCloseCycle({
+      prisma, now: () => new Date('2026-10-04T15:00:00.000Z'),
+      stripe: { invoices: { retrieve: async () => invoice } } as never,
+      quote: async (params) => ({
+        ledgerSnapshotCursor: 'bus_later_july_123456789',
+        amountMicroMinor: params.paidAdjustmentsAmountMinor === 130n ? 70_000_000n : 200_000_000n,
+        currency: 'USD',
+      }),
+    });
+    expect(later).toEqual({ checked: 1, held: 0, unbilled: 1 });
+    const reopened = await prisma.billingStripeInvoiceClose.findUniqueOrThrow({
+      where: { id: close.id },
+    });
+    expect(reopened.state).toBe('FINALIZED_HOLD');
+    expect(reopened.unbilledAmountMicroMinor).toBe(70_000_000n);
+    await expect(prisma.billingStripeInvoiceClose.update({
+      where: { id: close.id }, data: { billingMonth: '2026-08' },
+    })).rejects.toThrow();
+    await expect(prisma.billingStripeInvoiceCloseResolution.update({
+      where: { id: evidence.id }, data: { amountMicroMinor: 1n },
+    })).rejects.toThrow();
   });
 });
