@@ -231,6 +231,16 @@ time; terminal evidence closes it once. A missing baseline, unclosed month, or
 unproven Stripe billable period holds the finalized quote. The canonical cycle
 snapshot must freeze this quote before either Stripe invoice delivery or manual
 invoice issue; a live quote alone is never collection authority.
+The existing Admin Billing → Contracts → Activate version doorway collects each
+service's monthly flat fee or per-seat unit price in natural currency units,
+converted exactly to stored minor units, automatic or fixed quantity
+policy, full-month or prorated timing, and independent prepaid or pay-as-you-go
+usage mode. Fixed terms require an explicit purchased quantity. Activation
+readback labels a per-seat amount as a unit price and shows the saved capacity
+and payment mode. New operator terms default to prepaid; an older two-field
+activation request retains flat/pay-as-you-go semantics on replay. This
+operator action rechecks the superuser role and token epoch inside the final
+terms transaction, including idempotent replay.
 When a later manual term replaces a fixed-capacity agreement, the old
 agreement's immutable commercial end removes its admission limit exactly at
 the boundary even if the evidence-ending sweep runs later. A newly scheduled
@@ -238,10 +248,18 @@ fixed agreement constrains admission from its roster-capture time.
 The always-on seat transition scheduler closes the old evidence at its later
 observed sweep time, preserving the exact boundary and interval history.
 
-The manual invoice calculator uses the closed-month per-seat quote for its
-subscription line, never the per-seat unit price as a whole invoice fee. It
-excludes prepaid runtime usage from the manual pay-as-you-go total while
-retaining the raw Ledger snapshot reference for audit.
+The manual invoice calculator uses the closed-month source quote for flat and
+per-seat subscription lines, never the per-seat unit price as a whole invoice
+fee. A flat contract activated partway through its first month holds that
+month because it has no partial-month policy; later whole months can be billed
+from its observed activation. A closed month remains billable after later
+termination, but no month after the termination boundary can be charged.
+Complete Ledger coverage is required for prepaid and pay-as-you-go alike.
+Prepaid runtime usage is excluded from the manual usage total, and any legacy
+credit settlement found against a prepaid tariff holds calculation for
+reconciliation instead of reducing the separate subscription fee. Only a
+pay-as-you-go term can apply a collector credit as an invoice offset. The raw
+Ledger snapshot reference remains private audit evidence.
 
 Prepaid usage is funded from the existing scoped credit account before a paid
 provider dispatch. It cannot become a positive Stripe usage-meter export when
@@ -284,6 +302,38 @@ customer's debit. Pending holds reduce available credits without changing
 confirmed balance. The old portfolio credit allocator and Stripe usage meter
 exclude prepaid usage; invoice closure requires complete Ledger usage and
 matching settled raw-cost receipts.
+
+Delayed Ledger-owned research uses a separate, finite job-compute renewal
+grant. Ledger presents the fresh, original UOA `ai.invoke` delegation and its
+product-bound runtime key to `POST /billing/v1/ledger/job-compute-renewals`.
+The request identifies one immutable origin invocation, Ledger job, reserved
+Water UUID, optional open planner turn, and purpose. Ledger generates a
+256-bit opaque secret and stable issue key before the request; UOA stores only
+its digest and returns the same grant on an identical retry. If the original
+45-second JWT expires after the issue committed but before its HTTP response
+reached Ledger, the origin runtime key can recover the existing grant with
+the same secret, issue key, and exact frozen tuple at `/recover`; recovery
+never creates a grant. The seven-day
+expiry is fixed at the first committed issue and never extends on replay.
+UOA checks the original token's `tv`, product, source domain, active team,
+current membership, credential epoch, source delegation policy, and the
+DeepWater recipient app-key binding. Water may renew only with its existing
+DeepWater `customer_lifecycle` app key, the opaque secret, and the exact frozen
+job tuple at `POST /billing/v1/job-compute-renewals/:grantId/renew`; the
+RS256 Ledger-audience token lasts at most 120 seconds. Revocation uses the
+same recipient proof and tuple at the `/revoke` path. Every renewal checks
+current subject, membership, source and recipient policy, runtime-key state,
+and epoch. A reservation carrying this token must include the exact
+`job_compute` tuple; admission checks the live grant row again in both
+transactions, including replays. Ledger separately verifies its own active
+job and turn before any provider dispatch. Older jobs with no grant hold for
+owner reauthentication; a retry under a new Ledger job cannot inherit a grant.
+After Water durably acknowledges the carrier, Ledger erases its encrypted
+pending secret. The origin Ledger runtime key may still revoke with the
+original issue key and exact frozen job tuple; this irreversible narrowing
+cannot renew or rebind the grant. The issuer locks live runtime and recipient
+keys against concurrent revocation. Concurrent identical issues converge on one grant.
+Near expiry, `expires_in` reports only the remaining whole seconds.
 
 Mode rules:
 
@@ -628,7 +678,17 @@ assignment, customer, scope, and return URLs recovers the open session. If UOA
 crashes after Stripe creates a session but before recording its ID, retry
 searches the exact Stripe customer and UOA Checkout metadata and reattaches the
 single match. A stale creating lease with no Stripe session is marked abandoned
-and releases the scope. Concurrent lease creation recovers the database winner;
+and releases the billing scope for a new attempt. A fixed-seat capacity claim
+starts in the same transaction as the local Checkout row, before Stripe egress.
+It remains in force for creating, open, complete, and locally abandoned rows:
+the original Stripe create may finish after a lease lookup found no session.
+Verified Checkout expiry or a terminal canceled/incomplete-expired subscription
+releases the claim. A paid subscription transfers the claim to the activated
+seat subscription; an activation that cannot satisfy capacity remains held for
+payment reconciliation, never represented as an active UOA licence. Checkout
+creation and membership/invitation writes serialize on the organisation row,
+so a fixed quantity below occupied plus reserved seats fails before Stripe is
+called. Concurrent lease creation recovers the database winner;
 Stripe receives the winner's stable account/mode/Checkout idempotency key.
 
 UOA creates one currency-specific Stripe catalog for each product, including:
@@ -639,6 +699,11 @@ UOA creates one currency-specific Stripe catalog for each product, including:
 - one metered Price for rated customer money;
 - a calendar-month billing anchor aligned to Ledger's UTC month;
 - no promotion codes, because discounts must be explicit UOA tariff versions.
+
+Customer-visible Stripe product and monthly Price labels use the product name
+and “Monthly subscription”; internal tariff keys and versions stay in Stripe
+metadata for binding only. Existing catalog labels are normalized when reused,
+so a private operator key cannot appear in a hosted Checkout or invoice label.
 
 The hosted Checkout sets Stripe's billing-cycle anchor to the first day of the
 next UTC month and sets `proration_behavior=none`. The partial alignment period

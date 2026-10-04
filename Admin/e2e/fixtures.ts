@@ -129,6 +129,11 @@ export async function installFixtures(page: Page) {
         draft.services = [{ service_id: 'billing-1', service_identifier: 'deepwater',
           service_name: 'Fixture product', tariff_id: 'future-tariff',
           monthly_amount_minor: input.services[0].monthly_amount_minor,
+          monthly_charge_basis: input.services[0].monthly_charge_basis,
+          seat_policy: input.services[0].seat_policy ?? null,
+          seat_charge_timing: input.services[0].seat_charge_timing ?? null,
+          usage_payment_mode: input.services[0].usage_payment_mode,
+          fixed_seat_quantity: input.services[0].fixed_seat_quantity ?? null,
           monthly_price: { amount_minor: input.services[0].monthly_amount_minor,
             amount: '60', currency: 'USD', display: '$60.00' } }];
         return json(draft);

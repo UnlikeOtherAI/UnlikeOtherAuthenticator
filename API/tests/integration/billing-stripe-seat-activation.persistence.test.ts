@@ -107,6 +107,17 @@ describe.skipIf(!process.env.DATABASE_URL)('Stripe per-seat activation projectio
     expect(projected.seatSubscription?.baselineMemberCount).toBe(1);
     expect(projected.seatSubscription?.capacityRevisions).toHaveLength(1);
     expect(projected.seatSubscription?.capacityRevisions[0]?.quantity).toBe(2);
+    const team = await db.prisma.team.create({ data: {
+      orgId: checkout.orgId, name: 'Stripe invite scope', slug: 'stripe-invite-scope',
+    } });
+    await db.prisma.teamInvite.create({ data: {
+      orgId: checkout.orgId, teamId: team.id,
+      email: 'stripe-seat-invite@example.test', lastSentAt: new Date(),
+    } });
+    await expect(db.prisma.teamInvite.create({ data: {
+      orgId: checkout.orgId, teamId: team.id,
+      email: 'stripe-seat-overflow@example.test', lastSentAt: new Date(),
+    } })).rejects.toThrow('Fixed seat capacity exceeded');
     await db.prisma.$transaction((tx) => syncBaseStripeSubscription(
       tx, { ...active, status: 'canceled', cancel_at_period_end: true } as never,
       account as never,
@@ -116,5 +127,9 @@ describe.skipIf(!process.env.DATABASE_URL)('Stripe per-seat activation projectio
     });
     expect(ended.billableUntil).not.toBeNull();
     expect(ended.seatSubscription?.endedAt).not.toBeNull();
+    await db.prisma.teamInvite.create({ data: {
+      orgId: checkout.orgId, teamId: team.id,
+      email: 'stripe-seat-overflow@example.test', lastSentAt: new Date(),
+    } });
   });
 });

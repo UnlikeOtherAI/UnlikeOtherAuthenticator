@@ -6,6 +6,7 @@ import {
   BillingInvoiceSchema,
   type BillingContractFormValues,
   type BillingContractVersionFormValues,
+  type BillingContractServiceActivation,
   type BillingInvoiceBuyerFormValues,
   type BillingInvoiceCalculateFormValues,
   type BillingInvoiceIssuerFormValues,
@@ -73,7 +74,7 @@ export const billingContractAdminService = {
   async activateVersion(
     contractId: string,
     versionId: string,
-    services: Array<{ serviceId: string; monthlyAmountMinor: string }>,
+    services: BillingContractServiceActivation[],
   ) {
     return BillingContractVersionSchema.parse(
       await api.post<unknown>(
@@ -82,6 +83,13 @@ export const billingContractAdminService = {
           services: services.map((service) => ({
             service_id: service.serviceId,
             monthly_amount_minor: service.monthlyAmountMinor,
+            monthly_charge_basis: service.monthlyChargeBasis,
+            ...(service.seatPolicy ? { seat_policy: service.seatPolicy } : {}),
+            ...(service.seatChargeTiming
+              ? { seat_charge_timing: service.seatChargeTiming } : {}),
+            usage_payment_mode: service.usagePaymentMode,
+            ...(service.fixedSeatQuantity
+              ? { fixed_seat_quantity: service.fixedSeatQuantity } : {}),
           })),
         },
       ),

@@ -51,6 +51,7 @@ type FrozenTerms = {
   billableUntil?: Date | null;
   contractId?: string;
   contractVersionId?: string;
+  contractActivatedAt?: Date | null;
   contractTerminatedAt?: Date | null;
 };
 
@@ -78,7 +79,8 @@ async function loadFrozenTerms(source: MonthlyChargeSource, prisma: PrismaClient
   const row = await prisma.billingContractServiceTerm.findUnique({
     where: { id: source.id },
     include: { tariff: true, contractVersion: {
-      include: { contract: { select: { orgId: true, terminatedAt: true } } },
+      include: { contract: { select: { orgId: true, activatedAt: true,
+        terminatedAt: true } } },
     }, seatSubscription: {
       include: { membershipIntervals: true, capacityRevisions: true },
     } },
@@ -96,6 +98,7 @@ async function loadFrozenTerms(source: MonthlyChargeSource, prisma: PrismaClient
     unitAmountMinor: row.monthlyAmountMinor, currency: row.tariff.currency,
     agreement: row.seatSubscription, contractId: row.contractVersion.contractId,
     contractVersionId: row.contractVersionId,
+    contractActivatedAt: row.contractVersion.contract.activatedAt,
     contractTerminatedAt: row.contractVersion.contract.terminatedAt };
 }
 
@@ -115,6 +118,9 @@ export async function quoteSubscriptionMonthlyCharge(
     hold('BILLING_MONTHLY_SOURCE_STATUS_UNRESOLVED');
   }
   if (terms.contractId) {
+    if (!terms.contractActivatedAt || terms.contractActivatedAt >= end) {
+      hold('BILLING_MONTHLY_SOURCE_NOT_EFFECTIVE');
+    }
     const effective = await prisma.billingOrganisationContractVersion.findFirst({
       where: { contractId: terms.contractId,
         effectiveFromMonth: { lte: params.billingMonth } },
@@ -135,11 +141,14 @@ export async function quoteSubscriptionMonthlyCharge(
       const monthStart = new Date(`${params.billingMonth}-01T00:00:00.000Z`);
       const monthEnd = new Date(Date.UTC(monthStart.getUTCFullYear(),
         monthStart.getUTCMonth() + 1, 1));
-      if (!terms.billableFrom || terms.billableFrom >= monthStart ||
+      if (!terms.billableFrom || terms.billableFrom > monthStart ||
         (terms.billableUntil && terms.billableUntil <= monthStart) ||
         terms.billableFrom >= monthEnd) {
         hold('BILLING_MONTHLY_SOURCE_NOT_EFFECTIVE');
       }
+    } else if (!terms.contractActivatedAt || terms.contractActivatedAt > start) {
+      // A legacy flat contract has no rule for a partial activation month.
+      hold('BILLING_MONTHLY_SOURCE_PARTIAL_FLAT_MONTH');
     }
     return { source: terms.source, serviceId: terms.serviceId, tariffId: terms.tariffId,
       organisationId: terms.orgId, teamId: terms.teamId, scope: terms.scope,

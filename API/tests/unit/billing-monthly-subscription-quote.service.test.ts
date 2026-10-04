@@ -60,7 +60,8 @@ describe('frozen monthly subscription quote', () => {
         seatPolicy: null, seatChargeTiming: null,
         monthlyAmountMinor: 1200n, currency: 'USD' },
       contractVersion: { contractId: 'contract-1', currency: 'USD',
-        contract: { orgId: 'org-1', terminatedAt: null } }, seatSubscription: null };
+        contract: { orgId: 'org-1', activatedAt: at('2028-01-01T00:00:00Z'),
+          terminatedAt: null as Date | null } }, seatSubscription: null };
     const effective = vi.fn().mockResolvedValue({ id: 'version-1' });
     const prisma = { billingContractServiceTerm: { findUnique: vi.fn().mockResolvedValue(term) },
       billingOrganisationContractVersion: { findFirst: effective } };
@@ -68,6 +69,17 @@ describe('frozen monthly subscription quote', () => {
       billingMonth: '2028-02' }, closed(prisma));
     expect(quote).toMatchObject({ amountMinor: 1200n,
       agreementId: null, evidenceIds: [], scope: BillingAssignmentScope.ORGANISATION });
+    term.contractVersion.contract.terminatedAt = at('2028-04-01T00:00:00Z');
+    await expect(quoteSubscriptionMonthlyCharge({ source: { kind: 'manual', id: term.id },
+      billingMonth: '2028-02' }, closed(prisma))).resolves.toMatchObject({ amountMinor: 1200n });
+    await expect(quoteSubscriptionMonthlyCharge({ source: { kind: 'manual', id: term.id },
+      billingMonth: '2028-04' }, closed(prisma)))
+      .rejects.toThrow('BILLING_MONTHLY_SOURCE_NOT_EFFECTIVE');
+    term.contractVersion.contract.terminatedAt = null;
+    term.contractVersion.contract.activatedAt = at('2028-02-15T00:00:00Z');
+    await expect(quoteSubscriptionMonthlyCharge({ source: { kind: 'manual', id: term.id },
+      billingMonth: '2028-02' }, closed(prisma)))
+      .rejects.toThrow('BILLING_MONTHLY_SOURCE_PARTIAL_FLAT_MONTH');
     effective.mockResolvedValue({ id: 'version-2' });
     await expect(quoteSubscriptionMonthlyCharge({ source: { kind: 'manual', id: term.id },
       billingMonth: '2028-03' }, closed(prisma)))
@@ -85,6 +97,8 @@ describe('frozen monthly subscription quote', () => {
       source: { kind: 'stripe', id: source.id }, billingMonth: month,
     }, closed(prisma));
     await expect(quote('2028-01')).rejects.toThrow('BILLING_MONTHLY_SOURCE_NOT_EFFECTIVE');
+    await expect(quote('2028-02')).resolves.toMatchObject({ amountMinor: 1200n });
+    source.billableFrom = at('2028-02-01T00:00:00Z');
     await expect(quote('2028-02')).resolves.toMatchObject({ amountMinor: 1200n });
     await expect(quote('2028-04')).rejects.toThrow('BILLING_MONTHLY_SOURCE_NOT_EFFECTIVE');
     source.billableFrom = null as never;

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import type {
   BillingContractFormValues,
+  BillingContractServiceActivation,
   BillingContractVersionFormValues,
   BillingInvoiceBuyerFormValues,
   BillingInvoiceCalculateFormValues,
@@ -69,7 +70,7 @@ export function useCreateBillingContractVersionMutation(contractId: string) {
 export function useActivateBillingContractVersionMutation(contractId: string, versionId: string) {
   const refresh = useRefresh([contractsKey]);
   return useMutation({
-    mutationFn: (services: Array<{ serviceId: string; monthlyAmountMinor: string }>) =>
+    mutationFn: (services: BillingContractServiceActivation[]) =>
       billingContractAdminService.activateVersion(contractId, versionId, services),
     onSuccess: refresh,
   });

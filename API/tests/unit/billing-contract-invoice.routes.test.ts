@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp } from '../../src/app.js';
 
 const services = vi.hoisted(() => ({
+  activateBillingContractVersion: vi.fn(),
   listBillingContracts: vi.fn(),
   createBillingContractVersion: vi.fn(),
   resolveBillingInvoiceIssueActions: vi.fn(),
@@ -36,7 +37,7 @@ vi.mock('../../src/middleware/admin-superuser.js', () => ({
 }));
 
 vi.mock('../../src/services/billing-contract.service.js', () => ({
-  activateBillingContractVersion: vi.fn(),
+  activateBillingContractVersion: services.activateBillingContractVersion,
   createBillingContract: vi.fn(),
   createBillingContractVersion: services.createBillingContractVersion,
   listBillingContracts: services.listBillingContracts,
@@ -219,7 +220,53 @@ describe('contract invoice admin routes', () => {
     }
   });
 
+  it('passes explicit fixed prepaid terms through the superuser activation doorway', async () => {
+    services.activateBillingContractVersion.mockResolvedValue({
+      id: 'version_2', version: 2, usageMarkupBps: 3000,
+      currency: 'USD', paymentTermsDays: 30, effectiveFromMonth: '9999-12',
+      createdAt: now, serviceTerms: [],
+    });
+    const app = await createApp();
+    try {
+      const url = '/internal/admin/billing/contracts/contract_1/versions/version_2/activate';
+      const fixed = { service_id: 'service_1', monthly_amount_minor: '6000',
+        monthly_charge_basis: 'per_seat', seat_policy: 'fixed',
+        seat_charge_timing: 'full_month', usage_payment_mode: 'prepaid',
+        fixed_seat_quantity: 4 };
+      const denied = await app.inject({ method: 'POST', url,
+        payload: { services: [fixed] } });
+      expect(denied.statusCode).toBe(401);
+      const valid = await app.inject({ method: 'POST', url,
+        headers: { authorization: 'Bearer admin-token' },
+        payload: { services: [fixed] } });
+      expect(valid.statusCode, valid.body).toBe(200);
+      expect(services.activateBillingContractVersion).toHaveBeenCalledWith(
+        expect.objectContaining({ services: [{
+          serviceId: 'service_1', monthlyAmountMinor: '6000',
+          monthlyChargeBasis: 'per_seat', seatPolicy: 'fixed',
+          seatChargeTiming: 'full_month', usagePaymentMode: 'prepaid',
+          fixedSeatQuantity: 4,
+        }] }),
+      );
+      for (const invalid of [
+        { ...fixed, fixed_seat_quantity: undefined },
+        { ...fixed, seat_charge_timing: undefined },
+        { ...fixed, monthly_charge_basis: 'flat' },
+      ]) {
+        const response = await app.inject({ method: 'POST', url,
+          headers: { authorization: 'Bearer admin-token' },
+          payload: { services: [invalid] } });
+        expect(response.statusCode).toBe(400);
+      }
+      expect(services.activateBillingContractVersion).toHaveBeenCalledTimes(1);
+    } finally {
+      await app.close();
+    }
+  });
+
   it('projects exact contract and version action readiness from authoritative state', async () => {
+    const flatTariff = { monthlyChargeBasis: 'FLAT', seatPolicy: null,
+      seatChargeTiming: null, usagePaymentMode: 'PAY_AS_YOU_GO' };
     const baseVersion = {
       usageMarkupBps: 4000,
       currency: 'USD',
@@ -254,6 +301,9 @@ describe('contract invoice admin routes', () => {
             serviceTerms: [
               { serviceId: 'service_1', tariffId: 'tariff_future',
                 monthlyAmountMinor: 6000n,
+                tariff: { monthlyChargeBasis: 'PER_SEAT', seatPolicy: 'FIXED',
+                  seatChargeTiming: 'FULL_MONTH', usagePaymentMode: 'PREPAID' },
+                fixedSeatQuantity: 4,
                 service: { identifier: 'deepwater', name: 'DeepWater' } },
             ],
           },
@@ -273,6 +323,7 @@ describe('contract invoice admin routes', () => {
                 serviceId: 'service_1',
                 tariffId: 'tariff_1',
                 monthlyAmountMinor: 5000n,
+                tariff: flatTariff,
                 service: { identifier: 'deepwater', name: 'DeepWater' },
               },
             ],
@@ -287,6 +338,7 @@ describe('contract invoice admin routes', () => {
                 serviceId: 'service_1',
                 tariffId: 'tariff_old',
                 monthlyAmountMinor: 2500n,
+                tariff: flatTariff,
                 service: { identifier: 'deepwater', name: 'DeepWater' },
               },
             ],
@@ -325,6 +377,11 @@ describe('contract invoice admin routes', () => {
       expect(response.statusCode, response.body).toBe(200);
       const body = response.json();
       expect(body[0].actions).toEqual({ add_version: true });
+      expect(body[0].versions[1].services[0]).toMatchObject({
+        monthly_charge_basis: 'per_seat', seat_policy: 'fixed',
+        seat_charge_timing: 'full_month', usage_payment_mode: 'prepaid',
+        fixed_seat_quantity: 4,
+      });
       expect(
         Object.fromEntries(
           body[0].versions.map((version: { id: string; actions: unknown }) => [

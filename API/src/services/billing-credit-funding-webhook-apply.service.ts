@@ -12,6 +12,7 @@ import { randomUUID } from 'node:crypto';
 import { AppError } from '../utils/errors.js';
 import { lockCreditBalance } from './billing-credit-balance-lock.service.js';
 import { applyPaymentAdjustment } from './billing-credit-payment-adjustment-webhook.service.js';
+import { recordAcceptedCreditPaymentInvoice } from './billing-credit-payment-invoice-source.service.js';
 import type { StripeAccountContext } from './billing-stripe-client.service.js';
 import { stripeExternalId } from './billing-stripe-webhook-utils.service.js';
 import type {
@@ -34,7 +35,7 @@ async function applyTopUpSucceeded(
 ): Promise<void> {
   const checkout = await tx.billingCreditTopUpCheckout.findUnique({
     where: { id: event.localId },
-    include: { customer: true },
+    include: { customer: true, creditAccount: true },
   });
   if (!checkout || event.localType !== 'top_up') {
     throw new AppError('INTERNAL', 502, 'STRIPE_CREDIT_TOP_UP_BINDING_INVALID');
@@ -87,6 +88,22 @@ async function applyTopUpSucceeded(
       completionWebhookEventId: webhookEventId,
       completedAt: event.occurredAt,
       creditEntryId: entryId,
+    },
+  });
+  await recordAcceptedCreditPaymentInvoice(tx, {
+    event,
+    account,
+    source: {
+      kind: 'top_up', id: checkout.id, creditEntryId: entryId,
+      creditAccountId: checkout.creditAccountId,
+      creditAccountOrgId: checkout.creditAccount.orgId,
+      creditAccountTeamId: checkout.creditAccount.teamId,
+      serviceId: checkout.serviceId, appKeyId: checkout.appKeyId,
+      attributedUserId: checkout.requestedByUserId,
+      amountMinor: checkout.paymentAmountMinor,
+      creditsMicrocredits: checkout.creditsReceivedMicrocredits,
+      currency: checkout.currency,
+      stripeCustomerId: checkout.customer.stripeCustomerId as string,
     },
   });
 }
@@ -150,6 +167,22 @@ async function applyAutomaticTopUpSucceeded(
       status: BillingCreditAutoTopUpAttemptStatus.SUCCEEDED,
       creditEntryId: entryId,
       resolvedAt: event.occurredAt,
+    },
+  });
+  await recordAcceptedCreditPaymentInvoice(tx, {
+    event,
+    account,
+    source: {
+      kind: 'automatic_top_up', id: attempt.id, creditEntryId: entryId,
+      creditAccountId: attempt.creditAccountId,
+      creditAccountOrgId: attempt.creditAccount.orgId,
+      creditAccountTeamId: attempt.creditAccount.teamId,
+      serviceId: attempt.serviceId, appKeyId: attempt.appKeyId,
+      attributedUserId: attempt.attributedUserId,
+      amountMinor: attempt.paymentAmountMinor,
+      creditsMicrocredits: attempt.creditsReceivedMicrocredits,
+      currency: 'USD',
+      stripeCustomerId: attempt.creditAccount.customer.stripeCustomerId as string,
     },
   });
 }

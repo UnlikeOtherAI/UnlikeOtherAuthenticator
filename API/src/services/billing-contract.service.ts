@@ -12,6 +12,7 @@ import {
   contractSeatTerms, createManualSeatAgreement, normalizeContractServices,
   type ContractServiceActivation, type NormalizedContractService,
 } from './billing-contract-seat.service.js';
+import { requireLifecycleActor, type LifecycleActor } from './internal-admin-lifecycle.service.js';
 
 const KEY_PATTERN = /^[a-z0-9][a-z0-9._-]{0,99}$/;
 const MONTH_PATTERN = /^(\d{4})-(0[1-9]|1[0-2])$/;
@@ -19,6 +20,7 @@ const CURRENCY_PATTERN = /^[A-Z]{3}$/;
 const MAX_MARKUP_BPS = 100_000;
 
 type Actor = { userId?: string | null; email: string };
+type FinancialActor = Actor & LifecycleActor;
 type ContractClient = PrismaClient;
 
 function client(deps?: { prisma?: ContractClient }): ContractClient {
@@ -121,7 +123,7 @@ export async function createBillingContractVersion(
     currency: string;
     paymentTermsDays: number;
     effectiveFromMonth: string;
-    actor: Actor;
+    actor: FinancialActor;
   },
   deps?: { prisma?: ContractClient },
 ) {
@@ -143,6 +145,7 @@ export async function createBillingContractVersion(
     try {
       return await prisma.$transaction(
         async (tx) => {
+          const actorEmail = await requireLifecycleActor(tx as PrismaClient, params.actor);
           const contract = await tx.billingOrganisationContract.findUnique({
             where: { id: params.contractId },
             include: {
@@ -170,12 +173,12 @@ export async function createBillingContractVersion(
               paymentTermsDays: params.paymentTermsDays,
               effectiveFromMonth: params.effectiveFromMonth,
               createdByUserId: params.actor.userId ?? null,
-              createdByEmail: params.actor.email,
+              createdByEmail: actorEmail,
             },
           });
           await tx.adminAuditLog.create({
             data: {
-              actorEmail: params.actor.email,
+              actorEmail,
               action: 'billing.contract_version_created',
               metadata: {
                 contract_id: contract.id,
@@ -202,10 +205,11 @@ async function activateInTransaction(
     contractId: string;
     contractVersionId: string;
     services: NormalizedContractService[];
-    actor: Actor;
+    actor: FinancialActor;
     now: Date;
   },
 ) {
+  const actorEmail = await requireLifecycleActor(tx as PrismaClient, params.actor);
   const contract = await tx.billingOrganisationContract.findUnique({
     where: { id: params.contractId },
     include: {
@@ -302,7 +306,7 @@ async function activateInTransaction(
   const [serviceRows, teamOverride, checkout, subscription] = await Promise.all([
     tx.billingService.findMany({
       where: { id: { in: serviceIds }, active: true },
-      select: { id: true, identifier: true },
+      select: { id: true, identifier: true, name: true },
     }),
     tx.billingTariffAssignment.findFirst({
       where: {
@@ -353,9 +357,12 @@ async function activateInTransaction(
   }
 
   const key = contractTariffKey(contract.id);
+  const serviceById = new Map(serviceRows.map((row) => [row.id, row]));
   const commercialEffectiveAt = new Date(`${version.effectiveFromMonth}-01T00:00:00.000Z`);
   const createdTerms = [];
   for (const requested of params.services) {
+    const service = serviceById.get(requested.serviceId);
+    if (!service) throw new AppError('BAD_REQUEST', 400, 'BILLING_CONTRACT_SERVICE_NOT_FOUND');
     const { tariff: normalized, fixedSeatQuantity } = contractSeatTerms(requested,
       version, { key, name: `${contract.name} contract`.slice(0, 120) });
     const latest = await tx.billingTariff.findFirst({
@@ -380,7 +387,7 @@ async function activateInTransaction(
         currency: normalized.currency,
         isDefault: false,
         createdByUserId: params.actor.userId ?? null,
-        createdByEmail: params.actor.email,
+        createdByEmail: actorEmail,
       },
     });
     const term = await tx.billingContractServiceTerm.create({
@@ -393,7 +400,7 @@ async function activateInTransaction(
           fixedSeatQuantity,
         },
       });
-    createdTerms.push(term);
+    createdTerms.push({ ...term, tariff, service });
     await createManualSeatAgreement(tx, { serviceId: requested.serviceId,
       tariffId: tariff.id, termId: term.id, orgId: contract.orgId,
       monthlyChargeBasis: normalized.monthlyChargeBasis,
@@ -416,7 +423,7 @@ async function activateInTransaction(
       scopeKey: contract.orgId,
       effectiveFromMonth: version.effectiveFromMonth,
       tariffId: null,
-      actorEmail: params.actor.email,
+      actorEmail,
       reason: 'contract_service_removed',
     });
   }
@@ -429,7 +436,7 @@ async function activateInTransaction(
   });
   await tx.adminAuditLog.create({
     data: {
-      actorEmail: params.actor.email,
+      actorEmail,
       action: 'billing.contract_version_activated',
       metadata: {
         contract_id: contract.id,
@@ -447,7 +454,7 @@ export async function activateBillingContractVersion(
     contractId: string;
     contractVersionId: string;
     services: ContractServiceActivation[];
-    actor: Actor;
+    actor: FinancialActor;
   },
   deps?: { prisma?: ContractClient; now?: () => Date },
 ) {

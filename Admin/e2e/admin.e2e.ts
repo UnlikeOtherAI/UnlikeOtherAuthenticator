@@ -293,9 +293,9 @@ test('billing product and contract selection, invoice guards and retry preserve 
   expect(fixture.unexpected).toEqual([]);
 });
 
-test('future manual terms activate from the contract doorway without changing this month', async ({
+test('future manual seat terms activate from the contract doorway without changing this month', async ({
   page,
-}) => {
+}, testInfo) => {
   const fixture = await installFixtures(page);
   await page.goto('/billing?section=contracts&contract=contract-1');
   await page.getByRole('button', { name: 'Activate', exact: true }).first().click();
@@ -303,13 +303,26 @@ test('future manual terms activate from the contract doorway without changing th
   await expect(dialog.getByText(/These terms start in 2026-11/)).toBeVisible();
   await page.screenshot({ path: 'e2e/artifacts/future-contract-activation.png', fullPage: true });
   await dialog.getByRole('checkbox', { name: /Fixture product/ }).check();
-  await dialog.getByRole('textbox', { name: 'Fixture product monthly amount in minor units' })
-    .fill('6000');
-  await dialog.getByRole('checkbox', { name: /I confirm these exact monthly prices/ }).check();
+  await dialog.getByRole('textbox', { name: 'Fixture product monthly price in USD' })
+    .fill('60.00');
+  await dialog.getByLabel('Fixture product subscription basis').selectOption('per_seat');
+  await dialog.getByLabel('Fixture product seat quantity policy').selectOption('fixed');
+  await dialog.getByLabel('Fixture product seat charge timing').selectOption('full_month');
+  await dialog.getByLabel('Fixture product purchased seats').fill('4');
+  await expect(dialog.getByLabel('Fixture product usage payment')).toHaveValue('prepaid');
+  await page.screenshot({ path: `e2e/artifacts/manual-seat-activation-${testInfo.project.name}.png`,
+    fullPage: true });
+  await dialog.getByRole('checkbox', { name: /I confirm these exact subscription/ }).check();
   await dialog.getByRole('button', { name: 'Activate immutable terms' }).click();
-  await expect(page.getByText('Starts 2026-11').last()).toBeVisible();
+  await expect(page.locator('span:visible').filter({ hasText: 'Starts 2026-11' }))
+    .toBeVisible();
+  await expect(page.locator('span:visible').filter({ hasText: /4 purchased seats/ }))
+    .toBeVisible();
   expect(fixture.activations).toEqual([{ services: [
-    { service_id: 'billing-1', monthly_amount_minor: '6000' },
+    { service_id: 'billing-1', monthly_amount_minor: '6000',
+      monthly_charge_basis: 'per_seat', seat_policy: 'fixed',
+      seat_charge_timing: 'full_month', usage_payment_mode: 'prepaid',
+      fixed_seat_quantity: 4 },
   ] }]);
   expect(fixture.unexpected).toEqual([]);
 });

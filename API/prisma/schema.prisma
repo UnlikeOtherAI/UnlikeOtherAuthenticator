@@ -345,6 +345,23 @@ enum BillingCreditAutoTopUpAttemptStatus {
   CANCELED
 }
 
+enum BillingCreditPaymentInvoiceSource {
+  MANUAL_TOP_UP
+  AUTO_RECHARGE
+}
+
+enum BillingCreditPaymentInvoiceState {
+  PENDING
+  HELD
+  ISSUING
+  ISSUED
+}
+
+enum BillingCreditPaymentInvoiceTaxSource {
+  STRIPE_INVOICE
+  ISSUER_POLICY
+}
+
 enum BillingCreditUsageSettlementStatus {
   PENDING
   APPLIED
@@ -2117,6 +2134,7 @@ model BillingStripeAccount {
   creditPaymentAdjustments          BillingCreditPaymentAdjustment[]
   creditConsentRevisions            BillingCreditAutoTopUpConsentRevision[]
   creditAutoTopUpDisables           BillingCreditAutoTopUpDisableEvent[]
+  creditPaymentInvoices            BillingCreditPaymentInvoice[]
   recurringAddonCatalogs            BillingRecurringAddonCatalog[]
   recurringAddonCheckouts           BillingRecurringAddonCheckout[]
   recurringAddonSubscriptions       BillingRecurringAddonSubscription[]
@@ -2584,6 +2602,7 @@ model BillingInvoiceIssuerProfile {
 
   invoices  BillingInvoice[]
   sequences BillingInvoiceNumberSequence[]
+  creditPaymentInvoices BillingCreditPaymentInvoice[]
 
   @@index([active])
   @@map("billing_invoice_issuer_profiles")
@@ -2602,6 +2621,7 @@ model BillingOrganisationInvoiceProfile {
 
   org      Organisation     @relation(fields: [orgId], references: [id], onDelete: Restrict)
   invoices BillingInvoice[]
+  creditPaymentInvoices BillingCreditPaymentInvoice[]
 
   @@map("billing_organisation_invoice_profiles")
 }
@@ -3026,6 +3046,7 @@ model BillingCreditAccount {
   autoTopUpDisableEvents   BillingCreditAutoTopUpDisableEvent[]
   prepaidReservations      BillingPrepaidReservation[]
   prepaidRatingBuckets     BillingPrepaidRatingBucket[]
+  paymentInvoices          BillingCreditPaymentInvoice[]
 
   @@unique([accountId, scopeKey, currency])
   @@index([orgId, teamId])
@@ -3095,9 +3116,47 @@ model BillingLedgerRuntimeKey {
   reservations BillingPrepaidReservation[]
   dispatchDecisions BillingLedgerDispatchDecision[]
   creditEntries BillingCreditEntry[]
+  jobComputeRenewals BillingJobComputeRenewal[]
 
   @@index([serviceId, revokedAt])
   @@map("billing_ledger_runtime_keys")
+}
+
+// Opaque, finite authority to renew one originally authenticated research
+// job's compute calls. Only the digest is stored here; Ledger/Water keep the
+// caller-generated secret in scoped encrypted delivery carriers.
+model BillingJobComputeRenewal {
+  id                    String    @id @default(cuid())
+  issueKey              String    @unique @map("issue_key") @db.Char(64)
+  identityKey           String    @unique @map("identity_key") @db.Char(64)
+  secretDigest          String    @unique @map("secret_digest") @db.Char(64)
+  originRuntimeKeyId    String    @map("origin_runtime_key_id")
+  originProduct         String    @map("origin_product") @db.VarChar(100)
+  originSourceDomain    String    @map("origin_source_domain") @db.VarChar(255)
+  identityDomain        String    @map("identity_domain") @db.VarChar(255)
+  subjectId             String    @map("subject_id") @db.VarChar(256)
+  orgId                 String    @map("org_id") @db.VarChar(256)
+  teamId                String    @map("team_id") @db.VarChar(256)
+  tokenVersion          Int       @map("token_version")
+  originTokenJti        String    @map("origin_token_jti") @db.VarChar(256)
+  originInvocationId    String    @map("origin_invocation_id") @db.VarChar(160)
+  ledgerJobId           String    @map("ledger_job_id") @db.VarChar(160)
+  waterJobId            String    @map("water_job_id") @db.Uuid
+  scopeTurnId           String?   @map("scope_turn_id") @db.VarChar(160)
+  purpose               String    @db.VarChar(32)
+  recipientOrigin       String    @map("recipient_origin") @db.VarChar(255)
+  recipientProduct      String    @map("recipient_product") @db.VarChar(100)
+  ledgerAudience        String    @map("ledger_audience") @db.VarChar(255)
+  originalActorChain    Json?     @map("original_actor_chain")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  expiresAt             DateTime  @map("expires_at")
+  revokedAt             DateTime? @map("revoked_at")
+
+  originRuntimeKey BillingLedgerRuntimeKey @relation(fields: [originRuntimeKeyId], references: [id], onDelete: Restrict)
+
+  @@index([ledgerJobId, waterJobId, revokedAt])
+  @@index([subjectId, tokenVersion, expiresAt])
+  @@map("billing_job_compute_renewals")
 }
 
 model BillingPrepaidReservationEvent {
@@ -3187,6 +3246,7 @@ model BillingCreditEntry {
   adminAdjustment              BillingCreditAdminAdjustment?
   paymentAdjustmentDebit       BillingCreditPaymentAdjustment?         @relation("CreditPaymentAdjustmentDebit")
   paymentAdjustmentsOriginated BillingCreditPaymentAdjustment[]        @relation("CreditPaymentAdjustmentOriginal")
+  paymentInvoice             BillingCreditPaymentInvoice?
 
   @@unique([creditAccountId, idempotencyKey])
   @@index([creditAccountId, occurredAt])
@@ -3342,6 +3402,7 @@ model BillingCreditTopUpCheckout {
   requestedBy            User                       @relation("CreditTopUpRequester", fields: [requestedByUserId], references: [id], onDelete: Restrict)
   creditEntry            BillingCreditEntry?        @relation(fields: [creditEntryId], references: [id], onDelete: Restrict)
   completionWebhookEvent BillingStripeWebhookEvent? @relation("CreditTopUpCompletionEvent", fields: [completionWebhookEventId], references: [id], onDelete: Restrict)
+  paymentInvoice         BillingCreditPaymentInvoice?
 
   @@unique([accountId, stripeCheckoutSessionId])
   @@unique([accountId, stripePaymentIntentId])
@@ -3531,6 +3592,7 @@ model BillingCreditAutoTopUpAttempt {
   creditEntry         BillingCreditEntry?                   @relation("CreditAutoTopUpCredit", fields: [creditEntryId], references: [id], onDelete: Restrict)
   successWebhookEvent BillingStripeWebhookEvent?            @relation("CreditAutoTopUpSuccessEvent", fields: [successWebhookEventId], references: [id], onDelete: Restrict)
   stateWebhookEvent   BillingStripeWebhookEvent?            @relation("CreditAutoTopUpStateEvent", fields: [stateWebhookEventId], references: [id], onDelete: Restrict)
+  paymentInvoice      BillingCreditPaymentInvoice?
 
   @@unique([creditAccountId, idempotencyKey])
   @@unique([accountId, stripePaymentIntentId])
@@ -3540,6 +3602,62 @@ model BillingCreditAutoTopUpAttempt {
   @@index([triggerEntryId])
   @@index([consentRevisionId])
   @@map("billing_credit_auto_top_up_attempts")
+}
+
+// One accepted Stripe payment funds credits once and creates one durable legal
+// document obligation. A held or pending row is never presented as an invoice.
+// Payment and credit provenance cannot change after the funding transaction.
+model BillingCreditPaymentInvoice {
+  id                           String                                @id @default(cuid())
+  accountId                    String                                @map("account_id")
+  livemode                     Boolean
+  stripePaymentIntentId        String                                @map("stripe_payment_intent_id") @db.VarChar(255)
+  stripeChargeId               String                                @map("stripe_charge_id") @db.VarChar(255)
+  stripeInvoiceId              String?                               @map("stripe_invoice_id") @db.VarChar(255)
+  source                       BillingCreditPaymentInvoiceSource
+  topUpCheckoutId              String?                               @unique @map("top_up_checkout_id")
+  autoTopUpAttemptId           String?                               @unique @map("auto_top_up_attempt_id")
+  creditEntryId                String                                @unique @map("credit_entry_id")
+  creditAccountId              String                                @map("credit_account_id")
+  serviceId                    String                                @map("service_id")
+  appKeyId                     String                                @map("app_key_id")
+  orgId                        String                                @map("org_id")
+  teamId                       String?                               @map("team_id")
+  attributedUserId             String                                @map("attributed_user_id")
+  stripeCustomerId             String                                @map("stripe_customer_id") @db.VarChar(255)
+  currency                     String                                @db.Char(3)
+  grossAmountMinor             BigInt                                @map("gross_amount_minor")
+  creditsPurchasedMicrocredits BigInt                                @map("credits_purchased_microcredits")
+  paidAt                       DateTime                              @map("paid_at")
+  state                        BillingCreditPaymentInvoiceState      @default(PENDING)
+  holdReason                   String?                               @map("hold_reason") @db.VarChar(160)
+  taxAmountMinor               BigInt?                               @map("tax_amount_minor")
+  taxSource                    BillingCreditPaymentInvoiceTaxSource? @map("tax_source")
+  taxEvidenceReference         String?                               @map("tax_evidence_reference") @db.VarChar(255)
+  issuerProfileId              String?                               @map("issuer_profile_id")
+  buyerProfileId               String?                               @map("buyer_profile_id")
+  issuerSnapshot               Json?                                 @map("issuer_snapshot")
+  buyerSnapshot                Json?                                 @map("buyer_snapshot")
+  invoiceNumber                String?                               @unique @map("invoice_number") @db.VarChar(80)
+  issuedAt                     DateTime?                             @map("issued_at")
+  pdfObjectKey                 String?                               @map("pdf_object_key") @db.VarChar(1024)
+  pdfSha256                    String?                               @map("pdf_sha256") @db.Char(64)
+  createdAt                    DateTime                              @default(now()) @map("created_at")
+  updatedAt                    DateTime                              @updatedAt @map("updated_at")
+
+  account       BillingStripeAccount                @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  creditEntry   BillingCreditEntry                  @relation(fields: [creditEntryId], references: [id], onDelete: Restrict)
+  creditAccount BillingCreditAccount                @relation(fields: [creditAccountId], references: [id], onDelete: Restrict)
+  topUpCheckout BillingCreditTopUpCheckout?         @relation(fields: [topUpCheckoutId], references: [id], onDelete: Restrict)
+  autoAttempt   BillingCreditAutoTopUpAttempt?      @relation(fields: [autoTopUpAttemptId], references: [id], onDelete: Restrict)
+  issuerProfile BillingInvoiceIssuerProfile?       @relation(fields: [issuerProfileId], references: [id], onDelete: Restrict)
+  buyerProfile  BillingOrganisationInvoiceProfile? @relation(fields: [buyerProfileId], references: [id], onDelete: Restrict)
+
+  @@unique([accountId, livemode, stripePaymentIntentId])
+  @@index([orgId, teamId, paidAt, id])
+  @@index([serviceId, paidAt])
+  @@index([state, paidAt])
+  @@map("billing_credit_payment_invoices")
 }
 
 // UOA alone converts one exact Ledger USD-rated snapshot into credits. Each row

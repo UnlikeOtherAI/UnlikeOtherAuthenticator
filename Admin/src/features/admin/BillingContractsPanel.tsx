@@ -47,11 +47,20 @@ function VersionServices({ version }: { version: BillingContractVersion }) {
   return (
     <div className="space-y-1">
       {version.services.map((service) => (
-        <p key={service.service_id} className="whitespace-nowrap text-xs">
+        <p key={service.service_id} className="break-words text-xs leading-relaxed">
           <span className="font-medium text-gray-800">
             {service.service_name ?? service.service_identifier ?? service.service_id}
           </span>{' '}
-          <span className="text-gray-500">· {service.monthly_price.display}</span>
+          <span className="text-gray-500">
+            · {service.monthly_price.display}
+            {service.monthly_charge_basis === 'per_seat' ? ' per seat' : ' monthly'}
+            {service.seat_policy === 'fixed'
+              ? ` · ${service.fixed_seat_quantity} purchased seats`
+              : service.seat_policy === 'automatic' ? ' · active human seats' : ''}
+            {service.seat_charge_timing
+              ? ` · ${service.seat_charge_timing.replace('_', ' ')}` : ''}
+            {` · ${service.usage_payment_mode === 'prepaid' ? 'prepaid usage' : 'usage billed later'}`}
+          </span>
         </p>
       ))}
     </div>

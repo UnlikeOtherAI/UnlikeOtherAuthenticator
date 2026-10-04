@@ -50,6 +50,10 @@ export function contractSeatTerms(
   version: { usageMarkupBps: number; currency: string },
   identity: { key: string; name: string },
 ) {
+  if (requested.monthlyChargeBasis === 'per_seat' &&
+    (!requested.seatPolicy || !requested.seatChargeTiming)) {
+    throw new AppError('BAD_REQUEST', 400, 'BILLING_CONTRACT_SEAT_POLICY_REQUIRED');
+  }
   const tariff = normalizeTariffInput({
     ...identity, mode: 'custom', collectionMode: 'manual',
     markupBps: version.usageMarkupBps, currency: version.currency,

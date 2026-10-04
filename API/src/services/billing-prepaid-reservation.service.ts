@@ -13,6 +13,7 @@ import { verifyChainedSubjectAccessToken } from './confidential-chained-token-ex
 import { runBillingSerializableTransaction } from './billing-serializable-transaction.service.js';
 import { resolveBillingTariffForMonth, utcBillingMonth } from './billing-tariff-history.service.js';
 import { verifyLedgerRuntimeKey } from './billing-ledger-runtime-key.service.js';
+import { assertLiveJobComputeDispatch, type JobComputeDispatchIdentity } from './billing-job-compute-renewal.service.js';
 
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/;
 const DECIMAL_PATTERN = /^(?:0|[1-9]\d*)(?:\.\d{1,18})?$/;
@@ -67,6 +68,7 @@ export type ReservePrepaidDispatchInput = {
   userId: string;
   rawCostBound: string | null;
   currency: string;
+  jobCompute?: JobComputeDispatchIdentity | null;
 };
 
 async function assertActiveSubject(
@@ -149,6 +151,10 @@ export async function reservePrepaidDispatch(
     await lockDispatchId(tx, input.dispatchId);
     await assertActiveRuntimeKey(tx, key.id);
     await assertActiveSubject(tx, input, actor.tv);
+    await assertLiveJobComputeDispatch(tx, { claim: actor.job_compute,
+      identity: input.jobCompute ?? null, runtimeKeyId: key.id,
+      subjectId: input.userId, orgId: input.organisationId,
+      teamId: input.teamId, tokenVersion: actor.tv, now });
     const previous = await tx.billingLedgerDispatchDecision.findUnique({
       where: { dispatchId: input.dispatchId },
     });
@@ -231,6 +237,10 @@ export async function reservePrepaidDispatch(
     await lockDispatchId(tx, input.dispatchId);
     await assertActiveRuntimeKey(tx, key.id);
     await assertActiveSubject(tx, input, actor.tv);
+    await assertLiveJobComputeDispatch(tx, { claim: actor.job_compute,
+      identity: input.jobCompute ?? null, runtimeKeyId: key.id,
+      subjectId: input.userId, orgId: input.organisationId,
+      teamId: input.teamId, tokenVersion: actor.tv, now });
     const cancelled = await tx.billingLedgerDispatchDecision.findUnique({
       where: { dispatchId: input.dispatchId }, select: { status: true },
     });

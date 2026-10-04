@@ -18,6 +18,7 @@ describe('credit funding Stripe webhook application', () => {
     const checkout = fundingTopUpCheckout();
     const entryCreate = vi.fn().mockResolvedValue({ id: 'entry_1' });
     const checkoutUpdate = vi.fn().mockResolvedValue({});
+    const invoiceCreate = vi.fn().mockResolvedValue({ id: 'payment_invoice_1' });
     const tx = {
       $queryRaw: vi.fn().mockResolvedValue([{ balanceMicrocredits: 5_000_000_000n }]),
       billingCreditTopUpCheckout: {
@@ -25,6 +26,10 @@ describe('credit funding Stripe webhook application', () => {
         update: checkoutUpdate,
       },
       billingCreditEntry: { create: entryCreate },
+      billingCreditPaymentInvoice: {
+        findUnique: vi.fn().mockResolvedValue(null),
+        create: invoiceCreate,
+      },
     };
     const intent = fundingPaymentIntent({ uoa_credit_top_up_checkout_id: checkout.id });
 
@@ -66,6 +71,23 @@ describe('credit funding Stripe webhook application', () => {
     });
     expect(entryCreate.mock.invocationCallOrder[0]).toBeLessThan(
       checkoutUpdate.mock.invocationCallOrder[0],
+    );
+    expect(invoiceCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        accountId: fundingStripeAccount.id,
+        stripePaymentIntentId: intent.id,
+        stripeChargeId: 'ch_credit_1',
+        source: 'MANUAL_TOP_UP',
+        topUpCheckoutId: checkout.id,
+        creditAccountId: checkout.creditAccountId,
+        creditEntryId: expect.any(String),
+        grossAmountMinor: 1000n,
+        creditsPurchasedMicrocredits: 10_000_000_000n,
+        paidAt: fundingOccurredAt,
+      }),
+    });
+    expect(checkoutUpdate.mock.invocationCallOrder[0]).toBeLessThan(
+      invoiceCreate.mock.invocationCallOrder[0],
     );
   });
 

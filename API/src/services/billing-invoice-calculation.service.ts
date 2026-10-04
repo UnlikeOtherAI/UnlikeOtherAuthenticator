@@ -13,7 +13,7 @@ import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import { collectContractFundingEvidence } from './billing-contract-funding-evidence.service.js';
 import { fetchLedgerMeteringUsage } from './billing-ledger-collector.service.js';
-import type { FetchMeteringUsage } from './billing-metering.types.js';
+import { meteringIsComplete, type FetchMeteringUsage } from './billing-metering.types.js';
 import {
   addBillingDecimals,
   majorAmountToMinorRounded,
@@ -120,7 +120,8 @@ export async function calculateBillingContractInvoice(
   const contract = await prisma.billingOrganisationContract.findFirst({
     where: {
       id: params.contractId,
-      status: BillingOrganisationContractStatus.ACTIVE,
+      status: { in: [BillingOrganisationContractStatus.ACTIVE,
+        BillingOrganisationContractStatus.TERMINATED] },
     },
     include: {
       versions: {
@@ -187,17 +188,29 @@ export async function calculateBillingContractInvoice(
           { prisma },
         ),
       ]);
+      if (!meteringIsComplete(metering.billingCompleteness)) {
+        throw new AppError('INTERNAL', 409, 'LEDGER_METERING_UNRESOLVED_PAID_USAGE');
+      }
       const usageTotal = term.tariff.usagePaymentMode === BillingUsagePaymentMode.PREPAID
         ? '0' : rateMeteringTotal({
           usage: metering, product: term.service.identifier,
           currency: version.currency,
           terms: { mode: 'custom', markupBps: version.usageMarkupBps },
         }).total;
-      const seatQuote = term.tariff.monthlyChargeBasis === BillingMonthlyChargeBasis.PER_SEAT
-        ? await (deps?.quoteMonthly ?? quoteSubscriptionMonthlyCharge)({
-          source: { kind: 'manual', id: term.id }, billingMonth: params.billingMonth,
-        }, { prisma }) : null;
-      const monthlyAmountMinor = seatQuote?.amountMinor ?? term.monthlyAmountMinor;
+      if (term.tariff.usagePaymentMode === BillingUsagePaymentMode.PREPAID &&
+        funding.credits.length > 0) {
+        throw new AppError('BAD_REQUEST', 409, 'BILLING_INVOICE_PREPAID_CREDIT_CONFLICT');
+      }
+      const monthlyQuote = await (deps?.quoteMonthly ?? quoteSubscriptionMonthlyCharge)({
+        source: { kind: 'manual', id: term.id }, billingMonth: params.billingMonth,
+      }, { prisma, now: () => now });
+      if (monthlyQuote.chargeBasis !== term.tariff.monthlyChargeBasis ||
+        monthlyQuote.currency !== version.currency ||
+        monthlyQuote.tariffId !== term.tariffId ||
+        monthlyQuote.serviceId !== term.serviceId) {
+        throw new AppError('BAD_REQUEST', 409, 'BILLING_INVOICE_MONTHLY_QUOTE_DRIFT');
+      }
+      const monthlyAmountMinor = monthlyQuote.amountMinor;
       const total = addBillingDecimals(
         minorAmountToMajor(monthlyAmountMinor.toString(), version.currency),
         usageTotal,
@@ -211,7 +224,8 @@ export async function calculateBillingContractInvoice(
         serviceIdentifier: term.service.identifier,
         serviceName: term.service.name,
         amountMinor,
-        seatQuote,
+        seatQuote: term.tariff.monthlyChargeBasis === BillingMonthlyChargeBasis.PER_SEAT
+          ? monthlyQuote : null,
         credits: funding.credits,
         addons: funding.addons,
         snapshot: {

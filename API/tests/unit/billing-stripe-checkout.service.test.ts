@@ -174,6 +174,7 @@ function setup(orgRole = 'admin') {
       currency: input.currency,
       unit_amount_decimal: input.unit_amount_decimal ?? null,
       recurring: input.recurring,
+      nickname: input.nickname,
       metadata: input.metadata,
     };
     prices.set(id, row);
@@ -219,11 +220,16 @@ function setup(orgRole = 'admin') {
     },
     products: {
       create: vi.fn().mockImplementation(async (input) => {
-        const row = { id: 'prod_1', livemode: false, metadata: input.metadata };
+        const row = { id: 'prod_1', livemode: false, name: input.name, metadata: input.metadata };
         products.set(row.id, row);
         return row;
       }),
       retrieve: vi.fn().mockImplementation(async (id) => products.get(id)),
+      update: vi.fn().mockImplementation(async (id, input) => {
+        const row = { ...products.get(id), ...input };
+        products.set(id, row);
+        return row;
+      }),
     },
     billing: {
       meters: {
@@ -243,6 +249,11 @@ function setup(orgRole = 'admin') {
     prices: {
       create: pricesCreate,
       retrieve: vi.fn().mockImplementation(async (id) => prices.get(id)),
+      update: vi.fn().mockImplementation(async (id, input) => {
+        const row = { ...prices.get(id), ...input };
+        prices.set(id, row);
+        return row;
+      }),
     },
     checkout: {
       sessions: {

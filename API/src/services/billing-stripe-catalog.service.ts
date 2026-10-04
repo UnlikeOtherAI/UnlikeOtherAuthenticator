@@ -78,7 +78,7 @@ export async function ensureStripeCatalog(
   if (!catalog.stripeProductId) {
     const product = await params.stripe.products.create(
       {
-        name: `${params.service.name} usage`,
+        name: `${params.service.name} subscription and usage`,
         metadata: {
           uoa_service_id: params.service.id,
           uoa_product: params.service.identifier,
@@ -104,6 +104,14 @@ export async function ensureStripeCatalog(
       uoa_stripe_account_id: params.account.stripeAccountId,
       uoa_stripe_mode: params.account.livemode ? 'live' : 'test',
     });
+    const customerName = `${params.service.name} subscription and usage`;
+    if (product.name !== customerName) {
+      const renamed = await params.stripe.products.update(product.id, { name: customerName });
+      assertStripeObjectLivemode(renamed, params.account.livemode);
+      if (renamed.id !== product.id) {
+        throw new AppError('INTERNAL', 502, 'STRIPE_CATALOG_BINDING_INVALID');
+      }
+    }
   }
 
   if (!catalog.stripeMeterId) {
@@ -245,7 +253,7 @@ export async function ensureStripeTariffPrice(
         currency: params.catalog.currency.toLowerCase(),
         unit_amount_decimal: Stripe.Decimal.from(params.tariff.monthlyAmountMinor),
         recurring: { interval: 'month', usage_type: 'licensed' },
-        nickname: `${params.tariff.key} v${params.tariff.version} monthly`,
+        nickname: 'Monthly subscription',
         metadata: {
           uoa_tariff_id: params.tariff.id,
           uoa_tariff_key: params.tariff.key,
@@ -282,6 +290,15 @@ export async function ensureStripeTariffPrice(
       uoa_stripe_account_id: params.account.stripeAccountId,
       uoa_stripe_mode: params.account.livemode ? 'live' : 'test',
     });
+    if (price.nickname !== 'Monthly subscription') {
+      const renamed = await params.stripe.prices.update(price.id, {
+        nickname: 'Monthly subscription',
+      });
+      assertStripeObjectLivemode(renamed, params.account.livemode);
+      if (renamed.id !== price.id) {
+        throw new AppError('INTERNAL', 502, 'STRIPE_TARIFF_PRICE_BINDING_INVALID');
+      }
+    }
   }
   return mapping;
 }
