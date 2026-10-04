@@ -412,7 +412,7 @@ describe.skipIf(!enabled)('customer cycle scope persistence', () => {
       { prisma: db.prisma });
     expect(rated.usage_lines[0]?.credits_consumed).toBe('13000');
     expect(rated.credits).toMatchObject({ consumed: '13000',
-      opening_balance: null, closing_balance: null });
+      opening_balance: '0', closing_balance: '0', status: 'confirmed' });
     expect(JSON.stringify(rated)).not.toMatch(/markup|provider_cost|raw_units|tokens/i);
     const duplicateObservation = await db.prisma.billingCreditPortfolioSnapshot.create({
       data: { accountId: account.id, creditAccountId: wallet.id, orgId, teamId,

@@ -137,7 +137,12 @@ receipt identities and raw costs must match frozen UOA-rated receipt deltas
 before a customer credit number is confirmed. A verified operator waiver
 reduces collectible usage without erasing gross usage credits. Unknown coverage stays
 pending; proven zero usage is zero. Opening and closing funded-wallet balances
-remain pending until immutable account-entry boundaries establish them.
+come from append-only account entries before each UTC month boundary, after
+their full sum reconciles with the current account balance. A wallet with
+missing genesis, multiple payer accounts or a negative historical boundary
+remains pending. A later entry outside the month leaves its boundary unchanged;
+a backdated effect changes the next immutable cycle revision. Organisation-pool
+balances are withheld from selected-team usage cycles.
 Unknown paid usage holds final settlement rather than yielding a zero invoice.
 Closed-month reconciliation uses durable source/month watches, independent of
 customer page reads. A fresh closed month is seeded ahead of a persisted,
