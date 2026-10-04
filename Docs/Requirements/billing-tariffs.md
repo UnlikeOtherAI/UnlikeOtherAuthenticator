@@ -243,7 +243,9 @@ inventing currency conversion. A billable call may reach the provider only
 after the reservation response is confirmed.
 Admission holds the live user, organisation, and team membership rows through
 its final transaction so credential-epoch and membership revocations serialize
-with the decision. A free tariff remains customer-free even when its raw
+with the decision. The runtime key is rechecked and locked at final admission;
+revocation between account resolution and reservation creation refuses the call.
+A free tariff remains customer-free even when its raw
 provider receipt records a positive cost.
 
 `GET /billing/v1/ledger/reservations/:dispatchId` lets the product-bound
