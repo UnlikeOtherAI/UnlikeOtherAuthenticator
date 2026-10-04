@@ -7,6 +7,7 @@ import {
   type StripeAccountContext,
 } from './billing-stripe-client.service.js';
 import { stripeExternalId } from './billing-stripe-webhook-utils.service.js';
+import { disputePrincipalMovement, disputeProof } from './billing-stripe-dispute-evidence.service.js';
 import {
   assertCreditFundingMetadata,
   paymentBinding,
@@ -17,36 +18,6 @@ import type {
   PreparedCreditFundingWebhook,
 } from './billing-credit-funding-webhook.types.js';
 import { exactMinor, requireUsd } from './billing-credit-funding-webhook-validation.service.js';
-
-function disputePrincipalMovement(dispute: Stripe.Dispute, reinstated: boolean): number {
-  const movement = dispute.balance_transactions.reduce((total, transaction) => {
-    const relevant = reinstated ? transaction.amount > 0 : transaction.amount < 0;
-    if (!relevant) return total;
-    const absolute = Math.abs(transaction.amount);
-    if (transaction.currency.toLowerCase() === dispute.currency.toLowerCase()) {
-      return total + absolute;
-    }
-    if (!transaction.exchange_rate || transaction.exchange_rate <= 0) {
-      throw new AppError('INTERNAL', 503, 'STRIPE_CREDIT_DISPUTE_FX_PROOF_MISSING');
-    }
-    return total + Math.round(absolute / transaction.exchange_rate);
-  }, 0);
-  const principal = Math.min(movement, dispute.amount);
-  if (!Number.isSafeInteger(principal) || principal <= 0) {
-    throw new AppError('INTERNAL', 503, 'STRIPE_CREDIT_DISPUTE_MOVEMENT_PENDING');
-  }
-  return principal;
-}
-
-function disputeProof(dispute: Stripe.Dispute): string {
-  return dispute.balance_transactions
-    .map(
-      (transaction) =>
-        `${transaction.id}:${transaction.amount}:${transaction.currency}:${transaction.exchange_rate ?? 'none'}`,
-    )
-    .sort()
-    .join('|');
-}
 
 async function resolveStoredPaymentBinding(
   intent: Stripe.PaymentIntent,
