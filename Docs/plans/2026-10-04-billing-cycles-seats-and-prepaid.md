@@ -132,6 +132,13 @@ carry and prevents a funded usage credit from reducing a seat or flat fee.
 The customer cycle totals show tax and gross explicitly: subscription plus
 usage plus tax equals gross, and gross less applied usage credits equals due.
 The canonical monthly legal invoice retains its original gross convention.
+Each accepted prepaid top-up or automatic recharge creates one immutable
+payment-invoice source in the same transaction as its credit entry. The source
+is keyed by Stripe account, live mode and PaymentIntent, and its charge month
+comes from Stripe's signed payment-success event. Document issuance can remain
+pending when issuer, buyer, tax or PDF evidence is unavailable; a pending charge
+is visible as pending, with no invented invoice number, tax or download. Prepaid
+credit consumption never produces a second demand for payment.
 Manual and Stripe collection must both supply real monthly documents. Fetching
 historical months must not create charges, recalculate current terms or invent
 old invoices. Stripe invoice PDFs may not contain the full measured usage/seat
