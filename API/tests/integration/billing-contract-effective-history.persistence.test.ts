@@ -39,7 +39,7 @@ describe.skipIf(!process.env.DATABASE_URL)('manual contract effective history', 
       data: { orgId, reference: 'future-terms', name: 'Future terms' },
     });
     contractId = contract.id;
-  }, 120_000);
+  });
 
   afterAll(async () => { if (db) await db.cleanup(); });
 
@@ -111,5 +111,5 @@ describe.skipIf(!process.env.DATABASE_URL)('manual contract effective history', 
       serviceId, organisationId: orgId, teamId: 'team', billingMonth: '2026-12',
     });
     expect(december.tariff.markupBps).toBe(3000);
-  }, 120_000);
+  });
 });

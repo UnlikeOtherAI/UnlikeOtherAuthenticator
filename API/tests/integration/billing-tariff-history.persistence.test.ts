@@ -48,7 +48,7 @@ describe.skipIf(!enabled)('effective tariff history with PostgreSQL', () => {
         scopeKey: serviceId, effectiveFromMonth: '2026-07', tariffId: 'default',
         reason: 'initial-test' },
     });
-  }, 120_000);
+  });
 
   afterAll(async () => { if (cleanup) await cleanup(); });
 
@@ -133,9 +133,14 @@ describe.skipIf(!enabled)('effective tariff history with PostgreSQL', () => {
 });
 
 describe.skipIf(!enabled)('populated tariff-history migration', () => {
+  let db: NonNullable<Awaited<ReturnType<typeof createTestDb>>>;
+  beforeAll(async () => {
+    const created = await createTestDb();
+    if (!created) throw new Error('DATABASE_URL required');
+    db = created;
+  });
+
   it('preserves proven existing terms and holds the interval before an audited change', async () => {
-    const db = await createTestDb();
-    if (!db) throw new Error('DATABASE_URL required');
     try {
       await db.prisma.$executeRawUnsafe('DROP TABLE "billing_tariff_term_events"');
       await db.prisma.$executeRawUnsafe('DROP FUNCTION reject_billing_tariff_term_event_rewrite()');
@@ -212,5 +217,5 @@ describe.skipIf(!enabled)('populated tariff-history migration', () => {
     } finally {
       await db.cleanup();
     }
-  }, 120_000);
+  });
 });
