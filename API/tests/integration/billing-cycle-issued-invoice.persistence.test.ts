@@ -451,6 +451,23 @@ describe.skipIf(!enabled)('issued manual invoice cycle persistence', () => {
       });
       expect(lines.reduce((sum, line) => sum + line.totalMinor, 0n)).toBe(3300n);
       expect(lines.reduce((sum, line) => sum + line.dueMinor, 0n)).toBe(3300n);
+      // The mixed invoice's usage line needs its exact frozen paid evidence;
+      // financial allocations alone cannot authorize a legal usage charge.
+      const liability = await db.prisma.billingPaidUsageLiability.create({ data: {
+        dispatchId: `mixed-dispatch-${randomUUID()}`,
+        receiptId: `mixed-receipt-${randomUUID()}`,
+        serviceId: secondService.id, providerServiceId: 'fixture-provider',
+        orgId, teamId, userId: ownerId, billingMonth: '2026-05', currency: 'USD',
+        tariffId: secondTariff.id, frozenMarkupBps: 3000,
+        paymentMode: 'PAY_AS_YOU_GO', rawCostActual: '7.69',
+        ratedQuanta: '99970000000000000000000', ratedMicrocredits: 9_997_000_000n,
+      } });
+      await db.prisma.billingInvoicePaidReceipt.create({ data: {
+        invoiceId: invoice.id, serviceId: secondService.id, orgId, teamId,
+        billingMonth: '2026-05', dispatchId: liability.dispatchId,
+        receiptId: liability.receiptId, ratedMicrocredits: liability.ratedMicrocredits,
+        proofSha256: 'e'.repeat(64),
+      } });
       await issueBillingInvoice({ invoiceId: invoice.id,
         actor: { email: 'admin@example.com' } }, { prisma: db.prisma, storage,
         now: () => new Date('2026-06-01T00:00:00.000Z'),
