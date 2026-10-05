@@ -67,6 +67,7 @@ function unresolvedAttempt(overrides: Record<string, unknown> = {}) {
     appKeyId: credential.id,
     stripePaymentIntentId: 'pi_auto_1',
     paymentAmountMinor: 2_000n,
+    currency: 'USD',
     consentRevision: { stripePaymentMethodId: 'pm_1' },
     ...overrides,
   };

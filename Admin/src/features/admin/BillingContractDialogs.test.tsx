@@ -34,7 +34,7 @@ const version: BillingContractVersion = {
   usage_markup_percent: '40.00',
   currency: 'USD',
   payment_terms_days: 30,
-  effective_from_month: '2026-08',
+  effective_from_month: '2026-11',
   services: [],
   actions: { activation_state: 'ready', activate: true },
   created_at: '2026-07-21T00:00:00.000Z',
@@ -64,6 +64,9 @@ const contract: BillingContract = {
           tariff_id: 'tariff-1',
           monthly_amount_minor: '5000',
           monthly_price: money,
+          monthly_charge_basis: 'flat', seat_policy: null,
+          seat_charge_timing: null, usage_payment_mode: 'pay_as_you_go',
+          fixed_seat_quantity: null,
         },
       ],
     },
@@ -119,10 +122,10 @@ describe('ActivateBillingContractVersionDialog', () => {
     expect(screen.queryByText('Retired Signal')).toBeNull();
 
     const deepWaterAmount = screen.getByRole('textbox', {
-      name: 'DeepWater monthly amount in minor units',
+      name: 'DeepWater monthly price in USD',
     }) as HTMLInputElement;
     const deepTestAmount = screen.getByRole('textbox', {
-      name: 'DeepTest monthly amount in minor units',
+      name: 'DeepTest monthly price in USD',
     }) as HTMLInputElement;
     expect(deepWaterAmount.value).toBe('');
     expect(deepWaterAmount.disabled).toBe(true);
@@ -149,10 +152,10 @@ describe('ActivateBillingContractVersionDialog', () => {
 
     const serviceToggle = screen.getByRole('checkbox', { name: /DeepWater/ });
     const confirmation = screen.getByRole('checkbox', {
-      name: /I confirm these exact monthly prices/,
+      name: /I confirm these exact subscription and usage payment terms/,
     }) as HTMLInputElement;
     const amount = screen.getByRole('textbox', {
-      name: 'DeepWater monthly amount in minor units',
+      name: 'DeepWater monthly price in USD',
     }) as HTMLInputElement;
     const activate = screen.getByRole('button', {
       name: 'Activate immutable terms',
@@ -161,13 +164,13 @@ describe('ActivateBillingContractVersionDialog', () => {
     await user.click(serviceToggle);
     expect(amount.disabled).toBe(false);
     expect(activate.disabled).toBe(true);
-    await user.type(amount, '5000');
+    await user.type(amount, '50.00');
     expect(activate.disabled).toBe(true);
     await user.click(confirmation);
     expect(activate.disabled).toBe(false);
 
     await user.clear(amount);
-    await user.type(amount, '7500');
+    await user.type(amount, '75.00');
     expect(confirmation.checked).toBe(false);
     expect(activate.disabled).toBe(true);
     await user.click(confirmation);
@@ -182,9 +185,42 @@ describe('ActivateBillingContractVersionDialog', () => {
 
     await waitFor(() =>
       expect(mocks.activate).toHaveBeenCalledWith([
-        { serviceId: 'service-1', monthlyAmountMinor: '7500' },
+        { serviceId: 'service-1', monthlyAmountMinor: '7500',
+          monthlyChargeBasis: 'flat', usagePaymentMode: 'prepaid' },
       ]),
     );
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('requires fixed purchased seats and freezes all selected manual terms', async () => {
+    const user = userEvent.setup();
+    render(<ActivateBillingContractVersionDialog contract={contract} version={version}
+      services={services} onClose={vi.fn()} />);
+    await user.click(screen.getByRole('checkbox', { name: /DeepWater/ }));
+    await user.type(screen.getByRole('textbox', {
+      name: 'DeepWater monthly price in USD',
+    }), '24.00');
+    await user.selectOptions(screen.getByLabelText('DeepWater subscription basis'), 'per_seat');
+    await user.selectOptions(screen.getByLabelText('DeepWater seat quantity policy'), 'fixed');
+    await user.selectOptions(screen.getByLabelText('DeepWater seat charge timing'), 'full_month');
+    expect((screen.getByLabelText('DeepWater usage payment') as HTMLSelectElement).value)
+      .toBe('prepaid');
+    const confirm = screen.getByRole('checkbox', {
+      name: /I confirm these exact subscription and usage payment terms/,
+    });
+    await user.click(confirm);
+    expect((screen.getByRole('button', {
+      name: 'Activate immutable terms',
+    }) as HTMLButtonElement).disabled).toBe(true);
+    await user.type(screen.getByLabelText('DeepWater purchased seats'), '4');
+    expect((confirm as HTMLInputElement).checked).toBe(false);
+    await user.click(confirm);
+    await user.click(screen.getByRole('button', { name: 'Activate immutable terms' }));
+    await waitFor(() => expect(mocks.activate).toHaveBeenCalledWith([{
+      serviceId: 'service-1', monthlyAmountMinor: '2400',
+      monthlyChargeBasis: 'per_seat', seatPolicy: 'fixed',
+      seatChargeTiming: 'full_month', usagePaymentMode: 'prepaid',
+      fixedSeatQuantity: 4,
+    }]));
   });
 });

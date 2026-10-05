@@ -41,6 +41,9 @@ const version = {
       service_name: 'DeepWater',
       tariff_id: 'tariff-1',
       monthly_amount_minor: '5000',
+      monthly_charge_basis: 'flat', seat_policy: null,
+      seat_charge_timing: null, usage_payment_mode: 'pay_as_you_go',
+      fixed_seat_quantity: null,
       monthly_price: {
         amount_minor: '5000',
         amount: '50',
@@ -183,13 +186,14 @@ describe('billingContractAdminService', () => {
       name: 'Enterprise AI services',
     });
     await billingContractAdminService.createVersion('contract/1', {
-      usageMarkupBps: 4000,
+      usageMarkupPercent: '40.00',
       currency: 'USD',
       paymentTermsDays: 30,
       effectiveFromMonth: '2026-07',
     });
     await billingContractAdminService.activateVersion('contract/1', 'version/1', [
-      { serviceId: 'service-1', monthlyAmountMinor: '5000' },
+      { serviceId: 'service-1', monthlyAmountMinor: '5000',
+        monthlyChargeBasis: 'flat', usagePaymentMode: 'prepaid' },
     ]);
 
     expect(api.get).toHaveBeenCalledWith(
@@ -204,7 +208,7 @@ describe('billingContractAdminService', () => {
       2,
       '/internal/admin/billing/contracts/contract%2F1/versions',
       {
-        usage_markup_bps: 4000,
+        usage_markup_percent: '40.00',
         currency: 'USD',
         payment_terms_days: 30,
         effective_from_month: '2026-07',
@@ -213,7 +217,8 @@ describe('billingContractAdminService', () => {
     expect(api.post).toHaveBeenNthCalledWith(
       3,
       '/internal/admin/billing/contracts/contract%2F1/versions/version%2F1/activate',
-      { services: [{ service_id: 'service-1', monthly_amount_minor: '5000' }] },
+      { services: [{ service_id: 'service-1', monthly_amount_minor: '5000',
+        monthly_charge_basis: 'flat', usage_payment_mode: 'prepaid' }] },
     );
   });
 
@@ -303,6 +308,9 @@ describe('billingContractAdminService', () => {
       contractId: 'contract/1',
       issuerProfileId: 'issuer/1',
       billingMonth: '2026-07',
+      taxTreatment: 'standard_rate',
+      taxRatePercent: '20',
+      taxLegalBasis: 'Standard VAT on taxable services',
     });
     await expect(billingContractAdminService.listInvoices()).resolves.toEqual([invoice]);
 
@@ -310,6 +318,9 @@ describe('billingContractAdminService', () => {
       contract_id: 'contract/1',
       issuer_profile_id: 'issuer/1',
       billing_month: '2026-07',
+      tax_treatment: 'standard_rate',
+      tax_rate_percent: '20',
+      tax_legal_basis: 'Standard VAT on taxable services',
     });
     expect(calculated).toEqual(invoice);
     expect(JSON.stringify(calculated)).not.toMatch(/provider_cost|usage_markup|token_count/);
@@ -373,6 +384,9 @@ describe('billingContractAdminService', () => {
         contractId: 'contract-1',
         issuerProfileId: 'issuer-1',
         billingMonth: '2026-07',
+        taxTreatment: 'no_tax_charged',
+        taxRatePercent: '0',
+        taxLegalBasis: 'Outside scope of tax',
       }),
     ).rejects.toThrow();
   });

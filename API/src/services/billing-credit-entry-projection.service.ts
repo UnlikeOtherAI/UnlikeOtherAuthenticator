@@ -4,33 +4,26 @@ import type {
   BillingCreditsManagerV1,
   BillingCreditsMemberV1,
 } from '../contracts/billing-statement-v1.js';
-import { billingCreditAmount, billingWholeCredits } from './billing-credit-display.service.js';
+import { billingCreditAmount } from './billing-credit-display.service.js';
 import { billingCreditCopy, billingLocalizedCreditDisplay } from './billing-credit-copy.catalog.js';
 import { formatBillingCreditEntryCopy } from './billing-credit-entry-copy.catalog.js';
 import type { BillingCustomerLocale } from './billing-copy-locale.js';
 import type { BillingCreditProjectionData } from './billing-credit-projection-data.service.js';
 
-const MICROCREDITS_PER_CREDIT = 1_000_000n;
-
 function commonEntry(
   entry: BillingCreditProjectionData['entries'][number],
   locale?: BillingCustomerLocale,
 ) {
-  const amount = billingCreditAmount(entry.amountMicrocredits);
-  const displayedAmountMicrocredits =
-    billingWholeCredits(entry.amountMicrocredits) * MICROCREDITS_PER_CREDIT;
-  const hiddenFraction = entry.amountMicrocredits - displayedAmountMicrocredits;
-  const displayedBalanceAfter =
-    entry.direction === BillingCreditEntryDirection.DEBIT
-      ? entry.balanceAfterMicrocredits + hiddenFraction
-      : entry.balanceAfterMicrocredits - hiddenFraction;
+  const amount = billingCreditAmount(entry.amountMicrocredits, locale);
   return {
     id: entry.id,
     occurred_at: entry.occurredAt.toISOString(),
     service: entry.service
       ? { id: entry.service.id, identifier: entry.service.identifier, name: entry.service.name }
       : null,
-    kind: entry.kind.toLowerCase() as Lowercase<BillingCreditEntryKind>,
+    kind: (entry.kind === BillingCreditEntryKind.PREPAID_USAGE
+      ? 'usage_settlement' : entry.kind.toLowerCase()) as Exclude<
+        Lowercase<BillingCreditEntryKind>, 'prepaid_usage'>,
     direction:
       entry.direction === BillingCreditEntryDirection.CREDIT
         ? ('credit' as const)
@@ -41,8 +34,8 @@ function commonEntry(
     }),
     credits: { ...amount, display: billingLocalizedCreditDisplay(amount.credits, locale) },
     credit_balance_after: {
-      ...billingCreditAmount(displayedBalanceAfter),
-      display: billingLocalizedCreditDisplay(billingWholeCredits(displayedBalanceAfter).toString(), locale),
+      ...billingCreditAmount(entry.balanceAfterMicrocredits, locale),
+      display: billingLocalizedCreditDisplay(billingCreditAmount(entry.balanceAfterMicrocredits, locale).credits, locale),
     },
   };
 }
@@ -63,7 +56,7 @@ export function buildManagerCreditRecentEntries(
   locale?: BillingCustomerLocale,
 ): BillingCreditsManagerV1['recent_entries'] {
   return data.entries
-    .filter((entry) => billingWholeCredits(entry.amountMicrocredits) > 0n)
+    .filter((entry) => entry.amountMicrocredits > 0n)
     .map((entry) => ({
       ...commonEntry(entry, locale),
       attribution: entry.attributedUserId
@@ -82,7 +75,7 @@ export function buildMemberCreditRecentEntries(
   locale?: BillingCustomerLocale,
 ): BillingCreditsMemberV1['recent_entries'] {
   return data.entries
-    .filter((entry) => billingWholeCredits(entry.amountMicrocredits) > 0n)
+    .filter((entry) => entry.amountMicrocredits > 0n)
     .map((entry) => ({
       ...commonEntry(entry, locale),
       attribution:

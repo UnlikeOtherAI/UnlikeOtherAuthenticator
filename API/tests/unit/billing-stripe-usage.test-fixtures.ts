@@ -3,6 +3,7 @@ import {
   BillingCollectionMode,
   BillingTariffMode,
   BillingTariffSource,
+  BillingUsagePaymentMode,
 } from '@prisma/client';
 
 import type { NormalizedMeteringUsage } from '../../src/services/billing-metering.types.js';
@@ -68,6 +69,7 @@ export function subscriptionFixture() {
       name: 'Standard',
       mode: BillingTariffMode.STANDARD,
       collectionMode: BillingCollectionMode.STRIPE,
+      usagePaymentMode: BillingUsagePaymentMode.PAY_AS_YOU_GO,
       markupBps: 2500,
       monthlyAmountMinor: 2999n,
       currency: 'USD',
@@ -108,6 +110,7 @@ export function usageFixture(
 ): NormalizedMeteringUsage {
   return {
     schemaVersion: 1,
+    billingCompleteness: { state: 'complete', unresolvedPaidAttempts: '0' },
     product: 'deepwater',
     groupBy: 'service',
     scope: {
@@ -132,6 +135,7 @@ export function usageFixture(
         selectedProviderCost: rawProviderCost,
         currency: 'USD',
         costProvenance: 'provider_invoice',
+        billingDisposition: 'paid',
         billingProduct: 'deepwater',
         callerProduct: 'deepsignal',
         originProduct: 'nessie',

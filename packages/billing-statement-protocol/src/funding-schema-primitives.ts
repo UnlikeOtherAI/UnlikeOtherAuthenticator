@@ -4,13 +4,13 @@ export const signedDecimalPattern = '^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$';
 export const unsignedMinorPattern = '^(0|[1-9][0-9]*)$';
 export const positiveMinorPattern = '^[1-9][0-9]*$';
 export const signedMinorPattern = '^-?(0|[1-9][0-9]*)$';
-const unsignedCreditPattern = unsignedMinorPattern;
-const signedCreditPattern = signedMinorPattern;
-const positiveCreditPattern = positiveMinorPattern;
-const unsignedUsdEquivalentPattern = '^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$';
-const signedUsdEquivalentPattern = '^-?(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$';
+const unsignedCreditPattern = '^(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$';
+const signedCreditPattern = '^-?(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$';
+const positiveCreditPattern = '^(?:[1-9][0-9]*(?:\\.[0-9]{1,6})?|0\\.(?=[0-9]{1,6}$)[0-9]*[1-9][0-9]*)$';
+const unsignedUsdEquivalentPattern = '^(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$';
+const signedUsdEquivalentPattern = '^-?(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$';
 const positiveUsdEquivalentPattern =
-  '^(?:[1-9][0-9]*(?:\\.[0-9]{1,8})?|0\\.(?=[0-9]{1,8}$)[0-9]*[1-9][0-9]*)$';
+  '^(?:[1-9][0-9]*(?:\\.[0-9]{1,9})?|0\\.(?=[0-9]{1,9}$)[0-9]*[1-9][0-9]*)$';
 
 export function moneySchema(
   options: { signed?: boolean; positive?: boolean; usdOnly?: boolean } = {},

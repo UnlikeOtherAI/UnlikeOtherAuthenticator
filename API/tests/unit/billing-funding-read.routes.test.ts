@@ -174,6 +174,7 @@ describe('shared credits and recurring add-on read routes', () => {
         credential,
         actorToken: 'signed-actor',
         endpoint: '/billing/v1/credits',
+        supportsBillingStatus: false,
         request: {
           product: 'deepwater',
           organisationId: 'org_example',
@@ -181,6 +182,19 @@ describe('shared credits and recurring add-on read routes', () => {
           userId: 'user_example',
         },
       });
+      await app.inject({
+        method: 'POST',
+        url: '/billing/v1/credits',
+        headers: {
+          'x-uoa-app-key': 'uoa_app_key',
+          'x-uoa-actor': 'signed-actor',
+          'x-uoa-billing-credits-protocol': '2.0.0',
+        },
+        payload: body,
+      });
+      expect(creditsService.getBillingCredits).toHaveBeenLastCalledWith(
+        expect.objectContaining({ supportsBillingStatus: true }),
+      );
     });
   });
 

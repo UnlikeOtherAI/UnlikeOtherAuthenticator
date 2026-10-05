@@ -23,6 +23,8 @@ import {
   type BillingInvoicePdfStorage,
 } from './billing-invoice-storage.service.js';
 import type { CustomerSafeInvoice } from './billing-invoice-view.service.js';
+import { assertManualInvoicePaidReceiptIssueReady } from
+  './billing-invoice-paid-receipt-issue-guard.service.js';
 
 const MAX_INT64 = 9_223_372_036_854_775_807n;
 const invoiceInclude = Prisma.validator<Prisma.BillingInvoiceInclude>()({
@@ -47,12 +49,13 @@ function client(deps?: LifecycleDeps): PrismaClient {
 }
 
 function isTransactionConflict(error: unknown): boolean {
-  return Boolean(
-    error &&
-    typeof error === 'object' &&
-    'code' in error &&
-    (error.code === 'P2002' || error.code === 'P2034'),
-  );
+  if (!error || typeof error !== 'object' || !('code' in error)) return false;
+  if (error.code === 'P2002' || error.code === 'P2034') return true;
+  // PostgreSQL can return SQLSTATE 40001 through Prisma's raw-query P2010
+  // path when the issuer first locks a credit account after a stale read.
+  return error.code === 'P2010' && 'meta' in error &&
+    Boolean(error.meta && typeof error.meta === 'object' &&
+      'code' in error.meta && error.meta.code === '40001');
 }
 
 async function withConflictRetries<T>(
@@ -128,6 +131,14 @@ async function claimForIssue(
       });
       if (!invoice) throw new AppError('NOT_FOUND', 404, 'BILLING_INVOICE_NOT_FOUND');
       if (invoice.status === BillingInvoiceStatus.ISSUED) return invoice;
+      // Credit settlement locks its paying account before reading issuer
+      // reservations. Claiming the invoice takes those same account locks
+      // before changing its collection state, so no top-up can slip between
+      // the frozen paid cohort and the legal issuer claim.
+      await tx.$queryRaw(Prisma.sql`SELECT id FROM billing_credit_accounts
+        WHERE org_id = ${invoice.orgId} AND currency = ${invoice.currency}
+        ORDER BY id COLLATE "C" FOR UPDATE`);
+      await assertManualInvoicePaidReceiptIssueReady(tx, invoice.id);
       if (invoice.status === BillingInvoiceStatus.VOID) {
         throw new AppError('BAD_REQUEST', 409, 'BILLING_INVOICE_VOID');
       }

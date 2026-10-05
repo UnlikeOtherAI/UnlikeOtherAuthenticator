@@ -4,6 +4,7 @@ import type {
   BillingRecurringAddonMoney,
 } from '../contracts/billing-statement-v1.js';
 import type { BillingCustomerLocale } from './billing-copy-locale.js';
+import { localizedBillingMoney } from './billing-money.service.js';
 import { billingLocale } from './billing-copy-locale.js';
 import { AppError } from '../utils/errors.js';
 
@@ -58,35 +59,31 @@ export function billingWholeCredits(microcredits: bigint): bigint {
   return credits;
 }
 
-export function billingCreditAmount(microcredits: bigint): BillingCreditAmount {
-  if (microcredits % 10n !== 0n) {
-    throw new AppError('INTERNAL', 500, 'BILLING_CREDIT_PRECISION_INVALID');
-  }
-  const wholeCredits = billingWholeCredits(microcredits);
-  const credits = wholeCredits.toString();
-  const usd = scaledDecimal(wholeCredits, 3);
+export function billingCreditAmount(microcredits: bigint, locale?: BillingCustomerLocale): BillingCreditAmount {
+  const credits = scaledDecimal(microcredits, 6);
+  const usd = scaledDecimal(microcredits, 9);
   return {
     credits,
-    display: `${grouped(credits)} ${wholeCredits === 1n || wholeCredits === -1n ? 'credit' : 'credits'}`,
-    usd_equivalent: {
+    display: `${grouped(credits)} ${microcredits === MICROCREDITS_PER_CREDIT || microcredits === -MICROCREDITS_PER_CREDIT ? 'credit' : 'credits'}`,
+    usd_equivalent: localizedBillingMoney({
       amount: usd,
       currency: 'USD',
       display: usdDisplay(usd),
-    },
+    }, locale),
   };
 }
 
-export function billingCreditsPaymentMoney(amountMinor: bigint): BillingCreditsPaymentMoney {
+export function billingCreditsPaymentMoney(amountMinor: bigint, locale?: BillingCustomerLocale): BillingCreditsPaymentMoney {
   if (amountMinor < 0n) {
     throw new AppError('INTERNAL', 500, 'BILLING_CREDIT_PAYMENT_INVALID');
   }
   const amount = scaledDecimal(amountMinor, 2);
-  return {
+  return localizedBillingMoney({
     amount,
     amount_minor: amountMinor.toString(),
-    currency: 'USD',
+    currency: 'USD' as const,
     display: usdDisplay(amount),
-  };
+  }, locale);
 }
 
 export function billingRecurringAddonMoney(
@@ -102,6 +99,6 @@ export function billingRecurringAddonMoney(
     amount,
     amount_minor: amountMinor.toString(),
     currency,
-    display: `${currency === 'USD' ? usdDisplay(amount) : `${currency} ${grouped(amount)}`}${RECURRING_PERIOD_SUFFIX[billingLocale(locale)]}`,
+    display: `${localizedBillingMoney({ amount, currency, display: currency === 'USD' ? usdDisplay(amount) : `${currency} ${grouped(amount)}` }, locale).display}${RECURRING_PERIOD_SUFFIX[billingLocale(locale)]}`,
   };
 }

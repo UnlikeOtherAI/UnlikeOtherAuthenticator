@@ -2407,6 +2407,14 @@ holding database locks across external work.
 
 ## 2026-07 Billing Tariff Control Plane
 
+**2026-10 customer privacy amendment:** UOA alone computes price adjustments
+from private raw provider cost and immutable tariff terms. Customer billing
+responses and products show balances, credit usage, customer charges, raw usage,
+monthly subscription prices, and payer scope. They never show provider cost,
+markup, margin, multipliers, cost-basis modes, or derived billable units. This
+amendment supersedes the earlier customer billable-unit and cost-visibility
+language below while preserving the internal rating and evidence model.
+
 Tariffs and all commercial billing for UOA-backed products live in UOA. Ledger
 owns only immutable raw usage, provider cost, and attribution facts, while
 products consume a signed effective-tariff snapshot and display-ready billing
@@ -2448,6 +2456,14 @@ immutable tariff version declares `collection_mode = stripe | manual | none`.
 collecting no payment; specifically, `at_cost` + `none` + a zero monthly amount
 represents 100% provider-cost visibility with no charge. Free tariffs require
 `none`, zero markup, and zero monthly amount.
+
+An immutable plan also distinguishes a flat scope-level monthly subscription
+from a monthly per-seat charge, and prepaid usage from pay-as-you-go usage.
+The existing team/organisation assignment still determines the payer and credit
+pool. Historical tariffs retain their original flat, pay-as-you-go terms;
+newly configured plans explicitly default to prepaid usage. A prepaid plan
+requires reserved funding before paid provider dispatch and never rolls an
+unfunded token remainder into an automatic Stripe usage charge.
 
 The optional Stripe collection foundation is fail-closed behind an explicit
 process gate. It maps exact immutable tariff versions to calendar-month
@@ -2492,6 +2508,13 @@ administration, presentation rules, and Stripe collection boundaries are defined
 in [Billing Tariffs and Product Entitlements](./Requirements/billing-tariffs.md).
 That document is incorporated into this build brief by reference and is
 authoritative for the billing tariff control plane.
+
+Commercial tariff selection is resolved for the requested UTC month from
+append-only effective decisions. Administrator changes start next month, while
+unknown legacy intervals are held for reconciliation instead of being priced
+from mutable current pointers. UOA centrally defaults omitted standard markup
+to 30%; existing explicit terms, free, at-cost, and manual contract versions
+retain their agreed values.
 
 Organisation contract invoicing is the manual-collection extension of that
 control plane. A contract pins one organisation-wide usage markup, currency,
@@ -2610,9 +2633,10 @@ choice.
 UOA owns one exact-team credit balance shared across every connected product in
 the same Stripe account/mode. The fixed customer conversion is 1,000 credits =
 US$1.00 and the required product heading is `Remaining credits`. Customer credit
-quantities are always whole integers: UOA floors each cumulative service/user
-rated amount to complete credits and carries the sub-credit remainder internally
-until it crosses the next credit boundary. Individual
+quantities expose up to six decimal places in credits protocol 2.0.0. Prepaid
+dispatch settlement consumes exact microcredits with account-wide cumulative
+rounding; the older portfolio allocator carries its sub-credit remainder
+internally until it crosses the next complete-credit boundary. Individual
 products may advertise different fixed top-up offers, but every successful
 payment funds the shared account. Manual and bounded automatic top-up are
 available to all services only through UOA-authored frozen actions; products
@@ -3018,6 +3042,28 @@ the same boolean to SSR and hydration. Enablement retains mailbox proof, enrolle
 TOTP, product membership/privacy filters, exact config binding and native app
 revision checks; it never grants a login session.
 
+## Billing cycles, configurable seats and prepaid pools (2026-10-04)
+
+Customer billing must keep markup and provider cost private while operators
+configure an exact percentage. Monthly subscriptions may charge once per team
+or organisation, or per seat. Per-seat plans select automatic membership-based
+or fixed purchased seats, and full-month or prorated charging. Automatic
+proration follows actual join/leave intervals; fixed capacity must constrain
+every invitation and membership grant atomically. Usage may independently draw
+from a prepaid team/organisation credit pool, reserved before paid dispatch.
+Nessie, Deepwater and Deep Test require reachable monthly billing-cycle pages
+with authorized invoice and measured-usage/seat breakdown downloads. Final
+documents retain immutable amounts and explicit correction lineage. The ordered
+implementation and proof requirements are in
+[the billing delivery plan](plans/2026-10-04-billing-cycles-seats-and-prepaid.md).
+
+When a trusted provider receipt exceeds its pre-dispatch maximum, UOA keeps the
+financial hold until a current platform superuser reviews the exact private
+Ledger evidence. An explicit operator decision may collect only the original
+authorized credit hold and waive the excess; gross frozen-rated usage still
+counts against credit budgets. Unknown actual cost never becomes zero. The
+private route, operator doorway and immutable financial evidence are specified
+in [paid usage exception reconciliation](plans/2026-10-04-paid-usage-exception-reconciliation.md).
 
 ### Paid recurring add-on renewals (2026-10-04)
 

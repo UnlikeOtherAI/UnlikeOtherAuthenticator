@@ -77,7 +77,6 @@ describe('organisation billing responsibility (protocol 1.3.0)', () => {
           display_name: 'Research',
           pinned_ledger_snapshot:
             billingStatementV2ConformanceFixture.pinned_inputs.ledger_snapshots[0],
-          connected_service_usage: billingStatementV2ConformanceFixture.connected_service_usage,
           commercial_lines: billingStatementV2ConformanceFixture.commercial_lines,
           totals: billingStatementV2ConformanceFixture.totals,
         },

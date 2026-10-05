@@ -9,7 +9,7 @@ import {
 import { renderClaimInvalidHtml } from '../services/integration-claim-page.service.js';
 import { renderIntegrationStatusHtml } from '../services/integration-status-page.service.js';
 import { getEnv } from '../config/env.js';
-import { isAppError, type AppError } from '../utils/errors.js';
+import { AppError, isAppError } from '../utils/errors.js';
 import { buildPublicErrorBody } from '../utils/error-response.js';
 import { PRODUCTION_PUBLIC_ERROR_CODES } from '../utils/public-error-codes.js';
 
@@ -90,6 +90,16 @@ export function registerErrorHandler(app: FastifyInstance): void {
   app.setErrorHandler((error, request, reply) => {
     // Internal logs can contain specifics; user-facing responses must remain generic.
     request.log.error({ err: error }, 'request failed');
+
+    // Prisma wraps a trigger's custom SQLSTATE in an unknown-request error.
+    // Keep one mapping here so every membership writer returns the same 409.
+    if (error instanceof Error && /\bPZ001\b/.test(error.message)) {
+      const capacityError = new AppError('BAD_REQUEST', 409, 'SEAT_CAPACITY_EXCEEDED');
+      reply.status(409).send(buildPublicErrorBody({
+        request, error: capacityError, statusCode: 409,
+      }));
+      return;
+    }
 
     // Claim flow is always a browser context. Any failure (bad content-type,
     // AppError, unexpected crash) must produce the friendly invalid-link page

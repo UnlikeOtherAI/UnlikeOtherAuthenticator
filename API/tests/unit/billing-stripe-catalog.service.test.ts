@@ -78,6 +78,7 @@ describe('Stripe tariff catalog', () => {
     expect(productsCreate.mock.calls[0]?.[1].idempotencyKey).toContain(
       'acct_uoa:test:catalog-product:',
     );
+    expect(productsCreate.mock.calls[0]?.[0].name).toBe('DeepWater subscription and usage');
     expect(metersCreate).toHaveBeenCalledWith(
       expect.objectContaining({
         event_name: 'uoa_rated_hash',
@@ -154,6 +155,8 @@ describe('Stripe tariff catalog', () => {
     expect(result.stripeMonthlyPriceId).toBe('price_monthly_1');
     const priceInput = pricesCreate.mock.calls[0]?.[0];
     expect(priceInput.unit_amount_decimal.toString()).toBe('2000');
+    expect(priceInput.nickname).toBe('Monthly subscription');
+    expect(priceInput.nickname).not.toContain('standard');
     expect(priceInput.metadata).toMatchObject({
       uoa_tariff_id: 'tariff_1',
       uoa_tariff_version: '3',

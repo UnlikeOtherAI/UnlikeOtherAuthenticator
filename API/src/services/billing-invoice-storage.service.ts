@@ -7,7 +7,7 @@ import { getEnv, type Env } from '../config/env.js';
 import { AppError } from '../utils/errors.js';
 
 export interface BillingInvoicePdfStorage {
-  putImmutable(key: string, value: Uint8Array): Promise<void>;
+  putImmutable(key: string, value: Uint8Array, contentType?: 'application/pdf' | 'text/csv'): Promise<void>;
   read(key: string): Promise<Buffer>;
 }
 
@@ -15,7 +15,7 @@ export function validateBillingInvoiceStorageKey(key: string): string {
   if (
     key.length < 1 ||
     key.length > 1024 ||
-    !key.startsWith('billing-invoices/') ||
+    !(key.startsWith('billing-invoices/') || key.startsWith('billing-cycles/')) ||
     key.startsWith('/') ||
     key.endsWith('/') ||
     key.includes('\\') ||
@@ -82,13 +82,15 @@ export class GcsBillingInvoicePdfStorage implements BillingInvoicePdfStorage {
     private readonly storage: Storage,
   ) {}
 
-  public async putImmutable(key: string, value: Uint8Array): Promise<void> {
+  public async putImmutable(
+    key: string, value: Uint8Array, contentType: 'application/pdf' | 'text/csv' = 'application/pdf',
+  ): Promise<void> {
     const file = this.storage.bucket(this.bucketName).file(validateBillingInvoiceStorageKey(key));
     try {
       await file.save(Buffer.from(value), {
         resumable: false,
         validation: 'crc32c',
-        metadata: { contentType: 'application/pdf', cacheControl: 'private, no-store' },
+        metadata: { contentType, cacheControl: 'private, no-store' },
         preconditionOpts: { ifGenerationMatch: 0 },
       });
     } catch (error) {

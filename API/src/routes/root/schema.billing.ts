@@ -10,12 +10,130 @@ const tariffBody = {
   mode: 'standard | free | at_cost | custom',
   collection_mode:
     'stripe | manual | none; free requires none; none preserves rating/visibility without collecting payment',
-  markup_bps: 'integer 0-100000; 100 basis points = 1%; must be 0 for free and at_cost',
+  markup_percent:
+    'optional exact decimal percentage string, at most two fractional digits; standard defaults to 30.00; custom requires explicit; free and at_cost = 0.00',
   monthly_subscription:
-    '{ amount_minor: non-negative integer string, currency: three-letter uppercase ISO currency }',
+    '{ amount_minor: non-negative integer string, currency: uppercase ISO currency, charge_basis: flat | per_seat, seat_policy: automatic | fixed and seat_charge_timing: full_month | prorated for per_seat only }',
+  usage_payment_mode: 'prepaid | pay_as_you_go, independent of monthly subscription',
 };
 
 export const billingEndpoints: EndpointSchema[] = [
+  {
+    method: 'POST', path: '/billing/v1/ledger/reservations/:dispatchId/exception',
+    description: 'Record one selected immutable over-bound paid receipt as a held operator exception, without releasing the financial reservation.',
+    auth: 'Existing exact-product Ledger RuntimeKey bearer',
+    body: { receipt_id: 'selected immutable Ledger receipt ID',
+      raw_cost_actual: 'observed provider cost decimal, maximum 18 places',
+      currency: 'USD', evidence_digest: 'SHA-256 of frozen dispatch/receipt/cost/bound/context tuple',
+      source: 'ledger_selected_provider_receipt' },
+    response: { 200: 'HELD_OPERATOR_RECONCILIATION or idempotently replayed WRITTEN_OFF decision',
+      409: 'Missing frozen bound, mismatched evidence, stale/rebound receipt or ineligible dispatch' },
+  },
+  {
+    method: 'GET', path: '/billing/v1/ledger/reservations/:dispatchId/exception',
+    description: 'Read the exact operator decision for one product-bound Ledger dispatch before Ledger marks it settled.',
+    auth: 'Original exact-product Ledger RuntimeKey bearer',
+    response: { 200: 'HELD_OPERATOR_RECONCILIATION or WRITTEN_OFF with gross, collectible and waived microcredits',
+      404: 'No exception for this product-bound dispatch' },
+  },
+  {
+    method: 'GET', path: '/internal/admin/billing/paid-usage-exceptions',
+    description: 'Show the oldest 100 held selected receipts with frozen bounds and maximum original credit holds for platform reconciliation.',
+    auth: adminAuth,
+    response: { 200: '{ exceptions: private held receipt facts[], has_more }' },
+  },
+  {
+    method: 'POST', path: '/internal/admin/billing/paid-usage-exceptions/:dispatchId/write-off',
+    description: 'A recently authenticated platform superuser caps customer collection at the original hold, books gross rated usage and explicitly waives the excess once.',
+    auth: `${adminAuth}; access token iat within five minutes, live user epoch and role rechecked under row locks`,
+    body: { evidence_digest: 'exact held Ledger evidence SHA-256',
+      idempotency_key: 'lowercase 64-hex key stable across retries',
+      reason: 'operator explanation, 12–500 characters' },
+    response: { 200: 'WRITTEN_OFF with gross_rated_microcredits, collectible_microcredits and waived_microcredits',
+      409: 'Conflicting receipt, replay key or financial state' },
+  },
+  {
+    method: 'GET', path: '/schemas/billing-customer-invoices-v1.json', auth: 'public',
+    description: 'Strict customer-safe actual-charge invoice list, detail and download schema.',
+    response: { 200: 'BillingCustomerInvoicesV1 Draft 2020-12 JSON Schema' },
+  },
+  {
+    method: 'GET', path: '/schemas/billing-customer-invoices-v1.example.json', auth: 'public',
+    description: 'Synthetic issued and pending prepaid charge invoice examples.',
+    response: { 200: 'BillingCustomerInvoicesV1 conformance examples' },
+  },
+  {
+    method: 'GET', path: '/schemas/billing-customer-invoices-v1.openapi.json', auth: 'public',
+    description: 'Versioned OpenAPI 3.1 actual-charge invoice contract.',
+    response: { 200: 'BillingCustomerInvoicesV1 OpenAPI 3.1 components' },
+  },
+  {
+    method: 'POST', path: '/billing/v1/invoices/list',
+    description: 'Lists accepted prepaid payments and actual monthly service invoices by the charge source month. A pending legal document remains visible without guessed tax or invoice number.',
+    notes: 'Optional X-UOA-Billing-Presentation: 1.5.0 and X-UOA-Billing-Locale select localized generated labels and exact amount displays only; signed bodies, financial snapshots and legal document bytes do not change.',
+    auth: 'Product customer_lifecycle app key plus exact endpoint-audience X-UOA-Actor and current team or organisation billing-manager authority',
+    body: { product: 'string', organisation_id: 'string', team_id: 'string', user_id: 'string',
+      charge_month: 'YYYY-MM UTC', limit: 'optional integer 1–50', cursor: 'optional opaque cursor' },
+    response: { 200: 'BillingCustomerInvoicesListV1; no provider units or private markup' },
+  },
+  {
+    method: 'POST', path: '/billing/v1/invoices/detail',
+    description: 'Reads one actual invoice or accepted prepaid charge with only the issuer-proven customer charges and legal document state.',
+    notes: 'Optional X-UOA-Billing-Presentation: 1.5.0 and X-UOA-Billing-Locale select localized generated labels and exact amount displays only; signed bodies, financial snapshots and legal document bytes do not change.',
+    auth: 'Product customer_lifecycle app key plus exact endpoint-audience X-UOA-Actor and current payer billing-manager authority',
+    body: { product: 'string', organisation_id: 'string', team_id: 'string', user_id: 'string',
+      invoice_id: 'string (from the list)' },
+    response: { 200: 'BillingCustomerInvoiceDetailV1; pending documents have no download' },
+  },
+  {
+    method: 'POST', path: '/billing/v1/invoices/download',
+    description: 'Streams the original verified legal PDF after exact payer reauthorization, never a projected or synthetic invoice.',
+    auth: 'Product customer_lifecycle app key plus exact endpoint-audience X-UOA-Actor and current payer billing-manager authority',
+    body: { product: 'string', organisation_id: 'string', team_id: 'string', user_id: 'string',
+      invoice_id: 'string', document_id: 'string (from the detail action)' },
+    response: { 200: 'Private application/pdf attachment' },
+  },
+  {
+    method: 'GET', path: '/schemas/billing-cycles-v2.json', auth: 'public',
+    description: 'Strict customer-safe monthly cycle list, detail, and download request schema.',
+    response: { 200: 'BillingCyclesV2 Draft 2020-12 JSON Schema' },
+  },
+  {
+    method: 'GET', path: '/schemas/billing-cycles-v2.example.json', auth: 'public',
+    description: 'Synthetic monthly cycle fixture with seat evidence, measured usage, credits and real document metadata.',
+    response: { 200: 'BillingCyclesV2 conformance examples' },
+  },
+  {
+    method: 'GET', path: '/schemas/billing-cycles-v2.openapi.json', auth: 'public',
+    description: 'Versioned OpenAPI 3.1 monthly billing cycle contract.',
+    response: { 200: 'BillingCyclesV2 OpenAPI 3.1 components' },
+  },
+  {
+    method: 'POST', path: '/billing/v1/cycles/list',
+    description: 'Paginated, exact-product/team monthly billing history. Only actual frozen cycles and a clearly labeled open preview appear.',
+    notes: 'Optional X-UOA-Billing-Presentation: 1.5.0 and X-UOA-Billing-Locale select localized generated labels and exact amount displays only; signed bodies, financial snapshots and legal document bytes do not change.',
+    auth: 'Product customer_lifecycle app key plus exact endpoint-audience X-UOA-Actor; active billing manager for the frozen payer scope',
+    body: { product: 'string', organisation_id: 'string', team_id: 'string', user_id: 'string',
+      limit: 'optional integer 1–24', cursor: 'optional earlier YYYY-MM month' },
+    response: { 200: 'BillingCyclesListV2; no private cost or markup' },
+  },
+  {
+    method: 'POST', path: '/billing/v1/cycles/detail',
+    description: 'Frozen seat, measured usage, credits, actual documents and adjustment lineage for one exact product/team cycle.',
+    notes: 'Optional X-UOA-Billing-Presentation: 1.5.0 and X-UOA-Billing-Locale select localized generated labels and exact amount displays only; signed bodies, financial snapshots and legal document bytes do not change.',
+    auth: 'Product customer_lifecycle app key plus exact endpoint-audience X-UOA-Actor and current payer billing-manager authority',
+    body: { product: 'string', organisation_id: 'string', team_id: 'string', user_id: 'string',
+      cycle_id: 'string (from the list)' },
+    response: { 200: 'BillingCycleDetailV2; an open preview has no final invoice download' },
+  },
+  {
+    method: 'POST', path: '/billing/v1/cycles/download',
+    description: 'Streams one immutable, SHA-verified customer PDF or CSV after exact scope and payer reauthorization.',
+    auth: 'Product customer_lifecycle app key plus exact endpoint-audience X-UOA-Actor and current payer billing-manager authority',
+    body: { product: 'string', organisation_id: 'string', team_id: 'string', user_id: 'string',
+      cycle_id: 'string', document_id: 'string (from the cycle detail action)' },
+    response: { 200: 'Private application/pdf or text/csv attachment; no external URL proxy' },
+  },
   {
     method: 'GET',
     path: '/billing/v1/jwks.json',
@@ -72,7 +190,7 @@ export const billingEndpoints: EndpointSchema[] = [
     method: 'GET',
     path: '/schemas/billing-statement-v2.json',
     description:
-      'Public Draft 2020-12 schema for the SSO-filled customer statement and team-wide connected-service portfolio. V1 remains frozen and available.',
+      'Public Draft 2020-12 schema for the SSO-filled customer statement and team-wide connected-service portfolio. Both statement routes use the privacy-revised customer contract.',
     auth: 'public',
     response: {
       200: 'BillingStatementV2 JSON Schema',
@@ -133,7 +251,7 @@ export const billingEndpoints: EndpointSchema[] = [
     method: 'POST',
     path: '/billing/v1/effective-tariff',
     description:
-      'Resolve team > organisation > service-default tariff precedence, re-check active UOA membership, and return a signed content-free snapshot. Raw metered quantities remain immutable; the signed multiplier rates money and separately labeled customer billable units.',
+      'Resolve team > organisation > service-default tariff precedence, re-check active UOA membership, and return a signed content-free entitlement snapshot. UOA rates money privately; products receive collection and subscription terms, not provider cost or price adjustment.',
     auth: 'X-UOA-App-Key: uoa_app_… credential dedicated to the requested product, plus X-UOA-Actor: short-lived RS256 actor JWT bound to that credential, aud = this exact endpoint URL',
     body: {
       product: 'string (required) — exact global billing service identifier bound to the app key',
@@ -142,18 +260,18 @@ export const billingEndpoints: EndpointSchema[] = [
       user_id: 'string (required)',
     },
     response: {
-      200: '{ snapshot, payload } — snapshot is RS256 typ=uoa-tariff+jwt; payload contains schema/product/authorized app-key/subject, immutable tariff id+key+version, pricing mode, collection_mode, markup_bps, usage_price_multiplier_bps, monthly amount/currency, usage_billing_enabled, payment_collection_enabled, assignment scope, raw_usage_preserved=true, issued/expires timestamps',
+      200: '{ snapshot, payload } — snapshot is RS256 typ=uoa-tariff+jwt; payload contains schema/product/authorized app-key/subject, opaque tariff ID for UOA Checkout binding, collection_mode, monthly amount/currency, usage_billing_enabled, payment_collection_enabled, assignment scope, raw_usage_preserved=true, issued/expires timestamps; no private price basis',
       '401/403':
         'Generic error for invalid/revoked/wrong-product app key, invalid actor signature, actor/body mismatch, or inactive membership',
     },
     notes:
-      'Actor claims: iss/aud exact credential values, sub=user_id, product, organisation_id, team_id, unique jti, iat/exp with maximum 60-second lifetime. Snapshot iss is PUBLIC_BASE_URL; aud is the credential actor_issuer. Consumers must verify the signature and require exact signed product ID+identifier, authorized app-key ID, and user/organisation/team subject binding; shared actor signers never make snapshots portable across products. usage_billing_enabled controls rating; payment_collection_enabled and collection_mode independently describe whether/how payment is collected. Customer billable units are raw_metered_units × usage_price_multiplier_bps / 10000 and remain separately labeled from immutable raw units: token-equivalent for token-metered AI, search-equivalent for SERP, and research-equivalent for DeepWater.',
+      'Actor claims: iss/aud exact credential values, sub=user_id, product, organisation_id, team_id, unique jti, iat/exp with maximum 60-second lifetime. Snapshot iss is PUBLIC_BASE_URL; aud is the credential actor_issuer. Consumers must verify the signature and require exact signed product ID+identifier, authorized app-key ID, and user/organisation/team subject binding; shared actor signers never make snapshots portable across products. UOA alone rates usage; payment_collection_enabled and collection_mode describe whether/how payment is collected.',
   },
   {
     method: 'POST',
     path: '/billing/v1/customer-statement',
     description:
-      'Return UOA’s display-ready canonical plan, subscription, raw and centrally rated usage, cross-service and per-user attribution, exact commercial lines/totals, capabilities, and server-pinned actions. The statement pins immutable Ledger service/user snapshots and the exact UOA tariff version.',
+      'Return UOA’s display-ready canonical plan, subscription, customer charges, credit consumption, connected-service credit totals, exact commercial lines/totals, capabilities, and server-pinned actions. Token counts, provider costs and markup remain private. The statement pins immutable Ledger service/user snapshots and the exact UOA tariff version.',
     auth: 'The requested product’s customer_lifecycle X-UOA-App-Key plus a fresh credential-bound X-UOA-Actor assertion whose aud is this exact endpoint URL; both remain backend-only',
     body: {
       product: 'exact product identifier bound to the app key',
@@ -169,7 +287,7 @@ export const billingEndpoints: EndpointSchema[] = [
         'Ledger raw metering is invalid/unavailable or its dedicated reader is unconfigured',
     },
     notes:
-      'Products render this model and proxy only whitelisted action ID/path pairs. They never derive totals, markup wording, direct access, or cancellation choices. The browser receives neither app key nor actor JWT.',
+      'Products render this model and proxy only whitelisted action ID/path pairs. They never derive totals, private price terms, direct access, or cancellation choices. The browser receives neither app key nor actor JWT.',
   },
   {
     method: 'POST',

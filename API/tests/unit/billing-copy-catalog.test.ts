@@ -27,6 +27,10 @@ describe('customer billing copy catalogs', () => {
     expect(billingLocalizedCreditDisplay('2', 'cs')).toBe('2 kredity');
     expect(billingLocalizedCreditDisplay('5', 'cs')).toBe('5 kreditů');
     expect(billingLocalizedCreditDisplay('2', 'de')).toBe('2 Credits');
+    expect(billingLocalizedCreditDisplay('0.000001', 'cs')).toBe('0,000001 kreditů');
+    expect(billingLocalizedCreditDisplay('-0.000001', 'de')).toBe('-0,000001 Credits');
+    expect(billingLocalizedCreditDisplay('9223372036854.775807', 'en-US'))
+      .toBe('9,223,372,036,854.775807 credits');
     expect(billingPendingCreditsLabel(2, 'cs')).toBe('Čekají 2 dobití');
     expect(billingCreditCopy('cs').balanceLabel).toBe('Zbývající kredity');
   });

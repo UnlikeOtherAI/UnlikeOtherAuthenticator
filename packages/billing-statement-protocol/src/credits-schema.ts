@@ -154,6 +154,15 @@ export const billingCreditsV1JsonSchema = {
     credit_summary: {
       anyOf: [billingCreditsManagerSummaryJsonSchema, billingCreditsMemberSummaryJsonSchema],
     },
+    billing_status: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['settlement_state', 'message'],
+      properties: {
+        settlement_state: { enum: ['current', 'pending_reconciliation'] },
+        message: { type: 'string', minLength: 1 },
+      },
+    },
     funding_policy: {
       oneOf: [
         {
@@ -300,15 +309,6 @@ export const billingCreditsV1JsonSchema = {
     // Optional and absent from `required`: a credits view without it means the
     // organisation has not taken billing over, which is every deployment today.
     controlled_by: billingControlledByJsonSchema,
-    billing_status: {
-      type: 'object',
-      additionalProperties: false,
-      required: ['settlement_state', 'message'],
-      properties: {
-        settlement_state: { enum: ['current', 'pending_reconciliation'] },
-        message: { type: 'string', minLength: 1 },
-      },
-    },
     attention: {
       type: 'array', maxItems: 5, uniqueItems: true, items: billingCreditAttentionV1JsonSchema,
     },

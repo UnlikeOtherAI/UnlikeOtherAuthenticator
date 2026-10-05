@@ -17,7 +17,6 @@ import {
 import {
   billingCreditAmount,
   billingCreditsPaymentMoney,
-  billingWholeCredits,
 } from './billing-credit-display.service.js';
 import { billingLocalizedCreditDisplay } from './billing-credit-copy.catalog.js';
 import {
@@ -42,7 +41,7 @@ function sum(values: bigint[]): bigint {
 }
 
 function creditAmount(value: bigint, locale?: BillingCustomerLocale) {
-  const amount = billingCreditAmount(value);
+  const amount = billingCreditAmount(value, locale);
   return { ...amount, display: billingLocalizedCreditDisplay(amount.credits, locale) };
 }
 
@@ -59,9 +58,29 @@ function latestAllocations(data: BillingCreditProjectionData) {
   return [...rows.values()];
 }
 
+function prepaidByService(data: BillingCreditProjectionData) {
+  const grouped = new Map<string, {
+    service: { id: string; identifier: string; name: string };
+    total: bigint;
+    users: Map<string, bigint>;
+  }>();
+  for (const row of data.prepaidReservations) {
+    if (row.status !== 'SETTLED') continue;
+    const product = row.tariff.service;
+    const item = grouped.get(product.id) ?? { service: product, total: 0n,
+      users: new Map<string, bigint>() };
+    const amount = row.debitedMicrocredits ?? 0n;
+    item.total += amount;
+    item.users.set(row.userId, (item.users.get(row.userId) ?? 0n) + amount);
+    grouped.set(product.id, item);
+  }
+  return [...grouped.values()].sort((a, b) =>
+    a.service.identifier.localeCompare(b.service.identifier));
+}
+
 function managerBreakdown(data: BillingCreditProjectionData, locale?: BillingCustomerLocale) {
   const allocations = latestAllocations(data);
-  return data.settlements.map((settlement) => {
+  const settled = data.settlements.map((settlement) => {
     const rows = allocations.filter((row) => row.settlementId === settlement.id);
     return {
       service: service(settlement.service),
@@ -92,11 +111,23 @@ function managerBreakdown(data: BillingCreditProjectionData, locale?: BillingCus
         }),
     };
   });
+  const prepaid = prepaidByService(data).map((row) => ({
+    service: service(row.service),
+    credits_consumed: creditAmount(row.total, locale),
+    unattributed_credits_consumed: creditAmount(0n, locale),
+    users: [...row.users.entries()].map(([userId, amount]) => ({
+      user_id: userId,
+      display_name: data.entries.find((entry) => entry.attributedUserId === userId)
+        ?.attributedUser?.name ?? billingCreditCopy(locale).teamMember,
+      credits_consumed: creditAmount(amount, locale),
+    })),
+  }));
+  return [...settled, ...prepaid];
 }
 
 function memberBreakdown(data: BillingCreditProjectionData, viewerId: string, locale?: BillingCustomerLocale) {
   const allocations = latestAllocations(data);
-  return data.settlements.map((settlement) => {
+  const settled = data.settlements.map((settlement) => {
     const rows = allocations.filter((row) => row.settlementId === settlement.id);
     const viewer =
       rows.find((row) => row.attributedUserId === viewerId)
@@ -116,6 +147,15 @@ function memberBreakdown(data: BillingCreditProjectionData, viewerId: string, lo
       unattributed_credits_consumed: creditAmount(unattributed, locale),
     };
   });
+  const prepaid = prepaidByService(data).map((row) => {
+    const viewer = row.users.get(viewerId) ?? 0n;
+    return { service: service(row.service),
+      credits_consumed: creditAmount(row.total, locale),
+      viewer_credits_consumed: creditAmount(viewer, locale),
+      other_team_members_credits_consumed: creditAmount(row.total - viewer, locale),
+      unattributed_credits_consumed: creditAmount(0n, locale) };
+  });
+  return [...settled, ...prepaid];
 }
 
 export function buildBillingCreditsProjection(params: {
@@ -130,6 +170,7 @@ export function buildBillingCreditsProjection(params: {
   locale?: BillingCustomerLocale;
   attention?: BillingCreditAttentionV1[];
   fundingRequest?: BillingCreditFundingRequestActionV1;
+  settlementPending?: boolean;
 }): BillingCreditsV1 {
   const { data, viewer } = params;
   const controlledBy = params.controlledBy ?? null;
@@ -160,9 +201,12 @@ export function buildBillingCreditsProjection(params: {
       .map((entry) => entry.amountMicrocredits),
   );
   const creditsConsumed = sum(
-    data.settlements.map((settlement) => settlement.cumulativeCreditsConsumedMicrocredits),
+    [...data.settlements.map((settlement) => settlement.cumulativeCreditsConsumedMicrocredits),
+      ...data.prepaidReservations.filter((row) => row.status === 'SETTLED')
+        .map((row) => row.debitedMicrocredits ?? 0n)],
   );
-  const wholeCreditBalance = billingWholeCredits(data.creditAccount.balanceMicrocredits);
+  const availableBalance = data.creditAccount.balanceMicrocredits -
+    data.activeReservedMicrocredits;
   const requestBody = {
     product: params.credential.service.identifier,
     organisation_id: viewer.organisationId,
@@ -193,15 +237,16 @@ export function buildBillingCreditsProjection(params: {
       stripe_mode: params.collection.account.livemode ? ('live' as const) : ('test' as const),
     },
     credit_balance: {
-      ...creditAmount(data.creditAccount.balanceMicrocredits, params.locale),
+      ...creditAmount(availableBalance, params.locale),
       state:
-        wholeCreditBalance > 0n
+        availableBalance > 0n
           ? ('available' as const)
-          : wholeCreditBalance < 0n
+          : availableBalance < 0n
             ? ('debt' as const)
             : ('zero' as const),
       label: copy.balanceLabel,
-      description: copy.balanceDescription,
+      description: data.creditAccount.scope === 'ORGANISATION'
+        ? copy.organisationBalanceDescription : copy.balanceDescription,
     },
     pending_credits: {
       top_up_count: pendingCount,
@@ -212,6 +257,12 @@ export function buildBillingCreditsProjection(params: {
     ...(controlledBy ? { controlled_by: controlledBy } : {}),
     ...(params.attention ? { attention: params.attention } : {}),
     ...(params.fundingRequest ? { funding_request: params.fundingRequest } : {}),
+    ...(params.settlementPending ? {
+      billing_status: {
+        settlement_state: 'pending_reconciliation' as const,
+        message: copy.pendingSettlementDescription,
+      },
+    } : {}),
   };
   const summary = {
     credits_added: creditAmount(creditsAdded, params.locale),
@@ -245,7 +296,7 @@ export function buildBillingCreditsProjection(params: {
       },
       pending_credits: {
         ...common.pending_credits,
-        payment_amount: billingCreditsPaymentMoney(pendingPayment),
+        payment_amount: billingCreditsPaymentMoney(pendingPayment, params.locale),
       },
       funding_policy: funding,
       automatic_top_up: automatic,

@@ -3,6 +3,7 @@ import type { FastifyInstance, FastifyRequest, RouteShorthandOptions } from 'fas
 import { z } from 'zod';
 
 import { requireAdminSuperuser } from '../../../middleware/admin-superuser.js';
+import { AppError } from '../../../utils/errors.js';
 import {
   activateBillingContractVersion,
   createBillingContract,
@@ -10,6 +11,10 @@ import {
   listBillingContracts,
 } from '../../../services/billing-contract.service.js';
 import { calculateBillingContractInvoice } from '../../../services/billing-invoice-calculation.service.js';
+import { listPendingManualBillingCycleCorrections,
+  prepareManualBillingCycleCorrection } from
+  '../../../services/billing-cycle-manual-correction-prepare.service.js';
+import { markupPercentToBps } from '../../../services/billing-markup-percent.service.js';
 import {
   getBillingInvoice,
   issueBillingInvoice,
@@ -18,6 +23,7 @@ import {
   recordBillingInvoicePayment,
   voidBillingInvoice,
 } from '../../../services/billing-invoice-lifecycle.service.js';
+import { registerManualCreditNoteRoutes } from './billing-manual-credit-notes.js';
 import {
   createBillingInvoiceIssuerProfile,
   getOrganisationInvoiceProfile,
@@ -65,6 +71,28 @@ const VersionParamsSchema = ContractParamsSchema.extend({ versionId: IdentifierS
 const InvoiceParamsSchema = z.object({ invoiceId: IdentifierSchema }).strict();
 const OrganisationParamsSchema = z.object({ organisationId: IdentifierSchema }).strict();
 const ActorBodySchema = z.object({}).strict();
+const ContractActivationServiceSchema = z.object({
+  service_id: IdentifierSchema,
+  monthly_amount_minor: z.string().regex(/^(0|[1-9]\d*)$/),
+  monthly_charge_basis: z.enum(['flat', 'per_seat']).optional(),
+  seat_policy: z.enum(['automatic', 'fixed']).optional(),
+  seat_charge_timing: z.enum(['full_month', 'prorated']).optional(),
+  usage_payment_mode: z.enum(['pay_as_you_go', 'prepaid']).optional(),
+  fixed_seat_quantity: z.number().int().min(1).max(1_000_000).optional(),
+}).strict().superRefine((value, context) => {
+  const perSeat = value.monthly_charge_basis === 'per_seat';
+  if ((perSeat && (!value.seat_policy || !value.seat_charge_timing)) ||
+    (!perSeat && (value.seat_policy !== undefined ||
+      value.seat_charge_timing !== undefined))) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['seat_policy'],
+      message: 'Seat policy and timing must match the per-seat basis.' });
+  }
+  if ((perSeat && value.seat_policy === 'fixed') !==
+    (value.fixed_seat_quantity !== undefined)) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['fixed_seat_quantity'],
+      message: 'Purchased seats are required only for fixed per-seat terms.' });
+  }
+});
 
 const adminRoute: RouteShorthandOptions = {
   preHandler: [requireAdminSuperuser],
@@ -82,6 +110,12 @@ function actor(request: FastifyRequest) {
   };
 }
 
+function financialActor(request: FastifyRequest) {
+  const claims = request.adminAccessTokenClaims;
+  if (!claims) throw new AppError('UNAUTHORIZED', 401, 'MISSING_ACCESS_TOKEN');
+  return { userId: claims.userId, tokenVersion: claims.tokenVersion, email: claims.email };
+}
+
 async function serializeInvoices(invoices: CustomerSafeInvoice[]) {
   const issueActions = await resolveBillingInvoiceIssueActions(invoices);
   return invoices.map((invoice) =>
@@ -94,7 +128,9 @@ async function serializeInvoice(invoice: CustomerSafeInvoice) {
   return serializeCustomerSafeInvoice(invoice, issueActions.get(invoice.id) ?? null);
 }
 
+
 export function registerInternalAdminBillingContractInvoiceRoutes(app: FastifyInstance): void {
+  registerManualCreditNoteRoutes(app);
   app.get(
     '/internal/admin/billing/contracts',
     { ...adminRoute, schema: { response: { 200: contractArrayResponseSchema } } },
@@ -135,7 +171,7 @@ export function registerInternalAdminBillingContractInvoiceRoutes(app: FastifyIn
       const { contractId } = ContractParamsSchema.parse(request.params);
       const body = z
         .object({
-          usage_markup_bps: z.number().int().min(0).max(100_000),
+          usage_markup_percent: z.string(),
           currency: CurrencySchema,
           payment_terms_days: z.number().int().min(0).max(365),
           effective_from_month: MonthSchema,
@@ -144,18 +180,18 @@ export function registerInternalAdminBillingContractInvoiceRoutes(app: FastifyIn
         .parse(request.body);
       const version = await createBillingContractVersion({
         contractId,
-        usageMarkupBps: body.usage_markup_bps,
+        usageMarkupBps: markupPercentToBps(body.usage_markup_percent),
         currency: body.currency,
         paymentTermsDays: body.payment_terms_days,
         effectiveFromMonth: body.effective_from_month,
-        actor: actor(request),
+        actor: financialActor(request),
       });
       return reply
         .status(201)
         .send(
           serializeContractVersion(
             version,
-            version.effectiveFromMonth > currentBillingMonth() ? 'scheduled' : 'ready',
+            version.effectiveFromMonth > currentBillingMonth() ? 'ready' : 'superseded',
           ),
         );
     },
@@ -168,17 +204,7 @@ export function registerInternalAdminBillingContractInvoiceRoutes(app: FastifyIn
       const { contractId, versionId } = VersionParamsSchema.parse(request.params);
       const body = z
         .object({
-          services: z
-            .array(
-              z
-                .object({
-                  service_id: IdentifierSchema,
-                  monthly_amount_minor: z.string().regex(/^(0|[1-9]\d*)$/),
-                })
-                .strict(),
-            )
-            .min(1)
-            .max(100),
+          services: ContractActivationServiceSchema.array().min(1).max(100),
         })
         .strict()
         .parse(request.body);
@@ -188,8 +214,13 @@ export function registerInternalAdminBillingContractInvoiceRoutes(app: FastifyIn
         services: body.services.map((service) => ({
           serviceId: service.service_id,
           monthlyAmountMinor: service.monthly_amount_minor,
+          monthlyChargeBasis: service.monthly_charge_basis,
+          seatPolicy: service.seat_policy,
+          seatChargeTiming: service.seat_charge_timing,
+          usagePaymentMode: service.usage_payment_mode,
+          fixedSeatQuantity: service.fixed_seat_quantity,
         })),
-        actor: actor(request),
+        actor: financialActor(request),
       });
       return serializeContractVersion(version, 'active');
     },
@@ -280,6 +311,9 @@ export function registerInternalAdminBillingContractInvoiceRoutes(app: FastifyIn
           contract_id: IdentifierSchema,
           issuer_profile_id: IdentifierSchema,
           billing_month: MonthSchema,
+          tax_treatment: z.enum(['no_tax_charged', 'standard_rate']),
+          tax_rate_percent: z.string().regex(/^(0|[1-9]\d*)(?:\.\d{1,2})?$/),
+          tax_legal_basis: z.string().trim().min(1).max(500),
         })
         .strict()
         .parse(request.body);
@@ -287,11 +321,35 @@ export function registerInternalAdminBillingContractInvoiceRoutes(app: FastifyIn
         contractId: body.contract_id,
         issuerProfileId: body.issuer_profile_id,
         billingMonth: body.billing_month,
+        taxTerms: {
+          treatment: body.tax_treatment.toUpperCase() as
+            'NO_TAX_CHARGED' | 'STANDARD_RATE',
+          rateBps: markupPercentToBps(body.tax_rate_percent),
+          legalBasis: body.tax_legal_basis,
+        },
         actor: actor(request),
       });
       return reply.status(201).send(await serializeInvoice(invoice));
     },
   );
+
+  app.get('/internal/admin/billing/cycle-corrections', adminRoute, async () => ({
+    corrections: (await listPendingManualBillingCycleCorrections()).map((item) => ({
+      cycle_id: item.cycleId, organisation_id: item.orgId,
+      service_id: item.serviceId, billing_month: item.billingMonth,
+      direction: item.direction, supplement_invoice_id: item.supplementInvoiceId,
+    })),
+  }));
+
+  app.post('/internal/admin/billing/cycle-corrections/:cycleId/prepare',
+    { ...adminRoute, schema: { response: { 201: invoiceResponseSchema } } },
+    async (request, reply) => {
+      const cycleId = IdentifierSchema.parse((request.params as { cycleId?: unknown }).cycleId);
+      ActorBodySchema.parse(request.body ?? {});
+      const prepared = await prepareManualBillingCycleCorrection({ pendingCycleId: cycleId,
+        actor: financialActor(request) });
+      return reply.status(201).send(serializeInvoice(await getBillingInvoice(prepared.invoiceId)));
+    });
 
   app.get(
     '/internal/admin/billing/invoices',

@@ -1,6 +1,10 @@
 import {
-  BillingAssignmentScope,
   BillingCollectionMode,
+  BillingMonthlyChargeBasis,
+  type BillingSeatChargeTiming,
+  type BillingSeatPolicy,
+  type BillingUsagePaymentMode,
+  BillingTariffSource,
   BillingTariffMode,
   MembershipStatus,
   Prisma,
@@ -18,6 +22,7 @@ import {
   billingModeToPublic,
 } from './billing-tariff-serialization.service.js';
 import { normalizeBillingServiceIdentifier } from './billing-tariff.service.js';
+import { resolveBillingTariffForMonth, utcBillingMonth } from './billing-tariff-history.service.js';
 import {
   assertEffectiveTariffPayloadBinding,
   signEffectiveTariffSnapshot,
@@ -43,18 +48,18 @@ export type EffectiveTariffPayload = {
   };
   tariff: {
     id: string;
-    key: string;
-    version: number;
     mode: 'standard' | 'free' | 'at_cost' | 'custom';
     collection_mode: 'stripe' | 'manual' | 'none';
-    markup_bps: number;
-    markup_percent: string;
-    usage_price_multiplier_bps: number;
     monthly_subscription: {
       amount_minor: string;
       currency: string;
+      charge_basis: 'flat' | 'per_seat';
+      seat_policy: 'automatic' | 'fixed' | null;
+      seat_timing: 'full_month' | 'prorated' | null;
+      amount_role: 'monthly_total' | 'per_seat_unit';
     };
     usage_billing_enabled: boolean;
+    usage_payment_mode: 'prepaid' | 'pay_as_you_go';
     payment_collection_enabled: boolean;
     raw_usage_preserved: true;
   };
@@ -81,6 +86,10 @@ type TariffRow = {
   collectionMode: BillingCollectionMode;
   markupBps: number;
   monthlyAmountMinor: bigint;
+  monthlyChargeBasis: BillingMonthlyChargeBasis;
+  seatPolicy: BillingSeatPolicy | null;
+  seatChargeTiming: BillingSeatChargeTiming | null;
+  usagePaymentMode: BillingUsagePaymentMode;
   currency: string;
 };
 
@@ -89,16 +98,32 @@ function client(deps?: { prisma?: PrismaClient }): PrismaClient {
 }
 
 function assignmentScope(
-  scope: BillingAssignmentScope | null,
+  scope: BillingTariffSource,
 ): EffectiveTariffPayload['assignment']['scope'] {
-  if (scope === BillingAssignmentScope.TEAM) return 'team';
-  if (scope === BillingAssignmentScope.ORGANISATION) return 'organisation';
+  if (scope === BillingTariffSource.TEAM) return 'team';
+  if (scope === BillingTariffSource.ORGANISATION) return 'organisation';
   return 'service_default';
 }
 
-function priceMultiplierBps(tariff: TariffRow): number {
-  if (tariff.mode === BillingTariffMode.FREE) return 0;
-  return 10_000 + tariff.markupBps;
+export function customerBillingTariff(
+  tariff: EffectiveTariffPayload['tariff'],
+): Pick<
+  EffectiveTariffPayload['tariff'],
+  | 'collection_mode'
+  | 'monthly_subscription'
+  | 'usage_billing_enabled'
+  | 'usage_payment_mode'
+  | 'payment_collection_enabled'
+  | 'raw_usage_preserved'
+> {
+  return {
+    collection_mode: tariff.collection_mode,
+    monthly_subscription: tariff.monthly_subscription,
+    usage_billing_enabled: tariff.usage_billing_enabled,
+    usage_payment_mode: tariff.usage_payment_mode,
+    payment_collection_enabled: tariff.payment_collection_enabled,
+    raw_usage_preserved: tariff.raw_usage_preserved,
+  };
 }
 
 function payloadFor(params: {
@@ -107,7 +132,7 @@ function payloadFor(params: {
   tariff: TariffRow;
   assignment: {
     id: string | null;
-    scope: BillingAssignmentScope | null;
+    scope: BillingTariffSource;
   };
   nowEpochSeconds: number;
 }): EffectiveTariffPayload {
@@ -132,18 +157,22 @@ function payloadFor(params: {
     },
     tariff: {
       id: params.tariff.id,
-      key: params.tariff.key,
-      version: params.tariff.version,
       mode: billingModeToPublic(params.tariff.mode),
       collection_mode: billingCollectionModeToPublic(params.tariff.collectionMode),
-      markup_bps: params.tariff.markupBps,
-      markup_percent: (params.tariff.markupBps / 100).toFixed(2),
-      usage_price_multiplier_bps: priceMultiplierBps(params.tariff),
       monthly_subscription: {
         amount_minor: params.tariff.monthlyAmountMinor.toString(),
         currency: params.tariff.currency,
+        charge_basis: params.tariff.monthlyChargeBasis.toLowerCase() as 'flat' | 'per_seat',
+        seat_policy: params.tariff.seatPolicy?.toLowerCase() as 'automatic' | 'fixed' | undefined
+          ?? null,
+        seat_timing: params.tariff.seatChargeTiming?.toLowerCase() as
+          'full_month' | 'prorated' | undefined ?? null,
+        amount_role: params.tariff.monthlyChargeBasis === BillingMonthlyChargeBasis.PER_SEAT
+          ? 'per_seat_unit' : 'monthly_total',
       },
       usage_billing_enabled: params.tariff.mode !== BillingTariffMode.FREE,
+      usage_payment_mode: params.tariff.usagePaymentMode.toLowerCase() as
+        'prepaid' | 'pay_as_you_go',
       payment_collection_enabled: params.tariff.collectionMode !== BillingCollectionMode.NONE,
       raw_usage_preserved: true,
     },
@@ -182,10 +211,9 @@ export async function resolveEffectiveTariffContext(
   });
 
   const prisma = client(deps);
-  const teamScopeKey = `${request.organisationId}:${request.teamId}`;
   const resolution = await prisma.$transaction(
     async (tx) => {
-      const [service, user, orgMember, team, teamAssignment, orgAssignment, defaultTariff] =
+      const [service, user, orgMember, team] =
         await Promise.all([
           tx.billingService.findFirst({
             where: {
@@ -223,43 +251,12 @@ export async function resolveEffectiveTariffContext(
             },
             select: { id: true },
           }),
-          tx.billingTariffAssignment.findFirst({
-            where: {
-              serviceId: params.credential.service.id,
-              orgId: request.organisationId,
-              teamId: request.teamId,
-              scope: BillingAssignmentScope.TEAM,
-              scopeKey: teamScopeKey,
-              tariff: { serviceId: params.credential.service.id },
-            },
-            include: { tariff: true },
-          }),
-          tx.billingTariffAssignment.findFirst({
-            where: {
-              serviceId: params.credential.service.id,
-              orgId: request.organisationId,
-              teamId: null,
-              scope: BillingAssignmentScope.ORGANISATION,
-              scopeKey: request.organisationId,
-              tariff: { serviceId: params.credential.service.id },
-            },
-            include: { tariff: true },
-          }),
-          tx.billingTariff.findFirst({
-            where: {
-              serviceId: params.credential.service.id,
-              isDefault: true,
-            },
-          }),
         ]);
       return {
         service,
         user,
         orgMember,
         team,
-        teamAssignment,
-        orgAssignment,
-        defaultTariff,
       };
     },
     { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
@@ -275,11 +272,13 @@ export async function resolveEffectiveTariffContext(
     throw new AppError('FORBIDDEN', 403, 'BILLING_SUBJECT_NOT_ENTITLED');
   }
 
-  const selected = resolution.teamAssignment ?? resolution.orgAssignment;
-  const tariff = selected?.tariff ?? resolution.defaultTariff;
-  if (!tariff) {
-    throw new AppError('INTERNAL', 500, 'BILLING_DEFAULT_TARIFF_MISSING');
-  }
+  const effective = await resolveBillingTariffForMonth(prisma, {
+    serviceId: params.credential.service.id,
+    organisationId: request.organisationId,
+    teamId: request.teamId,
+    billingMonth: utcBillingMonth(new Date((deps?.now?.() ?? Math.floor(Date.now() / 1000)) * 1000)),
+  });
+  const tariff = effective.tariff;
 
   const now = deps?.now?.() ?? Math.floor(Date.now() / 1000);
   const payload = payloadFor({
@@ -287,8 +286,8 @@ export async function resolveEffectiveTariffContext(
     credential: params.credential,
     tariff,
     assignment: {
-      id: selected?.id ?? null,
-      scope: selected?.scope ?? null,
+      id: effective.assignmentId,
+      scope: effective.source,
     },
     nowEpochSeconds: now,
   });

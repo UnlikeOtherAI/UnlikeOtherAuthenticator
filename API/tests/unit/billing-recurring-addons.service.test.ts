@@ -156,7 +156,7 @@ describe('privacy-safe recurring add-on scopes', () => {
       capabilities: { can_manage_addons: false },
       offers: [{ actions: [{ id: 'cancel', enabled: false }] }],
     });
-    expect(result.offers[0]?.monthly_price.display).toBe('US$50.00 / měsíc');
+    expect(result.offers[0]?.monthly_price.display).toBe('50,00\u00a0US$ / měsíc');
   });
 
   it.each([

@@ -285,6 +285,41 @@ describe.skipIf(!databaseTestsEnabled)('credit payment adjustment persistence', 
     expect(account.balanceMicrocredits).toBe(initial.balanceMicrocredits);
   });
 
+  it('keeps an active provider reservation protected against a verified payment reversal', async () => {
+    await handle.prisma.$transaction(async (tx) => {
+      // Only establish the synthetic starting balance/hold; the tested debit
+      // runs with every real trigger enabled after this transaction commits.
+      await tx.$executeRawUnsafe('SET LOCAL session_replication_role = replica');
+      await tx.$executeRaw(Prisma.sql`
+        UPDATE "billing_credit_accounts" SET "balance_microcredits" = 10000000000
+        WHERE "id" = ${ids.creditAccount}
+      `);
+      await tx.$executeRaw(Prisma.sql`
+        INSERT INTO "billing_prepaid_reservations" (
+          "id", "dispatch_id", "request_fingerprint", "credit_account_id", "tariff_id",
+          "service_id", "provider_service_id", "app_key_id", "org_id", "team_id", "user_id",
+          "billing_month", "dispatch_started_at", "currency", "raw_cost_bound", "reserved_microcredits"
+        ) VALUES (
+          'reservation_refund_hold', 'dispatch_refund_hold', ${'d'.repeat(64)},
+          ${ids.creditAccount}, 'tariff_synthetic', ${ids.service}, 'provider_synthetic',
+          ${ids.appKey}, ${ids.org}, ${ids.team}, ${ids.user}, '2026-10',
+          '2026-10-05T00:00:00.000Z', 'USD', 0.01, 6000000000
+        )
+      `);
+    });
+    await expect(applyAdjustment(handle.prisma, {
+      checkout: 'partial', kind: BillingCreditPaymentAdjustmentKind.DISPUTE,
+      objectId: 'dp_protected_hold', amountMinor: 1000n,
+      eventType: 'charge.dispute.funds_withdrawn',
+    })).rejects.toThrow('prepaid reserved balance cannot be consumed');
+    expect((await handle.prisma.billingCreditAccount.findUniqueOrThrow({
+      where: { id: ids.creditAccount },
+    })).balanceMicrocredits).toBe(10_000_000_000n);
+    expect(await handle.prisma.billingCreditPaymentAdjustment.count({
+      where: { stripeObjectId: 'dp_protected_hold' },
+    })).toBe(0);
+  });
+
   it('debits a partial refund even after the paid credits have been spent', async () => {
     await applyAdjustment(handle.prisma, {
       checkout: 'partial',

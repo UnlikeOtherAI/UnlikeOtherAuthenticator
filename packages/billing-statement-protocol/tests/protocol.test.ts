@@ -8,6 +8,8 @@ import {
   BILLING_STATEMENT_PROTOCOL_VERSION,
   BILLING_STATEMENT_V2_PROTOCOL_VERSION,
   BILLING_CREDITS_PROTOCOL_VERSION,
+  billingCreditBudgetV1ConformanceFixture,
+  billingCycleDetailV2ConformanceFixture,
   billingCancellationConfirmationV1JsonSchema,
   billingCancellationConfirmRequestJsonSchema,
   billingCancellationPreviewV1JsonSchema,
@@ -20,9 +22,12 @@ import {
   billingHostedRedirectResponseJsonSchema,
   billingPortalSessionRequestJsonSchema,
   billingPortalSessionResponseJsonSchema,
+  billingControlledByJsonSchema,
+  BILLING_ORG_BILLING_MANAGE_ACTION_ID,
   billingCreditsV1ConformanceFixture,
   billingCreditsV1JsonSchema,
   billingCreditsV1OpenApiDocument,
+  billingRecurringAddonV1ConformanceFixtures,
   billingStatementV1ConformanceFixture,
   billingStatementV1JsonSchema,
   billingStatementV1OpenApiDocument,
@@ -36,6 +41,47 @@ import {
 async function readJson(path: string): Promise<unknown> {
   return JSON.parse(await readFile(new URL(path, import.meta.url), 'utf8'));
 }
+
+function expectCustomerBillingPrivacy(value: unknown): void {
+  if (Array.isArray(value)) {
+    value.forEach(expectCustomerBillingPrivacy);
+    return;
+  }
+  if (value === null || typeof value !== 'object') return;
+  for (const [key, child] of Object.entries(value)) {
+    expect(key).not.toMatch(/markup|provider_cost|cost_basis|multiplier|billable_units|rated_charge|cost_totals|provider_costs|raw_units|usage_unit|token_count|call_share|cache_write|reasoning_tokens/i);
+    if (typeof child === 'string' && /^(display|display_name|label|detail|description|message|title)$/.test(key)) {
+      expect(child).not.toMatch(/provider cost|markup|margin|at.cost|cost.plus/i);
+    }
+    expectCustomerBillingPrivacy(child);
+  }
+}
+
+describe('customer billing privacy boundary', () => {
+  it('excludes private rating terms from every public customer fixture', () => {
+    [
+      billingStatementV1ConformanceFixture,
+      billingStatementV2ConformanceFixture,
+      billingCreditsV1ConformanceFixture,
+      billingCreditBudgetV1ConformanceFixture,
+      billingCycleDetailV2ConformanceFixture,
+      billingRecurringAddonV1ConformanceFixtures,
+      billingConsumerActionV1ConformanceFixtures,
+    ].forEach(expectCustomerBillingPrivacy);
+    expect(billingStatementV1ConformanceFixture.usage.charge_totals[0]?.usage_charge.amount)
+      .toBe('3.6');
+    expect(billingStatementV1ConformanceFixture.plan.monthly_subscription.amount_minor)
+      .toBe('2000');
+    expect(billingStatementV1ConformanceFixture.plan.monthly_subscription.amount_role)
+      .toBe('monthly_total');
+    expect(billingStatementV1ConformanceFixture.plan.usage_payment_mode).toBe('prepaid');
+    expect(billingConsumerActionV1ConformanceFixtures.checkout_session_response
+      .tariff.monthly_subscription).toMatchObject({
+        charge_basis: 'per_seat', seat_policy: 'fixed', seat_timing: 'prorated',
+        amount_role: 'per_seat_unit',
+      });
+  });
+});
 
 describe('public BillingStatementV1 consumer protocol', () => {
   it('validates the conformance fixture against the exact Draft 2020-12 schema', () => {
@@ -119,6 +165,19 @@ describe('public BillingStatementV2 consumer protocol', () => {
 });
 
 describe('public billing consumer action protocol', () => {
+  it('accepts only a bounded customer-selected fixed-seat quantity', () => {
+    const ajv = new Ajv2020({ allErrors: true, strict: true });
+    addFormats(ajv);
+    const validate = ajv.compile(billingCheckoutSessionRequestJsonSchema);
+    const request = billingConsumerActionV1ConformanceFixtures.checkout_session_request;
+    expect(validate(request)).toBe(true);
+    for (const invalid of [0, -1, 1.5, 1_000_001, '12']) {
+      expect(validate({ ...request, fixed_seat_quantity: invalid })).toBe(false);
+    }
+    const { fixed_seat_quantity: _selected, ...base } = request;
+    expect(validate(base)).toBe(true);
+  });
+
   it('validates every synthetic fixture against its exact Draft 2020-12 schema', () => {
     const ajv = new Ajv2020({ allErrors: true, strict: true });
     addFormats(ajv);
@@ -218,8 +277,8 @@ describe('public billing consumer action protocol', () => {
 });
 
 describe('public BillingCreditsV1 consumer protocol', () => {
-  it('keeps the existing reconciliation capability version', () => {
-    expect(BILLING_CREDITS_PROTOCOL_VERSION).toBe('1.4.0');
+  it('names the opt-in reconciliation status revision', () => {
+    expect(BILLING_CREDITS_PROTOCOL_VERSION).toBe('2.0.0');
   });
 
   it('validates shared team credits, system adjustments, and fixed conversion', () => {
@@ -230,11 +289,18 @@ describe('public BillingCreditsV1 consumer protocol', () => {
     expect(validate(billingCreditsV1ConformanceFixture), JSON.stringify(validate.errors)).toBe(
       true,
     );
+    expect(validate({
+      ...billingCreditsV1ConformanceFixture,
+      billing_status: {
+        settlement_state: 'pending_reconciliation',
+        message: 'Your confirmed credit balance is available while recent usage is reconciled.',
+      },
+    }), JSON.stringify(validate.errors)).toBe(true);
     expect(billingCreditsV1ConformanceFixture.conversion).toEqual({
       credits_per_usd: '1000',
       settlement_currency: 'USD',
       description:
-        '1,000 credits always equal US$1.00. Usage is accumulated exactly, but only complete credits are deducted.',
+        '1,000 credits always equal US$1.00. Usage and balances retain microcredit precision.',
     });
     expect(
       billingCreditsV1ConformanceFixture.recent_entries.some(
@@ -257,20 +323,16 @@ describe('public BillingCreditsV1 consumer protocol', () => {
         ...billingCreditsV1ConformanceFixture,
         credit_balance: {
           ...billingCreditsV1ConformanceFixture.credit_balance,
-          label: 'Zbývající kredity',
+          label: '',
         },
       }),
-    ).toBe(true);
-    expect(validate({
-      ...billingCreditsV1ConformanceFixture,
-      credit_balance: { ...billingCreditsV1ConformanceFixture.credit_balance, label: '' },
-    })).toBe(false);
+    ).toBe(false);
     expect(validate({ ...billingCreditsV1ConformanceFixture, balance_microcredits: '1' })).toBe(
       false,
     );
   });
 
-  it('rejects zero positive prices, fractional credits, excess precision, and caller-controlled billing context', () => {
+  it('rejects zero positive prices, sub-microcredit amounts, excess precision, and caller-controlled billing context', () => {
     const ajv = new Ajv2020({ allErrors: true, strict: true });
     addFormats(ajv);
     const validate = ajv.compile(billingCreditsV1JsonSchema);
@@ -281,14 +343,16 @@ describe('public BillingCreditsV1 consumer protocol', () => {
 
     const fractionalCredits = structuredClone(billingCreditsV1ConformanceFixture);
     fractionalCredits.credit_balance.credits = '34125.1';
+    expect(validate(fractionalCredits)).toBe(true);
+    fractionalCredits.credit_balance.credits = '34125.0000001';
     expect(validate(fractionalCredits)).toBe(false);
 
     const precisionBoundary = structuredClone(billingCreditsV1ConformanceFixture);
-    precisionBoundary.credit_balance.usd_equivalent.amount = '34.12500001';
+    precisionBoundary.credit_balance.usd_equivalent.amount = '34.125000001';
     expect(validate(precisionBoundary), JSON.stringify(validate.errors)).toBe(true);
 
     const excessUsdPrecision = structuredClone(precisionBoundary);
-    excessUsdPrecision.credit_balance.usd_equivalent.amount = '34.125000001';
+    excessUsdPrecision.credit_balance.usd_equivalent.amount = '34.1250000001';
     expect(validate(excessUsdPrecision)).toBe(false);
 
     const callerContext = structuredClone(billingCreditsV1ConformanceFixture);
@@ -478,5 +542,95 @@ describe('public BillingCreditsV1 consumer protocol', () => {
     expect(fixtureArtifact).toEqual(billingCreditsV1ConformanceFixture);
     expect(openApiArtifact).toEqual(billingCreditsV1OpenApiDocument);
     expect(billingCreditsV1OpenApiDocument.info.version).toBe(BILLING_CREDITS_PROTOCOL_VERSION);
+  });
+});
+
+describe('organisation billing responsibility (protocol 1.3.0)', () => {
+  const controlledByManager = {
+    scope: 'organisation',
+    organisation_id: 'org_synthetic',
+    organisation_name: 'Acme',
+    message: 'Billing for this team is managed for the whole organisation.',
+    can_manage: true,
+    manage_action_id: BILLING_ORG_BILLING_MANAGE_ACTION_ID,
+  } as const;
+  const controlledByMember = { ...controlledByManager, can_manage: false, manage_action_id: null };
+
+  it('accepts both viewer shapes and rejects a fabricated manage action', () => {
+    const ajv = new Ajv2020({ allErrors: true, strict: true });
+    addFormats(ajv);
+    const validate = ajv.compile(billingControlledByJsonSchema);
+
+    expect(validate(controlledByManager), JSON.stringify(validate.errors)).toBe(true);
+    expect(validate(controlledByMember), JSON.stringify(validate.errors)).toBe(true);
+    expect(validate({ ...controlledByManager, manage_action_id: 'org-billing-transfer' })).toBe(
+      false,
+    );
+    expect(validate({ ...controlledByManager, scope: 'team' })).toBe(false);
+    expect(validate({ ...controlledByManager, unexpected: true })).toBe(false);
+  });
+
+  it('is optional on the statement and the credits view, so 1.2.0 payloads stay valid', () => {
+    const ajv = new Ajv2020({ allErrors: true, strict: true });
+    addFormats(ajv);
+    const validateStatement = ajv.compile(billingStatementV1JsonSchema);
+    const validateCredits = ajv.compile(billingCreditsV1JsonSchema);
+
+    expect(validateStatement(billingStatementV1ConformanceFixture)).toBe(true);
+    expect(
+      validateStatement({
+        ...billingStatementV1ConformanceFixture,
+        controlled_by: controlledByMember,
+        actions: [],
+        capabilities: { can_upgrade: false, can_open_portal: false, can_cancel: false },
+      }),
+      JSON.stringify(validateStatement.errors),
+    ).toBe(true);
+
+    expect(validateCredits(billingCreditsV1ConformanceFixture)).toBe(true);
+    expect(
+      validateCredits({ ...billingCreditsV1ConformanceFixture, controlled_by: controlledByMember }),
+      JSON.stringify(validateCredits.errors),
+    ).toBe(true);
+  });
+
+  it('carries the organisation roll-up only on V2, with per-team pinned snapshots', () => {
+    const ajv = new Ajv2020({ allErrors: true, strict: true });
+    addFormats(ajv);
+    const validate = ajv.compile(billingStatementV2JsonSchema);
+    const organisationScope = {
+      organisation_id: 'org_synthetic',
+      organisation_name: 'Acme',
+      title: 'Organisation billing',
+      description: 'Every team in Acme, billed together.',
+      teams: [
+        {
+          team_id: 'team_synthetic',
+          team_name: 'Research',
+          display_name: 'Research',
+          pinned_ledger_snapshot:
+            billingStatementV2ConformanceFixture.pinned_inputs.ledger_snapshots[0],
+          commercial_lines: billingStatementV2ConformanceFixture.commercial_lines,
+          totals: billingStatementV2ConformanceFixture.totals,
+        },
+      ],
+      commercial_lines: billingStatementV2ConformanceFixture.commercial_lines,
+      totals: billingStatementV2ConformanceFixture.totals,
+    };
+
+    expect(
+      validate({
+        ...billingStatementV2ConformanceFixture,
+        controlled_by: controlledByManager,
+        organisation_scope: organisationScope,
+      }),
+      JSON.stringify(validate.errors),
+    ).toBe(true);
+    expect(
+      validate({
+        ...billingStatementV2ConformanceFixture,
+        organisation_scope: { ...organisationScope, locally_calculated_total: 'forbidden' },
+      }),
+    ).toBe(false);
   });
 });

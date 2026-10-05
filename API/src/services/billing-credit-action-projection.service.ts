@@ -52,7 +52,7 @@ function configuredCatalog(
 }
 
 function creditAmount(microcredits: bigint, locale?: BillingCustomerLocale): BillingCreditAmount {
-  const amount = billingCreditAmount(microcredits);
+  const amount = billingCreditAmount(microcredits, locale);
   return {
     ...amount,
     display: billingLocalizedCreditDisplay(amount.credits, locale),
@@ -123,7 +123,7 @@ function fundingPolicy(
       key: offer.key,
       name: builtInCopy?.name ?? offer.name,
       description: builtInCopy?.description ?? offer.description,
-      payment_amount: billingCreditsPaymentMoney(offer.paymentAmountMinor),
+      payment_amount: billingCreditsPaymentMoney(offer.paymentAmountMinor, locale),
       credits_received: creditAmount(offer.creditsReceivedMicrocredits, locale),
       available,
       unavailable_reason: available
@@ -217,23 +217,23 @@ function optionActions(
       selected: account.autoTopUpOptionId === option.id,
       label: formatBillingCopy(copy.optionLabel, {
         refill: billingLocalizedCreditDisplay(
-          billingCreditAmount(option.refillOffer.creditsReceivedMicrocredits).credits,
+          billingCreditAmount(option.refillOffer.creditsReceivedMicrocredits, locale).credits,
           locale,
         ),
         threshold: billingLocalizedCreditDisplay(
-          billingCreditAmount(option.thresholdMicrocredits).credits,
+          billingCreditAmount(option.thresholdMicrocredits, locale).credits,
           locale,
         ),
       }),
       description: copy.optionDescription,
       threshold: creditAmount(option.thresholdMicrocredits, locale),
       refill_offer_id: option.refillOfferId,
-      refill_payment_amount: billingCreditsPaymentMoney(option.refillOffer.paymentAmountMinor),
+      refill_payment_amount: billingCreditsPaymentMoney(option.refillOffer.paymentAmountMinor, locale),
       refill_credits_received: creditAmount(
         option.refillOffer.creditsReceivedMicrocredits,
         locale,
       ),
-      monthly_cap: billingCreditsPaymentMoney(option.monthlyChargeCapMinor),
+      monthly_cap: billingCreditsPaymentMoney(option.monthlyChargeCapMinor, locale),
       setup_action: manager
         ? {
             id: 'auto_top_up_setup' as const,
@@ -332,10 +332,10 @@ function automaticTopUp(
         ? null
         : creditAmount(account.autoTopUpThresholdMicrocredits, locale),
     refill_offer_id: account.autoTopUpRefillOfferId,
-    monthly_cap: cap === null ? null : billingCreditsPaymentMoney(cap),
-    charged_this_month: billingCreditsPaymentMoney(charged),
+    monthly_cap: cap === null ? null : billingCreditsPaymentMoney(cap, locale),
+    charged_this_month: billingCreditsPaymentMoney(charged, locale),
     remaining_monthly_cap:
-      remainingCap === null ? null : billingCreditsPaymentMoney(remainingCap),
+      remainingCap === null ? null : billingCreditsPaymentMoney(remainingCap, locale),
     payment_method: manager
       ? paymentMethod(data, readiness, locale)
       : { status: paymentMethod(data, readiness, locale).status },

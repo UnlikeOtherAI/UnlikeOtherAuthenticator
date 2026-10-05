@@ -18,6 +18,7 @@ describe('credit funding Stripe webhook application', () => {
     const checkout = fundingTopUpCheckout();
     const entryCreate = vi.fn().mockResolvedValue({ id: 'entry_1' });
     const checkoutUpdate = vi.fn().mockResolvedValue({});
+    const invoiceCreate = vi.fn().mockResolvedValue({ id: 'payment_invoice_1' });
     const tx = {
       $queryRaw: vi.fn().mockResolvedValue([{ balanceMicrocredits: 5_000_000_000n }]),
       billingCreditTopUpCheckout: {
@@ -25,6 +26,10 @@ describe('credit funding Stripe webhook application', () => {
         update: checkoutUpdate,
       },
       billingCreditEntry: { create: entryCreate },
+      billingCreditPaymentInvoice: {
+        findUnique: vi.fn().mockResolvedValue(null),
+        create: invoiceCreate,
+      },
     };
     const intent = fundingPaymentIntent({ uoa_credit_top_up_checkout_id: checkout.id });
 
@@ -66,6 +71,23 @@ describe('credit funding Stripe webhook application', () => {
     });
     expect(entryCreate.mock.invocationCallOrder[0]).toBeLessThan(
       checkoutUpdate.mock.invocationCallOrder[0],
+    );
+    expect(invoiceCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        accountId: fundingStripeAccount.id,
+        stripePaymentIntentId: intent.id,
+        stripeChargeId: 'ch_credit_1',
+        source: 'MANUAL_TOP_UP',
+        topUpCheckoutId: checkout.id,
+        creditAccountId: checkout.creditAccountId,
+        creditEntryId: expect.any(String),
+        grossAmountMinor: 1000n,
+        creditsPurchasedMicrocredits: 10_000_000_000n,
+        paidAt: fundingOccurredAt,
+      }),
+    });
+    expect(checkoutUpdate.mock.invocationCallOrder[0]).toBeLessThan(
+      invoiceCreate.mock.invocationCallOrder[0],
     );
   });
 
@@ -144,12 +166,14 @@ describe('credit funding Stripe webhook application', () => {
       appKeyId: 'app_key_1',
       attributedUserId: 'user_1',
       paymentAmountMinor: 1_000n,
+      currency: 'USD',
       creditsReceivedMicrocredits: 10_000_000n,
       stripePaymentIntentId: null,
       status: BillingCreditAutoTopUpAttemptStatus.PENDING,
       consentRevision: { stripePaymentMethodId: 'pm_credit_1' },
       creditAccount: {
         autoTopUpState: BillingCreditAutoTopUpState.DISABLED,
+        orgId: 'org_1', teamId: 'team_1',
         customer: { stripeCustomerId: 'cus_team_1' },
       },
     };
@@ -166,6 +190,9 @@ describe('credit funding Stripe webhook application', () => {
         update: attemptUpdate,
       },
       billingCreditEntry: { create: entryCreate },
+      billingCreditPaymentInvoice: {
+        findUnique: vi.fn().mockResolvedValue(null), create: vi.fn(),
+      },
       billingCreditAccount: { update: vi.fn() },
     };
     const event = {
@@ -193,6 +220,10 @@ describe('credit funding Stripe webhook application', () => {
     );
 
     expect(entryCreate).toHaveBeenCalledTimes(1);
+    expect(tx.billingCreditPaymentInvoice.create).toHaveBeenCalledTimes(1);
+    expect(tx.billingCreditPaymentInvoice.create).toHaveBeenCalledWith({ data:
+      expect.objectContaining({ source: 'AUTO_RECHARGE', currency: 'USD',
+        orgId: 'org_1', teamId: 'team_1', stripePaymentIntentId: intent.id }) });
     expect(entryCreate).toHaveBeenCalledWith({
       data: expect.objectContaining({
         kind: 'AUTOMATIC_TOP_UP',

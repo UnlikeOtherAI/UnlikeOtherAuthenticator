@@ -21,6 +21,7 @@ import {
   billingCustomerActionDigest,
 } from './billing-customer-action-intent.service.js';
 import {
+  customerBillingTariff,
   resolveEffectiveTariffContext,
   type EffectiveTariffPayload,
 } from './billing-entitlement.service.js';
@@ -243,7 +244,7 @@ function serializeSubscription(context: LifecycleContext) {
   return {
     product: context.payload.product,
     subject: context.payload.subject,
-    tariff: context.payload.tariff,
+    tariff: customerBillingTariff(context.payload.tariff),
     assignment: context.payload.assignment,
     stripe_collection_enabled: context.stripeCollectionEnabled,
     stripe_mode: context.account

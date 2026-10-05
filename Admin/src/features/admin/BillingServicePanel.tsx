@@ -2,6 +2,7 @@ import { Link } from 'react-router';
 import { useBillingNavigation } from './billing-navigation';
 import { billingMoney } from './billing-money';
 import { BillingSubscriptionsTable } from './BillingSubscriptionsTable';
+import { BillingSeatCapacityPanel } from './BillingSeatCapacityPanel';
 import { BillingRecordDetail } from './BillingRecordDetail';
 
 import { Badge, type BadgeVariant } from '../../components/ui/Badge';
@@ -83,7 +84,8 @@ export function BillingServicePanel({
             </code>
           </div>
           <p className="mt-1 text-xs text-gray-500">
-            Team overrides organisation, which overrides the immutable service default.
+            Team overrides organisation, which overrides the service default. Default and assignment
+            changes take effect next UTC month; earlier usage keeps its effective terms.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -123,7 +125,7 @@ export function BillingServicePanel({
             },
             { label: 'App keys', value: 'app-keys', count: service.app_keys.length },
             {
-              label: 'Stripe subscriptions',
+              label: 'Subscriptions',
               value: 'subscriptions',
               count: service.stripe_subscriptions.length,
             },
@@ -132,7 +134,7 @@ export function BillingServicePanel({
       </div>
       {tab === 'tariffs' ? (
         <DataTable
-          headers={['Tariff', 'Mode', 'Collection', 'Markup', 'Monthly', 'Created', 'Default']}
+          headers={['Tariff', 'Mode', 'Collection', 'Markup', 'Usage', 'Monthly', 'Created', 'Default']}
         >
           {service.tariffs.map((tariff) => (
             <tr key={tariff.id}>
@@ -161,12 +163,18 @@ export function BillingServicePanel({
                 </Badge>
               </Td>
               <Td>{(tariff.markup_bps / 100).toFixed(2)}%</Td>
+              <Td>{tariff.usage_payment_mode === 'prepaid' ? 'Prepaid pool' : 'Pay as you go'}</Td>
               <Td>
                 <span className="font-mono text-xs">
                   {billingMoney(
                     tariff.monthly_subscription.amount_minor,
                     tariff.monthly_subscription.currency,
                   )}
+                </span>
+                <span className="block text-xs text-gray-500">
+                  {tariff.monthly_subscription.charge_basis === 'per_seat'
+                    ? `per seat · ${tariff.monthly_subscription.seat_policy} · ${tariff.monthly_subscription.seat_charge_timing?.replace('_', ' ')}`
+                    : 'per team or organisation'}
                 </span>
               </Td>
               <Td className="text-xs text-gray-400">
@@ -183,7 +191,7 @@ export function BillingServicePanel({
                     onClick={() =>
                       confirm(
                         `Make ${tariff.name} v${tariff.version} the default?`,
-                        'Only subjects without a team or organisation override receive this tariff. Active Stripe subscriptions may pin the current default.',
+                        'This becomes effective next UTC month for subjects without a team or organisation override. Active Stripe subscriptions may pin the current default.',
                         async () => {
                           await setDefault.mutateAsync(tariff.id);
                         },
@@ -250,7 +258,7 @@ export function BillingServicePanel({
                   onClick={() =>
                     confirm(
                       'Remove tariff assignment?',
-                      'The subject will immediately fall back to the next applicable tariff. Active Stripe subscriptions may block this change.',
+                      'The subject falls back to the next applicable tariff next UTC month. Active Stripe subscriptions may block this change.',
                       () => removeAssignment.mutateAsync(assignment.id),
                     )
                   }
@@ -441,7 +449,10 @@ export function BillingServicePanel({
         </DataTable>
       ) : null}
 
-      {tab === 'subscriptions' ? <BillingSubscriptionsTable service={service} /> : null}
+      {tab === 'subscriptions' ? <>
+        <BillingSubscriptionsTable service={service} />
+        <BillingSeatCapacityPanel serviceId={service.id} />
+      </> : null}
       <BillingRecordDetail service={service} />
     </Card>
   );

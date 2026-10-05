@@ -18,8 +18,8 @@ const validateCredits = ajv.compile(billingCreditsV1JsonSchema);
 const validateRequest = ajv.compile(billingCreditFundingRequestV1JsonSchema);
 
 describe('negotiated billing attention and funding requests', () => {
-  it('preserves the reconciliation capability already consumed by package 1.4', () => {
-    expect(BILLING_CREDITS_PROTOCOL_VERSION).toBe('1.4.0');
+  it('preserves the reconciliation capability from the integrated microcredit protocol', () => {
+    expect(BILLING_CREDITS_PROTOCOL_VERSION).toBe('2.0.0');
     expect(BILLING_CREDITS_PROTOCOL_HEADER).toBe('x-uoa-billing-credits-protocol');
     for (const settlement_state of ['current', 'pending_reconciliation']) {
       expect(validateCredits({ ...billingCreditsV1ConformanceFixture,

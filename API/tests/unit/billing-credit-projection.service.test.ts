@@ -66,6 +66,8 @@ function projectionData(balanceMicrocredits = 2_000_000_000n): BillingCreditProj
     },
     policy: null,
     catalogs: [],
+    prepaidReservations: [],
+    activeReservedMicrocredits: 0n,
     settlements: [
       {
         id: 'settlement_1',
@@ -448,6 +450,29 @@ describe('privacy-safe shared credit projection', () => {
     });
   });
 
+  it('subtracts prepaid holds from available credits and shows settled debits by team', () => {
+    const data = projectionData();
+    data.activeReservedMicrocredits = 250_000_000n;
+    data.prepaidReservations = [
+      { status: 'ACTIVE', reservedMicrocredits: 250_000_000n, debitedMicrocredits: null,
+        userId: 'user_1', tariff: { service } },
+      { status: 'SETTLED', reservedMicrocredits: 3_000_000n,
+        debitedMicrocredits: 2_000_000n, userId: 'user_2', tariff: { service } },
+    ] as BillingCreditProjectionData['prepaidReservations'];
+    const manager = buildBillingCreditsProjection({ credential, collection,
+      viewer: viewer(true), period, data, now });
+    expect(manager.credit_balance.credits).toBe('1750');
+    expect(manager.credit_summary.credits_consumed.credits).toBe('502');
+    expect(manager.credit_summary.consumed_breakdown).toEqual(expect.arrayContaining([
+      expect.objectContaining({ credits_consumed: expect.objectContaining({ credits: '2' }),
+        users: [expect.objectContaining({ user_id: 'user_2' })] }),
+    ]));
+    const member = buildBillingCreditsProjection({ credential, collection,
+      viewer: viewer(false), period, data, now });
+    expect(JSON.stringify(member)).not.toContain('Secret colleague');
+    expect(member.credit_summary.credits_consumed.credits).toBe('502');
+  });
+
   it('pauses projected automatic top-up when the remaining limit cannot cover one refill', () => {
     const data = projectionData();
     data.creditAccount.autoTopUpOptionId = 'option_1';
@@ -494,7 +519,8 @@ describe('privacy-safe shared credit projection', () => {
     });
   });
 
-  it('projects historical fractional usage as the whole-credit amount and balance', () => {
+  it('shows historical fractional entries without hiding microcredit changes', () => {
+
     const data = projectionData(49_999_000_000n);
     data.settlements[0]!.cumulativeCreditsConsumedMicrocredits = 1_000_000n;
     data.allocations = [
@@ -549,10 +575,14 @@ describe('privacy-safe shared credit projection', () => {
     });
     expect(result.recent_entries).toEqual([
       expect.objectContaining({
-        credits: expect.objectContaining({ credits: '1', display: '1 credit' }),
+        id: 'whole_credit_normalization',
+        credits: expect.objectContaining({ credits: '0.08365', display: '0.08365 credits' }),
+        credit_balance_after: expect.objectContaining({ credits: '49999' }),
+      }),
+      expect.objectContaining({
+        credits: expect.objectContaining({ credits: '1.08365', display: '1.08365 credits' }),
         credit_balance_after: expect.objectContaining({
-          credits: '49999',
-          display: '49,999 credits',
+          credits: '49998.91635', display: '49,998.91635 credits',
         }),
       }),
     ]);

@@ -4,6 +4,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
 import { requireBillingLifecycleAppKey } from '../../middleware/billing-app-auth.js';
+import { billingCheckoutTariffJsonSchema } from '../../contracts/billing-statement-v1.js';
 import {
   createStripePortalSession,
   getStripeSubscriptionSummary,
@@ -16,11 +17,6 @@ import type { BillingActorEndpoint } from '../../services/billing-actor-audience
 const PortalRequestSchema = BillingSubjectRequestSchema.extend({
   return_url: z.string().trim().url().max(2048),
 }).strict();
-
-const tariffSchema = {
-  type: 'object',
-  additionalProperties: true,
-} as const;
 
 const subjectSchema = {
   type: 'object',
@@ -80,7 +76,7 @@ const summarySchema = {
   properties: {
     product: { type: 'object', additionalProperties: true },
     subject: subjectSchema,
-    tariff: tariffSchema,
+    tariff: billingCheckoutTariffJsonSchema,
     assignment: { type: 'object', additionalProperties: true },
     stripe_collection_enabled: { type: 'boolean' },
     stripe_mode: {

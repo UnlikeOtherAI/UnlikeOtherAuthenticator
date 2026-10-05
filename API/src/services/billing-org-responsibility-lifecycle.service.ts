@@ -259,6 +259,16 @@ export async function assumeOrgBillingResponsibility(
           releasedByUserId: null,
         },
       });
+      await tx.billingOrgResponsibilityTransition.create({
+        data: {
+          responsibilityId: responsibility.id,
+          orgId: responsibility.orgId,
+          kind: 'ASSUMED',
+          effectiveAt: now,
+          actorUserId: params.request.userId,
+          source: 'customer_action',
+        },
+      });
       const deactivated = await deactivateTeamAutoTopUps(tx, {
         responsibilityId: responsibility.id,
         organisationId: params.request.organisationId,
@@ -350,6 +360,16 @@ export async function releaseOrgBillingResponsibility(
           active: false,
           releasedAt: now,
           releasedByUserId: params.request.userId,
+        },
+      });
+      await tx.billingOrgResponsibilityTransition.create({
+        data: {
+          responsibilityId: released.id,
+          orgId: released.orgId,
+          kind: 'RELEASED',
+          effectiveAt: now,
+          actorUserId: params.request.userId,
+          source: 'customer_action',
         },
       });
       await tx.orgAuditLog.create({

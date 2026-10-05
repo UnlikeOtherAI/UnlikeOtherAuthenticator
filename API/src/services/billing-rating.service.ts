@@ -1,5 +1,5 @@
 import { AppError } from '../utils/errors.js';
-import type { NormalizedMeteringUsage, RawMeteringLine } from './billing-metering.types.js';
+import { meteringIsComplete, type NormalizedMeteringUsage, type RawMeteringLine } from './billing-metering.types.js';
 import {
   addBillingDecimals,
   multiplyBillingDecimalByBps,
@@ -44,7 +44,9 @@ export function rateProviderCost(amount: string, currency: string, terms: Rating
   const multiplier = usagePriceMultiplierBps(terms);
   const total = multiplyBillingDecimalByBps(amount, multiplier);
   return {
-    base: amount,
+    // The raw provider cost is reported separately. A free customer's rated
+    // charge has no base, markup or total, preserving base + markup = total.
+    base: terms.mode === 'free' ? '0' : amount,
     markup: terms.mode === 'free' ? '0' : subtractBillingDecimals(total, amount),
     total,
     currency,
@@ -56,17 +58,16 @@ function selectedCost(
   params: {
     product: string;
     currency: string;
-    missingCost: 'reject' | 'skip';
   },
 ): { amount: string; currency: string } | null {
   if (line.billingProduct !== params.product) {
     throw new AppError('INTERNAL', 502, 'LEDGER_METERING_PRODUCT_MISMATCH');
   }
   if (line.selectedProviderCost === null && line.currency === null) {
-    if (params.missingCost === 'skip') return null;
+    if (line.billingDisposition === 'nonbillable') return null;
     throw new AppError('INTERNAL', 502, 'LEDGER_METERING_COST_MISSING');
   }
-  if (line.selectedProviderCost === null || line.currency !== params.currency) {
+  if (line.billingDisposition !== 'paid' || line.selectedProviderCost === null || line.currency !== params.currency) {
     throw new AppError('INTERNAL', 502, 'LEDGER_METERING_COST_MISMATCH');
   }
   return { amount: line.selectedProviderCost, currency: line.currency };
@@ -78,14 +79,15 @@ export function rateMeteringByCaller(params: {
   currency: string;
   terms: RatingTerms;
   unattributedCaller: string;
-  missingCost?: 'reject' | 'skip';
 }): RatedCallerTotal[] {
+  if (!meteringIsComplete(params.usage.billingCompleteness)) {
+    throw new AppError('INTERNAL', 409, 'LEDGER_METERING_UNRESOLVED_PAID_USAGE');
+  }
   const baseByCaller = new Map<string, string>();
   for (const line of params.usage.lines) {
     const cost = selectedCost(line, {
       product: params.product,
       currency: params.currency,
-      missingCost: params.missingCost ?? 'reject',
     });
     if (!cost) continue;
     const caller = line.callerProduct ?? params.unattributedCaller;
@@ -105,14 +107,15 @@ export function rateMeteringTotal(params: {
   product: string;
   currency: string;
   terms: RatingTerms;
-  missingCost?: 'reject' | 'skip';
 }): RatedMoney {
+  if (!meteringIsComplete(params.usage.billingCompleteness)) {
+    throw new AppError('INTERNAL', 409, 'LEDGER_METERING_UNRESOLVED_PAID_USAGE');
+  }
   let base = '0';
   for (const line of params.usage.lines) {
     const cost = selectedCost(line, {
       product: params.product,
       currency: params.currency,
-      missingCost: params.missingCost ?? 'reject',
     });
     if (cost) base = addBillingDecimals(base, cost.amount);
   }

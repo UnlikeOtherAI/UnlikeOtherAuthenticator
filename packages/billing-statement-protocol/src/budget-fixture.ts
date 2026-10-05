@@ -1,0 +1,28 @@
+import type { BillingCreditBudgetListV1 } from './budget-types.js';
+
+export const billingCreditBudgetV1ConformanceFixture: BillingCreditBudgetListV1 = {
+  schema_version: 1,
+  product: 'nessie',
+  organization_id: 'org_example',
+  team_id: 'team_example',
+  budgets: [{
+    policy_id: 'cbp_example',
+    version: 2,
+    scope_type: 'team',
+    scope_id: 'team_example',
+    period: 'monthly',
+    mode: 'enforce',
+    limit_credits: '10000',
+    warn_threshold_percent: 80,
+    block_humans_when_over: true,
+    degrade_model: null,
+    degrade_provider: null,
+    spent_credits: '1234.5',
+    held_credits: '12.125',
+    evidence_complete: true,
+    remaining_credits: '8753.375',
+    percent_used: 12.46625,
+    effective_window_start: '2026-10-01T00:00:00.000Z',
+    effective_window_end: '2026-11-01T00:00:00.000Z',
+  }],
+};

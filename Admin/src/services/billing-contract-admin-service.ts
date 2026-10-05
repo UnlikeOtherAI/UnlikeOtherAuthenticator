@@ -1,4 +1,5 @@
 import {
+  BillingCycleCorrectionCandidateSchema,
   BillingContractSchema,
   BillingContractVersionSchema,
   BillingInvoiceBuyerProfileSchema,
@@ -6,11 +7,14 @@ import {
   BillingInvoiceSchema,
   type BillingContractFormValues,
   type BillingContractVersionFormValues,
+  type BillingContractServiceActivation,
   type BillingInvoiceBuyerFormValues,
   type BillingInvoiceCalculateFormValues,
   type BillingInvoiceIssuerFormValues,
   type BillingInvoicePaymentFormValues,
 } from '../schemas/billing-contracts';
+import { z } from 'zod';
+import { BillingManualCreditNoteSchema } from '../schemas/billing-manual-credit-note';
 import { ApiRequestError, createApiClient } from './api-client';
 
 const api = createApiClient();
@@ -61,7 +65,7 @@ export const billingContractAdminService = {
       await api.post<unknown>(
         `/internal/admin/billing/contracts/${encodeURIComponent(contractId)}/versions`,
         {
-          usage_markup_bps: input.usageMarkupBps,
+          usage_markup_percent: input.usageMarkupPercent,
           currency: input.currency,
           payment_terms_days: input.paymentTermsDays,
           effective_from_month: input.effectiveFromMonth,
@@ -73,7 +77,7 @@ export const billingContractAdminService = {
   async activateVersion(
     contractId: string,
     versionId: string,
-    services: Array<{ serviceId: string; monthlyAmountMinor: string }>,
+    services: BillingContractServiceActivation[],
   ) {
     return BillingContractVersionSchema.parse(
       await api.post<unknown>(
@@ -82,6 +86,13 @@ export const billingContractAdminService = {
           services: services.map((service) => ({
             service_id: service.serviceId,
             monthly_amount_minor: service.monthlyAmountMinor,
+            monthly_charge_basis: service.monthlyChargeBasis,
+            ...(service.seatPolicy ? { seat_policy: service.seatPolicy } : {}),
+            ...(service.seatChargeTiming
+              ? { seat_charge_timing: service.seatChargeTiming } : {}),
+            usage_payment_mode: service.usagePaymentMode,
+            ...(service.fixedSeatQuantity
+              ? { fixed_seat_quantity: service.fixedSeatQuantity } : {}),
           })),
         },
       ),
@@ -143,6 +154,9 @@ export const billingContractAdminService = {
         contract_id: input.contractId,
         issuer_profile_id: input.issuerProfileId,
         billing_month: input.billingMonth,
+        tax_treatment: input.taxTreatment,
+        tax_rate_percent: input.taxRatePercent,
+        tax_legal_basis: input.taxLegalBasis,
       }),
     );
   },
@@ -151,6 +165,18 @@ export const billingContractAdminService = {
     return BillingInvoiceSchema.array().parse(
       await api.get<unknown>('/internal/admin/billing/invoices'),
     );
+  },
+
+  async listCycleCorrections() {
+    const response = await api.get<unknown>('/internal/admin/billing/cycle-corrections');
+    return z.object({ corrections: BillingCycleCorrectionCandidateSchema.array() })
+      .parse(response).corrections;
+  },
+
+  async prepareCycleCorrection(cycleId: string) {
+    return BillingInvoiceSchema.parse(await api.post<unknown>(
+      `/internal/admin/billing/cycle-corrections/${encodeURIComponent(cycleId)}/prepare`, {},
+    ));
   },
 
   async issueInvoice(invoiceId: string) {
@@ -164,6 +190,33 @@ export const billingContractAdminService = {
 
   async downloadInvoicePdf(invoiceId: string) {
     return api.getBlob(`/internal/admin/billing/invoices/${encodeURIComponent(invoiceId)}/pdf`);
+  },
+
+  async getManualCreditNote(invoiceId: string) {
+    const result = await api.get<unknown>(
+      `/internal/admin/billing/invoices/${encodeURIComponent(invoiceId)}/credit-note`);
+    return z.object({ credit_note: BillingManualCreditNoteSchema.nullable() }).strict()
+      .parse(result).credit_note;
+  },
+
+  async prepareManualCreditNote(invoiceId: string, reason: string) {
+    const result = await api.post<unknown>(
+      `/internal/admin/billing/invoices/${encodeURIComponent(invoiceId)}/credit-note/prepare`,
+      { reason });
+    return z.object({ credit_note: BillingManualCreditNoteSchema }).strict()
+      .parse(result).credit_note;
+  },
+
+  async issueManualCreditNote(creditNoteId: string) {
+    const result = await api.post<unknown>(
+      `/internal/admin/billing/credit-notes/${encodeURIComponent(creditNoteId)}/issue`, {});
+    return z.object({ credit_note: BillingManualCreditNoteSchema }).strict()
+      .parse(result).credit_note;
+  },
+
+  async downloadManualCreditNotePdf(creditNoteId: string) {
+    return api.getBlob(
+      `/internal/admin/billing/credit-notes/${encodeURIComponent(creditNoteId)}/pdf`);
   },
 
   async voidInvoice(invoiceId: string, reason: string) {

@@ -1,3 +1,4 @@
+import type { BillingCustomerLocale } from './billing-copy-locale.js';
 import type { ExactMoney } from '../contracts/billing-statement-v1.js';
 import { AppError } from '../utils/errors.js';
 
@@ -145,17 +146,42 @@ function groupedDigits(value: string): string {
   return `${negative ? '-' : ''}${grouped}${fraction ? `.${fraction}` : ''}`;
 }
 
-export function exactMoney(amount: string, currency: string): ExactMoney {
+export function exactMoney(amount: string, currency: string, locale?: BillingCustomerLocale): ExactMoney {
   const normalized = serializeDecimal(parseDecimal(amount));
   if (!/^[A-Z]{3}$/.test(currency)) {
     throw new AppError('INTERNAL', 502, 'BILLING_CURRENCY_INVALID');
   }
   const symbol = CURRENCY_SYMBOLS[currency];
-  return {
+  const [whole, fraction = ''] = normalized.split('.');
+  const digits = currencyMinorDigits(currency);
+  const displayAmount = digits > 0
+    ? `${whole}.${fraction.padEnd(digits, '0')}` : normalized;
+  return localizedBillingMoney({
     amount: normalized,
     currency,
     display: symbol
-      ? `${normalized.startsWith('-') ? '-' : ''}${symbol}${groupedDigits(normalized).replace('-', '')}`
-      : `${currency} ${groupedDigits(normalized)}`,
-  };
+      ? `${normalized.startsWith('-') ? '-' : ''}${symbol}${groupedDigits(displayAmount).replace('-', '')}`
+      : `${currency} ${groupedDigits(displayAmount)}`,
+  }, locale);
+}
+
+/** Preserve every decimal digit while formatting a customer read projection. */
+export function localizedBillingMoney<T extends ExactMoney>(
+  money: T, locale?: BillingCustomerLocale,
+): T {
+  if (!locale) return money;
+  const negative = money.amount.startsWith('-');
+  const [whole, fraction = ''] = (negative ? money.amount.slice(1) : money.amount).split('.');
+  const negativeZero = negative && BigInt(whole) === 0n;
+  const value = negativeZero ? -1n : BigInt(`${negative ? '-' : ''}${whole}`);
+  const digits = Math.max(currencyMinorDigits(money.currency), fraction.length);
+  const display = new Intl.NumberFormat(locale, {
+    style: 'currency', currency: money.currency,
+    minimumFractionDigits: digits, maximumFractionDigits: digits,
+  }).formatToParts(value).map((part) => {
+    if (part.type === 'fraction') return fraction.padEnd(digits, '0');
+    if (negativeZero && part.type === 'integer') return '0';
+    return part.value;
+  }).join('');
+  return { ...money, display };
 }

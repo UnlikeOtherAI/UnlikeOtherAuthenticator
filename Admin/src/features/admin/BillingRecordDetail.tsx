@@ -32,6 +32,15 @@ export function BillingRecordDetail({ service }: { service: BillingService }) {
         ['Mode', tariff.mode.replaceAll('_', ' ')],
         ['Collection', tariff.collection_mode],
         ['Markup', `${tariff.markup_bps / 100}%`],
+        ['Usage payment', tariff.usage_payment_mode === 'prepaid' ? 'Prepaid pool' : 'Pay as you go'],
+        ['Monthly basis', tariff.monthly_subscription.charge_basis === 'per_seat'
+          ? 'Per active seat' : 'Flat per team or organisation'],
+        ...(tariff.monthly_subscription.charge_basis === 'per_seat'
+          ? [
+              ['Seat quantity', tariff.monthly_subscription.seat_policy ?? '—'],
+              ['Seat charge timing', tariff.monthly_subscription.seat_charge_timing ?? '—'],
+            ] as Array<[string, string]>
+          : []),
         [
           'Monthly amount',
           billingMoney(

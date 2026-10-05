@@ -23,6 +23,13 @@ type SerializableContractVersion = {
     serviceId: string;
     tariffId: string;
     monthlyAmountMinor: bigint;
+    fixedSeatQuantity?: number | null;
+    tariff: {
+      monthlyChargeBasis: 'FLAT' | 'PER_SEAT';
+      seatPolicy: 'AUTOMATIC' | 'FIXED' | null;
+      seatChargeTiming: 'FULL_MONTH' | 'PRORATED' | null;
+      usagePaymentMode: 'PAY_AS_YOU_GO' | 'PREPAID';
+    };
     service?: { identifier: string; name: string };
   }>;
 };
@@ -49,6 +56,11 @@ export function serializeContractVersion(
       service_name: term.service?.name ?? null,
       tariff_id: term.tariffId,
       monthly_amount_minor: term.monthlyAmountMinor.toString(),
+      monthly_charge_basis: term.tariff.monthlyChargeBasis.toLowerCase(),
+      seat_policy: term.tariff.seatPolicy?.toLowerCase() ?? null,
+      seat_charge_timing: term.tariff.seatChargeTiming?.toLowerCase() ?? null,
+      usage_payment_mode: term.tariff.usagePaymentMode.toLowerCase(),
+      fixed_seat_quantity: term.fixedSeatQuantity ?? null,
       monthly_price: {
         amount_minor: term.monthlyAmountMinor.toString(),
         ...exactMoney(
@@ -71,10 +83,11 @@ function versionActivationState(
   contractTerminated: boolean,
 ): ContractVersionActivationState {
   if ((version.serviceTerms?.length ?? 0) > 0) {
+    if (version.effectiveFromMonth > currentBillingMonth()) return 'scheduled';
     return version.id === currentActive?.id ? 'active' : 'superseded';
   }
   if (contractTerminated) return 'contract_terminated';
-  if (version.effectiveFromMonth > currentBillingMonth()) return 'scheduled';
+  if (version.effectiveFromMonth <= currentBillingMonth()) return 'superseded';
   if (currentActive && version.effectiveFromMonth <= currentActive.effectiveFromMonth) {
     return 'superseded';
   }
@@ -98,6 +111,7 @@ export function serializeBillingContract(contract: {
   const currentActive =
     [...versions]
       .filter((version) => (version.serviceTerms?.length ?? 0) > 0)
+      .filter((version) => version.effectiveFromMonth <= currentBillingMonth())
       .sort(
         (left, right) =>
           right.effectiveFromMonth.localeCompare(left.effectiveFromMonth) ||

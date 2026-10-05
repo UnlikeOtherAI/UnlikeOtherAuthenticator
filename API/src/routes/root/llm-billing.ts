@@ -1,34 +1,49 @@
 export const llmBillingMarkdown = `## Canonical tariff and entitlement control plane
 
+### Private paid-usage exception recovery
+
+When a selected immutable Ledger provider receipt exceeds the original frozen
+cost bound, ordinary settlement remains held. The exact product-bound Ledger
+RuntimeKey calls \`POST /billing/v1/ledger/reservations/:dispatchId/exception\`
+with the selected receipt, exact USD actual cost and lowercase SHA-256 digest.
+The digest is over compact JSON of
+\`[dispatchId,receiptId,rawActualFixed18,"USD",requestFingerprint,rawBoundFixed18,contextDigest]\`.
+Paid reserve and original product-bound decision lookup expose the exact
+private frozen \`context_digest\`; Ledger persists it before provider egress.
+It creates only a held private exception, never a customer debit or release.
+\`GET\` at the same path returns the held or exact terminal decision to Ledger.
+
+Platform superusers review the oldest held receipts in Admin Billing → Usage
+exceptions or \`GET /internal/admin/billing/paid-usage-exceptions\`. A freshly
+issued (at most five minutes old), live-epoch superuser token may POST the exact
+evidence digest, stable idempotency key and written reason to
+\`/internal/admin/billing/paid-usage-exceptions/:dispatchId/write-off\`.
+UOA books the frozen gross rated liability once, charges at most the original
+reserved microcredits, explicitly waives the excess, and still counts gross
+usage against credit budgets. PREPAID wallet debits only the collectible part.
+Unknown actual cost, missing historical rating or a changed selected receipt
+remain held for further evidence; no operator can turn unknown into zero.
+
+Platform superusers configure append-only prepaid legal invoice tax policy at
+\`GET/POST /internal/admin/billing/credit-invoice-tax-policies\`. A policy binds
+one Stripe account, active legal issuer, issuer jurisdiction, inclusive tax
+rate or documented no-tax treatment, legal basis and UTC effective time.
+Accepted credit payments fund the wallet once and create one durable invoice
+obligation. Missing buyer, issuer or tax facts leave a pending document; UOA
+never adds tax to the already charged amount or fabricates a legal invoice.
+
 Tariffs live in UOA. Ledger and product backends consume signed, content-free effective
 tariff snapshots; they do not maintain independent tariff truth.
 
 ### Commercial semantics
 
-- Precedence is deterministic: **team assignment → organisation assignment → service default**.
-- Tariff versions are immutable. A new revision appends a version; changing a default or
-  assignment changes only the pointer used for later snapshots.
-- Modes are \`standard\`, \`free\`, \`at_cost\`, and \`custom\`.
-- Payment collection is an independent immutable tariff term:
-  \`collection_mode=stripe|manual|none\`. \`none\` keeps usage rating and cost
-  visibility while explicitly collecting no payment. \`free\` always requires
-  \`none\`; \`at_cost + none + monthly amount 0\` is the canonical
-  "provider cost visible, no payment" plan.
-- \`markup_bps\` is a price adjustment: 2,000 bps means 20.00%. \`free\` has a usage-price
-  multiplier of 0; \`at_cost\` has 10,000; \`standard\`/\`custom\` have
-  \`10,000 + markup_bps\`.
-- The optional monthly component is an exact integer minor-unit string plus ISO currency.
-  A \`free\` tariff has zero markup and zero monthly amount. An \`at_cost\` tariff may have a
-  separate monthly subscription, but its usage component remains provider cost.
-- **Raw token, request, byte, and search counts are never multiplied, rewritten, or
-  relabeled.** Ledger keeps immutable raw usage/provider cost and attribution only.
-  UOA applies the signed \`usage_price_multiplier_bps\` when rating money and deriving
-  separately labeled customer billable units:
-  \`raw_metered_units × usage_price_multiplier_bps / 10000\`. The result is a commercial
-  unit, not provider output; Ledger retains exact decimal-safe operands and consumers
-  show raw usage, billable units, and money separately. Its label follows the underlying
-  meter: token-equivalent for token-metered AI, search-equivalent for SERP, and
-  research-equivalent for DeepWater.
+- UOA resolves immutable monthly terms by team assignment, organisation assignment,
+  then service default. Only UOA rates selected Ledger provider cost.
+- The customer receives exact usage charges, credit consumption,
+  monthly subscription price, collection status, and payer scope. Provider cost,
+  markup, margin, rate multipliers, and cost-basis modes stay inside UOA.
+- Product backends verify signed entitlement binding and render UOA-authored
+  customer statements. They do not calculate a customer price or credit debit.
 
 ### Dedicated product app keys
 
@@ -102,15 +117,14 @@ expiry. Its business claims mirror \`payload\`:
   },
   "tariff": {
     "id": "tariff_123",
-    "key": "standard",
-    "version": 2,
-    "mode": "standard",
     "collection_mode": "stripe",
-    "markup_bps": 2000,
-    "markup_percent": "20.00",
-    "usage_price_multiplier_bps": 12000,
-    "monthly_subscription": { "amount_minor": "2000", "currency": "USD" },
+    "monthly_subscription": {
+      "amount_minor": "2000", "currency": "USD", "charge_basis": "per_seat",
+      "seat_policy": "fixed", "seat_timing": "prorated",
+      "amount_role": "per_seat_unit"
+    },
     "usage_billing_enabled": true,
+    "usage_payment_mode": "prepaid",
     "payment_collection_enabled": true,
     "raw_usage_preserved": true
   },
@@ -153,9 +167,11 @@ UOA is the sole commercial billing engine. Ledger returns only immutable
 \`metering-usage-v1\` facts; it never returns tariff, subscription, markup,
 billable-unit, customer-charge, add-on, credit, payment, or cancellation fields.
 
-\`GET /schemas/billing-statement-v1.json\` publishes the frozen Draft 2020-12 response
+\`GET /schemas/billing-statement-v1.json\` publishes the Draft 2020-12 response
 schema. \`GET /schemas/billing-statement-v2.json\` adds the complete SSO-filled,
-team-wide connected-service portfolio without mutating v1. The open-source-safe
+team-wide connected-service portfolio. Package 4.0.0 removes the public pinned
+tariff identity and adds monthly cycles; strict consumers must update before UOA
+serves the revised schemas. The open-source-safe
 \`@unlikeotherai/billing-statement-protocol\` package
 is the TypeScript source used by UOA itself; it has no private server imports or
 credentials. Until registry publication, consumers can vendor/pack that package
@@ -168,18 +184,61 @@ call:
 
 with their own \`customer_lifecycle\` app key, a fresh bound \`X-UOA-Actor\`, and the
 same product/organisation/team/user subject body (plus optional \`billing_month\`).
-The response is display-ready: exact current plan and subscription, raw and billable
-usage, service/caller/origin attribution, per-user totals, monthly/usage/add-on/credit
-lines, exact currency totals, capabilities, and action descriptors. V2 additionally
-contains team-wide raw totals for every connected billing product, complete
-\`origin_product\` contributions and shares, and per-user service shares. UOA rates
-only the requested product. Other-service totals are explanatory and never become
-line items or charges on the current statement. One pinned, user-grouped
-\`metering-portfolio-v1\` snapshot covers the exact team and month; UOA derives
-commercial rating plus all service, origin, and user totals from it.
+The response is display-ready: exact current plan and subscription, customer
+charges, credit consumption, monthly/usage/add-on/credit lines, exact currency
+totals, capabilities, and action descriptors. V2 includes connected-service
+customer credit totals without exposing token counts or provider costs. UOA
+rates only the requested product. Other-service totals are explanatory and
+never become line items or charges on the current statement. One pinned,
+user-grouped \`metering-portfolio-v1\` snapshot covers the exact team and month;
+UOA derives the private rating evidence and public credit totals from it.
+
+### Customer display language
+
+Cycles and invoice list/detail reads accept the same optional
+X-UOA-Billing-Presentation: 1.5.0 and X-UOA-Billing-Locale headers as statements
+and credits. Supported locales are cs, en-US, en-GB, de, es, fr, it. Locale is
+outside the signed subject. Only generated labels and exact decimal money
+displays change, after source integrity checks. Stored snapshots, charge/rating
+facts, line identities and legal PDF/CSV bytes stay immutable. Authored service
+names, Stripe line descriptions and stored adjustment reasons remain verbatim.
+
+### Actual customer charge invoices
+Use the product's customer_lifecycle app key and a fresh exact-endpoint
+X-UOA-Actor assertion for POST /billing/v1/invoices/list, /detail, and
+/download. List by charge_month in UTC, then use only UOA's opaque invoice
+and document IDs. A prepaid purchase or automatic recharge appears in the month
+of Stripe's accepted payment event even if legal issue finishes later. Pending
+documents have verified payment and purchased credits but no invented tax,
+invoice number or download. An organisation invoice or pool purchase requires
+current organisation billing-manager authority; a team manager only sees the
+selected team's own charge. Legal PDFs list charges and tax, not private usage
+units, provider cost or markup. The strict contract and synthetic examples are
+at /schemas/billing-customer-invoices-v1.json and its example and OpenAPI
+siblings. Refund and dispute effects are shown separately from
+the original immutable legal PDF.
+
+### Monthly billing cycles and documents
+
+The canonical BillingCyclesV2 contract is published at
+\`/schemas/billing-cycles-v2.json\`, \`/schemas/billing-cycles-v2.example.json\`, and
+\`/schemas/billing-cycles-v2.openapi.json\`. A product's billing page calls
+\`POST /billing/v1/cycles/list\` and \`/detail\` with its exact lifecycle app key,
+fresh endpoint-audience actor assertion, and product/organisation/team/user body.
+The caller must be a current billing manager for the cycle's frozen payer
+scope. The requested team can have a measured-usage cycle even when its payer
+is the organisation. Verified organisation billing managers also see a
+separate organisation subscription cycle with null team id; that null is never
+permission to expose another team's named usage. The list cursor includes
+month and cycle scope. The detail contains customer seat charges, consumed credits,
+and persisted invoice/breakdown metadata, never provider cost or markup.
+An open preview has no final invoice download. Only a document's server-authored
+\`download_action\` may be relayed to \`POST /billing/v1/cycles/download\`; UOA
+rechecks the same authority and streams immutable SHA-verified bytes. Products
+must not build a storage URL or invoice ID locally.
 
 Products render the supplied labels, descriptions, totals, shares, and actions
-unchanged. They never derive totals, markup wording, direct access, cancellation
+unchanged. They never derive totals, private price terms, direct access, cancellation
 choices, or a missing-origin remainder. A Nessie-originated DeepWater call therefore
 appears in Nessie’s DeepWater origin share but remains indirect access and cannot
 create a related cancellation choice. A null legacy origin renders as
@@ -321,7 +380,22 @@ from the latest canonical funded exact-team usage settlements, remain a separate
 labelled aggregate, and never alter a service line. Paid recurring add-ons are shown as
 collected separately and never enter the manual invoice total. Currency mismatch, missing selected provider
 cost, absent explicit issuer/buyer legal profiles, or unavailable Ledger evidence fails
-closed. UOA performs no tax or FX inference.
+closed. The operator must attest the invoice's tax treatment, exact rate and legal
+basis before draft calculation; those facts and cumulative per-line tax are frozen.
+UOA performs no FX inference. A later manual usage correction creates only a
+delta-only supplemental invoice through
+\`/internal/admin/billing/cycle-corrections\`, with the original issued tax policy
+and legal invoice retained. Negative provider-cost differences remain held
+without a separate verified correction source; immutable paid receipts do not
+decrease. For an issuer-authorized cancellation of a paid, single-product manual
+invoice with no wallet offset, Admin can prepare a separate legal credit note
+against the exact original amount and frozen tax policy with a required reason.
+POST /internal/admin/billing/invoices/:invoiceId/credit-note/prepare freezes it,
+POST /internal/admin/billing/credit-notes/:id/issue allocates a separate legal
+number/PDF, and GET /internal/admin/billing/credit-notes/:id/pdf downloads it.
+The original invoice and accepted payment stay immutable. Verified refunds and
+customer credit still due appear in an append-only customer cycle revision;
+the note never mints prepaid wallet credits.
 
 \`POST /internal/admin/billing/invoices/calculate\` and every invoice list/detail/mutation
 return only final customer price per service, legal profile snapshots, totals, and
@@ -336,7 +410,8 @@ Contract and version controls are also server-authored. A contract returns
 \`actions.{activation_state,activate}\`. The activation state is exactly \`active\`,
 \`ready\`, \`scheduled\`, \`superseded\`, or \`contract_terminated\`. Admin clients
 render those controls as returned and never decide locally which authored version may be
-activated.
+activated. A draft is ready only for a future effective month; scheduled means
+an activated version will take effect in that future month.
 
 Every customer-safe invoice DTO includes a server-authored \`actions\` projection.
 \`issue\` is \`issue\` only when UOA's database readiness function proves the active

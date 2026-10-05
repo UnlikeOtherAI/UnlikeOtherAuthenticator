@@ -8,6 +8,8 @@ export type BillingCreditCopy = Readonly<{
   conversionDescription: string;
   balanceLabel: string;
   balanceDescription: string;
+  organisationBalanceDescription: string;
+  pendingSettlementDescription: string;
   pendingCreditsLabel: BillingCopyPluralForms;
   pendingCreditsDescription: string;
   managerViewerDescription: string;
@@ -23,9 +25,11 @@ export type BillingCreditCopy = Readonly<{
 export const BILLING_CREDIT_COPY = {
   cs: {
     conversionDescription:
-      '1 000 kreditů vždy odpovídá 1,00 USD. Spotřeba se počítá přesně, odečítají se však pouze celé kredity.',
+      '1 000 kreditů vždy odpovídá 1,00 USD. Spotřebu a zůstatek evidujeme s přesností na miliontinu kreditu.',
     balanceLabel: 'Zbývající kredity',
     balanceDescription: 'Tento zůstatek sdílí celý tým napříč připojenými službami.',
+    organisationBalanceDescription: "Tento zůstatek sdílí týmy organizace napříč připojenými službami.",
+    pendingSettlementDescription: "Potvrzený zůstatek je dostupný. Nedávnou spotřebu ještě zpracováváme a potvrzený součet ji zatím nezahrnuje.",
     pendingCreditsLabel: { one: 'Čeká {count} dobití', few: 'Čekají {count} dobití', other: 'Čeká {count} dobití' },
     pendingCreditsDescription:
       'Čekající kredity se přičtou až po ověření platby a nejsou součástí zbývajícího zůstatku.',
@@ -40,9 +44,11 @@ export const BILLING_CREDIT_COPY = {
   },
   'en-US': {
     conversionDescription:
-      '1,000 credits always equal US$1.00. Usage is counted exactly, but only whole credits are deducted.',
+      '1,000 credits always equal US$1.00. Usage and balances retain microcredit precision.',
     balanceLabel: 'Remaining credits',
     balanceDescription: 'Your team shares this balance across connected services.',
+    organisationBalanceDescription: "This balance is shared across the organisation’s teams and connected services.",
+    pendingSettlementDescription: "Your confirmed credit balance is available. Recent usage is still being reconciled and is not included in the confirmed usage total yet.",
     pendingCreditsLabel: { one: '{count} top-up pending', other: '{count} top-ups pending' },
     pendingCreditsDescription:
       'Pending credits are added after payment is verified. They are not included in the remaining balance.',
@@ -57,9 +63,11 @@ export const BILLING_CREDIT_COPY = {
   },
   'en-GB': {
     conversionDescription:
-      '1,000 credits always equal US$1.00. Usage is counted exactly, but only whole credits are deducted.',
+      '1,000 credits always equal US$1.00. Usage and balances retain microcredit precision.',
     balanceLabel: 'Remaining credits',
     balanceDescription: 'Your team shares this balance across connected services.',
+    organisationBalanceDescription: "This balance is shared across the organisation’s teams and connected services.",
+    pendingSettlementDescription: "Your confirmed credit balance is available. Recent usage is still being reconciled and is not included in the confirmed usage total yet.",
     pendingCreditsLabel: { one: '{count} top-up pending', other: '{count} top-ups pending' },
     pendingCreditsDescription:
       'Pending credits are added after payment is verified. They are not included in the remaining balance.',
@@ -74,9 +82,11 @@ export const BILLING_CREDIT_COPY = {
   },
   de: {
     conversionDescription:
-      '1.000 Credits entsprechen immer 1,00 US$. Die Nutzung wird genau erfasst, abgezogen werden jedoch nur ganze Credits.',
+      '1.000 Credits entsprechen immer 1,00 US$. Nutzung und Guthaben werden auf ein Millionstel Credit genau erfasst.',
     balanceLabel: 'Verbleibende Credits',
     balanceDescription: 'Ihr Team nutzt dieses Guthaben gemeinsam über verbundene Dienste hinweg.',
+    organisationBalanceDescription: "Dieses Guthaben wird von den Teams der Organisation über verbundene Dienste hinweg geteilt.",
+    pendingSettlementDescription: "Ihr bestätigtes Guthaben ist verfügbar. Neuere Nutzung wird noch abgeglichen und ist noch nicht in der bestätigten Summe enthalten.",
     pendingCreditsLabel: { one: '{count} Aufladung ausstehend', other: '{count} Aufladungen ausstehend' },
     pendingCreditsDescription:
       'Ausstehende Credits werden nach bestätigter Zahlung gutgeschrieben. Sie sind nicht im verfügbaren Guthaben enthalten.',
@@ -91,9 +101,11 @@ export const BILLING_CREDIT_COPY = {
   },
   es: {
     conversionDescription:
-      '1.000 créditos equivalen siempre a 1,00 US$. El uso se calcula con exactitud, pero solo se descuentan créditos enteros.',
+      '1.000 créditos equivalen siempre a 1,00 US$. El uso y el saldo conservan una precisión de una millonésima de crédito.',
     balanceLabel: 'Créditos restantes',
     balanceDescription: 'El equipo comparte este saldo entre los servicios conectados.',
+    organisationBalanceDescription: "Los equipos de la organización comparten este saldo entre los servicios conectados.",
+    pendingSettlementDescription: "El saldo confirmado está disponible. El uso reciente aún se está conciliando y todavía no está incluido en el total confirmado.",
     pendingCreditsLabel: { one: '{count} recarga pendiente', other: '{count} recargas pendientes' },
     pendingCreditsDescription:
       'Los créditos pendientes se añaden cuando se verifica el pago. No se incluyen en el saldo restante.',
@@ -108,9 +120,11 @@ export const BILLING_CREDIT_COPY = {
   },
   fr: {
     conversionDescription:
-      '1 000 crédits correspondent toujours à 1,00 $US. L’utilisation est calculée précisément, mais seuls les crédits entiers sont déduits.',
+      '1 000 crédits correspondent toujours à 1,00 $US. L’utilisation et le solde sont calculés au millionième de crédit près.',
     balanceLabel: 'Crédits restants',
     balanceDescription: 'Votre équipe partage ce solde entre les services connectés.',
+    organisationBalanceDescription: "Les équipes de l’organisation partagent ce solde entre les services connectés.",
+    pendingSettlementDescription: "Votre solde confirmé est disponible. L’utilisation récente est en cours de rapprochement et n’est pas encore incluse dans le total confirmé.",
     pendingCreditsLabel: { one: '{count} recharge en attente', other: '{count} recharges en attente' },
     pendingCreditsDescription:
       'Les crédits en attente sont ajoutés après vérification du paiement. Ils ne sont pas inclus dans le solde restant.',
@@ -125,9 +139,11 @@ export const BILLING_CREDIT_COPY = {
   },
   it: {
     conversionDescription:
-      '1.000 crediti equivalgono sempre a 1,00 USD. L’utilizzo è conteggiato con precisione, ma vengono detratti solo crediti interi.',
+      '1.000 crediti equivalgono sempre a 1,00 USD. Utilizzo e saldo mantengono una precisione al milionesimo di credito.',
     balanceLabel: 'Crediti rimanenti',
     balanceDescription: 'Il team condivide questo saldo tra i servizi collegati.',
+    organisationBalanceDescription: "I team dell’organizzazione condividono questo saldo tra i servizi collegati.",
+    pendingSettlementDescription: "Il saldo confermato è disponibile. L’utilizzo recente è ancora in fase di riconciliazione e non è incluso nel totale confermato.",
     pendingCreditsLabel: { one: '{count} ricarica in sospeso', other: '{count} ricariche in sospeso' },
     pendingCreditsDescription:
       'I crediti in sospeso vengono aggiunti dopo la verifica del pagamento. Non sono inclusi nel saldo rimanente.',
@@ -159,8 +175,12 @@ export function billingBuiltInCreditOfferCopy(key: string, locale?: BillingCusto
 
 export function billingLocalizedCreditDisplay(credits: string, locale?: BillingCustomerLocale): string {
   const copy = billingCreditCopy(locale);
-  const amount = BigInt(credits);
-  const count = Number(amount < 0n ? -amount : amount);
-  const formatted = new Intl.NumberFormat(billingLocale(locale)).format(amount);
+  const [whole, fraction] = credits.split('.');
+  const amount = BigInt(whole);
+  const count = Math.abs(Number(credits));
+  const formatter = new Intl.NumberFormat(billingLocale(locale));
+  const sign = credits.startsWith('-') && amount === 0n ? '-' : '';
+  const separator = formatter.formatToParts(1.1).find((part) => part.type === 'decimal')?.value;
+  const formatted = `${sign}${formatter.format(amount)}${fraction ? `${separator}${fraction}` : ''}`;
   return `${formatted} ${billingPluralCopy(copy.creditUnit, count, locale)}`;
 }

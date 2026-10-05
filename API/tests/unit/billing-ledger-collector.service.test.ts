@@ -6,9 +6,11 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { parseEnv, type Env } from '../../src/config/env.js';
 import {
+  fetchLedgerRawBudgetReceiptSet,
   fetchLedgerMeteringPortfolio,
   fetchLedgerMeteringUsage,
 } from '../../src/services/billing-ledger-collector.service.js';
+
 
 let env: Env;
 let verificationKey: CryptoKey;
@@ -47,6 +49,7 @@ beforeAll(async () => {
 function rawMeteringResponse(groupBy: 'service' | 'user' = 'service') {
   return {
     schemaVersion: 1,
+    billingCompleteness: { state: 'complete', unresolvedPaidAttempts: '0' },
     product: 'deepwater',
     scope: {
       organizationId: 'org_123',
@@ -80,6 +83,7 @@ function rawMeteringResponse(groupBy: 'service' | 'user' = 'service') {
           originProduct: 'nessie',
           serviceId: 'openai',
           costProvenance: 'provider_pricebook',
+          billingDisposition: 'paid',
           rawProviderCurrency: 'USD',
           calls: '2',
           rawProviderEstimatedCost: '1.2',
@@ -98,12 +102,15 @@ function rawMeteringResponse(groupBy: 'service' | 'user' = 'service') {
         serviceId: 'openai',
         usageUnit: 'tokens',
         costProvenance: 'provider_pricebook',
+        billingDisposition: 'paid',
         rawProviderCurrency: 'USD',
         calls: '2',
         rawProviderUsage: {
           unitsIn: '100',
           unitsCachedIn: '10',
           unitsOut: '25',
+          breakdown: { thoughtOutputTokens: '5', cacheWrite5mTokens: '20',
+            cacheWrite1hTokens: '10', inputTextTokens: '100' },
         },
         rawProviderEstimatedCost: '1.2',
         rawProviderActualCost: '1.1',
@@ -219,6 +226,7 @@ describe('Ledger raw metering collector', () => {
 
     expect(result).toMatchObject({
       schemaVersion: 1,
+    billingCompleteness: { state: 'complete', unresolvedPaidAttempts: '0' },
       groupBy: 'service',
       calls: '2',
       lines: [
@@ -229,6 +237,8 @@ describe('Ledger raw metering collector', () => {
           billingProduct: 'deepwater',
           callerProduct: 'nessie',
           userId: null,
+          breakdown: { thoughtOutputTokens: '5', cacheWrite5mTokens: '20',
+            cacheWrite1hTokens: '10', inputTextTokens: '100' },
         },
       ],
       snapshot: {
@@ -337,6 +347,62 @@ describe('Ledger raw metering collector', () => {
     expect((fetchMock.mock.calls[0]?.[0] as URL).toString()).toBe(
       'https://ledger.unlikeotherai.com/v1/metering/portfolio?group_by=user',
     );
+  });
+
+  it('signs an exact native budget scope and current dispatch exclusion', async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const fetchMock = vi.fn(async (url: URL, init?: RequestInit) => {
+      expect(url.pathname).toBe('/v1/metering/budget-receipt-set');
+      const assertion = new Headers(init?.headers).get('X-UOA-Service-Assertion');
+      const verified = await jwtVerify(assertion as string, verificationKey, {
+        algorithms: ['RS256'], issuer: 'https://authentication.unlikeotherai.com',
+        audience: 'https://ledger.unlikeotherai.com',
+        currentDate: new Date(now * 1000),
+      });
+      expect(verified.payload).toMatchObject({ view: 'budget_receipt_set',
+        product: 'deepwater', organization_id: 'org_123', team_id: 'team_123',
+        exclude_dispatch_id: 'pd_current', exclude_request_fingerprint: 'a'.repeat(64),
+        exclude_team_id: 'team_123',
+        native_scope_type: 'run', native_scope_id: 'run_original',
+        native_born_at: '2026-07-04T12:00:00.000Z', native_owner_sub: 'usr_original' });
+      return new Response('{"proof":"opaque"}', { status: 200 });
+    });
+    await expect(fetchLedgerRawBudgetReceiptSet({
+      product: 'deepwater', organisationId: 'org_123', teamId: 'team_123',
+      billingMonth: '2026-07', excludeDispatchId: 'pd_current',
+      excludeRequestFingerprint: 'a'.repeat(64), excludeTeamId: 'team_123',
+      nativeScopeType: 'run',
+      nativeScopeId: 'run_original', nativeBornAt: '2026-07-04T12:00:00.000Z',
+      nativeOwnerSub: 'usr_original',
+    }, { env, fetch: fetchMock as unknown as typeof fetch, now: () => now }))
+      .resolves.toEqual({ proof: 'opaque' });
+  });
+
+  it('signs one organization-wide budget cohort with an exact excluded team', async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const fetchMock = vi.fn(async (_url: URL, init?: RequestInit) => {
+      const assertion = new Headers(init?.headers).get('X-UOA-Service-Assertion');
+      const verified = await jwtVerify(assertion as string, verificationKey, {
+        algorithms: ['RS256'], issuer: 'https://authentication.unlikeotherai.com',
+        audience: 'https://ledger.unlikeotherai.com',
+        currentDate: new Date(now * 1000),
+      });
+      expect(verified.payload).toMatchObject({
+        view: 'budget_receipt_set', product: 'deepwater',
+        organization_id: 'org_123', budget_scope_type: 'organization',
+        exclude_dispatch_id: 'pd_org_current', exclude_team_id: 'team_123',
+      });
+      expect(verified.payload).not.toHaveProperty('team_id');
+      return new Response('{"proof":"org"}', { status: 200 });
+    });
+    await expect(fetchLedgerRawBudgetReceiptSet({
+      product: 'deepwater', organisationId: 'org_123', teamId: null,
+      budgetScopeType: 'organization', billingMonth: '2026-07',
+      excludeDispatchId: 'pd_org_current',
+      excludeRequestFingerprint: 'a'.repeat(64),
+      excludeTeamId: 'team_123',
+    }, { env, fetch: fetchMock as unknown as typeof fetch, now: () => now }))
+      .resolves.toEqual({ proof: 'org' });
   });
 
   it('accepts Ledger’s committed public cross-product portfolio fixture exactly', async () => {

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import type {
   BillingContractFormValues,
+  BillingContractServiceActivation,
   BillingContractVersionFormValues,
   BillingInvoiceBuyerFormValues,
   BillingInvoiceCalculateFormValues,
@@ -13,6 +14,7 @@ import { billingContractAdminService } from '../../services/billing-contract-adm
 const contractsKey = ['admin', 'billing', 'contracts'] as const;
 const issuersKey = ['admin', 'billing', 'invoice-issuers'] as const;
 const invoicesKey = ['admin', 'billing', 'invoices'] as const;
+const correctionsKey = ['admin', 'billing', 'cycle-corrections'] as const;
 
 function useRefresh(keys: ReadonlyArray<readonly unknown[]>) {
   const queryClient = useQueryClient();
@@ -37,6 +39,17 @@ export function useBillingInvoiceIssuersQuery() {
 
 export function useBillingInvoicesQuery() {
   return useQuery({ queryKey: invoicesKey, queryFn: billingContractAdminService.listInvoices });
+}
+
+export function useBillingCycleCorrectionsQuery() {
+  return useQuery({ queryKey: correctionsKey,
+    queryFn: billingContractAdminService.listCycleCorrections });
+}
+
+export function usePrepareBillingCycleCorrectionMutation() {
+  const refresh = useRefresh([correctionsKey, invoicesKey]);
+  return useMutation({ mutationFn: (cycleId: string) =>
+    billingContractAdminService.prepareCycleCorrection(cycleId), onSuccess: refresh });
 }
 
 export function useBillingInvoiceBuyerQuery(organisationId: string, enabled: boolean) {
@@ -69,7 +82,7 @@ export function useCreateBillingContractVersionMutation(contractId: string) {
 export function useActivateBillingContractVersionMutation(contractId: string, versionId: string) {
   const refresh = useRefresh([contractsKey]);
   return useMutation({
-    mutationFn: (services: Array<{ serviceId: string; monthlyAmountMinor: string }>) =>
+    mutationFn: (services: BillingContractServiceActivation[]) =>
       billingContractAdminService.activateVersion(contractId, versionId, services),
     onSuccess: refresh,
   });

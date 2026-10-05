@@ -171,6 +171,78 @@ export function stripeUsageChargeKey(callerProduct: string, currency: string): s
   return `${callerProduct}\0${currency}`;
 }
 
+function majorAmountFromMeterQuantity(quantity: bigint, currency: string): string {
+  const scale = currencyMinorDigits(currency) + STRIPE_METER_FRACTION_DIGITS;
+  const digits = quantity.toString().padStart(scale + 1, '0');
+  const whole = digits.slice(0, -scale);
+  const fraction = digits.slice(-scale).replace(/0+$/, '');
+  return fraction ? `${whole}.${fraction}` : whole;
+}
+
+/** Keep each caller's prior prepaid allocation fixed and fund only new gross usage. */
+export function applyCreditOffsetToStripeCharges(
+  charges: Map<string, CumulativeCharge>,
+  offsetMicroMinor: bigint,
+  previous: ReadonlyMap<string, {
+    cumulativeGrossMeterQuantity: bigint | null;
+    cumulativeMeterQuantity: bigint;
+  }>,
+): Map<string, CumulativeCharge> {
+  if (offsetMicroMinor < 0n) {
+    throw new AppError('INTERNAL', 500, 'BILLING_CREDIT_OFFSET_INVALID');
+  }
+  const entries = [...charges.entries()].sort(([left], [right]) =>
+    Buffer.compare(Buffer.from(left, 'utf8'), Buffer.from(right, 'utf8')));
+  const gross = entries.reduce((sum, [, charge]) => sum + charge.quantity, 0n);
+  if (gross < offsetMicroMinor) {
+    throw new AppError('INTERNAL', 409, 'BILLING_CREDIT_OFFSET_EXCEEDS_USAGE');
+  }
+  let frozenOffset = 0n;
+  const allocations = entries.map(([key, charge]) => {
+    const prior = previous.get(key);
+    if (prior && prior.cumulativeGrossMeterQuantity === null) {
+      throw new AppError('INTERNAL', 409, 'STRIPE_BUCKET_GROSS_HISTORY_MISSING');
+    }
+    const priorGross = prior?.cumulativeGrossMeterQuantity ?? 0n;
+    const priorNet = prior?.cumulativeMeterQuantity ?? 0n;
+    if (priorGross < priorNet || charge.quantity < priorGross) {
+      throw new AppError('INTERNAL', 409, 'STRIPE_BUCKET_USAGE_RECONCILIATION_REQUIRED');
+    }
+    frozenOffset += priorGross - priorNet;
+    return { key, charge, priorNet, increment: charge.quantity - priorGross,
+      offset: 0n, remainder: 0n };
+  });
+  const additionalOffset = offsetMicroMinor - frozenOffset;
+  const incrementalGross = allocations.reduce((sum, row) => sum + row.increment, 0n);
+  if (additionalOffset < 0n || additionalOffset > incrementalGross) {
+    throw new AppError('INTERNAL', 409, 'STRIPE_BUCKET_CREDIT_RECONCILIATION_REQUIRED');
+  }
+  for (const row of allocations) {
+    if (incrementalGross === 0n) break;
+    const weighted = row.increment * additionalOffset;
+    row.offset = weighted / incrementalGross;
+    row.remainder = weighted % incrementalGross;
+  }
+  let unallocated = additionalOffset - allocations.reduce((sum, row) => sum + row.offset, 0n);
+  for (const row of [...allocations].sort((left, right) =>
+    left.remainder === right.remainder
+      ? Buffer.compare(Buffer.from(left.key, 'utf8'), Buffer.from(right.key, 'utf8'))
+      : left.remainder > right.remainder ? -1 : 1,
+  )) {
+    if (unallocated === 0n) break;
+    row.offset += 1n;
+    unallocated -= 1n;
+  }
+  return new Map(allocations.map(({ key, charge, priorNet, increment, offset }) => {
+    const quantity = priorNet + increment - offset;
+    return [key, {
+      ...charge,
+      amount: majorAmountFromMeterQuantity(quantity, charge.currency),
+      quantity,
+    }];
+  }));
+}
+
 export function validatedStripeCumulativeCharges(
   usage: NormalizedMeteringUsage,
   subscription: StripeUsageSubscription,
@@ -185,9 +257,6 @@ export function validatedStripeCumulativeCharges(
       markupBps: subscription.tariff.markupBps,
     },
     unattributedCaller: UNATTRIBUTED_BILLING_PRODUCT,
-    // Preserve the existing Stripe behaviour: rows with no cost at all do not
-    // create a meter event, while half-present/mismatched cost data fails.
-    missingCost: 'skip',
   });
   for (const item of rated) {
     const key = stripeUsageChargeKey(item.callerProduct, item.currency);

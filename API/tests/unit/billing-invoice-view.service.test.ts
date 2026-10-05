@@ -156,14 +156,14 @@ describe('customer-safe contract invoice view', () => {
       {
         id: 'line_1',
         service: { identifier: 'deepwater', name: 'DeepWater' },
-        price: { amount_minor: '6250', amount: '62.5', currency: 'USD', display: '$62.5' },
+        price: { amount_minor: '6250', amount: '62.5', currency: 'USD', display: '$62.50' },
       },
     ]);
     expect(value.totals.credits_applied).toEqual({
       amount_minor: '250',
       amount: '2.5',
       currency: 'USD',
-      display: '$2.5',
+      display: '$2.50',
     });
     expect(value.separately_billed_add_ons).toEqual([
       {
@@ -172,7 +172,7 @@ describe('customer-safe contract invoice view', () => {
         offer: { key: 'privacy', name: 'DeepWater Privacy' },
         scope: 'organisation',
         collection: 'collected_separately',
-        monthly_price: { amount_minor: '5000', amount: '50', currency: 'USD', display: '$50' },
+        monthly_price: { amount_minor: '5000', amount: '50', currency: 'USD', display: '$50.00' },
         note: 'Collected separately; not included in this invoice total.',
       },
     ]);

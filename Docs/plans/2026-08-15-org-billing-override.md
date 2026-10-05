@@ -181,7 +181,11 @@ proves they are on the same contract.
 
 - A team's metered spend lands on the org credit account with the override on,
   and on its own account with it off — asserted at the resolver, which is the
-  single chokepoint every debit crosses.
+  single chokepoint every debit crosses. The source team stays on each immutable
+  settlement and portfolio snapshot. Legacy mixed-team rows are held for
+  reconciliation, never apportioned or rewritten during schema deployment.
+  Future assume/release transitions are append-only; a monthly portfolio
+  crossing a transition is held rather than charged wholly to either payer.
 - Enabling is refused (not partially applied) while any funding action is in
   flight; releasing restores team resolution with no ledger rewriting.
 - An ordinary member's team view under the override exposes no funding action

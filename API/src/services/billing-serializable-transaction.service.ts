@@ -9,6 +9,7 @@ const MAX_DELAY_MS = 400;
 type RetryRuntime = {
   random?: () => number;
   sleep?: (delayMs: number) => Promise<void>;
+  timeoutMs?: number;
 };
 
 type CreditRetryExhaustedMessage =
@@ -44,6 +45,7 @@ export async function runBillingSerializableTransaction<T>(
     try {
       return await prisma.$transaction(transaction, {
         isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        ...(runtime.timeoutMs ? { timeout: runtime.timeoutMs } : {}),
       });
     } catch (error) {
       if (!isRetryableTransactionError(error)) throw error;
