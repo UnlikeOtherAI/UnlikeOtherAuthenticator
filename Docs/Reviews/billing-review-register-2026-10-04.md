@@ -87,3 +87,13 @@ existing authoritative nonzero refund amount; no new billing calculation or
 workflow is introduced. Refreshed responsive invoice/held-budget evidence and
 required CI are the remaining delivery gates. Older screenshot revisions
 identified by Astra are not current-source verification.
+
+The [final bounded Astra correction follow-up](billing-astra-final-followup-2026-10-05.md)
+closes both P2 corrections at its recorded five-repository snapshot and finds no
+confirmed reachable defect in that follow-up. It permits required CI and merge
+when green; it is not a deployment or real payment/provider certification.
+Current responsive refund evidence exists for all three consumers. Nessie's
+canonical held-budget screenshots were subsequently refreshed with the current
+entitled conversation and retry action (four viewport/theme cases passed).
+Water's full paid-adapter/checkpoint suite fixture updates and every required
+repository CI check remain delivery gates. The frozen public package is unchanged.
