@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
 import { requireBillingLifecycleAppKey } from '../../middleware/billing-app-auth.js';
+import { billingCheckoutTariffJsonSchema } from '../../contracts/billing-statement-v1.js';
 import { createStripeCheckoutSession } from '../../services/billing-stripe-checkout.service.js';
 import { AppError } from '../../utils/errors.js';
 import { BillingSubjectRequestSchema, readBillingActorHeader } from './billing-request.js';
@@ -9,6 +10,7 @@ import { BillingSubjectRequestSchema, readBillingActorHeader } from './billing-r
 const CheckoutRequestSchema = BillingSubjectRequestSchema.extend({
   success_url: z.string().trim().url().max(2048),
   cancel_url: z.string().trim().url().max(2048),
+  fixed_seat_quantity: z.number().int().positive().max(1_000_000).optional(),
 }).strict();
 
 const responseSchema = {
@@ -18,7 +20,7 @@ const responseSchema = {
     checkout_session_id: { type: 'string' },
     checkout_url: { type: 'string' },
     expires_at: { type: 'string' },
-    tariff: { type: 'object', additionalProperties: true },
+    tariff: billingCheckoutTariffJsonSchema,
   },
 } as const;
 
@@ -41,6 +43,7 @@ export function registerStripeCheckoutRoute(app: FastifyInstance): void {
           userId: body.user_id,
           successUrl: body.success_url,
           cancelUrl: body.cancel_url,
+          fixedSeatQuantity: body.fixed_seat_quantity ?? null,
         },
         actorToken: readBillingActorHeader(request.headers['x-uoa-actor']),
         endpoint: '/billing/v1/stripe/checkout-session',

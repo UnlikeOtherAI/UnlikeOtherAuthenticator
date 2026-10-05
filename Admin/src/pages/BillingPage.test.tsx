@@ -37,7 +37,12 @@ const service = {
       mode: 'standard' as const,
       collection_mode: 'stripe' as const,
       markup_bps: 2000,
-      monthly_subscription: { amount_minor: '2000', currency: 'GBP' },
+      markup_percent: '20.00',
+      usage_payment_mode: 'pay_as_you_go',
+      monthly_subscription: {
+        amount_minor: '2000', currency: 'GBP', charge_basis: 'flat',
+        seat_policy: null, seat_charge_timing: null,
+      },
       is_default: true,
       created_by_email: 'operator@example.com',
       created_at: '2026-07-20T00:00:00.000Z',
@@ -59,7 +64,12 @@ const service = {
         mode: 'standard' as const,
         collection_mode: 'stripe' as const,
         markup_bps: 2000,
-        monthly_subscription: { amount_minor: '2000', currency: 'GBP' },
+        markup_percent: '20.00',
+        usage_payment_mode: 'pay_as_you_go',
+        monthly_subscription: {
+          amount_minor: '2000', currency: 'GBP', charge_basis: 'flat',
+          seat_policy: null, seat_charge_timing: null,
+        },
         is_default: true,
         created_by_email: 'operator@example.com',
         created_at: '2026-07-20T00:00:00.000Z',
@@ -250,7 +260,7 @@ describe('BillingPage', () => {
     expect(screen.queryByText(/^uoa_app_[A-Za-z0-9_-]{20,}$/)).toBeNull();
   });
 
-  it('opens a safe at-cost/no-collection service form by default', async () => {
+  it('opens standard prepaid service terms with no automatic collection by default', async () => {
     const user = userEvent.setup();
     render(<BillingPage />);
 
@@ -258,11 +268,19 @@ describe('BillingPage', () => {
     const dialog = screen.getByRole('dialog', { name: 'Add billing service' });
     expect(dialog).toBeTruthy();
     expect((screen.getByRole('combobox', { name: 'Mode' }) as HTMLSelectElement).value).toBe(
-      'at_cost',
+      'standard',
     );
     expect((screen.getByRole('combobox', { name: /Collection/ }) as HTMLSelectElement).value).toBe(
       'none',
     );
+    expect((screen.getByRole('combobox', { name: /^Usage payment/ }) as HTMLSelectElement).value)
+      .toBe('prepaid');
+    const basisSelect = screen.getByRole('combobox', {
+      name: /^Monthly subscription basis/,
+    }) as HTMLSelectElement;
+    expect(basisSelect.value).toBe('flat');
+    expect((screen.getByRole('textbox', { name: /^Monthly price/ }) as HTMLInputElement).value)
+      .toBe('0.00');
     expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull();
     await user.type(screen.getByRole('textbox', { name: 'Display name' }), 'Unsaved product');
     await user.click(screen.getByRole('button', { name: 'Close modal' }));

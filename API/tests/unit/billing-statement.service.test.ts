@@ -67,6 +67,16 @@ const summary = {
     synced_at: now.toISOString(),
   },
 };
+const effectiveTerm = {
+  tariffId: 'tariff_standard_v4', assignmentId: 'assignment_1',
+  tariff: {
+    id: 'tariff_standard_v4', serviceId: 'service_deepwater', key: 'standard',
+    version: 4, name: 'Provider cost plus 20% markup', mode: 'STANDARD', collectionMode: 'STRIPE',
+    markupBps: 2_000, monthlyAmountMinor: 2000n, currency: 'GBP',
+    monthlyChargeBasis: 'FLAT', seatPolicy: null, seatChargeTiming: null,
+    usagePaymentMode: 'PAY_AS_YOU_GO',
+  },
+};
 
 function metering(groupBy: 'service' | 'user'): NormalizedMeteringUsage {
   const shared = {
@@ -112,6 +122,7 @@ function metering(groupBy: 'service' | 'user'): NormalizedMeteringUsage {
           selectedProviderCost: '2',
           currency: 'USD',
           costProvenance: 'provider_invoice',
+          billingDisposition: 'paid',
           billingProduct: 'deepwater',
           callerProduct: 'nessie',
           originProduct: 'deepsignal',
@@ -129,6 +140,7 @@ function metering(groupBy: 'service' | 'user'): NormalizedMeteringUsage {
           selectedProviderCost: '1',
           currency: 'USD',
           costProvenance: 'provider_pricebook',
+          billingDisposition: 'paid',
           billingProduct: 'deepwater',
           callerProduct: 'deepwater',
           originProduct: 'nessie',
@@ -152,6 +164,7 @@ function metering(groupBy: 'service' | 'user'): NormalizedMeteringUsage {
         selectedProviderCost: '1',
         currency: 'USD',
         costProvenance: 'provider_pricebook',
+        billingDisposition: 'paid',
         billingProduct: 'deepwater',
         callerProduct: 'nessie',
         originProduct: 'nessie',
@@ -169,6 +182,7 @@ function metering(groupBy: 'service' | 'user'): NormalizedMeteringUsage {
         selectedProviderCost: '1',
         currency: 'USD',
         costProvenance: 'provider_invoice',
+        billingDisposition: 'paid',
         billingProduct: 'deepwater',
         callerProduct: 'nessie',
         originProduct: 'nessie',
@@ -179,6 +193,59 @@ function metering(groupBy: 'service' | 'user'): NormalizedMeteringUsage {
 }
 
 describe('canonical UOA billing statement', () => {
+  it('uses a frozen seat quote for a closed period, leaving the plan price labelled per seat', async () => {
+    const quoteSubscription = vi.fn().mockResolvedValue({
+      serviceId: 'service_deepwater', teamId: 'team_1', currency: 'GBP',
+      amountMinor: 3000n,
+    });
+    const perSeatTerm = { ...effectiveTerm, tariff: { ...effectiveTerm.tariff,
+      monthlyChargeBasis: 'PER_SEAT', seatPolicy: 'FIXED', seatChargeTiming: 'PRORATED',
+    } };
+    const prisma = {
+      billingService: {
+        findUnique: vi.fn().mockResolvedValue({ tariffHistoryFromMonth: '2026-01' }),
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      billingTariffTermEvent: { findFirst: vi.fn().mockResolvedValue(perSeatTerm) },
+      billingOrganisationContractVersion: { findMany: vi.fn().mockResolvedValue([]) },
+      billingCommercialAdjustment: { findMany: vi.fn().mockResolvedValue([]) },
+      teamMember: { findMany: vi.fn().mockResolvedValue([]) },
+    };
+    const statement = await getCanonicalBillingStatement(
+      { request, actorToken: 'signed-actor', credential, billingMonth: '2026-07' },
+      { prisma: prisma as never, now: () => new Date('2026-08-15T00:00:00.000Z'),
+        resolveSummary: vi.fn().mockResolvedValue(summary) as never,
+        fetchMetering: vi.fn(async (params: { groupBy: 'service' | 'user' }) =>
+          metering(params.groupBy)) as never,
+        listDirectAccess: vi.fn().mockResolvedValue([]),
+        resolveControlledBy: vi.fn().mockResolvedValue(null),
+        quoteSubscription: quoteSubscription as never,
+      },
+    );
+    expect(quoteSubscription).toHaveBeenCalledWith({
+      source: { kind: 'stripe', id: 'subscription_1' }, billingMonth: '2026-07',
+    }, { prisma });
+    expect(statement.plan.monthly_subscription).toMatchObject({
+      amount_minor: '2000', amount_role: 'per_seat_unit', charge_basis: 'per_seat',
+      seat_policy: 'fixed', seat_timing: 'prorated',
+    });
+    expect(statement.commercial_lines.find((line) => line.kind === 'monthly_subscription')?.amount)
+      .toMatchObject({ amount: '30', currency: 'GBP' });
+    const open = await getCanonicalBillingStatement(
+      { request, actorToken: 'signed-actor', credential, billingMonth: '2026-07' },
+      { prisma: prisma as never, now: () => new Date('2026-07-15T00:00:00.000Z'),
+        resolveSummary: vi.fn().mockResolvedValue(summary) as never,
+        fetchMetering: vi.fn(async (params: { groupBy: 'service' | 'user' }) =>
+          metering(params.groupBy)) as never,
+        listDirectAccess: vi.fn().mockResolvedValue([]),
+        resolveControlledBy: vi.fn().mockResolvedValue(null),
+        quoteSubscription: quoteSubscription as never,
+      },
+    );
+    expect(open.commercial_lines.some((line) => line.kind === 'monthly_subscription')).toBe(false);
+    expect(quoteSubscription).toHaveBeenCalledTimes(1);
+  });
+
   it('rates immutable raw metering centrally and emits a display-ready v1 model', async () => {
     const fetchMetering = vi.fn(async (params: { groupBy: 'service' | 'user' }) =>
       metering(params.groupBy),
@@ -192,12 +259,17 @@ describe('canonical UOA billing statement', () => {
         findUnique: vi.fn().mockResolvedValue({ name: 'Acme', billingOrgResponsibility: null }),
       },
       billingService: {
+        findUnique: vi.fn().mockResolvedValue({ tariffHistoryFromMonth: '2026-01' }),
         findMany: vi.fn().mockResolvedValue([
           { identifier: 'deepwater', name: 'DeepWater' },
           { identifier: 'nessie', name: 'Nessie' },
           { identifier: 'deepsignal', name: 'DeepSignal' },
         ]),
       },
+      billingTariffTermEvent: {
+        findFirst: vi.fn().mockResolvedValue(effectiveTerm),
+      },
+      billingOrganisationContractVersion: { findMany: vi.fn().mockResolvedValue([]) },
       billingCommercialAdjustment: {
         findMany: vi.fn().mockResolvedValue([
           {
@@ -205,7 +277,7 @@ describe('canonical UOA billing statement', () => {
             kind: BillingAdjustmentKind.ADD_ON,
             cadence: BillingAdjustmentCadence.MONTHLY,
             active: true,
-            name: 'Priority support',
+            name: 'Provider cost markup adjustment',
             amountMinor: 1000n,
             currency: 'GBP',
           },
@@ -264,14 +336,12 @@ describe('canonical UOA billing statement', () => {
       product: { identifier: 'deepwater', name: 'DeepWater' },
       period: { key: '2026-07', state: 'open' },
       plan: {
-        display_name: 'Standard · v4',
-        markup_bps: 2_000,
-        markup_display: '20.00%',
+        display_name: 'Monthly subscription',
         monthly_subscription: {
           amount_minor: '2000',
           amount: '20',
           currency: 'GBP',
-          display: '£20',
+          display: '£20.00',
         },
       },
       subscription: {
@@ -288,33 +358,19 @@ describe('canonical UOA billing statement', () => {
       expect.objectContaining({ group_by: 'service', sha256: 'a'.repeat(64) }),
       expect.objectContaining({ group_by: 'user', sha256: 'b'.repeat(64) }),
     ]);
-    expect(statement.usage.totals).toEqual([
-      {
-        usage_unit: 'requests',
-        raw_units: '10',
-        billable_units: '12',
-        display: '12 billable requests (10 raw)',
-      },
-      {
-        usage_unit: 'tokens',
-        raw_units: '150',
-        billable_units: '180',
-        display: '180 billable tokens (150 raw)',
-      },
-    ]);
-    expect(statement.usage.cost_totals).toEqual([
+    expect(statement.usage).not.toHaveProperty('totals');
+    expect(JSON.stringify(statement)).not.toMatch(/raw_units|usage_unit|provider_cost/i);
+    expect(statement.usage.charge_totals).toEqual([
       {
         currency: 'USD',
-        provider_cost: { amount: '3', currency: 'USD', display: '$3' },
-        markup: { amount: '0.6', currency: 'USD', display: '$0.6' },
-        usage_charge: { amount: '3.6', currency: 'USD', display: '$3.6' },
+        usage_charge: { amount: '3.6', currency: 'USD', display: '$3.60' },
       },
     ]);
     expect(statement.usage.user_totals).toEqual([
       expect.objectContaining({
         user_id: 'user_1',
         email: 'ada@example.com',
-        costs: [
+        charges: [
           expect.objectContaining({
             usage_charge: expect.objectContaining({ amount: '1.2' }),
           }),
@@ -323,7 +379,7 @@ describe('canonical UOA billing statement', () => {
       expect.objectContaining({
         user_id: 'user_2',
         email: 'lin@example.com',
-        costs: [
+        charges: [
           expect.objectContaining({
             usage_charge: expect.objectContaining({ amount: '1.2' }),
           }),
@@ -354,7 +410,7 @@ describe('canonical UOA billing statement', () => {
         usage: expect.objectContaining({ amount: '0' }),
         add_ons: expect.objectContaining({ amount: '10' }),
         credits: expect.objectContaining({ amount: '-5' }),
-        total_due: expect.objectContaining({ amount: '25', display: '£25' }),
+        total_due: expect.objectContaining({ amount: '25', display: '£25.00' }),
       },
       {
         currency: 'USD',
@@ -362,7 +418,7 @@ describe('canonical UOA billing statement', () => {
         usage: expect.objectContaining({ amount: '3.6' }),
         add_ons: expect.objectContaining({ amount: '0' }),
         credits: expect.objectContaining({ amount: '0' }),
-        total_due: expect.objectContaining({ amount: '3.6', display: '$3.6' }),
+        total_due: expect.objectContaining({ amount: '3.6', display: '$3.60' }),
       },
     ]);
     expect(statement.actions.find((action) => action.id === 'cancel')).toMatchObject({
@@ -382,6 +438,10 @@ describe('canonical UOA billing statement', () => {
     addFormats(ajv);
     const validate = ajv.compile(billingStatementV1JsonSchema);
     expect(validate(statement), JSON.stringify(validate.errors)).toBe(true);
+    expect(JSON.stringify(statement)).not.toMatch(
+      /markup|provider[_ ]cost|multiplier|billable_units|rated_charge|cost_totals/i,
+    );
+    expect(statement.usage.lines[0]?.customer_charge?.amount).toBe('2.4');
   });
 
   it('offers no action at all while the organisation pays and the caller cannot manage it', async () => {
@@ -390,7 +450,12 @@ describe('canonical UOA billing statement', () => {
         findUnique: vi.fn().mockResolvedValue({ name: 'Acme', billingOrgResponsibility: null }),
       },
       billingTariff: { findUnique: vi.fn().mockResolvedValue({ name: 'Standard' }) },
-      billingService: { findMany: vi.fn().mockResolvedValue([]) },
+      billingService: {
+        findMany: vi.fn().mockResolvedValue([]),
+        findUnique: vi.fn().mockResolvedValue({ tariffHistoryFromMonth: '2026-01' }),
+      },
+      billingTariffTermEvent: { findFirst: vi.fn().mockResolvedValue(effectiveTerm) },
+      billingOrganisationContractVersion: { findMany: vi.fn().mockResolvedValue([]) },
       billingCommercialAdjustment: { findMany: vi.fn().mockResolvedValue([]) },
       teamMember: { findMany: vi.fn().mockResolvedValue([]) },
     };

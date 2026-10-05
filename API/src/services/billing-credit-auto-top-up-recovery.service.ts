@@ -46,6 +46,7 @@ type RecoveryAttempt = {
   appKeyId: string;
   stripePaymentIntentId: string | null;
   paymentAmountMinor: bigint;
+  currency: string;
   failureCode: string | null;
   status: BillingCreditAutoTopUpAttemptStatus;
   stateWebhookEventId: string | null;
@@ -74,7 +75,8 @@ function assertRecoveryIntent(
     stripeExternalId(intent.customer) !== context.customer.stripeCustomerId ||
     stripeExternalId(intent.payment_method) !== attempt.consentRevision.stripePaymentMethodId ||
     exactMinor(intent.amount) !== attempt.paymentAmountMinor ||
-    requireUsd(intent.currency) !== 'USD'
+    attempt.currency !== 'USD' ||
+    requireUsd(intent.currency) !== attempt.currency
   ) {
     throw new AppError('INTERNAL', 502, errorCode);
   }

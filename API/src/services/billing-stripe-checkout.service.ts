@@ -1,6 +1,8 @@
 import { requireIdentityEmail } from './entity-lifecycle.service.js';
 import {
   BillingCollectionMode,
+  BillingMonthlyChargeBasis,
+  BillingSeatPolicy,
   BillingTariffMode,
   MembershipStatus,
   type PrismaClient,
@@ -17,6 +19,7 @@ import {
   BILLING_CUSTOMER_ACTION,
 } from './billing-customer-action-intent.service.js';
 import {
+  customerBillingTariff,
   resolveEffectiveTariffContext,
   type EffectiveTariffPayload,
 } from './billing-entitlement.service.js';
@@ -49,6 +52,7 @@ type CheckoutRequest = {
   userId: string;
   successUrl: string;
   cancelUrl: string;
+  fixedSeatQuantity?: number | null;
 };
 
 const CHECKOUT_LEASE_MS = 10 * 60 * 1000;
@@ -74,7 +78,7 @@ function openSessionResult(session: Stripe.Checkout.Session, payload: EffectiveT
     checkout_session_id: session.id,
     checkout_url: session.url,
     expires_at: new Date(session.expires_at * 1000).toISOString(),
-    tariff: payload.tariff,
+    tariff: customerBillingTariff(payload.tariff),
   };
 }
 
@@ -213,6 +217,14 @@ export async function createStripeCheckoutSession(
   ) {
     throw new AppError('INTERNAL', 500, 'STRIPE_TARIFF_MISMATCH');
   }
+  const fixedSeatQuantity = params.request.fixedSeatQuantity ?? null;
+  const fixedSeats = details.tariff.monthlyChargeBasis === BillingMonthlyChargeBasis.PER_SEAT &&
+    details.tariff.seatPolicy === BillingSeatPolicy.FIXED;
+  if ((fixedSeats && (!Number.isSafeInteger(fixedSeatQuantity) || fixedSeatQuantity === null ||
+    fixedSeatQuantity < 1 || fixedSeatQuantity > 1_000_000)) ||
+    (!fixedSeats && fixedSeatQuantity !== null)) {
+    throw new AppError('BAD_REQUEST', 400, 'STRIPE_FIXED_SEAT_QUANTITY_INVALID');
+  }
   await (deps?.authorizeAction ?? authorizeBillingCustomerAction)(
     {
       credential: params.credential,
@@ -232,6 +244,7 @@ export async function createStripeCheckoutSession(
         scope_key: selectedScope.scopeKey,
         success_url_digest: successUrlDigest,
         cancel_url_digest: cancelUrlDigest,
+        ...(fixedSeatQuantity === null ? {} : { fixed_seat_quantity: fixedSeatQuantity }),
       },
     },
     { prisma },
@@ -294,6 +307,7 @@ export async function createStripeCheckoutSession(
       scope: selectedScope,
       successUrlDigest,
       cancelUrlDigest,
+      fixedSeatQuantity,
     });
     const recovered = await reconcileStripeCheckoutLease(
       { checkout, customerStripeId: customer.stripeCustomerId, account, now },
@@ -320,6 +334,7 @@ export async function createStripeCheckoutSession(
       requestedByUserId: payload.subject.user_id,
       successUrlDigest,
       cancelUrlDigest,
+      fixedSeatQuantity,
       leaseExpiresAt: new Date(now.getTime() + CHECKOUT_LEASE_MS),
     };
     for (let attempt = 0; !checkout && attempt < 3; attempt += 1) {
@@ -347,6 +362,7 @@ export async function createStripeCheckoutSession(
           scope: selectedScope,
           successUrlDigest,
           cancelUrlDigest,
+          fixedSeatQuantity,
         });
         const recovered = await reconcileStripeCheckoutLease(
           { checkout, customerStripeId: customer.stripeCustomerId, account, now },
@@ -389,7 +405,8 @@ export async function createStripeCheckoutSession(
       billing_address_collection: 'required',
       payment_method_collection: 'always',
       line_items: [
-        ...(tariffPrice.stripeMonthlyPriceId
+        ...(details.tariff.monthlyChargeBasis !== BillingMonthlyChargeBasis.PER_SEAT &&
+          tariffPrice.stripeMonthlyPriceId
           ? [{ price: tariffPrice.stripeMonthlyPriceId, quantity: 1 }]
           : []),
         { price: catalog.stripeUsagePriceId },
@@ -405,6 +422,7 @@ export async function createStripeCheckoutSession(
           uoa_scope_key: selectedScope.scopeKey,
           uoa_stripe_account_id: account.stripeAccountId,
           uoa_stripe_mode: account.livemode ? 'live' : 'test',
+          ...(fixedSeatQuantity === null ? {} : { uoa_fixed_seat_quantity: String(fixedSeatQuantity) }),
         },
       },
     },

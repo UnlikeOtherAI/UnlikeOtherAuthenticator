@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "UOA BillingCreditsV1 consumer API",
-    "version": "1.0.0",
+    "version": "2.0.0",
     "description": "Exact customer-facing shared team credits API. UOA returns display-ready values and capabilities; products never calculate balances, conversion, privacy filtering, or authorization."
   },
   "paths": {
@@ -864,7 +864,7 @@
                     "properties": {
                       "credits": {
                         "type": "string",
-                        "pattern": "^(0|[1-9][0-9]*)$"
+                        "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$"
                       },
                       "display": {
                         "type": "string"
@@ -880,7 +880,7 @@
                         "properties": {
                           "amount": {
                             "type": "string",
-                            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$"
+                            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$"
                           },
                           "currency": {
                             "const": "USD"
@@ -903,7 +903,7 @@
                     "properties": {
                       "credits": {
                         "type": "string",
-                        "pattern": "^(0|[1-9][0-9]*)$"
+                        "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$"
                       },
                       "display": {
                         "type": "string"
@@ -919,7 +919,7 @@
                         "properties": {
                           "amount": {
                             "type": "string",
-                            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$"
+                            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$"
                           },
                           "currency": {
                             "const": "USD"
@@ -942,7 +942,7 @@
                     "properties": {
                       "credits": {
                         "type": "string",
-                        "pattern": "^(0|[1-9][0-9]*)$"
+                        "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$"
                       },
                       "display": {
                         "type": "string"
@@ -958,7 +958,7 @@
                         "properties": {
                           "amount": {
                             "type": "string",
-                            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$"
+                            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$"
                           },
                           "currency": {
                             "const": "USD"
@@ -1016,7 +1016,7 @@
                           "properties": {
                             "credits": {
                               "type": "string",
-                              "pattern": "^(0|[1-9][0-9]*)$"
+                              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$"
                             },
                             "display": {
                               "type": "string"
@@ -1032,7 +1032,7 @@
                               "properties": {
                                 "amount": {
                                   "type": "string",
-                                  "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$"
+                                  "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$"
                                 },
                                 "currency": {
                                   "const": "USD"
@@ -1055,7 +1055,7 @@
                           "properties": {
                             "credits": {
                               "type": "string",
-                              "pattern": "^(0|[1-9][0-9]*)$"
+                              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$"
                             },
                             "display": {
                               "type": "string"
@@ -1071,7 +1071,7 @@
                               "properties": {
                                 "amount": {
                                   "type": "string",
-                                  "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$"
+                                  "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$"
                                 },
                                 "currency": {
                                   "const": "USD"
@@ -1112,7 +1112,7 @@
                                 "properties": {
                                   "credits": {
                                     "type": "string",
-                                    "pattern": "^(0|[1-9][0-9]*)$"
+                                    "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$"
                                   },
                                   "display": {
                                     "type": "string"
@@ -1128,7 +1128,7 @@
                                     "properties": {
                                       "amount": {
                                         "type": "string",
-                                        "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$"
+                                        "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$"
                                       },
                                       "currency": {
                                         "const": "USD"
@@ -1367,7 +1367,7 @@
                       "properties": {
                         "credits": {
                           "type": "string",
-                          "pattern": "^[1-9][0-9]*$"
+                          "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]{1,6})?|0\\.(?=[0-9]{1,6}$)[0-9]*[1-9][0-9]*)$"
                         },
                         "display": {
                           "type": "string"
@@ -1383,7 +1383,7 @@
                           "properties": {
                             "amount": {
                               "type": "string",
-                              "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]{1,8})?|0\\.(?=[0-9]{1,8}$)[0-9]*[1-9][0-9]*)$"
+                              "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]{1,9})?|0\\.(?=[0-9]{1,9}$)[0-9]*[1-9][0-9]*)$"
                             },
                             "currency": {
                               "const": "USD"
@@ -1406,7 +1406,7 @@
                       "properties": {
                         "credits": {
                           "type": "string",
-                          "pattern": "^-?(0|[1-9][0-9]*)$"
+                          "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$"
                         },
                         "display": {
                           "type": "string"
@@ -1422,7 +1422,7 @@
                           "properties": {
                             "amount": {
                               "type": "string",
-                              "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$"
+                              "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$"
                             },
                             "currency": {
                               "const": "USD"
@@ -1540,7 +1540,7 @@
                     "properties": {
                       "credits": {
                         "type": "string",
-                        "pattern": "^(0|[1-9][0-9]*)$"
+                        "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$"
                       },
                       "display": {
                         "type": "string"
@@ -1556,7 +1556,7 @@
                         "properties": {
                           "amount": {
                             "type": "string",
-                            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$"
+                            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$"
                           },
                           "currency": {
                             "const": "USD"
@@ -1579,7 +1579,7 @@
                     "properties": {
                       "credits": {
                         "type": "string",
-                        "pattern": "^(0|[1-9][0-9]*)$"
+                        "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$"
                       },
                       "display": {
                         "type": "string"
@@ -1595,7 +1595,7 @@
                         "properties": {
                           "amount": {
                             "type": "string",
-                            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$"
+                            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$"
                           },
                           "currency": {
                             "const": "USD"
@@ -1618,7 +1618,7 @@
                     "properties": {
                       "credits": {
                         "type": "string",
-                        "pattern": "^(0|[1-9][0-9]*)$"
+                        "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$"
                       },
                       "display": {
                         "type": "string"
@@ -1634,7 +1634,7 @@
                         "properties": {
                           "amount": {
                             "type": "string",
-                            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$"
+                            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$"
                           },
                           "currency": {
                             "const": "USD"
@@ -1693,7 +1693,7 @@
                           "properties": {
                             "credits": {
                               "type": "string",
-                              "pattern": "^(0|[1-9][0-9]*)$"
+                              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$"
                             },
                             "display": {
                               "type": "string"
@@ -1709,7 +1709,7 @@
                               "properties": {
                                 "amount": {
                                   "type": "string",
-                                  "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$"
+                                  "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$"
                                 },
                                 "currency": {
                                   "const": "USD"
@@ -1732,7 +1732,7 @@
                           "properties": {
                             "credits": {
                               "type": "string",
-                              "pattern": "^(0|[1-9][0-9]*)$"
+                              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$"
                             },
                             "display": {
                               "type": "string"
@@ -1748,7 +1748,7 @@
                               "properties": {
                                 "amount": {
                                   "type": "string",
-                                  "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$"
+                                  "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$"
                                 },
                                 "currency": {
                                   "const": "USD"
@@ -1771,7 +1771,7 @@
                           "properties": {
                             "credits": {
                               "type": "string",
-                              "pattern": "^(0|[1-9][0-9]*)$"
+                              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$"
                             },
                             "display": {
                               "type": "string"
@@ -1787,7 +1787,7 @@
                               "properties": {
                                 "amount": {
                                   "type": "string",
-                                  "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$"
+                                  "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$"
                                 },
                                 "currency": {
                                   "const": "USD"
@@ -1810,7 +1810,7 @@
                           "properties": {
                             "credits": {
                               "type": "string",
-                              "pattern": "^(0|[1-9][0-9]*)$"
+                              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$"
                             },
                             "display": {
                               "type": "string"
@@ -1826,7 +1826,7 @@
                               "properties": {
                                 "amount": {
                                   "type": "string",
-                                  "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$"
+                                  "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$"
                                 },
                                 "currency": {
                                   "const": "USD"
@@ -1972,7 +1972,7 @@
                       "properties": {
                         "credits": {
                           "type": "string",
-                          "pattern": "^[1-9][0-9]*$"
+                          "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]{1,6})?|0\\.(?=[0-9]{1,6}$)[0-9]*[1-9][0-9]*)$"
                         },
                         "display": {
                           "type": "string"
@@ -1988,7 +1988,7 @@
                           "properties": {
                             "amount": {
                               "type": "string",
-                              "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]{1,8})?|0\\.(?=[0-9]{1,8}$)[0-9]*[1-9][0-9]*)$"
+                              "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]{1,9})?|0\\.(?=[0-9]{1,9}$)[0-9]*[1-9][0-9]*)$"
                             },
                             "currency": {
                               "const": "USD"
@@ -2011,7 +2011,7 @@
                       "properties": {
                         "credits": {
                           "type": "string",
-                          "pattern": "^-?(0|[1-9][0-9]*)$"
+                          "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$"
                         },
                         "display": {
                           "type": "string"
@@ -2027,7 +2027,7 @@
                           "properties": {
                             "amount": {
                               "type": "string",
-                              "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$"
+                              "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$"
                             },
                             "currency": {
                               "const": "USD"
@@ -2244,7 +2244,7 @@
             "properties": {
               "credits": {
                 "type": "string",
-                "pattern": "^-?(0|[1-9][0-9]*)$"
+                "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$"
               },
               "display": {
                 "type": "string"
@@ -2260,7 +2260,7 @@
                 "properties": {
                   "amount": {
                     "type": "string",
-                    "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$"
+                    "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$"
                   },
                   "currency": {
                     "const": "USD"
@@ -2344,7 +2344,7 @@
                 "properties": {
                   "credits": {
                     "type": "string",
-                    "pattern": "^(0|[1-9][0-9]*)$"
+                    "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$"
                   },
                   "display": {
                     "type": "string"
@@ -2360,7 +2360,7 @@
                     "properties": {
                       "amount": {
                         "type": "string",
-                        "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$"
+                        "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$"
                       },
                       "currency": {
                         "const": "USD"
@@ -2403,7 +2403,7 @@
                     "properties": {
                       "credits": {
                         "type": "string",
-                        "pattern": "^(0|[1-9][0-9]*)$"
+                        "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$"
                       },
                       "display": {
                         "type": "string"
@@ -2419,7 +2419,7 @@
                         "properties": {
                           "amount": {
                             "type": "string",
-                            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$"
+                            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$"
                           },
                           "currency": {
                             "const": "USD"
@@ -2442,7 +2442,7 @@
                     "properties": {
                       "credits": {
                         "type": "string",
-                        "pattern": "^(0|[1-9][0-9]*)$"
+                        "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$"
                       },
                       "display": {
                         "type": "string"
@@ -2458,7 +2458,7 @@
                         "properties": {
                           "amount": {
                             "type": "string",
-                            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$"
+                            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$"
                           },
                           "currency": {
                             "const": "USD"
@@ -2481,7 +2481,7 @@
                     "properties": {
                       "credits": {
                         "type": "string",
-                        "pattern": "^(0|[1-9][0-9]*)$"
+                        "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$"
                       },
                       "display": {
                         "type": "string"
@@ -2497,7 +2497,7 @@
                         "properties": {
                           "amount": {
                             "type": "string",
-                            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$"
+                            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$"
                           },
                           "currency": {
                             "const": "USD"
@@ -2555,7 +2555,7 @@
                           "properties": {
                             "credits": {
                               "type": "string",
-                              "pattern": "^(0|[1-9][0-9]*)$"
+                              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$"
                             },
                             "display": {
                               "type": "string"
@@ -2571,7 +2571,7 @@
                               "properties": {
                                 "amount": {
                                   "type": "string",
-                                  "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$"
+                                  "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$"
                                 },
                                 "currency": {
                                   "const": "USD"
@@ -2594,7 +2594,7 @@
                           "properties": {
                             "credits": {
                               "type": "string",
-                              "pattern": "^(0|[1-9][0-9]*)$"
+                              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$"
                             },
                             "display": {
                               "type": "string"
@@ -2610,7 +2610,7 @@
                               "properties": {
                                 "amount": {
                                   "type": "string",
-                                  "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$"
+                                  "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$"
                                 },
                                 "currency": {
                                   "const": "USD"
@@ -2651,7 +2651,7 @@
                                 "properties": {
                                   "credits": {
                                     "type": "string",
-                                    "pattern": "^(0|[1-9][0-9]*)$"
+                                    "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$"
                                   },
                                   "display": {
                                     "type": "string"
@@ -2667,7 +2667,7 @@
                                     "properties": {
                                       "amount": {
                                         "type": "string",
-                                        "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$"
+                                        "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$"
                                       },
                                       "currency": {
                                         "const": "USD"
@@ -2708,7 +2708,7 @@
                     "properties": {
                       "credits": {
                         "type": "string",
-                        "pattern": "^(0|[1-9][0-9]*)$"
+                        "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$"
                       },
                       "display": {
                         "type": "string"
@@ -2724,7 +2724,7 @@
                         "properties": {
                           "amount": {
                             "type": "string",
-                            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$"
+                            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$"
                           },
                           "currency": {
                             "const": "USD"
@@ -2747,7 +2747,7 @@
                     "properties": {
                       "credits": {
                         "type": "string",
-                        "pattern": "^(0|[1-9][0-9]*)$"
+                        "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$"
                       },
                       "display": {
                         "type": "string"
@@ -2763,7 +2763,7 @@
                         "properties": {
                           "amount": {
                             "type": "string",
-                            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$"
+                            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$"
                           },
                           "currency": {
                             "const": "USD"
@@ -2786,7 +2786,7 @@
                     "properties": {
                       "credits": {
                         "type": "string",
-                        "pattern": "^(0|[1-9][0-9]*)$"
+                        "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$"
                       },
                       "display": {
                         "type": "string"
@@ -2802,7 +2802,7 @@
                         "properties": {
                           "amount": {
                             "type": "string",
-                            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$"
+                            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$"
                           },
                           "currency": {
                             "const": "USD"
@@ -2861,7 +2861,7 @@
                           "properties": {
                             "credits": {
                               "type": "string",
-                              "pattern": "^(0|[1-9][0-9]*)$"
+                              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$"
                             },
                             "display": {
                               "type": "string"
@@ -2877,7 +2877,7 @@
                               "properties": {
                                 "amount": {
                                   "type": "string",
-                                  "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$"
+                                  "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$"
                                 },
                                 "currency": {
                                   "const": "USD"
@@ -2900,7 +2900,7 @@
                           "properties": {
                             "credits": {
                               "type": "string",
-                              "pattern": "^(0|[1-9][0-9]*)$"
+                              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$"
                             },
                             "display": {
                               "type": "string"
@@ -2916,7 +2916,7 @@
                               "properties": {
                                 "amount": {
                                   "type": "string",
-                                  "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$"
+                                  "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$"
                                 },
                                 "currency": {
                                   "const": "USD"
@@ -2939,7 +2939,7 @@
                           "properties": {
                             "credits": {
                               "type": "string",
-                              "pattern": "^(0|[1-9][0-9]*)$"
+                              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$"
                             },
                             "display": {
                               "type": "string"
@@ -2955,7 +2955,7 @@
                               "properties": {
                                 "amount": {
                                   "type": "string",
-                                  "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$"
+                                  "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$"
                                 },
                                 "currency": {
                                   "const": "USD"
@@ -2978,7 +2978,7 @@
                           "properties": {
                             "credits": {
                               "type": "string",
-                              "pattern": "^(0|[1-9][0-9]*)$"
+                              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$"
                             },
                             "display": {
                               "type": "string"
@@ -2994,7 +2994,7 @@
                               "properties": {
                                 "amount": {
                                   "type": "string",
-                                  "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$"
+                                  "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$"
                                 },
                                 "currency": {
                                   "const": "USD"
@@ -3012,6 +3012,26 @@
                 }
               }
             ]
+          },
+          "billing_status": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "settlement_state",
+              "message"
+            ],
+            "properties": {
+              "settlement_state": {
+                "enum": [
+                  "current",
+                  "pending_reconciliation"
+                ]
+              },
+              "message": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
           },
           "funding_policy": {
             "oneOf": [
@@ -3106,7 +3126,7 @@
                           "properties": {
                             "credits": {
                               "type": "string",
-                              "pattern": "^[1-9][0-9]*$"
+                              "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]{1,6})?|0\\.(?=[0-9]{1,6}$)[0-9]*[1-9][0-9]*)$"
                             },
                             "display": {
                               "type": "string"
@@ -3122,7 +3142,7 @@
                               "properties": {
                                 "amount": {
                                   "type": "string",
-                                  "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]{1,8})?|0\\.(?=[0-9]{1,8}$)[0-9]*[1-9][0-9]*)$"
+                                  "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]{1,9})?|0\\.(?=[0-9]{1,9}$)[0-9]*[1-9][0-9]*)$"
                                 },
                                 "currency": {
                                   "const": "USD"
@@ -3326,7 +3346,7 @@
                         "properties": {
                           "credits": {
                             "type": "string",
-                            "pattern": "^(0|[1-9][0-9]*)$"
+                            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$"
                           },
                           "display": {
                             "type": "string"
@@ -3342,7 +3362,7 @@
                             "properties": {
                               "amount": {
                                 "type": "string",
-                                "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$"
+                                "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$"
                               },
                               "currency": {
                                 "const": "USD"
@@ -3600,7 +3620,7 @@
                           "properties": {
                             "credits": {
                               "type": "string",
-                              "pattern": "^(0|[1-9][0-9]*)$"
+                              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$"
                             },
                             "display": {
                               "type": "string"
@@ -3616,7 +3636,7 @@
                               "properties": {
                                 "amount": {
                                   "type": "string",
-                                  "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$"
+                                  "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$"
                                 },
                                 "currency": {
                                   "const": "USD"
@@ -3669,7 +3689,7 @@
                           "properties": {
                             "credits": {
                               "type": "string",
-                              "pattern": "^[1-9][0-9]*$"
+                              "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]{1,6})?|0\\.(?=[0-9]{1,6}$)[0-9]*[1-9][0-9]*)$"
                             },
                             "display": {
                               "type": "string"
@@ -3685,7 +3705,7 @@
                               "properties": {
                                 "amount": {
                                   "type": "string",
-                                  "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]{1,8})?|0\\.(?=[0-9]{1,8}$)[0-9]*[1-9][0-9]*)$"
+                                  "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]{1,9})?|0\\.(?=[0-9]{1,9}$)[0-9]*[1-9][0-9]*)$"
                                 },
                                 "currency": {
                                   "const": "USD"
@@ -4204,7 +4224,7 @@
                       "properties": {
                         "credits": {
                           "type": "string",
-                          "pattern": "^[1-9][0-9]*$"
+                          "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]{1,6})?|0\\.(?=[0-9]{1,6}$)[0-9]*[1-9][0-9]*)$"
                         },
                         "display": {
                           "type": "string"
@@ -4220,7 +4240,7 @@
                           "properties": {
                             "amount": {
                               "type": "string",
-                              "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]{1,8})?|0\\.(?=[0-9]{1,8}$)[0-9]*[1-9][0-9]*)$"
+                              "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]{1,9})?|0\\.(?=[0-9]{1,9}$)[0-9]*[1-9][0-9]*)$"
                             },
                             "currency": {
                               "const": "USD"
@@ -4243,7 +4263,7 @@
                       "properties": {
                         "credits": {
                           "type": "string",
-                          "pattern": "^-?(0|[1-9][0-9]*)$"
+                          "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$"
                         },
                         "display": {
                           "type": "string"
@@ -4259,7 +4279,7 @@
                           "properties": {
                             "amount": {
                               "type": "string",
-                              "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$"
+                              "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$"
                             },
                             "currency": {
                               "const": "USD"
@@ -4407,7 +4427,7 @@
                       "properties": {
                         "credits": {
                           "type": "string",
-                          "pattern": "^[1-9][0-9]*$"
+                          "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]{1,6})?|0\\.(?=[0-9]{1,6}$)[0-9]*[1-9][0-9]*)$"
                         },
                         "display": {
                           "type": "string"
@@ -4423,7 +4443,7 @@
                           "properties": {
                             "amount": {
                               "type": "string",
-                              "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]{1,8})?|0\\.(?=[0-9]{1,8}$)[0-9]*[1-9][0-9]*)$"
+                              "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]{1,9})?|0\\.(?=[0-9]{1,9}$)[0-9]*[1-9][0-9]*)$"
                             },
                             "currency": {
                               "const": "USD"
@@ -4446,7 +4466,7 @@
                       "properties": {
                         "credits": {
                           "type": "string",
-                          "pattern": "^-?(0|[1-9][0-9]*)$"
+                          "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$"
                         },
                         "display": {
                           "type": "string"
@@ -4462,7 +4482,7 @@
                           "properties": {
                             "amount": {
                               "type": "string",
-                              "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$"
+                              "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$"
                             },
                             "currency": {
                               "const": "USD"
@@ -4590,7 +4610,7 @@
           "conversion": {
             "credits_per_usd": "1000",
             "settlement_currency": "USD",
-            "description": "1,000 credits always equal US$1.00. Usage is accumulated exactly, but only complete credits are deducted."
+            "description": "1,000 credits always equal US$1.00. Usage and balances retain microcredit precision."
           },
           "current_period": {
             "starts_at": "2026-07-01T00:00:00.000Z",

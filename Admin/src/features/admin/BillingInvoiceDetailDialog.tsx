@@ -18,6 +18,7 @@ import {
   useRecordBillingInvoicePaymentMutation,
   useVoidBillingInvoiceMutation,
 } from './billing-contract-queries';
+import { BillingManualCreditNotePanel } from './BillingManualCreditNotePanel';
 
 function nowForInput(): string {
   const date = new Date();
@@ -245,6 +246,8 @@ export function BillingInvoiceDetailDialog({
             <p className="mt-1">{invoice.void_reason ?? 'No reason was recorded.'}</p>
           </div>
         ) : null}
+
+        <BillingManualCreditNotePanel invoice={invoice} />
 
         <div className="grid gap-4 text-sm sm:grid-cols-2">
           <div className="rounded-xl border border-gray-200 p-4">

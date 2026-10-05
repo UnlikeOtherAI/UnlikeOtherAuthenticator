@@ -73,9 +73,42 @@ export async function installFixtures(page: Page) {
     org.teams.map((team) => ({ ...team, orgName: org.name })),
   );
   const billing = createBillingFixtures();
-  const invoices: unknown[] = [billing.invoice];
+  const creditNoteInvoice = structuredClone(billing.invoice);
+  creditNoteInvoice.id = 'invoice-credit-note';
+  creditNoteInvoice.invoice_number = 'UOA-2026-000002';
+  creditNoteInvoice.lines = creditNoteInvoice.lines.slice(0, 1);
+  const noteLine = creditNoteInvoice.lines[0];
+  const notePayment = creditNoteInvoice.payments[0];
+  if (!noteLine || !notePayment) throw new Error('Credit note fixture source missing');
+  creditNoteInvoice.totals.subtotal = noteLine.price;
+  creditNoteInvoice.totals.total = noteLine.price;
+  creditNoteInvoice.totals.paid = noteLine.price;
+  notePayment.amount = noteLine.price;
+  creditNoteInvoice.actions.payment_limits.refund = noteLine.price;
+  const invoices: unknown[] = [billing.invoice, creditNoteInvoice];
+  let creditNote: Record<string, unknown> | null = null;
+  const taxPolicies: Array<Record<string, unknown>> = [];
   const calculations: unknown[] = [];
   const payments: unknown[] = [];
+  const paidUsageExceptions: Array<Record<string, unknown>> = [{
+    dispatch_id: 'dispatch-overbound-1', receipt_id: 'le_dispatch-overbound-1',
+    status: 'HELD_OPERATOR_RECONCILIATION', evidence_digest: 'a'.repeat(64),
+    product: 'deepwater', raw_cost_actual: '0.003000000000000000',
+    raw_cost_bound: '0.002000000000000000', max_collectible_microcredits: '200',
+    currency: 'USD', created_at: now, gross_rated_microcredits: null,
+    collectible_microcredits: null, waived_microcredits: null,
+  }];
+  const paidUsageDecisions: Array<Record<string, unknown>> = [];
+  const activations: unknown[] = [];
+  const seatCapacityWrites: unknown[] = [];
+  const seatSubscription = {
+    id: 'seat-fixture-1', service_id: 'billing-1',
+    organisation: { id: 'o1', name: 'Acme Research' }, team: null,
+    source: 'manual' as const, seat_policy: 'fixed' as const,
+    seat_charge_timing: 'full_month' as const, baseline_member_count: 4,
+    activated_at: now, ended_at: null, current_capacity: 5,
+    capacity_revisions: [{ id: 'revision-1', quantity: 5, effective_at: now }],
+  };
   const memberships: unknown[] = [];
   let paymentFailures = 1;
   const native = structuredClone(nativeApp);
@@ -98,6 +131,71 @@ export async function installFixtures(page: Page) {
       route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
     if (path.startsWith('/lifecycle/')) return lifecycle.handle(route, path);
     if (req.method() !== 'GET') {
+      if (path === '/billing/paid-usage-exceptions/dispatch-overbound-1/write-off'
+        && req.method() === 'POST') {
+        const input = req.postDataJSON();
+        if (input.evidence_digest !== 'a'.repeat(64)
+          || !/^[a-f0-9]{64}$/.test(input.idempotency_key)
+          || typeof input.reason !== 'string' || input.reason.trim().length < 12) {
+          unexpected.push('Invalid paid usage write-off');
+          return json({ error: 'Invalid write-off' }, 400);
+        }
+        paidUsageDecisions.push(input);
+        paidUsageExceptions.length = 0;
+        return json({ dispatch_id: 'dispatch-overbound-1', receipt_id: 'le_dispatch-overbound-1',
+          status: 'WRITTEN_OFF', evidence_digest: input.evidence_digest,
+          gross_rated_microcredits: '300', collectible_microcredits: '200',
+          waived_microcredits: '100' });
+      }
+      if (path === '/billing/credit-invoice-tax-policies' && req.method() === 'POST') {
+        const input = req.postDataJSON();
+        if (input.account_id !== 'account-1' ||
+            input.issuer_profile_id !== billing.issuer.id ||
+            input.jurisdiction_country !== 'GB' ||
+            input.treatment !== 'INCLUSIVE_RATE' ||
+            input.rate_bps !== 2000 ||
+            input.legal_basis_reference !== 'Verified UK VAT treatment' ||
+            input.effective_from !== '2026-10-04T00:00:00Z') {
+          unexpected.push('Invalid tax policy payload');
+          return json({ error: 'Invalid tax policy' }, 400);
+        }
+        const created = {
+          ...input, id: 'tax-policy-1', version: 1, created_at: now,
+          created_by_email: 'operator@example.test',
+        };
+        taxPolicies.push(created);
+        return json(created, 201);
+      }
+      if (path === '/billing/seat-subscriptions/seat-fixture-1/capacity') {
+        const input = req.postDataJSON();
+        seatCapacityWrites.push(input);
+        if (input.quantity !== 6) return json({ error: 'Invalid capacity' }, 400);
+        seatSubscription.current_capacity = input.quantity;
+        return json({ id: 'revision-2', quantity: input.quantity, effective_at: now });
+      }
+      if (path === '/billing/contracts/contract-1/versions/version-2/activate'
+          && req.method() === 'POST') {
+        const input = req.postDataJSON();
+        activations.push(input);
+        const draft = billing.contracts[0]?.versions[1];
+        if (!draft || input.services?.length !== 1
+            || input.services[0].service_id !== 'billing-1') {
+          unexpected.push('Invalid future contract activation');
+          return json({ error: 'Invalid activation' }, 400);
+        }
+        draft.actions = { activation_state: 'scheduled', activate: false };
+        draft.services = [{ service_id: 'billing-1', service_identifier: 'deepwater',
+          service_name: 'Fixture product', tariff_id: 'future-tariff',
+          monthly_amount_minor: input.services[0].monthly_amount_minor,
+          monthly_charge_basis: input.services[0].monthly_charge_basis,
+          seat_policy: input.services[0].seat_policy ?? null,
+          seat_charge_timing: input.services[0].seat_charge_timing ?? null,
+          usage_payment_mode: input.services[0].usage_payment_mode,
+          fixed_seat_quantity: input.services[0].fixed_seat_quantity ?? null,
+          monthly_price: { amount_minor: input.services[0].monthly_amount_minor,
+            amount: '60', currency: 'USD', display: '$60.00' } }];
+        return json(draft);
+      }
       if (path === '/users/u101/teams' && req.method() === 'POST') {
         const input = req.postDataJSON();
         memberships.push(input);
@@ -126,6 +224,27 @@ export async function installFixtures(page: Page) {
             payment_limits: { payment: null, refund: null, write_off: null } } };
         invoices.push(draft);
         return json(draft);
+      }
+      if (path === '/billing/invoices/invoice-credit-note/credit-note/prepare') {
+        const reason = req.postDataJSON()?.reason;
+        if (typeof reason !== 'string' || !reason.trim()) {
+          unexpected.push('Invalid credit note reason');
+          return json({ error: 'Invalid credit note reason' }, 400);
+        }
+        creditNote = { id: 'note-1', original_invoice_id: 'invoice-credit-note',
+          status: 'pending', number: null, issued_at: null,
+          net_credit_minor: '12500', tax_credit_minor: '0',
+          total_credit_minor: '12500', currency: 'USD', reason };
+        return json({ credit_note: creditNote });
+      }
+      if (path === '/billing/credit-notes/note-1/issue') {
+        if (!creditNote) {
+          unexpected.push('Missing prepared credit note');
+          return json({ error: 'Missing credit note' }, 404);
+        }
+        creditNote = { ...creditNote, status: 'issued', number: 'CN-UOA-2026-000001',
+          issued_at: '2026-10-04T00:00:00.000Z' };
+        return json({ credit_note: creditNote });
       }
       if (path === '/billing/invoices/invoice-1/payments') {
         payments.push(req.postDataJSON());
@@ -217,9 +336,21 @@ export async function installFixtures(page: Page) {
           updated_at: now,
         },
       ]);
+    if (path === '/billing/services/billing-1/seat-subscriptions')
+      return json([seatSubscription]);
     if (path === '/billing/contracts') return json(billing.contracts);
     if (path === '/billing/invoice-issuer-profiles') return json([billing.issuer]);
+    if (path === '/billing/credit-invoice-tax-policies') return json({
+      accounts: [{ id: 'account-1', stripe_account_id: 'acct_fixture',
+        livemode: false }],
+      policies: taxPolicies,
+    });
     if (path === '/billing/invoices') return json(invoices);
+    if (path === '/billing/cycle-corrections') return json({ corrections: [] });
+    if (path === '/billing/invoices/invoice-credit-note/credit-note')
+      return json({ credit_note: creditNote });
+    if (path === '/billing/paid-usage-exceptions')
+      return json({ exceptions: paidUsageExceptions, has_more: false });
     if (path.endsWith('/invoice-profile'))
       return json({ error: 'No synthetic buyer profile' }, 404);
     if (path === '/bans') return json([...data.bans.emails, ...data.bans.ips]);
@@ -234,6 +365,10 @@ export async function installFixtures(page: Page) {
     native,
     calculations,
     payments,
+    paidUsageDecisions,
+    activations,
+    seatCapacityWrites,
+    taxPolicies,
     memberships,
     failNextNativeSave: () => {
       nativeFailures = 1;

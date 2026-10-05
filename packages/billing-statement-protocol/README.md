@@ -2,13 +2,18 @@
 
 Public, open-source-safe consumer contracts for UOA's display-ready
 `BillingStatementV1`, `BillingStatementV2`, shared `BillingCreditsV1`, recurring
-add-ons, and customer billing actions.
+add-ons, customer billing actions, monthly billing cycles, and actual charge invoices.
 
-V1 remains frozen for existing consumers. V2 adds a complete team-wide
-connected-service portfolio, already aggregated and labelled by UOA, while
-retaining the same UOA-owned commercial statement. Products render either
-version without calculating usage shares, customer prices, markup, totals, or
-cancellation choices.
+Package 5.0.0 exposes customer charges, exact consumed credits, and monthly
+subscription/seat terms. Statement V1/V2 and cycle responses omit raw token,
+request, cache, reasoning, modality and provider-cost dimensions. Those facts
+remain private UOA/Ledger rating and reconciliation evidence. V2 no longer
+exports a connected-service raw usage portfolio. Products render UOA-authored
+balances and charges without calculating prices or usage units. Strict
+consumers must update validators and field mappings before producer rollout.
+`plan.monthly_subscription.amount_role` distinguishes a flat monthly total
+from a per-seat monthly unit price; a unit price is never an invoice total
+without a frozen seat quantity and billing period.
 
 The action contract covers the normalized hosted redirect response,
 cancellation selection, exact preview and `confirm_action`, confirmation
@@ -44,6 +49,12 @@ The public HTTP artifacts are:
 - `/schemas/billing-recurring-addons-v1.json`
 - `/schemas/billing-recurring-addons-v1.example.json`
 - `/schemas/billing-recurring-addons-v1.openapi.json`
+- `/schemas/billing-cycles-v2.json`
+- `/schemas/billing-cycles-v2.example.json`
+- `/schemas/billing-cycles-v2.openapi.json`
+- `/schemas/billing-customer-invoices-v1.json`
+- `/schemas/billing-customer-invoices-v1.example.json`
+- `/schemas/billing-customer-invoices-v1.openapi.json`
 
 TypeScript consumers use the package root:
 
@@ -56,6 +67,8 @@ import {
   type BillingRecurringAddonsV1,
   type BillingStatementV1,
   type BillingStatementV2,
+  type BillingCycleDetailV2,
+  billingCycleDetailV2JsonSchema,
   billingCreditsV1JsonSchema,
   billingCancellationPreviewV1JsonSchema,
   billingRecurringAddonProtocolV1JsonSchema,
@@ -64,18 +77,57 @@ import {
 } from '@unlikeotherai/billing-statement-protocol';
 ```
 
+`POST /billing/v1/cycles/list` returns product-scoped monthly summaries for the
+selected team, plus organisation-wide subscription cycles to verified
+organisation billing managers. `scope.cycle_scope` identifies which kind;
+`scope.payer_scope` separately identifies who pays. An organisation-paid team
+cycle still contains only the selected team's customer charges and consumed credits. A nullable
+`scope.team_id` denotes only the organisation-wide subscription cycle, never
+a wildcard over other teams. The cursor includes both month and cycle scope
+so both rows in one month remain reachable.
+`POST /billing/v1/cycles/detail` returns frozen subscription seat evidence,
+customer usage charges, consumed credits, actual payment documents, and explicit later
+adjustments. Available documents carry exact server-authored POST actions for
+`/billing/v1/cycles/download`; clients relay them unchanged. An open preview
+never has a final invoice download. Consumed prepaid credits reduce outstanding
+usage liability and do not create a second payment invoice. Public payloads
+contain customer charges and seat prices, never provider cost or markup.
+
+`POST /billing/v1/invoices/list` groups accepted charges and actual issued documents by
+their immutable charge month. Each row carries `payments_in_charge_month` so an
+invoice paid in several months never counts its full legal total as fresh cash
+in each month. `/detail` returns the verified payment history and accepts an
+optional `charge_month` to preserve the selected list context. A prepaid
+payment uses its accepted payment time even if legal issuance finishes in the
+next month. Each successful prepaid purchase, including every automatic
+recharge, has its own invoice; reading this API never creates one.
+`/detail` contains legal customer charge lines only, and `/download` returns
+only verified immutable PDF bytes after fresh payer authorization. Usage and
+credit consumption remain in the separate cycle/account view and are never
+re-invoiced when prepaid credits are spent. A multi-product legal invoice stays
+in UOA organisation finance; a single-product credential never relays its whole
+PDF or other-product lines.
+An accepted payment awaiting legal issuer or tax evidence appears as
+`pending_document`: the actual charged amount and purchased credits remain
+visible, while number, issuance time, tax, and PDF download are unavailable.
+Invoice totals use positive deductions: gross less credits applied and voided
+amount equals due; due less actual paid and written-off amounts equals
+outstanding. The original legal PDF and charge lines stay immutable after a
+void or later payment event.
+Refunds and disputes are positive, separately named verified effects; the
+original accepted payment and legal PDF remain visible. A partial effect has
+its own status and never becomes an invented legal credit note.
+A verified manual cancellation credit note may include positive
+`totals.customer_credit_due`: accepted original cash less actual refunds.
+Its `gross_total` describes canceled charges, not a promise to repay that
+gross amount. The field is absent when no repayment obligation is established.
+
 New consumers request `POST /billing/v2/customer-statement`. Its
-`connected_service_usage` model contains display-ready totals for every
-metered service in the exact team and month, the service's origin-product
-shares, and per-user shares. UOA derives the requested product's rating and all
-of those totals from one pinned user-grouped Ledger portfolio snapshot.
-Other-service totals are explanatory only and never become line items on the
-requested product's commercial statement.
-Indirect use such as Nessie calling DeepWater can appear as a Nessie origin
-share, but it is not direct DeepWater access and cannot create a related
-cancellation option. A null legacy origin is displayed as `Unattributed
-origin`; it does not create a service or cancellation option. Frozen V1 uses
-the string `unattributed` only in its display-only attribution field.
+`usage.lines` and `usage.user_totals` contain customer charges only, rated by
+UOA from a pinned private Ledger portfolio. The public statement does not
+expose raw usage units, call counts, provider costs, or attribution shares.
+Organisation roll-ups retain per-team monetary totals only for an authorised
+organisation billing manager.
 
 Upgrade, portal, and cancellation controls continue to use the v1 action
 contract. Products whitelist the supplied action ID/path pair, proxy the
@@ -84,19 +136,17 @@ subscription state.
 
 `BillingCreditsV1` displays the exact team's one shared cross-service balance
 under the required heading `Remaining credits`. The fixed public conversion is
-1,000 credits = US$1.00. Credit quantities are always whole integers. UOA keeps
-sub-credit usage in its exact internal rated remainder and deducts it only when
-the cumulative service/user amount reaches another complete credit. The USD
-equivalent remains an exact decimal derived from the whole-credit quantity.
+1,000 credits = US$1.00. Credit quantities retain up to six fractional digits (microcredits), and the
+USD equivalent retains up to nine fractional digits. UOA deducts the exact
+settled microcredit amount. Display currency can round to cents while machine
+amounts remain exact.
 UOA supplies fixed top-up offers and every complete auto-top-up action. The
 consumer relays the frozen action body unchanged and never chooses an offer or
 option by rebuilding its subject.
 
-`BillingCreditsV1` is an unreleased, coordinated launch contract. Its four
-initial consumers must update from the earlier unpublished draft together. The
-privacy-hardening shape in this package supersedes that draft before the first
-release, so the protocol remains version `1.0.0`; this is not presented as a
-compatible minor update to a published contract.
+Credit protocol 2.0.0 callers opt in to UOA's reconciliation status with
+`x-uoa-billing-credits-protocol: 2.0.0`. Older consumers receive the legacy
+shape and a reconciliation hold until they negotiate the status revision.
 
 Both credits and recurring add-ons use manager/member discriminated unions.
 Managers can receive exact-user breakdowns, payment-method display data, and
@@ -133,12 +183,32 @@ never replaces them, so a consumer that predates it cannot read
 organisation-wide numbers as if they were the team's.
 
 The consumer-action contract also publishes the checkout-session and
-portal-session request and response envelopes (1.3.0). The bodies still come
-from UOA inside a statement action's `request.body`; publishing their shape
-lets a product validate what it relays and what it receives, instead of
-hand-writing a parallel schema.
+portal-session request and response envelopes. The bodies come from UOA inside
+a statement action's `request.body`. For a fixed-seat plan only, the product
+adds the customer's explicitly selected `fixed_seat_quantity` (integer 1 to
+1,000,000) before relaying checkout. UOA checks whether that field is required
+for the plan. All other body fields remain UOA-authored.
+
+Customer cycles show subscription seats, rated usage charges and credits.
+An actual invoice void appends a `voided` cycle with zero current liability;
+the earlier issued invoice and its original PDF remain immutable history.
+`usage_lines` contain `id`, customer-facing `label`, `customer_charge`, and
+`credits_consumed` and, when verified, `credits.waived`; no raw usage dimensions
+or provider/service pricing keys.
+Raw token counts, reasoning, cache and modality evidence remain private to
+Ledger and UOA reconciliation and never enter customer JSON or downloads.
+Credit budgets are a separate customer credit-only contract; their policies
+and spent/held/remaining amounts never expose token units or provider costs.
 
 Run `pnpm generate` after an intentional protocol change. Build and test fail if
 the committed JSON Schema, example, or OpenAPI artifact drifts from the typed
-source. Breaking protocol changes require a new schema version and package
-major; additive non-breaking package changes use normal semantic versioning.
+source. Breaking protocol changes require a protocol major and package major. The
+`schema_version` integer identifies the stable v1/v2 route family; each family
+has an independent semantic protocol version.
+
+# Cycle pagination
+
+The first page may contain an open preview before persisted cycles. Its
+`YYYY-MM:preview` cursor resumes at the first persisted team or organisation
+cycle, including one in that same month. Persisted pages use the team or
+organisation cursor and never repeat the preview.

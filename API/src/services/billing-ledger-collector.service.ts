@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { importJWK, SignJWT, type JWK, type KeyLike } from 'jose';
-import { z } from 'zod';
+import type { z } from 'zod';
 
 import { getAuthServiceIdentifier, getEnv, getPublicBaseUrl, type Env } from '../config/env.js';
 import { AppError } from '../utils/errors.js';
@@ -16,142 +16,10 @@ import type {
   RawMeteringLine,
 } from './billing-metering.types.js';
 import { fetchLedgerJsonResponse } from './billing-ledger-http.service.js';
-
-const ProductSchema = z.enum(['nessie', 'deepwater', 'deepsignal', 'deeptest', 'docgen']);
-const IntegerSchema = z.string().regex(/^(0|[1-9][0-9]*)$/);
-const DecimalSchema = z.string().regex(/^-?(0|[1-9][0-9]*)(\.[0-9]+)?$/);
-const MonthSchema = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/);
-const CurrencySchema = z.string().regex(/^[A-Z]{3}$/);
-const AttributionProductSchema = z.string().trim().min(1).max(128);
-const ProductDimensionsSchema = z
-  .object({
-    billingProduct: ProductSchema,
-    callerProduct: AttributionProductSchema.nullable(),
-    originProduct: AttributionProductSchema.nullable(),
-  })
-  .strict();
-
-const UsageRowSchema = ProductDimensionsSchema.extend({
-  serviceId: z.string().trim().min(1).max(512),
-  usageUnit: z.string().trim().min(1).max(512),
-  calls: IntegerSchema,
-  rawProviderUsage: z
-    .object({
-      unitsIn: IntegerSchema,
-      unitsCachedIn: IntegerSchema,
-      unitsOut: IntegerSchema,
-    })
-    .strict(),
-}).strict();
-
-const CostFieldsSchema = {
-  costProvenance: z.string().trim().min(1).max(512),
-  rawProviderCurrency: CurrencySchema.nullable(),
-  rawProviderEstimatedCost: DecimalSchema.nullable(),
-  rawProviderActualCost: DecimalSchema.nullable(),
-  rawProviderSelectedCost: DecimalSchema.nullable(),
-} as const;
-
-const CostRowSchema = ProductDimensionsSchema.extend({
-  serviceId: z.string().trim().min(1).max(512),
-  calls: IntegerSchema,
-  ...CostFieldsSchema,
-}).strict();
-
-const BreakdownRowSchema = UsageRowSchema.extend({
-  dimension: z.string().trim().min(1).max(512).nullable(),
-  ...CostFieldsSchema,
-}).strict();
-
-const MeteringScopeSchema = z
-  .object({
-    organizationId: z.string().trim().min(1).max(256),
-    teamId: z.string().trim().min(1).max(256).nullable(),
-    userId: z.string().trim().min(1).max(256).nullable(),
-    month: MonthSchema.nullable(),
-    startsAt: z.string().datetime(),
-    endsAt: z.string().datetime(),
-  })
-  .strict();
-
-const MeteringPortfolioScopeSchema = z
-  .object({
-    organizationId: z.string().trim().min(1).max(256),
-    teamId: z.string().trim().min(1).max(256),
-    month: MonthSchema,
-    startsAt: z.string().datetime(),
-    endsAt: z.string().datetime(),
-  })
-  .strict();
-
-const MeteringTotalsSchema = z
-  .object({
-    calls: IntegerSchema,
-    usageByService: z.array(UsageRowSchema),
-    costs: z.array(CostRowSchema),
-  })
-  .strict();
-
-export const LedgerMeteringUsageSchema = z
-  .object({
-    schemaVersion: z.literal(1),
-    product: ProductSchema,
-    scope: MeteringScopeSchema,
-    totals: MeteringTotalsSchema,
-    groupBy: z.enum(['service', 'user']),
-    breakdown: z.array(BreakdownRowSchema),
-    snapshot: z
-      .object({
-        cursor: z.string().regex(/^mus_[A-Za-z0-9_-]{32}$/),
-        id: z.string().regex(/^mus_[A-Za-z0-9_-]{32}$/),
-        capturedAt: z.string().datetime(),
-        immutable: z.literal(true),
-      })
-      .strict(),
-  })
-  .strict()
-  .superRefine((value, context) => {
-    if (value.snapshot.cursor !== value.snapshot.id) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['snapshot', 'id'],
-        message: 'snapshot id must equal cursor',
-      });
-    }
-  });
-
-export type LedgerMeteringUsage = z.infer<typeof LedgerMeteringUsageSchema>;
-
-export const LedgerMeteringPortfolioSchema = z
-  .object({
-    schemaVersion: z.literal(1),
-    contract: z.literal('metering-portfolio-v1'),
-    perspectiveProduct: ProductSchema,
-    scope: MeteringPortfolioScopeSchema,
-    totals: MeteringTotalsSchema,
-    groupBy: z.enum(['service', 'user']),
-    breakdown: z.array(BreakdownRowSchema),
-    snapshot: z
-      .object({
-        cursor: z.string().regex(/^mup_[A-Za-z0-9_-]{32}$/),
-        id: z.string().regex(/^mup_[A-Za-z0-9_-]{32}$/),
-        capturedAt: z.string().datetime(),
-        immutable: z.literal(true),
-      })
-      .strict(),
-  })
-  .strict()
-  .superRefine((value, context) => {
-    if (value.snapshot.cursor !== value.snapshot.id) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['snapshot', 'id'],
-        message: 'snapshot id must equal cursor',
-      });
-    }
-  });
-
-export type LedgerMeteringPortfolio = z.infer<typeof LedgerMeteringPortfolioSchema>;
+import {
+  BreakdownRowSchema, LedgerMeteringPortfolioSchema, LedgerMeteringUsageSchema,
+  type LedgerMeteringPortfolio, type LedgerMeteringUsage,
+} from './billing-ledger-metering-schema.service.js';
 
 function billingMonthBounds(billingMonth: string): { startsAt: string; endsAt: string } {
   const match = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(billingMonth);
@@ -241,7 +109,15 @@ async function signServiceAssertion(
     organisationId: string;
     teamId: string | null;
     billingMonth: string;
-    view?: 'team_portfolio';
+    view?: 'team_portfolio' | 'paid_receipt_set' | 'budget_receipt_set';
+    excludeDispatchId?: string;
+    excludeRequestFingerprint?: string;
+    excludeTeamId?: string;
+    budgetScopeType?: 'organization';
+    nativeScopeType?: 'project' | 'run';
+    nativeScopeId?: string;
+    nativeBornAt?: string;
+    nativeOwnerSub?: string;
   },
   config: CollectorConfig,
   deps?: { now?: () => number },
@@ -255,6 +131,17 @@ async function signServiceAssertion(
     organization_id: params.organisationId,
     ...(params.teamId ? { team_id: params.teamId } : {}),
     ...(params.view ? { view: params.view } : {}),
+    ...(params.view === 'budget_receipt_set' && params.excludeDispatchId
+      ? { exclude_dispatch_id: params.excludeDispatchId,
+        exclude_request_fingerprint: params.excludeRequestFingerprint,
+        exclude_team_id: params.excludeTeamId } : {}),
+    ...(params.view === 'budget_receipt_set' && params.budgetScopeType
+      ? { budget_scope_type: params.budgetScopeType } : {}),
+    ...(params.view === 'budget_receipt_set' && params.nativeScopeType
+      ? { native_scope_type: params.nativeScopeType,
+        native_scope_id: params.nativeScopeId,
+        native_born_at: params.nativeBornAt,
+        ...(params.nativeOwnerSub ? { native_owner_sub: params.nativeOwnerSub } : {}) } : {}),
     billing_month: params.billingMonth,
   })
     .setProtectedHeader({
@@ -291,6 +178,9 @@ function normalizeLine(
     callerProduct: line.callerProduct,
     originProduct: line.originProduct,
     userId: groupBy === 'user' ? line.dimension : null,
+    billingDisposition: line.billingDisposition,
+    ...(line.rawProviderUsage.breakdown ?
+      { breakdown: line.rawProviderUsage.breakdown } : {}),
   };
 }
 
@@ -302,6 +192,7 @@ function normalizeUsage(usage: LedgerMeteringUsage, sha256: string): NormalizedM
     scope: usage.scope,
     calls: usage.totals.calls,
     lines: usage.breakdown.map((line) => normalizeLine(line, usage.groupBy)),
+    billingCompleteness: usage.billingCompleteness,
     snapshot: {
       cursor: usage.snapshot.cursor,
       id: usage.snapshot.id,
@@ -324,6 +215,7 @@ function normalizePortfolio(
     scope: usage.scope,
     calls: usage.totals.calls,
     lines: usage.breakdown.map((line) => normalizeLine(line, usage.groupBy)),
+    billingCompleteness: usage.billingCompleteness,
     snapshot: {
       cursor: usage.snapshot.cursor,
       id: usage.snapshot.id,
@@ -347,13 +239,13 @@ export async function getBillingAssertionPublicJwks(): Promise<{ keys: JWK[] }> 
   return { keys: keys.map((key) => ({ ...key })) };
 }
 
-export async function fetchLedgerMeteringUsage(
+export async function fetchLedgerRawUsage(
   params: {
     product: string;
     organisationId: string;
     teamId: string | null;
     billingMonth: string;
-    groupBy: 'service' | 'user';
+    groupBy: 'service' | 'team' | 'user';
     cursor?: string;
   },
   deps?: {
@@ -362,8 +254,7 @@ export async function fetchLedgerMeteringUsage(
     now?: () => number;
     signAssertion?: typeof signServiceAssertion;
   },
-): Promise<NormalizedMeteringUsage> {
-  const period = billingMonthBounds(params.billingMonth);
+): Promise<{ value: unknown; sha256: string }> {
   const config = await collectorConfig(deps?.env, deps?.env === undefined);
   const assertion = await (deps?.signAssertion ?? signServiceAssertion)(params, config, {
     now: deps?.now,
@@ -372,7 +263,7 @@ export async function fetchLedgerMeteringUsage(
   url.searchParams.set('group_by', params.groupBy);
   if (params.cursor) url.searchParams.set('cursor', params.cursor);
 
-  const response = await fetchLedgerJsonResponse(
+  return fetchLedgerJsonResponse(
     {
       url,
       headers: {
@@ -388,6 +279,68 @@ export async function fetchLedgerMeteringUsage(
     },
     { fetch: deps?.fetch },
   );
+}
+
+/** The paid cohort has its own Ledger contract and signature verification. */
+export async function fetchLedgerRawPaidReceiptSet(
+  params: { product: string; organisationId: string; teamId: string;
+    billingMonth: string; cursor?: string },
+  deps?: { env?: Env; fetch?: typeof fetch; now?: () => number },
+): Promise<unknown> {
+  billingMonthBounds(params.billingMonth);
+  const config = await collectorConfig(deps?.env, deps?.env === undefined);
+  const assertion = await signServiceAssertion({ ...params, view: 'paid_receipt_set' },
+    config, { now: deps?.now });
+  const url = new URL(`${config.baseUrl}/v1/metering/paid-receipt-set`);
+  if (params.cursor) url.searchParams.set('cursor', params.cursor);
+  const response = await fetchLedgerJsonResponse({ url, headers: {
+    Accept: 'application/json', 'X-Ledger-App-Key': config.appKey,
+    'X-UOA-Service-Assertion': assertion,
+  }, errors: {
+    requestFailed: 'LEDGER_PAID_RECEIPT_SET_REQUEST_FAILED',
+    responseTooLarge: 'LEDGER_PAID_RECEIPT_SET_RESPONSE_TOO_LARGE',
+    responseInvalid: 'LEDGER_PAID_RECEIPT_SET_RESPONSE_INVALID',
+  } }, { fetch: deps?.fetch });
+  return response.value;
+}
+
+/** Budget ancestry includes proven origin-product descendants across billed products. */
+export async function fetchLedgerRawBudgetReceiptSet(
+  params: { product: string; organisationId: string; teamId: string | null;
+    billingMonth: string; excludeDispatchId?: string;
+    excludeRequestFingerprint?: string; excludeTeamId?: string;
+    budgetScopeType?: 'organization';
+    nativeScopeType?: 'project' | 'run'; nativeScopeId?: string;
+    nativeBornAt?: string; nativeOwnerSub?: string; cursor?: string },
+  deps?: { env?: Env; fetch?: typeof fetch; now?: () => number },
+): Promise<unknown> {
+  billingMonthBounds(params.billingMonth);
+  const config = await collectorConfig(deps?.env, deps?.env === undefined);
+  const assertion = await signServiceAssertion({ ...params, view: 'budget_receipt_set' },
+    config, { now: deps?.now });
+  const url = new URL(`${config.baseUrl}/v1/metering/budget-receipt-set`);
+  if (params.cursor) url.searchParams.set('cursor', params.cursor);
+  const response = await fetchLedgerJsonResponse({ url, headers: {
+    Accept: 'application/json', 'X-Ledger-App-Key': config.appKey,
+    'X-UOA-Service-Assertion': assertion,
+  }, errors: {
+    requestFailed: 'LEDGER_BUDGET_RECEIPT_SET_REQUEST_FAILED',
+    responseTooLarge: 'LEDGER_BUDGET_RECEIPT_SET_RESPONSE_TOO_LARGE',
+    responseInvalid: 'LEDGER_BUDGET_RECEIPT_SET_RESPONSE_INVALID',
+  } }, { fetch: deps?.fetch });
+  return response.value;
+}
+
+export async function fetchLedgerMeteringUsage(
+  params: {
+    product: string; organisationId: string; teamId: string | null;
+    billingMonth: string; groupBy: 'service' | 'user'; cursor?: string;
+  },
+  deps?: { env?: Env; fetch?: typeof fetch; now?: () => number;
+    signAssertion?: typeof signServiceAssertion },
+): Promise<NormalizedMeteringUsage> {
+  const period = billingMonthBounds(params.billingMonth);
+  const response = await fetchLedgerRawUsage(params, deps);
   try {
     const usage = LedgerMeteringUsageSchema.parse(response.value);
     if (

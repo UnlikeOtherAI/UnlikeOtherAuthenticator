@@ -1,0 +1,435 @@
+{
+  "list": {
+    "schema_version": 1,
+    "generated_at": "2026-11-01T12:00:00.000Z",
+    "subject": {
+      "product": "nessie",
+      "organisation_id": "org_example",
+      "team_id": "team_example",
+      "user_id": "user_example"
+    },
+    "charge_month": "2026-10",
+    "invoices": [
+      {
+        "invoice_id": "invoice_topup_1",
+        "kind": "prepaid_purchase",
+        "status": "paid",
+        "number": "UOA-2026-000001",
+        "charged_at": "2026-10-03T23:59:59.000Z",
+        "charge_month": "2026-10",
+        "payments_in_charge_month": {
+          "amount": "50",
+          "amount_minor": "5000",
+          "currency": "USD",
+          "display": "US$50"
+        },
+        "issued_at": "2026-10-04T10:00:00.000Z",
+        "scope": {
+          "organisation_id": "org_example",
+          "team_id": "team_example",
+          "scope_type": "team"
+        },
+        "product_identifiers": [
+          "nessie"
+        ],
+        "totals": {
+          "currency": "USD",
+          "gross_total": {
+            "amount": "50",
+            "amount_minor": "5000",
+            "currency": "USD",
+            "display": "US$50"
+          },
+          "tax": {
+            "amount": "0",
+            "amount_minor": "0",
+            "currency": "USD",
+            "display": "US$0"
+          },
+          "credits_applied": {
+            "amount": "0",
+            "amount_minor": "0",
+            "currency": "USD",
+            "display": "US$0"
+          },
+          "voided_amount": {
+            "amount": "0",
+            "amount_minor": "0",
+            "currency": "USD",
+            "display": "US$0"
+          },
+          "total_due": {
+            "amount": "50",
+            "amount_minor": "5000",
+            "currency": "USD",
+            "display": "US$50"
+          },
+          "total_paid": {
+            "amount": "50",
+            "amount_minor": "5000",
+            "currency": "USD",
+            "display": "US$50"
+          },
+          "refunded_amount": {
+            "amount": "0",
+            "amount_minor": "0",
+            "currency": "USD",
+            "display": "US$0"
+          },
+          "disputed_amount": {
+            "amount": "0",
+            "amount_minor": "0",
+            "currency": "USD",
+            "display": "US$0"
+          },
+          "write_off": {
+            "amount": "0",
+            "amount_minor": "0",
+            "currency": "USD",
+            "display": "US$0"
+          },
+          "outstanding": {
+            "amount": "0",
+            "amount_minor": "0",
+            "currency": "USD",
+            "display": "US$0"
+          }
+        },
+        "document_available": true
+      },
+      {
+        "invoice_id": "payment_auto_2",
+        "kind": "prepaid_purchase",
+        "status": "pending_document",
+        "number": null,
+        "charged_at": "2026-10-31T23:59:59.000Z",
+        "charge_month": "2026-10",
+        "payments_in_charge_month": {
+          "amount": "50",
+          "amount_minor": "5000",
+          "currency": "USD",
+          "display": "US$50"
+        },
+        "issued_at": null,
+        "scope": {
+          "organisation_id": "org_example",
+          "team_id": "team_example",
+          "scope_type": "team"
+        },
+        "product_identifiers": [
+          "nessie"
+        ],
+        "totals": {
+          "currency": "USD",
+          "gross_total": {
+            "amount": "50",
+            "amount_minor": "5000",
+            "currency": "USD",
+            "display": "US$50"
+          },
+          "tax": null,
+          "credits_applied": {
+            "amount": "0",
+            "amount_minor": "0",
+            "currency": "USD",
+            "display": "US$0"
+          },
+          "voided_amount": {
+            "amount": "0",
+            "amount_minor": "0",
+            "currency": "USD",
+            "display": "US$0"
+          },
+          "total_due": {
+            "amount": "50",
+            "amount_minor": "5000",
+            "currency": "USD",
+            "display": "US$50"
+          },
+          "total_paid": {
+            "amount": "50",
+            "amount_minor": "5000",
+            "currency": "USD",
+            "display": "US$50"
+          },
+          "refunded_amount": {
+            "amount": "0",
+            "amount_minor": "0",
+            "currency": "USD",
+            "display": "US$0"
+          },
+          "disputed_amount": {
+            "amount": "0",
+            "amount_minor": "0",
+            "currency": "USD",
+            "display": "US$0"
+          },
+          "write_off": {
+            "amount": "0",
+            "amount_minor": "0",
+            "currency": "USD",
+            "display": "US$0"
+          },
+          "outstanding": {
+            "amount": "0",
+            "amount_minor": "0",
+            "currency": "USD",
+            "display": "US$0"
+          }
+        },
+        "document_available": false
+      }
+    ],
+    "next_cursor": null
+  },
+  "detail": {
+    "invoice_id": "invoice_topup_1",
+    "kind": "prepaid_purchase",
+    "status": "paid",
+    "number": "UOA-2026-000001",
+    "charged_at": "2026-10-03T23:59:59.000Z",
+    "charge_month": "2026-10",
+    "payments_in_charge_month": {
+      "amount": "50",
+      "amount_minor": "5000",
+      "currency": "USD",
+      "display": "US$50"
+    },
+    "issued_at": "2026-10-04T10:00:00.000Z",
+    "scope": {
+      "organisation_id": "org_example",
+      "team_id": "team_example",
+      "scope_type": "team"
+    },
+    "product_identifiers": [
+      "nessie"
+    ],
+    "totals": {
+      "currency": "USD",
+      "gross_total": {
+        "amount": "50",
+        "amount_minor": "5000",
+        "currency": "USD",
+        "display": "US$50"
+      },
+      "tax": {
+        "amount": "0",
+        "amount_minor": "0",
+        "currency": "USD",
+        "display": "US$0"
+      },
+      "credits_applied": {
+        "amount": "0",
+        "amount_minor": "0",
+        "currency": "USD",
+        "display": "US$0"
+      },
+      "voided_amount": {
+        "amount": "0",
+        "amount_minor": "0",
+        "currency": "USD",
+        "display": "US$0"
+      },
+      "total_due": {
+        "amount": "50",
+        "amount_minor": "5000",
+        "currency": "USD",
+        "display": "US$50"
+      },
+      "total_paid": {
+        "amount": "50",
+        "amount_minor": "5000",
+        "currency": "USD",
+        "display": "US$50"
+      },
+      "refunded_amount": {
+        "amount": "0",
+        "amount_minor": "0",
+        "currency": "USD",
+        "display": "US$0"
+      },
+      "disputed_amount": {
+        "amount": "0",
+        "amount_minor": "0",
+        "currency": "USD",
+        "display": "US$0"
+      },
+      "write_off": {
+        "amount": "0",
+        "amount_minor": "0",
+        "currency": "USD",
+        "display": "US$0"
+      },
+      "outstanding": {
+        "amount": "0",
+        "amount_minor": "0",
+        "currency": "USD",
+        "display": "US$0"
+      }
+    },
+    "document_available": true,
+    "schema_version": 1,
+    "payments": [
+      {
+        "payment_id": "payment_topup_1",
+        "paid_at": "2026-10-03T23:59:59.000Z",
+        "amount": {
+          "amount": "50",
+          "amount_minor": "5000",
+          "currency": "USD",
+          "display": "US$50"
+        }
+      }
+    ],
+    "charges": [
+      {
+        "line_id": "line_topup_1",
+        "kind": "prepaid_credits",
+        "label": "Prepaid credits purchase",
+        "amount": {
+          "amount": "50",
+          "amount_minor": "5000",
+          "currency": "USD",
+          "display": "US$50"
+        },
+        "credits_purchased": "50000"
+      }
+    ],
+    "document": {
+      "document_id": "document_topup_1",
+      "format": "pdf",
+      "number": "UOA-2026-000001",
+      "issued_at": "2026-10-04T10:00:00.000Z",
+      "download_action": {
+        "method": "POST",
+        "path": "/billing/v1/invoices/download",
+        "body": {
+          "product": "nessie",
+          "organisation_id": "org_example",
+          "team_id": "team_example",
+          "user_id": "user_example",
+          "invoice_id": "invoice_topup_1",
+          "document_id": "document_topup_1"
+        }
+      }
+    }
+  },
+  "pending_detail": {
+    "invoice_id": "payment_auto_2",
+    "kind": "prepaid_purchase",
+    "status": "pending_document",
+    "number": null,
+    "charged_at": "2026-10-31T23:59:59.000Z",
+    "charge_month": "2026-10",
+    "payments_in_charge_month": {
+      "amount": "50",
+      "amount_minor": "5000",
+      "currency": "USD",
+      "display": "US$50"
+    },
+    "issued_at": null,
+    "scope": {
+      "organisation_id": "org_example",
+      "team_id": "team_example",
+      "scope_type": "team"
+    },
+    "product_identifiers": [
+      "nessie"
+    ],
+    "totals": {
+      "currency": "USD",
+      "gross_total": {
+        "amount": "50",
+        "amount_minor": "5000",
+        "currency": "USD",
+        "display": "US$50"
+      },
+      "tax": null,
+      "credits_applied": {
+        "amount": "0",
+        "amount_minor": "0",
+        "currency": "USD",
+        "display": "US$0"
+      },
+      "voided_amount": {
+        "amount": "0",
+        "amount_minor": "0",
+        "currency": "USD",
+        "display": "US$0"
+      },
+      "total_due": {
+        "amount": "50",
+        "amount_minor": "5000",
+        "currency": "USD",
+        "display": "US$50"
+      },
+      "total_paid": {
+        "amount": "50",
+        "amount_minor": "5000",
+        "currency": "USD",
+        "display": "US$50"
+      },
+      "refunded_amount": {
+        "amount": "0",
+        "amount_minor": "0",
+        "currency": "USD",
+        "display": "US$0"
+      },
+      "disputed_amount": {
+        "amount": "0",
+        "amount_minor": "0",
+        "currency": "USD",
+        "display": "US$0"
+      },
+      "write_off": {
+        "amount": "0",
+        "amount_minor": "0",
+        "currency": "USD",
+        "display": "US$0"
+      },
+      "outstanding": {
+        "amount": "0",
+        "amount_minor": "0",
+        "currency": "USD",
+        "display": "US$0"
+      }
+    },
+    "document_available": false,
+    "schema_version": 1,
+    "payments": [
+      {
+        "payment_id": "payment_auto_2",
+        "paid_at": "2026-10-31T23:59:59.000Z",
+        "amount": {
+          "amount": "50",
+          "amount_minor": "5000",
+          "currency": "USD",
+          "display": "US$50"
+        }
+      }
+    ],
+    "charges": [
+      {
+        "line_id": "line_auto_2",
+        "kind": "prepaid_credits",
+        "label": "Automatic prepaid credits purchase",
+        "amount": {
+          "amount": "50",
+          "amount_minor": "5000",
+          "currency": "USD",
+          "display": "US$50"
+        },
+        "credits_purchased": "50000"
+      }
+    ],
+    "document": null
+  },
+  "download_request": {
+    "product": "nessie",
+    "organisation_id": "org_example",
+    "team_id": "team_example",
+    "user_id": "user_example",
+    "invoice_id": "invoice_topup_1",
+    "document_id": "document_topup_1"
+  }
+}

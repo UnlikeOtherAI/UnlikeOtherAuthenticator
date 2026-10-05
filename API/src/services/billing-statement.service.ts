@@ -23,15 +23,20 @@ import {
   type NormalizedMeteringUsage,
 } from './billing-metering.types.js';
 import { exactMoney, minorAmountToMajor } from './billing-money.service.js';
+import { quoteSubscriptionMonthlyCharge } from './billing-monthly-subscription-quote.service.js';
 import {
   listDirectTeamBillingServiceAccess,
   type DirectBillingServiceAccess,
 } from './billing-service-access.service.js';
 import { billingStatementActions } from './billing-statement-action.service.js';
+import { resolveBillingTariffForMonth } from './billing-tariff-history.service.js';
+import {
+  billingCollectionModeToPublic,
+  billingModeToPublic,
+} from './billing-tariff-serialization.service.js';
 import { resolveBillingControlledBy } from './billing-org-responsibility.service.js';
 import { buildOrganisationStatementScope } from './billing-statement-organisation.service.js';
 import {
-  buildConnectedServicePortfolio,
   filterPortfolioForProduct,
 } from './billing-statement-portfolio.service.js';
 import {
@@ -62,6 +67,7 @@ type Dependencies = {
   listDirectAccess?: typeof listDirectTeamBillingServiceAccess;
   resolveControlledBy?: typeof resolveBillingControlledBy;
   buildOrganisationScope?: typeof buildOrganisationStatementScope;
+  quoteSubscription?: typeof quoteSubscriptionMonthlyCharge;
 };
 
 function monthPeriod(
@@ -165,10 +171,10 @@ async function buildCanonicalBillingStatement(
   const now = deps?.now?.() ?? new Date();
   const period = monthPeriod(context.billingMonth, now);
   const prisma = deps?.prisma ?? getAdminPrisma();
-  const summary = await (
+  const currentSummary = await (
     deps?.resolveSummary ?? ((params) => getStripeSubscriptionSummary(params, { prisma }))
   )(context);
-  const statementProduct = summary.product.identifier;
+  const statementProduct = currentSummary.product.identifier;
   const canonicalRequest = { ...context.request, product: statementProduct };
 
   const fetchMetering = deps?.fetchMetering ?? fetchLedgerMeteringUsage;
@@ -198,10 +204,12 @@ async function buildCanonicalBillingStatement(
             groupBy: 'user',
           }),
         ]).then(([service, user]) => ({ service, user }));
-  const [tariff, products, accesses, adjustments, members, metering] = await Promise.all([
-    prisma.billingTariff.findUnique({
-      where: { id: summary.tariff.id },
-      select: { name: true },
+  const [effective, products, accesses, adjustments, members, metering] = await Promise.all([
+    resolveBillingTariffForMonth(prisma, {
+      serviceId: context.credential.service.id,
+      organisationId: context.request.organisationId,
+      teamId: context.request.teamId,
+      billingMonth: period.key,
     }),
     prisma.billingService.findMany({
       where: { active: true },
@@ -241,8 +249,43 @@ async function buildCanonicalBillingStatement(
     }),
     meteringPromise,
   ]);
+  const tariff = effective.tariff;
+  const modeFromTerm = billingModeToPublic(tariff.mode);
+  const collectionMode = billingCollectionModeToPublic(tariff.collectionMode);
+  const summary = {
+    ...currentSummary,
+    tariff: {
+      ...currentSummary.tariff,
+      id: tariff.id,
+      key: tariff.key,
+      version: tariff.version,
+      mode: modeFromTerm,
+      collection_mode: collectionMode,
+      markup_bps: tariff.markupBps,
+      markup_percent: (tariff.markupBps / 100).toFixed(2),
+      usage_price_multiplier_bps: modeFromTerm === 'free' ? 0 : 10_000 + tariff.markupBps,
+      monthly_subscription: {
+        amount_minor: tariff.monthlyAmountMinor.toString(),
+        currency: tariff.currency,
+        charge_basis: tariff.monthlyChargeBasis.toLowerCase() as 'flat' | 'per_seat',
+        seat_policy: tariff.seatPolicy?.toLowerCase() as 'automatic' | 'fixed' | undefined
+          ?? null,
+        seat_timing: tariff.seatChargeTiming?.toLowerCase() as
+          'full_month' | 'prorated' | undefined ?? null,
+        amount_role: tariff.monthlyChargeBasis === 'PER_SEAT'
+          ? 'per_seat_unit' as const : 'monthly_total' as const,
+      },
+      payment_collection_enabled: collectionMode !== 'none',
+      usage_billing_enabled: modeFromTerm !== 'free',
+      usage_payment_mode: tariff.usagePaymentMode.toLowerCase() as
+        'prepaid' | 'pay_as_you_go',
+    },
+    assignment: {
+      scope: effective.source.toLowerCase() as 'team' | 'organisation' | 'service_default',
+      id: effective.assignmentId,
+    },
+  };
   const { service: serviceMetering, user: userMetering } = metering;
-  if (!tariff) throw new AppError('INTERNAL', 500, 'BILLING_TARIFF_NOT_FOUND');
 
   const mode = modeFromSummary(summary.tariff.mode);
   const ratedServiceMetering =
@@ -268,15 +311,30 @@ async function buildCanonicalBillingStatement(
     summary.tariff.monthly_subscription.amount_minor,
     currency,
   );
+  const teamSubscriptionId = summary.subscription?.scope === 'team'
+    ? summary.subscription.id : null;
+  const perSeat = tariff.monthlyChargeBasis === 'PER_SEAT';
+  const quoted = perSeat && teamSubscriptionId && period.state === 'closed'
+    ? await (deps?.quoteSubscription ?? quoteSubscriptionMonthlyCharge)({
+      source: { kind: 'stripe', id: teamSubscriptionId }, billingMonth: period.key,
+    }, { prisma }) : null;
+  if (quoted && (quoted.serviceId !== context.credential.service.id ||
+      quoted.teamId !== context.request.teamId || quoted.currency !== currency)) {
+    throw new AppError('INTERNAL', 409, 'BILLING_MONTHLY_QUOTE_SCOPE_MISMATCH');
+  }
+  const subscriptionAmount = quoted
+    ? minorAmountToMajor(quoted.amountMinor.toString(), currency) : monthlyAmount;
+  const includeSubscriptionLine = !perSeat || quoted !== null;
   const commercialLines: BillingStatementV1['commercial_lines'] = [
-    {
+    ...(includeSubscriptionLine && (!summary.subscription || teamSubscriptionId) ? [{
       id: `monthly_${summary.tariff.id}`,
-      kind: 'monthly_subscription',
+      kind: 'monthly_subscription' as const,
       product: statementProduct,
-      label: `${tariff.name} monthly subscription`,
-      detail: `Tariff ${summary.tariff.key} v${summary.tariff.version}`,
-      amount: exactMoney(monthlyAmount, currency),
-    },
+      label: 'Monthly subscription',
+      detail: quoted ? 'Frozen seat charge for this billing period' :
+        'Subscription charge for this billing period',
+      amount: exactMoney(subscriptionAmount, currency),
+    }] : []),
     ...rated.commercialLines,
     ...adjustments.map((adjustment) => {
       const amount = minorAmountToMajor(adjustment.amountMinor.toString(), adjustment.currency);
@@ -289,7 +347,7 @@ async function buildCanonicalBillingStatement(
             ? ('credit' as const)
             : ('add_on' as const),
         product: statementProduct,
-        label: adjustment.name,
+        label: adjustment.kind === BillingAdjustmentKind.CREDIT ? 'Credit' : 'Additional charge',
         detail: adjustment.cadence === 'MONTHLY' ? 'Monthly adjustment' : 'One-time adjustment',
         amount: exactMoney(signed, adjustment.currency),
       };
@@ -310,9 +368,7 @@ async function buildCanonicalBillingStatement(
           capabilities: { can_upgrade: false, can_open_portal: false, can_cancel: false },
           actions: [],
         }
-      : billingStatementActions(summary, canonicalRequest, context.credential);
-  const markupPercent = (summary.tariff.markup_bps / 100).toFixed(2);
-
+      : billingStatementActions(currentSummary, canonicalRequest, context.credential);
   const statement: BillingStatementV1 = {
     schema_version: BILLING_STATEMENT_SCHEMA_VERSION,
     statement_id: `bst_${randomUUID()}`,
@@ -337,23 +393,18 @@ async function buildCanonicalBillingStatement(
         captured_at: metering.snapshot.capturedAt,
         sha256: metering.snapshot.sha256,
       })),
-      tariff: { id: summary.tariff.id, version: summary.tariff.version },
     },
     plan: {
-      tariff_id: summary.tariff.id,
-      key: summary.tariff.key,
-      version: summary.tariff.version,
-      name: tariff.name,
-      display_name: `${tariff.name} · v${summary.tariff.version}`,
-      mode,
+      display_name: 'Monthly subscription',
       collection_mode: summary.tariff.collection_mode,
-      markup_bps: summary.tariff.markup_bps,
-      markup_percent: markupPercent,
-      markup_display: `${markupPercent}%`,
-      usage_multiplier_bps: summary.tariff.usage_price_multiplier_bps,
+      usage_payment_mode: summary.tariff.usage_payment_mode,
       monthly_subscription: {
         amount_minor: summary.tariff.monthly_subscription.amount_minor,
         ...exactMoney(monthlyAmount, currency),
+        charge_basis: summary.tariff.monthly_subscription.charge_basis,
+        seat_policy: summary.tariff.monthly_subscription.seat_policy,
+        seat_timing: summary.tariff.monthly_subscription.seat_timing,
+        amount_role: summary.tariff.monthly_subscription.amount_role,
       },
       assignment: summary.assignment,
     },
@@ -392,15 +443,7 @@ async function buildCanonicalBillingStatement(
           sha256: portfolioUserMetering.snapshot.sha256,
         },
       ],
-      tariff: statement.pinned_inputs.tariff,
     },
-    connected_service_usage: buildConnectedServicePortfolio({
-      statementProduct,
-      userMetering: portfolioUserMetering,
-      products,
-      accesses,
-      users: members.map((member) => member.user),
-    }),
     // The organisation roll-up goes only to an organisation billing manager,
     // and only while the organisation is actually paying.
     ...(controlledBy?.can_manage
@@ -417,7 +460,7 @@ async function buildCanonicalBillingStatement(
               periodEndsAt: period.endsAtDate,
               products,
             },
-            { prisma, fetchPortfolio: deps?.fetchPortfolio, listDirectAccess: deps?.listDirectAccess },
+            { prisma, fetchPortfolio: deps?.fetchPortfolio },
           ),
         }
       : {}),

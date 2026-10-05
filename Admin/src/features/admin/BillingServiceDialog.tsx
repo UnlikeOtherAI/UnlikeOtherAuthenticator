@@ -11,13 +11,17 @@ import { useCreateBillingServiceMutation } from './billing-admin-queries';
 const defaults: BillingServiceFormValues = {
   identifier: '',
   serviceName: '',
-  key: 'at-cost',
-  name: 'At cost',
-  mode: 'at_cost',
+  key: 'standard',
+  name: 'Standard',
+  mode: 'standard',
   collectionMode: 'none',
-  markupBps: 0,
-  monthlyAmountMinor: '0',
-  currency: 'GBP',
+  markupPercent: '30.00',
+  usagePaymentMode: 'prepaid',
+  monthlyChargeBasis: 'flat',
+  seatPolicy: 'automatic',
+  seatChargeTiming: 'prorated',
+  monthlyAmount: '0.00',
+  currency: 'USD',
 };
 
 export function BillingServiceDialog({ onClose, open }: { onClose: () => void; open: boolean }) {
@@ -111,25 +115,64 @@ export function BillingServiceDialog({ onClose, open }: { onClose: () => void; o
               </SelectField>
             </FieldShell>
             <FieldShell
-              label="Markup (basis points)"
-              hint="2,000 = 20%; 4,000 = 40%."
-              error={form.formState.errors.markupBps?.message}
+              label="Markup (%)"
+              hint="30.00% is the standard rate; each tariff stores its own negotiated rate."
+              error={form.formState.errors.markupPercent?.message}
             >
-              <TextField {...form.register('markupBps')} type="number" min="0" step="1" />
+              <TextField {...form.register('markupPercent')} inputMode="decimal" />
             </FieldShell>
             <FieldShell
-              label="Monthly amount (minor units)"
-              hint="For GBP, 2000 means £20.00."
-              error={form.formState.errors.monthlyAmountMinor?.message}
+              label="Usage payment"
+              hint="Prepaid draws from the customer's shared team or organisation pool."
+              error={form.formState.errors.usagePaymentMode?.message}
             >
-              <div className="flex gap-2">
-                <TextField {...form.register('monthlyAmountMinor')} inputMode="numeric" />
-                <TextField
-                  {...form.register('currency')}
-                  className="w-24 uppercase"
-                  maxLength={3}
-                />
-              </div>
+              <SelectField {...form.register('usagePaymentMode')} className="w-full">
+                <option value="prepaid">Prepaid pool</option>
+                <option value="pay_as_you_go">Pay as you go</option>
+              </SelectField>
+            </FieldShell>
+            <FieldShell
+              label="Monthly subscription basis"
+              hint="One charge per team or organisation, or one charge per active seat."
+              error={form.formState.errors.monthlyChargeBasis?.message}
+            >
+              <SelectField {...form.register('monthlyChargeBasis')} className="w-full">
+                <option value="flat">Flat</option>
+                <option value="per_seat">Per seat</option>
+              </SelectField>
+            </FieldShell>
+            {form.watch('monthlyChargeBasis') === 'per_seat' ? (
+              <>
+                <FieldShell
+                  label="Seat quantity"
+                  hint="Fixed capacity is purchased for each team or organisation subscription."
+                  error={form.formState.errors.seatPolicy?.message}
+                >
+                  <SelectField {...form.register('seatPolicy')} className="w-full">
+                    <option value="automatic">Automatic active seats</option>
+                    <option value="fixed">Fixed purchased capacity</option>
+                  </SelectField>
+                </FieldShell>
+                <FieldShell
+                  label="Seat charge timing"
+                  error={form.formState.errors.seatChargeTiming?.message}
+                >
+                  <SelectField {...form.register('seatChargeTiming')} className="w-full">
+                    <option value="full_month">Full month</option>
+                    <option value="prorated">Prorated</option>
+                  </SelectField>
+                </FieldShell>
+              </>
+            ) : null}
+            <FieldShell
+              label="Monthly price"
+              hint="Currency amount per chosen subscription basis, for example 20.00 GBP."
+              error={form.formState.errors.monthlyAmount?.message}
+            >
+              <TextField {...form.register('monthlyAmount')} inputMode="decimal" />
+            </FieldShell>
+            <FieldShell label="Currency" error={form.formState.errors.currency?.message}>
+              <TextField {...form.register('currency')} className="uppercase" maxLength={3} />
             </FieldShell>
           </div>
         </div>

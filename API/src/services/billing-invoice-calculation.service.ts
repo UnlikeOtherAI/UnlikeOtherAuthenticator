@@ -2,7 +2,9 @@ import { createHash } from 'node:crypto';
 
 import {
   BillingInvoiceStatus,
+  BillingMonthlyChargeBasis,
   BillingOrganisationContractStatus,
+  BillingUsagePaymentMode,
   Prisma,
   type PrismaClient,
 } from '@prisma/client';
@@ -10,14 +12,23 @@ import {
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import { collectContractFundingEvidence } from './billing-contract-funding-evidence.service.js';
+import { writeInvoiceFinancialAllocations } from './billing-invoice-financial-allocation.service.js';
+import { collectManualInvoicePaidCohort, writeManualInvoicePaidCohort } from
+  './billing-invoice-paid-receipt-cohort.service.js';
+import { fetchLedgerHistoricalBillingTeams } from './billing-ledger-team-discovery.service.js';
+import { fetchVerifiedLedgerPaidReceiptSet } from
+  './billing-ledger-paid-receipt-proof.service.js';
 import { fetchLedgerMeteringUsage } from './billing-ledger-collector.service.js';
-import type { FetchMeteringUsage } from './billing-metering.types.js';
+import { meteringIsComplete, type FetchMeteringUsage } from './billing-metering.types.js';
 import {
   addBillingDecimals,
   majorAmountToMinorRounded,
   minorAmountToMajor,
 } from './billing-money.service.js';
 import { rateMeteringTotal } from './billing-rating.service.js';
+import { quoteSubscriptionMonthlyCharge } from './billing-monthly-subscription-quote.service.js';
+import { allocateInvoiceTaxMinor, assertInvoiceTaxTerms,
+  type BillingInvoiceTaxTerms } from './billing-invoice-tax.service.js';
 
 const MAX_INT64 = 9_223_372_036_854_775_807n;
 const MICROCREDITS_PER_USD_MINOR = 10_000_000n;
@@ -28,6 +39,9 @@ type CalculationDeps = {
   prisma?: PrismaClient;
   fetchMetering?: FetchMeteringUsage;
   collectFunding?: typeof collectContractFundingEvidence;
+  quoteMonthly?: typeof quoteSubscriptionMonthlyCharge;
+  discoverTeams?: typeof fetchLedgerHistoricalBillingTeams;
+  fetchPaidReceiptSet?: typeof fetchVerifiedLedgerPaidReceiptSet;
   now?: () => Date;
 };
 
@@ -106,17 +120,20 @@ export async function calculateBillingContractInvoice(
     contractId: string;
     issuerProfileId: string;
     billingMonth: string;
+    taxTerms: BillingInvoiceTaxTerms;
     actor: Actor;
   },
   deps?: CalculationDeps,
 ) {
   const now = deps?.now?.() ?? new Date();
+  const taxTerms = assertInvoiceTaxTerms(params.taxTerms);
   const period = closedBillingMonthPeriod(params.billingMonth, now);
   const prisma = deps?.prisma ?? getAdminPrisma();
   const contract = await prisma.billingOrganisationContract.findFirst({
     where: {
       id: params.contractId,
-      status: BillingOrganisationContractStatus.ACTIVE,
+      status: { in: [BillingOrganisationContractStatus.ACTIVE,
+        BillingOrganisationContractStatus.TERMINATED] },
     },
     include: {
       versions: {
@@ -183,25 +200,58 @@ export async function calculateBillingContractInvoice(
           { prisma },
         ),
       ]);
-      const rated = rateMeteringTotal({
-        usage: metering,
-        product: term.service.identifier,
-        currency: version.currency,
-        terms: { mode: 'custom', markupBps: version.usageMarkupBps },
-      });
+      if (!meteringIsComplete(metering.billingCompleteness)) {
+        throw new AppError('INTERNAL', 409, 'LEDGER_METERING_UNRESOLVED_PAID_USAGE');
+      }
+      const usageTotal = term.tariff.usagePaymentMode === BillingUsagePaymentMode.PREPAID
+        ? '0' : rateMeteringTotal({
+          usage: metering, product: term.service.identifier,
+          currency: version.currency,
+          terms: { mode: 'custom', markupBps: version.usageMarkupBps },
+        }).total;
+      if (term.tariff.usagePaymentMode === BillingUsagePaymentMode.PREPAID &&
+        funding.credits.length > 0) {
+        throw new AppError('BAD_REQUEST', 409, 'BILLING_INVOICE_PREPAID_CREDIT_CONFLICT');
+      }
+      const monthlyQuote = await (deps?.quoteMonthly ?? quoteSubscriptionMonthlyCharge)({
+        source: { kind: 'manual', id: term.id }, billingMonth: params.billingMonth,
+      }, { prisma, now: () => now });
+      if (monthlyQuote.chargeBasis !== term.tariff.monthlyChargeBasis ||
+        monthlyQuote.currency !== version.currency ||
+        monthlyQuote.tariffId !== term.tariffId ||
+        monthlyQuote.serviceId !== term.serviceId) {
+        throw new AppError('BAD_REQUEST', 409, 'BILLING_INVOICE_MONTHLY_QUOTE_DRIFT');
+      }
+      const monthlyAmountMinor = monthlyQuote.amountMinor;
       const total = addBillingDecimals(
-        minorAmountToMajor(term.monthlyAmountMinor.toString(), version.currency),
-        rated.total,
+        minorAmountToMajor(monthlyAmountMinor.toString(), version.currency),
+        usageTotal,
       );
       const amountMinor = majorAmountToMinorRounded(total, version.currency);
       if (amountMinor < 0n || amountMinor > MAX_INT64) {
         throw new AppError('BAD_REQUEST', 409, 'BILLING_INVOICE_SERVICE_TOTAL_INVALID');
       }
+      const usageMinor = amountMinor - monthlyAmountMinor;
+      if (usageMinor < 0n) {
+        throw new AppError('BAD_REQUEST', 409, 'BILLING_INVOICE_USAGE_TOTAL_INVALID');
+      }
+      const paidCohort = usageMinor > 0n ?
+        await collectManualInvoicePaidCohort({ serviceId: term.serviceId,
+          product: term.service.identifier, orgId: contract.orgId,
+          billingMonth: params.billingMonth }, {
+          discoverTeams: deps?.discoverTeams,
+          fetchPaidReceiptSet: deps?.fetchPaidReceiptSet,
+        }) : [];
       return {
         serviceId: term.serviceId,
         serviceIdentifier: term.service.identifier,
         serviceName: term.service.name,
         amountMinor,
+        monthlyAmountMinor,
+        usageMinor,
+        paidCohort,
+        seatQuote: term.tariff.monthlyChargeBasis === BillingMonthlyChargeBasis.PER_SEAT
+          ? monthlyQuote : null,
         credits: funding.credits,
         addons: funding.addons,
         snapshot: {
@@ -213,8 +263,12 @@ export async function calculateBillingContractInvoice(
       };
     }),
   );
-  calculated.sort((left, right) => left.serviceIdentifier.localeCompare(right.serviceIdentifier));
+  calculated.sort((left, right) => Buffer.compare(Buffer.from(left.serviceIdentifier), Buffer.from(right.serviceIdentifier)));
   const subtotalMinor = calculated.reduce((total, line) => total + line.amountMinor, 0n);
+  const taxByService = allocateInvoiceTaxMinor(calculated.map((line) => ({
+    id: line.serviceId, netMinor: line.amountMinor,
+  })), taxTerms);
+  const taxAmountMinor = [...taxByService.values()].reduce((sum, value) => sum + value, 0n);
   const creditEvidence = calculated.flatMap((line) => line.credits);
   const creditsAppliedMicrocredits = creditEvidence.reduce(
     (total, reference) => total + reference.creditsAppliedMicrocredits,
@@ -228,11 +282,12 @@ export async function calculateBillingContractInvoice(
   const addonEvidence = calculated
     .flatMap((line) => line.addons)
     .sort((left, right) =>
-      `${left.offerKey}:${left.scope}:${left.subscriptionId}`.localeCompare(
-        `${right.offerKey}:${right.scope}:${right.subscriptionId}`,
+      Buffer.compare(
+        Buffer.from(`${left.offerKey}:${left.scope}:${left.subscriptionId}`),
+        Buffer.from(`${right.offerKey}:${right.scope}:${right.subscriptionId}`),
       ),
     );
-  if (subtotalMinor > MAX_INT64) {
+  if (subtotalMinor + taxAmountMinor > MAX_INT64) {
     throw new AppError('BAD_REQUEST', 409, 'BILLING_INVOICE_TOTAL_INVALID');
   }
   if (creditsAppliedMinor > subtotalMinor) {
@@ -247,10 +302,22 @@ export async function calculateBillingContractInvoice(
     currency: version.currency,
     issuer: issuerData,
     buyer: buyerData,
+    tax: { treatment: taxTerms.treatment, rate_bps: taxTerms.rateBps,
+      legal_basis: taxTerms.legalBasis, amount_minor: taxAmountMinor.toString() },
     lines: calculated.map((line) => ({
       service_id: line.serviceId,
       amount_minor: line.amountMinor.toString(),
+      seat_quote: line.seatQuote ? {
+        agreement_id: line.seatQuote.agreementId,
+        amount_minor: line.seatQuote.amountMinor.toString(),
+        seat_milliseconds: line.seatQuote.seatMilliseconds?.toString(),
+        evidence_ids: line.seatQuote.evidenceIds,
+      } : null,
       snapshot: line.snapshot,
+      paid_cohort: line.paidCohort.map(({ scope, proof }) => ({
+        team_id: scope.teamId, count: proof.paid_receipt_count,
+        sha256: proof.paid_receipt_sha256,
+      })),
     })),
     credit_settlements: creditEvidence.map((reference) => ({
       account_id: reference.accountId,
@@ -296,7 +363,26 @@ export async function calculateBillingContractInvoice(
               _count: { select: { creditSettlementRefs: true } },
             },
           });
-          if (existing) return existing;
+          if (existing) {
+            const frozenCount = await tx.billingInvoiceLineFinancialAllocation.count({
+              where: { invoiceId: existing.id },
+            });
+            if (frozenCount === 0) {
+              await writeInvoiceFinancialAllocations(tx, existing, calculated.map((line) => ({
+                serviceId: line.serviceId,
+                subscriptionMinor: line.monthlyAmountMinor,
+                usageMinor: line.usageMinor,
+                taxMinor: taxByService.get(line.serviceId) ?? 0n,
+              })));
+            }
+            for (const line of calculated) {
+              await writeManualInvoicePaidCohort(tx, existing, {
+                id: line.serviceId, product: line.serviceIdentifier,
+                usageMinor: line.usageMinor, proofs: line.paidCohort,
+              });
+            }
+            return existing;
+          }
           const latest = await tx.billingInvoice.findFirst({
             where: { contractId: contract.id, billingMonth: params.billingMonth },
             orderBy: { revision: 'desc' },
@@ -313,8 +399,11 @@ export async function calculateBillingContractInvoice(
               revision: (latest?.revision ?? 0) + 1,
               currency: version.currency,
               subtotalMinor,
-              taxAmountMinor: 0n,
-              totalMinor: subtotalMinor,
+              taxAmountMinor,
+              taxTreatment: taxTerms.treatment,
+              taxRateBps: taxTerms.rateBps,
+              taxLegalBasis: taxTerms.legalBasis,
+              totalMinor: subtotalMinor + taxAmountMinor,
               creditsAppliedMinor,
               issuerSnapshot: issuerData,
               buyerSnapshot: buyerData,
@@ -373,6 +462,18 @@ export async function calculateBillingContractInvoice(
               _count: { select: { creditSettlementRefs: true } },
             },
           });
+          await writeInvoiceFinancialAllocations(tx, invoice, calculated.map((line) => ({
+            serviceId: line.serviceId,
+                subscriptionMinor: line.monthlyAmountMinor,
+                usageMinor: line.usageMinor,
+                taxMinor: taxByService.get(line.serviceId) ?? 0n,
+          })));
+          for (const line of calculated) {
+            await writeManualInvoicePaidCohort(tx, invoice, {
+              id: line.serviceId, product: line.serviceIdentifier,
+              usageMinor: line.usageMinor, proofs: line.paidCohort,
+            });
+          }
           await tx.adminAuditLog.create({
             data: {
               actorEmail: params.actor.email,

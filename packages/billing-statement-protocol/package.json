@@ -1,6 +1,6 @@
 {
   "name": "@unlikeotherai/billing-statement-protocol",
-  "version": "1.3.0",
+  "version": "5.0.0",
   "description": "Public UOA billing statement and customer-action consumer contracts",
   "license": "MIT",
   "type": "module",
@@ -27,6 +27,15 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
+    "./schema/billing-customer-invoices-v1.json": "./schema/billing-customer-invoices-v1.json",
+    "./fixtures/billing-customer-invoices-v1.example.json": "./fixtures/billing-customer-invoices-v1.example.json",
+    "./openapi/billing-customer-invoices-v1.openapi.json": "./openapi/billing-customer-invoices-v1.openapi.json",
+    "./schema/billing-credit-budgets-v1.json": "./schema/billing-credit-budgets-v1.json",
+    "./fixtures/billing-credit-budgets-v1.example.json": "./fixtures/billing-credit-budgets-v1.example.json",
+    "./openapi/billing-credit-budgets-v1.openapi.json": "./openapi/billing-credit-budgets-v1.openapi.json",
+    "./schema/billing-cycles-v2.json": "./schema/billing-cycles-v2.json",
+    "./fixtures/billing-cycles-v2.example.json": "./fixtures/billing-cycles-v2.example.json",
+    "./openapi/billing-cycles-v2.openapi.json": "./openapi/billing-cycles-v2.openapi.json",
     "./schema/billing-statement-v1.json": "./schema/billing-statement-v1.json",
     "./schema/billing-statement-v2.json": "./schema/billing-statement-v2.json",
     "./schema/billing-consumer-actions-v1.json": "./schema/billing-consumer-actions-v1.json",

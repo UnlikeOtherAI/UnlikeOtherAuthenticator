@@ -6,7 +6,7 @@ const adminAuth =
 const contractActionProjection =
   'Server-authored contract.actions.add_version; clients render it and never reconstruct eligibility.';
 const versionActionProjection =
-  'Server-authored version.actions.{activation_state,activate}. activation_state is active | ready | scheduled | superseded | contract_terminated; clients render these values and never reconstruct eligibility.';
+  'Server-authored version.actions.{activation_state,activate}. ready is a future-month draft eligible for activation; scheduled is an activated future-month version. Other states are active | superseded | contract_terminated. Clients render these values and never reconstruct eligibility.';
 const contractAndVersionActionProjection =
   contractActionProjection + ' Nested versions use ' + versionActionProjection;
 const invoiceActionProjection =
@@ -42,7 +42,8 @@ export const billingContractInvoiceEndpoints: EndpointSchema[] = [
       'Append an immutable forward-effective commercial version. Markup is visible only on this contract-editor surface.',
     auth: adminAuth,
     body: {
-      usage_markup_bps: 'integer 0-100000 applied centrally to provider cost',
+      usage_markup_percent:
+        'exact decimal percentage string with at most two fractional digits, applied centrally',
       currency: 'exact three-letter ISO currency; no FX inference',
       payment_terms_days: 'integer 0-365',
       effective_from_month: 'UTC YYYY-MM, later than every existing version',
@@ -55,11 +56,11 @@ export const billingContractInvoiceEndpoints: EndpointSchema[] = [
     method: 'POST',
     path: '/internal/admin/billing/contracts/:contractId/versions/:versionId/activate',
     description:
-      'On or after its effective UTC month, atomically activate the version and project one immutable CUSTOM+MANUAL org tariff per selected service. Rejects carried-assignment drift, team overrides, and nonterminal Stripe state.',
+      'Schedule future-effective immutable CUSTOM+MANUAL organisation terms per selected service. Capture the UOA seat baseline now and track it until the commercial month. Reject carried-assignment drift, team overrides, and nonterminal Stripe state.',
     auth: adminAuth,
     body: {
       services:
-        'non-empty [{ service_id, monthly_amount_minor }]; service set is pinned to the version',
+        'non-empty [{ service_id, monthly_amount_minor, monthly_charge_basis?, seat_policy?, seat_charge_timing?, usage_payment_mode?, fixed_seat_quantity? }]. New operator writes choose the basis and usage mode; fixed quantity is required only for fixed per-seat terms. Omitted fields retain legacy flat/pay-as-you-go semantics.',
     },
     response: { 200: 'Activated contract version with service terms. ' + versionActionProjection },
   },
@@ -68,6 +69,28 @@ export const billingContractInvoiceEndpoints: EndpointSchema[] = [
     path: '/internal/admin/billing/invoice-issuer-profiles',
     description: 'List explicit legal issuer profiles. UOA never invents or seeds issuer identity.',
     auth: adminAuth,
+  },
+  {
+    method: 'GET',
+    path: '/internal/admin/billing/credit-invoice-tax-policies',
+    description: 'List Stripe accounts and append-only legal issuer tax policies for accepted prepaid payment invoices. Platform superuser only.',
+    auth: adminAuth,
+  },
+  {
+    method: 'POST',
+    path: '/internal/admin/billing/credit-invoice-tax-policies',
+    description: 'Append a versioned issuer tax treatment effective at a UTC payment time. The tax amount is included within the actual accepted gross; this action never charges the payer.',
+    auth: adminAuth,
+    body: {
+      account_id: 'exact Stripe account row ID',
+      issuer_profile_id: 'active explicit issuer with the same tax jurisdiction',
+      jurisdiction_country: 'two-letter uppercase issuer jurisdiction',
+      treatment: 'INCLUSIVE_RATE or NO_TAX_CHARGED',
+      rate_bps: 'integer inclusive tax rate 1-10000, or 0 for explicit no-tax treatment',
+      legal_basis_reference: 'operator-attested legal rule or exemption reference',
+      effective_from: 'UTC ISO timestamp, exact effective start',
+    },
+    response: { 201: 'Created immutable policy version and actor audit event' },
   },
   {
     method: 'POST',
@@ -113,12 +136,30 @@ export const billingContractInvoiceEndpoints: EndpointSchema[] = [
       contract_id: 'active organisation contract ID',
       issuer_profile_id: 'active explicit issuer profile ID',
       billing_month: 'closed UTC YYYY-MM',
+      tax_treatment: 'no_tax_charged | standard_rate',
+      tax_rate_percent: 'exact 0..100 with at most two fractional digits',
+      tax_legal_basis: 'required legal basis frozen with the invoice',
     },
     response: {
       201:
         'Customer-safe draft invoice; never markup, cost, units, calls, cursor/hash, digest, or private PDF storage identity. ' +
         invoiceActionProjection,
     },
+  },
+  {
+    method: 'GET',
+    path: '/internal/admin/billing/cycle-corrections',
+    description: 'List closed-month manual billing cycle corrections awaiting a real legal financial effect.',
+    auth: adminAuth,
+    response: { 200: 'Pending correction cycles with direction and optional supplement invoice id.' },
+  },
+  {
+    method: 'POST',
+    path: '/internal/admin/billing/cycle-corrections/:cycleId/prepare',
+    description: 'Freeze a delta-only supplemental invoice from signed paid receipts, the original issued line and its tax evidence. No original monthly fee is repeated.',
+    auth: adminAuth,
+    body: {},
+    response: { 201: 'Customer-safe draft supplemental invoice ready for ordinary issue.' },
   },
   {
     method: 'GET',
@@ -143,6 +184,35 @@ export const billingContractInvoiceEndpoints: EndpointSchema[] = [
       invoiceActionProjection,
     auth: adminAuth,
     response: { 200: 'Customer-safe invoice. ' + invoiceActionProjection },
+  },
+  {
+    method: 'GET',
+    path: '/internal/admin/billing/invoices/:invoiceId/credit-note',
+    description: 'Read the separate issuer cancellation credit note for one issued manual invoice.',
+    auth: adminAuth,
+    response: { 200: 'Credit-note status, number, date, original invoice, exact customer credit and reason; or null.' },
+  },
+  {
+    method: 'POST',
+    path: '/internal/admin/billing/invoices/:invoiceId/credit-note/prepare',
+    description: 'Prepare one full-line legal cancellation note for a paid, issued, single-product manual invoice without wallet offsets. The original invoice remains immutable.',
+    auth: adminAuth,
+    body: { reason: 'required operator cancellation reason, max 500 characters' },
+    response: { 201: 'Frozen pending credit note with exact original charge and tax.' },
+  },
+  {
+    method: 'POST',
+    path: '/internal/admin/billing/credit-notes/:creditNoteId/issue',
+    description: 'Allocate a separate legal number and immutable PDF to the prepared issuer cancellation; durable cycle reconciliation follows.',
+    auth: adminAuth,
+    body: {},
+    response: { 200: 'Issued credit-note metadata; original accepted payment is preserved.' },
+  },
+  {
+    method: 'GET',
+    path: '/internal/admin/billing/credit-notes/:creditNoteId/pdf',
+    description: 'Download the numbered legal credit note after bounded PDF SHA-256 verification.',
+    auth: adminAuth,
   },
   {
     method: 'POST',

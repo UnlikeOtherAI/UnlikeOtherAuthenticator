@@ -2,6 +2,7 @@ import { BillingAppKeyPurpose, BillingCreditAutoTopUpState } from '@prisma/clien
 import { describe, expect, it, vi } from 'vitest';
 
 import { getBillingCredits } from '../../src/services/billing-credits.service.js';
+import { AppError } from '../../src/utils/errors.js';
 
 const now = new Date('2026-07-21T12:00:00.000Z');
 const service = { id: 'service_1', identifier: 'deepwater', name: 'DeepWater' };
@@ -45,6 +46,8 @@ describe('shared credit reads while Stripe collection is disabled', () => {
       policy: null,
       catalogs: [],
       settlements: [],
+      prepaidReservations: [],
+      activeReservedMicrocredits: 0n,
       allocations: [],
       entries: [],
       periodEntries: [],
@@ -54,7 +57,7 @@ describe('shared credit reads while Stripe collection is disabled', () => {
       unresolvedSetupCheckouts: [],
       autoTopUpChargedMinor: 0n,
     };
-    const result = await getBillingCredits({ request, actorToken: 'actor', credential }, {
+    const deps = {
       now: () => now,
       resolveEntitlement: vi.fn(),
       resolveCollection: vi.fn().mockResolvedValue({
@@ -66,6 +69,7 @@ describe('shared credit reads while Stripe collection is disabled', () => {
       resolvePortfolioProduct: vi.fn().mockResolvedValue('deepwater'),
       fetchPortfolio,
       settlePortfolio,
+      hasPendingSettlementWatch: vi.fn().mockResolvedValue(false),
       resolveViewer: vi.fn().mockResolvedValue({
         userId: request.userId,
         organisationId: request.organisationId,
@@ -74,7 +78,8 @@ describe('shared credit reads while Stripe collection is disabled', () => {
       }),
       loadProjectionData: vi.fn().mockResolvedValue(data),
       resolveControlledBy: vi.fn().mockResolvedValue(null),
-    } as never);
+    } as never;
+    const result = await getBillingCredits({ request, actorToken: 'actor', credential }, deps);
 
     expect(fetchPortfolio).toHaveBeenCalled();
     expect(settlePortfolio).toHaveBeenCalled();
@@ -83,5 +88,22 @@ describe('shared credit reads while Stripe collection is disabled', () => {
       credit_balance: { label: 'Remaining credits', credits: '3000' },
       capabilities: { can_top_up: false, can_manage_automatic_top_up: false },
     });
+    expect('billing_status' in result).toBe(false);
+    settlePortfolio.mockRejectedValue(new AppError('INTERNAL', 409, 'LEDGER_METERING_UNRESOLVED_PAID_USAGE'));
+    const pending = await getBillingCredits({
+      request, actorToken: 'actor', credential, supportsBillingStatus: true,
+    }, deps);
+    expect(pending).toMatchObject({
+      credit_balance: { credits: '3000' },
+      billing_status: { settlement_state: 'pending_reconciliation' },
+    });
+    await expect(getBillingCredits({ request, actorToken: 'actor', credential }, deps))
+      .rejects.toThrow('BILLING_CREDITS_PENDING_RECONCILIATION');
+    settlePortfolio.mockReset();
+    deps.hasPendingSettlementWatch.mockResolvedValue(true);
+    const olderPeriodHold = await getBillingCredits({
+      request, actorToken: 'actor', credential, supportsBillingStatus: true,
+    }, deps);
+    expect(olderPeriodHold.billing_status?.settlement_state).toBe('pending_reconciliation');
   });
 });

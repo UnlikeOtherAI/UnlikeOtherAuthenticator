@@ -1,6 +1,5 @@
 import {
   BillingAdjustmentKind,
-  BillingAssignmentScope,
   MembershipStatus,
   type PrismaClient,
 } from '@prisma/client';
@@ -15,12 +14,8 @@ import { listApplicableCommercialAdjustments } from './billing-commercial-adjust
 import { fetchLedgerMeteringPortfolio } from './billing-ledger-collector.service.js';
 import type { FetchMeteringPortfolio } from './billing-metering.types.js';
 import { exactMoney, minorAmountToMajor } from './billing-money.service.js';
+import { resolveBillingTariffForMonth } from './billing-tariff-history.service.js';
 import {
-  listDirectTeamBillingServiceAccess,
-  type DirectBillingServiceAccess,
-} from './billing-service-access.service.js';
-import {
-  buildConnectedServicePortfolio,
   filterPortfolioForProduct,
 } from './billing-statement-portfolio.service.js';
 import {
@@ -55,7 +50,6 @@ export type OrganisationStatementContext = {
 type Dependencies = {
   prisma: PrismaClient;
   fetchPortfolio?: FetchMeteringPortfolio;
-  listDirectAccess?: typeof listDirectTeamBillingServiceAccess;
 };
 
 type TeamTariff = {
@@ -83,38 +77,10 @@ function publicMode(value: string): TeamTariff['mode'] {
  * organisation.
  */
 async function resolveTeamTariff(
-  params: { serviceId: string; organisationId: string; teamId: string },
+  params: { serviceId: string; organisationId: string; teamId: string; billingMonth: string },
   prisma: PrismaClient,
 ): Promise<TeamTariff> {
-  const [teamAssignment, orgAssignment, defaultTariff] = await Promise.all([
-    prisma.billingTariffAssignment.findFirst({
-      where: {
-        serviceId: params.serviceId,
-        orgId: params.organisationId,
-        teamId: params.teamId,
-        scope: BillingAssignmentScope.TEAM,
-        scopeKey: `${params.organisationId}:${params.teamId}`,
-        tariff: { serviceId: params.serviceId },
-      },
-      include: { tariff: true },
-    }),
-    prisma.billingTariffAssignment.findFirst({
-      where: {
-        serviceId: params.serviceId,
-        orgId: params.organisationId,
-        teamId: null,
-        scope: BillingAssignmentScope.ORGANISATION,
-        scopeKey: params.organisationId,
-        tariff: { serviceId: params.serviceId },
-      },
-      include: { tariff: true },
-    }),
-    prisma.billingTariff.findFirst({
-      where: { serviceId: params.serviceId, isDefault: true },
-    }),
-  ]);
-  const tariff = (teamAssignment ?? orgAssignment)?.tariff ?? defaultTariff;
-  if (!tariff) throw new AppError('INTERNAL', 500, 'BILLING_DEFAULT_TARIFF_MISSING');
+  const { tariff } = await resolveBillingTariffForMonth(prisma, params);
   return {
     id: tariff.id,
     key: tariff.key,
@@ -143,8 +109,8 @@ function teamCommercialLines(params: {
       id: `monthly_${params.tariff.id}_${params.teamId}`,
       kind: 'monthly_subscription',
       product: params.statementProduct,
-      label: `${params.tariff.name} monthly subscription`,
-      detail: `Tariff ${params.tariff.key} v${params.tariff.version}`,
+      label: 'Monthly subscription',
+      detail: 'Subscription charge for this billing period',
       amount: exactMoney(monthlyAmount, params.tariff.currency),
     },
     ...params.ratedLines.map((line) => ({ ...line, id: `${line.id}_${params.teamId}` })),
@@ -159,7 +125,7 @@ function teamCommercialLines(params: {
             ? ('credit' as const)
             : ('add_on' as const),
         product: params.statementProduct,
-        label: adjustment.name,
+        label: adjustment.kind === BillingAdjustmentKind.CREDIT ? 'Credit' : 'Additional charge',
         detail: adjustment.cadence === 'MONTHLY' ? 'Monthly adjustment' : 'One-time adjustment',
         amount: exactMoney(signed, adjustment.currency),
       };
@@ -173,7 +139,7 @@ async function buildTeamUsage(
   deps: Dependencies,
 ): Promise<BillingOrganisationTeamUsageV1> {
   const fetchPortfolio = deps.fetchPortfolio ?? fetchLedgerMeteringPortfolio;
-  const [portfolio, tariff, accesses, adjustments, members] = await Promise.all([
+  const [portfolio, tariff, adjustments, members] = await Promise.all([
     fetchPortfolio({
       product: context.statementProduct,
       organisationId: context.organisationId,
@@ -186,13 +152,10 @@ async function buildTeamUsage(
         serviceId: context.serviceId,
         organisationId: context.organisationId,
         teamId: team.id,
+        billingMonth: context.billingMonth,
       },
       deps.prisma,
     ),
-    (deps.listDirectAccess ?? listDirectTeamBillingServiceAccess)(
-      { organisationId: context.organisationId, teamId: team.id },
-      { prisma: deps.prisma },
-    ) as Promise<DirectBillingServiceAccess[]>,
     listApplicableCommercialAdjustments(
       {
         serviceId: context.serviceId,
@@ -247,13 +210,6 @@ async function buildTeamUsage(
       captured_at: portfolio.snapshot.capturedAt,
       sha256: portfolio.snapshot.sha256,
     },
-    connected_service_usage: buildConnectedServicePortfolio({
-      statementProduct: context.statementProduct,
-      userMetering: portfolio,
-      products: context.products,
-      accesses,
-      users: members.map((member) => member.user),
-    }),
     commercial_lines: commercialLines,
     totals: billingCommercialTotals(commercialLines),
   };

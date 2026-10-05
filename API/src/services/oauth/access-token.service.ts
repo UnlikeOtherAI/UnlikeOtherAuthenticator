@@ -140,6 +140,16 @@ export type ConfidentialAccessTokenClaims = {
   expiresAtEpochSeconds?: number;
   scope: string;
   actor?: ConfidentialActorChain;
+  jobCompute?: {
+    grant_id: string;
+    origin_invocation_id: string;
+    ledger_job_id: string;
+    water_job_id: string;
+    scope_turn_id: string | null;
+    purpose: 'research_compute' | 'scope_turn_compute';
+    origin_product: string;
+    origin_source_domain: string;
+  };
 } & ConfidentialTeamClaims;
 
 /**
@@ -168,6 +178,7 @@ export async function signConfidentialAccessToken(
     };
   }
   if (claims.actor) payload.act = claims.actor;
+  if (claims.jobCompute) payload.job_compute = claims.jobCompute;
 
   try {
     const token = new SignJWT(payload)

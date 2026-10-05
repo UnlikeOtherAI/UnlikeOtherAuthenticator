@@ -486,6 +486,62 @@ describe.skipIf(!databaseTestsEnabled)('credit automatic top-up PostgreSQL runti
     });
   }, 20_000);
 
+  it.each(['recent', 'expired', 'scan-failed'])('recovers scheduler interruption safely: %s', async (mode) => {
+    const suffix = `scheduler-${mode}`;
+    const row = scopedIds(suffix);
+    await handle!.prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe('SET LOCAL session_replication_role = replica');
+      await seedCreditAccount(tx, suffix, 100_000_000n, true);
+    });
+    // Commit the production claim, then interrupt before any Stripe call.
+    const claim = await claimCreditAutoTopUpAttempt(
+      { accountId: ids.account, creditAccountId: row.creditAccount }, { prisma: handle!.prisma },
+    );
+    expect(claim.kind).toBe('dispatch');
+    if (claim.kind !== 'dispatch') throw new Error('Expected a committed pending claim');
+    if (mode === 'expired') {
+      // Seed a historical immutable attempt, then exercise the real reader/dispatch.
+      await handle!.prisma.$transaction(async (tx) => {
+        await tx.$executeRawUnsafe('SET LOCAL session_replication_role = replica');
+        await tx.$executeRaw(Prisma.sql`
+          UPDATE billing_credit_auto_top_up_attempts
+          SET created_at = clock_timestamp() - INTERVAL '24 hours' WHERE id = ${claim.attemptId}
+        `);
+      });
+    }
+    const create = vi.fn().mockResolvedValue(paymentIntent(claim.attemptId, suffix));
+    const stripe = {
+      accounts: { retrieveCurrent: vi.fn().mockResolvedValue({ id: stripeAccount.stripeAccountId }) },
+      events: { list: mode === 'scan-failed'
+        ? vi.fn().mockRejectedValue(new Error('event transport unavailable'))
+        : vi.fn().mockResolvedValue({ data: [], has_more: false }) },
+      paymentIntents: { create },
+    } as never;
+    const runCycle = () => runCreditAutoTopUpCycle({
+      prisma: handle!.prisma, stripe, stripeLivemode: false,
+      listCandidates: vi.fn().mockResolvedValue([row.creditAccount]),
+    });
+    const results = await Promise.all([runCycle(), runCycle()]);
+    const attempts = await handle!.prisma.billingCreditAutoTopUpAttempt.findMany({
+      where: { creditAccountId: row.creditAccount },
+    });
+    expect(attempts).toHaveLength(1);
+    expect(attempts[0].id).toBe(claim.attemptId);
+    if (mode === 'recent') {
+      expect(create).toHaveBeenCalledTimes(1);
+      expect(create.mock.calls[0]?.[1]).toEqual({ idempotencyKey: attempts[0].idempotencyKey });
+      expect(results.map((r) => r.submitted).sort()).toEqual([0, 1]);
+      expect(attempts[0].stripePaymentIntentId).toBe(`pi_auto_top_up_${suffix}`);
+    } else {
+      expect(create).not.toHaveBeenCalled();
+      expect(results.every((r) => r.awaitingWebhook === 1)).toBe(true);
+      expect(attempts[0].stripePaymentIntentId).toBeNull();
+    }
+    expect(await handle!.prisma.billingCreditEntry.count({
+      where: { sourceType: 'credit_auto_top_up_attempt', sourceId: claim.attemptId },
+    })).toBe(0);
+  }, 20_000);
+
   it('attaches an exact PaymentIntent returned inside an off-session Stripe error', async () => {
     const create = vi.fn(async (_params: unknown, options: { idempotencyKey?: string }) => {
       const attempt = await handle!.prisma.billingCreditAutoTopUpAttempt.findFirstOrThrow({

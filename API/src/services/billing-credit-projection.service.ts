@@ -15,7 +15,6 @@ import {
 import {
   billingCreditAmount,
   billingCreditsPaymentMoney,
-  billingWholeCredits,
 } from './billing-credit-display.service.js';
 import {
   buildManagerCreditRecentEntries,
@@ -49,9 +48,29 @@ function latestAllocations(data: BillingCreditProjectionData) {
   return [...rows.values()];
 }
 
+function prepaidByService(data: BillingCreditProjectionData) {
+  const grouped = new Map<string, {
+    service: { id: string; identifier: string; name: string };
+    total: bigint;
+    users: Map<string, bigint>;
+  }>();
+  for (const row of data.prepaidReservations) {
+    if (row.status !== 'SETTLED') continue;
+    const product = row.tariff.service;
+    const item = grouped.get(product.id) ?? { service: product, total: 0n,
+      users: new Map<string, bigint>() };
+    const amount = row.debitedMicrocredits ?? 0n;
+    item.total += amount;
+    item.users.set(row.userId, (item.users.get(row.userId) ?? 0n) + amount);
+    grouped.set(product.id, item);
+  }
+  return [...grouped.values()].sort((a, b) =>
+    a.service.identifier.localeCompare(b.service.identifier));
+}
+
 function managerBreakdown(data: BillingCreditProjectionData) {
   const allocations = latestAllocations(data);
-  return data.settlements.map((settlement) => {
+  const settled = data.settlements.map((settlement) => {
     const rows = allocations.filter((row) => row.settlementId === settlement.id);
     return {
       service: service(settlement.service),
@@ -81,11 +100,23 @@ function managerBreakdown(data: BillingCreditProjectionData) {
         }),
     };
   });
+  const prepaid = prepaidByService(data).map((row) => ({
+    service: service(row.service),
+    credits_consumed: billingCreditAmount(row.total),
+    unattributed_credits_consumed: billingCreditAmount(0n),
+    users: [...row.users.entries()].map(([userId, amount]) => ({
+      user_id: userId,
+      display_name: data.entries.find((entry) => entry.attributedUserId === userId)
+        ?.attributedUser?.name ?? 'Team member',
+      credits_consumed: billingCreditAmount(amount),
+    })),
+  }));
+  return [...settled, ...prepaid];
 }
 
 function memberBreakdown(data: BillingCreditProjectionData, viewerId: string) {
   const allocations = latestAllocations(data);
-  return data.settlements.map((settlement) => {
+  const settled = data.settlements.map((settlement) => {
     const rows = allocations.filter((row) => row.settlementId === settlement.id);
     const viewer =
       rows.find((row) => row.attributedUserId === viewerId)
@@ -105,6 +136,15 @@ function memberBreakdown(data: BillingCreditProjectionData, viewerId: string) {
       unattributed_credits_consumed: billingCreditAmount(unattributed),
     };
   });
+  const prepaid = prepaidByService(data).map((row) => {
+    const viewer = row.users.get(viewerId) ?? 0n;
+    return { service: service(row.service),
+      credits_consumed: billingCreditAmount(row.total),
+      viewer_credits_consumed: billingCreditAmount(viewer),
+      other_team_members_credits_consumed: billingCreditAmount(row.total - viewer),
+      unattributed_credits_consumed: billingCreditAmount(0n) };
+  });
+  return [...settled, ...prepaid];
 }
 
 export function buildBillingCreditsProjection(params: {
@@ -116,6 +156,7 @@ export function buildBillingCreditsProjection(params: {
   now: Date;
   actionReadiness?: BillingCreditActionReadiness;
   controlledBy?: BillingControlledByV1 | null;
+  settlementPending?: boolean;
 }): BillingCreditsV1 {
   const { data, viewer } = params;
   const controlledBy = params.controlledBy ?? null;
@@ -145,9 +186,12 @@ export function buildBillingCreditsProjection(params: {
       .map((entry) => entry.amountMicrocredits),
   );
   const creditsConsumed = sum(
-    data.settlements.map((settlement) => settlement.cumulativeCreditsConsumedMicrocredits),
+    [...data.settlements.map((settlement) => settlement.cumulativeCreditsConsumedMicrocredits),
+      ...data.prepaidReservations.filter((row) => row.status === 'SETTLED')
+        .map((row) => row.debitedMicrocredits ?? 0n)],
   );
-  const wholeCreditBalance = billingWholeCredits(data.creditAccount.balanceMicrocredits);
+  const availableBalance = data.creditAccount.balanceMicrocredits -
+    data.activeReservedMicrocredits;
   const requestBody = {
     product: params.credential.service.identifier,
     organisation_id: viewer.organisationId,
@@ -168,7 +212,7 @@ export function buildBillingCreditsProjection(params: {
       credits_per_usd: '1000' as const,
       settlement_currency: 'USD' as const,
       description:
-        '1,000 credits always equal US$1.00. Usage is accumulated exactly, but only complete credits are deducted.',
+        '1,000 credits always equal US$1.00. Usage and balances retain microcredit precision.',
     },
     current_period: {
       starts_at: params.period.startsAt.toISOString(),
@@ -179,15 +223,17 @@ export function buildBillingCreditsProjection(params: {
       stripe_mode: params.collection.account.livemode ? ('live' as const) : ('test' as const),
     },
     credit_balance: {
-      ...billingCreditAmount(data.creditAccount.balanceMicrocredits),
+      ...billingCreditAmount(availableBalance),
       state:
-        wholeCreditBalance > 0n
+        availableBalance > 0n
           ? ('available' as const)
-          : wholeCreditBalance < 0n
+          : availableBalance < 0n
             ? ('debt' as const)
             : ('zero' as const),
       label: 'Remaining credits' as const,
-      description: 'This balance is shared by the exact team across connected services.',
+      description: data.creditAccount.scope === 'ORGANISATION'
+        ? 'This balance is shared across the organisation’s teams and connected services.'
+        : 'This balance is shared by the exact team across connected services.',
     },
     pending_credits: {
       top_up_count: pendingCount,
@@ -197,6 +243,12 @@ export function buildBillingCreditsProjection(params: {
         'Pending credits await verified payment and are not included in remaining credits.',
     },
     ...(controlledBy ? { controlled_by: controlledBy } : {}),
+    ...(params.settlementPending ? {
+      billing_status: {
+        settlement_state: 'pending_reconciliation' as const,
+        message: 'Your confirmed credit balance is available. Recent usage is still being reconciled and is not included in the confirmed usage total yet.',
+      },
+    } : {}),
   };
   const summary = {
     credits_added: billingCreditAmount(creditsAdded),

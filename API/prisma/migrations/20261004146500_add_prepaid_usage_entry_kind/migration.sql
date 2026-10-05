@@ -1,0 +1,1 @@
+ALTER TYPE "BillingCreditEntryKind" ADD VALUE 'PREPAID_USAGE';

@@ -71,6 +71,7 @@ export function fundingTopUpCheckout() {
     stripePaymentIntentId: null,
     status: BillingCreditCheckoutStatus.OPEN,
     customer: { stripeCustomerId: 'cus_team_1' },
+    creditAccount: { orgId: 'org_1', teamId: 'team_1' },
   };
 }
 

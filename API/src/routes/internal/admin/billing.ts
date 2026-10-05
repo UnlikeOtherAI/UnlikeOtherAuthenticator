@@ -18,6 +18,7 @@ import {
   setDefaultBillingTariff,
   upsertBillingTariffAssignment,
 } from '../../../services/billing-tariff.service.js';
+import { markupPercentToBps } from '../../../services/billing-markup-percent.service.js';
 import { listBillingServices } from '../../../services/billing-tariff-read.service.js';
 import {
   serializeBillingAppKey,
@@ -41,6 +42,9 @@ const MonthlySchema = z
   .object({
     amount_minor: z.string().regex(/^(0|[1-9]\d*)$/),
     currency: z.string().trim().length(3),
+    charge_basis: z.enum(['flat', 'per_seat']).optional(),
+    seat_policy: z.enum(['automatic', 'fixed']).optional(),
+    seat_charge_timing: z.enum(['full_month', 'prorated']).optional(),
   })
   .strict();
 const TariffSchema = z
@@ -49,8 +53,9 @@ const TariffSchema = z
     name: z.string().trim().min(1).max(120),
     mode: z.enum(['standard', 'free', 'at_cost', 'custom']),
     collection_mode: z.enum(['stripe', 'manual', 'none']),
-    markup_bps: z.number().int().min(0).max(100_000),
+    markup_percent: z.string().optional(),
     monthly_subscription: MonthlySchema,
+    usage_payment_mode: z.enum(['pay_as_you_go', 'prepaid']).optional(),
   })
   .strict();
 const CreateServiceSchema = z
@@ -119,8 +124,13 @@ function tariffInput(body: z.infer<typeof TariffSchema>) {
     name: body.name,
     mode: body.mode,
     collectionMode: body.collection_mode,
-    markupBps: body.markup_bps,
+    markupBps: body.markup_percent === undefined ? undefined :
+      markupPercentToBps(body.markup_percent),
     monthlyAmountMinor: body.monthly_subscription.amount_minor,
+    monthlyChargeBasis: body.monthly_subscription.charge_basis,
+    seatPolicy: body.monthly_subscription.seat_policy,
+    seatChargeTiming: body.monthly_subscription.seat_charge_timing,
+    usagePaymentMode: body.usage_payment_mode,
     currency: body.monthly_subscription.currency,
   };
 }

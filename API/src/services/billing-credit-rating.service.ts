@@ -1,7 +1,7 @@
-import { BillingTariffMode } from '@prisma/client';
+import { BillingTariffMode, BillingUsagePaymentMode } from '@prisma/client';
 
 import { AppError } from '../utils/errors.js';
-import type { NormalizedMeteringPortfolio } from './billing-metering.types.js';
+import { meteringIsComplete, type NormalizedMeteringPortfolio } from './billing-metering.types.js';
 import { addBillingDecimals, multiplyBillingDecimalByBps } from './billing-money.service.js';
 import { stripeMeterQuantityFromMajorAmount } from './billing-stripe-usage-validation.service.js';
 
@@ -14,6 +14,7 @@ export type CreditRatingService = {
     mode: BillingTariffMode;
     markupBps: number;
     currency: string;
+    usagePaymentMode?: BillingUsagePaymentMode;
   };
 };
 
@@ -44,6 +45,7 @@ type Bucket = {
   ratedMicroMinor: bigint;
   previousConsumedMicrocredits: bigint;
   targetConsumedCredits: bigint;
+  additionalCapacityCredits?: bigint;
 };
 
 const MICROCREDITS_PER_CREDIT = 1_000_000n;
@@ -55,17 +57,20 @@ function bucketKey(serviceId: string, userId: string | null): string {
 }
 
 function compareBuckets(left: Bucket, right: Bucket): number {
-  const service = left.service.identifier.localeCompare(right.service.identifier);
+  const service = Buffer.compare(Buffer.from(left.service.identifier), Buffer.from(right.service.identifier));
   if (service !== 0) return service;
   if (left.userId === right.userId) return 0;
   if (left.userId === null) return 1;
   if (right.userId === null) return -1;
-  return left.userId.localeCompare(right.userId);
+  return Buffer.compare(Buffer.from(left.userId), Buffer.from(right.userId));
 }
 
 function selectedCost(line: NormalizedMeteringPortfolio['lines'][number]): string | null {
-  if (line.selectedProviderCost === null && line.currency === null) return null;
-  if (line.selectedProviderCost === null || line.currency !== 'USD') {
+  if (line.selectedProviderCost === null && line.currency === null) {
+    if (line.billingDisposition === 'nonbillable') return null;
+    throw new AppError('INTERNAL', 502, 'LEDGER_CREDIT_COST_MISSING');
+  }
+  if (line.billingDisposition !== 'paid' || line.selectedProviderCost === null || line.currency !== 'USD') {
     throw new AppError('INTERNAL', 502, 'LEDGER_CREDIT_COST_INVALID');
   }
   return line.selectedProviderCost;
@@ -81,7 +86,40 @@ function ratedMicroMinor(baseCost: string, service: CreditRatingService): bigint
 }
 
 function billableCreditCapacity(bucket: Bucket): bigint {
-  return bucket.ratedMicroMinor / MICRO_MINOR_PER_CREDIT;
+  return bucket.additionalCapacityCredits === undefined
+    ? bucket.ratedMicroMinor / MICRO_MINOR_PER_CREDIT
+    : bucket.targetConsumedCredits + bucket.additionalCapacityCredits;
+}
+
+function capAdditionalCreditCapacity(
+  buckets: Bucket[], budgets: ReadonlyMap<string, bigint> | undefined,
+): void {
+  if (!budgets) return;
+  for (const [serviceId, budget] of budgets) {
+    if (budget < 0n) throw new AppError('INTERNAL', 500, 'BILLING_CREDIT_CAP_INVALID');
+    const group = buckets.filter((bucket) => bucket.service.id === serviceId);
+    const capacities = group.map((bucket) =>
+      bucket.ratedMicroMinor / MICRO_MINOR_PER_CREDIT - bucket.targetConsumedCredits);
+    const total = capacities.reduce((sum, value) => sum + value, 0n);
+    if (total <= budget) continue;
+    let allocated = 0n;
+    const remainders = group.map((bucket, index) => {
+      const numerator = (capacities[index] ?? 0n) * budget;
+      const capacity = numerator / total;
+      bucket.additionalCapacityCredits = capacity;
+      allocated += capacity;
+      return { bucket, remainder: numerator % total };
+    });
+    remainders.sort((left, right) => {
+      if (left.remainder !== right.remainder) return left.remainder > right.remainder ? -1 : 1;
+      return compareBuckets(left.bucket, right.bucket);
+    });
+    for (const candidate of remainders) {
+      if (allocated === budget) break;
+      candidate.bucket.additionalCapacityCredits = (candidate.bucket.additionalCapacityCredits ?? 0n) + 1n;
+      allocated += 1n;
+    }
+  }
 }
 
 function allocateAdditionalCredits(buckets: Bucket[], requestedCredits: bigint): void {
@@ -128,7 +166,11 @@ export function rateCreditPortfolio(params: {
   previousAllocations: PreviousCreditAllocation[];
   balanceMicrocredits: bigint;
   validTeamUserIds: Set<string>;
+  maxAdditionalCreditsByService?: ReadonlyMap<string, bigint>;
 }): RatedCreditService[] {
+  if (!meteringIsComplete(params.portfolio.billingCompleteness)) {
+    throw new AppError('INTERNAL', 409, 'LEDGER_METERING_UNRESOLVED_PAID_USAGE');
+  }
   const servicesByIdentifier = new Map(
     params.services.map((service) => [service.identifier, service]),
   );
@@ -145,6 +187,7 @@ export function rateCreditPortfolio(params: {
       throw new AppError('INTERNAL', 502, 'LEDGER_CREDIT_USER_INVALID');
     }
     const cost = selectedCost(line);
+    if (service.tariff.usagePaymentMode === BillingUsagePaymentMode.PREPAID) continue;
     if (cost === null) continue;
     const key = bucketKey(service.id, line.userId);
     const current = baseCosts.get(key);
@@ -185,6 +228,10 @@ export function rateCreditPortfolio(params: {
     } satisfies Bucket;
   });
   buckets.sort(compareBuckets);
+
+  // Stripe's reserved/exported liability caps additional prepaid allocation,
+  // but new unexported usage in the same month can still use fresh credits.
+  capAdditionalCreditCapacity(buckets, params.maxAdditionalCreditsByService);
 
   const releasedMicrocredits = buckets.reduce(
     (sum, bucket) =>
@@ -232,6 +279,6 @@ export function rateCreditPortfolio(params: {
     });
   }
   return [...byService.values()].sort((left, right) =>
-    left.service.identifier.localeCompare(right.service.identifier),
+    Buffer.compare(Buffer.from(left.service.identifier), Buffer.from(right.service.identifier)),
   );
 }

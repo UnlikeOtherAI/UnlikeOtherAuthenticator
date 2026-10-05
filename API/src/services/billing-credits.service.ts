@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@prisma/client';
 
+import { getAdminPrisma } from '../db/prisma.js';
 import type { BillingActorEndpoint } from './billing-actor-audience.service.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
 import {
@@ -19,6 +20,7 @@ import { resolveBillingFundingViewer } from './billing-funding-viewer.service.js
 import { resolveBillingControlledBy } from './billing-org-responsibility.service.js';
 import { fetchLedgerMeteringPortfolio } from './billing-ledger-collector.service.js';
 import type { FetchMeteringPortfolio } from './billing-metering.types.js';
+import { AppError } from '../utils/errors.js';
 
 export type BillingCreditsRequest = {
   product: string;
@@ -40,7 +42,22 @@ type Dependencies = {
   loadProjectionData?: typeof loadBillingCreditProjectionData;
   resolveActionReadiness?: typeof resolveBillingCreditActionReadiness;
   resolveControlledBy?: typeof resolveBillingControlledBy;
+  hasPendingSettlementWatch?: (creditAccountId: string, teamId: string) => Promise<boolean>;
 };
+
+async function hasPendingSettlementWatch(
+  creditAccountId: string,
+  teamId: string,
+  prisma: PrismaClient,
+): Promise<boolean> {
+  return (await prisma.billingCreditSettlementWatch.count({
+    where: {
+      creditAccountId,
+      teamId,
+      OR: [{ lastCheckedAt: null }, { lastError: { not: null } }],
+    },
+  })) > 0;
+}
 
 export async function getBillingCredits(
   params: {
@@ -48,6 +65,7 @@ export async function getBillingCredits(
     actorToken: string;
     credential: VerifiedBillingAppKey;
     endpoint: BillingActorEndpoint;
+    supportsBillingStatus?: boolean;
   },
   deps?: Dependencies,
 ) {
@@ -83,26 +101,42 @@ export async function getBillingCredits(
   )(
     {
       creditAccountId: creditAccount.id,
+      teamId: params.request.teamId,
       billingMonth: period.key,
       fallbackProduct: params.credential.service.identifier,
     },
     { prisma },
   );
-  const portfolio = await (deps?.fetchPortfolio ?? fetchLedgerMeteringPortfolio)({
-    product: portfolioProduct,
-    organisationId: params.request.organisationId,
-    teamId: params.request.teamId,
-    billingMonth: period.key,
-    groupBy: 'user',
-  });
-  await (deps?.settlePortfolio ?? settleCreditPortfolio)(
-    {
-      creditAccountId: creditAccount.id,
-      portfolio,
-      credential: params.credential,
-    },
-    { prisma },
-  );
+  let settlementPending = false;
+  try {
+    const portfolio = await (deps?.fetchPortfolio ?? fetchLedgerMeteringPortfolio)({
+      product: portfolioProduct,
+      organisationId: params.request.organisationId,
+      teamId: params.request.teamId,
+      billingMonth: period.key,
+      groupBy: 'user',
+    });
+    await (deps?.settlePortfolio ?? settleCreditPortfolio)(
+      {
+        creditAccountId: creditAccount.id,
+        portfolio,
+        credential: params.credential,
+      },
+      { prisma },
+    );
+  } catch (error) {
+    if (!(error instanceof AppError) || !(error.message.startsWith('LEDGER_') || [
+      'BILLING_CREDIT_LEGACY_RECONCILIATION_REQUIRED',
+      'BILLING_CREDIT_PAYER_TRANSITION_RECONCILIATION_REQUIRED',
+      'BILLING_CREDIT_HISTORICAL_PAYER_MISMATCH',
+      'BILLING_CREDIT_PAYER_HISTORY_MISSING',
+      'BILLING_CREDIT_PAYER_PREHISTORY_UNCERTAIN',
+    ].includes(error.message))) throw error;
+    settlementPending = true;
+  }
+  settlementPending ||= await (deps?.hasPendingSettlementWatch
+    ? deps.hasPendingSettlementWatch(creditAccount.id, params.request.teamId)
+    : hasPendingSettlementWatch(creditAccount.id, params.request.teamId, prisma ?? getAdminPrisma()));
   const [viewer, data, controlledBy] = await Promise.all([
     (deps?.resolveViewer ?? resolveBillingFundingViewer)(
       {
@@ -115,6 +149,7 @@ export async function getBillingCredits(
     (deps?.loadProjectionData ?? loadBillingCreditProjectionData)(
       {
         creditAccountId: creditAccount.id,
+        teamId: params.request.teamId,
         accountId: collection.account.id,
         storefrontServiceId: params.credential.service.id,
         period,
@@ -129,6 +164,9 @@ export async function getBillingCredits(
   const actionReadiness = await (
     deps?.resolveActionReadiness ?? resolveBillingCreditActionReadiness
   )({ collection, credential: params.credential, data });
+  if (settlementPending && !params.supportsBillingStatus) {
+    throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_CREDITS_PENDING_RECONCILIATION');
+  }
   return buildBillingCreditsProjection({
     credential: params.credential,
     collection,
@@ -138,5 +176,6 @@ export async function getBillingCredits(
     now,
     actionReadiness,
     controlledBy,
+    settlementPending,
   });
 }
