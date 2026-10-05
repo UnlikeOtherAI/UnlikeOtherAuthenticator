@@ -510,4 +510,9 @@ not instant aggregate visibility; invoice reconciliation is verified after Strip
 asynchronously recomputes the draft at finalization.
 
 ---
+
+Automatic top-up disable remains available during an unresolved payment. Only the
+original verified lifecycle event may settle that older attempt; settlement never
+restores disabled consent. Recovery uses a bounded exact-account Stripe Events
+scan and the existing validation and deduplication path, never a replacement charge.
 `;

@@ -1298,6 +1298,26 @@ charge, SetupIntent, refund, and dispute binding drift also fails retryably.
 Invoice reconciliation events received while collection is disabled remain
 unconsumed so an operator can replay/reconcile them before enabling collection.
 
+For a pending automatic attempt, the scheduler also performs one account-level
+Stripe Events API scan to recover original payment lifecycle events missed by
+webhook delivery, including when Stripe created the PaymentIntent but its ID
+was not persisted. The scan is
+bounded to five pages of 100 events and to the attempt window (with a five-minute
+clock allowance), capped at Stripe's 30-day event retention. It considers only
+the original Stripe events returned for the configured account and mode, then
+uses the same event version/account checks, freshly retrieved PaymentIntent
+binding validation, durable event deduplication, and atomic funding apply as a
+signed webhook. An unbound attempt can match only an original Event whose
+reserved attempt metadata exactly identifies it; full Stripe object binding
+checks then establish the PaymentIntent ID. It never creates a replacement
+PaymentIntent. Recovery continues
+for an already-pending attempt even if auto-top-up consent was later disabled;
+turning off automatic top-ups prevents new attempts, while a payment already
+started may still complete.
+An absent event, expired window, incomplete/failed scan, or invalid event remains
+unresolved and is reported as a bounded diagnostic; it does not mark the attempt
+paid or add credits. Replaying an event cannot add credits twice.
+
 The public credit view is a manager/member discriminated union. A manager may
 receive per-user usage, payment-method display data, consent actor details, and
 enabled funding actions. An ordinary member receives the shared remaining and
@@ -1333,6 +1353,13 @@ metadata fails retryably rather than consuming the webhook event. For Stripe's
 `2026-06-24.dahlia` contract, the canonical invoice-line subscription proof is
 `parent.subscription_item_details`; the omitted legacy line-level subscription
 alias is tolerated, but when Stripe supplies it the alias must match exactly.
+Paid `subscription_cycle` invoices use the same exact customer, subscription,
+item, Price, quantity, amount, currency, and no-discount/no-tax/no-credit/no-
+shipping/no-proration proof. They update the current period only after the
+immutable paid initial-invoice proof exists; a cycle delivered first remains
+uncommitted and retryable until that prerequisite arrives. Renewal processing
+never changes the initial invoice, activation event, or activation timestamp,
+and a late renewal cannot restore a terminal subscription.
 
 Cancellation preview refreshes Stripe before minting an opaque five-minute
 capability, stores only its digest, and permits one unresolved intent per exact
@@ -1390,6 +1417,56 @@ webhooks must match the local customer, immutable terms, and reserved metadata
 before funding or consent is committed. A policy, catalog, payment method,
 consent, or Stripe binding gap disables the corresponding projected action and
 fails a forged direct request closed.
+
+An active automatic-top-up account with a saved card may replace that card
+through the existing recovery action only when there is no unresolved payment
+attempt. It opens the same Setup Checkout for the currently selected option.
+The saved card and immutable consent revision remain current until a verified
+`setup_intent.succeeded` event passes the exact Checkout, customer, metadata,
+generation, and consent-predecessor checks; canceling or expiring the Checkout
+does not change either. An automatic attempt created while replacement Checkout
+is open remains bound to its original immutable consent revision and payment
+method. Its durable attempt identity permits one Stripe dispatch and subsequent
+recovery uses that same idempotency key; card replacement cannot rebind or
+repeat the charge.
+
+Payment-card expiry is derived from a freshly retrieved, exact customer-bound
+Stripe card's `exp_year` and `exp_month`. The card remains valid through the
+last day of that month in UTC; only an earlier expiry month is `expired`. A
+failed or mismatched Stripe read disables the affected action but never
+classifies the card as expired. The existing credit protocol status field
+carries this projection; no route or protocol shape is added.
+
+Turning off automatic top-up revokes future consent even while an older
+attempt is unresolved. The disable transaction advances the generation,
+removes the current account consent and card pointer, and leaves that attempt
+and its immutable consent revision intact. An attempt with a persisted Payment
+Intent waits for its matching webhook; an attempt whose Stripe request timed
+out before its Payment Intent ID was saved is never retried after disable, but
+an exact late event may still settle it once. Neither path can restore consent
+or activate automatic top-up.
+
+The manager who disables a shared credit account may use any currently
+authorized lifecycle app key for that exact team, including one from another
+connected service or a rotated key. The disable audit records the acting app
+and service; the unresolved attempt and later Stripe event stay bound to the
+original consent's app and service.
+
+The projected automatic-top-up state is `paused` when the saved monthly limit
+cannot cover one full refill, including when a positive remainder is smaller
+than that refill. The projection keeps the exact charged and remaining money
+values and gives the reset date from the current UTC billing period end; it
+does not infer a smaller refill or alter the saved limit.
+
+When a team already has one pending top-up Checkout, the read projection may
+offer **Continue payment** only for that Checkout's exact active offer after
+rechecking its current Stripe session and the immutable account, team credit
+account, customer, product app key, service, catalog amount, credit quantity,
+and pinned return-URL digests. Other offers remain unavailable while that
+payment is pending. This read never changes checkout state; only a verified
+PaymentIntent webhook adds credits. Recovery updates are conditional on the
+checkout still being pending, so a webhook-completed checkout cannot be
+downgraded or redirected using a stale Stripe read.
 
 Disable authority is bound inside the database transaction. The immutable
 disable audit event identifies the exact requester, active lifecycle app key,

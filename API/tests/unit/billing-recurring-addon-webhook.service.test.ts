@@ -211,9 +211,9 @@ function paidInvoice(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function event(type: string, object: unknown) {
+function event(type: string, object: unknown, id?: string) {
   return {
-    id: `evt_${type.replaceAll('.', '_')}`,
+    id: id ?? `evt_${type.replaceAll('.', '_')}`,
     type,
     api_version: '2026-06-24.dahlia',
     account: account.stripeAccountId,
@@ -298,6 +298,245 @@ describe('recurring add-on Stripe webhook proof', () => {
         entitlementActivatedAt: new Date('2026-07-21T12:00:00.000Z'),
       }),
     });
+  });
+
+  it.each([
+    ['month 1', 'in_privacy_month_1', 1_785_571_200, 1_788_163_200],
+    ['month 2', 'in_privacy_month_2', 1_788_163_200, 1_790_841_600],
+    ['month 3', 'in_privacy_month_3', 1_790_841_600, 1_793_433_600],
+  ])(
+    'accepts and projects a fully verified renewal for %s without changing initial proof',
+    async (_month, invoiceId, periodStart, periodEnd) => {
+      const invoice = paidInvoice({ id: invoiceId, billing_reason: 'subscription_cycle' });
+      const initialPaidAt = new Date('2026-07-21T12:00:00.000Z');
+      const activatedAt = new Date('2026-07-21T12:00:00.000Z');
+      const local = localSubscription({
+        initialInvoicePaidAt: initialPaidAt,
+        initialInvoiceId: 'in_privacy_initial',
+        activationWebhookEventId: 'webhook_initial',
+        entitlementActivatedAt: activatedAt,
+      });
+      const remote = remoteSubscription({
+        items: {
+          data: [
+            {
+              id: 'si_privacy',
+              quantity: 1,
+              discounts: [],
+              current_period_start: periodStart,
+              current_period_end: periodEnd,
+              price: {
+                id: catalog.stripePriceId,
+                recurring: { interval: 'month', usage_type: 'licensed' },
+              },
+            },
+          ],
+        },
+      });
+      const prisma = {
+        billingRecurringAddonCheckout: { findUnique: vi.fn(), findFirst: vi.fn() },
+        billingRecurringAddonSubscription: { findUnique: vi.fn().mockResolvedValue(local) },
+      };
+      const stripe = {
+        checkout: { sessions: { retrieve: vi.fn() } },
+        subscriptions: { retrieve: vi.fn().mockResolvedValue(remote) },
+        invoices: { retrieve: vi.fn().mockResolvedValue(invoice) },
+      };
+      const prepared = await prepareRecurringAddonWebhook(
+        event('invoice.paid', invoice, `evt_paid_${invoiceId}`) as never,
+        stripe as never,
+        account,
+        prisma as never,
+      );
+      expect(prepared?.kind).toBe('invoice_renewal');
+      if (!prepared || prepared.kind !== 'invoice_renewal') {
+        throw new Error('Expected recurring add-on renewal preparation');
+      }
+
+      const update = vi.fn();
+      const tx = {
+        billingRecurringAddonCheckout: { update: vi.fn(), updateMany: vi.fn() },
+        billingRecurringAddonSubscription: { create: vi.fn(), updateMany: update },
+      };
+      await applyRecurringAddonWebhook(tx as never, prepared, 'webhook_renewal', account);
+      const updateData = update.mock.calls[0]?.[0]?.data as Record<string, unknown>;
+      expect(updateData).toMatchObject({
+        status: 'active',
+        currentPeriodStart: new Date(periodStart * 1000),
+        currentPeriodEnd: new Date(periodEnd * 1000),
+      });
+      expect(updateData).not.toHaveProperty('initialInvoicePaidAt');
+      expect(updateData).not.toHaveProperty('initialInvoiceId');
+      expect(updateData).not.toHaveProperty('activationWebhookEventId');
+      expect(updateData).not.toHaveProperty('entitlementActivatedAt');
+
+      // A second delivery of the same paid invoice is projection-idempotent and
+      // cannot rewrite the one-time initial activation evidence.
+      await applyRecurringAddonWebhook(tx as never, prepared, 'webhook_renewal_replay', account);
+      expect(update).toHaveBeenCalledTimes(2);
+      expect(update.mock.calls[1]?.[0]?.data).toEqual(update.mock.calls[0]?.[0]?.data);
+    },
+  );
+
+  it('retries a verified renewal until initial payment evidence exists', async () => {
+    const invoice = paidInvoice({
+      id: 'in_privacy_early_cycle',
+      billing_reason: 'subscription_cycle',
+    });
+    const local = localSubscription();
+    const prisma = {
+      billingRecurringAddonCheckout: { findUnique: vi.fn(), findFirst: vi.fn() },
+      billingRecurringAddonSubscription: { findUnique: vi.fn().mockResolvedValue(local) },
+    };
+    const stripe = {
+      checkout: { sessions: { retrieve: vi.fn() } },
+      subscriptions: { retrieve: vi.fn().mockResolvedValue(remoteSubscription()) },
+      invoices: { retrieve: vi.fn().mockResolvedValue(invoice) },
+    };
+
+    await expect(
+      prepareRecurringAddonWebhook(
+        event('invoice.paid', invoice) as never,
+        stripe as never,
+        account,
+        prisma as never,
+      ),
+    ).rejects.toMatchObject({
+      statusCode: 503,
+      message: 'STRIPE_RECURRING_ADDON_INITIAL_PAYMENT_REQUIRED',
+    });
+  });
+
+  it('treats the same initial invoice as an idempotent duplicate and rejects a rebind', async () => {
+    const invoice = paidInvoice();
+    const local = localSubscription({
+      initialInvoicePaidAt: now,
+      initialInvoiceId: invoice.id,
+      activationWebhookEventId: 'webhook_initial',
+      entitlementActivatedAt: now,
+    });
+    const prisma = {
+      billingRecurringAddonCheckout: { findUnique: vi.fn(), findFirst: vi.fn() },
+      billingRecurringAddonSubscription: { findUnique: vi.fn().mockResolvedValue(local) },
+    };
+    const stripe = {
+      checkout: { sessions: { retrieve: vi.fn() } },
+      subscriptions: { retrieve: vi.fn().mockResolvedValue(remoteSubscription()) },
+      invoices: { retrieve: vi.fn().mockResolvedValue(invoice) },
+    };
+    const prepared = await prepareRecurringAddonWebhook(
+      event('invoice.paid', invoice, 'evt_initial_invoice_duplicate') as never,
+      stripe as never,
+      account,
+      prisma as never,
+    );
+    if (!prepared || prepared.kind !== 'invoice_paid') {
+      throw new Error('Expected recurring add-on initial invoice preparation');
+    }
+    const update = vi.fn();
+    const tx = {
+      billingRecurringAddonCheckout: { update: vi.fn(), updateMany: vi.fn() },
+      billingRecurringAddonSubscription: { create: vi.fn(), update },
+    };
+    await applyRecurringAddonWebhook(tx as never, prepared, 'webhook_duplicate', account);
+    expect(update).not.toHaveBeenCalled();
+
+    const reboundInvoice = paidInvoice({ id: 'in_privacy_rebound' });
+    stripe.invoices.retrieve.mockResolvedValue(reboundInvoice);
+    const rebound = await prepareRecurringAddonWebhook(
+      event('invoice.paid', reboundInvoice, 'evt_initial_invoice_rebound') as never,
+      stripe as never,
+      account,
+      prisma as never,
+    );
+    if (!rebound || rebound.kind !== 'invoice_paid') {
+      throw new Error('Expected initial invoice rebind preparation');
+    }
+    await expect(
+      applyRecurringAddonWebhook(tx as never, rebound, 'webhook_rebound', account),
+    ).rejects.toMatchObject({
+      statusCode: 503,
+      message: 'STRIPE_RECURRING_ADDON_ACTIVATION_REBIND_FORBIDDEN',
+    });
+  });
+
+  it.each([
+    ['amount mismatch', { amount_paid: 4_000 }],
+    ['discount', { discounts: [{ id: 'di_renewal' }] }],
+    ['wrong billing reason', { billing_reason: 'subscription_update' }],
+  ])('rejects renewal evidence with %s', async (_label, overrides) => {
+    const invoice = paidInvoice({ billing_reason: 'subscription_cycle', ...overrides });
+    const local = localSubscription({
+      initialInvoicePaidAt: now,
+      initialInvoiceId: 'in_privacy_initial',
+      activationWebhookEventId: 'webhook_initial',
+      entitlementActivatedAt: now,
+    });
+    const prisma = {
+      billingRecurringAddonCheckout: { findUnique: vi.fn(), findFirst: vi.fn() },
+      billingRecurringAddonSubscription: { findUnique: vi.fn().mockResolvedValue(local) },
+    };
+    const stripe = {
+      checkout: { sessions: { retrieve: vi.fn() } },
+      subscriptions: { retrieve: vi.fn().mockResolvedValue(remoteSubscription()) },
+      invoices: { retrieve: vi.fn().mockResolvedValue(invoice) },
+    };
+
+    await expect(
+      prepareRecurringAddonWebhook(
+        event('invoice.paid', invoice) as never,
+        stripe as never,
+        account,
+        prisma as never,
+      ),
+    ).rejects.toMatchObject({
+      statusCode: 503,
+      message:
+        overrides.billing_reason === 'subscription_update'
+          ? 'STRIPE_RECURRING_ADDON_PAID_INVOICE_REASON_INVALID'
+          : 'STRIPE_RECURRING_ADDON_RENEWAL_INVOICE_INVALID',
+    });
+  });
+
+  it('does not revive a terminal subscription when a late renewal is applied', async () => {
+    const invoice = paidInvoice({
+      id: 'in_privacy_late_cycle',
+      billing_reason: 'subscription_cycle',
+    });
+    const local = localSubscription({
+      status: 'canceled',
+      cancelAtPeriodEnd: true,
+      initialInvoicePaidAt: now,
+      initialInvoiceId: 'in_privacy_initial',
+      activationWebhookEventId: 'webhook_initial',
+      entitlementActivatedAt: now,
+      entitlementDeactivatedAt: new Date('2026-08-01T00:00:00.000Z'),
+    });
+    const prisma = {
+      billingRecurringAddonCheckout: { findUnique: vi.fn(), findFirst: vi.fn() },
+      billingRecurringAddonSubscription: { findUnique: vi.fn().mockResolvedValue(local) },
+    };
+    const stripe = {
+      checkout: { sessions: { retrieve: vi.fn() } },
+      subscriptions: { retrieve: vi.fn().mockResolvedValue(remoteSubscription()) },
+      invoices: { retrieve: vi.fn().mockResolvedValue(invoice) },
+    };
+    const prepared = await prepareRecurringAddonWebhook(
+      event('invoice.paid', invoice) as never,
+      stripe as never,
+      account,
+      prisma as never,
+    );
+    if (!prepared || prepared.kind !== 'invoice_renewal') {
+      throw new Error('Expected recurring add-on renewal preparation');
+    }
+    const update = vi.fn();
+    const tx = {
+      billingRecurringAddonCheckout: { update: vi.fn(), updateMany: vi.fn() },
+      billingRecurringAddonSubscription: { create: vi.fn(), updateMany: update },
+    };
+    await applyRecurringAddonWebhook(tx as never, prepared, 'webhook_late_renewal', account);
+    expect(update).not.toHaveBeenCalled();
   });
 
   it.each([

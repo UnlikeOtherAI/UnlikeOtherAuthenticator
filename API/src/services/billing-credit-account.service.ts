@@ -15,7 +15,10 @@ import { resolveOrgBillingResponsibility } from './billing-org-responsibility.se
 export type CreditCollectionContext = {
   account: StripeAccountContext;
   stripeCollectionEnabled: boolean;
-  stripe?: Pick<Stripe, 'paymentIntents' | 'paymentMethods' | 'prices' | 'products'> | null;
+  stripe?: Pick<
+    Stripe,
+    'checkout' | 'paymentIntents' | 'paymentMethods' | 'prices' | 'products'
+  > | null;
 };
 
 const CANONICAL_PORTFOLIO_PRODUCTS = [

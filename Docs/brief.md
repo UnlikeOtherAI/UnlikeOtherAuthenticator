@@ -2655,7 +2655,13 @@ below their UOA consent threshold, rechecks current policy/offer/catalog and the
 UTC monthly cap under a database lock, and commits one attributed attempt before
 any off-session payment. A second per-account PostgreSQL lock serializes Stripe
 dispatch across replicas. Lost responses reuse that attempt's deterministic
-Stripe idempotency key; only signed webhooks terminalize it or add credits.
+Stripe idempotency key. Signed webhooks or a bounded, account-scoped Stripe
+Events API scan can apply its original lifecycle event through the same
+validation, deduplication, and atomic funding path. An unbound attempt matches
+only an original Event carrying its exact attempt metadata, then validates the
+retrieved PaymentIntent fully. Recovery never creates a replacement PaymentIntent
+and does not depend on current auto-top-up consent; missing, expired, incomplete,
+or invalid event history leaves the attempt unresolved.
 
 Recurring add-ons are UOA subscriptions scoped to an organisation, team, or
 subscribing user. DeepWater privacy is a versioned US$50/month offer.
@@ -2720,6 +2726,31 @@ return URL from UOA state. UOA persists the immutable local intent before
 calling Stripe, uses account/mode-scoped idempotency, recovers the same open
 Checkout across a fresh exact-scope actor, and applies webhooks only after
 current Stripe metadata matches the stored customer/catalog/intent binding.
+When one top-up payment is pending, its read action can continue only the same
+open payment for the unchanged offer, customer, product app key, service,
+amount, credit quantity, and return URLs. Other offers stay blocked until that
+payment is resolved. A Checkout completion snapshot does not add credits;
+verified PaymentIntent webhook evidence does.
+An active account with a saved card can use the existing recovery action to
+replace that card only when no payment attempt is unresolved. It reuses the
+selected option's Setup Checkout; the old card and immutable consent stay in
+force until the exact verified SetupIntent succeeds, while a canceled or
+expired replacement leaves them untouched. Any automatic attempt created
+after the Setup Checkout opens remains bound to its original consent revision
+and may dispatch only once with its existing idempotency key. Payment-card
+expiry is projected from a fresh, exact customer-bound Stripe card using its
+UTC valid-through month; a failed or mismatched read never means expired.
+Managers may turn off future automatic charges while an older attempt is
+unresolved. This clears current consent and card pointers but leaves the old
+attempt tied to its immutable consent; only its exact late payment evidence can
+settle it, once, and it cannot restore automatic top-up. A timed-out request
+whose payment ID was not saved is not retried after disable. The projection
+shows automatic top-up as paused when the exact monthly remainder cannot cover
+one full saved refill, and shows the reset date from the UTC period end.
+The manager may revoke the shared account through any currently authorized
+lifecycle app key for that team, including another connected service or a
+rotated key; the audit records the acting app while the old attempt remains
+bound to its original consent app and service.
 Missing policy, catalog, payment, consent, or Stripe evidence fails closed and
 keeps the corresponding projected action disabled.
 
@@ -3033,3 +3064,13 @@ authorized credit hold and waive the excess; gross frozen-rated usage still
 counts against credit budgets. Unknown actual cost never becomes zero. The
 private route, operator doorway and immutable financial evidence are specified
 in [paid usage exception reconciliation](plans/2026-10-04-paid-usage-exception-reconciliation.md).
+
+### Paid recurring add-on renewals (2026-10-04)
+
+A verified `invoice.paid` with `billing_reason=subscription_cycle` advances the
+existing recurring add-on subscription after its initial paid activation. It
+uses the same exact amount, currency, customer, item and Price binding as the
+initial invoice, while retaining the initial invoice and activation proof. A
+renewal prepared before a concurrent cancellation cannot revive the terminated
+subscription; the apply write checks the current row inside the transaction.
+See [billing tariffs](Requirements/billing-tariffs.md).
