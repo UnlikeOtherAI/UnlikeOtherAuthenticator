@@ -1314,9 +1314,14 @@ PaymentIntent. Recovery continues
 for an already-pending attempt even if auto-top-up consent was later disabled;
 turning off automatic top-ups prevents new attempts, while a payment already
 started may still complete.
-An absent event, expired window, incomplete/failed scan, or invalid event remains
-unresolved and is reported as a bounded diagnostic; it does not mark the attempt
-paid or add credits. Replaying an event cannot add credits twice.
+A complete scan finding no event for an unbound pending attempt permits the
+existing dispatch helper to retry its original immutable key under current
+consent. The helper uses the locked database clock and refuses replay after
+23 hours: Stripe can prune idempotency keys after 24 hours
+([Stripe idempotency contract](https://docs.stripe.com/api/idempotent_requests)).
+Older ambiguous attempts, expired event windows, incomplete/failed scans and
+invalid events remain unresolved. Recovery never invents a payment or adds
+credits before trusted payment evidence. Replaying an event cannot add credits twice.
 
 The public credit view is a manager/member discriminated union. A manager may
 receive per-user usage, payment-method display data, consent actor details, and

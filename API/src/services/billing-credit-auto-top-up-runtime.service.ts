@@ -43,6 +43,9 @@ const AUTO_TOP_UP_CONCURRENCY = 10;
 // the account lock alive across that full ambiguity-recovery window so another
 // replica cannot start the same durable attempt while the SDK is still retrying.
 const DISPATCH_TRANSACTION_TIMEOUT_MS = 75_000;
+// Stripe may prune idempotency keys after 24 hours. Keep an hour of headroom;
+// older ambiguous attempts require evidence rather than another create call.
+const SAFE_IDEMPOTENCY_REPLAY_MS = 23 * 60 * 60 * 1000;
 
 type CreditAutoTopUpStripeClient = Pick<
   Stripe,
@@ -82,7 +85,7 @@ function stripeAmount(value: bigint): number {
 async function lockDispatchSnapshot(
   tx: Prisma.TransactionClient,
   params: { creditAccountId: string; attemptId: string },
-): Promise<void> {
+): Promise<Date> {
   await tx.$queryRaw(Prisma.sql`
     WITH account_lock AS (
       SELECT pg_advisory_xact_lock(
@@ -91,8 +94,8 @@ async function lockDispatchSnapshot(
     )
     SELECT 1::integer AS "locked" FROM account_lock
   `);
-  const rows = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
-    SELECT attempt."id"
+  const rows = await tx.$queryRaw<Array<{ id: string; checkedAt: Date }>>(Prisma.sql`
+    SELECT attempt."id", clock_timestamp() AS "checkedAt"
     FROM "billing_credit_auto_top_up_attempts" AS attempt
     JOIN "billing_credit_accounts" AS credit
       ON credit."id" = attempt."credit_account_id"
@@ -117,6 +120,7 @@ async function lockDispatchSnapshot(
   if (rows.length !== 1) {
     throw new AppError('INTERNAL', 500, 'BILLING_CREDIT_AUTO_TOP_UP_ATTEMPT_NOT_FOUND');
   }
+  return rows[0].checkedAt;
 }
 
 function loadAttempt(tx: Prisma.TransactionClient, attemptId: string) {
@@ -260,7 +264,7 @@ async function dispatchCreditAutoTopUpAttempt(
 ): Promise<CreditAutoTopUpDispatchResult> {
   return deps.prisma.$transaction(
     async (tx) => {
-      await lockDispatchSnapshot(tx, params);
+      const checkedAt = await lockDispatchSnapshot(tx, params);
       const attempt = await loadAttempt(tx, params.attemptId);
       if (!attempt) {
         throw new AppError('INTERNAL', 500, 'BILLING_CREDIT_AUTO_TOP_UP_ATTEMPT_NOT_FOUND');
@@ -280,7 +284,8 @@ async function dispatchCreditAutoTopUpAttempt(
       }
       if (
         attempt.status !== BillingCreditAutoTopUpAttemptStatus.PENDING ||
-        attempt.stripePaymentIntentId
+        attempt.stripePaymentIntentId ||
+        checkedAt.getTime() - attempt.createdAt.getTime() >= SAFE_IDEMPOTENCY_REPLAY_MS
       ) {
         return {
           creditAccountId: params.creditAccountId,
@@ -443,6 +448,14 @@ export async function runCreditAutoTopUpCycle(deps?: {
           attemptId: webhookCandidate.attemptId,
           stripePaymentIntentId: recoveredPaymentIntentId,
         };
+      }
+      if (!paymentIntentId
+        && eventRecovery.diagnostics.get(webhookCandidate.attemptId) === 'event_not_found') {
+        // Reuse the committed attempt and idempotency key. The dispatch lock
+        // rechecks current consent, state and the safe replay window.
+        return (deps?.runAccount ?? runCreditAutoTopUpAccount)(
+          { account, creditAccountId }, { prisma, stripe },
+        );
       }
       return {
         creditAccountId,

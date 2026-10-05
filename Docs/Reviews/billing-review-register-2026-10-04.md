@@ -68,3 +68,22 @@ subscription receipts use the production writer's metered/nonbillable path.
 A non-dispatch release still requires proof that no provider egress occurred.
 Manual invoices now retain their legal PDF while appearing in later actual
 payment months, with durable reader and scope tests.
+
+The [corrected-cohort Astra CLI review](billing-astra-corrected-2026-10-05.md)
+independently confirms the seven earlier source corrections, completed DeepTest
+native budgets, commercial Live refusal, payment-month manual invoices and
+identical public vendor trees. It found two remaining P2 defects: scheduler
+recovery stranded an attempt committed before Stripe dispatch, and ordinary
+invoice details omitted refund amounts/status.
+
+Scheduler recovery now reuses the original committed attempt and immutable
+idempotency key after a complete event scan finds no intent. The locked
+database clock bounds replay to 23 hours; older ambiguous attempts, failed scans
+and changed consent cannot create a payment. Seventeen focused runtime/unit
+checks include the production scheduled path, concurrent recovery, expired
+attempts and failed scans. This remains synthetic Stripe transport proof.
+Consumer refund corrections retain historical payment totals and expose the
+existing authoritative nonzero refund amount; no new billing calculation or
+workflow is introduced. Refreshed responsive invoice/held-budget evidence and
+required CI are the remaining delivery gates. Older screenshot revisions
+identified by Astra are not current-source verification.

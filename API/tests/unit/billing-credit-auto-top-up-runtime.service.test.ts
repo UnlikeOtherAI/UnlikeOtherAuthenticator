@@ -177,7 +177,7 @@ describe('credit automatic top-up runtime', () => {
     });
   });
 
-  it('does not create a replacement intent while the original attempt has no persisted intent ID', async () => {
+  it('retries the same durable attempt when a complete event scan finds no submitted intent', async () => {
     const prisma = {
       billingStripeAccount: { upsert: vi.fn().mockResolvedValue(account) },
     };
@@ -192,7 +192,13 @@ describe('credit automatic top-up runtime', () => {
       stripePaymentIntentId: null,
       createdAt: new Date('2026-10-03T10:00:00.000Z'),
     };
-    const runAccount = vi.fn();
+    const runAccount = vi.fn().mockResolvedValue({
+      creditAccountId: candidate.creditAccountId,
+      outcome: 'submitted',
+      attemptId: candidate.attemptId,
+      stripePaymentIntentId: 'pi_original_attempt',
+      recoveredAttempt: true,
+    });
     const result = await runCreditAutoTopUpCycle({
       prisma: prisma as never,
       stripe: stripe as never,
@@ -207,14 +213,16 @@ describe('credit automatic top-up runtime', () => {
       runAccount: runAccount as never,
     });
 
-    expect(runAccount).not.toHaveBeenCalled();
+    expect(runAccount).toHaveBeenCalledWith(
+      { account, creditAccountId: candidate.creditAccountId }, { prisma, stripe },
+    );
     expect(stripe.paymentIntents.create).not.toHaveBeenCalled();
     expect(result.results).toMatchObject([
       {
-        outcome: 'awaiting_webhook',
+        outcome: 'submitted',
         attemptId: candidate.attemptId,
-        stripePaymentIntentId: null,
-        recoveryDiagnostic: 'event_not_found',
+        stripePaymentIntentId: 'pi_original_attempt',
+        recoveredAttempt: true,
       },
     ]);
   });
