@@ -22,6 +22,7 @@ describe('regular invoice exact payer line binding', () => {
     const other = { ...payer, id: 'other_local', stripeSubscriptionId: 'sub_other',
       stripeMonthlyItemId: 'si_other', ...changed };
     const prisma = { billingStripeSubscription: { findMany: vi.fn().mockResolvedValue([payer, other]) },
+      billingStripeInvoiceCloseResolution: { findMany: vi.fn().mockResolvedValue([]) },
       billingStripeMonthlyCharge: { findMany: vi.fn().mockResolvedValue([]) } } as unknown as PrismaClient;
     const stripe = { invoices: { listLineItems: vi.fn().mockResolvedValue({ data: [line], has_more: false }) } } as unknown as Pick<Stripe, 'invoices'>;
     await expect(verifyStripePaymentInvoiceLines({ invoice, accountId: 'account',

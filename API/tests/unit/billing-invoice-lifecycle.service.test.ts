@@ -57,6 +57,7 @@ describe('billing invoice lifecycle conflict safety', () => {
     const claimed = {
       id: 'invoice_1',
       orgId: 'org_1',
+      currency: 'USD',
       status: BillingInvoiceStatus.ISSUING,
       invoiceNumber: 'UOA-2026-000001',
       issueDate: now,
@@ -66,10 +67,14 @@ describe('billing invoice lifecycle conflict safety', () => {
       lines: [],
       addonLines: [],
       paymentEvents: [],
+      paidReceipts: [],
+      creditSettlementRefs: [],
       _count: { creditSettlementRefs: 0 },
     };
     const claimTx = {
-      billingInvoice: { findUnique: vi.fn().mockResolvedValue(claimed) },
+      $queryRaw: vi.fn().mockResolvedValue([]),
+      billingInvoice: { findUnique: vi.fn().mockResolvedValue(claimed),
+        findUniqueOrThrow: vi.fn().mockResolvedValue(claimed) },
     };
     const transaction = vi
       .fn()
@@ -99,6 +104,9 @@ describe('billing invoice lifecycle conflict safety', () => {
     });
     expect(transaction).toHaveBeenCalledTimes(4);
     expect(storage.putImmutable).toHaveBeenCalledOnce();
+    expect(claimTx.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(
+      storage.putImmutable.mock.invocationCallOrder[0]!,
+    );
     expect(storage.putImmutable).toHaveBeenCalledWith(
       'billing-invoices/org_1/invoice_1.pdf',
       Uint8Array.from([37, 80, 68, 70]),

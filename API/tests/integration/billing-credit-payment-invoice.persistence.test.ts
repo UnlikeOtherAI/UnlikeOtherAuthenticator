@@ -301,7 +301,7 @@ describe.skipIf(!process.env.DATABASE_URL)('prepaid payment invoice PostgreSQL s
         },
       },
     });
-  }, 60_000);
+  });
 
   afterAll(async () => {
     if (handle) await handle.cleanup();

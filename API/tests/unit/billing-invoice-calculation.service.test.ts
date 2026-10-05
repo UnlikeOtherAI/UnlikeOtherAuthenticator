@@ -2,7 +2,20 @@ import { BillingCollectionMode, BillingTariffMode } from '@prisma/client';
 import { describe, expect, it, vi } from 'vitest';
 
 import { calculateBillingContractInvoice } from '../../src/services/billing-invoice-calculation.service.js';
+import { collectManualInvoicePaidCohort, writeManualInvoicePaidCohort } from
+  '../../src/services/billing-invoice-paid-receipt-cohort.service.js';
 import type { NormalizedMeteringUsage } from '../../src/services/billing-metering.types.js';
+
+// This suite isolates invoice arithmetic. Real signed cohort validation and
+// both collector lock orders are exercised by the PostgreSQL invoice suites.
+vi.mock('../../src/services/billing-invoice-paid-receipt-cohort.service.js', () => ({
+  collectManualInvoicePaidCohort: vi.fn().mockResolvedValue([{
+    scope: { serviceId: 'service_1', product: 'deepwater', organisationId: 'org_1',
+      teamId: 'team_1', billingMonth: '2026-06' },
+    proof: { paid_receipt_count: '1', paid_receipt_sha256: 'b'.repeat(64) },
+  }]),
+  writeManualInvoicePaidCohort: vi.fn().mockResolvedValue(undefined),
+}));
 
 const now = new Date('2026-07-20T12:00:00.000Z');
 
@@ -217,6 +230,14 @@ describe('contract invoice calculator', () => {
     }, { prisma, now: expect.any(Function) });
     expect(data.subtotalMinor).toBe(1250n);
     expect(data.creditsAppliedMinor).toBe(50n);
+    expect(collectManualInvoicePaidCohort).toHaveBeenCalledWith({
+      serviceId: 'service_1', product: 'deepwater', orgId: 'org_1', billingMonth: '2026-06',
+    }, expect.any(Object));
+    expect(writeManualInvoicePaidCohort).toHaveBeenCalledWith(tx, created,
+      expect.objectContaining({ id: 'service_1', product: 'deepwater', usageMinor: 250n,
+        proofs: expect.arrayContaining([expect.objectContaining({
+          scope: expect.objectContaining({ teamId: 'team_1' }),
+        })]) }));
     expect(tx.billingInvoiceLineFinancialAllocation.create).toHaveBeenCalledWith({ data:
       expect.objectContaining({ lineId: 'line_1', subscriptionMinor: 1000n,
         usageMinor: 250n, invoiceCreditMinor: 50n, dueMinor: 1200n }),

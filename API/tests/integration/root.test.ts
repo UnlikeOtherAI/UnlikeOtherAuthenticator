@@ -419,7 +419,8 @@ describe('GET /llm', () => {
     expect(res.body).toContain('"code":"TOKEN_EXCHANGE_SUBJECT_FORBIDDEN"');
     expect(res.body).toContain('concurrent replays are rejected');
     expect(res.body).toContain('Canonical tariff and entitlement control plane');
-    expect(res.body).toContain('The customer receives raw usage, exact usage charges, credit consumption');
+    expect(res.body).toContain('The customer receives exact usage charges, credit consumption');
+    expect(res.body).not.toContain('The customer receives raw usage');
     expect(res.body).toContain('monthly subscription price, collection status, and payer scope');
     expect(res.body).toContain('markup, margin, rate multipliers, and cost-basis modes stay inside UOA');
     expect(res.body).toContain('authorized app-key ID');

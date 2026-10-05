@@ -429,7 +429,7 @@ describe('contract invoice admin routes', () => {
         {
           id: 'line_1',
           service: { identifier: 'deepwater', name: 'DeepWater' },
-          price: { amount_minor: '6250', amount: '62.5', currency: 'USD', display: '$62.5' },
+          price: { amount_minor: '6250', amount: '62.5', currency: 'USD', display: '$62.50' },
         },
       ]);
       expect(body.actions.issue).toBe('issue');

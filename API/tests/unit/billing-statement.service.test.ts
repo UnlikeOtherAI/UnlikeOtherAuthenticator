@@ -341,7 +341,7 @@ describe('canonical UOA billing statement', () => {
           amount_minor: '2000',
           amount: '20',
           currency: 'GBP',
-          display: '£20',
+          display: '£20.00',
         },
       },
       subscription: {
@@ -363,7 +363,7 @@ describe('canonical UOA billing statement', () => {
     expect(statement.usage.charge_totals).toEqual([
       {
         currency: 'USD',
-        usage_charge: { amount: '3.6', currency: 'USD', display: '$3.6' },
+        usage_charge: { amount: '3.6', currency: 'USD', display: '$3.60' },
       },
     ]);
     expect(statement.usage.user_totals).toEqual([
@@ -410,7 +410,7 @@ describe('canonical UOA billing statement', () => {
         usage: expect.objectContaining({ amount: '0' }),
         add_ons: expect.objectContaining({ amount: '10' }),
         credits: expect.objectContaining({ amount: '-5' }),
-        total_due: expect.objectContaining({ amount: '25', display: '£25' }),
+        total_due: expect.objectContaining({ amount: '25', display: '£25.00' }),
       },
       {
         currency: 'USD',
@@ -418,7 +418,7 @@ describe('canonical UOA billing statement', () => {
         usage: expect.objectContaining({ amount: '3.6' }),
         add_ons: expect.objectContaining({ amount: '0' }),
         credits: expect.objectContaining({ amount: '0' }),
-        total_due: expect.objectContaining({ amount: '3.6', display: '$3.6' }),
+        total_due: expect.objectContaining({ amount: '3.6', display: '$3.60' }),
       },
     ]);
     expect(statement.actions.find((action) => action.id === 'cancel')).toMatchObject({
