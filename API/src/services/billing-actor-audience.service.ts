@@ -20,6 +20,8 @@ export const BILLING_ACTOR_ENDPOINTS = [
   '/billing/v1/customer-statement',
   '/billing/v2/customer-statement',
   '/billing/v1/credits',
+  '/billing/v1/credits/funding-request',
+  '/billing/v1/credits/purchase-status',
   '/billing/v1/credit-budgets',
   '/billing/v1/credit-budgets/scopes',
   '/billing/v1/cycles/list',

@@ -4,6 +4,13 @@ import {
 } from './action-schema.js';
 import { billingCreditsV1ConformanceFixture } from './credits-conformance-fixture.js';
 import { billingCreditsV1JsonSchema } from './credits-schema.js';
+import { billingCreditPurchaseStatusV1JsonSchema } from './presentation-schema.js';
+import { billingCreditFundingRequestV1JsonSchema } from './credits-attention-schema.js';
+import { BILLING_CREDIT_FUNDING_REQUEST_PATH } from './credits-attention-types.js';
+import {
+  BILLING_CREDIT_PURCHASE_STATUS_PATH, BILLING_CUSTOMER_LOCALES,
+  BILLING_LOCALE_HEADER, BILLING_PRESENTATION_HEADER, BILLING_PRESENTATION_VERSION,
+} from './presentation-types.js';
 import {
   billingSubjectActionBodySchema,
   billingSubjectRequestJsonSchema,
@@ -19,6 +26,14 @@ import {
 } from './credits-types.js';
 
 const authenticatedOperation = {
+  parameters: [
+    { in: 'header', name: BILLING_PRESENTATION_HEADER, required: false,
+      schema: { const: BILLING_PRESENTATION_VERSION },
+      description: 'Opt in to localized display and opaque purchase references.' },
+    { in: 'header', name: BILLING_LOCALE_HEADER, required: false,
+      schema: { enum: BILLING_CUSTOMER_LOCALES },
+      description: 'Display language; requires the presentation version header.' },
+  ],
   security: [
     { UoaAppKey: [], UoaActor: [] },
     { UoaBearerAppKey: [], UoaActor: [] },
@@ -37,7 +52,7 @@ const errorResponse = {
   },
 } as const;
 
-function requestBody(selector: 'offer_id' | 'option_id' | null) {
+function requestBody(selector: 'offer_id' | 'option_id' | 'purchase_id' | null) {
   const schema = selector
     ? billingSubjectActionBodySchema(
         { [selector]: { type: 'string', minLength: 1, maxLength: 256 } },
@@ -81,6 +96,42 @@ export const billingCreditsV1OpenApiDocument = {
       'Exact customer-facing shared team credits API. UOA returns display-ready values and capabilities; products never calculate balances, conversion, privacy filtering, or authorization.',
   },
   paths: {
+    [BILLING_CREDIT_FUNDING_REQUEST_PATH]: {
+      post: {
+        ...authenticatedOperation,
+        operationId: 'requestBillingCreditFundingV1',
+        summary: 'Authorize a member request to current billing managers',
+        description: 'Rechecks live authority and returns authorized source user IDs to the product server. The product verifies local membership and reports actual notification delivery separately.',
+        requestBody: requestBody(null),
+        responses: {
+          200: {
+            description: 'Opaque request ID and authorized recipients; never returned directly to a browser.',
+            headers: { 'Cache-Control': noStoreHeader },
+            content: { 'application/json': { schema: billingCreditFundingRequestV1JsonSchema } },
+          },
+          400: errorResponse, 401: errorResponse, 403: errorResponse,
+          404: errorResponse, 503: errorResponse,
+        },
+      },
+    },
+    [BILLING_CREDIT_PURCHASE_STATUS_PATH]: {
+      post: {
+        ...authenticatedOperation,
+        operationId: 'getBillingCreditPurchaseStatusV1',
+        summary: 'Read one authorized credit purchase and resume its open Checkout',
+        description: 'Only the committed credit entry proves success. An optional continuation resumes the exact open Checkout; reads do not create charges or settle credits.',
+        requestBody: requestBody('purchase_id'),
+        responses: {
+          200: {
+            description: 'Exact purchase state and display-ready recovery copy.',
+            headers: { 'Cache-Control': noStoreHeader },
+            content: { 'application/json': { schema: billingCreditPurchaseStatusV1JsonSchema } },
+          },
+          400: errorResponse, 401: errorResponse, 403: errorResponse,
+          404: errorResponse, 503: errorResponse,
+        },
+      },
+    },
     [BILLING_CREDITS_READ_PATH]: {
       post: {
         ...authenticatedOperation,

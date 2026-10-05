@@ -322,6 +322,23 @@ describe('Stripe Checkout authorization, recovery, and account binding', () => {
     );
   });
 
+  it('freezes the initial language when a lost response retries with another locale', async () => {
+    const state = setup();
+    state.checkoutCreate.mockRejectedValueOnce(new Error('connection lost'));
+    await expect(createStripeCheckoutSession(
+      { request, actorToken: 'signed-actor', credential, locale: 'cs' }, deps(state),
+    )).rejects.toThrow('connection lost');
+    expect(state.checkouts).toHaveLength(1);
+    expect(state.checkouts[0]).toMatchObject({ checkoutLocale: 'cs' });
+    await createStripeCheckoutSession(
+      { request, actorToken: 'signed-actor', credential, locale: 'de' }, deps(state, 'actor_2'),
+    );
+    expect(state.checkoutCreate).toHaveBeenCalledTimes(2);
+    expect(state.checkoutCreate.mock.calls[0][0].locale).toBe('cs');
+    expect(state.checkoutCreate.mock.calls[1][0].locale).toBe('cs');
+    expect(state.checkoutCreate.mock.calls[0][1]).toEqual(state.checkoutCreate.mock.calls[1][1]);
+  });
+
   it('rejects a cross-origin checkout redirect before creating Stripe resources', async () => {
     const state = setup();
     await expect(

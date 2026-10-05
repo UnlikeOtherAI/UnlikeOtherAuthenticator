@@ -70,6 +70,7 @@ export const billingEndpoints: EndpointSchema[] = [
   {
     method: 'POST', path: '/billing/v1/invoices/list',
     description: 'Lists accepted prepaid payments and actual monthly service invoices by the charge source month. A pending legal document remains visible without guessed tax or invoice number.',
+    notes: 'Optional X-UOA-Billing-Presentation: 1.5.0 and X-UOA-Billing-Locale select localized generated labels and exact amount displays only; signed bodies, financial snapshots and legal document bytes do not change.',
     auth: 'Product customer_lifecycle app key plus exact endpoint-audience X-UOA-Actor and current team or organisation billing-manager authority',
     body: { product: 'string', organisation_id: 'string', team_id: 'string', user_id: 'string',
       charge_month: 'YYYY-MM UTC', limit: 'optional integer 1–50', cursor: 'optional opaque cursor' },
@@ -78,6 +79,7 @@ export const billingEndpoints: EndpointSchema[] = [
   {
     method: 'POST', path: '/billing/v1/invoices/detail',
     description: 'Reads one actual invoice or accepted prepaid charge with only the issuer-proven customer charges and legal document state.',
+    notes: 'Optional X-UOA-Billing-Presentation: 1.5.0 and X-UOA-Billing-Locale select localized generated labels and exact amount displays only; signed bodies, financial snapshots and legal document bytes do not change.',
     auth: 'Product customer_lifecycle app key plus exact endpoint-audience X-UOA-Actor and current payer billing-manager authority',
     body: { product: 'string', organisation_id: 'string', team_id: 'string', user_id: 'string',
       invoice_id: 'string (from the list)' },
@@ -109,6 +111,7 @@ export const billingEndpoints: EndpointSchema[] = [
   {
     method: 'POST', path: '/billing/v1/cycles/list',
     description: 'Paginated, exact-product/team monthly billing history. Only actual frozen cycles and a clearly labeled open preview appear.',
+    notes: 'Optional X-UOA-Billing-Presentation: 1.5.0 and X-UOA-Billing-Locale select localized generated labels and exact amount displays only; signed bodies, financial snapshots and legal document bytes do not change.',
     auth: 'Product customer_lifecycle app key plus exact endpoint-audience X-UOA-Actor; active billing manager for the frozen payer scope',
     body: { product: 'string', organisation_id: 'string', team_id: 'string', user_id: 'string',
       limit: 'optional integer 1–24', cursor: 'optional earlier YYYY-MM month' },
@@ -117,6 +120,7 @@ export const billingEndpoints: EndpointSchema[] = [
   {
     method: 'POST', path: '/billing/v1/cycles/detail',
     description: 'Frozen seat, measured usage, credits, actual documents and adjustment lineage for one exact product/team cycle.',
+    notes: 'Optional X-UOA-Billing-Presentation: 1.5.0 and X-UOA-Billing-Locale select localized generated labels and exact amount displays only; signed bodies, financial snapshots and legal document bytes do not change.',
     auth: 'Product customer_lifecycle app key plus exact endpoint-audience X-UOA-Actor and current payer billing-manager authority',
     body: { product: 'string', organisation_id: 'string', team_id: 'string', user_id: 'string',
       cycle_id: 'string (from the list)' },

@@ -1557,3 +1557,99 @@ Stripe invoice-close catch-up verifies the configured Stripe account identifier
 against the immutable account binding before reading or advancing any invoice.
 Changing the configured Stripe account holds prior-account liabilities for
 reconciliation; matching test/live mode alone is insufficient authority.
+
+
+## Localized payment presentation integration (2026-10-05)
+
+The customer-facing balance heading, source-authored credit and automatic
+top-up controls, add-on labels and prices, and statement copy use the selected
+supported billing locale (`cs`, `en-US`, `en-GB`, `de`, `es`, `fr`, or `it`),
+with English (`en-US`) as the default. Built-in offer names are localized by
+their catalog keys; custom offer and service names remain operator-authored.
+Statement customer-charge summaries are localized too. Raw metering units,
+provider costs and connected-service raw portfolios remain private under the
+5.0 privacy amendment; they are not translated into customer presentation.
+Action request bodies and exact financial amounts remain identical in every locale.
+
+### Credit purchase return and display language (2026-10-04)
+
+Presentation 1.5 explicitly negotiates customer display language using
+`x-uoa-billing-presentation` and `x-uoa-billing-locale`. Absent negotiation keeps
+legacy English and the original redirect shape. The selected locale never
+changes signed subjects, prices, consent, or frozen action request bodies.
+
+A negotiated one-time credit purchase returns its exact opaque `purchase_id`.
+Resuming an open checkout returns the same reference. Its read-only status endpoint
+revalidates actor, membership, current billing authority and exact Stripe account,
+credit account, customer, storefront and app key. Local completion plus the
+immutable webhook and credit-entry proof is the only success signal. Remote
+Checkout or PaymentIntent success remains processing until that commit exists.
+Status reads cannot create a charge, write financial evidence, or restart work.
+Consumers use bounded reads only while awaiting confirmation and offer explicit
+retry on unknown state. Schema and examples live in the public billing protocol.
+
+### Negotiated customer language and hosted pages (2026-10-04)
+
+Billing presentation clients send `x-uoa-billing-presentation: 1.5.0` and one
+supported `x-uoa-billing-locale` on reads, previews and actions. The locale stays
+outside the signed subject and frozen action body. Unsupported negotiation is
+rejected before a payment action; clients without it keep English projections.
+The same locale is passed to new Stripe Checkout, card setup and billing portal
+sessions (`en-US` maps to Stripe's `en`). Existing hosted sessions are resumed,
+not replaced just to change their language. Subscription and recurring Checkout
+leases persist the initial locale so even a lost-response retry in another
+language retains identical Stripe idempotency parameters. Legacy leases keep
+NULL and omit locale. Portal locale variants have separate session idempotency
+keys; opening a portal does not create a purchase.
+
+### Credit attention and member funding help (2026-10-04)
+
+Billing Presentation 1.5.0 credit reads may include source-confirmed attention
+events with opaque event keys and one of five stable kinds: low credits, no
+credits, payment action required, expired card, or paused automatic top-up.
+Low-credit attention requires an explicit positive threshold from the active
+consent or an active configured automatic option. Free or non-metered billing
+does not produce a balance warning. Event keys bind the source credit account,
+kind, current UTC billing period, and the last funding credit entry or consent
+generation as appropriate; changing balance text alone cannot create a new
+event.
+
+The negotiated credit projection may offer a member a localized action to ask
+for funding help for metered billing with payment collection enabled, when a
+currently authorized billing manager is reachable.
+The consumer POSTs the exact projected subject to
+`/billing/v1/credits/funding-request`; it cannot choose recipient IDs. UOA
+rechecks the fresh endpoint-bound actor, active user and exact org/team
+memberships, current organization billing responsibility, and current billing
+manager roles. For organization-funded accounts, only active organization
+owners/admins are eligible recipients; otherwise active organization or
+selected-team billing managers are eligible. The response returns a source
+account/team/requester/UTC-day-scoped opaque request ID and the current
+eligible recipient IDs. It neither sends a message nor claims a notification
+was delivered. Consumers map only those exact IDs to active local users and
+deduplicate any local alert by request ID. The strict response schema is
+`/schemas/billing-credit-funding-request-v1.json`.
+
+The current customer privacy contract remains authoritative. Localization never
+restores raw usage or private pricing fields. Credits and their entry balances
+retain microcredit precision; available-balance attention excludes active holds.
+Cycles, invoices, credit budgets, seat quotes and current effective tariff history
+are preserved from the integrated financial implementation.
+
+
+Customer display integration also covers cycle and invoice list/detail reads via
+presentation 1.5.0 locale negotiation. Generated cycle subscription/usage labels,
+prepaid purchase labels and credit-note cancellation labels use structural source
+facts. Exact money displays preserve every decimal digit without converting
+financial values to floating point. Read-time display projection occurs after
+source integrity validation; stored snapshot hashes, rating, line identities,
+PDFs and CSVs are unchanged. Authored plan/service names, Stripe invoice line
+labels and stored adjustment reasons remain verbatim because their persisted
+contract does not distinguish generated copy from operator text.
+
+
+Verified payment reversals remain able to create a credit debt after their paid
+credits were consumed, provided no positive provider reservation is held. The
+additive 20261005103000 migration corrects the reservation guard's zero-held
+case; active held funds, verified adjustment provenance, immutable ledger
+entries, and the prohibition on unfunded usage debits remain enforced.

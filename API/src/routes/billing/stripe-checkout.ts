@@ -1,3 +1,4 @@
+import { readBillingPresentation } from './billing-presentation.js';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
@@ -35,7 +36,9 @@ export function registerStripeCheckoutRoute(app: FastifyInstance): void {
       const body = CheckoutRequestSchema.parse(request.body);
       const credential = request.billingAppKey;
       if (!credential) throw new AppError('UNAUTHORIZED', 401);
+      const presentation = readBillingPresentation(request.headers);
       const result = await createStripeCheckoutSession({
+        ...(presentation.enabled ? { locale: presentation.locale } : {}),
         request: {
           product: body.product,
           organisationId: body.organisation_id,

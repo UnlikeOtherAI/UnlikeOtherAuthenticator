@@ -118,7 +118,7 @@ describe('privacy-safe recurring add-on scopes', () => {
     ] as never;
 
     const result = await getBillingRecurringAddons(
-      { request, actorToken: 'signed-actor', credential },
+      { request, actorToken: 'signed-actor', credential, locale: 'cs' },
       dependencies(data, true) as never,
     );
 
@@ -127,16 +127,19 @@ describe('privacy-safe recurring add-on scopes', () => {
       offers: [
         {
           available: false,
-          unavailable_reason: 'Checkout is not configured for this offer.',
+          unavailable_reason: 'Platba není pro tuto nabídku nastavená.',
+          name: 'Soukromí',
+          description: 'Soukromý výzkum pro tento tým.',
           actions: [{ id: 'subscribe', enabled: false }],
         },
       ],
     });
+    expect(result.title).toBe('DeepWater doplňky');
   });
 
   it('keeps the read projection available while collection actions are frozen', async () => {
     const result = await getBillingRecurringAddons(
-      { request, actorToken: 'signed-actor', credential },
+      { request, actorToken: 'signed-actor', credential, locale: 'cs' },
       dependencies(
         addonData(
           BillingRecurringAddonSubscriptionScope.TEAM,
@@ -153,6 +156,7 @@ describe('privacy-safe recurring add-on scopes', () => {
       capabilities: { can_manage_addons: false },
       offers: [{ actions: [{ id: 'cancel', enabled: false }] }],
     });
+    expect(result.offers[0]?.monthly_price.display).toBe('50,00\u00a0US$ / měsíc');
   });
 
   it.each([

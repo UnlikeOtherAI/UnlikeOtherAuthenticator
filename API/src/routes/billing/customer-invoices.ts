@@ -25,6 +25,7 @@ import {
   downloadCustomerInvoice, getCustomerInvoiceDetail, listCustomerInvoices,
 } from '../../services/billing-customer-invoice-read.service.js';
 import { AppError } from '../../utils/errors.js';
+import { readBillingPresentation } from './billing-presentation.js';
 import { BillingSubjectRequestSchema, readBillingActorHeader } from './billing-request.js';
 
 const validator = new Ajv2020({ allErrors: true, strict: true });
@@ -49,7 +50,9 @@ function context(request: FastifyRequest,
   body: z.infer<typeof BillingSubjectRequestSchema>,
   endpoint: BillingCycleContext['endpoint']): BillingCycleContext {
   if (!request.billingAppKey) throw new AppError('UNAUTHORIZED', 401);
+  const presentation = readBillingPresentation(request.headers);
   return { credential: request.billingAppKey,
+    locale: presentation.enabled ? presentation.locale : undefined,
     actorToken: readBillingActorHeader(request.headers['x-uoa-actor']), endpoint,
     request: { product: body.product, organisationId: body.organisation_id,
       teamId: body.team_id, userId: body.user_id } };

@@ -54,6 +54,14 @@ export const billingFundingEndpoints: EndpointSchema[] = [
   },
   {
     method: 'GET',
+    path: '/schemas/billing-credit-funding-request-v1.json',
+    description:
+      'Public Draft 2020-12 schema for the exact-scope funding-help acknowledgement; it lists eligible UOA user IDs but does not claim a notification was delivered.',
+    auth: 'public',
+    response: { 200: 'BillingCreditFundingRequestV1 JSON Schema' },
+  },
+  {
+    method: 'GET',
     path: '/schemas/billing-recurring-addons-v1.json',
     description:
       'Public Draft 2020-12 schema for UOA’s display-ready recurring add-on offers and exact-scope subscriptions.',
@@ -96,12 +104,50 @@ export const billingFundingEndpoints: EndpointSchema[] = [
   },
   {
     method: 'POST',
+    path: '/billing/v1/credits/funding-request',
+    description:
+      'Resolve current eligible billing managers for a member’s exact team credit account without sending a message or claiming one was sent.',
+    auth: lifecycleAuth,
+    body: fundingSubject,
+    response: {
+      200: 'BillingCreditFundingRequestV1: stable opaque request_id and current recipient_user_ids',
+      '401/403': 'Invalid app key, actor, active membership, payer authority, or no eligible recipient',
+      400: 'Billing Presentation 1.5.0 is required',
+      '502/503': 'Current billing context is unavailable',
+    },
+    notes:
+      'The caller cannot choose recipient IDs. UOA rechecks the active organisation/team membership, current payer responsibility, and manager roles on every call. The HMAC request ID is deduplicable by account, selected team, requester, and UTC day. Products map only the returned IDs to active local users before creating their own alerts; this source endpoint sends nothing.',
+  },
+  {
+    method: 'GET',
+    path: '/schemas/billing-credit-purchase-status-v1.json',
+    description: 'Strict schema for exact authorized credit purchase status.',
+    auth: 'public',
+    response: { 200: 'BillingCreditPurchaseStatusV1 JSON Schema' },
+  },
+  {
+    method: 'POST',
+    path: '/billing/v1/credits/purchase-status',
+    description: 'Read one opaque credit purchase and optionally resume its exact still-open Checkout after current billing authority and binding checks.',
+    auth: lifecycleAuth,
+    body: { ...fundingSubject, purchase_id: 'exact opaque ID from a negotiated credit Checkout' },
+    response: {
+      200: 'BillingCreditPurchaseStatusV1, optionally including the same purchase_id and safe Stripe Checkout continuation URL',
+      '401/403': 'Current actor or billing authority denied',
+      404: 'Purchase is not visible in this exact account, customer, service and app key',
+      '502/503': 'Current billing context is unavailable',
+    },
+    notes:
+      'Read-only financial status. Succeeded requires a durable credit entry and its verified completion event; Stripe payment success alone remains processing. An optional continuation is returned only for the exact bound Checkout while Stripe still reports it open; it carries the same purchase_id and never creates a new Checkout or charge. Presentation 1.5.0 headers select customer language; responses are private, no-store.',
+  },
+  {
+    method: 'POST',
     path: '/billing/v1/credits/top-up-checkout',
     description: 'Create or recover secure Stripe Checkout for one exact active UOA credit offer.',
     auth: lifecycleAuth,
     body: { ...fundingSubject, offer_id: 'exact offer ID from the latest BillingCreditsV1' },
     response: {
-      200: '{ redirect_url } for the exact UOA-hosted Checkout',
+      200: '{ redirect_url } for legacy clients; negotiated presentation adds the opaque purchase_id',
       '401/403': 'Invalid app key, actor, exact-team manager, or subject',
       409: 'Offer/catalog unavailable or another exact-team Checkout is pending',
       '502/503': 'Stripe binding invalid or reconciliation pending',

@@ -195,6 +195,103 @@ function productionFreshAccountData(): BillingCreditProjectionData {
 }
 
 describe('privacy-safe shared credit projection', () => {
+  it('localizes source-owned credit balance and ledger copy as one language', () => {
+    const result = buildBillingCreditsProjection({
+      credential,
+      collection,
+      viewer: viewer(true),
+      period,
+      data: projectionData(),
+      now,
+      locale: 'cs',
+    });
+
+    expect(result.conversion.description).toContain('1 000 kredit');
+    expect(result.credit_balance.label).toBe('Zbývající kredity');
+    expect(result.credit_balance.display).toContain('kreditů');
+    expect(result.viewer.description).toContain('tým');
+    expect(result.automatic_top_up.display_status).toBe('Zapnuto');
+    expect(result.automatic_top_up.payment_method.display).toBe('Visa končící na 4242');
+    expect(result.automatic_top_up.consent.description).toContain('Souhlas platí');
+    expect(result.recent_entries[0]?.label).toBe('Kredity přidané službou DeepWater');
+    expect(result.recent_entries[0]?.credits.display).toContain('kreditů');
+  });
+
+  it('localizes built-in credit offers and automatic top-up choices', () => {
+    const result = buildBillingCreditsProjection({
+      credential,
+      collection,
+      viewer: viewer(true),
+      period,
+      data: productionFreshAccountData(),
+      now,
+      locale: 'cs',
+    });
+
+    if (result.viewer.role !== 'billing_manager' || !result.funding_policy) {
+      throw new Error('Expected manager funding actions');
+    }
+    expect(result.funding_policy.title).toBe('Doplnit týmové kredity');
+    expect(result.funding_policy.offers[0]).toMatchObject({
+      name: 'Malé dobití kreditů',
+      description: 'Jednorázové dobití. Nezapíná automatické dobíjení.',
+    });
+    expect(result.funding_policy.offers[0]?.action?.label).toMatch(/^Koupit /);
+    expect(result.automatic_top_up.options[0]?.label).toContain('Dobít');
+    expect(result.automatic_top_up.options[0]?.setup_action?.label).toBe(
+      'Nastavit automatické dobíjení',
+    );
+  });
+
+  it('keeps source-authored credit actions in each supported billing locale', () => {
+    const cases = [
+      ['cs', 'Doplnit týmové kredity', 'Vypnuto', 'Malé dobití kreditů', 'kreditů'],
+      ['en-US', 'Add team credits', 'Off', 'Small credit top-up', 'credits'],
+      ['en-GB', 'Add team credits', 'Off', 'Small credit top-up', 'credits'],
+      ['de', 'Team-Credits aufladen', 'Aus', 'Kleine Credit-Aufladung', 'Credits'],
+      ['es', 'Añadir créditos al equipo', 'Desactivada', 'Recarga pequeña de créditos', 'créditos'],
+      ['fr', 'Ajouter des crédits à l’équipe', 'Désactivée', 'Petite recharge de crédits', 'crédits'],
+      ['it', 'Aggiungi crediti al team', 'Disattivata', 'Ricarica piccola di crediti', 'crediti'],
+    ] as const;
+
+    for (const [locale, fundingTitle, autoTopUpStatus, offerName, creditUnit] of cases) {
+      const result = buildBillingCreditsProjection({
+        credential,
+        collection,
+        viewer: viewer(true),
+        period,
+        data: productionFreshAccountData(),
+        now,
+        locale,
+      });
+
+      if (result.viewer.role !== 'billing_manager' || !result.funding_policy) {
+        throw new Error('Expected manager funding actions');
+      }
+      const offer = result.funding_policy.offers[0]!;
+      expect(result.funding_policy.title).toBe(fundingTitle);
+      expect(result.automatic_top_up.display_status).toBe(autoTopUpStatus);
+      expect(offer.name).toBe(offerName);
+      expect(offer.credits_received.display).toContain(creditUnit);
+      expect(offer.description).not.toMatch(/automatic top-up stays off|uoa/i);
+      expect(result.automatic_top_up.options[0]?.setup_action?.label).not.toMatch(/uoa/i);
+    }
+  });
+
+  it('keeps English as the default when no customer locale is supplied', () => {
+    const result = buildBillingCreditsProjection({
+      credential,
+      collection,
+      viewer: viewer(true),
+      period,
+      data: projectionData(),
+      now,
+    });
+
+    expect(result.credit_balance.label).toBe('Remaining credits');
+    expect(result.recent_entries[0]?.label).toBe('Credits added from DeepWater');
+  });
+
   it('validates the production-provisioned manager projection for a fresh zero-balance team', () => {
     const result = buildBillingCreditsProjection({
       credential,
@@ -415,8 +512,8 @@ describe('privacy-safe shared credit projection', () => {
     expect(() => assertBillingCreditsContract(result)).not.toThrow();
     expect(result.automatic_top_up).toMatchObject({
       state: 'paused',
-      display_status: 'Automatic top-up is paused',
-      description: 'The monthly limit cannot cover another refill. It resets on 2026-08-01.',
+      display_status: 'Paused',
+      description: 'The monthly limit cannot cover another refill. It resets on August 1, 2026.',
       charged_this_month: { amount_minor: '8500', currency: 'USD' },
       remaining_monthly_cap: { amount_minor: '1500', currency: 'USD' },
     });
@@ -478,10 +575,14 @@ describe('privacy-safe shared credit projection', () => {
     });
     expect(result.recent_entries).toEqual([
       expect.objectContaining({
+        id: 'whole_credit_normalization',
+        credits: expect.objectContaining({ credits: '0.08365', display: '0.08365 credits' }),
+        credit_balance_after: expect.objectContaining({ credits: '49999' }),
+      }),
+      expect.objectContaining({
         credits: expect.objectContaining({ credits: '1.08365', display: '1.08365 credits' }),
         credit_balance_after: expect.objectContaining({
-          credits: '49999',
-          display: '49,999 credits',
+          credits: '49998.91635', display: '49,998.91635 credits',
         }),
       }),
     ]);
@@ -663,6 +764,7 @@ describe('privacy-safe shared credit projection', () => {
       period,
       data,
       now,
+      locale: 'cs',
       actionReadiness: {
         executableCatalogIds: new Set(['catalog_1']),
         paymentMethodReady: false,
@@ -678,6 +780,12 @@ describe('privacy-safe shared credit projection', () => {
       funding_policy: { offers: [{ available: true, action: { enabled: true } }] },
       automatic_top_up: { options: [{ setup_action: { enabled: true } }] },
     });
+    if (available.viewer.role !== 'billing_manager') {
+      throw new Error('Expected manager funding actions');
+    }
+    expect(available.funding_policy?.description).toContain(
+      'Začněte nejmenším dostupným dobitím.',
+    );
 
     data.catalogs = [];
     const unavailable = buildBillingCreditsProjection({
@@ -702,5 +810,11 @@ describe('privacy-safe shared credit projection', () => {
       funding_policy: { offers: [{ available: false, action: { enabled: false } }] },
       automatic_top_up: { options: [{ setup_action: { enabled: false } }] },
     });
+    if (unavailable.viewer.role !== 'billing_manager') {
+      throw new Error('Expected manager funding actions');
+    }
+    expect(unavailable.funding_policy?.description).not.toContain(
+      'Start with the smallest available top-up.',
+    );
   });
 });

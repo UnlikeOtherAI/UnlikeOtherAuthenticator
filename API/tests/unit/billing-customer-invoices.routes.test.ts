@@ -59,6 +59,22 @@ async function withApp(callback: (app: Awaited<ReturnType<typeof createApp>>) =>
 }
 
 describe('actual customer charge invoice routes', () => {
+  it('negotiates display locale without changing the exact signed subject', async () => {
+    await withApp(async (app) => {
+      const reply = await app.inject({ method: 'POST', url: '/billing/v1/invoices/detail',
+        headers: { ...headers, 'x-uoa-billing-presentation': '1.5.0', 'x-uoa-billing-locale': 'cs' },
+        payload: { ...body, invoice_id: 'prepaid:one' } });
+      expect(reply.statusCode).toBe(200);
+      expect(invoices.getCustomerInvoiceDetail.mock.calls[0]?.[0]).toMatchObject({ locale: 'cs',
+        request: { product: body.product, organisationId: body.organisation_id,
+          teamId: body.team_id, userId: body.user_id } });
+      const invalid = await app.inject({ method: 'POST', url: '/billing/v1/invoices/detail',
+        headers: { ...headers, 'x-uoa-billing-presentation': '1.5.0', 'x-uoa-billing-locale': 'invalid' },
+        payload: { ...body, invoice_id: 'prepaid:one' } });
+      expect(invalid.statusCode).toBe(400);
+    });
+  });
+
   it('publishes the canonical contract and forwards exact actor audience per action', async () => {
     await withApp(async (app) => {
       for (const url of ['/schemas/billing-customer-invoices-v1.json',

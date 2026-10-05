@@ -18,6 +18,8 @@ export const billingCustomerInvoicesV1OpenApiDocument = {
   info: { title: 'UOA actual customer charge invoices',
     version: BILLING_CUSTOMER_INVOICES_PROTOCOL_VERSION,
     description: 'One actual issued document per payment source; no usage breakdown on legal invoices.' },
+  'x-uoa-presentation': { version: '1.5.0', locales: ['cs', 'en-US', 'en-GB', 'de', 'es', 'fr', 'it'],
+    scope: 'Generated read labels and money displays only; immutable financial facts and documents unchanged.' },
   paths: {},
   components: {
     schemas: {

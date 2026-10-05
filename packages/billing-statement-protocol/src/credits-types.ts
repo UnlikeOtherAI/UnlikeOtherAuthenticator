@@ -1,6 +1,7 @@
 import type { ExactMoney } from './types.js';
 import type { BillingSubjectRequest } from './funding-schema-primitives.js';
 import type { BillingControlledByV1 } from './org-billing-types.js';
+import type { BillingCreditAttentionV1, BillingCreditFundingRequestActionV1 } from './credits-attention-types.js';
 
 export const BILLING_CREDITS_SCHEMA_VERSION = 1 as const;
 // BillingCreditsV1 is shared by UOA and pinned consumer package revisions.
@@ -115,7 +116,7 @@ type BillingCreditsCommonV1<PendingPayment> = {
   };
   credit_balance: BillingCreditAmount & {
     state: 'available' | 'zero' | 'debt';
-    label: 'Remaining credits';
+    label: string;
     description: string;
   };
   pending_credits: {
@@ -138,6 +139,9 @@ type BillingCreditsCommonV1<PendingPayment> = {
    * read-only balance rather than controls that would 403.
    */
   controlled_by?: BillingControlledByV1;
+  /** Present only for consumers negotiating presentation version 1.5.0. */
+  attention?: BillingCreditAttentionV1[];
+  funding_request?: BillingCreditFundingRequestActionV1;
 };
 
 type BillingCreditsFundingOfferBase = {

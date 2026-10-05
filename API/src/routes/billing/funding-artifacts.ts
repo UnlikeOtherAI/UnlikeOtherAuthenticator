@@ -4,6 +4,10 @@ import {
   BILLING_CREDITS_EXAMPLE_PATH,
   BILLING_CREDITS_OPENAPI_PATH,
   BILLING_CREDITS_SCHEMA_PATH,
+  BILLING_CREDIT_PURCHASE_SCHEMA_PATH,
+  BILLING_CREDIT_FUNDING_REQUEST_SCHEMA_PATH,
+  billingCreditFundingRequestV1JsonSchema,
+  billingCreditPurchaseStatusV1JsonSchema,
   BILLING_RECURRING_ADDONS_EXAMPLE_PATH,
   BILLING_RECURRING_ADDONS_OPENAPI_PATH,
   BILLING_RECURRING_ADDONS_SCHEMA_PATH,
@@ -20,6 +24,14 @@ function cachePublic(reply: { header(name: string, value: string): unknown }): v
 }
 
 export function registerBillingFundingArtifactRoutes(app: FastifyInstance): void {
+  app.get(BILLING_CREDIT_FUNDING_REQUEST_SCHEMA_PATH, async (_request, reply) => {
+    cachePublic(reply);
+    return reply.type('application/schema+json').send(billingCreditFundingRequestV1JsonSchema);
+  });
+  app.get(BILLING_CREDIT_PURCHASE_SCHEMA_PATH, async (_request, reply) => {
+    cachePublic(reply);
+    return reply.type('application/schema+json').send(billingCreditPurchaseStatusV1JsonSchema);
+  });
   app.get(BILLING_CREDITS_SCHEMA_PATH, async (_request, reply) => {
     cachePublic(reply);
     return reply.type('application/schema+json').send(billingCreditsV1JsonSchema);

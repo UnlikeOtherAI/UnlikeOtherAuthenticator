@@ -1,3 +1,6 @@
+import type { BillingCustomerLocale } from './billing-copy-locale.js';
+import { billingStatementCopy } from './billing-statement-copy.catalog.js';
+import { billingSubscriptionCopy } from './billing-subscription-copy.catalog.js';
 import {
   BillingAdjustmentKind,
   MembershipStatus,
@@ -45,6 +48,7 @@ export type OrganisationStatementContext = {
   periodStartsAt: Date;
   periodEndsAt: Date;
   products: Array<{ identifier: string; name: string }>;
+  locale?: BillingCustomerLocale;
 };
 
 type Dependencies = {
@@ -99,6 +103,7 @@ function teamCommercialLines(params: {
   tariff: TeamTariff;
   ratedLines: BillingStatementV1['commercial_lines'];
   adjustments: Awaited<ReturnType<typeof listApplicableCommercialAdjustments>>;
+  locale?: BillingCustomerLocale;
 }): BillingStatementV1['commercial_lines'] {
   const monthlyAmount = minorAmountToMajor(
     params.tariff.monthlyAmountMinor.toString(),
@@ -109,9 +114,9 @@ function teamCommercialLines(params: {
       id: `monthly_${params.tariff.id}_${params.teamId}`,
       kind: 'monthly_subscription',
       product: params.statementProduct,
-      label: 'Monthly subscription',
-      detail: 'Subscription charge for this billing period',
-      amount: exactMoney(monthlyAmount, params.tariff.currency),
+      label: billingStatementCopy(params.locale).monthlySubscription,
+      detail: billingStatementCopy(params.locale).subscriptionDetails,
+      amount: exactMoney(monthlyAmount, params.tariff.currency, params.locale),
     },
     ...params.ratedLines.map((line) => ({ ...line, id: `${line.id}_${params.teamId}` })),
     ...params.adjustments.map((adjustment) => {
@@ -125,9 +130,12 @@ function teamCommercialLines(params: {
             ? ('credit' as const)
             : ('add_on' as const),
         product: params.statementProduct,
-        label: adjustment.kind === BillingAdjustmentKind.CREDIT ? 'Credit' : 'Additional charge',
-        detail: adjustment.cadence === 'MONTHLY' ? 'Monthly adjustment' : 'One-time adjustment',
-        amount: exactMoney(signed, adjustment.currency),
+        label: adjustment.kind === BillingAdjustmentKind.CREDIT
+          ? billingStatementCopy(params.locale).credit : billingStatementCopy(params.locale).additionalCharge,
+        detail: adjustment.cadence === 'MONTHLY'
+          ? billingSubscriptionCopy(params.locale).monthlyAdjustment
+          : billingSubscriptionCopy(params.locale).oneTimeAdjustment,
+        amount: exactMoney(signed, adjustment.currency, params.locale),
       };
     }),
   ];
@@ -190,6 +198,7 @@ async function buildTeamUsage(
       markupBps: tariff.markupBps,
     },
     users: members.map((member) => member.user),
+    locale: context.locale,
   });
   const commercialLines = teamCommercialLines({
     statementProduct: context.statementProduct,
@@ -197,6 +206,7 @@ async function buildTeamUsage(
     tariff,
     ratedLines: rated.commercialLines,
     adjustments,
+    locale: context.locale,
   });
   return {
     team_id: team.id,
@@ -211,7 +221,7 @@ async function buildTeamUsage(
       sha256: portfolio.snapshot.sha256,
     },
     commercial_lines: commercialLines,
-    totals: billingCommercialTotals(commercialLines),
+    totals: billingCommercialTotals(commercialLines, context.locale),
   };
 }
 
@@ -234,10 +244,10 @@ export async function buildOrganisationStatementScope(
   return {
     organisation_id: organisation.id,
     organisation_name: organisation.name,
-    title: 'Organisation billing',
-    description: `Every team in ${organisation.name}, billed together.`,
+    title: billingSubscriptionCopy(context.locale).organisationTitle,
+    description: billingSubscriptionCopy(context.locale).organisationDescription,
     teams: teamUsage,
     commercial_lines: commercialLines,
-    totals: billingCommercialTotals(commercialLines),
+    totals: billingCommercialTotals(commercialLines, context.locale),
   };
 }

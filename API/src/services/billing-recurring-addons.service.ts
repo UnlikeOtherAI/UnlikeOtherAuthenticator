@@ -22,6 +22,8 @@ import type { BillingActorEndpoint } from './billing-actor-audience.service.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
 import { resolveCreditCollectionContext } from './billing-credit-account.service.js';
 import { billingRecurringAddonMoney } from './billing-credit-display.service.js';
+import type { BillingCustomerLocale } from './billing-copy-locale.js';
+import { billingAddonCopy, billingAddonSubscriptionStatus } from './billing-addon-copy.catalog.js';
 import { resolveEffectiveTariffContext } from './billing-entitlement.service.js';
 import {
   resolveBillingFundingViewer,
@@ -36,9 +38,8 @@ import {
 
 type Subscription = Awaited<ReturnType<typeof loadAddonData>>['subscriptions'][number];
 
-function statusDisplay(status: string, cancelAtPeriodEnd: boolean): string {
-  if (cancelAtPeriodEnd) return 'Cancels at period end';
-  return status.replaceAll('_', ' ').replace(/(^|\s)\S/g, (letter) => letter.toUpperCase());
+function statusDisplay(status: string, cancelAtPeriodEnd: boolean, locale?: BillingCustomerLocale): string {
+  return cancelAtPeriodEnd ? billingAddonCopy(locale).cancelsAtPeriodEnd : billingAddonSubscriptionStatus(status, locale);
 }
 
 function publicScope(scope: BillingRecurringAddonSubscriptionScope) {
@@ -47,10 +48,10 @@ function publicScope(scope: BillingRecurringAddonSubscriptionScope) {
   return 'subscribing_user' as const;
 }
 
-function baseSubscription(subscription: Subscription) {
+function baseSubscription(subscription: Subscription, locale?: BillingCustomerLocale) {
   return {
     status: subscription.status,
-    display_status: statusDisplay(subscription.status, subscription.cancelAtPeriodEnd),
+    display_status: statusDisplay(subscription.status, subscription.cancelAtPeriodEnd, locale),
     scope: publicScope(subscription.scope),
     cancel_at_period_end: subscription.cancelAtPeriodEnd,
     current_period_start: subscription.currentPeriodStart?.toISOString() ?? null,
@@ -60,10 +61,11 @@ function baseSubscription(subscription: Subscription) {
 
 function managerSubscription(
   subscription: Subscription | null,
+  locale?: BillingCustomerLocale,
 ): BillingRecurringAddonManagerSubscription | null {
   return subscription
     ? {
-        ...baseSubscription(subscription),
+        ...baseSubscription(subscription, locale),
         id: subscription.id,
         owner_user_id: subscription.subscribingUserId,
       }
@@ -73,6 +75,7 @@ function managerSubscription(
 function memberSubscription(
   subscription: Subscription | null,
   viewerId: string,
+  locale?: BillingCustomerLocale,
 ): BillingRecurringAddonMemberSubscription | null {
   if (!subscription) return null;
   const ownerRelationship =
@@ -83,10 +86,11 @@ function memberSubscription(
         : subscription.subscribingUserId === viewerId
           ? ('viewer' as const)
           : ('other_team_member' as const);
-  return { ...baseSubscription(subscription), owner_relationship: ownerRelationship };
+  return { ...baseSubscription(subscription, locale), owner_relationship: ownerRelationship };
 }
 
-function entitlement(subscription: Subscription | null, hasPolicy: boolean) {
+function entitlement(subscription: Subscription | null, hasPolicy: boolean, locale?: BillingCustomerLocale) {
+  const copy = billingAddonCopy(locale);
   if (
     subscription?.entitlementActivatedAt &&
     !subscription.entitlementDeactivatedAt &&
@@ -94,28 +98,28 @@ function entitlement(subscription: Subscription | null, hasPolicy: boolean) {
   ) {
     return {
       state: 'active' as const,
-      display_status: 'Add-on entitlement is active',
-      description: 'UOA has activated this entitlement for its exact subscription scope.',
+      display_status: copy.entitlementActive,
+      description: copy.entitlementActiveDescription,
     };
   }
   if (subscription && !['canceled', 'incomplete_expired'].includes(subscription.status)) {
     return {
       state: 'pending' as const,
-      display_status: 'Add-on entitlement is pending',
-      description: 'UOA is waiting for verified payment or entitlement activation.',
+      display_status: copy.entitlementPending,
+      description: copy.entitlementPendingDescription,
     };
   }
   if (!hasPolicy) {
     return {
       state: 'unavailable' as const,
-      display_status: 'Add-on entitlement is unavailable',
-      description: 'No active entitlement policy is configured for this offer.',
+      display_status: copy.entitlementUnavailable,
+      description: copy.entitlementUnavailableDescription,
     };
   }
   return {
     state: 'inactive' as const,
-    display_status: 'Add-on entitlement is inactive',
-    description: 'This exact organisation, team, or user scope has no active entitlement.',
+    display_status: copy.entitlementInactive,
+    description: copy.entitlementInactiveDescription,
   };
 }
 
@@ -220,7 +224,7 @@ async function loadAddonData(
   return { offers, subscriptions, checkouts };
 }
 
-type OfferContext = RecurringAddonSubject & { collectionEnabled: boolean };
+type OfferContext = RecurringAddonSubject & { collectionEnabled: boolean; locale?: BillingCustomerLocale };
 
 function managerActions(params: {
   offer: Awaited<ReturnType<typeof loadAddonData>>['offers'][number];
@@ -230,6 +234,7 @@ function managerActions(params: {
   context: OfferContext;
   availability: ReturnType<typeof recurringAddonOfferAvailability>;
 }): Array<BillingRecurringAddonCheckoutAction | BillingRecurringAddonCancelAction> {
+  const copy = billingAddonCopy(params.context.locale);
   if (!params.availability.entitlementScope) return [];
   const scope = recurringAddonScope(params.availability.entitlementScope, {
     product: params.context.product,
@@ -247,14 +252,14 @@ function managerActions(params: {
       {
         id: 'cancel',
         kind: 'confirmation_dialog',
-        label: 'Cancel add-on',
-        description: 'Schedule this add-on to end at its current billing-period boundary.',
+        label: copy.cancelAction,
+        description: copy.cancelActionDescription,
         enabled,
         disabled_reason: enabled
           ? null
           : !params.context.collectionEnabled
-            ? 'Stripe collection is not enabled.'
-            : 'Cancellation is already scheduled.',
+            ? copy.noCollection
+            : copy.cancellationAlreadyScheduled,
         request: {
           method: 'POST',
           path: BILLING_RECURRING_ADDONS_CANCELLATION_PREVIEW_PATH,
@@ -280,14 +285,14 @@ function managerActions(params: {
     {
       id: 'subscribe',
       kind: 'hosted_redirect',
-      label: 'Subscribe',
-      description: 'Open secure Stripe Checkout for this fixed monthly add-on.',
+      label: copy.subscribeAction,
+      description: copy.subscribeActionDescription,
       enabled,
       disabled_reason: enabled
         ? null
         : pending
-          ? 'A Checkout session is already in progress.'
-          : params.availability.unavailableReason,
+          ? copy.checkoutAlreadyOpen
+          : params.availability.entitlementScope ? copy.checkoutUnavailable : copy.noEntitlementScope,
       request: {
         method: 'POST',
         path: BILLING_RECURRING_ADDONS_CHECKOUT_PATH,
@@ -308,6 +313,7 @@ function offersForManager(
   viewer: BillingFundingViewer,
   context: OfferContext,
 ): BillingRecurringAddonsManagerV1['offers'] {
+  const copy = billingAddonCopy(context.locale);
   return data.offers.map((offer) => {
     const scopes = new Set(offer.featurePolicies.map((policy) => policy.entitlementScope));
     const subscription = selectSubscription(
@@ -320,15 +326,19 @@ function offersForManager(
       id: offer.id,
       key: offer.key,
       version: offer.version,
-      name: offer.name,
-      description: offer.description,
-      benefits: offer.benefits,
-      monthly_price: billingRecurringAddonMoney(offer.monthlyAmountMinor, offer.currency),
+      name: context.product === 'deepwater' && offer.key === 'privacy' && offer.version === 1 ? copy.privacyOfferName : offer.name,
+      description: context.product === 'deepwater' && offer.key === 'privacy' && offer.version === 1 ? copy.privacyOfferDescription : offer.description,
+      benefits: context.product === 'deepwater' && offer.key === 'privacy' && offer.version === 1 ? [copy.privacyBenefit] : offer.benefits,
+      monthly_price: billingRecurringAddonMoney(
+        offer.monthlyAmountMinor,
+        offer.currency,
+        context.locale,
+      ),
       interval: 'month',
       available: availability.available,
-      unavailable_reason: availability.unavailableReason,
-      entitlement: entitlement(subscription, offer.featurePolicies.length > 0),
-      subscription: managerSubscription(subscription),
+      unavailable_reason: availability.available ? null : !context.collectionEnabled ? copy.noCollection : availability.entitlementScope ? copy.checkoutUnavailable : copy.noEntitlementScope,
+      entitlement: entitlement(subscription, offer.featurePolicies.length > 0, context.locale),
+      subscription: managerSubscription(subscription, context.locale),
       actions: managerActions({ offer, subscription, data, viewer, context, availability }),
     };
   });
@@ -339,6 +349,7 @@ function offersForMember(
   viewer: BillingFundingViewer,
   context: OfferContext,
 ): BillingRecurringAddonsMemberV1['offers'] {
+  const copy = billingAddonCopy(context.locale);
   return data.offers.map((offer) => {
     const scopes = new Set(offer.featurePolicies.map((policy) => policy.entitlementScope));
     const subscription = selectSubscription(
@@ -351,15 +362,19 @@ function offersForMember(
       id: offer.id,
       key: offer.key,
       version: offer.version,
-      name: offer.name,
-      description: offer.description,
-      benefits: offer.benefits,
-      monthly_price: billingRecurringAddonMoney(offer.monthlyAmountMinor, offer.currency),
+      name: context.product === 'deepwater' && offer.key === 'privacy' && offer.version === 1 ? copy.privacyOfferName : offer.name,
+      description: context.product === 'deepwater' && offer.key === 'privacy' && offer.version === 1 ? copy.privacyOfferDescription : offer.description,
+      benefits: context.product === 'deepwater' && offer.key === 'privacy' && offer.version === 1 ? [copy.privacyBenefit] : offer.benefits,
+      monthly_price: billingRecurringAddonMoney(
+        offer.monthlyAmountMinor,
+        offer.currency,
+        context.locale,
+      ),
       interval: 'month',
       available: availability.available,
-      unavailable_reason: availability.unavailableReason,
-      entitlement: entitlement(subscription, offer.featurePolicies.length > 0),
-      subscription: memberSubscription(subscription, viewer.userId),
+      unavailable_reason: availability.available ? null : !context.collectionEnabled ? copy.noCollection : availability.entitlementScope ? copy.checkoutUnavailable : copy.noEntitlementScope,
+      entitlement: entitlement(subscription, offer.featurePolicies.length > 0, context.locale),
+      subscription: memberSubscription(subscription, viewer.userId, context.locale),
       actions: [],
     };
   });
@@ -376,6 +391,7 @@ export async function getBillingRecurringAddons(
     actorToken: string;
     credential: VerifiedBillingAppKey;
     endpoint: BillingActorEndpoint;
+    locale?: BillingCustomerLocale;
   },
   deps?: {
     prisma?: PrismaClient;
@@ -440,8 +456,8 @@ export async function getBillingRecurringAddons(
       stripe_collection_enabled: collection.stripeCollectionEnabled,
       stripe_mode: collection.account.livemode ? ('live' as const) : ('test' as const),
     },
-    title: `${params.credential.service.name} add-ons`,
-    description: 'Optional subscriptions are billed separately from metered usage credits.',
+    title: `${params.credential.service.name} ${billingAddonCopy(params.locale).titleSuffix}`,
+    description: billingAddonCopy(params.locale).catalogDescription,
   };
   const offerContext: OfferContext = {
     product: params.credential.service.identifier,
@@ -449,6 +465,7 @@ export async function getBillingRecurringAddons(
     teamId: params.request.teamId,
     userId: params.request.userId,
     collectionEnabled: collection.stripeCollectionEnabled,
+    locale: params.locale,
   };
   if (viewer.billingManager) {
     const offers = offersForManager(data, viewer, offerContext);
@@ -457,7 +474,7 @@ export async function getBillingRecurringAddons(
       viewer: {
         role: 'billing_manager',
         entitlement_visibility: 'full_team',
-        description: 'This viewer may see full entitlement status and manage team add-ons.',
+        description: billingAddonCopy(params.locale).managerViewerDescription,
       },
       capabilities: {
         can_manage_addons: offers.some((offer) => offer.actions.some((action) => action.enabled)),
@@ -470,7 +487,7 @@ export async function getBillingRecurringAddons(
     viewer: {
       role: 'member',
       entitlement_visibility: 'own_plus_team_status',
-      description: 'This viewer may see their relationship and privacy-safe team status.',
+      description: billingAddonCopy(params.locale).memberViewerDescription,
     },
     capabilities: { can_manage_addons: false },
     offers: offersForMember(data, viewer, offerContext),

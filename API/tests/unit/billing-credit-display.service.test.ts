@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   billingCreditAmount,
   billingCreditsPaymentMoney,
+  billingRecurringAddonMoney,
   billingWholeCredits,
 } from '../../src/services/billing-credit-display.service.js';
 
@@ -38,6 +39,21 @@ describe('customer credit display', () => {
       amount: '50',
       amount_minor: '5000',
       display: 'US$50.00',
+    });
+  });
+
+  it.each([
+    ['cs', '50,00\u00a0US$ / měsíc'],
+    ['en-US', '$50.00 / month'],
+    ['en-GB', 'US$50.00 / month'],
+    ['de', '50,00\u00a0$ / Monat'],
+    ['es', '50,00\u00a0US$ / mes'],
+    ['fr', '50,00\u00a0$US / mois'],
+    ['it', '50,00\u00a0USD / mese'],
+  ] as const)('localizes the recurring price period in %s', (locale, display) => {
+    expect(billingRecurringAddonMoney(5_000n, 'USD', locale)).toMatchObject({
+      amount_minor: '5000',
+      display,
     });
   });
 });

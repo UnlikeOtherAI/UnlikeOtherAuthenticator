@@ -32,10 +32,14 @@ import {
   billingCreditsV1ConformanceFixture,
   billingCreditsV1JsonSchema,
   billingCreditsV1OpenApiDocument,
+  billingCreditPurchaseStatusV1JsonSchema,
+  billingCreditFundingRequestV1JsonSchema,
 } from '../dist/index.js';
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const artifacts = new Map([
+  [resolve(packageRoot, 'schema/billing-credit-funding-request-v1.json'), billingCreditFundingRequestV1JsonSchema],
+  [resolve(packageRoot, 'schema/billing-credit-purchase-status-v1.json'), billingCreditPurchaseStatusV1JsonSchema],
   [resolve(packageRoot, 'schema/billing-customer-invoices-v1.json'), billingCustomerInvoicesProtocolV1JsonSchema],
   [resolve(packageRoot, 'fixtures/billing-customer-invoices-v1.example.json'), {
     list: billingCustomerInvoicesListV1ConformanceFixture,

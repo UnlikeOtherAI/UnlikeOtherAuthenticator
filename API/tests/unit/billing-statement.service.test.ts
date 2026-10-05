@@ -346,7 +346,7 @@ describe('canonical UOA billing statement', () => {
       },
       subscription: {
         id: 'subscription_1',
-        display_status: 'active',
+        display_status: 'Active',
       },
       capabilities: {
         can_upgrade: false,

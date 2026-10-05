@@ -25,6 +25,7 @@ import {
   listBillingCycles,
 } from '../../services/billing-cycle-read.service.js';
 import { AppError } from '../../utils/errors.js';
+import { readBillingPresentation } from './billing-presentation.js';
 import { BillingSubjectRequestSchema, readBillingActorHeader } from './billing-request.js';
 
 const validator = new Ajv2020({ allErrors: true, strict: true });
@@ -48,8 +49,10 @@ function context(
   endpoint: Parameters<typeof listBillingCycles>[0]['endpoint'],
 ) {
   if (!request.billingAppKey) throw new AppError('UNAUTHORIZED', 401);
+  const presentation = readBillingPresentation(request.headers);
   return {
     credential: request.billingAppKey,
+    locale: presentation.enabled ? presentation.locale : undefined,
     actorToken: readBillingActorHeader(request.headers['x-uoa-actor']),
     endpoint,
     request: {

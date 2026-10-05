@@ -1,3 +1,5 @@
+import type { BillingCustomerLocale } from './billing-copy-locale.js';
+import { billingStatementCopy } from './billing-statement-copy.catalog.js';
 import type { BillingStatementV1 } from '../contracts/billing-statement-v1.js';
 import {
   addBillingDecimals,
@@ -40,16 +42,18 @@ function selectedProviderCost(line: RawMeteringLine): {
 function ratedCharge(
   cost: ReturnType<typeof selectedProviderCost>,
   plan: RatingPlan,
+  locale?: BillingCustomerLocale,
 ): UsageLine['customer_charge'] {
   if (!cost) return null;
   const rated = rateProviderCost(cost.amount, cost.currency, {
     mode: plan.mode,
     markupBps: plan.markupBps,
   });
-  return exactMoney(rated.total, rated.currency);
+  return exactMoney(rated.total, rated.currency, locale);
 }
 
-function serviceLines(metering: NormalizedMeteringUsage, plan: RatingPlan): UsageLine[] {
+function serviceLines(metering: NormalizedMeteringUsage, plan: RatingPlan,
+  locale?: BillingCustomerLocale): UsageLine[] {
   return metering.lines.map((line, index) => {
     const cost = selectedProviderCost(line);
     return {
@@ -60,12 +64,12 @@ function serviceLines(metering: NormalizedMeteringUsage, plan: RatingPlan): Usag
         caller_product: line.callerProduct ?? UNATTRIBUTED_BILLING_PRODUCT,
         origin_product: line.originProduct ?? UNATTRIBUTED_BILLING_PRODUCT,
       },
-      customer_charge: ratedCharge(cost, plan),
+      customer_charge: ratedCharge(cost, plan, locale),
     };
   });
 }
 
-function chargeTotals(lines: UsageLine[]): ChargeTotal[] {
+function chargeTotals(lines: UsageLine[], locale?: BillingCustomerLocale): ChargeTotal[] {
   const totals = new Map<string, string>();
   for (const line of lines) {
     if (!line.customer_charge) continue;
@@ -77,13 +81,14 @@ function chargeTotals(lines: UsageLine[]): ChargeTotal[] {
   }
   return [...totals.entries()]
     .sort(([left], [right]) => left.localeCompare(right))
-    .map(([currency, total]) => ({ currency, usage_charge: exactMoney(total, currency) }));
+    .map(([currency, total]) => ({ currency, usage_charge: exactMoney(total, currency, locale) }));
 }
 
 function userTotals(
   metering: NormalizedMeteringUsage,
   plan: RatingPlan,
   users: UserIdentity[],
+  locale?: BillingCustomerLocale,
 ): BillingStatementV1['usage']['user_totals'] {
   const identities = new Map(users.map((user) => [user.id, user]));
   const byUser = new Map<string, RawMeteringLine[]>();
@@ -96,24 +101,24 @@ function userTotals(
   return [...byUser.entries()]
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([userId, rows]) => {
-      const lines = serviceLines({ ...metering, lines: rows, groupBy: 'user' }, plan);
+      const lines = serviceLines({ ...metering, lines: rows, groupBy: 'user' }, plan, locale);
       const identity = identities.get(userId);
       return {
         user_id: userId,
         name: identity?.name ?? null,
         email: identity?.email ?? userId,
-        charges: chargeTotals(lines),
+        charges: chargeTotals(lines, locale),
       };
     });
 }
 
-function usageCommercialLines(totals: ChargeTotal[], plan: RatingPlan): CommercialLine[] {
+function usageCommercialLines(totals: ChargeTotal[], plan: RatingPlan, locale?: BillingCustomerLocale): CommercialLine[] {
   return totals.map((total) => ({
     id: `usage_${total.currency}`,
     kind: 'usage',
     product: plan.product,
-    label: 'Metered usage',
-    detail: 'Metered usage charge for this billing period',
+    label: billingStatementCopy(locale).meteredUsage,
+    detail: billingStatementCopy(locale).usageDetails,
     amount: total.usage_charge,
   }));
 }
@@ -123,24 +128,26 @@ export function rateBillingStatementUsage(params: {
   userMetering: NormalizedMeteringUsage;
   plan: RatingPlan;
   users: UserIdentity[];
+  locale?: BillingCustomerLocale;
 }): {
   usage: BillingStatementV1['usage'];
   commercialLines: CommercialLine[];
 } {
-  const lines = serviceLines(params.serviceMetering, params.plan);
-  const charges = chargeTotals(lines);
+  const lines = serviceLines(params.serviceMetering, params.plan, params.locale);
+  const charges = chargeTotals(lines, params.locale);
   return {
     usage: {
       lines,
       charge_totals: charges,
-      user_totals: userTotals(params.userMetering, params.plan, params.users),
+      user_totals: userTotals(params.userMetering, params.plan, params.users, params.locale),
     },
-    commercialLines: usageCommercialLines(charges, params.plan),
+    commercialLines: usageCommercialLines(charges, params.plan, params.locale),
   };
 }
 
 export function billingCommercialTotals(
   lines: BillingStatementV1['commercial_lines'],
+  locale?: BillingCustomerLocale,
 ): BillingStatementV1['totals'] {
   type Parts = {
     monthly: string;
@@ -171,13 +178,13 @@ export function billingCommercialTotals(
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([currency, parts]) => ({
       currency,
-      monthly: exactMoney(parts.monthly, currency),
-      usage: exactMoney(parts.usage, currency),
-      add_ons: exactMoney(parts.addOns, currency),
-      credits: exactMoney(parts.credits, currency),
+      monthly: exactMoney(parts.monthly, currency, locale),
+      usage: exactMoney(parts.usage, currency, locale),
+      add_ons: exactMoney(parts.addOns, currency, locale),
+      credits: exactMoney(parts.credits, currency, locale),
       total_due: exactMoney(
         [parts.monthly, parts.usage, parts.addOns, parts.credits].reduce(addBillingDecimals, '0'),
-        currency,
+        currency, locale,
       ),
     }));
 }

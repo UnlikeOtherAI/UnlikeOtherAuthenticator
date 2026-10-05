@@ -1,3 +1,5 @@
+import type { BillingCustomerLocale } from './billing-copy-locale.js';
+import { billingStatementCopy } from './billing-statement-copy.catalog.js';
 import {
   BillingCreditEntryDirection, BillingCreditEntryKind,
   BillingCreditPaymentAdjustmentKind, BillingCreditPaymentInvoiceState,
@@ -115,7 +117,7 @@ export function projectPrepaidCustomerInvoiceSummary(
 
 export function projectPrepaidCustomerInvoiceDetail(
   row: PrepaidInvoiceSource, adjustmentRows: Adjustment[], serviceIdentifier: string,
-  subject: BillingSubjectRequest, chargeMonth?: string,
+  subject: BillingSubjectRequest, chargeMonth?: string, locale?: BillingCustomerLocale,
 ): BillingCustomerInvoiceDetailV1 {
   const summary = projectPrepaidCustomerInvoiceSummary(row, adjustmentRows, serviceIdentifier,
     chargeMonth);
@@ -128,7 +130,7 @@ export function projectPrepaidCustomerInvoiceDetail(
       amount: cycleMoney(row.grossAmountMinor, row.currency) }],
     charges: [{ line_id: row.creditEntryId, kind: 'prepaid_credits',
       label: row.source === BillingCreditPaymentInvoiceSource.AUTO_RECHARGE ?
-        'Automatic prepaid credits purchase' : 'Prepaid credits purchase',
+        billingStatementCopy(locale).automaticPrepaidPurchase : billingStatementCopy(locale).prepaidPurchase,
       // The accepted payment is tax-inclusive. Until the legal tax evidence
       // arrives, the pending charge deliberately shows the full paid amount.
       amount: cycleMoney(issued && row.taxAmountMinor !== null ?

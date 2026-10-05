@@ -3,6 +3,8 @@ import type { FastifyInstance } from 'fastify';
 import { registerBillingCancellationRoutes } from './cancellation.js';
 import { registerBillingCreditFundingActionRoutes } from './credit-funding-actions.js';
 import { registerBillingCreditsRoute } from './credits.js';
+import { registerBillingCreditFundingRequestRoute } from './credit-funding-request.js';
+import { registerBillingCreditPurchaseStatusRoute } from './credit-purchase-status.js';
 import { registerBillingCreditBudgetRoutes } from './credit-budgets.js';
 import { registerBillingCycleRoutes } from './cycles.js';
 import { registerBillingCustomerInvoiceRoutes } from './customer-invoices.js';
@@ -24,6 +26,8 @@ export function registerBillingRoutes(app: FastifyInstance): void {
   registerBillingCancellationRoutes(app);
   registerBillingCreditFundingActionRoutes(app);
   registerBillingCreditsRoute(app);
+  registerBillingCreditFundingRequestRoute(app);
+  registerBillingCreditPurchaseStatusRoute(app);
   registerBillingCreditBudgetRoutes(app);
   registerBillingCycleRoutes(app);
   registerBillingCustomerInvoiceRoutes(app);

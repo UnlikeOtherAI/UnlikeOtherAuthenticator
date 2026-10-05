@@ -193,6 +193,16 @@ never become line items or charges on the current statement. One pinned,
 user-grouped \`metering-portfolio-v1\` snapshot covers the exact team and month;
 UOA derives the private rating evidence and public credit totals from it.
 
+### Customer display language
+
+Cycles and invoice list/detail reads accept the same optional
+X-UOA-Billing-Presentation: 1.5.0 and X-UOA-Billing-Locale headers as statements
+and credits. Supported locales are cs, en-US, en-GB, de, es, fr, it. Locale is
+outside the signed subject. Only generated labels and exact decimal money
+displays change, after source integrity checks. Stored snapshots, charge/rating
+facts, line identities and legal PDF/CSV bytes stay immutable. Authored service
+names, Stripe line descriptions and stored adjustment reasons remain verbatim.
+
 ### Actual customer charge invoices
 Use the product's customer_lifecycle app key and a fresh exact-endpoint
 X-UOA-Actor assertion for POST /billing/v1/invoices/list, /detail, and
@@ -515,4 +525,25 @@ Automatic top-up disable remains available during an unresolved payment. Only th
 original verified lifecycle event may settle that older attempt; settlement never
 restores disabled consent. Recovery uses a bounded exact-account Stripe Events
 scan and the existing validation and deduplication path, never a replacement charge.
+
+### Customer language and exact credit purchase status
+
+Presentation-capable clients send \`x-uoa-billing-presentation: 1.5.0\` and
+\`x-uoa-billing-locale\` (cs, en-US, en-GB, de, es, fr, it) on billing reads,
+previews and actions. These headers affect display only; signed subjects and frozen
+action bodies stay unchanged. Legacy clients retain English and the old redirect
+envelope. Negotiated credit Checkout additionally returns an opaque \`purchase_id\`.
+Read it via \`POST /billing/v1/credits/purchase-status\` with the exact subject and
+fresh endpoint-bound actor. The strict public schema is
+\`/schemas/billing-credit-purchase-status-v1.json\`. A successful redirect or
+Stripe PaymentIntent does not prove that credits were added: only the durable
+credit entry plus its verified completion event yields \`succeeded\`. Read failures
+must not be presented as declined payments. Poll only \`awaiting_confirmation\`
+within a finite return window. When Stripe still reports the exact bound Checkout
+open, the response may include \`continuation\` with the same opaque \`purchase_id\`;
+opening it resumes that session without creating another Checkout or charge.
+Current authority, account/customer/service/app-key binding and private no-store
+responses prevent cross-context disclosure.
+New hosted Stripe sessions receive the requested language. Resuming an existing
+session preserves it; subscription Checkout retries reuse their saved locale.
 `;

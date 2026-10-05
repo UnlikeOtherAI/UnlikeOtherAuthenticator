@@ -13,6 +13,8 @@ import {
 } from '../contracts/billing-statement-v1.js';
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
+import type { BillingCustomerLocale } from './billing-copy-locale.js';
+import { localizeBillingCycleDetail } from './billing-cycle-display.service.js';
 import type { BillingActorEndpoint } from './billing-actor-audience.service.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
 import { authorizeBillingCycle, type BillingCycleSubject } from './billing-cycle-authority.service.js';
@@ -27,6 +29,7 @@ const validate = validator.compile(billingCycleDetailV2JsonSchema);
 export type BillingCycleContext = {
   credential: VerifiedBillingAppKey;
   actorToken: string;
+  locale?: BillingCustomerLocale;
   endpoint: BillingActorEndpoint;
   request: BillingCycleSubject;
 };
@@ -103,7 +106,7 @@ function hydrate(row: CycleRow, context: BillingCycleContext): BillingCycleDetai
     }),
   };
   if (!validate(detail)) throw new AppError('INTERNAL', 503, 'BILLING_CYCLE_CONTRACT_INVALID');
-  return detail;
+  return localizeBillingCycleDetail(detail, context.locale);
 }
 
 function summary(detail: BillingCycleDetailV2): BillingCycleSummaryV2 {

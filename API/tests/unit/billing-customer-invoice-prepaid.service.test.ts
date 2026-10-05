@@ -60,6 +60,15 @@ function refund(amountMinor: bigint): BillingCreditPaymentAdjustment {
 }
 
 describe('accepted prepaid invoice customer projection', () => {
+  it('localizes the generated automatic purchase label from the verified source kind', () => {
+    const row = source(BillingCreditPaymentInvoiceState.HELD);
+    const before = JSON.stringify(row, (_, value) => typeof value === 'bigint' ? String(value) : value);
+    const cs = projectPrepaidCustomerInvoiceDetail(row, [], 'nessie', subject, undefined, 'cs');
+    expect(cs.charges[0]?.label).toBe('Automatický nákup kreditů');
+    expect(cs.charges[0]?.amount.amount_minor).toBe('5000');
+    expect(JSON.stringify(row, (_, value) => typeof value === 'bigint' ? String(value) : value)).toBe(before);
+  });
+
   it('keeps an October accepted charge in October while its legal document is pending', () => {
     const pending = projectPrepaidCustomerInvoiceDetail(source(
       BillingCreditPaymentInvoiceState.HELD), [], 'nessie', subject);

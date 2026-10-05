@@ -19,6 +19,8 @@ export const billingCyclesV2OpenApiDocument = {
     version: BILLING_CYCLES_PROTOCOL_VERSION,
     description: 'Exact product-scoped monthly history, documents, and download actions.',
   },
+  'x-uoa-presentation': { version: '1.5.0', locales: ['cs', 'en-US', 'en-GB', 'de', 'es', 'fr', 'it'],
+    scope: 'Generated read labels and money displays only; immutable financial facts and documents unchanged.' },
   paths: {},
   components: {
     schemas: {

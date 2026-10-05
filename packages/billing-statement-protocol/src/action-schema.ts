@@ -15,6 +15,7 @@ export const billingHostedRedirectResponseJsonSchema = {
   additionalProperties: false,
   required: ['redirect_url'],
   properties: {
+    purchase_id: { type: 'string', minLength: 1, maxLength: 256 },
     redirect_url: {
       type: 'string',
       format: 'uri',

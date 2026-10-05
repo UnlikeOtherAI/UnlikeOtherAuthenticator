@@ -69,6 +69,22 @@ async function withApp(callback: (app: Awaited<ReturnType<typeof createApp>>) =>
 const headers = { 'x-uoa-app-key': 'uoa_app_key', 'x-uoa-actor': 'signed-actor' };
 
 describe('customer billing cycle routes', () => {
+  it('negotiates display locale without changing the exact signed subject', async () => {
+    await withApp(async (app) => {
+      const reply = await app.inject({ method: 'POST', url: '/billing/v1/cycles/detail',
+        headers: { ...headers, 'x-uoa-billing-presentation': '1.5.0', 'x-uoa-billing-locale': 'cs' },
+        payload: { ...body, cycle_id: 'cycle_example_2026_07' } });
+      expect(reply.statusCode).toBe(200);
+      expect(cycles.getBillingCycleDetail.mock.calls[0]?.[0]).toMatchObject({ locale: 'cs',
+        request: { product: body.product, organisationId: body.organisation_id,
+          teamId: body.team_id, userId: body.user_id } });
+      const invalid = await app.inject({ method: 'POST', url: '/billing/v1/cycles/detail',
+        headers: { ...headers, 'x-uoa-billing-presentation': '1.5.0', 'x-uoa-billing-locale': 'invalid' },
+        payload: { ...body, cycle_id: 'cycle_example_2026_07' } });
+      expect(invalid.statusCode).toBe(400);
+    });
+  });
+
   it('publishes strict public schema, fixture, and OpenAPI without credentials', async () => {
     await withApp(async (app) => {
       const urls = ['/schemas/billing-cycles-v2.json',

@@ -10,6 +10,7 @@ import {
 } from '../contracts/billing-statement-v1.js';
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
+import { localizeCustomerInvoiceDetail, localizeCustomerInvoiceSummary } from './billing-customer-invoice-display.service.js';
 import type { BillingCycleContext } from './billing-cycle-read.service.js';
 import { authorizeBillingCycle } from './billing-cycle-authority.service.js';
 import { createBillingInvoicePdfStorage } from './billing-invoice-storage.service.js';
@@ -217,7 +218,7 @@ export async function listCustomerInvoices(
   const last = page.at(-1);
   return { schema_version: 1, generated_at: (deps?.now ?? new Date()).toISOString(),
     subject: subject(context), charge_month: params.chargeMonth,
-    invoices: page.map((item) => item.summary),
+    invoices: page.map((item) => localizeCustomerInvoiceSummary(item.summary, context.locale)),
     next_cursor: selected.length > limit && last ? encodeCursor(last.key) : null };
 }
 
@@ -236,7 +237,7 @@ async function readCustomerInvoice(
     if (!row) notFound();
     await authorizeBillingCycle({ ...context, payerScope: BillingAssignmentScope.ORGANISATION },
       { prisma });
-    return { detail: projectCustomerCreditNoteDetail(row, subject(context), chargeMonth),
+    return { detail: projectCustomerCreditNoteDetail(row, subject(context), chargeMonth, context.locale),
       pdfKey: row.pdfObjectKey, sha256: row.pdfSha256 };
   }
   if (source.kind === 'manual') {
@@ -290,7 +291,7 @@ async function readCustomerInvoice(
   }
   const changes = await prepaidAdjustments(prisma, [row]);
   return { detail: projectPrepaidCustomerInvoiceDetail(row, changes,
-    context.request.product, subject(context), chargeMonth),
+    context.request.product, subject(context), chargeMonth, context.locale),
   pdfKey: row.pdfObjectKey, sha256: row.pdfSha256 };
 }
 
@@ -298,8 +299,9 @@ export async function getCustomerInvoiceDetail(
   context: BillingCycleContext, invoiceId: string,
   deps?: { prisma?: PrismaClient; chargeMonth?: string },
 ): Promise<BillingCustomerInvoiceDetailV1> {
-  return (await readCustomerInvoice(context, invoiceId, deps?.prisma ?? getAdminPrisma(),
-    deps?.chargeMonth)).detail;
+  const { detail } = await readCustomerInvoice(context, invoiceId, deps?.prisma ?? getAdminPrisma(),
+    deps?.chargeMonth);
+  return localizeCustomerInvoiceDetail(detail, context.locale);
 }
 
 export async function downloadCustomerInvoice(

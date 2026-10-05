@@ -323,7 +323,7 @@ describe('public BillingCreditsV1 consumer protocol', () => {
         ...billingCreditsV1ConformanceFixture,
         credit_balance: {
           ...billingCreditsV1ConformanceFixture.credit_balance,
-          label: 'Credit balance',
+          label: '',
         },
       }),
     ).toBe(false);

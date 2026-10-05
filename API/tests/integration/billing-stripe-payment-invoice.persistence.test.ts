@@ -31,7 +31,6 @@ vi.mock('../../src/services/billing-actor.service.js', () => ({
 }));
 
 type TestDb = NonNullable<Awaited<ReturnType<typeof createTestDb>>>;
-const startsAt = new Date('2026-08-01T00:00:00.000Z');
 const endsAt = new Date('2026-09-01T00:00:00.000Z');
 const paidAt = new Date('2026-10-01T00:00:00.000Z');
 const pdf = Buffer.from('%PDF-1.7\nverified invoice\n%%EOF');

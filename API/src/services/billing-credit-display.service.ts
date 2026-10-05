@@ -3,6 +3,9 @@ import type {
   BillingCreditsPaymentMoney,
   BillingRecurringAddonMoney,
 } from '../contracts/billing-statement-v1.js';
+import type { BillingCustomerLocale } from './billing-copy-locale.js';
+import { localizedBillingMoney } from './billing-money.service.js';
+import { billingLocale } from './billing-copy-locale.js';
 import { AppError } from '../utils/errors.js';
 
 const MICROCREDITS_PER_CREDIT = 1_000_000n;
@@ -40,42 +43,53 @@ function usdDisplay(value: string): string {
   return `${roundedNegative ? '-' : ''}US$${grouped(fixed)}`;
 }
 
+const RECURRING_PERIOD_SUFFIX = {
+  cs: ' / měsíc',
+  'en-US': ' / month',
+  'en-GB': ' / month',
+  de: ' / Monat',
+  es: ' / mes',
+  fr: ' / mois',
+  it: ' / mese',
+} satisfies Record<BillingCustomerLocale, string>;
+
 export function billingWholeCredits(microcredits: bigint): bigint {
   let credits = microcredits / MICROCREDITS_PER_CREDIT;
   if (microcredits < 0n && microcredits % MICROCREDITS_PER_CREDIT !== 0n) credits -= 1n;
   return credits;
 }
 
-export function billingCreditAmount(microcredits: bigint): BillingCreditAmount {
+export function billingCreditAmount(microcredits: bigint, locale?: BillingCustomerLocale): BillingCreditAmount {
   const credits = scaledDecimal(microcredits, 6);
   const usd = scaledDecimal(microcredits, 9);
   return {
     credits,
     display: `${grouped(credits)} ${microcredits === MICROCREDITS_PER_CREDIT || microcredits === -MICROCREDITS_PER_CREDIT ? 'credit' : 'credits'}`,
-    usd_equivalent: {
+    usd_equivalent: localizedBillingMoney({
       amount: usd,
       currency: 'USD',
       display: usdDisplay(usd),
-    },
+    }, locale),
   };
 }
 
-export function billingCreditsPaymentMoney(amountMinor: bigint): BillingCreditsPaymentMoney {
+export function billingCreditsPaymentMoney(amountMinor: bigint, locale?: BillingCustomerLocale): BillingCreditsPaymentMoney {
   if (amountMinor < 0n) {
     throw new AppError('INTERNAL', 500, 'BILLING_CREDIT_PAYMENT_INVALID');
   }
   const amount = scaledDecimal(amountMinor, 2);
-  return {
+  return localizedBillingMoney({
     amount,
     amount_minor: amountMinor.toString(),
-    currency: 'USD',
+    currency: 'USD' as const,
     display: usdDisplay(amount),
-  };
+  }, locale);
 }
 
 export function billingRecurringAddonMoney(
   amountMinor: bigint,
   currency: string,
+  locale?: BillingCustomerLocale,
 ): BillingRecurringAddonMoney {
   if (amountMinor < 0n || !/^[A-Z]{3}$/.test(currency)) {
     throw new AppError('INTERNAL', 500, 'BILLING_RECURRING_ADDON_PRICE_INVALID');
@@ -85,6 +99,6 @@ export function billingRecurringAddonMoney(
     amount,
     amount_minor: amountMinor.toString(),
     currency,
-    display: `${currency === 'USD' ? usdDisplay(amount) : `${currency} ${grouped(amount)}`}/month`,
+    display: `${localizedBillingMoney({ amount, currency, display: currency === 'USD' ? usdDisplay(amount) : `${currency} ${grouped(amount)}` }, locale).display}${RECURRING_PERIOD_SUFFIX[billingLocale(locale)]}`,
   };
 }

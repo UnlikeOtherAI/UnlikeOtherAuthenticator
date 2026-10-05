@@ -195,6 +195,36 @@ function dependencies(
 }
 
 describe('canonical UOA BillingStatementV2', () => {
+  it('localizes customer charges without restoring private usage or tariff details', async () => {
+    const fetchPortfolio = vi.fn(async ({ groupBy }: { groupBy: 'service' | 'user' }) =>
+      portfolio(groupBy, [line({
+        inputUnits: '1000',
+        estimatedProviderCost: '1.25',
+        selectedProviderCost: '1.25',
+        currency: 'USD',
+        userId: 'user_1',
+      })]),
+    );
+    const deps = dependencies(fetchPortfolio);
+    const statement = await getCanonicalBillingStatementV2(
+      { request, actorToken: 'signed-actor', credential, billingMonth: '2026-07', locale: 'cs' },
+      deps.values,
+    );
+
+    expect(statement.commercial_lines.find((line) => line.kind === 'usage')).toMatchObject({
+      label: 'Spotřeba podle využití',
+      detail: 'Cena spotřeby za toto fakturační období',
+    });
+    expect(statement).not.toHaveProperty('connected_service_usage');
+    expect(JSON.stringify(statement)).not.toMatch(
+      /raw_units|usage_unit|provider[_ ]cost|markup|multiplier|billable_units|náklady poskytovatele|přirážka|token/i,
+    );
+    const ajv = new Ajv2020({ allErrors: true, strict: true });
+    addFormats(ajv);
+    const validate = ajv.compile(billingStatementV2JsonSchema);
+    expect(validate(statement), JSON.stringify(validate.errors)).toBe(true);
+  });
+
   it('rates only the statement product and emits a self-consistent user-snapshot portfolio', async () => {
     const userLines = [
       line({

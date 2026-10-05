@@ -212,3 +212,65 @@ The first page may contain an open preview before persisted cycles. Its
 `YYYY-MM:preview` cursor resumes at the first persisted team or organisation
 cycle, including one in that same month. Persisted pages use the team or
 organisation cursor and never repeat the preview.
+
+## Localized presentation and credit purchase return (5.1.0)
+
+Package 5.1 preserves the optional `billing_status` shape and
+`x-uoa-billing-credits-protocol: 2.0.0` capability already consumed by Nessie.
+Presentation negotiation is independent of that reconciliation capability.
+This additive contract integration changes no reconciliation, tariff, seat or
+storage implementation; the source that owns reconciliation continues to own
+when that optional status is returned.
+
+Consumers opt in with `x-uoa-billing-presentation: 1.5.0` and may select
+`x-uoa-billing-locale: cs|en-US|en-GB|de|es|fr|it`. Requests without presentation
+negotiation retain English display and the original strict redirect envelope.
+Unsupported versions or locales fail with 400. Locale changes display only:
+the actor subject, amounts and frozen action request bodies remain unchanged.
+All customer responses remain `private, no-store`.
+
+A negotiated credit top-up redirect may also carry `purchase_id`, an opaque
+reference to the exact existing checkout, including a resumed checkout. Keep it
+only in the person's API/organisation/team scope. POST the normal billing subject
+and this id to `/billing/v1/credits/purchase-status` using a fresh assertion for
+that exact endpoint. The read rechecks current billing-manager authority and exact
+account, team, storefront and app-key scope. It returns display-ready title and
+message, `state`, and `awaiting_confirmation`. Only the committed credit entry
+can yield `succeeded`; an open browser, success URL or Stripe intent alone cannot.
+Poll only while confirmation is pending, with a finite limit and an explicit
+retry. When Stripe still reports the exact bound Checkout open, the response may
+include `continuation` with the same `purchase_id` and its bounded hosted URL.
+Opening that redirect resumes the same Checkout. Reading a status never creates
+a payment or restarts the person's work.
+
+The purchase status schema is exported as
+`./schema/billing-credit-purchase-status-v1.json` and included in the credits
+OpenAPI document. Non-credit redirects retain their existing response shape.
+
+Negotiated credits may include `attention`: stable opaque event keys and safe
+reason enums, without amounts or card details. Consumers reconcile these facts
+into their existing team-scoped alerts and keep the person's read state.
+`funding_request` is an optional source-authorized action for a member who
+cannot fund the account. Its frozen body contains only the existing subject.
+The source rechecks live authority on POST and returns an opaque daily request
+ID plus authorized recipient IDs to the product server. The consumer maps only
+active identities and selected-team memberships, deduplicates delivery by the
+request ID and reports whether an alert was actually delivered. The result
+contains no promise of delivery and must never expose recipient IDs to a browser.
+The response schema is `./schema/billing-credit-funding-request-v1.json`.
+
+The 5.0 customer privacy boundary remains unchanged: localized statements never
+restore token counts, provider costs, markup, tariff identifiers or raw portfolios.
+Localized credits retain all six decimal places and subtract active reservations
+from the available balance before projecting attention.
+
+
+Customer display integration also covers cycle and invoice list/detail reads via
+presentation 1.5.0 locale negotiation. Generated cycle subscription/usage labels,
+prepaid purchase labels and credit-note cancellation labels use structural source
+facts. Exact money displays preserve every decimal digit without converting
+financial values to floating point. Read-time display projection occurs after
+source integrity validation; stored snapshot hashes, rating, line identities,
+PDFs and CSVs are unchanged. Authored plan/service names, Stripe invoice line
+labels and stored adjustment reasons remain verbatim because their persisted
+contract does not distinguish generated copy from operator text.

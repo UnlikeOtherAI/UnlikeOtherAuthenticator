@@ -1,3 +1,5 @@
+import type { BillingCustomerLocale } from '../contracts/billing-statement-v1.js';
+import { stripeCheckoutLocale } from './billing-stripe-locale.js';
 import { requireIdentityEmail } from './entity-lifecycle.service.js';
 import {
   BillingRecurringAddonCheckoutStatus,
@@ -135,6 +137,7 @@ export async function createRecurringAddonCheckout(
     actorToken: string;
     credential: VerifiedBillingAppKey;
     endpoint: BillingActorEndpoint;
+    locale?: BillingCustomerLocale;
   },
   deps?: {
     prisma?: PrismaClient;
@@ -366,6 +369,7 @@ export async function createRecurringAddonCheckout(
       checkout = await prisma.billingRecurringAddonCheckout.create({
         data: {
           ...identity,
+          checkoutLocale: params.locale ?? null,
           serviceId: offer.serviceId,
           offerKey: offer.key,
           orgId: params.request.organisationId,
@@ -410,6 +414,7 @@ export async function createRecurringAddonCheckout(
   const session = await stripe.checkout.sessions.create(
     {
       mode: 'subscription',
+      ...stripeCheckoutLocale(checkout.checkoutLocale),
       customer: customer.stripeCustomerId,
       client_reference_id: checkout.id,
       success_url: urls.success,

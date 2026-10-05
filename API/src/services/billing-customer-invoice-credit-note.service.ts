@@ -1,3 +1,5 @@
+import type { BillingCustomerLocale } from './billing-copy-locale.js';
+import { billingStatementCopy } from './billing-statement-copy.catalog.js';
 import type { Prisma } from '@prisma/client';
 
 import { BILLING_CUSTOMER_INVOICES_DOWNLOAD_PATH,
@@ -60,7 +62,7 @@ export function projectCustomerCreditNoteSummary(note: CreditNoteSource,
 }
 
 export function projectCustomerCreditNoteDetail(note: CreditNoteSource,
-  subject: BillingSubjectRequest, chargeMonth?: string): BillingCustomerInvoiceDetailV1 {
+  subject: BillingSubjectRequest, chargeMonth?: string, locale?: BillingCustomerLocale): BillingCustomerInvoiceDetailV1 {
   checked(note);
   if (subject.organisation_id !== note.orgId ||
     note.originalInvoice.lines[0]?.serviceIdentifier !== subject.product) hold();
@@ -69,7 +71,7 @@ export function projectCustomerCreditNoteDetail(note: CreditNoteSource,
   const id = `credit_note:${note.id}`;
   return { ...summary, schema_version: 1, payments: [],
     charges: [{ line_id: note.originalInvoice.lines[0]?.id ?? hold(),
-      kind: 'adjustment', label: 'Cancellation of original invoice charges',
+      kind: 'adjustment', label: billingStatementCopy(locale).cancelledInvoice,
       amount: cycleMoney(note.totalCreditMinor, note.currency),
       credits_purchased: null }],
     document: { document_id: id, format: 'pdf', number: note.creditNoteNumber,

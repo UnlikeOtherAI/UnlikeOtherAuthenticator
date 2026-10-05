@@ -1,3 +1,4 @@
+import { readBillingPresentation } from './billing-presentation.js';
 import type { FastifyInstance } from 'fastify';
 import { Ajv2020 } from 'ajv/dist/2020.js';
 import * as ajvFormats from 'ajv-formats';
@@ -100,8 +101,10 @@ export function registerCustomerStatementRoutes(app: FastifyInstance): void {
       const body = CustomerStatementRequestSchema.parse(request.body);
       const credential = request.billingAppKey;
       if (!credential) throw new AppError('UNAUTHORIZED', 401);
+      const presentation = readBillingPresentation(request.headers);
       const statement = await getCanonicalBillingStatement({
         credential,
+        ...(presentation.enabled ? { locale: presentation.locale } : {}),
         actorToken: readBillingActorHeader(request.headers['x-uoa-actor']),
         billingMonth: body.billing_month,
         endpoint: '/billing/v1/customer-statement',
@@ -130,8 +133,10 @@ export function registerCustomerStatementRoutes(app: FastifyInstance): void {
       const body = CustomerStatementRequestSchema.parse(request.body);
       const credential = request.billingAppKey;
       if (!credential) throw new AppError('UNAUTHORIZED', 401);
+      const presentation = readBillingPresentation(request.headers);
       const statement = await getCanonicalBillingStatementV2({
         credential,
+        ...(presentation.enabled ? { locale: presentation.locale } : {}),
         actorToken: readBillingActorHeader(request.headers['x-uoa-actor']),
         billingMonth: body.billing_month,
         endpoint: '/billing/v2/customer-statement',
