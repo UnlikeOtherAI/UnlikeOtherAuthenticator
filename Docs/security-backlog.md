@@ -30,6 +30,32 @@ defense in depth), **Low** (nit / future-proofing), **Info** (good practice note
 - **Remove when:** a stable `prisma`/`@prisma/client` release resolves `deepmerge-ts >=8.0.0` on its own — check with `npm view @prisma/config@<version> dependencies`. Drop the override then, so the scoped pin does not silently outlive the advisory.
 - **Status:** Fixed by override 2026-08-18; the override itself is the carry-forward item.
 
+### D3. Test/build transitive security patches — fixed by scoped overrides (2026-10-06)
+
+- **Found:** CI dependency audit on the admin debug-login change. Tinypool
+  advisories [GHSA-5gmw-xhrv-c9v3](https://github.com/advisories/GHSA-5gmw-xhrv-c9v3)
+  and [GHSA-85c8-ppgw-ccpr](https://github.com/tinylibs/tinypool/security/advisories/GHSA-85c8-ppgw-ccpr)
+  require the patched `2.1.2`; [GHSA-68fv-2mgg-jv7q](https://github.com/advisories/GHSA-68fv-2mgg-jv7q)
+  requires `source-map-js 1.2.2`.
+- **Fix:** Root pnpm overrides target only `tinypool@<2.1.2` and
+  `source-map-js@<1.2.2`, resolving exactly `2.1.2` and `1.2.2`. The lockfile
+  changes only these two packages and their existing dependency references.
+  No advisory was ignored and the high-severity CI gate is unchanged.
+- **Compatibility:** Vitest remains `3.2.6`. Tinypool's
+  [2.0 release](https://github.com/tinylibs/tinypool/releases/tag/v2.0.0)
+  dropped Node 18 and changed CPU parallelism detection; the pinned runtime
+  accepts Node 20 or Node 22+, including the repository's Node 22 CI/Docker
+  and the local Node 24 validation host. Vitest's actual fork and thread pools
+  were exercised, including migrated PostgreSQL debug/session race suites.
+  Source-map-js retains its 1.x API; Auth SSR and Admin production builds plus
+  desktop/mobile browser flows verify its PostCSS/source-map consumers.
+- **Verification:** `pnpm audit --audit-level high` passes; the remaining
+  findings are two low (one previously ignored) and six moderate. Focused
+  API/DB and Admin tests, production builds and browser flows pass.
+- **Remove when:** Supported Vitest and source-map consumers resolve these
+  patched versions themselves; verify the entire lockfile before removing
+  either scoped override.
+
 ---
 
 ## Deferred from the 2026-08-19 audit
