@@ -2,7 +2,7 @@ import { requireIdentityEmail } from './entity-lifecycle.service.js';
 import type { PrismaClient, UserRole } from '@prisma/client';
 
 import { getEnv } from '../config/env.js';
-import { getPrisma } from '../db/prisma.js';
+import { getAdminPrisma } from '../db/prisma.js';
 import { avatarImageBaseUrl, domainAvatarImageUrl } from '../utils/avatar-url.js';
 import { normalizeDomain } from '../utils/domain.js';
 import { AppError } from '../utils/errors.js';
@@ -49,7 +49,10 @@ export async function listUsersForDomain(
   const domain = normalizeDomain(params.domain);
   if (!domain) throw new AppError('BAD_REQUEST', 400);
 
-  const prisma = deps?.prisma ?? (getPrisma() as unknown as DomainUsersPrisma);
+  // The domain-hash route runs before tenant context exists. Use the same
+  // backend client as domain avatar reads; the exact domain/subject predicate
+  // below remains the visibility boundary, including active-user filtering.
+  const prisma = deps?.prisma ?? (getAdminPrisma() as unknown as DomainUsersPrisma);
   const limit = Math.max(1, Math.min(500, params.limit ?? 100));
 
   const rows = await prisma.domainRole.findMany({
@@ -113,4 +116,3 @@ async function findUploadedAvatarUserIds(
 
   return new Set(uploads.map((row) => row.userId));
 }
-
