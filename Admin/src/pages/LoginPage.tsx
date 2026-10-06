@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
+import { AdminDebugLoginImporter } from '../features/auth/AdminDebugLoginImporter';
 import { Navigate, useLocation } from 'react-router';
 
 import { Button } from '../components/ui/Button';
@@ -10,26 +11,11 @@ export function LoginPage() {
   const { isAuthenticated } = useAdminSession();
   const location = useLocation();
   const [error, setError] = useState(false);
-  const hasStarted = useRef(false);
   const from =
     typeof location.state === 'object' && location.state && 'from' in location.state
       ? String(location.state.from)
       : '/dashboard';
 
-  useEffect(() => {
-    if (isAuthenticated) return;
-    if (hasStarted.current) return;
-    hasStarted.current = true;
-
-    let cancelled = false;
-    void beginAdminSystemSignIn(from).catch(() => {
-      if (!cancelled) setError(true);
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [from, isAuthenticated]);
 
   if (isAuthenticated) {
     return <Navigate to={from} replace />;
@@ -41,14 +27,15 @@ export function LoginPage() {
         <img src={adminAssets.appIcon} width="140" height="140" className="h-32 w-32 rounded-[20px]" alt="UOA" />
         <h1 className="text-2xl font-semibold tracking-tight text-white">UOA Admin</h1>
         <p className="text-sm text-slate-400">
-          {error ? 'Unable to start system sign-in.' : 'Redirecting to system sign-in.'}
+          {error ? 'Unable to start system sign-in.' : 'Sign in to manage UOA.'}
         </p>
-        {error ? (
-          <Button className="mt-4 border-indigo-600 bg-indigo-600 focus:ring-offset-slate-950" icon="logout" onClick={() => void beginAdminSystemSignIn(from)} variant="primary">
-            Try again
+        {
+          <Button className="mt-4 border-indigo-600 bg-indigo-600 focus:ring-offset-slate-950" icon="logout" onClick={() => void beginAdminSystemSignIn(from).catch(() => setError(true))} variant="primary">
+            Continue with Google
           </Button>
-        ) : null}
+        }
       </div>
+      <AdminDebugLoginImporter />
     </main>
   );
 }

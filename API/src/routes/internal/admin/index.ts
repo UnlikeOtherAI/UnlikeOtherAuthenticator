@@ -1,3 +1,4 @@
+import { registerInternalAdminDebugLoginRoutes } from './debug-login.js';
 import type { FastifyInstance } from 'fastify';
 import { registerInternalAdminLifecycle } from './lifecycle.js';
 import { registerInternalAdminNativeApps } from './native-apps.js';
@@ -32,6 +33,7 @@ export function registerInternalAdminRoutes(app: FastifyInstance): void {
   registerInternalAdminNativeApps(app);
   registerInternalAdminConfigRoute(app);
   registerInternalAdminTokenRoute(app);
+  registerInternalAdminDebugLoginRoutes(app);
   registerInternalAdminReadRoutes(app);
   registerInternalAdminOrganisationRoutes(app);
   registerInternalAdminAppRoutes(app);

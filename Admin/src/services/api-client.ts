@@ -56,8 +56,8 @@ export function createApiClient(baseUrl = adminEnv.apiBaseUrl): ApiClient {
     if (requestUrl.origin !== window.location.origin) {
       throw new Error('Cross-origin admin API requests are not permitted');
     }
-    const accessToken = readAdminAccessToken();
     const headers = new Headers(init?.headers);
+    const accessToken = headers.has('Authorization') ? null : readAdminAccessToken();
     headers.set('Accept', accept);
     if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
 

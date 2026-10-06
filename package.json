@@ -47,7 +47,9 @@
       "vite": "^6.4.3",
       "ws": "^7.5.11",
       "browserslist": ">=4.28.7",
-      "@fastify/busboy": "^3.2.1"
+      "@fastify/busboy": "^3.2.1",
+      "tinypool@<2.1.2": "2.1.2",
+      "source-map-js@<1.2.2": "1.2.2"
     },
     "auditConfig": {
       "ignoreGhsas": [

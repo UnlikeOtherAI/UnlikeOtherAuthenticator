@@ -3074,3 +3074,36 @@ initial invoice, while retaining the initial invoice and activation proof. A
 renewal prepared before a concurrent cancellation cannot revive the terminated
 subscription; the apply write checks the current row inside the transaction.
 See [billing tariffs](Requirements/billing-tariffs.md).
+
+
+## 2026-10-06 First-party admin debug login
+
+The Admin login screen now waits for the operator to choose Continue with Google
+or the bottom-right Debug login button, preserving a reachable signed-out
+importer. The authenticated shell uses that same button to create, copy and renew
+a debug code. Clipboard JSON is exactly `{url,token}`; the importer also accepts
+a bare code and refuses JSON naming another product or environment.
+
+Admin debug routes are separate from confidential `/auth/debug-login/*`: browser
+code never sees a domain secret. Issue/redeem/logout require the canonical
+first-party config URL, exact service Origin and JSON POST before config lookup.
+Issuance needs a current admin bearer plus its exact bearer-bound HttpOnly cookie.
+Both issuance and redemption check ACTIVE canonical identity, credential epoch,
+current admin-domain SUPERUSER and source-family validity under the existing
+policy and session locks. Codes are cryptographically random, stored hashed,
+single use, valid at most 30 minutes and additionally bounded by source expiry.
+Renew invalidates the previous code; source logout/revocation blocks unused codes.
+
+The normal OAuth exchange retains its existing generated refresh family only in a
+private cookie, scoped to `/internal/admin`, HttpOnly, SameSite=Strict and Secure
+on HTTPS. Its name hashes the exact admin bearer; random admin JWT `jti` values
+keep simultaneous same-person sessions distinct. The cookie and family expire
+no later than the short-lived access session. It is solely a source-ownership
+handle: no admin refresh endpoint is added and no refresh credential is returned
+in JSON or available to JavaScript. Older sessions must sign in again to issue.
+Redemption creates an independent recipient family and a new bearer/cookie.
+`POST /internal/admin/logout` revokes only the exact presented bearer's family;
+other source/recipient sessions remain independent. UI logout awaits that write
+and retains the session on transport/server failure. Invalid/expired authority
+can clear local storage; failed sign-in uses local cleanup rather than logout.
+The access-status diagnostic flag remains disabled by default and unrelated.
