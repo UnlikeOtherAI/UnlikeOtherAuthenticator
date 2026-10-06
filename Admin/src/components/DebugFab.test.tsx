@@ -1,59 +1,33 @@
 // @vitest-environment happy-dom
-
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-
 import { DebugFab } from './DebugFab';
-
-// A real-looking HS256 superuser JWT (header.payload.signature) seeded into sessionStorage.
-const RAW_ACCESS_TOKEN =
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.' +
-  'eyJ1c2VySWQiOiJ1c2VyLTEiLCJlbWFpbCI6InN1cGVyQGV4YW1wbGUuY29tIiwicm9sZSI6InN1cGVydXNlciJ9.' +
-  'c2lnbmF0dXJl';
-
-function seedSession(): void {
-  window.sessionStorage.setItem(
-    'uoa-admin-session',
-    JSON.stringify({ accessToken: RAW_ACCESS_TOKEN, expiresAt: Date.now() + 60_000 }),
-  );
-}
-
-async function renderSnapshot(): Promise<string> {
-  const user = userEvent.setup();
-  render(<DebugFab />);
-  await user.click(screen.getByRole('button', { name: 'Debug session snapshot' }));
-  return (screen.getByLabelText('Session snapshot JSON') as HTMLTextAreaElement).value;
-}
-
-describe('DebugFab snapshot', () => {
-  afterEach(() => {
-    cleanup();
-    window.sessionStorage.clear();
-    vi.unstubAllGlobals();
+import { issueAdminDebugLogin } from '../services/admin-debug-login-service';
+vi.mock('../services/admin-debug-login-service', () => ({ issueAdminDebugLogin: vi.fn() }));
+describe('Debug login issuer', () => {
+  afterEach(() => { cleanup(); vi.resetAllMocks(); });
+  it('copies exactly the capability JSON and renews by invalidating the prior code', async () => {
+    const user = userEvent.setup();
+    vi.mocked(issueAdminDebugLogin).mockResolvedValueOnce({ url: 'https://admin.example/admin/login', token: 'a'.repeat(43), expires_in: 1800 })
+      .mockResolvedValueOnce({ url: 'https://admin.example/admin/login', token: 'b'.repeat(43), expires_in: 900 });
+    render(<DebugFab />);
+    await user.click(screen.getByRole('button', { name: 'Debug login' }));
+    await user.click(screen.getByRole('button', { name: 'Create code' }));
+    const json = JSON.parse((screen.getByLabelText('Debug login JSON') as HTMLTextAreaElement).value);
+    expect(Object.keys(json).sort()).toEqual(['token', 'url']);
+    await user.click(screen.getByRole('button', { name: 'Copy' }));
+    expect(await navigator.clipboard.readText()).toBe(JSON.stringify(json, null, 2));
+    await user.click(screen.getByRole('button', { name: 'Renew' }));
+    expect(issueAdminDebugLogin).toHaveBeenLastCalledWith('a'.repeat(43));
+    expect((screen.getByLabelText('Debug login JSON') as HTMLTextAreaElement).value).toContain('b'.repeat(43));
   });
-
-  it('never contains the raw access token or a Bearer replay affordance', async () => {
-    seedSession();
-
-    const json = await renderSnapshot();
-
-    expect(json).not.toContain(RAW_ACCESS_TOKEN);
-    expect(json).not.toContain('Bearer ey');
-    expect(json).not.toContain('curl');
-
-    const snapshot = JSON.parse(json) as Record<string, unknown>;
-    expect(snapshot).not.toHaveProperty('accessToken');
-    expect(snapshot).not.toHaveProperty('reconstruct');
-    expect(json).toContain('super@example.com');
-  });
-
-  it('describes the snapshot as non-secret diagnostics, not a reproducible request', async () => {
-    seedSession();
-
-    await renderSnapshot();
-
-    expect(screen.getByText(/Non-secret diagnostics/)).toBeTruthy();
-    expect(screen.queryByText(/reproduce/)).toBeNull();
+  it('keeps failed issuance visible and retryable', async () => {
+    vi.mocked(issueAdminDebugLogin).mockRejectedValue(new Error('rejected'));
+    const user = userEvent.setup(); render(<DebugFab />);
+    await user.click(screen.getByRole('button', { name: 'Debug login' }));
+    await user.click(screen.getByRole('button', { name: 'Create code' }));
+    expect(screen.getByRole('alert').textContent).toContain('Sign in again');
+    expect(screen.getByRole('button', { name: 'Create code' }).hasAttribute('disabled')).toBe(false);
   });
 });

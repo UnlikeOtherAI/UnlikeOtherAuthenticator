@@ -10,7 +10,7 @@ import { useAdminSession, useAdminSessionActions } from '../features/auth/admin-
 
 export function AdminAuthCallbackPage() {
   const { isAuthenticated } = useAdminSession();
-  const { completeSignIn, signOut } = useAdminSessionActions();
+  const { completeSignIn, clearFailedSignIn } = useAdminSessionActions();
   const location = useLocation();
   const navigate = useNavigate();
   const [error, setError] = useState(false);
@@ -31,7 +31,7 @@ export function AdminAuthCallbackPage() {
 
     if (!code || !pending || params.get('error')) {
       clearPendingAdminLogin();
-      signOut();
+      clearFailedSignIn();
       setError(true);
       return;
     }
@@ -46,14 +46,14 @@ export function AdminAuthCallbackPage() {
       .catch(() => {
         if (cancelled) return;
         clearPendingAdminLogin();
-        signOut();
+        clearFailedSignIn();
         setError(true);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [completeSignIn, isAuthenticated, location.search, navigate, signOut]);
+  }, [completeSignIn, isAuthenticated, location.search, navigate, clearFailedSignIn]);
 
   return (
     <main className="flex min-h-full items-center justify-center bg-slate-950 px-6 py-12 text-center">

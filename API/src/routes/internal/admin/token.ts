@@ -1,3 +1,4 @@
+import { storeAdminSessionHandle, assertAdminDebugRequest, assertAdminDebugOrigin } from '../../../services/admin-debug-session.service.js';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
@@ -76,7 +77,7 @@ export function registerInternalAdminTokenRoute(app: FastifyInstance): void {
   app.post(
     '/internal/admin/token',
     {
-      preHandler: [tokenExchangeRateLimiter, configVerifier],
+      preHandler: [tokenExchangeRateLimiter, async (request) => { assertAdminDebugOrigin(request); }, configVerifier],
       schema: { response: { 200: adminTokenResponseSchema } },
     },
     async (request, reply) => {
@@ -86,6 +87,7 @@ export function registerInternalAdminTokenRoute(app: FastifyInstance): void {
       }
 
       assertAdminConfigDomain(request.config.domain);
+      assertAdminDebugRequest(request);
 
       const config = request.config;
       const configUrl = request.configUrl;
@@ -104,6 +106,7 @@ export function registerInternalAdminTokenRoute(app: FastifyInstance): void {
       );
       await assertAdminAccessTokenIsSuperuser(tokenPair.accessToken);
 
+      await storeAdminSessionHandle(tokenPair, request.adminDb, reply);
       reply.header('Cache-Control', 'no-store');
       reply.header('Pragma', 'no-cache');
       reply.status(200).send({

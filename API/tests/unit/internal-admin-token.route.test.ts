@@ -8,6 +8,11 @@ import { testUiTheme } from '../helpers/test-config.js';
 let currentConfig: ClientConfig | null = null;
 let currentConfigUrl = '';
 const exchangeAuthorizationCodeForTokensMock = vi.fn();
+vi.mock('../../src/services/admin-debug-session.service.js', async () => {
+  const actual = await vi.importActual<typeof import('../../src/services/admin-debug-session.service.js')>(
+    '../../src/services/admin-debug-session.service.js');
+  return { ...actual, storeAdminSessionHandle: vi.fn() };
+});
 const adminSecret = 'admin-token-secret-with-enough-length';
 const issuer = 'uoa-auth-service';
 const adminDomain = 'admin.example.com';
@@ -77,6 +82,7 @@ describe('POST /internal/admin/token', () => {
   const originalAdminDomain = process.env.ADMIN_AUTH_DOMAIN;
   const originalAdminTokenSecret = process.env.ADMIN_ACCESS_TOKEN_SECRET;
   const originalConfigJwksUrl = process.env.CONFIG_JWKS_URL;
+  const originalPublicBaseUrl = process.env.PUBLIC_BASE_URL;
   const originalDatabaseUrl = process.env.DATABASE_URL;
 
   beforeEach(() => {
@@ -86,7 +92,8 @@ describe('POST /internal/admin/token', () => {
     process.env.ADMIN_ACCESS_TOKEN_SECRET = adminSecret;
     process.env.CONFIG_JWKS_URL = 'https://auth.example.com/.well-known/jwks.json';
     Reflect.deleteProperty(process.env, 'DATABASE_URL');
-    currentConfigUrl = 'https://admin.example.com/auth-config';
+    process.env.PUBLIC_BASE_URL = 'https://admin.example.com';
+    currentConfigUrl = 'https://admin.example.com/internal/admin/config';
     currentConfig = adminConfig();
     exchangeAuthorizationCodeForTokensMock.mockImplementation(async () => ({
       accessToken: await accessToken('superuser'),
@@ -103,6 +110,7 @@ describe('POST /internal/admin/token', () => {
     restoreEnv('ADMIN_ACCESS_TOKEN_SECRET', originalAdminTokenSecret);
     restoreEnv('CONFIG_JWKS_URL', originalConfigJwksUrl);
     restoreEnv('DATABASE_URL', originalDatabaseUrl);
+    restoreEnv('PUBLIC_BASE_URL', originalPublicBaseUrl);
     currentConfig = null;
     currentConfigUrl = '';
     vi.clearAllMocks();
@@ -116,6 +124,7 @@ describe('POST /internal/admin/token', () => {
     try {
       const response = await app.inject({
         method: 'POST',
+        headers: { origin: 'https://admin.example.com' },
         url: `/internal/admin/token?config_url=${encodeURIComponent(currentConfigUrl)}`,
         payload: {
           code: 'auth-code',
@@ -162,6 +171,7 @@ describe('POST /internal/admin/token', () => {
     try {
       const response = await app.inject({
         method: 'POST',
+        headers: { origin: 'https://admin.example.com' },
         url: `/internal/admin/token?config_url=${encodeURIComponent(currentConfigUrl)}`,
         payload: {
           code: 'auth-code',
@@ -191,6 +201,7 @@ describe('POST /internal/admin/token', () => {
     try {
       const response = await app.inject({
         method: 'POST',
+        headers: { origin: 'https://admin.example.com' },
         url: `/internal/admin/token?config_url=${encodeURIComponent(currentConfigUrl)}`,
         payload: {
           code: 'auth-code',

@@ -16,8 +16,7 @@ export function AdminLayout() {
         </main>
       </div>
       <ConfirmDialog />
-      {/* DEV-gated like adminEnv.bypassAuth: a support-debug surface has no place in a production build. */}
-      {import.meta.env.DEV ? <DebugFab /> : null}
+      <DebugFab />
     </div>
   );
 }

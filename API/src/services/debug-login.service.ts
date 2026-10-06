@@ -32,8 +32,9 @@ function matchesContext(row: { domain: string; clientId: string; configUrl: stri
 }
 const fail = () => new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
 const digest = (token: string) => createHash('sha256').update(`uoa:debug-login:v1:${token}`).digest('hex');
-type Context = { config: ClientConfig; configUrl: string; clientId: string; clientDomainId: string };
-type Deps = { prisma: PrismaClient; now?: () => Date; beforeRedemptionLock?: () => Promise<void> };
+type Context = { config: ClientConfig; configUrl: string; clientId: string; clientDomainId?: string };
+type Deps = { prisma: PrismaClient; now?: () => Date; beforeRedemptionLock?: () => Promise<void>;
+  assertAuthority?: (source: RefreshToken, prisma: PrismaClient) => Promise<void> };
 
 async function validateSource(context: Context, source: RefreshToken, prisma: PrismaClient, now: Date) {
   if (!matchesContext(source, context)
@@ -61,6 +62,7 @@ export async function issueDebugLogin(
     const now = deps.now?.() ?? new Date();
     if (!source) throw fail();
     await validateSource(input, source, tx, now);
+    await deps.assertAuthority?.(source, tx);
     const user = await tx.user.findUnique({ where: { lifecycleStatus: 'ACTIVE', id: source.userId }, select: { tokenVersion: true } });
     if (!user) throw fail();
     const recent = await tx.debugLoginGrant.count({ where: {
@@ -106,6 +108,7 @@ export async function redeemDebugLogin(input: Context & { token: string }, deps:
     } });
     if (!source || source.orgId !== grant.orgId || source.teamId !== grant.teamId) throw fail();
     await validateSource(input, source, tx, now);
+    await deps.assertAuthority?.(source, tx);
     const consumed = await tx.debugLoginGrant.updateMany({
       where: { id: grant.id, usedAt: null, expiresAt: { gt: now } }, data: { usedAt: now },
     });
