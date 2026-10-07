@@ -309,7 +309,9 @@ product-bound runtime key to `POST /billing/v1/ledger/job-compute-renewals`.
 The request identifies one immutable origin invocation, Ledger job, reserved
 Water UUID, optional open planner turn, and purpose. Ledger generates a
 256-bit opaque secret and stable issue key before the request; UOA stores only
-its digest and returns the same grant on an identical retry. If the original
+its digest and returns the same UUID grant identifier on an identical retry.
+The identifier is accepted unchanged by the recipient renewal/revocation routes
+and in the signed job-compute claim. If the original
 45-second JWT expires after the issue committed but before its HTTP response
 reached Ledger, the origin runtime key can recover the existing grant with
 the same secret, issue key, and exact frozen tuple at `/recover`; recovery

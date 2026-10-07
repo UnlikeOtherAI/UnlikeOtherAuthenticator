@@ -1,7 +1,12 @@
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { Prisma, type PrismaClient } from '@prisma/client';
+import Fastify from 'fastify';
 import { createLocalJWKSet, exportJWK, generateKeyPair, jwtVerify } from 'jose';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+
+import * as prismaProvider from '../../src/db/prisma.js';
+import { registerJobComputeRenewalRoutes } from '../../src/routes/billing/job-compute-renewals.js';
 
 import {
   assertLiveJobComputeDispatch, issueJobComputeRenewal, recoverJobComputeRenewal,
@@ -19,7 +24,8 @@ const enabled = Boolean(process.env.DATABASE_URL);
 const secret = `uoa_job_${'a'.repeat(43)}`;
 const appKey = `uoa_app_${'b'.repeat(43)}`;
 const runtimeSecret = `uoa_ledger_${'d'.repeat(43)}`;
-const grantId = 'grant-job-compute-test';
+const grantId = 'b6b40179-e4e4-4fdd-ad6f-9067f6127110';
+const grantUuid = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 const identity: JobComputeIdentity = {
   originInvocationId: 'inv-job-compute-test',
   ledgerJobId: 'ledger-job-compute-test',
@@ -145,6 +151,7 @@ describe.skipIf(!enabled)('finite job-compute grant in PostgreSQL', () => {
       issueKey: '3'.repeat(64), secret: `uoa_job_${'c'.repeat(43)}` };
     const first = await issueJobComputeRenewal({ runtimeSecret, delegation, input },
       { prisma: db });
+    expect(first.grant_id).toMatch(grantUuid);
     const replay = await issueJobComputeRenewal({ runtimeSecret, delegation, input },
       { prisma: db });
     expect(replay).toEqual(first);
@@ -194,6 +201,38 @@ describe.skipIf(!enabled)('finite job-compute grant in PostgreSQL', () => {
     expect(second).toEqual(first);
     expect(await db.billingJobComputeRenewal.count({ where: { issueKey: input.issueKey } }))
       .toBe(1);
+  });
+
+  it('renews through HTTP with the exact identifier returned by persisted issuance', async () => {
+    const provider = vi.spyOn(prismaProvider, 'getAdminPrisma').mockReturnValue(db);
+    const app = Fastify();
+    registerJobComputeRenewalRoutes(app);
+    const body = { origin_invocation_id: identity.originInvocationId,
+      ledger_job_id: 'ledger-job-http-test', water_job_id: identity.waterJobId,
+      scope_turn_id: null, purpose: identity.purpose };
+    const httpSecret = `uoa_job_${'h'.repeat(43)}`;
+    try {
+      const issued = await app.inject({ method: 'POST',
+        url: '/billing/v1/ledger/job-compute-renewals',
+        headers: { authorization: `Bearer ${runtimeSecret}`,
+          'x-uoa-delegation': await freshOriginalDelegation() },
+        payload: { ...body, issue_key: '6'.repeat(64), secret: httpSecret } });
+      expect(issued.statusCode).toBe(200);
+      const result = issued.json<{ grant_id: string }>();
+      expect(result.grant_id).toMatch(grantUuid);
+      const renewed = await app.inject({ method: 'POST',
+        url: `/billing/v1/job-compute-renewals/${result.grant_id}/renew`,
+        headers: { authorization: `Bearer ${appKey}` },
+        payload: { ...body, secret: httpSecret } });
+      expect(renewed.statusCode).toBe(200);
+      const verified = await jwtVerify(renewed.json<{ access_token: string }>().access_token,
+        createLocalJWKSet(await getAccessTokenPublicJwks()));
+      expect(verified.payload.job_compute).toMatchObject({ grant_id: result.grant_id,
+        ledger_job_id: body.ledger_job_id, water_job_id: body.water_job_id });
+    } finally {
+      await app.close();
+      provider.mockRestore();
+    }
   });
 
   it('renews a live original grant with frozen epoch and refuses its token after revoke', async () => {
@@ -248,6 +287,32 @@ describe.skipIf(!enabled)('finite job-compute grant in PostgreSQL', () => {
     }))).rejects.toThrow('JOB_COMPUTE_DISPATCH_MISMATCH');
   });
 
+  it('recovers migrated identifiers without changing authority or valid identifiers', async () => {
+    const original = await db.billingJobComputeRenewal.findUniqueOrThrow({ where: { id: grantId } });
+    const input = { ...identity, ledgerJobId: 'ledger-job-migration-test',
+      issueKey: '8'.repeat(64), secret: `uoa_job_${'j'.repeat(43)}` };
+    await issueJobComputeRenewal({ runtimeSecret,
+      delegation: await freshOriginalDelegation(), input }, { prisma: db });
+    const before = await db.billingJobComputeRenewal.findUniqueOrThrow({ where: { issueKey: input.issueKey } });
+    const legacyId = 'cmlegacygrant0000000000000';
+    const migration = readFileSync(new URL(
+      '../../prisma/migrations/20261007103000_job_compute_grant_uuid/migration.sql',
+      import.meta.url), 'utf8');
+    await db.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe('ALTER TABLE billing_job_compute_renewals DROP CONSTRAINT billing_job_compute_grant_id_uuid');
+      await tx.billingJobComputeRenewal.update({ where: { id: before.id }, data: { id: legacyId } });
+      await tx.$executeRawUnsafe(migration);
+    });
+    const migrated = await db.billingJobComputeRenewal.findUniqueOrThrow({ where: { issueKey: input.issueKey } });
+    expect(migrated.id).toMatch(grantUuid);
+    expect({ ...migrated, id: before.id }).toEqual(before);
+    expect(await recoverJobComputeRenewal({ runtimeSecret, input }, { prisma: db }))
+      .toMatchObject({ grant_id: migrated.id, expires_at: before.expiresAt.toISOString() });
+    expect(await db.billingJobComputeRenewal.findUnique({ where: { id: original.id } })).toEqual(original);
+    await expect(db.billingJobComputeRenewal.update({ where: { id: migrated.id },
+      data: { id: legacyId } })).rejects.toThrow(/constraint/i);
+  });
+
   it('refuses recovery when the original login epoch has changed', async () => {
     const input = { ...identity, ledgerJobId: 'ledger-job-epoch-test',
       issueKey: '4'.repeat(64), secret: `uoa_job_${'f'.repeat(43)}` };
@@ -276,4 +341,5 @@ describe.skipIf(!enabled)('finite job-compute grant in PostgreSQL', () => {
       where: { id: row.id },
     })).revokedAt).not.toBeNull();
   });
+
 });

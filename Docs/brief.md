@@ -3121,3 +3121,15 @@ other source/recipient sessions remain independent. UI logout awaits that write
 and retains the session on transport/server failure. Invalid/expired authority
 can clear local storage; failed sign-in uses local cleanup rather than logout.
 The access-status diagnostic flag remains disabled by default and unrelated.
+
+## 2026-10-07 Job-compute grant identifier contract
+
+Job-compute grants use UUID identifiers consistently from persisted issuance
+through Ledger delivery, Water renewal and the signed compute claim. The former
+CUID persistence default produced identifiers that the public routes and both
+consumers rejected. The corrective migration replaces only those unusable ids;
+the issue key, identity tuple, secret digest, original expiry and revocation are
+preserved, so Ledger recovers the same authorization through its existing
+issue-key recovery path. Existing UUID identifiers remain unchanged. A database
+constraint rejects future non-UUID ids, and a PostgreSQL regression exercises
+issuance and renewal through the actual HTTP routes.
