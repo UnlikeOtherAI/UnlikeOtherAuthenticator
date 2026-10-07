@@ -73,6 +73,25 @@ The UOA Billing Service, delegation mapping, and app key are operator state,
 not seed data. They must be provisioned before a DocGen deployment serves the
 new configuration; UOA being deployed alone cannot make the product live.
 
+### SalesNerd Ledger delegation
+
+SalesNerd uses its own product credit allowance and does not currently enroll
+in UOA customer billing. UOA accepts `salesnerd` in the raw Ledger metering
+schemas so its product attribution does not invalidate a usage or portfolio
+response. That acceptance does not create a UOA Billing Service, tariff, billing
+app key, Stripe catalog entry, or customer charge; those are separate
+commercial enrollment decisions and remain absent until explicitly requested.
+
+After the `app.salesnerd.live` ClientDomain is active and its config JWKS is
+serving the current assertion-signing key, create exactly one enabled
+confidential-delegation mapping with `source_domain=app.salesnerd.live`,
+`product=salesnerd`, `resource=https://ledger.unlikeotherai.com`, and only
+`scopes=["ai.invoke"]`. UOA now enforces that exact tuple in code, like
+DocGen's Ledger binding. The exchanged UOA access token has `azp` and
+`source_domain` equal to `app.salesnerd.live`; `product=salesnerd` remains a
+separate claim. This mapping is operator state and is not seeded or created by
+deploy.
+
 ### The two hardened receivers
 
 DeepTest and DocGen do not take a general root shell. Their CI keys are pinned in

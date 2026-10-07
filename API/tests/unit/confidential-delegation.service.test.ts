@@ -299,6 +299,47 @@ function mutationPrisma() {
 describe('confidential delegation admin mutations', () => {
   const actor = { userId: 'admin-1', email: 'admin@example.com' };
 
+  it('allows the exact SalesNerd Ledger ai.invoke binding', async () => {
+    const { prisma, tx } = mutationPrisma();
+    await createConfidentialDelegationMapping(
+      {
+        sourceDomain: 'app.salesnerd.live',
+        product: 'salesnerd',
+        resource: 'https://ledger.unlikeotherai.com',
+        scopes: ['ai.invoke'],
+        actor,
+      },
+      { prisma },
+    );
+
+    expect(tx.clientDomain.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { domain: 'app.salesnerd.live' } }),
+    );
+    expect(tx.confidentialDelegationMapping.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          product: 'salesnerd',
+          resource: 'https://ledger.unlikeotherai.com',
+          scopes: [ConfidentialDelegationScope.AI_INVOKE],
+        }),
+      }),
+    );
+  });
+
+  it.each([
+    { sourceDomain: 'salesnerd.live', resource: 'https://ledger.unlikeotherai.com', scopes: ['ai.invoke'] },
+    { sourceDomain: 'app.salesnerd.live', resource: 'https://ledger.other.example', scopes: ['ai.invoke'] },
+    { sourceDomain: 'app.salesnerd.live', resource: 'https://ledger.unlikeotherai.com', scopes: ['ai.invoke', 'billing.read'] },
+  ])('rejects a SalesNerd mapping outside its fixed binding: %o', async (binding) => {
+    const { prisma } = mutationPrisma();
+    await expect(
+      createConfidentialDelegationMapping(
+        { ...binding, product: 'salesnerd', actor },
+        { prisma },
+      ),
+    ).rejects.toThrow('FIRST_PARTY_CONFIDENTIAL_DELEGATION_MISMATCH');
+  });
+
   it('creates a normalized mapping and an audit event without credential material', async () => {
     const { prisma, tx, created } = mutationPrisma();
     const result = await createConfidentialDelegationMapping(

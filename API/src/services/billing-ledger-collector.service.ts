@@ -17,7 +17,14 @@ import type {
 } from './billing-metering.types.js';
 import { fetchLedgerJsonResponse } from './billing-ledger-http.service.js';
 
-const ProductSchema = z.enum(['nessie', 'deepwater', 'deepsignal', 'deeptest', 'docgen']);
+const ProductSchema = z.enum([
+  'nessie',
+  'deepwater',
+  'deepsignal',
+  'deeptest',
+  'docgen',
+  'salesnerd',
+]);
 const IntegerSchema = z.string().regex(/^(0|[1-9][0-9]*)$/);
 const DecimalSchema = z.string().regex(/^-?(0|[1-9][0-9]*)(\.[0-9]+)?$/);
 const MonthSchema = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/);

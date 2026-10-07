@@ -285,6 +285,35 @@ describe('Ledger raw metering collector', () => {
     }
   });
 
+  it('accepts SalesNerd raw usage without requiring a UOA billing tariff', async () => {
+    const response = rawMeteringResponse();
+    response.product = 'salesnerd';
+    response.totals.usageByService[0]!.billingProduct = 'salesnerd';
+    response.totals.costs[0]!.billingProduct = 'salesnerd';
+    response.breakdown[0]!.billingProduct = 'salesnerd';
+    const result = await fetchLedgerMeteringUsage(
+      {
+        product: 'salesnerd',
+        organisationId: 'org_123',
+        teamId: 'team_123',
+        billingMonth: '2026-07',
+        groupBy: 'service',
+      },
+      {
+        env,
+        fetch: vi.fn().mockResolvedValue(
+          new Response(JSON.stringify(response), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        ),
+      },
+    );
+
+    expect(result.product).toBe('salesnerd');
+    expect(result.lines[0]?.billingProduct).toBe('salesnerd');
+  });
+
   it('requests one exact team portfolio with the statement product only as perspective', async () => {
     const now = Math.floor(Date.parse('2026-07-19T12:00:00.000Z') / 1000);
     let responseText = '';
@@ -398,5 +427,31 @@ describe('Ledger raw metering collector', () => {
         ),
       ).rejects.toThrow('LEDGER_METERING_PORTFOLIO_RESPONSE_INVALID');
     }
+  });
+
+  it('accepts SalesNerd as a raw portfolio perspective and attribution product', async () => {
+    const response = rawPortfolioResponse('user');
+    response.perspectiveProduct = 'salesnerd';
+    response.totals.usageByService[0]!.billingProduct = 'salesnerd';
+    response.totals.costs[0]!.billingProduct = 'salesnerd';
+    response.breakdown[0]!.billingProduct = 'salesnerd';
+    const result = await fetchLedgerMeteringPortfolio(
+      {
+        product: 'salesnerd',
+        organisationId: 'org_123',
+        teamId: 'team_123',
+        billingMonth: '2026-07',
+        groupBy: 'user',
+      },
+      {
+        env,
+        fetch: vi.fn().mockResolvedValue(
+          new Response(JSON.stringify(response), { status: 200 }),
+        ),
+      },
+    );
+
+    expect(result.perspectiveProduct).toBe('salesnerd');
+    expect(result.lines[0]?.billingProduct).toBe('salesnerd');
   });
 });
