@@ -11,6 +11,10 @@ const startupScript = fileURLToPath(
   new URL('../../../docker/start-production.sh', import.meta.url),
 );
 const dockerfile = new URL('../../../Dockerfile', import.meta.url);
+const shell =
+  process.platform === 'win32'
+    ? join(process.env.ProgramFiles ?? 'C:\\Program Files', 'Git', 'bin', 'bash.exe')
+    : '/bin/sh';
 const temporaryDirectories: string[] = [];
 
 type StartupResult = {
@@ -58,7 +62,7 @@ async function runStartup(
   runtime: { bin: string; capture: string },
   env: Record<string, string>,
 ): Promise<StartupResult> {
-  const child = spawn('/bin/sh', [startupScript], {
+  const child = spawn(shell, [startupScript], {
     env: {
       CAPTURE_DIR: runtime.capture,
       PATH: `${runtime.bin}:/usr/bin:/bin`,

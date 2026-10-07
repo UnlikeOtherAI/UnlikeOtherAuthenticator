@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const ProductSchema = z.enum(['nessie', 'deepwater', 'deepsignal', 'deeptest', 'docgen']);
+export const ProductSchema = z.enum(['nessie', 'deepwater', 'deepsignal', 'deeptest', 'docgen', 'salesnerd']);
 export const BillingCompletenessSchema = z.object({
   state: z.enum(['complete', 'unresolved']),
   unresolvedPaidAttempts: z.string().regex(/^(0|[1-9][0-9]*)$/),

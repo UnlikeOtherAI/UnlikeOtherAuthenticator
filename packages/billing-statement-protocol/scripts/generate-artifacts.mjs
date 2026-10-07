@@ -2,6 +2,8 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { normalizeArtifactLineEndings, serializeArtifact } from './artifact-text.mjs';
+
 import {
   billingCreditBudgetV1ConformanceFixture,
   billingCreditBudgetV1JsonSchema,
@@ -113,14 +115,14 @@ if (mode !== '--write' && mode !== '--check') {
 }
 
 for (const [path, value] of artifacts) {
-  const expected = `${JSON.stringify(value, null, 2)}\n`;
+  const expected = serializeArtifact(value);
   if (mode === '--write') {
     await mkdir(dirname(path), { recursive: true });
     await writeFile(path, expected, 'utf8');
     continue;
   }
   const actual = await readFile(path, 'utf8').catch(() => '');
-  if (actual !== expected) {
+  if (normalizeArtifactLineEndings(actual) !== expected) {
     throw new Error(
       `${path} has drifted from the TypeScript source. Run pnpm --filter @unlikeotherai/billing-statement-protocol generate.`,
     );
