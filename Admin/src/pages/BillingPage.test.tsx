@@ -166,6 +166,10 @@ vi.mock('../features/admin/admin-queries', () => ({
   useTeamsQuery: () => ({ data: [] }),
 }));
 
+vi.mock('../features/admin/BillingSeatCapacityPanel', () => ({
+  BillingSeatCapacityPanel: () => null,
+}));
+
 vi.mock('../features/shell/admin-ui', () => ({
   useAdminUi: () => ({ confirm: mocks.confirm }),
 }));
@@ -223,7 +227,7 @@ describe('BillingPage', () => {
     expect(screen.getByText('uoa_app_abcd…')).toBeTruthy();
     expect(screen.queryByText(/^uoa_app_[A-Za-z0-9_-]{20,}$/)).toBeNull();
 
-    await user.click(screen.getByRole('button', { name: /Stripe subscriptions/ }));
+    await user.click(screen.getByRole('button', { name: /Subscriptions/ }));
     expect(screen.getByText('Example Org')).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Research' })).toBeTruthy();
     expect(screen.getByText('Test')).toBeTruthy();

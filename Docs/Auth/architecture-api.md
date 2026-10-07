@@ -73,6 +73,7 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
         schema.ts           — Aggregates the endpoint schema returned by /api
         schema.auth.ts      — /api schema slice: auth endpoints
         schema.auth-token.ts — /api contract for the multi-grant POST /auth/token endpoint
+        schema.billing-ledger-runtime-keys.ts — Existing superuser runtime-key metadata/issue/revoke documentation
         schema.billing.ts   — /api schema slice: tariffs, contract invoices, app keys, and snapshots
         schema.billing-funding.ts — /api schema slice: shared-credit and recurring-add-on reads/artifacts
         schema.config-debug.ts — /api schema slice: config debug endpoints

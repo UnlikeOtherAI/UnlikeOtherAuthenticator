@@ -336,3 +336,15 @@ other source/recipient sessions remain independent. UI logout awaits that write
 and retains the session on transport/server failure. Invalid/expired authority
 can clear local storage; failed sign-in uses local cleanup rather than logout.
 The access-status diagnostic flag remains disabled by default and unrelated.
+
+### Ledger runtime keys (2026-10-07)
+
+The existing Billing product panel owns `tab=runtime-keys`. Typed metadata uses
+`schemas/billing-ledger-runtime-keys.ts`, `services/billing-ledger-runtime-key-service.ts`
+and `features/admin/billing-ledger-runtime-key-queries.ts`. Creation calls the service
+directly from `BillingLedgerRuntimeKeyDialog`, holding the secret only in mounted
+component state, never a TanStack mutation result. The product-keyed panel and
+conditional tab mounting clear reveals on product/tab changes and auth-shell teardown.
+The shared Modal supplies pending dismissal, dirty form and focus guards. Existing
+server roles/endpoints remain authoritative. Browser checks use isolated synthetic
+responses, not production credentials or proof of deployed issuance.
