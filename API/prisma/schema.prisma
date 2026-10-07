@@ -3231,7 +3231,7 @@ model BillingLedgerRuntimeKey {
 // job's compute calls. Only the digest is stored here; Ledger/Water keep the
 // caller-generated secret in scoped encrypted delivery carriers.
 model BillingJobComputeRenewal {
-  id                    String    @id @default(cuid())
+  id                    String    @id @default(uuid())
   issueKey              String    @unique @map("issue_key") @db.Char(64)
   identityKey           String    @unique @map("identity_key") @db.Char(64)
   secretDigest          String    @unique @map("secret_digest") @db.Char(64)
