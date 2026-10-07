@@ -79,7 +79,7 @@ test('operator reaches product runtime keys, reviews binding, retries and clears
   await expect(page.getByText(secret)).toHaveCount(0);
   await page.getByRole('button', { name: 'Revoke', exact: true }).click();
   await expect(page.getByRole('dialog')).toContainText('api.nessie.works');
-  await page.getByRole('dialog').getByRole('button', { name: 'Confirm', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Revoke runtime key uoa_ledger_fixture', exact: true }).click();
   await expect(page.getByText('Revoked', { exact: true })).toBeVisible();
   expect(revocations).toEqual(['runtime-1']); expect(writes).toHaveLength(2);
   expect(fixture.unexpected).toEqual([]); expect(fixture.errors).toEqual([]);

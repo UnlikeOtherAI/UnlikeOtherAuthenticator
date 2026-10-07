@@ -23,7 +23,8 @@ If Chrome is already installed, set `PW_CHANNEL=chrome` to reuse it instead of d
 Chromium. In PowerShell: `$env:PW_CHANNEL='chrome'` before the test command.
 
 The harness starts its own Vite server on **127.0.0.1:5274** with the existing development-only
-auth bypass. The port must be free. It never reuses an unknown server. Playwright stops its
+auth bypass. The port must be free. Isolated concurrent worktrees may set `UOA_ADMIN_E2E_PORT`
+(1024–65535); the server, API origin and browser base URL all follow that one value. It never reuses an unknown server. Playwright stops its
 server at suite completion. Run one suite at a time; concurrency is fixed at one worker.
 Production builds cannot enable this bypass (`import.meta.env.DEV` remains required).
 
