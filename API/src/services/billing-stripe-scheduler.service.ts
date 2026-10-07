@@ -8,6 +8,10 @@ import {
   stripeCalendarBillingMonth,
 } from './billing-stripe-period.service.js';
 import { exportStripeUsage } from './billing-stripe-usage.service.js';
+import {
+  runStripeInvoiceCloseCycle,
+  startStripeInvoiceCloseScheduler,
+} from './billing-stripe-invoice-close-scheduler.service.js';
 import { STRIPE_METERABLE_SUBSCRIPTION_STATUSES } from './billing-stripe-usage-validation.service.js';
 import {
   requireStripeBillingEnabled,
@@ -15,8 +19,16 @@ import {
 } from './billing-stripe-client.service.js';
 import {
   runCreditAutoTopUpCycle,
-  startCreditAutoTopUpScheduler,
 } from './billing-credit-auto-top-up-runtime.service.js';
+import {
+  runCreditPaymentInvoiceCycle,
+  startCreditPaymentInvoiceScheduler,
+} from './billing-credit-payment-invoice-scheduler.service.js';
+
+import { startStripePaymentInvoiceScheduler, type runStripePaymentInvoiceCycle }
+  from './billing-stripe-payment-invoice-scheduler.service.js';
+import { startCreditAutoTopUpScheduler } from './billing-credit-auto-top-up-scheduler.service.js';
+
 
 type StripeSchedulerClient = Pick<Stripe, 'accounts' | 'billing'>;
 
@@ -251,6 +263,9 @@ export function startStripeBillingScheduler(params: {
   };
   runUsageCycle?: typeof runStripeUsageExportCycle;
   runAutoTopUpCycle?: typeof runCreditAutoTopUpCycle;
+  runInvoiceCloseCycle?: typeof runStripeInvoiceCloseCycle;
+  runPaymentInvoiceCycle?: typeof runCreditPaymentInvoiceCycle;
+  runSubscriptionInvoiceCycle?: typeof runStripePaymentInvoiceCycle;
 }): { stop: () => void } {
   const usage = startStripeUsageExportScheduler({
     log: params.log,
@@ -260,10 +275,24 @@ export function startStripeBillingScheduler(params: {
     log: params.log,
     ...(params.runAutoTopUpCycle ? { runCycle: params.runAutoTopUpCycle } : {}),
   });
+  const invoiceClose = startStripeInvoiceCloseScheduler({
+    log: params.log,
+    ...(params.runInvoiceCloseCycle ? { runCycle: params.runInvoiceCloseCycle } : {}),
+  });
+  const paymentInvoices = startCreditPaymentInvoiceScheduler({
+    log: params.log,
+    ...(params.runPaymentInvoiceCycle
+      ? { runCycle: params.runPaymentInvoiceCycle } : {}),
+  });
+  const subscriptionInvoices = startStripePaymentInvoiceScheduler({ log: params.log,
+    ...(params.runSubscriptionInvoiceCycle ? { runCycle: params.runSubscriptionInvoiceCycle } : {}) });
   return {
     stop: () => {
+      subscriptionInvoices.stop();
       usage.stop();
       automaticTopUp.stop();
+      invoiceClose.stop();
+      paymentInvoices.stop();
     },
   };
 }

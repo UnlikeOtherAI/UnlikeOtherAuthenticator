@@ -1,6 +1,7 @@
 import { renderToString } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
+import { AccessStatusContext } from '../utils/access-status.js';
 import { LoginPage } from './LoginPage.js';
 import { PopupProvider } from '../hooks/use-popup.js';
 import { I18nProvider } from '../i18n/I18nProvider.js';
@@ -35,17 +36,22 @@ const TEST_CONFIG = {
   language_config: 'en',
 };
 
-function renderLogin(search = "?config_url=https%3A%2F%2Fclient.example.com%2Fauth-config"): string {
+function renderLogin(
+  search = '?config_url=https%3A%2F%2Fclient.example.com%2Fauth-config',
+  enabled = false,
+): string {
   return renderToString(
     <ThemeProvider config={TEST_CONFIG} configUrl="">
       <I18nProvider config={TEST_CONFIG} configUrl="">
         <PopupProvider
-          configUrl=""
+          configUrl="https://client.example.com/auth-config"
           config={TEST_CONFIG}
           initialSearch={search}
           initialView="login"
         >
-          <LoginPage />
+          <AccessStatusContext.Provider value={enabled}>
+            <LoginPage />
+          </AccessStatusContext.Provider>
         </PopupProvider>
       </I18nProvider>
     </ThemeProvider>,
@@ -67,8 +73,22 @@ describe('LoginPage SSR', () => {
 });
 
 it('shows native Google sign-in before password fields in a short popup', () => {
-  const html = renderLogin('?client_id=public-client&redirect_uri=com.example.app%3A%2F%2Foauth%2Fcallback');
+  const html = renderLogin(
+    '?client_id=public-client&redirect_uri=com.example.app%3A%2F%2Foauth%2Fcallback',
+  );
   expect(html.indexOf('/oauth/social/google')).toBeGreaterThan(0);
   expect(html.indexOf('/oauth/social/google')).toBeLessThan(html.indexOf('type="email"'));
   expect(html.match(/href="[^"]*oauth\/social\/google/g)).toHaveLength(1);
+});
+
+it('omits access-status diagnostics by default for website and native logins', () => {
+  for (const search of [
+    '?config_url=https://client.example.com/config&access_status_enabled=true',
+    '?client_id=native-client&redirect_uri=com.example.app://callback',
+  ]) {
+    expect(renderLogin(search)).not.toContain('Check access status');
+  }
+});
+it('shows the optional diagnostic only when server bootstrap enables it', () => {
+  expect(renderLogin(undefined, true)).toContain('Check access status');
 });

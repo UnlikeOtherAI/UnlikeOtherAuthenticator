@@ -47,6 +47,11 @@
         "redirect_url"
       ],
       "properties": {
+        "purchase_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
         "redirect_url": {
           "type": "string",
           "format": "uri",
@@ -97,6 +102,11 @@
           "format": "uri",
           "pattern": "^https://",
           "maxLength": 2048
+        },
+        "fixed_seat_quantity": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000
         }
       }
     },
@@ -104,41 +114,14 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "id",
-        "key",
-        "version",
-        "mode",
         "collection_mode",
-        "markup_bps",
-        "markup_percent",
-        "usage_price_multiplier_bps",
         "monthly_subscription",
         "usage_billing_enabled",
+        "usage_payment_mode",
         "payment_collection_enabled",
         "raw_usage_preserved"
       ],
       "properties": {
-        "id": {
-          "type": "string",
-          "minLength": 1
-        },
-        "key": {
-          "type": "string",
-          "minLength": 1
-        },
-        "version": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "mode": {
-          "type": "string",
-          "enum": [
-            "standard",
-            "free",
-            "at_cost",
-            "custom"
-          ]
-        },
         "collection_mode": {
           "type": "string",
           "enum": [
@@ -147,24 +130,16 @@
             "none"
           ]
         },
-        "markup_bps": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "markup_percent": {
-          "type": "string",
-          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
-        },
-        "usage_price_multiplier_bps": {
-          "type": "integer",
-          "minimum": 0
-        },
         "monthly_subscription": {
           "type": "object",
           "additionalProperties": false,
           "required": [
             "amount_minor",
-            "currency"
+            "currency",
+            "charge_basis",
+            "seat_policy",
+            "seat_timing",
+            "amount_role"
           ],
           "properties": {
             "amount_minor": {
@@ -174,11 +149,43 @@
             "currency": {
               "type": "string",
               "pattern": "^[A-Z]{3}$"
+            },
+            "charge_basis": {
+              "enum": [
+                "flat",
+                "per_seat"
+              ]
+            },
+            "seat_policy": {
+              "enum": [
+                "automatic",
+                "fixed",
+                null
+              ]
+            },
+            "seat_timing": {
+              "enum": [
+                "full_month",
+                "prorated",
+                null
+              ]
+            },
+            "amount_role": {
+              "enum": [
+                "monthly_total",
+                "per_seat_unit"
+              ]
             }
           }
         },
         "usage_billing_enabled": {
           "type": "boolean"
+        },
+        "usage_payment_mode": {
+          "enum": [
+            "prepaid",
+            "pay_as_you_go"
+          ]
         },
         "payment_collection_enabled": {
           "type": "boolean"
@@ -215,41 +222,14 @@
           "type": "object",
           "additionalProperties": false,
           "required": [
-            "id",
-            "key",
-            "version",
-            "mode",
             "collection_mode",
-            "markup_bps",
-            "markup_percent",
-            "usage_price_multiplier_bps",
             "monthly_subscription",
             "usage_billing_enabled",
+            "usage_payment_mode",
             "payment_collection_enabled",
             "raw_usage_preserved"
           ],
           "properties": {
-            "id": {
-              "type": "string",
-              "minLength": 1
-            },
-            "key": {
-              "type": "string",
-              "minLength": 1
-            },
-            "version": {
-              "type": "integer",
-              "minimum": 0
-            },
-            "mode": {
-              "type": "string",
-              "enum": [
-                "standard",
-                "free",
-                "at_cost",
-                "custom"
-              ]
-            },
             "collection_mode": {
               "type": "string",
               "enum": [
@@ -258,24 +238,16 @@
                 "none"
               ]
             },
-            "markup_bps": {
-              "type": "integer",
-              "minimum": 0
-            },
-            "markup_percent": {
-              "type": "string",
-              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
-            },
-            "usage_price_multiplier_bps": {
-              "type": "integer",
-              "minimum": 0
-            },
             "monthly_subscription": {
               "type": "object",
               "additionalProperties": false,
               "required": [
                 "amount_minor",
-                "currency"
+                "currency",
+                "charge_basis",
+                "seat_policy",
+                "seat_timing",
+                "amount_role"
               ],
               "properties": {
                 "amount_minor": {
@@ -285,11 +257,43 @@
                 "currency": {
                   "type": "string",
                   "pattern": "^[A-Z]{3}$"
+                },
+                "charge_basis": {
+                  "enum": [
+                    "flat",
+                    "per_seat"
+                  ]
+                },
+                "seat_policy": {
+                  "enum": [
+                    "automatic",
+                    "fixed",
+                    null
+                  ]
+                },
+                "seat_timing": {
+                  "enum": [
+                    "full_month",
+                    "prorated",
+                    null
+                  ]
+                },
+                "amount_role": {
+                  "enum": [
+                    "monthly_total",
+                    "per_seat_unit"
+                  ]
                 }
               }
             },
             "usage_billing_enabled": {
               "type": "boolean"
+            },
+            "usage_payment_mode": {
+              "enum": [
+                "prepaid",
+                "pay_as_you_go"
+              ]
             },
             "payment_collection_enabled": {
               "type": "boolean"

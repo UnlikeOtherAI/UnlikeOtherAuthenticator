@@ -4,6 +4,7 @@ import {
   type PrismaClient,
 } from '@prisma/client';
 import type Stripe from 'stripe';
+import type { BillingCustomerLocale } from '../contracts/billing-statement-v1.js';
 
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
@@ -46,6 +47,7 @@ type RecoveryAttempt = {
   appKeyId: string;
   stripePaymentIntentId: string | null;
   paymentAmountMinor: bigint;
+  currency: string;
   failureCode: string | null;
   status: BillingCreditAutoTopUpAttemptStatus;
   stateWebhookEventId: string | null;
@@ -74,7 +76,8 @@ function assertRecoveryIntent(
     stripeExternalId(intent.customer) !== context.customer.stripeCustomerId ||
     stripeExternalId(intent.payment_method) !== attempt.consentRevision.stripePaymentMethodId ||
     exactMinor(intent.amount) !== attempt.paymentAmountMinor ||
-    requireUsd(intent.currency) !== 'USD'
+    attempt.currency !== 'USD' ||
+    requireUsd(intent.currency) !== attempt.currency
   ) {
     throw new AppError('INTERNAL', 502, errorCode);
   }
@@ -127,6 +130,7 @@ export async function recoverBillingCreditAutoTopUp(
     actorToken: string;
     credential: VerifiedBillingAppKey;
     endpoint: BillingActorEndpoint;
+    locale?: BillingCustomerLocale;
   },
   deps?: Dependencies,
 ): Promise<{ redirect_url: string }> {
@@ -147,10 +151,14 @@ export async function recoverBillingCreditAutoTopUp(
     { prisma },
   );
   const state = context.creditAccount.autoTopUpState;
+  const activeCardReplacement =
+    state === BillingCreditAutoTopUpState.ACTIVE &&
+    Boolean(context.creditAccount.stripePaymentMethodId);
   if (
     state !== BillingCreditAutoTopUpState.REQUIRES_ACTION &&
     state !== BillingCreditAutoTopUpState.NEEDS_REVIEW &&
-    state !== BillingCreditAutoTopUpState.PAUSED
+    state !== BillingCreditAutoTopUpState.PAUSED &&
+    !activeCardReplacement
   ) {
     throw new AppError('BAD_REQUEST', 409, 'BILLING_CREDIT_AUTO_TOP_UP_RECOVERY_UNAVAILABLE');
   }
@@ -175,6 +183,26 @@ export async function recoverBillingCreditAutoTopUp(
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     include: { consentRevision: true, stateWebhookEvent: { select: { type: true } } },
   });
+  if (activeCardReplacement && unresolved) {
+    throw new AppError('BAD_REQUEST', 409, 'BILLING_CREDIT_AUTO_TOP_UP_RECOVERY_PENDING');
+  }
+  if (activeCardReplacement) {
+    const paymentMethodId = context.creditAccount.stripePaymentMethodId;
+    const customerId = context.customer.stripeCustomerId;
+    if (!paymentMethodId || !customerId) {
+      throw new AppError('BAD_REQUEST', 409, 'BILLING_CREDIT_AUTO_TOP_UP_RECOVERY_UNAVAILABLE');
+    }
+    const paymentMethod = await context.stripe.paymentMethods.retrieve(paymentMethodId);
+    assertStripeObjectLivemode(paymentMethod, context.account.livemode);
+    if (
+      paymentMethod.id !== paymentMethodId ||
+      paymentMethod.type !== 'card' ||
+      !paymentMethod.card ||
+      stripeExternalId(paymentMethod.customer) !== customerId
+    ) {
+      throw new AppError('INTERNAL', 502, 'STRIPE_CREDIT_AUTO_TOP_UP_BINDING_INVALID');
+    }
+  }
   if (unresolved) {
     if (!unresolved.stripePaymentIntentId) {
       throw new AppError('INTERNAL', 503, 'BILLING_CREDIT_AUTO_TOP_UP_PAYMENT_PENDING');
@@ -240,6 +268,7 @@ export async function recoverBillingCreditAutoTopUp(
       // against that endpoint — never against the setup endpoint it delegates to.
       endpoint: params.endpoint,
       recovery: true,
+      locale: params.locale,
     },
     { prisma },
   );

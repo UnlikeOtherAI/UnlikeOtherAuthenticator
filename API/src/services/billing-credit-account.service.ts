@@ -15,7 +15,10 @@ import { resolveOrgBillingResponsibility } from './billing-org-responsibility.se
 export type CreditCollectionContext = {
   account: StripeAccountContext;
   stripeCollectionEnabled: boolean;
-  stripe?: Pick<Stripe, 'paymentIntents' | 'paymentMethods' | 'prices' | 'products'> | null;
+  stripe?: Pick<
+    Stripe,
+    'checkout' | 'paymentIntents' | 'paymentMethods' | 'prices' | 'products'
+  > | null;
 };
 
 const CANONICAL_PORTFOLIO_PRODUCTS = [
@@ -212,6 +215,7 @@ export async function resolveCreditAccount(
 export async function resolveCanonicalPortfolioProduct(
   params: {
     creditAccountId: string;
+    teamId: string;
     billingMonth: string;
     fallbackProduct: string;
   },
@@ -222,6 +226,7 @@ export async function resolveCanonicalPortfolioProduct(
     prisma.billingCreditPortfolioSnapshot.findFirst({
       where: {
         creditAccountId: params.creditAccountId,
+        teamId: params.teamId,
         billingMonth: params.billingMonth,
       },
       orderBy: [{ capturedAt: 'desc' }, { ledgerSnapshotCursor: 'desc' }],

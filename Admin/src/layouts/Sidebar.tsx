@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { NavLink } from 'react-router';
 
 import { Icon } from '../components/icons/Icon';
@@ -22,6 +23,14 @@ export function Sidebar() {
   const pendingIntegrationCount = integrationRequests?.length ?? 0;
   const { adminUser } = useAdminSession();
   const { signOut } = useAdminSessionActions();
+  const [signingOut, setSigningOut] = useState(false);
+  const [logoutError, setLogoutError] = useState(false);
+  async function logout() {
+    setSigningOut(true); setLogoutError(false);
+    try { await signOut(); }
+    catch { setLogoutError(true); }
+    finally { setSigningOut(false); }
+  }
   const { closeSidebar, isSidebarOpen } = useAdminUi();
 
   return (
@@ -61,7 +70,7 @@ export function Sidebar() {
           })}
         </nav>
         <div className="border-t border-slate-800 p-2">
-          <button aria-label="Sign out" className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left transition-colors hover:bg-slate-800" type="button" onClick={signOut}>
+          <button aria-label="Sign out" className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left transition-colors hover:bg-slate-800" type="button" disabled={signingOut} onClick={() => void logout()}>
             {adminUser?.id ? (
               <UserAvatar userId={adminUser.id} label={adminUser.email} />
             ) : (
@@ -69,10 +78,11 @@ export function Sidebar() {
             )}
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm font-medium text-slate-200">{adminUser?.email ?? 'Administrator'}</span>
-              <span className="block text-xs text-slate-400">Sign out</span>
+              <span className="block text-xs text-slate-400">{signingOut ? 'Signing out…' : 'Sign out'}</span>
             </span>
             <Icon name="logout" className="h-4 w-4 shrink-0 text-slate-500" />
           </button>
+          {logoutError ? <p role="alert" className="px-2 text-xs text-red-300">Unable to sign out. Retry when connected.</p> : null}
         </div>
       </aside>
     </>

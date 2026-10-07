@@ -1,6 +1,8 @@
+import type { BillingCustomerLocale } from './billing-copy-locale.js';
+import { billingStatementCopy } from './billing-statement-copy.catalog.js';
+import { billingSubscriptionCopy } from './billing-subscription-copy.catalog.js';
 import {
   BillingAdjustmentKind,
-  BillingAssignmentScope,
   MembershipStatus,
   type PrismaClient,
 } from '@prisma/client';
@@ -15,12 +17,8 @@ import { listApplicableCommercialAdjustments } from './billing-commercial-adjust
 import { fetchLedgerMeteringPortfolio } from './billing-ledger-collector.service.js';
 import type { FetchMeteringPortfolio } from './billing-metering.types.js';
 import { exactMoney, minorAmountToMajor } from './billing-money.service.js';
+import { resolveBillingTariffForMonth } from './billing-tariff-history.service.js';
 import {
-  listDirectTeamBillingServiceAccess,
-  type DirectBillingServiceAccess,
-} from './billing-service-access.service.js';
-import {
-  buildConnectedServicePortfolio,
   filterPortfolioForProduct,
 } from './billing-statement-portfolio.service.js';
 import {
@@ -50,12 +48,12 @@ export type OrganisationStatementContext = {
   periodStartsAt: Date;
   periodEndsAt: Date;
   products: Array<{ identifier: string; name: string }>;
+  locale?: BillingCustomerLocale;
 };
 
 type Dependencies = {
   prisma: PrismaClient;
   fetchPortfolio?: FetchMeteringPortfolio;
-  listDirectAccess?: typeof listDirectTeamBillingServiceAccess;
 };
 
 type TeamTariff = {
@@ -83,38 +81,10 @@ function publicMode(value: string): TeamTariff['mode'] {
  * organisation.
  */
 async function resolveTeamTariff(
-  params: { serviceId: string; organisationId: string; teamId: string },
+  params: { serviceId: string; organisationId: string; teamId: string; billingMonth: string },
   prisma: PrismaClient,
 ): Promise<TeamTariff> {
-  const [teamAssignment, orgAssignment, defaultTariff] = await Promise.all([
-    prisma.billingTariffAssignment.findFirst({
-      where: {
-        serviceId: params.serviceId,
-        orgId: params.organisationId,
-        teamId: params.teamId,
-        scope: BillingAssignmentScope.TEAM,
-        scopeKey: `${params.organisationId}:${params.teamId}`,
-        tariff: { serviceId: params.serviceId },
-      },
-      include: { tariff: true },
-    }),
-    prisma.billingTariffAssignment.findFirst({
-      where: {
-        serviceId: params.serviceId,
-        orgId: params.organisationId,
-        teamId: null,
-        scope: BillingAssignmentScope.ORGANISATION,
-        scopeKey: params.organisationId,
-        tariff: { serviceId: params.serviceId },
-      },
-      include: { tariff: true },
-    }),
-    prisma.billingTariff.findFirst({
-      where: { serviceId: params.serviceId, isDefault: true },
-    }),
-  ]);
-  const tariff = (teamAssignment ?? orgAssignment)?.tariff ?? defaultTariff;
-  if (!tariff) throw new AppError('INTERNAL', 500, 'BILLING_DEFAULT_TARIFF_MISSING');
+  const { tariff } = await resolveBillingTariffForMonth(prisma, params);
   return {
     id: tariff.id,
     key: tariff.key,
@@ -133,6 +103,7 @@ function teamCommercialLines(params: {
   tariff: TeamTariff;
   ratedLines: BillingStatementV1['commercial_lines'];
   adjustments: Awaited<ReturnType<typeof listApplicableCommercialAdjustments>>;
+  locale?: BillingCustomerLocale;
 }): BillingStatementV1['commercial_lines'] {
   const monthlyAmount = minorAmountToMajor(
     params.tariff.monthlyAmountMinor.toString(),
@@ -143,9 +114,9 @@ function teamCommercialLines(params: {
       id: `monthly_${params.tariff.id}_${params.teamId}`,
       kind: 'monthly_subscription',
       product: params.statementProduct,
-      label: `${params.tariff.name} monthly subscription`,
-      detail: `Tariff ${params.tariff.key} v${params.tariff.version}`,
-      amount: exactMoney(monthlyAmount, params.tariff.currency),
+      label: billingStatementCopy(params.locale).monthlySubscription,
+      detail: billingStatementCopy(params.locale).subscriptionDetails,
+      amount: exactMoney(monthlyAmount, params.tariff.currency, params.locale),
     },
     ...params.ratedLines.map((line) => ({ ...line, id: `${line.id}_${params.teamId}` })),
     ...params.adjustments.map((adjustment) => {
@@ -159,9 +130,12 @@ function teamCommercialLines(params: {
             ? ('credit' as const)
             : ('add_on' as const),
         product: params.statementProduct,
-        label: adjustment.name,
-        detail: adjustment.cadence === 'MONTHLY' ? 'Monthly adjustment' : 'One-time adjustment',
-        amount: exactMoney(signed, adjustment.currency),
+        label: adjustment.kind === BillingAdjustmentKind.CREDIT
+          ? billingStatementCopy(params.locale).credit : billingStatementCopy(params.locale).additionalCharge,
+        detail: adjustment.cadence === 'MONTHLY'
+          ? billingSubscriptionCopy(params.locale).monthlyAdjustment
+          : billingSubscriptionCopy(params.locale).oneTimeAdjustment,
+        amount: exactMoney(signed, adjustment.currency, params.locale),
       };
     }),
   ];
@@ -173,7 +147,7 @@ async function buildTeamUsage(
   deps: Dependencies,
 ): Promise<BillingOrganisationTeamUsageV1> {
   const fetchPortfolio = deps.fetchPortfolio ?? fetchLedgerMeteringPortfolio;
-  const [portfolio, tariff, accesses, adjustments, members] = await Promise.all([
+  const [portfolio, tariff, adjustments, members] = await Promise.all([
     fetchPortfolio({
       product: context.statementProduct,
       organisationId: context.organisationId,
@@ -186,13 +160,10 @@ async function buildTeamUsage(
         serviceId: context.serviceId,
         organisationId: context.organisationId,
         teamId: team.id,
+        billingMonth: context.billingMonth,
       },
       deps.prisma,
     ),
-    (deps.listDirectAccess ?? listDirectTeamBillingServiceAccess)(
-      { organisationId: context.organisationId, teamId: team.id },
-      { prisma: deps.prisma },
-    ) as Promise<DirectBillingServiceAccess[]>,
     listApplicableCommercialAdjustments(
       {
         serviceId: context.serviceId,
@@ -227,6 +198,7 @@ async function buildTeamUsage(
       markupBps: tariff.markupBps,
     },
     users: members.map((member) => member.user),
+    locale: context.locale,
   });
   const commercialLines = teamCommercialLines({
     statementProduct: context.statementProduct,
@@ -234,6 +206,7 @@ async function buildTeamUsage(
     tariff,
     ratedLines: rated.commercialLines,
     adjustments,
+    locale: context.locale,
   });
   return {
     team_id: team.id,
@@ -247,15 +220,8 @@ async function buildTeamUsage(
       captured_at: portfolio.snapshot.capturedAt,
       sha256: portfolio.snapshot.sha256,
     },
-    connected_service_usage: buildConnectedServicePortfolio({
-      statementProduct: context.statementProduct,
-      userMetering: portfolio,
-      products: context.products,
-      accesses,
-      users: members.map((member) => member.user),
-    }),
     commercial_lines: commercialLines,
-    totals: billingCommercialTotals(commercialLines),
+    totals: billingCommercialTotals(commercialLines, context.locale),
   };
 }
 
@@ -278,10 +244,10 @@ export async function buildOrganisationStatementScope(
   return {
     organisation_id: organisation.id,
     organisation_name: organisation.name,
-    title: 'Organisation billing',
-    description: `Every team in ${organisation.name}, billed together.`,
+    title: billingSubscriptionCopy(context.locale).organisationTitle,
+    description: billingSubscriptionCopy(context.locale).organisationDescription,
     teams: teamUsage,
     commercial_lines: commercialLines,
-    totals: billingCommercialTotals(commercialLines),
+    totals: billingCommercialTotals(commercialLines, context.locale),
   };
 }

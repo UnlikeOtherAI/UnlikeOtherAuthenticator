@@ -76,6 +76,14 @@ export type PreparedRecurringAddonWebhook =
       eventFields: EventFields;
     }
   | {
+      kind: 'invoice_renewal';
+      local: Subscription;
+      remote: Stripe.Subscription;
+      invoice: Stripe.Invoice;
+      eventAt: Date;
+      eventFields: EventFields;
+    }
+  | {
       kind: 'invoice_observed';
       local: Subscription;
       remote: Stripe.Subscription;
@@ -292,10 +300,11 @@ const INVOICE_EVENTS = new Set([
   'invoice.voided',
 ]);
 
-function assertInitialInvoice(
+function assertPaidInvoice(
   invoice: Stripe.Invoice,
   local: Subscription,
   remote: Stripe.Subscription,
+  billingReason: 'subscription_create' | 'subscription_cycle',
 ): void {
   const line = invoice.lines.data[0];
   const details = line?.parent?.subscription_item_details;
@@ -303,7 +312,7 @@ function assertInitialInvoice(
   const expected = Number(local.catalog.monthlyAmountMinor);
   if (
     invoice.status !== 'paid' ||
-    invoice.billing_reason !== 'subscription_create' ||
+    invoice.billing_reason !== billingReason ||
     invoice.collection_method !== 'charge_automatically' ||
     invoice.amount_due !== expected ||
     invoice.amount_paid !== expected ||
@@ -340,7 +349,13 @@ function assertInitialInvoice(
     stripeExternalId(line.pricing?.price_details?.price) !== local.catalog.stripePriceId ||
     line.pricing?.unit_amount_decimal?.toString() !== local.catalog.monthlyAmountMinor.toString()
   ) {
-    throw new AppError('INTERNAL', 503, 'STRIPE_RECURRING_ADDON_INITIAL_INVOICE_INVALID');
+    throw new AppError(
+      'INTERNAL',
+      503,
+      billingReason === 'subscription_create'
+        ? 'STRIPE_RECURRING_ADDON_INITIAL_INVOICE_INVALID'
+        : 'STRIPE_RECURRING_ADDON_RENEWAL_INVOICE_INVALID',
+    );
   }
 }
 
@@ -402,8 +417,18 @@ async function prepareInvoice(
     currency: invoice.currency.toUpperCase(),
   };
   if (event.type === 'invoice.paid') {
-    assertInitialInvoice(invoice, local, remote);
-    return { kind: 'invoice_paid', local, remote, invoice, eventAt, eventFields };
+    if (invoice.billing_reason === 'subscription_create') {
+      assertPaidInvoice(invoice, local, remote, 'subscription_create');
+      return { kind: 'invoice_paid', local, remote, invoice, eventAt, eventFields };
+    }
+    if (invoice.billing_reason === 'subscription_cycle') {
+      assertPaidInvoice(invoice, local, remote, 'subscription_cycle');
+      if (!local.initialInvoiceId || !local.initialInvoicePaidAt) {
+        throw new AppError('INTERNAL', 503, 'STRIPE_RECURRING_ADDON_INITIAL_PAYMENT_REQUIRED');
+      }
+      return { kind: 'invoice_renewal', local, remote, invoice, eventAt, eventFields };
+    }
+    throw new AppError('INTERNAL', 503, 'STRIPE_RECURRING_ADDON_PAID_INVOICE_REASON_INVALID');
   }
   return { kind: 'invoice_observed', local, remote, invoice, eventAt, eventFields };
 }

@@ -4,12 +4,15 @@ import * as ajvFormats from 'ajv-formats';
 
 import {
   BILLING_CREDITS_READ_PATH,
+  BILLING_CREDITS_PROTOCOL_HEADER,
+  BILLING_CREDITS_PROTOCOL_VERSION,
   billingCreditsV1JsonSchema,
 } from '../../contracts/billing-statement-v1.js';
 import { requireBillingLifecycleAppKey } from '../../middleware/billing-app-auth.js';
 import { getBillingCredits } from '../../services/billing-credits.service.js';
 import { AppError } from '../../utils/errors.js';
 import { BillingSubjectRequestSchema, readBillingActorHeader } from './billing-request.js';
+import { readBillingPresentation } from './billing-presentation.js';
 
 const validator = new Ajv2020({ allErrors: true, strict: true });
 ajvFormats.default.default(validator);
@@ -30,12 +33,15 @@ export function registerBillingCreditsRoute(app: FastifyInstance): void {
     },
     async (request, reply) => {
       const body = BillingSubjectRequestSchema.parse(request.body);
+      const presentation = readBillingPresentation(request.headers);
       const credential = request.billingAppKey;
       if (!credential) throw new AppError('UNAUTHORIZED', 401);
       const credits = await getBillingCredits({
+        ...(presentation.enabled ? { locale: presentation.locale } : {}),
         credential,
         actorToken: readBillingActorHeader(request.headers['x-uoa-actor']),
         endpoint: BILLING_CREDITS_READ_PATH,
+        supportsBillingStatus: request.headers[BILLING_CREDITS_PROTOCOL_HEADER] === BILLING_CREDITS_PROTOCOL_VERSION,
         request: {
           product: body.product,
           organisationId: body.organisation_id,

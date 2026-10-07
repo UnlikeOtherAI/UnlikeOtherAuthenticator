@@ -17,7 +17,33 @@ export type RawMeteringLine = {
   callerProduct: string | null;
   originProduct: string | null;
   userId: string | null;
+  billingDisposition: 'paid' | 'nonbillable';
+  breakdown?: {
+    thoughtOutputTokens?: string;
+    cacheWrite5mTokens?: string;
+    cacheWrite1hTokens?: string;
+    inputTextTokens?: string;
+    inputImageTokens?: string;
+    inputAudioTokens?: string;
+    outputImageTokens?: string;
+    outputAudioTokens?: string;
+    cachedImageTokens?: string;
+    cachedAudioTokens?: string;
+    toolUseInputTokens?: string;
+    rawInputTokens?: string;
+    rawOutputTokens?: string;
+    unattributedTokens?: string;
+  };
 };
+
+export type BillingCompleteness = {
+  state: 'complete' | 'unresolved';
+  unresolvedPaidAttempts: string;
+};
+
+export function meteringIsComplete(value: BillingCompleteness | undefined): boolean {
+  return value?.state === 'complete' && value.unresolvedPaidAttempts === '0';
+}
 
 export type NormalizedMeteringUsage = {
   schemaVersion: 1;
@@ -33,6 +59,7 @@ export type NormalizedMeteringUsage = {
   };
   calls: string;
   lines: RawMeteringLine[];
+  billingCompleteness: BillingCompleteness;
   snapshot: {
     cursor: string;
     id: string;

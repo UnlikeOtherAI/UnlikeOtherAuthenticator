@@ -5,6 +5,8 @@ import {
 } from '@prisma/client';
 import { createHash } from 'node:crypto';
 import type Stripe from 'stripe';
+import type { BillingCustomerLocale } from '../contracts/billing-statement-v1.js';
+import { stripeBillingLocale } from './billing-stripe-locale.js';
 
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
@@ -138,6 +140,7 @@ export async function createBillingCreditAutoTopUpSetup(
     credential: VerifiedBillingAppKey;
     endpoint: BillingActorEndpoint;
     recovery?: boolean;
+    locale?: BillingCustomerLocale;
   },
   deps?: Dependencies,
 ): Promise<{ redirect_url: string }> {
@@ -164,9 +167,12 @@ export async function createBillingCreditAutoTopUpSetup(
     state === BillingCreditAutoTopUpState.REQUIRES_ACTION ||
     state === BillingCreditAutoTopUpState.NEEDS_REVIEW ||
     state === BillingCreditAutoTopUpState.PAUSED;
+  const activeCardReplacement =
+    state === BillingCreditAutoTopUpState.ACTIVE &&
+    Boolean(context.creditAccount.stripePaymentMethodId);
   if (
     params.recovery
-      ? !recoveryState
+      ? !recoveryState && !activeCardReplacement
       : state !== BillingCreditAutoTopUpState.DISABLED ||
         Boolean(context.creditAccount.stripePaymentMethodId)
   ) {
@@ -339,6 +345,7 @@ export async function createBillingCreditAutoTopUpSetup(
   const session = await context.stripe.checkout.sessions.create(
     {
       mode: 'setup',
+      ...(params.locale ? { locale: stripeBillingLocale(params.locale) } : {}),
       customer: context.customer.stripeCustomerId as string,
       client_reference_id: checkout.id,
       success_url: returns.checkoutSuccess,

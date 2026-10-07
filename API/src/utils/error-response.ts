@@ -238,6 +238,11 @@ function explainKnownCode(
         summary: 'The requested team is not available to this session.',
         hints: ['Refresh the team directory or complete interactive authorization again.'],
       };
+    case 'SEAT_CAPACITY_EXCEEDED':
+      return {
+        summary: 'The selected team or organisation has reached its purchased seat capacity.',
+        hints: ['Increase seat capacity or release an unused invitation before trying again.'],
+      };
     case 'INTERACTION_REQUIRED':
       return {
         summary: 'Interactive authentication is required before this team can be selected.',

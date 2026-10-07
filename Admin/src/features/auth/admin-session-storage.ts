@@ -37,3 +37,13 @@ export function writeStoredAdminSession(accessToken: string, expiresInSeconds: n
   };
   window.sessionStorage.setItem(storageKey, JSON.stringify(storedSession));
 }
+
+/** Logout must still present a live bearer during the proactive five-second expiry margin. */
+export function readStoredAdminSessionForLogout(): StoredAdminSession | null {
+  try {
+    const raw = window.sessionStorage.getItem(storageKey);
+    if (!raw) return null;
+    const value = JSON.parse(raw) as StoredAdminSession;
+    return typeof value.accessToken === 'string' && typeof value.expiresAt === 'number' ? value : null;
+  } catch { return null; }
+}

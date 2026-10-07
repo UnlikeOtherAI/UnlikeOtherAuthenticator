@@ -89,6 +89,40 @@ async function withApp(
 const headers = { 'x-uoa-app-key': 'uoa_app_key', 'x-uoa-actor': 'signed-actor' };
 
 describe('billing credit funding action routes', () => {
+  it('passes negotiated Czech separately from the unchanged purchase body', async () => {
+    topUpService.createBillingCreditTopUpCheckout.mockResolvedValue({
+      redirect_url: 'https://checkout.stripe.com/c/pay/top-up', purchase_id: 'purchase_1',
+    });
+    await withApp(async (app) => {
+      const response = await app.inject({ method: 'POST',
+        url: '/billing/v1/credits/top-up-checkout',
+        headers: { ...headers, 'x-uoa-billing-presentation': '1.5.0', 'x-uoa-billing-locale': 'cs' },
+        payload: { ...subject, offer_id: 'offer_20k' },
+      });
+      expect(response.statusCode).toBe(200);
+      expect(response.json().purchase_id).toBe('purchase_1');
+      expect(topUpService.createBillingCreditTopUpCheckout).toHaveBeenCalledWith({
+        credential, actorToken: 'signed-actor', endpoint: '/billing/v1/credits/top-up-checkout',
+        includePurchaseId: true, locale: 'cs', request: { ...requestSubject, offerId: 'offer_20k' },
+      });
+    });
+  });
+
+  it.each([
+    { 'x-uoa-billing-locale': 'cs' },
+    { 'x-uoa-billing-presentation': '1.4.0', 'x-uoa-billing-locale': 'cs' },
+    { 'x-uoa-billing-presentation': '1.5.0', 'x-uoa-billing-locale': 'xx' },
+  ])('rejects invalid presentation negotiation before creating a payment: %j', async (presentation) => {
+    await withApp(async (app) => {
+      const response = await app.inject({ method: 'POST',
+        url: '/billing/v1/credits/top-up-checkout', headers: { ...headers, ...presentation },
+        payload: { ...subject, offer_id: 'offer_20k' },
+      });
+      expect(response.statusCode).toBe(400);
+      expect(topUpService.createBillingCreditTopUpCheckout).not.toHaveBeenCalled();
+    });
+  });
+
   it('rejects selectors above the public 256-character bound before dispatch', async () => {
     await withApp(async (app) => {
       const response = await app.inject({
@@ -121,6 +155,40 @@ describe('billing credit funding action routes', () => {
         credential,
         actorToken: 'signed-actor',
         endpoint: '/billing/v1/credits/top-up-checkout',
+        includePurchaseId: false,
+        request: { ...requestSubject, offerId: 'offer_20k' },
+      });
+    });
+  });
+
+  it('returns the resumed purchase id only when presentation support is negotiated', async () => {
+    topUpService.createBillingCreditTopUpCheckout.mockResolvedValue({
+      redirect_url: 'https://checkout.stripe.com/c/pay/resumed',
+      purchase_id: 'purchase_resumed',
+    });
+    await withApp(async (app) => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/billing/v1/credits/top-up-checkout',
+        headers: {
+          ...headers,
+          'x-uoa-billing-presentation': '1.5.0',
+          'x-uoa-billing-locale': 'cs',
+        },
+        payload: { ...subject, offer_id: 'offer_20k' },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({
+        redirect_url: 'https://checkout.stripe.com/c/pay/resumed',
+        purchase_id: 'purchase_resumed',
+      });
+      expect(topUpService.createBillingCreditTopUpCheckout).toHaveBeenCalledWith({
+        credential,
+        actorToken: 'signed-actor',
+        endpoint: '/billing/v1/credits/top-up-checkout',
+        includePurchaseId: true,
+        locale: 'cs',
         request: { ...requestSubject, offerId: 'offer_20k' },
       });
     });

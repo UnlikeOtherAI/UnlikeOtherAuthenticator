@@ -1,3 +1,4 @@
+import { useAccessStatusEnabled } from '../utils/access-status.js';
 import { AccessStatusForm } from '../components/form/AccessStatusForm.js';
 import React from 'react';
 import { NativeAppConsent } from '../components/form/NativeAppConsent.js';
@@ -13,6 +14,7 @@ export function LoginPage(): React.JSX.Element {
   const { classNames } = useTheme();
   const { t } = useTranslation();
   const { config, notice, clientId } = usePopup();
+  const accessStatusEnabled = useAccessStatusEnabled();
   const showEmailPassword = isEmailPasswordEnabled(config);
 
   return (
@@ -32,7 +34,7 @@ export function LoginPage(): React.JSX.Element {
       {!clientId ? <div className="mt-6">
         <SocialButtons showDivider={showEmailPassword} />
       </div> : null}
-      <AccessStatusForm />
+      {accessStatusEnabled ? <AccessStatusForm /> : null}
     </div>
   );
 }

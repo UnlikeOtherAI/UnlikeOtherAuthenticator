@@ -28,6 +28,151 @@ A tariff is an immutable version row. Its identity is the tuple
 `(service, key, version)`; changing commercial terms creates the next version
 instead of modifying historical terms. Assignments point to one exact version.
 The `is_default` pointer may move between versions without changing their terms.
+New service and tariff dialogs prefill a 3,000 basis-point (30%) standard
+markup. The prefill is prospective; stored versions and negotiated custom or
+at-cost terms are never rewritten by that UI default. Stripe collection stays
+an explicit choice.
+
+Commercial selection now has an append-only monthly history as well as the
+operator's current default/assignment pointers. A new service's initial default
+applies from its creation UTC month. Later default and organisation/team
+assignment changes take effect on the first day of the next UTC month; a
+same-month edit to a scheduled change appends another decision, with the latest
+decision before that month governing it. Removing an assignment appends an
+explicit removal so the next lower-precedence term applies. UOA resolves the
+requested billing month before rating credits or a customer statement; a
+read cannot establish that month's terms. Stripe subscriptions continue to use
+their checkout-pinned tariff. Activated manual contract service terms are
+resolved by their immutable contract version's explicit effective month for
+credit and statement rating as well as manual invoices. Competing contracts
+claiming one service/month are held for reconciliation. New manual contract
+versions may only be activated for a future UTC billing month. Activation
+records their immutable terms without moving the live assignment, so already
+dispatched but not yet settled usage in the current month keeps its price.
+Legacy activated versions retain their original effective months and terms.
+For a terminated manual contract, its explicit terms remain authoritative for
+whole UTC months before `terminated_at`. If termination is exactly at a UTC
+month start, that month uses the next evidenced ordinary term. A termination
+within a month cannot be split from monthly Ledger usage, so that month is
+held as `BILLING_CONTRACT_TERMINATION_MONTH_RECONCILIATION_REQUIRED`. Later
+months must not inherit a stale assignment to the terminated contract tariff:
+they use a separately evidenced effective term or remain held.
+
+The migration starts legacy history only at a month for which the current
+pointer can be supported by the service creation, assignment update, and
+administrator audit timestamps. A later tariff version moves that boundary
+forward; multiple versions without a pricing audit cannot prove the old
+default and remain held until a month after migration. It retains existing
+tariffs unchanged. Older
+months without reliable evidence return
+`BILLING_TARIFF_HISTORY_RECONCILIATION_REQUIRED` and require an audited
+operator reconciliation; UOA must not infer their price from today's pointer.
+Reconciliation needs the executed agreement and activation/termination dates
+(if contractual), the contemporaneous tariff or assignment change and its
+administrator audit record, and the exact organisation, team, service, and
+month in Ledger. The operator must compare existing credits, Stripe exports,
+and issued invoices before recording a new append-only effective decision;
+settled rows require an explicit adjustment rather than a silent rerating.
+No operator endpoint exists yet, so an interval lacking this evidence stays
+held. A current pointer or the first statement read is not evidence of an
+earlier price.
+The administrator write API accepts `markup_percent` as a decimal string with
+at most two decimal places (for example `"30.00"`); it converts exactly to
+internal basis points. The previous `markup_bps` write field is rejected, including
+requests that send both fields, so an operator cannot accidentally enter 30
+as basis points. For a `standard` tariff, omitting `markup_percent` uses
+30.00% centrally. `custom` requires an explicit value; `free` and
+`at_cost` default to zero. Provider cost is reported separately from the
+customer rated charge, so free rated base, markup, and total are all zero.
+
+## Paid usage completeness and settlement
+
+Ledger supplies immutable provider cost and attribution, including an explicit
+`billingCompleteness` signal for unresolved paid attempts and a
+`billingDisposition` for paid versus intentionally nonbillable rows. UOA holds
+all paid settlement and export while any paid attempt remains unresolved, and
+holds a paid row with missing selected cost or currency. Nonbillable telemetry
+is excluded only when Ledger marks it explicitly. UOA alone applies the
+tariff's basis points to exact selected provider cost; a 3,000 bps markup on
+US$1.00 is US$1.30 before the collection path’s exact credit or Stripe meter rounding.
+
+Credit portfolio snapshots and settlements identify the source team even when
+an organisation credit account pays multiple teams. Older ambiguous
+organisation settlement rows retain their recorded debit and receive no
+invented team lineage. The payer/month is held for explicit reconciliation.
+The append-only payer transition history records future assume/release actions;
+a monthly aggregate that crosses a payer transition, or predates reconstructable
+legacy history, is also held. A durable scheduler revisits source-team/month
+portfolios independently of customer page reads, including older periods, and
+records its next check, last cursor, and hold reason. Current and previous
+months have priority, while older months retain a separate fair work budget.
+Watches begin with the source team's creation month even when its credit
+account was opened later; dated payer lineage determines which account may
+settle each historical month. Existing Stripe reservations prevent later
+funding from debiting already exported charges.
+
+For a Stripe subscription, UOA first allocates available prepaid credits to
+the rated liability, then reserves only the remaining amount as meter usage.
+The reservation and credit allocation share the payer account lock. Once a
+meter row is reserved or accepted, later top-ups can fund only new usage not
+already reserved for Stripe; refunds do not silently rewrite accepted usage.
+Stripe reservation also advances the locked payer row version. This makes a
+serializable credit settlement that was already waiting for the row retry with
+a fresh snapshot of the newly reserved liability; a lock without a row write
+can otherwise let that settlement debit credits for the same usage.
+Each exported caller bucket stores gross and net cumulative quantity. Existing
+bucket allocations stay fixed, and newly consumed credits are applied only to
+new gross usage in that bucket. A legacy export without gross evidence holds
+subsequent export for reconciliation instead of guessing its prepaid share.
+Stripe delivery records a durable attempt before the external call. An
+unconfirmed attempt is retried only inside the identifier safety window measured
+from its immutable first possible acceptance, even if later attempts restart;
+after that it is held for reconciliation. UOA never assumes a timed-out event
+was rejected or sends an unverified negative meter correction.
+Platform billing operators use the machine-only
+`GET /internal/admin/billing/stripe/usage-reconciliations` report to find
+unconfirmed meter rows. `POST` to the same path with `/:exportId` records an
+evidence reference, observation time, actor, and one of three decisions:
+confirmed accepted, confirmed not accepted (releases one retry generation with
+a new identifier only while
+Stripe's meter timestamp window remains open), or a verified manual invoice
+line for an expired period. Evidence is append-only and the resolution is
+written atomically with the export state and admin audit log. The operator must
+verify the external Stripe event or invoice before submitting the decision;
+UOA cannot infer acceptance from a timeout or recover an expired identifier by
+automatic replay.
+An operator decision cannot race an active send lease, and an old response can
+mark acceptance only for the exact identifier, generation, and attempt it sent.
+
+Subscription-cycle invoices have a separate durable close record keyed by the
+Stripe invoice and service month. An unresolved export or incomplete Ledger
+coverage pauses a draft invoice's `auto_advance`; the background close cycle
+retries export and releases the draft only after it is current. If Stripe has
+already finalized the invoice, UOA compares the period's latest net liability
+with the **actual finalized usage lines**, rather than treating an accepted
+meter event as proof that its amount appeared on the invoice. The close stores
+the Ledger cursor, invoice-line IDs and amount, currency, period, and exact
+unbilled increment. Later Ledger receipts continue to recheck finalized and
+previously compensated closes, including older months. No expired meter event
+is replayed into a finalized invoice.
+
+`GET /internal/admin/billing/stripe/invoice-closes` is the machine-only
+operator queue. A positive finalized gap requires a paid manual Stripe invoice
+with one line, exact rounded amount, customer/account/currency, and metadata on
+both invoice and line binding the source close, source invoice, subscription,
+service, and period. `POST /internal/admin/billing/stripe/invoice-closes/:closeId/compensate`
+verifies that evidence and records the actor, line, paid amount, liability,
+and cursor in an append-only resolution. A paid invoice or line can resolve
+only one gap. If still later usage arrives, the next close cycle subtracts
+earlier paid adjustments and holds only the new incremental liability.
+
+`BillingCreditsV1` 2.0.0 callers opt in with
+`x-uoa-billing-credits-protocol: 2.0.0`. On a Ledger or legacy reconciliation
+hold, UOA returns confirmed balance and entry history with
+`billing_status.settlement_state = pending_reconciliation`; its message says
+recent usage is not yet included in the confirmed total. Older strict-schema
+callers keep the previous response shape when current and receive a named
+503 hold instead of a misleading total when reconciliation is pending.
 
 Each tariff contains:
 
@@ -35,9 +180,162 @@ Each tariff contains:
 | ----------------------------------- | --------------------------------------------------------------------------- |
 | `mode`                              | `standard`, `free`, `at_cost`, or `custom`                                  |
 | `collection_mode`                   | `stripe`, `manual`, or `none`; independent of usage rating                  |
-| `markup_bps`                        | Price markup in basis points; 2,000 means 20.00%                            |
-| `monthly_subscription.amount_minor` | Monthly fixed charge in currency minor units; `"0"` means no monthly charge |
+| `markup_percent` (operator write)  | Exact decimal percentage string; `"20.00"` means 20%                       |
+| `markup_bps` (stored/read)          | Internal basis points; 2,000 means 20.00%                                   |
+| `monthly_subscription.amount_minor` | Flat monthly charge or per-seat monthly unit price in currency minor units; `"0"` means no monthly charge |
 | `monthly_subscription.currency`     | Three-letter uppercase ISO-style currency code                              |
+| `monthly_subscription.charge_basis` | `flat` for one scoped monthly charge or `per_seat` for each eligible human seat |
+| `monthly_subscription.seat_policy` | For per-seat plans, `automatic` active human members or `fixed` purchased capacity |
+| `monthly_subscription.seat_charge_timing` | For per-seat plans, `full_month` or `prorated` UTC membership/capacity intervals |
+| `usage_payment_mode`                | `pay_as_you_go` or `prepaid`; independent of the monthly charge               |
+
+Existing immutable tariff versions retain `flat` and `pay_as_you_go` through
+the additive migration. Newly configured plans must explicitly choose their
+monthly charge basis and usage payment mode. The Admin creation default is
+`prepaid`, and a team or organisation assignment continues to determine the
+payer scope. A per-seat amount is the price of one eligible seat per month;
+the Admin form enters that amount in natural currency units and converts it
+exactly to the integer `amount_minor` write contract. New per-seat forms
+default to automatic quantity with prorated seat changes. Per-seat terms are
+forbidden on flat plans; historical flat tariffs retain null seat terms. Fixed
+purchased capacity belongs to each scoped subscription, not to the reusable
+tariff. Seat quantity evidence is separate from usage credits.
+Each active per-seat agreement has one exact Stripe subscription or manual
+contract service-term source, frozen scope, tariff version, unit price, seat
+policy and charge timing. Activation captures the current UOA human roster at
+that instant; it never treats historical membership creation timestamps as
+billing intervals. Automatic billing stores effective-dated UOA membership
+intervals once per subject per subscription, so organisation seats deduplicate
+the same person across teams. Fixed billing stores explicit positive capacity
+revisions; pending invitation capacity and grant enforcement use the effective
+revision under an account/scope lock. A missing activation baseline or capacity
+revision holds the seat quote.
+
+`quoteMonthlySeatCharge` uses the actual UTC month duration. For automatic
+prorated seats it sums each person's non-overlapping active milliseconds,
+including leave and rejoin. Full-month automatic counts every person with any
+active overlap once. Fixed prorated seats integrate purchased quantity over
+time; fixed full-month charges the highest capacity effective in the month,
+so increases apply that month and decreases first reduce the following month.
+The full month's exact numerator is rounded only once to currency minor units.
+The quote retains interval/revision IDs for immutable invoice evidence. A
+future manual contract captures the current roster when its terms are scheduled
+and tracks changes until its distinct commercial effective month. It never
+backfills an uncaptured past roster. A scheduled fixed capacity constrains new
+admissions immediately, even though its monthly charge starts at the future
+commercial boundary. Manual activation freezes the per-seat terms and explicit
+fixed quantity in its service term; Stripe Checkout freezes the fixed quantity
+in the customer action, local lease and Stripe metadata. The first verified
+active Stripe projection captures the UOA baseline at the observed database
+time; terminal evidence closes it once. A missing baseline, unclosed month, or
+unproven Stripe billable period holds the finalized quote. The canonical cycle
+snapshot must freeze this quote before either Stripe invoice delivery or manual
+invoice issue; a live quote alone is never collection authority.
+The existing Admin Billing → Contracts → Activate version doorway collects each
+service's monthly flat fee or per-seat unit price in natural currency units,
+converted exactly to stored minor units, automatic or fixed quantity
+policy, full-month or prorated timing, and independent prepaid or pay-as-you-go
+usage mode. Fixed terms require an explicit purchased quantity. Activation
+readback labels a per-seat amount as a unit price and shows the saved capacity
+and payment mode. New operator terms default to prepaid; an older two-field
+activation request retains flat/pay-as-you-go semantics on replay. This
+operator action rechecks the superuser role and token epoch inside the final
+terms transaction, including idempotent replay.
+When a later manual term replaces a fixed-capacity agreement, the old
+agreement's immutable commercial end removes its admission limit exactly at
+the boundary even if the evidence-ending sweep runs later. A newly scheduled
+fixed agreement constrains admission from its roster-capture time.
+The always-on seat transition scheduler closes the old evidence at its later
+observed sweep time, preserving the exact boundary and interval history.
+
+The manual invoice calculator uses the closed-month source quote for flat and
+per-seat subscription lines, never the per-seat unit price as a whole invoice
+fee. A flat contract activated partway through its first month holds that
+month because it has no partial-month policy; later whole months can be billed
+from its observed activation. A closed month remains billable after later
+termination, but no month after the termination boundary can be charged.
+Complete Ledger coverage is required for prepaid and pay-as-you-go alike.
+Prepaid runtime usage is excluded from the manual usage total, and any legacy
+credit settlement found against a prepaid tariff holds calculation for
+reconciliation instead of reducing the separate subscription fee. Only a
+pay-as-you-go term can apply a collector credit as an invoice offset. The raw
+Ledger snapshot reference remains private audit evidence.
+
+Prepaid usage is funded from the existing scoped credit account before a paid
+provider dispatch. It cannot become a positive Stripe usage-meter export when
+credits are exhausted or provider liability remains unresolved; the monthly
+subscription charge remains separate.
+
+Ledger uses a separately issued, product-bound runtime key for prepaid
+admission. A superuser provisions and revokes keys through
+`/internal/admin/billing/ledger-runtime-keys`; creation returns the secret
+once. Each key pins the product, exact Ledger audience, and original product
+source domain. The reserve request carries the original short-lived UOA
+delegation with `ai.invoke`, its live subject/team and credential epoch, an
+immutable physical dispatch ID, start time, request fingerprint, provider
+service ID, and an exact raw-cost upper bound. UOA rechecks the subject on
+every POST, including replay, and freezes the tariff, payer account, and UTC
+month. A null bound is permitted only to obtain a durable pay-as-you-go mode
+decision; prepaid admission rejects it. Prepaid credits support USD without
+inventing currency conversion. A billable call may reach the provider only
+after the reservation response is confirmed.
+Admission holds the live user, organisation, and team membership rows through
+its final transaction so credential-epoch and membership revocations serialize
+with the decision. The runtime key is rechecked and locked at final admission;
+revocation between account resolution and reservation creation refuses the call.
+A free tariff remains customer-free even when its raw
+provider receipt records a positive cost.
+
+`GET /billing/v1/ledger/reservations/:dispatchId` lets the product-bound
+runtime key recover a committed decision after a lost HTTP response. If
+absent, Ledger's no-egress release creates a durable cancellation tombstone
+under the same dispatch lock, so a delayed reserve cannot strand funds. An
+unresolved paid provider attempt retains its reservation; elapsed time never
+releases it. Settlement accepts only Ledger's authenticated immutable receipt,
+checks actual cost against the frozen bound, and debits the credit account
+through an append-only `PREPAID_USAGE` entry linked to the exact reservation.
+The account-wide cumulative rated numerator carries sub-microcredit remainders
+across dispatches, tariff versions, teams, and months; each new debit is the
+delta of the cumulative liability rounded up once to a microcredit. Per-call
+reservation bounds round up separately for safety, but do not determine the
+customer's debit. Pending holds reduce available credits without changing
+confirmed balance. The old portfolio credit allocator and Stripe usage meter
+exclude prepaid usage; invoice closure requires complete Ledger usage and
+matching settled raw-cost receipts.
+
+Delayed Ledger-owned research uses a separate, finite job-compute renewal
+grant. Ledger presents the fresh, original UOA `ai.invoke` delegation and its
+product-bound runtime key to `POST /billing/v1/ledger/job-compute-renewals`.
+The request identifies one immutable origin invocation, Ledger job, reserved
+Water UUID, optional open planner turn, and purpose. Ledger generates a
+256-bit opaque secret and stable issue key before the request; UOA stores only
+its digest and returns the same UUID grant identifier on an identical retry.
+The identifier is accepted unchanged by the recipient renewal/revocation routes
+and in the signed job-compute claim. If the original
+45-second JWT expires after the issue committed but before its HTTP response
+reached Ledger, the origin runtime key can recover the existing grant with
+the same secret, issue key, and exact frozen tuple at `/recover`; recovery
+never creates a grant. The seven-day
+expiry is fixed at the first committed issue and never extends on replay.
+UOA checks the original token's `tv`, product, source domain, active team,
+current membership, credential epoch, source delegation policy, and the
+DeepWater recipient app-key binding. Water may renew only with its existing
+DeepWater `customer_lifecycle` app key, the opaque secret, and the exact frozen
+job tuple at `POST /billing/v1/job-compute-renewals/:grantId/renew`; the
+RS256 Ledger-audience token lasts at most 120 seconds. Revocation uses the
+same recipient proof and tuple at the `/revoke` path. Every renewal checks
+current subject, membership, source and recipient policy, runtime-key state,
+and epoch. A reservation carrying this token must include the exact
+`job_compute` tuple; admission checks the live grant row again in both
+transactions, including replays. Ledger separately verifies its own active
+job and turn before any provider dispatch. Older jobs with no grant hold for
+owner reauthentication; a retry under a new Ledger job cannot inherit a grant.
+After Water durably acknowledges the carrier, Ledger erases its encrypted
+pending secret. The origin Ledger runtime key may still revoke with the
+original issue key and exact frozen job tuple; this irreversible narrowing
+cannot renew or rebind the grant. The issuer locks live runtime and recipient
+keys against concurrent revocation. Concurrent identical issues converge on one grant.
+Near expiry, `expires_in` reports only the remaining whole seconds.
 
 Mode rules:
 
@@ -53,11 +351,11 @@ Collection rules:
   to collect payment.
 - `manual` means payment is expected but is collected outside the automated
   Stripe flow.
-- `none` means no payment is collected. Rating and cost visibility remain
-  active for any non-free tariff, so `usage_billing_enabled` can be true while
+- `none` means no payment is collected. Private rating remains active for any
+  non-free tariff, so `usage_billing_enabled` can be true while
   `payment_collection_enabled` is false.
-- `at_cost + none + monthly_subscription.amount_minor = "0"` is the explicit
-  special plan for showing 100% provider cost with no payment.
+- `at_cost + none + monthly_subscription.amount_minor = "0"` is an internal
+  tariff combination that collects no payment; it does not display cost basis.
 - Pricing mode and collection mode are separate immutable tariff-version terms.
   A collection change creates a new version.
 
@@ -78,36 +376,25 @@ The team must belong to the organisation. The user must exist and hold active
 membership in both the organisation and team. A missing membership, mismatched
 product credential, inactive service, or missing default fails closed.
 
-## Raw usage, billable units, and price presentation
+## Raw usage and customer price presentation
 
 Raw provider usage is immutable accounting evidence. Token counts, search
 requests, storage bytes, and other metered quantities must never be overwritten
 or relabeled to represent markup.
 
-UOA's snapshot exposes one signed `usage_price_multiplier_bps`:
-
-- `free`: `0`
-- `at_cost`: `10000`
-- `standard` or `custom`: `10000 + markup_bps`
-
-UOA applies that multiplier to the selected raw provider cost while retaining
-the original usage quantities. UOA may also expose a separately labelled
-customer-facing billable unit:
-
-```text
-customer_billable_units =
-  raw_metered_units × usage_price_multiplier_bps / 10000
-```
-
-That value is a derived commercial unit, not provider output. UOA calculates it
-with decimal-safe arithmetic while preserving Ledger's exact raw-unit evidence,
-so display or invoice rounding never mutates the raw facts. Its customer-facing
-label follows the underlying meter: billable token-equivalent units for
-token-metered AI, billable search-equivalent units for SERP, and billable
-research-equivalent units for DeepWater. Consumer pages render UOA's immutable
-raw-unit labels, separately labelled customer billable units, and
-customer-facing monetary amount. They never calculate those values or present
-a derived unit as provider output.
+UOA rates selected raw provider cost internally using the immutable commercial
+term for the billing month. A US$10.00 raw cost at the internal 30% standard
+rate yields a US$13.00 customer usage charge, or 13,000 prepaid credits at
+1,000 credits per US dollar. Customers see only their original usage units,
+credit consumption, exact customer charge, monthly subscription price and
+billing scope. Customer statements, Checkout and subscription summaries never
+include raw provider cost, cost basis, markup, price multiplier, or derived
+billable units. Signed product entitlement snapshots retain only the tariff
+identity needed for UOA's Checkout binding, collection and usage-billing flags,
+monthly subscription price, and assignment scope. Product backends do not rate
+usage; UOA's private Ledger and tariff data remain the financial authority.
+Statement adjustment rows use generic customer labels because operator-entered
+internal adjustment names are not classified as customer-safe copy.
 
 ## Individual product credentials
 
@@ -259,13 +546,7 @@ content-free business payload plus its RS256 signature:
     },
     "tariff": {
       "id": "tariff-id",
-      "key": "standard",
-      "version": 1,
-      "mode": "standard",
       "collection_mode": "stripe",
-      "markup_bps": 2000,
-      "markup_percent": "20.00",
-      "usage_price_multiplier_bps": 12000,
       "monthly_subscription": {
         "amount_minor": "0",
         "currency": "GBP"
@@ -399,21 +680,45 @@ assignment, customer, scope, and return URLs recovers the open session. If UOA
 crashes after Stripe creates a session but before recording its ID, retry
 searches the exact Stripe customer and UOA Checkout metadata and reattaches the
 single match. A stale creating lease with no Stripe session is marked abandoned
-and releases the scope. Concurrent lease creation recovers the database winner;
+and releases the billing scope for a new attempt. A fixed-seat capacity claim
+starts in the same transaction as the local Checkout row, before Stripe egress.
+It remains in force for creating, open, complete, and locally abandoned rows:
+the original Stripe create may finish after a lease lookup found no session.
+Verified Checkout expiry or a terminal canceled/incomplete-expired subscription
+releases the claim. A paid subscription transfers the claim to the activated
+seat subscription; an activation that cannot satisfy capacity remains held for
+payment reconciliation, never represented as an active UOA licence. Checkout
+creation and membership/invitation writes serialize on the organisation row,
+so a fixed quantity below occupied plus reserved seats fails before Stripe is
+called. Concurrent lease creation recovers the database winner;
 Stripe receives the winner's stable account/mode/Checkout idempotency key.
 
 UOA creates one currency-specific Stripe catalog for each product, including:
 
-- an immutable monthly Price for the exact tariff version when its monthly
-  amount is non-zero;
+- an immutable licensed monthly Price for a flat tariff when its monthly amount
+  is non-zero; a per-seat tariff keeps its unit price in UOA and has no licensed
+  quantity-one Stripe item;
 - one metered Price for rated customer money;
 - a calendar-month billing anchor aligned to Ledger's UTC month;
 - no promotion codes, because discounts must be explicit UOA tariff versions.
 
+Customer-visible Stripe product and monthly Price labels use the product name
+and “Monthly subscription”; internal tariff keys and versions stay in Stripe
+metadata for binding only. Existing catalog labels are normalized when reused,
+so a private operator key cannot appear in a hosted Checkout or invoice label.
+
 The hosted Checkout sets Stripe's billing-cycle anchor to the first day of the
 next UTC month and sets `proration_behavior=none`. The partial alignment period
-between Checkout and that boundary is free; the first invoice covers the first
-complete UTC calendar month, and subsequent renewals remain calendar-aligned.
+between Checkout and that boundary is free for legacy flat subscriptions.
+Per-seat liability is computed by UOA from frozen terms and effective-dated
+membership or purchased-capacity evidence, then collected on a subsequent
+calendar-cycle invoice. Stripe's live item quantity and proration cannot
+replace that evidence. Automatic seats count unique active humans across the
+subscribed scope; fixed seats charge contracted capacity. `FULL_MONTH` counts
+any active automatic seat once and the greatest fixed capacity in the month;
+`PRORATED` sums exact UTC interval overlap and rounds once at the final
+currency minor unit. Checkout freezes an explicit positive purchased quantity
+only for a fixed per-seat tariff. Later renewals remain calendar-aligned.
 This follows Stripe's documented
 [billing-cycle anchor](https://docs.stripe.com/billing/subscriptions/billing-cycle)
 and [no-proration](https://docs.stripe.com/billing/subscriptions/prorations)
@@ -435,10 +740,12 @@ Lifecycle events are notifications, not authoritative snapshots. UOA verifies
 the signature first, resolves the exact account/mode, then retrieves the current
 Checkout or Subscription from Stripe. Reordered updates cannot resurrect a
 canceled subscription, and a subscription missing at Stripe deterministically
-tombstones an existing local row. The current subscription must contain exactly
-the UOA monthly item (quantity one, when non-zero) and exactly one metered usage
-item, with no extra/duplicate items and no subscription- or item-level
-discounts.
+tombstones an existing local row. A flat subscription must contain exactly the
+UOA monthly item (quantity one, when non-zero) and one metered usage item. A
+per-seat subscription contains only the metered usage item; its exact monthly
+fee is attached to the draft invoice after UOA closes and freezes the prior
+month's seat evidence. No extra/duplicate items or subscription- or item-level
+discounts are accepted.
 
 ### Customer subscription lifecycle API
 
@@ -485,13 +792,14 @@ provider cost, producing each exact major-currency customer charge. UOA then
 converts it to an integer count of
 `10^-6` minor-currency units and sends only the delta since the previous
 snapshot to Stripe's sum meter, using a stable idempotent event identifier.
-Stripe therefore meters rated money—not tokens, searches, research runs, or
-their derived billable units. Raw facts remain in Ledger; customer billable
-usage and display-ready totals belong to UOA and flow unchanged to product UIs.
+Stripe therefore meters rated money—not tokens, searches, or research runs.
+Raw facts remain in Ledger; UOA projects only raw usage and customer charge
+totals to product UIs.
 
 Snapshot cursors and cumulative/delta exports are stored so retries can be
-replayed and audited. A lower corrected cumulative total emits a negative
-delta; it does not rewrite prior raw usage.
+replayed and audited. If a corrected liability is lower than the amount already
+accepted by Stripe, UOA holds the export for reconciliation; it does not send
+an unverified negative meter event or rewrite prior raw usage.
 
 ### Recurring export, safety pass, and invoice reconciliation
 
@@ -561,7 +869,7 @@ remains blocked until all of the following are demonstrated:
    `invoice.finalization_failed` handling,
    the free initial alignment period, calendar-month renewal, cancellation,
    webhook retries,
-   negative corrections, and immutable-cursor replay are exercised in Stripe
+   correction reconciliation, and immutable-cursor replay are exercised in Stripe
    test mode;
 6. invoices visibly reconcile UOA tariff terms and Ledger customer charges.
 
@@ -580,7 +888,7 @@ contract. The lifecycle and export descriptions above use the same boundaries.
 UOA is the only commercial billing engine and system of record. It owns:
 
 - immutable tariff terms and assignment precedence;
-- centrally rated billable units, markup, customer charges, exact totals, and
+- privately rated customer charges, exact totals, and
   currencies;
 - monthly subscriptions, add-ons, credits, collection state, and customer
   actions;
@@ -664,7 +972,8 @@ caller/origin to the string `unattributed` only inside its display-only
 
 ### Canonical public customer contract
 
-The frozen v1 and additive v2 paths are:
+The v1 and v2 route names remain while their privacy-revised protocol shapes
+require strict consumers to update together:
 
 | Method and path                                         | Behaviour                                                                                                                                                                      |
 | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -678,7 +987,7 @@ The frozen v1 and additive v2 paths are:
 | `GET /schemas/billing-consumer-actions-v1.example.json` | Synthetic, credential-free fixtures for every billing consumer-action message                                                                                                  |
 | `GET /schemas/billing-consumer-actions-v1.openapi.json` | OpenAPI 3.1 components embedding the exact action schemas and fixtures                                                                                                         |
 | `POST /billing/v1/service-access/confirm`               | Records one direct product session after exact product-key, actor, and active membership verification                                                                          |
-| `POST /billing/v1/customer-statement`                   | Display-ready current/past-month plan, subscription, raw and billable usage, cross-service and per-user attribution, commercial lines, exact totals, capabilities, and actions |
+| `POST /billing/v1/customer-statement`                   | Display-ready current/past-month plan, subscription, customer charges and consumed credits, per-user customer charges, commercial lines, exact totals, capabilities, and actions |
 | `POST /billing/v2/customer-statement`                   | The same UOA-owned commercial statement plus complete display-ready totals, origins, and users across all services connected to the exact team                                 |
 | `POST /billing/v1/cancellation/preview`                 | Complete confirmation-dialog model plus opaque five-minute token and server-generated idempotency key                                                                          |
 | `POST /billing/v1/cancellation/confirm`                 | Locked, revalidated, idempotent confirmation for the preview's exact pinned direct subscriptions                                                                               |
@@ -693,8 +1002,11 @@ The canonical UOA and Ledger product identifiers are `nessie`, `deepwater`,
 mapped at the product boundary and are never sent in billing subjects.
 
 Products render `BillingStatementV1` or `BillingStatementV2` unchanged. New
-consumers use v2; v1 remains frozen and served for compatibility. Products must
-not derive tariff copy, totals, usage shares, provider-cost shares, markup,
+consumers use v2. Package 5.0.0, V1 protocol 5.0.0, and V2 protocol 6.0.0
+retain the route names but remove the public pinned tariff identity, which is
+private financial authority. Consuming products must update their strict
+validators before the producer switches. Products must not derive tariff copy,
+totals, usage shares, customer charges,
 cancellation scope, or action choices. The three action
 IDs and fixed routes are:
 
@@ -702,9 +1014,18 @@ IDs and fixed routes are:
 - `portal` → `/billing/v1/stripe/portal-session`;
 - `cancel` → `/billing/v1/cancellation/preview`.
 
-The statement supplies the exact request body, including server-pinned
-allowlisted return URLs. A product may whitelist these ID/path pairs and proxy
-the supplied body, but must reject unknown actions. The old
+The customer plan and Checkout tariff include safe `charge_basis`, `seat_policy`,
+`seat_timing`, `amount_role`, and `usage_payment_mode`. A `per_seat_unit`
+`amount_minor` is the monthly price of one seat, never the customer's total.
+The frozen seat quote supplies a closed period's financial subscription line;
+an open per-seat statement leaves that line pending rather than displaying the
+unit price as a charged total. Provider cost, margin, and markup stay private.
+
+The statement supplies the request body, including server-pinned
+allowlisted return URLs. For a fixed-seat plan, a product appends only the
+customer-selected `fixed_seat_quantity` (integer 1 to 1,000,000); UOA enforces
+that it is required only for this plan. A product may whitelist these ID/path
+pairs and proxy the supplied body, but must reject unknown actions. The old
 `POST /billing/v1/stripe/subscription/cancel` route no longer exists.
 
 The versioned, MIT-licensed
@@ -720,7 +1041,68 @@ It has no UOA server imports, credentials, or tenant data. The API imports this
 package rather than maintaining a private duplicate. Build and package tests
 fail when any committed JSON artifact drifts from the typed source. Until
 registry publication is approved, consumers may vendor the whole package
-directory or fetch the nine public artifacts above.
+directory or fetch the public artifacts above. The same package defines
+`BillingCyclesV2` (protocol 2.1.0): exact product/selected-team monthly history,
+customer subscription and usage charges, consumed credits, true
+payment documents and explicit later adjustments. The selected-team request
+can also return a separate organisation-wide subscription/document cycle to
+current organisation billing managers. Its `scope.team_id` is null and
+`scope.cycle_scope` is `organisation`; team usage remains in team-scoped
+cycles, even if the organisation pays for it. The month-and-scope cursor keeps
+both records visible without duplicating the organisation subscription fee
+in team totals. The cycle read does not
+create a payment invoice. Only an available, persisted document receives a
+server-authored download action; open and unreconciled periods cannot claim a
+final invoice. Prepaid usage consumption is not a second payment invoice.
+For a closed source month, `prepareBillingCycleClose` freezes the contractual
+subscription quote and complete immutable Ledger coverage in a pending cycle.
+It holds unresolved paid attempts, missing paid costs, currency mismatches and
+quote drift. Pending credits are represented as unknown, never zero. This
+preparation does not create a payment invoice, mark liability paid, or make
+documents downloadable; those transitions require verified collection and
+credit evidence in a later immutable revision.
+For a manual organisation invoice, `captureIssuedManualBillingCycle` reads
+the actual issued UOA invoice and its immutable issuer PDF. It binds the exact
+single service line, contract version, month, legal parties, customer amount,
+payment events and verified PDF digest to one append-only allocation. It
+publishes the copied legal invoice and separate frozen PDF/CSV customer-charge
+breakdown as a new cycle revision. Tax, credits and multi-service invoices
+without exact line-level settlement allocation hold; no whole-invoice amount
+is silently assigned to one service. A second attempt with the same immutable
+effect is idempotent, while a verified payment or refund appends a new cycle
+revision with updated paid and outstanding amounts. The original legal PDF
+and its single invoice-line allocation remain immutable.
+An actual issuer VOID appends an explicit `voided` customer cycle with zero
+current liability, preserving the prior issued cycle and legal PDF bytes.
+The five-minute manual reconciliation scheduler revisits issued allocations
+for later payments/refunds and voids independent of customer page reads;
+failures remain held and retried with their source invoice IDs and codes.
+If Ledger adds a late receipt before finalization, preparation appends a new
+pending revision and retains the original snapshot. A late receipt after
+finalization holds for a separately evidenced financial adjustment. Customer
+seat intervals are clipped to the immutable commercial effective/end and
+termination window used by the monetary quote.
+Replay comparison uses the exact receipt facts, not a new signed Ledger
+assertion's cursor, capture time or response hash. A zero-monthly-charge team
+without a subscription source can still prepare its own pending customer-usage-charge
+cycle from the historically effective tariff and payer; unresolved historical
+terms, payer changes and paid costs hold it. This path never checks current
+team membership to attribute old usage. Organisation-scoped, signed Ledger
+`group_by=team` discovery supplies historical team identifiers for the close;
+the financial cycle retains the stable identifier after a live Team row is
+deleted without recreating identity or granting read access. One organisation
+subscription cycle freezes its fee once, while each discovered team can have a
+separate selected-team usage cycle bound to that organisation source. The
+organisation cycle combines customer usage charges from all discovered teams for current organisation billing managers,
+without publishing team identifiers or member details. Team managers cannot
+open that cycle, and selected-team cycles contain only their own usage. Missing
+historical payer or tariff evidence holds reconciliation. Ledger may provide measured reasoning, cache-write duration and modality
+dimensions; they stay in private evidence and never enter customer cycle JSON
+or downloads. Cache creation tokens are disjoint from ordinary input in
+private rated evidence, while reasoning and modality figures are subsets. Downloaded CSV includes per-seat unit
+price/policy/timing, customer charges, paid/outstanding totals and credit
+boundaries; spreadsheet formula prefixes are neutralized. PDF labels pending
+totals honestly and wraps long source identifiers within the page.
 
 `BillingStatementV1.capabilities` describes UOA-owned billing actions only. A
 product runtime capability such as `can_be_private` is not inferred from a
@@ -789,13 +1171,14 @@ service or tariff:
 1 Ledger USD micro-minor = 10 internal microcredits
 ```
 
-Every new customer balance-changing usage target is an integer credit, or one
-million microcredits. UOA retains sub-credit rated usage in the settlement's
+The older portfolio collector targets complete credits. Prepaid dispatch
+settlement can debit an exact microcredit quantity. UOA retains sub-credit rated usage in the settlement's
 exact micro-minor remainder until the same service/user bucket reaches another
-whole credit. Public credit values are therefore integers; their exact USD
-equivalents may contain the three decimal places implied by 1,000 credits per
-dollar. Microcredits, raw Ledger token counts, and provider cost never appear in
-the public credit protocol.
+whole credit. The older collector settles complete credits, while new prepaid reservations
+can settle exact microcredit amounts. Public credit values therefore retain up to
+six decimal places and their exact USD equivalents up to nine. The public
+contract exposes credits, never internal microcredit counters, raw provider
+cost, or private markup.
 
 There is one exact-team credit account per Stripe account/mode and currency,
 shared across all connected services. A product can present its own versioned,
@@ -917,6 +1300,31 @@ charge, SetupIntent, refund, and dispute binding drift also fails retryably.
 Invoice reconciliation events received while collection is disabled remain
 unconsumed so an operator can replay/reconcile them before enabling collection.
 
+For a pending automatic attempt, the scheduler also performs one account-level
+Stripe Events API scan to recover original payment lifecycle events missed by
+webhook delivery, including when Stripe created the PaymentIntent but its ID
+was not persisted. The scan is
+bounded to five pages of 100 events and to the attempt window (with a five-minute
+clock allowance), capped at Stripe's 30-day event retention. It considers only
+the original Stripe events returned for the configured account and mode, then
+uses the same event version/account checks, freshly retrieved PaymentIntent
+binding validation, durable event deduplication, and atomic funding apply as a
+signed webhook. An unbound attempt can match only an original Event whose
+reserved attempt metadata exactly identifies it; full Stripe object binding
+checks then establish the PaymentIntent ID. It never creates a replacement
+PaymentIntent. Recovery continues
+for an already-pending attempt even if auto-top-up consent was later disabled;
+turning off automatic top-ups prevents new attempts, while a payment already
+started may still complete.
+A complete scan finding no event for an unbound pending attempt permits the
+existing dispatch helper to retry its original immutable key under current
+consent. The helper uses the locked database clock and refuses replay after
+23 hours: Stripe can prune idempotency keys after 24 hours
+([Stripe idempotency contract](https://docs.stripe.com/api/idempotent_requests)).
+Older ambiguous attempts, expired event windows, incomplete/failed scans and
+invalid events remain unresolved. Recovery never invents a payment or adds
+credits before trusted payment evidence. Replaying an event cannot add credits twice.
+
 The public credit view is a manager/member discriminated union. A manager may
 receive per-user usage, payment-method display data, consent actor details, and
 enabled funding actions. An ordinary member receives the shared remaining and
@@ -952,6 +1360,13 @@ metadata fails retryably rather than consuming the webhook event. For Stripe's
 `2026-06-24.dahlia` contract, the canonical invoice-line subscription proof is
 `parent.subscription_item_details`; the omitted legacy line-level subscription
 alias is tolerated, but when Stripe supplies it the alias must match exactly.
+Paid `subscription_cycle` invoices use the same exact customer, subscription,
+item, Price, quantity, amount, currency, and no-discount/no-tax/no-credit/no-
+shipping/no-proration proof. They update the current period only after the
+immutable paid initial-invoice proof exists; a cycle delivered first remains
+uncommitted and retryable until that prerequisite arrives. Renewal processing
+never changes the initial invoice, activation event, or activation timestamp,
+and a late renewal cannot restore a terminal subscription.
 
 Cancellation preview refreshes Stripe before minting an opaque five-minute
 capability, stores only its digest, and permits one unresolved intent per exact
@@ -966,10 +1381,11 @@ terms remain cancellable.
 `BillingCreditsV1` and the recurring-add-on protocol are public, MIT-licensed
 interfaces from `@unlikeotherai/billing-statement-protocol`. Their generated
 JSON Schema, fixtures, and OpenAPI 3.1 components are the consumer contract.
-The credits contract is still unreleased: this privacy-hardening shape replaces
-the earlier unpublished draft as one coordinated V1 update across UOA and its
-four initial consumers, rather than claiming a compatible semantic-version
-minor change. Its protocol version therefore remains `1.0.0` until launch.
+The credits contract is at protocol version `2.0.0`. Clients that send
+`x-uoa-billing-credits-protocol: 2.0.0` can receive an optional
+`billing_status` for held reconciliation; older strict clients receive a named
+503 response while a billing hold is active, with no unnegotiated response
+property.
 UOA serves those artifacts under `/schemas/billing-credits-v1.*` and
 `/schemas/billing-recurring-addons-v1.*`. A product reads the current shared
 balance through `POST /billing/v1/credits` and its scoped add-on catalog through
@@ -1008,6 +1424,56 @@ webhooks must match the local customer, immutable terms, and reserved metadata
 before funding or consent is committed. A policy, catalog, payment method,
 consent, or Stripe binding gap disables the corresponding projected action and
 fails a forged direct request closed.
+
+An active automatic-top-up account with a saved card may replace that card
+through the existing recovery action only when there is no unresolved payment
+attempt. It opens the same Setup Checkout for the currently selected option.
+The saved card and immutable consent revision remain current until a verified
+`setup_intent.succeeded` event passes the exact Checkout, customer, metadata,
+generation, and consent-predecessor checks; canceling or expiring the Checkout
+does not change either. An automatic attempt created while replacement Checkout
+is open remains bound to its original immutable consent revision and payment
+method. Its durable attempt identity permits one Stripe dispatch and subsequent
+recovery uses that same idempotency key; card replacement cannot rebind or
+repeat the charge.
+
+Payment-card expiry is derived from a freshly retrieved, exact customer-bound
+Stripe card's `exp_year` and `exp_month`. The card remains valid through the
+last day of that month in UTC; only an earlier expiry month is `expired`. A
+failed or mismatched Stripe read disables the affected action but never
+classifies the card as expired. The existing credit protocol status field
+carries this projection; no route or protocol shape is added.
+
+Turning off automatic top-up revokes future consent even while an older
+attempt is unresolved. The disable transaction advances the generation,
+removes the current account consent and card pointer, and leaves that attempt
+and its immutable consent revision intact. An attempt with a persisted Payment
+Intent waits for its matching webhook; an attempt whose Stripe request timed
+out before its Payment Intent ID was saved is never retried after disable, but
+an exact late event may still settle it once. Neither path can restore consent
+or activate automatic top-up.
+
+The manager who disables a shared credit account may use any currently
+authorized lifecycle app key for that exact team, including one from another
+connected service or a rotated key. The disable audit records the acting app
+and service; the unresolved attempt and later Stripe event stay bound to the
+original consent's app and service.
+
+The projected automatic-top-up state is `paused` when the saved monthly limit
+cannot cover one full refill, including when a positive remainder is smaller
+than that refill. The projection keeps the exact charged and remaining money
+values and gives the reset date from the current UTC billing period end; it
+does not infer a smaller refill or alter the saved limit.
+
+When a team already has one pending top-up Checkout, the read projection may
+offer **Continue payment** only for that Checkout's exact active offer after
+rechecking its current Stripe session and the immutable account, team credit
+account, customer, product app key, service, catalog amount, credit quantity,
+and pinned return-URL digests. Other offers remain unavailable while that
+payment is pending. This read never changes checkout state; only a verified
+PaymentIntent webhook adds credits. Recovery updates are conditional on the
+checkout still being pending, so a webhook-completed checkout cannot be
+downgraded or redirected using a stale Stripe read.
 
 Disable authority is bound inside the database transaction. The immutable
 disable audit event identifies the exact requester, active lifecycle app key,
@@ -1079,9 +1545,113 @@ Issued-invoice views expose gross calculated customer price grouped by service,
 then one separate canonical funded-credit settlement, ordinary fixed
 subscriptions, adjustments, taxes, payments, and totals as applicable. Paid
 recurring add-ons remain on their canonical Stripe subscription, are labelled
-as collected separately, and are excluded from the manual amount due. They must
-not expose token counts, raw API/search/
-research units, raw provider cost, cost-token equivalents, tariff markup, or
-the margin calculation. Even operator-created descriptions must not encode
-those prohibited facts. Product applications receive only UOA's display-ready
-invoice view model and never reproduce the calculator.
+as collected separately, and are excluded from the manual amount due. The
+payment invoice remains distinct from the frozen cycle usage breakdown: the
+breakdown shows customer charges, consumed credits and subscription/seat
+evidence. Private UOA/Ledger records retain measured token/API/search/research
+units, cache and modality counts when the Ledger receipt actually supplies them. Neither document exposes raw provider cost,
+cost-token equivalents, tariff markup, or the margin calculation. Even
+operator-created descriptions must not encode those prohibited financial
+facts. Product applications receive only UOA's display-ready documents and
+never reproduce the calculator.
+
+Stripe invoice-close catch-up verifies the configured Stripe account identifier
+against the immutable account binding before reading or advancing any invoice.
+Changing the configured Stripe account holds prior-account liabilities for
+reconciliation; matching test/live mode alone is insufficient authority.
+
+
+## Localized payment presentation integration (2026-10-05)
+
+The customer-facing balance heading, source-authored credit and automatic
+top-up controls, add-on labels and prices, and statement copy use the selected
+supported billing locale (`cs`, `en-US`, `en-GB`, `de`, `es`, `fr`, or `it`),
+with English (`en-US`) as the default. Built-in offer names are localized by
+their catalog keys; custom offer and service names remain operator-authored.
+Statement customer-charge summaries are localized too. Raw metering units,
+provider costs and connected-service raw portfolios remain private under the
+5.0 privacy amendment; they are not translated into customer presentation.
+Action request bodies and exact financial amounts remain identical in every locale.
+
+### Credit purchase return and display language (2026-10-04)
+
+Presentation 1.5 explicitly negotiates customer display language using
+`x-uoa-billing-presentation` and `x-uoa-billing-locale`. Absent negotiation keeps
+legacy English and the original redirect shape. The selected locale never
+changes signed subjects, prices, consent, or frozen action request bodies.
+
+A negotiated one-time credit purchase returns its exact opaque `purchase_id`.
+Resuming an open checkout returns the same reference. Its read-only status endpoint
+revalidates actor, membership, current billing authority and exact Stripe account,
+credit account, customer, storefront and app key. Local completion plus the
+immutable webhook and credit-entry proof is the only success signal. Remote
+Checkout or PaymentIntent success remains processing until that commit exists.
+Status reads cannot create a charge, write financial evidence, or restart work.
+Consumers use bounded reads only while awaiting confirmation and offer explicit
+retry on unknown state. Schema and examples live in the public billing protocol.
+
+### Negotiated customer language and hosted pages (2026-10-04)
+
+Billing presentation clients send `x-uoa-billing-presentation: 1.5.0` and one
+supported `x-uoa-billing-locale` on reads, previews and actions. The locale stays
+outside the signed subject and frozen action body. Unsupported negotiation is
+rejected before a payment action; clients without it keep English projections.
+The same locale is passed to new Stripe Checkout, card setup and billing portal
+sessions (`en-US` maps to Stripe's `en`). Existing hosted sessions are resumed,
+not replaced just to change their language. Subscription and recurring Checkout
+leases persist the initial locale so even a lost-response retry in another
+language retains identical Stripe idempotency parameters. Legacy leases keep
+NULL and omit locale. Portal locale variants have separate session idempotency
+keys; opening a portal does not create a purchase.
+
+### Credit attention and member funding help (2026-10-04)
+
+Billing Presentation 1.5.0 credit reads may include source-confirmed attention
+events with opaque event keys and one of five stable kinds: low credits, no
+credits, payment action required, expired card, or paused automatic top-up.
+Low-credit attention requires an explicit positive threshold from the active
+consent or an active configured automatic option. Free or non-metered billing
+does not produce a balance warning. Event keys bind the source credit account,
+kind, current UTC billing period, and the last funding credit entry or consent
+generation as appropriate; changing balance text alone cannot create a new
+event.
+
+The negotiated credit projection may offer a member a localized action to ask
+for funding help for metered billing with payment collection enabled, when a
+currently authorized billing manager is reachable.
+The consumer POSTs the exact projected subject to
+`/billing/v1/credits/funding-request`; it cannot choose recipient IDs. UOA
+rechecks the fresh endpoint-bound actor, active user and exact org/team
+memberships, current organization billing responsibility, and current billing
+manager roles. For organization-funded accounts, only active organization
+owners/admins are eligible recipients; otherwise active organization or
+selected-team billing managers are eligible. The response returns a source
+account/team/requester/UTC-day-scoped opaque request ID and the current
+eligible recipient IDs. It neither sends a message nor claims a notification
+was delivered. Consumers map only those exact IDs to active local users and
+deduplicate any local alert by request ID. The strict response schema is
+`/schemas/billing-credit-funding-request-v1.json`.
+
+The current customer privacy contract remains authoritative. Localization never
+restores raw usage or private pricing fields. Credits and their entry balances
+retain microcredit precision; available-balance attention excludes active holds.
+Cycles, invoices, credit budgets, seat quotes and current effective tariff history
+are preserved from the integrated financial implementation.
+
+
+Customer display integration also covers cycle and invoice list/detail reads via
+presentation 1.5.0 locale negotiation. Generated cycle subscription/usage labels,
+prepaid purchase labels and credit-note cancellation labels use structural source
+facts. Exact money displays preserve every decimal digit without converting
+financial values to floating point. Read-time display projection occurs after
+source integrity validation; stored snapshot hashes, rating, line identities,
+PDFs and CSVs are unchanged. Authored plan/service names, Stripe invoice line
+labels and stored adjustment reasons remain verbatim because their persisted
+contract does not distinguish generated copy from operator text.
+
+
+Verified payment reversals remain able to create a credit debt after their paid
+credits were consumed, provided no positive provider reservation is held. The
+additive 20261005103000 migration corrects the reservation guard's zero-held
+case; active held funds, verified adjustment provenance, immutable ledger
+entries, and the prohibition on unfunded usage debits remain enforced.

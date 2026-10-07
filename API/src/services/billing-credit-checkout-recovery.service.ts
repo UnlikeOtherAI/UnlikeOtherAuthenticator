@@ -28,7 +28,7 @@ function sessionId(checkout: CreditCheckout): string | null {
   return checkout.stripeCheckoutSessionId;
 }
 
-function assertSessionBinding(
+export function assertCreditCheckoutSessionBinding(
   session: Stripe.Checkout.Session,
   checkout: CreditCheckout,
   kind: CreditCheckoutKind,
@@ -83,7 +83,7 @@ async function findSession(
   if (knownId) {
     try {
       const session = await stripe.checkout.sessions.retrieve(knownId);
-      assertSessionBinding(session, checkout, kind, customerStripeId, account);
+      assertCreditCheckoutSessionBinding(session, checkout, kind, customerStripeId, account);
       return session;
     } catch (error) {
       if (!isMissingStripeResource(error)) throw error;
@@ -105,7 +105,7 @@ async function findSession(
         session.client_reference_id === checkout.id &&
         session.metadata?.[metadataKey(kind)] === checkout.id
       ) {
-        assertSessionBinding(session, checkout, kind, customerStripeId, account);
+        assertCreditCheckoutSessionBinding(session, checkout, kind, customerStripeId, account);
         matches.push(session);
       }
     }
@@ -140,7 +140,22 @@ async function updateCheckout(
     expiresAt: new Date(session.expires_at * 1000),
   };
   if (kind === 'top_up') {
-    await prisma.billingCreditTopUpCheckout.update({ where: { id: checkout.id }, data });
+    const updated = await prisma.billingCreditTopUpCheckout.updateMany({
+      where: {
+        id: checkout.id,
+        status: {
+          in: [
+            BillingCreditCheckoutStatus.CREATING,
+            BillingCreditCheckoutStatus.OPEN,
+            BillingCreditCheckoutStatus.NEEDS_REVIEW,
+          ],
+        },
+      },
+      data,
+    });
+    if (updated.count !== 1) {
+      throw new AppError('BAD_REQUEST', 409, 'BILLING_CREDIT_TOP_UP_PREDECESSOR_CHANGED');
+    }
   } else {
     const updated = await prisma.billingCreditSetupCheckout.updateMany({
       where: {
@@ -202,6 +217,9 @@ export async function reconcileCreditCheckout(
     deps.stripe,
   );
   if (session) {
+    if (session.status === 'complete') {
+      return { session, abandoned: false };
+    }
     await updateCheckout(deps.prisma, params.kind, params.checkout, session);
     return { session, abandoned: false };
   }

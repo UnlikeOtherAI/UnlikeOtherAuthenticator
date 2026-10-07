@@ -1,7 +1,10 @@
+import type { BillingCustomerLocale } from '../../contracts/billing-statement-v1.js';
+import { readBillingPresentation } from './billing-presentation.js';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
 import { requireBillingLifecycleAppKey } from '../../middleware/billing-app-auth.js';
+import { billingCheckoutTariffJsonSchema } from '../../contracts/billing-statement-v1.js';
 import {
   createStripePortalSession,
   getStripeSubscriptionSummary,
@@ -14,11 +17,6 @@ import type { BillingActorEndpoint } from '../../services/billing-actor-audience
 const PortalRequestSchema = BillingSubjectRequestSchema.extend({
   return_url: z.string().trim().url().max(2048),
 }).strict();
-
-const tariffSchema = {
-  type: 'object',
-  additionalProperties: true,
-} as const;
 
 const subjectSchema = {
   type: 'object',
@@ -78,7 +76,7 @@ const summarySchema = {
   properties: {
     product: { type: 'object', additionalProperties: true },
     subject: subjectSchema,
-    tariff: tariffSchema,
+    tariff: billingCheckoutTariffJsonSchema,
     assignment: { type: 'object', additionalProperties: true },
     stripe_collection_enabled: { type: 'boolean' },
     stripe_mode: {
@@ -98,10 +96,13 @@ function requestContext(
   actorToken: string;
   endpoint: BillingActorEndpoint;
   credential: NonNullable<FastifyRequest['billingAppKey']>;
+  locale?: BillingCustomerLocale;
 } {
   const credential = request.billingAppKey;
   if (!credential) throw new AppError('UNAUTHORIZED', 401);
+  const presentation = readBillingPresentation(request.headers);
   return {
+    ...(presentation.enabled ? { locale: presentation.locale } : {}),
     request: {
       product: body.product,
       organisationId: body.organisation_id,

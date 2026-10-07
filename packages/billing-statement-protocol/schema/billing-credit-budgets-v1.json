@@ -1,0 +1,197 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "/schemas/billing-credit-budgets-v1.json",
+  "title": "Customer credit budget management",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "product",
+    "organization_id",
+    "team_id",
+    "budgets"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "product": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "organization_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "team_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "budgets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "evidence_complete": {
+                  "const": false
+                }
+              },
+              "required": [
+                "evidence_complete"
+              ]
+            },
+            "then": {
+              "properties": {
+                "remaining_credits": {
+                  "type": "null"
+                },
+                "percent_used": {
+                  "type": "null"
+                }
+              }
+            }
+          }
+        ],
+        "required": [
+          "scope_type",
+          "scope_id",
+          "period",
+          "mode",
+          "limit_credits",
+          "warn_threshold_percent",
+          "block_humans_when_over",
+          "degrade_model",
+          "degrade_provider",
+          "policy_id",
+          "version",
+          "spent_credits",
+          "held_credits",
+          "evidence_complete",
+          "remaining_credits",
+          "percent_used",
+          "effective_window_start",
+          "effective_window_end"
+        ],
+        "properties": {
+          "scope_type": {
+            "enum": [
+              "organization",
+              "team",
+              "project",
+              "run"
+            ]
+          },
+          "scope_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "period": {
+            "enum": [
+              "weekly",
+              "monthly",
+              "yearly",
+              "per_run"
+            ]
+          },
+          "mode": {
+            "enum": [
+              "off",
+              "warn",
+              "enforce",
+              "degrade",
+              "unlimited"
+            ]
+          },
+          "limit_credits": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "warn_threshold_percent": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "block_humans_when_over": {
+            "type": "boolean"
+          },
+          "degrade_model": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "degrade_provider": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "policy_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "spent_credits": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$"
+          },
+          "held_credits": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$"
+          },
+          "evidence_complete": {
+            "type": "boolean"
+          },
+          "remaining_credits": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "percent_used": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "effective_window_start": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "effective_window_end": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      }
+    }
+  }
+}

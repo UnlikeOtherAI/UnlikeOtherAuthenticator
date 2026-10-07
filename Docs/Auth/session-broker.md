@@ -11,6 +11,14 @@ only this scope. The vocabulary migration creates no mappings and widens no old 
 Absent or disabled mappings fail closed. Deploy UOA before configuring the mapping and
 updating both relying products; source merge alone does not provision production.
 
+In UOA Admin, open **Integrations → Delegation policies → Create mapping**. Select
+source domain `coder.unlikeotherai.com`, enter product `coder` and resource
+`https://api.selkie.live`, clear the default **AI invocation** selection, and select
+only **Session brokering** (`session:broker`). Keep **Mapping enabled** checked.
+The same scope remains visible and selected when editing this mapping. The API
+rejects this scope combined with another scope or bound to any other
+source/product/resource; the form does not grant it by default.
+
 Selkie authenticates with its verified configuration and domain bearer and posts
 `{token}` to `/auth/session-broker/validate`. Only target domain `api.selkie.live` is
 accepted. UOA checks the signature, audience, direct provenance, expiry, scope, current

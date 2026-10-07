@@ -18,6 +18,7 @@ const context = {
 function portfolio(teamId: string, cost: string, userId: string): NormalizedMeteringPortfolio {
   return {
     schemaVersion: 1,
+    billingCompleteness: { state: 'complete', unresolvedPaidAttempts: '0' },
     contract: 'metering-portfolio-v1',
     perspectiveProduct: 'deepwater',
     groupBy: 'user',
@@ -42,6 +43,7 @@ function portfolio(teamId: string, cost: string, userId: string): NormalizedMete
         selectedProviderCost: cost,
         currency: 'USD',
         costProvenance: 'provider_invoice',
+        billingDisposition: 'paid',
         billingProduct: 'deepwater',
         callerProduct: 'deepwater',
         originProduct: 'deepwater',
@@ -69,10 +71,15 @@ function prismaDouble() {
         { id: 'team_b', name: 'Support' },
       ]),
     },
-    billingTariffAssignment: { findFirst: vi.fn().mockResolvedValue(null) },
-    billingTariff: {
-      findFirst: vi.fn().mockResolvedValue({
+    billingService: {
+      findUnique: vi.fn().mockResolvedValue({ tariffHistoryFromMonth: '2026-07' }),
+    },
+    billingOrganisationContractVersion: { findMany: vi.fn().mockResolvedValue([]) },
+    billingTariffTermEvent: {
+      findFirst: vi.fn(async ({ where }: { where: { source: string } }) =>
+        where.source === 'SERVICE_DEFAULT' ? { tariffId: 'tariff_standard', assignmentId: null, tariff: {
         id: 'tariff_standard',
+        serviceId: 'service_deepwater',
         key: 'standard',
         name: 'Standard',
         version: 1,
@@ -80,7 +87,7 @@ function prismaDouble() {
         markupBps: 2_000,
         monthlyAmountMinor: 1_000n,
         currency: 'USD',
-      }),
+      } } : null),
     },
     teamMember: {
       findMany: vi
@@ -92,6 +99,20 @@ function prismaDouble() {
 }
 
 describe('organisation billing responsibility', () => {
+  it('uses one selected locale for controlled-by copy and preserves the organisation name', () => {
+    const manager = buildBillingControlledBy({
+      organisationId: 'org_1',
+      organisationName: 'Acme Research',
+      canManage: true,
+      locale: 'cs',
+    });
+
+    expect(manager.organisation_name).toBe('Acme Research');
+    expect(manager.message).toContain('Fakturaci tohoto týmu');
+    expect(manager.message).toContain('Acme Research');
+    expect(manager.message).not.toContain('Billing for this team');
+  });
+
   it('composes the controlled-by copy in UOA, and names an action only for a manager', () => {
     const manager = buildBillingControlledBy({
       organisationId: 'org_1',

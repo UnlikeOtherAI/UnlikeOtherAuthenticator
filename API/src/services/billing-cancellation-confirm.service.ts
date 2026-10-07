@@ -14,6 +14,9 @@ import type {
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import type { BillingActorEndpoint } from './billing-actor-audience.service.js';
+import type { BillingCustomerLocale } from './billing-copy-locale.js';
+import { billingPluralCopy } from './billing-copy-locale.js';
+import { billingSubscriptionCopy } from './billing-subscription-copy.catalog.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
 import {
   authorizeBillingCustomerAction,
@@ -292,27 +295,47 @@ async function cancelTargets(
 function confirmationResult(
   subscriptions: CancellationSubscription[],
   indirectProducts: string[],
+  locale?: BillingCustomerLocale,
 ): BillingCancellationConfirmationV1 {
+  return localizeCancellationConfirmation(
+    {
+      schema_version: BILLING_CANCELLATION_SCHEMA_VERSION,
+      status: 'confirmed',
+      title: '',
+      message: '',
+      cancelled_services: subscriptions.map((subscription) => ({
+        service_id: subscription.serviceId,
+        product: subscription.service.identifier,
+        name: subscription.service.name,
+        display_name: subscription.service.name,
+        status: 'cancels_at_period_end',
+        effective_at: subscription.currentPeriodEnd?.toISOString() ?? null,
+      })),
+      indirect_services: indirectProducts.sort().map((product) => ({
+        product,
+        display_name: product,
+        impact: '',
+      })),
+    },
+    locale,
+  );
+}
+
+function localizeCancellationConfirmation(
+  result: BillingCancellationConfirmationV1,
+  locale?: BillingCustomerLocale,
+): BillingCancellationConfirmationV1 {
+  const copy = billingSubscriptionCopy(locale);
   return {
-    schema_version: BILLING_CANCELLATION_SCHEMA_VERSION,
-    status: 'confirmed',
-    title: 'Cancellation scheduled',
+    ...result,
+    title: copy.cancellationScheduled,
     message:
-      subscriptions.length === 1
-        ? 'The subscription will end at its current period boundary.'
-        : `${subscriptions.length} direct subscriptions will end at their current period boundaries.`,
-    cancelled_services: subscriptions.map((subscription) => ({
-      service_id: subscription.serviceId,
-      product: subscription.service.identifier,
-      name: subscription.service.name,
-      display_name: subscription.service.name,
-      status: 'cancels_at_period_end',
-      effective_at: subscription.currentPeriodEnd?.toISOString() ?? null,
-    })),
-    indirect_services: indirectProducts.sort().map((product) => ({
-      product,
-      display_name: product,
-      impact: 'No separate subscription was cancelled.',
+      result.cancelled_services.length === 1
+        ? copy.oneSubscriptionEnds
+        : billingPluralCopy(copy.manySubscriptionsEnd, result.cancelled_services.length, locale),
+    indirect_services: result.indirect_services.map((service) => ({
+      ...service,
+      impact: copy.noSeparateSubscriptionCanceled,
     })),
   };
 }
@@ -323,6 +346,7 @@ export async function confirmBillingCancellation(
     actorToken: string;
     credential: VerifiedBillingAppKey;
     endpoint: BillingActorEndpoint;
+    locale?: BillingCustomerLocale;
     token: string;
     idempotencyKey: string;
     selection: BillingCancellationSelection | null;
@@ -392,7 +416,9 @@ export async function confirmBillingCancellation(
     prisma,
     deps?.loadState ?? loadBillingCancellationState,
   );
-  if ('completed' in claimed) return claimed.completed;
+  if ('completed' in claimed) {
+    return localizeCancellationConfirmation(claimed.completed, params.locale);
+  }
 
   const configured = deps?.stripe ? undefined : requireStripeBillingEnabled();
   const stripe = deps?.stripe ?? configured?.client;
@@ -409,7 +435,7 @@ export async function confirmBillingCancellation(
     account,
     syncSubscription: deps?.syncSubscription ?? syncStripeSubscriptionProjection,
   });
-  const result = confirmationResult(cancelled, claimed.indirectProducts);
+  const result = confirmationResult(cancelled, claimed.indirectProducts, params.locale);
   return prisma.$transaction(async (tx) => {
     const updated = await tx.billingCancellationIntent.updateMany({
       where: {
@@ -433,7 +459,7 @@ export async function confirmBillingCancellation(
         completed.requestDigest === requestDigest(params.selection) &&
         completed.result !== null
       ) {
-        return parseStoredResult(completed.result);
+        return localizeCancellationConfirmation(parseStoredResult(completed.result), params.locale);
       }
       throw new AppError('BAD_REQUEST', 409, 'BILLING_CANCELLATION_STATE_CHANGED');
     }

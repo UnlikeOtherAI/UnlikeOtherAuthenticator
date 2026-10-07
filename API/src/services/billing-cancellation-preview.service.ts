@@ -12,6 +12,8 @@ import { loadBillingCancellationState } from './billing-cancellation-state.servi
 import { getCanonicalBillingStatement } from './billing-statement.service.js';
 import type { BillingSubscriptionRequest } from './billing-stripe-subscription.service.js';
 import type { BillingActorEndpoint } from './billing-actor-audience.service.js';
+import type { BillingCustomerLocale } from './billing-copy-locale.js';
+import { billingSubscriptionCopy, billingSubscriptionText } from './billing-subscription-copy.catalog.js';
 
 export const BILLING_CANCELLATION_SCHEMA_VERSION = BILLING_CONSUMER_ACTION_SCHEMA_VERSION;
 export const BILLING_CANCELLATION_PREVIEW_TTL_MS = 5 * 60 * 1000;
@@ -30,6 +32,7 @@ export async function createBillingCancellationPreview(
     actorToken: string;
     credential: VerifiedBillingAppKey;
     endpoint: BillingActorEndpoint;
+    locale?: BillingCustomerLocale;
   },
   deps?: {
     prisma?: PrismaClient;
@@ -90,6 +93,7 @@ export async function createBillingCancellationPreview(
   const idempotencyKey = opaqueValue('uoa_confirm');
   const expiresAt = new Date(now.getTime() + BILLING_CANCELLATION_PREVIEW_TTL_MS);
   const indirect = statement.services.filter((service) => service.access === 'indirect');
+  const copy = billingSubscriptionCopy(params.locale);
 
   await prisma.billingCancellationIntent.create({
     data: {
@@ -112,25 +116,25 @@ export async function createBillingCancellationPreview(
     schema_version: BILLING_CANCELLATION_SCHEMA_VERSION,
     preview_token: previewToken,
     expires_at: expiresAt.toISOString(),
-    title: `Cancel ${params.credential.service.name}?`,
+    title: billingSubscriptionText(copy.previewTitle, { name: params.credential.service.name }),
     message: choiceRequired
-      ? 'Choose whether to cancel only this product or every related product your team accesses directly.'
+      ? copy.chooseCancellation
       : indirect.length
-        ? 'Only this direct subscription will be cancelled. Indirectly used services have no separate subscription to cancel.'
-        : 'This subscription will be scheduled to end at its current period boundary.',
+        ? `${copy.thisSubscriptionEnds} ${copy.noSeparateSubscription}`
+        : copy.thisSubscriptionEnds,
     choice_required: choiceRequired,
     choices: choiceRequired
       ? [
           {
             id: 'current_service',
-            label: `Cancel ${params.credential.service.name} only`,
-            description: 'Keep the team’s other direct product subscriptions active.',
+            label: billingSubscriptionText(copy.currentOnlyLabel, { name: params.credential.service.name }),
+            description: copy.keepOtherProducts,
             service_ids: [current.serviceId],
           },
           {
             id: 'current_and_related_direct_services',
-            label: 'Cancel all related direct subscriptions',
-            description: `Also cancel ${related.map((item) => item.service.name).join(', ')}.`,
+            label: copy.cancelRelatedLabel,
+            description: billingSubscriptionText(copy.alsoCancelProducts, { products: related.map((item) => item.service.name).join(', ') }),
             service_ids: directSubscriptions.map((item) => item.serviceId),
           },
         ]
@@ -150,12 +154,12 @@ export async function createBillingCancellationPreview(
       product: service.product,
       name: service.name,
       display_name: service.display_name,
-      impact: 'No separate subscription will be cancelled.',
+      impact: copy.noSeparateSubscription,
     })),
     confirm_action: {
       method: 'POST',
       path: '/billing/v1/cancellation/confirm',
-      label: 'Confirm cancellation',
+      label: copy.confirmCancellation,
       idempotency_key: idempotencyKey,
       selection_required: choiceRequired,
       default_selection: choiceRequired ? null : 'current_service',

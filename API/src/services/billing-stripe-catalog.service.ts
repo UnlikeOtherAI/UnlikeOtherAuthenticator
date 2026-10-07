@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@prisma/client';
+import { BillingMonthlyChargeBasis, type PrismaClient } from '@prisma/client';
 import { createHash } from 'node:crypto';
 import Stripe from 'stripe';
 
@@ -78,7 +78,7 @@ export async function ensureStripeCatalog(
   if (!catalog.stripeProductId) {
     const product = await params.stripe.products.create(
       {
-        name: `${params.service.name} usage`,
+        name: `${params.service.name} subscription and usage`,
         metadata: {
           uoa_service_id: params.service.id,
           uoa_product: params.service.identifier,
@@ -104,6 +104,14 @@ export async function ensureStripeCatalog(
       uoa_stripe_account_id: params.account.stripeAccountId,
       uoa_stripe_mode: params.account.livemode ? 'live' : 'test',
     });
+    const customerName = `${params.service.name} subscription and usage`;
+    if (product.name !== customerName) {
+      const renamed = await params.stripe.products.update(product.id, { name: customerName });
+      assertStripeObjectLivemode(renamed, params.account.livemode);
+      if (renamed.id !== product.id) {
+        throw new AppError('INTERNAL', 502, 'STRIPE_CATALOG_BINDING_INVALID');
+      }
+    }
   }
 
   if (!catalog.stripeMeterId) {
@@ -200,6 +208,7 @@ export async function ensureStripeTariffPrice(
       key: string;
       version: number;
       monthlyAmountMinor: bigint;
+      monthlyChargeBasis?: BillingMonthlyChargeBasis;
     };
     catalog: Awaited<ReturnType<typeof ensureStripeCatalog>>;
     account: StripeAccountContext;
@@ -208,6 +217,7 @@ export async function ensureStripeTariffPrice(
   deps?: { prisma?: CatalogPrisma },
 ) {
   const prisma = client(deps);
+  const licensedMonthly = params.tariff.monthlyChargeBasis !== BillingMonthlyChargeBasis.PER_SEAT;
   let mapping = await prisma.billingStripeTariffPrice.upsert({
     where: {
       accountId_tariffId: {
@@ -227,12 +237,13 @@ export async function ensureStripeTariffPrice(
     mapping.catalogId !== params.catalog.id ||
     mapping.accountId !== params.account.id ||
     mapping.monthlyAmountMinor !== params.tariff.monthlyAmountMinor ||
-    (params.tariff.monthlyAmountMinor === 0n && mapping.stripeMonthlyPriceId !== null)
+    ((!licensedMonthly || params.tariff.monthlyAmountMinor === 0n) &&
+      mapping.stripeMonthlyPriceId !== null)
   ) {
     throw new AppError('INTERNAL', 500, 'STRIPE_TARIFF_PRICE_MISMATCH');
   }
 
-  if (params.tariff.monthlyAmountMinor > 0n && !mapping.stripeMonthlyPriceId) {
+  if (licensedMonthly && params.tariff.monthlyAmountMinor > 0n && !mapping.stripeMonthlyPriceId) {
     if (!params.catalog.stripeProductId) {
       throw new AppError('INTERNAL', 500, 'STRIPE_CATALOG_INCOMPLETE');
     }
@@ -242,7 +253,7 @@ export async function ensureStripeTariffPrice(
         currency: params.catalog.currency.toLowerCase(),
         unit_amount_decimal: Stripe.Decimal.from(params.tariff.monthlyAmountMinor),
         recurring: { interval: 'month', usage_type: 'licensed' },
-        nickname: `${params.tariff.key} v${params.tariff.version} monthly`,
+        nickname: 'Monthly subscription',
         metadata: {
           uoa_tariff_id: params.tariff.id,
           uoa_tariff_key: params.tariff.key,
@@ -279,6 +290,15 @@ export async function ensureStripeTariffPrice(
       uoa_stripe_account_id: params.account.stripeAccountId,
       uoa_stripe_mode: params.account.livemode ? 'live' : 'test',
     });
+    if (price.nickname !== 'Monthly subscription') {
+      const renamed = await params.stripe.prices.update(price.id, {
+        nickname: 'Monthly subscription',
+      });
+      assertStripeObjectLivemode(renamed, params.account.livemode);
+      if (renamed.id !== price.id) {
+        throw new AppError('INTERNAL', 502, 'STRIPE_TARIFF_PRICE_BINDING_INVALID');
+      }
+    }
   }
   return mapping;
 }

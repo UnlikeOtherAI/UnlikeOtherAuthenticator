@@ -83,8 +83,9 @@ describe('billing actor endpoint registry', () => {
     try {
       for (const endpoint of BILLING_ACTOR_ENDPOINTS) {
         expect(
-          app.hasRoute({ method: 'POST', url: endpoint }),
-          `${endpoint} is declared as an actor endpoint but no POST route registers it`,
+          ['POST', 'GET', 'PUT', 'DELETE'].some((method) =>
+            app.hasRoute({ method: method as 'POST', url: endpoint })),
+          `${endpoint} is declared as an actor endpoint but no route registers it`,
         ).toBe(true);
       }
     } finally {
@@ -97,6 +98,7 @@ describe('billing actor endpoint registry', () => {
     const files = [
       'cancellation.ts',
       'credit-funding-actions.ts',
+      'credit-funding-request.ts',
       'credits.ts',
       'customer-statement.ts',
       'effective-tariff.ts',

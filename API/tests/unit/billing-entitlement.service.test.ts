@@ -2,13 +2,20 @@ import {
   BillingAssignmentScope,
   BillingAppKeyPurpose,
   BillingCollectionMode,
+  BillingMonthlyChargeBasis,
+  BillingSeatChargeTiming,
+  BillingSeatPolicy,
+  BillingUsagePaymentMode,
   BillingTariffMode,
+  BillingTariffSource,
   MembershipStatus,
   type PrismaClient,
 } from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { getEffectiveTariffSnapshot } from '../../src/services/billing-entitlement.service.js';
+import {
+  customerBillingTariff, getEffectiveTariffSnapshot,
+} from '../../src/services/billing-entitlement.service.js';
 import type { VerifiedBillingAppKey } from '../../src/services/billing-app-key.service.js';
 
 const credential: VerifiedBillingAppKey = {
@@ -37,6 +44,10 @@ const defaultTariff = {
   collectionMode: BillingCollectionMode.STRIPE,
   markupBps: 2_000,
   monthlyAmountMinor: 0n,
+  monthlyChargeBasis: BillingMonthlyChargeBasis.FLAT,
+  seatPolicy: null,
+  seatChargeTiming: null,
+  usagePaymentMode: BillingUsagePaymentMode.PAY_AS_YOU_GO,
   currency: 'USD',
   isDefault: true,
   createdByUserId: null,
@@ -55,6 +66,7 @@ function fakePrisma(params: {
   const prisma = {
     billingService: {
       findFirst: vi.fn().mockResolvedValue(active ? { id: 'service_1' } : null),
+      findUnique: vi.fn().mockResolvedValue({ tariffHistoryFromMonth: '2026-01' }),
     },
     user: {
       findUnique: vi
@@ -76,6 +88,24 @@ function fakePrisma(params: {
     billingTariff: {
       findFirst: vi.fn().mockResolvedValue(params.fallback ?? defaultTariff),
     },
+    billingTariffTermEvent: {
+      findFirst: vi.fn().mockImplementation(async ({ where }: { where: { source: BillingTariffSource } }) => {
+        const assignment = where.source === BillingTariffSource.TEAM
+          ? params.teamAssignment
+          : where.source === BillingTariffSource.ORGANISATION
+            ? params.orgAssignment : null;
+        if (assignment) {
+          const row = assignment as { id: string; tariff: typeof defaultTariff };
+          return { tariffId: row.tariff.id, tariff: row.tariff, assignmentId: row.id };
+        }
+        if (where.source === BillingTariffSource.SERVICE_DEFAULT) {
+          const tariff = params.fallback ?? defaultTariff;
+          return tariff ? { tariffId: tariff.id, tariff, assignmentId: null } : null;
+        }
+        return null;
+      }),
+    },
+    billingOrganisationContractVersion: { findMany: vi.fn().mockResolvedValue([]) },
     billingServiceAccess: {
       upsert: vi.fn().mockResolvedValue({}),
     },
@@ -93,7 +123,7 @@ describe('effective billing tariff resolution', () => {
     signSnapshot.mockClear();
   });
 
-  it('prefers a team assignment and exposes price markup without inflating usage', async () => {
+  it('prefers a team assignment without exposing private rating terms', async () => {
     const teamTariff = {
       ...defaultTariff,
       id: 'tariff_team',
@@ -103,6 +133,10 @@ describe('effective billing tariff resolution', () => {
       collectionMode: BillingCollectionMode.NONE,
       markupBps: 4_000,
       monthlyAmountMinor: 2_000n,
+      monthlyChargeBasis: BillingMonthlyChargeBasis.PER_SEAT,
+      seatPolicy: BillingSeatPolicy.FIXED,
+      seatChargeTiming: BillingSeatChargeTiming.PRORATED,
+      usagePaymentMode: BillingUsagePaymentMode.PREPAID,
     };
     const prisma = fakePrisma({
       teamAssignment: {
@@ -137,13 +171,11 @@ describe('effective billing tariff resolution', () => {
       authorized_party: { app_key_id: 'key_1' },
       tariff: {
         id: 'tariff_team',
-        version: 3,
-        mode: 'custom',
         collection_mode: 'none',
-        markup_bps: 4_000,
-        markup_percent: '40.00',
-        usage_price_multiplier_bps: 14_000,
-        monthly_subscription: { amount_minor: '2000', currency: 'USD' },
+        monthly_subscription: { amount_minor: '2000', currency: 'USD',
+          charge_basis: 'per_seat', seat_policy: 'fixed', seat_timing: 'prorated',
+          amount_role: 'per_seat_unit' },
+        usage_payment_mode: 'prepaid',
         usage_billing_enabled: true,
         payment_collection_enabled: false,
         raw_usage_preserved: true,
@@ -152,6 +184,13 @@ describe('effective billing tariff resolution', () => {
     });
     expect(result.payload).not.toHaveProperty('tokens');
     expect(result.payload).not.toHaveProperty('usage');
+    expect(JSON.stringify(result.payload)).not.toMatch(/markup|multiplier|at_cost|provider_cost/i);
+    expect(customerBillingTariff(result.payload.tariff)).toMatchObject({
+      monthly_subscription: { amount_minor: '2000', amount_role: 'per_seat_unit' },
+      usage_payment_mode: 'prepaid',
+    });
+    expect(customerBillingTariff(result.payload.tariff)).not.toHaveProperty('id');
+    expect(customerBillingTariff(result.payload.tariff)).not.toHaveProperty('mode');
     expect(prisma.billingServiceAccess.upsert).not.toHaveBeenCalled();
   });
 
@@ -245,14 +284,12 @@ describe('effective billing tariff resolution', () => {
     {
       mode: BillingTariffMode.FREE,
       collectionMode: BillingCollectionMode.NONE,
-      usagePriceMultiplierBps: 0,
       usageBillingEnabled: false,
       paymentCollectionEnabled: false,
     },
     {
       mode: BillingTariffMode.AT_COST,
       collectionMode: BillingCollectionMode.NONE,
-      usagePriceMultiplierBps: 10_000,
       usageBillingEnabled: true,
       paymentCollectionEnabled: false,
     },
@@ -261,7 +298,6 @@ describe('effective billing tariff resolution', () => {
     async ({
       mode,
       collectionMode,
-      usagePriceMultiplierBps,
       usageBillingEnabled,
       paymentCollectionEnabled,
     }) => {
@@ -283,7 +319,6 @@ describe('effective billing tariff resolution', () => {
       );
 
       expect(result.payload.tariff).toMatchObject({
-        usage_price_multiplier_bps: usagePriceMultiplierBps,
         usage_billing_enabled: usageBillingEnabled,
         payment_collection_enabled: paymentCollectionEnabled,
         raw_usage_preserved: true,

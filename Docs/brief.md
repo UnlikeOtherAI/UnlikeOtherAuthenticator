@@ -2407,6 +2407,14 @@ holding database locks across external work.
 
 ## 2026-07 Billing Tariff Control Plane
 
+**2026-10 customer privacy amendment:** UOA alone computes price adjustments
+from private raw provider cost and immutable tariff terms. Customer billing
+responses and products show balances, credit usage, customer charges, raw usage,
+monthly subscription prices, and payer scope. They never show provider cost,
+markup, margin, multipliers, cost-basis modes, or derived billable units. This
+amendment supersedes the earlier customer billable-unit and cost-visibility
+language below while preserving the internal rating and evidence model.
+
 Tariffs and all commercial billing for UOA-backed products live in UOA. Ledger
 owns only immutable raw usage, provider cost, and attribution facts, while
 products consume a signed effective-tariff snapshot and display-ready billing
@@ -2448,6 +2456,14 @@ immutable tariff version declares `collection_mode = stripe | manual | none`.
 collecting no payment; specifically, `at_cost` + `none` + a zero monthly amount
 represents 100% provider-cost visibility with no charge. Free tariffs require
 `none`, zero markup, and zero monthly amount.
+
+An immutable plan also distinguishes a flat scope-level monthly subscription
+from a monthly per-seat charge, and prepaid usage from pay-as-you-go usage.
+The existing team/organisation assignment still determines the payer and credit
+pool. Historical tariffs retain their original flat, pay-as-you-go terms;
+newly configured plans explicitly default to prepaid usage. A prepaid plan
+requires reserved funding before paid provider dispatch and never rolls an
+unfunded token remainder into an automatic Stripe usage charge.
 
 The optional Stripe collection foundation is fail-closed behind an explicit
 process gate. It maps exact immutable tariff versions to calendar-month
@@ -2492,6 +2508,13 @@ administration, presentation rules, and Stripe collection boundaries are defined
 in [Billing Tariffs and Product Entitlements](./Requirements/billing-tariffs.md).
 That document is incorporated into this build brief by reference and is
 authoritative for the billing tariff control plane.
+
+Commercial tariff selection is resolved for the requested UTC month from
+append-only effective decisions. Administrator changes start next month, while
+unknown legacy intervals are held for reconciliation instead of being priced
+from mutable current pointers. UOA centrally defaults omitted standard markup
+to 30%; existing explicit terms, free, at-cost, and manual contract versions
+retain their agreed values.
 
 Organisation contract invoicing is the manual-collection extension of that
 control plane. A contract pins one organisation-wide usage markup, currency,
@@ -2610,9 +2633,10 @@ choice.
 UOA owns one exact-team credit balance shared across every connected product in
 the same Stripe account/mode. The fixed customer conversion is 1,000 credits =
 US$1.00 and the required product heading is `Remaining credits`. Customer credit
-quantities are always whole integers: UOA floors each cumulative service/user
-rated amount to complete credits and carries the sub-credit remainder internally
-until it crosses the next credit boundary. Individual
+quantities expose up to six decimal places in credits protocol 2.0.0. Prepaid
+dispatch settlement consumes exact microcredits with account-wide cumulative
+rounding; the older portfolio allocator carries its sub-credit remainder
+internally until it crosses the next complete-credit boundary. Individual
 products may advertise different fixed top-up offers, but every successful
 payment funds the shared account. Manual and bounded automatic top-up are
 available to all services only through UOA-authored frozen actions; products
@@ -2631,7 +2655,13 @@ below their UOA consent threshold, rechecks current policy/offer/catalog and the
 UTC monthly cap under a database lock, and commits one attributed attempt before
 any off-session payment. A second per-account PostgreSQL lock serializes Stripe
 dispatch across replicas. Lost responses reuse that attempt's deterministic
-Stripe idempotency key; only signed webhooks terminalize it or add credits.
+Stripe idempotency key. Signed webhooks or a bounded, account-scoped Stripe
+Events API scan can apply its original lifecycle event through the same
+validation, deduplication, and atomic funding path. An unbound attempt matches
+only an original Event carrying its exact attempt metadata, then validates the
+retrieved PaymentIntent fully. Recovery never creates a replacement PaymentIntent
+and does not depend on current auto-top-up consent; missing, expired, incomplete,
+or invalid event history leaves the attempt unresolved.
 
 Recurring add-ons are UOA subscriptions scoped to an organisation, team, or
 subscribing user. DeepWater privacy is a versioned US$50/month offer.
@@ -2696,6 +2726,31 @@ return URL from UOA state. UOA persists the immutable local intent before
 calling Stripe, uses account/mode-scoped idempotency, recovers the same open
 Checkout across a fresh exact-scope actor, and applies webhooks only after
 current Stripe metadata matches the stored customer/catalog/intent binding.
+When one top-up payment is pending, its read action can continue only the same
+open payment for the unchanged offer, customer, product app key, service,
+amount, credit quantity, and return URLs. Other offers stay blocked until that
+payment is resolved. A Checkout completion snapshot does not add credits;
+verified PaymentIntent webhook evidence does.
+An active account with a saved card can use the existing recovery action to
+replace that card only when no payment attempt is unresolved. It reuses the
+selected option's Setup Checkout; the old card and immutable consent stay in
+force until the exact verified SetupIntent succeeds, while a canceled or
+expired replacement leaves them untouched. Any automatic attempt created
+after the Setup Checkout opens remains bound to its original consent revision
+and may dispatch only once with its existing idempotency key. Payment-card
+expiry is projected from a fresh, exact customer-bound Stripe card using its
+UTC valid-through month; a failed or mismatched read never means expired.
+Managers may turn off future automatic charges while an older attempt is
+unresolved. This clears current consent and card pointers but leaves the old
+attempt tied to its immutable consent; only its exact late payment evidence can
+settle it, once, and it cannot restore automatic top-up. A timed-out request
+whose payment ID was not saved is not retried after disable. The projection
+shows automatic top-up as paused when the exact monthly remainder cannot cover
+one full saved refill, and shows the reset date from the UTC period end.
+The manager may revoke the shared account through any currently authorized
+lifecycle app key for that team, including another connected service or a
+rotated key; the audit records the acting app while the old attempt remains
+bound to its original consent app and service.
 Missing policy, catalog, payment, consent, or Stripe evidence fails closed and
 keeps the corresponding projected action disabled.
 
@@ -2936,6 +2991,11 @@ service separation does not create browser-origin isolation between subfolders.
 
 Products replace transferable session snapshots with exactly `{url,token}`. The server issues a random 256-bit code valid for 30 minutes. Renewal invalidates the previous code; redemption atomically consumes it and creates an independent refresh family. Source expiry, logout, credential revocation and current team/product/2FA/signature policy are rechecked. The verified config URL and domain bind the environment. Credentials never travel in URLs. Products own issue and login entry surfaces.
 
+Nessie's supported signed `theme` config URL variants are presentation-only and
+identify the same product environment. UOA accepts its twelve named themes,
+including `sandstone`, while rejecting duplicate or unknown theme values;
+all other config URL parameters retain their environment identity.
+
 `GET /domain/users?domain=...&user_id=...` supports exact UOA subject lookup for relying products that persist only subject references. The current domain role remains required; this never searches outside the authenticated domain.
 
 Normal independent-session logout uses `POST /auth/revoke` with `{refresh_token,scope:"family"}`. This preserves other families and does not increment the global credential epoch. Omission keeps existing global revocation semantics. A product clears its local session only after upstream confirms revocation; failures retain it for retry.
@@ -2967,8 +3027,109 @@ concurrent submissions, and refreshes admin membership views after success.
 
 The deletion executor commits bounded leased scope/account/audit stages, with retryable progress instead of a long global authentication lock. An already-DELETED child retained as evidence is included in organisation preview but never revived or rewritten. Operational product access grants, unsigned signing continuations, provider credentials, creator attribution and normalized allowlists are erased; restricted signing/financial snapshots retain their existing immutable protections and appear in the evidence inventory. Active-job identifiers needed for recovery remain restricted until completion, when mutable erasure receipts use a one-way target digest.
 
-Access-status proof is reachable from the existing Auth login screen for signed websites and registered native clients. It returns workplace labels and authorized reasons only after mailbox proof and enrolled TOTP. Server-owned product/team mapping determines cross-product membership visibility; unmapped products retain same-origin isolation. Registered native app revision and callback are rechecked under the product policy lock at verification.
+Access-status proof is disabled by default. Only the auth-server diagnostic opt-in `AUTH_ACCESS_STATUS_ENABLED=true` exposes the existing Auth login entry and proof endpoints for signed websites and registered native clients. It returns workplace labels and authorized reasons only after mailbox proof and enrolled TOTP. Server-owned product/team mapping determines cross-product membership visibility; unmapped products retain same-origin isolation. Registered native app revision and callback are rechecked under the product policy lock at verification.
 
 ## Coder to Selkie session broker (2026-10-03)
 
 A dedicated `session:broker` confidential capability replaces caller-profile login assertions. It is limited to the exact approved Coder source and Selkie API resource, current epoch/team and an enabled operator mapping. Selkie validates through UOA on each request and caps local handles at the five-minute capability expiry. No refresh-family or debug-grant authority is conveyed. See [Auth/session-broker.md](Auth/session-broker.md).
+
+## Optional access-status diagnostics (2026-10-03)
+
+“Check access status” is optional debugging, disabled by default. Only the auth
+server's `AUTH_ACCESS_STATUS_ENABLED=true` environment setting enables the entry
+and the website/native `lifecycle-status/start` and `lifecycle-status/verify`
+endpoints. Unset or false hides the entry and returns 404 on all four endpoints
+before config fetch, native-client lookup, mail, challenge or proof work. This
+also refuses redemption of a proof issued before the setting was disabled.
+`DEBUG_ENABLED`, signed product configuration, query parameters and browser
+storage cannot enable it. The separate server-owned runtime bootstrap carries
+the same boolean to SSR and hydration. Enablement retains mailbox proof, enrolled
+TOTP, product membership/privacy filters, exact config binding and native app
+revision checks; it never grants a login session.
+
+## Billing cycles, configurable seats and prepaid pools (2026-10-04)
+
+PAYG admission decisions remain append-only after provider completion. Their
+settled state and receipt come from the existing immutable paid-usage liability;
+a no-egress cancellation records a separate append-only dispatch release receipt.
+Finalization and budget-hold termination commit together under the dispatch lock.
+Exact terminal receipt replay is idempotent; conflicting receipts, settlement
+after release, release after settlement, and admission after either terminal
+outcome are refused. Pre-cutover PAYG dispatches without frozen rating evidence
+still require explicit historical reconciliation.
+
+Customer billing must keep markup and provider cost private while operators
+configure an exact percentage. Monthly subscriptions may charge once per team
+or organisation, or per seat. Per-seat plans select automatic membership-based
+or fixed purchased seats, and full-month or prorated charging. Automatic
+proration follows actual join/leave intervals; fixed capacity must constrain
+every invitation and membership grant atomically. Usage may independently draw
+from a prepaid team/organisation credit pool, reserved before paid dispatch.
+Nessie, Deepwater and Deep Test require reachable monthly billing-cycle pages
+with authorized invoice and measured-usage/seat breakdown downloads. Final
+documents retain immutable amounts and explicit correction lineage. The ordered
+implementation and proof requirements are in
+[the billing delivery plan](plans/2026-10-04-billing-cycles-seats-and-prepaid.md).
+
+When a trusted provider receipt exceeds its pre-dispatch maximum, UOA keeps the
+financial hold until a current platform superuser reviews the exact private
+Ledger evidence. An explicit operator decision may collect only the original
+authorized credit hold and waive the excess; gross frozen-rated usage still
+counts against credit budgets. Unknown actual cost never becomes zero. The
+private route, operator doorway and immutable financial evidence are specified
+in [paid usage exception reconciliation](plans/2026-10-04-paid-usage-exception-reconciliation.md).
+
+### Paid recurring add-on renewals (2026-10-04)
+
+A verified `invoice.paid` with `billing_reason=subscription_cycle` advances the
+existing recurring add-on subscription after its initial paid activation. It
+uses the same exact amount, currency, customer, item and Price binding as the
+initial invoice, while retaining the initial invoice and activation proof. A
+renewal prepared before a concurrent cancellation cannot revive the terminated
+subscription; the apply write checks the current row inside the transaction.
+See [billing tariffs](Requirements/billing-tariffs.md).
+
+
+## 2026-10-06 First-party admin debug login
+
+The Admin login screen now waits for the operator to choose Continue with Google
+or the bottom-right Debug login button, preserving a reachable signed-out
+importer. The authenticated shell uses that same button to create, copy and renew
+a debug code. Clipboard JSON is exactly `{url,token}`; the importer also accepts
+a bare code and refuses JSON naming another product or environment.
+
+Admin debug routes are separate from confidential `/auth/debug-login/*`: browser
+code never sees a domain secret. Issue/redeem/logout require the canonical
+first-party config URL, exact service Origin and JSON POST before config lookup.
+Issuance needs a current admin bearer plus its exact bearer-bound HttpOnly cookie.
+Both issuance and redemption check ACTIVE canonical identity, credential epoch,
+current admin-domain SUPERUSER and source-family validity under the existing
+policy and session locks. Codes are cryptographically random, stored hashed,
+single use, valid at most 30 minutes and additionally bounded by source expiry.
+Renew invalidates the previous code; source logout/revocation blocks unused codes.
+
+The normal OAuth exchange retains its existing generated refresh family only in a
+private cookie, scoped to `/internal/admin`, HttpOnly, SameSite=Strict and Secure
+on HTTPS. Its name hashes the exact admin bearer; random admin JWT `jti` values
+keep simultaneous same-person sessions distinct. The cookie and family expire
+no later than the short-lived access session. It is solely a source-ownership
+handle: no admin refresh endpoint is added and no refresh credential is returned
+in JSON or available to JavaScript. Older sessions must sign in again to issue.
+Redemption creates an independent recipient family and a new bearer/cookie.
+`POST /internal/admin/logout` revokes only the exact presented bearer's family;
+other source/recipient sessions remain independent. UI logout awaits that write
+and retains the session on transport/server failure. Invalid/expired authority
+can clear local storage; failed sign-in uses local cleanup rather than logout.
+The access-status diagnostic flag remains disabled by default and unrelated.
+
+## 2026-10-07 Job-compute grant identifier contract
+
+Job-compute grants use UUID identifiers consistently from persisted issuance
+through Ledger delivery, Water renewal and the signed compute claim. The former
+CUID persistence default produced identifiers that the public routes and both
+consumers rejected. The corrective migration replaces only those unusable ids;
+the issue key, identity tuple, secret digest, original expiry and revocation are
+preserved, so Ledger recovers the same authorization through its existing
+issue-key recovery path. Existing UUID identifiers remain unchanged. A database
+constraint rejects future non-UUID ids, and a PostgreSQL regression exercises
+issuance and renewal through the actual HTTP routes.

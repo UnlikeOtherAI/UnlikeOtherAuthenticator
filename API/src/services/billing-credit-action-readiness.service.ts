@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import { BillingCreditAutoTopUpAttemptStatus, BillingCreditAutoTopUpState } from '@prisma/client';
 import type Stripe from 'stripe';
 
@@ -14,7 +16,11 @@ import { stripeExternalId } from './billing-stripe-webhook-utils.service.js';
 export type BillingCreditActionReadiness = {
   executableCatalogIds: ReadonlySet<string>;
   paymentMethodReady: boolean;
+  paymentMethodVerified?: boolean;
+  paymentMethodExpired?: boolean;
+  paymentMethodSummary?: { brand: string | null; last4: string | null } | null;
   topUpCheckoutReady: boolean;
+  resumableTopUpOfferId: string | null;
   setupCheckoutReady: boolean;
   disableReady: boolean;
   recoverReady: boolean;
@@ -24,7 +30,11 @@ export function unavailableBillingCreditActions(): BillingCreditActionReadiness 
   return {
     executableCatalogIds: new Set(),
     paymentMethodReady: false,
+    paymentMethodVerified: false,
+    paymentMethodExpired: false,
+    paymentMethodSummary: null,
     topUpCheckoutReady: false,
+    resumableTopUpOfferId: null,
     setupCheckoutReady: false,
     disableReady: false,
     recoverReady: false,
@@ -51,6 +61,86 @@ function catalogForOffer(
   );
 }
 
+function digest(value: string): string {
+  return createHash('sha256').update(value).digest('hex');
+}
+
+async function pendingTopUpState(
+  stripe: NonNullable<CreditCollectionContext['stripe']>,
+  collection: CreditCollectionContext,
+  credential: VerifiedBillingAppKey,
+  data: BillingCreditProjectionData,
+): Promise<{ resumableTopUpOfferId: string | null; expired: boolean }> {
+  const [checkout] = data.unresolvedTopUpCheckouts;
+  if (
+    data.unresolvedTopUpCheckouts.length !== 1 ||
+    !checkout ||
+    checkout.status !== 'OPEN' ||
+    !checkout.stripeCheckoutSessionId ||
+    !data.creditAccount.customer.stripeCustomerId
+  ) {
+    return { resumableTopUpOfferId: null, expired: false };
+  }
+  const offer = data.policy?.topUpOffers.find((candidate) => candidate.id === checkout.offerId);
+  const catalog = offer && catalogForOffer(data, offer);
+  let returns;
+  try {
+    returns = pinnedBillingReturnUrls(credential.checkoutReturnOrigins);
+  } catch {
+    return { resumableTopUpOfferId: null, expired: false };
+  }
+  if (
+    !offer ||
+    !catalog ||
+    checkout.accountId !== collection.account.id ||
+    checkout.creditAccountId !== data.creditAccount.id ||
+    checkout.customerId !== data.creditAccount.customerId ||
+    checkout.catalogId !== catalog.id ||
+    checkout.serviceId !== credential.service.id ||
+    checkout.appKeyId !== credential.id ||
+    checkout.paymentAmountMinor !== offer.paymentAmountMinor ||
+    checkout.creditsReceivedMicrocredits !== offer.creditsReceivedMicrocredits ||
+    checkout.currency !== 'USD' ||
+    checkout.successUrlDigest !== digest(returns.checkoutSuccess) ||
+    checkout.cancelUrlDigest !== digest(returns.checkoutCancel)
+  ) {
+    return { resumableTopUpOfferId: null, expired: false };
+  }
+  try {
+    const session = await stripe.checkout.sessions.retrieve(checkout.stripeCheckoutSessionId);
+    assertStripeObjectLivemode(session, collection.account.livemode);
+    assertCreditFundingMetadata(
+      session.metadata,
+      {
+        localType: 'top_up',
+        localId: checkout.id,
+        serviceId: checkout.serviceId,
+        appKeyId: checkout.appKeyId,
+        creditAccountId: checkout.creditAccountId,
+      },
+      'STRIPE_CREDIT_CHECKOUT_BINDING_INVALID',
+    );
+    if (
+      session.client_reference_id !== checkout.id ||
+      stripeExternalId(session.customer) !== data.creditAccount.customer.stripeCustomerId ||
+      session.mode !== 'payment' ||
+      session.metadata?.uoa_credit_top_up_checkout_id !== checkout.id
+    ) {
+      return { resumableTopUpOfferId: null, expired: false };
+    }
+    if (session.status === 'expired') {
+      return { resumableTopUpOfferId: null, expired: true };
+    }
+    return session.status === 'open' &&
+      session.expires_at * 1000 > Date.now() &&
+      session.url?.startsWith('https://')
+      ? { resumableTopUpOfferId: offer.id, expired: false }
+      : { resumableTopUpOfferId: null, expired: false };
+  } catch {
+    return { resumableTopUpOfferId: null, expired: false };
+  }
+}
+
 async function executableCatalogs(
   stripe: NonNullable<CreditCollectionContext['stripe']>,
   collection: CreditCollectionContext,
@@ -75,25 +165,59 @@ async function executableCatalogs(
   return catalogs;
 }
 
-async function currentPaymentMethodReady(
+function expiredInUtcMonth(card: Stripe.PaymentMethod.Card, now: Date): boolean {
+  const month = card.exp_month;
+  const year = card.exp_year;
+  if (!Number.isInteger(month) || month < 1 || month > 12 || !Number.isInteger(year)) {
+    return false;
+  }
+  const currentYear = now.getUTCFullYear();
+  const currentMonth = now.getUTCMonth() + 1;
+  return year < currentYear || (year === currentYear && month < currentMonth);
+}
+
+async function currentPaymentMethodEvidence(
   stripe: NonNullable<CreditCollectionContext['stripe']>,
   collection: CreditCollectionContext,
   data: BillingCreditProjectionData,
-): Promise<boolean> {
+  now: Date,
+): Promise<{
+  ready: boolean;
+  verified: boolean;
+  expired: boolean;
+  summary: { brand: string | null; last4: string | null } | null;
+}> {
   const methodId = data.creditAccount.stripePaymentMethodId;
   const customerId = data.creditAccount.customer.stripeCustomerId;
-  if (!methodId || !customerId) return false;
+  if (!methodId || !customerId) {
+    return { ready: false, verified: false, expired: false, summary: null };
+  }
   try {
     const method = await stripe.paymentMethods.retrieve(methodId);
     assertStripeObjectLivemode(method, collection.account.livemode);
-    return (
+    const verified =
       method.id === methodId &&
       method.type === 'card' &&
       Boolean(method.card) &&
-      stripeExternalId(method.customer) === customerId
-    );
+      stripeExternalId(method.customer) === customerId;
+    if (!verified || !method.card) {
+      return { ready: false, verified: false, expired: false, summary: null };
+    }
+    const expired = expiredInUtcMonth(method.card, now);
+    const actionRequired =
+      data.creditAccount.autoTopUpState === BillingCreditAutoTopUpState.REQUIRES_ACTION ||
+      data.creditAccount.autoTopUpState === BillingCreditAutoTopUpState.NEEDS_REVIEW;
+    return {
+      ready: !expired && !actionRequired,
+      verified: true,
+      expired,
+      summary: {
+        brand: typeof method.card.brand === 'string' ? method.card.brand : null,
+        last4: typeof method.card.last4 === 'string' ? method.card.last4 : null,
+      },
+    };
   } catch {
-    return false;
+    return { ready: false, verified: false, expired: false, summary: null };
   }
 }
 
@@ -103,12 +227,19 @@ async function currentRecoveryReady(
   data: BillingCreditProjectionData,
   selectedCatalogReady: boolean,
   returnUrlsReady: boolean,
+  paymentMethodVerified: boolean,
 ): Promise<boolean> {
   const state = data.creditAccount.autoTopUpState;
+  const activeReplacement =
+    state === BillingCreditAutoTopUpState.ACTIVE &&
+    Boolean(data.creditAccount.stripePaymentMethodId) &&
+    data.unresolvedAttempts.length === 0 &&
+    paymentMethodVerified;
   if (
     state !== BillingCreditAutoTopUpState.REQUIRES_ACTION &&
     state !== BillingCreditAutoTopUpState.NEEDS_REVIEW &&
-    state !== BillingCreditAutoTopUpState.PAUSED
+    state !== BillingCreditAutoTopUpState.PAUSED &&
+    !activeReplacement
   )
     return false;
   const attempt = data.unresolvedAttempts.at(0);
@@ -155,6 +286,7 @@ export async function resolveBillingCreditActionReadiness(params: {
   collection: CreditCollectionContext;
   credential: VerifiedBillingAppKey;
   data: BillingCreditProjectionData;
+  now?: Date;
 }): Promise<BillingCreditActionReadiness> {
   const { collection, credential, data } = params;
   const stripe = collection.stripe;
@@ -170,34 +302,41 @@ export async function resolveBillingCreditActionReadiness(params: {
   const catalogs = data.policy
     ? await executableCatalogs(stripe, collection, data)
     : new Set<string>();
-  const paymentMethodReady = await currentPaymentMethodReady(stripe, collection, data);
+  const pendingTopUp = data.unresolvedTopUpCheckouts.length
+    ? await pendingTopUpState(stripe, collection, credential, data)
+    : { resumableTopUpOfferId: null, expired: false };
+  const paymentMethod = await currentPaymentMethodEvidence(
+    stripe,
+    collection,
+    data,
+    params.now ?? new Date(),
+  );
   const selected = data.policy?.autoTopUpOptions.find(
     (option) => option.id === data.creditAccount.autoTopUpOptionId,
   );
   const selectedCatalog = selected ? catalogForOffer(data, selected.refillOffer) : undefined;
   const selectedCatalogReady = Boolean(selectedCatalog && catalogs.has(selectedCatalog.id));
-  const unresolvedPayment = data.unresolvedAttempts.some(
-    (attempt) =>
-      attempt.status === BillingCreditAutoTopUpAttemptStatus.PENDING ||
-      attempt.status === BillingCreditAutoTopUpAttemptStatus.PROCESSING ||
-      attempt.status === BillingCreditAutoTopUpAttemptStatus.REQUIRES_ACTION ||
-      attempt.status === BillingCreditAutoTopUpAttemptStatus.NEEDS_REVIEW,
-  );
   return {
     executableCatalogIds: catalogs,
-    paymentMethodReady,
-    topUpCheckoutReady: returnUrlsReady && data.unresolvedTopUpCheckouts.length === 0,
+    paymentMethodReady: paymentMethod.ready,
+    paymentMethodVerified: paymentMethod.verified,
+    paymentMethodExpired: paymentMethod.expired,
+    paymentMethodSummary: paymentMethod.summary,
+    topUpCheckoutReady:
+      returnUrlsReady && (data.unresolvedTopUpCheckouts.length === 0 || pendingTopUp.expired),
+    resumableTopUpOfferId: pendingTopUp.resumableTopUpOfferId,
     setupCheckoutReady:
       returnUrlsReady &&
       data.unresolvedSetupCheckouts.length === 0 &&
       data.unresolvedTopUpCheckouts.length === 0,
-    disableReady: !unresolvedPayment,
+    disableReady: true,
     recoverReady: await currentRecoveryReady(
       stripe,
       collection,
       data,
       selectedCatalogReady,
       returnUrlsReady,
+      paymentMethod.verified,
     ),
   };
 }

@@ -11,6 +11,7 @@ import {
 function metering(): NormalizedMeteringUsage {
   return {
     schemaVersion: 1,
+    billingCompleteness: { state: 'complete', unresolvedPaidAttempts: '0' },
     product: 'deepwater',
     groupBy: 'service',
     scope: {
@@ -35,6 +36,7 @@ function metering(): NormalizedMeteringUsage {
         selectedProviderCost: '1.111111',
         currency: 'USD',
         costProvenance: 'provider_invoice',
+        billingDisposition: 'paid',
         billingProduct: 'deepwater',
         callerProduct: 'nessie',
         originProduct: 'nessie',
@@ -52,6 +54,7 @@ function metering(): NormalizedMeteringUsage {
         selectedProviderCost: '0.222222',
         currency: 'USD',
         costProvenance: 'provider_pricebook',
+        billingDisposition: 'paid',
         billingProduct: 'deepwater',
         callerProduct: null,
         originProduct: 'deepwater',
@@ -152,7 +155,7 @@ describe('shared billing rating core', () => {
 
   it('preserves free and at-cost semantics', () => {
     expect(rateProviderCost('5', 'GBP', { mode: 'free', markupBps: 0 })).toEqual({
-      base: '5',
+      base: '0',
       markup: '0',
       total: '0',
       currency: 'GBP',
@@ -163,5 +166,31 @@ describe('shared billing rating core', () => {
       total: '5',
       currency: 'GBP',
     });
+  });
+
+  it('applies the central 30% once to exact provider costs', () => {
+    expect(rateProviderCost('1.20', 'USD', { mode: 'standard', markupBps: 3000 })).toEqual({
+      base: '1.20', markup: '0.36', total: '1.56', currency: 'USD',
+    });
+    expect(rateProviderCost('0.000001', 'USD', { mode: 'standard', markupBps: 3000 }))
+      .toMatchObject({ total: '0.0000013' });
+  });
+
+  it('holds paid rows without cost and unresolved dispatches, but skips explicit nonbillable rows', () => {
+    const usage = metering();
+    usage.billingCompleteness = { state: 'unresolved', unresolvedPaidAttempts: '1' };
+    expect(() => rateMeteringTotal({
+      usage, product: 'deepwater', currency: 'USD', terms: { mode: 'standard', markupBps: 3000 },
+    })).toThrow('LEDGER_METERING_UNRESOLVED_PAID_USAGE');
+    usage.billingCompleteness = { state: 'complete', unresolvedPaidAttempts: '0' };
+    usage.lines[0]!.selectedProviderCost = null;
+    usage.lines[0]!.currency = null;
+    expect(() => rateMeteringTotal({
+      usage, product: 'deepwater', currency: 'USD', terms: { mode: 'standard', markupBps: 3000 },
+    })).toThrow('LEDGER_METERING_COST_MISSING');
+    usage.lines[0]!.billingDisposition = 'nonbillable';
+    expect(rateMeteringTotal({
+      usage, product: 'deepwater', currency: 'USD', terms: { mode: 'standard', markupBps: 3000 },
+    }).total).toBe('0.2888886');
   });
 });

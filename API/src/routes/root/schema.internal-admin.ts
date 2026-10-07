@@ -1,3 +1,4 @@
+import { internalAdminDebugLoginEndpoints } from './schema.internal-admin-debug-login.js';
 import { IDENTITY_AVATAR_URL_NOTE } from './schema.avatars.js';
 import type { EndpointSchema } from './schema.js';
 import { buildInternalAdminAppEndpoints } from './schema.internal-admin-apps.js';
@@ -13,6 +14,7 @@ const listLimit = { limit: 'number (optional, max 200)' };
 const authFailures = '401 when bearer token is missing/invalid; 403 when token is not an admin-domain superuser';
 
 export const internalAdminEndpoints: EndpointSchema[] = [
+  ...internalAdminDebugLoginEndpoints,
   {
     method: 'POST',
     path: '/internal/admin/users/:userId/teams',
@@ -34,14 +36,14 @@ export const internalAdminEndpoints: EndpointSchema[] = [
     path: '/internal/admin/token',
     description:
       'Browser-safe Admin UI authorization-code exchange; consumes the code and creates tokens in one BYPASSRLS transaction, and returns an admin access token only',
-    auth: 'Verified config_url whose domain matches ADMIN_AUTH_DOMAIN; one-time authorization code with PKCE. Does not use domain-hash bearer auth and does not return refresh tokens.',
+    auth: 'Exact first-party config_url, service Origin and JSON POST; verified domain matches ADMIN_AUTH_DOMAIN; one-time authorization code with PKCE. Does not use domain-hash bearer auth and does not return refresh tokens.',
     body: {
       code: 'string (required)',
       redirect_url: 'string (required)',
       code_verifier: 'string (optional; required when the authorization code used PKCE)',
     },
     query: { config_url: 'string (required)' },
-    response: { 200: '{ access_token, expires_in, token_type }' },
+    response: { 200: '{ access_token, expires_in, token_type }; HttpOnly SameSite=Strict exact-bearer private session cookie' },
   },
   {
     method: 'GET',

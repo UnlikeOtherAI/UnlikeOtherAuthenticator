@@ -1,0 +1,273 @@
+{
+  "list": {
+    "schema_version": 2,
+    "generated_at": "2026-08-03T12:00:00.000Z",
+    "subject": {
+      "product": "deepwater",
+      "organisation_id": "org_example",
+      "team_id": "team_example",
+      "user_id": "user_example"
+    },
+    "cycles": [
+      {
+        "cycle_id": "cycle_example_2026_07",
+        "period": {
+          "month": "2026-07",
+          "starts_at": "2026-07-01T00:00:00.000Z",
+          "ends_at": "2026-08-01T00:00:00.000Z"
+        },
+        "state": "finalized",
+        "scope": {
+          "organisation_id": "org_example",
+          "team_id": "team_example",
+          "cycle_scope": "team",
+          "payer_scope": "team"
+        },
+        "product": {
+          "id": "service_example",
+          "identifier": "deepwater",
+          "name": "DeepWater"
+        },
+        "totals": [
+          {
+            "currency": "USD",
+            "subscription": {
+              "amount": "20",
+              "amount_minor": "2000",
+              "currency": "USD",
+              "display": "US$20"
+            },
+            "usage_charge": {
+              "amount": "13",
+              "amount_minor": "1300",
+              "currency": "USD",
+              "display": "US$13"
+            },
+            "tax": {
+              "amount": "0",
+              "amount_minor": "0",
+              "currency": "USD",
+              "display": "US$0"
+            },
+            "gross_total": {
+              "amount": "33",
+              "amount_minor": "3300",
+              "currency": "USD",
+              "display": "US$33"
+            },
+            "credits_applied": {
+              "amount": "-13",
+              "amount_minor": "-1300",
+              "currency": "USD",
+              "display": "US$-13"
+            },
+            "total_due": {
+              "amount": "20",
+              "amount_minor": "2000",
+              "currency": "USD",
+              "display": "US$20"
+            },
+            "total_paid": {
+              "amount": "20",
+              "amount_minor": "2000",
+              "currency": "USD",
+              "display": "US$20"
+            },
+            "outstanding": {
+              "amount": "0",
+              "amount_minor": "0",
+              "currency": "USD",
+              "display": "US$0"
+            }
+          }
+        ],
+        "document_available": true
+      }
+    ],
+    "next_cursor": null
+  },
+  "detail": {
+    "cycle_id": "cycle_example_2026_07",
+    "period": {
+      "month": "2026-07",
+      "starts_at": "2026-07-01T00:00:00.000Z",
+      "ends_at": "2026-08-01T00:00:00.000Z"
+    },
+    "state": "finalized",
+    "scope": {
+      "organisation_id": "org_example",
+      "team_id": "team_example",
+      "cycle_scope": "team",
+      "payer_scope": "team"
+    },
+    "product": {
+      "id": "service_example",
+      "identifier": "deepwater",
+      "name": "DeepWater"
+    },
+    "totals": [
+      {
+        "currency": "USD",
+        "subscription": {
+          "amount": "20",
+          "amount_minor": "2000",
+          "currency": "USD",
+          "display": "US$20"
+        },
+        "usage_charge": {
+          "amount": "13",
+          "amount_minor": "1300",
+          "currency": "USD",
+          "display": "US$13"
+        },
+        "tax": {
+          "amount": "0",
+          "amount_minor": "0",
+          "currency": "USD",
+          "display": "US$0"
+        },
+        "gross_total": {
+          "amount": "33",
+          "amount_minor": "3300",
+          "currency": "USD",
+          "display": "US$33"
+        },
+        "credits_applied": {
+          "amount": "-13",
+          "amount_minor": "-1300",
+          "currency": "USD",
+          "display": "US$-13"
+        },
+        "total_due": {
+          "amount": "20",
+          "amount_minor": "2000",
+          "currency": "USD",
+          "display": "US$20"
+        },
+        "total_paid": {
+          "amount": "20",
+          "amount_minor": "2000",
+          "currency": "USD",
+          "display": "US$20"
+        },
+        "outstanding": {
+          "amount": "0",
+          "amount_minor": "0",
+          "currency": "USD",
+          "display": "US$0"
+        }
+      }
+    ],
+    "document_available": true,
+    "schema_version": 2,
+    "subscription_lines": [
+      {
+        "id": "subscription_example",
+        "label": "Monthly subscription",
+        "charge_basis": "per_seat",
+        "seat_policy": "automatic",
+        "seat_timing": "full_month",
+        "unit_price": {
+          "amount": "10",
+          "amount_minor": "1000",
+          "currency": "USD",
+          "display": "US$10"
+        },
+        "quantity": "2",
+        "active_seat_seconds": "5356800",
+        "month_seconds": "2678400",
+        "intervals": [
+          {
+            "starts_at": "2026-07-01T00:00:00.000Z",
+            "ends_at": "2026-08-01T00:00:00.000Z",
+            "quantity": "2"
+          }
+        ],
+        "customer_charge": {
+          "amount": "20",
+          "amount_minor": "2000",
+          "currency": "USD",
+          "display": "US$20"
+        }
+      }
+    ],
+    "usage_lines": [
+      {
+        "id": "usage_example",
+        "label": "Metered usage",
+        "usage_payment_mode": "pay_as_you_go",
+        "customer_charge": {
+          "amount": "13",
+          "currency": "USD",
+          "display": "US$13"
+        },
+        "credits_consumed": "13000"
+      }
+    ],
+    "credits": {
+      "consumed": "13000",
+      "waived": "0",
+      "opening_balance": "25000",
+      "closing_balance": "12000",
+      "status": "confirmed"
+    },
+    "documents": [
+      {
+        "document_id": "document_monthly_example",
+        "kind": "monthly_invoice",
+        "format": "pdf",
+        "state": "available",
+        "number": "INV-2026-07-001",
+        "issued_at": "2026-08-03T12:00:00.000Z",
+        "customer_total": {
+          "amount": "20",
+          "amount_minor": "2000",
+          "currency": "USD",
+          "display": "US$20"
+        },
+        "download_action": {
+          "method": "POST",
+          "path": "/billing/v1/cycles/download",
+          "body": {
+            "product": "deepwater",
+            "organisation_id": "org_example",
+            "team_id": "team_example",
+            "user_id": "user_example",
+            "cycle_id": "cycle_example_2026_07",
+            "document_id": "document_monthly_example"
+          }
+        }
+      },
+      {
+        "document_id": "document_breakdown_example",
+        "kind": "usage_breakdown",
+        "format": "csv",
+        "state": "available",
+        "number": null,
+        "issued_at": "2026-08-03T12:00:00.000Z",
+        "customer_total": null,
+        "download_action": {
+          "method": "POST",
+          "path": "/billing/v1/cycles/download",
+          "body": {
+            "product": "deepwater",
+            "organisation_id": "org_example",
+            "team_id": "team_example",
+            "user_id": "user_example",
+            "cycle_id": "cycle_example_2026_07",
+            "document_id": "document_breakdown_example"
+          }
+        }
+      }
+    ],
+    "adjustments": []
+  },
+  "download_request": {
+    "product": "deepwater",
+    "organisation_id": "org_example",
+    "team_id": "team_example",
+    "user_id": "user_example",
+    "cycle_id": "cycle_example_2026_07",
+    "document_id": "document_breakdown_example"
+  }
+}

@@ -66,6 +66,10 @@ version removes a service, activation deletes that service's live organisation
 assignment and the historical term retains a nullable provenance pointer.
 Generic tariff management rejects organisation/team overrides and removal of an
 assignment protected by the current active version.
+Historical rating also gives the effective immutable contract service term
+precedence over every generic team or organisation tariff event, including a
+team event committed after contract activation. Ordinary team overrides apply
+only when no effective contract service term governs the billing month.
 
 ## Explicit legal profiles
 
@@ -79,9 +83,43 @@ name, accounts-payable email, and billing address. Tax identifier and purchase
 order reference are optional explicit values. Calculation snapshots the exact
 issuer and buyer values, so later profile edits cannot rewrite an invoice.
 
-UOA performs no tax determination and no FX conversion. The v1 calculator uses
-an explicit zero tax amount. Currency mismatch or a need for tax/FX handling is
-an operator-visible fail-closed condition, never an inferred conversion.
+UOA performs no FX conversion. A fresh financial superuser must supply an
+explicit tax treatment, rate, and legal basis for each manual draft. UOA
+freezes those terms, applies cumulative minor-unit rounding to the actual
+invoice lines, and holds issuance when the issuer or buyer tax evidence is
+missing. A zero tax rate requires the explicit `NO_TAX_CHARGED` policy; it is
+never a fallback for unknown treatment.
+
+A late manual cycle supplement inherits that frozen tax treatment and taxes
+only its new gross usage line. Settled wallet credits are payment against the
+supplement's usage liability, after tax; they never discount a seat or flat
+fee. Each new credit reference freezes both the latest cumulative settlement
+and the amount already applied by a prior issued invoice in the same contract,
+month and service. The issuer and database independently allocate only the
+incremental cents by cumulative rounding, so two half-cent debits across two
+invoices cannot become two credited cents. The prior issuer reference must
+exist and match exactly. An offset larger than the new usage line needs a
+separate legal credit-note path and remains held by the positive supplement.
+
+An immutable paid provider receipt cannot later become a smaller receipt.
+UOA therefore holds apparent negative provider-cost changes until a distinct
+verified financial correction source exists. An issuer may separately cancel
+an already issued, paid, single-product manual invoice with no funded wallet
+offset. This full-line cancellation requires a fresh financial superuser,
+reason, original frozen invoice/line/tax source, and a separate numbered legal
+credit-note PDF. It preserves the original legal invoice and accepted cash;
+verified refunds reduce the positive customer credit still due. The note does
+not mint funded credits, rerate provider usage, or make a second invoice.
+The original invoice remains downloadable with its accepted payment intact;
+its current customer InvoiceV1 view shows the full amount voided and no
+outstanding debt. The separate credit note appears in the month it was issued
+with its own legal PDF. The latest monthly cycle exposes a positive
+`customer_credit_due` equal to accepted original cash less verified refunds,
+while earlier finalized cycle snapshots and document hashes remain frozen.
+The credit note's customer InvoiceV1 totals expose that same verified
+`customer_credit_due` as an optional repayment fact; its legal gross amount
+is the canceled charge, not cash due back. A refund changes the repayment
+fact without editing either original legal PDF.
 
 ## Closed-month calculator
 
@@ -292,3 +330,18 @@ The guarded migration independently enforces:
 These controls are not replaced by route validation. Migration tests apply all
 migrations to fresh PostgreSQL and exercise the state transitions and rejection
 paths.
+
+Manual usage invoices also freeze the exact paid Ledger dispatch and receipt
+cohort by source team. The signed monthly cohort must match UOA's immutable
+paid-liability rows, including the unrounded credit amount. The issuer takes
+the same payer-account lock as wallet settlement before claiming a draft and
+rechecks its credit references; a wallet debit after calculation therefore
+holds a stale draft instead of collecting that usage twice. An issued manual
+line reserves only the part of its frozen cohort not already covered by that
+line's wallet references. Supplements subtract their incremental reference
+offset, not the cumulative prior carry. Later receipts outside the issued
+cohort can still consume newly purchased credits. A historical issued line
+without a provable receipt cohort holds automatic wallet allocation for that
+service and month; organisation-wide totals are never divided among teams by
+current membership or by a guessed percentage. Voided unpaid invoices release
+their reservation, while their immutable legal history remains visible.

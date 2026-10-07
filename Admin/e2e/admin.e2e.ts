@@ -293,6 +293,108 @@ test('billing product and contract selection, invoice guards and retry preserve 
   expect(fixture.unexpected).toEqual([]);
 });
 
+test('future manual seat terms activate from the contract doorway without changing this month', async ({
+  page,
+}, testInfo) => {
+  const fixture = await installFixtures(page);
+  await page.goto('/billing?section=contracts&contract=contract-1');
+  await page.getByRole('button', { name: 'Activate', exact: true }).first().click();
+  const dialog = page.getByRole('dialog', { name: 'Activate version 2' });
+  await expect(dialog.getByText(/These terms start in 2026-11/)).toBeVisible();
+  await page.screenshot({ path: 'e2e/artifacts/future-contract-activation.png', fullPage: true });
+  await dialog.getByRole('checkbox', { name: /Fixture product/ }).check();
+  await dialog.getByRole('textbox', { name: 'Fixture product monthly price in USD' })
+    .fill('60.00');
+  await dialog.getByLabel('Fixture product subscription basis').selectOption('per_seat');
+  await dialog.getByLabel('Fixture product seat quantity policy').selectOption('fixed');
+  await dialog.getByLabel('Fixture product seat charge timing').selectOption('full_month');
+  await dialog.getByLabel('Fixture product purchased seats').fill('4');
+  await expect(dialog.getByLabel('Fixture product usage payment')).toHaveValue('prepaid');
+  await page.screenshot({ path: `e2e/artifacts/manual-seat-activation-${testInfo.project.name}.png`,
+    fullPage: true });
+  await dialog.getByRole('checkbox', { name: /I confirm these exact subscription/ }).check();
+  await dialog.getByRole('button', { name: 'Activate immutable terms' }).click();
+  await expect(page.locator('span:visible').filter({ hasText: 'Starts 2026-11' }))
+    .toBeVisible();
+  await expect(page.locator('span:visible').filter({ hasText: /4 purchased seats/ }))
+    .toBeVisible();
+  expect(fixture.activations).toEqual([{ services: [
+    { service_id: 'billing-1', monthly_amount_minor: '6000',
+      monthly_charge_basis: 'per_seat', seat_policy: 'fixed',
+      seat_charge_timing: 'full_month', usage_payment_mode: 'prepaid',
+      fixed_seat_quantity: 4 },
+  ] }]);
+  expect(fixture.unexpected).toEqual([]);
+});
+
+test('new billing terms show the prospective 30 percent default', async ({ page }, testInfo) => {
+  const fixture = await installFixtures(page);
+  await page.goto('/billing?section=products');
+  await page.getByRole('button', { name: 'Add service' }).click();
+  const serviceDialog = page.getByRole('dialog', { name: 'Add billing service' });
+  await expect(serviceDialog).toBeVisible();
+  await expect(serviceDialog.getByLabel('Markup (%)')).toHaveValue('30.00');
+  await expect(serviceDialog.getByLabel('Usage payment')).toHaveValue('prepaid');
+  await expect(serviceDialog.getByLabel('Monthly subscription basis')).toHaveValue('flat');
+  await expect(serviceDialog.getByLabel('Monthly price')).toHaveValue('0.00');
+  await serviceDialog.getByLabel('Monthly subscription basis').selectOption('per_seat');
+  await expect(serviceDialog.getByLabel('Seat quantity')).toHaveValue('automatic');
+  await serviceDialog.getByLabel('Seat quantity').selectOption('fixed');
+  await serviceDialog.getByLabel('Seat charge timing').selectOption('prorated');
+  await serviceDialog.getByLabel('Monthly price').fill('20.00');
+  await serviceDialog.screenshot({
+    path: `e2e/artifacts/billing-service-default-${testInfo.project.name}.png`,
+  });
+  await page.keyboard.press('Escape');
+  await serviceDialog.getByRole('button', { name: 'Discard changes' }).click();
+  await page.getByRole('link', { name: 'Fixture product', exact: true }).click();
+  await expect(page.getByText(/Default and assignment changes take effect next UTC month/))
+    .toBeVisible();
+  await page.screenshot({
+    path: `e2e/artifacts/billing-effective-month-${testInfo.project.name}.png`,
+  });
+  await page.getByRole('button', { name: 'Tariff version' }).click();
+  const tariffDialog = page.getByRole('dialog', { name: /Add tariff version/ });
+  await expect(tariffDialog).toBeVisible();
+  await expect(tariffDialog.getByLabel('Markup (%)')).toHaveValue('30.00');
+  await expect(tariffDialog.getByLabel('Usage payment')).toHaveValue('prepaid');
+  await expect(tariffDialog.getByLabel('Monthly subscription basis')).toHaveValue('flat');
+  await tariffDialog.screenshot({
+    path: `e2e/artifacts/billing-tariff-default-${testInfo.project.name}.png`,
+  });
+  expect(fixture.errors).toEqual([]);
+  expect(fixture.unexpected).toEqual([]);
+});
+
+test('fixed seat capacity is reachable from the service subscription doorway', async (
+  { page }, testInfo,
+) => {
+  const fixture = await installFixtures(page);
+  await page.goto('/billing?section=products');
+  await page.getByRole('link', { name: 'Fixture product', exact: true }).click();
+  await page.getByRole('button', { name: 'Subscriptions' }).click();
+  await expect(page.getByRole('heading', { name: 'Seat subscriptions' })).toBeVisible();
+  await expect(page.getByText('Acme Research').last()).toBeVisible();
+  const capacity = page.getByRole('textbox', { name: 'Purchased seats for Acme Research' });
+  await expect(capacity).toHaveValue('5');
+  await capacity.fill('6');
+  const saveSeats = page.getByRole('button', { name: 'Save seats' });
+  await saveSeats.scrollIntoViewIfNeeded();
+  await expect(capacity).toBeInViewport();
+  await expect(saveSeats).toBeInViewport();
+  await page.screenshot({
+    path: `e2e/artifacts/billing-seat-capacity-${testInfo.project.name}.png`, fullPage: true,
+  });
+  await saveSeats.click();
+  const dialog = page.getByRole('dialog', { name: 'Change purchased seat capacity?' });
+  await expect(dialog.getByText('The higher capacity starts now.')).toBeVisible();
+  await dialog.getByRole('button', { name: 'Change purchased seat capacity' }).click();
+  await expect(page.getByRole('row').filter({ has: capacity })).toContainText('6');
+  expect(fixture.seatCapacityWrites).toEqual([{ quantity: 6 }]);
+  expect(fixture.errors).toEqual([]);
+  expect(fixture.unexpected).toEqual([]);
+});
+
 
 test('user add-to-team retains organisation team and role on failed save, then refreshes membership', async ({ page }) => {
   const fixture = await installFixtures(page);

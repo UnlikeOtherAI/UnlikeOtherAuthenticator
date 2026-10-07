@@ -17,9 +17,13 @@ const defaults: BillingTariffFormValues = {
   name: 'Standard',
   mode: 'standard',
   collectionMode: 'none',
-  markupBps: 2000,
-  monthlyAmountMinor: '0',
-  currency: 'GBP',
+  markupPercent: '30.00',
+  usagePaymentMode: 'prepaid',
+  monthlyChargeBasis: 'flat',
+  seatPolicy: 'automatic',
+  seatChargeTiming: 'prorated',
+  monthlyAmount: '0.00',
+  currency: 'USD',
   setAsDefault: false,
 };
 
@@ -104,24 +108,64 @@ export function BillingTariffDialog({
             </SelectField>
           </FieldShell>
           <FieldShell
-            label="Markup (basis points)"
-            hint="100 basis points = 1%."
-            error={form.formState.errors.markupBps?.message}
+            label="Markup (%)"
+            hint="30.00% is the standard rate."
+            error={form.formState.errors.markupPercent?.message}
           >
-            <TextField {...form.register('markupBps')} type="number" min="0" step="1" />
+            <TextField {...form.register('markupPercent')} inputMode="decimal" />
           </FieldShell>
           <FieldShell
-            label="Monthly subscription"
-            hint="Integer minor units plus ISO currency."
-            error={
-              form.formState.errors.monthlyAmountMinor?.message ??
-              form.formState.errors.currency?.message
-            }
+            label="Usage payment"
+            hint="Prepaid draws from the customer's shared team or organisation pool."
+            error={form.formState.errors.usagePaymentMode?.message}
           >
-            <div className="flex gap-2">
-              <TextField {...form.register('monthlyAmountMinor')} inputMode="numeric" />
-              <TextField {...form.register('currency')} className="w-24 uppercase" maxLength={3} />
-            </div>
+            <SelectField {...form.register('usagePaymentMode')} className="w-full">
+              <option value="prepaid">Prepaid pool</option>
+              <option value="pay_as_you_go">Pay as you go</option>
+            </SelectField>
+          </FieldShell>
+          <FieldShell
+            label="Monthly subscription basis"
+            hint="One charge per assigned scope, or one charge per active seat."
+            error={form.formState.errors.monthlyChargeBasis?.message}
+          >
+            <SelectField {...form.register('monthlyChargeBasis')} className="w-full">
+              <option value="flat">Flat</option>
+              <option value="per_seat">Per seat</option>
+            </SelectField>
+          </FieldShell>
+          {form.watch('monthlyChargeBasis') === 'per_seat' ? (
+            <>
+              <FieldShell
+                label="Seat quantity"
+                hint="Fixed capacity is purchased for each team or organisation subscription."
+                error={form.formState.errors.seatPolicy?.message}
+              >
+                <SelectField {...form.register('seatPolicy')} className="w-full">
+                  <option value="automatic">Automatic active seats</option>
+                  <option value="fixed">Fixed purchased capacity</option>
+                </SelectField>
+              </FieldShell>
+              <FieldShell
+                label="Seat charge timing"
+                error={form.formState.errors.seatChargeTiming?.message}
+              >
+                <SelectField {...form.register('seatChargeTiming')} className="w-full">
+                  <option value="full_month">Full month</option>
+                  <option value="prorated">Prorated</option>
+                </SelectField>
+              </FieldShell>
+            </>
+          ) : null}
+          <FieldShell
+            label="Monthly price"
+            hint="Currency amount per chosen subscription basis."
+            error={form.formState.errors.monthlyAmount?.message}
+          >
+            <TextField {...form.register('monthlyAmount')} inputMode="decimal" />
+          </FieldShell>
+          <FieldShell label="Currency" error={form.formState.errors.currency?.message}>
+            <TextField {...form.register('currency')} className="uppercase" maxLength={3} />
           </FieldShell>
         </div>
         <label className="flex items-start gap-3 rounded-xl border border-gray-200 p-4">
@@ -135,8 +179,8 @@ export function BillingTariffDialog({
               Make this the service default
             </span>
             <span className="mt-0.5 block text-xs text-gray-500">
-              Existing Stripe subscriptions pin their original immutable terms and may prevent a
-              default change.
+              The default changes next UTC month. Existing Stripe subscriptions pin their
+              original immutable terms and may prevent a default change.
             </span>
           </span>
         </label>

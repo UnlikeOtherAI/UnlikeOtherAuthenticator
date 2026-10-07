@@ -12,18 +12,21 @@ export type BillingCancellationSelection =
 
 export type BillingHostedRedirectResponse = {
   redirect_url: string;
+  /** Opaque local credit purchase reference, only with presentation 1.5 negotiation. */
+  purchase_id?: string;
 };
 
 /**
  * The exact bodies a product relays to `POST /billing/v1/stripe/checkout-session`
  * and `POST /billing/v1/stripe/portal-session`, and the exact envelopes UOA
- * answers with (protocol 1.3.0).
+ * answers with. The selected fixed-seat quantity is the sole customer input
+ * a product may add to UOA's statement action body before checkout.
  *
  * These were the one gap in the published contract, so products hand-wrote
  * validators for them — the parallel-contract problem this package exists to
  * prevent. The body values still come from UOA inside a statement action's
- * `request.body`: publishing the shape lets a product *validate* what it relays
- * and what it receives, never *compose* it.
+ * `request.body`: publishing the shape lets a product validate what it relays
+ * and receives. Other fields must never be composed by the product.
  */
 export type BillingSubjectActionRequest = {
   product: string;
@@ -35,22 +38,21 @@ export type BillingSubjectActionRequest = {
 export type BillingCheckoutSessionRequest = BillingSubjectActionRequest & {
   success_url: string;
   cancel_url: string;
+  fixed_seat_quantity?: number;
 };
 
 export type BillingCheckoutTariff = {
-  id: string;
-  key: string;
-  version: number;
-  mode: 'standard' | 'free' | 'at_cost' | 'custom';
   collection_mode: 'stripe' | 'manual' | 'none';
-  markup_bps: number;
-  markup_percent: string;
-  usage_price_multiplier_bps: number;
   monthly_subscription: {
     amount_minor: string;
     currency: string;
+    charge_basis: 'flat' | 'per_seat';
+    seat_policy: 'automatic' | 'fixed' | null;
+    seat_timing: 'full_month' | 'prorated' | null;
+    amount_role: 'monthly_total' | 'per_seat_unit';
   };
   usage_billing_enabled: boolean;
+  usage_payment_mode: 'prepaid' | 'pay_as_you_go';
   payment_collection_enabled: boolean;
   raw_usage_preserved: true;
 };

@@ -1,4 +1,4 @@
-import { BillingAssignmentScope, Prisma, type PrismaClient } from '@prisma/client';
+import { BillingUsagePaymentMode, Prisma, type PrismaClient } from '@prisma/client';
 
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
@@ -14,6 +14,12 @@ import {
 } from './billing-credit-settlement-write.service.js';
 import type { NormalizedMeteringPortfolio } from './billing-metering.types.js';
 import { runBillingSerializableTransaction } from './billing-serializable-transaction.service.js';
+import { assertUnambiguousCreditPayer } from './billing-credit-payer-period.service.js';
+import { manualInvoiceReservedMicroMinor } from './billing-credit-manual-invoice-cap.service.js';
+import {
+  lockTariffHistoryService,
+  resolveBillingTariffForMonth,
+} from './billing-tariff-history.service.js';
 
 function sameInstant(left: Date, right: string): boolean {
   return left.getTime() === Date.parse(right);
@@ -76,32 +82,6 @@ function latestAllocationMap(
   return latest;
 }
 
-function assignmentTariffs(
-  services: Array<{ id: string }>,
-  assignments: Array<Prisma.BillingTariffAssignmentGetPayload<{ include: { tariff: true } }>>,
-  defaults: Prisma.BillingTariffGetPayload<Record<string, never>>[],
-): Map<string, Prisma.BillingTariffGetPayload<Record<string, never>>> {
-  const selected = new Map<string, Prisma.BillingTariffGetPayload<Record<string, never>>>();
-  for (const service of services) {
-    const team = assignments.find(
-      (assignment) =>
-        assignment.serviceId === service.id && assignment.scope === BillingAssignmentScope.TEAM,
-    );
-    const organisation = assignments.find(
-      (assignment) =>
-        assignment.serviceId === service.id &&
-        assignment.scope === BillingAssignmentScope.ORGANISATION,
-    );
-    const tariff =
-      team?.tariff ??
-      organisation?.tariff ??
-      defaults.find((candidate) => candidate.serviceId === service.id);
-    if (!tariff) throw new AppError('INTERNAL', 500, 'BILLING_DEFAULT_TARIFF_MISSING');
-    selected.set(service.id, tariff);
-  }
-  return selected;
-}
-
 async function settleInTransaction(
   tx: Prisma.TransactionClient,
   params: {
@@ -120,11 +100,16 @@ async function settleInTransaction(
     where: { id: params.creditAccountId },
   });
   if (!account) throw new AppError('NOT_FOUND', 404, 'BILLING_CREDIT_ACCOUNT_MISSING');
+  await assertUnambiguousCreditPayer(tx, {
+    orgId: account.orgId,
+    scope: account.scope,
+    billingMonth: params.portfolio.scope.month,
+  });
   // The paying account may be the organisation's (Docs/plans/2026-08-15-org-billing-override.md
   // §2), in which case every team's portfolio settles against it. The team the
   // usage belongs to still drives rating, attribution and the snapshot row —
   // only where the credits are drawn from changes.
-  const settlementTeamId = account.teamId ?? params.portfolio.scope.teamId;
+  const settlementTeamId = params.portfolio.scope.teamId;
   const portfolioTeam =
     account.teamId === null
       ? await tx.team.findFirst({
@@ -139,6 +124,20 @@ async function settleInTransaction(
   ) {
     throw new AppError('INTERNAL', 409, 'BILLING_CREDIT_PORTFOLIO_SCOPE_MISMATCH');
   }
+  // A pre-migration organisation row may contain adjustments from several
+  // teams. Its prior debit cannot be apportioned without financial evidence.
+  // Hold this payer/month for reconciliation instead of debiting it again.
+  const legacy = await tx.billingCreditUsageSettlement.findFirst({
+    where: {
+      creditAccountId: account.id,
+      teamId: null,
+      billingMonth: params.portfolio.scope.month,
+    },
+    select: { id: true },
+  });
+  if (legacy) {
+    throw new AppError('INTERNAL', 409, 'BILLING_CREDIT_LEGACY_RECONCILIATION_REQUIRED');
+  }
 
   const perspectiveService = await tx.billingService.findUnique({
     where: { identifier: params.portfolio.perspectiveProduct },
@@ -148,8 +147,9 @@ async function settleInTransaction(
   }
   let snapshot = await tx.billingCreditPortfolioSnapshot.findUnique({
     where: {
-      creditAccountId_ledgerSnapshotCursor: {
+      creditAccountId_teamId_ledgerSnapshotCursor: {
         creditAccountId: account.id,
+        teamId: settlementTeamId,
         ledgerSnapshotCursor: params.portfolio.snapshot.cursor,
       },
     },
@@ -168,6 +168,7 @@ async function settleInTransaction(
     const latestSnapshot = await tx.billingCreditPortfolioSnapshot.findFirst({
       where: {
         creditAccountId: account.id,
+        teamId: settlementTeamId,
         billingMonth: params.portfolio.scope.month,
       },
       orderBy: [{ capturedAt: 'desc' }, { ledgerSnapshotCursor: 'desc' }],
@@ -199,7 +200,11 @@ async function settleInTransaction(
   }
 
   const existingSettlements = await tx.billingCreditUsageSettlement.findMany({
-    where: { creditAccountId: account.id, billingMonth: params.portfolio.scope.month },
+    where: {
+      creditAccountId: account.id,
+      teamId: settlementTeamId,
+      billingMonth: params.portfolio.scope.month,
+    },
     include: {
       service: true,
       tariff: true,
@@ -229,40 +234,26 @@ async function settleInTransaction(
       throw new AppError('INTERNAL', 409, 'BILLING_CREDIT_SERVICE_INACTIVE');
     }
   }
+  for (const serviceId of services.map((service) => service.id).sort()) {
+    await lockTariffHistoryService(tx, serviceId);
+  }
 
   const newServiceIds = services
     .filter((service) => !existingSettlements.some((row) => row.serviceId === service.id))
     .map((service) => service.id);
-  const [assignments, defaults, teamMembers] = await Promise.all([
-    tx.billingTariffAssignment.findMany({
-      where: {
-        serviceId: { in: newServiceIds },
-        orgId: account.orgId,
-        OR: [
-          {
-            scope: BillingAssignmentScope.TEAM,
-            teamId: settlementTeamId,
-            scopeKey: `${account.orgId}:${settlementTeamId}`,
-          },
-          {
-            scope: BillingAssignmentScope.ORGANISATION,
-            teamId: null,
-            scopeKey: account.orgId,
-          },
-        ],
-      },
-      include: { tariff: true },
-    }),
-    tx.billingTariff.findMany({
-      where: { serviceId: { in: newServiceIds }, isDefault: true },
-    }),
-    tx.teamMember.findMany({ where: { teamId: settlementTeamId }, select: { userId: true } }),
-  ]);
-  const resolvedTariffs = assignmentTariffs(
-    services.filter((service) => newServiceIds.includes(service.id)),
-    assignments,
-    defaults,
-  );
+  const teamMembers = await tx.teamMember.findMany({
+    where: { teamId: settlementTeamId }, select: { userId: true },
+  });
+  const resolvedTariffs = new Map();
+  for (const serviceId of newServiceIds) {
+    const resolved = await resolveBillingTariffForMonth(tx, {
+      serviceId,
+      organisationId: account.orgId,
+      teamId: settlementTeamId,
+      billingMonth: params.portfolio.scope.month,
+    });
+    resolvedTariffs.set(serviceId, resolved.tariff);
+  }
   const ratingServices: CreditRatingService[] = services.map((service) => {
     const existing = existingSettlements.find((row) => row.serviceId === service.id);
     const tariff = existing?.tariff ?? resolvedTariffs.get(service.id);
@@ -276,6 +267,7 @@ async function settleInTransaction(
         mode: tariff.mode,
         markupBps: tariff.markupBps,
         currency: tariff.currency,
+        usagePaymentMode: tariff.usagePaymentMode,
       },
     };
   });
@@ -293,21 +285,84 @@ async function settleInTransaction(
     userId: row.userId,
     consumedMicrocredits: row.consumedMicrocredits,
   }));
+  const reservedExports = await tx.billingStripeUsageExport.findMany({
+    where: {
+      accountId: account.accountId,
+      billingMonth: params.portfolio.scope.month,
+      subscription: {
+        orgId: account.orgId,
+        ...(account.teamId ? { OR: [{ teamId: settlementTeamId }, { teamId: null }] } : {}),
+      },
+    },
+    select: { deltaMeterQuantity: true, subscription: { select: { serviceId: true } } },
+  });
+  const otherSettlements = await tx.billingCreditUsageSettlement.findMany({
+    where: {
+      creditAccountId: account.id,
+      teamId: { not: settlementTeamId },
+      billingMonth: params.portfolio.scope.month,
+    },
+    select: {
+      serviceId: true,
+      cumulativeRatedUsageAmountMicroMinor: true,
+      cumulativeCreditsConsumedMicrocredits: true,
+    },
+  });
+  const gross = rateCreditPortfolio({
+    portfolio: params.portfolio,
+    services: ratingServices,
+    previousAllocations: [],
+    balanceMicrocredits: 0n,
+    validTeamUserIds: new Set(teamMembers.map((member) => member.userId)),
+  });
+  const maxAdditionalCreditsByService = new Map<string, bigint>();
+  for (const service of gross) {
+    const reserved = reservedExports
+      .filter((row) => row.subscription.serviceId === service.service.id)
+      .reduce((sum, row) => sum + row.deltaMeterQuantity, 0n);
+    const manualReserved = await manualInvoiceReservedMicroMinor(tx, {
+      orgId: account.orgId, teamId: settlementTeamId,
+      serviceId: service.service.id, billingMonth: params.portfolio.scope.month,
+      creditAccountId: account.id,
+    });
+    if (reserved > 0n && manualReserved > 0n) {
+      throw new AppError('INTERNAL', 409, 'BILLING_CREDIT_MULTIPLE_COLLECTORS_UNPROVEN');
+    }
+    if (reserved === 0n && manualReserved === 0n) continue;
+    const other = otherSettlements.filter((row) => row.serviceId === service.service.id);
+    const otherGross = other.reduce((sum, row) => sum + row.cumulativeRatedUsageAmountMicroMinor, 0n);
+    const otherCredits = other.reduce((sum, row) => sum + row.cumulativeCreditsConsumedMicrocredits / 10n, 0n);
+    const currentCredits = previousAllocations
+      .filter((row) => row.serviceId === service.service.id)
+      .reduce((sum, row) => sum + row.consumedMicrocredits / 10n, 0n);
+    const unreserved = reserved > 0n ?
+      service.ratedMicroMinor + otherGross - reserved - otherCredits - currentCredits :
+      service.ratedMicroMinor - manualReserved - currentCredits;
+    maxAdditionalCreditsByService.set(service.service.id, unreserved > 0n ? unreserved / 100_000n : 0n);
+  }
   const rated = rateCreditPortfolio({
     portfolio: params.portfolio,
     services: ratingServices,
     previousAllocations,
     balanceMicrocredits: account.balanceMicrocredits,
     validTeamUserIds: new Set(teamMembers.map((member) => member.userId)),
+    maxAdditionalCreditsByService,
   });
 
-  const settlements = [...existingSettlements];
-  for (const service of ratingServices) {
+  const prepaidServiceIds = new Set(ratingServices.filter((service) =>
+    service.tariff.usagePaymentMode === BillingUsagePaymentMode.PREPAID).map((service) => service.id));
+  if (existingSettlements.some((row) => prepaidServiceIds.has(row.serviceId) &&
+    row.cumulativeCreditsConsumedMicrocredits !== 0n)) {
+    throw new AppError('INTERNAL', 409, 'PREPAID_LEGACY_USAGE_RECONCILIATION_REQUIRED');
+  }
+  const settlements = existingSettlements.filter((row) => !prepaidServiceIds.has(row.serviceId));
+  for (const service of ratingServices.filter((row) => !prepaidServiceIds.has(row.id))) {
     if (settlements.some((settlement) => settlement.serviceId === service.id)) continue;
     const created = await tx.billingCreditUsageSettlement.create({
       data: {
         accountId: account.accountId,
         creditAccountId: account.id,
+        teamId: settlementTeamId,
         tariffId: service.tariff.id,
         serviceId: service.id,
         appKeyId: params.credential.id,
@@ -321,6 +376,9 @@ async function settleInTransaction(
       },
     });
     settlements.push(created);
+  }
+  if (settlements.length === 0) {
+    return { snapshotId: snapshot.id, replayed: false, superseded: false };
   }
 
   const replays = await tx.billingCreditUsageSettlementAdjustment.findMany({
@@ -342,7 +400,7 @@ async function settleInTransaction(
     return { snapshotId: snapshot.id, replayed: true, superseded: false };
   }
 
-  const work = rated.map((target) => {
+  const work = rated.filter((target) => !prepaidServiceIds.has(target.service.id)).map((target) => {
     const settlement = settlements.find((row) => row.serviceId === target.service.id);
     if (!settlement) throw new AppError('INTERNAL', 500, 'BILLING_CREDIT_SETTLEMENT_MISSING');
     return { target, settlement };
@@ -353,7 +411,8 @@ async function settleInTransaction(
     const rightDelta =
       right.target.consumedMicrocredits - right.settlement.cumulativeCreditsConsumedMicrocredits;
     if (leftDelta < 0n !== rightDelta < 0n) return leftDelta < 0n ? -1 : 1;
-    return left.target.service.identifier.localeCompare(right.target.service.identifier);
+    return Buffer.compare(Buffer.from(left.target.service.identifier, 'utf8'),
+      Buffer.from(right.target.service.identifier, 'utf8'));
   });
   let balance = account.balanceMicrocredits;
   for (const item of work) {

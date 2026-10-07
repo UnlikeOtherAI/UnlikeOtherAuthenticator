@@ -11,6 +11,8 @@ import {
 } from '../contracts/billing-statement-v1.js';
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
+import type { BillingCustomerLocale } from './billing-copy-locale.js';
+import { billingAddonCopy } from './billing-addon-copy.catalog.js';
 import type { BillingActorEndpoint } from './billing-actor-audience.service.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
 import {
@@ -190,17 +192,36 @@ async function claimCancellation(
   );
 }
 
+export function localizeRecurringAddonCancellationConfirmation(
+  result: BillingRecurringAddonCancellationConfirmationV1,
+  locale?: BillingCustomerLocale,
+): BillingRecurringAddonCancellationConfirmationV1 {
+  const copy = billingAddonCopy(locale);
+  return {
+    ...result,
+    title:
+      result.status === 'already_scheduled'
+        ? copy.confirmationAlreadyScheduled
+        : copy.confirmationScheduled,
+    description: copy.confirmationDescription,
+  };
+}
+
 function resultFor(
   subscription: RecurringAddonSubscriptionWithBinding,
   alreadyScheduled: boolean,
+  locale?: BillingCustomerLocale,
 ): BillingRecurringAddonCancellationConfirmationV1 {
-  return {
-    schema_version: BILLING_RECURRING_ADDONS_SCHEMA_VERSION,
-    status: alreadyScheduled ? 'already_scheduled' : 'scheduled',
-    title: alreadyScheduled ? 'Cancellation already scheduled' : 'Cancellation scheduled',
-    description: 'The paid add-on remains available until its current period ends.',
-    cancellation_effective_at: subscription.currentPeriodEnd?.toISOString() ?? null,
-  };
+  return localizeRecurringAddonCancellationConfirmation(
+    {
+      schema_version: BILLING_RECURRING_ADDONS_SCHEMA_VERSION,
+      status: alreadyScheduled ? 'already_scheduled' : 'scheduled',
+      title: '',
+      description: '',
+      cancellation_effective_at: subscription.currentPeriodEnd?.toISOString() ?? null,
+    },
+    locale,
+  );
 }
 
 export async function confirmRecurringAddonCancellation(
@@ -209,6 +230,7 @@ export async function confirmRecurringAddonCancellation(
     actorToken: string;
     credential: VerifiedBillingAppKey;
     endpoint: BillingActorEndpoint;
+    locale?: BillingCustomerLocale;
   },
   deps?: {
     prisma?: PrismaClient;
@@ -289,7 +311,9 @@ export async function confirmRecurringAddonCancellation(
     },
     prisma,
   );
-  if (claimed.kind === 'completed') return claimed.result;
+  if (claimed.kind === 'completed') {
+    return localizeRecurringAddonCancellationConfirmation(claimed.result, params.locale);
+  }
   if (claimed.kind === 'expired') {
     throw new AppError('BAD_REQUEST', 410, 'BILLING_RECURRING_ADDON_CANCELLATION_EXPIRED');
   }
@@ -358,7 +382,7 @@ export async function confirmRecurringAddonCancellation(
   ) {
     throw new AppError('INTERNAL', 503, 'STRIPE_RECURRING_ADDON_CANCELLATION_DRIFT');
   }
-  const result = resultFor(refreshed.local, alreadyScheduled);
+  const result = resultFor(refreshed.local, alreadyScheduled, params.locale);
   return prisma.$transaction(async (tx) => {
     const updated = await tx.billingRecurringAddonCancellationIntent.updateMany({
       where: {
@@ -381,7 +405,10 @@ export async function confirmRecurringAddonCancellation(
         replay.confirmationRequestDigest === requestDigest &&
         replay.result
       ) {
-        return parseResult(replay.result);
+        return localizeRecurringAddonCancellationConfirmation(
+          parseResult(replay.result),
+          params.locale,
+        );
       }
       throw new AppError('BAD_REQUEST', 409, 'BILLING_RECURRING_ADDON_CANCELLATION_CHANGED');
     }

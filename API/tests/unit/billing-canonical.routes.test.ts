@@ -3,6 +3,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 
 import { createApp } from '../../src/app.js';
 import {
+  BILLING_STATEMENT_PROTOCOL_VERSION,
+  BILLING_STATEMENT_V2_PROTOCOL_VERSION,
   billingConsumerActionV1ConformanceFixtures,
   billingStatementV2ConformanceFixture,
 } from '../../src/contracts/billing-statement-v1.js';
@@ -165,7 +167,7 @@ describe('canonical customer billing routes', () => {
       expect(openApiResponse.headers['cache-control']).toBe('public, max-age=300');
       expect(openApiResponse.json()).toMatchObject({
         openapi: '3.1.0',
-        info: { version: '1.0.0' },
+        info: { version: BILLING_STATEMENT_PROTOCOL_VERSION },
         components: {
           schemas: {
             BillingStatementV1: {
@@ -198,30 +200,18 @@ describe('canonical customer billing routes', () => {
         $id: '/schemas/billing-statement-v2.json',
         properties: {
           schema_version: { const: 2 },
-          connected_service_usage: { additionalProperties: false },
         },
       });
       expect(fixtureResponse.statusCode).toBe(200);
       expect(fixtureResponse.json()).toMatchObject({
         schema_version: 2,
         statement_id: 'bst_conformance_v2',
-        connected_service_usage: {
-          statement_product: 'deepwater',
-          services: [
-            {
-              billing_product: 'deepwater',
-              origins: [
-                expect.objectContaining({ product: 'deepwater' }),
-                expect.objectContaining({ product: 'nessie' }),
-              ],
-            },
-          ],
-        },
       });
+      expect(fixtureResponse.json()).not.toHaveProperty('connected_service_usage');
       expect(openApiResponse.statusCode).toBe(200);
       expect(openApiResponse.json()).toMatchObject({
         openapi: '3.1.0',
-        info: { version: '2.0.0' },
+        info: { version: BILLING_STATEMENT_V2_PROTOCOL_VERSION },
         components: {
           schemas: { BillingStatementV2: { properties: { schema_version: { const: 2 } } } },
         },

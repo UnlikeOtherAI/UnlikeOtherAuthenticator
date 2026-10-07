@@ -23,18 +23,6 @@ const exactMoneySchema = {
   properties: exactMoneyProperties,
 } as const;
 
-const unitSetSchema = {
-  type: 'object',
-  additionalProperties: false,
-  required: ['input', 'cached_input', 'output', 'total'],
-  properties: {
-    input: { type: 'string', pattern: '^(0|[1-9][0-9]*)(\\.[0-9]+)?$' },
-    cached_input: { type: 'string', pattern: '^(0|[1-9][0-9]*)(\\.[0-9]+)?$' },
-    output: { type: 'string', pattern: '^(0|[1-9][0-9]*)(\\.[0-9]+)?$' },
-    total: { type: 'string', pattern: '^(0|[1-9][0-9]*)(\\.[0-9]+)?$' },
-  },
-} as const;
-
 export const billingStatementV1JsonSchema = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',
   $id: BILLING_STATEMENT_SCHEMA_PATH,
@@ -97,7 +85,7 @@ export const billingStatementV1JsonSchema = {
     pinned_inputs: {
       type: 'object',
       additionalProperties: false,
-      required: ['ledger_snapshots', 'tariff'],
+      required: ['ledger_snapshots'],
       properties: {
         ledger_snapshots: {
           type: 'array',
@@ -116,54 +104,34 @@ export const billingStatementV1JsonSchema = {
             },
           },
         },
-        tariff: {
-          type: 'object',
-          additionalProperties: false,
-          required: ['id', 'version'],
-          properties: {
-            id: { type: 'string' },
-            version: { type: 'integer', minimum: 1 },
-          },
-        },
       },
     },
     plan: {
       type: 'object',
       additionalProperties: false,
       required: [
-        'tariff_id',
-        'key',
-        'version',
-        'name',
         'display_name',
-        'mode',
         'collection_mode',
-        'markup_bps',
-        'markup_percent',
-        'markup_display',
-        'usage_multiplier_bps',
+        'usage_payment_mode',
         'monthly_subscription',
         'assignment',
       ],
       properties: {
-        tariff_id: { type: 'string' },
-        key: { type: 'string' },
-        version: { type: 'integer', minimum: 1 },
-        name: { type: 'string' },
         display_name: { type: 'string' },
-        mode: { type: 'string', enum: ['standard', 'free', 'at_cost', 'custom'] },
         collection_mode: { type: 'string', enum: ['stripe', 'manual', 'none'] },
-        markup_bps: { type: 'integer', minimum: 0 },
-        markup_percent: { type: 'string' },
-        markup_display: { type: 'string' },
-        usage_multiplier_bps: { type: 'integer', minimum: 0 },
+        usage_payment_mode: { enum: ['prepaid', 'pay_as_you_go'] },
         monthly_subscription: {
           type: 'object',
           additionalProperties: false,
-          required: ['amount', 'currency', 'display', 'amount_minor'],
+          required: ['amount', 'currency', 'display', 'amount_minor',
+            'charge_basis', 'seat_policy', 'seat_timing', 'amount_role'],
           properties: {
             ...exactMoneyProperties,
             amount_minor: { type: 'string', pattern: '^(0|[1-9][0-9]*)$' },
+            charge_basis: { enum: ['flat', 'per_seat'] },
+            seat_policy: { enum: ['automatic', 'fixed', null] },
+            seat_timing: { enum: ['full_month', 'prorated', null] },
+            amount_role: { enum: ['monthly_total', 'per_seat_unit'] },
           },
         },
         assignment: {
@@ -238,30 +206,16 @@ export const billingStatementV1JsonSchema = {
     usage: {
       type: 'object',
       additionalProperties: false,
-      required: ['lines', 'totals', 'cost_totals', 'user_totals'],
+      required: ['lines', 'charge_totals', 'user_totals'],
       properties: {
         lines: {
           type: 'array',
           items: {
             type: 'object',
             additionalProperties: false,
-            required: [
-              'id',
-              'service_id',
-              'usage_unit',
-              'calls',
-              'attribution',
-              'raw_units',
-              'billable_units',
-              'share',
-              'provider_cost',
-              'rated_charge',
-            ],
+            required: ['id', 'attribution', 'customer_charge'],
             properties: {
               id: { type: 'string' },
-              service_id: { type: 'string' },
-              usage_unit: { type: 'string' },
-              calls: { type: 'string', pattern: '^(0|[1-9][0-9]*)$' },
               attribution: {
                 type: 'object',
                 additionalProperties: false,
@@ -273,69 +227,18 @@ export const billingStatementV1JsonSchema = {
                   origin_product: { type: 'string' },
                 },
               },
-              raw_units: unitSetSchema,
-              billable_units: unitSetSchema,
-              share: {
-                type: 'object',
-                additionalProperties: false,
-                required: ['basis_points', 'percent', 'display'],
-                properties: {
-                  basis_points: { type: 'integer', minimum: 0, maximum: 10000 },
-                  percent: { type: 'string' },
-                  display: { type: 'string' },
-                },
-              },
-              provider_cost: {
-                anyOf: [
-                  { type: 'null' },
-                  {
-                    type: 'object',
-                    additionalProperties: false,
-                    required: ['amount', 'currency', 'display', 'provenance'],
-                    properties: {
-                      ...exactMoneyProperties,
-                      provenance: { type: 'string' },
-                    },
-                  },
-                ],
-              },
-              rated_charge: {
-                type: ['object', 'null'],
-                additionalProperties: false,
-                required: ['base', 'markup', 'total'],
-                properties: {
-                  base: exactMoneySchema,
-                  markup: exactMoneySchema,
-                  total: exactMoneySchema,
-                },
-              },
+              customer_charge: { anyOf: [exactMoneySchema, { type: 'null' }] },
             },
           },
         },
-        totals: {
+        charge_totals: {
           type: 'array',
           items: {
             type: 'object',
             additionalProperties: false,
-            required: ['usage_unit', 'raw_units', 'billable_units', 'display'],
-            properties: {
-              usage_unit: { type: 'string' },
-              raw_units: { type: 'string' },
-              billable_units: { type: 'string' },
-              display: { type: 'string' },
-            },
-          },
-        },
-        cost_totals: {
-          type: 'array',
-          items: {
-            type: 'object',
-            additionalProperties: false,
-            required: ['currency', 'provider_cost', 'markup', 'usage_charge'],
+            required: ['currency', 'usage_charge'],
             properties: {
               currency: { type: 'string' },
-              provider_cost: exactMoneySchema,
-              markup: exactMoneySchema,
               usage_charge: exactMoneySchema,
             },
           },
@@ -345,35 +248,19 @@ export const billingStatementV1JsonSchema = {
           items: {
             type: 'object',
             additionalProperties: false,
-            required: ['user_id', 'name', 'email', 'calls', 'usage', 'costs'],
+            required: ['user_id', 'name', 'email', 'charges'],
             properties: {
               user_id: { type: 'string' },
               name: { type: ['string', 'null'] },
               email: { type: 'string' },
-              calls: { type: 'string', pattern: '^(0|[1-9][0-9]*)$' },
-              usage: {
+              charges: {
                 type: 'array',
                 items: {
                   type: 'object',
                   additionalProperties: false,
-                  required: ['usage_unit', 'raw_units', 'billable_units'],
-                  properties: {
-                    usage_unit: { type: 'string' },
-                    raw_units: { type: 'string' },
-                    billable_units: { type: 'string' },
-                  },
-                },
-              },
-              costs: {
-                type: 'array',
-                items: {
-                  type: 'object',
-                  additionalProperties: false,
-                  required: ['currency', 'provider_cost', 'markup', 'usage_charge'],
+                  required: ['currency', 'usage_charge'],
                   properties: {
                     currency: { type: 'string' },
-                    provider_cost: exactMoneySchema,
-                    markup: exactMoneySchema,
                     usage_charge: exactMoneySchema,
                   },
                 },

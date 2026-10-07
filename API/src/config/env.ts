@@ -41,6 +41,8 @@ const EnvSchema = z
     // If unset, we fall back to `http://${HOST}:${PORT}`.
     PUBLIC_BASE_URL: z.string().min(1).optional(),
     LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
+    // Optional access-status diagnostics; never enabled by client config or DEBUG_ENABLED.
+    AUTH_ACCESS_STATUS_ENABLED: z.preprocess(normalizeBoolean, z.boolean().default(false)),
     DEBUG_ENABLED: z.preprocess(normalizeBoolean, z.boolean().default(false)),
     // Single global shared secret used for domain hashing and client-domain access tokens.
     SHARED_SECRET: z.string().min(32),

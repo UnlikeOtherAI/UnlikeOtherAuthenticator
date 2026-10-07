@@ -148,6 +148,7 @@ Set via Cloud Run service config:
 
 | Variable                                    | Source                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AUTH_ACCESS_STATUS_ENABLED`               | Optional access-status debugging only. Default `false`; unset/false removes the login entry and returns 404 on all website/native lifecycle-status start/verify endpoints before work, including previously issued proofs. Set `true` only on the auth-server environment for intentional diagnostics; restart/redeploy to apply. Independent of `DEBUG_ENABLED` and product config. |
 | `AUTH_SERVICE_IDENTIFIER`                   | Optional plain override; internal issuer/audience for service-issued tokens. Defaults to the `PUBLIC_BASE_URL` host and is not required in client config JWTs                                                                                                                                                                                                                                                                                                     |
 | `ADMIN_AUTH_DOMAIN`                         | Optional plain override; domain allowed into the Admin panel. Defaults to the resolved auth service identifier                                                                                                                                                                                                                                                                                                                                                    |
 | `ADMIN_ACCESS_TOKEN_SECRET`                 | Secret Manager: `uoa-admin-access-token-secret`; used to sign tokens issued for `ADMIN_AUTH_DOMAIN`; route-level requirement for admin access                                                                                                                                                                                                                                                                                                                     |
@@ -671,12 +672,14 @@ changed immutable term, or remote mismatch aborts the whole operation. A second
 exact run reports no-op actions. Output contains IDs and decisions but no
 credentials.
 
-The opt-in PostgreSQL credit-settlement integration gate is:
+CI enables the PostgreSQL funding and credit-settlement integration gate against
+its disposable Postgres service. To run the same financial persistence checks
+locally:
 
 ```bash
 BILLING_FUNDING_DATABASE_TESTS=true DATABASE_URL='<isolated PostgreSQL URL>' \
   pnpm --filter @uoa/api exec vitest run \
-  tests/integration/billing-credit-settlement.persistence.test.ts
+  tests/integration/billing-*.persistence.test.ts
 ```
 
 Run it only against a disposable database: the shared test helper applies the
@@ -736,3 +739,19 @@ Numeric loopback registration permits the client's ephemeral port; every later
 redirect comparison is exact. Upload the existing Kelpie 256px app icon. Verify the
 hosted page and Google destination before releasing clients that send this app ID.
 Security policy edits revoke previous client revisions; cosmetic edits preserve them.
+
+### Access-status diagnostic environment example
+
+Keep this optional diagnostic disabled in normal deployments:
+
+```dotenv
+AUTH_ACCESS_STATUS_ENABLED=false
+```
+
+An operator can explicitly set `true` in the auth-server environment for temporary
+debugging, then redeploy/restart. Remove it or restore `false` and redeploy/restart
+to close both new and outstanding proof requests. The main deployment's explicit
+environment list leaves this setting absent, so it ships disabled. No product
+config, URL parameter or browser storage value enables it. The login entry and
+all four `/auth/lifecycle-status/{start,verify}` and
+`/oauth/lifecycle-status/{start,verify}` endpoints share this server-owned flag.

@@ -1,3 +1,5 @@
+import { ApiRequestError } from '../../services/api-client';
+import { logoutAdminSession } from '../../services/admin-debug-login-service';
 import {
   Fragment,
   createContext,
@@ -14,6 +16,7 @@ import { adminEnv } from '../../config/env';
 import {
   clearStoredAdminSession,
   readStoredAdminSession,
+  readStoredAdminSessionForLogout,
   writeStoredAdminSession,
 } from './admin-session-storage';
 
@@ -29,7 +32,8 @@ type AdminSessionContextValue = {
   isLoading: boolean;
   isAuthenticated: boolean;
   completeSignIn: (accessToken: string, expiresInSeconds: number) => Promise<AdminUser>;
-  signOut: () => void;
+  signOut: () => Promise<void>;
+  clearFailedSignIn: () => void;
 };
 
 const AdminSessionContext = createContext<AdminSessionContextValue | null>(null);
@@ -74,12 +78,23 @@ export function AdminSessionProvider({ children }: PropsWithChildren) {
       isAuthenticated: Boolean(adminUser),
       isLoading,
       async completeSignIn(accessToken, expiresInSeconds) {
-        writeStoredAdminSession(accessToken, expiresInSeconds);
         const nextUser = await fetchAdminUser(accessToken);
+        writeStoredAdminSession(accessToken, expiresInSeconds);
         setAdminUser(nextUser);
         return nextUser;
       },
-      signOut() {
+      clearFailedSignIn() {
+        clearStoredAdminSession();
+        setAdminUser(null);
+      },
+      async signOut() {
+        const stored = readStoredAdminSessionForLogout();
+        if (stored) {
+          try { await logoutAdminSession(stored.accessToken); }
+          catch (error) {
+            if (!(error instanceof ApiRequestError) || ![401, 403].includes(error.status)) throw error;
+          }
+        }
         clearStoredAdminSession();
         setAdminUser(null);
       },
@@ -106,6 +121,7 @@ export function useAdminSessionActions() {
   return {
     completeSignIn: session.completeSignIn,
     signOut: session.signOut,
+    clearFailedSignIn: session.clearFailedSignIn,
   };
 }
 

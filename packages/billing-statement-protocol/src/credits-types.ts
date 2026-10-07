@@ -1,11 +1,14 @@
 import type { ExactMoney } from './types.js';
 import type { BillingSubjectRequest } from './funding-schema-primitives.js';
 import type { BillingControlledByV1 } from './org-billing-types.js';
+import type { BillingCreditAttentionV1, BillingCreditFundingRequestActionV1 } from './credits-attention-types.js';
 
 export const BILLING_CREDITS_SCHEMA_VERSION = 1 as const;
-// BillingCreditsV1 has not been released yet. This remains the coordinated V1
-// contract consumed by UOA and its four launch consumers.
-export const BILLING_CREDITS_PROTOCOL_VERSION = '1.0.0' as const;
+// BillingCreditsV1 is shared by UOA and pinned consumer package revisions.
+// Additive fields require an explicit read capability header while older
+// consumers still validate the previous strict schema.
+export const BILLING_CREDITS_PROTOCOL_VERSION = '2.0.0' as const;
+export const BILLING_CREDITS_PROTOCOL_HEADER = 'x-uoa-billing-credits-protocol' as const;
 export const BILLING_CREDITS_SCHEMA_PATH = '/schemas/billing-credits-v1.json' as const;
 export const BILLING_CREDITS_EXAMPLE_PATH = '/schemas/billing-credits-v1.example.json' as const;
 export const BILLING_CREDITS_OPENAPI_PATH = '/schemas/billing-credits-v1.openapi.json' as const;
@@ -113,7 +116,7 @@ type BillingCreditsCommonV1<PendingPayment> = {
   };
   credit_balance: BillingCreditAmount & {
     state: 'available' | 'zero' | 'debt';
-    label: 'Remaining credits';
+    label: string;
     description: string;
   };
   pending_credits: {
@@ -123,6 +126,11 @@ type BillingCreditsCommonV1<PendingPayment> = {
     label: string;
     description: string;
   };
+  /** Confirmed balance and entries remain visible while unconfirmed usage is held. */
+  billing_status?: {
+    settlement_state: 'current' | 'pending_reconciliation';
+    message: string;
+  };
   /**
    * Present only while the organisation has taken billing over from its teams
    * (protocol 1.3.0). While it is present this team offers no funding action —
@@ -131,6 +139,9 @@ type BillingCreditsCommonV1<PendingPayment> = {
    * read-only balance rather than controls that would 403.
    */
   controlled_by?: BillingControlledByV1;
+  /** Present only for consumers negotiating presentation version 1.5.0. */
+  attention?: BillingCreditAttentionV1[];
+  funding_request?: BillingCreditFundingRequestActionV1;
 };
 
 type BillingCreditsFundingOfferBase = {

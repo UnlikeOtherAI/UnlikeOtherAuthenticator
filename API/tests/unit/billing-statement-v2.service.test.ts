@@ -66,6 +66,16 @@ const summary = {
     synced_at: now.toISOString(),
   },
 };
+const effectiveTerm = {
+  tariffId: 'tariff_standard_v4', assignmentId: 'assignment_1',
+  tariff: {
+    id: 'tariff_standard_v4', serviceId: 'service_deepwater', key: 'standard',
+    version: 4, name: 'Standard', mode: 'STANDARD', collectionMode: 'STRIPE',
+    markupBps: 2_000, monthlyAmountMinor: 2000n, currency: 'GBP',
+    monthlyChargeBasis: 'FLAT', seatPolicy: null, seatChargeTiming: null,
+    usagePaymentMode: 'PAY_AS_YOU_GO',
+  },
+};
 
 function line(overrides: Partial<RawMeteringLine> = {}): RawMeteringLine {
   const result: RawMeteringLine = {
@@ -80,6 +90,7 @@ function line(overrides: Partial<RawMeteringLine> = {}): RawMeteringLine {
     selectedProviderCost: null,
     currency: null,
     costProvenance: null,
+    billingDisposition: 'paid',
     billingProduct: 'deepwater',
     callerProduct: 'deepwater',
     originProduct: 'deepwater',
@@ -99,6 +110,7 @@ function portfolio(
   const suffix = groupBy === 'service' ? '0' : '1';
   return {
     schemaVersion: 1,
+    billingCompleteness: { state: 'complete', unresolvedPaidAttempts: '0' },
     contract: 'metering-portfolio-v1',
     perspectiveProduct: 'deepwater',
     groupBy,
@@ -130,12 +142,15 @@ function prisma() {
       findUnique: vi.fn().mockResolvedValue({ name: 'Standard' }),
     },
     billingService: {
+      findUnique: vi.fn().mockResolvedValue({ tariffHistoryFromMonth: '2026-01' }),
       findMany: vi.fn().mockResolvedValue([
         { identifier: 'deepwater', name: 'DeepWater' },
         { identifier: 'nessie', name: 'Nessie' },
         { identifier: 'deeptest', name: 'DeepTest' },
       ]),
     },
+    billingTariffTermEvent: { findFirst: vi.fn().mockResolvedValue(effectiveTerm) },
+    billingOrganisationContractVersion: { findMany: vi.fn().mockResolvedValue([]) },
     billingCommercialAdjustment: {
       findMany: vi.fn().mockResolvedValue([]),
     },
@@ -180,6 +195,36 @@ function dependencies(
 }
 
 describe('canonical UOA BillingStatementV2', () => {
+  it('localizes customer charges without restoring private usage or tariff details', async () => {
+    const fetchPortfolio = vi.fn(async ({ groupBy }: { groupBy: 'service' | 'user' }) =>
+      portfolio(groupBy, [line({
+        inputUnits: '1000',
+        estimatedProviderCost: '1.25',
+        selectedProviderCost: '1.25',
+        currency: 'USD',
+        userId: 'user_1',
+      })]),
+    );
+    const deps = dependencies(fetchPortfolio);
+    const statement = await getCanonicalBillingStatementV2(
+      { request, actorToken: 'signed-actor', credential, billingMonth: '2026-07', locale: 'cs' },
+      deps.values,
+    );
+
+    expect(statement.commercial_lines.find((line) => line.kind === 'usage')).toMatchObject({
+      label: 'Spotřeba podle využití',
+      detail: 'Cena spotřeby za toto fakturační období',
+    });
+    expect(statement).not.toHaveProperty('connected_service_usage');
+    expect(JSON.stringify(statement)).not.toMatch(
+      /raw_units|usage_unit|provider[_ ]cost|markup|multiplier|billable_units|náklady poskytovatele|přirážka|token/i,
+    );
+    const ajv = new Ajv2020({ allErrors: true, strict: true });
+    addFormats(ajv);
+    const validate = ajv.compile(billingStatementV2JsonSchema);
+    expect(validate(statement), JSON.stringify(validate.errors)).toBe(true);
+  });
+
   it('rates only the statement product and emits a self-consistent user-snapshot portfolio', async () => {
     const userLines = [
       line({
@@ -247,56 +292,13 @@ describe('canonical UOA BillingStatementV2', () => {
       billingMonth: '2026-07',
       groupBy: 'user',
     });
-    expect(statement.usage.cost_totals).toEqual([
+    expect(statement.usage.charge_totals).toEqual([
       expect.objectContaining({
-        provider_cost: expect.objectContaining({ amount: '10' }),
-        markup: expect.objectContaining({ amount: '2' }),
         usage_charge: expect.objectContaining({ amount: '12' }),
       }),
     ]);
-    const deepWater = statement.connected_service_usage.services.find(
-      (service) => service.billing_product === 'deepwater',
-    );
-    expect(deepWater).toMatchObject({
-      access: 'direct',
-      totals: { usage: [{ usage_unit: 'tokens', raw_units: '1000' }] },
-      users: [
-        expect.objectContaining({
-          user_id: 'user_1',
-          usage: [
-            expect.objectContaining({
-              raw_units: '600',
-              share: expect.objectContaining({ basis_points: 6000 }),
-            }),
-          ],
-        }),
-        expect.objectContaining({
-          user_id: 'user_2',
-          usage: [
-            expect.objectContaining({
-              raw_units: '400',
-              share: expect.objectContaining({ basis_points: 4000 }),
-            }),
-          ],
-        }),
-      ],
-    });
-    expect(deepWater?.origins.find((origin) => origin.product === 'nessie')).toMatchObject({
-      usage: [
-        expect.objectContaining({
-          raw_units: '440',
-          share: expect.objectContaining({ basis_points: 4400, percent: '44.00' }),
-        }),
-      ],
-    });
-    expect(
-      statement.connected_service_usage.services.find(
-        (service) => service.billing_product === 'deeptest',
-      ),
-    ).toMatchObject({
-      access: 'indirect',
-      totals: { usage: [{ usage_unit: 'test_runs', raw_units: '1' }] },
-    });
+    expect(statement).not.toHaveProperty('connected_service_usage');
+    expect(JSON.stringify(statement)).not.toMatch(/raw_units|usage_unit|call_share|provider_cost/i);
     expect(statement.commercial_lines.every((item) => item.product === 'deepwater')).toBe(true);
     expect(deps.database.teamMember.findMany).toHaveBeenCalledWith({
       where: {
@@ -318,6 +320,9 @@ describe('canonical UOA BillingStatementV2', () => {
     addFormats(ajv);
     const validate = ajv.compile(billingStatementV2JsonSchema);
     expect(validate(statement), JSON.stringify(validate.errors)).toBe(true);
+    expect(JSON.stringify(statement)).not.toMatch(
+      /markup|provider[_ ]cost|multiplier|billable_units|rated_charge|cost_totals/i,
+    );
   });
 
   it('preserves unknown provenance and canonicalizes the statement product once', async () => {
@@ -353,18 +358,8 @@ describe('canonical UOA BillingStatementV2', () => {
       caller_product: 'unattributed',
       origin_product: 'unattributed',
     });
-    expect(
-      statement.connected_service_usage.services[0]?.origins.find(
-        (origin) => origin.product === null,
-      ),
-    ).toMatchObject({
-      display_name: 'Unattributed origin',
-      usage: [
-        expect.objectContaining({
-          share: expect.objectContaining({ basis_points: 10000 }),
-        }),
-      ],
-    });
+    expect(statement).not.toHaveProperty('connected_service_usage');
+    expect(JSON.stringify(statement)).not.toMatch(/raw_units|usage_unit|call_share|provider_cost/i);
     expect(statement.actions.find((action) => action.id === 'cancel')).toMatchObject({
       request: { body: { product: 'deepwater' } },
     });

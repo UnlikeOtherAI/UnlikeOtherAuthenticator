@@ -1,6 +1,8 @@
 import { BillingCreditCheckoutStatus, type PrismaClient } from '@prisma/client';
 import { createHash } from 'node:crypto';
 import type Stripe from 'stripe';
+import type { BillingCustomerLocale } from '../contracts/billing-statement-v1.js';
+import { stripeBillingLocale } from './billing-stripe-locale.js';
 
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
@@ -90,11 +92,11 @@ function sameScopeBinding(
   );
 }
 
-function openRedirect(session: Stripe.Checkout.Session): { redirect_url: string } {
+function openRedirect(session: Stripe.Checkout.Session, purchaseId?: string) {
   if (session.status !== 'open' || !session.url || !session.url.startsWith('https://')) {
     throw new AppError('BAD_REQUEST', 409, 'BILLING_CREDIT_TOP_UP_NOT_OPEN');
   }
-  return { redirect_url: session.url };
+  return { redirect_url: session.url, ...(purchaseId ? { purchase_id: purchaseId } : {}) };
 }
 
 type Dependencies = {
@@ -112,9 +114,11 @@ export async function createBillingCreditTopUpCheckout(
     actorToken: string;
     credential: VerifiedBillingAppKey;
     endpoint: BillingActorEndpoint;
+    includePurchaseId?: boolean;
+    locale?: BillingCustomerLocale;
   },
   deps?: Dependencies,
-): Promise<{ redirect_url: string }> {
+): Promise<{ redirect_url: string; purchase_id?: string }> {
   const prisma = deps?.prisma ?? getAdminPrisma();
   const context = await (deps?.resolveContext ?? resolveCreditFundingActionContext)(
     {
@@ -185,7 +189,7 @@ export async function createBillingCreditTopUpCheckout(
       },
       { prisma, stripe: context.stripe },
     );
-    if (recovered.session) return openRedirect(recovered.session);
+    if (recovered.session) return openRedirect(recovered.session, params.includePurchaseId ? replay.id : undefined);
     throw new AppError('INTERNAL', 503, 'BILLING_CREDIT_TOP_UP_RETRY');
   }
 
@@ -216,7 +220,7 @@ export async function createBillingCreditTopUpCheckout(
       { prisma, stripe: context.stripe },
     );
     if (sameScopeBinding(unresolved, expected) && recovered.session?.status === 'open') {
-      return openRedirect(recovered.session);
+      return openRedirect(recovered.session, params.includePurchaseId ? unresolved.id : undefined);
     }
     if (!recovered.abandoned && recovered.session?.status !== 'expired') {
       throw new AppError('BAD_REQUEST', 409, 'BILLING_CREDIT_TOP_UP_PENDING');
@@ -272,7 +276,9 @@ export async function createBillingCreditTopUpCheckout(
         },
         { prisma, stripe: context.stripe },
       );
-      if (recovered.session?.status === 'open') return openRedirect(recovered.session);
+      if (recovered.session?.status === 'open') {
+        return openRedirect(recovered.session, params.includePurchaseId ? winner.id : undefined);
+      }
     }
     throw new AppError('BAD_REQUEST', 409, 'BILLING_CREDIT_TOP_UP_PENDING');
   }
@@ -287,6 +293,7 @@ export async function createBillingCreditTopUpCheckout(
   const session = await context.stripe.checkout.sessions.create(
     {
       mode: 'payment',
+      ...(params.locale ? { locale: stripeBillingLocale(params.locale) } : {}),
       customer: context.customer.stripeCustomerId as string,
       client_reference_id: checkout.id,
       success_url: returns.checkoutSuccess,
@@ -326,5 +333,5 @@ export async function createBillingCreditTopUpCheckout(
       expiresAt: new Date(session.expires_at * 1000),
     },
   });
-  return openRedirect(session);
+  return openRedirect(session, params.includePurchaseId ? checkout.id : undefined);
 }

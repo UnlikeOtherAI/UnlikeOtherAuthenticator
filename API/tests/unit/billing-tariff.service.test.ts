@@ -7,6 +7,16 @@ import {
 } from '../../src/services/billing-tariff.service.js';
 
 describe('billing tariff validation', () => {
+  it('defaults omitted standard markup centrally while preserving explicit terms', () => {
+    const base = {
+      key: 'standard', name: 'Standard', mode: 'standard' as const,
+      collectionMode: 'none' as const, monthlyAmountMinor: '0', currency: 'USD',
+    };
+    expect(normalizeTariffInput(base).markupBps).toBe(3000);
+    expect(normalizeTariffInput({ ...base, markupBps: 1250 }).markupBps).toBe(1250);
+    expect(normalizeTariffInput({ ...base, mode: 'at_cost' }).markupBps).toBe(0);
+    expect(normalizeTariffInput({ ...base, mode: 'free' }).markupBps).toBe(0);
+  });
   it('stores explicit markup and exact monthly minor units', () => {
     expect(
       normalizeTariffInput({
@@ -26,6 +36,31 @@ describe('billing tariff validation', () => {
       monthlyAmountMinor: 2000n,
       currency: 'USD',
     });
+  });
+
+  it('keeps omitted legacy terms flat and PAYG while accepting explicit prepaid seat plans', () => {
+    const base = {
+      key: 'standard', name: 'Standard', mode: 'standard' as const,
+      collectionMode: 'stripe' as const, monthlyAmountMinor: '2500', currency: 'USD',
+    };
+    expect(normalizeTariffInput(base)).toMatchObject({
+      monthlyChargeBasis: 'FLAT', seatPolicy: null, seatChargeTiming: null,
+      usagePaymentMode: 'PAY_AS_YOU_GO', markupBps: 3000,
+    });
+    expect(normalizeTariffInput({ ...base, monthlyChargeBasis: 'per_seat',
+      usagePaymentMode: 'prepaid' })).toMatchObject({
+      monthlyChargeBasis: 'PER_SEAT', seatPolicy: 'AUTOMATIC',
+      seatChargeTiming: 'PRORATED', usagePaymentMode: 'PREPAID',
+      monthlyAmountMinor: 2500n,
+    });
+    expect(normalizeTariffInput({ ...base, monthlyChargeBasis: 'per_seat',
+      seatPolicy: 'fixed', seatChargeTiming: 'full_month' })).toMatchObject({
+      seatPolicy: 'FIXED', seatChargeTiming: 'FULL_MONTH',
+    });
+    expect(() => normalizeTariffInput({ ...base, seatPolicy: 'fixed' }))
+      .toThrowError('INVALID_FLAT_SEAT_TERMS');
+    expect(() => normalizeTariffInput({ ...base, usagePaymentMode: 'invalid' as never }))
+      .toThrowError('INVALID_USAGE_PAYMENT_MODE');
   });
 
   it('requires free tariffs to have no usage markup or subscription', () => {
@@ -102,6 +137,8 @@ describe('billing tariff validation', () => {
   it('retries a concurrent default update in a serializable transaction', async () => {
     const tariff = { id: 'tariff_2', serviceId: 'service_1', isDefault: false };
     const transactionClient = {
+      $queryRaw: vi.fn().mockResolvedValue([{ id: 'service_1' }]),
+      billingTariffTermEvent: { create: vi.fn().mockResolvedValue({}) },
       billingTariff: {
         findFirst: vi.fn().mockResolvedValue(tariff),
         updateMany: vi.fn().mockResolvedValue({ count: 1 }),

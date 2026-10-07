@@ -65,6 +65,7 @@ export function registerRootRoute(app: FastifyInstance): void {
       config_validation: configValidationEndpointDocumentation,
       config_verification: configVerificationEndpointDocumentation,
       endpoints,
+      customer_invoices: 'Actual prepaid payment and monthly service charge invoices use the /billing/v1/invoices/* endpoints; their canonical JSON Schema and examples are at /schemas/billing-customer-invoices-v1.json.',
       lifecycle: lifecycleDocumentation,
       debug_login: {
         issue: { method: 'POST', path: '/auth/debug-login/issue', auth: 'domain bearer plus source refresh_token',
@@ -72,7 +73,18 @@ export function registerRootRoute(app: FastifyInstance): void {
           response: { token: 'opaque one-use code', expires_in: 1800 } },
         redeem: { method: 'POST', path: '/auth/debug-login/redeem', auth: 'domain bearer',
           body: { token: 'opaque one-use code' }, response: 'Independent access and refresh token pair' },
-        binding: 'Exact verified config_url, domain, client, source refresh family, credential epoch and selected team. Tokens travel only in POST bodies.',
+        binding: 'Exact verified config_url, domain, client, source refresh family, credential epoch and selected team. Supported Nessie theme variants of the signed config URL are presentation-only; other query parameters retain their identity. Tokens travel only in POST bodies.',
+      },
+      admin_debug_login: {
+        issue: { method: 'POST', path: '/internal/admin/debug-login/issue', auth: 'current admin bearer and exact bearer-bound HttpOnly source cookie; same-origin JSON POST',
+          query: { config_url: 'exact first-party /internal/admin/config URL' }, body: { previous_token: 'optional previous code' },
+          response: { url: 'canonical /admin/login URL', token: 'one-use code', expires_in: 'seconds, capped by source lifetime' } },
+        redeem: { method: 'POST', path: '/internal/admin/debug-login/redeem', auth: 'one-use admin code; same-origin JSON POST',
+          query: { config_url: 'exact first-party admin config URL' }, body: { token: 'one-use code' },
+          response: { access_token: 'new short-lived admin bearer', expires_in: 'seconds', token_type: 'Bearer' } },
+        logout: { method: 'POST', path: '/internal/admin/logout', auth: 'admin bearer; exact same-origin JSON POST',
+          query: { config_url: 'exact first-party admin config URL' }, body: {}, response: { ok: true } },
+        binding: 'Current ACTIVE canonical identity, SUPERUSER admin-domain role, credential epoch, exact config and source family. A new private cookie is set for the independent recipient family; refresh tokens never appear in JSON.',
       },
       product_api_concurrency:
         'Product data APIs — /org/*, /domain/*, /settings/*, /internal/org/*, /avatar/*, /email/* — share a small per-instance concurrency cap so sign-in always keeps database connections. An excess request waits briefly in FIFO order, then answers 503 with Retry-After: 1 and code PRODUCT_API_BUSY (the request had no effect). Retry after the delay with backoff and never fan out one UOA call per end-user request: resolve /org/me and settings once per session and cache them. /auth/* (including /auth/token), /oauth/*, /2fa/*, /integrations/*, /internal/admin/*, /billing/* and discovery are never limited.',

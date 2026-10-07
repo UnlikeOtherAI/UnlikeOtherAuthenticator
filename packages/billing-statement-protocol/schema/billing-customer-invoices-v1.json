@@ -1,0 +1,1620 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "/schemas/billing-customer-invoices-v1.json",
+  "title": "UOA actual customer charge invoices",
+  "description": "Actual issued payment documents only; usage evidence stays in separate breakdowns.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "list_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "product",
+        "organisation_id",
+        "team_id",
+        "user_id",
+        "charge_month"
+      ],
+      "properties": {
+        "product": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "organisation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "team_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "user_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "charge_month": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      }
+    },
+    "list_response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "generated_at",
+        "subject",
+        "charge_month",
+        "invoices",
+        "next_cursor"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": 1
+        },
+        "generated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "subject": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "product",
+            "organisation_id",
+            "team_id",
+            "user_id"
+          ],
+          "properties": {
+            "product": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "organisation_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "team_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "user_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          }
+        },
+        "charge_month": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"
+        },
+        "invoices": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "invoice_id",
+              "kind",
+              "status",
+              "number",
+              "charged_at",
+              "charge_month",
+              "payments_in_charge_month",
+              "issued_at",
+              "scope",
+              "product_identifiers",
+              "totals",
+              "document_available"
+            ],
+            "properties": {
+              "invoice_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "kind": {
+                "enum": [
+                  "prepaid_purchase",
+                  "monthly_service",
+                  "adjustment",
+                  "credit_note"
+                ]
+              },
+              "status": {
+                "enum": [
+                  "pending_document",
+                  "issued",
+                  "paid",
+                  "partially_paid",
+                  "voided",
+                  "refunded",
+                  "partially_refunded",
+                  "disputed",
+                  "partially_disputed",
+                  "written_off"
+                ]
+              },
+              "number": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "charged_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "charge_month": {
+                "type": "string",
+                "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"
+              },
+              "payments_in_charge_month": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "amount",
+                  "amount_minor",
+                  "currency",
+                  "display"
+                ],
+                "properties": {
+                  "amount": {
+                    "type": "string",
+                    "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                  },
+                  "amount_minor": {
+                    "type": "string",
+                    "pattern": "^[0-9]+$"
+                  },
+                  "currency": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{3}$"
+                  },
+                  "display": {
+                    "type": "string"
+                  }
+                }
+              },
+              "issued_at": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "scope": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "organisation_id",
+                  "team_id",
+                  "scope_type"
+                ],
+                "properties": {
+                  "organisation_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "team_id": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 256
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "scope_type": {
+                    "enum": [
+                      "team",
+                      "organisation"
+                    ]
+                  }
+                },
+                "allOf": [
+                  {
+                    "if": {
+                      "properties": {
+                        "scope_type": {
+                          "const": "organisation"
+                        }
+                      }
+                    },
+                    "then": {
+                      "properties": {
+                        "team_id": {
+                          "type": "null"
+                        }
+                      }
+                    },
+                    "else": {
+                      "properties": {
+                        "team_id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        }
+                      }
+                    }
+                  }
+                ]
+              },
+              "product_identifiers": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "uniqueItems": true
+              },
+              "totals": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "currency",
+                  "gross_total",
+                  "tax",
+                  "credits_applied",
+                  "voided_amount",
+                  "total_due",
+                  "total_paid",
+                  "refunded_amount",
+                  "disputed_amount",
+                  "write_off",
+                  "outstanding"
+                ],
+                "properties": {
+                  "currency": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{3}$"
+                  },
+                  "gross_total": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "amount",
+                      "amount_minor",
+                      "currency",
+                      "display"
+                    ],
+                    "properties": {
+                      "amount": {
+                        "type": "string",
+                        "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                      },
+                      "amount_minor": {
+                        "type": "string",
+                        "pattern": "^[0-9]+$"
+                      },
+                      "currency": {
+                        "type": "string",
+                        "pattern": "^[A-Z]{3}$"
+                      },
+                      "display": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "tax": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "amount",
+                          "amount_minor",
+                          "currency",
+                          "display"
+                        ],
+                        "properties": {
+                          "amount": {
+                            "type": "string",
+                            "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                          },
+                          "amount_minor": {
+                            "type": "string",
+                            "pattern": "^[0-9]+$"
+                          },
+                          "currency": {
+                            "type": "string",
+                            "pattern": "^[A-Z]{3}$"
+                          },
+                          "display": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "credits_applied": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "amount",
+                      "amount_minor",
+                      "currency",
+                      "display"
+                    ],
+                    "properties": {
+                      "amount": {
+                        "type": "string",
+                        "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                      },
+                      "amount_minor": {
+                        "type": "string",
+                        "pattern": "^[0-9]+$"
+                      },
+                      "currency": {
+                        "type": "string",
+                        "pattern": "^[A-Z]{3}$"
+                      },
+                      "display": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "voided_amount": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "amount",
+                      "amount_minor",
+                      "currency",
+                      "display"
+                    ],
+                    "properties": {
+                      "amount": {
+                        "type": "string",
+                        "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                      },
+                      "amount_minor": {
+                        "type": "string",
+                        "pattern": "^[0-9]+$"
+                      },
+                      "currency": {
+                        "type": "string",
+                        "pattern": "^[A-Z]{3}$"
+                      },
+                      "display": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "total_due": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "amount",
+                      "amount_minor",
+                      "currency",
+                      "display"
+                    ],
+                    "properties": {
+                      "amount": {
+                        "type": "string",
+                        "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                      },
+                      "amount_minor": {
+                        "type": "string",
+                        "pattern": "^[0-9]+$"
+                      },
+                      "currency": {
+                        "type": "string",
+                        "pattern": "^[A-Z]{3}$"
+                      },
+                      "display": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "total_paid": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "amount",
+                      "amount_minor",
+                      "currency",
+                      "display"
+                    ],
+                    "properties": {
+                      "amount": {
+                        "type": "string",
+                        "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                      },
+                      "amount_minor": {
+                        "type": "string",
+                        "pattern": "^[0-9]+$"
+                      },
+                      "currency": {
+                        "type": "string",
+                        "pattern": "^[A-Z]{3}$"
+                      },
+                      "display": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "refunded_amount": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "amount",
+                      "amount_minor",
+                      "currency",
+                      "display"
+                    ],
+                    "properties": {
+                      "amount": {
+                        "type": "string",
+                        "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                      },
+                      "amount_minor": {
+                        "type": "string",
+                        "pattern": "^[0-9]+$"
+                      },
+                      "currency": {
+                        "type": "string",
+                        "pattern": "^[A-Z]{3}$"
+                      },
+                      "display": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "disputed_amount": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "amount",
+                      "amount_minor",
+                      "currency",
+                      "display"
+                    ],
+                    "properties": {
+                      "amount": {
+                        "type": "string",
+                        "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                      },
+                      "amount_minor": {
+                        "type": "string",
+                        "pattern": "^[0-9]+$"
+                      },
+                      "currency": {
+                        "type": "string",
+                        "pattern": "^[A-Z]{3}$"
+                      },
+                      "display": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "write_off": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "amount",
+                      "amount_minor",
+                      "currency",
+                      "display"
+                    ],
+                    "properties": {
+                      "amount": {
+                        "type": "string",
+                        "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                      },
+                      "amount_minor": {
+                        "type": "string",
+                        "pattern": "^[0-9]+$"
+                      },
+                      "currency": {
+                        "type": "string",
+                        "pattern": "^[A-Z]{3}$"
+                      },
+                      "display": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "outstanding": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "amount",
+                      "amount_minor",
+                      "currency",
+                      "display"
+                    ],
+                    "properties": {
+                      "amount": {
+                        "type": "string",
+                        "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                      },
+                      "amount_minor": {
+                        "type": "string",
+                        "pattern": "^[0-9]+$"
+                      },
+                      "currency": {
+                        "type": "string",
+                        "pattern": "^[A-Z]{3}$"
+                      },
+                      "display": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "customer_credit_due": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "amount",
+                      "amount_minor",
+                      "currency",
+                      "display"
+                    ],
+                    "properties": {
+                      "amount": {
+                        "type": "string",
+                        "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                      },
+                      "amount_minor": {
+                        "type": "string",
+                        "pattern": "^[0-9]+$"
+                      },
+                      "currency": {
+                        "type": "string",
+                        "pattern": "^[A-Z]{3}$"
+                      },
+                      "display": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              },
+              "document_available": {
+                "type": "boolean"
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "status": {
+                      "const": "pending_document"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "number": {
+                      "type": "null"
+                    },
+                    "issued_at": {
+                      "type": "null"
+                    },
+                    "document_available": {
+                      "const": false
+                    }
+                  }
+                },
+                "else": {
+                  "properties": {
+                    "number": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "issued_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "totals": {
+                      "type": "object",
+                      "properties": {
+                        "tax": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "amount",
+                            "amount_minor",
+                            "currency",
+                            "display"
+                          ],
+                          "properties": {
+                            "amount": {
+                              "type": "string",
+                              "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                            },
+                            "amount_minor": {
+                              "type": "string",
+                              "pattern": "^[0-9]+$"
+                            },
+                            "currency": {
+                              "type": "string",
+                              "pattern": "^[A-Z]{3}$"
+                            },
+                            "display": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "document_available": {
+                      "const": true
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "next_cursor": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "detail_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "product",
+        "organisation_id",
+        "team_id",
+        "user_id",
+        "invoice_id"
+      ],
+      "properties": {
+        "product": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "organisation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "team_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "user_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "invoice_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "charge_month": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"
+        }
+      }
+    },
+    "detail_response": {
+      "type": "object",
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "pending_document"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "number": {
+                "type": "null"
+              },
+              "issued_at": {
+                "type": "null"
+              },
+              "document_available": {
+                "const": false
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "number": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "issued_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "totals": {
+                "type": "object",
+                "properties": {
+                  "tax": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "amount",
+                      "amount_minor",
+                      "currency",
+                      "display"
+                    ],
+                    "properties": {
+                      "amount": {
+                        "type": "string",
+                        "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                      },
+                      "amount_minor": {
+                        "type": "string",
+                        "pattern": "^[0-9]+$"
+                      },
+                      "currency": {
+                        "type": "string",
+                        "pattern": "^[A-Z]{3}$"
+                      },
+                      "display": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              },
+              "document_available": {
+                "const": true
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "pending_document"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "document": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "document": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      ],
+      "required": [
+        "invoice_id",
+        "kind",
+        "status",
+        "number",
+        "charged_at",
+        "charge_month",
+        "payments_in_charge_month",
+        "issued_at",
+        "scope",
+        "product_identifiers",
+        "totals",
+        "document_available",
+        "schema_version",
+        "payments",
+        "charges",
+        "document"
+      ],
+      "properties": {
+        "invoice_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "kind": {
+          "enum": [
+            "prepaid_purchase",
+            "monthly_service",
+            "adjustment",
+            "credit_note"
+          ]
+        },
+        "status": {
+          "enum": [
+            "pending_document",
+            "issued",
+            "paid",
+            "partially_paid",
+            "voided",
+            "refunded",
+            "partially_refunded",
+            "disputed",
+            "partially_disputed",
+            "written_off"
+          ]
+        },
+        "number": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "charged_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "charge_month": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"
+        },
+        "payments_in_charge_month": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "amount",
+            "amount_minor",
+            "currency",
+            "display"
+          ],
+          "properties": {
+            "amount": {
+              "type": "string",
+              "pattern": "^[0-9]+(\\.[0-9]+)?$"
+            },
+            "amount_minor": {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            },
+            "currency": {
+              "type": "string",
+              "pattern": "^[A-Z]{3}$"
+            },
+            "display": {
+              "type": "string"
+            }
+          }
+        },
+        "issued_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "scope": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "organisation_id",
+            "team_id",
+            "scope_type"
+          ],
+          "properties": {
+            "organisation_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "team_id": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "scope_type": {
+              "enum": [
+                "team",
+                "organisation"
+              ]
+            }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "scope_type": {
+                    "const": "organisation"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "team_id": {
+                    "type": "null"
+                  }
+                }
+              },
+              "else": {
+                "properties": {
+                  "team_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "product_identifiers": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "uniqueItems": true
+        },
+        "totals": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "currency",
+            "gross_total",
+            "tax",
+            "credits_applied",
+            "voided_amount",
+            "total_due",
+            "total_paid",
+            "refunded_amount",
+            "disputed_amount",
+            "write_off",
+            "outstanding"
+          ],
+          "properties": {
+            "currency": {
+              "type": "string",
+              "pattern": "^[A-Z]{3}$"
+            },
+            "gross_total": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "amount",
+                "amount_minor",
+                "currency",
+                "display"
+              ],
+              "properties": {
+                "amount": {
+                  "type": "string",
+                  "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                },
+                "amount_minor": {
+                  "type": "string",
+                  "pattern": "^[0-9]+$"
+                },
+                "currency": {
+                  "type": "string",
+                  "pattern": "^[A-Z]{3}$"
+                },
+                "display": {
+                  "type": "string"
+                }
+              }
+            },
+            "tax": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "amount",
+                    "amount_minor",
+                    "currency",
+                    "display"
+                  ],
+                  "properties": {
+                    "amount": {
+                      "type": "string",
+                      "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                    },
+                    "amount_minor": {
+                      "type": "string",
+                      "pattern": "^[0-9]+$"
+                    },
+                    "currency": {
+                      "type": "string",
+                      "pattern": "^[A-Z]{3}$"
+                    },
+                    "display": {
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "credits_applied": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "amount",
+                "amount_minor",
+                "currency",
+                "display"
+              ],
+              "properties": {
+                "amount": {
+                  "type": "string",
+                  "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                },
+                "amount_minor": {
+                  "type": "string",
+                  "pattern": "^[0-9]+$"
+                },
+                "currency": {
+                  "type": "string",
+                  "pattern": "^[A-Z]{3}$"
+                },
+                "display": {
+                  "type": "string"
+                }
+              }
+            },
+            "voided_amount": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "amount",
+                "amount_minor",
+                "currency",
+                "display"
+              ],
+              "properties": {
+                "amount": {
+                  "type": "string",
+                  "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                },
+                "amount_minor": {
+                  "type": "string",
+                  "pattern": "^[0-9]+$"
+                },
+                "currency": {
+                  "type": "string",
+                  "pattern": "^[A-Z]{3}$"
+                },
+                "display": {
+                  "type": "string"
+                }
+              }
+            },
+            "total_due": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "amount",
+                "amount_minor",
+                "currency",
+                "display"
+              ],
+              "properties": {
+                "amount": {
+                  "type": "string",
+                  "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                },
+                "amount_minor": {
+                  "type": "string",
+                  "pattern": "^[0-9]+$"
+                },
+                "currency": {
+                  "type": "string",
+                  "pattern": "^[A-Z]{3}$"
+                },
+                "display": {
+                  "type": "string"
+                }
+              }
+            },
+            "total_paid": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "amount",
+                "amount_minor",
+                "currency",
+                "display"
+              ],
+              "properties": {
+                "amount": {
+                  "type": "string",
+                  "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                },
+                "amount_minor": {
+                  "type": "string",
+                  "pattern": "^[0-9]+$"
+                },
+                "currency": {
+                  "type": "string",
+                  "pattern": "^[A-Z]{3}$"
+                },
+                "display": {
+                  "type": "string"
+                }
+              }
+            },
+            "refunded_amount": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "amount",
+                "amount_minor",
+                "currency",
+                "display"
+              ],
+              "properties": {
+                "amount": {
+                  "type": "string",
+                  "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                },
+                "amount_minor": {
+                  "type": "string",
+                  "pattern": "^[0-9]+$"
+                },
+                "currency": {
+                  "type": "string",
+                  "pattern": "^[A-Z]{3}$"
+                },
+                "display": {
+                  "type": "string"
+                }
+              }
+            },
+            "disputed_amount": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "amount",
+                "amount_minor",
+                "currency",
+                "display"
+              ],
+              "properties": {
+                "amount": {
+                  "type": "string",
+                  "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                },
+                "amount_minor": {
+                  "type": "string",
+                  "pattern": "^[0-9]+$"
+                },
+                "currency": {
+                  "type": "string",
+                  "pattern": "^[A-Z]{3}$"
+                },
+                "display": {
+                  "type": "string"
+                }
+              }
+            },
+            "write_off": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "amount",
+                "amount_minor",
+                "currency",
+                "display"
+              ],
+              "properties": {
+                "amount": {
+                  "type": "string",
+                  "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                },
+                "amount_minor": {
+                  "type": "string",
+                  "pattern": "^[0-9]+$"
+                },
+                "currency": {
+                  "type": "string",
+                  "pattern": "^[A-Z]{3}$"
+                },
+                "display": {
+                  "type": "string"
+                }
+              }
+            },
+            "outstanding": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "amount",
+                "amount_minor",
+                "currency",
+                "display"
+              ],
+              "properties": {
+                "amount": {
+                  "type": "string",
+                  "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                },
+                "amount_minor": {
+                  "type": "string",
+                  "pattern": "^[0-9]+$"
+                },
+                "currency": {
+                  "type": "string",
+                  "pattern": "^[A-Z]{3}$"
+                },
+                "display": {
+                  "type": "string"
+                }
+              }
+            },
+            "customer_credit_due": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "amount",
+                "amount_minor",
+                "currency",
+                "display"
+              ],
+              "properties": {
+                "amount": {
+                  "type": "string",
+                  "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                },
+                "amount_minor": {
+                  "type": "string",
+                  "pattern": "^[0-9]+$"
+                },
+                "currency": {
+                  "type": "string",
+                  "pattern": "^[A-Z]{3}$"
+                },
+                "display": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "document_available": {
+          "type": "boolean"
+        },
+        "schema_version": {
+          "const": 1
+        },
+        "payments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "payment_id",
+              "paid_at",
+              "amount"
+            ],
+            "properties": {
+              "payment_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "paid_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "amount": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "amount",
+                  "amount_minor",
+                  "currency",
+                  "display"
+                ],
+                "properties": {
+                  "amount": {
+                    "type": "string",
+                    "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                  },
+                  "amount_minor": {
+                    "type": "string",
+                    "pattern": "^[0-9]+$"
+                  },
+                  "currency": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{3}$"
+                  },
+                  "display": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "charges": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "line_id",
+              "kind",
+              "label",
+              "amount",
+              "credits_purchased"
+            ],
+            "properties": {
+              "line_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "kind": {
+                "enum": [
+                  "prepaid_credits",
+                  "service_charge",
+                  "adjustment"
+                ]
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1
+              },
+              "amount": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "amount",
+                  "amount_minor",
+                  "currency",
+                  "display"
+                ],
+                "properties": {
+                  "amount": {
+                    "type": "string",
+                    "pattern": "^-?[0-9]+(\\.[0-9]+)?$"
+                  },
+                  "amount_minor": {
+                    "type": "string",
+                    "pattern": "^-?[0-9]+$"
+                  },
+                  "currency": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{3}$"
+                  },
+                  "display": {
+                    "type": "string"
+                  }
+                }
+              },
+              "credits_purchased": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "document": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "document_id",
+                "format",
+                "number",
+                "issued_at",
+                "download_action"
+              ],
+              "properties": {
+                "document_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "format": {
+                  "const": "pdf"
+                },
+                "number": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "issued_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "download_action": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "method",
+                    "path",
+                    "body"
+                  ],
+                  "properties": {
+                    "method": {
+                      "const": "POST"
+                    },
+                    "path": {
+                      "const": "/billing/v1/invoices/download"
+                    },
+                    "body": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "product",
+                        "organisation_id",
+                        "team_id",
+                        "user_id",
+                        "invoice_id",
+                        "document_id"
+                      ],
+                      "properties": {
+                        "product": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        },
+                        "organisation_id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        },
+                        "team_id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        },
+                        "user_id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        },
+                        "invoice_id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        },
+                        "document_id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "download_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "product",
+        "organisation_id",
+        "team_id",
+        "user_id",
+        "invoice_id",
+        "document_id"
+      ],
+      "properties": {
+        "product": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "organisation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "team_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "user_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "invoice_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "document_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      }
+    }
+  }
+}

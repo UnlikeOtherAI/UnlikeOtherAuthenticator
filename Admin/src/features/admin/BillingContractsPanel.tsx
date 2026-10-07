@@ -1,7 +1,5 @@
 import { useDirectoryNavigation } from './useDirectoryNavigation';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { useEffect, useMemo, useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { DataTable, Td, PaginationFooter, usePagination } from '../../components/ui/Table';
 import { useBillingNavigation } from './billing-navigation';
@@ -9,13 +7,11 @@ import { useBillingNavigation } from './billing-navigation';
 import { Badge, type BadgeVariant } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { Card, CardHeader } from '../../components/ui/Card';
-import { FieldShell, SelectField, TextField } from '../../components/ui/FormFields';
+import { FieldShell, SelectField } from '../../components/ui/FormFields';
 import type { BillingService } from '../../schemas/billing';
 import {
-  BillingInvoiceCalculateFormSchema,
   type BillingContract,
   type BillingContractVersion,
-  type BillingInvoiceCalculateFormValues,
 } from '../../schemas/billing-contracts';
 import { useOrganisationsQuery } from './admin-queries';
 import {
@@ -27,8 +23,9 @@ import {
   useBillingContractsQuery,
   useBillingInvoiceIssuersQuery,
   useBillingInvoicesQuery,
-  useCalculateBillingInvoiceMutation,
 } from './billing-contract-queries';
+import { BillingInvoiceCalculator } from './BillingInvoiceCalculator';
+import { BillingCycleCorrectionsPanel } from './BillingCycleCorrectionsPanel';
 import { BillingInvoiceDetailDialog } from './BillingInvoiceDetailDialog';
 import { BillingInvoiceHistory } from './BillingInvoiceHistory';
 import {
@@ -47,11 +44,20 @@ function VersionServices({ version }: { version: BillingContractVersion }) {
   return (
     <div className="space-y-1">
       {version.services.map((service) => (
-        <p key={service.service_id} className="whitespace-nowrap text-xs">
+        <p key={service.service_id} className="break-words text-xs leading-relaxed">
           <span className="font-medium text-gray-800">
             {service.service_name ?? service.service_identifier ?? service.service_id}
           </span>{' '}
-          <span className="text-gray-500">· {service.monthly_price.display}</span>
+          <span className="text-gray-500">
+            · {service.monthly_price.display}
+            {service.monthly_charge_basis === 'per_seat' ? ' per seat' : ' monthly'}
+            {service.seat_policy === 'fixed'
+              ? ` · ${service.fixed_seat_quantity} purchased seats`
+              : service.seat_policy === 'automatic' ? ' · active human seats' : ''}
+            {service.seat_charge_timing
+              ? ` · ${service.seat_charge_timing.replace('_', ' ')}` : ''}
+            {` · ${service.usage_payment_mode === 'prepaid' ? 'prepaid usage' : 'usage billed later'}`}
+          </span>
         </p>
       ))}
     </div>
@@ -78,18 +84,11 @@ function VersionAction({
   const label = {
     active: 'Active',
     ready: 'Unavailable',
-    scheduled: `Available ${version.effective_from_month}`,
+    scheduled: `Starts ${version.effective_from_month}`,
     superseded: 'Frozen',
     contract_terminated: 'Contract terminated',
   }[version.actions.activation_state];
   return <span className="text-xs text-gray-400">{label}</span>;
-}
-
-function latestClosedMonth(): string {
-  const now = new Date();
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1))
-    .toISOString()
-    .slice(0, 7);
 }
 
 export function BillingContractsPanel({
@@ -106,7 +105,6 @@ export function BillingContractsPanel({
   const invoicesQuery = useBillingInvoicesQuery();
   const { recordState } = useDirectoryNavigation('/billing');
   const { data: organisations = [] } = useOrganisationsQuery();
-  const calculate = useCalculateBillingInvoiceMutation();
   const contracts = useMemo(() => contractsQuery.data ?? [], [contractsQuery.data]);
   const issuers = useMemo(() => issuersQuery.data ?? [], [issuersQuery.data]);
   const invoices = useMemo(() => invoicesQuery.data ?? [], [invoicesQuery.data]);
@@ -123,10 +121,6 @@ export function BillingContractsPanel({
   const [buyerOrganisationId, setBuyerOrganisationId] = useState('');
   const selectedInvoiceId = params.get('invoice') ?? '';
   const setSelectedInvoiceId = (id: string) => update({ invoice: id || null });
-  const form = useForm<BillingInvoiceCalculateFormValues>({
-    resolver: zodResolver(BillingInvoiceCalculateFormSchema),
-    defaultValues: { contractId: '', issuerProfileId: '', billingMonth: latestClosedMonth() },
-  });
 
   const visibleContracts = useMemo(
     () =>
@@ -138,26 +132,6 @@ export function BillingContractsPanel({
   const { pageItems, pagination } = usePagination(visibleContracts, 10, { key: 'contracts_page' });
   const selectedContract = contracts.find((contract) => contract.id === selectedContractId) ?? null;
   const selectedInvoice = invoices.find((invoice) => invoice.id === selectedInvoiceId) ?? null;
-
-  useEffect(() => {
-    form.setValue('contractId', selectedContract?.status === 'active' ? selectedContract.id : '');
-    const activeIssuer = issuers.find((issuer) => issuer.active);
-    if (
-      !issuers.some((issuer) => issuer.id === form.getValues('issuerProfileId') && issuer.active)
-    ) {
-      form.setValue('issuerProfileId', activeIssuer?.id ?? '');
-    }
-  }, [selectedContract, form, issuers]);
-
-  async function calculateInvoice(values: BillingInvoiceCalculateFormValues) {
-    if (!selectedContract || values.contractId !== selectedContract.id) return;
-    try {
-      const invoice = await calculate.mutateAsync(values);
-      setSelectedInvoiceId(invoice.id);
-    } catch {
-      /* The mutation error is rendered below; preserve inputs for retry. */
-    }
-  }
 
   const loading = contractsQuery.isLoading || issuersQuery.isLoading || invoicesQuery.isLoading;
   const failed = contractsQuery.isError || issuersQuery.isError || invoicesQuery.isError;
@@ -374,64 +348,8 @@ export function BillingContractsPanel({
       </Card>
 
       {selectedContract?.status === 'active' ? (
-        <Card>
-          <CardHeader>
-            <div>
-              <h2 className="text-sm font-semibold text-gray-900">Invoice calculator</h2>
-              <p className="mt-0.5 text-xs text-gray-500">
-                Create an immutable draft for a closed billing month.
-              </p>
-            </div>
-          </CardHeader>
-          <form
-            className="grid gap-4 p-5 md:grid-cols-4"
-            onSubmit={form.handleSubmit(calculateInvoice)}
-          >
-            <input type="hidden" {...form.register('contractId')} />
-            <div className="text-sm">
-              <p className="font-medium text-gray-700">Contract</p>
-              <p>
-                {selectedContract.name} · {selectedContract.reference}
-              </p>
-            </div>
-            <FieldShell label="Issuer" error={form.formState.errors.issuerProfileId?.message}>
-              <SelectField className="w-full" {...form.register('issuerProfileId')}>
-                <option value="">Select issuer</option>
-                {issuers
-                  .filter((issuer) => issuer.active)
-                  .map((issuer) => (
-                    <option key={issuer.id} value={issuer.id}>
-                      {issuer.legal_name}
-                    </option>
-                  ))}
-              </SelectField>
-            </FieldShell>
-            <FieldShell label="Billing month" error={form.formState.errors.billingMonth?.message}>
-              <TextField
-                type="month"
-                max={latestClosedMonth()}
-                {...form.register('billingMonth')}
-              />
-            </FieldShell>
-            <div className="flex items-end">
-              <Button
-                className="w-full"
-                type="submit"
-                variant="primary"
-                disabled={calculate.isPending || loading || failed}
-              >
-                {calculate.isPending ? 'Calculating...' : 'Calculate draft'}
-              </Button>
-            </div>
-            {calculate.isError ? (
-              <p className="text-sm text-red-600 md:col-span-4">
-                {calculate.error instanceof Error
-                  ? calculate.error.message
-                  : 'Invoice calculation failed.'}
-              </p>
-            ) : null}
-          </form>
-        </Card>
+        <BillingInvoiceCalculator key={selectedContract.id} contract={selectedContract}
+          issuers={issuers} disabled={loading || failed} onCreated={setSelectedInvoiceId} />
       ) : null}
 
       <BillingInvoiceHistory
@@ -441,6 +359,7 @@ export function BillingContractsPanel({
             (!selectedContractId || invoice.contract_id === selectedContractId),
         )}
       />
+      <BillingCycleCorrectionsPanel onInvoicePrepared={setSelectedInvoiceId} />
 
       <CreateBillingContractDialog
         open={createContractOpen}

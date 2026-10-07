@@ -4,6 +4,8 @@ These tests run the real React UI against isolated synthetic API fixtures. No lo
 production API calls, database, email or payment runtime are used. Every external request is
 blocked; unknown API reads and every unlisted mutation are recorded and fail the checks.
 Only explicitly modeled native-app saves, invoice calculations, payment retries and team memberships are accepted.
+The session-broker check additionally models exact Coder-to-Selkie delegation creation
+and enabled-state edits, accepting only the sole `session:broker` scope.
 
 ## Run
 
@@ -39,8 +41,12 @@ Both desktop (1440x1000) and Pixel 7 mobile viewports:
 - Email/pattern/IP/user ban visibility and filtering.
 - Nested credential confirmation dismissal retains the underlying request review.
 - Billing product detail, contract selection/calculator payload, invoice selection and related organisation Back.
+- Private paid-usage exception review shows the selected dispatch and receipt, original bound and
+  maximum collectible amount; the operator records a reason-bound, idempotent waiver and sees it clear.
 - Invoice server-authored action guards and amount cap; failed payment retry retains its idempotency key, successful save clears dirty state.
 - No uncaught page errors, unexpected fixture endpoints or document-level horizontal overflow.
+- Broker scope starts unchecked, can be selected alone for the exact Coder-to-Selkie
+  mapping, remains selected when editing, and renders after an enabled-state edit and reload.
 
 Fixtures include populated directories/services/flags/contracts/invoices and empty signature evidence histories. These are UI regressions, not proof of authorization, backend persistence, PDF
 generation, SES delivery, payment processing or real-device behavior. Existing API/unit tests

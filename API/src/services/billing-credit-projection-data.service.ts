@@ -28,6 +28,7 @@ export function currentBillingCreditPeriod(now: Date): BillingCreditPeriod {
 export async function loadBillingCreditProjectionData(
   params: {
     creditAccountId: string;
+    teamId: string;
     accountId: string;
     storefrontServiceId: string;
     period: BillingCreditPeriod;
@@ -40,6 +41,8 @@ export async function loadBillingCreditProjectionData(
     policy,
     catalogs,
     settlements,
+    prepaidReservations,
+    activeReserved,
     entries,
     pendingCheckouts,
     pendingSetupCheckouts,
@@ -77,13 +80,26 @@ export async function loadBillingCreditProjectionData(
     prisma.billingCreditUsageSettlement.findMany({
       where: {
         creditAccountId: params.creditAccountId,
+        teamId: params.teamId,
         billingMonth: params.period.key,
       },
       orderBy: { service: { identifier: 'asc' } },
       include: { service: true },
     }),
+    prisma.billingPrepaidReservation.findMany({
+      where: { creditAccountId: params.creditAccountId, teamId: params.teamId,
+        billingMonth: params.period.key },
+      include: { tariff: { select: { service: { select: { id: true,
+        identifier: true, name: true } } } } },
+    }),
+    prisma.billingPrepaidReservation.aggregate({
+      where: { creditAccountId: params.creditAccountId, status: 'ACTIVE' },
+      _sum: { reservedMicrocredits: true },
+    }),
     prisma.billingCreditEntry.findMany({
-      where: { creditAccountId: params.creditAccountId },
+      where: { creditAccountId: params.creditAccountId,
+        OR: [{ kind: { not: BillingCreditEntryKind.PREPAID_USAGE } },
+          { prepaidReservation: { teamId: params.teamId } }] },
       orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
       take: 20,
       include: {
@@ -102,7 +118,23 @@ export async function loadBillingCreditProjectionData(
           ],
         },
       },
-      select: { id: true, paymentAmountMinor: true, creditsReceivedMicrocredits: true },
+      select: {
+        id: true,
+        accountId: true,
+        creditAccountId: true,
+        customerId: true,
+        catalogId: true,
+        serviceId: true,
+        appKeyId: true,
+        offerId: true,
+        paymentAmountMinor: true,
+        creditsReceivedMicrocredits: true,
+        currency: true,
+        successUrlDigest: true,
+        cancelUrlDigest: true,
+        status: true,
+        stripeCheckoutSessionId: true,
+      },
     }),
     prisma.billingCreditSetupCheckout.findMany({
       where: {
@@ -208,6 +240,8 @@ export async function loadBillingCreditProjectionData(
     policy,
     catalogs,
     settlements,
+    prepaidReservations,
+    activeReservedMicrocredits: activeReserved._sum.reservedMicrocredits ?? 0n,
     allocations,
     entries,
     periodEntries,

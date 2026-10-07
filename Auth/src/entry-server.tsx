@@ -11,6 +11,7 @@ function extractSearchFromUrl(value: string): string {
 export async function render(_params: {
   config: unknown;
   configUrl: string;
+  accessStatusEnabled?: boolean;
   // Fastify request URL: "/auth?config_url=...&redirect_url=...".
   url?: string;
 }): Promise<string> {
@@ -21,6 +22,7 @@ export async function render(_params: {
     <App
       config={_params.config}
       configUrl={_params.configUrl}
+      accessStatusEnabled={_params.accessStatusEnabled}
       initialSearch={initialSearch}
     />,
   );

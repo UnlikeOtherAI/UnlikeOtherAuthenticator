@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { SignJWT } from 'jose';
 import { ACCESS_TOKEN_AUDIENCE } from '../config/constants.js';
 import { isUserAccessTokenRs256Enabled } from '../config/env.js';
@@ -24,6 +25,7 @@ export async function signAccessToken(params: {
   relyingPartyToken: boolean;
 }): Promise<string> {
   const payload = {
+    ...(!params.relyingPartyToken ? { jti: randomUUID() } : {}),
     email: params.email,
     domain: params.domain,
     client_id: params.clientId,
