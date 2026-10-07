@@ -3133,3 +3133,14 @@ preserved, so Ledger recovers the same authorization through its existing
 issue-key recovery path. Existing UUID identifiers remain unchanged. A database
 constraint rejects future non-UUID ids, and a PostgreSQL regression exercises
 issuance and renewal through the actual HTTP routes.
+
+## 2026-10-07 Ledger runtime-key operator doorway
+
+The existing product-bound runtime-key API is reachable in Admin Billing's selected
+product under **Ledger runtime keys**. Current admin-domain SUPERUSER authority
+remains required for list, issuance and revocation. Operators review the fixed
+product, original source domain and exact Ledger audience before issuance; plaintext
+is shown once in ephemeral dialog state and never retained in browser storage or
+query caches. Navigation/sign-out clears it. This UI does not install a credential,
+change delegation policy or grant bootstrap authority. See
+[the billing contract](Requirements/billing-tariffs.md).

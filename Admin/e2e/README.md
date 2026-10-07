@@ -4,6 +4,8 @@ These tests run the real React UI against isolated synthetic API fixtures. No lo
 production API calls, database, email or payment runtime are used. Every external request is
 blocked; unknown API reads and every unlisted mutation are recorded and fail the checks.
 Only explicitly modeled native-app saves, invoice calculations, payment retries and team memberships are accepted.
+The runtime-key check additionally models exact selected-product issuance and revocation,
+metadata-only lists, failed writes/retry and ephemeral reveal with synthetic keys only.
 The session-broker check additionally models exact Coder-to-Selkie delegation creation
 and enabled-state edits, accepting only the sole `session:broker` scope.
 

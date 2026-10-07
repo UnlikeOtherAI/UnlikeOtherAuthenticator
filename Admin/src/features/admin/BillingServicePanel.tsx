@@ -4,6 +4,7 @@ import { billingMoney } from './billing-money';
 import { BillingSubscriptionsTable } from './BillingSubscriptionsTable';
 import { BillingSeatCapacityPanel } from './BillingSeatCapacityPanel';
 import { BillingRecordDetail } from './BillingRecordDetail';
+import { BillingLedgerRuntimeKeysPanel } from './BillingLedgerRuntimeKeysPanel';
 
 import { Badge, type BadgeVariant } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
@@ -19,7 +20,7 @@ import {
   useSetDefaultBillingTariffMutation,
 } from './billing-admin-queries';
 
-type BillingTab = 'tariffs' | 'assignments' | 'adjustments' | 'app-keys' | 'subscriptions';
+type BillingTab = 'tariffs' | 'assignments' | 'adjustments' | 'app-keys' | 'subscriptions' | 'runtime-keys';
 
 function date(value: string | null): string {
   return value ? new Date(value).toLocaleString() : '—';
@@ -61,6 +62,7 @@ export function BillingServicePanel({
     'adjustments',
     'app-keys',
     'subscriptions',
+    'runtime-keys',
   ].includes(requestedTab)
     ? (requestedTab as BillingTab)
     : 'tariffs';
@@ -124,6 +126,7 @@ export function BillingServicePanel({
               count: service.adjustments.length,
             },
             { label: 'App keys', value: 'app-keys', count: service.app_keys.length },
+            { label: 'Ledger runtime keys', value: 'runtime-keys' },
             {
               label: 'Subscriptions',
               value: 'subscriptions',
@@ -453,6 +456,9 @@ export function BillingServicePanel({
         <BillingSubscriptionsTable service={service} />
         <BillingSeatCapacityPanel serviceId={service.id} />
       </> : null}
+      {tab === 'runtime-keys' ? (
+        <BillingLedgerRuntimeKeysPanel key={service.id} service={service} />
+      ) : null}
       <BillingRecordDetail service={service} />
     </Card>
   );

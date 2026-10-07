@@ -270,7 +270,19 @@ Ledger uses a separately issued, product-bound runtime key for prepaid
 admission. A superuser provisions and revokes keys through
 `/internal/admin/billing/ledger-runtime-keys`; creation returns the secret
 once. Each key pins the product, exact Ledger audience, and original product
-source domain. The reserve request carries the original short-lived UOA
+source domain. The operator doorway is **Billing → Product billing → selected
+product → Ledger runtime keys** (`/billing?product=<service-id>&tab=runtime-keys`).
+The list shows only that product's metadata and revocation state. Issuance fixes
+that product and asks the operator to review the original config-domain hostname
+and exact HTTPS Ledger origin. This creates a credential but never installs it
+or widens confidential-delegation mappings. The plaintext response lives only
+in the mounted reveal dialog, outside query/mutation caches, URLs and browser
+storage. Closing, changing product/tab, leaving Billing or signing out unmounts
+and clears it; a late response cannot reopen it. Copy is explicit and clipboard
+failure preserves manual-copy access. Failed issuance preserves inputs and warns
+that a lost response may have created a key: inspect metadata and revoke any
+unused credential before retrying. Revocation confirms the exact binding.
+ The reserve request carries the original short-lived UOA
 delegation with `ai.invoke`, its live subject/team and credential epoch, an
 immutable physical dispatch ID, start time, request fingerprint, provider
 service ID, and an exact raw-cost upper bound. UOA rechecks the subject on
