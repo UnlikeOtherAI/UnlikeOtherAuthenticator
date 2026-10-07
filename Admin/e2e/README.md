@@ -4,6 +4,8 @@ These tests run the real React UI against isolated synthetic API fixtures. No lo
 production API calls, database, email or payment runtime are used. Every external request is
 blocked; unknown API reads and every unlisted mutation are recorded and fail the checks.
 Only explicitly modeled native-app saves, invoice calculations, payment retries and team memberships are accepted.
+The runtime-key check additionally models exact selected-product issuance and revocation,
+metadata-only lists, failed writes/retry and ephemeral reveal with synthetic keys only.
 The session-broker check additionally models exact Coder-to-Selkie delegation creation
 and enabled-state edits, accepting only the sole `session:broker` scope.
 
@@ -21,7 +23,8 @@ If Chrome is already installed, set `PW_CHANNEL=chrome` to reuse it instead of d
 Chromium. In PowerShell: `$env:PW_CHANNEL='chrome'` before the test command.
 
 The harness starts its own Vite server on **127.0.0.1:5274** with the existing development-only
-auth bypass. The port must be free. It never reuses an unknown server. Playwright stops its
+auth bypass. The port must be free. Isolated concurrent worktrees may set `UOA_ADMIN_E2E_PORT`
+(1024–65535); the server, API origin and browser base URL all follow that one value. It never reuses an unknown server. Playwright stops its
 server at suite completion. Run one suite at a time; concurrency is fixed at one worker.
 Production builds cannot enable this bypass (`import.meta.env.DEV` remains required).
 

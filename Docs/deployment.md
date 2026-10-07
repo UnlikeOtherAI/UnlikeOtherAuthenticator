@@ -241,3 +241,15 @@ all website/native status-proof start/verify requests with 404 before side
 effects. An intentional auth-server `true` opt-in retains the existing mailbox,
 TOTP and membership/privacy checks. Changing it requires a restart/redeploy;
 disabling also closes outstanding proof redemption. See [the environment example](deploy.md#access-status-diagnostic-environment-example).
+
+### Operator provisioning of Ledger runtime keys
+
+A current platform superuser opens Admin **Billing → Product billing → selected
+product → Ledger runtime keys**. Review the exact product, original source config
+domain (for Nessie production, `api.nessie.works`) and Ledger audience before issuing.
+Transfer the one-time plaintext only to the approved Ledger deployment secret store;
+the UI does not install it or restart Ledger. Do not reuse ordinary product app keys,
+domain credentials, delegation tokens or another product's runtime key. Lists contain
+metadata only; UOA cannot retrieve the plaintext later. If issuance response is lost,
+inspect the list and revoke an unused key before issuing a replacement. Production
+provisioning and installation remain deliberate operator actions.

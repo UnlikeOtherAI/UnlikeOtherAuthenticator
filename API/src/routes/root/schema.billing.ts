@@ -1,4 +1,5 @@
 import type { EndpointSchema } from './schema.js';
+import { billingLedgerRuntimeKeyEndpoints } from './schema.billing-ledger-runtime-keys.js';
 import { billingContractInvoiceEndpoints } from './schema.billing-contract-invoices.js';
 import { billingFundingEndpoints } from './schema.billing-funding.js';
 
@@ -18,6 +19,7 @@ const tariffBody = {
 };
 
 export const billingEndpoints: EndpointSchema[] = [
+  ...billingLedgerRuntimeKeyEndpoints(adminAuth),
   {
     method: 'POST', path: '/billing/v1/ledger/reservations/:dispatchId/exception',
     description: 'Record one selected immutable over-bound paid receipt as a held operator exception, without releasing the financial reservation.',
