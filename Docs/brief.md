@@ -3044,6 +3044,15 @@ revision checks; it never grants a login session.
 
 ## Billing cycles, configurable seats and prepaid pools (2026-10-04)
 
+PAYG admission decisions remain append-only after provider completion. Their
+settled state and receipt come from the existing immutable paid-usage liability;
+a no-egress cancellation records a separate append-only dispatch release receipt.
+Finalization and budget-hold termination commit together under the dispatch lock.
+Exact terminal receipt replay is idempotent; conflicting receipts, settlement
+after release, release after settlement, and admission after either terminal
+outcome are refused. Pre-cutover PAYG dispatches without frozen rating evidence
+still require explicit historical reconciliation.
+
 Customer billing must keep markup and provider cost private while operators
 configure an exact percentage. Monthly subscriptions may charge once per team
 or organisation, or per seat. Per-seat plans select automatic membership-based

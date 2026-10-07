@@ -3312,8 +3312,20 @@ model BillingLedgerDispatchDecision {
 
   runtimeKey BillingLedgerRuntimeKey @relation(fields: [runtimeKeyId], references: [id], onDelete: Restrict)
   service BillingService @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  release BillingLedgerDispatchRelease?
 
   @@map("billing_ledger_dispatch_decisions")
+}
+
+// A no-egress receipt terminates an admitted PAYG dispatch without changing
+// its append-only admission. Settled receipts live in BillingPaidUsageLiability.
+model BillingLedgerDispatchRelease {
+  dispatchId String @id @map("dispatch_id") @db.VarChar(160)
+  receiptId String @unique @map("receipt_id") @db.VarChar(160)
+  createdAt DateTime @default(now()) @map("created_at")
+  decision BillingLedgerDispatchDecision @relation(fields: [dispatchId], references: [dispatchId], onDelete: Restrict)
+
+  @@map("billing_ledger_dispatch_releases")
 }
 
 // Paid customer liability exists for every settled Ledger provider dispatch,

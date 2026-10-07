@@ -19,10 +19,12 @@ import { assertLedgerBudgetContext, attachLegacyBudgetDispatch,
   type VerifiedBudgetContext } from './billing-credit-budget-dispatch.service.js';
 import { recordLegacyPrepaidLiability,
   recordPaidUsageLiability } from './billing-paid-liability.service.js';
+import { finalizeUnreservedLedgerDispatch } from './billing-ledger-dispatch-finalization.service.js';
+import { ratedMicrocredits, ratedMicrocreditsFromQuanta, scaledRaw } from
+  './billing-prepaid-rating.service.js';
 
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/;
 const DECIMAL_PATTERN = /^(?:0|[1-9]\d*)(?:\.\d{1,18})?$/;
-const MAX_INT64 = 9_223_372_036_854_775_807n;
 
 function validId(value: string): string {
   if (!ID_PATTERN.test(value)) throw new AppError('BAD_REQUEST', 400, 'PREPAID_DISPATCH_ID_INVALID');
@@ -36,30 +38,6 @@ function rawCost(value: string): Prisma.Decimal {
     throw new AppError('BAD_REQUEST', 400, 'PREPAID_COST_INVALID');
   }
   return decimal;
-}
-
-function scaledRaw(value: Prisma.Decimal): bigint {
-  const [whole, fraction = ''] = value.toFixed(18).split('.');
-  return BigInt(whole) * 10n ** 18n + BigInt(fraction.padEnd(18, '0'));
-}
-
-function ratedMicrocreditsScaled(scaled: bigint, markupBps: number): bigint {
-  const denominator = 10_000n * 10n ** 18n;
-  const numerator = scaled * BigInt(10_000 + markupBps) * 1_000_000_000n;
-  const credits = (numerator + denominator - 1n) / denominator;
-  if (credits > MAX_INT64) throw new AppError('BAD_REQUEST', 400, 'PREPAID_COST_TOO_LARGE');
-  return credits;
-}
-
-function ratedMicrocreditsFromQuanta(quanta: bigint): bigint {
-  const denominator = 10_000n * 10n ** 18n;
-  const credits = (quanta * 1_000_000_000n + denominator - 1n) / denominator;
-  if (credits > MAX_INT64) throw new AppError('BAD_REQUEST', 400, 'PREPAID_COST_TOO_LARGE');
-  return credits;
-}
-
-function ratedMicrocredits(value: Prisma.Decimal, markupBps: number): bigint {
-  return ratedMicrocreditsScaled(scaledRaw(value), markupBps);
 }
 
 export type ReservePrepaidDispatchInput = {
@@ -175,10 +153,14 @@ export async function reservePrepaidDispatch(
       jobGrantId: input.jobCompute?.grantId ?? null,
       originInvocationId: input.jobCompute?.originInvocationId ?? null });
     const previous = await tx.billingLedgerDispatchDecision.findUnique({
-      where: { dispatchId: input.dispatchId },
+      where: { dispatchId: input.dispatchId }, include: { release: true },
     });
     if (previous) {
-      if (previous.status !== 'PAY_AS_YOU_GO' || previous.runtimeKeyId !== key.id ||
+      const settled = await tx.billingPaidUsageLiability.findUnique({
+        where: { dispatchId: input.dispatchId }, select: { dispatchId: true },
+      });
+      if (previous.release || settled || previous.status !== 'PAY_AS_YOU_GO' ||
+        previous.runtimeKeyId !== key.id ||
         previous.requestFingerprint !== input.requestFingerprint ||
         previous.serviceId !== key.serviceId ||
         previous.providerServiceId !== input.providerServiceId ||
@@ -369,19 +351,24 @@ export async function getLedgerDispatchDecision(
   }
   const decision = await prisma.billingLedgerDispatchDecision.findUnique({
     where: { dispatchId: params.dispatchId },
-    include: { runtimeKey: { select: { ledgerAudience: true, sourceDomain: true } } },
+    include: { release: true, runtimeKey: { select: { ledgerAudience: true, sourceDomain: true } } },
   });
   if (!decision || decision.serviceId !== key.serviceId ||
     decision.runtimeKey.ledgerAudience !== key.ledgerAudience ||
     decision.runtimeKey.sourceDomain !== key.sourceDomain) {
     throw new AppError('NOT_FOUND', 404, 'LEDGER_DISPATCH_DECISION_NOT_FOUND');
   }
+  const liability = decision.status === 'PAY_AS_YOU_GO'
+    ? await prisma.billingPaidUsageLiability.findUnique({
+      where: { dispatchId: decision.dispatchId }, select: { receiptId: true },
+    }) : null;
+  const cancelled = decision.status === 'CANCELLED' || Boolean(decision.release);
   return withBudgetContextDigest(prisma, {
-    payment_mode: decision.status === 'PAY_AS_YOU_GO' ? 'pay_as_you_go' : 'cancelled',
+    payment_mode: cancelled ? 'cancelled' : 'pay_as_you_go',
     reservation_id: null, dispatch_id: decision.dispatchId,
     request_fingerprint: decision.requestFingerprint,
-    status: decision.status === 'PAY_AS_YOU_GO' && decision.receiptId ? 'SETTLED' : decision.status,
-    receipt_id: decision.receiptId,
+    status: cancelled ? 'CANCELLED' : liability ? 'SETTLED' : decision.status,
+    receipt_id: decision.release?.receiptId ?? liability?.receiptId ?? decision.receiptId,
     billing_month: decision.billingMonth, currency: decision.currency });
 }
 
@@ -405,65 +392,8 @@ export async function finalizePrepaidDispatch(params: {
       include: { tariff: { select: { markupBps: true, mode: true } },
         runtimeKey: { select: { serviceId: true, ledgerAudience: true, sourceDomain: true } } },
     });
-    if (!reservation && params.kind === 'settle') {
-      const prior = await tx.billingLedgerDispatchDecision.findUnique({
-        where: { dispatchId: params.dispatchId },
-      });
-      if (!prior || prior.status !== 'PAY_AS_YOU_GO' || prior.serviceId !== key.serviceId
-        || prior.runtimeKeyId !== key.id || !actual) {
-        throw new AppError('NOT_FOUND', 404, 'PAID_DISPATCH_NOT_FOUND');
-      }
-      if (prior.receiptId && prior.receiptId !== params.receiptId) {
-        throw new AppError('BAD_REQUEST', 409, 'PAID_RECEIPT_CONFLICT');
-      }
-      if (prior.rawCostBound && actual.greaterThan(prior.rawCostBound)) {
-        throw new AppError('BAD_REQUEST', 409, 'PAID_RECEIPT_EXCEEDS_BOUND');
-      }
-      if (!prior.orgId) throw new AppError('BAD_REQUEST', 409, 'PAID_DISPATCH_EVIDENCE_MISSING');
-      await lockBudgetOrganisation(tx, prior.orgId);
-      if (!await tx.billingCreditBudgetDispatch.findUnique({
-        where: { dispatchId: params.dispatchId }, select: { dispatchId: true },
-      })) {
-        // A pre-cutover PAYG dispatch has no frozen per-receipt UOA rating.
-        // It enters the explicit historical reconciliation queue; applying
-        // today's tariff would rewrite an earlier customer's liability.
-        throw new AppError('BAD_REQUEST', 409, 'LEGACY_PAYG_RECONCILIATION_REQUIRED');
-      }
-      const liability = await recordPaidUsageLiability(tx, {
-        dispatchId: params.dispatchId, receiptId: params.receiptId, actual,
-      });
-      if (!prior.receiptId) await tx.billingLedgerDispatchDecision.update({
-        where: { dispatchId: params.dispatchId }, data: { receiptId: params.receiptId },
-      });
-      return { dispatch_id: params.dispatchId, receipt_id: params.receiptId,
-        status: 'SETTLED', debited_microcredits: '0',
-        rated_microcredits: liability.ratedMicrocredits.toString() };
-    }
-    if (!reservation && params.kind === 'release') {
-      const prior = await tx.billingLedgerDispatchDecision.findUnique({
-        where: { dispatchId: params.dispatchId },
-      });
-      if (prior?.status === 'PAY_AS_YOU_GO' && prior.serviceId === key.serviceId &&
-        prior.runtimeKeyId === key.id) {
-        if (prior.receiptId) throw new AppError('BAD_REQUEST', 409, 'PAID_RECEIPT_CONFLICT');
-        await releaseBudgetDispatch(tx, params.dispatchId);
-        await tx.billingLedgerDispatchDecision.update({ where: { dispatchId: params.dispatchId },
-          data: { status: 'CANCELLED', receiptId: params.receiptId } });
-        return { dispatch_id: params.dispatchId, receipt_id: params.receiptId,
-          status: 'RELEASED', debited_microcredits: '0' };
-      }
-      if (prior && (prior.status !== 'CANCELLED' || prior.receiptId !== params.receiptId ||
-        prior.serviceId !== key.serviceId || prior.runtimeKeyId !== key.id)) {
-        throw new AppError('BAD_REQUEST', 409, 'PREPAID_RECEIPT_CONFLICT');
-      }
-      if (!prior) await tx.billingLedgerDispatchDecision.create({ data: {
-        dispatchId: params.dispatchId, runtimeKeyId: key.id, serviceId: key.serviceId,
-        status: 'CANCELLED', receiptId: params.receiptId,
-      } });
-      return { dispatch_id: params.dispatchId, receipt_id: params.receiptId,
-        status: 'RELEASED', debited_microcredits: '0' };
-    }
-    if (!reservation || reservation.serviceId !== key.serviceId ||
+    if (!reservation) return finalizeUnreservedLedgerDispatch(tx, key, params, actual);
+    if (reservation.serviceId !== key.serviceId ||
       reservation.runtimeKey.ledgerAudience !== key.ledgerAudience ||
       reservation.runtimeKey.sourceDomain !== key.sourceDomain) {
       throw new AppError('NOT_FOUND', 404, 'PREPAID_RESERVATION_NOT_FOUND');
