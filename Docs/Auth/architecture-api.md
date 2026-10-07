@@ -237,6 +237,8 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       billing-entitlement.service.ts        — Membership validation and team→org→default resolution
       billing-funding-viewer.service.ts      — Exact-scope manager/member visibility resolution
       billing-ledger-collector.service.ts   — Strict immutable Ledger usage/portfolio snapshots
+      billing-ledger-dispatch-finalization.service.ts — Immutable PAYG admission finalization through liability/release evidence
+      billing-prepaid-rating.service.ts     — Exact bounded prepaid cost-to-microcredit conversion
       billing-rating.service.ts             — Shared exact statement, Stripe, and contract-invoice rating core
       billing-recurring-addons.service.ts   — Privacy-safe exact-scope recurring add-on projection
       billing-recurring-addon-catalog.service.ts — Immutable offer/catalog to exact Stripe Product/monthly Price binding
