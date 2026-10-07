@@ -10,4 +10,12 @@ describe('first-party confidential delegation registry', () => {
       scopes: ['ai.invoke'],
     });
   });
+
+  it('pins SalesNerd to its exact source domain and Ledger ai.invoke audience', () => {
+    expect(FIRST_PARTY_CONFIDENTIAL_DELEGATIONS.salesnerd).toEqual({
+      sourceDomain: 'app.salesnerd.live',
+      resource: 'https://ledger.unlikeotherai.com',
+      scopes: ['ai.invoke'],
+    });
+  });
 });

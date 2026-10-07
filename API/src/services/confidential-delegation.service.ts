@@ -16,6 +16,11 @@ export const FIRST_PARTY_CONFIDENTIAL_DELEGATIONS = {
     resource: 'https://ledger.unlikeotherai.com',
     scopes: ['ai.invoke'],
   },
+  salesnerd: {
+    sourceDomain: 'app.salesnerd.live',
+    resource: 'https://ledger.unlikeotherai.com',
+    scopes: ['ai.invoke'],
+  },
 } as const;
 
 export const CONFIDENTIAL_DELEGATION_SCOPES = [
