@@ -34,8 +34,8 @@ export function BillingLedgerRuntimeKeysPanel({ service }: { service: BillingSer
         {keys.map((key) => <tr key={key.id}>
           <Td><code className="text-xs">{key.key_prefix}</code>
             <p className="max-w-48 break-all text-xs text-gray-400">{key.id}</p></Td>
-          <Td><code className="block max-w-48 break-all text-xs">{key.source_domain}</code></Td>
-          <Td><code className="block max-w-64 break-all text-xs">{key.ledger_audience}</code></Td>
+          <Td><code className="block min-w-40 max-w-48 break-all text-xs">{key.source_domain}</code></Td>
+          <Td><code className="block min-w-64 max-w-64 break-all text-xs">{key.ledger_audience}</code></Td>
           <Td className="text-xs">{new Date(key.created_at).toLocaleString()}</Td>
           <Td><Badge variant={key.revoked_at ? 'red' : 'green'}>
             {key.revoked_at ? 'Revoked' : 'Active'}</Badge>

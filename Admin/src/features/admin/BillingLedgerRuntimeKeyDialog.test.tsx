@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -90,7 +90,8 @@ it('switching selected products unmounts a pending issuance and never reveals it
   }
   const user = userEvent.setup(); const rendered = render(view(product));
   await user.click(screen.getByRole('button', { name: 'Issue runtime key' }));
-  await fill(user); await user.click(screen.getAllByRole('button', { name: 'Issue runtime key' })[1]!);
+  await fill(user);
+  await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Issue runtime key' }));
   await waitFor(() => expect(mocks.create).toHaveBeenCalledOnce());
   rendered.rerender(view({ ...product, id: 'deepwater-1', identifier: 'deepwater', name: 'DeepWater' }));
   await act(async () => finish(result));
