@@ -4,7 +4,10 @@ import { debugLoginConfigIdentity } from '../../src/services/debug-login.service
 describe('debug login product environment binding', () => {
   it('accepts only supported presentation theme variants', () => {
     const canonical = 'https://api.example/api/auth/config';
-    for (const theme of ['nessie', 'nebula', 'midnight']) {
+    for (const theme of [
+      'nessie', 'nebula', 'midnight', 'daylight', 'blckwhte', 'forest',
+      'ocean', 'sunset', 'rose', 'graphite', 'sandstone', 'contrast',
+    ]) {
       expect(debugLoginConfigIdentity(`${canonical}?theme=${theme}`)).toBe(canonical);
     }
     expect(() => debugLoginConfigIdentity(`${canonical}?theme=other`)).toThrow();

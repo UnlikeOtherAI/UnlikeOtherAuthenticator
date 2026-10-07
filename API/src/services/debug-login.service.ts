@@ -16,11 +16,17 @@ import { resolveProductTeamPolicy } from './product-team-policy.service.js';
 import { resolveAccessTokenTtl } from './token-session-ttl.service.js';
 
 const TTL_SECONDS = 1800;
+// Nessie's signed config endpoint serves these presentation variants. Keep this
+// list aligned with its SsoThemeSchema; no other config URL parameter is cosmetic.
+const PRESENTATION_THEMES = new Set([
+  'nessie', 'nebula', 'midnight', 'daylight', 'blckwhte', 'forest',
+  'ocean', 'sunset', 'rose', 'graphite', 'sandstone', 'contrast',
+]);
 /** Only signed presentation variants can share a product capability. */
 export function debugLoginConfigIdentity(configUrl: string): string {
   const url = new URL(configUrl);
   const themes = url.searchParams.getAll('theme');
-  if (themes.length > 1 || (themes.length === 1 && !['nessie', 'nebula', 'midnight'].includes(themes[0]))) {
+  if (themes.length > 1 || (themes.length === 1 && !PRESENTATION_THEMES.has(themes[0]))) {
     throw fail();
   }
   url.searchParams.delete('theme');

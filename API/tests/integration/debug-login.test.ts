@@ -156,7 +156,7 @@ describe.skipIf(!process.env.DATABASE_URL)('durable single-use debug login', () 
 
   it('redeems a supported themed source into a canonical family that can refresh normally', async () => {
     const a = await source();
-    const themed = `${configUrl}?theme=nessie`;
+    const themed = `${configUrl}?theme=sandstone`;
     await handle.prisma.refreshToken.updateMany({ where: { userId: a.user.id }, data: { configUrl: themed } });
     const grant = await issueDebugLogin({ ...context(), configUrl: themed, refreshToken: a.refresh.refreshToken }, deps());
     const pair = await redeemDebugLogin({ ...context(), token: grant.token }, deps());
