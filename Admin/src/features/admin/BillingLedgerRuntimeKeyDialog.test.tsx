@@ -4,11 +4,14 @@ import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { BillingService } from '../../schemas/billing';
+import { MemoryRouter } from 'react-router';
+import { BillingServicePanel } from './BillingServicePanel';
 import { BillingLedgerRuntimeKeyDialog } from './BillingLedgerRuntimeKeyDialog';
 const mocks = vi.hoisted(() => ({ create: vi.fn() }));
 vi.mock('../../services/billing-ledger-runtime-key-service', () => ({
-  billingLedgerRuntimeKeyService: { create: mocks.create },
+  billingLedgerRuntimeKeyService: { create: mocks.create, list: async () => [], revoke: vi.fn() },
 }));
+vi.mock('../shell/admin-ui', () => ({ useAdminUi: () => ({ confirm: vi.fn() }) }));
 afterEach(() => { cleanup(); vi.resetAllMocks(); });
 const secret = `uoa_ledger_${'a'.repeat(43)}`;
 const result = { id: 'runtime-1', key_prefix: 'uoa_ledger_fixture',
@@ -71,4 +74,29 @@ it('reopening starts blank after the one-time dialog unmounts', async () => {
   unmount(); mount();
   expect(screen.queryByText(secret)).toBeNull();
   expect((screen.getByRole('textbox', { name: /^Source domain/ }) as HTMLInputElement).value).toBe('');
+});
+
+it('switching selected products unmounts a pending issuance and never reveals it under the new product', async () => {
+  let finish!: (value: typeof result) => void;
+  mocks.create.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const product = { ...service, tariffs: [], assignments: [], adjustments: [], app_keys: [],
+    stripe_catalogs: [], stripe_subscriptions: [], created_at: '', updated_at: '' };
+  function view(value: BillingService) {
+    return <QueryClientProvider client={client}><MemoryRouter initialEntries={[
+      '/billing?product=nessie-1&tab=runtime-keys',
+    ]}><BillingServicePanel service={value} onAddAppKey={vi.fn()} onAddAdjustment={vi.fn()}
+      onAddAssignment={vi.fn()} onAddTariff={vi.fn()} /></MemoryRouter></QueryClientProvider>;
+  }
+  const user = userEvent.setup(); const rendered = render(view(product));
+  await user.click(screen.getByRole('button', { name: 'Issue runtime key' }));
+  await fill(user); await user.click(screen.getAllByRole('button', { name: 'Issue runtime key' })[1]!);
+  await waitFor(() => expect(mocks.create).toHaveBeenCalledOnce());
+  rendered.rerender(view({ ...product, id: 'deepwater-1', identifier: 'deepwater', name: 'DeepWater' }));
+  await act(async () => finish(result));
+  expect(screen.queryByRole('dialog')).toBeNull(); expect(screen.queryByText(secret)).toBeNull();
+  expect(await screen.findByText('No Ledger runtime keys have been issued for DeepWater.')).toBeTruthy();
+  expect(client.getMutationCache().getAll()).toHaveLength(0);
+  expect(JSON.stringify(client.getQueryCache().getAll().map((query) => query.state.data)))
+    .not.toContain(secret);
 });

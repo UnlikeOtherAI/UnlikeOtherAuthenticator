@@ -43,7 +43,7 @@ export function BillingLedgerRuntimeKeysPanel({ service }: { service: BillingSer
               {new Date(key.revoked_at).toLocaleString()}</p> : null}</Td>
           <Td><Button size="sm" variant="danger" disabled={!!key.revoked_at || revoke.isPending}
             onClick={() => confirm(`Revoke runtime key ${key.key_prefix}?`,
-              `${service.identifier} from ${key.source_domain} loses Ledger admission and job-compute authorization at ${key.ledger_audience}. This cannot be undone.`,
+              `Requests using this key for ${service.identifier} from ${key.source_domain} will lose Ledger admission and job-compute authorization at ${key.ledger_audience}. This cannot be undone.`,
               async () => { await revoke.mutateAsync(key.id); })}>Revoke</Button></Td>
         </tr>)}
         {keys.length === 0 ? <tr><Td colSpan={6} className="text-gray-400">

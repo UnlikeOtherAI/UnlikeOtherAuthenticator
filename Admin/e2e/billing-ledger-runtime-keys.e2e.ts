@@ -11,7 +11,7 @@ test('operator reaches product runtime keys, reviews binding, retries and clears
     key_prefix: 'uoa_ledger_other', source_domain: 'api.deepwater.example',
     ledger_audience: 'https://ledger.example', created_at: now, revoked_at: null }];
   const writes: unknown[] = []; const revocations: string[] = [];
-  let listFailures = 1;
+  let listFailures = 4; // Exhaust the existing three automatic query retries.
   await page.route('**/internal/admin/billing/services', (route) => route.fulfill({
     contentType: 'application/json', body: JSON.stringify(['nessie', 'deepwater'].map((identifier) => ({
       id: identifier, name: identifier === 'nessie' ? 'Nessie' : 'DeepWater', identifier,
