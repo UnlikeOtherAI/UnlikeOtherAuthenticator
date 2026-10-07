@@ -73,7 +73,7 @@ export function registerRootRoute(app: FastifyInstance): void {
           response: { token: 'opaque one-use code', expires_in: 1800 } },
         redeem: { method: 'POST', path: '/auth/debug-login/redeem', auth: 'domain bearer',
           body: { token: 'opaque one-use code' }, response: 'Independent access and refresh token pair' },
-        binding: 'Exact verified config_url, domain, client, source refresh family, credential epoch and selected team. Tokens travel only in POST bodies.',
+        binding: 'Exact verified config_url, domain, client, source refresh family, credential epoch and selected team. Supported Nessie theme variants of the signed config URL are presentation-only; other query parameters retain their identity. Tokens travel only in POST bodies.',
       },
       admin_debug_login: {
         issue: { method: 'POST', path: '/internal/admin/debug-login/issue', auth: 'current admin bearer and exact bearer-bound HttpOnly source cookie; same-origin JSON POST',
