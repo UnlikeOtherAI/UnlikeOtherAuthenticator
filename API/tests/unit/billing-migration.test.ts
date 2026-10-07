@@ -115,7 +115,7 @@ describe('billing tariff control-plane migration', () => {
   });
 
   it('separates entitlement and customer-lifecycle app credentials at the database boundary', async () => {
-    const sql = await readFile(appKeyPurposeMigrationUrl, 'utf8');
+    const sql = (await readFile(appKeyPurposeMigrationUrl, 'utf8')).replace(/\r\n/g, '\n');
 
     expect(sql).toContain(
       "CREATE TYPE \"BillingAppKeyPurpose\" AS ENUM (\n  'ENTITLEMENT',\n  'CUSTOMER_LIFECYCLE'",
