@@ -42,7 +42,9 @@ describe('signature object storage', () => {
 
     await expect(storage.read(key)).resolves.toEqual(value);
     await expect(readFile(path.join(root, key))).resolves.toEqual(value);
-    expect((await stat(path.join(root, key))).mode & 0o777).toBe(0o600);
+    if (process.platform !== 'win32') {
+      expect((await stat(path.join(root, key))).mode & 0o777).toBe(0o600);
+    }
     await expect(storage.putImmutable(key, value, 'application/pdf')).rejects.toMatchObject({
       message: 'SIGNATURE_OBJECT_ALREADY_EXISTS',
       statusCode: 409,
