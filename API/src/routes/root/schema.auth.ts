@@ -2,8 +2,10 @@ import type { EndpointSchema } from './schema.js';
 import { actionVerificationEndpoints } from './schema.action-verification.js';
 import { authTokenEndpoint } from './schema.auth-token.js';
 import { authEmailEndpoints } from './schema.auth-email.js';
+import { salesResearchJobGrantEndpoints } from './schema.auth-job-grants.js';
 
 export const authEndpoints: EndpointSchema[] = [
+  ...salesResearchJobGrantEndpoints,
   ...actionVerificationEndpoints,
   { method: 'POST', path: '/auth/session-broker/validate',
     description: 'Validate a direct Coder-to-Selkie short-lived session:broker capability against current UOA authority.',
