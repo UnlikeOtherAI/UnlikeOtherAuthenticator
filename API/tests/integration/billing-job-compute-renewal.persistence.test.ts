@@ -235,6 +235,17 @@ describe.skipIf(!enabled)('finite job-compute grant in PostgreSQL', () => {
     }
   });
 
+  it('keeps concurrent renewal transactions healthy without shared-key telemetry writes', async () => {
+    await db.billingAppKey.update({ where: { id: 'app-key-job-water' }, data: { lastUsedAt: null } });
+    const renewed = await Promise.all(Array.from({ length: 4 }, () =>
+      renewJobComputeAuthority({ appKey, secret, grantId, identity }, { prisma: db })));
+
+    expect(renewed).toHaveLength(4);
+    expect(renewed.every((result) => result.access_token.length > 0)).toBe(true);
+    expect((await db.billingAppKey.findUniqueOrThrow({ where: { id: 'app-key-job-water' } })).lastUsedAt)
+      .toBeNull();
+  });
+
   it('renews a live original grant with frozen epoch and refuses its token after revoke', async () => {
     const row = await db.billingJobComputeRenewal.findUniqueOrThrow({
       where: { issueKey: '3'.repeat(64) },
@@ -245,8 +256,11 @@ describe.skipIf(!enabled)('finite job-compute grant in PostgreSQL', () => {
       purpose: row.purpose as JobComputeIdentity['purpose'],
     };
     const issuedSecret = `uoa_job_${'c'.repeat(43)}`;
+    await db.billingAppKey.update({ where: { id: 'app-key-job-water' }, data: { lastUsedAt: null } });
     const result = await renewJobComputeAuthority({ appKey, secret: issuedSecret,
       grantId: row.id, identity: issuedIdentity }, { prisma: db });
+    expect((await db.billingAppKey.findUniqueOrThrow({ where: { id: 'app-key-job-water' } })).lastUsedAt)
+      .toBeNull();
     const verified = await jwtVerify(result.access_token,
       createLocalJWKSet(await getAccessTokenPublicJwks()), {
         issuer: 'https://authentication.unlikeotherai.com',

@@ -280,7 +280,9 @@ async function recipientGrant(
   if (!SECRET.test(params.secret)) deny();
   await lockProductTeamPolicyShared(tx);
   const recipient = await verifyBillingAppKey(params.appKey,
-    { prisma: tx as unknown as PrismaClient, now: () => now });
+    // The caller rechecks this row under FOR SHARE below. Avoid a best-effort
+    // write on the transaction: a swallowed PostgreSQL error aborts the tx.
+    { prisma: tx as unknown as PrismaClient, now: () => now, touchLastUsedAt: false });
   if (recipient.purpose !== BillingAppKeyPurpose.CUSTOMER_LIFECYCLE
     || recipient.service.identifier !== RECIPIENT_PRODUCT
     || recipient.actorIssuer !== RECIPIENT_ORIGIN) deny('JOB_COMPUTE_RECIPIENT_MISMATCH');
