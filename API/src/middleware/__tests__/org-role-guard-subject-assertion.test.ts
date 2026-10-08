@@ -5,7 +5,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import { requireOrgRole, resolveOrgUserClaims } from '../org-role-guard.js';
 
 const verifySubjectAssertion = vi.fn();
-const lockEpoch = vi.fn();
+const lockEpochShared = vi.fn();
 const isEpochMismatch = vi.fn();
 const getActiveOrg = vi.fn();
 
@@ -14,7 +14,7 @@ vi.mock('../../services/confidential-token-exchange.service.js', () => ({
 }));
 
 vi.mock('../../services/authentication-epoch.service.js', () => ({
-  lockAndAssertAuthenticationEpoch: (...args: unknown[]) => lockEpoch(...args),
+  lockAndAssertAuthenticationEpochShared: (...args: unknown[]) => lockEpochShared(...args),
   isAuthenticationEpochMismatchError: (...args: unknown[]) => isEpochMismatch(...args),
 }));
 
@@ -41,7 +41,7 @@ const request = (overrides: { accessToken?: string; assertion?: string; teamId?:
 
 afterEach(() => {
   verifySubjectAssertion.mockReset();
-  lockEpoch.mockReset();
+  lockEpochShared.mockReset();
   isEpochMismatch.mockReset();
   getActiveOrg.mockReset();
 });
@@ -51,7 +51,7 @@ describe('requireOrgRole — subject assertion user mode', () => {
     verifySubjectAssertion.mockResolvedValueOnce({
       sub: 'user_1', tv: 7, active: { orgId: 'org_1', teamId: 'team_1' },
     });
-    lockEpoch.mockResolvedValueOnce({ tokenVersion: 7 });
+    lockEpochShared.mockResolvedValueOnce({ tokenVersion: 7 });
     getActiveOrg.mockResolvedValueOnce({
       org_id: 'org_1', tenant_slug: 'live-team', org_role: 'admin',
       teams: ['team_1'], team_roles: { team_1: 'admin' },
@@ -69,7 +69,7 @@ describe('requireOrgRole — subject assertion user mode', () => {
     verifySubjectAssertion.mockResolvedValueOnce({
       sub: 'user_1', tv: 7, active: { orgId: 'org_1', teamId: 'team_1' },
     });
-    lockEpoch.mockResolvedValueOnce({ tokenVersion: 7 });
+    lockEpochShared.mockResolvedValueOnce({ tokenVersion: 7 });
     getActiveOrg.mockResolvedValueOnce({
       org_id: 'org_1', tenant_slug: 'live-team', org_role: 'owner',
       teams: ['team_1'], team_roles: { team_1: 'admin' },
@@ -84,7 +84,7 @@ describe('requireOrgRole — subject assertion user mode', () => {
       sourceDomain: 'api.nessie.works',
       audience: 'https://authentication.unlikeotherai.com/org',
     });
-    expect(lockEpoch).toHaveBeenCalledWith(
+    expect(lockEpochShared).toHaveBeenCalledWith(
       { userId: 'user_1', domain: 'api.nessie.works', credentialEpoch: 7 },
       expect.objectContaining({ prisma: (input as unknown as { adminDb: unknown }).adminDb }),
     );
@@ -103,7 +103,7 @@ describe('requireOrgRole — subject assertion user mode', () => {
     verifySubjectAssertion.mockResolvedValueOnce({
       sub: 'user_1', tv: 7, active: { orgId: 'org_1', teamId: 'team_other' },
     });
-    lockEpoch.mockResolvedValueOnce({ tokenVersion: 7 });
+    lockEpochShared.mockResolvedValueOnce({ tokenVersion: 7 });
     getActiveOrg.mockResolvedValueOnce({
       org_id: 'org_1', tenant_slug: 'live-team', org_role: 'member',
       teams: ['team_other'], team_roles: { team_other: 'admin' },
@@ -112,7 +112,7 @@ describe('requireOrgRole — subject assertion user mode', () => {
 
     await requireOrgRole()(input, {} as FastifyReply);
 
-    expect(lockEpoch).toHaveBeenCalledOnce();
+    expect(lockEpochShared).toHaveBeenCalledOnce();
     expect(getActiveOrg).toHaveBeenCalledOnce();
     expect(input.accessTokenClaims).toMatchObject({
       active: { orgId: 'org_1', teamId: 'team_other' },
@@ -123,7 +123,7 @@ describe('requireOrgRole — subject assertion user mode', () => {
     verifySubjectAssertion.mockResolvedValueOnce({
       sub: 'user_1', tv: 7, active: { orgId: 'org_1', teamId: 'team_1' },
     });
-    lockEpoch.mockRejectedValueOnce(new Error('credential epoch changed'));
+    lockEpochShared.mockRejectedValueOnce(new Error('credential epoch changed'));
     isEpochMismatch.mockReturnValueOnce(true);
     await expect(requireOrgRole()(request({ assertion: 'assertion' }), {} as FastifyReply))
       .rejects.toMatchObject({ code: 'UNAUTHORIZED', statusCode: 401, message: 'INVALID_SUBJECT_TOKEN' });
