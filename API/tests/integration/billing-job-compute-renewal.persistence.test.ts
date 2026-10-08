@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { Prisma, type PrismaClient } from '@prisma/client';
+import { MembershipStatus, Prisma, type PrismaClient } from '@prisma/client';
 import Fastify from 'fastify';
 import { createLocalJWKSet, exportJWK, generateKeyPair, jwtVerify } from 'jose';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -19,6 +19,11 @@ import {
   getAccessTokenPublicJwks, resetAccessTokenKeyCache, signConfidentialAccessToken,
 } from '../../src/services/oauth/access-token.service.js';
 import { createTestDb } from '../helpers/test-db.js';
+import { assertActiveSubject } from '../../src/services/billing-prepaid-reservation.service.js';
+import { lockAndAssertAuthenticationEpoch } from '../../src/services/authentication-epoch.service.js';
+import { lockRefreshSessionUserDomain } from '../../src/services/refresh-session-lock.service.js';
+import { lockOrganisationMemberships } from '../../src/services/organisation-membership-lock.service.js';
+import { lockTeamMembershipRows } from '../../src/services/team-scope.service.js';
 
 const enabled = Boolean(process.env.DATABASE_URL);
 const secret = `uoa_job_${'a'.repeat(43)}`;
@@ -50,6 +55,26 @@ function freshOriginalDelegation() {
     org: { org_id: 'org-job-test', tenant_slug: 'job-test', org_role: 'owner',
       teams: ['team-job-test'], team_roles: { 'team-job-test': 'owner' } },
   });
+}
+
+function deferred(): { promise: Promise<void>; resolve: () => void } {
+  let resolve!: () => void;
+  const promise = new Promise<void>((done) => { resolve = done; });
+  return { promise, resolve };
+}
+
+async function waitForEpochLockWaiters(expected: number): Promise<void> {
+  const deadline = Date.now() + 5_000;
+  do {
+    const rows = await db.$queryRaw<Array<{ count: bigint }>>(Prisma.sql`
+      SELECT count(*)::bigint AS count FROM pg_stat_activity
+      WHERE wait_event_type = 'Lock'
+        AND query LIKE '%pg_advisory_xact_lock(hashtextextended%'
+    `);
+    if ((rows[0]?.count ?? 0n) >= BigInt(expected)) return;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  } while (Date.now() < deadline);
+  throw new Error(`Expected ${expected} transactions to wait on the authentication epoch lock.`);
 }
 
 describe.skipIf(!enabled)('finite job-compute grant in PostgreSQL', () => {
@@ -126,7 +151,7 @@ describe.skipIf(!enabled)('finite job-compute grant in PostgreSQL', () => {
         originRuntimeKeyId: 'key-job-origin', originProduct: 'nessie',
         originSourceDomain: 'api.nessie.works', identityDomain: 'api.nessie.works',
         subjectId: 'subject-job-test', orgId: 'org-job-test', teamId: 'team-job-test',
-        tokenVersion: 7, originTokenJti: 'original-token-job-test',
+        tokenVersion: 0, originTokenJti: 'original-token-job-test',
         originInvocationId: identity.originInvocationId,
         ledgerJobId: identity.ledgerJobId, waterJobId: identity.waterJobId,
         scopeTurnId: null, purpose: identity.purpose,
@@ -251,6 +276,72 @@ describe.skipIf(!enabled)('finite job-compute grant in PostgreSQL', () => {
       .toBeNull();
   });
 
+  it('serializes renewal and dispatch ahead of membership revocation locks', async () => {
+    const input = { ...identity, ledgerJobId: 'ledger-job-revoke-race-test',
+      issueKey: 'a'.repeat(64), secret: `uoa_job_${'l'.repeat(43)}` };
+    const issued = await issueJobComputeRenewal({ runtimeSecret,
+      delegation: await freshOriginalDelegation(), input }, { prisma: db });
+    const grant = await db.billingJobComputeRenewal.findUniqueOrThrow({
+      where: { id: issued.grant_id },
+    });
+    const dispatchIdentity = { ...identity, ledgerJobId: input.ledgerJobId,
+      grantId: grant.id };
+    const claim = { grant_id: grant.id, origin_invocation_id: identity.originInvocationId,
+      ledger_job_id: input.ledgerJobId, water_job_id: identity.waterJobId,
+      scope_turn_id: null, purpose: identity.purpose, origin_product: 'nessie',
+      origin_source_domain: 'api.nessie.works' };
+    const revocationLocked = deferred();
+    const finishRevocation = deferred();
+    const revocation = db.$transaction(async (tx) => {
+      await lockRefreshSessionUserDomain({ userId: grant.subjectId,
+        domain: grant.identityDomain }, { prisma: tx });
+      await lockOrganisationMemberships(tx, grant.orgId, [grant.subjectId]);
+      await lockTeamMembershipRows({ userId: grant.subjectId, orgId: grant.orgId,
+        teamId: grant.teamId }, { prisma: tx });
+      revocationLocked.resolve();
+      await finishRevocation.promise;
+      await tx.orgMember.update({ where: { orgId_userId: {
+        orgId: grant.orgId, userId: grant.subjectId } },
+      data: { status: MembershipStatus.DEACTIVATED } });
+      await tx.teamMember.update({ where: { id: 'team-member-job' },
+        data: { status: MembershipStatus.DEACTIVATED } });
+    }, { timeout: 10_000 });
+    await revocationLocked.promise;
+
+    const renewalResult = renewJobComputeAuthority({ appKey, secret: input.secret,
+      grantId: grant.id, identity: input }, { prisma: db }).then(
+      () => ({ ok: true as const }), (error: unknown) => ({ ok: false as const, error }));
+    const dispatchResult = db.$transaction(async (tx) => {
+      // This is the same authority order used by reservePrepaidDispatch.
+      await lockAndAssertAuthenticationEpoch({ userId: grant.subjectId,
+        domain: grant.identityDomain, credentialEpoch: grant.tokenVersion }, { prisma: tx });
+      await assertActiveSubject(tx, { userId: grant.subjectId, organisationId: grant.orgId,
+        teamId: grant.teamId }, grant.tokenVersion);
+      await assertLiveJobComputeDispatch(tx, { claim, identity: dispatchIdentity,
+        runtimeKeyId: 'key-job-water', subjectId: grant.subjectId, orgId: grant.orgId,
+        teamId: grant.teamId, tokenVersion: grant.tokenVersion,
+        identityDomain: grant.identityDomain, now: new Date() });
+    }, { timeout: 10_000 }).then(
+      () => ({ ok: true as const }), (error: unknown) => ({ ok: false as const, error }));
+
+    try {
+      await waitForEpochLockWaiters(2);
+      finishRevocation.resolve();
+      await revocation;
+      const [renewal, dispatch] = await Promise.all([renewalResult, dispatchResult]);
+      expect(renewal.ok).toBe(false);
+      expect(dispatch.ok).toBe(false);
+    } finally {
+      finishRevocation.resolve();
+      await revocation.catch(() => undefined);
+      await db.orgMember.update({ where: { orgId_userId: {
+        orgId: grant.orgId, userId: grant.subjectId } },
+      data: { status: MembershipStatus.ACTIVE } });
+      await db.teamMember.update({ where: { id: 'team-member-job' },
+        data: { status: MembershipStatus.ACTIVE } });
+    }
+  });
+
   it('renews a live original grant with frozen epoch and refuses its token after revoke', async () => {
     const row = await db.billingJobComputeRenewal.findUniqueOrThrow({
       where: { issueKey: '3'.repeat(64) },
@@ -279,7 +370,7 @@ describe.skipIf(!enabled)('finite job-compute grant in PostgreSQL', () => {
     const dispatch = { claim: verified.payload.job_compute,
       identity: { ...issuedIdentity, grantId: row.id }, runtimeKeyId: 'key-job-water',
       subjectId: row.subjectId, orgId: row.orgId, teamId: row.teamId,
-      tokenVersion: row.tokenVersion, now: new Date() };
+      tokenVersion: row.tokenVersion, identityDomain: row.identityDomain, now: new Date() };
     await expect(db.$transaction((tx) => assertLiveJobComputeDispatch(tx, dispatch)))
       .resolves.toBeUndefined();
     await db.billingJobComputeRenewal.update({ where: { id: row.id },
@@ -302,7 +393,7 @@ describe.skipIf(!enabled)('finite job-compute grant in PostgreSQL', () => {
         origin_source_domain: 'api.nessie.works' },
       identity: { ...identity, grantId }, runtimeKeyId: 'key-job-origin',
       subjectId: 'subject-job-test', orgId: 'org-job-test', teamId: 'team-job-test',
-      tokenVersion: 7, now: new Date(),
+      tokenVersion: 0, identityDomain: 'api.nessie.works', now: new Date(),
     }))).rejects.toThrow('JOB_COMPUTE_DISPATCH_MISMATCH');
   });
 

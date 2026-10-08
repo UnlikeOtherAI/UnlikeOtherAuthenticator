@@ -85,7 +85,7 @@ function identityMatches(row: Grant, input: JobComputeIdentity): boolean {
     && row.purpose === input.purpose;
 }
 
-function originalIdentityDomain(sourceDomain: string, actor: ConfidentialActorChain | undefined): string {
+export function originalIdentityDomain(sourceDomain: string, actor: ConfidentialActorChain | undefined): string {
   let domain = sourceDomain;
   for (let current = actor; current; current = current.act) domain = current.sub;
   return domain;
@@ -96,6 +96,11 @@ async function assertCurrentGrantAuthority(
   row: Pick<Grant, 'subjectId' | 'tokenVersion' | 'identityDomain' | 'orgId' | 'teamId'
     | 'originProduct' | 'originSourceDomain' | 'ledgerAudience' | 'originRuntimeKeyId'>,
 ) {
+  // Epoch is the first authority lock. Membership revocation takes epoch before
+  // organisation/team rows, so acquiring policy or membership locks first here
+  // would invert the order used by callers which also hold a grant row.
+  await lockAndAssertAuthenticationEpoch({ userId: row.subjectId,
+    domain: row.identityDomain, credentialEpoch: row.tokenVersion }, { prisma: tx });
   await lockProductTeamPolicyShared(tx);
   const activeOriginKey = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
     SELECT id FROM billing_ledger_runtime_keys
@@ -107,8 +112,6 @@ async function assertCurrentGrantAuthority(
   await resolveConfidentialDelegationForSource({ sourceDomain: new URL(RECIPIENT_ORIGIN).hostname,
     product: RECIPIENT_PRODUCT, resource: row.ledgerAudience, scope: 'ai.invoke' },
   { prisma: tx as unknown as PrismaClient });
-  await lockAndAssertAuthenticationEpoch({ userId: row.subjectId,
-    domain: row.identityDomain, credentialEpoch: row.tokenVersion }, { prisma: tx });
   await tx.$queryRaw(Prisma.sql`SELECT id FROM organisations WHERE id = ${row.orgId} FOR SHARE`);
   await tx.$queryRaw(Prisma.sql`SELECT id FROM teams WHERE id = ${row.teamId} FOR SHARE`);
   await tx.$queryRaw(Prisma.sql`SELECT id FROM org_members
@@ -250,7 +253,16 @@ export async function recoverJobComputeRenewal(
   const db = deps.prisma ?? getAdminPrisma();
   const key = await verifyLedgerRuntimeKey(params.runtimeSecret, { prisma: db });
   const now = deps.now ?? new Date();
+  // This read is only a hint for selecting the epoch lock. The complete grant
+  // is re-read and validated under the transaction after the epoch is held.
+  const epochHint = await db.billingJobComputeRenewal.findUnique({
+    where: { issueKey: input.issueKey },
+    select: { subjectId: true, identityDomain: true, tokenVersion: true },
+  });
+  if (!epochHint) deny();
   return db.$transaction(async (tx) => {
+    await lockAndAssertAuthenticationEpoch({ userId: epochHint.subjectId,
+      domain: epochHint.identityDomain, credentialEpoch: epochHint.tokenVersion }, { prisma: tx });
     await tx.$queryRaw(Prisma.sql`SELECT id FROM billing_job_compute_renewals
       WHERE issue_key = ${input.issueKey} FOR SHARE`);
     const row = await tx.billingJobComputeRenewal.findUnique({
@@ -311,6 +323,7 @@ export async function assertLiveJobComputeDispatch(
     orgId: string;
     teamId: string;
     tokenVersion: number;
+    identityDomain: string;
     now: Date;
   },
 ): Promise<void> {
@@ -325,6 +338,8 @@ export async function assertLiveJobComputeDispatch(
     || c.water_job_id !== params.identity.waterJobId
     || c.scope_turn_id !== params.identity.scopeTurnId
     || c.purpose !== params.identity.purpose) deny('JOB_COMPUTE_DISPATCH_MISMATCH');
+  await lockAndAssertAuthenticationEpoch({ userId: params.subjectId,
+    domain: params.identityDomain, credentialEpoch: params.tokenVersion }, { prisma: tx });
   await tx.$queryRaw(Prisma.sql`SELECT id FROM billing_job_compute_renewals
     WHERE id = ${c.grant_id} FOR SHARE`);
   const row = await tx.billingJobComputeRenewal.findUnique({ where: { id: c.grant_id } });
@@ -352,8 +367,19 @@ export async function renewJobComputeAuthority(
 ) {
   const db = deps.prisma ?? getAdminPrisma();
   const now = deps.now ?? new Date();
+  // The external lookup supplies only the lock key. recipientGrant locks and
+  // re-reads the row in the mutation transaction, and authority is revalidated.
+  const epochHint = await db.billingJobComputeRenewal.findUnique({
+    where: { id: params.grantId },
+    select: { subjectId: true, identityDomain: true, tokenVersion: true },
+  });
+  if (!epochHint) deny();
   return db.$transaction(async (tx) => {
+    await lockAndAssertAuthenticationEpoch({ userId: epochHint.subjectId,
+      domain: epochHint.identityDomain, credentialEpoch: epochHint.tokenVersion }, { prisma: tx });
     const row = await recipientGrant(params, tx, now);
+    if (row.subjectId !== epochHint.subjectId || row.identityDomain !== epochHint.identityDomain
+      || row.tokenVersion !== epochHint.tokenVersion) deny();
     if (row.revokedAt || row.expiresAt <= now) deny();
     const current = await assertCurrentGrantAuthority(tx, row);
     const nowSeconds = Math.floor(now.getTime() / 1000);
