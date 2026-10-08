@@ -120,6 +120,21 @@ Use this precedence inside your RP:
 
 \`superuser\` in the JWT does NOT mean the user is an admin *inside your product*; it only means they can use UOA's admin UI.
 
+### Live platform administrator verdict
+
+The top-level \`system_admin: boolean\` in \`GET /org/me\` is the current platform
+administrator verdict for the authenticated person, resolved from \`SUPERUSER\` on
+\`ADMIN_AUTH_DOMAIN\`. It is independent of org/team owner/admin standing and
+product-domain bootstrap superuser roles. This clarifies the legacy \`claims.role\`
+description above: that token claim can also represent a product-domain superuser
+and must not authorize a platform-only operation.
+
+The usual signed person credential, ACTIVE identity/membership and current credential
+epoch checks still apply. No user ID may be supplied instead of that credential;
+backend mode remains forbidden. Responses are private/no-store. Missing, malformed,
+false or unavailable verdicts deny access. Fetch it for every privileged operation,
+never persist it or cache a positive result. No database means false.
+
 ### 4.4a Roles are the domain's words; do not hard-code them
 
 The org and team role **vocabularies are per-domain configuration**

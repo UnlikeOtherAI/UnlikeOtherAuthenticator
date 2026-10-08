@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ClientConfig } from '../../src/services/config.service.js';
 
+const isPlatformSuperuserMock = vi.hoisted(() => vi.fn());
 const claimsMock = vi.hoisted(() => vi.fn());
 const getActiveClientOrgContextMock = vi.hoisted(() => vi.fn());
 const getUserOrgContextMock = vi.hoisted(() => vi.fn());
@@ -46,6 +47,10 @@ vi.mock('../../src/routes/org/domain-context.js', () => ({
   normalizeDomain: (value: string) => value.trim().toLowerCase(),
 }));
 
+vi.mock('../../src/services/domain-role.service.js', () => ({
+  isPlatformSuperuser: (...args: unknown[]) => isPlatformSuperuserMock(...args),
+}));
+
 vi.mock('../../src/services/org-context.service.js', () => ({
   getActiveClientOrgContext: (...args: unknown[]) => getActiveClientOrgContextMock(...args),
   getUserOrgContext: (...args: unknown[]) => getUserOrgContextMock(...args),
@@ -84,6 +89,7 @@ async function getOrgMe() {
 describe('GET /org/me cross-product directory', () => {
   beforeEach(() => {
     for (const mock of [
+      isPlatformSuperuserMock,
       claimsMock,
       getActiveClientOrgContextMock,
       getUserOrgContextMock,
@@ -94,6 +100,7 @@ describe('GET /org/me cross-product directory', () => {
       mock.mockReset();
     }
 
+    isPlatformSuperuserMock.mockResolvedValue(false);
     claimsMock.mockResolvedValue({
       userId: 'user-1',
       domain: 'product.example.com',
@@ -132,8 +139,10 @@ describe('GET /org/me cross-product directory', () => {
     const response = await getOrgMe();
 
     expect(response.statusCode).toBe(200);
+    expect(response.headers['cache-control']).toBe('private, no-store');
     expect(response.json()).toEqual({
       ok: true,
+      system_admin: false,
       org: {
         org_id: 'org-cross',
         tenant_slug: 'external-org',
@@ -240,7 +249,7 @@ describe('GET /org/me cross-product directory', () => {
     const response = await getOrgMe();
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ ok: true });
+    expect(response.json()).toEqual({ ok: true, system_admin: false });
     expect(getActiveClientOrgContextMock).not.toHaveBeenCalled();
     expect(buildSidebarTeamsMock).not.toHaveBeenCalled();
   });
@@ -251,7 +260,7 @@ describe('GET /org/me cross-product directory', () => {
     const response = await getOrgMe();
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ ok: true });
+    expect(response.json()).toEqual({ ok: true, system_admin: false });
     expect(getActiveClientOrgContextMock).toHaveBeenCalled();
     expect(buildSidebarTeamsMock).not.toHaveBeenCalled();
   });

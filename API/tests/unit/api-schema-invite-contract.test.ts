@@ -158,6 +158,15 @@ describe('/api invite response contract', () => {
     expect(llmIntegrationMarkdown).toContain('more than one organisation on the same origin domain');
   });
 
+  it('publishes the live platform administrator verdict without tenant-role authority', () => {
+    const orgMe = endpoints.find(endpoint => endpoint.method === 'GET' && endpoint.path === '/org/me');
+    expect(orgMe?.response?.system_admin).toContain('ADMIN_AUTH_DOMAIN');
+    expect(orgMe?.response?.system_admin).toContain('current credential epoch');
+    expect(orgMe?.response?.system_admin).toContain('never persist');
+    expect(llmIntegrationMarkdown).toContain('system_admin: boolean');
+    expect(llmIntegrationMarkdown).toContain('product-domain bootstrap superuser roles');
+  });
+
   it('documents the inviting organisation on the /org/me pending invitation contract', () => {
     const orgMe = endpoints.find(
       (endpoint) => endpoint.method === 'GET' && endpoint.path === '/org/me',

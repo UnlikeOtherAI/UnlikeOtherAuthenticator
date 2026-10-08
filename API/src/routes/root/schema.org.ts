@@ -11,6 +11,7 @@ export const orgEndpoints: EndpointSchema[] = [
     auth: 'domain hash bearer token plus exactly one user credential: X-UOA-Access-Token or X-UOA-Subject-Assertion',
     query: { config_url: 'string (required)' },
     response: {
+      system_admin: 'boolean — live SUPERUSER on ADMIN_AUTH_DOMAIN for the authenticated ACTIVE subject with a current credential epoch; independent of org/team or product-domain roles. False without a database. Re-read for each privileged action; never persist or positively cache it. Responses are private/no-store.',
       org: 'object | absent — live legacy org context plus the directory fields below. Normally anchored to the active same-domain organisation. For an `all_active_memberships` product whose selected team belongs to another domain, it is anchored to the token’s exact `active.orgId` after that organisation and the product policy are revalidated live. It remains absent when neither live context exists; an unscoped token never causes an arbitrary cross-domain org to be synthesized.',
       'org.teams':
         'array of team IDs — the legacy claim field, identical in shape to the JWT `org.teams` claim and the keys of `org.team_roles`, but reflecting current database state. For the renderable directory use `org.team_directory`.',
