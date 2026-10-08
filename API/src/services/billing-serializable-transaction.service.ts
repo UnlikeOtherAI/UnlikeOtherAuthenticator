@@ -10,6 +10,7 @@ type RetryRuntime = {
   random?: () => number;
   sleep?: (delayMs: number) => Promise<void>;
   timeoutMs?: number;
+  isolationLevel?: Prisma.TransactionIsolationLevel;
 };
 
 type CreditRetryExhaustedMessage =
@@ -44,7 +45,7 @@ export async function runBillingSerializableTransaction<T>(
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
     try {
       return await prisma.$transaction(transaction, {
-        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        isolationLevel: runtime.isolationLevel ?? Prisma.TransactionIsolationLevel.Serializable,
         ...(runtime.timeoutMs ? { timeout: runtime.timeoutMs } : {}),
       });
     } catch (error) {

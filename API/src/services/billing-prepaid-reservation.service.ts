@@ -13,7 +13,10 @@ import { verifyChainedSubjectAccessToken } from './confidential-chained-token-ex
 import { runBillingSerializableTransaction } from './billing-serializable-transaction.service.js';
 import { resolveBillingTariffForMonth, utcBillingMonth } from './billing-tariff-history.service.js';
 import { verifyLedgerRuntimeKey } from './billing-ledger-runtime-key.service.js';
-import { assertLiveJobComputeDispatch, type JobComputeDispatchIdentity } from './billing-job-compute-renewal.service.js';
+import { assertLiveJobComputeDispatch, originalIdentityDomain,
+  type JobComputeDispatchIdentity } from './billing-job-compute-renewal.service.js';
+import { isAuthenticationEpochMismatchError, lockAndAssertAuthenticationEpoch } from
+  './authentication-epoch.service.js';
 import { assertLedgerBudgetContext, attachLegacyBudgetDispatch,
   lockBudgetOrganisation, releaseBudgetDispatch, reserveBudgetDispatch,
   type VerifiedBudgetContext } from './billing-credit-budget-dispatch.service.js';
@@ -40,6 +43,20 @@ function rawCost(value: string): Prisma.Decimal {
   return decimal;
 }
 
+async function lockAndAssertPrepaidEpoch(input: {
+  userId: string; identityDomain: string; tokenVersion: number;
+}, tx: Prisma.TransactionClient): Promise<void> {
+  try {
+    await lockAndAssertAuthenticationEpoch({ userId: input.userId,
+      domain: input.identityDomain, credentialEpoch: input.tokenVersion }, { prisma: tx });
+  } catch (error) {
+    if (isAuthenticationEpochMismatchError(error)) {
+      throw new AppError('FORBIDDEN', 403, 'PREPAID_SUBJECT_NOT_ENTITLED');
+    }
+    throw error;
+  }
+}
+
 export type ReservePrepaidDispatchInput = {
   dispatchId: string;
   requestFingerprint: string;
@@ -55,9 +72,9 @@ export type ReservePrepaidDispatchInput = {
   billingContext?: VerifiedBudgetContext | null;
 };
 
-async function assertActiveSubject(
+export async function assertActiveSubject(
   tx: Prisma.TransactionClient,
-  input: ReservePrepaidDispatchInput,
+  input: Pick<ReservePrepaidDispatchInput, 'userId' | 'organisationId' | 'teamId'>,
   tokenVersion: number,
 ): Promise<void> {
   // Admission serializes against token-epoch and membership revocation writers.
@@ -140,14 +157,23 @@ export async function reservePrepaidDispatch(
     throw new AppError('BAD_REQUEST', 400, 'PREPAID_DISPATCH_TIME_INVALID');
   }
   const billingMonth = utcBillingMonth(dispatchStartedAt);
+  // The epoch advisory lock can wait for revocation. READ COMMITTED ensures the
+  // authority reads after that wait see the committed revocation state; budget
+  // and balance mutations remain serialized by their explicit locks below.
   const decision = await runBillingSerializableTransaction(prisma, async (tx) => {
+    // Make the first transaction snapshot and authority lock follow the same
+    // epoch-before-grant/membership order as renewals and revocation.
+    await lockAndAssertPrepaidEpoch({ userId: input.userId,
+      identityDomain: originalIdentityDomain(actor.source_domain, actor.act),
+      tokenVersion: actor.tv }, tx);
     await lockDispatchId(tx, input.dispatchId);
     await assertActiveRuntimeKey(tx, key.id);
     await assertActiveSubject(tx, input, actor.tv);
     await assertLiveJobComputeDispatch(tx, { claim: actor.job_compute,
       identity: input.jobCompute ?? null, runtimeKeyId: key.id,
       subjectId: input.userId, orgId: input.organisationId,
-      teamId: input.teamId, tokenVersion: actor.tv, now });
+      teamId: input.teamId, tokenVersion: actor.tv,
+      identityDomain: originalIdentityDomain(actor.source_domain, actor.act), now });
     await assertLedgerBudgetContext(tx, { product: input.product,
       sourceDomain: actor.source_domain, context: input.billingContext ?? null,
       jobGrantId: input.jobCompute?.grantId ?? null,
@@ -229,7 +255,13 @@ export async function reservePrepaidDispatch(
       throw new AppError('BAD_REQUEST', 409, 'PREPAID_CURRENCY_UNSUPPORTED');
     }
     return null;
-  }, 'BILLING_CREDIT_ACCOUNT_RETRY_EXHAUSTED', { timeoutMs: 30_000 });
+  }, 'BILLING_CREDIT_ACCOUNT_RETRY_EXHAUSTED', { timeoutMs: 30_000,
+    isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted }).catch((error: unknown) => {
+      if (isAuthenticationEpochMismatchError(error)) {
+        throw new AppError('FORBIDDEN', 403, 'PREPAID_SUBJECT_NOT_ENTITLED');
+      }
+      throw error;
+    });
   if (decision) return withBudgetContextDigest(prisma, decision);
   if (bound === null) throw new AppError('BAD_REQUEST', 422, 'PREPAID_BOUND_REQUIRED');
   if (input.currency !== 'USD') {
@@ -243,14 +275,20 @@ export async function reservePrepaidDispatch(
     organisationId: input.organisationId, teamId: input.teamId,
   }, { prisma });
 
+  // See the first reservation stage: every balance/budget writer takes the
+  // same account/organisation locks, while authority reads need a fresh snapshot.
   const prepaid = await runBillingSerializableTransaction(prisma, async (tx) => {
+    await lockAndAssertPrepaidEpoch({ userId: input.userId,
+      identityDomain: originalIdentityDomain(actor.source_domain, actor.act),
+      tokenVersion: actor.tv }, tx);
     await lockDispatchId(tx, input.dispatchId);
     await assertActiveRuntimeKey(tx, key.id);
     await assertActiveSubject(tx, input, actor.tv);
     await assertLiveJobComputeDispatch(tx, { claim: actor.job_compute,
       identity: input.jobCompute ?? null, runtimeKeyId: key.id,
       subjectId: input.userId, orgId: input.organisationId,
-      teamId: input.teamId, tokenVersion: actor.tv, now });
+      teamId: input.teamId, tokenVersion: actor.tv,
+      identityDomain: originalIdentityDomain(actor.source_domain, actor.act), now });
     await assertLedgerBudgetContext(tx, { product: input.product,
       sourceDomain: actor.source_domain, context: input.billingContext ?? null,
       jobGrantId: input.jobCompute?.grantId ?? null,
@@ -320,7 +358,13 @@ export async function reservePrepaidDispatch(
       request_fingerprint: reservation.requestFingerprint,
       reserved_microcredits: reserved.toString(), billing_month: billingMonth,
       currency: reservation.currency };
-  }, 'BILLING_CREDIT_ACCOUNT_RETRY_EXHAUSTED', { timeoutMs: 30_000 });
+  }, 'BILLING_CREDIT_ACCOUNT_RETRY_EXHAUSTED', { timeoutMs: 30_000,
+    isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted }).catch((error: unknown) => {
+      if (isAuthenticationEpochMismatchError(error)) {
+        throw new AppError('FORBIDDEN', 403, 'PREPAID_SUBJECT_NOT_ENTITLED');
+      }
+      throw error;
+    });
   return withBudgetContextDigest(prisma, prepaid);
 }
 
