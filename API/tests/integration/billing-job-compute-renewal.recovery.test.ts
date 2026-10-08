@@ -272,17 +272,13 @@ describe.skipIf(!enabled)('finite job-compute recovery and revocation in Postgre
   });
 
   it('renews a live original grant with frozen epoch and refuses its token after revoke', async () => {
-    const row = await db.billingJobComputeRenewal.findUniqueOrThrow({
-      where: { issueKey: '3'.repeat(64) },
-    });
-    const issuedIdentity: JobComputeIdentity = {
-      originInvocationId: row.originInvocationId,
-      ledgerJobId: row.ledgerJobId,
-      waterJobId: row.waterJobId,
-      scopeTurnId: row.scopeTurnId,
-      purpose: row.purpose as JobComputeIdentity['purpose'],
-    };
     const issuedSecret = `uoa_job_${'c'.repeat(43)}`;
+    const issuedIdentity: JobComputeIdentity = { ...identity, ledgerJobId: 'ledger-live-renewal-test' };
+    const issued = await issueJobComputeRenewal({ runtimeSecret,
+      delegation: await freshOriginalDelegation(),
+      input: { ...issuedIdentity, issueKey: '3'.repeat(64), secret: issuedSecret },
+    }, { prisma: db });
+    const row = await db.billingJobComputeRenewal.findUniqueOrThrow({ where: { id: issued.grant_id } });
     await db.billingAppKey.update({
       where: { id: 'app-key-job-water' },
       data: { lastUsedAt: null },
