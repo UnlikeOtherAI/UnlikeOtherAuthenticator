@@ -19,8 +19,7 @@ import {
   getAccessTokenPublicJwks, resetAccessTokenKeyCache, signConfidentialAccessToken,
 } from '../../src/services/oauth/access-token.service.js';
 import { createTestDb } from '../helpers/test-db.js';
-import { assertActiveSubject } from '../../src/services/billing-prepaid-reservation.service.js';
-import { lockAndAssertAuthenticationEpoch } from '../../src/services/authentication-epoch.service.js';
+import { reservePrepaidDispatch } from '../../src/services/billing-prepaid-reservation.service.js';
 import { lockRefreshSessionUserDomain } from '../../src/services/refresh-session-lock.service.js';
 import { lockOrganisationMemberships } from '../../src/services/organisation-membership-lock.service.js';
 import { lockTeamMembershipRows } from '../../src/services/team-scope.service.js';
@@ -29,6 +28,7 @@ const enabled = Boolean(process.env.DATABASE_URL);
 const secret = `uoa_job_${'a'.repeat(43)}`;
 const appKey = `uoa_app_${'b'.repeat(43)}`;
 const runtimeSecret = `uoa_ledger_${'d'.repeat(43)}`;
+const waterRuntimeSecret = `uoa_ledger_${'e'.repeat(43)}`;
 const grantId = 'b6b40179-e4e4-4fdd-ad6f-9067f6127110';
 const grantUuid = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 const identity: JobComputeIdentity = {
@@ -132,8 +132,8 @@ describe.skipIf(!enabled)('finite job-compute grant in PostgreSQL', () => {
       } });
       await tx.billingLedgerRuntimeKey.create({ data: {
         id: 'key-job-water', serviceId: 'svc-job-water',
-        secretDigest: createHash('sha256').update('water-runtime').digest('hex'),
-        keyPrefix: 'water-runtime', ledgerAudience: 'https://ledger.unlikeotherai.com',
+        secretDigest: createHash('sha256').update(waterRuntimeSecret).digest('hex'),
+        keyPrefix: waterRuntimeSecret.slice(0, 18), ledgerAudience: 'https://ledger.unlikeotherai.com',
         sourceDomain: 'api.deepwater.live', createdByEmail: 'admin@example.com',
       } });
       await tx.billingAppKey.create({ data: {
@@ -286,10 +286,8 @@ describe.skipIf(!enabled)('finite job-compute grant in PostgreSQL', () => {
     });
     const dispatchIdentity = { ...identity, ledgerJobId: input.ledgerJobId,
       grantId: grant.id };
-    const claim = { grant_id: grant.id, origin_invocation_id: identity.originInvocationId,
-      ledger_job_id: input.ledgerJobId, water_job_id: identity.waterJobId,
-      scope_turn_id: null, purpose: identity.purpose, origin_product: 'nessie',
-      origin_source_domain: 'api.nessie.works' };
+    const activeToken = await renewJobComputeAuthority({ appKey, secret: input.secret,
+      grantId: grant.id, identity: input }, { prisma: db });
     const revocationLocked = deferred();
     const finishRevocation = deferred();
     const revocation = db.$transaction(async (tx) => {
@@ -311,17 +309,18 @@ describe.skipIf(!enabled)('finite job-compute grant in PostgreSQL', () => {
     const renewalResult = renewJobComputeAuthority({ appKey, secret: input.secret,
       grantId: grant.id, identity: input }, { prisma: db }).then(
       () => ({ ok: true as const }), (error: unknown) => ({ ok: false as const, error }));
-    const dispatchResult = db.$transaction(async (tx) => {
-      // This is the same authority order used by reservePrepaidDispatch.
-      await lockAndAssertAuthenticationEpoch({ userId: grant.subjectId,
-        domain: grant.identityDomain, credentialEpoch: grant.tokenVersion }, { prisma: tx });
-      await assertActiveSubject(tx, { userId: grant.subjectId, organisationId: grant.orgId,
-        teamId: grant.teamId }, grant.tokenVersion);
-      await assertLiveJobComputeDispatch(tx, { claim, identity: dispatchIdentity,
-        runtimeKeyId: 'key-job-water', subjectId: grant.subjectId, orgId: grant.orgId,
-        teamId: grant.teamId, tokenVersion: grant.tokenVersion,
-        identityDomain: grant.identityDomain, now: new Date() });
-    }, { timeout: 10_000 }).then(
+    const startedAt = new Date().toISOString();
+    const dispatchInput = { dispatchId: 'dispatch-renewal-membership-race',
+      requestFingerprint: 'c'.repeat(64), dispatchStartedAt: startedAt,
+      product: 'deepwater', providerServiceId: 'openrouter',
+      organisationId: grant.orgId, teamId: grant.teamId, userId: grant.subjectId,
+      rawCostBound: '1', currency: 'USD', jobCompute: dispatchIdentity,
+      billingContext: { contextId: input.originInvocationId,
+        originProduct: 'nessie', originSourceDomain: 'api.nessie.works',
+        projectId: null, runId: null } };
+    const dispatchResult = reservePrepaidDispatch({ runtimeSecret: waterRuntimeSecret,
+      delegation: activeToken.access_token, input: dispatchInput }, { prisma: db })
+      .then(
       () => ({ ok: true as const }), (error: unknown) => ({ ok: false as const, error }));
 
     try {
