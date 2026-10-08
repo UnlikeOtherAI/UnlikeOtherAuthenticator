@@ -295,6 +295,9 @@ describe.skipIf(!hasDatabase)('user-facing /org/me org context', () => {
         create: { domain, userId: user.id, role: 'SUPERUSER' }, update: { role: 'SUPERUSER' },
       });
       await assertVerdict({ 'x-uoa-access-token': token }, false); // Product bootstrap superuser.
+      const productSuperuserToken = await signAccessToken({ subject: user.id, domain,
+        role: 'superuser', secret: process.env.SHARED_SECRET!, issuer: process.env.AUTH_SERVICE_IDENTIFIER! });
+      await assertVerdict({ 'x-uoa-access-token': productSuperuserToken }, false);
 
       const pair = await generateKeyPair('RS256');
       subjectJwks.keys = [{ ...await exportJWK(pair.publicKey), kid: 'system-verdict', alg: 'RS256', use: 'sig' }];
@@ -311,6 +314,10 @@ describe.skipIf(!hasDatabase)('user-facing /org/me org context', () => {
       await handle!.prisma.domainRole.create({ data: { domain: adminDomain, userId: user.id, role: 'SUPERUSER' } });
       await assertVerdict({ 'x-uoa-access-token': token }, true);
       await assertVerdict(assertionCredential, true);
+      const roleService = await import('../../src/services/domain-role.service.js');
+      const unavailable = vi.spyOn(roleService, 'isPlatformSuperuser').mockRejectedValueOnce(new Error('Unavailable'));
+      expect((await read(assertionCredential)).statusCode).toBe(500);
+      unavailable.mockRestore();
 
       const forgedPair = await generateKeyPair('RS256');
       expect((await read({ 'x-uoa-subject-assertion': await mintAssertion(forgedPair.privateKey) })).statusCode).toBe(401);
@@ -319,6 +326,9 @@ describe.skipIf(!hasDatabase)('user-facing /org/me org context', () => {
       await handle!.prisma.domainRole.delete({ where: { domain_userId: { domain: adminDomain, userId: user.id } } });
       await assertVerdict(assertionCredential, false); // Revocation cannot reuse a positive verdict.
       await handle!.prisma.domainRole.create({ data: { domain: adminDomain, userId: user.id, role: 'SUPERUSER' } });
+      await handle!.prisma.organisation.update({ where: { id: org.id }, data: { lifecycleStatus: 'DISABLED' } });
+      expect([401, 403]).toContain((await read(assertionCredential)).statusCode);
+      await handle!.prisma.organisation.update({ where: { id: org.id }, data: { lifecycleStatus: 'ACTIVE' } });
       await handle!.prisma.teamMember.update({ where: { teamId_userId: { teamId: team.id, userId: user.id } }, data: { status: 'REMOVED' } });
       expect((await read(assertionCredential)).statusCode).toBe(403);
       await handle!.prisma.teamMember.update({ where: { teamId_userId: { teamId: team.id, userId: user.id } }, data: { status: 'ACTIVE' } });

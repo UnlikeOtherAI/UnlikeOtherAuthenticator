@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ClientConfig } from '../../src/services/config.service.js';
 
+const isPlatformSuperuserMock = vi.hoisted(() => vi.fn());
 const claimsMock = vi.hoisted(() => vi.fn());
 const getActiveClientOrgContextMock = vi.hoisted(() => vi.fn());
 const getUserOrgContextMock = vi.hoisted(() => vi.fn());
@@ -46,6 +47,10 @@ vi.mock('../../src/routes/org/domain-context.js', () => ({
   normalizeDomain: (value: string) => value.trim().toLowerCase(),
 }));
 
+vi.mock('../../src/services/domain-role.service.js', () => ({
+  isPlatformSuperuser: (...args: unknown[]) => isPlatformSuperuserMock(...args),
+}));
+
 vi.mock('../../src/services/org-context.service.js', () => ({
   getActiveClientOrgContext: (...args: unknown[]) => getActiveClientOrgContextMock(...args),
   getUserOrgContext: (...args: unknown[]) => getUserOrgContextMock(...args),
@@ -84,6 +89,7 @@ async function getOrgMe() {
 describe('GET /org/me cross-product directory', () => {
   beforeEach(() => {
     for (const mock of [
+      isPlatformSuperuserMock,
       claimsMock,
       getActiveClientOrgContextMock,
       getUserOrgContextMock,
@@ -94,6 +100,7 @@ describe('GET /org/me cross-product directory', () => {
       mock.mockReset();
     }
 
+    isPlatformSuperuserMock.mockResolvedValue(false);
     claimsMock.mockResolvedValue({
       userId: 'user-1',
       domain: 'product.example.com',
