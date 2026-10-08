@@ -18,7 +18,7 @@ declare module 'fastify' {
     /** Domain-only is an explicit route policy for access requests/revocation;
      * it never enables domainBackend RLS visibility or replaces a user credential. */
     withTenantTx: <T>(handler: (tx: Prisma.TransactionClient) => Promise<T>,
-      options?: { authority: 'domain' }) => Promise<T>;
+      options?: { authority?: 'domain'; userEpochLock?: 'exclusive' | 'shared' }) => Promise<T>;
   }
 }
 

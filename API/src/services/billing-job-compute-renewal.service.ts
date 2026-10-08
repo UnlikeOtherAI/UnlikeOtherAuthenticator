@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { getPublicBaseUrl } from '../config/env.js';
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
-import { lockAndAssertAuthenticationEpoch } from './authentication-epoch.service.js';
+import { lockAndAssertAuthenticationEpochShared } from './authentication-epoch.service.js';
 import { verifyBillingAppKey } from './billing-app-key.service.js';
 import { verifyLedgerRuntimeKey } from './billing-ledger-runtime-key.service.js';
 import { resolveConfidentialDelegationForSource } from './confidential-delegation.service.js';
@@ -99,7 +99,7 @@ async function assertCurrentGrantAuthority(
   // Epoch is the first authority lock. Membership revocation takes epoch before
   // organisation/team rows, so acquiring policy or membership locks first here
   // would invert the order used by callers which also hold a grant row.
-  await lockAndAssertAuthenticationEpoch({ userId: row.subjectId,
+  await lockAndAssertAuthenticationEpochShared({ userId: row.subjectId,
     domain: row.identityDomain, credentialEpoch: row.tokenVersion }, { prisma: tx });
   await lockProductTeamPolicyShared(tx);
   const activeOriginKey = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
@@ -261,7 +261,7 @@ export async function recoverJobComputeRenewal(
   });
   if (!epochHint) deny();
   return db.$transaction(async (tx) => {
-    await lockAndAssertAuthenticationEpoch({ userId: epochHint.subjectId,
+    await lockAndAssertAuthenticationEpochShared({ userId: epochHint.subjectId,
       domain: epochHint.identityDomain, credentialEpoch: epochHint.tokenVersion }, { prisma: tx });
     await tx.$queryRaw(Prisma.sql`SELECT id FROM billing_job_compute_renewals
       WHERE issue_key = ${input.issueKey} FOR SHARE`);
@@ -280,13 +280,14 @@ export async function recoverJobComputeRenewal(
     return { grant_id: row.id, expires_at: row.expiresAt.toISOString(),
       purpose: row.purpose, ledger_job_id: row.ledgerJobId,
       water_job_id: row.waterJobId, scope_turn_id: row.scopeTurnId };
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted });
 }
 
 async function recipientGrant(
   params: { appKey: string; secret: string; grantId: string; identity: JobComputeIdentity },
   tx: Prisma.TransactionClient,
   now: Date,
+  grantLock: 'share' | 'update' = 'update',
 ) {
   validIdentity(params.identity);
   if (!SECRET.test(params.secret)) deny();
@@ -303,8 +304,13 @@ async function recipientGrant(
     WHERE id = ${recipient.id} AND revoked_at IS NULL
       AND (expires_at IS NULL OR expires_at > ${now}) FOR SHARE`);
   if (activeRecipient.length !== 1) deny('JOB_COMPUTE_RECIPIENT_MISMATCH');
-  await tx.$queryRaw(Prisma.sql`SELECT id FROM billing_job_compute_renewals
-    WHERE id = ${params.grantId} FOR UPDATE`);
+  if (grantLock === 'share') {
+    await tx.$queryRaw(Prisma.sql`SELECT id FROM billing_job_compute_renewals
+      WHERE id = ${params.grantId} FOR SHARE`);
+  } else {
+    await tx.$queryRaw(Prisma.sql`SELECT id FROM billing_job_compute_renewals
+      WHERE id = ${params.grantId} FOR UPDATE`);
+  }
   const row = await tx.billingJobComputeRenewal.findUnique({ where: { id: params.grantId } });
   if (!row || row.secretDigest !== hash(params.secret)
     || row.recipientOrigin !== RECIPIENT_ORIGIN
@@ -338,7 +344,7 @@ export async function assertLiveJobComputeDispatch(
     || c.water_job_id !== params.identity.waterJobId
     || c.scope_turn_id !== params.identity.scopeTurnId
     || c.purpose !== params.identity.purpose) deny('JOB_COMPUTE_DISPATCH_MISMATCH');
-  await lockAndAssertAuthenticationEpoch({ userId: params.subjectId,
+  await lockAndAssertAuthenticationEpochShared({ userId: params.subjectId,
     domain: params.identityDomain, credentialEpoch: params.tokenVersion }, { prisma: tx });
   await tx.$queryRaw(Prisma.sql`SELECT id FROM billing_job_compute_renewals
     WHERE id = ${c.grant_id} FOR SHARE`);
@@ -375,9 +381,9 @@ export async function renewJobComputeAuthority(
   });
   if (!epochHint) deny();
   return db.$transaction(async (tx) => {
-    await lockAndAssertAuthenticationEpoch({ userId: epochHint.subjectId,
+    await lockAndAssertAuthenticationEpochShared({ userId: epochHint.subjectId,
       domain: epochHint.identityDomain, credentialEpoch: epochHint.tokenVersion }, { prisma: tx });
-    const row = await recipientGrant(params, tx, now);
+    const row = await recipientGrant(params, tx, now, 'share');
     if (row.subjectId !== epochHint.subjectId || row.identityDomain !== epochHint.identityDomain
       || row.tokenVersion !== epochHint.tokenVersion) deny();
     if (row.revokedAt || row.expiresAt <= now) deny();
@@ -404,7 +410,7 @@ export async function renewJobComputeAuthority(
     });
     return { access_token: jwt, token_type: 'Bearer' as const,
       expires_in: exp - nowSeconds };
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted });
 }
 
 export async function revokeJobComputeRenewal(

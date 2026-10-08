@@ -124,7 +124,7 @@ export function registerOrgMeRoute(app: FastifyInstance): void {
         ]);
 
         return { ...context, team_directory: teamDirectory, pending_invites: pendingInvites };
-      });
+      }, { userEpochLock: 'shared' });
 
       const response: { ok: true; org?: typeof org } = { ok: true };
       if (org) response.org = org;

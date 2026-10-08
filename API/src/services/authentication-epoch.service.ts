@@ -6,6 +6,7 @@ import { isActiveLifecycle } from './entity-lifecycle.service.js';
 import {
   lockRefreshSessionUser,
   lockRefreshSessionUserDomain,
+  lockRefreshSessionUserDomainShared,
 } from './refresh-session-lock.service.js';
 
 type AuthenticationEpochPrisma = Pick<PrismaClient, '$queryRaw' | 'user'>;
@@ -85,6 +86,47 @@ export async function lockAndAssertAuthenticationEpoch(
     };
   }
   await lockRefreshSessionUserDomain(
+    { userId: params.userId, domain: params.domain },
+    { prisma: deps.prisma },
+  );
+  await deps.afterLock?.();
+
+  const user = await deps.prisma.user.findUnique({
+    where: { id: params.userId },
+    select: { tokenVersion: true, twoFaEnabled: true, lifecycleStatus: true },
+  });
+  if (!user || !isActiveLifecycle(user.lifecycleStatus) || user.tokenVersion !== params.credentialEpoch) {
+    throw new AuthenticationEpochMismatchError();
+  }
+  return user;
+}
+
+/**
+ * Read and pin the current credential epoch while allowing concurrent authorization reads.
+ * State-changing callers must continue to acquire the exclusive epoch lock before mutation.
+ */
+export async function lockAndAssertAuthenticationEpochShared(
+  params: {
+    userId: string;
+    domain: string;
+    credentialEpoch: number;
+  },
+  deps: {
+    afterLock?: () => Promise<void>;
+    fallbackTwoFaEnabled?: boolean;
+    prisma: AuthenticationEpochPrisma;
+  },
+): Promise<{ tokenVersion: number; twoFaEnabled: boolean }> {
+  if (
+    !getEnv().DATABASE_URL &&
+    typeof (deps.prisma as { user?: { findUnique?: unknown } }).user?.findUnique !== 'function'
+  ) {
+    return {
+      tokenVersion: params.credentialEpoch,
+      twoFaEnabled: deps.fallbackTwoFaEnabled ?? false,
+    };
+  }
+  await lockRefreshSessionUserDomainShared(
     { userId: params.userId, domain: params.domain },
     { prisma: deps.prisma },
   );

@@ -49,6 +49,7 @@ vi.mock('../../src/services/confidential-token-exchange.service.js', () => ({
 }));
 vi.mock('../../src/services/authentication-epoch.service.js', () => ({
   lockAndAssertAuthenticationEpoch: (...args: unknown[]) => mocks.epoch(...args),
+  lockAndAssertAuthenticationEpochShared: (...args: unknown[]) => mocks.epoch(...args),
   isAuthenticationEpochMismatchError: () => false,
 }));
 vi.mock('../../src/services/org-context.service.js', () => ({

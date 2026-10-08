@@ -6,7 +6,7 @@ import { verifyAccessToken, type AccessTokenClaims } from '../services/access-to
 import { verifyConfidentialSubjectToken } from '../services/confidential-token-exchange.service.js';
 import {
   isAuthenticationEpochMismatchError,
-  lockAndAssertAuthenticationEpoch,
+  lockAndAssertAuthenticationEpochShared,
 } from '../services/authentication-epoch.service.js';
 import { getActiveClientOrgContext } from '../services/org-context.service.js';
 import { normalizeDomain } from '../utils/domain.js';
@@ -170,7 +170,7 @@ async function resolveSubjectAssertionClaims(
 
   let identity: { tokenVersion: number };
   try {
-    identity = await lockAndAssertAuthenticationEpoch(
+    identity = await lockAndAssertAuthenticationEpochShared(
       {
         userId: assertion.sub,
         domain: sourceDomain,
