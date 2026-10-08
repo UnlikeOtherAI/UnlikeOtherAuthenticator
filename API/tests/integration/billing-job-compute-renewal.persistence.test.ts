@@ -236,9 +236,14 @@ describe.skipIf(!enabled)('finite job-compute grant in PostgreSQL', () => {
   });
 
   it('keeps concurrent renewal transactions healthy without shared-key telemetry writes', async () => {
+    const input = { ...identity, ledgerJobId: 'ledger-job-concurrent-renew-test',
+      issueKey: '9'.repeat(64), secret: `uoa_job_${'k'.repeat(43)}` };
+    const issued = await issueJobComputeRenewal({ runtimeSecret,
+      delegation: await freshOriginalDelegation(), input }, { prisma: db });
     await db.billingAppKey.update({ where: { id: 'app-key-job-water' }, data: { lastUsedAt: null } });
     const renewed = await Promise.all(Array.from({ length: 4 }, () =>
-      renewJobComputeAuthority({ appKey, secret, grantId, identity }, { prisma: db })));
+      renewJobComputeAuthority({ appKey, secret: input.secret,
+        grantId: issued.grant_id, identity: input }, { prisma: db })));
 
     expect(renewed).toHaveLength(4);
     expect(renewed.every((result) => result.access_token.length > 0)).toBe(true);
