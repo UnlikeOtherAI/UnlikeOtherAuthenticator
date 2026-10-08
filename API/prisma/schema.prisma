@@ -870,6 +870,7 @@ model ClientDomain {
   signatureClaimIntents SignatureClaimIntent[]
   agreementSignatures   AgreementSignature[]
   delegationMappings    ConfidentialDelegationMapping[]
+  salesResearchJobGrants SalesResearchJobGrant[]
 
   @@index([status])
   @@map("client_domains")
@@ -3253,15 +3254,47 @@ model BillingJobComputeRenewal {
   recipientProduct      String    @map("recipient_product") @db.VarChar(100)
   ledgerAudience        String    @map("ledger_audience") @db.VarChar(255)
   originalActorChain    Json?     @map("original_actor_chain")
+  parentSalesJobGrantId String?   @map("parent_sales_job_grant_id") @db.Uuid
   createdAt             DateTime  @default(now()) @map("created_at")
   expiresAt             DateTime  @map("expires_at")
   revokedAt             DateTime? @map("revoked_at")
 
   originRuntimeKey BillingLedgerRuntimeKey @relation(fields: [originRuntimeKeyId], references: [id], onDelete: Restrict)
+  parentSalesJobGrant SalesResearchJobGrant? @relation(fields: [parentSalesJobGrantId], references: [id], onDelete: Restrict)
 
   @@index([ledgerJobId, waterJobId, revokedAt])
   @@index([subjectId, tokenVersion, expiresAt])
   @@map("billing_job_compute_renewals")
+}
+
+// A bounded continuation authority captured from one fresh SalesNerd team
+// assertion. It is independent of DeepWater's Ledger-runtime-key grants.
+model SalesResearchJobGrant {
+  id                String    @id @default(uuid())
+  clientDomainId    String    @map("client_domain_id")
+  requestId         String    @map("request_id") @db.Uuid
+  jobId             String    @map("job_id") @db.VarChar(160)
+  sourceDomain      String    @map("source_domain") @db.VarChar(255)
+  subjectId         String    @map("subject_id") @db.VarChar(256)
+  orgId             String    @map("org_id") @db.VarChar(256)
+  teamId            String    @map("team_id") @db.VarChar(256)
+  tokenVersion      Int       @map("token_version")
+  originTokenJti    String    @map("origin_token_jti") @db.VarChar(256)
+  product           String    @db.VarChar(100)
+  resource          String    @db.VarChar(255)
+  purpose           String    @db.VarChar(64)
+  bindingHash       String    @map("binding_hash") @db.Char(64)
+  authorizedUntil   DateTime  @map("authorized_until") @db.Timestamptz(3)
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  revokedAt         DateTime? @map("revoked_at") @db.Timestamptz(3)
+
+  clientDomain ClientDomain @relation(fields: [clientDomainId], references: [id], onDelete: Cascade)
+  billingJobComputeRenewals BillingJobComputeRenewal[]
+
+  @@unique([clientDomainId, product, requestId])
+  @@index([product, jobId, purpose, createdAt], map: "sales_research_job_grants_job_lineage_idx")
+  @@index([subjectId, tokenVersion, authorizedUntil])
+  @@map("sales_research_job_grants")
 }
 
 model BillingPrepaidReservationEvent {

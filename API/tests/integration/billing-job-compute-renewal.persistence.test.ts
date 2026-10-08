@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { MembershipStatus, Prisma, type PrismaClient } from '@prisma/client';
 import Fastify from 'fastify';
@@ -31,6 +31,10 @@ const secret = `uoa_job_${'a'.repeat(43)}`;
 const appKey = `uoa_app_${'b'.repeat(43)}`;
 const runtimeSecret = `uoa_ledger_${'d'.repeat(43)}`;
 const waterRuntimeSecret = `uoa_ledger_${'e'.repeat(43)}`;
+const salesRuntimeSecret = `uoa_ledger_${'f'.repeat(43)}`;
+const salesSourceDomain = 'app.salesnerd.live';
+const salesOrgId = 'org-job-sales';
+const salesTeamId = 'team-job-sales';
 const grantId = 'b6b40179-e4e4-4fdd-ad6f-9067f6127110';
 const grantUuid = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 const identity: JobComputeIdentity = {
@@ -42,6 +46,7 @@ const identity: JobComputeIdentity = {
 };
 let db: PrismaClient;
 let cleanup: () => Promise<void>;
+let salesClientDomainId: string;
 const originalEnv = {
   PUBLIC_BASE_URL: process.env.PUBLIC_BASE_URL,
   MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK: process.env.MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK,
@@ -98,6 +103,7 @@ describe.skipIf(!enabled)('finite job-compute grant in PostgreSQL', () => {
       await tx.$executeRaw(Prisma.sql`INSERT INTO billing_services
         (id, identifier, name, updated_at) VALUES
         ('svc-job-origin', 'nessie', 'Nessie', CURRENT_TIMESTAMP),
+        ('svc-job-sales', 'salesnerd', 'SalesNerd', CURRENT_TIMESTAMP),
         ('svc-job-water', 'deepwater', 'Water', CURRENT_TIMESTAMP)`);
       await tx.$executeRaw(Prisma.sql`INSERT INTO users
         (id, email, user_key, name) VALUES
@@ -105,23 +111,40 @@ describe.skipIf(!enabled)('finite job-compute grant in PostgreSQL', () => {
       await tx.$executeRaw(Prisma.sql`INSERT INTO organisations
         (id, domain, name, slug, owner_id, updated_at) VALUES
         ('org-job-test', 'api.nessie.works', 'Job', 'job-test', 'subject-job-test', CURRENT_TIMESTAMP)`);
+      await tx.$executeRaw(Prisma.sql`INSERT INTO organisations
+        (id, domain, name, slug, owner_id, updated_at) VALUES
+        (${salesOrgId}, ${salesSourceDomain}, 'Sales', 'sales-job-test', 'subject-job-test', CURRENT_TIMESTAMP)`);
       await tx.$executeRaw(Prisma.sql`INSERT INTO teams
         (id, org_id, name, slug, updated_at) VALUES
         ('team-job-test', 'org-job-test', 'Job', 'job-test', CURRENT_TIMESTAMP)`);
+      await tx.$executeRaw(Prisma.sql`INSERT INTO teams
+        (id, org_id, name, slug, updated_at) VALUES
+        (${salesTeamId}, ${salesOrgId}, 'Sales', 'sales-job-test', CURRENT_TIMESTAMP)`);
       await tx.$executeRaw(Prisma.sql`INSERT INTO org_members
         (id, org_id, user_id, domain, role, updated_at) VALUES
         ('org-member-job', 'org-job-test', 'subject-job-test', 'api.nessie.works', 'owner', CURRENT_TIMESTAMP)`);
+      await tx.$executeRaw(Prisma.sql`INSERT INTO org_members
+        (id, org_id, user_id, domain, role, updated_at) VALUES
+        ('org-member-sales-job', ${salesOrgId}, 'subject-job-test', ${salesSourceDomain}, 'owner', CURRENT_TIMESTAMP)`);
       await tx.$executeRaw(Prisma.sql`INSERT INTO team_members
         (id, team_id, user_id, team_role, updated_at) VALUES
         ('team-member-job', 'team-job-test', 'subject-job-test', 'owner', CURRENT_TIMESTAMP)`);
+      await tx.$executeRaw(Prisma.sql`INSERT INTO team_members
+        (id, team_id, user_id, team_role, updated_at) VALUES
+        ('team-member-sales-job', ${salesTeamId}, 'subject-job-test', 'owner', CURRENT_TIMESTAMP)`);
       await tx.domainRole.create({ data: { domain: 'api.nessie.works',
+        userId: 'subject-job-test', role: 'USER' } });
+      await tx.domainRole.create({ data: { domain: salesSourceDomain,
         userId: 'subject-job-test', role: 'USER' } });
       const origin = await tx.clientDomain.create({ data: { domain: 'api.nessie.works',
         label: 'Nessie', status: 'active' } });
+      const sales = await tx.clientDomain.create({ data: { domain: salesSourceDomain,
+        label: 'SalesNerd', status: 'active' } });
+      salesClientDomainId = sales.id;
       const recipient = await tx.clientDomain.create({ data: { domain: 'api.deepwater.live',
         label: 'Water', status: 'active' } });
       for (const [clientDomainId, product] of [
-        [origin.id, 'nessie'], [recipient.id, 'deepwater'],
+        [origin.id, 'nessie'], [sales.id, 'salesnerd'], [recipient.id, 'deepwater'],
       ] as const) {
         await tx.confidentialDelegationMapping.create({ data: {
           clientDomainId, product, resource: 'https://ledger.unlikeotherai.com',
@@ -133,6 +156,12 @@ describe.skipIf(!enabled)('finite job-compute grant in PostgreSQL', () => {
         secretDigest: createHash('sha256').update(runtimeSecret).digest('hex'),
         keyPrefix: runtimeSecret.slice(0, 18), ledgerAudience: 'https://ledger.unlikeotherai.com',
         sourceDomain: 'api.nessie.works', createdByEmail: 'admin@example.com',
+      } });
+      await tx.billingLedgerRuntimeKey.create({ data: {
+        id: 'key-job-sales', serviceId: 'svc-job-sales',
+        secretDigest: createHash('sha256').update(salesRuntimeSecret).digest('hex'),
+        keyPrefix: salesRuntimeSecret.slice(0, 18), ledgerAudience: 'https://ledger.unlikeotherai.com',
+        sourceDomain: salesSourceDomain, createdByEmail: 'admin@example.com',
       } });
       await tx.billingLedgerRuntimeKey.create({ data: {
         id: 'key-job-water', serviceId: 'svc-job-water',
@@ -165,6 +194,23 @@ describe.skipIf(!enabled)('finite job-compute grant in PostgreSQL', () => {
       } });
     });
   });
+
+  async function salesParentDelegation(input: {
+    grantHandle: string; requestId: string; jobId: string; authorizedUntil: Date;
+  }): Promise<string> {
+    return signConfidentialAccessToken({
+      subject: 'subject-job-test', credentialEpoch: 0, email: 'job@example.com',
+      sourceDomain: salesSourceDomain, product: 'salesnerd',
+      resource: 'https://ledger.unlikeotherai.com',
+      issuer: 'https://authentication.unlikeotherai.com', ttlSeconds: 45,
+      scope: 'ai.invoke', active: { orgId: salesOrgId, teamId: salesTeamId },
+      org: { org_id: salesOrgId, tenant_slug: 'sales-job-test', org_role: 'owner',
+        teams: [salesTeamId], team_roles: { [salesTeamId]: 'owner' } },
+      jobAuthorization: { grant_handle: input.grantHandle, request_id: input.requestId,
+        job_id: input.jobId, purpose: 'research_job',
+        authorized_until: Math.floor(input.authorizedUntil.getTime() / 1000) },
+    });
+  }
   afterAll(async () => {
     for (const [key, value] of Object.entries(originalEnv)) {
       if (value === undefined) Reflect.deleteProperty(process.env, key);
@@ -217,6 +263,95 @@ describe.skipIf(!enabled)('finite job-compute grant in PostgreSQL', () => {
     expect(JSON.stringify(row)).not.toContain(secret);
     await expect(renewJobComputeAuthority({ appKey, secret, grantId, identity },
       { prisma: db })).rejects.toThrow('JOB_COMPUTE_RENEWAL_DENIED');
+  });
+
+  it('binds Water compute authority to the Sales parent grant and stops renewal on revoke', async () => {
+    const now = new Date();
+    const parentGrantId = randomUUID();
+    const parentRequestId = randomUUID();
+    const parentJobId = `j_sales_parent_${randomUUID()}`;
+    const authorizedUntil = new Date(now.getTime() + 60 * 60 * 1000);
+    const parent = await db.salesResearchJobGrant.create({ data: {
+      id: parentGrantId, clientDomainId: salesClientDomainId,
+      requestId: parentRequestId, jobId: parentJobId, sourceDomain: salesSourceDomain,
+      subjectId: 'subject-job-test', orgId: salesOrgId, teamId: salesTeamId,
+      tokenVersion: 0, originTokenJti: randomUUID(), product: 'salesnerd',
+      resource: 'https://ledger.unlikeotherai.com', purpose: 'research_job',
+      bindingHash: 'a'.repeat(64), authorizedUntil, createdAt: now,
+    } });
+    const childInput = { ...identity, originInvocationId: parentJobId,
+      ledgerJobId: `ledger-child-${randomUUID()}`, issueKey: randomUUID().replaceAll('-', '').padEnd(64, '0').slice(0, 64),
+      secret: `uoa_job_${'p'.repeat(43)}` };
+    const delegation = await salesParentDelegation({ grantHandle: parent.id,
+      requestId: parentRequestId, jobId: parentJobId, authorizedUntil });
+    const wrongParent = await salesParentDelegation({ grantHandle: randomUUID(),
+      requestId: parentRequestId, jobId: parentJobId, authorizedUntil });
+    await expect(issueJobComputeRenewal({ runtimeSecret: salesRuntimeSecret,
+      delegation: wrongParent, input: { ...childInput,
+        ledgerJobId: `ledger-wrong-parent-${randomUUID()}`,
+        issueKey: randomUUID().replaceAll('-', '').padEnd(64, '2').slice(0, 64) } },
+    { prisma: db, now })).rejects.toThrow('JOB_COMPUTE_PARENT_AUTHORIZATION_INVALID');
+    const child = await issueJobComputeRenewal({ runtimeSecret: salesRuntimeSecret,
+      delegation, input: childInput }, { prisma: db, now });
+    const persisted = await db.billingJobComputeRenewal.findUniqueOrThrow({
+      where: { id: child.grant_id },
+    });
+    expect(persisted.parentSalesJobGrantId).toBe(parent.id);
+    expect(persisted.expiresAt.getTime()).toBeLessThanOrEqual(authorizedUntil.getTime());
+    await expect(renewJobComputeAuthority({ appKey, secret: childInput.secret,
+      grantId: child.grant_id, identity: childInput }, { prisma: db })).resolves.toMatchObject({
+      token_type: 'Bearer',
+    });
+
+    await db.salesResearchJobGrant.update({ where: { id: parent.id },
+      data: { revokedAt: new Date() } });
+    await expect(renewJobComputeAuthority({ appKey, secret: childInput.secret,
+      grantId: child.grant_id, identity: childInput }, { prisma: db }))
+      .rejects.toThrow('JOB_COMPUTE_PARENT_AUTHORIZATION_INVALID');
+    await expect(recoverJobComputeRenewal({ runtimeSecret: salesRuntimeSecret,
+      input: childInput }, { prisma: db }))
+      .rejects.toThrow('JOB_COMPUTE_PARENT_AUTHORIZATION_INVALID');
+    const dispatchIdentity = { ...identity, originInvocationId: parentJobId,
+      ledgerJobId: childInput.ledgerJobId, grantId: child.grant_id };
+    await expect(assertLiveJobComputeDispatch(db, {
+      claim: { grant_id: child.grant_id, origin_invocation_id: parentJobId,
+        ledger_job_id: childInput.ledgerJobId, water_job_id: identity.waterJobId,
+        scope_turn_id: null, purpose: 'research_compute',
+        origin_product: 'salesnerd', origin_source_domain: salesSourceDomain },
+      identity: dispatchIdentity, runtimeKeyId: 'key-job-water',
+      subjectId: 'subject-job-test', orgId: salesOrgId, teamId: salesTeamId,
+      tokenVersion: 0, identityDomain: salesSourceDomain, now: new Date(),
+    })).rejects.toThrow('JOB_COMPUTE_PARENT_AUTHORIZATION_INVALID');
+
+    const expiringParentId = randomUUID();
+    const expiringRequestId = randomUUID();
+    const expiringJobId = `j_sales_expiring_parent_${randomUUID()}`;
+    const expiringAt = new Date(now.getTime() + 45_000);
+    const expiringParent = await db.salesResearchJobGrant.create({ data: {
+      id: expiringParentId, clientDomainId: salesClientDomainId,
+      requestId: expiringRequestId, jobId: expiringJobId, sourceDomain: salesSourceDomain,
+      subjectId: 'subject-job-test', orgId: salesOrgId, teamId: salesTeamId,
+      tokenVersion: 0, originTokenJti: randomUUID(), product: 'salesnerd',
+      resource: 'https://ledger.unlikeotherai.com', purpose: 'research_job',
+      bindingHash: 'b'.repeat(64), authorizedUntil: expiringAt,
+      createdAt: now,
+    } });
+    const expiringInput = { ...identity, originInvocationId: expiringJobId,
+      ledgerJobId: `ledger-expiring-child-${randomUUID()}`,
+      issueKey: randomUUID().replaceAll('-', '').padEnd(64, '1').slice(0, 64),
+      secret: `uoa_job_${'q'.repeat(43)}` };
+    const expiringDelegation = await salesParentDelegation({ grantHandle: expiringParent.id,
+      requestId: expiringRequestId, jobId: expiringJobId, authorizedUntil: expiringAt });
+    const expiringChild = await issueJobComputeRenewal({ runtimeSecret: salesRuntimeSecret,
+      delegation: expiringDelegation, input: expiringInput }, { prisma: db, now });
+    const expiringChildRow = await db.billingJobComputeRenewal.findUniqueOrThrow({
+      where: { id: expiringChild.grant_id },
+    });
+    expect(expiringChildRow.expiresAt).toEqual(expiringAt);
+    await expect(renewJobComputeAuthority({ appKey, secret: expiringInput.secret,
+      grantId: expiringChild.grant_id, identity: expiringInput },
+    { prisma: db, now: new Date(expiringAt.getTime() + 1_000) }))
+      .rejects.toThrow('JOB_COMPUTE_RENEWAL_DENIED');
   });
 
   it('concurrent identical issue requests converge to one durable grant', async () => {

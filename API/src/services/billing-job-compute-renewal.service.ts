@@ -48,6 +48,13 @@ const JobClaim = z.object({
   origin_product: z.string().min(1),
   origin_source_domain: z.string().min(1),
 }).strict();
+const SalesParentJobClaim = z.object({
+  grant_handle: z.string().uuid(),
+  request_id: z.string().uuid(),
+  job_id: z.string().min(1).max(160),
+  purpose: z.literal('research_job'),
+  authorized_until: z.number().int().positive(),
+}).strict();
 
 export type JobComputeDispatchIdentity = JobComputeIdentity & { grantId: string };
 
@@ -164,6 +171,57 @@ async function assertRecipientAvailable(tx: Prisma.TransactionClient): Promise<v
   if (locked.length !== 1) deny('JOB_COMPUTE_RECIPIENT_UNAVAILABLE');
 }
 
+async function assertParentSalesJobGrant(
+  tx: Prisma.TransactionClient,
+  original: { job_authorization?: unknown; sub: string; tv: number; source_domain: string;
+    product: string; aud: string; active: { orgId: string; teamId: string };
+    identityDomain: string; },
+  now: Date,
+) {
+  if (original.job_authorization === undefined) return null;
+  const parsed = SalesParentJobClaim.safeParse(original.job_authorization);
+  if (!parsed.success || original.product !== 'salesnerd'
+    || original.aud !== LEDGER_AUDIENCE) deny('JOB_COMPUTE_PARENT_AUTHORIZATION_INVALID');
+  const claim = parsed.data;
+  await tx.$queryRaw(Prisma.sql`SELECT id FROM sales_research_job_grants
+    WHERE id = ${claim.grant_handle}::uuid FOR SHARE`);
+  const row = await tx.salesResearchJobGrant.findUnique({ where: { id: claim.grant_handle } });
+  const authorizedUntil = Math.floor((row?.authorizedUntil.getTime() ?? 0) / 1000);
+  if (!row || row.requestId !== claim.request_id || row.jobId !== claim.job_id
+    || row.purpose !== claim.purpose || authorizedUntil !== claim.authorized_until
+    || row.product !== original.product || row.resource !== original.aud
+    || row.subjectId !== original.sub || row.tokenVersion !== original.tv
+    || row.sourceDomain !== original.source_domain || row.sourceDomain !== original.identityDomain
+    || row.orgId !== original.active.orgId || row.teamId !== original.active.teamId
+    || row.revokedAt || row.authorizedUntil <= now
+    || Math.floor(now.getTime() / 1000) >= claim.authorized_until) {
+    deny('JOB_COMPUTE_PARENT_AUTHORIZATION_INVALID');
+  }
+  return row;
+}
+
+async function assertParentSalesJobGrantActive(
+  tx: Prisma.TransactionClient,
+  row: Grant,
+  now: Date,
+) {
+  if (!row.parentSalesJobGrantId) return null;
+  await tx.$queryRaw(Prisma.sql`SELECT id FROM sales_research_job_grants
+    WHERE id = ${row.parentSalesJobGrantId}::uuid FOR SHARE`);
+  const parent = await tx.salesResearchJobGrant.findUnique({
+    where: { id: row.parentSalesJobGrantId },
+  });
+  if (!parent || parent.revokedAt || parent.authorizedUntil <= now
+    || parent.subjectId !== row.subjectId || parent.tokenVersion !== row.tokenVersion
+    || parent.sourceDomain !== row.identityDomain || parent.orgId !== row.orgId
+    || parent.teamId !== row.teamId || parent.product !== row.originProduct
+    || parent.sourceDomain !== row.originSourceDomain
+    || parent.resource !== row.ledgerAudience || parent.purpose !== 'research_job') {
+    deny('JOB_COMPUTE_PARENT_AUTHORIZATION_INVALID');
+  }
+  return parent;
+}
+
 async function issueTransaction<T>(db: PrismaClient,
   action: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
   for (let attempt = 0; attempt < 5; attempt += 1) {
@@ -211,28 +269,37 @@ export async function issueJobComputeRenewal(
       originProduct: original.product, originSourceDomain: original.source_domain,
       ledgerAudience: key.ledgerAudience, originRuntimeKeyId: key.id };
     await assertCurrentGrantAuthority(tx, frozen);
+    const parentSalesJobGrant = await assertParentSalesJobGrant(tx,
+      { ...original, identityDomain }, now);
     await assertRecipientAvailable(tx);
+    const immutableFrozen = { ...frozen,
+      parentSalesJobGrantId: parentSalesJobGrant?.id ?? null };
     const existing = await tx.billingJobComputeRenewal.findFirst({
       where: { OR: [{ issueKey: input.issueKey }, { identityKey }] },
     });
     if (existing) {
       if (existing.issueKey !== input.issueKey || existing.identityKey !== identityKey
         || existing.secretDigest !== secretDigest || !identityMatches(existing, input)
-        || Object.entries(frozen).some(([field, value]) =>
-          existing[field as keyof typeof frozen] !== value)) {
+        || Object.entries(immutableFrozen).some(([field, value]) =>
+          existing[field as keyof typeof immutableFrozen] !== value)) {
         throw new AppError('BAD_REQUEST', 409, 'JOB_COMPUTE_ISSUE_CONFLICT');
       }
       if (existing.revokedAt || existing.expiresAt <= now) deny();
       return existing;
     }
+    const expiresAt = new Date(now.getTime() + GRANT_TTL_MS);
+    if (parentSalesJobGrant && parentSalesJobGrant.authorizedUntil < expiresAt) {
+      expiresAt.setTime(parentSalesJobGrant.authorizedUntil.getTime());
+    }
+    if (expiresAt <= now) deny('JOB_COMPUTE_PARENT_AUTHORIZATION_INVALID');
     return tx.billingJobComputeRenewal.create({ data: {
-      ...frozen, issueKey: input.issueKey, identityKey, secretDigest,
+      ...immutableFrozen, issueKey: input.issueKey, identityKey, secretDigest,
       originInvocationId: input.originInvocationId,
       ledgerJobId: input.ledgerJobId, waterJobId: input.waterJobId,
       scopeTurnId: input.scopeTurnId, purpose: input.purpose,
       recipientOrigin: RECIPIENT_ORIGIN, recipientProduct: RECIPIENT_PRODUCT,
       originalActorChain: original.act as Prisma.InputJsonValue | undefined,
-      createdAt: now, expiresAt: new Date(now.getTime() + GRANT_TTL_MS),
+      createdAt: now, expiresAt,
     } });
   });
   return { grant_id: row.id, expires_at: row.expiresAt.toISOString(),
@@ -277,6 +344,7 @@ export async function recoverJobComputeRenewal(
       || !identityMatches(row, input)
       || row.revokedAt || row.expiresAt <= now) deny();
     await assertCurrentGrantAuthority(tx, row);
+    await assertParentSalesJobGrantActive(tx, row, now);
     return { grant_id: row.id, expires_at: row.expiresAt.toISOString(),
       purpose: row.purpose, ledger_job_id: row.ledgerJobId,
       water_job_id: row.waterJobId, scope_turn_id: row.scopeTurnId };
@@ -365,6 +433,7 @@ export async function assertLiveJobComputeDispatch(
     || runtimeKey.sourceDomain !== new URL(RECIPIENT_ORIGIN).hostname
     || runtimeKey.ledgerAudience !== row.ledgerAudience) deny('JOB_COMPUTE_DISPATCH_MISMATCH');
   await assertCurrentGrantAuthority(tx, row);
+  await assertParentSalesJobGrantActive(tx, row, params.now);
 }
 
 export async function renewJobComputeAuthority(
@@ -388,8 +457,11 @@ export async function renewJobComputeAuthority(
       || row.tokenVersion !== epochHint.tokenVersion) deny();
     if (row.revokedAt || row.expiresAt <= now) deny();
     const current = await assertCurrentGrantAuthority(tx, row);
+    const parentSalesJobGrant = await assertParentSalesJobGrantActive(tx, row, now);
     const nowSeconds = Math.floor(now.getTime() / 1000);
     const exp = Math.min(Math.floor(row.expiresAt.getTime() / 1000),
+      ...(parentSalesJobGrant
+        ? [Math.floor(parentSalesJobGrant.authorizedUntil.getTime() / 1000)] : []),
       nowSeconds + TOKEN_TTL_SECONDS);
     if (exp <= nowSeconds) deny();
     const actor = row.originalActorChain as ConfidentialActorChain | null;

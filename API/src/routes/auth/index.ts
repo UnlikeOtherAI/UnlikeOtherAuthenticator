@@ -23,6 +23,7 @@ import { registerAuthSessionChoicesRoute } from './auth-session-choices.js';
 import { registerAuthStartRoute } from './auth-start.js';
 import { registerAuthTeamInviteLinkRoute } from './team-invite-link.js';
 import { registerAuthTokenExchangeRoute } from './token-exchange.js';
+import { registerSalesResearchJobGrantRoutes } from './job-grants.js';
 import { registerAuthVerifyCodeRoute } from './auth-verify-code.js';
 import { registerAuthVerifyEmailRoute } from './verify-email.js';
 import { registerAuthSocialRoute } from './social.js';
@@ -54,6 +55,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
   registerAuthTeamInviteLinkRoute(app);
   registerAuthRevokeRoute(app);
   registerAuthTokenExchangeRoute(app);
+  registerSalesResearchJobGrantRoutes(app);
   registerAuthVerifyCodeRoute(app);
   registerAuthVerifyEmailRoute(app);
 }
