@@ -4208,11 +4208,19 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [ok]
+                required: [ok, system_admin]
                 properties:
                   ok:
                     type: boolean
                     enum: [true]
+                  system_admin:
+                    type: boolean
+                    description: >-
+                      Live SUPERUSER on ADMIN_AUTH_DOMAIN for the authenticated
+                      ACTIVE subject with a current credential epoch. Independent
+                      of org/team and product-domain roles; false without a database.
+                      Re-read for each privileged action; never persist or cache a
+                      positive result. The response is private/no-store.
                   org:
                     type: object
                     additionalProperties: true

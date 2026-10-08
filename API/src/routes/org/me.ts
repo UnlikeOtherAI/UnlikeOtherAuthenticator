@@ -1,6 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
+import { getEnv } from '../../config/env.js';
+import { isPlatformSuperuser } from '../../services/domain-role.service.js';
 import { asPrismaClient } from '../../db/tenant-context.js';
 import { requireDomainHashAuthForDomainQuery } from '../../middleware/domain-hash-auth.js';
 import { requireOrgFeaturesEnabled } from '../../middleware/org-features.js';
@@ -63,8 +65,16 @@ export function registerOrgMeRoute(app: FastifyInstance): void {
       request.accessTokenClaims = claims;
       setTenantContextFromRequest(request, { orgId: null, userId: claims.userId });
 
+      let systemAdmin = false;
       const org = await request.withTenantTx(async (tx) => {
         const prisma = asPrismaClient(tx);
+        // The transaction has pinned the current ACTIVE identity and credential epoch.
+        // Platform authority is a live admin-domain role, never the product/token role.
+        // Use the other pool: tenant RLS cannot see ADMIN_AUTH_DOMAIN.
+        systemAdmin = Boolean(getEnv().DATABASE_URL) && await isPlatformSuperuser({
+          userId: claims.userId,
+          prisma: request.adminDb,
+        });
         // Prefer the org the token is actually scoped to. A user can hold ACTIVE memberships in
         // several organisations, and "the first active membership on this domain" would answer
         // with a different org than every `/org/organisations/:orgId/**` call the same token can
@@ -126,10 +136,13 @@ export function registerOrgMeRoute(app: FastifyInstance): void {
         return { ...context, team_directory: teamDirectory, pending_invites: pendingInvites };
       }, { userEpochLock: 'shared' });
 
-      const response: { ok: true; org?: typeof org } = { ok: true };
+      const response: { ok: true; system_admin: boolean; org?: typeof org } = {
+        ok: true,
+        system_admin: systemAdmin,
+      };
       if (org) response.org = org;
 
-      reply.status(200).send(response);
+      reply.header('Cache-Control', 'private, no-store').status(200).send(response);
     },
   );
 }

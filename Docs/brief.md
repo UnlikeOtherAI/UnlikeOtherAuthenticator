@@ -3144,3 +3144,16 @@ is shown once in ephemeral dialog state and never retained in browser storage or
 query caches. Navigation/sign-out clears it. This UI does not install a credential,
 change delegation policy or grant bootstrap authority. See
 [the billing contract](Requirements/billing-tariffs.md).
+
+
+## 2026-10-08 Live platform administrator verdict for products
+
+Authenticated `GET /org/me` returns additive top-level `system_admin: boolean`.
+It reads the current subject's `SUPERUSER` role on `ADMIN_AUTH_DOMAIN` live,
+after existing signed-person, ACTIVE lifecycle/membership and credential-epoch
+checks. Product-domain bootstrap superusers and organisation/team owners or
+administrators do not qualify. Backend mode cannot supply a person; database-less
+mode returns false. Responses are private/no-store, and products recheck every
+platform-only operation without storing or positively caching this verdict.
+The broader historical token `role: superuser` also includes product-domain
+bootstrap roles and must not stand in for this platform verdict.

@@ -132,8 +132,10 @@ describe('GET /org/me cross-product directory', () => {
     const response = await getOrgMe();
 
     expect(response.statusCode).toBe(200);
+    expect(response.headers['cache-control']).toBe('private, no-store');
     expect(response.json()).toEqual({
       ok: true,
+      system_admin: false,
       org: {
         org_id: 'org-cross',
         tenant_slug: 'external-org',
@@ -240,7 +242,7 @@ describe('GET /org/me cross-product directory', () => {
     const response = await getOrgMe();
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ ok: true });
+    expect(response.json()).toEqual({ ok: true, system_admin: false });
     expect(getActiveClientOrgContextMock).not.toHaveBeenCalled();
     expect(buildSidebarTeamsMock).not.toHaveBeenCalled();
   });
@@ -251,7 +253,7 @@ describe('GET /org/me cross-product directory', () => {
     const response = await getOrgMe();
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ ok: true });
+    expect(response.json()).toEqual({ ok: true, system_admin: false });
     expect(getActiveClientOrgContextMock).toHaveBeenCalled();
     expect(buildSidebarTeamsMock).not.toHaveBeenCalled();
   });
