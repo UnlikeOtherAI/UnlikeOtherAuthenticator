@@ -13,7 +13,7 @@ import { getActiveClientOrgContext } from './org-context.service.js';
 import { signConfidentialAccessToken, type ConfidentialActorChain } from './oauth/access-token.service.js';
 import { lockProductTeamPolicyShared } from './product-team-policy-lock.service.js';
 import {
-  deny, HEX, identityMatches, immutableKey, originalIdentityDomain, SECRET, validIdentity,
+  deny, hash, HEX, identityMatches, immutableKey, originalIdentityDomain, SECRET, validIdentity,
   type Grant, type IssueJobComputeRenewalInput, type JobComputeDispatchIdentity,
   type JobComputeIdentity, type JobComputePurpose,
 } from './billing-job-compute-identity.js';

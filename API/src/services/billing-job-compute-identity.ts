@@ -41,7 +41,7 @@ export function validIdentity(input: JobComputeIdentity): void {
   }
 }
 
-function hash(value: string): string {
+export function hash(value: string): string {
   return createHash('sha256').update(value).digest('hex');
 }
 
