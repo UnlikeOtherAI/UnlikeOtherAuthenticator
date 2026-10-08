@@ -159,6 +159,7 @@ describe('product-dedicated billing app keys', () => {
     const verified = await verifyBillingAppKey('uoa_app_example', {
       prisma: prisma as never,
       now: () => new Date('2026-07-19T00:00:00.000Z'),
+      touchLastUsedAt: true,
     });
 
     expect(verified.service).toEqual({
@@ -170,6 +171,40 @@ describe('product-dedicated billing app keys', () => {
       where: { id: 'key_1' },
       data: { lastUsedAt: new Date('2026-07-19T00:00:00.000Z') },
     });
+  });
+
+  it('can verify a key in a caller transaction without writing non-authoritative telemetry', async () => {
+    process.env.SHARED_SECRET = 'test-shared-secret-with-enough-length';
+    process.env.DATABASE_URL = 'postgresql://configured';
+    const update = vi.fn().mockRejectedValue(new Error('transaction would be aborted'));
+    const prisma = {
+      billingAppKey: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: 'key_1',
+          purpose: BillingAppKeyPurpose.CUSTOMER_LIFECYCLE,
+          actorIssuer: 'https://api.deepwater.live',
+          actorAudience: 'https://authentication.unlikeotherai.com/billing/v1/effective-tariff',
+          actorKeyId: 'water-actor',
+          actorPublicJwk: publicJwk,
+          checkoutReturnOrigins: ['https://api.deepwater.live'],
+          revokedAt: null,
+          expiresAt: null,
+          service: {
+            id: 'service_1',
+            identifier: 'deepwater',
+            name: 'DeepWater',
+            active: true,
+          },
+        }),
+        update,
+      },
+    };
+
+    await expect(verifyBillingAppKey('uoa_app_example', {
+      prisma: prisma as never,
+      now: () => new Date('2026-07-19T00:00:00.000Z'),
+    })).resolves.toMatchObject({ id: 'key_1', purpose: BillingAppKeyPurpose.CUSTOMER_LIFECYCLE });
+    expect(update).not.toHaveBeenCalled();
   });
 
   it.each([

@@ -259,7 +259,10 @@ export async function revokeBillingAppKey(
 
 export async function verifyBillingAppKey(
   rawKey: string,
-  deps?: { prisma?: BillingAppKeyPrisma; now?: () => Date },
+  // A caller-supplied Prisma client may be an interactive transaction. Keep
+  // best-effort telemetry off that client by default: catching a failed write
+  // inside a transaction leaves PostgreSQL's transaction aborted.
+  deps?: { prisma?: BillingAppKeyPrisma; now?: () => Date; touchLastUsedAt?: boolean },
 ): Promise<VerifiedBillingAppKey> {
   if (!getEnv().DATABASE_URL) throw new AppError('UNAUTHORIZED', 401);
   const now = deps?.now?.() ?? new Date();
@@ -291,13 +294,15 @@ export async function verifyBillingAppKey(
     throw new AppError('UNAUTHORIZED', 401);
   }
 
-  try {
-    await prisma.billingAppKey.update({
-      where: { id: row.id },
-      data: { lastUsedAt: now },
-    });
-  } catch {
-    // Credential validity is authoritative; a telemetry touch is not.
+  if (deps?.touchLastUsedAt ?? deps?.prisma === undefined) {
+    try {
+      await prisma.billingAppKey.update({
+        where: { id: row.id },
+        data: { lastUsedAt: now },
+      });
+    } catch {
+      // Credential validity is authoritative; a telemetry touch is not.
+    }
   }
 
   return {
