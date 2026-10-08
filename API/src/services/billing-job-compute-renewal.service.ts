@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { BillingAppKeyPurpose, MembershipStatus, Prisma, type PrismaClient } from '@prisma/client';
 import { z } from 'zod';
 
@@ -13,31 +12,20 @@ import { verifyChainedSubjectAccessToken } from './confidential-chained-token-ex
 import { getActiveClientOrgContext } from './org-context.service.js';
 import { signConfidentialAccessToken, type ConfidentialActorChain } from './oauth/access-token.service.js';
 import { lockProductTeamPolicyShared } from './product-team-policy-lock.service.js';
+import {
+  deny, HEX, identityMatches, immutableKey, originalIdentityDomain, SECRET, validIdentity,
+  type Grant, type IssueJobComputeRenewalInput, type JobComputeDispatchIdentity,
+  type JobComputeIdentity, type JobComputePurpose,
+} from './billing-job-compute-identity.js';
+export { originalIdentityDomain } from './billing-job-compute-identity.js';
+export type { IssueJobComputeRenewalInput, JobComputeDispatchIdentity,
+  JobComputeIdentity, JobComputePurpose } from './billing-job-compute-identity.js';
 
 const RECIPIENT_ORIGIN = 'https://api.deepwater.live';
 const RECIPIENT_PRODUCT = 'deepwater';
 const LEDGER_AUDIENCE = 'https://ledger.unlikeotherai.com';
 const GRANT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const TOKEN_TTL_SECONDS = 120;
-const SECRET = /^uoa_job_[A-Za-z0-9_-]{43}$/u;
-const HEX = /^[a-f0-9]{64}$/u;
-const ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/u;
-const WATER_UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u;
-
-export type JobComputePurpose = 'research_compute' | 'scope_turn_compute';
-export type JobComputeIdentity = {
-  originInvocationId: string;
-  ledgerJobId: string;
-  waterJobId: string;
-  scopeTurnId: string | null;
-  purpose: JobComputePurpose;
-};
-
-export type IssueJobComputeRenewalInput = JobComputeIdentity & {
-  issueKey: string;
-  secret: string;
-};
-
 const JobClaim = z.object({
   grant_id: z.string().min(1),
   origin_invocation_id: z.string().min(1),
@@ -55,48 +43,6 @@ const SalesParentJobClaim = z.object({
   purpose: z.literal('research_job'),
   authorized_until: z.number().int().positive(),
 }).strict();
-
-export type JobComputeDispatchIdentity = JobComputeIdentity & { grantId: string };
-
-type Grant = NonNullable<Awaited<ReturnType<PrismaClient['billingJobComputeRenewal']['findUnique']>>>;
-
-function deny(code = 'JOB_COMPUTE_RENEWAL_DENIED'): never {
-  throw new AppError('FORBIDDEN', 403, code);
-}
-
-function validIdentity(input: JobComputeIdentity): void {
-  if (!ID.test(input.originInvocationId) || !ID.test(input.ledgerJobId)
-    || !WATER_UUID.test(input.waterJobId)
-    || (input.purpose === 'scope_turn_compute') !== (input.scopeTurnId !== null)
-    || (input.scopeTurnId !== null && !ID.test(input.scopeTurnId))) {
-    throw new AppError('BAD_REQUEST', 400, 'JOB_COMPUTE_IDENTITY_INVALID');
-  }
-}
-
-function hash(value: string): string {
-  return createHash('sha256').update(value).digest('hex');
-}
-
-function immutableKey(input: JobComputeIdentity): string {
-  return hash(JSON.stringify([
-    input.originInvocationId, input.ledgerJobId, input.waterJobId,
-    input.scopeTurnId, input.purpose,
-  ]));
-}
-
-function identityMatches(row: Grant, input: JobComputeIdentity): boolean {
-  return row.originInvocationId === input.originInvocationId
-    && row.ledgerJobId === input.ledgerJobId
-    && row.waterJobId === input.waterJobId
-    && row.scopeTurnId === input.scopeTurnId
-    && row.purpose === input.purpose;
-}
-
-export function originalIdentityDomain(sourceDomain: string, actor: ConfidentialActorChain | undefined): string {
-  let domain = sourceDomain;
-  for (let current = actor; current; current = current.act) domain = current.sub;
-  return domain;
-}
 
 async function assertCurrentGrantAuthority(
   tx: Prisma.TransactionClient,
