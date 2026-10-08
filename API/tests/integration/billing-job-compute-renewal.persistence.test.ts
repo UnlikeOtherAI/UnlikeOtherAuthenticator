@@ -21,6 +21,8 @@ import {
 import { createTestDb } from '../helpers/test-db.js';
 import { reservePrepaidDispatch } from '../../src/services/billing-prepaid-reservation.service.js';
 import { lockRefreshSessionUserDomain } from '../../src/services/refresh-session-lock.service.js';
+import { lockAndAssertAuthenticationEpochShared } from
+  '../../src/services/authentication-epoch.service.js';
 import { lockOrganisationMemberships } from '../../src/services/organisation-membership-lock.service.js';
 import { lockTeamMembershipRows } from '../../src/services/team-scope.service.js';
 
@@ -70,7 +72,8 @@ async function waitForEpochLockWaiters(expected: number): Promise<void> {
       SELECT count(*)::bigint AS count FROM pg_stat_activity
       WHERE wait_event_type = 'Lock'
         AND datname = current_database()
-        AND query LIKE '%pg_advisory_xact_lock(hashtextextended%'
+        AND (query LIKE '%pg_advisory_xact_lock(hashtextextended%'
+          OR query LIKE '%pg_advisory_xact_lock_shared(hashtextextended%')
     `);
     if ((rows[0]?.count ?? 0n) >= BigInt(expected)) return;
     await new Promise((resolve) => setTimeout(resolve, 20));
@@ -275,6 +278,61 @@ describe.skipIf(!enabled)('finite job-compute grant in PostgreSQL', () => {
     expect(renewed.every((result) => result.access_token.length > 0)).toBe(true);
     expect((await db.billingAppKey.findUniqueOrThrow({ where: { id: 'app-key-job-water' } })).lastUsedAt)
       .toBeNull();
+  });
+
+  it('lets renewal reads share the epoch while revocation waits and then takes effect', async () => {
+    const input = { ...identity, ledgerJobId: 'ledger-job-shared-epoch-test',
+      issueKey: 'b'.repeat(64), secret: `uoa_job_${'m'.repeat(43)}` };
+    const issued = await issueJobComputeRenewal({ runtimeSecret,
+      delegation: await freshOriginalDelegation(), input }, { prisma: db });
+    const readerEntered = deferred();
+    const releaseReader = deferred();
+    const heldReader = db.$transaction(async (tx) => {
+      await lockAndAssertAuthenticationEpochShared({ userId: 'subject-job-test',
+        domain: 'api.nessie.works', credentialEpoch: 0 }, { prisma: tx,
+        afterLock: async () => {
+          readerEntered.resolve();
+          await releaseReader.promise;
+        } });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted, timeout: 10_000 });
+    await readerEntered.promise;
+
+    const renewalRequests = Promise.all(Array.from({ length: 6 }, () =>
+      renewJobComputeAuthority({ appKey, secret: input.secret,
+        grantId: issued.grant_id, identity: input }, { prisma: db })));
+    const renewed = await Promise.race([
+      renewalRequests,
+      new Promise<never>((_resolve, reject) => setTimeout(
+        () => reject(new Error('Concurrent renewal readers did not overlap.')), 4_000)),
+    ]);
+    expect(renewed).toHaveLength(6);
+
+    const writerEntered = deferred();
+    const revocation = db.$transaction(async (tx) => {
+      await lockRefreshSessionUserDomain({ userId: 'subject-job-test',
+        domain: 'api.nessie.works' }, { prisma: tx });
+      writerEntered.resolve();
+      await tx.user.update({ where: { id: 'subject-job-test' },
+        data: { tokenVersion: { increment: 1 } } });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted, timeout: 10_000 });
+
+    try {
+      await waitForEpochLockWaiters(1);
+      expect(await Promise.race([
+        writerEntered.promise.then(() => true),
+        new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 75)),
+      ])).toBe(false);
+    } finally {
+      releaseReader.resolve();
+    }
+    await Promise.all([heldReader, revocation]);
+    try {
+      await expect(renewJobComputeAuthority({ appKey, secret: input.secret,
+        grantId: issued.grant_id, identity: input }, { prisma: db }))
+        .rejects.toThrow('AUTHENTICATION_FAILED');
+    } finally {
+      await db.user.update({ where: { id: 'subject-job-test' }, data: { tokenVersion: 0 } });
+    }
   });
 
   it('serializes renewal and dispatch ahead of membership revocation locks', async () => {

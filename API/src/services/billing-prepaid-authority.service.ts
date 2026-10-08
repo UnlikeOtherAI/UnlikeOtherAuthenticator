@@ -1,14 +1,14 @@
 import { MembershipStatus, Prisma } from '@prisma/client';
 
 import { AppError } from '../utils/errors.js';
-import { isAuthenticationEpochMismatchError, lockAndAssertAuthenticationEpoch } from
+import { isAuthenticationEpochMismatchError, lockAndAssertAuthenticationEpochShared } from
   './authentication-epoch.service.js';
 
 export async function lockAndAssertPrepaidEpoch(input: {
   userId: string; identityDomain: string; tokenVersion: number;
 }, tx: Prisma.TransactionClient): Promise<void> {
   try {
-    await lockAndAssertAuthenticationEpoch({ userId: input.userId,
+    await lockAndAssertAuthenticationEpochShared({ userId: input.userId,
       domain: input.identityDomain, credentialEpoch: input.tokenVersion }, { prisma: tx });
   } catch (error) {
     if (isAuthenticationEpochMismatchError(error)) {

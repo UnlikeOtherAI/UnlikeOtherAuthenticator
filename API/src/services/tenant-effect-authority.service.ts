@@ -8,7 +8,10 @@ import { AppError } from '../utils/errors.js';
 import { verifyDomainAuthToken } from './domain-secret.service.js';
 import { assertEntityAccess } from './entity-lifecycle.service.js';
 import { lockProductTeamPolicyShared } from './product-team-policy-lock.service.js';
-import { lockRefreshSessionUser } from './refresh-session-lock.service.js';
+import {
+  lockRefreshSessionUser,
+  lockRefreshSessionUserShared,
+} from './refresh-session-lock.service.js';
 
 type EffectRequest = Pick<FastifyRequest, 'accessTokenClaims' | 'adminAccessTokenClaims' |
   'orgBackendCaller' | 'domainAuthClientDomainId' | 'domainAuthClientId' | 'params' | 'body'>;
@@ -29,7 +32,7 @@ export async function assertTenantEffectAuthority(
   context: TenantContext,
   tx: Prisma.TransactionClient,
   adminDb: PrismaClient,
-  options?: { authority: 'domain' },
+  options?: { authority?: 'domain'; userEpochLock?: 'exclusive' | 'shared' },
 ): Promise<void> {
   await lockProductTeamPolicyShared(tx);
   const claims = request.adminAccessTokenClaims ?? request.accessTokenClaims;
@@ -40,7 +43,11 @@ export async function assertTenantEffectAuthority(
   const userIds = [claims?.userId, field(request.params, 'userId'),
     field(request.body, 'userId'), field(request.body, 'newOwnerId'), field(request.body, 'ownerId')];
   for (const id of [...new Set(userIds.filter((id): id is string => Boolean(id)))].sort()) {
-    await lockRefreshSessionUser(id, { prisma: tx });
+    if (options?.userEpochLock === 'shared') {
+      await lockRefreshSessionUserShared(id, { prisma: tx });
+    } else {
+      await lockRefreshSessionUser(id, { prisma: tx });
+    }
   }
   if (claims) {
     const user = await adminDb.user.findUnique({ where: { id: claims.userId },
