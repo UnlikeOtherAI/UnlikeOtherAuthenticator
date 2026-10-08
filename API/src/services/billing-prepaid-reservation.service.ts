@@ -72,7 +72,7 @@ export type ReservePrepaidDispatchInput = {
   billingContext?: VerifiedBudgetContext | null;
 };
 
-export async function assertActiveSubject(
+async function assertActiveSubject(
   tx: Prisma.TransactionClient,
   input: Pick<ReservePrepaidDispatchInput, 'userId' | 'organisationId' | 'teamId'>,
   tokenVersion: number,
