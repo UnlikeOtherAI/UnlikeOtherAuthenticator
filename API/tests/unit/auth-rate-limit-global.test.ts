@@ -84,6 +84,7 @@ async function globalKeys(): Promise<Record<string, LimiterCase>> {
     tokenExchangeRateLimiter: { globalKey: 'auth:token-exchange:global' },
     tokenExchangePreAuthRateLimiter: { globalKey: 'auth:token-exchange:global' },
     confidentialTokenExchangeDomainRateLimiter: { globalKey: null },
+    confidentialJobGrantRateLimiter: { globalKey: null },
     twoFactorVerifyRateLimiter: { globalKey: 'auth:twofa-verify:global' },
     twoFactorSetupRateLimiter: { globalKey: 'auth:twofa-setup:global' },
     twoFactorEnrollRateLimiter: { globalKey: 'auth:twofa-enroll:global' },
@@ -193,7 +194,9 @@ describe('auth limiters global ceiling', () => {
       const prefix =
         name === 'emailSendRateLimiter'
           ? 'email:send'
-          : `auth:${name === 'revokeRateLimiter' ? 'revoke' : 'token-exchange:confidential'}`;
+          : name === 'confidentialJobGrantRateLimiter'
+            ? 'auth:job-grant'
+            : `auth:${name === 'revokeRateLimiter' ? 'revoke' : 'token-exchange:confidential'}`;
       const probe = createRateLimiter({
         keyBuilder: () => `${prefix}:global`,
         limit: 1,

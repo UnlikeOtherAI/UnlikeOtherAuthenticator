@@ -152,6 +152,20 @@ const confidentialTokenExchangeDomainLimiter = createRateLimiter({
   },
 });
 
+const confidentialJobGrantDomainLimiter = createRateLimiter({
+  limit: 600,
+  windowMs: MINUTE_MS,
+  keyBuilder: (request) => {
+    const domain = normalizePart(request.config?.domain);
+    return domain ? `auth:job-grant:domain:${hashPart(domain)}` : '';
+  },
+});
+
+/** Job-grant operations are backend-only and reach this limiter after config and app auth. */
+export async function confidentialJobGrantRateLimiter(request: FastifyRequest): Promise<void> {
+  await confidentialJobGrantDomainLimiter(request);
+}
+
 function isConfidentialTokenExchange(request: FastifyRequest): boolean {
   return bodyString(request, 'grant_type') === TOKEN_EXCHANGE_GRANT_TYPE;
 }

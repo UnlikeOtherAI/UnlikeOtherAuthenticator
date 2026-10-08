@@ -150,6 +150,13 @@ export type ConfidentialAccessTokenClaims = {
     origin_product: string;
     origin_source_domain: string;
   };
+  jobAuthorization?: {
+    grant_handle: string;
+    request_id: string;
+    job_id: string;
+    purpose: 'research_job';
+    authorized_until: number;
+  };
 } & ConfidentialTeamClaims;
 
 /**
@@ -179,6 +186,7 @@ export async function signConfidentialAccessToken(
   }
   if (claims.actor) payload.act = claims.actor;
   if (claims.jobCompute) payload.job_compute = claims.jobCompute;
+  if (claims.jobAuthorization) payload.job_authorization = claims.jobAuthorization;
 
   try {
     const token = new SignJWT(payload)
