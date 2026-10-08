@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { Prisma, type PrismaClient } from '@prisma/client';
+import { MembershipStatus, Prisma, type PrismaClient } from '@prisma/client';
 import Fastify from 'fastify';
 import { createLocalJWKSet, exportJWK, generateKeyPair, jwtVerify } from 'jose';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -19,11 +19,16 @@ import {
   getAccessTokenPublicJwks, resetAccessTokenKeyCache, signConfidentialAccessToken,
 } from '../../src/services/oauth/access-token.service.js';
 import { createTestDb } from '../helpers/test-db.js';
+import { reservePrepaidDispatch } from '../../src/services/billing-prepaid-reservation.service.js';
+import { lockRefreshSessionUserDomain } from '../../src/services/refresh-session-lock.service.js';
+import { lockOrganisationMemberships } from '../../src/services/organisation-membership-lock.service.js';
+import { lockTeamMembershipRows } from '../../src/services/team-scope.service.js';
 
 const enabled = Boolean(process.env.DATABASE_URL);
 const secret = `uoa_job_${'a'.repeat(43)}`;
 const appKey = `uoa_app_${'b'.repeat(43)}`;
 const runtimeSecret = `uoa_ledger_${'d'.repeat(43)}`;
+const waterRuntimeSecret = `uoa_ledger_${'e'.repeat(43)}`;
 const grantId = 'b6b40179-e4e4-4fdd-ad6f-9067f6127110';
 const grantUuid = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 const identity: JobComputeIdentity = {
@@ -50,6 +55,27 @@ function freshOriginalDelegation() {
     org: { org_id: 'org-job-test', tenant_slug: 'job-test', org_role: 'owner',
       teams: ['team-job-test'], team_roles: { 'team-job-test': 'owner' } },
   });
+}
+
+function deferred(): { promise: Promise<void>; resolve: () => void } {
+  let resolve!: () => void;
+  const promise = new Promise<void>((done) => { resolve = done; });
+  return { promise, resolve };
+}
+
+async function waitForEpochLockWaiters(expected: number): Promise<void> {
+  const deadline = Date.now() + 5_000;
+  do {
+    const rows = await db.$queryRaw<Array<{ count: bigint }>>(Prisma.sql`
+      SELECT count(*)::bigint AS count FROM pg_stat_activity
+      WHERE wait_event_type = 'Lock'
+        AND datname = current_database()
+        AND query LIKE '%pg_advisory_xact_lock(hashtextextended%'
+    `);
+    if ((rows[0]?.count ?? 0n) >= BigInt(expected)) return;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  } while (Date.now() < deadline);
+  throw new Error(`Expected ${expected} transactions to wait on the authentication epoch lock.`);
 }
 
 describe.skipIf(!enabled)('finite job-compute grant in PostgreSQL', () => {
@@ -107,8 +133,8 @@ describe.skipIf(!enabled)('finite job-compute grant in PostgreSQL', () => {
       } });
       await tx.billingLedgerRuntimeKey.create({ data: {
         id: 'key-job-water', serviceId: 'svc-job-water',
-        secretDigest: createHash('sha256').update('water-runtime').digest('hex'),
-        keyPrefix: 'water-runtime', ledgerAudience: 'https://ledger.unlikeotherai.com',
+        secretDigest: createHash('sha256').update(waterRuntimeSecret).digest('hex'),
+        keyPrefix: waterRuntimeSecret.slice(0, 18), ledgerAudience: 'https://ledger.unlikeotherai.com',
         sourceDomain: 'api.deepwater.live', createdByEmail: 'admin@example.com',
       } });
       await tx.billingAppKey.create({ data: {
@@ -126,7 +152,7 @@ describe.skipIf(!enabled)('finite job-compute grant in PostgreSQL', () => {
         originRuntimeKeyId: 'key-job-origin', originProduct: 'nessie',
         originSourceDomain: 'api.nessie.works', identityDomain: 'api.nessie.works',
         subjectId: 'subject-job-test', orgId: 'org-job-test', teamId: 'team-job-test',
-        tokenVersion: 7, originTokenJti: 'original-token-job-test',
+        tokenVersion: 0, originTokenJti: 'original-token-job-test',
         originInvocationId: identity.originInvocationId,
         ledgerJobId: identity.ledgerJobId, waterJobId: identity.waterJobId,
         scopeTurnId: null, purpose: identity.purpose,
@@ -235,6 +261,87 @@ describe.skipIf(!enabled)('finite job-compute grant in PostgreSQL', () => {
     }
   });
 
+  it('keeps concurrent renewal transactions healthy without shared-key telemetry writes', async () => {
+    const input = { ...identity, ledgerJobId: 'ledger-job-concurrent-renew-test',
+      issueKey: '9'.repeat(64), secret: `uoa_job_${'k'.repeat(43)}` };
+    const issued = await issueJobComputeRenewal({ runtimeSecret,
+      delegation: await freshOriginalDelegation(), input }, { prisma: db });
+    await db.billingAppKey.update({ where: { id: 'app-key-job-water' }, data: { lastUsedAt: null } });
+    const renewed = await Promise.all(Array.from({ length: 4 }, () =>
+      renewJobComputeAuthority({ appKey, secret: input.secret,
+        grantId: issued.grant_id, identity: input }, { prisma: db })));
+
+    expect(renewed).toHaveLength(4);
+    expect(renewed.every((result) => result.access_token.length > 0)).toBe(true);
+    expect((await db.billingAppKey.findUniqueOrThrow({ where: { id: 'app-key-job-water' } })).lastUsedAt)
+      .toBeNull();
+  });
+
+  it('serializes renewal and dispatch ahead of membership revocation locks', async () => {
+    const input = { ...identity, ledgerJobId: 'ledger-job-revoke-race-test',
+      issueKey: 'a'.repeat(64), secret: `uoa_job_${'l'.repeat(43)}` };
+    const issued = await issueJobComputeRenewal({ runtimeSecret,
+      delegation: await freshOriginalDelegation(), input }, { prisma: db });
+    const grant = await db.billingJobComputeRenewal.findUniqueOrThrow({
+      where: { id: issued.grant_id },
+    });
+    const dispatchIdentity = { ...identity, ledgerJobId: input.ledgerJobId,
+      grantId: grant.id };
+    const activeToken = await renewJobComputeAuthority({ appKey, secret: input.secret,
+      grantId: grant.id, identity: input }, { prisma: db });
+    const revocationLocked = deferred();
+    const finishRevocation = deferred();
+    const revocation = db.$transaction(async (tx) => {
+      await lockRefreshSessionUserDomain({ userId: grant.subjectId,
+        domain: grant.identityDomain }, { prisma: tx });
+      await lockOrganisationMemberships(tx, grant.orgId, [grant.subjectId]);
+      await lockTeamMembershipRows({ userId: grant.subjectId, orgId: grant.orgId,
+        teamId: grant.teamId }, { prisma: tx });
+      revocationLocked.resolve();
+      await finishRevocation.promise;
+      await tx.orgMember.update({ where: { orgId_userId: {
+        orgId: grant.orgId, userId: grant.subjectId } },
+      data: { status: MembershipStatus.DEACTIVATED } });
+      await tx.teamMember.update({ where: { id: 'team-member-job' },
+        data: { status: MembershipStatus.DEACTIVATED } });
+    }, { timeout: 10_000 });
+    await revocationLocked.promise;
+
+    const renewalResult = renewJobComputeAuthority({ appKey, secret: input.secret,
+      grantId: grant.id, identity: input }, { prisma: db }).then(
+      () => ({ ok: true as const }), (error: unknown) => ({ ok: false as const, error }));
+    const startedAt = new Date().toISOString();
+    const dispatchInput = { dispatchId: 'dispatch-renewal-membership-race',
+      requestFingerprint: 'c'.repeat(64), dispatchStartedAt: startedAt,
+      product: 'deepwater', providerServiceId: 'openrouter',
+      organisationId: grant.orgId, teamId: grant.teamId, userId: grant.subjectId,
+      rawCostBound: '1', currency: 'USD', jobCompute: dispatchIdentity,
+      billingContext: { contextId: input.originInvocationId,
+        originProduct: 'nessie', originSourceDomain: 'api.nessie.works',
+        projectId: null, runId: null } };
+    const dispatchResult = reservePrepaidDispatch({ runtimeSecret: waterRuntimeSecret,
+      delegation: activeToken.access_token, input: dispatchInput }, { prisma: db })
+      .then(
+      () => ({ ok: true as const }), (error: unknown) => ({ ok: false as const, error }));
+
+    try {
+      await waitForEpochLockWaiters(2);
+      finishRevocation.resolve();
+      await revocation;
+      const [renewal, dispatch] = await Promise.all([renewalResult, dispatchResult]);
+      expect(renewal.ok).toBe(false);
+      expect(dispatch.ok).toBe(false);
+    } finally {
+      finishRevocation.resolve();
+      await revocation.catch(() => undefined);
+      await db.orgMember.update({ where: { orgId_userId: {
+        orgId: grant.orgId, userId: grant.subjectId } },
+      data: { status: MembershipStatus.ACTIVE } });
+      await db.teamMember.update({ where: { id: 'team-member-job' },
+        data: { status: MembershipStatus.ACTIVE } });
+    }
+  });
+
   it('renews a live original grant with frozen epoch and refuses its token after revoke', async () => {
     const row = await db.billingJobComputeRenewal.findUniqueOrThrow({
       where: { issueKey: '3'.repeat(64) },
@@ -245,8 +352,11 @@ describe.skipIf(!enabled)('finite job-compute grant in PostgreSQL', () => {
       purpose: row.purpose as JobComputeIdentity['purpose'],
     };
     const issuedSecret = `uoa_job_${'c'.repeat(43)}`;
+    await db.billingAppKey.update({ where: { id: 'app-key-job-water' }, data: { lastUsedAt: null } });
     const result = await renewJobComputeAuthority({ appKey, secret: issuedSecret,
       grantId: row.id, identity: issuedIdentity }, { prisma: db });
+    expect((await db.billingAppKey.findUniqueOrThrow({ where: { id: 'app-key-job-water' } })).lastUsedAt)
+      .toBeNull();
     const verified = await jwtVerify(result.access_token,
       createLocalJWKSet(await getAccessTokenPublicJwks()), {
         issuer: 'https://authentication.unlikeotherai.com',
@@ -260,7 +370,7 @@ describe.skipIf(!enabled)('finite job-compute grant in PostgreSQL', () => {
     const dispatch = { claim: verified.payload.job_compute,
       identity: { ...issuedIdentity, grantId: row.id }, runtimeKeyId: 'key-job-water',
       subjectId: row.subjectId, orgId: row.orgId, teamId: row.teamId,
-      tokenVersion: row.tokenVersion, now: new Date() };
+      tokenVersion: row.tokenVersion, identityDomain: row.identityDomain, now: new Date() };
     await expect(db.$transaction((tx) => assertLiveJobComputeDispatch(tx, dispatch)))
       .resolves.toBeUndefined();
     await db.billingJobComputeRenewal.update({ where: { id: row.id },
@@ -283,7 +393,7 @@ describe.skipIf(!enabled)('finite job-compute grant in PostgreSQL', () => {
         origin_source_domain: 'api.nessie.works' },
       identity: { ...identity, grantId }, runtimeKeyId: 'key-job-origin',
       subjectId: 'subject-job-test', orgId: 'org-job-test', teamId: 'team-job-test',
-      tokenVersion: 7, now: new Date(),
+      tokenVersion: 0, identityDomain: 'api.nessie.works', now: new Date(),
     }))).rejects.toThrow('JOB_COMPUTE_DISPATCH_MISMATCH');
   });
 
