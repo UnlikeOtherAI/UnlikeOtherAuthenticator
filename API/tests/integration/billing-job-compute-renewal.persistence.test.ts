@@ -69,6 +69,7 @@ async function waitForEpochLockWaiters(expected: number): Promise<void> {
     const rows = await db.$queryRaw<Array<{ count: bigint }>>(Prisma.sql`
       SELECT count(*)::bigint AS count FROM pg_stat_activity
       WHERE wait_event_type = 'Lock'
+        AND datname = current_database()
         AND query LIKE '%pg_advisory_xact_lock(hashtextextended%'
     `);
     if ((rows[0]?.count ?? 0n) >= BigInt(expected)) return;
