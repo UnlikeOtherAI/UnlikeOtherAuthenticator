@@ -29,10 +29,12 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       provision-stripe-commercial-catalog.ts — Guarded Stripe catalog validation and local provisioning entry point
       stripe-catalog-provisioning-args.ts — Exact dry-run/apply, account, mode, and confirmation parsing
     /config
-      billing-env-validation.ts — Tariff, Stripe, and Ledger collector startup invariants
+      billing-env-validation.ts — Stripe, Ledger collector, actor-audience and invoice-storage variables; tariff, Stripe, collector and invoice-storage startup invariants
       constants.ts          — App-wide constants (token TTL defaults, retention defaults)
-      env.ts                — Environment variable loading and validation
+      env-boolean.ts        — Boolean env-flag preprocessor shared by the env schemas
+      env.ts                — Environment variable loading and validation; composes the billing and signature schemas into the one `getEnv()` / `Env` surface
       jwt.ts                — JWT signing/verification configuration
+      signature-env-validation.ts — Agreement-signature variables and their storage and evidence-key startup invariants
     /db
       prisma.ts             — Prisma client construction (anonymous + tenant-scoped)
       pool-checkout-guard.ts — Flags global-client use inside a same-pool interactive transaction
