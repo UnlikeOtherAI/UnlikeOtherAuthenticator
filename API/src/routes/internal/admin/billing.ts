@@ -78,7 +78,7 @@ const AssignmentSchema = z
   .strict();
 const CreateAppKeySchema = z
   .object({
-    purpose: z.enum(['entitlement', 'customer_lifecycle']),
+    purpose: z.enum(['entitlement', 'customer_lifecycle', 'sms_runtime']),
     name: z.string().trim().min(1).max(120),
     actor_issuer: z.string().trim().url(),
     actor_audience: z.string().trim().url(),

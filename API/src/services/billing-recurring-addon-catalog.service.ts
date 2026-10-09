@@ -15,7 +15,7 @@ import {
   recurringAddonPriceMetadata,
   recurringAddonProductMetadata,
 } from './billing-stripe-catalog-provisioning-spec.js';
-import { uniqueEntitlementScope } from './billing-recurring-addon-scope.service.js';
+import { recurringAddonOfferScope } from './billing-recurring-addon-scope.service.js';
 
 export type RecurringAddonCatalogClient = Pick<Stripe, 'prices' | 'products'>;
 
@@ -26,7 +26,7 @@ export function recurringAddonOfferAvailability(
   },
   collectionEnabled: boolean,
 ) {
-  const entitlementScope = uniqueEntitlementScope(offer.featurePolicies);
+  const entitlementScope = recurringAddonOfferScope(offer);
   const catalog = offer.catalogs[0];
   const catalogMatches = Boolean(
     catalog?.stripeProductId &&

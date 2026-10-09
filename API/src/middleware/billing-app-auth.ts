@@ -75,3 +75,10 @@ export function requireBillingLifecycleAppKey(
 ): Promise<void> {
   return requireBillingAppKeyPurpose(request, reply, BillingAppKeyPurpose.CUSTOMER_LIFECYCLE);
 }
+
+export function requireBillingSmsRuntimeAppKey(
+  request: FastifyRequest,
+  reply: FastifyReply,
+): Promise<void> {
+  return requireBillingAppKeyPurpose(request, reply, BillingAppKeyPurpose.SMS_RUNTIME);
+}

@@ -1,0 +1,47 @@
+import type { EndpointSchema } from './schema.js';
+
+const subject = { product: 'registered product identifier', organisation_id: 'exact UOA organisation ID',
+  team_id: 'exact active actor context team ID', user_id: 'exact current UOA actor subject' };
+const scope = { country: 'ISO country verified against destination for outbound', number_type: 'mobile',
+  direction: 'monthly | inbound | outbound', destination: 'E.164 for outbound; null otherwise',
+  carrier: 'null; outbound uses conservative maximum mobile carrier rate', mcc: 'null', mnc: 'null' };
+const auth = 'Product ENTITLEMENT app key plus fresh RS256 X-UOA-Actor with exact endpoint audience; live epoch and exact membership rechecked';
+
+export const billingSmsEndpoints: EndpointSchema[] = [
+  { method: 'POST', path: '/billing/v1/sms/numbers/begin',
+    auth: 'CUSTOMER_LIFECYCLE key and exact-endpoint fresh actor; organisation billing manager',
+    description: 'Bind one exact mobile number and accepted quote to hosted monthly subscription Checkout.',
+    body: { ...subject, resource_id: 'Stable acquisition-operation ID', quote_id: 'Accepted quote ID',
+      phone_number: 'Exact SMS-capable available mobile E.164' },
+    response: { 200: 'Exact number resource, pinned final quote, payment state and hosted Checkout URL',
+      409: 'Changed binding, expired unaccepted quote or canceled resource' } },
+  { method: 'POST', path: '/billing/v1/sms/numbers/status', auth,
+    description: 'Read exact organisation-owned number payment status with organisation manager authority.',
+    body: { ...subject, resource_id: 'Stable exact resource ID' },
+    response: { 200: 'Strict customer-safe number payment state', 404: 'Not visible or missing' } },
+  { method: 'POST', path: '/billing/v1/sms/numbers/runtime-status', auth: 'Product SMS_RUNTIME key',
+    description: 'Read exact product-bound number payment state for machine recovery.',
+    body: { product: 'Registered product', resource_id: 'Stable exact resource ID' },
+    response: { 200: 'Strict customer-safe number payment state', 404: 'No exact product resource' } },
+  { method: 'POST', path: '/billing/v1/sms/numbers/attach', auth: 'Product SMS_RUNTIME key',
+    description: 'Attach the exact verified acquired provider number to its paid monthly resource.',
+    body: { product: 'Registered product', resource_id: 'Stable exact resource ID',
+      account_sid: 'Configured provider account', phone_number_sid: 'Exact acquired PN SID' },
+    response: { 200: 'Number state', 409: 'Payment inactive or provider identity mismatch' } },
+  { method: 'POST', path: '/billing/v1/sms/numbers/end', auth: 'Product SMS_RUNTIME key',
+    description: 'Fence missing acquisition or end subscription after verified provider release.',
+    body: { product: 'Registered product', resource_id: 'Stable exact resource ID',
+      reason: 'released | acquisition_unavailable' },
+    response: { 200: 'Number state or exact missing-resource cancellation tombstone',
+      503: 'Payment/provider outcome unresolved; no false cancellation or refund' } },
+  { method: 'POST', path: '/billing/v1/sms/quotes', auth,
+    description: 'Issue an opaque, scoped and expiring UOA final customer mobile-number or SMS quote.',
+    body: { ...subject, ...scope },
+    response: { 200: 'id, exact decimal amount, USD currency, expiry, rate_basis and exact scope only',
+      503: 'Provider or accepted dated UOA currency policy unavailable' },
+    notes: 'No customer-supplied provider costs, carrier narrowing or exchange rates. Monthly quote display expiry does not cancel accepted paid resource terms.' },
+  { method: 'POST', path: '/billing/v1/sms/quotes/verify', auth,
+    description: 'Verify the persisted exact quote binding and current expiry before customer acceptance.',
+    body: { ...subject, ...scope, quote_id: 'opaque persisted UOA quote ID' },
+    response: { 200: 'Same strict final customer quote', 409: 'Expired or mismatched quote scope' } },
+];

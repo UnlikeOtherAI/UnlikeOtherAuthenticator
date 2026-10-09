@@ -243,6 +243,7 @@ enum BillingTariffSource {
 enum BillingAppKeyPurpose {
   ENTITLEMENT
   CUSTOMER_LIFECYCLE
+  SMS_RUNTIME
 }
 
 enum BillingAdjustmentKind {
@@ -304,6 +305,7 @@ enum BillingCreditEntryKind {
   DISPUTE_REVERSAL
   ADJUSTMENT
   PREPAID_USAGE
+  SMS_PREPAID_USAGE
 }
 
 enum BillingCreditPaymentAdjustmentKind {
@@ -3150,6 +3152,8 @@ model BillingCreditAccount {
   consentRevisions         BillingCreditAutoTopUpConsentRevision[]  @relation("CreditAccountConsentRevisions")
   autoTopUpDisableEvents   BillingCreditAutoTopUpDisableEvent[]
   prepaidReservations      BillingPrepaidReservation[]
+  smsReservations          BillingSmsReservation[]
+  smsStandingHolds          BillingSmsStandingHold[]
   prepaidRatingBuckets     BillingPrepaidRatingBucket[]
   paymentInvoices          BillingCreditPaymentInvoice[]
 
@@ -3582,6 +3586,8 @@ model BillingCreditEntry {
   appKeyId                 String?                     @map("app_key_id")
   ledgerRuntimeKeyId       String?                     @map("ledger_runtime_key_id")
   prepaidReservationId     String?                     @unique @map("prepaid_reservation_id")
+  smsReservationId         String?                     @unique @map("sms_reservation_id")
+  smsInboundReceiptId      String?                     @unique @map("sms_inbound_receipt_id")
   attributedUserId         String?                     @map("attributed_user_id")
   direction                BillingCreditEntryDirection
   kind                     BillingCreditEntryKind
@@ -3600,6 +3606,8 @@ model BillingCreditEntry {
   appKey                       BillingAppKey?                          @relation(fields: [appKeyId], references: [id], onDelete: Restrict)
   ledgerRuntimeKey             BillingLedgerRuntimeKey?                @relation(fields: [ledgerRuntimeKeyId], references: [id], onDelete: Restrict)
   prepaidReservation           BillingPrepaidReservation?              @relation(fields: [prepaidReservationId], references: [id], onDelete: Restrict)
+  smsReservation               BillingSmsReservation?                  @relation(fields: [smsReservationId], references: [id], onDelete: Restrict)
+  smsInboundReceipt            BillingSmsInboundReceipt?               @relation(fields: [smsInboundReceiptId], references: [id], onDelete: Restrict)
   attributedUser               User?                                   @relation("CreditEntryAttribution", fields: [attributedUserId], references: [id], onDelete: Restrict)
   reversesEntry                BillingCreditEntry?                     @relation("CreditEntryReversal", fields: [reversesEntryId], references: [id], onDelete: Restrict)
   reversedBy                   BillingCreditEntry[]                    @relation("CreditEntryReversal")
@@ -4235,6 +4243,8 @@ model BillingRecurringAddonOffer {
   monthlyAmountMinor BigInt    @map("monthly_amount_minor")
   currency           String    @db.Char(3)
   active             Boolean   @default(true)
+  resourceKind       String?   @map("resource_kind") @db.VarChar(40)
+  resourceId         String?   @map("resource_id") @db.VarChar(160)
   deactivatedAt      DateTime? @map("deactivated_at")
   createdByUserId    String?   @map("created_by_user_id")
   createdByEmail     String?   @map("created_by_email") @db.VarChar(200)
@@ -4770,4 +4780,273 @@ model BillingStripePaymentInvoiceCashPayment {
   @@index([invoiceId, paidAt, id])
   @@index([paidAt, invoiceId])
   @@map("billing_stripe_payment_invoice_cash_payments")
+}
+
+// Private SMS pricing evidence and accepted FX policy are UOA-owned financial data.
+model BillingSmsResourceCancellation {
+  resourceId String @id @map("resource_id") @db.VarChar(160)
+  serviceId String @map("service_id")
+  appKeyId String @map("app_key_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("billing_sms_resource_cancellations")
+}
+
+model BillingSmsDispatchCancellation {
+  dispatchId String @id @map("dispatch_id") @db.VarChar(160)
+  serviceId String @map("service_id")
+  appKeyId String @map("app_key_id")
+  requestFingerprint String @map("request_fingerprint") @db.Char(64)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("billing_sms_dispatch_cancellations")
+}
+
+model BillingSmsGrantRevocation {
+  grantId String @id @map("grant_id") @db.VarChar(160)
+  serviceId String @map("service_id")
+  appKeyId String @map("app_key_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("billing_sms_grant_revocations")
+}
+
+model BillingSmsStandingFunding {
+  id String @id @default(cuid())
+  serviceId String @map("service_id")
+  appKeyId String @map("app_key_id")
+  holdId String @map("hold_id")
+  quoteId String @map("quote_id")
+  idempotencyKey String @map("idempotency_key") @db.VarChar(160)
+  addedMicrocredits BigInt @map("added_microcredits")
+  requestedByUserId String @map("requested_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([serviceId, idempotencyKey])
+  @@map("billing_sms_standing_funding")
+}
+
+model BillingSmsFxSnapshot {
+  id                String   @id @default(cuid())
+  policy            String   @db.VarChar(80)
+  source            String   @db.VarChar(255)
+  sourceDigest      String   @map("source_digest") @db.Char(64)
+  rateDate          DateTime @map("rate_date") @db.Date
+  observedAt        DateTime @map("observed_at")
+  expiresAt         DateTime @map("expires_at")
+  usdPerEur         Decimal  @map("usd_per_eur") @db.Decimal(38, 18)
+  acceptedByUserId   String   @map("accepted_by_user_id")
+  acceptedAt        DateTime @default(now()) @map("accepted_at")
+  acceptanceReason  String   @map("acceptance_reason") @db.VarChar(500)
+  quotes            BillingSmsQuote[]
+
+  @@unique([policy, sourceDigest])
+  @@index([expiresAt, acceptedAt])
+  @@map("billing_sms_fx_snapshots")
+}
+
+model BillingSmsQuote {
+  commercialPolicyVersion String @map("commercial_policy_version") @db.VarChar(80)
+  monthlyFeeEur Decimal @map("monthly_fee_eur") @db.Decimal(18, 6)
+  messageMarkupBps Int @map("message_markup_bps")
+  id                 String   @id @default(cuid())
+  serviceId          String   @map("service_id")
+  appKeyId           String   @map("app_key_id")
+  orgId              String   @map("org_id")
+  country            String   @db.Char(2)
+  direction          String   @db.VarChar(10)
+  destination        String?  @db.VarChar(16)
+  providerAmount     Decimal  @map("provider_amount") @db.Decimal(38, 18)
+  providerCurrency   String   @map("provider_currency") @db.Char(3)
+  providerSource     String   @map("provider_source") @db.VarChar(255)
+  providerObservedAt DateTime @map("provider_observed_at")
+  fxSnapshotId       String   @map("fx_snapshot_id")
+  routePolicyId      String?  @map("route_policy_id")
+  providerBoundAmount Decimal? @map("provider_bound_amount") @db.Decimal(38, 18)
+  finalAmount        Decimal  @map("final_amount") @db.Decimal(38, 18)
+  finalCurrency      String   @default("USD") @map("final_currency") @db.Char(3)
+  rateBasis          String   @map("rate_basis") @db.VarChar(40)
+  expiresAt          DateTime @map("expires_at")
+  createdAt          DateTime @default(now()) @map("created_at")
+  fxSnapshot         BillingSmsFxSnapshot @relation(fields: [fxSnapshotId], references: [id], onDelete: Restrict)
+  numberResources    BillingSmsNumberResource[]
+  reservations       BillingSmsReservation[]
+
+  @@index([serviceId, orgId, expiresAt])
+  @@map("billing_sms_quotes")
+}
+
+model BillingSmsNumberResource {
+  id                   String   @id @db.VarChar(160)
+  serviceId            String   @map("service_id")
+  appKeyId             String   @map("app_key_id")
+  orgId                String   @map("org_id")
+  quoteId              String   @map("quote_id")
+  phoneNumber          String   @map("phone_number") @db.VarChar(16)
+  country              String   @db.Char(2)
+  offerId              String?  @map("offer_id")
+  checkoutId           String?  @map("checkout_id")
+  accountSid           String?  @map("account_sid") @db.Char(34)
+  phoneNumberSid       String?  @map("phone_number_sid") @db.Char(34)
+  state                String   @default("payment_required") @db.VarChar(32)
+  recoveryReason       String?  @map("recovery_reason") @db.VarChar(80)
+  refundEvidenceDigest String? @map("refund_evidence_digest") @db.Char(64)
+  refundedAt DateTime? @map("refunded_at")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+  quote                BillingSmsQuote @relation(fields: [quoteId], references: [id], onDelete: Restrict)
+  reservations         BillingSmsReservation[]
+  standingHolds        BillingSmsStandingHold[]
+
+  @@unique([serviceId, accountSid, phoneNumberSid])
+  @@index([serviceId, orgId, state])
+  @@map("billing_sms_number_resources")
+}
+
+// A held dispatch retains its original team/allocation even after number reassignment.
+model BillingSmsReservation {
+  id                   String   @id @default(cuid())
+  dispatchId           String   @unique @map("dispatch_id") @db.VarChar(160)
+  requestFingerprint   String   @map("request_fingerprint") @db.Char(64)
+  creditAccountId      String   @map("credit_account_id")
+  serviceId            String   @map("service_id")
+  appKeyId             String   @map("app_key_id")
+  orgId                String   @map("org_id")
+  teamId               String   @map("team_id")
+  userId               String   @map("user_id")
+  actorTokenVersion    Int      @map("actor_token_version")
+  actorExpiresAt       DateTime @map("actor_expires_at")
+  numberId             String   @map("number_id") @db.VarChar(160)
+  allocationId         String   @map("allocation_id") @db.VarChar(160)
+  quoteId              String   @map("quote_id")
+  grantId              String?  @map("grant_id")
+  delegateId           String?  @map("delegate_id") @db.VarChar(160)
+  accountSid           String   @map("account_sid") @db.Char(34)
+  from                 String   @db.VarChar(16)
+  to                   String   @db.VarChar(16)
+  maxSegments          Int      @map("max_segments")
+  reservedMicrocredits BigInt   @map("reserved_microcredits")
+  debitedMicrocredits  BigInt?  @map("debited_microcredits")
+  actualAmount         Decimal? @map("actual_amount") @db.Decimal(38, 18)
+  actualCurrency       String?  @map("actual_currency") @db.Char(3)
+  messageSid           String?  @map("message_sid") @db.Char(34)
+  dispatchTokenDigest  String?  @map("dispatch_token_digest") @db.Char(64)
+  dispatchClaimedAt DateTime? @map("dispatch_claimed_at")
+  state                String   @default("reserved") @db.VarChar(32)
+  billingMonth         String   @map("billing_month") @db.Char(7)
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+  creditAccount        BillingCreditAccount @relation(fields: [creditAccountId], references: [id], onDelete: Restrict)
+  number               BillingSmsNumberResource @relation(fields: [numberId], references: [id], onDelete: Restrict)
+  quote                BillingSmsQuote @relation(fields: [quoteId], references: [id], onDelete: Restrict)
+  creditEntry          BillingCreditEntry?
+
+  @@unique([accountSid, messageSid])
+  @@index([creditAccountId, state])
+  @@index([orgId, teamId, billingMonth])
+  @@map("billing_sms_reservations")
+}
+
+// Inbound consumes only an explicitly funded, allocation-bound standing reserve.
+model BillingSmsStandingHold {
+  id                   String   @id @default(cuid())
+  creditAccountId      String   @map("credit_account_id")
+  serviceId            String   @map("service_id")
+  appKeyId             String   @map("app_key_id")
+  orgId                String   @map("org_id")
+  teamId               String   @map("team_id")
+  numberId             String   @map("number_id") @db.VarChar(160)
+  allocationId         String   @map("allocation_id") @db.VarChar(160)
+  quoteId String @map("quote_id")
+  retiredAt DateTime? @map("retired_at")
+  requestedByUserId    String   @map("requested_by_user_id")
+  idempotencyKey       String   @map("idempotency_key") @db.VarChar(160)
+  reservedMicrocredits BigInt   @map("reserved_microcredits")
+  state                String   @default("active") @db.VarChar(32)
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+  creditAccount        BillingCreditAccount @relation(fields: [creditAccountId], references: [id], onDelete: Restrict)
+  number               BillingSmsNumberResource @relation(fields: [numberId], references: [id], onDelete: Restrict)
+
+  @@unique([serviceId, numberId, allocationId])
+  @@unique([appKeyId, idempotencyKey])
+  @@index([creditAccountId, state])
+  @@map("billing_sms_standing_holds")
+}
+
+model BillingSmsStandingRetirement {
+  id String @id @default(cuid())
+  serviceId String @map("service_id")
+  appKeyId String @map("app_key_id")
+  numberId String @map("number_id") @db.VarChar(160)
+  allocationId String @map("allocation_id") @db.VarChar(160)
+  createdAt DateTime @default(now()) @map("created_at")
+  @@unique([serviceId, numberId, allocationId])
+  @@map("billing_sms_standing_retirements")
+}
+
+model BillingSmsInboundReceipt {
+  id                   String   @id @default(cuid())
+  serviceId            String   @map("service_id")
+  numberId             String   @map("number_id") @db.VarChar(160)
+  allocationId         String   @map("allocation_id") @db.VarChar(160)
+  accountSid           String   @map("account_sid") @db.Char(34)
+  messageSid           String   @map("message_sid") @db.Char(34)
+  orgId                String   @map("org_id")
+  teamId               String   @map("team_id")
+  standingHoldId       String?  @map("standing_hold_id")
+  quoteId String? @map("quote_id")
+  actualAmount         Decimal? @map("actual_amount") @db.Decimal(38, 18)
+  actualCurrency       String?  @map("actual_currency") @db.Char(3)
+  consumedMicrocredits BigInt?  @map("consumed_microcredits")
+  uncollectedMicrocredits BigInt? @map("uncollected_microcredits")
+  state                String   @default("pending") @db.VarChar(32)
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+  creditEntry          BillingCreditEntry?
+
+  @@unique([accountSid, messageSid])
+  @@index([serviceId, numberId, allocationId])
+  @@map("billing_sms_inbound_receipts")
+}
+
+model BillingSmsDispatchGrant {
+  id                   String   @id @default(cuid())
+  serviceId            String   @map("service_id")
+  appKeyId             String   @map("app_key_id")
+  orgId                String   @map("org_id")
+  teamId               String   @map("team_id")
+  userId               String   @map("user_id")
+  actorTokenVersion    Int      @map("actor_token_version")
+  numberId             String   @map("number_id") @db.VarChar(160)
+  allocationId         String   @map("allocation_id") @db.VarChar(160)
+  delegateId           String   @map("delegate_id") @db.VarChar(160)
+  maxSegments          Int      @map("max_segments")
+  idempotencyKey       String   @map("idempotency_key") @db.VarChar(160)
+  revokedAt            DateTime? @map("revoked_at")
+  createdAt            DateTime @default(now()) @map("created_at")
+
+  @@unique([appKeyId, idempotencyKey])
+  @@index([serviceId, numberId, allocationId, delegateId])
+  @@map("billing_sms_dispatch_grants")
+}
+
+// Explicit, dated complete-fee evidence; absence never means zero additional fees.
+model BillingSmsRoutePolicy {
+  id                   String   @id @default(cuid())
+  accountSid           String   @map("account_sid") @db.Char(34)
+  country              String   @db.Char(2)
+  direction            String   @db.VarChar(10)
+  currency             String   @db.Char(3)
+  additionalPerSegment Decimal  @map("additional_per_segment") @db.Decimal(38, 18)
+  additionalPerMessage Decimal  @map("additional_per_message") @db.Decimal(38, 18)
+  source               String   @db.VarChar(500)
+  evidenceDigest       String   @map("evidence_digest") @db.Char(64)
+  expiresAt            DateTime @map("expires_at")
+  acceptedByUserId      String   @map("accepted_by_user_id")
+  acceptedAt           DateTime @default(now()) @map("accepted_at")
+  acceptanceReason     String   @map("acceptance_reason") @db.VarChar(500)
+
+  @@index([accountSid, country, direction, expiresAt])
+  @@map("billing_sms_route_policies")
 }

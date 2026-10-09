@@ -5,6 +5,8 @@ import { fileURLToPath } from 'node:url';
 import { normalizeArtifactLineEndings, serializeArtifact } from './artifact-text.mjs';
 
 import {
+  billingSmsProtocolV1JsonSchema,
+  billingSmsV1OpenApiDocument,
   billingCreditBudgetV1ConformanceFixture,
   billingCreditBudgetV1JsonSchema,
   billingCreditBudgetV1OpenApiDocument,
@@ -40,6 +42,8 @@ import {
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const artifacts = new Map([
+  [resolve(packageRoot, 'schema/billing-sms-v1.json'), billingSmsProtocolV1JsonSchema],
+  [resolve(packageRoot, 'openapi/billing-sms-v1.openapi.json'), billingSmsV1OpenApiDocument],
   [resolve(packageRoot, 'schema/billing-credit-funding-request-v1.json'), billingCreditFundingRequestV1JsonSchema],
   [resolve(packageRoot, 'schema/billing-credit-purchase-status-v1.json'), billingCreditPurchaseStatusV1JsonSchema],
   [resolve(packageRoot, 'schema/billing-customer-invoices-v1.json'), billingCustomerInvoicesProtocolV1JsonSchema],

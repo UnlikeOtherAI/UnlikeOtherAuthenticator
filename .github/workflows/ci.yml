@@ -52,6 +52,21 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     steps:
+      # Each integration file owns a complete schema. Concurrent schema cleanup
+      # locks its tables, indexes and constraints together, exceeding the default
+      # lock table as the billing schema grows. This is the disposable CI service.
+      - name: Size PostgreSQL lock table for isolated test schemas
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          docker exec "$POSTGRES_CONTAINER" psql -U postgres -c 'ALTER SYSTEM SET max_locks_per_transaction = 512'
+          docker restart "$POSTGRES_CONTAINER"
+          for attempt in $(seq 1 30); do
+            if docker exec "$POSTGRES_CONTAINER" pg_isready -U postgres; then break; fi
+            sleep 1
+          done
+          test "$(docker exec "$POSTGRES_CONTAINER" psql -U postgres -Atc 'SHOW max_locks_per_transaction')" = 512
+
       - name: Check out repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
 

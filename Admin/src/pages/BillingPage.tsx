@@ -20,6 +20,7 @@ import { BillingTariffDialog } from '../features/admin/BillingTariffDialog';
 import { BillingContractsPanel } from '../features/admin/BillingContractsPanel';
 import { BillingCreditInvoiceTaxPolicyPanel } from '../features/admin/BillingCreditInvoiceTaxPolicyPanel';
 import { BillingPaidUsageExceptionsPanel } from '../features/admin/BillingPaidUsageExceptionsPanel';
+import { BillingSmsPoliciesPanel } from '../features/admin/BillingSmsPoliciesPanel';
 import type { CreatedBillingAppKey } from '../schemas/billing';
 
 export function BillingPage() {
@@ -40,7 +41,8 @@ export function BillingPage() {
   const [adjustmentOpen, setAdjustmentOpen] = useState(false);
   const [createdKey, setCreatedKey] = useState<CreatedBillingAppKey | null>(null);
   const section = params.get('section') === 'contracts' ? 'contracts'
-    : params.get('section') === 'exceptions' ? 'exceptions' : 'products';
+    : params.get('section') === 'exceptions' ? 'exceptions'
+    : params.get('section') === 'sms' ? 'sms' : 'products';
   const selectedService = useMemo(
     () => services.find((service) => service.id === selectedServiceId) ?? null,
     [selectedServiceId, services],
@@ -65,6 +67,7 @@ export function BillingPage() {
           { label: 'Product billing', value: 'products' },
           { label: 'Contracts & invoices', value: 'contracts' },
           { label: 'Usage exceptions', value: 'exceptions' },
+          { label: 'SMS policies', value: 'sms' },
         ]}
       />
 
@@ -176,6 +179,8 @@ export function BillingPage() {
           />
           <BillingCreditInvoiceTaxPolicyPanel />
         </div>
+      ) : section === 'sms' ? (
+        <BillingSmsPoliciesPanel />
       ) : (
         <BillingPaidUsageExceptionsPanel />
       )}

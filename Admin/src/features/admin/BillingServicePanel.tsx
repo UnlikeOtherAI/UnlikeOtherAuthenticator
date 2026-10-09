@@ -329,7 +329,9 @@ export function BillingServicePanel({
                     onClick={() =>
                       confirm(
                         `Revoke ${key.name}?`,
-                        key.purpose === 'entitlement'
+                        key.purpose === 'sms_runtime'
+                          ? 'This deployment loses SMS dispatch and provider recovery access immediately. This cannot be undone.'
+                          : key.purpose === 'entitlement'
                           ? 'This deployment loses effective-tariff access immediately. This cannot be undone.'
                           : 'This deployment loses Checkout, subscription, cancellation, and portal access immediately. This cannot be undone.',
                         () => revokeKey.mutateAsync(key.id),

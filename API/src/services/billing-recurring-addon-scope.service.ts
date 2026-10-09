@@ -33,6 +33,18 @@ export function uniqueEntitlementScope(
   return scopes.size === 1 ? ([...scopes][0] ?? null) : null;
 }
 
+/** Resource tariffs own their explicit org scope without inventing a feature flag. */
+export function recurringAddonOfferScope(offer: {
+  resourceKind: string | null; resourceId: string | null;
+  featurePolicies: Array<{ entitlementScope: BillingRecurringAddonEntitlementScope }>;
+}): BillingRecurringAddonEntitlementScope | null {
+  if (offer.resourceKind === 'sms_mobile_number' && offer.resourceId) {
+    return offer.featurePolicies.length === 0 ? BillingRecurringAddonEntitlementScope.ORGANISATION : null;
+  }
+  if (offer.resourceKind !== null || offer.resourceId !== null) return null;
+  return uniqueEntitlementScope(offer.featurePolicies);
+}
+
 export function recurringAddonScope(
   entitlementScope: BillingRecurringAddonEntitlementScope,
   subject: RecurringAddonSubject,

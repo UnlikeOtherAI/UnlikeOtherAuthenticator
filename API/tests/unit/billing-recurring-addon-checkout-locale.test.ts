@@ -61,6 +61,8 @@ function setup() {
   };
   const offer = {
     id: 'offer_1',
+    resourceKind: null,
+    resourceId: null,
     serviceId: 'service_1',
     key: 'privacy',
     active: true,

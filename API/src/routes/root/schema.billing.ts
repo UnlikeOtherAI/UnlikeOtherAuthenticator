@@ -2,6 +2,7 @@ import type { EndpointSchema } from './schema.js';
 import { billingLedgerRuntimeKeyEndpoints } from './schema.billing-ledger-runtime-keys.js';
 import { billingContractInvoiceEndpoints } from './schema.billing-contract-invoices.js';
 import { billingFundingEndpoints } from './schema.billing-funding.js';
+import { billingSmsEndpoints } from './schema.billing-sms.js';
 
 const adminAuth =
   'Authorization: Bearer <access_token>; token must be an ADMIN_AUTH_DOMAIN platform superuser and remain backed by a SUPERUSER domain_roles row';
@@ -19,6 +20,7 @@ const tariffBody = {
 };
 
 export const billingEndpoints: EndpointSchema[] = [
+  ...billingSmsEndpoints,
   ...billingLedgerRuntimeKeyEndpoints(adminAuth),
   {
     method: 'POST', path: '/billing/v1/ledger/reservations/:dispatchId/exception',
