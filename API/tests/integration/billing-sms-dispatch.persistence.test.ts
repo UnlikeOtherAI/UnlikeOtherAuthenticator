@@ -41,7 +41,7 @@ describe.skipIf(!process.env.DATABASE_URL)('SMS paid number and outgoing financi
     const db = await createTestDb();
     if (!db) throw new Error('Financial tests require DATABASE_URL');
     prisma = db.prisma; cleanup = db.cleanup; fixture = await smsPaidNumberFixture(prisma);
-  }, 180_000);
+  });
   afterAll(async () => { if (cleanup) await cleanup(); });
 
   it('preserves exact paid monthly terms after display expiry and verifies real cash independently', async () => {

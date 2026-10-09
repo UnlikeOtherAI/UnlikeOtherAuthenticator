@@ -45,6 +45,8 @@ function addonData(
     offers: [
       {
         id: 'offer_privacy',
+        resourceKind: null,
+        resourceId: null,
         serviceId: credential.service.id,
         key: 'privacy',
         version: 1,

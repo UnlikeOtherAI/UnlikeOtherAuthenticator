@@ -25,7 +25,7 @@ describe.skipIf(!process.env.DATABASE_URL)('SMS financial PostgreSQL invariants'
     if (!db) throw new Error('DATABASE_URL required for financial verification');
     prisma = db.prisma; cleanup = db.cleanup;
     await seedSmsFinance(prisma);
-  }, 180_000);
+  });
   afterAll(async () => { if (cleanup) await cleanup(); });
 
   it('prevents rewriting accepted commercial terms', async () => {
