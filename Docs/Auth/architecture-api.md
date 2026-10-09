@@ -240,6 +240,12 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       billing-ledger-collector.service.ts   — Strict immutable Ledger usage/portfolio snapshots
       billing-ledger-dispatch-finalization.service.ts — Immutable PAYG admission finalization through liability/release evidence
       billing-prepaid-rating.service.ts     — Exact bounded prepaid cost-to-microcredit conversion
+      billing-sms-provider.service.ts       — Private fixed-host Twilio pricing, destination and receipt evidence
+      billing-sms-fx-evidence.service.ts    — Validated dated ECB evidence and exact private USD rating arithmetic
+      billing-credit-holds.service.ts      — Shared canonical balance holds for AI, outbound SMS and inbound funding
+      billing-sms-authority.service.ts     — Exact SMS actor audience and live epoch/key/membership locking
+      billing-sms-quote.service.ts         — Immutable UOA final customer quotes from private provider and accepted FX evidence
+      billing-sms-runtime.service.ts       — Explicit configuration gate for private read-only Twilio evidence
       billing-rating.service.ts             — Shared exact statement, Stripe, and contract-invoice rating core
       billing-recurring-addons.service.ts   — Privacy-safe exact-scope recurring add-on projection
       billing-recurring-addon-catalog.service.ts — Immutable offer/catalog to exact Stripe Product/monthly Price binding
@@ -905,3 +911,7 @@ and verify routes run `requireAccessStatusEnabled` at `onRequest`, before signed
 config retrieval, native public-profile/client checks or lifecycle proof services.
 The HTML renderer injects the separate boolean `__UOA_ACCESS_STATUS_ENABLED__`
 and passes it to Auth SSR. Product configuration cannot supply this setting.
+
+SMS number payment implementation: services/billing-sms-number.service.ts owns immutable monthly acceptance and verified Checkout projection; services/billing-sms-number-lifecycle.service.ts owns acquired-number attachment and fenced release/cancellation. routes/billing/sms-numbers.ts is the thin public registration.
+
+SMS prepaid runtime: services/billing-sms-{reservation,dispatch,receipt,grant,standing,inbound}.service.ts own admission, physical dispatch fencing and actual usage settlement; routes/billing/sms-{reservations,grants,inbound}.ts register the public contracts. Exact money arithmetic lives in billing-sms-money.service.ts. All share the canonical wallet and budget services.

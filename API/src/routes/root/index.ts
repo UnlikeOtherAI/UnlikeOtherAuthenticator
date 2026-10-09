@@ -58,6 +58,8 @@ export function registerRootRoute(app: FastifyInstance): void {
       native_apps: { admin: '/admin/apps', registration: '/oauth/register', public_identifier: 'app_id', client_secret_required: false },
       admin_team_membership: 'POST /internal/admin/users/:userId/teams atomically adds an existing user to the selected organisation/team through the admin superuser boundary; see endpoints for its request and lifecycle rules.',
       ledger_runtime_keys: 'Admin Billing > selected product > Ledger runtime keys; existing platform-superuser metadata/issue/revoke API, one-time plaintext only, no installation or bootstrap authority.',
+      sms_pricing: 'UOA owns final mobile-number and SMS quotes at /billing/v1/sms/quotes and /verify. Provider configuration and accepted dated currency policy are required; customer payloads contain final prices only.',
+      sms_policy_operators: 'Admin Billing > SMS policies provides fixed-source ECB refresh/XML import, dimensional route evidence review and immutable acceptance. Current platform SUPERUSER only; five-minute operator/epoch-bound previews, private/no-store. SMS runtime credentials are issued under the selected product App keys with purpose sms_runtime.',
       config_jwt: configJwtDocumentation,
       website_service_identity: 'Separate subfolder services use config.domain=hostname/mount-path (no trailing slash). Register each complete identity independently; credentials, signing keys, roles, allowlists and organisation origin scope never inherit from its parent hostname.',
       access_token: accessTokenDocumentation,

@@ -1,3 +1,4 @@
+import { billingReservedMicrocredits } from './billing-credit-holds.service.js';
 import {
   BillingCreditEntryDirection, BillingCreditEntryKind, BillingPrepaidReservationStatus,
   BillingTariffMode,
@@ -294,11 +295,8 @@ export async function reservePrepaidDispatch(
       paymentMode: 'PREPAID', rawCostBound: bound,
       context: input.billingContext ?? null });
     const balance = await lockCreditBalance(tx, creditAccount.id);
-    const held = await tx.billingPrepaidReservation.aggregate({
-      where: { creditAccountId: creditAccount.id, status: BillingPrepaidReservationStatus.ACTIVE },
-      _sum: { reservedMicrocredits: true },
-    });
-    if (balance - (held._sum.reservedMicrocredits ?? 0n) < reserved) {
+    const held = await billingReservedMicrocredits(tx, creditAccount.id);
+    if (balance - held < reserved) {
       throw new AppError('FORBIDDEN', 402, 'PREPAID_CREDIT_EXHAUSTED');
     }
     const reservation = await tx.billingPrepaidReservation.create({

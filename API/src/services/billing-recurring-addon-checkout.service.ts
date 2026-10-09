@@ -3,6 +3,7 @@ import { stripeCheckoutLocale } from './billing-stripe-locale.js';
 import { requireIdentityEmail } from './entity-lifecycle.service.js';
 import {
   BillingRecurringAddonCheckoutStatus,
+  Prisma,
   MembershipStatus,
   type BillingRecurringAddonCheckout,
   type PrismaClient,
@@ -26,7 +27,7 @@ import {
   assertCanManageRecurringAddonScope,
   recurringAddonScope,
   recurringAddonSubjectFingerprint,
-  uniqueEntitlementScope,
+  recurringAddonOfferScope,
   type RecurringAddonSubject,
 } from './billing-recurring-addon-scope.service.js';
 import {
@@ -170,12 +171,20 @@ export async function createRecurringAddonCheckout(
       catalogs: { where: { accountId: account.id } },
     },
   });
-  const entitlementScope = offer ? uniqueEntitlementScope(offer.featurePolicies) : null;
+  const entitlementScope = offer ? recurringAddonOfferScope(offer) : null;
   if (!offer || !entitlementScope) {
     throw new AppError('BAD_REQUEST', 409, 'BILLING_RECURRING_ADDON_UNAVAILABLE');
   }
   const selectedScope = recurringAddonScope(entitlementScope, params.request);
   assertCanManageRecurringAddonScope(viewer, selectedScope.scope);
+  if (offer.resourceKind === 'sms_mobile_number') {
+    if (!offer.resourceId) throw new AppError('NOT_FOUND', 404, 'BILLING_SMS_RESOURCE_NOT_FOUND');
+    const resource = await prisma.billingSmsNumberResource.findFirst({ where: {
+      id: offer.resourceId, serviceId: offer.serviceId, orgId: params.request.organisationId,
+      offerId: offer.id, state: { in: ['payment_required', 'payment_pending'] },
+    } });
+    if (!resource) throw new AppError('NOT_FOUND', 404, 'BILLING_SMS_RESOURCE_NOT_FOUND');
+  }
   const urls = returnUrls(params.credential);
   let catalog = offer.catalogs[0];
   if (!catalog) {
@@ -366,7 +375,17 @@ export async function createRecurringAddonCheckout(
   const now = deps?.now?.() ?? new Date();
   if (!checkout) {
     try {
-      checkout = await prisma.billingRecurringAddonCheckout.create({
+      checkout = await prisma.$transaction(async (tx) => {
+        if (offer.resourceKind === 'sms_mobile_number') {
+          if (!offer.resourceId) throw new AppError('NOT_FOUND', 404, 'BILLING_SMS_RESOURCE_NOT_FOUND');
+          await tx.$queryRaw(Prisma.sql`SELECT id FROM billing_sms_number_resources
+            WHERE id = ${offer.resourceId} FOR UPDATE`);
+          const resource = await tx.billingSmsNumberResource.findFirst({ where: {
+            id: offer.resourceId, offerId: offer.id, state: { in: ['payment_required', 'payment_pending'] },
+          } });
+          if (!resource) throw new AppError('BAD_REQUEST', 409, 'BILLING_SMS_RESOURCE_ENDED');
+        }
+        return tx.billingRecurringAddonCheckout.create({
         data: {
           ...identity,
           checkoutLocale: params.locale ?? null,
@@ -382,6 +401,7 @@ export async function createRecurringAddonCheckout(
           requestedByUserId: params.request.userId,
           leaseExpiresAt: new Date(now.getTime() + CHECKOUT_LEASE_MS),
         },
+        });
       });
     } catch (error) {
       if ((error as { code?: unknown } | null)?.code !== 'P2002') throw error;

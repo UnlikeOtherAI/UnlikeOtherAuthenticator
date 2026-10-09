@@ -15,7 +15,8 @@ type RetryRuntime = {
 
 type CreditRetryExhaustedMessage =
   | 'BILLING_CREDIT_ACCOUNT_RETRY_EXHAUSTED'
-  | 'BILLING_CREDIT_SETTLEMENT_RETRY_EXHAUSTED';
+  | 'BILLING_CREDIT_SETTLEMENT_RETRY_EXHAUSTED'
+  | 'BILLING_SMS_RESOURCE_RETRY_EXHAUSTED';
 
 function isRetryableTransactionError(error: unknown): boolean {
   const candidate = error as { code?: unknown; meta?: { code?: unknown } } | null;

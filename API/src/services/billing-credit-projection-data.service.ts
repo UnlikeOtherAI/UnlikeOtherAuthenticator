@@ -8,6 +8,7 @@ import {
 
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
+import { billingReservedMicrocredits } from './billing-credit-holds.service.js';
 
 export type BillingCreditPeriod = {
   key: string;
@@ -92,14 +93,13 @@ export async function loadBillingCreditProjectionData(
       include: { tariff: { select: { service: { select: { id: true,
         identifier: true, name: true } } } } },
     }),
-    prisma.billingPrepaidReservation.aggregate({
-      where: { creditAccountId: params.creditAccountId, status: 'ACTIVE' },
-      _sum: { reservedMicrocredits: true },
-    }),
+    billingReservedMicrocredits(prisma, params.creditAccountId),
     prisma.billingCreditEntry.findMany({
       where: { creditAccountId: params.creditAccountId,
-        OR: [{ kind: { not: BillingCreditEntryKind.PREPAID_USAGE } },
-          { prepaidReservation: { teamId: params.teamId } }] },
+        OR: [{ kind: { notIn: [BillingCreditEntryKind.PREPAID_USAGE, BillingCreditEntryKind.SMS_PREPAID_USAGE] } },
+          { prepaidReservation: { teamId: params.teamId } },
+          { smsReservation: { teamId: params.teamId } },
+          { smsInboundReceipt: { teamId: params.teamId } }] },
       orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
       take: 20,
       include: {
@@ -241,7 +241,7 @@ export async function loadBillingCreditProjectionData(
     catalogs,
     settlements,
     prepaidReservations,
-    activeReservedMicrocredits: activeReserved._sum.reservedMicrocredits ?? 0n,
+    activeReservedMicrocredits: activeReserved,
     allocations,
     entries,
     periodEntries,

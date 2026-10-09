@@ -33,7 +33,7 @@ export const BillingTariffSchema = z.object({
 export const BillingAppKeySchema = z.object({
   id: z.string(),
   service_id: z.string().optional(),
-  purpose: z.enum(['entitlement', 'customer_lifecycle']),
+  purpose: z.enum(['entitlement', 'customer_lifecycle', 'sms_runtime']),
   name: z.string(),
   key_prefix: z.string(),
   actor_issuer: z.string(),
@@ -228,7 +228,7 @@ export const BillingAssignmentFormSchema = z.object({
 
 export const BillingAppKeyFormSchema = z
   .object({
-    purpose: z.enum(['entitlement', 'customer_lifecycle']),
+    purpose: z.enum(['entitlement', 'customer_lifecycle', 'sms_runtime']),
     name: z.string().trim().min(1).max(120),
     actorIssuer: z.string().trim().url(),
     actorAudience: z.string().trim().url(),
@@ -244,11 +244,11 @@ export const BillingAppKeyFormSchema = z
         message: 'At least one customer return origin is required.',
       });
     }
-    if (value.purpose === 'entitlement' && value.checkoutReturnOrigins.trim()) {
+    if (value.purpose !== 'customer_lifecycle' && value.checkoutReturnOrigins.trim()) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['checkoutReturnOrigins'],
-        message: 'Entitlement keys cannot have return origins.',
+        message: 'Entitlement and SMS runtime keys cannot have return origins.',
       });
     }
   });

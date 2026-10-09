@@ -178,7 +178,7 @@ async function loadAddonData(
   const prisma = deps?.prisma ?? getAdminPrisma();
   const [offers, subscriptions, checkouts] = await Promise.all([
     prisma.billingRecurringAddonOffer.findMany({
-      where: { serviceId: params.serviceId, active: true },
+      where: { serviceId: params.serviceId, active: true, resourceKind: null },
       orderBy: [{ key: 'asc' }, { version: 'desc' }],
       include: {
         catalogs: { where: { accountId: params.accountId } },
@@ -190,6 +190,7 @@ async function loadAddonData(
         accountId: params.accountId,
         serviceId: params.serviceId,
         orgId: params.organisationId,
+        offer: { resourceKind: null },
         OR: [
           {
             scope: BillingRecurringAddonSubscriptionScope.ORGANISATION,
@@ -216,6 +217,7 @@ async function loadAddonData(
         serviceId: params.serviceId,
         orgId: params.organisationId,
         requestedTeamId: params.teamId,
+        offer: { resourceKind: null },
         status: { in: ['CREATING', 'OPEN', 'NEEDS_REVIEW'] },
       },
       orderBy: { updatedAt: 'desc' },

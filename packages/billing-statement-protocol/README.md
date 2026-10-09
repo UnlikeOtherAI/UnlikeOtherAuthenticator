@@ -274,3 +274,16 @@ source integrity validation; stored snapshot hashes, rating, line identities,
 PDFs and CSVs are unchanged. Authored plan/service names, Stripe invoice line
 labels and stored adjustment reasons remain verbatim because their persisted
 contract does not distinguish generated copy from operator text.
+
+## Mobile-number subscriptions and prepaid SMS (5.2.0)
+
+The independent SMS v1 protocol exports exact request/result schemas and the
+`schema/billing-sms-v1.json` and `openapi/billing-sms-v1.openapi.json` artifacts.
+Only final customer prices cross the public boundary. SMS prices are maxima per
+segment; final verified usage can be lower. Monthly exact-number payment belongs
+to the organisation. SMS reservations and standing incoming-text funds belong
+to the original exact team and allocation. Runtime recovery uses the separately
+scoped SMS_RUNTIME credential; lifecycle consent and entitlement keys remain
+separate. Missing resource/grant/dispatch/standing retirement proof is explicitly
+typed and fenced, never inferred from a generic HTTP status. Unknown provider
+outcomes remain held and uncovered incoming charges remain uncollected liability.

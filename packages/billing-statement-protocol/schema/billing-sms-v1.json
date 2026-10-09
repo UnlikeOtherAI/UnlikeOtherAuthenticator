@@ -1,0 +1,1936 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://authentication.unlikeotherai.com/schema/billing-sms-v1.json",
+  "definitions": {
+    "billingSmsClaimRequestV1JsonSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "product",
+        "dispatch_id",
+        "request_fingerprint"
+      ],
+      "properties": {
+        "product": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "dispatch_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "request_fingerprint": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
+    },
+    "billingSmsDispatchCancellationV1JsonSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "dispatch_id",
+        "state",
+        "can_dispatch"
+      ],
+      "properties": {
+        "dispatch_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "state": {
+          "const": "released"
+        },
+        "can_dispatch": {
+          "const": false
+        }
+      }
+    },
+    "billingSmsFinalQuoteV1JsonSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "amount",
+        "currency",
+        "expires_at",
+        "rate_basis",
+        "scope"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$",
+          "maxLength": 80
+        },
+        "currency": {
+          "const": "USD"
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "rate_basis": {
+          "enum": [
+            "monthly_mobile",
+            "inbound_mobile",
+            "maximum_mobile_carrier"
+          ]
+        },
+        "scope": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "organisation_id",
+            "country",
+            "number_type",
+            "direction",
+            "destination",
+            "carrier",
+            "mcc",
+            "mnc"
+          ],
+          "properties": {
+            "organisation_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "country": {
+              "type": "string",
+              "pattern": "^[A-Z]{2}$"
+            },
+            "number_type": {
+              "const": "mobile"
+            },
+            "direction": {
+              "enum": [
+                "monthly",
+                "inbound",
+                "outbound"
+              ]
+            },
+            "destination": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^\\+[1-9][0-9]{6,14}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "carrier": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 160
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "mcc": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 160
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "mnc": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 160
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "billingSmsGrantQuoteRequestV1JsonSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "product",
+        "grant_id",
+        "country",
+        "destination"
+      ],
+      "properties": {
+        "product": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "grant_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "country": {
+          "type": "string",
+          "pattern": "^[A-Z]{2}$"
+        },
+        "destination": {
+          "type": "string",
+          "pattern": "^\\+[1-9][0-9]{6,14}$"
+        }
+      }
+    },
+    "billingSmsGrantReadRequestV1JsonSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "product",
+        "grant_id"
+      ],
+      "properties": {
+        "product": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "grant_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        }
+      }
+    },
+    "billingSmsGrantRequestV1JsonSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "product",
+        "organisation_id",
+        "team_id",
+        "user_id",
+        "number_id",
+        "allocation_id",
+        "delegate_id",
+        "max_segments",
+        "idempotency_key"
+      ],
+      "properties": {
+        "product": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "organisation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "team_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "user_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "number_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "allocation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "delegate_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "max_segments": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "idempotency_key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        }
+      }
+    },
+    "billingSmsGrantRevocationV1JsonSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "grant_id",
+        "state"
+      ],
+      "properties": {
+        "grant_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "state": {
+          "const": "revoked"
+        }
+      }
+    },
+    "billingSmsGrantRevokeResultV1JsonSchema": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "number_id",
+            "allocation_id",
+            "delegate_id",
+            "max_segments",
+            "state"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "number_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "allocation_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "delegate_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "max_segments": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "state": {
+              "enum": [
+                "active",
+                "revoked"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "grant_id",
+            "state"
+          ],
+          "properties": {
+            "grant_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "state": {
+              "const": "revoked"
+            }
+          }
+        }
+      ]
+    },
+    "billingSmsGrantV1JsonSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "number_id",
+        "allocation_id",
+        "delegate_id",
+        "max_segments",
+        "state"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "number_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "allocation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "delegate_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "max_segments": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "state": {
+          "enum": [
+            "active",
+            "revoked"
+          ]
+        }
+      }
+    },
+    "billingSmsInboundReceiptRequestV1JsonSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "product",
+        "number_id",
+        "allocation_id",
+        "message_sid",
+        "organisation_id",
+        "team_id"
+      ],
+      "properties": {
+        "product": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "number_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "allocation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "message_sid": {
+          "type": "string",
+          "pattern": "^SM[a-fA-F0-9]{32}$"
+        },
+        "organisation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "team_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        }
+      }
+    },
+    "billingSmsInboundReceiptV1JsonSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "message_sid",
+        "state",
+        "consumed_credits",
+        "uncollected_credits"
+      ],
+      "properties": {
+        "message_sid": {
+          "type": "string",
+          "pattern": "^SM[a-fA-F0-9]{32}$"
+        },
+        "state": {
+          "enum": [
+            "pending",
+            "funded",
+            "uncollected",
+            "reconciliation"
+          ]
+        },
+        "consumed_credits": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$",
+              "maxLength": 80
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "uncollected_credits": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$",
+              "maxLength": 80
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "billingSmsInsufficientCreditsV1JsonSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "reason",
+        "can_dispatch"
+      ],
+      "properties": {
+        "code": {
+          "const": "BILLING_SMS_INSUFFICIENT_CREDITS"
+        },
+        "reason": {
+          "const": "insufficient_prepaid_credits"
+        },
+        "can_dispatch": {
+          "const": false
+        }
+      }
+    },
+    "billingSmsNumberAttachRequestV1JsonSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "product",
+        "resource_id",
+        "account_sid",
+        "phone_number_sid"
+      ],
+      "properties": {
+        "product": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "resource_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "account_sid": {
+          "type": "string",
+          "pattern": "^AC[a-fA-F0-9]{32}$"
+        },
+        "phone_number_sid": {
+          "type": "string",
+          "pattern": "^PN[a-fA-F0-9]{32}$"
+        }
+      }
+    },
+    "billingSmsNumberBeginRequestV1JsonSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "product",
+        "organisation_id",
+        "team_id",
+        "user_id",
+        "resource_id",
+        "quote_id",
+        "phone_number"
+      ],
+      "properties": {
+        "product": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "organisation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "team_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "user_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "resource_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "quote_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "phone_number": {
+          "type": "string",
+          "pattern": "^\\+[1-9][0-9]{6,14}$"
+        }
+      }
+    },
+    "billingSmsNumberCancellationV1JsonSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "resource_id",
+        "state",
+        "acquisition_authorized"
+      ],
+      "properties": {
+        "resource_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "state": {
+          "const": "ended"
+        },
+        "acquisition_authorized": {
+          "const": false
+        }
+      }
+    },
+    "billingSmsNumberEndRequestV1JsonSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "product",
+        "resource_id",
+        "reason"
+      ],
+      "properties": {
+        "product": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "resource_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "reason": {
+          "enum": [
+            "released",
+            "acquisition_unavailable"
+          ]
+        }
+      }
+    },
+    "billingSmsNumberEndResultV1JsonSchema": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "resource_id",
+            "organisation_id",
+            "phone_number",
+            "state",
+            "quote",
+            "acquisition_authorized",
+            "checkout_url",
+            "disabled_reason"
+          ],
+          "properties": {
+            "resource_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "organisation_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "phone_number": {
+              "type": "string",
+              "pattern": "^\\+[1-9][0-9]{6,14}$"
+            },
+            "state": {
+              "enum": [
+                "payment_required",
+                "payment_pending",
+                "paid",
+                "active",
+                "ending",
+                "ended",
+                "recovery_required",
+                "refund_required"
+              ]
+            },
+            "quote": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "amount",
+                "currency",
+                "expires_at",
+                "rate_basis",
+                "scope"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 160
+                },
+                "amount": {
+                  "type": "string",
+                  "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$",
+                  "maxLength": 80
+                },
+                "currency": {
+                  "const": "USD"
+                },
+                "expires_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "rate_basis": {
+                  "enum": [
+                    "monthly_mobile",
+                    "inbound_mobile",
+                    "maximum_mobile_carrier"
+                  ]
+                },
+                "scope": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "organisation_id",
+                    "country",
+                    "number_type",
+                    "direction",
+                    "destination",
+                    "carrier",
+                    "mcc",
+                    "mnc"
+                  ],
+                  "properties": {
+                    "organisation_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 160
+                    },
+                    "country": {
+                      "type": "string",
+                      "pattern": "^[A-Z]{2}$"
+                    },
+                    "number_type": {
+                      "const": "mobile"
+                    },
+                    "direction": {
+                      "enum": [
+                        "monthly",
+                        "inbound",
+                        "outbound"
+                      ]
+                    },
+                    "destination": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "pattern": "^\\+[1-9][0-9]{6,14}$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "carrier": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 160
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "mcc": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 160
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "mnc": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 160
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            },
+            "acquisition_authorized": {
+              "type": "boolean"
+            },
+            "checkout_url": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uri"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "disabled_reason": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 160
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "resource_id",
+            "state",
+            "acquisition_authorized"
+          ],
+          "properties": {
+            "resource_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "state": {
+              "const": "ended"
+            },
+            "acquisition_authorized": {
+              "const": false
+            }
+          }
+        }
+      ]
+    },
+    "billingSmsNumberRuntimeStatusRequestV1JsonSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "product",
+        "resource_id"
+      ],
+      "properties": {
+        "product": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "resource_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        }
+      }
+    },
+    "billingSmsNumberStatusRequestV1JsonSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "product",
+        "organisation_id",
+        "team_id",
+        "user_id",
+        "resource_id"
+      ],
+      "properties": {
+        "product": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "organisation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "team_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "user_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "resource_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        }
+      }
+    },
+    "billingSmsNumberV1JsonSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "resource_id",
+        "organisation_id",
+        "phone_number",
+        "state",
+        "quote",
+        "acquisition_authorized",
+        "checkout_url",
+        "disabled_reason"
+      ],
+      "properties": {
+        "resource_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "organisation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "phone_number": {
+          "type": "string",
+          "pattern": "^\\+[1-9][0-9]{6,14}$"
+        },
+        "state": {
+          "enum": [
+            "payment_required",
+            "payment_pending",
+            "paid",
+            "active",
+            "ending",
+            "ended",
+            "recovery_required",
+            "refund_required"
+          ]
+        },
+        "quote": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "amount",
+            "currency",
+            "expires_at",
+            "rate_basis",
+            "scope"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "amount": {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$",
+              "maxLength": 80
+            },
+            "currency": {
+              "const": "USD"
+            },
+            "expires_at": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "rate_basis": {
+              "enum": [
+                "monthly_mobile",
+                "inbound_mobile",
+                "maximum_mobile_carrier"
+              ]
+            },
+            "scope": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "organisation_id",
+                "country",
+                "number_type",
+                "direction",
+                "destination",
+                "carrier",
+                "mcc",
+                "mnc"
+              ],
+              "properties": {
+                "organisation_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 160
+                },
+                "country": {
+                  "type": "string",
+                  "pattern": "^[A-Z]{2}$"
+                },
+                "number_type": {
+                  "const": "mobile"
+                },
+                "direction": {
+                  "enum": [
+                    "monthly",
+                    "inbound",
+                    "outbound"
+                  ]
+                },
+                "destination": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^\\+[1-9][0-9]{6,14}$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "carrier": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 160
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "mcc": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 160
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "mnc": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 160
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "acquisition_authorized": {
+          "type": "boolean"
+        },
+        "checkout_url": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uri"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "disabled_reason": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "billingSmsQuoteRequestV1JsonSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "product",
+        "organisation_id",
+        "team_id",
+        "user_id",
+        "country",
+        "number_type",
+        "direction",
+        "destination",
+        "carrier",
+        "mcc",
+        "mnc"
+      ],
+      "properties": {
+        "product": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "organisation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "team_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "user_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "country": {
+          "type": "string",
+          "pattern": "^[A-Z]{2}$"
+        },
+        "number_type": {
+          "const": "mobile"
+        },
+        "direction": {
+          "enum": [
+            "monthly",
+            "inbound",
+            "outbound"
+          ]
+        },
+        "destination": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^\\+[1-9][0-9]{6,14}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "carrier": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "mcc": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "mnc": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "billingSmsReceiptRequestV1JsonSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "product",
+        "dispatch_id",
+        "request_fingerprint",
+        "message_sid"
+      ],
+      "properties": {
+        "product": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "dispatch_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "request_fingerprint": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "message_sid": {
+          "type": "string",
+          "pattern": "^SM[a-fA-F0-9]{32}$"
+        }
+      }
+    },
+    "billingSmsReleaseRequestV1JsonSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "product",
+        "dispatch_id",
+        "request_fingerprint",
+        "proof",
+        "dispatch_token"
+      ],
+      "properties": {
+        "product": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "dispatch_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "request_fingerprint": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "proof": {
+          "const": "no_provider_dispatch"
+        },
+        "dispatch_token": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "billingSmsReleaseResultV1JsonSchema": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "dispatch_id",
+            "reservation_id",
+            "state",
+            "dispatch_token",
+            "reserved_credits",
+            "consumed_credits",
+            "message_sid"
+          ],
+          "properties": {
+            "dispatch_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "reservation_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "state": {
+              "enum": [
+                "reserved",
+                "dispatching",
+                "uncertain",
+                "settled",
+                "released",
+                "reconciliation"
+              ]
+            },
+            "dispatch_token": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 160
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "reserved_credits": {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$",
+              "maxLength": 80
+            },
+            "consumed_credits": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$",
+                  "maxLength": 80
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "message_sid": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^SM[a-fA-F0-9]{32}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "dispatch_id",
+            "state",
+            "can_dispatch"
+          ],
+          "properties": {
+            "dispatch_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "state": {
+              "const": "released"
+            },
+            "can_dispatch": {
+              "const": false
+            }
+          }
+        }
+      ]
+    },
+    "billingSmsReservationReadRequestV1JsonSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "product",
+        "dispatch_id"
+      ],
+      "properties": {
+        "product": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "dispatch_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        }
+      }
+    },
+    "billingSmsReservationV1JsonSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "dispatch_id",
+        "reservation_id",
+        "state",
+        "dispatch_token",
+        "reserved_credits",
+        "consumed_credits",
+        "message_sid"
+      ],
+      "properties": {
+        "dispatch_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "reservation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "state": {
+          "enum": [
+            "reserved",
+            "dispatching",
+            "uncertain",
+            "settled",
+            "released",
+            "reconciliation"
+          ]
+        },
+        "dispatch_token": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reserved_credits": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$",
+          "maxLength": 80
+        },
+        "consumed_credits": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$",
+              "maxLength": 80
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "message_sid": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^SM[a-fA-F0-9]{32}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "billingSmsReserveRequestV1JsonSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "product",
+        "organisation_id",
+        "team_id",
+        "user_id",
+        "dispatch_id",
+        "request_fingerprint",
+        "number_id",
+        "allocation_id",
+        "account_sid",
+        "from",
+        "to",
+        "quote_id",
+        "max_segments",
+        "grant_id",
+        "delegate_id"
+      ],
+      "properties": {
+        "product": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "organisation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "team_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "user_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "dispatch_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "request_fingerprint": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "number_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "allocation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "account_sid": {
+          "type": "string",
+          "pattern": "^AC[a-fA-F0-9]{32}$"
+        },
+        "from": {
+          "type": "string",
+          "pattern": "^\\+[1-9][0-9]{6,14}$"
+        },
+        "to": {
+          "type": "string",
+          "pattern": "^\\+[1-9][0-9]{6,14}$"
+        },
+        "quote_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "max_segments": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "grant_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "delegate_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "billingSmsResourceNotFoundV1JsonSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "resource_id"
+      ],
+      "properties": {
+        "code": {
+          "const": "BILLING_SMS_RESOURCE_NOT_FOUND"
+        },
+        "resource_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        }
+      }
+    },
+    "billingSmsStandingHoldRequestV1JsonSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "product",
+        "organisation_id",
+        "team_id",
+        "user_id",
+        "number_id",
+        "allocation_id",
+        "reserve_credits",
+        "idempotency_key"
+      ],
+      "properties": {
+        "product": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "organisation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "team_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "user_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "number_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "allocation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "reserve_credits": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$",
+          "maxLength": 80
+        },
+        "idempotency_key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        }
+      }
+    },
+    "billingSmsStandingHoldV1JsonSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "number_id",
+        "allocation_id",
+        "state",
+        "reserved_credits"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "number_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "allocation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "state": {
+          "enum": [
+            "active",
+            "retired",
+            "reconciliation"
+          ]
+        },
+        "reserved_credits": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$",
+          "maxLength": 80
+        }
+      }
+    },
+    "billingSmsStandingReadRequestV1JsonSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "product",
+        "number_id",
+        "allocation_id"
+      ],
+      "properties": {
+        "product": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "number_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "allocation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        }
+      }
+    },
+    "billingSmsStandingRetireResultV1JsonSchema": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "number_id",
+            "allocation_id",
+            "state",
+            "reserved_credits"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "number_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "allocation_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "state": {
+              "enum": [
+                "active",
+                "retired",
+                "reconciliation"
+              ]
+            },
+            "reserved_credits": {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$",
+              "maxLength": 80
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "number_id",
+            "allocation_id",
+            "state",
+            "can_fund"
+          ],
+          "properties": {
+            "number_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "allocation_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "state": {
+              "const": "retired"
+            },
+            "can_fund": {
+              "const": false
+            }
+          }
+        }
+      ]
+    },
+    "billingSmsStandingRetirementV1JsonSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "number_id",
+        "allocation_id",
+        "state",
+        "can_fund"
+      ],
+      "properties": {
+        "number_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "allocation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "state": {
+          "const": "retired"
+        },
+        "can_fund": {
+          "const": false
+        }
+      }
+    },
+    "billingSmsVerifyQuoteRequestV1JsonSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "product",
+        "organisation_id",
+        "team_id",
+        "user_id",
+        "country",
+        "number_type",
+        "direction",
+        "destination",
+        "carrier",
+        "mcc",
+        "mnc",
+        "quote_id"
+      ],
+      "properties": {
+        "product": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "organisation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "team_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "user_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "country": {
+          "type": "string",
+          "pattern": "^[A-Z]{2}$"
+        },
+        "number_type": {
+          "const": "mobile"
+        },
+        "direction": {
+          "enum": [
+            "monthly",
+            "inbound",
+            "outbound"
+          ]
+        },
+        "destination": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^\\+[1-9][0-9]{6,14}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "carrier": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "mcc": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "mnc": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "quote_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        }
+      }
+    }
+  }
+}

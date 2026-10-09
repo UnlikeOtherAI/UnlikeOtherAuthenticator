@@ -21,8 +21,18 @@ import { registerBillingRecurringAddonsRoute } from './recurring-addons.js';
 import { registerStripeCheckoutRoute } from './stripe-checkout.js';
 import { registerStripeSubscriptionRoutes } from './stripe-subscription.js';
 import { registerStripeWebhookRoute } from './stripe-webhook.js';
+import { registerSmsQuoteRoutes } from './sms-quotes.js';
+import { registerSmsNumberRoutes } from './sms-numbers.js';
+import { registerSmsGrantRoutes } from './sms-grants.js';
+import { registerSmsReservationRoutes } from './sms-reservations.js';
+import { registerSmsInboundRoutes } from './sms-inbound.js';
 
 export function registerBillingRoutes(app: FastifyInstance): void {
+  registerSmsQuoteRoutes(app);
+  registerSmsNumberRoutes(app);
+  registerSmsGrantRoutes(app);
+  registerSmsReservationRoutes(app);
+  registerSmsInboundRoutes(app);
   registerBillingCancellationRoutes(app);
   registerBillingCreditFundingActionRoutes(app);
   registerBillingCreditsRoute(app);

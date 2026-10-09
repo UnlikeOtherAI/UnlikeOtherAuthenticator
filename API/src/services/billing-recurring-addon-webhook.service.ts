@@ -300,7 +300,7 @@ const INVOICE_EVENTS = new Set([
   'invoice.voided',
 ]);
 
-function assertPaidInvoice(
+export function assertPaidInvoice(
   invoice: Stripe.Invoice,
   local: Subscription,
   remote: Stripe.Subscription,

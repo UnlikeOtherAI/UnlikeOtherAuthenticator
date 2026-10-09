@@ -1,5 +1,7 @@
 export { billingConsumerActionV1ConformanceFixtures } from './action-conformance-fixtures.js';
 export * from './presentation-types.js';
+export * from './sms-types.js';
+export * from './sms-schema.js';
 export * from './credits-attention-types.js';
 export {
   billingCreditAttentionV1JsonSchema,
@@ -229,3 +231,4 @@ export { billingCyclesV2OpenApiDocument } from './cycle-openapi.js';
 export { billingCyclesProtocolV2JsonSchema, billingCyclesListRequestV2JsonSchema, billingCyclesListV2JsonSchema, billingCycleDetailRequestV2JsonSchema, billingCycleDetailV2JsonSchema, billingCycleDownloadRequestV2JsonSchema } from './cycle-schema.js';
 export type { BillingCycleMoney, BillingCycleState, BillingCycleScope, BillingCyclePeriod, BillingCycleProduct, BillingCycleTotals, BillingCycleSummaryV2, BillingCyclesListRequestV2, BillingCyclesListV2, BillingCycleDetailRequestV2, BillingCycleSeatInterval, BillingCycleSubscriptionLine, BillingCycleUsageLine, BillingCycleCredits, BillingCycleDownloadAction, BillingCycleDocument, BillingCycleAdjustment, BillingCycleDetailV2, BillingCycleDownloadRequestV2 } from './cycle-types.js';
 export { BILLING_CYCLES_PROTOCOL_VERSION, BILLING_CYCLES_SCHEMA_VERSION, BILLING_CYCLES_SCHEMA_PATH, BILLING_CYCLES_EXAMPLE_PATH, BILLING_CYCLES_OPENAPI_PATH, BILLING_CYCLES_LIST_PATH, BILLING_CYCLES_DETAIL_PATH, BILLING_CYCLES_DOWNLOAD_PATH } from './cycle-types.js';
+export { billingSmsProtocolV1JsonSchema, billingSmsV1OpenApiDocument } from './sms-openapi.js';
