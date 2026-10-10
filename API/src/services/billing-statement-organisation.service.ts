@@ -18,6 +18,7 @@ import { fetchLedgerMeteringPortfolio } from './billing-ledger-collector.service
 import type { FetchMeteringPortfolio } from './billing-metering.types.js';
 import { exactMoney, minorAmountToMajor } from './billing-money.service.js';
 import { resolveBillingTariffForMonth } from './billing-tariff-history.service.js';
+import { loadProviderServiceRates, type ProviderServiceRate } from './billing-provider-service-rate.service.js';
 import {
   filterPortfolioForProduct,
 } from './billing-statement-portfolio.service.js';
@@ -63,6 +64,7 @@ type TeamTariff = {
   version: number;
   mode: 'standard' | 'free' | 'at_cost' | 'custom';
   markupBps: number;
+  providerServiceRates: ProviderServiceRate[];
   monthlyAmountMinor: bigint;
   currency: string;
 };
@@ -92,6 +94,7 @@ async function resolveTeamTariff(
     version: tariff.version,
     mode: publicMode(tariff.mode),
     markupBps: tariff.markupBps,
+    providerServiceRates: await loadProviderServiceRates(prisma, tariff.id),
     monthlyAmountMinor: tariff.monthlyAmountMinor,
     currency: tariff.currency,
   };
@@ -196,6 +199,7 @@ async function buildTeamUsage(
       product: context.statementProduct,
       mode: tariff.mode,
       markupBps: tariff.markupBps,
+      providerServiceRates: tariff.providerServiceRates,
     },
     users: members.map((member) => member.user),
     locale: context.locale,

@@ -71,6 +71,22 @@ describe('billingAdminService', () => {
     });
   });
 
+  it('sends an optional cloud browser rate as the Browserbase provider-service rate', async () => {
+    api.post.mockResolvedValue({ ...tariff, provider_service_rates: [{ provider_service_id: 'browserbase',
+      markup_bps: 2000, markup_percent: '20.00', line_kind: 'cloud_browser' }] });
+
+    const created = await billingAdminService.createTariff('service-1', {
+      key: 'standard', name: 'Standard', mode: 'standard', collectionMode: 'none',
+      markupPercent: '30.00', usagePaymentMode: 'prepaid', cloudBrowserMarkupPercent: '20.00',
+      monthlyChargeBasis: 'flat', monthlyAmount: '0.00', currency: 'USD', setAsDefault: false,
+    });
+
+    expect(api.post).toHaveBeenCalledWith('/internal/admin/billing/services/service-1/tariffs',
+      expect.objectContaining({ markup_percent: '30.00', provider_service_rates: [{
+        provider_service_id: 'browserbase', markup_percent: '20.00', line_kind: 'cloud_browser' }] }));
+    expect(created.provider_service_rates?.[0]?.markup_percent).toBe('20.00');
+  });
+
   it('parses a public actor JWK and returns the product key only from creation', async () => {
     api.post.mockResolvedValue({
       id: 'app-key-1',

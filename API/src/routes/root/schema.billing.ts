@@ -17,6 +17,8 @@ const tariffBody = {
   monthly_subscription:
     '{ amount_minor: non-negative integer string, currency: uppercase ISO currency, charge_basis: flat | per_seat, seat_policy: automatic | fixed and seat_charge_timing: full_month | prorated for per_seat only }',
   usage_payment_mode: 'prepaid | pay_as_you_go, independent of monthly subscription',
+  provider_service_rates:
+    'optional, prepaid standard/custom only, at most 20: [{ provider_service_id: Ledger connector id such as browserbase, markup_percent: exact decimal string with at most two fractional digits, line_kind: cloud_browser }]; that connector is rated with its own markup and shown as its own customer line; immutable with the version and returned to operators as provider_service_rates[{ provider_service_id, markup_bps, markup_percent, line_kind }]',
 };
 
 export const billingEndpoints: EndpointSchema[] = [
@@ -332,7 +334,7 @@ export const billingEndpoints: EndpointSchema[] = [
       '401/403': 'Invalid key purpose, actor, product, subject, or active membership',
     },
     notes:
-      'Canonical identifiers are nessie, deepwater, deepsignal, deeptest, and docgen. Product/repository slugs such as deep-water or deep-test are mapped before this call. The browser receives neither credential.',
+      'Canonical identifiers are nessie, deepwater, deepsignal, deeptest, docgen, and salesnerd. Product/repository slugs such as deep-water or deep-test are mapped before this call. The browser receives neither credential.',
   },
   ...billingContractInvoiceEndpoints,
   {

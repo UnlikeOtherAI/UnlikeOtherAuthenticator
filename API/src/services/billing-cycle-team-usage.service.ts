@@ -15,8 +15,11 @@ import {
   readVerifiedCycleCreditEvidence, usdFromRatedMicrocredits,
 } from './billing-cycle-paid-credit-evidence.service.js';
 import {
-  cycleUsageContentFingerprint, projectCycleUsage, type CycleUsageEvidence,
+  cycleUsageContentFingerprint, projectCycleUsage, withCycleLineCredits, type CycleUsageEvidence,
 } from './billing-cycle-usage-projection.service.js';
+import {
+  loadProviderServiceRates, readProviderServiceKindConsumption,
+} from './billing-provider-service-rate.service.js';
 import { fetchLedgerMeteringUsage } from './billing-ledger-collector.service.js';
 import { fetchVerifiedLedgerPaidReceiptSet } from './billing-ledger-paid-receipt-proof.service.js';
 import { fetchLedgerHistoricalBillingTeams } from './billing-ledger-team-discovery.service.js';
@@ -90,10 +93,11 @@ export async function prepareBillingTeamUsageCycle(
     product: service.identifier, organisationId: params.organisationId,
     teamId: params.teamId, billingMonth: params.billingMonth, groupBy: 'user',
   });
+  const providerServiceRates = await loadProviderServiceRates(prisma, terms.tariff.id);
   const projected = projectCycleUsage(usage, { serviceIdentifier: service.identifier,
     organisationId: params.organisationId, teamId: params.teamId,
     billingMonth: params.billingMonth, startsAt, endsAt,
-    currency: terms.tariff.currency }, terms.tariff);
+    currency: terms.tariff.currency }, terms.tariff, providerServiceRates);
   const scope = { product: service.identifier, organisationId: params.organisationId,
     teamId: params.teamId, billingMonth: params.billingMonth, serviceId: params.serviceId };
   const proof = await (deps?.fetchPaidReceiptSet ?? fetchVerifiedLedgerPaidReceiptSet)(scope);
@@ -101,6 +105,7 @@ export async function prepareBillingTeamUsageCycle(
     scope, proof, payer, tariff: terms.tariff,
     rawLines: projected.evidence.raw_lines,
   });
+  const kindConsumption = await readProviderServiceKindConsumption(prisma, scope, providerServiceRates);
   const walletBoundary = await readCycleWalletBoundary(prisma, {
     orgId: params.organisationId, teamId: params.teamId, payer,
     startsAt, endsAt,
@@ -201,14 +206,13 @@ export async function prepareBillingTeamUsageCycle(
           scope: { organisation_id: params.organisationId, team_id: params.teamId,
             cycle_scope: 'team', payer_scope: payer.toLowerCase() as 'team' | 'organisation' },
           product: service, totals: [], document_available: false,
-          subscription_lines: [], usage_lines: projected.lines.map((line) => ({
+          subscription_lines: [], usage_lines: withCycleLineCredits(projected.lines.map((line) => ({
             ...line, customer_charge: line.usage_payment_mode === 'prepaid' ? null :
               exactMoney(usdFromRatedMicrocredits(
                 BigInt(creditEvidence.consumed_microcredits) -
                 BigInt(creditEvidence.waived_microcredits)), terms.tariff.currency),
-            credits_consumed: creditEvidence.covered ?
-              decimalCredits(BigInt(creditEvidence.consumed_microcredits ?? '0')) : null,
-          })),
+          })), creditEvidence.covered ? BigInt(creditEvidence.consumed_microcredits) : null,
+          kindConsumption),
           credits: { consumed: creditEvidence.covered ?
             decimalCredits(BigInt(creditEvidence.consumed_microcredits ?? '0')) : null,
             waived: decimalCredits(BigInt(creditEvidence.waived_microcredits)),

@@ -8,6 +8,7 @@ import {
 } from '@prisma/client';
 
 import { AppError } from '../utils/errors.js';
+import type { ProviderServiceRateInput } from './billing-provider-service-rate.service.js';
 
 const IDENTIFIER_PATTERN = /^[a-z0-9][a-z0-9._-]{0,99}$/;
 const TARIFF_KEY_PATTERN = /^[a-z0-9][a-z0-9._-]{0,79}$/;
@@ -35,10 +36,13 @@ export type TariffInput = {
   seatChargeTiming?: PublicSeatChargeTiming;
   usagePaymentMode?: PublicUsagePaymentMode;
   currency: string;
+  // Connected provider-service rates of a prepaid version; see
+  // billing-provider-service-rate.service.ts. Created beside the version.
+  providerServiceRates?: ProviderServiceRateInput[];
 };
 
 type NormalizedTariffInput = Omit<TariffInput,
-  'mode' | 'collectionMode' | 'monthlyAmountMinor' | 'monthlyChargeBasis' | 'seatPolicy' | 'seatChargeTiming' | 'usagePaymentMode' | 'markupBps'> & {
+  'mode' | 'collectionMode' | 'monthlyAmountMinor' | 'monthlyChargeBasis' | 'seatPolicy' | 'seatChargeTiming' | 'usagePaymentMode' | 'markupBps' | 'providerServiceRates'> & {
   mode: BillingTariffMode;
   collectionMode: BillingCollectionMode;
   markupBps: number;

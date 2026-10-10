@@ -2,6 +2,7 @@ import type { BillingCycleDetailV2 } from '../contracts/billing-statement-v1.js'
 import type { BillingCustomerLocale } from './billing-copy-locale.js';
 import { localizedBillingMoney } from './billing-money.service.js';
 import { billingStatementCopy } from './billing-statement-copy.catalog.js';
+import { cycleUsageLineKind } from './billing-cycle-usage-projection.service.js';
 
 /** Called only after the stored financial snapshot and bindings are verified. */
 export function localizeBillingCycleDetail(
@@ -25,7 +26,8 @@ export function localizeBillingCycleDetail(
       unit_price: money(line.unit_price), customer_charge: money(line.customer_charge),
     })),
     usage_lines: detail.usage_lines.map((line) => ({
-      ...line, label: line.usage_payment_mode === 'prepaid' ? copy.prepaidUsage : copy.meteredUsage,
+      ...line, label: cycleUsageLineKind(line) === 'cloud_browser' ? copy.cloudBrowser
+        : line.usage_payment_mode === 'prepaid' ? copy.prepaidUsage : copy.meteredUsage,
       customer_charge: line.customer_charge ? money(line.customer_charge) : null,
     })),
     documents: detail.documents.map((document) => ({

@@ -2761,7 +2761,7 @@ account-and-mode-bound confirmation for `--apply`. Before any database write it
 retrieves and validates the existing immutable Stripe Products and Prices for
 the four shared-credit offers and DeepWater privacy add-on. Apply then creates
 or binds, in one serializable transaction, the credit policy, offers, default
-automatic-top-up option for `nessie`, `deepwater`, `deepsignal`, `deeptest`, and `docgen`,
+automatic-top-up option for `nessie`, `deepwater`, `deepsignal`, `deeptest`, `docgen`, and `salesnerd`,
 plus DeepWater's team feature policy and recurring add-on catalog. Stripe
 metadata contains stable public contract identifiers only, never UOA database
 IDs. Any local or remote drift aborts instead of mutating or replacing an
@@ -3157,3 +3157,21 @@ mode returns false. Responses are private/no-store, and products recheck every
 platform-only operation without storing or positively caching this verdict.
 The broader historical token `role: superuser` also includes product-domain
 bootstrap roles and must not stand in for this platform verdict.
+
+## 2026-10-10 SalesNerd billing product and cloud-browser rate
+
+SalesNerd joins central billing as the product `salesnerd`, registered the way
+DocGen was: it is a canonical product identifier, the Stripe commercial-catalog
+provisioner requires its active Billing Service (and fails closed until an
+operator registers it), and it receives the shared-credit funding policy, offers
+and default automatic top-up. Its Billing Service, tariff, `customer_lifecycle`
+app key and Ledger runtime key are operator state, issued through the existing
+admin doorways; the exact steps are in [deployment](deployment.md#salesnerd-commercial-enrollment-2026-10-10).
+
+SalesNerd's cloud browser runs on Browserbase through Ledger, which meters it in
+minutes as the `browserbase` connector. The 20 per cent over provider cost for
+those minutes is a connected provider-service rate on SalesNerd's prepaid tariff
+version, shown to the customer as its own "Cloud browser" line. The model,
+limits and presentation rules are in
+[Connected provider-service rates](Requirements/billing-tariffs.md#connected-provider-service-rates-2026-10-10).
+Products never see the rate, the markup or the provider cost.

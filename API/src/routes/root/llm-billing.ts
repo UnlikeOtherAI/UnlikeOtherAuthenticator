@@ -60,7 +60,7 @@ and cancellation preview/confirm endpoints and requires at least one exact HTTPS
 return origin.
 The plaintext key is returned once; UOA stores only a peppered HMAC digest. The same
 Ledger signing JWK may be bound to multiple credentials, but Nessie, DeepWater,
-DeepSignal, DeepTest, and DocGen must keep distinct app secrets so every connection is
+DeepSignal, DeepTest, DocGen, and SalesNerd must keep distinct app secrets so every connection is
 independently revocable and attributable.
 
 ### Resolve an effective tariff
@@ -147,6 +147,14 @@ serving, so malformed or incomplete rotation configuration fails at startup.
 
 All tariff catalog/default/assignment/key mutations are platform-superuser-only and are
 written to the UOA admin audit log. See [/api](/api) for exact mutation contracts.
+
+A prepaid standard or custom tariff version may carry connected provider-service
+rates (\`provider_service_rates\`): usage that Ledger meters for one connector, for
+example \`browserbase\` cloud-browser minutes, is held, settled and rated with that
+connector's own markup and shown under its own customer line (\`Cloud browser\`) on
+statements and billing cycles. All other usage keeps the version's markup. Rates are
+operator-only commercial terms, immutable with the version, and never appear in a
+customer response; products render the labelled line and its final amount only.
 
 ### Confirm a direct product session
 

@@ -1010,7 +1010,7 @@ user, organisation, and team exactly match the body. The actor lifetime is at
 most 60 seconds and its audience is the exact audience stored on the app key.
 Product backends inject both credentials; browsers receive neither.
 The canonical UOA and Ledger product identifiers are `nessie`, `deepwater`,
-`deepsignal`, `deeptest`, and `docgen`. Hyphenated repository or application slugs are
+`deepsignal`, `deeptest`, `docgen`, and `salesnerd`. Hyphenated repository or application slugs are
 mapped at the product boundary and are never sent in billing subjects.
 
 Products render `BillingStatementV1` or `BillingStatementV2` unchanged. New
@@ -1524,7 +1524,7 @@ The version-1 shared-credit Product has four one-time Prices:
 | `uoa_credits_usd_100_v1` | US$100 | 100,000 |
 
 The same offers are projected for the exact active services `nessie`,
-`deepwater`, `deepsignal`, `deeptest`, and `docgen`. Each receives top-up and
+`deepwater`, `deepsignal`, `deeptest`, `docgen`, and `salesnerd`. Each receives top-up and
 automatic-top-up policy plus the default automatic option: refill 25,000
 credits below 5,000, with a US$100 monthly cap and consent version
 `credits-auto-top-up-v1`.
@@ -1667,3 +1667,51 @@ credits were consumed, provided no positive provider reservation is held. The
 additive 20261005103000 migration corrects the reservation guard's zero-held
 case; active held funds, verified adjustment provenance, immutable ledger
 entries, and the prohibition on unfunded usage debits remain enforced.
+
+## Connected provider-service rates (2026-10-10)
+
+Requested by Ondrej on 10 October 2026 for SalesNerd's cloud browser: Browserbase
+usage that Ledger meters is charged at the provider's cost plus 20 per cent, and
+appears on the customer's statement and billing cycle as its own line.
+
+A prepaid `standard` or `custom` tariff version may carry up to twenty
+**connected provider-service rates**. Each names one Ledger connector
+(`provider_service_id`, the `serviceId` of Ledger's raw metering lines and the
+`provider_service_id` of a Ledger dispatch reservation, for example
+`browserbase`), an exact markup (`markup_percent`, converted exactly to basis
+points like the version's own markup) and a closed customer line kind
+(`line_kind`; `cloud_browser` today). Rates are written with the version in the
+same transaction and are immutable: the database rejects update or delete, and
+rejects a rate on a pay-as-you-go, free or at-cost version. Changing a rate is a
+new tariff version with the ordinary next-month effective history. A version
+without rates rates and presents exactly as before.
+
+Rating uses the connector's rate wherever UOA rates that connector's usage:
+
+- prepaid admission freezes the connector's markup on the dispatch hold, so the
+  reservation, the immutable paid-usage liability and the credit debit all use
+  it; every other connector keeps the version's markup;
+- statements rate each raw line with its connector's markup;
+- billing cycles rate each raw line the same way and take each line's credits
+  from the immutable liabilities of that connector.
+
+Presentation: statements show a separate `usage` commercial line per line kind
+and currency (`usage_cloud_browser_<currency>`, label "Cloud browser" and its
+localized forms) beside the product's metered-usage line. Team cycles show a
+`usage:cloud_browser:<digest>` usage line; organisation cycles keep one line per
+payment mode and kind. Labels come from the localized copy catalog, never from
+operator text. The customer sees only the final amount or credits of each line:
+the rate, the markup and the provider cost stay operator-only, exactly as for
+every other line.
+
+Not covered, and refused rather than approximated: pay-as-you-go versions (the
+portfolio credit allocator, PAYG settlement and Stripe usage export rate one
+markup per product), and organisation contract invoices, whose contract version
+pins one organisation-wide usage markup that replaces the tariff entirely.
+
+UOA does not publish a per-minute customer rate for the cloud browser. A
+display-ready unit rate would need the provider's unit price, which Ledger owns
+and the raw metering contract deliberately does not carry; UOA computing it
+from history would be an estimate presented as a price. Until an authoritative
+price contract exists, products omit the rate and show UOA's balances and line
+amounts only.

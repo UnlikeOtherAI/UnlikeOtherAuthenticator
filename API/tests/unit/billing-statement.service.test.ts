@@ -207,6 +207,8 @@ describe('canonical UOA billing statement', () => {
         findMany: vi.fn().mockResolvedValue([]),
       },
       billingTariffTermEvent: { findFirst: vi.fn().mockResolvedValue(perSeatTerm) },
+      billingTariffProviderServiceRate: { findMany: vi.fn().mockResolvedValue([]) },
+
       billingOrganisationContractVersion: { findMany: vi.fn().mockResolvedValue([]) },
       billingCommercialAdjustment: { findMany: vi.fn().mockResolvedValue([]) },
       teamMember: { findMany: vi.fn().mockResolvedValue([]) },
@@ -269,6 +271,8 @@ describe('canonical UOA billing statement', () => {
       billingTariffTermEvent: {
         findFirst: vi.fn().mockResolvedValue(effectiveTerm),
       },
+      billingTariffProviderServiceRate: { findMany: vi.fn().mockResolvedValue([]) },
+
       billingOrganisationContractVersion: { findMany: vi.fn().mockResolvedValue([]) },
       billingCommercialAdjustment: {
         findMany: vi.fn().mockResolvedValue([
@@ -455,6 +459,8 @@ describe('canonical UOA billing statement', () => {
         findUnique: vi.fn().mockResolvedValue({ tariffHistoryFromMonth: '2026-01' }),
       },
       billingTariffTermEvent: { findFirst: vi.fn().mockResolvedValue(effectiveTerm) },
+      billingTariffProviderServiceRate: { findMany: vi.fn().mockResolvedValue([]) },
+
       billingOrganisationContractVersion: { findMany: vi.fn().mockResolvedValue([]) },
       billingCommercialAdjustment: { findMany: vi.fn().mockResolvedValue([]) },
       teamMember: { findMany: vi.fn().mockResolvedValue([]) },

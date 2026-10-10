@@ -7,6 +7,12 @@ import {
 } from './billing-money.service.js';
 import { rateProviderCost } from './billing-rating.service.js';
 import {
+  effectiveMarkupBps,
+  providerServiceLineKind,
+  type ProviderServiceLineKind,
+  type ProviderServiceRate,
+} from './billing-provider-service-rate.service.js';
+import {
   UNATTRIBUTED_BILLING_PRODUCT,
   type NormalizedMeteringUsage,
   type RawMeteringLine,
@@ -16,6 +22,9 @@ type RatingPlan = {
   product: string;
   mode: 'standard' | 'free' | 'at_cost' | 'custom';
   markupBps: number;
+  // A connected provider-service rate rates that Ledger connector's lines and
+  // shows them under their own commercial line.
+  providerServiceRates?: readonly ProviderServiceRate[];
 };
 
 type UserIdentity = {
@@ -42,12 +51,13 @@ function selectedProviderCost(line: RawMeteringLine): {
 function ratedCharge(
   cost: ReturnType<typeof selectedProviderCost>,
   plan: RatingPlan,
+  providerServiceId: string,
   locale?: BillingCustomerLocale,
 ): UsageLine['customer_charge'] {
   if (!cost) return null;
   const rated = rateProviderCost(cost.amount, cost.currency, {
     mode: plan.mode,
-    markupBps: plan.markupBps,
+    markupBps: effectiveMarkupBps(plan, plan.providerServiceRates ?? [], providerServiceId),
   });
   return exactMoney(rated.total, rated.currency, locale);
 }
@@ -64,7 +74,7 @@ function serviceLines(metering: NormalizedMeteringUsage, plan: RatingPlan,
         caller_product: line.callerProduct ?? UNATTRIBUTED_BILLING_PRODUCT,
         origin_product: line.originProduct ?? UNATTRIBUTED_BILLING_PRODUCT,
       },
-      customer_charge: ratedCharge(cost, plan, locale),
+      customer_charge: ratedCharge(cost, plan, line.serviceId, locale),
     };
   });
 }
@@ -112,15 +122,29 @@ function userTotals(
     });
 }
 
-function usageCommercialLines(totals: ChargeTotal[], plan: RatingPlan, locale?: BillingCustomerLocale): CommercialLine[] {
-  return totals.map((total) => ({
-    id: `usage_${total.currency}`,
-    kind: 'usage',
-    product: plan.product,
-    label: billingStatementCopy(locale).meteredUsage,
-    detail: billingStatementCopy(locale).usageDetails,
-    amount: total.usage_charge,
-  }));
+function lineCopy(kind: ProviderServiceLineKind | null, locale?: BillingCustomerLocale) {
+  const copy = billingStatementCopy(locale);
+  return kind === 'cloud_browser'
+    ? { label: copy.cloudBrowser, detail: copy.cloudBrowserDetails }
+    : { label: copy.meteredUsage, detail: copy.usageDetails };
+}
+
+/** One usage line per currency, plus one per connected provider-service line kind. */
+function usageCommercialLines(metering: NormalizedMeteringUsage, lines: UsageLine[], plan: RatingPlan,
+  locale?: BillingCustomerLocale): CommercialLine[] {
+  const rates = plan.providerServiceRates ?? [];
+  const kinds: (ProviderServiceLineKind | null)[] = [null, ...new Set(rates.map((rate) => rate.lineKind))];
+  return kinds.flatMap((kind) => {
+    const grouped = lines.filter((line, index) =>
+      providerServiceLineKind(rates, metering.lines[index]?.serviceId ?? null) === kind);
+    return chargeTotals(grouped, locale).map((total) => ({
+      id: kind ? `usage_${kind}_${total.currency}` : `usage_${total.currency}`,
+      kind: 'usage' as const,
+      product: plan.product,
+      ...lineCopy(kind, locale),
+      amount: total.usage_charge,
+    }));
+  });
 }
 
 export function rateBillingStatementUsage(params: {
@@ -141,7 +165,7 @@ export function rateBillingStatementUsage(params: {
       charge_totals: charges,
       user_totals: userTotals(params.userMetering, params.plan, params.users, params.locale),
     },
-    commercialLines: usageCommercialLines(charges, params.plan, params.locale),
+    commercialLines: usageCommercialLines(params.serviceMetering, lines, params.plan, params.locale),
   };
 }
 

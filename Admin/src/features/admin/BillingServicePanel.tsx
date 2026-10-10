@@ -165,7 +165,14 @@ export function BillingServicePanel({
                   {tariff.collection_mode}
                 </Badge>
               </Td>
-              <Td>{(tariff.markup_bps / 100).toFixed(2)}%</Td>
+              <Td>
+                {(tariff.markup_bps / 100).toFixed(2)}%
+                {(tariff.provider_service_rates ?? []).map((rate) => (
+                  <p key={rate.provider_service_id} className="text-xs text-gray-500">
+                    Cloud browser ({rate.provider_service_id}) {rate.markup_percent}%
+                  </p>
+                ))}
+              </Td>
               <Td>{tariff.usage_payment_mode === 'prepaid' ? 'Prepaid pool' : 'Pay as you go'}</Td>
               <Td>
                 <span className="font-mono text-xs">

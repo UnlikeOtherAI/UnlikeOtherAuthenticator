@@ -24,8 +24,8 @@ import { assertLedgerBudgetContext, attachLegacyBudgetDispatch,
 import { recordLegacyPrepaidLiability,
   recordPaidUsageLiability } from './billing-paid-liability.service.js';
 import { finalizeUnreservedLedgerDispatch } from './billing-ledger-dispatch-finalization.service.js';
-import { ratedMicrocredits, ratedMicrocreditsFromQuanta, scaledRaw } from
-  './billing-prepaid-rating.service.js';
+import { ratedMicrocredits, ratedMicrocreditsFromQuanta, scaledRaw } from './billing-prepaid-rating.service.js';
+import { effectiveMarkupBps, loadProviderServiceRates } from './billing-provider-service-rate.service.js';
 
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/;
 const DECIMAL_PATTERN = /^(?:0|[1-9]\d*)(?:\.\d{1,18})?$/;
@@ -284,14 +284,16 @@ export async function reservePrepaidDispatch(
       tariff.currency !== input.currency) {
       throw new AppError('FORBIDDEN', 403, 'PREPAID_TARIFF_REQUIRED');
     }
-    const reserved = ratedMicrocredits(bound, tariff.markupBps);
+    // The hold freezes a connector's own rate, so settlement rates its receipt alike.
+    const markupBps = effectiveMarkupBps(tariff, await loadProviderServiceRates(tx, tariff.id), input.providerServiceId);
+    const reserved = ratedMicrocredits(bound, markupBps);
     await reserveBudgetDispatch(tx, { dispatchId: input.dispatchId,
       requestFingerprint: input.requestFingerprint, startedAt: dispatchStartedAt,
       product: input.product, serviceId: key.serviceId,
       providerServiceId: input.providerServiceId,
       orgId: input.organisationId, teamId: input.teamId, userId: input.userId,
       billingMonth, currency: input.currency, tariffId: tariff.id,
-      tariffMode: tariff.mode, markupBps: tariff.markupBps,
+      tariffMode: tariff.mode, markupBps,
       paymentMode: 'PREPAID', rawCostBound: bound,
       context: input.billingContext ?? null });
     const balance = await lockCreditBalance(tx, creditAccount.id);

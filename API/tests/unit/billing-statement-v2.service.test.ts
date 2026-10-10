@@ -150,6 +150,8 @@ function prisma() {
       ]),
     },
     billingTariffTermEvent: { findFirst: vi.fn().mockResolvedValue(effectiveTerm) },
+    billingTariffProviderServiceRate: { findMany: vi.fn().mockResolvedValue([]) },
+
     billingOrganisationContractVersion: { findMany: vi.fn().mockResolvedValue([]) },
     billingCommercialAdjustment: {
       findMany: vi.fn().mockResolvedValue([]),

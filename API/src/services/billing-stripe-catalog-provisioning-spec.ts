@@ -4,6 +4,7 @@ export const PROVISIONED_BILLING_SERVICE_IDENTIFIERS = [
   'deepsignal',
   'deeptest',
   'docgen',
+  'salesnerd',
 ] as const;
 
 export type ProvisionedBillingServiceIdentifier =

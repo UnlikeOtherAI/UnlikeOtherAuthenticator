@@ -1,4 +1,7 @@
+import type { BillingProviderServiceLineKind } from '@prisma/client';
+
 import type { BillingAppKeyRecord } from '../../../services/billing-app-key.service.js';
+import { providerServiceLineKindToPublic } from '../../../services/billing-provider-service-rate.service.js';
 
 type Tariff = {
   id: string;
@@ -18,6 +21,7 @@ type Tariff = {
   isDefault: boolean;
   createdByEmail: string | null;
   createdAt: Date;
+  providerServiceRates?: { providerServiceId: string; markupBps: number; lineKind: BillingProviderServiceLineKind }[];
 };
 
 export function serializeBillingTariff(tariff: Tariff) {
@@ -39,6 +43,13 @@ export function serializeBillingTariff(tariff: Tariff) {
       seat_policy: tariff.seatPolicy?.toLowerCase() ?? null,
       seat_charge_timing: tariff.seatChargeTiming?.toLowerCase() ?? null,
     },
+    // Operator-only commercial terms; never part of a customer DTO.
+    provider_service_rates: (tariff.providerServiceRates ?? []).map((rate) => ({
+      provider_service_id: rate.providerServiceId,
+      markup_bps: rate.markupBps,
+      markup_percent: (rate.markupBps / 100).toFixed(2),
+      line_kind: providerServiceLineKindToPublic(rate.lineKind),
+    })),
     is_default: tariff.isDefault,
     created_by_email: tariff.createdByEmail,
     created_at: tariff.createdAt.toISOString(),

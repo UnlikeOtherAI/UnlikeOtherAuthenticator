@@ -26,6 +26,11 @@ function tariffBody(input: BillingTariffFormValues | BillingServiceFormValues) {
     collection_mode: input.collectionMode,
     markup_percent: input.markupPercent,
     usage_payment_mode: input.usagePaymentMode,
+    ...(input.cloudBrowserMarkupPercent ? { provider_service_rates: [{
+      provider_service_id: 'browserbase',
+      markup_percent: input.cloudBrowserMarkupPercent,
+      line_kind: 'cloud_browser' as const,
+    }] } : {}),
     monthly_subscription: {
       amount_minor: billingMajorToMinor(input.monthlyAmount, input.currency),
       currency: input.currency,

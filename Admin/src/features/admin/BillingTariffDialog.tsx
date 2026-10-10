@@ -19,6 +19,7 @@ const defaults: BillingTariffFormValues = {
   collectionMode: 'none',
   markupPercent: '30.00',
   usagePaymentMode: 'prepaid',
+  cloudBrowserMarkupPercent: '',
   monthlyChargeBasis: 'flat',
   seatPolicy: 'automatic',
   seatChargeTiming: 'prorated',
@@ -123,6 +124,13 @@ export function BillingTariffDialog({
               <option value="prepaid">Prepaid pool</option>
               <option value="pay_as_you_go">Pay as you go</option>
             </SelectField>
+          </FieldShell>
+          <FieldShell
+            label="Cloud browser markup %"
+            hint="Optional, prepaid only. Browserbase minutes metered by Ledger use this markup and show as Cloud browser."
+            error={form.formState.errors.cloudBrowserMarkupPercent?.message}
+          >
+            <TextField {...form.register('cloudBrowserMarkupPercent')} inputMode="decimal" />
           </FieldShell>
           <FieldShell
             label="Monthly subscription basis"

@@ -12,6 +12,41 @@ import {
 import { exactMoney } from './billing-money.service.js';
 import { rateProviderCost } from './billing-rating.service.js';
 import { decimalCredits } from './billing-cycle-credit-evidence.service.js';
+import {
+  effectiveMarkupBps, providerServiceLineKind,
+  type ProviderServiceLineKind, type ProviderServiceRate,
+} from './billing-provider-service-rate.service.js';
+
+const LINE_KINDS: readonly ProviderServiceLineKind[] = ['cloud_browser'];
+
+/** The connected provider-service line kind encoded in a cycle usage line id. */
+export function cycleUsageLineKind(line: { id: string }): ProviderServiceLineKind | null {
+  const segments = line.id.split(':');
+  return LINE_KINDS.find((kind) => segments.includes(kind)) ?? null;
+}
+
+const kindLabel = (kind: ProviderServiceLineKind | null, prepaid: boolean) =>
+  kind === 'cloud_browser' ? 'Cloud browser' : prepaid ? 'Prepaid usage' : 'Metered usage';
+
+/** Splits a team's credit consumption across its usage lines: each connected
+ * provider-service line gets its own receipts' credits, the product line the rest. */
+export function withCycleLineCredits(lines: BillingCycleUsageLine[], consumed: bigint | null,
+  byKind: ReadonlyMap<ProviderServiceLineKind, bigint>): BillingCycleUsageLine[] {
+  if (consumed === null) return lines.map((line) => ({ ...line, credits_consumed: null }));
+  let kindTotal = 0n;
+  for (const line of lines) {
+    const kind = cycleUsageLineKind(line);
+    if (kind) kindTotal += byKind.get(kind) ?? 0n;
+  }
+  const rest = consumed - kindTotal;
+  if (rest < 0n || (rest !== 0n && lines.every((line) => cycleUsageLineKind(line) !== null))) {
+    hold('BILLING_CYCLE_CREDIT_SOURCE_CONFLICT');
+  }
+  return lines.map((line) => {
+    const kind = cycleUsageLineKind(line);
+    return { ...line, credits_consumed: decimalCredits(kind ? byKind.get(kind) ?? 0n : rest) };
+  });
+}
 
 function hold(code: string): never {
   throw new AppError('INTERNAL', 409, code);
@@ -22,6 +57,7 @@ export function projectCycleUsage(
   expected: { serviceIdentifier: string; organisationId: string; teamId: string;
     billingMonth: string; startsAt: Date; endsAt: Date; currency: string },
   tariff: BillingTariff,
+  providerServiceRates: readonly ProviderServiceRate[] = [],
 ): { lines: BillingCycleUsageLine[]; ratedAmount: string; evidence: { team_id: string; snapshot_id: string;
   cursor: string; sha256: string; captured_at: string; line_count: number;
   content_sha256: string; raw_lines: RawMeteringLine[] } } {
@@ -36,6 +72,8 @@ export function projectCycleUsage(
   if (!meteringIsComplete(usage.billingCompleteness)) {
     hold('BILLING_CYCLE_LEDGER_COVERAGE_UNRESOLVED');
   }
+  const prepaid = tariff.usagePaymentMode === BillingUsagePaymentMode.PREPAID;
+  if (providerServiceRates.length > 0 && !prepaid) hold('BILLING_CYCLE_PROVIDER_RATES_REQUIRE_PREPAID');
   // A new signed assertion can produce a new immutable observation cursor for
   // identical receipts. Financial replay identity is the rated source facts,
   // not the assertion, capture time or delivery snapshot hash.
@@ -43,10 +81,11 @@ export function projectCycleUsage(
     calls: usage.calls, lines: usage.lines.map((line) => JSON.stringify(line)).sort(compareBillingCycleUtf8),
     billingCompleteness: usage.billingCompleteness,
   })).digest('hex');
-  const ratedCharges = usage.lines.flatMap((line) => {
+  const ratedLines = usage.lines.map((line) => {
     if (line.billingProduct !== expected.serviceIdentifier) {
       hold('BILLING_CYCLE_LEDGER_PRODUCT_MISMATCH');
     }
+    const kind = providerServiceLineKind(providerServiceRates, line.serviceId);
     if (line.billingDisposition === 'paid') {
       if (line.selectedProviderCost === null || line.currency === null) {
         hold('BILLING_CYCLE_PAID_COST_MISSING');
@@ -54,23 +93,31 @@ export function projectCycleUsage(
       if (line.currency !== expected.currency) hold('BILLING_CYCLE_FX_RECONCILIATION_REQUIRED');
       const rated = rateProviderCost(line.selectedProviderCost, line.currency, {
         mode: tariff.mode.toLowerCase() as 'standard' | 'free' | 'at_cost' | 'custom',
-        markupBps: tariff.markupBps,
+        markupBps: effectiveMarkupBps(tariff, providerServiceRates, line.serviceId),
       });
-      return [rated.total];
+      return { kind, charge: rated.total };
     } else if (line.selectedProviderCost !== null || line.currency !== null) {
       hold('BILLING_CYCLE_NONBILLABLE_COST_CONFLICT');
     }
-    return [];
+    return { kind, charge: null };
   });
-  const ratedAmount = sumBillingDecimals(ratedCharges);
-  const prepaid = tariff.usagePaymentMode === BillingUsagePaymentMode.PREPAID;
-  const lines: BillingCycleUsageLine[] = usage.lines.length === 0 ? [] : [{
-    id: `usage:${createHash('sha256').update(`${expected.serviceIdentifier}\0${expected.teamId}\0${expected.billingMonth}`).digest('hex')}`,
-    label: 'Metered usage',
-    usage_payment_mode: prepaid ? 'prepaid' : 'pay_as_you_go',
-    customer_charge: prepaid ? null : exactMoney(ratedAmount, expected.currency),
-    credits_consumed: null,
-  }];
+  const amount = (rows: typeof ratedLines) =>
+    sumBillingDecimals(rows.flatMap((row) => row.charge === null ? [] : [row.charge]));
+  const ratedAmount = amount(ratedLines);
+  const baseId = `${expected.serviceIdentifier}\0${expected.teamId}\0${expected.billingMonth}`;
+  // Without connected provider-service rates a team has exactly one usage line.
+  const lines: BillingCycleUsageLine[] = [null, ...LINE_KINDS].flatMap((kind) => {
+    const rows = ratedLines.filter((row) => row.kind === kind);
+    if (rows.length === 0) return [];
+    return [{
+      id: kind ? `usage:${kind}:${createHash('sha256').update(`${baseId}\0${kind}`).digest('hex')}`
+        : `usage:${createHash('sha256').update(baseId).digest('hex')}`,
+      label: kindLabel(kind, false),
+      usage_payment_mode: prepaid ? 'prepaid' as const : 'pay_as_you_go' as const,
+      customer_charge: prepaid ? null : exactMoney(amount(rows), expected.currency),
+      credits_consumed: null,
+    }];
+  });
   return { lines, ratedAmount, evidence: { team_id: expected.teamId,
     snapshot_id: usage.snapshot.id, cursor: usage.snapshot.cursor,
     sha256: usage.snapshot.sha256, captured_at: usage.snapshot.capturedAt,
@@ -88,10 +135,6 @@ export function aggregateOrganisationCycleUsage(
   const currency = sourceLines.find((line) => line.customer_charge)?.customer_charge?.currency;
   if (sourceLines.some((line) => line.customer_charge &&
     line.customer_charge.currency !== currency)) hold('BILLING_CYCLE_FX_RECONCILIATION_REQUIRED');
-  const payable = sourceLines.filter((line) => line.usage_payment_mode === 'pay_as_you_go');
-  const prepaid = sourceLines.filter((line) => line.usage_payment_mode === 'prepaid');
-  const amount = sumBillingDecimals(payable.flatMap((line) =>
-    line.customer_charge ? [line.customer_charge.amount] : []));
   const creditsByMode = (lines: BillingCycleUsageLine[]): string | null => {
     if (lines.some((line) => line.credits_consumed === null)) return null;
     const microcredits = lines.reduce((sum, line) => {
@@ -104,15 +147,20 @@ export function aggregateOrganisationCycleUsage(
     }, 0n);
     return decimalCredits(microcredits);
   };
-  return [
-    ...(payable.length ? [{ id: 'usage:organisation:payg', label: 'Metered usage',
-      usage_payment_mode: 'pay_as_you_go' as const,
-      customer_charge: currency ? exactMoney(amount, currency) : null,
-      credits_consumed: creditsByMode(payable) }] : []),
-    ...(prepaid.length ? [{ id: 'usage:organisation:prepaid', label: 'Prepaid usage',
-      usage_payment_mode: 'prepaid' as const,
-      customer_charge: null, credits_consumed: creditsByMode(prepaid) }] : []),
-  ];
+  // One line per payment mode, plus one per connected provider-service kind.
+  return (['pay_as_you_go', 'prepaid'] as const).flatMap((mode) =>
+    [null, ...LINE_KINDS].flatMap((kind) => {
+      const lines = sourceLines.filter((line) =>
+        line.usage_payment_mode === mode && cycleUsageLineKind(line) === kind);
+      if (lines.length === 0) return [];
+      const key = mode === 'prepaid' ? 'prepaid' : 'payg';
+      const amount = sumBillingDecimals(lines.flatMap((line) =>
+        line.customer_charge ? [line.customer_charge.amount] : []));
+      return [{ id: kind ? `usage:organisation:${key}:${kind}` : `usage:organisation:${key}`,
+        label: kindLabel(kind, mode === 'prepaid'), usage_payment_mode: mode,
+        customer_charge: mode === 'prepaid' || !currency ? null : exactMoney(amount, currency),
+        credits_consumed: creditsByMode(lines) }];
+    }));
 }
 
 /** Assertion/cursor changes do not change the underlying financial receipts. */

@@ -92,6 +92,63 @@ DocGen's Ledger binding. The exchanged UOA access token has `azp` and
 separate claim. This mapping is operator state and is not seeded or created by
 deploy.
 
+### SalesNerd commercial enrollment (2026-10-10)
+
+On 10 October 2026 Ondrej requested SalesNerd's enrollment in UOA customer
+billing: prepaid credits are its gate, and its cloud browser (Browserbase,
+metered by Ledger) is charged at provider cost plus 20 per cent as its own
+"Cloud browser" line. This supersedes "remain absent until explicitly requested"
+above. Deploying UOA creates none of the following; each is a deliberate
+platform-superuser action, in this order.
+
+1. **Billing Service and tariff — before the next Stripe-catalog provisioner run.**
+   The provisioner now requires an active `salesnerd` service and fails closed
+   until it exists. Create it through Admin **Billing → Product billing → Add service** (fill
+   "Cloud browser markup %" with `20.00`) or the API:
+
+   ```bash
+   curl --fail-with-body -X POST "${UOA_BASE_URL}/internal/admin/billing/services" \
+     -H "Authorization: Bearer ${UOA_SUPERUSER_ACCESS_TOKEN}" -H 'Content-Type: application/json' \
+     -d '{"identifier":"salesnerd","name":"SalesNerd","default_tariff":{
+       "key":"standard","name":"Standard","mode":"standard","collection_mode":"none",
+       "markup_percent":"30.00","usage_payment_mode":"prepaid",
+       "monthly_subscription":{"amount_minor":"0","currency":"USD"},
+       "provider_service_rates":[{"provider_service_id":"browserbase",
+         "markup_percent":"20.00","line_kind":"cloud_browser"}]}}'
+   ```
+
+   `markup_percent` for SalesNerd's other (model) usage is an operator decision;
+   `30.00` is UOA's standard default. The `browserbase` rate is the requested 20
+   per cent. Prepaid is required for the rate.
+2. **Stripe commercial catalog.** Run `pnpm billing:provision-stripe-catalog`
+   for the exact Stripe account and mode, first `--dry-run`, then `--apply` with
+   its confirmation. It creates SalesNerd's credit funding policy, the four
+   shared-credit top-up offers and the default automatic top-up option
+   (`salesnerd/default/v1`).
+3. **Product app key.** In Admin **Billing → SalesNerd → App keys**, issue one
+   `customer_lifecycle` key with `actor_issuer=https://app.salesnerd.live`,
+   `actor_audience=${PUBLIC_BASE_URL}/billing/v1/effective-tariff`, SalesNerd's
+   own RS256 actor public JWK, and `checkout_return_origins=["https://app.salesnerd.live"]`.
+   The plaintext `uoa_app_…` goes only into SalesNerd's backend secret store.
+   Issuing it links the `app.salesnerd.live` SSO domain to this billing product
+   (`product-team-policy.service.ts`), which changes its team policy from
+   `client_domain` to `all_active_memberships`; confirm that with SalesNerd
+   before issuing.
+4. **Ledger runtime key.** In Admin **Billing → SalesNerd → Ledger runtime keys**,
+   issue a key with `ledger_audience=https://ledger.unlikeotherai.com` and
+   `source_domain=app.salesnerd.live`, then install the one-time plaintext in
+   Ledger's `UOA_LEDGER_RUNTIME_KEYS_JSON` under `"salesnerd"` and redeploy
+   Ledger. Without it Ledger refuses every paid SalesNerd dispatch with
+   `billing_configuration`.
+5. **Ledger side** (Ledger repository, `docs/browserbase-sessions.md`): add the
+   Browserbase API key as an upstream key of the `browserbase` service, review
+   its pricing row, and give SalesNerd's product key the exact
+   `browserbase` / `browser-minutes` / `sessions`, `contexts` scope.
+
+The delegation mapping above must already exist. Verify with one prepaid
+admission: a cloud-browser session reserves credits at 1.2 times its Ledger
+bound, and its settled statement line reads "Cloud browser".
+
 ### The two hardened receivers
 
 DeepTest and DocGen do not take a general root shell. Their CI keys are pinned in

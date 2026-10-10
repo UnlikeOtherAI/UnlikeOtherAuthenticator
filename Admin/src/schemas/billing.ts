@@ -18,6 +18,12 @@ export const BillingTariffSchema = z.object({
   markup_bps: z.number().int(),
   markup_percent: z.string(),
   usage_payment_mode: z.enum(['pay_as_you_go', 'prepaid']),
+  provider_service_rates: z.array(z.object({
+    provider_service_id: z.string(),
+    markup_bps: z.number().int(),
+    markup_percent: z.string(),
+    line_kind: z.enum(['cloud_browser']),
+  })).optional(),
   monthly_subscription: z.object({
     amount_minor: z.string(),
     currency: z.string(),
@@ -140,6 +146,8 @@ const tariffFields = {
   collectionMode: BillingCollectionModeSchema,
   markupPercent: MarkupPercentFormSchema,
   usagePaymentMode: z.enum(['pay_as_you_go', 'prepaid']),
+  // Optional connected provider-service rate for Ledger's Browserbase minutes.
+  cloudBrowserMarkupPercent: MarkupPercentFormSchema.or(z.literal('')).optional(),
   monthlyChargeBasis: z.enum(['flat', 'per_seat']),
   seatPolicy: z.enum(['automatic', 'fixed']).optional(),
   seatChargeTiming: z.enum(['full_month', 'prorated']).optional(),
@@ -157,6 +165,7 @@ function validateTariffFields(
     collectionMode: z.infer<typeof BillingCollectionModeSchema>;
     markupPercent: string;
     usagePaymentMode: 'pay_as_you_go' | 'prepaid';
+    cloudBrowserMarkupPercent?: string;
     monthlyAmount: string;
     currency: string;
     monthlyChargeBasis?: 'flat' | 'per_seat';
@@ -190,6 +199,14 @@ function validateTariffFields(
       code: z.ZodIssueCode.custom,
       path: ['mode'],
       message: 'Free tariffs must have no subscription fee, prepaid usage, or payment collection.',
+    });
+  }
+  if (value.cloudBrowserMarkupPercent && (value.usagePaymentMode !== 'prepaid' ||
+    (value.mode !== 'standard' && value.mode !== 'custom'))) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['cloudBrowserMarkupPercent'],
+      message: 'A cloud browser rate needs a prepaid standard or custom tariff.',
     });
   }
   if (value.monthlyChargeBasis === 'per_seat' &&

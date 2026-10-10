@@ -7,11 +7,11 @@ export async function listBillingServices(deps?: { prisma?: PrismaClient }) {
   return prisma.billingService.findMany({
     orderBy: { identifier: 'asc' },
     include: {
-      tariffs: { orderBy: [{ key: 'asc' }, { version: 'desc' }] },
+      tariffs: { orderBy: [{ key: 'asc' }, { version: 'desc' }], include: { providerServiceRates: true } },
       assignments: {
         orderBy: [{ scope: 'asc' }, { scopeKey: 'asc' }],
         include: {
-          tariff: true,
+          tariff: { include: { providerServiceRates: true } },
           org: { select: { id: true, name: true } },
           team: { select: { id: true, name: true } },
         },

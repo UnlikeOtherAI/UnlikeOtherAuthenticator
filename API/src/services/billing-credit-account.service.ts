@@ -27,6 +27,7 @@ const CANONICAL_PORTFOLIO_PRODUCTS = [
   'deepwater',
   'docgen',
   'nessie',
+  'salesnerd',
 ] as const;
 
 async function resolvePersistedCreditAccount(

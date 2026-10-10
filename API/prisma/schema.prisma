@@ -1839,10 +1839,34 @@ model BillingTariff {
   prepaidReservations  BillingPrepaidReservation[]
   contractServiceTerms BillingContractServiceTerm[]
   seatSubscriptions    BillingSeatSubscription[]
+  providerServiceRates BillingTariffProviderServiceRate[]
 
   @@unique([serviceId, key, version])
   @@index([serviceId, isDefault])
   @@map("billing_tariffs")
+}
+
+// The customer-facing line a connected provider service is shown under.
+enum BillingProviderServiceLineKind {
+  CLOUD_BROWSER
+}
+
+// Part of one immutable prepaid tariff version: usage metered by one Ledger
+// connector (`provider_service_id`, for example `browserbase`) is rated with
+// this markup instead of the tariff's and is shown as its own customer line.
+// Created with the version; never updated or deleted.
+model BillingTariffProviderServiceRate {
+  id                String                         @id @default(cuid())
+  tariffId          String                         @map("tariff_id")
+  providerServiceId String                         @map("provider_service_id") @db.VarChar(100)
+  markupBps         Int                            @map("markup_bps")
+  lineKind          BillingProviderServiceLineKind @map("line_kind")
+  createdAt         DateTime                       @default(now()) @map("created_at")
+
+  tariff BillingTariff @relation(fields: [tariffId], references: [id], onDelete: Restrict)
+
+  @@unique([tariffId, providerServiceId])
+  @@map("billing_tariff_provider_service_rates")
 }
 
 // Append-only monthly commercial decisions. A null tariff is an explicit

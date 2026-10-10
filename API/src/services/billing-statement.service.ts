@@ -40,6 +40,7 @@ import {
 } from './billing-tariff-serialization.service.js';
 import { resolveBillingControlledBy } from './billing-org-responsibility.service.js';
 import { buildOrganisationStatementScope } from './billing-statement-organisation.service.js';
+import { loadProviderServiceRates } from './billing-provider-service-rate.service.js';
 import {
   filterPortfolioForProduct,
 } from './billing-statement-portfolio.service.js';
@@ -255,6 +256,7 @@ async function buildCanonicalBillingStatement(
     meteringPromise,
   ]);
   const tariff = effective.tariff;
+  const providerServiceRates = await loadProviderServiceRates(prisma, tariff.id);
   const modeFromTerm = billingModeToPublic(tariff.mode);
   const collectionMode = billingCollectionModeToPublic(tariff.collectionMode);
   const summary = {
@@ -308,6 +310,7 @@ async function buildCanonicalBillingStatement(
       product: statementProduct,
       mode,
       markupBps: summary.tariff.markup_bps,
+      providerServiceRates,
     },
     users: members.map((member) => member.user),
     locale: context.locale,

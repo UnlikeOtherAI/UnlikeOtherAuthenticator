@@ -10,6 +10,7 @@ import { normalizeBillingServiceIdentifier, normalizeTariffInput, type TariffInp
 export { normalizeBillingServiceIdentifier, normalizeTariffInput, DEFAULT_STANDARD_MARKUP_BPS } from './billing-tariff-input.service.js';
 export type { TariffInput, PublicTariffMode, PublicBillingCollectionMode } from './billing-tariff-input.service.js';
 import { AppError } from '../utils/errors.js';
+import { normalizeProviderServiceRates } from './billing-provider-service-rate.service.js';
 import {
   assertContractAssignmentRemovalAllowed,
   assertContractAssignmentWriteAllowed,
@@ -55,6 +56,7 @@ export async function createBillingService(
   const identifier = normalizeBillingServiceIdentifier(params.identifier);
   const name = params.name.trim();
   const tariff = normalizeTariffInput(params.defaultTariff);
+  const providerServiceRates = normalizeProviderServiceRates(params.defaultTariff.providerServiceRates, tariff);
   if (!name || name.length > 120) {
     throw new AppError('BAD_REQUEST', 400, 'INVALID_BILLING_SERVICE_NAME');
   }
@@ -79,7 +81,9 @@ export async function createBillingService(
           isDefault: true,
           ...tariff,
           ...auditActor(params.actor),
+          providerServiceRates: { create: providerServiceRates },
         },
+        include: { providerServiceRates: true },
       });
       await appendTariffTermEvent(tx, {
         serviceId: service.id,
@@ -98,6 +102,7 @@ export async function createBillingService(
             service_id: service.id,
             product: service.identifier,
             default_tariff_id: createdTariff.id,
+            provider_service_ids: providerServiceRates.map((rate) => rate.providerServiceId),
           },
         },
       });
@@ -122,6 +127,7 @@ export async function createBillingTariffVersion(
   deps?: { prisma?: PrismaClient },
 ) {
   const tariff = normalizeTariffInput(params.tariff);
+  const providerServiceRates = normalizeProviderServiceRates(params.tariff.providerServiceRates, tariff);
   const prisma = client(deps);
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -155,7 +161,9 @@ export async function createBillingTariffVersion(
               isDefault: params.setAsDefault,
               ...tariff,
               ...auditActor(params.actor),
+              providerServiceRates: { create: providerServiceRates },
             },
+            include: { providerServiceRates: true },
           });
           if (params.setAsDefault) {
             await appendTariffTermEvent(tx, {
@@ -178,6 +186,7 @@ export async function createBillingTariffVersion(
                 tariff_key: created.key,
                 tariff_version: created.version,
                 set_as_default: params.setAsDefault,
+                provider_service_ids: providerServiceRates.map((rate) => rate.providerServiceId),
               },
             },
           });
