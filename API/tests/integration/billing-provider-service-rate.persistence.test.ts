@@ -7,6 +7,9 @@ import {
   finalizePrepaidDispatch, reservePrepaidDispatch,
 } from '../../src/services/billing-prepaid-reservation.service.js';
 import { createBillingService, createBillingTariffVersion } from '../../src/services/billing-tariff.service.js';
+import {
+  loadProviderServiceRates, readProviderServiceKindConsumption,
+} from '../../src/services/billing-provider-service-rate.service.js';
 import { serializeBillingTariff } from '../../src/routes/internal/admin/billing-serialization.js';
 import { resetAccessTokenKeyCache } from '../../src/services/oauth/access-token.service.js';
 import { createTestDb } from '../helpers/test-db.js';
@@ -123,6 +126,11 @@ describe.skipIf(!enabled)('connected provider-service rates in PostgreSQL', () =
       tariffId: ids.tariff, ratedMicrocredits: 7_200_000n });
     expect((await prisma.billingCreditAccount.findUniqueOrThrow({ where: { id: ids.credit } }))
       .balanceMicrocredits).toBe(1_000_000_000n - 7_200_000n);
+    // The billing cycle's Cloud browser line takes exactly these credits.
+    const rates = await loadProviderServiceRates(prisma, ids.tariff);
+    expect(rates).toEqual([{ providerServiceId: 'browserbase', markupBps: 2000, lineKind: 'cloud_browser' }]);
+    expect(await readProviderServiceKindConsumption(prisma, { serviceId: ids.service, organisationId: ids.org,
+      teamId: ids.team, billingMonth: '2026-10' }, rates)).toEqual(new Map([['cloud_browser', 7_200_000n]]));
     await finalizePrepaidDispatch({ runtimeSecret: secret, dispatchId: 'pd_cloud_model_1',
       receiptId: 'le_pd_cloud_model_1', kind: 'release' }, { prisma });
   });
