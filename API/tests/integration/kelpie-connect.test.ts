@@ -75,6 +75,14 @@ describe.skipIf(!process.env.DATABASE_URL)('Kelpie connection authority', () => 
   async function ticket() {
     const result = await issue(); expect(result.statusCode, result.body).toBe(200); return result.json().connection_ticket as string;
   }
+  it('keeps gateway validation independent of the native issuance rate bucket', async () => {
+    const value = await ticket();
+    for (let i = 0; i < 121; i += 1) {
+      const result = await validate(value);
+      expect(result.statusCode, result.body).toBe(200);
+    }
+    expect((await issue()).statusCode).toBe(200);
+  }, 60000);
   it('completes PKCE and refresh without silently widening old grants; issues a profile-free live ticket', async () => {
     const verifier = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ';
     const context = new URLSearchParams({ client_id: clientId, redirect_uri: redirect, state: 'kelpie-state', scope: scopes,
