@@ -9,6 +9,7 @@ import { getAdminPrisma } from '../../db/prisma.js';
 import { AppError } from '../../utils/errors.js';
 import { tryParseRedirectUrl } from '../../utils/http-url.js';
 import { nativeRedirectMatches } from './native-app-policy.js';
+import { assertKelpieScopeClient } from './kelpie-connect-policy.js';
 
 /** Validate a redirect URI per RFC 8252 native-app guidance: https anywhere, http
  *  only for loopback, and custom (non-http) schemes for native deep links. Shares the
@@ -29,6 +30,7 @@ export interface RegisterOAuthClientInput {
 }
 
 export async function registerOAuthClient(input: RegisterOAuthClientInput): Promise<OAuthClient> {
+  assertKelpieScopeClient(input.scopes ?? [], input.appId);
   const redirectUris = [...new Set(input.redirectUris.map((u) => u.trim()).filter(Boolean))];
   if (redirectUris.length === 0) {
     throw new AppError('BAD_REQUEST', 400, 'INVALID_REDIRECT_URI');

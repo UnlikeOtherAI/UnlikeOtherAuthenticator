@@ -32,4 +32,30 @@ Current epoch, bans, second-factor and signature requirements still apply. The o
 Google completion is isolated from the signed-config website flow. App security edits
 invalidate existing registrations and UOA account tokens; name/color/icon edits do
 not. Offline resource servers enforce their own revocation and token expiry.
+
+Kelpie account connectivity requires dedicated kelpie.connect consent, granted only
+to the exact enabled registered com.unlikeotherai.kelpie app. POST /oauth/kelpie/connect
+with the native UOA account bearer and {resource: "https://api.nessie.works/api/kelpie/connect"}
+returns {connection_ticket,token_type:"Bearer",expires_in,gateway_url}. The resource
+must exactly equal operator KELPIE_CONNECT_RESOURCE; absent disables this feature.
+The RS256 at+jwt ticket is at most120 seconds and capped by source account expiry.
+It carries iss/sub/aud/iat/exp/jti/client_id/app_id/tv/twofa, scope=kelpie.connect
+and token_use=kelpie_connect; no email, name, avatar, organisation or team.
+Send only that ticket in the gateway's first WSS frame. Renew after60seconds or
+before expiry through the same endpoint, refreshing the native account token through
+the existing grant as needed. A403 requires fresh consent; a401 permits one account
+refresh then sign-in if still refused. Never widen an existing refresh grant.
+App scope edits invalidate old client revisions: re-register and sign in once.
+404 means operator configuration/profile is unavailable;429/network/5xx retry with
+backoff while retaining native account credentials. All responses are no-store.
+
+The gateway calls POST /oauth/kelpie/connect/validate?domain=api.nessie.works with
+its existing domain bearer and {ticket}. UOA re-resolves current native and account
+authority and authenticates the exact resource host. Success is
+{active:true,iss,sub,aud,client_id,app_id,exp,jti}; invalid authority is a generic401.
+Validate before dispatch and at most every30seconds, close on failure or ticket
+expiry, and accept only renewed tickets for the same issuer/subject/client.
+UOA remains the identity authority; Nessie resolves its existing team entitlements
+separately and stores only stable references and product-specific device data.
+App IDs are public registration metadata, never binary attestation.
 `;

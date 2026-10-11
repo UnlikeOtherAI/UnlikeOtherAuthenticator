@@ -3157,3 +3157,18 @@ mode returns false. Responses are private/no-store, and products recheck every
 platform-only operation without storing or positively caching this verdict.
 The broader historical token `role: superuser` also includes product-domain
 bootstrap roles and must not stand in for this platform verdict.
+
+## 2026-10-11 Kelpie account connectivity
+
+Kelpie signed into the same UOA account as Nessie may connect outbound to Nessie's
+WSS gateway without pairing or selecting a team. The dedicated `kelpie.connect`
+native scope is granted only to the exact registered `com.unlikeotherai.kelpie` app.
+UOA issues a profile-free, audience-bound RS256 connection ticket of at most120
+seconds, capped by source account expiry. Nessie's domain-authenticated live
+validation rechecks current native app/client revision, scope, ACTIVE account,
+credential epoch and policy; the gateway closes on failed validation or expiry and
+checks again before work dispatch. Nessie resolves its current team entitlements
+through UOA independently; no duplicate identity, organisation or membership store
+is permitted. Existing native refresh grants never widen: adding the scope requires
+one fresh registration/sign-in with explicit hosted consent. Operator provisioning,
+wire contract and verification are authoritative in [Kelpie account connectivity](Auth/kelpie-connect.md).

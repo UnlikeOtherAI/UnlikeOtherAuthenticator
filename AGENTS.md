@@ -48,3 +48,8 @@ callbacks (numeric loopback port variance only during DCR), S256, browser-bound
 one-use social flows, and current app revision at completion and account writes.
 Never accept unsigned client configuration or route native clients through the
 confidential signed website configuration/finalization path.
+
+Kelpie's dedicated `kelpie.connect` scope, operator gateway allowlist, short-lived
+profile-free tickets and live domain-authenticated revocation checks follow
+[Kelpie account connectivity](Docs/Auth/kelpie-connect.md). Native refresh grants
+never widen silently; app scope edits require fresh registration and consent.
