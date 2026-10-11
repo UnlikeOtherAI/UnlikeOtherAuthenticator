@@ -63,12 +63,26 @@ export async function getAccessTokenPublicJwks(): Promise<{ keys: JWK[] }> {
 }
 
 /** A connection capability has its own token class and contains no account profile. */
-export async function signKelpieConnectionTicket(claims: {
+type KelpieTicketClaims = {
   subject: string; clientId: string; appId: string; resource: string; issuer: string;
   credentialEpoch: number; twoFaCompleted: boolean; issuedAt: number; expiresAt: number;
+};
+
+export function signKelpieConnectionTicket(claims: KelpieTicketClaims): Promise<string> {
+  return signKelpieTicket(claims, { token_use: 'kelpie_connect' });
+}
+
+/** LAN pairing proofs are challenge-bound and cannot authenticate a gateway/account. */
+export function signKelpiePairingTicket(claims: KelpieTicketClaims & {
+  challenge: string; pairingClientId: string;
 }): Promise<string> {
+  return signKelpieTicket(claims, { token_use: 'kelpie_pair', challenge: claims.challenge,
+    pairing_client_id: claims.pairingClientId });
+}
+
+async function signKelpieTicket(claims: KelpieTicketClaims, binding: Record<string, string>): Promise<string> {
   const { privateKey, kid } = await load();
-  return new SignJWT({ token_use: 'kelpie_connect', scope: 'kelpie.connect',
+  return new SignJWT({ ...binding, scope: 'kelpie.connect',
     client_id: claims.clientId, app_id: claims.appId, tv: claims.credentialEpoch,
     twofa: claims.twoFaCompleted })
     .setProtectedHeader({ alg: ALG, kid, typ: 'at+jwt' })

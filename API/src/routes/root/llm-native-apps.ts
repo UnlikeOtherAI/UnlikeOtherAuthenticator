@@ -58,4 +58,24 @@ expiry, and accept only renewed tickets for the same issuer/subject/client.
 UOA remains the identity authority; Nessie resolves its existing team entitlements
 separately and stores only stable references and product-specific device data.
 App IDs are public registration metadata, never binary attestation.
+
+Same-account LAN pairing uses POST /oauth/kelpie/pair with the requesting application's
+existing Kelpie UOA account bearer and {challenge,clientId}. challenge is the receiving
+Kelpie's fresh 43-character base64url nonce; clientId names the exact LAN caller.
+Existing kelpie.connect consent is required. The returned {pairing_ticket,token_type,
+expires_in} is profile-free, at most120seconds, capped by source expiry and carries
+token_use=kelpie_pair, exact challenge/client binding and a challenge-bound urn audience.
+Only that proof travels to the LAN; never forward a UOA account credential there.
+This flow needs no KELPIE_CONNECT_RESOURCE and cannot authenticate a gateway/account.
+
+The receiving registered Kelpie calls POST /oauth/kelpie/pair/validate using its own
+UOA profile-scope account bearer and {ticket,challenge,clientId}. UOA checks both live
+account authorities and exact subject equality, returning {active:true,expires_at}
+(epoch milliseconds capped by both accounts) or200 {active:false}. Invalid requester
+proof never signs the receiver out:401 is reserved for its own invalid account.
+No identity/profile is returned. Accept only active proof, without an Allow dialog,
+keep resulting local access in memory until expiry/sign-out/revoke, and revalidate
+before every HTTP/MCP call. Account switch and failed validation deny access.
+Calls without account authorization retain ordinary on-device pairing. Never silently
+downgrade failed account proof to approval. All responses are no-store.
 `;

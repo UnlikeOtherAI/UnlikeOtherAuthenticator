@@ -1,6 +1,14 @@
 import type { EndpointSchema } from './schema.js';
 const auth = 'Public OAuth RS256 bearer token, issuer audience, token_use=public_oauth, current credential epoch; public profile must be enabled';
 export const oauthAccountEndpoints: EndpointSchema[] = [
+  { method: 'POST', path: '/oauth/kelpie/pair', description: 'Issue a short-lived same-account local pairing proof without exposing the account credential to the LAN.', auth,
+    body: { challenge: '43-character base64url nonce from the receiving Kelpie', clientId: 'exact LAN client id, 1-200 characters' },
+    response: { pairing_ticket: 'profile-free RS256 at+jwt, token_use=kelpie_pair, challenge-bound audience', token_type: 'Bearer', expires_in: 'seconds, at most 120 and capped by issuing account expiry' },
+    notes: 'Requires existing kelpie.connect consent on the enabled com.unlikeotherai.kelpie native app. Independent of gateway configuration. No new refresh grant, profile copy, or persistent pairing record. No-store, including errors.' },
+  { method: 'POST', path: '/oauth/kelpie/pair/validate', description: 'Validate a LAN proof against the receiving Kelpie\'s own live UOA account.', auth,
+    body: { ticket: 'same-account pairing proof', challenge: 'exact receiving nonce', clientId: 'exact LAN client id' },
+    response: { active: 'boolean', expires_at: 'present only if active; epoch milliseconds, bounded by both accounts and proof expiry' },
+    notes: 'Receiver requires profile scope and exact enabled Kelpie registration. Checks same subject, class/signature/audience/binding/expiry and both live authorities using current epoch, app revision, consent, factor, lifecycle, bans and login/signature policies. Invalid requester proof returns 200 {active:false}; only invalid receiver authority uses 401. Revalidate before every LAN/MCP request; fail closed on transport/server errors. No-store; no identity response.' },
   { method: 'POST', path: '/oauth/kelpie/connect', description: 'Issue a profile-free Nessie connection ticket for the current Kelpie native account.', auth,
     body: { resource: 'exact operator KELPIE_CONNECT_RESOURCE HTTPS URL' },
     response: { connection_ticket: 'RS256 at+jwt, token_use=kelpie_connect; no profile or org', token_type: 'Bearer', expires_in: 'seconds, at most 120 and capped by account expiry', gateway_url: 'corresponding WSS URL' },

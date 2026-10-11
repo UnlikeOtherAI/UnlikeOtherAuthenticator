@@ -17,15 +17,17 @@ import { KELPIE_APP_ID, KELPIE_CONNECT_SCOPE, KELPIE_TICKET_TTL_SECONDS,
 
 type Account = Awaited<ReturnType<typeof verifyPublicAccountToken>>;
 
-async function authorizeKelpieAccount(account: Account, tx: Prisma.TransactionClient): Promise<void> {
+export async function authorizeKelpieAccount(
+  account: Account, tx: Prisma.TransactionClient, requiredScope = KELPIE_CONNECT_SCOPE,
+): Promise<void> {
   try {
     // Pins app revision and credential epoch against every security-policy writer.
     await authorizePublicAccount(account, tx);
     const client = await getOAuthClient(account.clientId, tx);
     if (client?.nativeApp?.identifier !== KELPIE_APP_ID ||
-        !client.scopes.includes(KELPIE_CONNECT_SCOPE) ||
-        !client.nativeApp.scopes.includes(KELPIE_CONNECT_SCOPE)) rejectKelpieConnection();
-    validatePublicScopes(KELPIE_CONNECT_SCOPE, client.scopes);
+        !client.scopes.includes(requiredScope) ||
+        !client.nativeApp.scopes.includes(requiredScope)) rejectKelpieConnection();
+    validatePublicScopes(requiredScope, client.scopes);
     const domain = await tx.clientDomain.findUnique({ where: { domain: account.domain }, select: { status: true } });
     if (domain?.status === 'disabled') rejectKelpieConnection();
     await assertNotBannedAtLogin(account, { prisma: tx });

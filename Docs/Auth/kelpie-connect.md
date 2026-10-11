@@ -123,6 +123,36 @@ through the native issuance limit.
    native logout/account disable closes the connection and prevents work. UOA deployment
    alone does not deploy any gateway or native app.
 
+## Same-account local pairing
+
+Authorized local CLI/MCP callers skip the Allow dialog when UOA verifies they and
+the receiving Kelpie have the same current subject. POST `/oauth/kelpie/pair`
+uses the caller's existing `kelpie.connect` native account grant and
+`{challenge,clientId}`; the challenge is the receiving device's random
+43-character base64url nonce. It returns `{pairing_ticket,token_type:"Bearer",expires_in}`.
+The proof uses `token_use=kelpie_pair`, `aud=urn:unlikeotherai:kelpie:pair:<challenge>`,
+`challenge` and `pairing_client_id`, plus the same profile-free live-authority
+claims as the direct connection ticket. Its lifetime is at most120seconds and
+never exceeds the issuing account expiry. No gateway configuration is needed.
+
+POST `/oauth/kelpie/pair/validate` uses the receiving Kelpie's own profile-scope
+account bearer and `{ticket,challenge,clientId}`. Both must be current registered
+Kelpie native authorities with exactly the same subject. The receiver is checked
+first under existing locks; invalid receiver authority can return401. Invalid,
+expired, mismatched or revoked requester proof returns200 `{active:false}` so an
+untrusted LAN caller cannot force a healthy receiver to sign out. Successful
+validation returns only `{active:true,expires_at}` in epoch milliseconds, bounded
+by both account expiries. No identity data or refresh token is returned.
+
+The receiver keeps the challenge, proof and resulting local bearer in memory,
+binds them to its current account session and requesting source, and validates
+through UOA before every HTTP/MCP request. Failure, expiry, account switch or local
+revocation refuses access. Proofs cannot authenticate the account or direct gateway;
+account/direct tickets cannot substitute for a pairing proof. Ordinary callers
+without an account still use explicit pairing. Existing consent is never widened.
+All issue/validation responses are no-store. Issuance and validation have independent
+120/minute and12,000/minute IP buckets.
+
 ## Focused verification
 
 With an isolated migrated database exported as `DATABASE_URL`, run
@@ -149,3 +179,12 @@ PostgreSQL database: all nine connection integration tests passed, including 121
 consecutive domain-authenticated validations without consuming the native issuance
 bucket. Changed route ESLint passed. This is server-side HTTP evidence, not live WSS
 or production operator provisioning evidence.
+
+The local-pairing extension passed all sixteen connection/pairing integration
+tests on Minis against an isolated PostgreSQL schema on 2026-10-11. It covers
+same/different live subjects, expiry caps, issuing-consent narrowing, receiver
+revocation, proof binding/class confusion and both published integration
+contracts. Full workspace builds/typechecks and 2,507 DB-less API tests passed
+on Maxis; 674 database-dependent cases were skipped in that DB-less run.
+Changed API files passed ESLint. These are server tests; installed-client local
+pairing and production deployment still require separate verification.
