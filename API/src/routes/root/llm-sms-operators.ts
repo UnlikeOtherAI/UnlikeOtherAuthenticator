@@ -24,6 +24,11 @@ BILLING_SMS_POLICY_AUTORENEW_LOOKAHEAD_DAYS whose account Pricing API price is
 not above the provider_price recorded at operator acceptance (renewal_of_id
 names that acceptance). It only appends records. Anything else opens one alert
 and emails platform superusers once. Rows without provider_price need a person.
+POST /fx/refresh-accept with {policy_understood:true} is the one-button ECB
+acceptance: it fetches the fixed XML and accepts it under the operator with a
+generated reason only within the same band of the last accepted rate
+(409 BILLING_SMS_FX_BASELINE_REQUIRED or BILLING_SMS_FX_OUTSIDE_BAND otherwise;
+use the reviewed preview/accept flow for those).
 Selected product > App keys > SMS runtime issues purpose sms_runtime independently
 of customer lifecycle, entitlement and Ledger keys, with no redirect origins.
 Transfer one-time plaintext only through approved deployment secrets.

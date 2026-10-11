@@ -136,6 +136,14 @@ Then use **Admin → Billing → SMS policies**:
    explicitly accept this informational reference as commercial policy with a
    reason. Evidence expires seven days after its source date; refreshing the same
    source cannot extend that validity. Renew accepted evidence before expiry.
+   **Refresh and accept** does this in one click once a rate has been accepted:
+   it fetches the same fixed XML and accepts it under the operator's subject with
+   a generated reason when the rate is within
+   `BILLING_SMS_POLICY_AUTORENEW_FX_BAND_BPS` of the last accepted rate (the
+   renewal job's band). With no accepted rate, or a rate outside the band, it
+   refuses (`BILLING_SMS_FX_BASELINE_REQUIRED` / `BILLING_SMS_FX_OUTSIDE_BAND`)
+   and the operator uses **Review manually**, the reviewed preview, import and
+   reason flow above.
 2. Import route evidence for each exact account, country, inbound/outbound
    direction and provider currency that will be used. Include documentary source,
    source-supported expiry, additional per-segment carrier charge bound, and

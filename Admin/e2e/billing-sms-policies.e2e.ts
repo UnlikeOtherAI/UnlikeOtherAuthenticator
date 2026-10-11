@@ -40,6 +40,15 @@ test('operator reviews exact SMS evidence, retries acceptance, checks history an
       resources: [{ ...resource, created_at: now, updated_at: now }], next_cursor: null });
     if (request.method() === 'GET') return json(policies);
     writes.push(url.pathname); const input = request.postDataJSON();
+    if (url.pathname.endsWith('/fx/refresh-accept')) {
+      expect(input).toEqual({ policy_understood: true });
+      // No accepted baseline yet: the one-button path refuses and names the manual review.
+      if (!policies.fx.length) return json({ error: 'Request failed', code: 'BILLING_SMS_FX_BASELINE_REQUIRED' }, 409);
+      const renewed = { ...fx, id: 'fx-2', source_digest: 'c'.repeat(64), usd_per_eur: '1.1201', accepted_by: 'operator',
+        accepted_by_user_id: 'operator-fixture', accepted_at: now,
+        acceptance_reason: 'Refresh and accept: official ECB daily reference within ±5.00% of the last accepted 1.1186.' };
+      policies.fx.unshift(renewed); return json(renewed);
+    }
     if (url.pathname.endsWith('/fx/preview')) {
       expect(input).toEqual({}); return json({ evidence: fx, preview_token: 'synthetic-fx-preview', preview_expires_at: expiry });
     }
@@ -71,6 +80,9 @@ test('operator reviews exact SMS evidence, retries acceptance, checks history an
   await page.getByRole('button', { name: 'SMS policies', exact: true }).click();
   await expect(page).toHaveURL(/section=sms/);
   await expect(page.getByText('No accepted SMS policies.')).toBeVisible();
+  await page.getByRole('button', { name: 'Refresh and accept', exact: true }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'No ECB rate has been accepted yet' })).toBeVisible();
+  await page.getByText('Review manually', { exact: true }).click();
   await page.getByRole('button', { name: 'Refresh ECB evidence', exact: true }).click();
   let dialog = page.getByRole('dialog', { name: 'Review ECB reference conversion' });
   await expect(dialog).toContainText('1.1186'); await expect(dialog).toContainText('a'.repeat(64));
@@ -81,6 +93,9 @@ test('operator reviews exact SMS evidence, retries acceptance, checks history an
   await expect(dialog.getByLabel(/^Acceptance reason/)).toHaveValue('Accept the dated ECB reference conversion for commercial prices.');
   await dialog.getByRole('button', { name: 'Accept immutable policy' }).click();
   await expect(dialog).toHaveCount(0); await expect(page.getByText(/ECB · .* USD\/EUR 1.1186/)).toBeVisible();
+  await page.getByRole('button', { name: 'Refresh and accept', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'USD/EUR 1.1201' })).toBeVisible();
+  await expect(page.getByText(/ECB · .* USD\/EUR 1.1201/)).toBeVisible();
   await page.getByLabel(/^Provider account SID/).fill(`AC${'a'.repeat(32)}`);
   await page.getByLabel(/^Country/, { exact: true }).fill('GB');
   await page.getByLabel(/^Additional charge per segment/).fill('0.003');
@@ -117,6 +132,7 @@ test('operator reviews exact SMS evidence, retries acceptance, checks history an
   expect(await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } })
     .includes('synthetic-route-preview'))).toBe(false);
   expect(writes.filter((value) => value.endsWith('/routes/accept'))).toHaveLength(1);
+  expect(writes.filter((value) => value.endsWith('/fx/refresh-accept'))).toHaveLength(2);
   expect(fixture.unexpected).toEqual([]); expect(fixture.errors).toEqual([]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
 });

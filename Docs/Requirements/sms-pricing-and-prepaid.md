@@ -252,6 +252,16 @@ without rewriting its provenance or freshness. Responses use private/no-store.
 History shows the latest 50 currency and 100 route acceptances. These controls
 do not enable the SMS environment gate or install provider/payment credentials.
 
+### One-button ECB acceptance — 2026-10-11
+
+The ECB card now leads with **Refresh and accept**. It fetches the same fixed
+official XML and accepts it as the operator, with a generated reason, only when
+the new USD-per-EUR rate is within the renewal band of the last accepted rate
+(`BILLING_SMS_POLICY_AUTORENEW_FX_BAND_BPS`, default ±5%). The first rate, and
+any rate outside the band, still go through the reviewed flow described above,
+now under **Review manually**. Source-date expiry, the immutable record and the
+authority locks are unchanged.
+
 Under **Product billing → selected product → App keys**, operators can issue an
 **SMS runtime** key through the existing one-time credential reveal and revocation
 workflow. It uses the dedicated `sms_runtime` purpose, refuses redirect origins,
