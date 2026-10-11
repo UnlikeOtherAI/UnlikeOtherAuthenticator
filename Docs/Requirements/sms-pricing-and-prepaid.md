@@ -262,6 +262,18 @@ any rate outside the band, still go through the reviewed flow described above,
 now under **Review manually**. Source-date expiry, the immutable record and the
 authority locks are unchanged.
 
+### One-button Add country — 2026-10-11
+
+Route bounds for the configured account are normally accepted with **Add
+country**: UOA reads the account's own Pricing API prices for both directions,
+applies the versioned bound rule (`TWILIO_LONG_CODE_2X_V1`), and generates and
+hashes the evidence. One **Accept** appends both route policies, with the three
+attestations and a generated reason, and records each route's `provider_price`.
+The structured form above moved behind **Enter evidence manually**, for routes
+the Pricing API cannot price. Route policies accepted before this change have no
+recorded price, so they renew only once someone accepts that country again with
+Add country.
+
 Under **Product billing → selected product → App keys**, operators can issue an
 **SMS runtime** key through the existing one-time credential reveal and revocation
 workflow. It uses the dedicated `sms_runtime` purpose, refuses redirect origins,

@@ -13,6 +13,8 @@ test('operator reviews exact SMS evidence, retries acceptance, checks history an
     source_digest: 'a'.repeat(64), rate_date: now.slice(0, 10), observed_at: now, expires_at: future, usd_per_eur: '1.1186' };
   const policies: { fx: Array<Record<string, unknown>>; routes: Array<Record<string, unknown>> } = { fx: [], routes: [] };
   let routeEvidence: Record<string, unknown> = {}; let evidenceDocument = ''; let fxAttempts = 0;
+  let countryRoutes: Array<Record<string, unknown> & { direction: string; observed_at: string }> = [];
+  const thirty = new Date(Date.now() + 30 * 86_400_000).toISOString();
   const writes: string[] = [];
   const resource = { id: 'resource-fixture', service_id: 'nessie', organisation_id: 'org-fixture',
     phone_number: '+441234567890', country: 'GB', state: 'refund_required', recovery_reason: 'payment_without_acquired_number' };
@@ -58,9 +60,28 @@ test('operator reviews exact SMS evidence, retries acceptance, checks history an
       const accepted = { ...fx, id: 'fx-1', accepted_by: 'operator', accepted_by_user_id: 'operator-fixture', accepted_at: now,
         acceptance_reason: input.acceptance_reason }; policies.fx.push(accepted); return json(accepted);
     }
+    if (url.pathname.endsWith('/routes/country/preview')) {
+      expect(input).toEqual({ country: 'GB' });
+      const route = (direction: string, price: string, segment: string) => ({ account_sid: `AC${'a'.repeat(32)}`,
+        country: 'GB', direction, currency: 'USD', additional_per_segment: segment, additional_per_message: '0.002',
+        source: 'https://www.twilio.com/en-us/sms/pricing/gb', expires_at: thirty, evidence_digest: (direction === 'outbound' ? 'e' : 'f').repeat(64),
+        observed_at: now, provider_price: price });
+      countryRoutes = [route('outbound', '0.0560', '0.01'), route('inbound', '0.0075', '0.007')];
+      return json({ evidence: { country: 'GB', account_sid: `AC${'a'.repeat(32)}`, rule: 'TWILIO_LONG_CODE_2X_V1',
+        validity_days: 30, routes: countryRoutes }, evidence_documents: ['Synthetic outbound evidence', 'Synthetic inbound evidence'],
+        preview_token: 'synthetic-country-preview', preview_expires_at: expiry });
+    }
+    if (url.pathname.endsWith('/routes/country/accept')) {
+      expect(input).toEqual({ preview_token: 'synthetic-country-preview', policy_understood: true,
+        complete_segment_bound: true, complete_message_bound: true });
+      const accepted = countryRoutes.map(({ observed_at: _observed, ...terms }) => ({ ...terms, id: `country-${terms.direction}`,
+        accepted_by: 'operator', accepted_by_user_id: 'operator-fixture', renewal_of_id: null, accepted_at: now,
+        acceptance_reason: 'Add country GB: accepted the Twilio account prices and rule bounds.' }));
+      policies.routes.unshift(...accepted); return json({ routes: accepted });
+    }
     if (url.pathname.endsWith('/routes/preview')) {
       const { evidence, ...dimensions } = input; evidenceDocument = evidence;
-      expect(dimensions).toMatchObject({ account_sid: `AC${'a'.repeat(32)}`, country: 'GB', currency: 'USD',
+      expect(dimensions).toMatchObject({ account_sid: `AC${'a'.repeat(32)}`, country: 'IE', currency: 'USD',
         direction: 'outbound', additional_per_segment: '0.003', additional_per_message: '0.001' });
       routeEvidence = { ...dimensions, evidence_digest: 'b'.repeat(64), observed_at: now };
       return json({ evidence: routeEvidence, evidence_document: evidenceDocument,
@@ -96,8 +117,21 @@ test('operator reviews exact SMS evidence, retries acceptance, checks history an
   await page.getByRole('button', { name: 'Refresh and accept', exact: true }).click();
   await expect(page.getByRole('status').filter({ hasText: 'USD/EUR 1.1201' })).toBeVisible();
   await expect(page.getByText(/ECB · .* USD\/EUR 1.1201/)).toBeVisible();
+  await page.getByLabel(/^Country to add/).selectOption('GB');
+  await page.getByRole('button', { name: 'Add country', exact: true }).click();
+  dialog = page.getByRole('dialog', { name: 'Add United Kingdom (GB)' });
+  await expect(dialog).toContainText(`AC${'a'.repeat(32)}`); await expect(dialog).toContainText('30 days');
+  await expect(dialog).toContainText('USD 0.0560'); await expect(dialog).toContainText('USD 0.007');
+  await expect(dialog.getByRole('checkbox')).toHaveCount(0);
+  if (process.env.UOA_SMS_ADMIN_PROOF_DIR) { await mkdir(process.env.UOA_SMS_ADMIN_PROOF_DIR, { recursive: true });
+    await page.screenshot({ path: path.join(process.env.UOA_SMS_ADMIN_PROOF_DIR, `sms-add-country-${info.project.name}.png`), fullPage: true }); }
+  await dialog.getByRole('button', { name: 'Accept', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByText('GB · outbound · USD', { exact: true })).toBeVisible();
+  await expect(page.getByText('GB · inbound · USD', { exact: true })).toBeVisible();
+  await page.getByText('Enter evidence manually', { exact: true }).click();
   await page.getByLabel(/^Provider account SID/).fill(`AC${'a'.repeat(32)}`);
-  await page.getByLabel(/^Country/, { exact: true }).fill('GB');
+  await page.getByLabel('Country', { exact: true }).fill('IE');
   await page.getByLabel(/^Additional charge per segment/).fill('0.003');
   await page.getByLabel(/^Additional charge per message/).fill('0.001');
   await page.getByLabel(/^Evidence source/).fill('https://provider.example/account-terms');
@@ -114,7 +148,7 @@ test('operator reviews exact SMS evidence, retries acceptance, checks history an
   if (proof) { await mkdir(proof, { recursive: true });
     await page.screenshot({ path: path.join(proof, `sms-route-review-${info.project.name}.png`), fullPage: true }); }
   await dialog.getByRole('button', { name: 'Accept immutable policy' }).click();
-  await expect(dialog).toHaveCount(0); await expect(page.getByText('GB · outbound · USD', { exact: true })).toBeVisible();
+  await expect(dialog).toHaveCount(0); await expect(page.getByText('IE · outbound · USD', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Review resource', exact: true }).click();
   const recovery = page.getByRole('dialog', { name: 'SMS number recovery' });
   await expect(recovery).toContainText('Frozen customer quote: USD 12.34 per month');
@@ -122,7 +156,7 @@ test('operator reviews exact SMS evidence, retries acceptance, checks history an
   await expect(recovery).toContainText('in_fixture');
   if (proof) await page.screenshot({ path: path.join(proof, `sms-recovery-${info.project.name}.png`), fullPage: true });
   await page.keyboard.press('Escape'); await page.reload();
-  await expect(page.getByText('GB · outbound · USD', { exact: true })).toBeVisible();
+  await expect(page.getByText('IE · outbound · USD', { exact: true })).toBeVisible();
   await page.getByText('uncollected · SM_fixture', { exact: true }).click();
   await expect(page.getByText('Uncollected credits: 1.234567', { exact: true })).toBeVisible();
   await expect(page.getByText('Consumed credits: Unknown', { exact: true })).toBeVisible();
@@ -133,6 +167,7 @@ test('operator reviews exact SMS evidence, retries acceptance, checks history an
     .includes('synthetic-route-preview'))).toBe(false);
   expect(writes.filter((value) => value.endsWith('/routes/accept'))).toHaveLength(1);
   expect(writes.filter((value) => value.endsWith('/fx/refresh-accept'))).toHaveLength(2);
+  expect(writes.filter((value) => value.endsWith('/routes/country/accept'))).toHaveLength(1);
   expect(fixture.unexpected).toEqual([]); expect(fixture.errors).toEqual([]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
 });

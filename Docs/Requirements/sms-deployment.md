@@ -151,6 +151,26 @@ Then use **Admin → Billing → SMS policies**:
    accept both completeness statements. Missing fees in the Pricing API do not
    establish zero; zero requires documentary support. Keep source documents in
    the operator archive. Preview tokens last five minutes.
+   **Add country** is the normal path for the configured account. The operator
+   picks a country. UOA reads that account's Pricing API mobile `current_price`
+   for outbound and inbound in the configured region and currency, and applies
+   rule `TWILIO_LONG_CODE_2X_V1` from
+   `API/src/services/billing-sms-route-bound-rule.ts`: the per-segment bound is
+   twice the highest long-code SMS carrier fee Twilio publishes for that
+   direction (USD 0.005 outbound, USD 0.0035 inbound, from the US carrier-fee
+   schedule that the country pages link to), and the per-message bound is twice
+   the documented USD 0.001 failed-message fee. Validity is 30 days. UOA
+   assembles and hashes each evidence text itself (prices, pricing page,
+   Pricing API URL, retrieval time, rule version and citations), so nothing is
+   typed or pasted. One review screen shows the account, both directions with
+   the account price and bounds, and the validity; its single **Accept** records
+   the three attestations and a generated reason under the operator's subject,
+   together with `provider_price`, the baseline the renewal job compares against.
+   The account SID always comes from configuration. A route the Pricing API
+   cannot price, or one priced in a currency the rule does not document
+   (`BILLING_SMS_ROUTE_RULE_UNSUPPORTED`), uses **Enter evidence manually**,
+   which is the structured import above. Manual evidence never renews
+   automatically.
 
 No accepted FX means `BILLING_SMS_FX_POLICY_REQUIRED`; a missing message-route
 bound means `BILLING_SMS_ROUTE_BOUND_REQUIRED`. Both refuse a new quote. FX evidence remains required for every quote, including USD quotes, so the existing

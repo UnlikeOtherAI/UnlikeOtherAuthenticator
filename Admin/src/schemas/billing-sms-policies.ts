@@ -31,6 +31,13 @@ const preview = { preview_token: z.string(), preview_expires_at: z.string().date
 export const SmsFxPreviewSchema = z.object({ ...preview, evidence: SmsFxEvidenceSchema }).strict();
 export const SmsRoutePreviewSchema = z.object({ ...preview, evidence: SmsRouteEvidenceSchema,
   evidence_document: z.string().max(32_000) }).strict();
+const SmsCountryRouteSchema = SmsRouteEvidenceSchema.extend({ provider_price: decimal }).strict();
+export const SmsCountryPreviewSchema = z.object({ ...preview,
+  evidence: z.object({ country: z.string().regex(/^[A-Z]{2}$/), account_sid: z.string(), rule: z.string(),
+    validity_days: z.number().int(), routes: z.tuple([SmsCountryRouteSchema, SmsCountryRouteSchema]) }).strict(),
+  evidence_documents: z.tuple([z.string().max(32_000), z.string().max(32_000)]) }).strict();
+export const SmsCountryAcceptedSchema = z.object({ routes: z.array(SmsRoutePolicySchema) }).strict();
 export type SmsFxPreview = z.infer<typeof SmsFxPreviewSchema>;
+export type SmsCountryPreview = z.infer<typeof SmsCountryPreviewSchema>;
 export type SmsRoutePreview = z.infer<typeof SmsRoutePreviewSchema>;
 export type SmsRouteImport = z.infer<typeof SmsRouteImportSchema>;

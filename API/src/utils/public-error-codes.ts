@@ -71,4 +71,7 @@ export const PRODUCTION_PUBLIC_ERROR_CODES = new Set([
   // the accepted rates these codes compare against.
   'BILLING_SMS_FX_BASELINE_REQUIRED',
   'BILLING_SMS_FX_OUTSIDE_BAND',
+  // Add country, also superuser-only: the account's Pricing API currency is one the bound rule
+  // does not document, so the Admin points to manual evidence for that route.
+  'BILLING_SMS_ROUTE_RULE_UNSUPPORTED',
 ]);

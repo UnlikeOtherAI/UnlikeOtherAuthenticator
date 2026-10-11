@@ -1,5 +1,5 @@
 import { createApiClient } from './api-client';
-import { SmsFxPolicySchema, SmsFxPreviewSchema, SmsPoliciesSchema,
+import { SmsCountryAcceptedSchema, SmsCountryPreviewSchema, SmsFxPolicySchema, SmsFxPreviewSchema, SmsPoliciesSchema,
   SmsRouteImportSchema, SmsRoutePolicySchema, SmsRoutePreviewSchema,
   type SmsRouteImport } from '../schemas/billing-sms-policies';
 
@@ -16,6 +16,16 @@ export const billingSmsPolicyService = {
   async refreshAcceptFx() {
     return SmsFxPolicySchema.parse(await api.post<unknown>(`${base}/fx/refresh-accept`,
       { policy_understood: true }, options));
+  },
+  async previewCountry(country: string) {
+    return SmsCountryPreviewSchema.parse(await api.post<unknown>(`${base}/routes/country/preview`,
+      { country }, options));
+  },
+  /** One Accept records all three attestations; the server writes the reason. */
+  async acceptCountry(token: string) {
+    return SmsCountryAcceptedSchema.parse(await api.post<unknown>(`${base}/routes/country/accept`, {
+      preview_token: token, policy_understood: true, complete_segment_bound: true, complete_message_bound: true,
+    }, options));
   },
   async previewRoute(input: SmsRouteImport) {
     return SmsRoutePreviewSchema.parse(await api.post<unknown>(`${base}/routes/preview`,

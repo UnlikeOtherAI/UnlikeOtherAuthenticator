@@ -73,11 +73,11 @@ function fxDto(evidence: SmsFxEvidence) {
     observed_at: evidence.observedAt.toISOString(), expires_at: evidence.expiresAt.toISOString(),
     usd_per_eur: evidence.usdPerEur });
 }
-/** The complete-import digest every route acceptance binds. */
-function smsRouteImportDigest(value: SmsRoutePolicyImport): string {
+/** The complete-import digest every route acceptance binds, whoever assembled the import. */
+export function smsRouteImportDigest(value: SmsRoutePolicyImport): string {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex');
 }
-async function preview(kind: 'fx' | 'route', evidence: object,
+async function preview<T extends object>(kind: 'fx' | 'route' | 'country', evidence: T,
   actor: SmsPolicyActor, now: Date) {
   const expiresAt = new Date(now.getTime() + 5 * 60_000);
   const previewToken = await new SignJWT({ kind, evidence, tv: actor.tokenVersion })
@@ -87,7 +87,7 @@ async function preview(kind: 'fx' | 'route', evidence: object,
     .sign(key());
   return { evidence, preview_token: previewToken, preview_expires_at: expiresAt.toISOString() };
 }
-async function reviewed(kind: 'fx' | 'route', token: string,
+async function reviewed(kind: 'fx' | 'route' | 'country', token: string,
   actor: SmsPolicyActor, now: Date) {
   try {
     const { payload, protectedHeader } = await jwtVerify(token, key(), { algorithms: ['HS256'],
