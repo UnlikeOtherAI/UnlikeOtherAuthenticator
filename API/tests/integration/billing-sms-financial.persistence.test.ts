@@ -31,6 +31,9 @@ describe.skipIf(!process.env.DATABASE_URL)('SMS financial PostgreSQL invariants'
   it('prevents rewriting accepted commercial terms', async () => {
     await expect(prisma.billingSmsQuote.update({ where: { id: smsIds.quote },
       data: { messageMarkupBps: 4100 } })).rejects.toThrow('SMS accepted commercial policy is immutable');
+    expect((await prisma.billingSmsQuote.findUniqueOrThrow({ where: { id: smsIds.quote } })).monthlyMarkupBps).toBe(0);
+    await expect(prisma.billingSmsQuote.update({ where: { id: smsIds.quote },
+      data: { monthlyMarkupBps: 1500 } })).rejects.toThrow('SMS accepted commercial policy is immutable');
   });
 
   it('settles funded inbound against the canonical wallet and immutable runtime provenance once', async () => {

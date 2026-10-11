@@ -755,3 +755,10 @@ environment list leaves this setting absent, so it ships disabled. No product
 config, URL parameter or browser storage value enables it. The login entry and
 all four `/auth/lifecycle-status/{start,verify}` and
 `/oauth/lifecycle-status/{start,verify}` endpoints share this server-owned flag.
+
+### SMS evidence runtime
+
+[SMS operator setup](Requirements/sms-deployment.md) documents the dedicated
+Secret Manager entries and opt-in repository flags. The main deployment workflow
+preserves those configured bindings explicitly; enabling SMS still requires
+accepted private commercial/FX/route evidence and the existing Stripe gate.

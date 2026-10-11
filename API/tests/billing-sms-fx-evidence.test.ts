@@ -39,4 +39,17 @@ describe('UOA SMS FX and private rating', () => {
     expect(() => smsFinalUsdQuanta({ providerAmount: '1', providerCurrency: 'GBP', usdPerEur: '1.1186',
       monthlyFeeEur: '7.25', messageMarkupBps: 2700, direction: 'outbound', quantum: 1_000_000_000n })).toThrow();
   });
+  it('marks up all included provider costs exactly once, with no country-specific pricing rule', () => {
+    const policy = { monthlyFeeEur: '0', monthlyMarkupBps: 1500, messageMarkupBps: 1500 };
+    expect(smsFinalUsdQuanta({ ...policy, providerAmount: '2', providerCurrency: 'USD', usdPerEur: '1.1186',
+      direction: 'monthly', quantum: 100n })).toBe(230n);
+    expect(smsFinalUsdQuanta({ ...policy, providerAmount: '2', providerCurrency: 'EUR', usdPerEur: '1.1186',
+      direction: 'monthly', quantum: 100n })).toBe(258n);
+    // A complete charge including transport, carrier and processing fees gets one markup.
+    expect(smsFinalUsdQuanta({ ...policy, providerAmount: '0.013', providerCurrency: 'USD', usdPerEur: '1.1186',
+      direction: 'outbound', quantum: 1_000_000_000n })).toBe(14_950_000n);
+    expect(smsFinalUsdQuanta({ ...policy, providerAmount: '0.001', providerCurrency: 'USD', usdPerEur: '1.1186',
+      direction: 'inbound', quantum: 1_000_000_000n })).toBe(1_150_000n);
+  });
+
 });

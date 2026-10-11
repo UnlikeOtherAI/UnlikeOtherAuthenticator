@@ -101,4 +101,15 @@ describe('SMS private provider evidence', () => {
     }).receipt({ accountSid, messageSid, from: '+420777111222', to: '+420777111223', direction: 'outbound' });
     expect(receipt).toEqual({ amount: '0.00750', currency: 'USD', segments: 1, terminal: true });
   });
+  it('refuses newly exposed number setup or ancillary charges instead of silently dropping them', async () => {
+    for (const extra of [{ setup_price: '5.00' }, { recurring_fee: '1.00' }]) {
+      await expect(provider({ country: 'Czech Republic', iso_country: 'CZ', price_unit: 'USD',
+        phone_number_prices: [{ number_type: 'mobile', current_price: '1.00', ...extra }],
+      }).price('CZ', 'monthly')).rejects.toThrow('BILLING_SMS_PROVIDER_EVIDENCE_UNAVAILABLE');
+    }
+    await expect(provider({ country: 'Czech Republic', iso_country: 'CZ', price_unit: 'USD',
+      setup_fee: '5.00', phone_number_prices: [{ number_type: 'mobile', current_price: '1.00' }],
+    }).price('CZ', 'monthly')).rejects.toThrow('BILLING_SMS_PROVIDER_EVIDENCE_UNAVAILABLE');
+  });
+
 });

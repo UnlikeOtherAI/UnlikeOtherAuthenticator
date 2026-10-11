@@ -78,7 +78,7 @@ function fraction(decimal: string): { numerator: bigint; denominator: bigint } {
 export function smsFinalUsdQuanta(input: {
   providerAmount: string; providerCurrency: string; usdPerEur: string;
   direction: 'monthly' | 'inbound' | 'outbound'; quantum: bigint;
-  monthlyFeeEur: string; messageMarkupBps: number;
+  monthlyFeeEur: string; monthlyMarkupBps?: number; messageMarkupBps: number;
 }): bigint {
   const provider = fraction(input.providerAmount);
   const fx = fraction(input.usdPerEur);
@@ -90,14 +90,14 @@ export function smsFinalUsdQuanta(input: {
   } else if (input.providerCurrency !== 'USD') {
     throw unavailable();
   }
+  const markup = input.direction === 'monthly' ? input.monthlyMarkupBps ?? 0 : input.messageMarkupBps;
+  if (!Number.isSafeInteger(markup) || markup < 0 || markup > 999999) throw unavailable();
+  numerator *= 10_000n + BigInt(markup);
+  denominator *= 10_000n;
   if (input.direction === 'monthly') {
     const fee = fraction(input.monthlyFeeEur);
     numerator = numerator * fx.denominator * fee.denominator + fee.numerator * fx.numerator * denominator;
     denominator *= fx.denominator * fee.denominator;
-  } else {
-    if (!Number.isSafeInteger(input.messageMarkupBps) || input.messageMarkupBps < 0) throw unavailable();
-    numerator *= 10_000n + BigInt(input.messageMarkupBps);
-    denominator *= 10_000n;
   }
   if (input.quantum <= 0n) throw unavailable();
   return (numerator * input.quantum + denominator - 1n) / denominator;

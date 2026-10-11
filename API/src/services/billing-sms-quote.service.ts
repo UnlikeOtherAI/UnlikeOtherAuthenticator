@@ -112,7 +112,7 @@ deps: { provider: BillingSmsProvider; prisma?: PrismaClient; now?: () => Date })
       serviceId: input.credential.service.id, appKeyId: input.credential.id, orgId: request.organisation_id,
       country: request.country, direction: request.direction, destination: request.destination,
       commercialPolicyVersion: commercial.version, monthlyFeeEur: commercial.monthlyFeeEur,
-      messageMarkupBps: commercial.messageMarkupBps, providerAmount, providerCurrency: price.currency, providerSource: price.source,
+      monthlyMarkupBps: commercial.monthlyMarkupBps, messageMarkupBps: commercial.messageMarkupBps, providerAmount, providerCurrency: price.currency, providerSource: price.source,
       providerObservedAt: price.observedAt, fxSnapshotId: fx.id,
       providerBoundAmount: providerBound, routePolicyId: policy?.id ?? null,
       finalAmount: formattedQuanta(finalQuanta, monthly ? 2 : 9), finalCurrency: 'USD',
