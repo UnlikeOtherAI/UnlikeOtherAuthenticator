@@ -115,6 +115,13 @@ adds other Twilio services. It does not claim to allocate account-wide taxes or
 separately invoiced charges to customers. Such charges require a supported cost
 attribution and collection path before they can be incurred on a customer's behalf.
 
+The accepted monthly price is fixed in the exact-number subscription. There is no
+automatic comparison against later Twilio rental invoices or repricing when Twilio
+changes its rate. Therefore this mode establishes the configured markup on the
+verified quote, not a guarantee of the same margin on every future invoice. A
+requirement to recover every subsequent provider charge needs invoice attribution,
+reconciliation and an authorised customer collection/repricing path before launch.
+
 There is no country allowlist in UOA commercial pricing. Provider inventory,
 regulatory eligibility, documented fee completeness, supported currency and
 customer permissions remain real eligibility checks, not a commercial geography
