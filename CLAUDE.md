@@ -131,3 +131,7 @@ callbacks (numeric loopback port variance only during DCR), S256, browser-bound
 one-use social flows, and current app revision at completion and account writes.
 Never accept unsigned client configuration or route native clients through the
 confidential signed website configuration/finalization path.
+
+Kelpie connection-ticket issuance and live gateway validation use the existing native
+account and resource-signing boundaries; read [Kelpie account connectivity](Docs/Auth/kelpie-connect.md)
+before changing the scope, operator gateway allowlist, grant migration or validation.

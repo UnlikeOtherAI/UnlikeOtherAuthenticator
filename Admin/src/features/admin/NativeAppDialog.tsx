@@ -10,7 +10,8 @@ const defaults: NativeAppForm = { identifier: '', name: '', enabled: true, redir
   scopes: ['openid', 'profile', 'email'], methods: ['google', 'email_password'], allow_registration: true,
   primary_color: '#2563eb', background_color: '#ffffff', text_color: '#111827' };
 export function NativeAppDialog({ app, close }: { app?: NativeApp; close: () => void }) {
-  const { register, handleSubmit, formState } = useForm<NativeAppForm>({ defaultValues: app ?? defaults });
+  const { register, handleSubmit, formState, watch } = useForm<NativeAppForm>({ defaultValues: app ?? defaults });
+  const kelpie = watch('identifier') === 'com.unlikeotherai.kelpie';
   const [redirects, setRedirects] = useState(app?.redirect_uris.join('\n') ?? '');
   const [file, setFile] = useState<File | null | undefined>(undefined);
   const [error, setError] = useState('');
@@ -35,7 +36,7 @@ export function NativeAppDialog({ app, close }: { app?: NativeApp; close: () => 
       </fieldset>
       <label className="block text-sm"><input type="checkbox" {...register('allow_registration')} /> Allow new accounts through Google</label>
       <fieldset className="flex flex-wrap gap-3"><legend className="mb-2 text-sm font-medium">Account access</legend>
-        {(['openid', 'profile', 'email', 'settings.read', 'settings.write'] as const).map((scope) =>
+        {(['openid', 'profile', 'email', 'settings.read', 'settings.write', ...(kelpie ? ['kelpie.connect' as const] : [])] as const).map((scope) =>
           <label key={scope} className="text-sm"><input type="checkbox" value={scope} {...register('scopes')} /> {scope}</label>)}
       </fieldset>
       <div className="grid grid-cols-3 gap-4">

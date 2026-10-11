@@ -6,6 +6,7 @@ import { sniffAvatarUpload, toAvatarBytes } from '../avatar-subject.service.js';
 import { lockProductTeamPolicyExclusive } from '../product-team-policy-lock.service.js';
 import { CreateNativeAppSchema, NativeAppPolicySchema, type NativeAppPolicy } from './native-app-policy.js';
 import { validatePublicScopes } from './scopes.service.js';
+import { assertKelpieScopeClient } from './kelpie-connect-policy.js';
 
 export function nativeAppView(app: NativeApp) {
   return { id: app.id, identifier: app.identifier, name: app.name, enabled: app.enabled,
@@ -37,6 +38,7 @@ export async function saveNativeApp(input: unknown, actorEmail: string, id?: str
     await lockProductTeamPolicyExclusive(tx);
     const previous = id ? await tx.nativeApp.findUnique({ where: { id } }) : null;
     if (id && !previous) throw new AppError('NOT_FOUND', 404);
+    assertKelpieScopeClient(data.scopes, previous?.identifier ?? CreateNativeAppSchema.parse(input).identifier);
     if (!id && await tx.nativeApp.findUnique({ where: { identifier: CreateNativeAppSchema.parse(input).identifier }, select: { id: true } })) throw new AppError('BAD_REQUEST', 409, 'APP_IDENTIFIER_EXISTS');
     const app = previous
       ? await tx.nativeApp.update({ where: { id }, data: { ...data,

@@ -56,6 +56,7 @@ export function registerRootRoute(app: FastifyInstance): void {
       docs: '/llm',
       api: '/api',
       native_apps: { admin: '/admin/apps', registration: '/oauth/register', public_identifier: 'app_id', client_secret_required: false },
+      kelpie_connect: { issue: '/oauth/kelpie/connect', validate: '/oauth/kelpie/connect/validate', scope: 'kelpie.connect', app_id: 'com.unlikeotherai.kelpie', ticket_ttl_seconds: 120, configuration: 'KELPIE_CONNECT_RESOURCE; exact HTTPS /api/kelpie/connect gateway, absent disables' },
       admin_team_membership: 'POST /internal/admin/users/:userId/teams atomically adds an existing user to the selected organisation/team through the admin superuser boundary; see endpoints for its request and lifecycle rules.',
       ledger_runtime_keys: 'Admin Billing > selected product > Ledger runtime keys; existing platform-superuser metadata/issue/revoke API, one-time plaintext only, no installation or bootstrap authority.',
       sms_pricing: 'UOA owns final mobile-number and SMS quotes at /billing/v1/sms/quotes and /verify. Provider configuration and accepted dated currency policy are required; customer payloads contain final prices only.',
