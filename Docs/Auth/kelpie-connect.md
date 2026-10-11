@@ -129,3 +129,12 @@ factor/lifecycle/app revocation, and disabled operator configuration. All test w
 use isolated schemas; an unset database skips integration tests and proves no database
 coverage. Run Auth/Admin typecheck/lint and local headless Playwright for consent and
 the Kelpie operator scope field. Browser tests stay out of CI.
+
+Verified on Minis on 2026-10-11 using an isolated PostgreSQL database: the eight
+connection integration tests, three policy unit tests, native account/refresh/app
+regressions and twenty confidential exchange/resource validation regressions passed.
+API, Auth and Admin typechecks/builds and changed-file lint passed. Local headless
+Chrome passed the operator editor on desktop/mobile (four checks) and the native
+consent screen on desktop/mobile (two checks); their screenshots were inspected.
+Production operator provisioning, installed native clients and actual WSS revocation
+remain integration/deployment checks; the HTTP tests do not prove those are live.
