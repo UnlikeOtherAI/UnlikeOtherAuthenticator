@@ -2,10 +2,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Button } from '../../components/ui/Button';
 import { Card, CardHeader } from '../../components/ui/Card';
-import { FieldShell, TextAreaField } from '../../components/ui/FormFields';
 import { Badge } from '../../components/ui/Badge';
 import { billingSmsPolicyService as service } from '../../services/billing-sms-policy-service';
 import type { SmsFxPreview, SmsRoutePreview } from '../../schemas/billing-sms-policies';
+import { BillingSmsFxCard } from './BillingSmsFxCard';
 import { BillingSmsPolicyReview } from './BillingSmsPolicyReview';
 import { BillingSmsRoutePolicyForm } from './BillingSmsRoutePolicyForm';
 import { BillingSmsRecoveryPanel } from './BillingSmsRecoveryPanel';
@@ -15,11 +15,8 @@ const queryKey = ['admin', 'billing', 'sms-policies'];
 export function BillingSmsPoliciesPanel() {
   const client = useQueryClient();
   const policies = useQuery({ queryKey, queryFn: service.list });
-  const [xml, setXml] = useState('');
   const [fx, setFx] = useState<SmsFxPreview | null>(null);
   const [route, setRoute] = useState<SmsRoutePreview | null>(null);
-  const refresh = useMutation({ mutationFn: service.previewFx,
-    onSuccess: (result) => { acceptFx.reset(); setFx(result); } });
   const importRoute = useMutation({ mutationFn: service.previewRoute,
     onSuccess: (result) => { acceptRoute.reset(); setRoute(result); } });
   const acceptFx = useMutation({ mutationFn: async (reason: string) => {
@@ -34,18 +31,8 @@ export function BillingSmsPoliciesPanel() {
         Accepted policies apply only while fresh. A missing or expired policy blocks new quotes or dispatch.
         Customers receive final prices only. These controls do not enable billing or provision provider credentials.</p>
     </Card>
-    <Card className="space-y-4 p-5"><h3 className="font-semibold text-gray-900">Dated ECB reference rate</h3>
-      <p className="text-sm text-gray-500">Refresh the fixed ECB daily USD-per-EUR document, or import that source's XML.
-        Review its date, hash and expiry before explicitly accepting commercial use. Reimporting cannot extend the source date's seven-day validity.</p>
-      <Button disabled={refresh.isPending} onClick={() => refresh.mutate(undefined)}>
-        {refresh.isPending ? 'Fetching evidence...' : 'Refresh ECB evidence'}</Button>
-      <details><summary className="cursor-pointer text-sm text-blue-600">Import ECB daily XML</summary>
-        <div className="mt-3 space-y-3"><FieldShell label="ECB daily XML">
-          <TextAreaField value={xml} onChange={(event) => setXml(event.target.value)} maxLength={100_000} rows={5} />
-        </FieldShell><Button disabled={!xml.trim() || refresh.isPending} onClick={() => refresh.mutate(xml)}>
-          Review imported ECB evidence</Button></div></details>
-      {refresh.isError ? <p role="alert" className="text-sm text-red-600">Could not validate fresh ECB evidence. Retry refresh or import a current source document.</p> : null}
-    </Card>
+    <BillingSmsFxCard onAccepted={() => client.invalidateQueries({ queryKey })}
+      onReview={(result) => { acceptFx.reset(); setFx(result); }} />
     <Card className="space-y-4 p-5"><h3 className="font-semibold text-gray-900">Account-specific route fee bounds</h3>
       <p className="text-sm text-gray-500">Import reviewed documentation for the exact route. Provide both additional
         per-segment and per-message bounds; zero requires explicit supporting evidence. The server hashes the complete import.</p>

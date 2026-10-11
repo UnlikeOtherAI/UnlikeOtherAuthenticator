@@ -10,7 +10,7 @@ import { lockBillingAdminEffectAuthority, type BillingAdminEffectActor } from '.
 import { lockRefreshSessionUserDomain } from './refresh-session-lock.service.js';
 import { getAdminAuthDomain } from '../config/env.js';
 import {
-  parseSmsFxEvidence, readSmsFxEvidence, SMS_FX_POLICY, SMS_FX_SOURCE, type SmsFxEvidence,
+  parseSmsFxEvidence, readSmsFxEvidence, smsFxWithinBand, SMS_FX_POLICY, SMS_FX_SOURCE, type SmsFxEvidence,
 } from './billing-sms-fx-evidence.service.js';
 
 // Canonical decimal syntax fits Decimal(38,18) without rounding or JS float conversion.
@@ -162,6 +162,25 @@ export async function acceptSmsFxPolicy(actor: SmsPolicyActor, token: string, re
     // A preview that expires while waiting for authority locks cannot commit.
     await reviewed('fx', token, actor, now); fresh(value.expires_at, now);
     return insertSmsFxPolicy(tx, value, acceptor, now, acceptanceReason);
+  });
+}
+
+/** Refresh and accept: the renewal job's band check, accepted under the operator's own subject. */
+export async function acceptSmsFxRefresh(actor: SmsPolicyActor, read: () => Promise<SmsFxEvidence> = readSmsFxEvidence) {
+  const value = fxDto(await read());
+  const bandBps = getEnv().BILLING_SMS_POLICY_AUTORENEW_FX_BAND_BPS;
+  const acceptor = { kind: 'operator', actor } as const;
+  return getAdminPrisma().$transaction(async (tx) => {
+    await lockSmsPolicyAcceptance(tx, acceptor, value.source_digest);
+    const now = new Date(); fresh(value.expires_at, now);
+    const last = await tx.billingSmsFxSnapshot.findFirst({ where: { policy: SMS_FX_POLICY },
+      orderBy: [{ rateDate: 'desc' }, { acceptedAt: 'desc' }] });
+    if (!last) throw invalid('BILLING_SMS_FX_BASELINE_REQUIRED');
+    const lastRate = last.usdPerEur.toFixed();
+    if (!smsFxWithinBand(lastRate, value.usd_per_eur, bandBps)) throw invalid('BILLING_SMS_FX_OUTSIDE_BAND');
+    return insertSmsFxPolicy(tx, value, acceptor, now, `Refresh and accept: official ECB daily reference ` +
+      `${value.rate_date}, USD/EUR ${value.usd_per_eur}, within ±${(bandBps / 100).toFixed(2)}% of the ` +
+      `last accepted ${lastRate}; adopted as the commercial USD-per-EUR conversion.`);
   });
 }
 

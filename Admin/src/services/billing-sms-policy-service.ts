@@ -12,6 +12,11 @@ export const billingSmsPolicyService = {
     return SmsFxPreviewSchema.parse(await api.post<unknown>(`${base}/fx/preview`,
       xml === undefined ? {} : { xml }, options));
   },
+  /** Refresh and accept: the server applies the renewal band and writes the reason. */
+  async refreshAcceptFx() {
+    return SmsFxPolicySchema.parse(await api.post<unknown>(`${base}/fx/refresh-accept`,
+      { policy_understood: true }, options));
+  },
   async previewRoute(input: SmsRouteImport) {
     return SmsRoutePreviewSchema.parse(await api.post<unknown>(`${base}/routes/preview`,
       SmsRouteImportSchema.parse(input), options));

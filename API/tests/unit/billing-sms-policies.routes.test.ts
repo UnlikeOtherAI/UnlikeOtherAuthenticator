@@ -7,7 +7,7 @@ import { registerInternalAdminSmsPolicyRoutes } from '../../src/routes/internal/
 
 const db = vi.hoisted(() => ({ user: { findUnique: vi.fn() }, domainRole: { findUnique: vi.fn() } }));
 const service = vi.hoisted(() => ({ previewSmsFxPolicy: vi.fn(), previewSmsRoutePolicy: vi.fn(),
-  acceptSmsFxPolicy: vi.fn(), acceptSmsRoutePolicy: vi.fn(), listSmsPolicies: vi.fn(),
+  acceptSmsFxPolicy: vi.fn(), acceptSmsFxRefresh: vi.fn(), acceptSmsRoutePolicy: vi.fn(), listSmsPolicies: vi.fn(),
   serializeSmsFxPolicy: vi.fn((value) => value), serializeSmsRoutePolicy: vi.fn((value) => value) }));
 const recovery = vi.hoisted(() => ({ listSmsRecoveryResources: vi.fn(), readSmsRecoveryResource: vi.fn() }));
 const refunds = vi.hoisted(() => ({ verifySmsNumberRefund: vi.fn() }));
@@ -41,13 +41,14 @@ async function call(path: string, method: 'GET' | 'POST', credential?: string, p
 }
 it('guards every private evidence and recovery route against absent/ordinary/product/wrong-domain credentials', async () => {
   for (const credential of [undefined, await token('user'), await token('superuser', 'api.nessie.works'), await token('superuser', domain, 'product-secret')]) {
-    for (const [path, method] of [['', 'GET'], ['/fx/preview', 'POST'], ['/fx/accept', 'POST'],
+    for (const [path, method] of [['', 'GET'], ['/fx/preview', 'POST'], ['/fx/accept', 'POST'], ['/fx/refresh-accept', 'POST'],
       ['/routes/preview', 'POST'], ['/routes/accept', 'POST'], ['/recovery', 'GET'], ['/recovery/resource-1', 'GET'],
       ['/liabilities?kind=inbound', 'GET'], ['/recovery/resource-1/verify-refund', 'POST']] as const) {
       expect([401, 403]).toContain((await call(path, method, credential)).statusCode);
     }
   }
   expect(service.previewSmsFxPolicy).not.toHaveBeenCalled(); expect(service.listSmsPolicies).not.toHaveBeenCalled();
+  expect(service.acceptSmsFxRefresh).not.toHaveBeenCalled();
   expect(recovery.readSmsRecoveryResource).not.toHaveBeenCalled();
   expect(refunds.verifySmsNumberRefund).not.toHaveBeenCalled();
 });
@@ -90,4 +91,16 @@ it('uses the fixed refresh service with verified actor and refuses current revok
   db.domainRole.findUnique.mockResolvedValue({ role: 'SUPERUSER' });
   db.user.findUnique.mockResolvedValue({ tokenVersion: 1, lifecycleStatus: 'ACTIVE' });
   expect((await call('/fx/accept', 'POST', credential)).statusCode).toBe(401);
+});
+it('accepts Refresh and accept only with the explicit policy statement and never a caller-chosen reason', async () => {
+  const credential = await token();
+  for (const body of [{}, { policy_understood: false }, { policy_understood: true, acceptance_reason: 'Caller reason here' }]) {
+    expect((await call('/fx/refresh-accept', 'POST', credential, body)).statusCode).toBe(400);
+  }
+  expect(service.acceptSmsFxRefresh).not.toHaveBeenCalled();
+  service.acceptSmsFxRefresh.mockResolvedValue({ id: 'fx-2' });
+  const result = await call('/fx/refresh-accept', 'POST', credential, { policy_understood: true });
+  expect(result.statusCode).toBe(200); expect(result.headers['cache-control']).toBe('private, no-store');
+  expect(service.acceptSmsFxRefresh).toHaveBeenCalledWith({ userId: 'admin-1', tokenVersion: 0,
+    email: 'operator@example.test', domain });
 });

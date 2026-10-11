@@ -7,7 +7,7 @@ import { listSmsRecoveryResources, readSmsRecoveryResource } from '../../../serv
 import { listSmsRecoveryLiabilities } from '../../../services/billing-sms-liability-admin.service.js';
 import { SmsRefundRecoverySchema, verifySmsNumberRefund } from '../../../services/billing-sms-refund-recovery.service.js';
 import {
-  acceptSmsFxPolicy, acceptSmsRoutePolicy, listSmsPolicies, previewSmsFxPolicy,
+  acceptSmsFxPolicy, acceptSmsFxRefresh, acceptSmsRoutePolicy, listSmsPolicies, previewSmsFxPolicy,
   previewSmsRoutePolicy, serializeSmsFxPolicy, serializeSmsRoutePolicy,
   SmsRoutePolicyImportSchema, type SmsPolicyActor,
 } from '../../../services/billing-sms-policy-admin.service.js';
@@ -20,6 +20,8 @@ const Acceptance = z.object({ preview_token: z.string().min(1).max(100_000),
 const RouteAcceptance = Acceptance.extend({
   complete_segment_bound: z.literal(true), complete_message_bound: z.literal(true),
 }).strict();
+// One-button flow: the click is the attestation and the server writes the reason.
+const FxRefreshAcceptance = z.object({ policy_understood: z.literal(true) }).strict();
 function actor(request: FastifyRequest): SmsPolicyActor {
   const claims = request.adminAccessTokenClaims;
   if (!claims) throw new AppError('UNAUTHORIZED', 401, 'MISSING_ACCESS_TOKEN');
@@ -58,6 +60,10 @@ export function registerInternalAdminSmsPolicyRoutes(app: FastifyInstance) {
     const value = Acceptance.parse(request.body);
     const result = await acceptSmsFxPolicy(actor(request), value.preview_token, value.acceptance_reason);
     return reply.header('Cache-Control', 'private, no-store').send(serializeSmsFxPolicy(result));
+  });
+  app.post(`${base}/fx/refresh-accept`, guard, async (request, reply) => {
+    FxRefreshAcceptance.parse(request.body);
+    return reply.header('Cache-Control', 'private, no-store').send(serializeSmsFxPolicy(await acceptSmsFxRefresh(actor(request))));
   });
   app.post(`${base}/routes/preview`, guard, async (request, reply) => {
     const value = SmsRoutePolicyImportSchema.parse(request.body);
