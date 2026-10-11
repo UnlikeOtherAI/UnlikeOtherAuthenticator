@@ -179,3 +179,12 @@ PostgreSQL database: all nine connection integration tests passed, including 121
 consecutive domain-authenticated validations without consuming the native issuance
 bucket. Changed route ESLint passed. This is server-side HTTP evidence, not live WSS
 or production operator provisioning evidence.
+
+The local-pairing extension passed all sixteen connection/pairing integration
+tests on Minis against an isolated PostgreSQL schema on 2026-10-11. It covers
+same/different live subjects, expiry caps, issuing-consent narrowing, receiver
+revocation, proof binding/class confusion and both published integration
+contracts. Full workspace builds/typechecks and 2,507 DB-less API tests passed
+on Maxis; 674 database-dependent cases were skipped in that DB-less run.
+Changed API files passed ESLint. These are server tests; installed-client local
+pairing and production deployment still require separate verification.
