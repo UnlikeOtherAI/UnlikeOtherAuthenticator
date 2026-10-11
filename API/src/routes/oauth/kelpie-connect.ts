@@ -16,14 +16,18 @@ export function registerKelpieConnectRoutes(app: FastifyInstance): void {
         error instanceof Error && 'statusCode' in error && typeof error.statusCode === 'number' ? error.statusCode : 500;
       reply.status(status).send({ error: PUBLIC_ERROR_MESSAGE });
     });
-    const preHandler = [requireMcpOAuthPublicProfile, async () => { kelpieConnectResource(); },
-      createRateLimiter({ limit: 120, windowMs: 60_000, keyBuilder: (request) => `kelpie-connect:${request.ip}` })];
-    routes.post('/oauth/kelpie/connect', { preHandler }, async (request) => {
+    const preHandler = [requireMcpOAuthPublicProfile, async () => { kelpieConnectResource(); }];
+    routes.post('/oauth/kelpie/connect', { preHandler: [...preHandler,
+      createRateLimiter({ limit: 120, windowMs: 60_000, keyBuilder: (request) => `kelpie-connect:issue:${request.ip}` })],
+    }, async (request) => {
       const { resource } = z.object({ resource: z.string().min(1).max(2048) }).strict().parse(request.body);
       return issueKelpieConnectionTicket({ resource, authorization: request.headers.authorization }, request.adminDb);
     });
     routes.post('/oauth/kelpie/connect/validate', {
-      preHandler: [...preHandler, requireDomainHashAuthForDomainQuery()],
+      preHandler: [...preHandler, requireDomainHashAuthForDomainQuery(),
+        // A gateway validates many devices; native issuance must not exhaust its revocation checks.
+        createRateLimiter({ limit: 12000, windowMs: 60_000,
+          keyBuilder: () => `kelpie-connect:validate:${new URL(kelpieConnectResource()).host}` })],
     }, async (request) => {
       const { domain } = z.object({ domain: z.string().min(1).max(253) }).strict().parse(request.query);
       const { ticket } = z.object({ ticket: z.string().min(1).max(8192) }).strict().parse(request.body);
