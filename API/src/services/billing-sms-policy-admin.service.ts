@@ -9,7 +9,9 @@ import { AppError } from '../utils/errors.js';
 import { lockBillingAdminEffectAuthority, type BillingAdminEffectActor } from './billing-admin-effect-authority.service.js';
 import { lockRefreshSessionUserDomain } from './refresh-session-lock.service.js';
 import { getAdminAuthDomain } from '../config/env.js';
-import { parseSmsFxEvidence, readSmsFxEvidence, SMS_FX_POLICY, SMS_FX_SOURCE, type SmsFxEvidence } from './billing-sms-fx-evidence.service.js';
+import {
+  parseSmsFxEvidence, readSmsFxEvidence, SMS_FX_POLICY, SMS_FX_SOURCE, type SmsFxEvidence,
+} from './billing-sms-fx-evidence.service.js';
 
 // Canonical decimal syntax fits Decimal(38,18) without rounding or JS float conversion.
 const Bound = z.string().regex(/^(?:0|[1-9]\d{0,19})(?:\.\d{1,18})?$/);
@@ -37,6 +39,10 @@ const PreviewAudience = 'uoa:sms-operator-policy-preview:v1';
 const Reason = z.string().trim().min(8).max(500);
 export type SmsPolicyActor = BillingAdminEffectActor & { userId: string; tokenVersion: number };
 export type SmsRoutePolicyImport = z.infer<typeof SmsRoutePolicyImportSchema>;
+export type SmsRoutePolicyEvidence = z.infer<typeof RouteSchema>;
+/** An operator acceptance names the exact subject; the renewal job never claims one. */
+export type SmsPolicyAcceptor = { kind: 'operator'; actor: SmsPolicyActor } | { kind: 'renewal_job' };
+type FxPolicyValue = z.infer<typeof FxSchema>;
 
 function invalid(code = 'BILLING_SMS_POLICY_PREVIEW_INVALID') {
   return new AppError('BAD_REQUEST', 409, code);
@@ -49,10 +55,17 @@ function key() {
 function fresh(expiresAt: string, now: Date) {
   if (Date.parse(expiresAt) <= now.getTime()) throw invalid('BILLING_SMS_POLICY_EXPIRED');
 }
-async function lockAcceptance(tx: Prisma.TransactionClient, actor: SmsPolicyActor, digest: string) {
-  await lockRefreshSessionUserDomain({ userId: actor.userId, domain: getAdminAuthDomain() }, { prisma: tx });
-  await lockBillingAdminEffectAuthority(tx, actor);
+export async function lockSmsPolicyAcceptance(tx: Prisma.TransactionClient, acceptor: SmsPolicyAcceptor, digest: string) {
+  if (acceptor.kind === 'operator') {
+    await lockRefreshSessionUserDomain({ userId: acceptor.actor.userId, domain: getAdminAuthDomain() }, { prisma: tx });
+    await lockBillingAdminEffectAuthority(tx, acceptor.actor);
+  }
   await tx.$queryRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtextextended(${`uoa:sms-policy:${digest}`}, 0))::text`);
+}
+function acceptedBy(acceptor: SmsPolicyAcceptor) {
+  return acceptor.kind === 'operator'
+    ? { acceptedBy: 'operator', acceptedByUserId: acceptor.actor.userId }
+    : { acceptedBy: 'renewal_job', acceptedByUserId: null };
 }
 function fxDto(evidence: SmsFxEvidence) {
   return FxSchema.parse({ policy: evidence.policy, source: evidence.source,
@@ -60,7 +73,12 @@ function fxDto(evidence: SmsFxEvidence) {
     observed_at: evidence.observedAt.toISOString(), expires_at: evidence.expiresAt.toISOString(),
     usd_per_eur: evidence.usdPerEur });
 }
-async function preview(kind: 'fx' | 'route', evidence: object, actor: SmsPolicyActor, now: Date) {
+/** The complete-import digest every route acceptance binds. */
+function smsRouteImportDigest(value: SmsRoutePolicyImport): string {
+  return createHash('sha256').update(JSON.stringify(value)).digest('hex');
+}
+async function preview(kind: 'fx' | 'route', evidence: object,
+  actor: SmsPolicyActor, now: Date) {
   const expiresAt = new Date(now.getTime() + 5 * 60_000);
   const previewToken = await new SignJWT({ kind, evidence, tv: actor.tokenVersion })
     .setProtectedHeader({ alg: 'HS256', typ: 'sms-policy-preview+jwt' })
@@ -69,7 +87,8 @@ async function preview(kind: 'fx' | 'route', evidence: object, actor: SmsPolicyA
     .sign(key());
   return { evidence, preview_token: previewToken, preview_expires_at: expiresAt.toISOString() };
 }
-async function reviewed(kind: 'fx' | 'route', token: string, actor: SmsPolicyActor, now: Date) {
+async function reviewed(kind: 'fx' | 'route', token: string,
+  actor: SmsPolicyActor, now: Date) {
   try {
     const { payload, protectedHeader } = await jwtVerify(token, key(), { algorithms: ['HS256'],
       issuer: PreviewAudience, audience: PreviewAudience, subject: actor.userId, currentDate: now });
@@ -77,6 +96,43 @@ async function reviewed(kind: 'fx' | 'route', token: string, actor: SmsPolicyAct
         payload.tv !== actor.tokenVersion) throw invalid();
     return payload.evidence;
   } catch { throw invalid(); }
+}
+// Shared with the one-button Add country review, which assembles its own evidence.
+export { Bound as SmsPolicyBound, RouteSchema as SmsRoutePolicyEvidenceSchema, fresh as assertSmsPolicyFresh, preview as signSmsPolicyPreview, reviewed as readSmsPolicyPreview,
+  fxDto as smsFxPolicyValue };
+
+/** Append one FX acceptance; an exact retry returns the original without extending freshness. */
+export async function insertSmsFxPolicy(tx: Prisma.TransactionClient, value: FxPolicyValue,
+  acceptor: SmsPolicyAcceptor, now: Date, acceptanceReason: string) {
+  const existing = await tx.billingSmsFxSnapshot.findUnique({
+    where: { policy_sourceDigest: { policy: value.policy, sourceDigest: value.source_digest } },
+  });
+  if (existing) return existing;
+  return tx.billingSmsFxSnapshot.create({ data: {
+    policy: value.policy, source: value.source, sourceDigest: value.source_digest,
+    rateDate: new Date(`${value.rate_date}T00:00:00.000Z`), observedAt: new Date(value.observed_at),
+    expiresAt: new Date(value.expires_at), usdPerEur: value.usd_per_eur,
+    ...acceptedBy(acceptor), acceptedAt: now, acceptanceReason,
+  } });
+}
+
+/** Append one route acceptance; nothing ever updates or removes an accepted record. */
+export async function insertSmsRoutePolicy(tx: Prisma.TransactionClient, value: SmsRoutePolicyEvidence,
+  acceptor: SmsPolicyAcceptor, now: Date, acceptanceReason: string,
+  baseline: { providerPrice?: string | null; renewalOfId?: string | null } = {}) {
+  const existing = await tx.billingSmsRoutePolicy.findFirst({ where: {
+    evidenceDigest: value.evidence_digest, accountSid: value.account_sid, country: value.country,
+    direction: value.direction, currency: value.currency,
+  } });
+  if (existing) return existing;
+  return tx.billingSmsRoutePolicy.create({ data: {
+    accountSid: value.account_sid, country: value.country, direction: value.direction,
+    currency: value.currency, additionalPerSegment: value.additional_per_segment,
+    additionalPerMessage: value.additional_per_message, source: value.source,
+    evidenceDigest: value.evidence_digest, expiresAt: new Date(value.expires_at),
+    ...acceptedBy(acceptor), acceptedAt: now, acceptanceReason,
+    providerPrice: baseline.providerPrice ?? null, renewalOfId: baseline.renewalOfId ?? null,
+  } });
 }
 
 export async function previewSmsFxPolicy(actor: SmsPolicyActor, xml?: string) {
@@ -90,7 +146,7 @@ export async function previewSmsRoutePolicy(actor: SmsPolicyActor, input: SmsRou
   const value = SmsRoutePolicyImportSchema.parse(input); const now = new Date();
   fresh(value.expires_at, now);
   // Bind the entire reviewed document to its dimensional policy, not only a pasted digest.
-  const evidenceDigest = createHash('sha256').update(JSON.stringify(value)).digest('hex');
+  const evidenceDigest = smsRouteImportDigest(value);
   const { evidence: document, ...dimensions } = value;
   return { ...await preview('route', { ...dimensions, evidence_digest: evidenceDigest,
     observed_at: now.toISOString() }, actor, now), evidence_document: document };
@@ -99,42 +155,25 @@ export async function previewSmsRoutePolicy(actor: SmsPolicyActor, input: SmsRou
 export async function acceptSmsFxPolicy(actor: SmsPolicyActor, token: string, reason: string) {
   const acceptanceReason = Reason.parse(reason);
   const value = FxSchema.parse(await reviewed('fx', token, actor, new Date()));
+  const acceptor = { kind: 'operator', actor } as const;
   return getAdminPrisma().$transaction(async (tx) => {
-    await lockAcceptance(tx, actor, value.source_digest);
+    await lockSmsPolicyAcceptance(tx, acceptor, value.source_digest);
     const now = new Date();
     // A preview that expires while waiting for authority locks cannot commit.
     await reviewed('fx', token, actor, now); fresh(value.expires_at, now);
-    const existing = await tx.billingSmsFxSnapshot.findUnique({
-      where: { policy_sourceDigest: { policy: value.policy, sourceDigest: value.source_digest } },
-    });
-    if (existing) return existing; // Exact retry never rewrites acceptance or extends freshness.
-    return tx.billingSmsFxSnapshot.create({ data: {
-      policy: value.policy, source: value.source, sourceDigest: value.source_digest,
-      rateDate: new Date(`${value.rate_date}T00:00:00.000Z`), observedAt: new Date(value.observed_at),
-      expiresAt: new Date(value.expires_at), usdPerEur: value.usd_per_eur,
-      acceptedByUserId: actor.userId, acceptedAt: now, acceptanceReason,
-    } });
+    return insertSmsFxPolicy(tx, value, acceptor, now, acceptanceReason);
   });
 }
 
 export async function acceptSmsRoutePolicy(actor: SmsPolicyActor, token: string, reason: string) {
   const acceptanceReason = Reason.parse(reason);
   const value = RouteSchema.parse(await reviewed('route', token, actor, new Date()));
+  const acceptor = { kind: 'operator', actor } as const;
   return getAdminPrisma().$transaction(async (tx) => {
-    await lockAcceptance(tx, actor, value.evidence_digest); const now = new Date();
+    await lockSmsPolicyAcceptance(tx, acceptor, value.evidence_digest); const now = new Date();
     await reviewed('route', token, actor, now); fresh(value.expires_at, now);
-    const existing = await tx.billingSmsRoutePolicy.findFirst({ where: {
-      evidenceDigest: value.evidence_digest, accountSid: value.account_sid, country: value.country,
-      direction: value.direction, currency: value.currency,
-    } });
-    if (existing) return existing;
-    return tx.billingSmsRoutePolicy.create({ data: {
-      accountSid: value.account_sid, country: value.country, direction: value.direction,
-      currency: value.currency, additionalPerSegment: value.additional_per_segment,
-      additionalPerMessage: value.additional_per_message, source: value.source,
-      evidenceDigest: value.evidence_digest, expiresAt: new Date(value.expires_at),
-      acceptedByUserId: actor.userId, acceptedAt: now, acceptanceReason,
-    } });
+    // Manual evidence keeps its operator-chosen expiry, so it records no renewal baseline.
+    return insertSmsRoutePolicy(tx, value, acceptor, now, acceptanceReason);
   });
 }
 
@@ -149,7 +188,7 @@ export async function listSmsPolicies() {
 export function serializeSmsFxPolicy(value: Awaited<ReturnType<typeof acceptSmsFxPolicy>>) {
   if (value.policy !== SMS_FX_POLICY || value.source !== SMS_FX_SOURCE) throw invalid('BILLING_SMS_FX_PROVENANCE_INVALID');
   return { ...fxDto({ ...value, policy: SMS_FX_POLICY, source: SMS_FX_SOURCE,
-    usdPerEur: value.usdPerEur.toString() }), id: value.id,
+    usdPerEur: value.usdPerEur.toString() }), id: value.id, accepted_by: acceptedByKind(value.acceptedBy),
     accepted_by_user_id: value.acceptedByUserId, accepted_at: value.acceptedAt.toISOString(),
     acceptance_reason: value.acceptanceReason };
 }
@@ -159,6 +198,11 @@ export function serializeSmsRoutePolicy(value: Awaited<ReturnType<typeof acceptS
     additional_per_segment: value.additionalPerSegment.toString(),
     additional_per_message: value.additionalPerMessage.toString(), source: value.source,
     evidence_digest: value.evidenceDigest, expires_at: value.expiresAt.toISOString(),
-    accepted_by_user_id: value.acceptedByUserId, accepted_at: value.acceptedAt.toISOString(),
-    acceptance_reason: value.acceptanceReason };
+    accepted_by: acceptedByKind(value.acceptedBy), accepted_by_user_id: value.acceptedByUserId,
+    accepted_at: value.acceptedAt.toISOString(), acceptance_reason: value.acceptanceReason,
+    provider_price: value.providerPrice?.toString() ?? null, renewal_of_id: value.renewalOfId };
+}
+function acceptedByKind(value: string): 'operator' | 'renewal_job' {
+  if (value !== 'operator' && value !== 'renewal_job') throw invalid('BILLING_SMS_POLICY_PROVENANCE_INVALID');
+  return value;
 }

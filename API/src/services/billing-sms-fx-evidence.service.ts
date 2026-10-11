@@ -74,6 +74,19 @@ function fraction(decimal: string): { numerator: bigint; denominator: bigint } {
   return { numerator: BigInt(integer + digits), denominator: 10n ** BigInt(digits.length) };
 }
 
+/** Whether `next` lies within ±`bandBps` basis points of the last accepted rate, inclusive and exact. */
+export function smsFxWithinBand(lastAccepted: string, next: string, bandBps: number): boolean {
+  if (!Number.isSafeInteger(bandBps) || bandBps < 0 || bandBps > 10_000) throw unavailable();
+  const last = fraction(lastAccepted);
+  const candidate = fraction(next);
+  if (last.numerator === 0n) return false;
+  // |next - last| / last <= bps / 10000, cross-multiplied over both denominators.
+  const scaledNext = candidate.numerator * last.denominator;
+  const scaledLast = last.numerator * candidate.denominator;
+  const difference = scaledNext > scaledLast ? scaledNext - scaledLast : scaledLast - scaledNext;
+  return difference * 10_000n <= scaledLast * BigInt(bandBps);
+}
+
 /** Exact USD rational arithmetic, rounding once upwards at the specified billing quantum. */
 export function smsFinalUsdQuanta(input: {
   providerAmount: string; providerCurrency: string; usdPerEur: string;

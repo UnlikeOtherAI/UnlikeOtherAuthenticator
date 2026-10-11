@@ -46,7 +46,7 @@ test('operator reviews exact SMS evidence, retries acceptance, checks history an
     if (url.pathname.endsWith('/fx/accept')) {
       expect(input).toMatchObject({ preview_token: 'synthetic-fx-preview', policy_understood: true });
       if (++fxAttempts === 1) return json({ error: 'Synthetic failed acceptance' }, 503);
-      const accepted = { ...fx, id: 'fx-1', accepted_by_user_id: 'operator-fixture', accepted_at: now,
+      const accepted = { ...fx, id: 'fx-1', accepted_by: 'operator', accepted_by_user_id: 'operator-fixture', accepted_at: now,
         acceptance_reason: input.acceptance_reason }; policies.fx.push(accepted); return json(accepted);
     }
     if (url.pathname.endsWith('/routes/preview')) {
@@ -61,7 +61,8 @@ test('operator reviews exact SMS evidence, retries acceptance, checks history an
       expect(input).toMatchObject({ preview_token: 'synthetic-route-preview', policy_understood: true,
         complete_segment_bound: true, complete_message_bound: true });
       const { observed_at: _observed, ...terms } = routeEvidence;
-      const accepted = { ...terms, id: 'route-1', accepted_by_user_id: 'operator-fixture', accepted_at: now,
+      const accepted = { ...terms, id: 'route-1', accepted_by: 'operator', accepted_by_user_id: 'operator-fixture',
+        provider_price: null, renewal_of_id: null, accepted_at: now,
         acceptance_reason: input.acceptance_reason }; policies.routes.push(accepted); return json(accepted);
     }
     return json({ error: 'Unexpected operation' }, 400);

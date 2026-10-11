@@ -85,9 +85,9 @@ function PolicyStatus({ expiresAt }: { expiresAt: string }) {
   return <Badge variant={expired ? 'red' : 'green'}>{expired ? 'Expired' : 'Fresh'}</Badge>;
 }
 function EvidenceRecord({ source, digest, expiresAt, acceptedAt, actor, reason }: {
-  source: string; digest: string; expiresAt: string; acceptedAt: string; actor: string; reason: string;
+  source: string; digest: string; expiresAt: string; acceptedAt: string; actor: string | null; reason: string;
 }) {
   return <div className="mt-2 space-y-1 break-all text-xs text-gray-500"><p>{source}</p>
     <p className="font-mono">SHA-256 {digest}</p><p>Valid until {new Date(expiresAt).toLocaleString()}</p>
-    <p>Accepted {new Date(acceptedAt).toLocaleString()} by {actor}</p><p>{reason}</p></div>;
+    <p>Accepted {new Date(acceptedAt).toLocaleString()} by {actor ?? 'the renewal job'}</p><p>{reason}</p></div>;
 }

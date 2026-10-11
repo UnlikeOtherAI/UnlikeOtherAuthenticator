@@ -159,6 +159,10 @@ const EnvSchema = z
     BILLING_SMS_TWILIO_ACCOUNT_SID: z.string().regex(/^AC[0-9a-fA-F]{32}$/).optional(),
     BILLING_SMS_TWILIO_API_KEY_SID: z.string().regex(/^SK[0-9a-fA-F]{32}$/).optional(),
     BILLING_SMS_TWILIO_API_KEY_SECRET: z.string().min(1).optional(),
+    // Daily renewal of ECB and route-bound evidence; see Docs/Requirements/sms-deployment.md.
+    BILLING_SMS_POLICY_AUTORENEW_ENABLED: z.preprocess(normalizeBoolean, z.boolean().default(false)),
+    BILLING_SMS_POLICY_AUTORENEW_FX_BAND_BPS: z.coerce.number().int().min(1).max(2000).default(500),
+    BILLING_SMS_POLICY_AUTORENEW_LOOKAHEAD_DAYS: z.coerce.number().int().min(1).max(20).default(7),
     STRIPE_USAGE_EXPORT_INTERVAL_MINUTES: z.coerce.number().int().min(5).max(1440).default(60),
     STRIPE_AUTO_TOP_UP_INTERVAL_MINUTES: z.coerce.number().int().min(1).max(60).default(1),
     STRIPE_PRE_BOUNDARY_SAFETY_LEAD_MINUTES: z.coerce.number().int().min(5).max(1440).default(360),

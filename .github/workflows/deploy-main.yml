@@ -29,6 +29,9 @@ jobs:
       BILLING_SMS_ENABLED: ${{ vars.BILLING_SMS_ENABLED || 'false' }}
       BILLING_SMS_TWILIO_REGION: ${{ vars.BILLING_SMS_TWILIO_REGION || 'us1' }}
       UOA_SMS_PRICING_MODE: ${{ vars.UOA_SMS_PRICING_MODE || 'legacy' }}
+      BILLING_SMS_POLICY_AUTORENEW_ENABLED: ${{ vars.BILLING_SMS_POLICY_AUTORENEW_ENABLED || 'false' }}
+      BILLING_SMS_POLICY_AUTORENEW_FX_BAND_BPS: ${{ vars.BILLING_SMS_POLICY_AUTORENEW_FX_BAND_BPS || '500' }}
+      BILLING_SMS_POLICY_AUTORENEW_LOOKAHEAD_DAYS: ${{ vars.BILLING_SMS_POLICY_AUTORENEW_LOOKAHEAD_DAYS || '7' }}
       LEDGER_BILLING_BASE_URL: ${{ vars.LEDGER_BILLING_BASE_URL || 'https://ledger.unlikeotherai.com' }}
       LEDGER_BILLING_APP_KEY_ID: ${{ vars.LEDGER_BILLING_APP_KEY_ID }}
       LEDGER_BILLING_ASSERTION_AUDIENCE: ${{ vars.LEDGER_BILLING_ASSERTION_AUDIENCE || 'https://ledger.unlikeotherai.com' }}
@@ -110,12 +113,22 @@ jobs:
               ;;
           esac
 
-          for name in UOA_SMS_CONFIGURED BILLING_SMS_ENABLED; do
+          for name in UOA_SMS_CONFIGURED BILLING_SMS_ENABLED BILLING_SMS_POLICY_AUTORENEW_ENABLED; do
             case "${!name}" in
               true|false) ;;
               *) echo "$name must be exactly true or false"; exit 1 ;;
             esac
           done
+          if ! [[ "$BILLING_SMS_POLICY_AUTORENEW_FX_BAND_BPS" =~ ^[0-9]+$ ]] \
+            || (( BILLING_SMS_POLICY_AUTORENEW_FX_BAND_BPS < 1 || BILLING_SMS_POLICY_AUTORENEW_FX_BAND_BPS > 2000 )); then
+            echo "BILLING_SMS_POLICY_AUTORENEW_FX_BAND_BPS must be an integer from 1 to 2000"
+            exit 1
+          fi
+          if ! [[ "$BILLING_SMS_POLICY_AUTORENEW_LOOKAHEAD_DAYS" =~ ^[0-9]+$ ]] \
+            || (( BILLING_SMS_POLICY_AUTORENEW_LOOKAHEAD_DAYS < 1 || BILLING_SMS_POLICY_AUTORENEW_LOOKAHEAD_DAYS > 20 )); then
+            echo "BILLING_SMS_POLICY_AUTORENEW_LOOKAHEAD_DAYS must be an integer from 1 to 20"
+            exit 1
+          fi
           case "$BILLING_SMS_TWILIO_REGION" in
             us1|ie1) ;;
             *) echo "BILLING_SMS_TWILIO_REGION must be us1 or ie1"; exit 1 ;;
@@ -181,6 +194,7 @@ jobs:
           fi
           secret_vars="DATABASE_URL=uoa-auth-database-url:latest,SHARED_SECRET=uoa-auth-shared-secret:latest,GOOGLE_CLIENT_ID=uoa-auth-google-client-id:latest,GOOGLE_CLIENT_SECRET=uoa-auth-google-client-secret:latest,SMTP_PASSWORD=uoa-auth-smtp-password:latest,ADMIN_ACCESS_TOKEN_SECRET=uoa-admin-access-token-secret:latest,ADMIN_CONFIG_JWT=uoa-admin-config-jwt:latest,CONFIG_JWKS_JSON=uoa-auth-config-jwks-json:latest,DATABASE_ADMIN_URL=uoa-auth-database-admin-url:latest,MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK=uoa-auth-mcp-oauth-access-token-private-jwk:latest,TARIFF_SNAPSHOT_PRIVATE_JWK=uoa-auth-tariff-snapshot-private-jwk:latest,TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON=uoa-auth-tariff-snapshot-public-jwks-json:latest,UOA_BILLING_ASSERTION_SIGNING_PRIVATE_JWK=uoa-auth-billing-assertion-private-jwk:latest,UOA_BILLING_ASSERTION_PUBLIC_JWKS_JSON=uoa-auth-billing-assertion-public-jwks-json:latest,LEDGER_BILLING_APP_KEY=uoa-auth-ledger-billing-app-key:latest"
           env_vars="$env_vars,BILLING_SMS_ENABLED=$BILLING_SMS_ENABLED,BILLING_SMS_TWILIO_REGION=$BILLING_SMS_TWILIO_REGION,UOA_SMS_PRICING_MODE=$UOA_SMS_PRICING_MODE"
+          env_vars="$env_vars,BILLING_SMS_POLICY_AUTORENEW_ENABLED=$BILLING_SMS_POLICY_AUTORENEW_ENABLED,BILLING_SMS_POLICY_AUTORENEW_FX_BAND_BPS=$BILLING_SMS_POLICY_AUTORENEW_FX_BAND_BPS,BILLING_SMS_POLICY_AUTORENEW_LOOKAHEAD_DAYS=$BILLING_SMS_POLICY_AUTORENEW_LOOKAHEAD_DAYS"
           if [[ "$UOA_SMS_CONFIGURED" == "true" ]]; then
             secret_vars="$secret_vars,BILLING_SMS_TWILIO_ACCOUNT_SID=uoa-auth-sms-twilio-account-sid:latest,BILLING_SMS_TWILIO_API_KEY_SID=uoa-auth-sms-twilio-us1-api-key-sid:latest,BILLING_SMS_TWILIO_API_KEY_SECRET=uoa-auth-sms-twilio-us1-api-key-secret:latest,UOA_SMS_COMMERCIAL_POLICY_VERSION=uoa-auth-sms-commercial-policy-version:latest"
             if [[ "$UOA_SMS_PRICING_MODE" == "provider_markup" ]]; then

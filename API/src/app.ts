@@ -23,6 +23,7 @@ import { startCreditSettlementScheduler } from './services/billing-credit-settle
 import { startSeatTransitionScheduler } from './services/billing-seat-transition-scheduler.service.js';
 import { startManualCycleReconciliationScheduler } from './services/billing-cycle-manual-reconciliation-scheduler.service.js';
 import { startBillingCycleCloseScheduler } from './services/billing-cycle-close-scheduler.service.js';
+import { startSmsPolicyRenewalScheduler } from './services/billing-sms-policy-renewal-scheduler.service.js';
 import { preloadBillingAssertionSigningKey } from './services/billing-ledger-collector.service.js';
 import { sweepExpiredClaims } from './services/integration-claim.service.js';
 import { pruneExpiredSecurityData } from './services/retention-pruning.service.js';
@@ -285,6 +286,12 @@ export async function createApp(): Promise<FastifyInstance> {
       app.addHook('onClose', async () => {
         closedCycleScheduler.stop();
       });
+      if (env.BILLING_SMS_POLICY_AUTORENEW_ENABLED) {
+        const smsPolicyRenewalScheduler = startSmsPolicyRenewalScheduler({ log: app.log });
+        app.addHook('onClose', async () => {
+          smsPolicyRenewalScheduler.stop();
+        });
+      }
     }
   } else {
     app.log.warn('DATABASE_URL not set; database is disabled');

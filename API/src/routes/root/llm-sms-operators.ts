@@ -16,6 +16,14 @@ in the operator archive. Signed reviews last five minutes and bind operator and
 credential epoch. Acceptance rechecks live ACTIVE platform authority under locks,
 records subject/time/reason immutably and refuses stale evidence. Responses are
 private/no-store. These controls neither enable billing nor provision resources.
+Each record names accepted_by: operator (with accepted_by_user_id) or
+renewal_job (no subject). With BILLING_SMS_POLICY_AUTORENEW_ENABLED a daily job
+accepts a newer ECB rate within BILLING_SMS_POLICY_AUTORENEW_FX_BAND_BPS of the
+last accepted one, and re-attests routes expiring within
+BILLING_SMS_POLICY_AUTORENEW_LOOKAHEAD_DAYS whose account Pricing API price is
+not above the provider_price recorded at operator acceptance (renewal_of_id
+names that acceptance). It only appends records. Anything else opens one alert
+and emails platform superusers once. Rows without provider_price need a person.
 Selected product > App keys > SMS runtime issues purpose sms_runtime independently
 of customer lifecycle, entitlement and Ledger keys, with no redirect origins.
 Transfer one-time plaintext only through approved deployment secrets.

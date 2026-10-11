@@ -155,6 +155,53 @@ canonical prepaid credit and budget, current authority, assigned allocation and,
 for an agent, the current explicit responsible-agent grant. Nessie's destination
 permission gate remains independent of country pricing and billing acceptance.
 
+### Automatic policy renewal
+
+With `BILLING_SMS_POLICY_AUTORENEW_ENABLED=true` a job runs at startup and then
+daily on each instance. Every step is idempotent across instances, and it only
+appends records: accepted evidence is never edited, which the append-only
+triggers enforce.
+
+- **ECB rate.** The job fetches the same fixed official XML, with the same
+  parser and SHA-256 as the operator import. It accepts the document only when
+  its date is newer than the last accepted rate and its USD-per-EUR is within
+  `BILLING_SMS_POLICY_AUTORENEW_FX_BAND_BPS` (default 500, that is ±5%) of the
+  last accepted rate. The record names `accepted_by = renewal_job`, has no UOA
+  subject, and carries a fixed reason. Expiry is still seven days from the ECB
+  source date. A failed fetch or parse, a rate outside the band, or no accepted
+  rate to compare against raises an alert and accepts nothing.
+- **Route bounds.** For the configured Twilio account, each route
+  (country, direction, currency) whose latest fresh policy expires within
+  `BILLING_SMS_POLICY_AUTORENEW_LOOKAHEAD_DAYS` (default 7) is re-attested only
+  when the account's current Pricing API price for that route
+  (`current_price`, the same read quotes use) is at or below the
+  `provider_price` recorded when an operator accepted the bounds. The renewal
+  copies that operator acceptance's bounds and source, references it through
+  `renewal_of_id`, hashes a renewal document (the original evidence digest
+  plus the fresh price reading), and lasts 30 days from the check. A database
+  trigger refuses any renewal whose bounds, source or account differ from its
+  operator acceptance, or whose price is above the attested one. If the price
+  rose, or the Pricing API cannot be read, or no price was recorded, nothing is
+  renewed and an alert names the route and both prices.
+- **Who still needs a person.** `provider_price` is recorded only by
+  acceptances that read it from the Pricing API. Rows accepted before this
+  column existed, and manual evidence, keep `NULL`. They never renew
+  automatically, because manual evidence carries an operator-chosen,
+  source-supported expiry. The job raises `route_needs_operator` for them
+  inside the look-ahead window. An existing row is never backfilled: the table
+  is append-only, so a person accepts the route again instead.
+- **Alerts.** Each condition opens one row in `billing_sms_policy_alerts`
+  (one open row per kind and subject, enforced by a partial unique index). The
+  open emails every `ADMIN_AUTH_DOMAIN` superuser once through the existing
+  email sender, and the row resolves when the condition clears. Later passes
+  only refresh `last_seen_at`. Without `EMAIL_FROM` the email is skipped and
+  logged.
+
+The job needs the SMS provider configuration, so routes are skipped (and logged)
+while `BILLING_SMS_ENABLED` or the Twilio credentials are absent. The scheduler is
+an in-process timer like the other billing jobs; it relies on the always-on
+instance that `STRIPE_BILLING_ENABLED=true` already requires.
+
 ## 4. Durable Cloud Run deployment
 
 `.github/workflows/deploy-main.yml` uses `--set-env-vars` and `--set-secrets`, so
@@ -167,6 +214,11 @@ Use these repository variables with the existing deployment workflow:
   Default `legacy` attaches the two legacy commercial settings instead.
 - `BILLING_SMS_TWILIO_REGION=ie1`: select the agreed IE1 messaging/Lookup region.
   Default is `us1`.
+- `BILLING_SMS_POLICY_AUTORENEW_ENABLED=true`: start the daily renewal job
+  described in §3. Default is false, so deploying the code changes nothing.
+  `BILLING_SMS_POLICY_AUTORENEW_FX_BAND_BPS` (1–2,000, default 500) and
+  `BILLING_SMS_POLICY_AUTORENEW_LOOKAHEAD_DAYS` (1–20, default 7) tune it; the
+  workflow validates all three and forwards them on every deployment.
 - `BILLING_SMS_ENABLED=true`: enable the runtime only after provider, policy,
   accepted evidence and product permission checks are ready. Default is false.
   Deployment refuses this flag without `UOA_SMS_CONFIGURED=true` and

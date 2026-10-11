@@ -19,11 +19,12 @@ export const SmsRouteImportSchema = z.object({
 export const SmsRouteEvidenceSchema = SmsRouteImportSchema.omit({ evidence: true }).extend({
   evidence_digest: z.string().regex(/^[a-f0-9]{64}$/), observed_at: z.string().datetime(),
 }).strict();
-const accepted = { id: z.string(), accepted_by_user_id: z.string(),
-  accepted_at: z.string().datetime(), acceptance_reason: z.string() };
+// An operator acceptance names its UOA subject; a renewal-job acceptance has none.
+const accepted = { id: z.string(), accepted_by: z.enum(['operator', 'renewal_job']),
+  accepted_by_user_id: z.string().nullable(), accepted_at: z.string().datetime(), acceptance_reason: z.string() };
 export const SmsFxPolicySchema = SmsFxEvidenceSchema.extend(accepted).strict();
 export const SmsRoutePolicySchema = SmsRouteEvidenceSchema.omit({ observed_at: true })
-  .extend(accepted).strict();
+  .extend({ ...accepted, provider_price: decimal.nullable(), renewal_of_id: z.string().nullable() }).strict();
 export const SmsPoliciesSchema = z.object({ fx: z.array(SmsFxPolicySchema),
   routes: z.array(SmsRoutePolicySchema) }).strict();
 const preview = { preview_token: z.string(), preview_expires_at: z.string().datetime() };
