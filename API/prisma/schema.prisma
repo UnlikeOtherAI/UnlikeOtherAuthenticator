@@ -4849,6 +4849,7 @@ model BillingSmsQuote {
   commercialPolicyVersion String @map("commercial_policy_version") @db.VarChar(80)
   monthlyFeeEur Decimal @map("monthly_fee_eur") @db.Decimal(18, 6)
   messageMarkupBps Int @map("message_markup_bps")
+  monthlyMarkupBps Int @default(0) @map("monthly_markup_bps")
   id                 String   @id @default(cuid())
   serviceId          String   @map("service_id")
   appKeyId           String   @map("app_key_id")

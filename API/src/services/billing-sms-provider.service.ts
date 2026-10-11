@@ -11,7 +11,11 @@ const messaging = countryPrice.extend({
     carrier: z.string(), mcc: z.string(), mnc: z.string(), prices: z.array(price),
   })),
 });
-const numbers = countryPrice.extend({ phone_number_prices: z.array(price) });
+// Monthly-only checkout cannot silently drop newly exposed setup or ancillary fees.
+const numberPrice = price.extend({ base_price: money.nullable().optional() }).strict();
+const numbers = countryPrice.extend({
+  phone_number_prices: z.array(numberPrice), url: z.string().nullable().optional(),
+}).strict();
 
 /** Private provider evidence; never serialize this object into customer responses. */
 export type SmsPrivatePrice = {
