@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { llmSmsOperatorsMarkdown } from './llm-sms-operators.js';
 import { llmNativeAppsMarkdown } from './llm-native-apps.js';
-// Native app integration includes Kelpie ticket issuance and live gateway validation.
+// Native app integration includes direct connectivity and same-account local pairing proofs.
 import { llmWebsiteServicesMarkdown } from './llm-website-services.js';
 
 import { llmAvatarsMarkdown } from './llm-avatars.js';

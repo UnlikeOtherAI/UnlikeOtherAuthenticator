@@ -8,6 +8,14 @@ For the full product spec, see [brief.md](./brief.md). For tech stack, see [tech
 
 ## Guiding Principles
 
+Kelpie account connectivity uses `routes/oauth/kelpie-connect.ts` and
+`services/oauth/kelpie-connect.service.ts`. Same-account LAN admission adds
+`routes/oauth/kelpie-pair.ts` and `services/oauth/kelpie-pair.service.ts`, reusing
+the same locked native/account authority and resource signer with a distinct
+challenge-bound ticket class. Invalid requester proof returns inactive; receiver
+authority failures retain normal account errors. Contracts live in
+`routes/root/schema.oauth-account.ts` and `routes/root/llm-native-apps.ts`.
+
 - **No code file longer than 500 lines.** If a file approaches this limit, split it.
 - **One responsibility per file.** A route file handles routing. A service file handles logic. They don't mix.
 - **Thin routes, fat services.** Route handlers validate input, call a service, and return a response. Business logic lives in services.

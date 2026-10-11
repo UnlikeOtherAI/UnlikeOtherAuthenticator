@@ -185,4 +185,96 @@ describe.skipIf(!process.env.DATABASE_URL)('Kelpie connection authority', () => 
     process.env.KELPIE_CONNECT_RESOURCE = resource; process.env.MCP_OAUTH_PUBLIC_PROFILE_ENABLED = 'false';
     expect((await issue()).statusCode).toBe(404);
   });
+
+  const binding = { challenge: 'c'.repeat(43), clientId: 'cli-client' };
+  function pairIssue(value = accountToken) {
+    return app.inject({ method: 'POST', url: '/oauth/kelpie/pair',
+      headers: { authorization: `Bearer ${value}` }, payload: binding });
+  }
+  function pairValidate(ticket: string, value = accountToken, extra: Record<string, unknown> = {}) {
+    return app.inject({ method: 'POST', url: '/oauth/kelpie/pair/validate',
+      headers: { authorization: `Bearer ${value}` }, payload: { ...binding, ticket, ...extra } });
+  }
+  async function pairingTicket() {
+    const result = await pairIssue(); expect(result.statusCode, result.body).toBe(200);
+    return result.json().pairing_ticket as string;
+  }
+  it('issues a profile-free local proof independently of gateway configuration and validates the same live subject', async () => {
+    delete process.env.KELPIE_CONNECT_RESOURCE;
+    const result = await pairIssue();
+    expect(result.statusCode, result.body).toBe(200);
+    expect(result.headers['cache-control']).toBe('no-store');
+    expect(result.json()).toMatchObject({ token_type: 'Bearer', expires_in: 120 });
+    const claims = decodeJwt(result.json().pairing_ticket);
+    expect(claims).toMatchObject({ token_use: 'kelpie_pair', sub: userId,
+      aud: 'urn:unlikeotherai:kelpie:pair:' + binding.challenge, challenge: binding.challenge,
+      pairing_client_id: binding.clientId, app_id: appId, scope: 'kelpie.connect' });
+    for (const field of ['email', 'name', 'avatar', 'domain', 'org', 'role']) expect(claims).not.toHaveProperty(field);
+    const live = await pairValidate(result.json().pairing_ticket, await token({ scope: 'profile' }));
+    expect(live.statusCode, live.body).toBe(200);
+    expect(live.json()).toEqual({ active: true, expires_at: claims.exp! * 1000 });
+    expect(live.headers['cache-control']).toBe('no-store');
+  });
+  it('rejects another authorized account without invalidating the receiver session or exposing identity', async () => {
+    const other = await handle.prisma.user.create({ data: { email: 'pair-other@example.com', userKey: 'pair-other@example.com' } });
+    const result = await pairIssue(await token({ subject: other.id, email: other.email }));
+    expect(result.statusCode, result.body).toBe(200);
+    const decision = await pairValidate(result.json().pairing_ticket);
+    expect(decision.statusCode).toBe(200); expect(decision.json()).toEqual({ active: false });
+    expect((await pairValidate(await pairingTicket())).json().active).toBe(true);
+  });
+  it('rejects local proof class/audience/binding/expiry misuse with a non-signout decision', async () => {
+    const value = await pairingTicket(); const claims = decodeJwt(value);
+    for (const extra of [{ token_use: 'kelpie_connect' }, { token_use: 'public_oauth' }, { app_id: 'com.other.app' },
+      { aud: resource }, { aud: [claims.aud] }, { challenge: 'other' }, { pairing_client_id: 'other' },
+      { tv: -1 }, { exp: claims.iat! - 1 }, { exp: claims.iat! + 121 }, { iat: claims.iat! + 600 }]) {
+      const forged = await new SignJWT({ ...claims, ...extra }).setProtectedHeader({ alg: 'RS256', kid: 'kelpie-test', typ: 'at+jwt' }).sign(privateKey);
+      const decision = await pairValidate(forged);
+      expect(decision.statusCode, decision.body).toBe(200); expect(decision.json()).toEqual({ active: false });
+      expect(decision.headers['cache-control']).toBe('no-store');
+    }
+    for (const invalid of [accountToken, await ticket(), value.slice(0, -4) + 'aaaa']) {
+      expect((await pairValidate(invalid)).json()).toEqual({ active: false });
+    }
+    expect((await pairValidate(value, accountToken, { clientId: 'another-client' })).json()).toEqual({ active: false });
+    expect((await pairValidate(value, accountToken, { challenge: 'd'.repeat(43) })).json()).toEqual({ active: false });
+    expect((await validate(value)).statusCode).toBe(401);
+    expect((await pairIssue(value)).statusCode).toBe(401);
+  });
+  it('caps local access at both account expiries and requires existing connection consent for issuance', async () => {
+    const result = await pairIssue(await token({ ttlSeconds: 5 }));
+    expect(result.statusCode).toBe(200); expect(result.json().expires_in).toBeLessThanOrEqual(5);
+    const claims = decodeJwt(await token({ ttlSeconds: 3 }));
+    const live = await pairValidate(await pairingTicket(), await token({ ttlSeconds: 3 }));
+    expect(live.statusCode).toBe(200); expect(live.json().expires_at).toBeLessThanOrEqual((claims.exp! + 1) * 1000);
+    expect((await pairIssue(await token({ scope: 'profile' }))).statusCode).toBe(403);
+  });
+  it('rechecks issuing client consent while keeping a healthy receiving client signed in', async () => {
+    const registered = await app.inject({ method: 'POST', url: '/oauth/register', payload: {
+      app_id: appId, redirect_uris: [redirect], scope: 'profile',
+    } });
+    expect(registered.statusCode).toBe(201);
+    const receiver = await token({ clientId: registered.json().client_id, scope: 'profile' });
+    const value = await pairingTicket();
+    expect((await pairValidate(value, receiver)).json().active).toBe(true);
+    await handle.prisma.oAuthClient.update({ where: { clientId }, data: { scopes: ['profile'] } });
+    const rejected = await pairValidate(value, receiver);
+    expect(rejected.statusCode, rejected.body).toBe(200); expect(rejected.json()).toEqual({ active: false });
+  });
+  it('reserves 401 for a receiver whose own live account authority is invalid', async () => {
+    const value = await pairingTicket();
+    await handle.prisma.user.update({ where: { id: userId }, data: { tokenVersion: 1 } });
+    const rejected = await pairValidate(value);
+    expect(rejected.statusCode).toBe(401); expect(rejected.json()).toEqual({ error: 'Request failed' });
+    const fresh = await token({ credentialEpoch: 1 });
+    expect((await pairValidate(value, fresh)).json()).toEqual({ active: false });
+  });
+  it('publishes local pairing in both integration contracts and gates it on the public profile', async () => {
+    const schema = (await app.inject('/api')).json();
+    expect(schema.endpoints.some((endpoint: { path: string }) => endpoint.path === '/oauth/kelpie/pair')).toBe(true);
+    expect((await app.inject('/llm')).body).toContain('/oauth/kelpie/pair/validate');
+    process.env.MCP_OAUTH_PUBLIC_PROFILE_ENABLED = 'false';
+    const disabled = await pairIssue(); expect(disabled.statusCode).toBe(404);
+    expect(disabled.headers['cache-control']).toBe('no-store');
+  });
 });

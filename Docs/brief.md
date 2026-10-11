@@ -1,5 +1,18 @@
 # Central OAuth & Auth Service — Full Build Brief
 
+## Same-account Kelpie local pairing (2026-10-11)
+
+Authorized same-subject account connections and LAN CLI/MCP pairing require no
+additional Allow dialog. The LAN path uses a fresh device challenge and a
+profile-free, challenge/client-bound UOA proof with its own token class, valid
+at most120seconds. UOA checks both current native account authorities and exact
+subject equality before admitting access; the receiver repeats live validation
+before each request and holds only an expiring in-memory grant. Existing
+kelpie.connect consent authorizes issuance; consent is never silently widened.
+Invalid requester proof returns an inactive decision rather than signing out a
+healthy receiver. Unauthenticated local callers keep ordinary manual pairing.
+See [Kelpie account connectivity](Auth/kelpie-connect.md) for both endpoints.
+
 ## Product action verification (2026-09-24)
 
 Products can request fresh verification for an exact sensitive action through

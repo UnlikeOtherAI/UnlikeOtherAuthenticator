@@ -5,6 +5,7 @@ import { registerPublicSocialRoutes } from './social.js';
 
 import { registerOAuthAccountRoutes } from './account.js';
 import { registerKelpieConnectRoutes } from './kelpie-connect.js';
+import { registerKelpiePairRoutes } from './kelpie-pair.js';
 import { registerOAuthAuthorizeRoute } from './authorize.js';
 import { registerOAuthJwksRoute } from './jwks.js';
 import { registerOAuthLoginRoute } from './login.js';
@@ -20,6 +21,7 @@ export function registerOAuthRoutes(app: FastifyInstance): void {
   registerPublicSocialRoutes(app);
   registerOAuthAccountRoutes(app);
   registerKelpieConnectRoutes(app);
+  registerKelpiePairRoutes(app);
   registerOAuthMetadataRoute(app);
   registerOAuthJwksRoute(app);
   registerOAuthRegisterRoute(app);
