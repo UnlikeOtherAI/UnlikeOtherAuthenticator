@@ -70,7 +70,7 @@ export async function validateKelpieConnectionTicket(params: {
       algorithms: ['RS256'], typ: 'at+jwt', issuer, audience: resource,
       requiredClaims: ['sub', 'iat', 'exp', 'jti', 'client_id', 'app_id', 'tv', 'twofa', 'scope', 'token_use'],
     })).payload;
-    if (payload.token_use !== 'kelpie_connect' || payload.scope !== KELPIE_CONNECT_SCOPE ||
+    if (payload.aud !== resource || payload.token_use !== 'kelpie_connect' || payload.scope !== KELPIE_CONNECT_SCOPE ||
         payload.app_id !== KELPIE_APP_ID || typeof payload.sub !== 'string' || !payload.sub ||
         typeof payload.client_id !== 'string' || !payload.client_id || typeof payload.jti !== 'string' || !payload.jti ||
         typeof payload.tv !== 'number' || !Number.isSafeInteger(payload.tv) || payload.tv < 0 ||
