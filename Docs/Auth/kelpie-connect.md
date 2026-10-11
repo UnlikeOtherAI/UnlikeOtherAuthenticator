@@ -84,6 +84,11 @@ credential-free HTTPS URL with path `/api/kelpie/connect`. Production is
 `https://api.nessie.works/api/kelpie/connect`. The dedicated allowlist does not expand
 `MCP_OAUTH_RESOURCES_SUPPORTED` or permit generic public OAuth tokens for Nessie.
 
+Ticket issuance has a separate 120/minute IP bucket. Authenticated gateway
+validation has a 12,000/minute resource-host bucket after domain authentication,
+so reconnects or several active phones do not exhaust live revocation checks
+through the native issuance limit.
+
 1. Deploy UOA code and the existing public-profile signing environment. Set the
    repository variable using `gh variable set KELPIE_CONNECT_RESOURCE --repo
    UnlikeOtherAI/UnlikeOtherAuthenticator --body
