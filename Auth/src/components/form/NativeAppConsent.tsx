@@ -9,6 +9,7 @@ export function NativeAppConsent() {
   if (grants.includes('profile') || grants.includes('email')) access.push('your profile');
   if (grants.includes('settings.write')) access.push('permission to read and save your personal settings, including favourites');
   else if (grants.includes('settings.read')) access.push('permission to read your personal settings, including favourites');
+  if (grants.includes('kelpie.connect')) access.push('permission to connect this device to your Nessie account for work you request');
   return <div className="my-4 text-sm text-[var(--uoa-color-muted)]">
     {name ? <p className="mb-2 font-medium text-[var(--uoa-color-text)]">{name}</p> : null}
     {access.length ? <p>Signing in gives this app {access.join(' and ')}.</p> : null}

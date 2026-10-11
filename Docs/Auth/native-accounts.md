@@ -23,9 +23,14 @@ from the administrative domain. The issuer remains `https://authentication.unlik
    [Native refresh tokens](#native-refresh-tokens).
 
 Scopes are the configured `MCP_OAUTH_SCOPES_SUPPORTED` allowlist (default `openid`,
-`profile`, `email`, `settings.read`, `settings.write`) intersected with the registered
+`profile`, `email`, `settings.read`, `settings.write`, `kelpie.connect`) intersected with the registered
 client's grants. Registering an app does not authenticate a human or confer admin access.
 Public clients cannot call confidential `/settings/me` using their token.
+
+`kelpie.connect` is dedicated to the exact enabled registered Kelpie app and connects
+its account to Nessie using a profile-free short-lived ticket and live authority
+validation. Existing refresh grants never gain that scope implicitly; see
+[Kelpie account connectivity](kelpie-connect.md) for consent migration and provisioning.
 
 ## Profile and personal settings
 

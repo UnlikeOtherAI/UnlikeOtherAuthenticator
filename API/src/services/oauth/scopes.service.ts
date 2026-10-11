@@ -2,7 +2,7 @@ import { getEnv } from '../../config/env.js';
 import { AppError } from '../../utils/errors.js';
 
 export function publicOAuthScopes(): string[] {
-  return (getEnv().MCP_OAUTH_SCOPES_SUPPORTED ?? 'openid,profile,email,settings.read,settings.write')
+  return (getEnv().MCP_OAUTH_SCOPES_SUPPORTED ?? 'openid,profile,email,settings.read,settings.write,kelpie.connect')
     .split(',').map((scope) => scope.trim()).filter(Boolean);
 }
 

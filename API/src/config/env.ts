@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import dotenv from 'dotenv';
+import { normalizeBoolean } from './env-values.js';
+import { oauthEnvironmentFields, addOAuthEnvironmentIssues } from './oauth-env.js';
 
 import { privateRs256JwkKeyId, publicRs256JwkKeyIds } from '../utils/rs256-jwk.js';
 import { addBillingEnvironmentIssues } from './billing-env-validation.js';
@@ -22,14 +24,6 @@ function isValidAccessTokenTtl(value: string): boolean {
   const minutes = Number(match[1]);
   if (!Number.isInteger(minutes)) return false;
   return minutes >= 15 && minutes <= 60;
-}
-
-function normalizeBoolean(input: unknown): unknown {
-  if (typeof input !== 'string') return input;
-  const normalized = input.trim().toLowerCase();
-  if (normalized === 'true' || normalized === '1') return true;
-  if (normalized === 'false' || normalized === '0' || normalized === '') return false;
-  return input;
 }
 
 const EnvSchema = z
@@ -134,24 +128,7 @@ const EnvSchema = z
     AI_TRANSLATION_PROVIDER: z.enum(['disabled', 'openai']).default('disabled'),
     OPENAI_API_KEY: z.string().min(1).optional(),
     OPENAI_MODEL: z.string().min(1).optional(),
-    // RS256 private JWK (JSON) shared by confidential resource-token issuance and,
-    // only when explicitly enabled below, the public-client / MCP OAuth profile.
-    // Its public half is served at GET /oauth/jwks.json for resource verification.
-    // Key presence alone MUST NOT enable public registration/login/token routes.
-    MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK: z.string().min(1).optional(),
-    MCP_OAUTH_PUBLIC_PROFILE_ENABLED: z.preprocess(normalizeBoolean, z.boolean().default(false)),
-    // First-party config for the profile (no client config_url): the auth "domain"
-    // used for tenant scope, and the auth methods offered on the login screen.
-    MCP_OAUTH_DOMAIN: z.string().min(1).optional(),
-    MCP_OAUTH_ENABLED_AUTH_METHODS: z.string().min(1).optional(),
-    // Comma-separated OAuth scopes advertised in metadata (informational; this profile
-    // grants full user context like the rest of the service). Defaults to "openid".
-    MCP_OAUTH_SCOPES_SUPPORTED: z.string().min(1).optional(),
-    // Optional comma-separated allowlist of resource-server URIs (RFC 8707) this profile
-    // may issue tokens for. When a client supplies `resource`, it must exactly match one
-    // of these; otherwise the request is rejected (invalid_target). Closes the
-    // confused-deputy: a public client cannot mint a token for an arbitrary `aud`.
-    MCP_OAUTH_RESOURCES_SUPPORTED: z.string().min(1).optional(),
+    ...oauthEnvironmentFields,
     // Dedicated current RS256 key for content-free tariff/entitlement snapshots.
     // It is required together with the public overlap set served at
     // GET /billing/v1/jwks.json.
@@ -170,30 +147,6 @@ const EnvSchema = z
       .min(1)
       .refine((value) => publicRs256JwkKeyIds(value) !== undefined, {
         message: 'TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON must contain public-only RS256 RSA keys',
-      })
-      .optional(),
-    // Dedicated RS256 signer for the user access token relying parties receive.
-    // Without it the token is HS256 over SHARED_SECRET, which is also the domain
-    // hash secret, the refresh-token pepper, and the login_token / 2FA / social
-    // bridge signing key — so it can never be published for relying parties to
-    // verify against. Configuring both values switches issuance to RS256 and
-    // publishes the verification key at GET /oauth/jwks.json; UOA keeps accepting
-    // already-issued HS256 tokens either way. See Docs/Auth/access-token-verification.md.
-    USER_ACCESS_TOKEN_PRIVATE_JWK: z
-      .string()
-      .min(1)
-      .refine((value) => privateRs256JwkKeyId(value) !== undefined, {
-        message: 'USER_ACCESS_TOKEN_PRIVATE_JWK must be a private RS256 RSA JWK with a kid',
-      })
-      .optional(),
-    // Public-only current and retired user access-token verification keys. Both
-    // generations stay here so signing-key rotation is safe across cached JWKS
-    // responses, mixed Cloud Run revisions, and unexpired tokens.
-    USER_ACCESS_TOKEN_PUBLIC_JWKS_JSON: z
-      .string()
-      .min(1)
-      .refine((value) => publicRs256JwkKeyIds(value) !== undefined, {
-        message: 'USER_ACCESS_TOKEN_PUBLIC_JWKS_JSON must contain public-only RS256 RSA keys',
       })
       .optional(),
     // Stripe is an explicitly gated payment processor. Keys may be provisioned
@@ -314,20 +267,7 @@ const EnvSchema = z
     SIGNATURE_MAX_SIGN_ATTEMPTS: z.coerce.number().int().min(1).max(50).default(10),
   })
   .superRefine((env, ctx) => {
-    if (env.MCP_OAUTH_PUBLIC_PROFILE_ENABLED && !env.MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK'],
-        message: 'MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK is required for the public OAuth profile',
-      });
-    }
-    if (env.MCP_OAUTH_PUBLIC_PROFILE_ENABLED && !env.MCP_OAUTH_DOMAIN) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['MCP_OAUTH_DOMAIN'],
-        message: 'MCP_OAUTH_DOMAIN is required for the public OAuth profile',
-      });
-    }
+    addOAuthEnvironmentIssues(env, ctx);
     addBillingEnvironmentIssues(env, ctx);
 
     if (
@@ -375,27 +315,6 @@ const EnvSchema = z
         path: ['SIGNATURE_GCS_BUCKET'],
         message: 'SIGNATURE_GCS_BUCKET is required for GCS signature storage',
       });
-    }
-    if (
-      Boolean(env.USER_ACCESS_TOKEN_PRIVATE_JWK) !== Boolean(env.USER_ACCESS_TOKEN_PUBLIC_JWKS_JSON)
-    ) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['USER_ACCESS_TOKEN_PUBLIC_JWKS_JSON'],
-        message:
-          'USER_ACCESS_TOKEN_PRIVATE_JWK and USER_ACCESS_TOKEN_PUBLIC_JWKS_JSON must be set together',
-      });
-    }
-    if (env.USER_ACCESS_TOKEN_PRIVATE_JWK && env.USER_ACCESS_TOKEN_PUBLIC_JWKS_JSON) {
-      const privateKid = privateRs256JwkKeyId(env.USER_ACCESS_TOKEN_PRIVATE_JWK);
-      const publicKids = publicRs256JwkKeyIds(env.USER_ACCESS_TOKEN_PUBLIC_JWKS_JSON);
-      if (privateKid && publicKids && !publicKids.includes(privateKid)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['USER_ACCESS_TOKEN_PUBLIC_JWKS_JSON'],
-          message: 'user access-token public JWKS must include the current private key kid',
-        });
-      }
     }
     if (env.SIGNATURE_EVIDENCE_PRIVATE_JWK && env.SIGNATURE_EVIDENCE_PUBLIC_JWKS_JSON) {
       const privateKid = privateRs256JwkKeyId(env.SIGNATURE_EVIDENCE_PRIVATE_JWK);

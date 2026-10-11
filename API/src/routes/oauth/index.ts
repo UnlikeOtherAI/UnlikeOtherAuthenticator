@@ -4,6 +4,7 @@ import { registerNativeAppIcon } from './native-app-icon.js';
 import { registerPublicSocialRoutes } from './social.js';
 
 import { registerOAuthAccountRoutes } from './account.js';
+import { registerKelpieConnectRoutes } from './kelpie-connect.js';
 import { registerOAuthAuthorizeRoute } from './authorize.js';
 import { registerOAuthJwksRoute } from './jwks.js';
 import { registerOAuthLoginRoute } from './login.js';
@@ -18,6 +19,7 @@ export function registerOAuthRoutes(app: FastifyInstance): void {
   registerNativeAppIcon(app);
   registerPublicSocialRoutes(app);
   registerOAuthAccountRoutes(app);
+  registerKelpieConnectRoutes(app);
   registerOAuthMetadataRoute(app);
   registerOAuthJwksRoute(app);
   registerOAuthRegisterRoute(app);

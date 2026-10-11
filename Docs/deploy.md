@@ -740,6 +740,11 @@ redirect comparison is exact. Upload the existing Kelpie 256px app icon. Verify 
 hosted page and Google destination before releasing clients that send this app ID.
 Security policy edits revoke previous client revisions; cosmetic edits preserve them.
 
+Kelpie account connectivity additionally requires the `kelpie.connect` native app
+scope and exact operator `KELPIE_CONNECT_RESOURCE` repository variable carried by
+Deploy to Cloud Run. Provisioning, coordinated one-time consent migration and live
+gateway verification are in [Kelpie account connectivity](Auth/kelpie-connect.md).
+
 ### Access-status diagnostic environment example
 
 Keep this optional diagnostic disabled in normal deployments:
