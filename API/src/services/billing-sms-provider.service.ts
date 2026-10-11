@@ -26,6 +26,10 @@ export type SmsProviderConfiguration = {
   accountSid: string;
   apiKeySid: string;
   apiKeySecret: string;
+  /** Messaging/Lookup region. Inventory and Pricing always use the US1 pair above. */
+  region?: 'us1' | 'ie1';
+  ie1ApiKeySid?: string;
+  ie1ApiKeySecret?: string;
 };
 
 function unavailable(): AppError {
@@ -51,14 +55,28 @@ export class BillingSmsProvider {
         !/^SK[0-9a-fA-F]{32}$/.test(configuration.apiKeySid) || !configuration.apiKeySecret) {
       throw unavailable();
     }
+    const region = configuration.region ?? 'us1';
+    if (!['us1', 'ie1'].includes(region) || (region === 'ie1' &&
+        (!/^SK[0-9a-fA-F]{32}$/.test(configuration.ie1ApiKeySid ?? '') ||
+         !configuration.ie1ApiKeySecret || configuration.ie1ApiKeySid === configuration.apiKeySid))) {
+      throw unavailable();
+    }
   }
 
-  private async read(url: string, allowMissing = false): Promise<unknown> {
+  private messagingHost(product: 'api' | 'lookups'): string {
+    return this.configuration.region === 'ie1'
+      ? `${product}.dublin.ie1.twilio.com` : `${product}.twilio.com`;
+  }
+
+  private async read(url: string, allowMissing = false, messaging = false): Promise<unknown> {
     try {
+      const regional = messaging && this.configuration.region === 'ie1';
+      const sid = regional ? this.configuration.ie1ApiKeySid : this.configuration.apiKeySid;
+      const secret = regional ? this.configuration.ie1ApiKeySecret : this.configuration.apiKeySecret;
       const response = await this.transport(url, {
         method: 'GET', redirect: 'error', signal: AbortSignal.timeout(15_000),
         headers: { authorization: `Basic ${Buffer.from(
-          `${this.configuration.apiKeySid}:${this.configuration.apiKeySecret}`,
+          `${sid}:${secret}`,
         ).toString('base64')}` },
       });
       const body = await response.text();
@@ -106,7 +124,7 @@ export class BillingSmsProvider {
     const parsed = z.object({
       valid: z.literal(true), phone_number: z.string(), country_code: z.string().regex(/^[A-Z]{2}$/),
     }).safeParse(await this.read(
-      `https://lookups.twilio.com/v2/PhoneNumbers/${encodeURIComponent(destination)}`,
+      `https://${this.messagingHost('lookups')}/v2/PhoneNumbers/${encodeURIComponent(destination)}`, false, true,
     ));
     if (!parsed.success || parsed.data.phone_number !== destination) throw unavailable();
     return parsed.data.country_code;
@@ -163,7 +181,7 @@ export class BillingSmsProvider {
       num_segments: z.string().regex(/^\d+$/).nullable(),
       date_created: z.string().optional(),
     }).safeParse(await this.read(
-      `https://api.twilio.com/2010-04-01/Accounts/${binding.accountSid}/Messages/${binding.messageSid}.json`,
+      `https://${this.messagingHost('api')}/2010-04-01/Accounts/${binding.accountSid}/Messages/${binding.messageSid}.json`, false, true,
     ));
     if (!parsed.success) throw unavailable();
     const data = parsed.data;
@@ -202,7 +220,7 @@ export class BillingSmsProvider {
     const metadata = z.object({ sid: z.literal(sid), account_sid: z.literal(accountSid),
       to: z.literal(to), direction: z.literal('inbound'), from: z.string().min(1).max(80),
       date_created: z.string(),
-    }).safeParse(await this.read(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages/${sid}.json`));
+    }).safeParse(await this.read(`https://${this.messagingHost('api')}/2010-04-01/Accounts/${accountSid}/Messages/${sid}.json`, false, true));
     if (!metadata.success) throw unavailable();
     const createdAt = new Date(metadata.data.date_created);
     if (Number.isNaN(createdAt.getTime()) || createdAt > this.now()) throw unavailable();

@@ -370,3 +370,11 @@ Each quote stores an immutable private policy version, monthly increment and
 message rating basis. Reservation and settlement use that accepted snapshot,
 including after deployment configuration changes. Public projections expose
 only final customer prices. Tests use unrelated synthetic policy values.
+
+### Regional evidence and durable deployment — 2026-10-11
+
+See [SMS operator setup and regional provider evidence](sms-deployment.md) for
+purpose-bound Nessie keys, the IE1 Messages/Lookup versus US1 inventory/Pricing
+credential split, private commercial settings, accepted evidence and the opt-in
+Cloud Run deployment bindings. Defaults remain disabled. Regional configuration
+never falls back to another region and is not a historical-traffic migration.
