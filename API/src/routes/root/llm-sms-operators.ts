@@ -29,6 +29,16 @@ acceptance: it fetches the fixed XML and accepts it under the operator with a
 generated reason only within the same band of the last accepted rate
 (409 BILLING_SMS_FX_BASELINE_REQUIRED or BILLING_SMS_FX_OUTSIDE_BAND otherwise;
 use the reviewed preview/accept flow for those).
+POST /routes/country/preview with {country} is Add country: it reads the
+configured account's outbound and inbound mobile Pricing API prices (the SID is
+never supplied), applies rule TWILIO_LONG_CODE_2X_V1 (per segment 2x the highest
+published long-code carrier fee, per message 2x the USD 0.001 failed-message
+fee, 30 days) and returns both generated, hashed evidence documents. POST
+/routes/country/accept with {preview_token,policy_understood,
+complete_segment_bound,complete_message_bound} appends both policies under the
+operator with a generated reason, each recording provider_price so it can
+renew. A non-USD account price answers 409 BILLING_SMS_ROUTE_RULE_UNSUPPORTED;
+enter such routes through /routes/preview instead.
 Selected product > App keys > SMS runtime issues purpose sms_runtime independently
 of customer lifecycle, entitlement and Ledger keys, with no redirect origins.
 Transfer one-time plaintext only through approved deployment secrets.

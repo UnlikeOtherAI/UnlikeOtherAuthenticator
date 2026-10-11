@@ -5,6 +5,7 @@ import { Card, CardHeader } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { billingSmsPolicyService as service } from '../../services/billing-sms-policy-service';
 import type { SmsFxPreview, SmsRoutePreview } from '../../schemas/billing-sms-policies';
+import { BillingSmsAddCountry } from './BillingSmsAddCountry';
 import { BillingSmsFxCard } from './BillingSmsFxCard';
 import { BillingSmsPolicyReview } from './BillingSmsPolicyReview';
 import { BillingSmsRoutePolicyForm } from './BillingSmsRoutePolicyForm';
@@ -34,10 +35,19 @@ export function BillingSmsPoliciesPanel() {
     <BillingSmsFxCard onAccepted={() => client.invalidateQueries({ queryKey })}
       onReview={(result) => { acceptFx.reset(); setFx(result); }} />
     <Card className="space-y-4 p-5"><h3 className="font-semibold text-gray-900">Account-specific route fee bounds</h3>
-      <p className="text-sm text-gray-500">Import reviewed documentation for the exact route. Provide both additional
-        per-segment and per-message bounds; zero requires explicit supporting evidence. The server hashes the complete import.</p>
-      <BillingSmsRoutePolicyForm pending={importRoute.isPending} error={importRoute.isError}
-        onPreview={(input) => importRoute.mutate(input)} />
+      <p className="text-sm text-gray-500">Add country reads the configured Twilio account's own mobile prices for
+        outbound and inbound, applies the documented bound rule and shows one review to accept. Accepted countries
+        renew automatically while their price does not rise, once automatic renewal is enabled.</p>
+      <BillingSmsAddCountry onAccepted={() => client.invalidateQueries({ queryKey })} />
+      <details><summary className="cursor-pointer text-sm text-blue-600">Enter evidence manually</summary>
+        <div className="mt-3 space-y-4">
+          <p className="text-sm text-gray-500">For routes the Pricing API cannot price. Import reviewed documentation for
+            the exact route and provide both additional per-segment and per-message bounds; zero requires explicit
+            supporting evidence. The server hashes the complete import. Manual evidence keeps the expiry you enter and
+            never renews automatically.</p>
+          <BillingSmsRoutePolicyForm pending={importRoute.isPending} error={importRoute.isError}
+            onPreview={(input) => importRoute.mutate(input)} />
+        </div></details>
     </Card>
     <Card className="space-y-4 p-5"><div className="flex items-center justify-between"><h3 className="font-semibold text-gray-900">Accepted evidence history</h3>
       <Button onClick={() => void policies.refetch()}>Reload history</Button></div>

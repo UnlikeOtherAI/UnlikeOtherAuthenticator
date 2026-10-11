@@ -9,12 +9,14 @@ const db = vi.hoisted(() => ({ user: { findUnique: vi.fn() }, domainRole: { find
 const service = vi.hoisted(() => ({ previewSmsFxPolicy: vi.fn(), previewSmsRoutePolicy: vi.fn(),
   acceptSmsFxPolicy: vi.fn(), acceptSmsFxRefresh: vi.fn(), acceptSmsRoutePolicy: vi.fn(), listSmsPolicies: vi.fn(),
   serializeSmsFxPolicy: vi.fn((value) => value), serializeSmsRoutePolicy: vi.fn((value) => value) }));
+const country = vi.hoisted(() => ({ previewSmsCountryPolicy: vi.fn(), acceptSmsCountryPolicy: vi.fn() }));
 const recovery = vi.hoisted(() => ({ listSmsRecoveryResources: vi.fn(), readSmsRecoveryResource: vi.fn() }));
 const refunds = vi.hoisted(() => ({ verifySmsNumberRefund: vi.fn() }));
 vi.mock('../../src/db/prisma.js', () => ({ getAdminPrisma: () => db }));
 vi.mock('../../src/services/billing-sms-policy-admin.service.js', async (original) => ({
   ...await original<object>(), ...service,
 }));
+vi.mock('../../src/services/billing-sms-country-policy.service.js', () => country);
 vi.mock('../../src/services/billing-sms-recovery-admin.service.js', () => recovery);
 vi.mock('../../src/services/billing-sms-refund-recovery.service.js', async (original) => ({
   ...await original<object>(), ...refunds,
@@ -42,13 +44,15 @@ async function call(path: string, method: 'GET' | 'POST', credential?: string, p
 it('guards every private evidence and recovery route against absent/ordinary/product/wrong-domain credentials', async () => {
   for (const credential of [undefined, await token('user'), await token('superuser', 'api.nessie.works'), await token('superuser', domain, 'product-secret')]) {
     for (const [path, method] of [['', 'GET'], ['/fx/preview', 'POST'], ['/fx/accept', 'POST'], ['/fx/refresh-accept', 'POST'],
+      ['/routes/country/preview', 'POST'], ['/routes/country/accept', 'POST'],
       ['/routes/preview', 'POST'], ['/routes/accept', 'POST'], ['/recovery', 'GET'], ['/recovery/resource-1', 'GET'],
       ['/liabilities?kind=inbound', 'GET'], ['/recovery/resource-1/verify-refund', 'POST']] as const) {
       expect([401, 403]).toContain((await call(path, method, credential)).statusCode);
     }
   }
   expect(service.previewSmsFxPolicy).not.toHaveBeenCalled(); expect(service.listSmsPolicies).not.toHaveBeenCalled();
-  expect(service.acceptSmsFxRefresh).not.toHaveBeenCalled();
+  expect(service.acceptSmsFxRefresh).not.toHaveBeenCalled(); expect(country.previewSmsCountryPolicy).not.toHaveBeenCalled();
+  expect(country.acceptSmsCountryPolicy).not.toHaveBeenCalled();
   expect(recovery.readSmsRecoveryResource).not.toHaveBeenCalled();
   expect(refunds.verifySmsNumberRefund).not.toHaveBeenCalled();
 });
@@ -103,4 +107,25 @@ it('accepts Refresh and accept only with the explicit policy statement and never
   expect(result.statusCode).toBe(200); expect(result.headers['cache-control']).toBe('private, no-store');
   expect(service.acceptSmsFxRefresh).toHaveBeenCalledWith({ userId: 'admin-1', tokenVersion: 0,
     email: 'operator@example.test', domain });
+});
+it('adds a country only with every attestation and never a caller-chosen account or reason', async () => {
+  const credential = await token(); const operator = { userId: 'admin-1', tokenVersion: 0, email: 'operator@example.test', domain };
+  for (const body of [{}, { country: 'gb' }, { country: 'GB', account_sid: `AC${'a'.repeat(32)}` }]) {
+    expect((await call('/routes/country/preview', 'POST', credential, body)).statusCode).toBe(400);
+  }
+  country.previewSmsCountryPolicy.mockResolvedValue({ evidence: { country: 'GB' } });
+  expect((await call('/routes/country/preview', 'POST', credential, { country: 'GB' })).statusCode).toBe(200);
+  expect(country.previewSmsCountryPolicy).toHaveBeenCalledWith(operator, 'GB');
+  const acceptance = { preview_token: 'signed-country', policy_understood: true,
+    complete_segment_bound: true, complete_message_bound: true };
+  for (const change of [{ complete_segment_bound: false }, { policy_understood: undefined },
+    { acceptance_reason: 'Caller supplied acceptance reason' }, { accepted_by_user_id: 'other' }]) {
+    expect((await call('/routes/country/accept', 'POST', credential, { ...acceptance, ...change })).statusCode).toBe(400);
+  }
+  expect(country.acceptSmsCountryPolicy).not.toHaveBeenCalled();
+  country.acceptSmsCountryPolicy.mockResolvedValue([{ id: 'out' }, { id: 'in' }]);
+  const accepted = await call('/routes/country/accept', 'POST', credential, acceptance);
+  expect(accepted.statusCode).toBe(200); expect(accepted.headers['cache-control']).toBe('private, no-store');
+  expect(accepted.json()).toEqual({ routes: [{ id: 'out' }, { id: 'in' }] });
+  expect(country.acceptSmsCountryPolicy).toHaveBeenCalledWith(operator, 'signed-country');
 });

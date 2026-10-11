@@ -11,6 +11,7 @@ import {
   previewSmsRoutePolicy, serializeSmsFxPolicy, serializeSmsRoutePolicy,
   SmsRoutePolicyImportSchema, type SmsPolicyActor,
 } from '../../../services/billing-sms-policy-admin.service.js';
+import { acceptSmsCountryPolicy, previewSmsCountryPolicy } from '../../../services/billing-sms-country-policy.service.js';
 
 const FxPreview = z.object({ xml: z.string().min(1).max(100_000).optional() }).strict();
 const Acceptance = z.object({ preview_token: z.string().min(1).max(100_000),
@@ -20,8 +21,10 @@ const Acceptance = z.object({ preview_token: z.string().min(1).max(100_000),
 const RouteAcceptance = Acceptance.extend({
   complete_segment_bound: z.literal(true), complete_message_bound: z.literal(true),
 }).strict();
-// One-button flow: the click is the attestation and the server writes the reason.
+// One-button flows: the click is the attestation and the server writes the reason.
 const FxRefreshAcceptance = z.object({ policy_understood: z.literal(true) }).strict();
+const CountryPreview = z.object({ country: z.string().regex(/^[A-Z]{2}$/) }).strict();
+const CountryAcceptance = RouteAcceptance.omit({ acceptance_reason: true }).strict();
 function actor(request: FastifyRequest): SmsPolicyActor {
   const claims = request.adminAccessTokenClaims;
   if (!claims) throw new AppError('UNAUTHORIZED', 401, 'MISSING_ACCESS_TOKEN');
@@ -64,6 +67,15 @@ export function registerInternalAdminSmsPolicyRoutes(app: FastifyInstance) {
   app.post(`${base}/fx/refresh-accept`, guard, async (request, reply) => {
     FxRefreshAcceptance.parse(request.body);
     return reply.header('Cache-Control', 'private, no-store').send(serializeSmsFxPolicy(await acceptSmsFxRefresh(actor(request))));
+  });
+  app.post(`${base}/routes/country/preview`, guard, async (request, reply) => {
+    const { country } = CountryPreview.parse(request.body);
+    return reply.header('Cache-Control', 'private, no-store').send(await previewSmsCountryPolicy(actor(request), country));
+  });
+  app.post(`${base}/routes/country/accept`, guard, async (request, reply) => {
+    const value = CountryAcceptance.parse(request.body);
+    const routes = await acceptSmsCountryPolicy(actor(request), value.preview_token);
+    return reply.header('Cache-Control', 'private, no-store').send({ routes: routes.map(serializeSmsRoutePolicy) });
   });
   app.post(`${base}/routes/preview`, guard, async (request, reply) => {
     const value = SmsRoutePolicyImportSchema.parse(request.body);
