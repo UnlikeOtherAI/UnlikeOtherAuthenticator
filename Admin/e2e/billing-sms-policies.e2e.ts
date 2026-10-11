@@ -11,7 +11,16 @@ test('operator reviews exact SMS evidence, retries acceptance, checks history an
   const fx = { policy: 'ECB_REFERENCE_USD_PER_EUR_V1',
     source: 'https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml',
     source_digest: 'a'.repeat(64), rate_date: now.slice(0, 10), observed_at: now, expires_at: future, usd_per_eur: '1.1186' };
-  const policies: { fx: Array<Record<string, unknown>>; routes: Array<Record<string, unknown>> } = { fx: [], routes: [] };
+  const sid = `AC${'a'.repeat(32)}`;
+  // One automatic renewal already exists, and the job has flagged GB outbound for a person.
+  const policies: { fx: Array<Record<string, unknown>>; routes: Array<Record<string, unknown>>;
+    alerts: Array<Record<string, unknown>> } = { fx: [], routes: [{ id: 'renewed-cz-in', account_sid: sid, country: 'CZ',
+    direction: 'inbound', currency: 'USD', additional_per_segment: '0.007', additional_per_message: '0.002',
+    source: 'https://www.twilio.com/en-us/sms/pricing/cz', evidence_digest: 'd'.repeat(64), expires_at: future,
+    accepted_by: 'renewal_job', accepted_by_user_id: null, accepted_at: now, provider_price: '0.0075',
+    renewal_of_id: 'cz-in-root', acceptance_reason: 'Automatic renewal: Twilio account price USD 0.0075 is not above the 0.0075 an operator attested.' }],
+  alerts: [{ id: 'alert-1', kind: 'route_needs_operator', subject: `${sid}:GB:outbound:USD`, opened_at: now, last_seen_at: now,
+    message: 'GB outbound USD route fee bounds expire soon. They were accepted without a recorded Twilio account price.' }] };
   let routeEvidence: Record<string, unknown> = {}; let evidenceDocument = ''; let fxAttempts = 0;
   let countryRoutes: Array<Record<string, unknown> & { direction: string; observed_at: string }> = [];
   const thirty = new Date(Date.now() + 30 * 86_400_000).toISOString();
@@ -100,7 +109,10 @@ test('operator reviews exact SMS evidence, retries acceptance, checks history an
   await page.goto('/billing');
   await page.getByRole('button', { name: 'SMS policies', exact: true }).click();
   await expect(page).toHaveURL(/section=sms/);
-  await expect(page.getByText('No accepted SMS policies.')).toBeVisible();
+  await expect(page.getByRole('alert').filter({ hasText: 'accepted without a recorded Twilio account price' })).toBeVisible();
+  await expect(page.getByText('CZ · inbound · USD', { exact: true })).toBeVisible();
+  await expect(page.getByText(/automatically by the renewal job/)).toBeVisible();
+  await expect(page.getByText(/Account price USD 0.0075 at acceptance/)).toBeVisible();
   await page.getByRole('button', { name: 'Refresh and accept', exact: true }).click();
   await expect(page.getByRole('alert').filter({ hasText: 'No ECB rate has been accepted yet' })).toBeVisible();
   await page.getByText('Review manually', { exact: true }).click();
@@ -129,6 +141,9 @@ test('operator reviews exact SMS evidence, retries acceptance, checks history an
   await expect(dialog).toHaveCount(0);
   await expect(page.getByText('GB · outbound · USD', { exact: true })).toBeVisible();
   await expect(page.getByText('GB · inbound · USD', { exact: true })).toBeVisible();
+  // The pending alert marks the newest GB outbound record, which now has a recorded price.
+  await expect(page.getByText('Needs attention', { exact: true }).last()).toBeVisible();
+  await expect(page.getByText(/Account price USD 0.0560 at acceptance/)).toBeVisible();
   await page.getByText('Enter evidence manually', { exact: true }).click();
   await page.getByLabel(/^Provider account SID/).fill(`AC${'a'.repeat(32)}`);
   await page.getByLabel('Country', { exact: true }).fill('IE');
@@ -198,7 +213,7 @@ test('operator verifies existing full refund after a refusal and sees exact reso
         initial_invoice_id: 'in_fixture', initial_invoice_paid_at: now, status: 'canceled', livemode: false, cancel_at_period_end: false }],
       refund_action_available: state === 'refund_required',
       operator_next_step: 'Only complete original cash refunds and a canceled subscription can finish recovery. This action never creates refunds.' });
-    return json({ fx: [], routes: [] });
+    return json({ fx: [], routes: [], alerts: [] });
   });
   await page.goto('/billing?section=sms'); await page.getByRole('button', { name: 'Review resource' }).click();
   const dialog = page.getByRole('dialog', { name: 'SMS number recovery' });

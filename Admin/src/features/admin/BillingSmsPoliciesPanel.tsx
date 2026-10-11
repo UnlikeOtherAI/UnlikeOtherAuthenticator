@@ -1,12 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Button } from '../../components/ui/Button';
 import { Card, CardHeader } from '../../components/ui/Card';
-import { Badge } from '../../components/ui/Badge';
 import { billingSmsPolicyService as service } from '../../services/billing-sms-policy-service';
 import type { SmsFxPreview, SmsRoutePreview } from '../../schemas/billing-sms-policies';
 import { BillingSmsAddCountry } from './BillingSmsAddCountry';
 import { BillingSmsFxCard } from './BillingSmsFxCard';
+import { BillingSmsPolicyAlerts, BillingSmsPolicyHistory } from './BillingSmsPolicyHistory';
 import { BillingSmsPolicyReview } from './BillingSmsPolicyReview';
 import { BillingSmsRoutePolicyForm } from './BillingSmsRoutePolicyForm';
 import { BillingSmsRecoveryPanel } from './BillingSmsRecoveryPanel';
@@ -16,29 +15,32 @@ const queryKey = ['admin', 'billing', 'sms-policies'];
 export function BillingSmsPoliciesPanel() {
   const client = useQueryClient();
   const policies = useQuery({ queryKey, queryFn: service.list });
+  const reload = () => client.invalidateQueries({ queryKey });
   const [fx, setFx] = useState<SmsFxPreview | null>(null);
   const [route, setRoute] = useState<SmsRoutePreview | null>(null);
   const importRoute = useMutation({ mutationFn: service.previewRoute,
     onSuccess: (result) => { acceptRoute.reset(); setRoute(result); } });
   const acceptFx = useMutation({ mutationFn: async (reason: string) => {
     if (!fx) throw new Error('Preview required'); return service.acceptFx(fx.preview_token, reason);
-  }, onSuccess: async () => { setFx(null); await client.invalidateQueries({ queryKey }); } });
+  }, onSuccess: async () => { setFx(null); await reload(); } });
   const acceptRoute = useMutation({ mutationFn: async (reason: string) => {
     if (!route) throw new Error('Preview required'); return service.acceptRoute(route.preview_token, reason);
-  }, onSuccess: async () => { setRoute(null); await client.invalidateQueries({ queryKey }); } });
+  }, onSuccess: async () => { setRoute(null); await reload(); } });
   return <div className="space-y-4">
     <Card className="p-5"><CardHeader><h2 className="font-semibold text-gray-900">SMS pricing policies</h2></CardHeader>
       <p className="text-sm text-gray-600">Private operator evidence for mobile-number pricing and prepaid SMS.
         Accepted policies apply only while fresh. A missing or expired policy blocks new quotes or dispatch.
-        Customers receive final prices only. These controls do not enable billing or provision provider credentials.</p>
+        Customers receive final prices only. These controls do not enable billing or provision provider credentials.
+        When automatic renewal is enabled, a daily job renews in-band ECB rates and unchanged route prices and raises
+        anything else here.</p>
     </Card>
-    <BillingSmsFxCard onAccepted={() => client.invalidateQueries({ queryKey })}
-      onReview={(result) => { acceptFx.reset(); setFx(result); }} />
+    <BillingSmsPolicyAlerts alerts={policies.data?.alerts ?? []} />
+    <BillingSmsFxCard onAccepted={reload} onReview={(result) => { acceptFx.reset(); setFx(result); }} />
     <Card className="space-y-4 p-5"><h3 className="font-semibold text-gray-900">Account-specific route fee bounds</h3>
       <p className="text-sm text-gray-500">Add country reads the configured Twilio account's own mobile prices for
         outbound and inbound, applies the documented bound rule and shows one review to accept. Accepted countries
         renew automatically while their price does not rise, once automatic renewal is enabled.</p>
-      <BillingSmsAddCountry onAccepted={() => client.invalidateQueries({ queryKey })} />
+      <BillingSmsAddCountry onAccepted={reload} />
       <details><summary className="cursor-pointer text-sm text-blue-600">Enter evidence manually</summary>
         <div className="mt-3 space-y-4">
           <p className="text-sm text-gray-500">For routes the Pricing API cannot price. Import reviewed documentation for
@@ -49,26 +51,8 @@ export function BillingSmsPoliciesPanel() {
             onPreview={(input) => importRoute.mutate(input)} />
         </div></details>
     </Card>
-    <Card className="space-y-4 p-5"><div className="flex items-center justify-between"><h3 className="font-semibold text-gray-900">Accepted evidence history</h3>
-      <Button onClick={() => void policies.refetch()}>Reload history</Button></div>
-      {policies.isLoading ? <p className="text-sm text-gray-500">Loading accepted policies...</p> : null}
-      {policies.isError ? <p role="alert" className="text-sm text-red-600">Could not load accepted policies. Reload history to retry.</p> : null}
-      {policies.data ? <>
-        <p className="text-xs text-gray-500">Latest 50 currency policies and 100 route policies; immutable acceptance records.</p>
-        {policies.data.fx.map((value) => <div key={value.id} className="rounded-lg border border-gray-200 p-3 text-sm">
-          <PolicyStatus expiresAt={value.expires_at} /> <strong>ECB · {value.rate_date} · USD/EUR {value.usd_per_eur}</strong>
-          <EvidenceRecord source={value.source} digest={value.source_digest} expiresAt={value.expires_at}
-            acceptedAt={value.accepted_at} actor={value.accepted_by_user_id} reason={value.acceptance_reason} />
-        </div>)}
-        {policies.data.routes.map((value) => <div key={value.id} className="rounded-lg border border-gray-200 p-3 text-sm">
-          <PolicyStatus expiresAt={value.expires_at} /> <strong>{value.country} · {value.direction} · {value.currency}</strong>
-          <p className="mt-1 break-all font-mono text-xs">{value.account_sid} · segment {value.additional_per_segment} · message {value.additional_per_message}</p>
-          <EvidenceRecord source={value.source} digest={value.evidence_digest} expiresAt={value.expires_at}
-            acceptedAt={value.accepted_at} actor={value.accepted_by_user_id} reason={value.acceptance_reason} />
-        </div>)}
-        {policies.data.fx.length === 0 && policies.data.routes.length === 0 ? <p className="text-sm text-gray-500">No accepted SMS policies.</p> : null}
-      </> : null}
-    </Card>
+    <BillingSmsPolicyHistory data={policies.data} loading={policies.isLoading} failed={policies.isError}
+      onReload={() => void policies.refetch()} />
     <BillingSmsRecoveryPanel />
     <BillingSmsLiabilityPanel />
     <BillingSmsPolicyReview kind="fx" preview={fx} pending={acceptFx.isPending} error={acceptFx.isError}
@@ -76,15 +60,4 @@ export function BillingSmsPoliciesPanel() {
     <BillingSmsPolicyReview kind="route" preview={route} pending={acceptRoute.isPending} error={acceptRoute.isError}
       onClose={() => setRoute(null)} onAccept={(reason) => acceptRoute.mutate(reason)} />
   </div>;
-}
-function PolicyStatus({ expiresAt }: { expiresAt: string }) {
-  const expired = Date.parse(expiresAt) <= Date.now();
-  return <Badge variant={expired ? 'red' : 'green'}>{expired ? 'Expired' : 'Fresh'}</Badge>;
-}
-function EvidenceRecord({ source, digest, expiresAt, acceptedAt, actor, reason }: {
-  source: string; digest: string; expiresAt: string; acceptedAt: string; actor: string | null; reason: string;
-}) {
-  return <div className="mt-2 space-y-1 break-all text-xs text-gray-500"><p>{source}</p>
-    <p className="font-mono">SHA-256 {digest}</p><p>Valid until {new Date(expiresAt).toLocaleString()}</p>
-    <p>Accepted {new Date(acceptedAt).toLocaleString()} by {actor ?? 'the renewal job'}</p><p>{reason}</p></div>;
 }

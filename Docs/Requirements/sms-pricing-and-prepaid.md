@@ -274,6 +274,14 @@ the Pricing API cannot price. Route policies accepted before this change have no
 recorded price, so they renew only once someone accepts that country again with
 Add country.
 
+### Renewal visibility on the SMS policies page — 2026-10-11
+
+The page lists the renewal job's open alerts under **Needs attention**. In the
+history, each record names its acceptor: the operator's subject, or
+"automatically by the renewal job". It also shows its expiry and, for routes,
+whether an account price was recorded, which is what lets it renew. The newest
+record for an alerted route or rate carries a **Needs attention** badge.
+
 Under **Product billing → selected product → App keys**, operators can issue an
 **SMS runtime** key through the existing one-time credential reveal and revocation
 workflow. It uses the dedicated `sms_runtime` purpose, refuses redirect origins,

@@ -12,6 +12,7 @@ import { getAdminAuthDomain } from '../config/env.js';
 import {
   parseSmsFxEvidence, readSmsFxEvidence, smsFxWithinBand, SMS_FX_POLICY, SMS_FX_SOURCE, type SmsFxEvidence,
 } from './billing-sms-fx-evidence.service.js';
+import { listOpenSmsPolicyAlerts } from './billing-sms-policy-alert.service.js';
 
 // Canonical decimal syntax fits Decimal(38,18) without rounding or JS float conversion.
 const Bound = z.string().regex(/^(?:0|[1-9]\d{0,19})(?:\.\d{1,18})?$/);
@@ -198,11 +199,12 @@ export async function acceptSmsRoutePolicy(actor: SmsPolicyActor, token: string,
 
 export async function listSmsPolicies() {
   const db = getAdminPrisma();
-  const [fx, routes] = await Promise.all([
+  const [fx, routes, alerts] = await Promise.all([
     db.billingSmsFxSnapshot.findMany({ orderBy: { acceptedAt: 'desc' }, take: 50 }),
     db.billingSmsRoutePolicy.findMany({ orderBy: { acceptedAt: 'desc' }, take: 100 }),
+    listOpenSmsPolicyAlerts(db),
   ]);
-  return { fx: fx.map(serializeSmsFxPolicy), routes: routes.map(serializeSmsRoutePolicy) };
+  return { fx: fx.map(serializeSmsFxPolicy), routes: routes.map(serializeSmsRoutePolicy), alerts };
 }
 export function serializeSmsFxPolicy(value: Awaited<ReturnType<typeof acceptSmsFxPolicy>>) {
   if (value.policy !== SMS_FX_POLICY || value.source !== SMS_FX_SOURCE) throw invalid('BILLING_SMS_FX_PROVENANCE_INVALID');
