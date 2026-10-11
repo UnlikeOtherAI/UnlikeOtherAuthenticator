@@ -13,6 +13,12 @@ function decimal(value: bigint): Prisma.Decimal {
   const digits = value.toString().padStart(19, '0');
   return new Prisma.Decimal(`${digits.slice(0, -18)}.${digits.slice(-18)}`);
 }
+/** Exact order of two canonical Decimal(38,18) amounts; noncanonical input fails closed. */
+export function compareSmsAmounts(left: string, right: string): -1 | 0 | 1 {
+  const a = scaled(left);
+  const b = scaled(right);
+  return a < b ? -1 : a > b ? 1 : 0;
+}
 export function sumSmsAmounts(values: string[]): Prisma.Decimal {
   return decimal(values.reduce((sum, value) => sum + scaled(value), 0n));
 }
