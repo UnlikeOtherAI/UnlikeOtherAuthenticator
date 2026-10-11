@@ -138,3 +138,9 @@ Chrome passed the operator editor on desktop/mobile (four checks) and the native
 consent screen on desktop/mobile (two checks); their screenshots were inspected.
 Production operator provisioning, installed native clients and actual WSS revocation
 remain integration/deployment checks; the HTTP tests do not prove those are live.
+
+The subsequent gateway-rate regression passed on Minis against the same isolated
+PostgreSQL database: all nine connection integration tests passed, including 121
+consecutive domain-authenticated validations without consuming the native issuance
+bucket. Changed route ESLint passed. This is server-side HTTP evidence, not live WSS
+or production operator provisioning evidence.
