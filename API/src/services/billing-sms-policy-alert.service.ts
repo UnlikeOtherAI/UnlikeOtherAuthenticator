@@ -46,6 +46,14 @@ export async function resolveSmsPolicyAlerts(db: AlertDb, subject: string, now: 
   });
 }
 
+export async function listOpenSmsPolicyAlerts(db: AlertDb) {
+  const rows = await db.billingSmsPolicyAlert.findMany({
+    where: { resolvedAt: null }, orderBy: { openedAt: 'desc' }, take: 50,
+  });
+  return rows.map((row) => ({ id: row.id, kind: row.kind, subject: row.subject, message: row.message,
+    opened_at: row.openedAt.toISOString(), last_seen_at: row.lastSeenAt.toISOString() }));
+}
+
 /** Email every admin-domain superuser through the existing sender; failures are logged, never thrown. */
 export async function emailSmsPolicyAlert(condition: SmsPolicyAlertCondition, log: SmsPolicyAlertLog): Promise<void> {
   const env = getEnv();

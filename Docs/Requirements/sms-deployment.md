@@ -224,6 +224,12 @@ triggers enforce.
   email sender, and the row resolves when the condition clears. Later passes
   only refresh `last_seen_at`. Without `EMAIL_FROM` the email is skipped and
   logged.
+- **Where operators see it.** Admin › Billing › SMS policies lists open alerts
+  under **Needs attention**. In the accepted history, every record says whether
+  a person accepted it (their UOA subject) or the renewal job did, and when it
+  expires. Each route says whether it carries a recorded account price, and so
+  whether it can renew, and the newest record for a route or rate with an open
+  alert is marked. The dashboard is unchanged.
 
 The job needs the SMS provider configuration, so routes are skipped (and logged)
 while `BILLING_SMS_ENABLED` or the Twilio credentials are absent. The scheduler is

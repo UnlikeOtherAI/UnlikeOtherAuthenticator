@@ -25,8 +25,10 @@ const accepted = { id: z.string(), accepted_by: z.enum(['operator', 'renewal_job
 export const SmsFxPolicySchema = SmsFxEvidenceSchema.extend(accepted).strict();
 export const SmsRoutePolicySchema = SmsRouteEvidenceSchema.omit({ observed_at: true })
   .extend({ ...accepted, provider_price: decimal.nullable(), renewal_of_id: z.string().nullable() }).strict();
+export const SmsPolicyAlertSchema = z.object({ id: z.string(), kind: z.string(), subject: z.string(),
+  message: z.string(), opened_at: z.string().datetime(), last_seen_at: z.string().datetime() }).strict();
 export const SmsPoliciesSchema = z.object({ fx: z.array(SmsFxPolicySchema),
-  routes: z.array(SmsRoutePolicySchema) }).strict();
+  routes: z.array(SmsRoutePolicySchema), alerts: z.array(SmsPolicyAlertSchema) }).strict();
 const preview = { preview_token: z.string(), preview_expires_at: z.string().datetime() };
 export const SmsFxPreviewSchema = z.object({ ...preview, evidence: SmsFxEvidenceSchema }).strict();
 export const SmsRoutePreviewSchema = z.object({ ...preview, evidence: SmsRouteEvidenceSchema,
@@ -41,3 +43,5 @@ export type SmsFxPreview = z.infer<typeof SmsFxPreviewSchema>;
 export type SmsCountryPreview = z.infer<typeof SmsCountryPreviewSchema>;
 export type SmsRoutePreview = z.infer<typeof SmsRoutePreviewSchema>;
 export type SmsRouteImport = z.infer<typeof SmsRouteImportSchema>;
+export type SmsPolicies = z.infer<typeof SmsPoliciesSchema>;
+export type SmsPolicyAlert = z.infer<typeof SmsPolicyAlertSchema>;
