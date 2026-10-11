@@ -13,7 +13,7 @@ export function registerKelpieConnectRoutes(app: FastifyInstance): void {
     routes.addHook('onRequest', async (_request, reply) => { reply.header('Cache-Control', 'no-store'); });
     routes.setErrorHandler((error, _request, reply) => {
       const status = error instanceof AppError ? error.statusCode : error instanceof ZodError ? 400 :
-        typeof error.statusCode === 'number' ? error.statusCode : 500;
+        error instanceof Error && 'statusCode' in error && typeof error.statusCode === 'number' ? error.statusCode : 500;
       reply.status(status).send({ error: PUBLIC_ERROR_MESSAGE });
     });
     const preHandler = [requireMcpOAuthPublicProfile, async () => { kelpieConnectResource(); },
@@ -27,7 +27,9 @@ export function registerKelpieConnectRoutes(app: FastifyInstance): void {
     }, async (request) => {
       const { domain } = z.object({ domain: z.string().min(1).max(253) }).strict().parse(request.query);
       const { ticket } = z.object({ ticket: z.string().min(1).max(8192) }).strict().parse(request.body);
-      return validateKelpieConnectionTicket({ domain, ticket, domainCredential: request.domainAuthClientId! }, request.adminDb);
+      const domainCredential = request.domainAuthClientId;
+      if (!domainCredential) throw new AppError('UNAUTHORIZED', 401);
+      return validateKelpieConnectionTicket({ domain, ticket, domainCredential }, request.adminDb);
     });
   });
 }

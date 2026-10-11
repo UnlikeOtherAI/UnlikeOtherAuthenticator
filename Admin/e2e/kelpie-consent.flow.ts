@@ -15,8 +15,8 @@ test('native hosted consent explains the Nessie connection before account sign-i
     scope: 'openid profile email settings.read settings.write kelpie.connect' });
   await page.goto('/?' + params);
   await expect(page.getByText(/permission to connect this device to your Nessie account for work you request/)).toBeVisible();
-  await expect(page.getByRole('button', { name: /Google/ })).toBeVisible();
-  await expect(page.getByLabel('Email address', { exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: /Google/ })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'Email', exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: info.outputPath('kelpie-native-consent.png'), fullPage: true });
 });

@@ -51,8 +51,9 @@ describe.skipIf(!process.env.DATABASE_URL)('Kelpie connection authority', () => 
     process.env.MCP_OAUTH_PUBLIC_PROFILE_ENABLED = 'true';
     delete process.env.MCP_OAUTH_SCOPES_SUPPORTED;
     await handle.prisma.user.update({ where: { id: userId }, data: { tokenVersion: 0, twoFaEnabled: false, lifecycleStatus: 'ACTIVE' } });
-    await handle.prisma.clientDomain.update({ where: { domain }, data: { status: 'active', twoFaPolicy: 'OFF', allowedEmails: [] } });
+    await handle.prisma.clientDomain.update({ where: { domain }, data: { status: 'active', twoFaPolicy: 'OPTIONAL', allowedEmails: [] } });
     await handle.prisma.ban.deleteMany({ where: { domain } });
+    await handle.prisma.domainRole.updateMany({ where: { domain, userId }, data: { role: 'USER' } });
     await saveNativeApp(policy, 'operator@example.com', registeredId);
     const registered = await app.inject({ method: 'POST', url: '/oauth/register', payload: {
       app_id: appId, redirect_uris: [redirect], scope: scopes,
@@ -87,7 +88,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Kelpie connection authority', () => 
       client_id: clientId, redirect_uri: redirect, code_verifier: verifier } });
     expect(exchange.statusCode, exchange.body).toBe(200);
     const grant = exchange.json();
-    expect(grant.scope).toBe(scopes);
+    expect(decodeJwt(grant.access_token).scope).toBe(scopes);
     const widened = await app.inject({ method: 'POST', url: '/oauth/token', payload: { grant_type: 'refresh_token',
       client_id: clientId, refresh_token: grant.refresh_token, scope: scopes + ' email' } });
     expect(widened.statusCode).toBe(401);
@@ -136,7 +137,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Kelpie connection authority', () => 
   });
   it('rejects expired, tampered, wrong-class, wrong-app, wrong-audience and excessive-lifetime tickets', async () => {
     const value = await ticket(); const claims = decodeJwt(value);
-    for (const extra of [{ token_use: 'public_oauth' }, { app_id: 'com.attacker.app' }, { aud: issuer },
+    for (const extra of [{ token_use: 'public_oauth' }, { app_id: 'com.attacker.app' }, { aud: issuer }, { aud: [resource, issuer] },
       { tv: -1 }, { exp: claims.iat! - 1 }, { exp: claims.iat! + 121 }, { iat: claims.iat! + 600 }]) {
       const forged = await new SignJWT({ ...claims, ...extra }).setProtectedHeader({ alg: 'RS256', kid: 'kelpie-test', typ: 'at+jwt' }).sign(privateKey);
       const result = await validate(forged);
