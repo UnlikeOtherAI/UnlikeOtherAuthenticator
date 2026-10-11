@@ -27,8 +27,10 @@ function regionalProvider() {
       : url.includes('/IncomingPhoneNumbers/') ? { sid: phoneSid, account_sid: accountSid,
         phone_number: phone, capabilities: { sms: true } }
       : url.includes('lookups.') ? { valid: true, phone_number: peer, country_code: 'CZ' }
-      : { country: 'Czech Republic', iso_country: 'CZ', price_unit: 'USD',
-        phone_number_prices: [{ number_type: 'mobile', current_price: '1.00' }],
+      : url.includes('/PhoneNumbers/Countries/')
+        ? { country: 'Czech Republic', iso_country: 'CZ', price_unit: 'USD',
+          phone_number_prices: [{ number_type: 'mobile', current_price: '1.00' }] }
+        : { country: 'Czech Republic', iso_country: 'CZ', price_unit: 'USD',
         inbound_sms_prices: [{ number_type: 'mobile', current_price: '0.01' }],
         outbound_sms_prices: [{ carrier: 'A', mcc: '230', mnc: '01',
           prices: [{ number_type: 'mobile', current_price: '0.02' }] }] };
