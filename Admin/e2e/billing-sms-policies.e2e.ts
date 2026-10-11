@@ -64,7 +64,7 @@ test('operator reviews exact SMS evidence, retries acceptance, checks history an
       expect(input).toEqual({ country: 'GB' });
       const route = (direction: string, price: string, segment: string) => ({ account_sid: `AC${'a'.repeat(32)}`,
         country: 'GB', direction, currency: 'USD', additional_per_segment: segment, additional_per_message: '0.002',
-        source: 'https://www.twilio.com/en-us/sms/pricing/gb', expires_at: thirty, evidence_digest: direction[0]!.repeat(64).replace(/[^a-f]/g, 'e'),
+        source: 'https://www.twilio.com/en-us/sms/pricing/gb', expires_at: thirty, evidence_digest: (direction === 'outbound' ? 'e' : 'f').repeat(64),
         observed_at: now, provider_price: price });
       countryRoutes = [route('outbound', '0.0560', '0.01'), route('inbound', '0.0075', '0.007')];
       return json({ evidence: { country: 'GB', account_sid: `AC${'a'.repeat(32)}`, rule: 'TWILIO_LONG_CODE_2X_V1',
