@@ -236,6 +236,36 @@ while `BILLING_SMS_ENABLED` or the Twilio credentials are absent. The scheduler 
 an in-process timer like the other billing jobs; it relies on the always-on
 instance that `STRIPE_BILLING_ENABLED=true` already requires.
 
+### Verifying the renewal job
+
+There is no manual trigger. Each instance runs one pass when it starts, so a
+deployment with the flag on runs one, and then every 24 hours. Each pass writes one
+structured log line, `SMS policy renewal cycle`, with
+`{ fx, routes }`:
+
+- `fx` is `accepted` (a new renewal-job record), `current` (the newest ECB
+  document is already accepted) or `alerted`.
+- `routes` is `{ checked, renewed, alerted }`, or `provider_unavailable` when
+  the SMS provider configuration is missing.
+- The line is logged at `info` when nothing needs a person, and at `error` when
+  `fx` is `alerted`, any route alerted, or the provider is unavailable.
+- An exception logs `SMS policy renewal cycle failed`. Email problems log
+  `SMS policy alert email skipped: EMAIL_FROM is not configured`,
+  `failed to resolve SMS policy alert recipients` or
+  `failed to send SMS policy alert email`.
+
+In Admin › Billing › SMS policies, open alerts appear under **Needs attention**.
+Records written by the job read "Accepted … automatically by the renewal job",
+and their reason starts with `Automatic renewal:`. In the database they are
+rows with `accepted_by = 'renewal_job'` in `billing_sms_fx_snapshots` or
+`billing_sms_route_policies`, plus open rows (`resolved_at IS NULL`) in
+`billing_sms_policy_alerts`.
+
+A route renews only inside the look-ahead window. After Add country, a route is
+fresh for 30 days, so its first renewal comes about 23 days later with the
+default 7-day window. Until then the pass reports it neither as checked nor as
+renewed.
+
 ## 4. Durable Cloud Run deployment
 
 `.github/workflows/deploy-main.yml` uses `--set-env-vars` and `--set-secrets`, so

@@ -773,3 +773,11 @@ accepted private commercial/FX/route evidence and the existing Stripe gate.
 The repository variable `BILLING_SMS_POLICY_AUTORENEW_ENABLED` (default `false`)
 starts the daily evidence renewal job; the workflow also forwards its band and
 look-ahead settings, so an older revision's values are never silently kept.
+Route bounds are accepted with Admin's **Add country**. It applies rule
+`TWILIO_LONG_CODE_2X_V1` (`API/src/services/billing-sms-route-bound-rule.ts`):
+per segment, twice the highest long-code SMS carrier fee Twilio publishes for
+the direction; per message, twice the USD 0.001 failed-message fee; valid for
+30 days. Only acceptances that record the account's Pricing API price renew
+automatically. Rows accepted before that column existed, and manual evidence,
+need a person, who accepts the country once with Add country. How to verify a
+pass is in `Docs/Requirements/sms-deployment.md` §3.
