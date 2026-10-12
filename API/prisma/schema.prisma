@@ -4911,7 +4911,8 @@ model BillingSmsFxSnapshot {
   acceptanceReason  String   @map("acceptance_reason") @db.VarChar(500)
   quotes            BillingSmsQuote[]
 
-  @@unique([policy, sourceDigest])
+  // Unique per document and whether it records GBP (an expression index in the migration).
+  @@index([policy, sourceDigest])
   @@index([expiresAt, acceptedAt])
   @@map("billing_sms_fx_snapshots")
 }

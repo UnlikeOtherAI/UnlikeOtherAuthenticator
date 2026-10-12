@@ -65,8 +65,10 @@ async function renewFx(db: PrismaClient, deps: SmsPolicyRenewalDeps, now: Date, 
     return 'alerted' as const;
   }
   const label = `ECB ${evidence.rateDate.toISOString().slice(0, 10)} USD/EUR ${evidence.usdPerEur}`;
-  // Refreshing the same or an older source never adds a record or extends its date-bound validity.
-  if (last && (last.sourceDigest === evidence.sourceDigest || last.rateDate >= evidence.rateDate)) {
+  // Refreshing the same or an older source never adds a record or extends its date-bound validity,
+  // except to record the GBP rate an earlier acceptance of the same document did not.
+  const addsGbp = last?.sourceDigest === evidence.sourceDigest && last.gbpPerEur === null && evidence.gbpPerEur !== null;
+  if (last && !addsGbp && (last.sourceDigest === evidence.sourceDigest || last.rateDate >= evidence.rateDate)) {
     await resolveSmsPolicyAlerts(db, subject, now);
     return 'current' as const;
   }

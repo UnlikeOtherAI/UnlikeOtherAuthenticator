@@ -4,7 +4,7 @@ import { acceptSmsFxPolicy, acceptSmsRoutePolicy, previewSmsFxPolicy, previewSms
   SmsRoutePolicyImportSchema, serializeSmsFxPolicy } from '../../src/services/billing-sms-policy-admin.service.js';
 
 const tx = vi.hoisted(() => ({ $queryRaw: vi.fn(),
-  billingSmsFxSnapshot: { create: vi.fn(), findUnique: vi.fn() },
+  billingSmsFxSnapshot: { create: vi.fn(), findMany: vi.fn() },
   billingSmsRoutePolicy: { create: vi.fn(), findFirst: vi.fn() } }));
 vi.mock('../../src/db/prisma.js', () => ({ getAdminPrisma: () => ({
   $transaction: async (fn: (value: typeof tx) => unknown) => fn(tx),
@@ -22,7 +22,7 @@ beforeEach(() => {
   vi.clearAllMocks(); vi.useFakeTimers(); vi.setSystemTime(now);
   vi.stubEnv('ADMIN_AUTH_DOMAIN', actor.domain); vi.stubEnv('ADMIN_ACCESS_TOKEN_SECRET', 'synthetic-admin-secret-with-enough-length');
   tx.$queryRaw.mockResolvedValue([{ id: actor.userId, tokenVersion: 3, email: actor.email, role: 'SUPERUSER' }]);
-  tx.billingSmsFxSnapshot.findUnique.mockResolvedValue(null); tx.billingSmsRoutePolicy.findFirst.mockResolvedValue(null);
+  tx.billingSmsFxSnapshot.findMany.mockResolvedValue([]); tx.billingSmsRoutePolicy.findFirst.mockResolvedValue(null);
   tx.billingSmsFxSnapshot.create.mockImplementation(async ({ data }) => ({ id: 'fx-1', ...data }));
   tx.billingSmsRoutePolicy.create.mockImplementation(async ({ data }) => ({ id: 'route-1', ...data }));
 });
@@ -87,7 +87,7 @@ describe('private immutable operator SMS policy acceptance', () => {
     await expect(acceptSmsFxPolicy(actor, preview.preview_token, 'Recorded acceptance reason')).rejects.toThrow('AUTHORITY_REQUIRED');
     tx.$queryRaw.mockResolvedValue([{ tokenVersion: 3, email: actor.email, role: 'SUPERUSER' }]);
     const original = { id: 'fx-existing', acceptanceReason: 'Original acceptance', acceptedAt: now };
-    tx.billingSmsFxSnapshot.findUnique.mockResolvedValue(original);
+    tx.billingSmsFxSnapshot.findMany.mockResolvedValue([original]);
     expect(await acceptSmsFxPolicy(actor, preview.preview_token, 'Different retry reason')).toBe(original);
     expect(tx.billingSmsFxSnapshot.create).not.toHaveBeenCalled();
   });

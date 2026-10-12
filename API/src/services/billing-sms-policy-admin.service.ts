@@ -103,13 +103,28 @@ async function reviewed(kind: 'fx' | 'route' | 'country', token: string,
 export { Bound as SmsPolicyBound, RouteSchema as SmsRoutePolicyEvidenceSchema, fresh as assertSmsPolicyFresh, preview as signSmsPolicyPreview, reviewed as readSmsPolicyPreview,
   fxDto as smsFxPolicyValue };
 
-/** Append one FX acceptance; an exact retry returns the original without extending freshness. */
+/** The reason recorded when a document is accepted again only to record its GBP rate. */
+export function smsFxReaddGbpReason(rateDate: string, gbpPerEur: string): string {
+  return `Re-accepted the same ECB ${rateDate} document to add GBP ${gbpPerEur}; its earlier acceptance recorded no GBP rate.`;
+}
+
+/**
+ * Append one FX acceptance; an exact retry returns the original without
+ * extending freshness. The same document is accepted once more, as a new
+ * version with the same date-bound validity, only when the stored acceptance
+ * lacks the GBP rate the document carries.
+ */
 export async function insertSmsFxPolicy(tx: Prisma.TransactionClient, value: FxPolicyValue,
   acceptor: SmsPolicyAcceptor, now: Date, acceptanceReason: string) {
-  const existing = await tx.billingSmsFxSnapshot.findUnique({
-    where: { policy_sourceDigest: { policy: value.policy, sourceDigest: value.source_digest } },
+  const existing = await tx.billingSmsFxSnapshot.findMany({
+    where: { policy: value.policy, sourceDigest: value.source_digest }, orderBy: { acceptedAt: 'desc' },
   });
-  if (existing) return existing;
+  const complete = existing.find((row) => row.gbpPerEur !== null);
+  if (complete) return complete;
+  if (existing[0] && value.gbp_per_eur === null) return existing[0];
+  if (existing[0] && value.gbp_per_eur !== null) {
+    acceptanceReason = `${smsFxReaddGbpReason(value.rate_date, value.gbp_per_eur)} ${acceptanceReason}`.slice(0, 500);
+  }
   return tx.billingSmsFxSnapshot.create({ data: {
     policy: value.policy, source: value.source, sourceDigest: value.source_digest,
     rateDate: new Date(`${value.rate_date}T00:00:00.000Z`), observedAt: new Date(value.observed_at),

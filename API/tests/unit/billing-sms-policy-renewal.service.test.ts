@@ -57,7 +57,7 @@ function fakeDb(state: { fx: object[]; routes: Array<Record<string, unknown>> })
     $queryRaw: vi.fn(async () => []),
     $transaction: async (run: (tx: unknown) => unknown) => run(db),
     billingSmsFxSnapshot: delegate('billingSmsFxSnapshot', {
-      findFirst: async () => state.fx[0] ?? null, findUnique: async () => null,
+      findFirst: async () => state.fx[0] ?? null, findMany: async () => [],
       create: async ({ data }: { data: object }) => { state.fx.unshift(data); return data; },
     }),
     billingSmsRoutePolicy: delegate('billingSmsRoutePolicy', {
