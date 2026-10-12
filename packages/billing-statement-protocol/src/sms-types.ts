@@ -40,7 +40,7 @@ export type BillingSmsQuoteScope = {
 export type BillingSmsFinalQuoteV1 = {
   id: string;
   amount: string;
-  currency: 'USD' | 'EUR';
+  currency: 'USD' | 'EUR' | 'GBP';
   expires_at: string;
   rate_basis: 'monthly_mobile' | 'inbound_mobile' | 'maximum_mobile_carrier';
   scope: BillingSmsQuoteScope;

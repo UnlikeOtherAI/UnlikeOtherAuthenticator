@@ -16,7 +16,9 @@ describe('SMS number subscriptions in the quote currency', () => {
     // Every other organisation subscription keeps the organisation's own Customer.
     expect(recurringAddonScope(org, subject, { resourceKind: null, currency: 'USD' }).customerScopeKey).toBe('org_1');
     expect(recurringAddonScope(org, subject).customerScopeKey).toBe('org_1');
-    expect(() => smsNumberCustomerScopeKey('org_1', 'GBP')).toThrow('BILLING_RECURRING_ADDON_UNAVAILABLE');
+    expect(recurringAddonScope(org, subject, { resourceKind: 'sms_mobile_number', currency: 'GBP' }).customerScopeKey)
+      .toBe('org_1:sms:GBP');
+    expect(() => smsNumberCustomerScopeKey('org_1', 'CHF')).toThrow('BILLING_RECURRING_ADDON_UNAVAILABLE');
   });
 
   it('creates the Stripe monthly price in EUR at the exact minor amount', async () => {

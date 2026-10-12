@@ -7,6 +7,7 @@ import { AppError } from '../utils/errors.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
 import { lockSmsCredential, lockSmsSubject, smsSubject, verifySmsActor } from './billing-sms-authority.service.js';
 import { publicSmsQuote } from './billing-sms-quote.service.js';
+import { requireOrganisationBillingRegion } from './billing-organisation-region.service.js';
 import type { BillingSmsProvider } from './billing-sms-provider.service.js';
 import { runBillingSerializableTransaction } from './billing-serializable-transaction.service.js';
 import { resolveBillingFundingViewer } from './billing-funding-viewer.service.js';
@@ -154,9 +155,12 @@ export async function beginSmsNumber(input: { request: BillingSmsNumberBeginRequ
       }
       return prior;
     }
+    // A purchase is billed in the organisation's one region currency, which its monthly quote carries.
+    const region = await requireOrganisationBillingRegion(input.request.organisation_id, tx);
     const quote = await tx.billingSmsQuote.findUnique({ where: { id: input.request.quote_id } });
     if (!quote || quote.serviceId !== input.credential.service.id || quote.orgId !== input.request.organisation_id ||
-        quote.direction !== 'monthly' || quote.destination !== null || !['EUR', 'USD'].includes(quote.finalCurrency) ||
+        quote.finalCurrency !== region.currency ||
+        quote.direction !== 'monthly' || quote.destination !== null || !['EUR', 'GBP', 'USD'].includes(quote.finalCurrency) ||
         quote.expiresAt.getTime() <= (deps.now?.() ?? new Date()).getTime()) {
       throw new AppError('BAD_REQUEST', 409, 'BILLING_SMS_QUOTE_NOT_ACCEPTABLE');
     }

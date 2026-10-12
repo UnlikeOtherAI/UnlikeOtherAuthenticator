@@ -15,6 +15,7 @@ import {
   recordSmsMonthlyQuoteOutcome, SmsMonthlyBelowCostError, smsMonthlyTerms,
 } from './billing-sms-monthly-price.service.js';
 import type { SmsPolicyAlertLog } from './billing-sms-policy-alert.service.js';
+import { requireOrganisationBillingRegion } from './billing-organisation-region.service.js';
 
 const QUOTE_TTL_MS = 5 * 60_000;
 // A microcredit is USD 0.000000001. A displayed maximum must cover the wallet ceiling.
@@ -39,7 +40,7 @@ function formattedQuanta(value: bigint, places: number): string {
 export function publicSmsQuote(quote: BillingSmsQuote): BillingSmsFinalQuoteV1 {
   if (!['monthly_mobile', 'inbound_mobile', 'maximum_mobile_carrier'].includes(quote.rateBasis) ||
       !['monthly', 'inbound', 'outbound'].includes(quote.direction) ||
-      !(quote.finalCurrency === 'USD' || (quote.direction === 'monthly' && quote.finalCurrency === 'EUR'))) {
+      !(quote.finalCurrency === 'USD' || (quote.direction === 'monthly' && ['EUR', 'GBP'].includes(quote.finalCurrency)))) {
     throw unavailable();
   }
   return {
@@ -113,9 +114,12 @@ deps: SmsQuoteDependencies): Promise<BillingSmsFinalQuoteV1> {
     const providerBound = policy ? sumSmsAmounts([providerAmount.toFixed(),
       policy.additionalPerSegment.toFixed(), policy.additionalPerMessage.toFixed()])
       : providerAmount;
-    // A number costs the flat monthly price in every country; messages keep provider cost plus markup.
+    // A number costs its region currency's flat monthly price in every country; messages keep
+    // provider cost plus markup. The region is chosen once before the first monthly quote.
     const terms = monthly ? await smsMonthlyTerms(tx, { country: request.country,
-      providerAmount: providerAmount.toFixed(), providerCurrency: price.currency, usdPerEur: fx.usdPerEur.toFixed() })
+      currency: (await requireOrganisationBillingRegion(request.organisation_id, tx)).currency,
+      providerAmount: providerAmount.toFixed(), providerCurrency: price.currency,
+      rates: { usdPerEur: fx.usdPerEur.toFixed(), gbpPerEur: fx.gbpPerEur?.toFixed() ?? null } })
       : { finalAmount: formattedQuanta(smsFinalUsdQuanta({ providerAmount: providerBound.toFixed(),
         providerCurrency: price.currency, usdPerEur: fx.usdPerEur.toFixed(), ...commercial,
         direction: request.direction, quantum: PRICE_QUANTUM }), 9), finalCurrency: 'USD', monthlyPriceId: null };
@@ -138,11 +142,13 @@ deps: SmsQuoteDependencies): Promise<BillingSmsFinalQuoteV1> {
   }, 'BILLING_CREDIT_ACCOUNT_RETRY_EXHAUSTED');
   try {
     const quote = await issue();
-    if (monthly) await recordSmsMonthlyQuoteOutcome(prisma, request.country, null, deps.log);
+    if (monthly) {
+      await recordSmsMonthlyQuoteOutcome(prisma, `monthly:${request.country}:${quote.currency}`, null, deps.log);
+    }
     return quote;
   } catch (error) {
     if (error instanceof SmsMonthlyBelowCostError) {
-      await recordSmsMonthlyQuoteOutcome(prisma, request.country, error, deps.log);
+      await recordSmsMonthlyQuoteOutcome(prisma, error.subject, error, deps.log);
     }
     throw error;
   }

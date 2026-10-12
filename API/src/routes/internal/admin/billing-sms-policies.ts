@@ -13,9 +13,8 @@ import {
 } from '../../../services/billing-sms-policy-admin.service.js';
 import { acceptSmsCountryPolicy, previewSmsCountryPolicy } from '../../../services/billing-sms-country-policy.service.js';
 import {
-  readSmsMonthlyPrice, serializeSmsMonthlyPrice, setSmsMonthlyPrice, SmsMonthlyPriceInput,
+  listSmsMonthlyPrices, serializeSmsMonthlyPrice, setSmsMonthlyPrice, SmsMonthlyPriceInput,
 } from '../../../services/billing-sms-monthly-price.service.js';
-import { getAdminPrisma } from '../../../db/prisma.js';
 
 const FxPreview = z.object({ xml: z.string().min(1).max(100_000).optional() }).strict();
 const Acceptance = z.object({ preview_token: z.string().min(1).max(100_000),
@@ -68,11 +67,10 @@ export function registerInternalAdminSmsPolicyRoutes(app: FastifyInstance) {
     const result = await acceptSmsFxPolicy(actor(request), value.preview_token, value.acceptance_reason);
     return reply.header('Cache-Control', 'private, no-store').send(serializeSmsFxPolicy(result));
   });
-  app.get(`${base}/monthly-price`, guard, async (_request, reply) => {
-    return reply.header('Cache-Control', 'private, no-store')
-      .send(serializeSmsMonthlyPrice(await readSmsMonthlyPrice(getAdminPrisma())));
+  app.get(`${base}/monthly-prices`, guard, async (_request, reply) => {
+    return reply.header('Cache-Control', 'private, no-store').send({ prices: await listSmsMonthlyPrices() });
   });
-  app.post(`${base}/monthly-price`, guard, async (request, reply) => {
+  app.post(`${base}/monthly-prices`, guard, async (request, reply) => {
     const value = SmsMonthlyPriceInput.parse(request.body);
     return reply.header('Cache-Control', 'private, no-store')
       .send(serializeSmsMonthlyPrice(await setSmsMonthlyPrice(actor(request), value)));

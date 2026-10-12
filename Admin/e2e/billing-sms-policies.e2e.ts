@@ -10,7 +10,8 @@ test('operator reviews exact SMS evidence, retries acceptance, checks history an
   const expiry = new Date(Date.now() + 5 * 60_000).toISOString();
   const fx = { policy: 'ECB_REFERENCE_USD_PER_EUR_V1',
     source: 'https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml',
-    source_digest: 'a'.repeat(64), rate_date: now.slice(0, 10), observed_at: now, expires_at: future, usd_per_eur: '1.1186' };
+    source_digest: 'a'.repeat(64), rate_date: now.slice(0, 10), observed_at: now, expires_at: future, usd_per_eur: '1.1186',
+    gbp_per_eur: '0.8437' };
   const sid = `AC${'a'.repeat(32)}`;
   // One automatic renewal already exists, and the job has flagged GB outbound for a person.
   const policies: { fx: Array<Record<string, unknown>>; routes: Array<Record<string, unknown>>;
@@ -25,20 +26,23 @@ test('operator reviews exact SMS evidence, retries acceptance, checks history an
   let countryRoutes: Array<Record<string, unknown> & { direction: string; observed_at: string }> = [];
   const thirty = new Date(Date.now() + 30 * 86_400_000).toISOString();
   const writes: string[] = [];
-  let monthlyPrice = { id: 'price-seed', amount: '4.99', currency: 'EUR', set_by: 'seed', set_by_user_id: null as string | null,
-    set_at: now };
+  const seed = (currency: string, amount: string) => ({ id: `price-seed-${currency}`, amount, currency, set_by: 'seed',
+    set_by_user_id: null as string | null, set_at: now });
+  const monthlyPrices = [seed('EUR', '4.99'), seed('GBP', '4.49'), seed('USD', '5.49')];
   const resource = { id: 'resource-fixture', service_id: 'nessie', organisation_id: 'org-fixture',
     phone_number: '+441234567890', country: 'GB', state: 'refund_required', recovery_reason: 'payment_without_acquired_number' };
   await page.route('**/internal/admin/billing/sms-policies**', async (handler) => {
     const request = handler.request(); const url = new URL(request.url());
     const json = (value: unknown, status = 200) => handler.fulfill({ status, contentType: 'application/json',
       headers: { 'Cache-Control': 'private, no-store' }, body: JSON.stringify(value) });
-    if (url.pathname.endsWith('/monthly-price')) {
+    if (url.pathname.endsWith('/monthly-prices')) {
       if (request.method() === 'POST') {
         writes.push(url.pathname); expect(request.postDataJSON()).toEqual({ amount: '5.49', currency: 'EUR' });
-        monthlyPrice = { ...monthlyPrice, id: 'price-2', amount: '5.49', set_by: 'operator', set_by_user_id: 'operator-fixture' };
+        monthlyPrices[0] = { ...monthlyPrices[0]!, id: 'price-2', amount: '5.49', set_by: 'operator',
+          set_by_user_id: 'operator-fixture' };
+        return json(monthlyPrices[0]);
       }
-      return json(monthlyPrice);
+      return json({ prices: monthlyPrices });
     }
     if (request.method() === 'GET' && url.pathname.endsWith('/liabilities')) return json({
       kind: url.searchParams.get('kind'), next_cursor: null, liabilities: [{ id: 'liability-fixture',
@@ -122,13 +126,15 @@ test('operator reviews exact SMS evidence, retries acceptance, checks history an
   await expect(page.getByText('CZ · inbound · USD', { exact: true })).toBeVisible();
   await expect(page.getByText(/automatically by the renewal job/)).toBeVisible();
   await expect(page.getByText(/Account price USD 0.0075 at acceptance/)).toBeVisible();
-  await expect(page.getByText('EUR 4.99', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Edit', exact: true }).click();
-  await page.getByLabel('Amount', { exact: true }).fill('5.4');
+  for (const price of ['EUR 4.99', 'GBP 4.49', 'USD 5.49']) await expect(page.getByText(price, { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Edit Europe (EUR) price', exact: true }).click();
+  const amount = page.getByRole('textbox', { name: /^Europe \(EUR\) amount/ });
+  await amount.fill('5.4');
   await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeDisabled();
-  await page.getByLabel('Amount', { exact: true }).fill('5.49');
+  await amount.fill('5.49');
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.getByText('EUR 5.49', { exact: true })).toBeVisible();
+  await expect(page.getByText('GBP 4.49', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Refresh and accept', exact: true }).click();
   await expect(page.getByRole('alert').filter({ hasText: 'No ECB rate has been accepted yet' })).toBeVisible();
   await page.getByText('Review manually', { exact: true }).click();
@@ -199,7 +205,7 @@ test('operator reviews exact SMS evidence, retries acceptance, checks history an
   expect(writes.filter((value) => value.endsWith('/routes/accept'))).toHaveLength(1);
   expect(writes.filter((value) => value.endsWith('/fx/refresh-accept'))).toHaveLength(2);
   expect(writes.filter((value) => value.endsWith('/routes/country/accept'))).toHaveLength(1);
-  expect(writes.filter((value) => value.endsWith('/monthly-price'))).toHaveLength(1);
+  expect(writes.filter((value) => value.endsWith('/monthly-prices'))).toHaveLength(1);
   expect(fixture.unexpected).toEqual([]); expect(fixture.errors).toEqual([]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
 });
@@ -222,8 +228,8 @@ test('operator verifies existing full refund after a refusal and sees exact reso
       if (++attempts === 1) return json({ error: 'Synthetic pending refund evidence' }, 409);
       state = 'ended'; return json({ resource_id: 'resource-refund', state, evidence_digest: 'c'.repeat(64), refunded_at: now });
     }
-    if (pathname.endsWith('/monthly-price')) return json({ id: 'price-seed', amount: '4.99', currency: 'EUR',
-      set_by: 'seed', set_by_user_id: null, set_at: now });
+    if (pathname.endsWith('/monthly-prices')) return json({ prices: [{ id: 'price-seed', amount: '4.99', currency: 'EUR',
+      set_by: 'seed', set_by_user_id: null, set_at: now }] });
     if (pathname.endsWith('/liabilities')) return json({ kind: 'inbound', next_cursor: null, liabilities: [] });
     if (pathname.endsWith('/recovery')) return json({ resources: state === 'ended' ? [] : [{ ...resource(), created_at: now, updated_at: now }], next_cursor: null });
     if (pathname.endsWith('/resource-refund')) return json({ ...resource(), account_sid: null, phone_number_sid: null,

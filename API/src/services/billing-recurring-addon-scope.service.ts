@@ -51,7 +51,7 @@ export function recurringAddonOfferScope(offer: {
  * never collide with the organisation's other subscriptions.
  */
 export function smsNumberCustomerScopeKey(organisationId: string, currency: string): string {
-  if (currency !== 'EUR' && currency !== 'USD') {
+  if (!['EUR', 'GBP', 'USD'].includes(currency)) {
     throw new AppError('BAD_REQUEST', 409, 'BILLING_RECURRING_ADDON_UNAVAILABLE');
   }
   return `${organisationId}:sms:${currency}`;
