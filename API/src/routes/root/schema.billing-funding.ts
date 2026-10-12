@@ -289,11 +289,11 @@ export const billingFundingEndpoints: EndpointSchema[] = [
     auth: lifecycleAuth,
     body: fundingSubject,
     response: {
-      200: '{ organisation_id, active, assumed_at, released_at, can_manage, billing_region: { region, currency, suggested_region, suggested_currency, can_set } }',
+      200: '{ organisation_id, active, assumed_at, released_at, can_manage, billing_region: { region, currency, suggested_region, suggested_currency, suggested_from?, can_set } }',
       '401/403': 'Invalid lifecycle credential, actor, membership, or subject',
     },
     notes:
-      'Absent or inactive means each team pays for itself, which is the default everywhere.',
+      'Absent or inactive means each team pays for itself, which is the default everywhere. With x-uoa-billing-region-protocol: 1.1.0 the billing_region block (and the region set response) adds suggested_from: billing_country when the suggestion came from the invoice-profile billing country, null when no country is known and US is the default.',
   },
   {
     method: 'POST',
@@ -303,7 +303,7 @@ export const billingFundingEndpoints: EndpointSchema[] = [
     auth: lifecycleAuth,
     body: { ...fundingSubject, region: 'UK | US | EUROPE' },
     response: {
-      200: '{ region, currency, suggested_region, suggested_currency, can_set }',
+      200: '{ region, currency, suggested_region, suggested_currency, suggested_from? (region protocol 1.1.0), can_set }',
       '401/403': 'Invalid lifecycle credential, actor, membership, or BILLING_ORG_MANAGER_REQUIRED',
       409: 'BILLING_REGION_IMMUTABLE: a different region was already chosen',
     },

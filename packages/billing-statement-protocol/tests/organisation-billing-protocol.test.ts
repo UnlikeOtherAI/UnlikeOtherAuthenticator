@@ -113,6 +113,11 @@ describe('organisation billing region (protocol 5.3.0)', () => {
     expect(view({ region: 'UK', currency: 'GBP', suggested_region: 'UK', suggested_currency: 'GBP', can_set: false })).toBe(true);
     expect(view({ region: 'APAC', currency: null, suggested_region: 'US', suggested_currency: 'USD', can_set: true })).toBe(false);
     expect(view({ region: null, currency: null, suggested_region: 'US', suggested_currency: 'USD' })).toBe(false);
+    // Region protocol 1.1.0: the suggestion source is optional, and only a billing country or null.
+    const unset = { region: null, currency: null, suggested_region: 'US', suggested_currency: 'USD', can_set: true };
+    expect(view({ ...unset, suggested_from: 'billing_country' })).toBe(true);
+    expect(view({ ...unset, suggested_from: null })).toBe(true);
+    expect(view({ ...unset, suggested_from: 'ip_address' })).toBe(false);
   });
   it('sets the region with the ordinary subject fields only', () => {
     const set = ajv.compile(billingRegionSetRequestV1JsonSchema);
