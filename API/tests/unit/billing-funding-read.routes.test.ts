@@ -177,6 +177,7 @@ describe('shared credits and recurring add-on read routes', () => {
         supportsBillingStatus: false,
         supportsPurchaseCurrency: false,
         supportsReloadCurrency: false,
+        supportsRegionValue: false,
         log: expect.anything(),
         request: {
           product: 'deepwater',
