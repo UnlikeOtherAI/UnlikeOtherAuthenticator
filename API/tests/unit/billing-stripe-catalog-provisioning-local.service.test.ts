@@ -285,23 +285,40 @@ describe('local Stripe commercial catalog reconciliation', () => {
     expect(db.billingStripeAccount.create).not.toHaveBeenCalled();
   });
 
-  it('fails closed rather than leaving an unprovisioned active service', async () => {
+  it('leaves an active service the catalog does not cover alone and names it', async () => {
     const db = emptyLocalCatalog([
       ...services,
-      { id: 'service_future', identifier: 'future', name: 'future', active: true },
+      { id: 'service_salesnerd', identifier: 'salesnerd', name: 'SalesNerd', active: true },
     ]);
 
-    await expect(
-      reconcileLocalStripeCommercialCatalog({ db: db as never, catalog, write: false }),
-    ).rejects.toThrow('BILLING_COMMERCIAL_CATALOG_LOCAL_DRIFT');
+    const actions = await reconcileLocalStripeCommercialCatalog({ db: db as never, catalog, write: false });
+
+    expect(actions).toContainEqual({ resource: 'billing_service_not_covered', key: 'salesnerd', outcome: 'skipped' });
+    expect(actions.some((action) => action.key.startsWith('salesnerd/'))).toBe(false);
+    expect(db.billingCreditFundingPolicy.findMany).not.toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ serviceId: 'service_salesnerd' }) }));
   });
 
-  it('blocks provisioning until the operator registers DocGen', async () => {
+  it('provisions the registered products and names one not yet registered', async () => {
     const db = emptyLocalCatalog(services.filter((service) => service.identifier !== 'docgen'));
 
-    await expect(
-      reconcileLocalStripeCommercialCatalog({ db: db as never, catalog, write: false }),
-    ).rejects.toThrow('BILLING_COMMERCIAL_CATALOG_LOCAL_DRIFT');
+    const actions = await reconcileLocalStripeCommercialCatalog({ db: db as never, catalog, write: false });
+
+    expect(actions).toContainEqual({ resource: 'billing_service_not_registered', key: 'docgen', outcome: 'skipped' });
+    expect(actions.some((action) => action.key.startsWith('docgen/'))).toBe(false);
+    expect(actions).toContainEqual({ resource: 'credit_funding_policy', key: 'nessie/EUR/v1', outcome: 'created' });
+  });
+
+  it('names the check that found drift and the rows it saw', async () => {
+    const db = emptyLocalCatalog();
+    db.billingCreditFundingPolicy.findMany.mockImplementation(async ({ where }) =>
+      where.serviceId === 'service_nessie' && where.currency === 'USD'
+        ? [{ id: 'policy_retired', serviceId: 'service_nessie', currency: 'USD', version: 1, active: false }]
+        : []);
+
+    await expect(reconcileLocalStripeCommercialCatalog({ db: db as never, catalog, write: false }))
+      .rejects.toMatchObject({ message: 'BILLING_COMMERCIAL_CATALOG_LOCAL_DRIFT', check: 'credit_policy_version_inactive',
+        details: { service: 'nessie', currency: 'USD', policy_id: 'policy_retired' } });
   });
 
   it('is a complete no-op when every immutable row is already exact', async () => {
