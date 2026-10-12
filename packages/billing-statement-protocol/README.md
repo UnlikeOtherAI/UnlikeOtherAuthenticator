@@ -147,6 +147,8 @@ option by rebuilding its subject.
 Credit protocol 2.0.0 callers opt in to UOA's reconciliation status with
 `x-uoa-billing-credits-protocol: 2.0.0`. Older consumers receive the legacy
 shape and a reconciliation hold until they negotiate the status revision.
+Credit protocol 2.1.0 (package 5.5.0) keeps that status and adds top-ups in the
+billing region's currency; see "Credits bought in the region currency" below.
 
 Both credits and recurring add-ons use manager/member discriminated unions.
 Managers can receive exact-user breakdowns, payment-method display data, and
@@ -310,3 +312,26 @@ region currency (EUR 4.99, GBP 4.49, USD 5.49 at release), the same in every
 country, and its monthly subscription is charged in that currency. Until the
 region is chosen the quote answers `BILLING_REGION_REQUIRED`. Message quotes stay
 USD in 5.4.0. Products render the currency the quote carries and never assume USD.
+
+## Credits bought in the region currency (5.5.0, credits protocol 2.1.0)
+
+Credits stay one USD-denominated unit: 1,000 credits per USD, and every balance,
+charge and entry is in credits. An organisation whose billing region is UK or
+Europe buys them in GBP or EUR. A consumer that sends
+`x-uoa-billing-credits-protocol: 2.1.0` receives the one-time offers in the
+region's currency (USD until a region is chosen); an older consumer keeps seeing
+the USD offers, which stay purchasable.
+
+- `payment_amount` on an offer and on `pending_credits` is `USD`, `EUR` or `GBP`
+  (`BillingCreditPurchaseCurrency`).
+- A GBP or EUR offer carries `credit_rate` (`BillingCreditPurchaseRateV1`): USD
+  per unit, its source (`stripe` by default, `ecb` when the deployment selects
+  it) and a display line. `credits_received` is what today's rate buys; the exact
+  credits are fixed when the checkout is created and granted unchanged when the
+  payment succeeds. The credits equal the payment times Stripe's base rate,
+  rounded down to whole credits, with no buffer and no FX fee taken.
+- When no rate can be read the GBP or EUR offers are left out and the funding
+  description says so; a checkout answers `503 BILLING_CREDIT_FX_RATE_UNAVAILABLE`.
+  UOA never switches rate source on its own.
+- Automatic top-up stays USD in 5.5.0.
+

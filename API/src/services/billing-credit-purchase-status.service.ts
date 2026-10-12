@@ -10,7 +10,7 @@ import { resolveCreditAccount, resolveCreditCollectionContext } from './billing-
 import { assertCreditCheckoutSessionBinding } from './billing-credit-checkout-recovery.service.js';
 import type { CreditFundingActionRequest } from './billing-credit-funding-context.service.js';
 import { assertCreditFundingMetadata } from './billing-credit-funding-binding.service.js';
-import { exactMinor, requireUsd } from './billing-credit-funding-webhook-validation.service.js';
+import { exactMinor, requireCreditCurrency } from './billing-credit-funding-webhook-validation.service.js';
 import { resolveEffectiveTariffContext } from './billing-entitlement.service.js';
 import { resolveBillingFundingViewer } from './billing-funding-viewer.service.js';
 import { isOrganisationBillingManager, resolveOrgBillingResponsibility } from './billing-org-responsibility.service.js';
@@ -69,7 +69,7 @@ export async function readCreditPurchaseEvidence(params: {
     if (session.id !== checkout.stripeCheckoutSessionId
       || session.amount_total === null || session.currency === null
       || exactMinor(session.amount_total) !== checkout.paymentAmountMinor
-      || requireUsd(session.currency) !== 'USD') return { state: 'needs_review' };
+      || requireCreditCurrency(session.currency) !== checkout.currency) return { state: 'needs_review' };
     if (session.status === 'expired') return { state: 'expired' };
     const continuation = continuationForOpenSession(session, checkout);
     const intentId = stripeExternalId(session.payment_intent);
@@ -84,7 +84,7 @@ export async function readCreditPurchaseEvidence(params: {
     });
     if (intent.id !== intentId || stripeExternalId(intent.customer) !== customerStripeId
       || exactMinor(intent.amount) !== checkout.paymentAmountMinor
-      || requireUsd(intent.currency) !== 'USD') return { state: 'needs_review' };
+      || requireCreditCurrency(intent.currency) !== checkout.currency) return { state: 'needs_review' };
     let state: BillingCreditPurchaseState;
     switch (intent.status) {
       case 'requires_action': state = 'requires_action'; break;

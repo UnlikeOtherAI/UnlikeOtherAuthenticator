@@ -17,7 +17,8 @@ export type BillingCreditCopy = Readonly<{
   teamName: string;
   teamMember: string;
   creditUnit: BillingCopyPluralForms;
-  creditOfferNames: Readonly<Record<'credits_usd_10' | 'credits_usd_25' | 'credits_usd_50' | 'credits_usd_100', string>>;
+  creditOfferNames: Readonly<Record<
+    'credits_usd_10' | 'credits_usd_25' | 'credits_usd_50' | 'credits_usd_100' | 'credits_usd_1000', string>>;
   oneTimeOfferDescription: string;
   smallestOfferHint: string;
 }>;
@@ -38,7 +39,7 @@ export const BILLING_CREDIT_COPY = {
     teamName: 'Tým',
     teamMember: 'Člen týmu',
     creditUnit: { one: 'kredit', few: 'kredity', other: 'kreditů' },
-    creditOfferNames: { credits_usd_10: 'Malé dobití kreditů', credits_usd_25: 'Střední dobití kreditů', credits_usd_50: 'Velké dobití kreditů', credits_usd_100: 'Největší dobití kreditů' },
+    creditOfferNames: { credits_usd_10: 'Malé dobití kreditů', credits_usd_25: 'Střední dobití kreditů', credits_usd_50: 'Velké dobití kreditů', credits_usd_100: 'Největší dobití kreditů', credits_usd_1000: 'Velkoobjemové dobití kreditů' },
     oneTimeOfferDescription: 'Jednorázové dobití. Nezapíná automatické dobíjení.',
     smallestOfferHint: 'Začněte nejmenším dostupným dobitím.',
   },
@@ -57,7 +58,7 @@ export const BILLING_CREDIT_COPY = {
     teamName: 'Team',
     teamMember: 'Team member',
     creditUnit: { one: 'credit', other: 'credits' },
-    creditOfferNames: { credits_usd_10: 'Small credit top-up', credits_usd_25: 'Medium credit top-up', credits_usd_50: 'Large credit top-up', credits_usd_100: 'Extra-large credit top-up' },
+    creditOfferNames: { credits_usd_10: 'Small credit top-up', credits_usd_25: 'Medium credit top-up', credits_usd_50: 'Large credit top-up', credits_usd_100: 'Extra-large credit top-up', credits_usd_1000: 'Bulk credit top-up' },
     oneTimeOfferDescription: 'One-time purchase. This does not enable automatic top-up.',
     smallestOfferHint: 'Start with the smallest available top-up.',
   },
@@ -76,7 +77,7 @@ export const BILLING_CREDIT_COPY = {
     teamName: 'Team',
     teamMember: 'Team member',
     creditUnit: { one: 'credit', other: 'credits' },
-    creditOfferNames: { credits_usd_10: 'Small credit top-up', credits_usd_25: 'Medium credit top-up', credits_usd_50: 'Large credit top-up', credits_usd_100: 'Extra-large credit top-up' },
+    creditOfferNames: { credits_usd_10: 'Small credit top-up', credits_usd_25: 'Medium credit top-up', credits_usd_50: 'Large credit top-up', credits_usd_100: 'Extra-large credit top-up', credits_usd_1000: 'Bulk credit top-up' },
     oneTimeOfferDescription: 'One-time purchase. This does not enable automatic top-up.',
     smallestOfferHint: 'Start with the smallest available top-up.',
   },
@@ -95,7 +96,7 @@ export const BILLING_CREDIT_COPY = {
     teamName: 'Team',
     teamMember: 'Teammitglied',
     creditUnit: { one: 'Credit', other: 'Credits' },
-    creditOfferNames: { credits_usd_10: 'Kleine Credit-Aufladung', credits_usd_25: 'Mittlere Credit-Aufladung', credits_usd_50: 'Große Credit-Aufladung', credits_usd_100: 'Sehr große Credit-Aufladung' },
+    creditOfferNames: { credits_usd_10: 'Kleine Credit-Aufladung', credits_usd_25: 'Mittlere Credit-Aufladung', credits_usd_50: 'Große Credit-Aufladung', credits_usd_100: 'Sehr große Credit-Aufladung', credits_usd_1000: 'Credit-Großpaket' },
     oneTimeOfferDescription: 'Einmaliger Kauf. Dadurch wird die automatische Aufladung nicht aktiviert.',
     smallestOfferHint: 'Beginnen Sie mit der kleinsten verfügbaren Aufladung.',
   },
@@ -114,7 +115,7 @@ export const BILLING_CREDIT_COPY = {
     teamName: 'Equipo',
     teamMember: 'Miembro del equipo',
     creditUnit: { one: 'crédito', other: 'créditos' },
-    creditOfferNames: { credits_usd_10: 'Recarga pequeña de créditos', credits_usd_25: 'Recarga mediana de créditos', credits_usd_50: 'Recarga grande de créditos', credits_usd_100: 'Recarga extragrande de créditos' },
+    creditOfferNames: { credits_usd_10: 'Recarga pequeña de créditos', credits_usd_25: 'Recarga mediana de créditos', credits_usd_50: 'Recarga grande de créditos', credits_usd_100: 'Recarga extragrande de créditos', credits_usd_1000: 'Recarga de créditos por volumen' },
     oneTimeOfferDescription: 'Compra única. Esto no activa la recarga automática.',
     smallestOfferHint: 'Empieza con la recarga más pequeña disponible.',
   },
@@ -133,7 +134,7 @@ export const BILLING_CREDIT_COPY = {
     teamName: 'Équipe',
     teamMember: 'Membre de l’équipe',
     creditUnit: { one: 'crédit', other: 'crédits' },
-    creditOfferNames: { credits_usd_10: 'Petite recharge de crédits', credits_usd_25: 'Recharge moyenne de crédits', credits_usd_50: 'Grande recharge de crédits', credits_usd_100: 'Très grande recharge de crédits' },
+    creditOfferNames: { credits_usd_10: 'Petite recharge de crédits', credits_usd_25: 'Recharge moyenne de crédits', credits_usd_50: 'Grande recharge de crédits', credits_usd_100: 'Très grande recharge de crédits', credits_usd_1000: 'Recharge de crédits en volume' },
     oneTimeOfferDescription: 'Achat ponctuel. Cela n’active pas la recharge automatique.',
     smallestOfferHint: 'Commencez par la plus petite recharge disponible.',
   },
@@ -152,7 +153,7 @@ export const BILLING_CREDIT_COPY = {
     teamName: 'Team',
     teamMember: 'Membro del team',
     creditUnit: { one: 'credito', other: 'crediti' },
-    creditOfferNames: { credits_usd_10: 'Ricarica piccola di crediti', credits_usd_25: 'Ricarica media di crediti', credits_usd_50: 'Ricarica grande di crediti', credits_usd_100: 'Ricarica extra grande di crediti' },
+    creditOfferNames: { credits_usd_10: 'Ricarica piccola di crediti', credits_usd_25: 'Ricarica media di crediti', credits_usd_50: 'Ricarica grande di crediti', credits_usd_100: 'Ricarica extra grande di crediti', credits_usd_1000: 'Ricarica di crediti in volume' },
     oneTimeOfferDescription: 'Acquisto singolo. Questo non attiva la ricarica automatica.',
     smallestOfferHint: 'Inizia dalla ricarica disponibile più piccola.',
   },
@@ -168,8 +169,10 @@ export function billingPendingCreditsLabel(count: number, locale?: BillingCustom
 
 export function billingBuiltInCreditOfferCopy(key: string, locale?: BillingCustomerLocale) {
   const copy = billingCreditCopy(locale);
-  if (!Object.prototype.hasOwnProperty.call(copy.creditOfferNames, key)) return null;
-  const offerKey = key as keyof BillingCreditCopy['creditOfferNames'];
+  // A GBP or EUR offer shares its USD tier's name: credits_eur_25 is named as credits_usd_25.
+  const tier = key.replace(/^credits_(eur|gbp)_/, 'credits_usd_');
+  if (!Object.prototype.hasOwnProperty.call(copy.creditOfferNames, tier)) return null;
+  const offerKey = tier as keyof BillingCreditCopy['creditOfferNames'];
   return { name: copy.creditOfferNames[offerKey], description: copy.oneTimeOfferDescription };
 }
 

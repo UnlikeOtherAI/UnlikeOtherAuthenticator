@@ -6,7 +6,7 @@ import {
   billingCreditsTopUpActionJsonSchema,
   nullableBillingCreditsAction,
 } from './credits-action-schema.js';
-import { creditAmountSchema, moneySchema } from './funding-schema-primitives.js';
+import { creditAmountSchema, moneySchema, positiveDecimalPattern } from './funding-schema-primitives.js';
 import { billingControlledByJsonSchema } from './org-billing-schema.js';
 import {
   billingCreditAttentionV1JsonSchema,
@@ -30,6 +30,22 @@ const positiveCredits = creditAmountSchema({ positive: true });
 const unsignedCredits = creditAmountSchema();
 const usdMoney = moneySchema({ usdOnly: true });
 const positivePaymentMoney = moneySchema({ positive: true, usdOnly: true });
+// A one-time purchase is paid in USD or the billing region's GBP or EUR (protocol 2.1.0).
+const purchaseCurrencies = ['USD', 'EUR', 'GBP'] as const;
+const purchaseMoney = moneySchema({ currencies: purchaseCurrencies });
+const positivePurchaseMoney = moneySchema({ positive: true, currencies: purchaseCurrencies });
+const creditRateSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['currency', 'usd_per_unit', 'source', 'as_of', 'display'],
+  properties: {
+    currency: { enum: ['EUR', 'GBP'] },
+    usd_per_unit: { type: 'string', pattern: positiveDecimalPattern },
+    source: { enum: ['stripe', 'ecb'] },
+    as_of: { type: 'string', format: 'date-time' },
+    display: { type: 'string' },
+  },
+} as const;
 
 export const billingCreditsV1JsonSchema = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',
@@ -145,7 +161,7 @@ export const billingCreditsV1JsonSchema = {
       required: ['top_up_count', 'payment_amount', 'credits_received', 'label', 'description'],
       properties: {
         top_up_count: { type: 'integer', minimum: 0 },
-        payment_amount: { oneOf: [usdMoney, { type: 'null' }] },
+        payment_amount: { oneOf: [purchaseMoney, { type: 'null' }] },
         credits_received: unsignedCredits,
         label: { type: 'string' },
         description: { type: 'string' },
@@ -201,8 +217,9 @@ export const billingCreditsV1JsonSchema = {
                   key: { type: 'string', minLength: 1 },
                   name: { type: 'string' },
                   description: { type: 'string' },
-                  payment_amount: positivePaymentMoney,
+                  payment_amount: positivePurchaseMoney,
                   credits_received: positiveCredits,
+                  credit_rate: creditRateSchema,
                   available: { type: 'boolean' },
                   unavailable_reason: { type: ['string', 'null'] },
                   action: {

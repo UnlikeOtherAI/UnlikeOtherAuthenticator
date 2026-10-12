@@ -60,11 +60,17 @@ async function loadPrices(
     ...CREDIT_TOP_UP_SPECS.map((spec) => spec.stripeLookupKey),
     DEEPWATER_PRIVACY_SPEC.stripeLookupKey,
   ];
-  const response = await stripe.prices.list({ lookup_keys: lookupKeys, limit: 100 });
-  if (response.has_more || response.data.length !== lookupKeys.length) remoteDrift();
+  // Stripe accepts at most ten lookup keys per list request.
+  const pages = [];
+  for (let index = 0; index < lookupKeys.length; index += 10) {
+    const chunk = lookupKeys.slice(index, index + 10);
+    const response = await stripe.prices.list({ lookup_keys: chunk, limit: 100 });
+    if (response.has_more || response.data.length !== chunk.length) remoteDrift();
+    pages.push(...response.data);
+  }
 
   const prices = new Map<string, Stripe.Price>();
-  for (const price of response.data) {
+  for (const price of pages) {
     if (
       !price.lookup_key ||
       !lookupKeys.includes(price.lookup_key) ||
@@ -104,7 +110,7 @@ function validateCreditPrice(params: {
   if (
     !price.active ||
     price.lookup_key !== spec.stripeLookupKey ||
-    price.currency !== 'usd' ||
+    price.currency !== spec.currency.toLowerCase() ||
     price.type !== 'one_time' ||
     price.recurring !== null ||
     price.unit_amount !== Number(spec.paymentAmountMinor) ||

@@ -36,12 +36,16 @@ export function registerBillingCreditsRoute(app: FastifyInstance): void {
       const presentation = readBillingPresentation(request.headers);
       const credential = request.billingAppKey;
       if (!credential) throw new AppError('UNAUTHORIZED', 401);
+      const protocol = String(request.headers[BILLING_CREDITS_PROTOCOL_HEADER] ?? '');
       const credits = await getBillingCredits({
         ...(presentation.enabled ? { locale: presentation.locale } : {}),
         credential,
         actorToken: readBillingActorHeader(request.headers['x-uoa-actor']),
         endpoint: BILLING_CREDITS_READ_PATH,
-        supportsBillingStatus: request.headers[BILLING_CREDITS_PROTOCOL_HEADER] === BILLING_CREDITS_PROTOCOL_VERSION,
+        // 2.0.0 added billing_status; 2.1.0 adds offers in the billing region's currency.
+        supportsBillingStatus: ['2.0.0', BILLING_CREDITS_PROTOCOL_VERSION].includes(protocol),
+        supportsPurchaseCurrency: protocol === BILLING_CREDITS_PROTOCOL_VERSION,
+        log: request.log,
         request: {
           product: body.product,
           organisationId: body.organisation_id,

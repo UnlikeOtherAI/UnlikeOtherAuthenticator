@@ -15,4 +15,18 @@ no-op; a different one answers 409 BILLING_REGION_IMMUTABLE; a non-manager gets
 purchases and SMS top-ups answer 409 BILLING_REGION_REQUIRED: ask an owner or
 admin to choose. AI usage stays USD for every region. Render the block; store
 nothing.
+
+## Credits bought in the region currency
+Credits stay one USD-denominated unit (1,000 per USD). An organisation in the UK
+or Europe buys them in GBP or EUR. Send x-uoa-billing-credits-protocol: 2.1.0 on
+POST /billing/v1/credits to receive the one-time offers in the region currency
+(USD until a region is chosen; older protocol versions keep the USD offers, which
+stay purchasable). A GBP or EUR offer carries credit_rate {currency,
+usd_per_unit, source, as_of, display}; its credits_received is what today's rate
+buys. The exact credits are fixed when POST /billing/v1/credits/top-up-checkout
+creates the checkout (payment times Stripe's live base rate, rounded down to
+whole credits, no buffer) and granted unchanged when the payment succeeds. While
+no rate can be read those offers are left out and the checkout answers 503
+BILLING_CREDIT_FX_RATE_UNAVAILABLE; try again later. Automatic top-up stays USD
+for now.
 `;

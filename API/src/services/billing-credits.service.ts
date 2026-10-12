@@ -26,6 +26,9 @@ import {
   resolveBillingFundingRequestRecipients,
 } from './billing-credit-funding-request.service.js';
 import { fetchLedgerMeteringPortfolio } from './billing-ledger-collector.service.js';
+import { readOrganisationBillingRegion } from './billing-organisation-region.service.js';
+import { readCreditPurchaseRateWithAlert } from './billing-credit-purchase-rate.service.js';
+import type { SmsPolicyAlertLog } from './billing-sms-policy-alert.service.js';
 import type { FetchMeteringPortfolio } from './billing-metering.types.js';
 import { AppError } from '../utils/errors.js';
 
@@ -53,6 +56,8 @@ type Dependencies = {
   resolveFundingRecipients?: typeof resolveBillingFundingRequestRecipients;
   resolveLatestFundingCreditEntryId?: typeof resolveLatestBillingFundingCreditEntryId;
   hasPendingSettlementWatch?: (creditAccountId: string, teamId: string) => Promise<boolean>;
+  readRegion?: typeof readOrganisationBillingRegion;
+  readRate?: typeof readCreditPurchaseRateWithAlert;
 };
 
 async function hasPendingSettlementWatch(
@@ -77,6 +82,9 @@ export async function getBillingCredits(
     endpoint: BillingActorEndpoint;
     locale?: BillingCustomerLocale;
     supportsBillingStatus?: boolean;
+    /** Credits protocol 2.1.0: offers may be priced in the billing region's GBP or EUR. */
+    supportsPurchaseCurrency?: boolean;
+    log?: SmsPolicyAlertLog;
   },
   deps?: Dependencies,
 ) {
@@ -145,6 +153,11 @@ export async function getBillingCredits(
     ].includes(error.message))) throw error;
     settlementPending = true;
   }
+  // A consumer on an older credits protocol keeps seeing the USD offers it can validate.
+  const region = params.supportsPurchaseCurrency
+    ? await (deps?.readRegion ?? readOrganisationBillingRegion)(params.request.organisationId, prisma)
+    : null;
+  const purchaseCurrency = region?.currency ?? 'USD';
   settlementPending ||= await (deps?.hasPendingSettlementWatch
     ? deps.hasPendingSettlementWatch(creditAccount.id, params.request.teamId)
     : hasPendingSettlementWatch(creditAccount.id, params.request.teamId, prisma ?? getAdminPrisma()));
@@ -164,6 +177,7 @@ export async function getBillingCredits(
         accountId: collection.account.id,
         storefrontServiceId: params.credential.service.id,
         period,
+        purchaseCurrency,
       },
       { prisma },
     ),
@@ -176,9 +190,15 @@ export async function getBillingCredits(
       { prisma },
     ),
   ]);
-  const actionReadiness = await (
-    deps?.resolveActionReadiness ?? resolveBillingCreditActionReadiness
-  )({ collection, credential: params.credential, data });
+  const readRate = deps?.readRate ?? readCreditPurchaseRateWithAlert;
+  const [actionReadiness, purchaseRate] = await Promise.all([
+    (deps?.resolveActionReadiness ?? resolveBillingCreditActionReadiness)(
+      { collection, credential: params.credential, data }),
+    // Offers show what today's rate buys; without a rate they are left out, never priced another way.
+    purchaseCurrency === 'USD' || !collection.stripe || !collection.stripeCollectionEnabled ? null
+      : readRate(purchaseCurrency, { stripe: collection.stripe, ...(prisma ? { prisma } : {}), now: () => now,
+        ...(params.log ? { log: params.log } : {}) }).catch(() => null),
+  ]);
   const meteredBilling = Boolean(
     params.locale !== undefined &&
       entitlement.payload.tariff.usage_billing_enabled &&
@@ -254,5 +274,6 @@ export async function getBillingCredits(
     attention,
     ...(fundingRequest ? { fundingRequest } : {}),
     settlementPending,
+    purchaseRate,
   });
 }

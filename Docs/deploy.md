@@ -184,6 +184,7 @@ Set via Cloud Run service config:
 | `BILLING_SMS_POLICY_AUTORENEW_ENABLED`      | Plain `true`/`false`, workflow default `false`. Starts the daily SMS policy renewal job (ECB rate within the band; route bounds whose account price did not rise); see `Docs/Requirements/sms-deployment.md` §3 |
 | `BILLING_SMS_POLICY_AUTORENEW_FX_BAND_BPS`  | Plain 1–2,000 basis points, default `500` (±5%): the largest move from the last accepted USD-per-EUR rate that the job accepts. Admin's Refresh and accept uses the same band |
 | `BILLING_SMS_POLICY_AUTORENEW_LOOKAHEAD_DAYS` | Plain 1–20 days, default `7`: how far ahead of expiry the job re-attests route bounds and raises route alerts |
+| `BILLING_CREDIT_FX_RATE_SOURCE`             | Plain `stripe` or `ecb`, workflow default `stripe`. The rate GBP and EUR credit top-ups are sold at: Stripe's live FX Quote base rate (`lock_duration: none`), or the accepted ECB snapshot from Admin › SMS policies. An unavailable source refuses with `BILLING_CREDIT_FX_RATE_UNAVAILABLE` and opens one `credit_fx_rate_unavailable` alert; UOA never switches source itself, so `ecb` is an explicit operator flip |
 | `LEDGER_BILLING_BASE_URL`                   | Plain credential-free HTTPS Ledger origin, canonical production value `https://ledger.unlikeotherai.com`                                                                                                                                                                                                                                                                                                                                                          |
 | `LEDGER_BILLING_APP_KEY`                    | Secret Manager: UOA's own dedicated, product-bound Ledger raw-metering reader app key. Never reuse a Nessie, DeepWater, DeepSignal, DeepTest, user, or webhook credential                                                                                                                                                                                                                                                                                         |
 | `LEDGER_BILLING_APP_KEY_ID`                 | Plain immutable Ledger record ID for that exact UOA app key; copied into the signed assertion's `azp` and verified by Ledger                                                                                                                                                                                                                                                                                                                                      |
@@ -630,8 +631,9 @@ Prerequisites:
   `deepwater`, `deepsignal`, and `deeptest`, and exactly one active,
   feature-flags-enabled app identified as `deepwater-api`. Unexpected active
   services or ambiguous app state fail closed.
-- Stripe must already contain one shared-credit Product, its four active
-  one-time USD Prices, and a distinct DeepWater privacy Product with its active
+- Stripe must already contain one shared-credit Product, its fifteen active
+  one-time Prices (USD, EUR and GBP at 10, 25, 50, 100 and 1,000), and a
+  distinct DeepWater privacy Product with its active
   monthly licensed USD Price. Prices are located by lookup key, so Stripe IDs
   are neither copied into source nor supplied on the command line.
 
@@ -644,6 +646,9 @@ The exact Stripe contract is:
 | US$25 credit Price        | `uoa_credits_usd_25_v1`, one-time, 25,000 credits                 | `credits=25000`, `uoa_kind=team_credit_top_up`                                                      |
 | US$50 credit Price        | `uoa_credits_usd_50_v1`, one-time, 50,000 credits                 | `credits=50000`, `uoa_kind=team_credit_top_up`                                                      |
 | US$100 credit Price       | `uoa_credits_usd_100_v1`, one-time, 100,000 credits               | `credits=100000`, `uoa_kind=team_credit_top_up`                                                     |
+| US$1,000 credit Price     | `uoa_credits_usd_1000_v1`, one-time, 1,000,000 credits            | `credits=1000000`, `uoa_kind=team_credit_top_up`                                                    |
+| EUR credit Prices         | `uoa_credits_eur_{10,25,50,100,1000}_v1`, one-time, EUR 10–1,000  | `credits_basis=live_fx_rate`, `uoa_kind=team_credit_top_up`                                         |
+| GBP credit Prices         | `uoa_credits_gbp_{10,25,50,100,1000}_v1`, one-time, GBP 10–1,000  | `credits_basis=live_fx_rate`, `uoa_kind=team_credit_top_up`                                         |
 | DeepWater privacy Product | active, distinct from credit Product                              | `contract_version=1`, `uoa_addon_key=privacy`, `uoa_kind=recurring_addon`, `uoa_service=deep-water` |
 | DeepWater privacy Price   | `deepwater_privacy_usd_month_v1`, US$50/month, licensed, no meter | `uoa_addon_key=privacy`, `uoa_kind=recurring_addon`, `uoa_service=deep-water`                       |
 

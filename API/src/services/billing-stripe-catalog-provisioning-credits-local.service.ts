@@ -7,8 +7,10 @@ import {
 import type { ValidatedStripeCommercialCatalog } from './billing-stripe-catalog-provisioning-remote.service.js';
 import {
   CREDIT_AUTO_TOP_UP_SPEC,
-  CREDIT_FUNDING_POLICY_SPEC,
+  CREDIT_PURCHASE_CURRENCIES,
   CREDIT_TOP_UP_SPECS,
+  creditFundingPolicySpec,
+  type CreditPurchaseCurrency,
   type CreditTopUpSpec,
 } from './billing-stripe-catalog-provisioning-spec.js';
 
@@ -29,7 +31,7 @@ function assertCreditCatalogTerms(
   if (
     row.key !== spec.catalogKey ||
     row.version !== spec.catalogVersion ||
-    row.currency !== CREDIT_FUNDING_POLICY_SPEC.currency ||
+    row.currency !== spec.currency ||
     row.paymentAmountMinor !== spec.paymentAmountMinor ||
     row.creditsReceivedMicrocredits !== spec.creditsReceivedMicrocredits ||
     row.stripeLookupKey !== spec.stripeLookupKey ||
@@ -101,7 +103,7 @@ export async function ensureProvisionedCreditCatalogs(params: {
           accountId: params.accountId,
           key: spec.catalogKey,
           version: spec.catalogVersion,
-          currency: CREDIT_FUNDING_POLICY_SPEC.currency,
+          currency: spec.currency,
           paymentAmountMinor: spec.paymentAmountMinor,
           creditsReceivedMicrocredits: spec.creditsReceivedMicrocredits,
           stripeLookupKey: spec.stripeLookupKey,
@@ -117,23 +119,25 @@ export async function ensureProvisionedCreditCatalogs(params: {
 async function ensureCreditPolicy(params: {
   db: CatalogDb;
   service: { id: string; identifier: string };
+  currency: CreditPurchaseCurrency;
   write: boolean;
   actions: CatalogProvisioningAction[];
 }) {
+  const spec = creditFundingPolicySpec(params.currency);
   const rows = await params.db.billingCreditFundingPolicy.findMany({
-    where: { serviceId: params.service.id },
+    where: { serviceId: params.service.id, currency: params.currency },
   });
   const active = rows.filter((row) => row.active);
   const existing = active[0];
   if (active.length > 1) localCatalogDrift();
-  const key = `${params.service.identifier}/USD/v${CREDIT_FUNDING_POLICY_SPEC.version}`;
+  const key = `${params.service.identifier}/${params.currency}/v${spec.version}`;
   if (existing) {
     if (
-      existing.version !== CREDIT_FUNDING_POLICY_SPEC.version ||
-      existing.currency !== CREDIT_FUNDING_POLICY_SPEC.currency ||
-      existing.topUpEnabled !== CREDIT_FUNDING_POLICY_SPEC.topUpEnabled ||
-      existing.automaticTopUpEnabled !== CREDIT_FUNDING_POLICY_SPEC.automaticTopUpEnabled ||
-      existing.automaticConsentVersion !== CREDIT_FUNDING_POLICY_SPEC.automaticConsentVersion ||
+      existing.version !== spec.version ||
+      existing.currency !== spec.currency ||
+      existing.topUpEnabled !== spec.topUpEnabled ||
+      existing.automaticTopUpEnabled !== spec.automaticTopUpEnabled ||
+      existing.automaticConsentVersion !== spec.automaticConsentVersion ||
       existing.deactivatedAt !== null
     ) {
       localCatalogDrift();
@@ -141,18 +145,10 @@ async function ensureCreditPolicy(params: {
     addCatalogAction(params.actions, 'credit_funding_policy', key, false);
     return existing;
   }
-  if (
-    rows.some(
-      (row) =>
-        row.version === CREDIT_FUNDING_POLICY_SPEC.version &&
-        row.currency === CREDIT_FUNDING_POLICY_SPEC.currency,
-    )
-  ) {
-    localCatalogDrift();
-  }
+  if (rows.some((row) => row.version === spec.version)) localCatalogDrift();
   const created = params.write
     ? await params.db.billingCreditFundingPolicy.create({
-        data: { serviceId: params.service.id, ...CREDIT_FUNDING_POLICY_SPEC },
+        data: { serviceId: params.service.id, ...spec },
       })
     : null;
   addCatalogAction(params.actions, 'credit_funding_policy', key, true);
@@ -198,12 +194,16 @@ function assertOfferTerms(
 async function ensureCreditOffersAndOption(params: {
   db: CatalogDb;
   service: { id: string; identifier: string };
+  currency: CreditPurchaseCurrency;
   policy: { id: string } | null;
   write: boolean;
   actions: CatalogProvisioningAction[];
 }): Promise<void> {
+  const specs = CREDIT_TOP_UP_SPECS.filter((spec) => spec.currency === params.currency);
+  // Automatic top-up options in GBP and EUR arrive with region auto reload.
+  const withOption = params.currency === 'USD';
   if (!params.policy) {
-    for (const spec of CREDIT_TOP_UP_SPECS) {
+    for (const spec of specs) {
       addCatalogAction(
         params.actions,
         'credit_top_up_offer',
@@ -211,24 +211,19 @@ async function ensureCreditOffersAndOption(params: {
         true,
       );
     }
-    addCatalogAction(
-      params.actions,
-      'credit_auto_top_up_option',
-      `${params.service.identifier}/default/v1`,
-      true,
-    );
+    if (withOption) {
+      addCatalogAction(params.actions, 'credit_auto_top_up_option', `${params.service.identifier}/default/v1`, true);
+    }
     return;
   }
   const offers = await params.db.billingCreditTopUpOffer.findMany({
     where: { policyId: params.policy.id },
   });
-  if (
-    offers.some((offer) => offer.active && !CREDIT_TOP_UP_SPECS.some((s) => s.key === offer.key))
-  ) {
+  if (offers.some((offer) => offer.active && !specs.some((s) => s.key === offer.key))) {
     localCatalogDrift();
   }
   const resolved = new Map<string, { id: string }>();
-  for (const spec of CREDIT_TOP_UP_SPECS) {
+  for (const spec of specs) {
     const key = `${params.service.identifier}/${spec.key}/v${spec.version}`;
     let offer = offers.find(
       (candidate) => candidate.key === spec.key && candidate.version === spec.version,
@@ -261,6 +256,7 @@ async function ensureCreditOffersAndOption(params: {
     }
     if (offer) resolved.set(spec.key, offer);
   }
+  if (!withOption) return;
 
   const options = await params.db.billingCreditAutoTopUpOption.findMany({
     where: { policyId: params.policy.id },
@@ -326,6 +322,8 @@ export async function ensureProvisionedServiceCredits(params: {
   write: boolean;
   actions: CatalogProvisioningAction[];
 }): Promise<void> {
-  const policy = await ensureCreditPolicy(params);
-  await ensureCreditOffersAndOption({ ...params, policy });
+  for (const currency of CREDIT_PURCHASE_CURRENCIES) {
+    const policy = await ensureCreditPolicy({ ...params, currency });
+    await ensureCreditOffersAndOption({ ...params, currency, policy });
+  }
 }

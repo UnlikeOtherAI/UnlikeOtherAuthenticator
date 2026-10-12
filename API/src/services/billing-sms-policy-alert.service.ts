@@ -5,7 +5,8 @@ import { sendRawEmail } from './email.service.js';
 import { listSuperuserEmailsInAdminDomain } from './integration-request-notify.service.js';
 
 export type SmsPolicyAlertKind = 'fx_unavailable' | 'fx_outside_band' | 'fx_no_baseline' |
-  'route_needs_operator' | 'route_price_rose' | 'route_price_unavailable' | 'monthly_price_below_cost';
+  'route_needs_operator' | 'route_price_rose' | 'route_price_unavailable' | 'monthly_price_below_cost' |
+  'credit_fx_rate_unavailable';
 export type SmsPolicyAlertCondition = { kind: SmsPolicyAlertKind; subject: string; message: string };
 export type SmsPolicyAlertLog = { error: (details: object, message: string) => void };
 type AlertDb = Pick<PrismaClient, 'billingSmsPolicyAlert'>;
@@ -72,7 +73,8 @@ export async function emailSmsPolicyAlert(condition: SmsPolicyAlertCondition, lo
   const where = base ? `${base}/admin/billing?section=sms` : 'Admin > Billing > SMS policies';
   await Promise.all(recipients.map(async (to) => {
     try {
-      await sendRawEmail({ to, from: env.EMAIL_FROM as string, subject: 'UOA SMS pricing policy needs attention',
+      await sendRawEmail({ to, from: env.EMAIL_FROM as string, subject: condition.kind === 'credit_fx_rate_unavailable'
+        ? 'UOA credit purchases need attention' : 'UOA SMS pricing policy needs attention',
         text: `${condition.message}\n\nReview it in Admin > Billing > SMS policies: ${where}\n` });
     } catch (err) {
       log.error({ err, kind: condition.kind }, 'failed to send SMS policy alert email');

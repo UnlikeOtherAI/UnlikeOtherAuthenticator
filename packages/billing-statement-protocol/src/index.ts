@@ -168,6 +168,8 @@ export type {
   BillingCreditsAutoTopUpSetupAction,
   BillingCreditsAutoTopUpUpdateAction,
   BillingCreditAmount,
+  BillingCreditPurchaseCurrency,
+  BillingCreditPurchaseRateV1,
   BillingCreditsManagerV1,
   BillingCreditsMemberV1,
   BillingCreditsPaymentMoney,

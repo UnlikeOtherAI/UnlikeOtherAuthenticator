@@ -9,6 +9,7 @@ import {
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import { billingReservedMicrocredits } from './billing-credit-holds.service.js';
+import type { CreditPurchaseCurrency } from './billing-stripe-catalog-provisioning-spec.js';
 
 export type BillingCreditPeriod = {
   key: string;
@@ -33,13 +34,17 @@ export async function loadBillingCreditProjectionData(
     accountId: string;
     storefrontServiceId: string;
     period: BillingCreditPeriod;
+    /** The currency top-ups are offered in: the billing region's, or USD. */
+    purchaseCurrency?: CreditPurchaseCurrency;
   },
   deps?: { prisma?: PrismaClient },
 ) {
   const prisma = deps?.prisma ?? getAdminPrisma();
+  const purchaseCurrency = params.purchaseCurrency ?? 'USD';
   const [
     creditAccount,
     policy,
+    regionPolicy,
     catalogs,
     settlements,
     prepaidReservations,
@@ -75,8 +80,14 @@ export async function loadBillingCreditProjectionData(
         },
       },
     }),
+    purchaseCurrency === 'USD' ? null : prisma.billingCreditFundingPolicy.findFirst({
+      where: { serviceId: params.storefrontServiceId, currency: purchaseCurrency, active: true },
+      orderBy: { version: 'desc' },
+      include: { topUpOffers: { where: { active: true },
+        orderBy: [{ paymentAmountMinor: 'asc' }, { key: 'asc' }] } },
+    }),
     prisma.billingCreditTopUpCatalog.findMany({
-      where: { accountId: params.accountId, currency: 'USD' },
+      where: { accountId: params.accountId, currency: { in: [...new Set(['USD', purchaseCurrency])] } },
     }),
     prisma.billingCreditUsageSettlement.findMany({
       where: {
@@ -173,6 +184,7 @@ export async function loadBillingCreditProjectionData(
         failureCode: true,
         paymentAmountMinor: true,
         creditsReceivedMicrocredits: true,
+        currency: true,
         consentRevision: { select: { stripePaymentMethodId: true } },
         stateWebhookEvent: { select: { type: true } },
       },
@@ -237,7 +249,10 @@ export async function loadBillingCreditProjectionData(
 
   return {
     creditAccount,
+    // Automatic top-up stays on the USD policy; one-time top-ups use the purchase currency's.
     policy,
+    purchaseCurrency,
+    regionPolicy,
     catalogs,
     settlements,
     prepaidReservations,
@@ -256,3 +271,10 @@ export async function loadBillingCreditProjectionData(
 export type BillingCreditProjectionData = Awaited<
   ReturnType<typeof loadBillingCreditProjectionData>
 >;
+
+/** The policy one-time top-ups are offered under: the USD policy, or the region currency's. */
+export function creditPurchasePolicy(
+  data: Pick<BillingCreditProjectionData, 'policy' | 'purchaseCurrency' | 'regionPolicy'>,
+) {
+  return data.purchaseCurrency === 'USD' ? data.policy : data.regionPolicy;
+}

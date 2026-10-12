@@ -18,8 +18,15 @@ import {
   billingCreditAmount,
   billingCreditsPaymentMoney,
 } from './billing-credit-display.service.js';
-import type { BillingCreditProjectionData } from './billing-credit-projection-data.service.js';
+import {
+  creditPurchasePolicy,
+  type BillingCreditProjectionData,
+} from './billing-credit-projection-data.service.js';
 import type { BillingCreditActionReadiness } from './billing-credit-action-readiness.service.js';
+import {
+  creditsForPayment,
+  type CreditPurchaseRate,
+} from './billing-credit-purchase-rate.service.js';
 
 export type BillingCreditActionSubject = {
   product: string;
@@ -91,6 +98,18 @@ function paymentMethod(
   return { status, display: `${brand}${last4}` };
 }
 
+function liveRate(rate: CreditPurchaseRate, locale?: BillingCustomerLocale) {
+  return {
+    currency: rate.currency as 'EUR' | 'GBP',
+    usd_per_unit: rate.baseRate,
+    source: rate.source as 'stripe' | 'ecb',
+    as_of: rate.asOf.toISOString(),
+    display: formatBillingCopy(billingCreditFundingCopy(locale).liveRate, {
+      currency: rate.currency, rate: Number(rate.baseRate).toFixed(4),
+    }),
+  };
+}
+
 function fundingPolicy(
   data: BillingCreditProjectionData,
   requestBody: BillingCreditActionSubject,
@@ -98,9 +117,20 @@ function fundingPolicy(
   collectionEnabled: boolean,
   readiness: BillingCreditActionReadiness,
   locale?: BillingCustomerLocale,
+  purchaseRate?: CreditPurchaseRate | null,
 ) {
   const copy = billingCreditFundingCopy(locale);
-  const offers = (data.policy?.topUpOffers ?? []).map((offer) => {
+  const policy = creditPurchasePolicy(data);
+  // A USD offer fixes its credits. A GBP or EUR offer shows what today's rate
+  // buys and is left out while no rate can be read.
+  const live = data.purchaseCurrency !== 'USD';
+  const rate = live && purchaseRate?.currency === data.purchaseCurrency ? purchaseRate : null;
+  const priced = (policy?.topUpOffers ?? []).flatMap((offer) => {
+    if (!live) return [{ offer, credits: offer.creditsReceivedMicrocredits }];
+    const credits = rate ? creditsForPayment(offer.paymentAmountMinor, rate.baseRate) : 0n;
+    return credits > 0n ? [{ offer, credits }] : [];
+  });
+  const offers = priced.map(({ offer, credits }) => {
     const catalogExecutable = configuredCatalog(data, offer, readiness);
     const canResume = readiness.resumableTopUpOfferId === offer.id && catalogExecutable;
     const pendingCheckoutBlocksOffer =
@@ -108,29 +138,27 @@ function fundingPolicy(
       !canResume &&
       !readiness.topUpCheckoutReady;
     const available = Boolean(
-      data.policy?.topUpEnabled &&
+      policy?.topUpEnabled &&
       collectionEnabled &&
       (readiness.topUpCheckoutReady || canResume) &&
       catalogExecutable,
     );
     const builtInCopy = billingBuiltInCreditOfferCopy(offer.key, locale);
-    const creditDisplay = billingLocalizedCreditDisplay(
-      creditAmount(offer.creditsReceivedMicrocredits, locale).credits,
-      locale,
-    );
+    const creditDisplay = billingLocalizedCreditDisplay(creditAmount(credits, locale).credits, locale);
     return {
       id: offer.id,
       key: offer.key,
       name: builtInCopy?.name ?? offer.name,
       description: builtInCopy?.description ?? offer.description,
-      payment_amount: billingCreditsPaymentMoney(offer.paymentAmountMinor, locale),
-      credits_received: creditAmount(offer.creditsReceivedMicrocredits, locale),
+      payment_amount: billingCreditsPaymentMoney(offer.paymentAmountMinor, locale, data.purchaseCurrency),
+      credits_received: creditAmount(credits, locale),
+      ...(rate ? { credit_rate: liveRate(rate, locale) } : {}),
       available,
       unavailable_reason: available
         ? null
         : pendingCheckoutBlocksOffer
           ? copy.paymentPending
-          : data.policy?.topUpEnabled
+          : policy?.topUpEnabled
             ? copy.offerUnavailable
             : copy.topUpsDisabled,
       action: manager
@@ -139,7 +167,7 @@ function fundingPolicy(
             kind: 'hosted_redirect' as const,
             label: canResume
               ? copy.continuePayment
-              : formatBillingCopy(copy.buyOffer, { credits: creditDisplay }),
+              : formatBillingCopy(live ? copy.buyOfferAtRate : copy.buyOffer, { credits: creditDisplay }),
             description: canResume
               ? copy.continuePaymentDescription
               : copy.buyOfferDescription,
@@ -160,13 +188,14 @@ function fundingPolicy(
         : null,
     };
   });
-  const description = offers.some((offer) => offer.available)
-    ? `${copy.description} ${billingCreditCopy(locale).smallestOfferHint}`
-    : copy.description;
-  const policy = data.policy;
+  const description = live && !rate && (policy?.topUpOffers.length ?? 0) > 0
+    ? `${copy.description} ${formatBillingCopy(copy.rateUnavailable, { currency: data.purchaseCurrency })}`
+    : offers.some((offer) => offer.available)
+      ? `${copy.description} ${billingCreditCopy(locale).smallestOfferHint}`
+      : copy.description;
   return {
     top_up_enabled: Boolean(policy?.topUpEnabled && collectionEnabled),
-    automatic_top_up_enabled: Boolean(policy?.automaticTopUpEnabled && collectionEnabled),
+    automatic_top_up_enabled: Boolean(data.policy?.automaticTopUpEnabled && collectionEnabled),
     title: copy.title,
     description,
     offers,
@@ -407,9 +436,10 @@ export function buildManagerCreditActionsProjection(
   readiness: BillingCreditActionReadiness,
   capResetsAt?: Date,
   locale?: BillingCustomerLocale,
+  purchaseRate?: CreditPurchaseRate | null,
 ): Pick<BillingCreditsManagerV1, 'funding_policy' | 'automatic_top_up'> {
   return {
-    funding_policy: fundingPolicy(data, body, true, collectionEnabled, readiness, locale),
+    funding_policy: fundingPolicy(data, body, true, collectionEnabled, readiness, locale, purchaseRate),
     automatic_top_up: automaticTopUp(
       data,
       body,
