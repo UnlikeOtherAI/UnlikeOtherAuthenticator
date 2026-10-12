@@ -162,8 +162,12 @@ describe.skipIf(!enabled)('automatic reload in the billing region currency (Post
   it.each(Object.keys(regions) as Currency[])('reloads %s 25.00 once a debit takes the lots below 5.00', async (currency) => {
     const ids = scoped(currency);
     const stripe = stripeFor(currency);
-    const run = () => runCreditAutoTopUpAccount({ account, creditAccountId: ids.credit },
-      { prisma: db(), stripe: stripe as never });
+    const run = async () => {
+      const result = await runCreditAutoTopUpAccount({ account, creditAccountId: ids.credit },
+        { prisma: db(), stripe: stripe as never });
+      if (result.outcome === 'failed') throw new Error(`reload failed: ${result.error}`);
+      return result;
+    };
 
     // 6,000 credits are worth USD 6.00, above 5.00 at the region's rate.
     expect(await run()).toMatchObject({ outcome: 'skipped', reason: 'threshold_not_reached' });
@@ -194,8 +198,12 @@ describe.skipIf(!enabled)('automatic reload in the billing region currency (Post
     // 35,000 credits after the first reload; spending 30,000 leaves 5,000 of the EUR lot, worth EUR 4.16.
     await spend('EUR', 30_000_000_000n);
     const stripe = stripeFor('EUR');
-    const run = () => runCreditAutoTopUpAccount({ account, creditAccountId: ids.credit },
-      { prisma: db(), stripe: stripe as never });
+    const run = async () => {
+      const result = await runCreditAutoTopUpAccount({ account, creditAccountId: ids.credit },
+        { prisma: db(), stripe: stripe as never });
+      if (result.outcome === 'failed') throw new Error(`reload failed: ${result.error}`);
+      return result;
+    };
     expect(await run()).toMatchObject({ outcome: 'submitted' });
 
     await settle('EUR', stripe, 'failed');
