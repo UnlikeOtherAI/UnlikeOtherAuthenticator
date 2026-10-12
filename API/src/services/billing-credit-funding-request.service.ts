@@ -171,6 +171,7 @@ export type BillingCreditAttentionInput = {
     automaticTopUpEnabled: boolean;
     autoTopUpOptions: Array<{
       id: string;
+      key?: string;
       thresholdMicrocredits: bigint;
       refillOffer: {
         paymentAmountMinor: bigint;
@@ -221,17 +222,14 @@ export function buildBillingCreditAttention(input: BillingCreditAttentionInput) 
       input.account.autoTopUpThresholdMicrocredits > 0n
         ? input.account.autoTopUpThresholdMicrocredits
         : null;
-    const configuredOptionThreshold = input.policy?.automaticTopUpEnabled
-      ? input.policy.autoTopUpOptions
-          .filter(
-            (option) =>
-              option.refillOffer.active &&
-              option.refillOffer.automaticTopUpEligible &&
-              option.thresholdMicrocredits > 0n,
-          )
-          .map((option) => option.thresholdMicrocredits)
-          .sort((left, right) => (left < right ? -1 : left > right ? 1 : 0))[0]
-      : undefined;
+    const usable = input.policy?.automaticTopUpEnabled
+      ? input.policy.autoTopUpOptions.filter((option) =>
+        option.refillOffer.active && option.refillOffer.automaticTopUpEligible && option.thresholdMicrocredits > 0n)
+      : [];
+    // The default reload's threshold sets the low-credits warning; other refill amounts do not move it.
+    const configuredOptionThreshold = usable.find((option) => option.key === 'default')?.thresholdMicrocredits
+      ?? usable.map((option) => option.thresholdMicrocredits)
+        .sort((left, right) => (left < right ? -1 : left > right ? 1 : 0))[0];
     const threshold = activeConsentThreshold ?? configuredOptionThreshold;
     if (threshold !== undefined && threshold !== null && input.balanceMicrocredits < threshold) {
       kinds.push('low_credits');

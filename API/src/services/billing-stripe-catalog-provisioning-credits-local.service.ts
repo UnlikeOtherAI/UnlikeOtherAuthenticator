@@ -7,7 +7,7 @@ import {
 } from './billing-stripe-catalog-provisioning-local.shared.js';
 import type { ValidatedStripeCommercialCatalog } from './billing-stripe-catalog-provisioning-remote.service.js';
 import {
-  CREDIT_AUTO_TOP_UP_SPEC,
+  CREDIT_AUTO_TOP_UP_OPTION_SPECS,
   CREDIT_PURCHASE_CURRENCIES,
   CREDIT_TOP_UP_SPECS,
   creditFundingPolicySpec,
@@ -190,8 +190,6 @@ async function ensureCreditOffersAndOption(params: {
   actions: CatalogProvisioningAction[];
 }): Promise<void> {
   const specs = CREDIT_TOP_UP_SPECS.filter((spec) => spec.currency === params.currency);
-  // Automatic top-up options in GBP and EUR arrive with region auto reload.
-  const withOption = params.currency === 'USD';
   if (!params.policy) {
     for (const spec of specs) {
       addCatalogAction(
@@ -201,8 +199,9 @@ async function ensureCreditOffersAndOption(params: {
         true,
       );
     }
-    if (withOption) {
-      addCatalogAction(params.actions, 'credit_auto_top_up_option', `${params.service.identifier}/default/v1`, true);
+    for (const option of CREDIT_AUTO_TOP_UP_OPTION_SPECS.filter((spec) => spec.currency === params.currency)) {
+      addCatalogAction(params.actions, 'credit_auto_top_up_option',
+        `${params.service.identifier}/${option.key}/v${option.version}`, true);
     }
     return;
   }
@@ -250,65 +249,66 @@ async function ensureCreditOffersAndOption(params: {
     }
     if (offer) resolved.set(spec.key, offer);
   }
-  if (!withOption) return;
+  await ensureCreditAutoTopUpOptions({ ...params, policy: params.policy, offers: resolved });
+}
 
+async function ensureCreditAutoTopUpOptions(params: {
+  db: CatalogDb;
+  service: { id: string; identifier: string };
+  currency: CreditPurchaseCurrency;
+  policy: { id: string };
+  offers: Map<string, { id: string }>;
+  write: boolean;
+  actions: CatalogProvisioningAction[];
+}): Promise<void> {
+  const specs = CREDIT_AUTO_TOP_UP_OPTION_SPECS.filter((spec) => spec.currency === params.currency);
   const options = await params.db.billingCreditAutoTopUpOption.findMany({
     where: { policyId: params.policy.id },
   });
-  const unknownOptions = options.filter((option) => option.active && option.key !== CREDIT_AUTO_TOP_UP_SPEC.key);
+  const unknownOptions = options.filter((option) => option.active && !specs.some((spec) => spec.key === option.key));
   if (unknownOptions.length > 0) {
     localCatalogDrift('credit_option_unknown_active', { service: params.service.identifier,
       option_ids: unknownOptions.map((option) => option.id) });
   }
-  const option = options.find(
-    (candidate) =>
-      candidate.key === CREDIT_AUTO_TOP_UP_SPEC.key &&
-      candidate.version === CREDIT_AUTO_TOP_UP_SPEC.version,
-  );
-  const refillOffer = resolved.get(CREDIT_AUTO_TOP_UP_SPEC.refillOfferKey);
-  if (option) {
-    const fields = differingFields(option, {
-      active: true, deactivatedAt: null, serviceId: params.service.id, refillOfferId: refillOffer?.id,
-      thresholdMicrocredits: CREDIT_AUTO_TOP_UP_SPEC.thresholdMicrocredits,
-      monthlyChargeCapMinor: CREDIT_AUTO_TOP_UP_SPEC.monthlyChargeCapMinor,
-    });
-    if (fields.length > 0) localCatalogDrift('credit_option_terms', { option_id: option.id, fields });
-    addCatalogAction(
-      params.actions,
-      'credit_auto_top_up_option',
-      `${params.service.identifier}/default/v1`,
-      false,
-    );
-    return;
-  }
-  const otherOption = options.find((candidate) => candidate.active && candidate.key === CREDIT_AUTO_TOP_UP_SPEC.key);
-  if (otherOption) {
-    localCatalogDrift('credit_option_other_version_active', { option_id: otherOption.id,
-      version: otherOption.version });
-  }
-  if (params.write) {
-    if (!refillOffer) {
-      localCatalogDrift('credit_option_refill_offer_missing', { service: params.service.identifier,
-        offer_key: CREDIT_AUTO_TOP_UP_SPEC.refillOfferKey });
+  for (const spec of specs) {
+    const key = `${params.service.identifier}/${spec.key}/v${spec.version}`;
+    const refillOffer = params.offers.get(spec.refillOfferKey);
+    const option = options.find((candidate) => candidate.key === spec.key && candidate.version === spec.version);
+    if (option) {
+      const fields = differingFields(option, {
+        active: true, deactivatedAt: null, serviceId: params.service.id, refillOfferId: refillOffer?.id,
+        thresholdMicrocredits: spec.thresholdMicrocredits, thresholdAmountMinor: spec.thresholdAmountMinor,
+        monthlyChargeCapMinor: spec.monthlyChargeCapMinor,
+      });
+      if (fields.length > 0) localCatalogDrift('credit_option_terms', { option_id: option.id, fields });
+      addCatalogAction(params.actions, 'credit_auto_top_up_option', key, false);
+      continue;
     }
-    await params.db.billingCreditAutoTopUpOption.create({
-      data: {
-        policyId: params.policy.id,
-        serviceId: params.service.id,
-        refillOfferId: refillOffer.id,
-        key: CREDIT_AUTO_TOP_UP_SPEC.key,
-        version: CREDIT_AUTO_TOP_UP_SPEC.version,
-        thresholdMicrocredits: CREDIT_AUTO_TOP_UP_SPEC.thresholdMicrocredits,
-        monthlyChargeCapMinor: CREDIT_AUTO_TOP_UP_SPEC.monthlyChargeCapMinor,
-      },
-    });
+    const otherOption = options.find((candidate) => candidate.active && candidate.key === spec.key);
+    if (otherOption) {
+      localCatalogDrift('credit_option_other_version_active', { option_id: otherOption.id,
+        version: otherOption.version });
+    }
+    if (params.write) {
+      if (!refillOffer) {
+        localCatalogDrift('credit_option_refill_offer_missing', { service: params.service.identifier,
+          offer_key: spec.refillOfferKey });
+      }
+      await params.db.billingCreditAutoTopUpOption.create({
+        data: {
+          policyId: params.policy.id,
+          serviceId: params.service.id,
+          refillOfferId: refillOffer.id,
+          key: spec.key,
+          version: spec.version,
+          thresholdMicrocredits: spec.thresholdMicrocredits,
+          thresholdAmountMinor: spec.thresholdAmountMinor,
+          monthlyChargeCapMinor: spec.monthlyChargeCapMinor,
+        },
+      });
+    }
+    addCatalogAction(params.actions, 'credit_auto_top_up_option', key, true);
   }
-  addCatalogAction(
-    params.actions,
-    'credit_auto_top_up_option',
-    `${params.service.identifier}/default/v1`,
-    true,
-  );
 }
 
 export async function ensureProvisionedServiceCredits(params: {

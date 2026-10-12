@@ -79,6 +79,40 @@ export const CREDIT_AUTO_TOP_UP_SPEC = {
   monthlyChargeCapMinor: 10_000n,
 } as const;
 
+export type CreditAutoTopUpOptionSpec = {
+  key: string;
+  version: number;
+  currency: CreditPurchaseCurrency;
+  refillOfferKey: string;
+  /** A USD option's threshold in credits; 0 for GBP and EUR. */
+  thresholdMicrocredits: bigint;
+  /** A GBP or EUR option's threshold in its currency; null for USD. */
+  thresholdAmountMinor: bigint | null;
+  monthlyChargeCapMinor: bigint;
+};
+
+/**
+ * One automatic reload option per currency and refill amount. Each reloads one
+ * offer when the balance falls below a fifth of it, up to four reloads a month:
+ * the terms of the original USD 25 option (below 5,000 credits, USD 100 cap),
+ * which keeps its key.
+ */
+export const CREDIT_AUTO_TOP_UP_OPTION_SPECS: CreditAutoTopUpOptionSpec[] =
+  CREDIT_PURCHASE_CURRENCIES.flatMap((currency) => TOP_UP_AMOUNTS.map((amount) => {
+    const code = currency.toLowerCase();
+    const minor = BigInt(amount * 100);
+    const usd = currency === 'USD';
+    return {
+      key: usd && amount === 25 ? CREDIT_AUTO_TOP_UP_SPEC.key : `refill_${code}_${amount}`,
+      version: 1,
+      currency,
+      refillOfferKey: `credits_${code}_${amount}`,
+      thresholdMicrocredits: usd ? (minor / 5n) * 10_000_000n : 0n,
+      thresholdAmountMinor: usd ? null : minor / 5n,
+      monthlyChargeCapMinor: minor * 4n,
+    };
+  }));
+
 export const DEEPWATER_PRIVACY_SPEC = {
   serviceIdentifier: 'deepwater',
   key: 'privacy',

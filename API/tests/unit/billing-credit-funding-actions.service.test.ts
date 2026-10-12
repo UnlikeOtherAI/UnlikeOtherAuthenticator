@@ -290,6 +290,7 @@ describe('UOA credit funding mutation services', () => {
         now: () => now,
         resolveContext: vi.fn().mockResolvedValue(state.context),
         resolveOption: vi.fn().mockResolvedValue(selections().option),
+        readRegion: vi.fn().mockResolvedValue(null),
         validateCatalog: vi.fn(),
       },
     );
@@ -351,6 +352,7 @@ describe('UOA credit funding mutation services', () => {
         now: () => now,
         resolveContext: vi.fn().mockResolvedValue(state.context),
         resolveOption: vi.fn().mockResolvedValue(selections().option),
+        readRegion: vi.fn().mockResolvedValue(null),
         validateCatalog: vi.fn(),
       },
     );
@@ -569,6 +571,7 @@ describe('UOA credit funding mutation services', () => {
         now: () => now,
         resolveContext: vi.fn().mockResolvedValue(state.context),
         resolveOption: vi.fn().mockResolvedValue(selections().option),
+        readRegion: vi.fn().mockResolvedValue(null),
         validateCatalog: vi.fn(),
       },
     );

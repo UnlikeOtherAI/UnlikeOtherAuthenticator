@@ -30,6 +30,20 @@ buys. The exact credits are fixed when POST /billing/v1/credits/top-up-checkout
 creates the checkout (payment times Stripe's live base rate, rounded down to
 whole credits, no buffer) and granted unchanged when the payment succeeds. While
 no rate can be read those offers are left out and the checkout answers 503
-BILLING_CREDIT_FX_RATE_UNAVAILABLE; try again later. Automatic top-up stays USD
-for now.
+BILLING_CREDIT_FX_RATE_UNAVAILABLE; try again later.
+
+## Automatic reload in the region currency
+Send x-uoa-billing-credits-protocol: 2.2.0 to also receive the automatic reload
+options in the region currency, one per refill amount (10, 25, 50, 100, 1,000),
+each reloading when the balance is worth less than a fifth of its refill, up to
+four reloads a month. A GBP or EUR option carries threshold_value and
+credit_rate, with refill_payment_amount and monthly_cap in its currency; its
+threshold and refill_credits_received are what today's rate makes of them.
+automatic_top_up carries threshold_value and the monthly figures in the
+consented option's currency. The balance is compared as a value: each credit lot
+at the rate it was bought at. Each reload reads Stripe's live base rate when it
+is claimed, just before its off-session payment, and its credits are fixed then.
+A failed reload pauses automatic top-up (needs_review, one
+payment_action_required attention item) until the card is updated; it is not
+retried. Older protocol versions keep the USD options.
 `;

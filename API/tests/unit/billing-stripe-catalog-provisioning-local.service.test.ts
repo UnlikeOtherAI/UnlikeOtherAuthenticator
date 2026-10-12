@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { reconcileLocalStripeCommercialCatalog } from '../../src/services/billing-stripe-catalog-provisioning-local.service.js';
 import {
-  CREDIT_AUTO_TOP_UP_SPEC,
+  CREDIT_AUTO_TOP_UP_OPTION_SPECS,
   CREDIT_PURCHASE_CURRENCIES,
   CREDIT_TOP_UP_SPECS,
   creditFundingPolicySpec,
@@ -188,24 +188,17 @@ function completeLocalCatalog() {
       create,
     },
     billingCreditAutoTopUpOption: {
+      // Every reload option of the policy's currency, each on its own refill offer.
       findMany: vi.fn(({ where }) => {
-        const refill = offers
-          .get(where.policyId)
-          ?.find((offer) => offer.key === CREDIT_AUTO_TOP_UP_SPEC.refillOfferKey);
-        return Promise.resolve([
-          {
-            id: `option_${where.policyId}`,
-            policyId: where.policyId,
-            serviceId: refill?.serviceId,
-            refillOfferId: refill?.id,
-            key: CREDIT_AUTO_TOP_UP_SPEC.key,
-            version: CREDIT_AUTO_TOP_UP_SPEC.version,
-            thresholdMicrocredits: CREDIT_AUTO_TOP_UP_SPEC.thresholdMicrocredits,
-            monthlyChargeCapMinor: CREDIT_AUTO_TOP_UP_SPEC.monthlyChargeCapMinor,
-            active: true,
-            deactivatedAt: null,
-          },
-        ]);
+        const policy = [...policies.values()].find((candidate) => candidate.id === where.policyId);
+        return Promise.resolve(CREDIT_AUTO_TOP_UP_OPTION_SPECS.filter((spec) => spec.currency === policy?.currency)
+          .map((spec) => {
+            const refill = offers.get(where.policyId)?.find((offer) => offer.key === spec.refillOfferKey);
+            return { id: `option_${where.policyId}_${spec.key}`, policyId: where.policyId,
+              serviceId: refill?.serviceId, refillOfferId: refill?.id, key: spec.key, version: spec.version,
+              thresholdMicrocredits: spec.thresholdMicrocredits, thresholdAmountMinor: spec.thresholdAmountMinor,
+              monthlyChargeCapMinor: spec.monthlyChargeCapMinor, active: true, deactivatedAt: null };
+          }));
       }),
       create,
     },
@@ -256,9 +249,9 @@ describe('local Stripe commercial catalog reconciliation', () => {
       write: false,
     });
 
-    // Per service: three currency policies, fifteen offers and the USD option;
+    // Per service: three currency policies, fifteen offers and fifteen reload options;
     // then the account, fifteen credit catalogs and the four DeepWater rows.
-    expect(actions).toHaveLength(115);
+    expect(actions).toHaveLength(185);
     expect(actions.every((action) => action.outcome === 'created')).toBe(true);
     expect(actions).toContainEqual({
       resource: 'credit_auto_top_up_option',
@@ -275,7 +268,9 @@ describe('local Stripe commercial catalog reconciliation', () => {
       key: 'nessie/credits_gbp_1000/v1',
       outcome: 'created',
     });
-    expect(actions.filter((action) => action.resource === 'credit_auto_top_up_option')).toHaveLength(5);
+    expect(actions.filter((action) => action.resource === 'credit_auto_top_up_option')).toHaveLength(75);
+    expect(actions).toContainEqual({ resource: 'credit_auto_top_up_option', key: 'nessie/refill_gbp_1000/v1',
+      outcome: 'created' });
     expect(actions).toContainEqual({
       resource: 'recurring_addon_feature_policy',
       key: 'deepwater/privacy/team',
@@ -386,9 +381,9 @@ describe('local Stripe commercial catalog reconciliation', () => {
       write: true,
     });
 
-    // Per service: three currency policies, fifteen offers and the USD option;
+    // Per service: three currency policies, fifteen offers and fifteen reload options;
     // then the account, fifteen credit catalogs and the four DeepWater rows.
-    expect(actions).toHaveLength(115);
+    expect(actions).toHaveLength(185);
     expect(actions.every((action) => action.outcome === 'no-op')).toBe(true);
     expect(db.featureFlagDefinition.create).not.toHaveBeenCalled();
     expect(db.billingCreditTopUpCatalog.update).not.toHaveBeenCalled();

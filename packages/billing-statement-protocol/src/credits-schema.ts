@@ -28,8 +28,6 @@ import { BILLING_CREDITS_SCHEMA_PATH, BILLING_CREDITS_SCHEMA_VERSION } from './c
 const signedCredits = creditAmountSchema({ signed: true });
 const positiveCredits = creditAmountSchema({ positive: true });
 const unsignedCredits = creditAmountSchema();
-const usdMoney = moneySchema({ usdOnly: true });
-const positivePaymentMoney = moneySchema({ positive: true, usdOnly: true });
 // A one-time purchase is paid in USD or the billing region's GBP or EUR (protocol 2.1.0).
 const purchaseCurrencies = ['USD', 'EUR', 'GBP'] as const;
 const purchaseMoney = moneySchema({ currencies: purchaseCurrencies });
@@ -259,10 +257,12 @@ export const billingCreditsV1JsonSchema = {
             display_status: { type: 'string' },
             description: { type: 'string' },
             threshold: { oneOf: [unsignedCredits, { type: 'null' }] },
+            // Credits protocol 2.2.0: a GBP or EUR reload's threshold in its currency.
+            threshold_value: positivePurchaseMoney,
             refill_offer_id: { type: ['string', 'null'] },
-            monthly_cap: { oneOf: [positivePaymentMoney, { type: 'null' }] },
-            charged_this_month: usdMoney,
-            remaining_monthly_cap: { oneOf: [usdMoney, { type: 'null' }] },
+            monthly_cap: { oneOf: [positivePurchaseMoney, { type: 'null' }] },
+            charged_this_month: purchaseMoney,
+            remaining_monthly_cap: { oneOf: [purchaseMoney, { type: 'null' }] },
             payment_method: {
               oneOf: [
                 billingCreditsManagerPaymentMethodJsonSchema,
@@ -294,10 +294,12 @@ export const billingCreditsV1JsonSchema = {
                   label: { type: 'string' },
                   description: { type: 'string' },
                   threshold: unsignedCredits,
+                  threshold_value: positivePurchaseMoney,
                   refill_offer_id: { type: 'string', minLength: 1 },
-                  refill_payment_amount: positivePaymentMoney,
+                  refill_payment_amount: positivePurchaseMoney,
                   refill_credits_received: positiveCredits,
-                  monthly_cap: positivePaymentMoney,
+                  credit_rate: creditRateSchema,
+                  monthly_cap: positivePurchaseMoney,
                   setup_action: nullableBillingCreditsAction(
                     billingCreditsAutoTopUpSetupActionJsonSchema,
                   ),

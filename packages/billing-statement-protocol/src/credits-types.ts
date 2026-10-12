@@ -7,7 +7,7 @@ export const BILLING_CREDITS_SCHEMA_VERSION = 1 as const;
 // BillingCreditsV1 is shared by UOA and pinned consumer package revisions.
 // Additive fields require an explicit read capability header while older
 // consumers still validate the previous strict schema.
-export const BILLING_CREDITS_PROTOCOL_VERSION = '2.1.0' as const;
+export const BILLING_CREDITS_PROTOCOL_VERSION = '2.2.0' as const;
 export const BILLING_CREDITS_PROTOCOL_HEADER = 'x-uoa-billing-credits-protocol' as const;
 export const BILLING_CREDITS_SCHEMA_PATH = '/schemas/billing-credits-v1.json' as const;
 export const BILLING_CREDITS_EXAMPLE_PATH = '/schemas/billing-credits-v1.example.json' as const;
@@ -186,10 +186,15 @@ type BillingCreditsAutoTopUpOptionBase = {
   selected: boolean;
   label: string;
   description: string;
+  /** Credits; for a GBP or EUR option, what today's rate makes of `threshold_value`. */
   threshold: BillingCreditAmount;
+  /** Credits protocol 2.2.0: a GBP or EUR option's threshold, compared with the lots' value. */
+  threshold_value?: BillingCreditsPaymentMoney;
   refill_offer_id: string;
   refill_payment_amount: BillingCreditsPaymentMoney;
   refill_credits_received: BillingCreditAmount;
+  /** Present on a GBP or EUR option, whose refill credits follow the live rate. */
+  credit_rate?: BillingCreditPurchaseRateV1;
   monthly_cap: BillingCreditsPaymentMoney;
 };
 
@@ -198,6 +203,8 @@ type BillingCreditsAutomaticTopUpBase = {
   display_status: string;
   description: string;
   threshold: BillingCreditAmount | null;
+  /** Credits protocol 2.2.0: the consented GBP or EUR reload's threshold in its currency. */
+  threshold_value?: BillingCreditsPaymentMoney;
   refill_offer_id: string | null;
   monthly_cap: BillingCreditsPaymentMoney | null;
   charged_this_month: BillingCreditsPaymentMoney;

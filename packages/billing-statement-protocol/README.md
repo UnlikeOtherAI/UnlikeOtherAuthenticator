@@ -344,5 +344,28 @@ the USD offers, which stay purchasable.
 - When no rate can be read the GBP or EUR offers are left out and the funding
   description says so; a checkout answers `503 BILLING_CREDIT_FX_RATE_UNAVAILABLE`.
   UOA never switches rate source on its own.
-- Automatic top-up stays USD in 5.5.0.
+- Automatic top-up stays USD in 5.5.0; see 5.7.0.
+
+## Reload in the region currency (5.7.0, credits protocol 2.2.0)
+
+A consumer that sends `x-uoa-billing-credits-protocol: 2.2.0` also receives the
+automatic reload options in the billing region's currency: one per refill
+amount (10, 25, 50, 100 and 1,000), each reloading when the balance is worth
+less than a fifth of its refill, up to four reloads a month. 2.2.0 includes
+everything in 2.1.0 and 2.0.0.
+
+- A GBP or EUR option carries `threshold_value` (its threshold in its
+  currency), `credit_rate`, and `refill_payment_amount` and `monthly_cap` in its
+  currency. `threshold` and `refill_credits_received` are what today's rate
+  makes of them. While no rate can be read those options are left out.
+- `automatic_top_up` carries `threshold_value`, `monthly_cap`,
+  `charged_this_month` and `remaining_monthly_cap` in the consented option's
+  currency.
+- The balance is compared with the threshold as a value: each credit lot at the
+  rate it was bought at, credits bought in USD at the rate the region captured
+  when it was chosen. Each reload reads the live rate as it is claimed, just
+  before its off-session PaymentIntent, and its credits are fixed then.
+- A failed reload pauses automatic top-up (`needs_review`) with one
+  `payment_action_required` attention item until the card is updated; there is
+  no retry.
 
