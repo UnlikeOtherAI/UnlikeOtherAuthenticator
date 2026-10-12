@@ -22,7 +22,7 @@ const regions = {
 type Currency = keyof typeof regions;
 const scoped = (currency: Currency) => {
   const code = currency.toLowerCase();
-  return { org: `org_reload_${code}`, team: `team_reload_${code}`, customer: `bsc_reload_${code}`,
+  return { org: `org-reload-${code}`, team: `team-reload-${code}`, customer: `bsc_reload_${code}`,
     credit: `bca_reload_${code}`, policy: `bcfp_reload_${code}`, offer: `bcto_reload_${code}`,
     option: `bcat_reload_${code}`, catalog: `bctc_reload_${code}`, revision: `bcar_reload_${code}`,
     lot: `bcl_open_reload_${code}`, pm: `pm_reload_${code}`, cus: `cus_reload_${code}` };
