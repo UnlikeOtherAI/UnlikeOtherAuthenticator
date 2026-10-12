@@ -20,7 +20,9 @@ export type CatalogDb = Pick<
 export type CatalogProvisioningAction = {
   resource: string;
   key: string;
-  outcome: 'created' | 'no-op' | 'skipped';
+  outcome: 'created' | 'no-op' | 'skipped' | 'retired';
+  /** The row a retirement or a kept uncovered row refers to. */
+  id?: string;
 };
 
 export type CatalogDriftDetails = Record<string, string | number | boolean | null | string[]>;
@@ -57,9 +59,10 @@ export function addCatalogAction(
   resource: string,
   key: string,
   created: boolean,
-  outcome?: 'skipped',
+  outcome?: 'skipped' | 'retired',
+  id?: string,
 ): void {
-  actions.push({ resource, key, outcome: outcome ?? (created ? 'created' : 'no-op') });
+  actions.push({ resource, key, outcome: outcome ?? (created ? 'created' : 'no-op'), ...(id ? { id } : {}) });
 }
 
 export function sameCatalogStrings(left: readonly string[], right: readonly string[]): boolean {

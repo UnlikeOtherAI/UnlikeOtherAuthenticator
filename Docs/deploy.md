@@ -627,20 +627,32 @@ Prerequisites:
   URL. It intentionally does not load or require unrelated API-server settings
   such as `SHARED_SECRET`, which keeps the documented two-secret operator job
   isolated from the runtime service configuration.
-- The catalog covers the billing services `nessie`, `deepwater`, `deepsignal`,
-  `deeptest` and `docgen`, and needs exactly one active, feature-flags-enabled
-  app identified as `deepwater-api`. A covered service that is not registered
-  yet is skipped (`billing_service_not_registered`); an active service the
-  catalog does not cover, such as `salesnerd`, is left untouched
-  (`billing_service_not_covered`). Both appear in the plan as `skipped`.
+- The catalog covers the billing services `nessie`, `deepwater`, `deeptest`,
+  `salesnerd` and `docgen`, and needs exactly one active, feature-flags-enabled
+  app identified as `deepwater-api`. Each covered service gets USD, EUR and GBP
+  funding policies, the 15 top-up offers, the USD `default` automatic top-up
+  option, and the 15 shared credit catalogs. A covered service that is not
+  registered yet is skipped (`billing_service_not_registered`); an active
+  service the catalog does not cover, such as `deepsignal`, is listed as
+  `billing_service_not_covered`. Both appear in the plan as `skipped`.
   Ambiguous app state fails closed.
+- For an uncovered service, the plan retires (deactivates, never deletes) what
+  the catalog gave it beyond its original USD rows: its GBP and EUR funding
+  policies with their offers, and USD offers other than `credits_usd_10`, `_25`,
+  `_50` and `_100`. Each appears as `…_retired` with its id. Its USD funding
+  policy, those four USD offers and its USD reload option stay active and are
+  listed as `…_kept_uncovered` with their ids. Catalogs are shared by every
+  service and are never retired. The result's `outcome` is `changed` when the
+  run creates or retires anything, and `summary` counts `created`, `retired`,
+  `skipped` and `no_op`.
 - Stripe must already contain one shared-credit Product, its fifteen active
   one-time Prices (USD, EUR and GBP at 10, 25, 50, 100 and 1,000), and a
   distinct DeepWater privacy Product with its active
   monthly licensed USD Price. Prices are located by lookup key, so Stripe IDs
   are neither copied into source nor supplied on the command line.
 
-The exact Stripe contract is:
+The exact Stripe contract (shared by `nessie`, `deepwater`, `deeptest`,
+`salesnerd` and `docgen`) is:
 
 | Object                    | Lookup/terms                                                      | Exact metadata                                                                                      |
 | ------------------------- | ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |

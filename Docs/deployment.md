@@ -54,8 +54,8 @@ must register the canonical product identifier `docgen` as an active Billing
 Service through `/internal/admin/billing/services`, with its initial immutable
 tariff, before DocGen sells credits. While the service is absent the
 provisioner skips it and names it (`billing_service_not_registered`), and the
-next run after registration provisions it beside Nessie, DeepWater, DeepSignal
-and DeepTest; this does not alter runtime billing merely by deploying UOA. It
+next run after registration provisions it beside Nessie, DeepWater, DeepTest
+and SalesNerd; this does not alter runtime billing merely by deploying UOA. It
 does not create a service, tariff, Stripe product, or Price on an operator's
 behalf.
 

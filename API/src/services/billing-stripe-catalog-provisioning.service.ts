@@ -12,13 +12,16 @@ import {
 
 export type StripeCatalogProvisioningResult = {
   mode: 'apply' | 'dry-run';
-  outcome: 'created' | 'no-op';
+  /** `changed` when the run creates or retires anything; `no-op` when every row is already exact. */
+  outcome: 'changed' | 'no-op';
   stripe: {
     account_id: string;
     livemode: boolean;
   };
   summary: {
     created: number;
+    retired: number;
+    skipped: number;
     no_op: number;
   };
   actions: CatalogProvisioningAction[];
@@ -49,17 +52,22 @@ export async function provisionStripeCommercialCatalog(
     : await prisma.$transaction((tx) => reconcile({ db: tx, catalog, write: true }), {
         isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
       });
-  const created = actions.filter((action) => action.outcome === 'created').length;
+  const count = (outcome: CatalogProvisioningAction['outcome']) =>
+    actions.filter((action) => action.outcome === outcome).length;
+  const created = count('created');
+  const retired = count('retired');
   return {
     mode: params.dryRun ? 'dry-run' : 'apply',
-    outcome: created > 0 ? 'created' : 'no-op',
+    outcome: created + retired > 0 ? 'changed' : 'no-op',
     stripe: {
       account_id: catalog.stripeAccountId,
       livemode: catalog.livemode,
     },
     summary: {
       created,
-      no_op: actions.length - created,
+      retired,
+      skipped: count('skipped'),
+      no_op: count('no-op'),
     },
     actions,
   };
