@@ -72,16 +72,16 @@ async function seed(prisma: PrismaClient) {
         thresholdMicrocredits: 0n, thresholdAmountMinor: 500n, refillCreditsMicrocredits: 0n,
         refillPaymentAmountMinor: 2_500n, monthlyChargeCapMinor: 10_000n, stripePaymentMethodId: ids.pm,
         consentedAt } });
-      // 6,000 credits bought in the region currency at the region's rate: worth more than 5.00.
+      // 7,000 credits bought in USD before the region: EUR 6.03 or GBP 5.26 at the region's rate.
       await tx.billingCreditAccount.create({ data: { id: ids.credit, accountId: account.id, customerId: ids.customer,
-        orgId: ids.org, teamId: ids.team, scopeKey: `${ids.org}:${ids.team}`, balanceMicrocredits: 6_000_000_000n,
+        orgId: ids.org, teamId: ids.team, scopeKey: `${ids.org}:${ids.team}`, balanceMicrocredits: 7_000_000_000n,
         autoTopUpState: 'ACTIVE', autoTopUpPolicyId: ids.policy, autoTopUpServiceId: service, autoTopUpAppKeyId: appKey,
         autoTopUpConsentRevisionId: ids.revision, autoTopUpOptionId: ids.option, autoTopUpThresholdMicrocredits: 0n,
         autoTopUpRefillOfferId: ids.offer, autoTopUpMonthlyChargeCapMinor: 10_000n, autoTopUpConsentVersion: 'auto-v1',
         autoTopUpConsentedAt: consentedAt, autoTopUpConsentedByUserId: user, stripePaymentMethodId: ids.pm } });
       await tx.billingCreditLot.create({ data: { id: ids.lot, creditAccountId: ids.credit, sourceEntryId: null,
-        sequence: 0, currency: 'USD', paidAmountMinor: 600n, usdPerUnit: '1', grantedMicrocredits: 6_000_000_000n,
-        remainingMicrocredits: 6_000_000_000n, openedAt: consentedAt } });
+        sequence: 0, currency: 'USD', paidAmountMinor: 700n, usdPerUnit: '1', grantedMicrocredits: 7_000_000_000n,
+        remainingMicrocredits: 7_000_000_000n, openedAt: consentedAt } });
     }
   });
 }
@@ -169,11 +169,11 @@ describe.skipIf(!enabled)('automatic reload in the billing region currency (Post
       return result;
     };
 
-    // 6,000 credits are worth USD 6.00, above 5.00 at the region's rate.
+    // 7,000 credits are worth USD 7.00, above 5.00 at the region's rate.
     expect(await run()).toMatchObject({ outcome: 'skipped', reason: 'threshold_not_reached' });
     expect(stripe.paymentIntents.create).not.toHaveBeenCalled();
 
-    await spend(currency, 1_000_000_000n);
+    await spend(currency, 1_500_000_000n);
     expect(await run()).toMatchObject({ outcome: 'submitted' });
 
     const attempt = await db().billingCreditAutoTopUpAttempt.findFirstOrThrow({ where: { creditAccountId: ids.credit } });
@@ -181,8 +181,8 @@ describe.skipIf(!enabled)('automatic reload in the billing region currency (Post
     expect(attempt).toMatchObject({ currency, paymentAmountMinor: 2_500n, creditsReceivedMicrocredits: expected,
       thresholdAmountMinor: 500n, fxRateSource: 'stripe', fxQuoteId: `fxq_reload_${currency.toLowerCase()}` });
     expect(attempt.fxBaseRate?.toNumber()).toBe(regions[currency].reloadRate);
-    // USD 5.00 left, at the region's captured rate, is below 5.00 in its currency.
-    expect(attempt.observedValueMinor).toBe(BigInt(Math.floor(500 / Number(regions[currency].rate))));
+    // USD 5.50 left, at the region's captured rate, is below 5.00 in its currency.
+    expect(attempt.observedValueMinor).toBe(BigInt(Math.floor(550 / Number(regions[currency].rate))));
     expect(stripe.paymentIntents.create).toHaveBeenCalledWith(
       expect.objectContaining({ amount: 2_500, currency: currency.toLowerCase(), off_session: true }),
       expect.anything());
@@ -195,8 +195,8 @@ describe.skipIf(!enabled)('automatic reload in the billing region currency (Post
 
   it('pauses after a failed reload until the card is updated, with one alert and no retry', async () => {
     const ids = scoped('EUR');
-    // 35,000 credits after the first reload; spending 30,000 leaves 5,000 of the EUR lot, worth EUR 4.16.
-    await spend('EUR', 30_000_000_000n);
+    // 35,500 credits after the first reload; spending 30,500 leaves 5,000 of the EUR lot, worth EUR 4.16.
+    await spend('EUR', 30_500_000_000n);
     const stripe = stripeFor('EUR');
     const run = async () => {
       const result = await runCreditAutoTopUpAccount({ account, creditAccountId: ids.credit },

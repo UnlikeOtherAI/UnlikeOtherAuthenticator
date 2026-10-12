@@ -889,3 +889,126 @@ BEGIN
     RAISE EXCEPTION 'credit lots do not match the account balance' USING ERRCODE = '23514';
   END IF;
 END $$;
+
+-- An automatic top-up's state evidence (a failed, processing, action-required or
+-- canceled PaymentIntent event) is recorded on the attempt; its own trigger keeps
+-- that evidence from being removed or replaced once terminal. The identity guard
+-- refused the column outright, so a failed reload could never pause its account.
+CREATE OR REPLACE FUNCTION "billing_guard_funding_projection_identity"() RETURNS trigger
+LANGUAGE plpgsql AS $$
+DECLARE
+  new_identity JSONB;
+  old_identity JSONB;
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    RAISE EXCEPTION '% commercial history cannot be deleted', TG_TABLE_NAME
+      USING ERRCODE = '23514';
+  END IF;
+  CASE TG_TABLE_NAME
+    WHEN 'billing_credit_accounts' THEN
+      new_identity := to_jsonb(NEW) - ARRAY[
+        'balance_microcredits', 'auto_top_up_state', 'auto_top_up_policy_id',
+        'auto_top_up_service_id', 'auto_top_up_app_key_id',
+        'auto_top_up_consent_revision_id', 'auto_top_up_option_id',
+        'auto_top_up_threshold_microcredits', 'auto_top_up_refill_offer_id',
+        'auto_top_up_monthly_charge_cap_minor', 'auto_top_up_consent_version',
+        'auto_top_up_consented_at', 'auto_top_up_consented_by_user_id',
+        'stripe_payment_method_id', 'payment_method_summary', 'updated_at'
+      ];
+      old_identity := to_jsonb(OLD) - ARRAY[
+        'balance_microcredits', 'auto_top_up_state', 'auto_top_up_policy_id',
+        'auto_top_up_service_id', 'auto_top_up_app_key_id',
+        'auto_top_up_consent_revision_id', 'auto_top_up_option_id',
+        'auto_top_up_threshold_microcredits', 'auto_top_up_refill_offer_id',
+        'auto_top_up_monthly_charge_cap_minor', 'auto_top_up_consent_version',
+        'auto_top_up_consented_at', 'auto_top_up_consented_by_user_id',
+        'stripe_payment_method_id', 'payment_method_summary', 'updated_at'
+      ];
+    WHEN 'billing_credit_top_up_checkouts' THEN
+      new_identity := to_jsonb(NEW) - ARRAY[
+        'stripe_checkout_session_id', 'stripe_payment_intent_id',
+        'completion_webhook_event_id', 'status',
+        'lease_expires_at', 'expires_at', 'completed_at', 'credit_entry_id', 'updated_at'
+      ];
+      old_identity := to_jsonb(OLD) - ARRAY[
+        'stripe_checkout_session_id', 'stripe_payment_intent_id',
+        'completion_webhook_event_id', 'status',
+        'lease_expires_at', 'expires_at', 'completed_at', 'credit_entry_id', 'updated_at'
+      ];
+    WHEN 'billing_credit_setup_checkouts' THEN
+      new_identity := to_jsonb(NEW) - ARRAY[
+        'stripe_checkout_session_id', 'stripe_setup_intent_id',
+        'stripe_payment_method_id', 'completion_webhook_event_id', 'status',
+        'lease_expires_at', 'expires_at', 'completed_at', 'updated_at'
+      ];
+      old_identity := to_jsonb(OLD) - ARRAY[
+        'stripe_checkout_session_id', 'stripe_setup_intent_id',
+        'stripe_payment_method_id', 'completion_webhook_event_id', 'status',
+        'lease_expires_at', 'expires_at', 'completed_at', 'updated_at'
+      ];
+    WHEN 'billing_credit_auto_top_up_attempts' THEN
+      new_identity := to_jsonb(NEW) - ARRAY[
+        'stripe_payment_intent_id', 'success_webhook_event_id', 'state_webhook_event_id', 'status',
+        'failure_code', 'credit_entry_id', 'resolved_at', 'updated_at'
+      ];
+      old_identity := to_jsonb(OLD) - ARRAY[
+        'stripe_payment_intent_id', 'success_webhook_event_id', 'state_webhook_event_id', 'status',
+        'failure_code', 'credit_entry_id', 'resolved_at', 'updated_at'
+      ];
+    WHEN 'billing_credit_usage_settlements' THEN
+      new_identity := to_jsonb(NEW) - ARRAY[
+        'subscription_id', 'cumulative_rated_usage_amount_micro_minor',
+        'cumulative_credits_consumed_microcredits',
+        'cumulative_remaining_usage_amount_micro_minor', 'status', 'updated_at'
+      ];
+      old_identity := to_jsonb(OLD) - ARRAY[
+        'subscription_id', 'cumulative_rated_usage_amount_micro_minor',
+        'cumulative_credits_consumed_microcredits',
+        'cumulative_remaining_usage_amount_micro_minor', 'status', 'updated_at'
+      ];
+    WHEN 'billing_credit_invoice_lines' THEN
+      new_identity := to_jsonb(NEW) - ARRAY[
+        'last_adjustment_id', 'stripe_invoice_item_id',
+        'cumulative_credits_consumed_microcredits', 'stripe_unit_amount_decimal',
+        'stripe_quantity', 'status', 'updated_at'
+      ];
+      old_identity := to_jsonb(OLD) - ARRAY[
+        'last_adjustment_id', 'stripe_invoice_item_id',
+        'cumulative_credits_consumed_microcredits', 'stripe_unit_amount_decimal',
+        'stripe_quantity', 'status', 'updated_at'
+      ];
+    WHEN 'billing_recurring_addon_checkouts' THEN
+      new_identity := to_jsonb(NEW) - ARRAY[
+        'stripe_checkout_session_id', 'stripe_subscription_id',
+        'completion_webhook_event_id', 'status', 'lease_expires_at',
+        'expires_at', 'completed_at', 'updated_at'
+      ];
+      old_identity := to_jsonb(OLD) - ARRAY[
+        'stripe_checkout_session_id', 'stripe_subscription_id',
+        'completion_webhook_event_id', 'status', 'lease_expires_at',
+        'expires_at', 'completed_at', 'updated_at'
+      ];
+    WHEN 'billing_recurring_addon_subscriptions' THEN
+      new_identity := to_jsonb(NEW) - ARRAY[
+        'status', 'cancel_at_period_end', 'current_period_start', 'current_period_end',
+        'initial_invoice_paid_at', 'initial_invoice_id', 'activation_webhook_event_id',
+        'entitlement_activated_at',
+        'entitlement_deactivated_at', 'updated_at'
+      ];
+      old_identity := to_jsonb(OLD) - ARRAY[
+        'status', 'cancel_at_period_end', 'current_period_start', 'current_period_end',
+        'initial_invoice_paid_at', 'initial_invoice_id', 'activation_webhook_event_id',
+        'entitlement_activated_at',
+        'entitlement_deactivated_at', 'updated_at'
+      ];
+    ELSE
+      RAISE EXCEPTION 'unsupported commercial projection table %', TG_TABLE_NAME
+        USING ERRCODE = '23514';
+  END CASE;
+  IF new_identity IS DISTINCT FROM old_identity THEN
+    RAISE EXCEPTION '% identity and commercial snapshot are immutable', TG_TABLE_NAME
+      USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END;
+$$;
