@@ -175,6 +175,8 @@ describe('shared credits and recurring add-on read routes', () => {
         actorToken: 'signed-actor',
         endpoint: '/billing/v1/credits',
         supportsBillingStatus: false,
+        supportsPurchaseCurrency: false,
+        log: expect.anything(),
         request: {
           product: 'deepwater',
           organisationId: 'org_example',

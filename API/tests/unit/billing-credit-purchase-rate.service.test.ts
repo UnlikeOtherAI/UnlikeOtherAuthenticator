@@ -89,7 +89,7 @@ describe('credit purchase rate', () => {
     [2_000n, '1.16123', 23_224_000_000n],
     [100_000n, '1.16123', 1_161_230_000_000n],
     [1_000n, '1.3314986813', 13_314_000_000n],
-    [1n, '0.5', 0n],
+    [1n, '0.00005', 0n],
   ])('grants %s minor at %s as %s microcredits, in whole credits', (minor, rate, expected) => {
     expect(creditsForPayment(minor, rate)).toBe(expected);
   });

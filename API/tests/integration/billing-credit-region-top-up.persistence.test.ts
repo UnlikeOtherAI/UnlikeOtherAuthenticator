@@ -45,7 +45,7 @@ describe.skipIf(!databaseTestsEnabled)('credit top-ups in the region currency (P
       key: 'credits_eur_25', version: 1, currency: 'EUR', paymentAmountMinor: 2_500n,
       creditsReceivedMicrocredits: 0n, stripeLookupKey: 'uoa_credits_eur_25_v1',
       stripeProductId: 'prod_funding_race', stripePriceId: 'price_eur_25' } });
-  }, 60_000);
+  });
 
   afterAll(async () => {
     if (handle) await handle.cleanup();

@@ -21,6 +21,7 @@ const catalog = {
   id: 'catalog_1',
   key: offer.catalogKey,
   version: 1,
+  currency: 'USD',
   stripeLookupKey: 'credits-20k-v1',
   stripePriceId: 'price_1',
   stripeProductId: 'prod_1',

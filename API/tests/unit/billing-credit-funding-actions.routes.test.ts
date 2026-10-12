@@ -104,6 +104,7 @@ describe('billing credit funding action routes', () => {
       expect(topUpService.createBillingCreditTopUpCheckout).toHaveBeenCalledWith({
         credential, actorToken: 'signed-actor', endpoint: '/billing/v1/credits/top-up-checkout',
         includePurchaseId: true, locale: 'cs', request: { ...requestSubject, offerId: 'offer_20k' },
+        log: expect.anything(),
       });
     });
   });
@@ -157,6 +158,7 @@ describe('billing credit funding action routes', () => {
         endpoint: '/billing/v1/credits/top-up-checkout',
         includePurchaseId: false,
         request: { ...requestSubject, offerId: 'offer_20k' },
+        log: expect.anything(),
       });
     });
   });
@@ -190,6 +192,7 @@ describe('billing credit funding action routes', () => {
         includePurchaseId: true,
         locale: 'cs',
         request: { ...requestSubject, offerId: 'offer_20k' },
+        log: expect.anything(),
       });
     });
   });
