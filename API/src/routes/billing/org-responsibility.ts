@@ -9,7 +9,11 @@ import {
   releaseOrgBillingResponsibility,
 } from '../../services/billing-org-responsibility-lifecycle.service.js';
 import {
-  BILLING_REGIONS, setOrganisationBillingRegion, type BillingRegion,
+  BILLING_REGION_PROTOCOL_HEADER,
+  BILLING_REGION_PROTOCOL_VERSION,
+} from '../../contracts/billing-statement-v1.js';
+import {
+  BILLING_REGIONS, setOrganisationBillingRegion, type BillingRegion, type BillingRegionViewV1,
 } from '../../services/billing-organisation-region.service.js';
 import { AppError } from '../../utils/errors.js';
 import { BillingSubjectRequestSchema, readBillingActorHeader } from './billing-request.js';
@@ -30,9 +34,17 @@ const regionSchema = {
     currency: { type: ['string', 'null'], enum: ['GBP', 'USD', 'EUR', null] },
     suggested_region: { type: 'string', enum: BILLING_REGIONS },
     suggested_currency: { type: 'string', enum: ['GBP', 'USD', 'EUR'] },
+    suggested_from: { type: ['string', 'null'], enum: ['billing_country', null] },
     can_set: { type: 'boolean' },
   },
 } as const;
+
+/** `suggested_from` reaches only consumers on region protocol 1.1.0; older ones keep the 1.0.0 view. */
+function negotiatedRegion(request: FastifyRequest, view: BillingRegionViewV1) {
+  if (request.headers[BILLING_REGION_PROTOCOL_HEADER] === BILLING_REGION_PROTOCOL_VERSION) return view;
+  const { suggested_from: _omitted, ...older } = view;
+  return older;
+}
 const RegionRequestSchema = BillingSubjectRequestSchema.extend({
   region: z.enum(BILLING_REGIONS as [BillingRegion, ...BillingRegion[]]),
 }).strict();
@@ -136,7 +148,7 @@ export function registerBillingOrgResponsibilityRoutes(app: FastifyInstance): vo
         endpoint: BILLING_ORG_RESPONSIBILITY_READ_PATH,
       });
       reply.header('Cache-Control', 'private, no-store');
-      return reply.send(state);
+      return reply.send({ ...state, billing_region: negotiatedRegion(request, state.billing_region) });
     },
   );
 
@@ -151,7 +163,7 @@ export function registerBillingOrgResponsibilityRoutes(app: FastifyInstance): vo
       const view = await setOrganisationBillingRegion({ ...parse(request, subject), region,
         endpoint: BILLING_ORG_REGION_PATH });
       reply.header('Cache-Control', 'private, no-store');
-      return reply.send(view);
+      return reply.send(negotiatedRegion(request, view));
     },
   );
 

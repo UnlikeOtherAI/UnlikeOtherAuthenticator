@@ -304,6 +304,17 @@ choose now. A different second choice answers `BILLING_REGION_IMMUTABLE`; SMS
 pricing, purchase and top-up answer `BILLING_REGION_REQUIRED` until chosen. AI
 usage stays USD in every region.
 
+### Where the suggestion came from (5.6.0, region protocol 1.1.0)
+
+A consumer that sends `x-uoa-billing-region-protocol: 1.1.0`
+(`BILLING_REGION_PROTOCOL_HEADER`, `BILLING_REGION_PROTOCOL_VERSION`) on either
+endpoint also receives `suggested_from`: `billing_country` when
+`suggested_region` came from the organisation's invoice-profile billing country
+(any country, US included), or `null` when no billing country is known and the
+suggestion is the US default. Render a real country's suggestion as a
+prefill and the default as no preference; never infer either from
+`suggested_region`. Without the header the view keeps its 1.0.0 fields.
+
 ## Region-currency quotes (5.4.0, SMS protocol 1.1.0)
 
 `BillingSmsFinalQuoteV1.currency` is `USD`, `EUR` or `GBP`. A monthly

@@ -6,7 +6,10 @@ organisation owner or admin and never changes. POST /billing/v1/organisation-bil
 returns billing_region: {region, currency} (both null until chosen),
 {suggested_region, suggested_currency} to prefill the choice (from the
 organisation's invoice billing country: GB → UK, the EU, EEA and CH → EUROPE,
-anything else → US) and can_set (owner or admin, and no region yet).
+anything else → US) and can_set (owner or admin, and no region yet). Send
+x-uoa-billing-region-protocol: 1.1.0 to also receive suggested_from:
+billing_country when a billing country decided the suggestion, or null when no
+country is known and US is only the default.
 POST /billing/v1/organisation-billing/region with the subject fields plus
 region, the customer_lifecycle app key and a fresh X-UOA-Actor for that exact
 endpoint chooses it and returns the same block. Repeating the same region is a

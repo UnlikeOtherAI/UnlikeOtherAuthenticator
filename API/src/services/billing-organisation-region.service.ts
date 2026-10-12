@@ -35,6 +35,8 @@ export type BillingRegionViewV1 = {
   currency: BillingRegionCurrency | null;
   suggested_region: BillingRegion;
   suggested_currency: BillingRegionCurrency;
+  /** `billing_country` when a billing country decided the suggestion; null for the no-country US default. */
+  suggested_from: 'billing_country' | null;
   can_set: boolean;
 };
 type RegionDb = Pick<PrismaClient | Prisma.TransactionClient,
@@ -71,10 +73,11 @@ export async function billingRegionView(organisationId: string, canManage: boole
       select: { billingAddress: true } }),
   ]);
   const address = profile?.billingAddress as { country?: unknown } | null | undefined;
-  const suggested = suggestedBillingRegion(typeof address?.country === 'string' ? address.country : null);
+  const country = typeof address?.country === 'string' && address.country.trim() ? address.country : null;
+  const suggested = suggestedBillingRegion(country);
   return { region: chosen?.region ?? null, currency: chosen?.currency ?? null,
     suggested_region: suggested, suggested_currency: BILLING_REGION_CURRENCY[suggested],
-    can_set: canManage && !chosen };
+    suggested_from: country ? 'billing_country' : null, can_set: canManage && !chosen };
 }
 
 /**

@@ -1722,7 +1722,11 @@ answer `409 BILLING_REGION_REQUIRED`.
 `suggested_currency` for prefilling the choice, and `can_set` (true only for an
 owner or admin while no region is chosen). The suggestion comes from the
 organisation's invoice-profile billing country: GB → UK; the EU, the other EEA
-members and Switzerland → Europe; anything else or no known country → US.
+members and Switzerland → Europe; anything else or no known country → US. A
+consumer that sends `x-uoa-billing-region-protocol: 1.1.0` (protocol package
+5.6.0) also gets `suggested_from`: `billing_country` when a billing country
+decided the suggestion (any country, the US included), `null` when no country is
+known and US is the default. Older consumers receive the view without it.
 `POST /billing/v1/organisation-billing/region` takes the subject fields plus
 `region` (`UK`, `US` or `EUROPE`) with the `CUSTOMER_LIFECYCLE` app key and a
 fresh `X-UOA-Actor` signed for that exact endpoint, and returns the same block.

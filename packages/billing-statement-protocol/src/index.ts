@@ -52,7 +52,10 @@ export { billingStatementV1ConformanceFixture } from './conformance-fixture.js';
 export {
   billingControlledByJsonSchema, billingRegionSetRequestV1JsonSchema, billingRegionViewV1JsonSchema,
 } from './org-billing-schema.js';
-export { BILLING_ORG_BILLING_MANAGE_ACTION_ID, BILLING_ORG_REGION_PATH } from './org-billing-types.js';
+export {
+  BILLING_ORG_BILLING_MANAGE_ACTION_ID, BILLING_ORG_REGION_PATH, BILLING_REGION_PROTOCOL_HEADER,
+  BILLING_REGION_PROTOCOL_VERSION,
+} from './org-billing-types.js';
 export type {
   BillingControlledByV1, BillingRegionCurrencyV1, BillingRegionV1, BillingRegionViewV1,
 } from './org-billing-types.js';

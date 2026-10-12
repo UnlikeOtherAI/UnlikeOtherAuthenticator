@@ -31,13 +31,29 @@ describe('organisation billing region', () => {
   it('is chosen once by a manager, repeats as a no-op and refuses any other region', async () => {
     const { db, deps } = setup();
     expect(await setOrganisationBillingRegion({ ...params, region: 'EUROPE' }, deps)).toEqual({ region: 'EUROPE',
-      currency: 'EUR', suggested_region: 'EUROPE', suggested_currency: 'EUR', can_set: false });
+      currency: 'EUR', suggested_region: 'EUROPE', suggested_currency: 'EUR', suggested_from: 'billing_country',
+      can_set: false });
     expect(db.billingOrganisationRegion.create).toHaveBeenCalledWith({ data: expect.objectContaining({
       orgId: 'org_1', region: 'EUROPE', currency: 'EUR', setByUserId: 'user_1' }) });
     await setOrganisationBillingRegion({ ...params, region: 'EUROPE' }, deps);
     await expect(setOrganisationBillingRegion({ ...params, region: 'UK' }, deps)).rejects.toThrow('BILLING_REGION_IMMUTABLE');
     expect(db.billingOrganisationRegion.create).toHaveBeenCalledTimes(1);
   });
+
+  it('names the billing country as the source of any country\'s suggestion, and nothing for the US default',
+    async () => {
+      const { billingRegionView } = await import('../../src/services/billing-organisation-region.service.js');
+      const cases = [[{ country: 'US' }, 'US', 'billing_country'], [{ country: 'CA' }, 'US', 'billing_country'],
+        [{ country: 'GB' }, 'UK', 'billing_country'], [{ country: ' ' }, 'US', null], [{}, 'US', null],
+        [null, 'US', null]] as const;
+      for (const [billingAddress, region, from] of cases) {
+        const db = { billingOrganisationRegion: { findUnique: vi.fn(async () => null) },
+          billingOrganisationInvoiceProfile: { findUnique: vi.fn(async () => (billingAddress === null ? null
+            : { billingAddress })) } };
+        expect(await billingRegionView('org_1', true, db as never)).toMatchObject({ suggested_region: region,
+          suggested_from: from });
+      }
+    });
 
   it('refuses a member who is not an organisation owner or admin before any write', async () => {
     const { db, deps } = setup();

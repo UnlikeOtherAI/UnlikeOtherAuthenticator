@@ -26,7 +26,7 @@ describe.skipIf(!process.env.DATABASE_URL)('organisation billing region in Postg
 
   it('reads null and refuses SMS work until chosen, then shows the chosen region', async () => {
     expect(await billingRegionView('region-org', true, prisma)).toEqual({ region: null, currency: null,
-      suggested_region: 'US', suggested_currency: 'USD', can_set: true });
+      suggested_region: 'US', suggested_currency: 'USD', suggested_from: null, can_set: true });
     await expect(requireOrganisationBillingRegion('region-org', prisma)).rejects.toThrow('BILLING_REGION_REQUIRED');
     await prisma.billingOrganisationRegion.create({ data: { orgId: 'region-org', region: 'UK', currency: 'GBP',
       setByUserId: 'region-user' } });

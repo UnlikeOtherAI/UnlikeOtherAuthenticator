@@ -1,7 +1,10 @@
 import { billingSubjectActionBodySchema } from './funding-schema-primitives.js';
 import { BILLING_ORG_BILLING_MANAGE_ACTION_ID } from './org-billing-types.js';
 
-export { BILLING_ORG_BILLING_MANAGE_ACTION_ID, BILLING_ORG_REGION_PATH } from './org-billing-types.js';
+export {
+  BILLING_ORG_BILLING_MANAGE_ACTION_ID, BILLING_ORG_REGION_PATH, BILLING_REGION_PROTOCOL_HEADER,
+  BILLING_REGION_PROTOCOL_VERSION,
+} from './org-billing-types.js';
 export type {
   BillingControlledByV1, BillingRegionCurrencyV1, BillingRegionV1, BillingRegionViewV1,
 } from './org-billing-types.js';
@@ -47,6 +50,8 @@ export const billingRegionViewV1JsonSchema = {
     currency: { oneOf: [regionCurrency, { type: 'null' }] },
     suggested_region: region,
     suggested_currency: regionCurrency,
+    // Region protocol 1.1.0; optional so a 1.0.0 view stays valid.
+    suggested_from: { oneOf: [{ const: 'billing_country' }, { type: 'null' }] },
     can_set: { type: 'boolean' },
   },
 } as const;
