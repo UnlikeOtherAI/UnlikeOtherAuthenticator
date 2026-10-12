@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "UOA BillingCreditsV1 consumer API",
-    "version": "2.0.0",
+    "version": "2.1.0",
     "description": "Exact customer-facing shared team credits API. UOA returns display-ready values and capabilities; products never calculate balances, conversion, privacy filtering, or authorization."
   },
   "paths": {
@@ -2894,7 +2894,11 @@
                         "pattern": "^(0|[1-9][0-9]*)$"
                       },
                       "currency": {
-                        "const": "USD"
+                        "enum": [
+                          "USD",
+                          "EUR",
+                          "GBP"
+                        ]
                       },
                       "display": {
                         "type": "string"
@@ -3681,7 +3685,11 @@
                               "pattern": "^[1-9][0-9]*$"
                             },
                             "currency": {
-                              "const": "USD"
+                              "enum": [
+                                "USD",
+                                "EUR",
+                                "GBP"
+                              ]
                             },
                             "display": {
                               "type": "string"
@@ -3724,6 +3732,42 @@
                                   "type": "string"
                                 }
                               }
+                            }
+                          }
+                        },
+                        "credit_rate": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "currency",
+                            "usd_per_unit",
+                            "source",
+                            "as_of",
+                            "display"
+                          ],
+                          "properties": {
+                            "currency": {
+                              "enum": [
+                                "EUR",
+                                "GBP"
+                              ]
+                            },
+                            "usd_per_unit": {
+                              "type": "string",
+                              "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]+)?|0\\.[0-9]*[1-9][0-9]*)$"
+                            },
+                            "source": {
+                              "enum": [
+                                "stripe",
+                                "ecb"
+                              ]
+                            },
+                            "as_of": {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            "display": {
+                              "type": "string"
                             }
                           }
                         },
