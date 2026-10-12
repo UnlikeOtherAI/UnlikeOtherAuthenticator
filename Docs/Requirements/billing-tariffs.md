@@ -1559,8 +1559,10 @@ region is UK or Europe buys them in GBP or EUR:
   purchase are refused at the webhook (fail closed, retried by Stripe) until
   refunds per lot land, and a mixed-currency balance is valued only in credits.
 
-The same offers are projected for the exact active services `nessie`,
-`deepwater`, `deepsignal`, `deeptest`, and `docgen`. Each receives top-up and
+The same offers are projected for the covered services `nessie`, `deepwater`,
+`deepsignal`, `deeptest` and `docgen` that are registered and active; another
+active service (such as `salesnerd`) is left untouched, and a covered one not
+yet registered is skipped until it is. Each receives top-up and
 automatic-top-up policy plus the default automatic option: refill 25,000
 credits below 5,000, with a US$100 monthly cap and consent version
 `credits-auto-top-up-v1`.

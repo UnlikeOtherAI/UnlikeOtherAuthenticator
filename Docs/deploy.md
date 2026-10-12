@@ -627,10 +627,13 @@ Prerequisites:
   URL. It intentionally does not load or require unrelated API-server settings
   such as `SHARED_SECRET`, which keeps the documented two-secret operator job
   isolated from the runtime service configuration.
-- The database must contain exactly the active billing services `nessie`,
-  `deepwater`, `deepsignal`, and `deeptest`, and exactly one active,
-  feature-flags-enabled app identified as `deepwater-api`. Unexpected active
-  services or ambiguous app state fail closed.
+- The catalog covers the billing services `nessie`, `deepwater`, `deepsignal`,
+  `deeptest` and `docgen`, and needs exactly one active, feature-flags-enabled
+  app identified as `deepwater-api`. A covered service that is not registered
+  yet is skipped (`billing_service_not_registered`); an active service the
+  catalog does not cover, such as `salesnerd`, is left untouched
+  (`billing_service_not_covered`). Both appear in the plan as `skipped`.
+  Ambiguous app state fails closed.
 - Stripe must already contain one shared-credit Product, its fifteen active
   one-time Prices (USD, EUR and GBP at 10, 25, 50, 100 and 1,000), and a
   distinct DeepWater privacy Product with its active
@@ -652,8 +655,10 @@ The exact Stripe contract is:
 | DeepWater privacy Product | active, distinct from credit Product                              | `contract_version=1`, `uoa_addon_key=privacy`, `uoa_kind=recurring_addon`, `uoa_service=deep-water` |
 | DeepWater privacy Price   | `deepwater_privacy_usd_month_v1`, US$50/month, licensed, no meter | `uoa_addon_key=privacy`, `uoa_kind=recurring_addon`, `uoa_service=deep-water`                       |
 
-Metadata is an exact set: extra, absent, or changed keys are drift. Begin with
-the read-only operation:
+Metadata is an exact set: extra, absent, or changed keys are drift. A refusal
+prints the check that failed and the rows it saw, by id, for example
+`{"error":"BILLING_COMMERCIAL_CATALOG_LOCAL_DRIFT","check":"credit_offer_terms","details":{"offer_id":"…","fields":["name"]}}`;
+it never prints a secret. Begin with the read-only operation:
 
 ```bash
 STRIPE_SECRET_KEY='sk_test_...' DATABASE_ADMIN_URL='postgresql://...' \

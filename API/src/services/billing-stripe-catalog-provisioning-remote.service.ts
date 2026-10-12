@@ -1,6 +1,7 @@
 import type Stripe from 'stripe';
 
 import { AppError } from '../utils/errors.js';
+import { CatalogDriftError, type CatalogDriftDetails } from './billing-stripe-catalog-provisioning-local.shared.js';
 import { assertStripeObjectLivemode } from './billing-stripe-client.service.js';
 import {
   CREDIT_PRODUCT_METADATA,
@@ -32,8 +33,8 @@ export type ValidatedStripeCommercialCatalog = {
   };
 };
 
-function remoteDrift(): never {
-  throw new AppError('INTERNAL', 409, 'STRIPE_COMMERCIAL_CATALOG_DRIFT');
+function remoteDrift(check: string, details: CatalogDriftDetails = {}): never {
+  throw new CatalogDriftError('STRIPE_COMMERCIAL_CATALOG_DRIFT', check, details);
 }
 
 function exactMetadata(actual: Stripe.Metadata, expected: Record<string, string>): boolean {
@@ -65,7 +66,10 @@ async function loadPrices(
   for (let index = 0; index < lookupKeys.length; index += 10) {
     const chunk = lookupKeys.slice(index, index + 10);
     const response = await stripe.prices.list({ lookup_keys: chunk, limit: 100 });
-    if (response.has_more || response.data.length !== chunk.length) remoteDrift();
+    if (response.has_more || response.data.length !== chunk.length) {
+      remoteDrift('stripe_prices_by_lookup_key', { asked: chunk,
+        found: response.data.map((price) => price.lookup_key ?? price.id) });
+    }
     pages.push(...response.data);
   }
 
@@ -76,11 +80,12 @@ async function loadPrices(
       !lookupKeys.includes(price.lookup_key) ||
       prices.has(price.lookup_key)
     ) {
-      remoteDrift();
+      remoteDrift('stripe_price_lookup_key', { price_id: price.id, lookup_key: price.lookup_key ?? null });
     }
     prices.set(price.lookup_key, price);
   }
-  if (lookupKeys.some((key) => !prices.has(key))) remoteDrift();
+  const missing = lookupKeys.filter((key) => !prices.has(key));
+  if (missing.length > 0) remoteDrift('stripe_prices_missing', { lookup_keys: missing });
   return prices;
 }
 
@@ -92,7 +97,8 @@ async function loadProducts(
   const products = await Promise.all(ids.map((id) => stripe.products.retrieve(id)));
   const result = new Map<string, Stripe.Product>();
   for (const product of products) {
-    if (!activeProduct(product)) remoteDrift();
+    const productId = (product as { id: string }).id;
+    if (!activeProduct(product)) remoteDrift('stripe_product_inactive', { product_id: productId });
     result.set(product.id, product);
   }
   return result;
@@ -107,19 +113,19 @@ function validateCreditPrice(params: {
   const { price, product, expectedLivemode, spec } = params;
   assertStripeObjectLivemode(price, expectedLivemode);
   assertStripeObjectLivemode(product, expectedLivemode);
-  if (
-    !price.active ||
-    price.lookup_key !== spec.stripeLookupKey ||
-    price.currency !== spec.currency.toLowerCase() ||
-    price.type !== 'one_time' ||
-    price.recurring !== null ||
-    price.unit_amount !== Number(spec.paymentAmountMinor) ||
-    price.unit_amount_decimal?.toString() !== spec.paymentAmountMinor.toString() ||
-    stripeExternalId(price.product) !== product.id ||
-    !exactMetadata(price.metadata, creditPriceMetadata(spec)) ||
-    !exactMetadata(product.metadata, CREDIT_PRODUCT_METADATA)
-  ) {
-    remoteDrift();
+  const fields = [
+    !price.active && 'active',
+    price.lookup_key !== spec.stripeLookupKey && 'lookup_key',
+    price.currency !== spec.currency.toLowerCase() && 'currency',
+    (price.type !== 'one_time' || price.recurring !== null) && 'type',
+    (price.unit_amount !== Number(spec.paymentAmountMinor) ||
+      price.unit_amount_decimal?.toString() !== spec.paymentAmountMinor.toString()) && 'unit_amount',
+    stripeExternalId(price.product) !== product.id && 'product',
+    !exactMetadata(price.metadata, creditPriceMetadata(spec)) && 'price_metadata',
+    !exactMetadata(product.metadata, CREDIT_PRODUCT_METADATA) && 'product_metadata',
+  ].filter((field): field is string => Boolean(field));
+  if (fields.length > 0) {
+    remoteDrift('stripe_credit_price_terms', { price_id: price.id, lookup_key: spec.stripeLookupKey, fields });
   }
   return {
     key: spec.catalogKey,
@@ -164,7 +170,7 @@ function validateRecurringAddon(params: {
       }),
     )
   ) {
-    remoteDrift();
+    remoteDrift('stripe_recurring_addon_price_terms', { price_id: price.id, product_id: product.id });
   }
   return {
     stripeLookupKey: DEEPWATER_PRIVACY_SPEC.stripeLookupKey,
@@ -187,7 +193,7 @@ export async function validateStripeCommercialCatalog(params: {
   const creditPrices = CREDIT_TOP_UP_SPECS.map((spec) => {
     const price = prices.get(spec.stripeLookupKey);
     const product = price ? products.get(stripeExternalId(price.product)) : undefined;
-    if (!price || !product) remoteDrift();
+    if (!price || !product) remoteDrift('stripe_credit_price_missing', { lookup_key: spec.stripeLookupKey });
     return validateCreditPrice({
       price,
       product,
@@ -195,17 +201,22 @@ export async function validateStripeCommercialCatalog(params: {
       spec,
     });
   });
-  if (new Set(creditPrices.map((price) => price.stripeProductId)).size !== 1) remoteDrift();
+  const creditProducts = [...new Set(creditPrices.map((price) => price.stripeProductId))];
+  if (creditProducts.length !== 1) remoteDrift('stripe_credit_products_not_shared', { product_ids: creditProducts });
 
   const addonPrice = prices.get(DEEPWATER_PRIVACY_SPEC.stripeLookupKey);
   const addonProduct = addonPrice ? products.get(stripeExternalId(addonPrice.product)) : undefined;
-  if (!addonPrice || !addonProduct) remoteDrift();
+  if (!addonPrice || !addonProduct) {
+    remoteDrift('stripe_recurring_addon_price_missing', { lookup_key: DEEPWATER_PRIVACY_SPEC.stripeLookupKey });
+  }
   const recurringAddon = validateRecurringAddon({
     price: addonPrice,
     product: addonProduct,
     expectedLivemode: params.expectedLivemode,
   });
-  if (recurringAddon.stripeProductId === creditPrices[0]?.stripeProductId) remoteDrift();
+  if (recurringAddon.stripeProductId === creditPrices[0]?.stripeProductId) {
+    remoteDrift('stripe_recurring_addon_shares_credit_product', { product_id: recurringAddon.stripeProductId });
+  }
 
   return {
     stripeAccountId: account.id,

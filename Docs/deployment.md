@@ -52,11 +52,12 @@ the BuildMe name is `docgen`.
 Before enabling DocGen paid inference or its Billing screen, a UOA superuser
 must register the canonical product identifier `docgen` as an active Billing
 Service through `/internal/admin/billing/services`, with its initial immutable
-tariff, **before** the next Stripe-catalog provisioner invocation. The
-provisioner intentionally fails closed while the service is absent, then
-requires it beside Nessie, DeepWater, DeepSignal, and DeepTest; this does not
-alter runtime billing merely by deploying UOA. It does not create a service,
-tariff, Stripe product, or Price on an operator's behalf.
+tariff, before DocGen sells credits. While the service is absent the
+provisioner skips it and names it (`billing_service_not_registered`), and the
+next run after registration provisions it beside Nessie, DeepWater, DeepSignal
+and DeepTest; this does not alter runtime billing merely by deploying UOA. It
+does not create a service, tariff, Stripe product, or Price on an operator's
+behalf.
 
 After the `buildme.live` client domain is active, create exactly one enabled
 confidential-delegation mapping with `source_domain=buildme.live`,
