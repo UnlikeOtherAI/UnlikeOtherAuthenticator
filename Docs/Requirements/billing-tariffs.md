@@ -1667,3 +1667,33 @@ credits were consumed, provided no positive provider reservation is held. The
 additive 20261005103000 migration corrects the reservation guard's zero-held
 case; active held funds, verified adjustment provenance, immutable ledger
 entries, and the prohibition on unfunded usage debits remain enforced.
+
+## Organisation billing region (2026-10-12)
+
+Every organisation has one top-level billing region: **UK**, **US** or
+**Europe**. The region sets the currency of everything SMS: number prices,
+per-text prices, the SMS prepaid balance and number subscriptions (UK → GBP,
+US → USD, Europe → EUR). It is UOA-owned commercial state
+(`billing_organisation_regions`), chosen **once** by an organisation owner or
+admin and never changed: the database refuses any update with a trigger, and a
+second, different choice answers `409 BILLING_REGION_IMMUTABLE` (repeating the
+same choice changes nothing). Existing organisations are not backfilled; each
+chooses on first use. Until then SMS quotes, number purchases and SMS top-ups
+answer `409 BILLING_REGION_REQUIRED`.
+
+`POST /billing/v1/organisation-billing` returns `billing_region`: `region` and
+`currency` (both `null` until chosen), `suggested_region` and
+`suggested_currency` for prefilling the choice, and `can_set` (true only for an
+owner or admin while no region is chosen). The suggestion comes from the
+organisation's invoice-profile billing country: GB → UK; the EU, the other EEA
+members and Switzerland → Europe; anything else or no known country → US.
+`POST /billing/v1/organisation-billing/region` takes the subject fields plus
+`region` (`UK`, `US` or `EUROPE`) with the `CUSTOMER_LIFECYCLE` app key and a
+fresh `X-UOA-Actor` signed for that exact endpoint, and returns the same block.
+Products render the block and store nothing.
+
+**Known limitation: AI usage is USD-only, regardless of region.** Credits for
+AI usage, their top-ups, plans and Ledger settlement stay in USD for every
+organisation; the region affects SMS only. An organisation in the UK or Europe
+therefore holds a USD AI balance beside its GBP or EUR SMS balance.
+

@@ -1902,6 +1902,19 @@ model BillingTariffAssignment {
 // room to add a service dimension later without a breaking change.
 // Releasing sets `active = false` and reverses the resolver only; historical
 // organisation-scoped ledger rows stay where the spend was actually incurred.
+// An organisation's billing region, chosen once by an owner or admin and never
+// changed (a trigger refuses updates). It sets the currency of SMS prices, the
+// SMS balance and number subscriptions. AI usage stays USD regardless.
+model BillingOrganisationRegion {
+  orgId       String   @id @map("org_id")
+  region      String   @db.VarChar(10)
+  currency    String   @db.Char(3)
+  setByUserId String   @map("set_by_user_id")
+  setAt       DateTime @default(now()) @map("set_at")
+
+  @@map("billing_organisation_regions")
+}
+
 model BillingOrgResponsibility {
   id               String    @id @default(cuid())
   orgId            String    @unique @map("org_id")

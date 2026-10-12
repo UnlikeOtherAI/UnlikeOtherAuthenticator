@@ -26,6 +26,7 @@ export const BILLING_CUSTOMER_ACTION = {
   SMS_INBOUND_FUND: 'sms_inbound_fund',
   ORG_BILLING_ASSUME: 'org_billing_assume',
   ORG_BILLING_RELEASE: 'org_billing_release',
+  BILLING_REGION_SET: 'billing_region_set',
 } as const;
 
 export type BillingCustomerAction =
