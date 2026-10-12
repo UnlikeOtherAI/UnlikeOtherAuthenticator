@@ -57,7 +57,8 @@ export type CreditFundingEvent =
       paymentIntentId: string;
       chargeId: string;
       amountMinor: bigint;
-      currency: 'USD';
+      /** The purchase's own currency: USD, or a billing region's GBP or EUR. */
+      currency: 'USD' | 'EUR' | 'GBP';
       occurredAt: Date;
     } & CreditPaymentBinding)
   | {

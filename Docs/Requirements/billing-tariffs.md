@@ -1555,8 +1555,17 @@ region is UK or Europe buys them in GBP or EUR:
 - A consumer on credits protocol 2.1.0 sees the region-currency offers with a
   `credit_rate`; an older consumer sees the USD offers, which stay purchasable.
   Without a region the offers are USD.
-- Not yet: refunds and disputes of a GBP or EUR purchase are refused at the
-  webhook (fail closed, retried by Stripe) until refunds per lot land.
+- A refund or dispute of a GBP or EUR purchase is in that purchase's currency
+  (any other currency is refused). The money buys back credits at the
+  purchase's own terms (credits granted ÷ amount paid), in whole credits and
+  never more than the purchase granted, and the lot trigger takes them from that
+  purchase's lot first. So refunding what is left of a lot, in its currency,
+  empties it: EUR 22.41 of a EUR 25.00 lot of 29,030 credits with 26,030 left
+  takes back 26,022 credits and leaves 8, worth under a cent. Refunding more
+  than is left takes the rest from other lots, then as debt, as a USD refund
+  does. A USD purchase grants 10,000,000 microcredits a cent, so its refunds are
+  unchanged. The adjustment row keeps the money in its currency; the credit
+  entry stays in the account's USD credits.
 
 ### Automatic reload in the region currency
 

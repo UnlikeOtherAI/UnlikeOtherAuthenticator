@@ -17,7 +17,7 @@ import type {
   CreditPaymentBinding,
   PreparedCreditFundingWebhook,
 } from './billing-credit-funding-webhook.types.js';
-import { exactMinor, requireUsd } from './billing-credit-funding-webhook-validation.service.js';
+import { exactMinor, requireCreditCurrency } from './billing-credit-funding-webhook-validation.service.js';
 
 async function resolveStoredPaymentBinding(
   intent: Stripe.PaymentIntent,
@@ -54,7 +54,7 @@ async function resolveStoredPaymentBinding(
     if (
       checkout.customer.stripeCustomerId !== customerId ||
       checkout.paymentAmountMinor !== exactMinor(intent.amount_received) ||
-      checkout.currency !== requireUsd(intent.currency)
+      checkout.currency !== requireCreditCurrency(intent.currency)
     ) {
       throw new AppError('INTERNAL', 502, 'STRIPE_CREDIT_TOP_UP_BINDING_INVALID');
     }
@@ -76,7 +76,7 @@ async function resolveStoredPaymentBinding(
       attempt.creditAccount.customer.stripeCustomerId !== customerId ||
       attempt.paymentAmountMinor !== exactMinor(intent.amount_received) ||
       attempt.consentRevision.stripePaymentMethodId !== paymentMethodId ||
-      requireUsd(intent.currency) !== 'USD'
+      requireCreditCurrency(intent.currency) !== attempt.currency
     ) {
       throw new AppError('INTERNAL', 502, 'STRIPE_CREDIT_AUTO_TOP_UP_BINDING_INVALID');
     }
@@ -183,7 +183,8 @@ export async function preparePaymentAdjustmentWebhook(
   }
   const occurredAt = new Date(event.created * 1000);
   const amountMinor = exactMinor(amount);
-  const usd = requireUsd(currency);
+  // A GBP or EUR purchase is refunded or disputed in its own currency; the apply checks it is the purchase's.
+  const adjustmentCurrency = requireCreditCurrency(currency);
   return {
     event: {
       kind: 'payment_adjustment',
@@ -194,7 +195,7 @@ export async function preparePaymentAdjustmentWebhook(
       paymentIntentId,
       chargeId,
       amountMinor,
-      currency: usd,
+      currency: adjustmentCurrency,
       occurredAt,
     },
     eventFields: {
@@ -204,7 +205,7 @@ export async function preparePaymentAdjustmentWebhook(
       stripePaymentIntentId: paymentIntentId,
       stripeChargeId: chargeId,
       amountMinor,
-      currency: usd,
+      currency: adjustmentCurrency,
       stripeCreatedAt: occurredAt,
     },
   };
