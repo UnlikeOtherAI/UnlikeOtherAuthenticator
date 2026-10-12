@@ -236,8 +236,9 @@ export async function resolveCreditTopUpOffer(
   return { policy: offer.policy, offer, catalog: catalog as NonNullable<typeof catalog> };
 }
 
+/** A reload option in a currency the organisation may buy in: USD, or its billing region's. */
 export async function resolveCreditAutoTopUpOption(
-  params: { serviceId: string; accountId: string; optionId: string },
+  params: { serviceId: string; accountId: string; optionId: string; currencies?: string[] },
   deps?: { prisma?: PrismaClient },
 ) {
   const prisma = deps?.prisma ?? getAdminPrisma();
@@ -248,7 +249,7 @@ export async function resolveCreditAutoTopUpOption(
       active: true,
       policy: {
         serviceId: params.serviceId,
-        currency: 'USD',
+        currency: { in: params.currencies ?? ['USD'] },
         active: true,
         automaticTopUpEnabled: true,
       },

@@ -1555,9 +1555,33 @@ region is UK or Europe buys them in GBP or EUR:
 - A consumer on credits protocol 2.1.0 sees the region-currency offers with a
   `credit_rate`; an older consumer sees the USD offers, which stay purchasable.
   Without a region the offers are USD.
-- Not yet: automatic top-up stays USD, and refunds and disputes of a GBP or EUR
-  purchase are refused at the webhook (fail closed, retried by Stripe) until
-  refunds per lot land.
+- Not yet: refunds and disputes of a GBP or EUR purchase are refused at the
+  webhook (fail closed, retried by Stripe) until refunds per lot land.
+
+### Automatic reload in the region currency
+
+Each currency's policy has one reload option per refill amount (10, 25, 50, 100
+and 1,000): it reloads one offer when the balance falls below a fifth of it,
+with a monthly cap of four reloads. The USD 25 option keeps its original key
+(`default`: below 5,000 credits, USD 100 a month), which also still sets the
+low-credits warning.
+
+- A USD option's threshold is in credits, as before. A GBP or EUR option's is
+  in its currency (`threshold_amount_minor`, with `threshold_microcredits` 0).
+- The claim compares the lots' value in the option currency with it, under the
+  account lock: holds come out of the oldest lots, lots in that currency at
+  their own rate, credits bought in USD at the region's captured rate. The
+  attempt records the value it saw (`observed_value_minor`); the database
+  refuses a GBP or EUR attempt whose value is not below its threshold.
+- The claim then reads the live rate (`BILLING_CREDIT_FX_RATE_SOURCE`), fixes
+  the credits on the attempt with the same rate evidence as a checkout, and the
+  off-session PaymentIntent follows in the same cycle. The reload is its own lot
+  at that rate. No rate means no attempt (`rate_unavailable`).
+- A failed payment moves the account to `NEEDS_REVIEW`: no further attempt is
+  made, the credits view shows one `payment_action_required` item, and only a
+  new card (consent) resumes reloading.
+- Options are offered to a consumer on credits protocol 2.2.0; older consumers
+  keep the USD options.
 
 ### Credit lots
 

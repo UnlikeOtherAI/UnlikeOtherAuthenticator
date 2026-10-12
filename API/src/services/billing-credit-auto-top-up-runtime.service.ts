@@ -57,6 +57,7 @@ type CreditAutoTopUpStripeClient = Pick<
   | 'paymentMethods'
   | 'prices'
   | 'products'
+  | 'rawRequest'
   | 'refunds'
   | 'setupIntents'
 >;
@@ -163,11 +164,12 @@ function assertAttemptBinding(attempt: DispatchAttempt, account: StripeAccountCo
     !customer.stripeCustomerId ||
     attempt.creditAccountId !== credit.id ||
     attempt.catalog.accountId !== account.id ||
-    attempt.catalog.currency !== 'USD' ||
-    attempt.currency !== 'USD' ||
+    !['USD', 'EUR', 'GBP'].includes(attempt.currency) ||
     attempt.catalog.currency !== attempt.currency ||
     attempt.catalog.paymentAmountMinor !== attempt.paymentAmountMinor ||
-    attempt.catalog.creditsReceivedMicrocredits !== attempt.creditsReceivedMicrocredits ||
+    // A GBP or EUR reload's credits follow the rate its attempt was claimed at.
+    (attempt.currency === 'USD' &&
+      attempt.catalog.creditsReceivedMicrocredits !== attempt.creditsReceivedMicrocredits) ||
     attempt.serviceId !== revision.serviceId ||
     attempt.appKeyId !== revision.appKeyId ||
     attempt.appKey.serviceId !== attempt.serviceId ||
@@ -182,12 +184,14 @@ function assertAttemptBinding(attempt: DispatchAttempt, account: StripeAccountCo
     attempt.offer.catalogKey !== attempt.catalog.key ||
     attempt.offer.catalogVersion !== attempt.catalog.version ||
     attempt.offer.paymentAmountMinor !== attempt.paymentAmountMinor ||
-    attempt.offer.creditsReceivedMicrocredits !== attempt.creditsReceivedMicrocredits ||
+    (attempt.currency === 'USD' &&
+      attempt.offer.creditsReceivedMicrocredits !== attempt.creditsReceivedMicrocredits) ||
     attempt.consentVersion !== revision.consentVersion ||
     attempt.thresholdMicrocredits !== revision.thresholdMicrocredits ||
     attempt.monthlyChargeCapMinor !== revision.monthlyChargeCapMinor ||
     attempt.paymentAmountMinor !== revision.refillPaymentAmountMinor ||
-    attempt.creditsReceivedMicrocredits !== revision.refillCreditsMicrocredits ||
+    attempt.thresholdAmountMinor !== revision.thresholdAmountMinor ||
+    (attempt.currency === 'USD' && attempt.creditsReceivedMicrocredits !== revision.refillCreditsMicrocredits) ||
     attempt.attributedUserId !== revision.consentedByUserId ||
     attempt.idempotencyKey !== `uoa:auto-top-up:${attempt.id}` ||
     attempt.chargedThisMonthBeforeMinor + attempt.paymentAmountMinor > attempt.monthlyChargeCapMinor
@@ -328,7 +332,7 @@ export async function runCreditAutoTopUpAccount(
   params: { account: StripeAccountContext; creditAccountId: string },
   deps: {
     prisma: PrismaClient;
-    stripe: Pick<Stripe, 'paymentIntents'>;
+    stripe: Pick<Stripe, 'paymentIntents'> & Partial<Pick<Stripe, 'rawRequest'>>;
     claim?: typeof claimCreditAutoTopUpAttempt;
   },
 ): Promise<AccountResult> {
@@ -336,7 +340,9 @@ export async function runCreditAutoTopUpAccount(
   try {
     const claim = await (deps.claim ?? claimCreditAutoTopUpAttempt)(
       { accountId: params.account.id, creditAccountId: params.creditAccountId },
-      { prisma: deps.prisma },
+      // A GBP or EUR reload reads the live rate as it claims its attempt.
+      { prisma: deps.prisma,
+        stripe: deps.stripe.rawRequest ? { rawRequest: deps.stripe.rawRequest.bind(deps.stripe) } : null },
     );
     if (claim.kind === 'skipped') {
       return {

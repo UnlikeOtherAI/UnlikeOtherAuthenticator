@@ -11,7 +11,7 @@ import {
 } from './billing-credit-projection-data.service.js';
 import { assertCreditCatalogPrice } from './billing-credit-funding-context.service.js';
 import { assertCreditFundingMetadata } from './billing-credit-funding-binding.service.js';
-import { exactMinor, requireUsd } from './billing-credit-funding-webhook-validation.service.js';
+import { exactMinor, requireCreditCurrency } from './billing-credit-funding-webhook-validation.service.js';
 import { pinnedBillingReturnUrls } from './billing-return-url-policy.service.js';
 import { assertStripeObjectLivemode } from './billing-stripe-client.service.js';
 import { stripeExternalId } from './billing-stripe-webhook-utils.service.js';
@@ -62,6 +62,11 @@ function catalogForOffer(
   return data.catalogs.find(
     (catalog) => catalog.key === offer.catalogKey && catalog.version === offer.catalogVersion,
   );
+}
+
+/** Reload options of the USD policy and, once a region is chosen, of its currency's. */
+function reloadOptions(data: BillingCreditProjectionData) {
+  return [...(data.policy?.autoTopUpOptions ?? []), ...(data.regionPolicy?.autoTopUpOptions ?? [])];
 }
 
 function digest(value: string): string {
@@ -152,8 +157,8 @@ async function executableCatalogs(
 ): Promise<Set<string>> {
   const catalogs = new Set<string>();
   const candidates = new Map<string, BillingCreditProjectionData['catalogs'][number]>();
-  // One-time offers in the purchase currency, and the USD refill offers automatic top-up uses.
-  const refills = (data.policy?.autoTopUpOptions ?? []).map((option) => option.refillOffer);
+  // One-time offers in the purchase currency, and the refill offers of the USD and region reload options.
+  const refills = reloadOptions(data).map((option) => option.refillOffer);
   for (const offer of [...(creditPurchasePolicy(data)?.topUpOffers ?? []), ...refills]) {
     const catalog = catalogForOffer(data, offer);
     if (catalog) candidates.set(catalog.id, catalog);
@@ -265,7 +270,7 @@ async function currentRecoveryReady(
       stripeExternalId(intent.customer) === data.creditAccount.customer.stripeCustomerId &&
       stripeExternalId(intent.payment_method) === attempt.consentRevision.stripePaymentMethodId &&
       exactMinor(intent.amount) === attempt.paymentAmountMinor &&
-      requireUsd(intent.currency) === 'USD';
+      requireCreditCurrency(intent.currency) === attempt.currency;
     if (!exact) return false;
     if (intent.status === 'requires_action') {
       return (
@@ -317,7 +322,7 @@ export async function resolveBillingCreditActionReadiness(params: {
     data,
     params.now ?? new Date(),
   );
-  const selected = data.policy?.autoTopUpOptions.find(
+  const selected = reloadOptions(data).find(
     (option) => option.id === data.creditAccount.autoTopUpOptionId,
   );
   const selectedCatalog = selected ? catalogForOffer(data, selected.refillOffer) : undefined;

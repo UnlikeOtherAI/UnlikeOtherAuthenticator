@@ -12,7 +12,7 @@ import type { BillingActorEndpoint } from './billing-actor-audience.service.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
 import { BILLING_CUSTOMER_ACTION } from './billing-customer-action-intent.service.js';
 import { assertCreditFundingMetadata } from './billing-credit-funding-binding.service.js';
-import { exactMinor, requireUsd } from './billing-credit-funding-webhook-validation.service.js';
+import { exactMinor, requireCreditCurrency } from './billing-credit-funding-webhook-validation.service.js';
 import {
   resolveCreditFundingActionContext,
   type CreditFundingActionContext,
@@ -76,8 +76,7 @@ function assertRecoveryIntent(
     stripeExternalId(intent.customer) !== context.customer.stripeCustomerId ||
     stripeExternalId(intent.payment_method) !== attempt.consentRevision.stripePaymentMethodId ||
     exactMinor(intent.amount) !== attempt.paymentAmountMinor ||
-    attempt.currency !== 'USD' ||
-    requireUsd(intent.currency) !== attempt.currency
+    requireCreditCurrency(intent.currency) !== attempt.currency
   ) {
     throw new AppError('INTERNAL', 502, errorCode);
   }

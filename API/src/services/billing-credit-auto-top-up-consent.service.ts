@@ -17,6 +17,7 @@ import {
   resolveCreditFundingActionContext,
   type CreditFundingActionRequest,
 } from './billing-credit-funding-context.service.js';
+import { readOrganisationBillingRegion } from './billing-organisation-region.service.js';
 import { creditPaymentMethodSummary } from './billing-credit-payment-method.service.js';
 import { assertStripeObjectLivemode } from './billing-stripe-client.service.js';
 import { stripeExternalId } from './billing-stripe-webhook-utils.service.js';
@@ -26,6 +27,7 @@ type Dependencies = {
   now?: () => Date;
   resolveContext?: typeof resolveCreditFundingActionContext;
   resolveOption?: typeof resolveCreditAutoTopUpOption;
+  readRegion?: typeof readOrganisationBillingRegion;
   validateCatalog?: typeof assertCreditCatalogPrice;
 };
 
@@ -137,11 +139,14 @@ export async function updateBillingCreditAutoTopUp(
   if (!context.customer.stripeCustomerId) {
     throw new AppError('BAD_REQUEST', 409, 'BILLING_CREDIT_PAYMENT_METHOD_UNAVAILABLE');
   }
+  // Reload options in the billing region's currency, with USD options still open to older consumers.
+  const region = await (deps?.readRegion ?? readOrganisationBillingRegion)(params.request.organisationId, prisma);
   const selection = await (deps?.resolveOption ?? resolveCreditAutoTopUpOption)(
     {
       serviceId: params.credential.service.id,
       accountId: context.account.id,
       optionId: params.request.optionId,
+      currencies: [...new Set(['USD', region?.currency ?? 'USD'])],
     },
     { prisma },
   );
@@ -219,6 +224,7 @@ export async function updateBillingCreditAutoTopUp(
             consentedByUserId: params.request.userId,
             consentVersion: selection.policy.automaticConsentVersion,
             thresholdMicrocredits: selection.option.thresholdMicrocredits,
+            thresholdAmountMinor: selection.option.thresholdAmountMinor,
             refillCreditsMicrocredits: selection.offer.creditsReceivedMicrocredits,
             refillPaymentAmountMinor: selection.offer.paymentAmountMinor,
             monthlyChargeCapMinor: selection.option.monthlyChargeCapMinor,

@@ -48,3 +48,25 @@ describe('credits bought in the billing region currency (credits protocol 2.1.0)
     expect(validateCredits(withOffer({ ...eurOffer, ...change }))).toBe(false);
   });
 });
+
+describe('reload options in the billing region currency (credits protocol 2.2.0)', () => {
+  const automatic = fixture.automatic_top_up;
+  const [option] = automatic.options;
+  const eur = (minor: string, display: string) => ({ amount: (Number(minor) / 100).toString(), amount_minor: minor,
+    currency: 'EUR', display });
+
+  it('accepts a EUR option and a EUR consented reload with their threshold values', () => {
+    const eurOption = { ...option, threshold_value: eur('500', '€5.00'), refill_payment_amount: eur('2500', '€25.00'),
+      monthly_cap: eur('10000', '€100.00'), credit_rate: eurOffer.credit_rate };
+    expect(validateCredits({ ...fixture, automatic_top_up: { ...automatic, threshold_value: eur('500', '€5.00'),
+      monthly_cap: eur('10000', '€100.00'), charged_this_month: eur('0', '€0.00'),
+      remaining_monthly_cap: eur('10000', '€100.00'), options: [eurOption] } }),
+    JSON.stringify(validateCredits.errors)).toBe(true);
+  });
+
+  it('rejects a reload in a currency credits are not sold in', () => {
+    expect(validateCredits({ ...fixture, automatic_top_up: { ...automatic,
+      options: [{ ...option, monthly_cap: { ...option.monthly_cap, currency: 'CHF' } }] } })).toBe(false);
+  });
+});
+

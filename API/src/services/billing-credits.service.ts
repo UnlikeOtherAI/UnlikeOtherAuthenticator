@@ -84,6 +84,8 @@ export async function getBillingCredits(
     supportsBillingStatus?: boolean;
     /** Credits protocol 2.1.0: offers may be priced in the billing region's GBP or EUR. */
     supportsPurchaseCurrency?: boolean;
+    /** Credits protocol 2.2.0: reload options may be in the billing region's GBP or EUR too. */
+    supportsReloadCurrency?: boolean;
     log?: SmsPolicyAlertLog;
   },
   deps?: Dependencies,
@@ -154,10 +156,11 @@ export async function getBillingCredits(
     settlementPending = true;
   }
   // A consumer on an older credits protocol keeps seeing the USD offers it can validate.
-  const region = params.supportsPurchaseCurrency
+  const region = params.supportsPurchaseCurrency || params.supportsReloadCurrency
     ? await (deps?.readRegion ?? readOrganisationBillingRegion)(params.request.organisationId, prisma)
     : null;
-  const purchaseCurrency = region?.currency ?? 'USD';
+  const purchaseCurrency = params.supportsPurchaseCurrency ? region?.currency ?? 'USD' : 'USD';
+  const reloadCurrency = params.supportsReloadCurrency ? region?.currency ?? 'USD' : 'USD';
   settlementPending ||= await (deps?.hasPendingSettlementWatch
     ? deps.hasPendingSettlementWatch(creditAccount.id, params.request.teamId)
     : hasPendingSettlementWatch(creditAccount.id, params.request.teamId, prisma ?? getAdminPrisma()));
@@ -178,6 +181,7 @@ export async function getBillingCredits(
         storefrontServiceId: params.credential.service.id,
         period,
         purchaseCurrency,
+        reloadCurrency,
       },
       { prisma },
     ),
@@ -195,8 +199,9 @@ export async function getBillingCredits(
     (deps?.resolveActionReadiness ?? resolveBillingCreditActionReadiness)(
       { collection, credential: params.credential, data }),
     // Offers show what today's rate buys; without a rate they are left out, never priced another way.
-    purchaseCurrency === 'USD' || !collection.stripe || !collection.stripeCollectionEnabled ? null
-      : readRate(purchaseCurrency, { stripe: collection.stripe, ...(prisma ? { prisma } : {}), now: () => now,
+    region?.currency === undefined || region.currency === 'USD' || !collection.stripe
+      || !collection.stripeCollectionEnabled ? null
+      : readRate(region.currency, { stripe: collection.stripe, ...(prisma ? { prisma } : {}), now: () => now,
         ...(params.log ? { log: params.log } : {}) }).catch(() => null),
   ]);
   const meteredBilling = Boolean(

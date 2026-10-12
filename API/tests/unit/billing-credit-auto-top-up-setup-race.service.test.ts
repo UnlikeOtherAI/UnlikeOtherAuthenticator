@@ -79,6 +79,7 @@ describe('automatic top-up Setup Checkout finalization', () => {
           prisma: prisma as never,
           resolveContext: vi.fn().mockResolvedValue(context),
           resolveOption: vi.fn().mockResolvedValue(selection),
+          readRegion: vi.fn().mockResolvedValue(null),
           validateCatalog: vi.fn(),
           afterStripeSessionCreated: vi.fn(),
         },

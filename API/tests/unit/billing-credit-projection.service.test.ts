@@ -66,6 +66,7 @@ function projectionData(balanceMicrocredits = 2_000_000_000n): BillingCreditProj
     },
     policy: null,
     purchaseCurrency: 'USD',
+    reloadCurrency: 'USD',
     regionPolicy: null,
     catalogs: [],
     prepaidReservations: [],

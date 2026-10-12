@@ -42,9 +42,11 @@ export function registerBillingCreditsRoute(app: FastifyInstance): void {
         credential,
         actorToken: readBillingActorHeader(request.headers['x-uoa-actor']),
         endpoint: BILLING_CREDITS_READ_PATH,
-        // 2.0.0 added billing_status; 2.1.0 adds offers in the billing region's currency.
-        supportsBillingStatus: ['2.0.0', BILLING_CREDITS_PROTOCOL_VERSION].includes(protocol),
-        supportsPurchaseCurrency: protocol === BILLING_CREDITS_PROTOCOL_VERSION,
+        // 2.0.0 added billing_status, 2.1.0 offers in the billing region's currency,
+        // and 2.2.0 reload options in it too.
+        supportsBillingStatus: ['2.0.0', '2.1.0', BILLING_CREDITS_PROTOCOL_VERSION].includes(protocol),
+        supportsPurchaseCurrency: ['2.1.0', BILLING_CREDITS_PROTOCOL_VERSION].includes(protocol),
+        supportsReloadCurrency: protocol === BILLING_CREDITS_PROTOCOL_VERSION,
         log: request.log,
         request: {
           product: body.product,

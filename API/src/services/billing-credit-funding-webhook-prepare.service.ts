@@ -22,7 +22,6 @@ import type {
 import {
   exactMinor,
   requireCreditCurrency,
-  requireUsd,
 } from './billing-credit-funding-webhook-validation.service.js';
 
 function methodSummary(method: Stripe.PaymentMethod): Prisma.InputJsonValue {
@@ -151,7 +150,7 @@ async function validatePaymentBinding(
     attempt.paymentAmountMinor !== exactMinor(intent.amount) ||
     (attempt.stripePaymentIntentId && attempt.stripePaymentIntentId !== intent.id) ||
     paymentMethodId !== attempt.consentRevision.stripePaymentMethodId ||
-    requireUsd(intent.currency) !== 'USD'
+    requireCreditCurrency(intent.currency) !== attempt.currency
   ) {
     throw new AppError('INTERNAL', 502, 'STRIPE_CREDIT_AUTO_TOP_UP_BINDING_INVALID');
   }

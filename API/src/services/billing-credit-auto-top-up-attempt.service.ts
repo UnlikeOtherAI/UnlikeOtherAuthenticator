@@ -10,6 +10,15 @@ import {
 } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 
+import { billingReservedMicrocredits } from './billing-credit-holds.service.js';
+import { creditBalanceValue, creditValueTarget } from './billing-credit-lot-value.service.js';
+import {
+  creditsForPayment,
+  readCreditPurchaseRateWithAlert,
+  type CreditPurchaseRateClient,
+} from './billing-credit-purchase-rate.service.js';
+import type { CreditPurchaseCurrency } from './billing-stripe-catalog-provisioning-spec.js';
+
 const OPEN_ATTEMPT_STATUSES = [
   BillingCreditAutoTopUpAttemptStatus.PENDING,
   BillingCreditAutoTopUpAttemptStatus.PROCESSING,
@@ -38,7 +47,9 @@ export type CreditAutoTopUpClaim =
         | 'configuration_inactive'
         | 'configuration_invalid'
         | 'monthly_cap_reached'
-        | 'threshold_not_reached';
+        | 'threshold_not_reached'
+        | 'value_unavailable'
+        | 'rate_unavailable';
     };
 
 export type CreditAutoTopUpWebhookCandidate = {
@@ -121,7 +132,7 @@ function activeConfigurationIsExact(
     revision.policyId === policy.id &&
     revision.optionId === option.id &&
     revision.refillOfferId === offer.id &&
-    policy.currency === 'USD' &&
+    ['USD', 'EUR', 'GBP'].includes(policy.currency) &&
     policy.active &&
     policy.automaticTopUpEnabled &&
     policy.automaticConsentVersion === revision.consentVersion &&
@@ -130,6 +141,7 @@ function activeConfigurationIsExact(
     option.serviceId === policy.serviceId &&
     option.refillOfferId === offer.id &&
     option.thresholdMicrocredits === revision.thresholdMicrocredits &&
+    option.thresholdAmountMinor === revision.thresholdAmountMinor &&
     option.monthlyChargeCapMinor === revision.monthlyChargeCapMinor &&
     offer.active &&
     offer.policyId === policy.id &&
@@ -199,7 +211,11 @@ export async function listCreditAutoTopUpCandidateIds(
         AND credit."currency" = 'USD'
         AND credit."auto_top_up_state" = 'ACTIVE'
         AND credit."auto_top_up_threshold_microcredits" IS NOT NULL
-        AND credit."balance_microcredits" < credit."auto_top_up_threshold_microcredits"
+        -- A GBP or EUR threshold is a value the claim computes from the lots.
+        AND (credit."balance_microcredits" < credit."auto_top_up_threshold_microcredits"
+          OR EXISTS (SELECT 1 FROM "billing_credit_auto_top_up_consent_revisions" AS revision
+            WHERE revision."id" = credit."auto_top_up_consent_revision_id"
+              AND revision."threshold_amount_minor" IS NOT NULL))
         AND NOT EXISTS (
           SELECT 1
           FROM "billing_credit_auto_top_up_attempts" AS attempt
@@ -241,9 +257,26 @@ export async function listCreditAutoTopUpWebhookCandidates(
   }));
 }
 
+/** What the lots are worth in a GBP or EUR reload's currency, under the claim's lock. */
+async function reloadValueMinor(tx: Prisma.TransactionClient, credit: { id: string; orgId: string },
+  currency: CreditPurchaseCurrency, stripe: CreditPurchaseRateClient | null): Promise<bigint | null> {
+  const [lots, debt, reserved, target] = await Promise.all([
+    tx.billingCreditLot.findMany({ where: { creditAccountId: credit.id, remainingMicrocredits: { gt: 0 } },
+      select: { currency: true, usdPerUnit: true, remainingMicrocredits: true, sequence: true } }),
+    tx.billingCreditLotMovement.aggregate({ where: { creditAccountId: credit.id, lotId: null },
+      _sum: { deltaMicrocredits: true } }),
+    billingReservedMicrocredits(tx, credit.id),
+    creditValueTarget(credit.orgId, { db: tx, stripe }),
+  ]);
+  if (target.currency !== currency) return null;
+  return creditBalanceValue({ lots, debtMicrocredits: -(debt._sum.deltaMicrocredits ?? 0n),
+    reservedMicrocredits: reserved, target })?.amountMinor ?? null;
+}
+
 export async function claimCreditAutoTopUpAttempt(
   params: { accountId: string; creditAccountId: string },
-  deps: { prisma: PrismaClient; createId?: () => string },
+  deps: { prisma: PrismaClient; createId?: () => string; stripe?: CreditPurchaseRateClient | null;
+    readRate?: typeof readCreditPurchaseRateWithAlert },
 ): Promise<CreditAutoTopUpClaim> {
   return deps.prisma.$transaction(async (tx) => {
     if (!(await lockCreditAccount(tx, params.creditAccountId))) {
@@ -291,10 +324,11 @@ export async function claimCreditAutoTopUpAttempt(
         reason: 'account_not_found',
       };
     }
+    const currency = (credit.autoTopUpPolicy?.currency ?? 'USD') as CreditPurchaseCurrency;
     if (
       credit.autoTopUpState !== BillingCreditAutoTopUpState.ACTIVE ||
       credit.autoTopUpThresholdMicrocredits === null ||
-      credit.balanceMicrocredits >= credit.autoTopUpThresholdMicrocredits
+      (currency === 'USD' && credit.balanceMicrocredits >= credit.autoTopUpThresholdMicrocredits)
     ) {
       return {
         kind: 'skipped',
@@ -324,11 +358,25 @@ export async function claimCreditAutoTopUpAttempt(
     });
     if (
       !catalog?.stripePriceId ||
-      catalog.currency !== 'USD' ||
+      catalog.currency !== currency ||
       catalog.paymentAmountMinor !== revision.refillPaymentAmountMinor ||
       catalog.creditsReceivedMicrocredits !== revision.refillCreditsMicrocredits
     ) {
       return { kind: 'skipped', creditAccountId: credit.id, reason: 'configuration_invalid' };
+    }
+    // A GBP or EUR reload compares the lots' value in its currency with its threshold.
+    let observedValueMinor: bigint | null = null;
+    if (currency !== 'USD') {
+      if (revision.thresholdAmountMinor === null) {
+        return { kind: 'skipped', creditAccountId: credit.id, reason: 'configuration_invalid' };
+      }
+      observedValueMinor = await reloadValueMinor(tx, credit, currency, deps.stripe ?? null);
+      if (observedValueMinor === null) {
+        return { kind: 'skipped', creditAccountId: credit.id, reason: 'value_unavailable' };
+      }
+      if (observedValueMinor >= revision.thresholdAmountMinor) {
+        return { kind: 'skipped', creditAccountId: credit.id, reason: 'threshold_not_reached' };
+      }
     }
     const charged = await tx.billingCreditAutoTopUpAttempt.aggregate({
       where: {
@@ -354,6 +402,24 @@ export async function claimCreditAutoTopUpAttempt(
       latestEntry.balanceAfterMicrocredits === credit.balanceMicrocredits
         ? latestEntry.id
         : null;
+    // A GBP or EUR reload buys credits at the live rate read now, just before its PaymentIntent.
+    let reload: { credits: bigint; fx: { fxRateSource: string; fxBaseRate: string; fxExchangeRate: string | null;
+      fxQuoteId: string | null; fxSnapshotId: string | null } | null } =
+      { credits: revision.refillCreditsMicrocredits, fx: null };
+    if (currency !== 'USD') {
+      if (!deps.stripe) return { kind: 'skipped', creditAccountId: credit.id, reason: 'rate_unavailable' };
+      try {
+        const rate = await (deps.readRate ?? readCreditPurchaseRateWithAlert)(currency,
+          { stripe: deps.stripe, prisma: tx as unknown as PrismaClient });
+        reload = { credits: creditsForPayment(revision.refillPaymentAmountMinor, rate.baseRate), fx: {
+          fxRateSource: rate.source, fxBaseRate: rate.baseRate, fxExchangeRate: rate.exchangeRate,
+          fxQuoteId: rate.quoteId, fxSnapshotId: rate.fxSnapshotId,
+        } };
+      } catch {
+        return { kind: 'skipped', creditAccountId: credit.id, reason: 'rate_unavailable' };
+      }
+      if (reload.credits <= 0n) return { kind: 'skipped', creditAccountId: credit.id, reason: 'rate_unavailable' };
+    }
     const attemptId = deps.createId?.() ?? randomUUID();
     const attempt = await tx.billingCreditAutoTopUpAttempt.create({
       data: {
@@ -374,8 +440,11 @@ export async function claimCreditAutoTopUpAttempt(
         chargedThisMonthBeforeMinor: chargedBefore,
         observedBalanceMicrocredits: credit.balanceMicrocredits,
         paymentAmountMinor: revision.refillPaymentAmountMinor,
-        creditsReceivedMicrocredits: revision.refillCreditsMicrocredits,
-        currency: 'USD',
+        creditsReceivedMicrocredits: reload.credits,
+        currency,
+        thresholdAmountMinor: revision.thresholdAmountMinor,
+        observedValueMinor,
+        ...(reload.fx ?? {}),
         billingMonth: clock.billingMonth,
         idempotencyKey: `uoa:auto-top-up:${attemptId}`,
       },

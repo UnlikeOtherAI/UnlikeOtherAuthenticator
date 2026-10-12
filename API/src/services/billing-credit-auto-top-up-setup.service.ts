@@ -24,6 +24,7 @@ import {
   type CreditFundingActionContext,
   type CreditFundingActionRequest,
 } from './billing-credit-funding-context.service.js';
+import { readOrganisationBillingRegion } from './billing-organisation-region.service.js';
 import {
   assertCreditFundingMetadata,
   creditFundingMetadata,
@@ -64,6 +65,7 @@ function assertLocalBinding(
     expectedConsentRevisionId: string | null;
     consentVersion: string;
     thresholdMicrocredits: bigint;
+    thresholdAmountMinor: bigint | null;
     refillOfferId: string;
     refillCreditsMicrocredits: bigint;
     refillPaymentAmountMinor: bigint;
@@ -82,6 +84,7 @@ function assertLocalBinding(
     expectedConsentRevisionId: string | null;
     consentVersion: string;
     thresholdMicrocredits: bigint;
+    thresholdAmountMinor: bigint | null;
     refillOfferId: string;
     refillCreditsMicrocredits: bigint;
     refillPaymentAmountMinor: bigint;
@@ -115,6 +118,7 @@ function sameScopeBinding(
     checkout.expectedConsentRevisionId === expected.expectedConsentRevisionId &&
     checkout.consentVersion === expected.consentVersion &&
     checkout.thresholdMicrocredits === expected.thresholdMicrocredits &&
+    checkout.thresholdAmountMinor === expected.thresholdAmountMinor &&
     checkout.refillOfferId === expected.refillOfferId &&
     checkout.refillCreditsMicrocredits === expected.refillCreditsMicrocredits &&
     checkout.refillPaymentAmountMinor === expected.refillPaymentAmountMinor &&
@@ -129,6 +133,7 @@ type Dependencies = {
   now?: () => Date;
   resolveContext?: typeof resolveCreditFundingActionContext;
   resolveOption?: typeof resolveCreditAutoTopUpOption;
+  readRegion?: typeof readOrganisationBillingRegion;
   validateCatalog?: typeof assertCreditCatalogPrice;
   afterStripeSessionCreated?: () => void | Promise<void>;
 };
@@ -178,11 +183,14 @@ export async function createBillingCreditAutoTopUpSetup(
   ) {
     throw new AppError('BAD_REQUEST', 409, 'BILLING_CREDIT_SETUP_STATE_INVALID');
   }
+  // Reload options in the billing region's currency, with USD options still open to older consumers.
+  const region = await (deps?.readRegion ?? readOrganisationBillingRegion)(params.request.organisationId, prisma);
   const selection = await (deps?.resolveOption ?? resolveCreditAutoTopUpOption)(
     {
       serviceId: params.credential.service.id,
       accountId: context.account.id,
       optionId: params.request.optionId,
+      currencies: [...new Set(['USD', region?.currency ?? 'USD'])],
     },
     { prisma },
   );
@@ -206,6 +214,7 @@ export async function createBillingCreditAutoTopUpSetup(
     expectedConsentRevisionId: context.creditAccount.autoTopUpConsentRevisionId,
     consentVersion: selection.policy.automaticConsentVersion,
     thresholdMicrocredits: selection.option.thresholdMicrocredits,
+    thresholdAmountMinor: selection.option.thresholdAmountMinor,
     refillOfferId: selection.offer.id,
     refillCreditsMicrocredits: selection.offer.creditsReceivedMicrocredits,
     refillPaymentAmountMinor: selection.offer.paymentAmountMinor,
@@ -296,6 +305,7 @@ export async function createBillingCreditAutoTopUpSetup(
         expectedConsentRevisionId: context.creditAccount.autoTopUpConsentRevisionId,
         consentVersion: selection.policy.automaticConsentVersion,
         thresholdMicrocredits: selection.option.thresholdMicrocredits,
+        thresholdAmountMinor: selection.option.thresholdAmountMinor,
         refillOfferId: selection.offer.id,
         refillCreditsMicrocredits: selection.offer.creditsReceivedMicrocredits,
         refillPaymentAmountMinor: selection.offer.paymentAmountMinor,

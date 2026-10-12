@@ -50,8 +50,9 @@ function eurData(): BillingCreditProjectionData {
     policy: { id: 'policy_usd', serviceId: service.id, ...CREDIT_FUNDING_POLICY_SPEC, active: true,
       topUpOffers: usdOffers, autoTopUpOptions: [] },
     purchaseCurrency: 'EUR',
+    reloadCurrency: 'USD',
     regionPolicy: { id: 'policy_eur', serviceId: service.id, ...creditFundingPolicySpec('EUR'), active: true,
-      topUpOffers: eurOffers },
+      topUpOffers: eurOffers, autoTopUpOptions: [] },
     catalogs: [...usdOffers, ...eurOffers].map((offer) => ({
       id: `catalog_${offer.key}`, accountId: collection.account.id, key: offer.catalogKey,
       version: offer.catalogVersion, currency: offer.currency, paymentAmountMinor: offer.paymentAmountMinor,
