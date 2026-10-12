@@ -45,3 +45,14 @@ export type SmsRoutePreview = z.infer<typeof SmsRoutePreviewSchema>;
 export type SmsRouteImport = z.infer<typeof SmsRouteImportSchema>;
 export type SmsPolicies = z.infer<typeof SmsPoliciesSchema>;
 export type SmsPolicyAlert = z.infer<typeof SmsPolicyAlertSchema>;
+
+export const SmsMonthlyPriceSchema = z.object({ id: z.string(),
+  amount: z.string().regex(/^\d{1,6}\.\d{2}$/), currency: z.enum(['EUR', 'USD']),
+  set_by: z.enum(['seed', 'operator']), set_by_user_id: z.string().nullable(), set_at: z.string().datetime() }).strict();
+export const SmsMonthlyPriceInputSchema = z.object({
+  amount: z.string().regex(/^(?:0|[1-9]\d{0,5})\.\d{2}$/, 'Enter an amount with two decimals, for example 4.99.')
+    .refine((value) => value !== '0.00', 'Enter an amount above zero.'),
+  currency: z.enum(['EUR', 'USD']),
+}).strict();
+export type SmsMonthlyPrice = z.infer<typeof SmsMonthlyPriceSchema>;
+export type SmsMonthlyPriceInput = z.infer<typeof SmsMonthlyPriceInputSchema>;

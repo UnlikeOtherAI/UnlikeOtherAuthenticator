@@ -59,9 +59,8 @@ export function scopeForSubscription(
     teamId: subscription.teamId,
     subscribingUserId: subscription.subscribingUserId,
     customerScope: teamCustomer ? BillingAssignmentScope.TEAM : BillingAssignmentScope.ORGANISATION,
-    customerScopeKey: teamCustomer
-      ? `${subscription.orgId}:${subscription.teamId}`
-      : subscription.orgId,
+    // The subscription's own Customer: SMS numbers bill through a per-currency one.
+    customerScopeKey: subscription.customer.scopeKey,
     customerTeamId: teamCustomer ? subscription.teamId : null,
   };
 }

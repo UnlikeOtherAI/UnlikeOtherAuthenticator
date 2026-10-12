@@ -5,7 +5,7 @@ import { sendRawEmail } from './email.service.js';
 import { listSuperuserEmailsInAdminDomain } from './integration-request-notify.service.js';
 
 export type SmsPolicyAlertKind = 'fx_unavailable' | 'fx_outside_band' | 'fx_no_baseline' |
-  'route_needs_operator' | 'route_price_rose' | 'route_price_unavailable';
+  'route_needs_operator' | 'route_price_rose' | 'route_price_unavailable' | 'monthly_price_below_cost';
 export type SmsPolicyAlertCondition = { kind: SmsPolicyAlertKind; subject: string; message: string };
 export type SmsPolicyAlertLog = { error: (details: object, message: string) => void };
 type AlertDb = Pick<PrismaClient, 'billingSmsPolicyAlert'>;

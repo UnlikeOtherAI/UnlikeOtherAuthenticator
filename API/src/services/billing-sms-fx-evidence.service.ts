@@ -87,6 +87,21 @@ export function smsFxWithinBand(lastAccepted: string, next: string, bandBps: num
   return difference * 10_000n <= scaledLast * BigInt(bandBps);
 }
 
+/** Whether a provider cost reaches a price, both converted to USD at the accepted rate, exactly. */
+export function smsCostReachesPrice(input: { costAmount: string; costCurrency: string;
+  priceAmount: string; priceCurrency: string; usdPerEur: string }): boolean {
+  const usd = (amount: string, currency: string) => {
+    const value = fraction(amount);
+    if (currency === 'USD') return value;
+    if (currency !== 'EUR') throw unavailable();
+    const fx = fraction(input.usdPerEur);
+    return { numerator: value.numerator * fx.numerator, denominator: value.denominator * fx.denominator };
+  };
+  const cost = usd(input.costAmount, input.costCurrency);
+  const price = usd(input.priceAmount, input.priceCurrency);
+  return cost.numerator * price.denominator >= price.numerator * cost.denominator;
+}
+
 /** Exact USD rational arithmetic, rounding once upwards at the specified billing quantum. */
 export function smsFinalUsdQuanta(input: {
   providerAmount: string; providerCurrency: string; usdPerEur: string;

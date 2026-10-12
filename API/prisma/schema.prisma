@@ -4878,6 +4878,8 @@ model BillingSmsQuote {
   providerObservedAt DateTime @map("provider_observed_at")
   fxSnapshotId       String   @map("fx_snapshot_id")
   routePolicyId      String?  @map("route_policy_id")
+  // The flat monthly price row a monthly quote used; null for message quotes and older quotes.
+  monthlyPriceId     String?  @map("monthly_price_id")
   providerBoundAmount Decimal? @map("provider_bound_amount") @db.Decimal(38, 18)
   finalAmount        Decimal  @map("final_amount") @db.Decimal(38, 18)
   finalCurrency      String   @default("USD") @map("final_currency") @db.Char(3)
@@ -5072,6 +5074,20 @@ model BillingSmsRoutePolicy {
 
   @@index([accountSid, country, direction, expiresAt])
   @@map("billing_sms_route_policies")
+}
+
+// Flat monthly mobile-number price, in every country. Append-only; newest is current.
+model BillingSmsMonthlyPrice {
+  id          String   @id @default(cuid())
+  amount      Decimal  @db.Decimal(18, 2)
+  currency    String   @db.Char(3)
+  // `seed` (the migration's EUR 4.99) or `operator` with the UOA subject.
+  setBy       String   @map("set_by") @db.VarChar(20)
+  setByUserId String?  @map("set_by_user_id")
+  setAt       DateTime @default(now()) @map("set_at")
+
+  @@index([setAt])
+  @@map("billing_sms_monthly_prices")
 }
 
 // Operator attention raised by the SMS policy renewal job. One open alert per

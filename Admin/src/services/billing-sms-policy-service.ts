@@ -1,12 +1,20 @@
 import { createApiClient } from './api-client';
 import { SmsCountryAcceptedSchema, SmsCountryPreviewSchema, SmsFxPolicySchema, SmsFxPreviewSchema, SmsPoliciesSchema,
   SmsRouteImportSchema, SmsRoutePolicySchema, SmsRoutePreviewSchema,
+  SmsMonthlyPriceInputSchema, SmsMonthlyPriceSchema, type SmsMonthlyPriceInput,
   type SmsRouteImport } from '../schemas/billing-sms-policies';
 
 const api = createApiClient();
 const base = '/internal/admin/billing/sms-policies';
 const options = { cache: 'no-store' } as const;
 export const billingSmsPolicyService = {
+  async monthlyPrice() {
+    return SmsMonthlyPriceSchema.parse(await api.get<unknown>(`${base}/monthly-price`, options));
+  },
+  async setMonthlyPrice(input: SmsMonthlyPriceInput) {
+    return SmsMonthlyPriceSchema.parse(await api.post<unknown>(`${base}/monthly-price`,
+      SmsMonthlyPriceInputSchema.parse(input), options));
+  },
   async list() { return SmsPoliciesSchema.parse(await api.get<unknown>(base, options)); },
   async previewFx(xml?: string) {
     return SmsFxPreviewSchema.parse(await api.post<unknown>(`${base}/fx/preview`,

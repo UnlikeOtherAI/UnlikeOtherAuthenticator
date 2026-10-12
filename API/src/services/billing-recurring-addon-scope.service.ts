@@ -45,9 +45,22 @@ export function recurringAddonOfferScope(offer: {
   return uniqueEntitlementScope(offer.featurePolicies);
 }
 
+/**
+ * SMS number subscriptions get their own Stripe Customer per organisation and
+ * currency: Stripe allows one subscription currency per Customer, so they can
+ * never collide with the organisation's other subscriptions.
+ */
+export function smsNumberCustomerScopeKey(organisationId: string, currency: string): string {
+  if (currency !== 'EUR' && currency !== 'USD') {
+    throw new AppError('BAD_REQUEST', 409, 'BILLING_RECURRING_ADDON_UNAVAILABLE');
+  }
+  return `${organisationId}:sms:${currency}`;
+}
+
 export function recurringAddonScope(
   entitlementScope: BillingRecurringAddonEntitlementScope,
   subject: RecurringAddonSubject,
+  offer?: { resourceKind: string | null; currency: string },
 ): RecurringAddonScope {
   if (entitlementScope === BillingRecurringAddonEntitlementScope.ORGANISATION) {
     return {
@@ -56,7 +69,8 @@ export function recurringAddonScope(
       teamId: null,
       subscribingUserId: null,
       customerScope: BillingAssignmentScope.ORGANISATION,
-      customerScopeKey: subject.organisationId,
+      customerScopeKey: offer?.resourceKind === 'sms_mobile_number'
+        ? smsNumberCustomerScopeKey(subject.organisationId, offer.currency) : subject.organisationId,
       customerTeamId: null,
     };
   }

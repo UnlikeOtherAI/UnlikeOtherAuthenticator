@@ -156,7 +156,7 @@ export async function beginSmsNumber(input: { request: BillingSmsNumberBeginRequ
     }
     const quote = await tx.billingSmsQuote.findUnique({ where: { id: input.request.quote_id } });
     if (!quote || quote.serviceId !== input.credential.service.id || quote.orgId !== input.request.organisation_id ||
-        quote.direction !== 'monthly' || quote.destination !== null || quote.finalCurrency !== 'USD' ||
+        quote.direction !== 'monthly' || quote.destination !== null || !['EUR', 'USD'].includes(quote.finalCurrency) ||
         quote.expiresAt.getTime() <= (deps.now?.() ?? new Date()).getTime()) {
       throw new AppError('BAD_REQUEST', 409, 'BILLING_SMS_QUOTE_NOT_ACCEPTABLE');
     }
@@ -168,10 +168,10 @@ export async function beginSmsNumber(input: { request: BillingSmsNumberBeginRequ
     const offer = await tx.billingRecurringAddonOffer.create({ data: {
       serviceId: input.credential.service.id, key, version: 1,
       name: `Mobile number ${input.request.phone_number}`, description: 'Monthly mobile phone number service.',
-      monthlyAmountMinor: minor, currency: 'USD', resourceKind: 'sms_mobile_number', resourceId: input.request.resource_id,
+      monthlyAmountMinor: minor, currency: quote.finalCurrency, resourceKind: 'sms_mobile_number', resourceId: input.request.resource_id,
     } });
     await tx.billingRecurringAddonCatalog.create({ data: { accountId: account.id, serviceId: offer.serviceId,
-      offerId: offer.id, currency: 'USD', monthlyAmountMinor: minor, stripeLookupKey: `${key}:1:${account.id}` } });
+      offerId: offer.id, currency: quote.finalCurrency, monthlyAmountMinor: minor, stripeLookupKey: `${key}:1:${account.id}` } });
     return tx.billingSmsNumberResource.create({ data: { id: input.request.resource_id,
       serviceId: input.credential.service.id, appKeyId: input.credential.id, orgId: input.request.organisation_id,
       quoteId: quote.id, phoneNumber: input.request.phone_number, country: quote.country,

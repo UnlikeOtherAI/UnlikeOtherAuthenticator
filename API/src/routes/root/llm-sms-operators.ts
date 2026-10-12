@@ -39,6 +39,11 @@ complete_segment_bound,complete_message_bound} appends both policies under the
 operator with a generated reason, each recording provider_price so it can
 renew. A non-USD account price answers 409 BILLING_SMS_ROUTE_RULE_UNSUPPORTED;
 enter such routes through /routes/preview instead.
+GET/POST /monthly-price under the same base reads or sets the flat monthly
+mobile-number price ({amount:"4.99",currency:"EUR"}, seeded to EUR 4.99). Every
+monthly quote uses it in every country; a country whose Twilio rental reaches it
+at the accepted ECB rate answers 409 BILLING_SMS_MONTHLY_PRICE_BELOW_COST and
+raises a monthly_price_below_cost alert.
 Selected product > App keys > SMS runtime issues purpose sms_runtime independently
 of customer lifecycle, entitlement and Ledger keys, with no redirect origins.
 Transfer one-time plaintext only through approved deployment secrets.

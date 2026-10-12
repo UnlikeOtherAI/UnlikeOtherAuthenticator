@@ -302,3 +302,9 @@ choose now. A different second choice answers `BILLING_REGION_IMMUTABLE`; SMS
 pricing, purchase and top-up answer `BILLING_REGION_REQUIRED` until chosen. AI
 usage stays USD in every region.
 
+## EUR quotes (5.3.0, SMS protocol 1.1.0)
+
+`BillingSmsFinalQuoteV1.currency` is `USD` or `EUR`. A monthly mobile-number
+quote is UOA's flat monthly price in the currency the operator set (EUR 4.99 at
+release), and its monthly subscription is charged in that currency. Products
+render the currency the quote carries and never assume USD.

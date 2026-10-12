@@ -45,6 +45,10 @@ describe('SMS commercial protocol', () => {
     expect(validate(quote)).toBe(true);
     expect(validate({ ...quote, provider_cost: '0.1' })).toBe(false);
     expect(validate({ ...quote, amount: 0.01 })).toBe(false);
+    // A monthly number is priced flat, in the currency the quote carries.
+    expect(validate({ ...quote, amount: '4.99', currency: 'EUR', rate_basis: 'monthly_mobile',
+      scope: { ...quote.scope, direction: 'monthly', destination: null } })).toBe(true);
+    expect(validate({ ...quote, currency: 'GBP' })).toBe(false);
     expect(validate({ ...quote, scope: { ...quote.scope, markup_bps: 2700 } })).toBe(false);
   });
 

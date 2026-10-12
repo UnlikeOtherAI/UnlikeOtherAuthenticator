@@ -175,7 +175,7 @@ export async function createRecurringAddonCheckout(
   if (!offer || !entitlementScope) {
     throw new AppError('BAD_REQUEST', 409, 'BILLING_RECURRING_ADDON_UNAVAILABLE');
   }
-  const selectedScope = recurringAddonScope(entitlementScope, params.request);
+  const selectedScope = recurringAddonScope(entitlementScope, params.request, offer);
   assertCanManageRecurringAddonScope(viewer, selectedScope.scope);
   if (offer.resourceKind === 'sms_mobile_number') {
     if (!offer.resourceId) throw new AppError('NOT_FOUND', 404, 'BILLING_SMS_RESOURCE_NOT_FOUND');

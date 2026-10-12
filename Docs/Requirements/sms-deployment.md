@@ -93,6 +93,30 @@ sets existing quotes' rental markup to zero, preserving their original fixed-fee
 terms. No existing paid subscription or reservation is repriced by a mode change.
 Only USD and EUR provider pricing is supported; other currencies fail closed.
 
+### Flat monthly number price
+
+A mobile number costs one flat monthly price in every country, set in
+**Admin › Billing › SMS policies › Monthly number price** (one value with Edit).
+The migration seeds EUR 4.99. The price is append-only: an edit adds a row, the
+newest row is current, and every monthly quote names the row it used
+(`billing_sms_quotes.monthly_price_id`). The quote amount and currency are that
+price; its rate basis stays `monthly_mobile`. This replaces provider cost plus
+markup for the monthly charge only. Message quotes are unchanged (USD).
+
+The price is never below cost. At quote time the account's Twilio monthly
+rental is converted at the quote's accepted ECB rate and compared exactly; a
+rental at or above the flat price refuses that country's monthly quote with
+`409 BILLING_SMS_MONTHLY_PRICE_BELOW_COST`, logs it, and opens a
+`monthly_price_below_cost` alert on the SMS policies page (email once). A later
+successful monthly quote for that country resolves it.
+
+Begin accepts the quote's currency and creates the offer, catalog and Stripe
+monthly price in it. SMS number subscriptions bill through a Stripe Customer of
+their own per organisation and currency (`scope_key = <org>:sms:<currency>`),
+because Stripe allows only one subscription currency per Customer; the
+organisation's other subscriptions keep its plain organisation Customer. The
+customer pays for the first number's checkout on that new Customer.
+
 ### Provider-charge coverage and unsupported charges
 
 | Component | Evidence and collection |
