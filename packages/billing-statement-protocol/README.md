@@ -382,10 +382,12 @@ credits; these are display values. 2.3.0 includes everything in 2.2.0.
   never moves with exchange rates. Credits bought in USD before the region was
   chosen count at the rate captured when it was chosen. It is null while that
   rate is needed but not known yet. A US region (or none) sees dollars.
-- Each `recent_entries` item carries `value`: what the entry drew from (or gave
-  back to) each lot, summed, as a positive amount; `direction` gives the sign.
-  A debit that spans two lots is the sum of its two parts. It is null for
-  history from before lots.
+- Each `recent_entries` item carries `value` as a positive amount; `direction`
+  gives the sign. A purchase is worth what was paid for it (credits bought in
+  USD in a GBP or EUR region, their credits at the captured rate). Any other
+  entry is what it drew from (or gave back to) each lot, summed, so a debit that
+  spans two lots is the sum of its two parts. It is null for history from
+  before lots.
 - `region_rate` {currency, usd_per_unit, credits_per_unit, source, as_of,
   display} is the rate the next credits used are valued at, for showing an
   estimate such as "≈ €0.04" beside a price in credits. `source` is `purchase`

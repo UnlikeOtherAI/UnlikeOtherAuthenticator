@@ -294,8 +294,9 @@ type BillingCreditsRecentEntryBase = {
   credits: BillingCreditAmount;
   credit_balance_after: BillingCreditAmount;
   /**
-   * Credits protocol 2.3.0: the entry's value in the region currency, summed
-   * from the lots it drew from or gave back to; null for history before lots.
+   * Credits protocol 2.3.0: the entry's value in the region currency, as a
+   * magnitude: a purchase is worth its lot, any other entry the sum of what it
+   * drew from or gave back to each lot; null for history before lots.
    */
   value?: BillingCreditsValueMoney | null;
 };

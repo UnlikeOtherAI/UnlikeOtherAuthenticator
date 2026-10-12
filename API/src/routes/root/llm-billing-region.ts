@@ -52,8 +52,9 @@ Send x-uoa-billing-credits-protocol: 2.3.0 to also receive what credits are
 worth in the region currency; charges stay in credits. credit_balance.value is
 the available balance with a label ("€42.18 left", or "€1.20 owed" with a
 negative amount for debt), each lot at the rate it was bought at, so it never
-moves with exchange rates. Each recent_entries item carries value, the positive
-sum of what it drew from or gave back to each lot (direction gives the sign).
+moves with exchange rates. Each recent_entries item carries value, a positive
+amount (direction gives the sign): a purchase is worth what was paid for it, any
+other entry the sum of what it drew from or gave back to each lot.
 region_rate {currency, usd_per_unit, credits_per_unit, source, as_of, display}
 is the rate the next credits used are valued at: show credits ÷
 credits_per_unit as an estimate beside a price in credits. Any of these is null

@@ -1625,8 +1625,10 @@ A consumer on credits protocol 2.3.0 sees these values in the credits view
 - `credit_balance.value`: the available balance in the region currency, with a
   label ("€42.18 left", or "€1.20 owed" for debt). Null while credits bought in
   USD need a region rate that is not captured yet.
-- `recent_entries[].value`: each entry's draws from (or returns to) its lots,
-  summed and shown as a positive amount. Null for history from before lots.
+- `recent_entries[].value`, a positive amount: a purchase is worth the lot it
+  opened (what was paid in the region currency, or a USD purchase's credits at
+  the captured rate); any other entry is its draws from (or returns to) its
+  lots, summed. Null for history from before lots.
 - `region_rate`: the rate the next credits used are valued at, so a product can
   show an estimate beside a price in credits. It is the oldest remaining lot's
   purchase rate when that lot is in the region currency (`purchase`), otherwise
