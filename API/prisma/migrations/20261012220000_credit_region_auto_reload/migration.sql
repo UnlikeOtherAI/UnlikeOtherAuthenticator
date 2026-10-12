@@ -500,8 +500,7 @@ BEGIN
           AND disable_event."account_id" = NEW."account_id"
           AND disable_event."org_id" = credit_row."org_id"
           AND disable_event."team_id" IS NOT DISTINCT FROM credit_row."team_id"
-          AND disable_event."service_id" = NEW."service_id"
-          AND disable_event."app_key_id" = NEW."app_key_id"
+          -- Any authorized product may revoke consent given through another (20261004193000).
           AND disable_event."previous_generation" + 1 = credit_row."auto_top_up_generation"
           AND disable_event."previous_consent_revision_id" = NEW."consent_revision_id"
       );
