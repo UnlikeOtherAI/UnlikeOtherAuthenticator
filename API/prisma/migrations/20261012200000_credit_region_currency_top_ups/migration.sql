@@ -8,6 +8,10 @@ SET statement_timeout = '120s';
 ALTER TABLE billing_credit_funding_policies
   DROP CONSTRAINT billing_credit_funding_policies_currency_check,
   ADD CONSTRAINT billing_credit_funding_policies_currency_check CHECK (currency IN ('USD', 'EUR', 'GBP'));
+-- One active policy per service and purchase currency.
+DROP INDEX billing_credit_funding_policies_one_active_version;
+CREATE UNIQUE INDEX billing_credit_funding_policies_one_active_version
+  ON billing_credit_funding_policies(service_id, currency) WHERE active;
 
 -- A GBP or EUR offer and catalog carry no fixed credit count (0): it is decided at checkout.
 ALTER TABLE billing_credit_top_up_catalogs
