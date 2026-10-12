@@ -49,9 +49,13 @@ export {
   BILLING_CONSUMER_ACTION_SCHEMA_VERSION,
 } from './action-types.js';
 export { billingStatementV1ConformanceFixture } from './conformance-fixture.js';
-export { billingControlledByJsonSchema } from './org-billing-schema.js';
-export { BILLING_ORG_BILLING_MANAGE_ACTION_ID } from './org-billing-types.js';
-export type { BillingControlledByV1 } from './org-billing-types.js';
+export {
+  billingControlledByJsonSchema, billingRegionSetRequestV1JsonSchema, billingRegionViewV1JsonSchema,
+} from './org-billing-schema.js';
+export { BILLING_ORG_BILLING_MANAGE_ACTION_ID, BILLING_ORG_REGION_PATH } from './org-billing-types.js';
+export type {
+  BillingControlledByV1, BillingRegionCurrencyV1, BillingRegionV1, BillingRegionViewV1,
+} from './org-billing-types.js';
 export {
   billingStatementV1OpenApiDocument,
   type BillingStatementV1OpenApiDocument,

@@ -54,6 +54,7 @@ export const BILLING_ACTOR_ENDPOINTS = [
   '/billing/v1/organisation-billing',
   '/billing/v1/organisation-billing/assume',
   '/billing/v1/organisation-billing/release',
+  '/billing/v1/organisation-billing/region',
 ] as const;
 
 export type BillingActorEndpoint = (typeof BILLING_ACTOR_ENDPOINTS)[number];

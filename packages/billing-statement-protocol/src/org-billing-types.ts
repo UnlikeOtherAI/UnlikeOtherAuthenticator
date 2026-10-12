@@ -29,3 +29,22 @@ export type BillingControlledByV1 = {
    */
   manage_action_id: typeof BILLING_ORG_BILLING_MANAGE_ACTION_ID | null;
 };
+
+/**
+ * Organisation billing region (protocol 5.3.0, additive). Chosen once by an
+ * organisation owner or admin and never changed. It sets the currency of SMS
+ * prices, the SMS balance and number subscriptions. AI usage stays USD.
+ */
+export const BILLING_ORG_REGION_PATH = '/billing/v1/organisation-billing/region' as const;
+export type BillingRegionV1 = 'UK' | 'US' | 'EUROPE';
+export type BillingRegionCurrencyV1 = 'GBP' | 'USD' | 'EUR';
+export type BillingRegionViewV1 = {
+  /** Null until an owner or admin chooses. */
+  region: BillingRegionV1 | null;
+  currency: BillingRegionCurrencyV1 | null;
+  /** Prefill for the choice, from the organisation's billing country. */
+  suggested_region: BillingRegionV1;
+  suggested_currency: BillingRegionCurrencyV1;
+  /** True only for an owner or admin while no region is chosen. */
+  can_set: boolean;
+};

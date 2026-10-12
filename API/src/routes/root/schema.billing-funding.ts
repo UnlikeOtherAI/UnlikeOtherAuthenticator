@@ -289,11 +289,26 @@ export const billingFundingEndpoints: EndpointSchema[] = [
     auth: lifecycleAuth,
     body: fundingSubject,
     response: {
-      200: '{ organisation_id, active, assumed_at, released_at, can_manage }',
+      200: '{ organisation_id, active, assumed_at, released_at, can_manage, billing_region: { region, currency, suggested_region, suggested_currency, can_set } }',
       '401/403': 'Invalid lifecycle credential, actor, membership, or subject',
     },
     notes:
       'Absent or inactive means each team pays for itself, which is the default everywhere.',
+  },
+  {
+    method: 'POST',
+    path: '/billing/v1/organisation-billing/region',
+    description:
+      'Choose the organisation billing region once: UK (GBP), US (USD) or EUROPE (EUR). It sets the currency of SMS prices, the SMS balance and number subscriptions.',
+    auth: lifecycleAuth,
+    body: { ...fundingSubject, region: 'UK | US | EUROPE' },
+    response: {
+      200: '{ region, currency, suggested_region, suggested_currency, can_set }',
+      '401/403': 'Invalid lifecycle credential, actor, membership, or BILLING_ORG_MANAGER_REQUIRED',
+      409: 'BILLING_REGION_IMMUTABLE: a different region was already chosen',
+    },
+    notes:
+      'Set once, never changed; the database refuses updates. Repeating the same region is a no-op. AI usage stays USD for every region. Until chosen, SMS quotes, number purchases and SMS top-ups answer 409 BILLING_REGION_REQUIRED.',
   },
   {
     method: 'POST',

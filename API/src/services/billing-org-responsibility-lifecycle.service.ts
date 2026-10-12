@@ -19,6 +19,7 @@ import {
   resolveOrgBillingResponsibility,
 } from './billing-org-responsibility.service.js';
 import { assertOrgBillingAssumable } from './billing-org-responsibility-guard.service.js';
+import { billingRegionView, type BillingRegionViewV1 } from './billing-organisation-region.service.js';
 
 export type BillingOrgResponsibilityRequest = {
   product: string;
@@ -407,7 +408,7 @@ export async function readOrgBillingResponsibility(
     endpoint: BillingActorEndpoint;
   },
   deps?: Dependencies,
-): Promise<BillingOrgResponsibilityView & { can_manage: boolean }> {
+): Promise<BillingOrgResponsibilityView & { can_manage: boolean; billing_region: BillingRegionViewV1 }> {
   const prisma = deps?.prisma ?? getAdminPrisma();
   await (deps?.resolveTariff ?? resolveEffectiveTariffContext)(params, { prisma });
   const [state, canManage, record] = await Promise.all([
@@ -430,5 +431,6 @@ export async function readOrgBillingResponsibility(
       deactivatedTeamAutoTopUps: 0,
     }),
     can_manage: canManage,
+    billing_region: await billingRegionView(params.request.organisationId, canManage, prisma),
   };
 }

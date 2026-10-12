@@ -287,3 +287,18 @@ scoped SMS_RUNTIME credential; lifecycle consent and entitlement keys remain
 separate. Missing resource/grant/dispatch/standing retirement proof is explicitly
 typed and fenced, never inferred from a generic HTTP status. Unknown provider
 outcomes remain held and uncovered incoming charges remain uncollected liability.
+
+## Organisation billing region (5.3.0)
+
+`BillingRegionViewV1` (`billingRegionViewV1JsonSchema`) is the
+`billing_region` block of `POST /billing/v1/organisation-billing` and the
+response of `POST /billing/v1/organisation-billing/region`
+(`BILLING_ORG_REGION_PATH`, body `billingRegionSetRequestV1JsonSchema`: the
+subject fields plus `region`). A region (`UK`, `US`, `EUROPE`) is chosen once by
+an organisation owner or admin and never changes; it sets the SMS currency
+(`GBP`, `USD`, `EUR`). `region` and `currency` are null until chosen;
+`suggested_region` prefills the choice; `can_set` says whether this caller may
+choose now. A different second choice answers `BILLING_REGION_IMMUTABLE`; SMS
+pricing, purchase and top-up answer `BILLING_REGION_REQUIRED` until chosen. AI
+usage stays USD in every region.
+

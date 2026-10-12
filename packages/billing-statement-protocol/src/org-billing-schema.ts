@@ -1,7 +1,10 @@
+import { billingSubjectActionBodySchema } from './funding-schema-primitives.js';
 import { BILLING_ORG_BILLING_MANAGE_ACTION_ID } from './org-billing-types.js';
 
-export { BILLING_ORG_BILLING_MANAGE_ACTION_ID } from './org-billing-types.js';
-export type { BillingControlledByV1 } from './org-billing-types.js';
+export { BILLING_ORG_BILLING_MANAGE_ACTION_ID, BILLING_ORG_REGION_PATH } from './org-billing-types.js';
+export type {
+  BillingControlledByV1, BillingRegionCurrencyV1, BillingRegionV1, BillingRegionViewV1,
+} from './org-billing-types.js';
 
 /**
  * Shared by the statement (v1 and v2) and the credits view. Optional in every
@@ -30,3 +33,22 @@ export const billingControlledByJsonSchema = {
     },
   },
 } as const;
+
+const region = { enum: ['UK', 'US', 'EUROPE'] } as const;
+const regionCurrency = { enum: ['GBP', 'USD', 'EUR'] } as const;
+
+/** The organisation-billing read's `billing_region` block and the set endpoint's response. */
+export const billingRegionViewV1JsonSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['region', 'currency', 'suggested_region', 'suggested_currency', 'can_set'],
+  properties: {
+    region: { oneOf: [region, { type: 'null' }] },
+    currency: { oneOf: [regionCurrency, { type: 'null' }] },
+    suggested_region: region,
+    suggested_currency: regionCurrency,
+    can_set: { type: 'boolean' },
+  },
+} as const;
+
+export const billingRegionSetRequestV1JsonSchema = billingSubjectActionBodySchema({ region }, ['region']);

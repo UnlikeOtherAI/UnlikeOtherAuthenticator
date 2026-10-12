@@ -74,4 +74,9 @@ export const PRODUCTION_PUBLIC_ERROR_CODES = new Set([
   // Add country, also superuser-only: the account's Pricing API currency is one the bound rule
   // does not document, so the Admin points to manual evidence for that route.
   'BILLING_SMS_ROUTE_RULE_UNSUPPORTED',
+  // An organisation's one-time billing region: REQUIRED tells the product to ask an owner or admin
+  // to choose it before SMS pricing, purchase or top-up; IMMUTABLE that it was already chosen. Both
+  // follow fresh actor authentication and name nothing beyond the caller's own organisation.
+  'BILLING_REGION_REQUIRED',
+  'BILLING_REGION_IMMUTABLE',
 ]);

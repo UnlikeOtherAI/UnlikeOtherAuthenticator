@@ -1,0 +1,48 @@
+import { describe, expect, it, vi } from 'vitest';
+import {
+  setOrganisationBillingRegion, suggestedBillingRegion,
+} from '../../src/services/billing-organisation-region.service.js';
+
+describe('organisation billing region', () => {
+  it('suggests UK for GB, Europe for the EU, EEA and Switzerland, and US for anything else', () => {
+    expect(suggestedBillingRegion('GB')).toBe('UK');
+    for (const country of ['CZ', 'DE', 'IE', 'FR', 'IS', 'LI', 'NO', 'CH', ' cz ']) expect(suggestedBillingRegion(country)).toBe('EUROPE');
+    for (const country of ['US', 'CA', 'AU', 'TR', '', null, undefined]) expect(suggestedBillingRegion(country)).toBe('US');
+  });
+
+  function setup(existing: Array<{ region: string }> = []) {
+    const rows = [...existing];
+    const db = {
+      billingOrganisationRegion: {
+        findUnique: vi.fn(async () => (rows[0] ? { orgId: 'org_1', ...rows[0] } : null)),
+        create: vi.fn(async ({ data }: { data: { region: string } }) => { rows.push(data); return data; }),
+      },
+      billingOrganisationInvoiceProfile: { findUnique: vi.fn(async () => ({ billingAddress: { country: 'CZ' } })) },
+      $transaction: vi.fn(async (run: (tx: unknown) => unknown) => run(db)),
+    };
+    const deps = { prisma: db as never, resolveTariff: vi.fn(async () => ({ actor: { jti: 'jti', tv: 0, exp: 9 } })) as never,
+      isOrganisationManager: vi.fn(async () => true), authorizeAction: vi.fn(async () => ({})) as never };
+    return { db, deps };
+  }
+  const params = { request: { product: 'nessie', organisationId: 'org_1', teamId: 'team_1', userId: 'user_1' },
+    actorToken: 'actor', credential: { id: 'key', service: { id: 'svc' } } as never,
+    endpoint: '/billing/v1/organisation-billing/region' as const };
+
+  it('is chosen once by a manager, repeats as a no-op and refuses any other region', async () => {
+    const { db, deps } = setup();
+    expect(await setOrganisationBillingRegion({ ...params, region: 'EUROPE' }, deps)).toEqual({ region: 'EUROPE',
+      currency: 'EUR', suggested_region: 'EUROPE', suggested_currency: 'EUR', can_set: false });
+    expect(db.billingOrganisationRegion.create).toHaveBeenCalledWith({ data: expect.objectContaining({
+      orgId: 'org_1', region: 'EUROPE', currency: 'EUR', setByUserId: 'user_1' }) });
+    await setOrganisationBillingRegion({ ...params, region: 'EUROPE' }, deps);
+    await expect(setOrganisationBillingRegion({ ...params, region: 'UK' }, deps)).rejects.toThrow('BILLING_REGION_IMMUTABLE');
+    expect(db.billingOrganisationRegion.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses a member who is not an organisation owner or admin before any write', async () => {
+    const { db, deps } = setup();
+    deps.isOrganisationManager.mockResolvedValue(false);
+    await expect(setOrganisationBillingRegion({ ...params, region: 'US' }, deps)).rejects.toThrow('BILLING_ORG_MANAGER_REQUIRED');
+    expect(db.billingOrganisationRegion.create).not.toHaveBeenCalled();
+  });
+});
