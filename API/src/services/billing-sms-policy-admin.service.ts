@@ -104,7 +104,9 @@ export { Bound as SmsPolicyBound, RouteSchema as SmsRoutePolicyEvidenceSchema, f
   fxDto as smsFxPolicyValue };
 
 /** The reason recorded when a document is accepted again only to record its GBP rate. */
-export const SMS_FX_READD_GBP_REASON = 'Re-accepted to add GBP: the earlier acceptance of this document recorded no GBP rate.';
+export function smsFxReaddGbpReason(rateDate: string, gbpPerEur: string): string {
+  return `Re-accepted the same ECB ${rateDate} document to add GBP ${gbpPerEur}; its earlier acceptance recorded no GBP rate.`;
+}
 
 /**
  * Append one FX acceptance; an exact retry returns the original without
@@ -120,7 +122,9 @@ export async function insertSmsFxPolicy(tx: Prisma.TransactionClient, value: FxP
   const complete = existing.find((row) => row.gbpPerEur !== null);
   if (complete) return complete;
   if (existing[0] && value.gbp_per_eur === null) return existing[0];
-  if (existing[0]) acceptanceReason = `${acceptanceReason} ${SMS_FX_READD_GBP_REASON}`.slice(0, 500);
+  if (existing[0] && value.gbp_per_eur !== null) {
+    acceptanceReason = `${smsFxReaddGbpReason(value.rate_date, value.gbp_per_eur)} ${acceptanceReason}`.slice(0, 500);
+  }
   return tx.billingSmsFxSnapshot.create({ data: {
     policy: value.policy, source: value.source, sourceDigest: value.source_digest,
     rateDate: new Date(`${value.rate_date}T00:00:00.000Z`), observedAt: new Date(value.observed_at),

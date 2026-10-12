@@ -9,7 +9,7 @@ import { smsMonthlyTerms } from '../../src/services/billing-sms-monthly-price.se
 import {
   insertSmsFxPolicy,
   smsFxPolicyValue,
-  SMS_FX_READD_GBP_REASON,
+  smsFxReaddGbpReason,
 } from '../../src/services/billing-sms-policy-admin.service.js';
 import { runSmsPolicyRenewalCycle } from '../../src/services/billing-sms-policy-renewal.service.js';
 
@@ -68,7 +68,8 @@ describe.skipIf(!process.env.DATABASE_URL)('re-accepting a dated ECB document to
     expect(rows[1]?.gbpPerEur?.toFixed()).toBe('0.8712');
     expect(rows[1]?.expiresAt).toEqual(rows[0]?.expiresAt);
     expect(rows[1]?.rateDate).toEqual(rows[0]?.rateDate);
-    expect(rows[1]?.acceptanceReason).toContain(SMS_FX_READD_GBP_REASON);
+    expect(rows[1]?.acceptanceReason).toContain(`Re-accepted the same ECB ${date} document to add GBP 0.8712`);
+    expect(rows[1]?.acceptanceReason).toContain(smsFxReaddGbpReason(date, '0.8712'));
     // The monthly GBP price now converts.
     expect(await gbQuote(prisma, await latest(prisma))).toMatchObject({ finalAmount: '4.49', finalCurrency: 'GBP' });
   });

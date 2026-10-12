@@ -4,7 +4,7 @@ import { parseSmsFxEvidence } from '../../src/services/billing-sms-fx-evidence.s
 import { acceptSmsFxRefresh } from '../../src/services/billing-sms-policy-admin.service.js';
 
 const tx = vi.hoisted(() => ({ $queryRaw: vi.fn(),
-  billingSmsFxSnapshot: { create: vi.fn(), findUnique: vi.fn(), findFirst: vi.fn() } }));
+  billingSmsFxSnapshot: { create: vi.fn(), findMany: vi.fn(), findFirst: vi.fn() } }));
 vi.mock('../../src/db/prisma.js', () => ({ getAdminPrisma: () => ({
   $transaction: async (fn: (value: typeof tx) => unknown) => fn(tx),
 }) }));
@@ -17,7 +17,7 @@ beforeEach(() => {
   vi.clearAllMocks(); vi.useFakeTimers(); vi.setSystemTime(now);
   vi.stubEnv('ADMIN_AUTH_DOMAIN', actor.domain);
   tx.$queryRaw.mockResolvedValue([{ id: actor.userId, tokenVersion: 3, email: actor.email, role: 'SUPERUSER' }]);
-  tx.billingSmsFxSnapshot.findUnique.mockResolvedValue(null);
+  tx.billingSmsFxSnapshot.findMany.mockResolvedValue([]);
   tx.billingSmsFxSnapshot.create.mockImplementation(async ({ data }) => ({ id: 'fx-2', ...data }));
 });
 afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs(); });
