@@ -59,7 +59,8 @@ ALTER TABLE billing_credit_top_up_checkouts
   ADD CONSTRAINT billing_credit_top_up_checkouts_fx_snapshot FOREIGN KEY (fx_snapshot_id)
     REFERENCES billing_sms_fx_snapshots(id) ON DELETE RESTRICT,
   DROP CONSTRAINT billing_credit_top_up_checkouts_fixed_conversion_check,
-  ADD CONSTRAINT billing_credit_top_up_checkouts_fixed_conversion_check CHECK (
+  -- COALESCE: a comparison with a missing rate is unknown, and a CHECK passes unknown.
+  ADD CONSTRAINT billing_credit_top_up_checkouts_fixed_conversion_check CHECK (COALESCE(
     payment_amount_minor > 0 AND (
       (currency = 'USD' AND credits_received_microcredits::numeric = payment_amount_minor::numeric * 10000000
         AND fx_rate_source IS NULL AND fx_base_rate IS NULL AND fx_exchange_rate IS NULL
@@ -69,7 +70,7 @@ ALTER TABLE billing_credit_top_up_checkouts
         AND ((fx_rate_source = 'stripe' AND fx_quote_id ~ '^fxq_[A-Za-z0-9_]+$'
             AND fx_exchange_rate > 0 AND fx_snapshot_id IS NULL)
           OR (fx_rate_source = 'ecb' AND fx_snapshot_id IS NOT NULL AND fx_quote_id IS NULL
-            AND fx_exchange_rate IS NULL)))));
+            AND fx_exchange_rate IS NULL)))), false));
 
 -- A checkout's policy, catalog and payment share one currency. A USD checkout
 -- grants its catalog's fixed credits; a GBP or EUR one grants what its stored
