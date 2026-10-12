@@ -7,6 +7,7 @@ import type { BillingCreditActionReadiness } from '../../src/services/billing-cr
 import type { BillingCreditProjectionData } from '../../src/services/billing-credit-projection-data.service.js';
 import { buildBillingCreditsProjection } from '../../src/services/billing-credit-projection.service.js';
 import type { CreditPurchaseRate } from '../../src/services/billing-credit-purchase-rate.service.js';
+import type { CreditDisplayValues } from '../../src/services/billing-credit-lot-value.service.js';
 import {
   CREDIT_FUNDING_POLICY_SPEC,
   CREDIT_TOP_UP_SPECS,
@@ -74,9 +75,9 @@ function readiness(data: BillingCreditProjectionData): BillingCreditActionReadin
 }
 
 function project(data: BillingCreditProjectionData, purchaseRate: CreditPurchaseRate | null,
-  locale: 'en-GB' | 'cs' = 'en-GB') {
+  locale: 'en-GB' | 'cs' = 'en-GB', regionValues?: CreditDisplayValues) {
   const result = buildBillingCreditsProjection({ credential, collection, viewer, period, data, now, locale,
-    actionReadiness: readiness(data), purchaseRate });
+    actionReadiness: readiness(data), purchaseRate, ...(regionValues ? { regionValues } : {}) });
   if (result.viewer.role !== 'billing_manager' || !result.funding_policy) throw new Error('expected a manager view');
   return result;
 }
@@ -136,5 +137,51 @@ describe('credit offers in the billing region currency', () => {
     expect(pending.payment_amount).toMatchObject({ amount_minor: '2500', currency: 'EUR' });
     expect(pending.credits_received.credits).toBe('54030');
     expect(pending.top_up_count).toBe(2);
+  });
+});
+
+describe('credits valued in the billing region currency (credits protocol 2.3.0)', () => {
+  function withEntries(): BillingCreditProjectionData {
+    const data = eurData();
+    return { ...data, creditAccount: { ...data.creditAccount, balanceMicrocredits: 48_980_000_000n },
+      entries: ['entry_usage', 'entry_history'].map((id) => ({ id, occurredAt: now, service, kind: 'USAGE_SETTLEMENT',
+        direction: 'DEBIT', amountMicrocredits: 5_000_000_000n, balanceAfterMicrocredits: 48_980_000_000n,
+        attributedUserId: null, attributedUser: null })) } as unknown as BillingCreditProjectionData;
+  }
+  const values: CreditDisplayValues = {
+    currency: 'EUR',
+    balance: { currency: 'EUR', amount: '42.18', amountMinor: 4_218n },
+    nextRate: { currency: 'EUR', usdPerUnit: '1.16123', source: 'purchase', asOf: new Date('2026-10-01T09:00:00Z') },
+    // The usage entry drew from two lots; the other predates lots and has no movements.
+    entries: new Map([['entry_usage', { currency: 'EUR', amount: '4.12', amountMinor: 412n }]]),
+  };
+
+  it('shows the balance left, each entry\'s value and the rate behind price estimates', () => {
+    const result = project(withEntries(), rate, 'en-GB', values);
+    expect(result.credit_balance.value).toEqual({ amount: '42.18', amount_minor: '4218', currency: 'EUR',
+      display: '€42.18', label: '€42.18 left' });
+    expect(result.region_rate).toEqual({ currency: 'EUR', usd_per_unit: '1.16123', credits_per_unit: '1161.23',
+      source: 'purchase', as_of: '2026-10-01T09:00:00.000Z', display: '1 EUR ≈ 1,161 credits' });
+    expect(result.recent_entries.map((entry) => entry.value)).toEqual([
+      { amount: '4.12', amount_minor: '412', currency: 'EUR', display: '€4.12' }, null]);
+    expect(() => assertBillingCreditsContract(result)).not.toThrow();
+  });
+
+  it('says what a debt is owed, and leaves values out until they can be known', () => {
+    const owed = project(withEntries(), rate, 'cs', { ...values,
+      balance: { currency: 'EUR', amount: '-1.20', amountMinor: -120n } });
+    expect(owed.credit_balance.value).toMatchObject({ amount: '-1.2', amount_minor: '-120',
+      label: expect.stringMatching(/^Dlužíte 1,20\s€$/) });
+    const unknown = project(withEntries(), rate, 'en-GB', { ...values, balance: null, nextRate: null });
+    expect(unknown.credit_balance.value).toBeNull();
+    expect(unknown.region_rate).toBeNull();
+    expect(() => assertBillingCreditsContract(unknown)).not.toThrow();
+  });
+
+  it('adds nothing for a consumer on an older credits protocol', () => {
+    const result = project(withEntries(), rate);
+    expect(result).not.toHaveProperty('region_rate');
+    expect(result.credit_balance).not.toHaveProperty('value');
+    expect(result.recent_entries[0]).not.toHaveProperty('value');
   });
 });

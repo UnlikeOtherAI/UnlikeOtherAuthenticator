@@ -210,7 +210,7 @@ describe('shared credits and recurring add-on read routes', () => {
       });
       expect(creditsService.getBillingCredits).toHaveBeenLastCalledWith(
         expect.objectContaining({ supportsBillingStatus: true, supportsPurchaseCurrency: true,
-          supportsReloadCurrency: false }),
+          supportsReloadCurrency: false, supportsRegionValue: false }),
       );
       await app.inject({
         method: 'POST',
@@ -224,7 +224,21 @@ describe('shared credits and recurring add-on read routes', () => {
       });
       expect(creditsService.getBillingCredits).toHaveBeenLastCalledWith(
         expect.objectContaining({ supportsBillingStatus: true, supportsPurchaseCurrency: true,
-          supportsReloadCurrency: true }),
+          supportsReloadCurrency: true, supportsRegionValue: false }),
+      );
+      await app.inject({
+        method: 'POST',
+        url: '/billing/v1/credits',
+        headers: {
+          'x-uoa-app-key': 'uoa_app_key',
+          'x-uoa-actor': 'signed-actor',
+          'x-uoa-billing-credits-protocol': '2.3.0',
+        },
+        payload: body,
+      });
+      expect(creditsService.getBillingCredits).toHaveBeenLastCalledWith(
+        expect.objectContaining({ supportsBillingStatus: true, supportsPurchaseCurrency: true,
+          supportsReloadCurrency: true, supportsRegionValue: true }),
       );
     });
   });

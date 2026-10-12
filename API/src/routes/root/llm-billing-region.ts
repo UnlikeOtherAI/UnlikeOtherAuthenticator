@@ -46,4 +46,16 @@ is claimed, just before its off-session payment, and its credits are fixed then.
 A failed reload pauses automatic top-up (needs_review, one
 payment_action_required attention item) until the card is updated; it is not
 retried. Older protocol versions keep the USD options.
+
+## Credits valued in the region currency
+Send x-uoa-billing-credits-protocol: 2.3.0 to also receive what credits are
+worth in the region currency; charges stay in credits. credit_balance.value is
+the available balance with a label ("€42.18 left", or "€1.20 owed" with a
+negative amount for debt), each lot at the rate it was bought at, so it never
+moves with exchange rates. Each recent_entries item carries value, the positive
+sum of what it drew from or gave back to each lot (direction gives the sign).
+region_rate {currency, usd_per_unit, credits_per_unit, source, as_of, display}
+is the rate the next credits used are valued at: show credits ÷
+credits_per_unit as an estimate beside a price in credits. Any of these is null
+while it cannot be valued yet. Render them; store nothing.
 `;
