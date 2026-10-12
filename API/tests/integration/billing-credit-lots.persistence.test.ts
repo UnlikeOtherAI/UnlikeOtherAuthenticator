@@ -159,12 +159,16 @@ describe.skipIf(!databaseTestsEnabled)('credit lots (PostgreSQL)', () => {
     const debit = 'bce_lots_debit_spanning';
     const euro = (await db().billingCreditTopUpCheckout.findUniqueOrThrow({ where: { id: 'bctu_lots_eur_1' } }))
       .creditEntryId as string;
+    const dollars = (await db().billingCreditTopUpCheckout.findUniqueOrThrow({ where: { id: 'bctu_lots_usd_2' } }))
+      .creditEntryId as string;
     const values = await readCreditDisplayValues({ creditAccountId: ids.creditAccount, organisationId: ids.org,
-      entryIds: [debit, euro, 'bce_without_movements'] }, { db: db(), stripe: null });
+      entryIds: [debit, euro, dollars, 'bce_without_movements'] }, { db: db(), stripe: null });
     // USD 5.00 from the USD lot at the region's 1.20 (EUR 4.1666) plus 3,000 EUR-lot credits (EUR 2.5834).
     expect(values.entries.get(debit)).toEqual({ currency: 'EUR', amount: '6.75', amountMinor: 675n });
-    // The EUR 25.00 purchase is worth what it bought: 29,030 credits at 1.16123.
-    expect(values.entries.get(euro)).toEqual({ currency: 'EUR', amount: '24.99', amountMinor: 2_499n });
+    // The EUR 25.00 purchase is worth what was paid for it.
+    expect(values.entries.get(euro)).toEqual({ currency: 'EUR', amount: '25.00', amountMinor: 2_500n });
+    // USD 5.00 bought after the region was chosen is worth its credits at the region's 1.20.
+    expect(values.entries.get(dollars)).toEqual({ currency: 'EUR', amount: '4.16', amountMinor: 416n });
     expect(values.entries.has('bce_without_movements')).toBe(false);
     expect(values.balance).toEqual({ currency: 'EUR', amount: '26.58', amountMinor: 2_658n });
     // The first USD lot is spent, so the next credits come from the EUR lot at its own rate.

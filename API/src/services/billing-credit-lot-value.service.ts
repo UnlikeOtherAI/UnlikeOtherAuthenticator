@@ -173,20 +173,27 @@ export type CreditDisplayValues = {
 
 /**
  * What a credits view shows in the region currency: the available balance, the
- * rate the next credits used are valued at, and each listed entry's value as the
- * sum of what it drew from (or gave back to) each lot, as a magnitude.
+ * rate the next credits used are valued at, and each listed entry's value as a
+ * magnitude. A grant is worth the lot it opened; any other entry is the sum of
+ * what it drew from (or gave back to) each lot.
  */
 export async function readCreditDisplayValues(params: { creditAccountId: string; organisationId: string;
   entryIds: string[] }, deps: { db?: ValueDb; stripe: CreditPurchaseRateClient | null; now?: () => Date }):
   Promise<CreditDisplayValues> {
   const db = deps.db ?? getAdminPrisma();
   const now = deps.now?.() ?? new Date();
-  const [state, movements] = await Promise.all([
+  const listed = params.entryIds.length > 0;
+  const [state, movements, opened] = await Promise.all([
     loadCreditLotState(params, { ...deps, db }),
-    params.entryIds.length === 0 ? [] : db.billingCreditLotMovement.findMany({
+    listed ? db.billingCreditLotMovement.findMany({
       where: { creditAccountId: params.creditAccountId, entryId: { in: params.entryIds } },
       select: { entryId: true, deltaMicrocredits: true, lot: { select: { currency: true, usdPerUnit: true } } },
-    }),
+    }) : [],
+    listed ? db.billingCreditLot.findMany({
+      where: { creditAccountId: params.creditAccountId, sourceEntryId: { in: params.entryIds } },
+      select: { sourceEntryId: true, currency: true, usdPerUnit: true, paidAmountMinor: true,
+        grantedMicrocredits: true },
+    }) : [],
   ]);
   const byEntry = new Map<string, typeof movements>();
   for (const movement of movements) {
@@ -198,6 +205,14 @@ export async function readCreditDisplayValues(params: { creditAccountId: string;
     const value = creditMovementValue(rows, state.target);
     entries.set(entryId, value && value.amountMinor < 0n
       ? { ...value, amount: value.amount.slice(1), amountMinor: -value.amountMinor } : value);
+  }
+  // A grant is worth its lot: what was paid when it was bought in the region currency, otherwise its credits.
+  for (const lot of opened) {
+    if (!lot.sourceEntryId) continue;
+    entries.set(lot.sourceEntryId, lot.currency === state.target.currency && lot.paidAmountMinor > 0n
+      ? { currency: state.target.currency, amount: new Prisma.Decimal(lot.paidAmountMinor.toString()).div(100)
+        .toFixed(2), amountMinor: lot.paidAmountMinor }
+      : creditMovementValue([{ deltaMicrocredits: -lot.grantedMicrocredits, lot }], state.target));
   }
   return { currency: state.target.currency, balance: creditBalanceValue(state), entries,
     nextRate: creditNextRate({ ...state, now }) };
