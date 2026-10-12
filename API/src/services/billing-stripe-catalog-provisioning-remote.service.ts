@@ -97,7 +97,8 @@ async function loadProducts(
   const products = await Promise.all(ids.map((id) => stripe.products.retrieve(id)));
   const result = new Map<string, Stripe.Product>();
   for (const product of products) {
-    if (!activeProduct(product)) remoteDrift('stripe_product_inactive', { product_id: product.id });
+    const productId = (product as { id: string }).id;
+    if (!activeProduct(product)) remoteDrift('stripe_product_inactive', { product_id: productId });
     result.set(product.id, product);
   }
   return result;
