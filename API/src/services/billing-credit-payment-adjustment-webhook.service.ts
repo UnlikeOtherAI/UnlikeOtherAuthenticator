@@ -51,6 +51,7 @@ function entryKind(kind: BillingCreditPaymentAdjustmentKind): BillingCreditEntry
   }
 }
 
+/** The paid entry an adjustment reverses, and what was paid for it in which currency. */
 async function resolvePaidEntry(
   tx: Prisma.TransactionClient,
   event: AdjustmentEvent,
@@ -71,7 +72,8 @@ async function resolvePaidEntry(
     ) {
       throw new AppError('INTERNAL', 502, 'STRIPE_CREDIT_PAYMENT_NOT_FOUND');
     }
-    return checkout.creditEntry;
+    return { entry: checkout.creditEntry, currency: checkout.currency,
+      paymentAmountMinor: checkout.paymentAmountMinor };
   }
   const attempt = await tx.billingCreditAutoTopUpAttempt.findUnique({
     where: { id: event.localId },
@@ -94,7 +96,8 @@ async function resolvePaidEntry(
   ) {
     throw new AppError('INTERNAL', 502, 'STRIPE_CREDIT_PAYMENT_NOT_FOUND');
   }
-  return attempt.creditEntry;
+  return { entry: attempt.creditEntry, currency: attempt.currency,
+    paymentAmountMinor: attempt.paymentAmountMinor };
 }
 
 async function lockPaidEntry(
@@ -119,10 +122,23 @@ async function lockPaidEntry(
   }
 }
 
-function expectedAppliedDelta(
+/**
+ * The credits an active refunded or disputed principal (money, in the purchase
+ * currency) takes back: at the purchase's own terms, in whole credits, never
+ * more than it granted. A USD purchase granted 10,000,000 microcredits a cent,
+ * so its refunds are unchanged; a refund of what is left of a GBP or EUR lot, in
+ * its currency, takes back what is left of it. The database computes the same.
+ */
+export function creditsForPrincipal(principalMinor: bigint, paid: { amountMinor: bigint;
+  microcredits: bigint }): bigint {
+  const credits = (principalMinor * paid.microcredits) / (paid.amountMinor * 1_000_000n) * 1_000_000n;
+  return credits < paid.microcredits ? credits : paid.microcredits;
+}
+
+export function expectedAppliedDelta(
   states: AdjustmentState[],
-  event: AdjustmentEvent,
-  paidAmountMicrocredits: bigint,
+  event: Pick<AdjustmentEvent, 'adjustmentKind' | 'stripeObjectId' | 'amountMinor'>,
+  paid: { amountMinor: bigint; microcredits: bigint },
 ): bigint {
   const active = new Map<string, bigint>();
   const restored = new Map<string, bigint>();
@@ -130,26 +146,23 @@ function expectedAppliedDelta(
   for (const state of states) {
     const reversal = isReversal(state.kind);
     const key = familyKey(state.kind, state.stripeObjectId);
-    if (reversal) restored.set(key, state.amountMinor * 10_000_000n);
-    else active.set(key, state.amountMinor * 10_000_000n);
+    if (reversal) restored.set(key, state.amountMinor);
+    else active.set(key, state.amountMinor);
     currentlyApplied += reversal
       ? -state.amountMicrocredits
       : state.amountMicrocredits;
   }
   const eventKey = familyKey(event.adjustmentKind, event.stripeObjectId);
   if (isReversal(event.adjustmentKind)) {
-    restored.set(eventKey, event.amountMinor * 10_000_000n);
+    restored.set(eventKey, event.amountMinor);
   }
-  else active.set(eventKey, event.amountMinor * 10_000_000n);
-  let activePrincipal = 0n;
+  else active.set(eventKey, event.amountMinor);
+  let activePrincipalMinor = 0n;
   for (const [key, amount] of active) {
     const restoredAmount = restored.get(key) ?? 0n;
-    activePrincipal += amount > restoredAmount ? amount - restoredAmount : 0n;
+    activePrincipalMinor += amount > restoredAmount ? amount - restoredAmount : 0n;
   }
-  const desiredApplied =
-    activePrincipal < paidAmountMicrocredits
-      ? activePrincipal
-      : paidAmountMicrocredits;
+  const desiredApplied = creditsForPrincipal(activePrincipalMinor, paid);
   const delta = desiredApplied - currentlyApplied;
   if (
     (isReversal(event.adjustmentKind) && delta > 0n) ||
@@ -166,9 +179,13 @@ export async function applyPaymentAdjustment(
   webhookEventId: string,
   account: StripeAccountContext,
 ): Promise<void> {
-  const paidEntry = await resolvePaidEntry(tx, event, account);
+  const paid = await resolvePaidEntry(tx, event, account);
+  const paidEntry = paid.entry;
   if (!paidEntry.serviceId || !paidEntry.appKeyId) {
     throw new AppError('INTERNAL', 502, 'STRIPE_CREDIT_PAYMENT_NOT_FOUND');
+  }
+  if (event.currency !== paid.currency) {
+    throw new AppError('INTERNAL', 502, 'STRIPE_CREDIT_ADJUSTMENT_BINDING_INVALID');
   }
   await lockPaidEntry(tx, paidEntry.id);
   const existing = await tx.billingCreditPaymentAdjustment.findUnique({
@@ -202,11 +219,8 @@ export async function applyPaymentAdjustment(
       amountMicrocredits: true,
     },
   });
-  const amountMicrocredits = expectedAppliedDelta(
-    states,
-    event,
-    paidEntry.amountMicrocredits,
-  );
+  const amountMicrocredits = expectedAppliedDelta(states, event,
+    { amountMinor: paid.paymentAmountMinor, microcredits: paidEntry.amountMicrocredits });
   const adjustmentId = randomUUID();
   const creditEntryId = amountMicrocredits > 0n ? randomUUID() : null;
   const idempotencyKey = `stripe:${event.adjustmentKind.toLowerCase()}:${event.stripeObjectId}`;
@@ -250,7 +264,8 @@ export async function applyPaymentAdjustment(
       balanceAfterMicrocredits: reversal
         ? balance + amountMicrocredits
         : balance - amountMicrocredits,
-      currency: event.currency,
+      // Credits stay USD-denominated; the adjustment row keeps the refunded money's currency.
+      currency: paidEntry.currency,
       idempotencyKey,
       sourceType: 'credit_payment_adjustment',
       sourceId: adjustmentId,

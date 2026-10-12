@@ -67,7 +67,8 @@ describe.skipIf(!databaseTestsEnabled)('credit lots (PostgreSQL)', () => {
     return `bce_${id}`;
   }
 
-  async function refund(checkoutId: string, kind: BillingCreditPaymentAdjustmentKind, objectId: string, minor: bigint) {
+  async function refund(checkoutId: string, kind: BillingCreditPaymentAdjustmentKind, objectId: string, minor: bigint,
+    currency: 'USD' | 'EUR' = 'USD') {
     const at = tick();
     await db().$transaction(async (tx) => {
       const reversal = kind === BillingCreditPaymentAdjustmentKind.REFUND_REVERSAL;
@@ -76,12 +77,12 @@ describe.skipIf(!databaseTestsEnabled)('credit lots (PostgreSQL)', () => {
         apiVersion: '2026-06-24.dahlia', livemode: false, stripeCreatedAt: at, stripeObjectId: objectId,
         stripeObjectStatus: reversal ? 'failed' : 'succeeded', stripeCustomerId: 'cus_funding_race',
         stripePaymentIntentId: `pi_${checkoutId}`, stripeChargeId: `ch_${checkoutId}`, amountMinor: minor,
-        currency: 'USD' } });
+        currency } });
       await applyPaymentAdjustment(tx, { kind: 'payment_adjustment', localId: checkoutId, localType: 'top_up',
         adjustmentKind: kind, stripeObjectId: objectId,
         paymentIntent: { id: `pi_${checkoutId}`, customer: 'cus_funding_race', latest_charge: `ch_${checkoutId}`,
           payment_method: 'pm_funding_race' } as never,
-        paymentIntentId: `pi_${checkoutId}`, chargeId: `ch_${checkoutId}`, amountMinor: minor, currency: 'USD',
+        paymentIntentId: `pi_${checkoutId}`, chargeId: `ch_${checkoutId}`, amountMinor: minor, currency,
         occurredAt: at }, webhook.id, stripeAccount);
     });
   }
@@ -221,6 +222,44 @@ describe.skipIf(!databaseTestsEnabled)('credit lots (PostgreSQL)', () => {
     const drawn = await db().billingCreditLotMovement.aggregate({ where: { entryId: { in: debits } },
       _sum: { deltaMicrocredits: true } });
     expect(drawn._sum.deltaMicrocredits).toBe(-18_000_000_000n);
+    await expectBalanced();
+  });
+
+  it('refunds what is left of a EUR lot, in EUR, from that lot alone', async () => {
+    const entry = await pay('bctu_lots_eur_3', 'EUR');
+    const lot = async () => (await lots()).find((row) => row.sourceEntryId === entry)!;
+    // Spend every older lot and 3,000 of this lot's 29,030 credits.
+    const older = (await lots()).filter((row) => row.sourceEntryId !== entry)
+      .reduce((sum, row) => sum + row.remainingMicrocredits, 0n);
+    await adjust('lots_spend_into_eur_3', -(older + 3_000_000_000n));
+    expect((await lot()).remainingMicrocredits).toBe(26_030_000_000n);
+
+    // What is left is worth EUR 22.41 of the EUR 25.00 paid; refunding that takes back 26,022 credits, all from
+    // this lot, and leaves 8 credits, worth under a cent.
+    await refund('bctu_lots_eur_3', BillingCreditPaymentAdjustmentKind.REFUND, 're_lots_eur_3', 2_241n, 'EUR');
+    const refunded = await db().billingCreditEntry.findFirstOrThrow({ where: { kind: 'REFUND', reversesEntryId: entry } });
+    expect(refunded).toMatchObject({ amountMicrocredits: 26_022_000_000n, currency: 'USD' });
+    expect(await movements(refunded.id)).toEqual([{ lotId: `bcl_${entry}`, deltaMicrocredits: -26_022_000_000n }]);
+    await expect(db().billingCreditPaymentAdjustment.findFirstOrThrow({ where: { stripeObjectId: 're_lots_eur_3' } }))
+      .resolves.toMatchObject({ currency: 'EUR', amountMinor: 2_241n, amountMicrocredits: 26_022_000_000n });
+    await expect(readCreditBalanceValue({ creditAccountId: ids.creditAccount, organisationId: ids.org },
+      { db: db(), stripe: null })).resolves.toEqual({ currency: 'EUR', amount: '0.00', amountMinor: 0n });
+
+    // A refund that fails gives the same credits back to the same lot.
+    await refund('bctu_lots_eur_3', BillingCreditPaymentAdjustmentKind.REFUND_REVERSAL, 're_lots_eur_3', 2_241n, 'EUR');
+    const reversal = await db().billingCreditEntry.findFirstOrThrow({ where: { kind: 'REFUND_REVERSAL',
+      reversesEntryId: entry } });
+    expect(await movements(reversal.id)).toEqual([{ lotId: `bcl_${entry}`, deltaMicrocredits: 26_022_000_000n }]);
+
+    // Refunding all EUR 25.00 takes back exactly the 29,030 credits it bought: the lot, then debt for what was spent.
+    await refund('bctu_lots_eur_3', BillingCreditPaymentAdjustmentKind.REFUND, 're_lots_eur_3_all', 2_500n, 'EUR');
+    const all = await db().billingCreditEntry.findFirstOrThrow({ where: { kind: 'REFUND', reversesEntryId: entry,
+      NOT: { id: refunded.id } } });
+    expect(all.amountMicrocredits).toBe(29_030_000_000n);
+    expect(await movements(all.id)).toEqual([
+      { lotId: `bcl_${entry}`, deltaMicrocredits: -26_030_000_000n },
+      { lotId: null, deltaMicrocredits: -3_000_000_000n },
+    ]);
     await expectBalanced();
   });
 
