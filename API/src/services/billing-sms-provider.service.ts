@@ -36,6 +36,12 @@ export type SmsProviderConfiguration = {
   ie1ApiKeySecret?: string;
 };
 
+// AvailablePhoneNumbers returns `SMS` (upper case); IncomingPhoneNumbers and Twilio's
+// published schema name `sms`. Require an explicit true and refuse contradictory flags.
+const availableCapabilities = z.object({ sms: z.boolean().optional(), SMS: z.boolean().optional() })
+  .transform((value) => ({ sms: (value.sms === true || value.SMS === true) &&
+    value.sms !== false && value.SMS !== false }));
+
 function unavailable(): AppError {
   return new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_SMS_PROVIDER_EVIDENCE_UNAVAILABLE');
 }
@@ -101,7 +107,7 @@ export class BillingSmsProvider {
     if (!/^[A-Z]{2}$/.test(country) || !/^\+[1-9]\d{6,14}$/.test(phone)) throw unavailable();
     const query = new URLSearchParams({ Contains: phone, SmsEnabled: 'true', PageSize: '100' });
     const result = z.object({ available_phone_numbers: z.array(z.object({
-      phone_number: z.string(), iso_country: z.string(), capabilities: z.object({ sms: z.boolean() }),
+      phone_number: z.string(), iso_country: z.string(), capabilities: availableCapabilities,
     })) }).safeParse(await this.read(`https://api.twilio.com/2010-04-01/Accounts/` +
       `${this.configuration.accountSid}/AvailablePhoneNumbers/${country}/Mobile.json?${query}`));
     if (!result.success || !result.data.available_phone_numbers.some((number) =>

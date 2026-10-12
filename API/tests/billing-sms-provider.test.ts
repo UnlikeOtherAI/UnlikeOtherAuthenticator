@@ -23,6 +23,20 @@ describe('SMS private provider evidence', () => {
       capabilities: { sms: false } }] }).assertAvailableMobile('CZ', phone))
       .rejects.toThrow('BILLING_SMS_MOBILE_NUMBER_UNAVAILABLE');
   });
+  it('reads the uppercase capability keys the AvailablePhoneNumbers resource actually returns', async () => {
+    const phone = '+447463595266';
+    // Shape of a live Twilio AvailablePhoneNumbers/GB/Mobile read: capability keys are upper case.
+    const live = (capabilities: Record<string, boolean>) => provider({ available_phone_numbers: [{
+      friendly_name: '+44 7463 595266', phone_number: phone, lata: null, locality: null, rate_center: null,
+      latitude: null, longitude: null, region: null, postal_code: null, iso_country: 'GB',
+      address_requirements: 'none', beta: false, capabilities }], uri: '/2010-04-01/Accounts/x/AvailablePhoneNumbers/GB/Mobile.json' });
+    await live({ MMS: false, SMS: true, voice: true }).assertAvailableMobile('GB', phone);
+    for (const capabilities of [{ MMS: true, SMS: false, voice: true }, { MMS: false, voice: true },
+      { SMS: true, sms: false }, { SMS: false, sms: true }]) {
+      await expect(live(capabilities).assertAvailableMobile('GB', phone))
+        .rejects.toThrow('BILLING_SMS_MOBILE_NUMBER_UNAVAILABLE');
+    }
+  });
   it('binds owned number evidence to the configured provider account and exact SID', async () => {
     const sid = `PN${'4'.repeat(32)}`;
     expect(await provider({ sid, account_sid: accountSid, phone_number: '+420777111222',
