@@ -1597,9 +1597,10 @@ That is the only change a region row accepts. One debit's value
 from the display release.
 
 The same offers are projected for the covered services `nessie`, `deepwater`,
-`deepsignal`, `deeptest` and `docgen` that are registered and active; another
-active service (such as `salesnerd`) is left untouched, and a covered one not
-yet registered is skipped until it is. Each receives top-up and
+`deeptest`, `salesnerd` and `docgen` that are registered and active. A covered
+one not yet registered is skipped until it is. Another active service (such as
+`deepsignal`) is not provisioned, and the catalog retires what it had given it
+beyond its original USD policy, offers and option. Each receives top-up and
 automatic-top-up policy plus the default automatic option: refill 25,000
 credits below 5,000, with a US$100 monthly cap and consent version
 `credits-auto-top-up-v1`.

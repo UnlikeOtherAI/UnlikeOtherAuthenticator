@@ -18,6 +18,8 @@ import {
   PROVISIONED_BILLING_SERVICE_IDENTIFIERS,
 } from './billing-stripe-catalog-provisioning-spec.js';
 
+import { retireUncoveredServiceCredits } from './billing-stripe-catalog-provisioning-retire.service.js';
+
 export type { CatalogProvisioningAction } from './billing-stripe-catalog-provisioning-local.shared.js';
 
 /**
@@ -32,16 +34,20 @@ async function requireServices(db: CatalogDb, actions: CatalogProvisioningAction
     select: { id: true, identifier: true, name: true, active: true },
   });
   const covered = new Set<string>(PROVISIONED_BILLING_SERVICE_IDENTIFIERS);
-  for (const service of services) {
-    if (!covered.has(service.identifier)) addCatalogAction(actions, 'billing_service_not_covered', service.identifier, false, 'skipped');
+  const uncovered = services.filter((service) => !covered.has(service.identifier));
+  for (const service of uncovered) {
+    addCatalogAction(actions, 'billing_service_not_covered', service.identifier, false, 'skipped', service.id);
   }
   for (const identifier of PROVISIONED_BILLING_SERVICE_IDENTIFIERS) {
     if (!services.some((service) => service.identifier === identifier)) {
       addCatalogAction(actions, 'billing_service_not_registered', identifier, false, 'skipped');
     }
   }
-  return new Map(services.filter((service) => covered.has(service.identifier))
-    .map((service) => [service.identifier, service]));
+  return {
+    covered: new Map(services.filter((service) => covered.has(service.identifier))
+      .map((service) => [service.identifier, service])),
+    uncovered,
+  };
 }
 
 async function requireDeepWaterApp(db: CatalogDb) {
@@ -266,7 +272,7 @@ export async function reconcileLocalStripeCommercialCatalog(params: {
   write: boolean;
 }): Promise<CatalogProvisioningAction[]> {
   const actions: CatalogProvisioningAction[] = [];
-  const services = await requireServices(params.db, actions);
+  const { covered: services, uncovered } = await requireServices(params.db, actions);
   const app = await requireDeepWaterApp(params.db);
   await ensureFeatureFlag({ db: params.db, appId: app.id, write: params.write, actions });
   const account = await ensureStripeAccount({ ...params, actions });
@@ -277,6 +283,10 @@ export async function reconcileLocalStripeCommercialCatalog(params: {
   });
   for (const service of services.values()) {
     await ensureProvisionedServiceCredits({ db: params.db, service, write: params.write, actions });
+  }
+  const now = new Date();
+  for (const service of uncovered) {
+    await retireUncoveredServiceCredits({ db: params.db, service, write: params.write, now, actions });
   }
   const deepwater = services.get(DEEPWATER_PRIVACY_SPEC.serviceIdentifier);
   if (!deepwater) localCatalogDrift('deepwater_service_missing', { service: DEEPWATER_PRIVACY_SPEC.serviceIdentifier });

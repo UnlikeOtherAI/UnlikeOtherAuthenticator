@@ -1,10 +1,18 @@
+/** The services that sell shared credits through the catalog. DeepSignal does not. */
 export const PROVISIONED_BILLING_SERVICE_IDENTIFIERS = [
   'nessie',
   'deepwater',
-  'deepsignal',
   'deeptest',
   'docgen',
+  'salesnerd',
 ] as const;
+
+/**
+ * The USD rows the first catalog version provisioned for every service. An
+ * uncovered service keeps these until someone decides; everything else the
+ * catalog gave it is retired.
+ */
+export const ORIGINAL_USD_CREDIT_OFFER_KEYS = ['credits_usd_10', 'credits_usd_25', 'credits_usd_50', 'credits_usd_100'];
 
 export type ProvisionedBillingServiceIdentifier =
   (typeof PROVISIONED_BILLING_SERVICE_IDENTIFIERS)[number];

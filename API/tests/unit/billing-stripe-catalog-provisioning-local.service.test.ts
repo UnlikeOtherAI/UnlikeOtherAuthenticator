@@ -285,18 +285,75 @@ describe('local Stripe commercial catalog reconciliation', () => {
     expect(db.billingStripeAccount.create).not.toHaveBeenCalled();
   });
 
-  it('leaves an active service the catalog does not cover alone and names it', async () => {
+  it('covers SalesNerd and not DeepSignal', () => {
+    expect(PROVISIONED_BILLING_SERVICE_IDENTIFIERS).toContain('salesnerd');
+    expect(PROVISIONED_BILLING_SERVICE_IDENTIFIERS).not.toContain('deepsignal');
+  });
+
+  it('leaves an active service the catalog does not cover unprovisioned and names it', async () => {
     const db = emptyLocalCatalog([
       ...services,
-      { id: 'service_salesnerd', identifier: 'salesnerd', name: 'SalesNerd', active: true },
+      { id: 'service_deepsignal', identifier: 'deepsignal', name: 'DeepSignal', active: true },
     ]);
 
     const actions = await reconcileLocalStripeCommercialCatalog({ db: db as never, catalog, write: false });
 
-    expect(actions).toContainEqual({ resource: 'billing_service_not_covered', key: 'salesnerd', outcome: 'skipped' });
-    expect(actions.some((action) => action.key.startsWith('salesnerd/'))).toBe(false);
-    expect(db.billingCreditFundingPolicy.findMany).not.toHaveBeenCalledWith(
-      expect.objectContaining({ where: expect.objectContaining({ serviceId: 'service_salesnerd' }) }));
+    expect(actions).toContainEqual({ resource: 'billing_service_not_covered', key: 'deepsignal', outcome: 'skipped',
+      id: 'service_deepsignal' });
+    expect(actions.some((action) => action.outcome === 'created' && action.key.startsWith('deepsignal/'))).toBe(false);
+  });
+
+  it('retires what the catalog gave an uncovered service, keeping its original USD rows', async () => {
+    const db = emptyLocalCatalog([
+      ...services,
+      { id: 'service_deepsignal', identifier: 'deepsignal', name: 'DeepSignal', active: true },
+    ]);
+    const signalPolicies = [
+      { id: 'policy_signal_usd', serviceId: 'service_deepsignal', currency: 'USD', version: 1, active: true },
+      { id: 'policy_signal_eur', serviceId: 'service_deepsignal', currency: 'EUR', version: 1, active: true },
+    ];
+    db.billingCreditFundingPolicy.findMany.mockImplementation(async ({ where }) =>
+      where.serviceId === 'service_deepsignal' ? signalPolicies : []);
+    const offer = (policyId: string, key: string) => ({ id: `offer_${key}`, policyId, key, version: 1, active: true });
+    db.billingCreditTopUpOffer.findMany.mockImplementation(async ({ where }) =>
+      where.policyId === 'policy_signal_usd'
+        ? ['credits_usd_10', 'credits_usd_100', 'credits_usd_1000'].map((key) => offer('policy_signal_usd', key))
+        : where.policyId === 'policy_signal_eur' ? [offer('policy_signal_eur', 'credits_eur_10')] : []);
+    db.billingCreditAutoTopUpOption.findMany.mockImplementation(async ({ where }) =>
+      where.policyId === 'policy_signal_usd'
+        ? [{ id: 'option_signal_default', policyId: 'policy_signal_usd', key: 'default', version: 1, active: true }]
+        : []);
+    Object.assign(db.billingCreditTopUpOffer, { update: vi.fn() });
+    Object.assign(db.billingCreditFundingPolicy, { update: vi.fn() });
+    Object.assign(db.billingCreditAutoTopUpOption, { update: vi.fn() });
+
+    const planned = await reconcileLocalStripeCommercialCatalog({ db: db as never, catalog, write: false });
+    const signal = planned.filter((action) => action.key.startsWith('deepsignal/'));
+
+    expect(signal).toEqual([
+      { resource: 'credit_top_up_offer_kept_uncovered', key: 'deepsignal/credits_usd_10/v1', outcome: 'skipped',
+        id: 'offer_credits_usd_10' },
+      { resource: 'credit_top_up_offer_kept_uncovered', key: 'deepsignal/credits_usd_100/v1', outcome: 'skipped',
+        id: 'offer_credits_usd_100' },
+      { resource: 'credit_top_up_offer_retired', key: 'deepsignal/credits_usd_1000/v1', outcome: 'retired',
+        id: 'offer_credits_usd_1000' },
+      { resource: 'credit_auto_top_up_option_kept_uncovered', key: 'deepsignal/default/v1', outcome: 'skipped',
+        id: 'option_signal_default' },
+      { resource: 'credit_funding_policy_kept_uncovered', key: 'deepsignal/USD/v1', outcome: 'skipped',
+        id: 'policy_signal_usd' },
+      { resource: 'credit_top_up_offer_retired', key: 'deepsignal/credits_eur_10/v1', outcome: 'retired',
+        id: 'offer_credits_eur_10' },
+      { resource: 'credit_funding_policy_retired', key: 'deepsignal/EUR/v1', outcome: 'retired',
+        id: 'policy_signal_eur' },
+    ]);
+    expect(db.billingCreditTopUpOffer.update).not.toHaveBeenCalled();
+
+    await reconcileLocalStripeCommercialCatalog({ db: db as never, catalog, write: true });
+    const deactivated = (fn: { mock: { calls: Array<[{ where: { id: string } }]> } }) =>
+      fn.mock.calls.map(([call]) => call.where.id);
+    expect(deactivated(db.billingCreditTopUpOffer.update as never)).toEqual(['offer_credits_usd_1000', 'offer_credits_eur_10']);
+    expect(deactivated(db.billingCreditFundingPolicy.update as never)).toEqual(['policy_signal_eur']);
+    expect(db.billingCreditAutoTopUpOption.update).not.toHaveBeenCalled();
   });
 
   it('provisions the registered products and names one not yet registered', async () => {
