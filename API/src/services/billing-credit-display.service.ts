@@ -73,7 +73,9 @@ export function billingCreditAmount(microcredits: bigint, locale?: BillingCustom
   };
 }
 
-export function billingCreditsPaymentMoney(amountMinor: bigint, locale?: BillingCustomerLocale): BillingCreditsPaymentMoney {
+/** A credit purchase amount in the currency it is paid in: USD, or a billing region's GBP or EUR. */
+export function billingCreditsPaymentMoney(amountMinor: bigint, locale?: BillingCustomerLocale,
+  currency: BillingCreditsPaymentMoney['currency'] = 'USD'): BillingCreditsPaymentMoney {
   if (amountMinor < 0n) {
     throw new AppError('INTERNAL', 500, 'BILLING_CREDIT_PAYMENT_INVALID');
   }
@@ -81,8 +83,8 @@ export function billingCreditsPaymentMoney(amountMinor: bigint, locale?: Billing
   return localizedBillingMoney({
     amount,
     amount_minor: amountMinor.toString(),
-    currency: 'USD' as const,
-    display: usdDisplay(amount),
+    currency,
+    display: currency === 'USD' ? usdDisplay(amount) : `${currency} ${grouped(amount)}`,
   }, locale);
 }
 

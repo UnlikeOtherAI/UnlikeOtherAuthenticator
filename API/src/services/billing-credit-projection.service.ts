@@ -18,6 +18,7 @@ import {
   billingCreditAmount,
   billingCreditsPaymentMoney,
 } from './billing-credit-display.service.js';
+import type { CreditPurchaseRate } from './billing-credit-purchase-rate.service.js';
 import { billingLocalizedCreditDisplay } from './billing-credit-copy.catalog.js';
 import {
   buildManagerCreditRecentEntries,
@@ -171,6 +172,7 @@ export function buildBillingCreditsProjection(params: {
   attention?: BillingCreditAttentionV1[];
   fundingRequest?: BillingCreditFundingRequestActionV1;
   settlementPending?: boolean;
+  purchaseRate?: CreditPurchaseRate | null;
 }): BillingCreditsV1 {
   const { data, viewer } = params;
   const controlledBy = params.controlledBy ?? null;
@@ -182,7 +184,9 @@ export function buildBillingCreditsProjection(params: {
   // organisation's own credit account.
   const canFund = controlledBy === null ? viewer.billingManager : controlledBy.can_manage;
   const pendingCount = data.pending.length;
-  const pendingPayment = sum(data.pending.map((row) => row.paymentAmountMinor));
+  // The payment shown is what is pending in the purchase currency; credits and count include every row.
+  const pendingPayment = sum(data.pending.filter((row) => row.currency === data.purchaseCurrency)
+    .map((row) => row.paymentAmountMinor));
   const pendingCredits = sum(data.pending.map((row) => row.creditsReceivedMicrocredits));
   const copy = billingCreditCopy(params.locale);
   const creditsAdded = sum(
@@ -277,6 +281,7 @@ export function buildBillingCreditsProjection(params: {
       params.actionReadiness ?? unavailableBillingCreditActions(),
       params.period.endsAt,
       params.locale,
+      params.purchaseRate,
     );
     const funding = actions.funding_policy;
     const automatic = actions.automatic_top_up;
@@ -296,7 +301,7 @@ export function buildBillingCreditsProjection(params: {
       },
       pending_credits: {
         ...common.pending_credits,
-        payment_amount: billingCreditsPaymentMoney(pendingPayment, params.locale),
+        payment_amount: billingCreditsPaymentMoney(pendingPayment, params.locale, data.purchaseCurrency),
       },
       funding_policy: funding,
       automatic_top_up: automatic,

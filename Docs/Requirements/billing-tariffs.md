@@ -1507,21 +1507,57 @@ write. `--apply` additionally requires the exact confirmation string
 one serializable transaction.
 
 The remote Stripe objects must already exist. UOA validates their account,
-mode, active state, lookup key, Product binding, exact metadata, USD amount,
+mode, active state, lookup key, Product binding, exact metadata, currency and amount,
 one-time/recurring type, and monthly licensed recurrence before opening the
 write transaction. The command never creates, updates, archives, or replaces a
 Stripe Product or Price. It may bind an exact local catalog only when both of
 its Stripe identifiers are still null; a partial or different binding is
 drift. Re-running against the exact state is a no-op.
 
-The version-1 shared-credit Product has four one-time Prices:
+The version-1 shared-credit Product has fifteen one-time Prices:
 
-| Lookup key               | Charge | Credits |
-| ------------------------ | -----: | ------: |
-| `uoa_credits_usd_10_v1`  |  US$10 |  10,000 |
-| `uoa_credits_usd_25_v1`  |  US$25 |  25,000 |
-| `uoa_credits_usd_50_v1`  |  US$50 |  50,000 |
-| `uoa_credits_usd_100_v1` | US$100 | 100,000 |
+| Lookup key                | Charge   | Credits   |
+| ------------------------- | -------: | --------: |
+| `uoa_credits_usd_10_v1`   |    US$10 |    10,000 |
+| `uoa_credits_usd_25_v1`   |    US$25 |    25,000 |
+| `uoa_credits_usd_50_v1`   |    US$50 |    50,000 |
+| `uoa_credits_usd_100_v1`  |   US$100 |   100,000 |
+| `uoa_credits_usd_1000_v1` | US$1,000 | 1,000,000 |
+| `uoa_credits_eur_N_v1`    | EUR N    | live rate |
+| `uoa_credits_gbp_N_v1`    | GBP N    | live rate |
+
+N is 10, 25, 50, 100 and 1,000. A USD Price carries `credits` in its metadata; a
+GBP or EUR Price carries `credits_basis=live_fx_rate` instead.
+
+### Credits bought in the region currency
+
+Credits stay one USD-denominated unit (1,000 per USD); balances, charges,
+entries and the credit account are in credits. An organisation whose billing
+region is UK or Europe buys them in GBP or EUR:
+
+- Each currency has its own funding policy and offers. Offers and catalogs in
+  GBP or EUR carry no fixed credit count (`0`), enforced in the database.
+- When the checkout is created UOA reads the rate: by default Stripe's FX Quote
+  with `lock_duration: none` (no fee, no lock) and its `base_rate`. The credits
+  are the payment times that rate, rounded down to whole credits, with no buffer.
+  The checkout stores the currency, the credits, the rate source, the base rate,
+  Stripe's fee-bearing `exchange_rate` and the quote id as evidence; the
+  database requires them for every GBP or EUR checkout and none for USD.
+- A quote cannot be attached to a Checkout Session, so Stripe converts the
+  payment at its own rate minutes later. The difference is exchange swing the
+  usage markup absorbs.
+- The payment webhook grants exactly the stored credits, as a USD credit entry,
+  and the purchase invoice is in the payment currency.
+- `BILLING_CREDIT_FX_RATE_SOURCE=ecb` sells at the accepted ECB snapshot
+  instead. An unavailable source refuses with
+  `503 BILLING_CREDIT_FX_RATE_UNAVAILABLE` and opens one
+  `credit_fx_rate_unavailable` alert, emailed once; UOA never switches source.
+- A consumer on credits protocol 2.1.0 sees the region-currency offers with a
+  `credit_rate`; an older consumer sees the USD offers, which stay purchasable.
+  Without a region the offers are USD.
+- Not yet: automatic top-up stays USD, refunds and disputes of a GBP or EUR
+  purchase are refused at the webhook (fail closed, retried by Stripe) until
+  refunds per lot land, and a mixed-currency balance is valued only in credits.
 
 The same offers are projected for the exact active services `nessie`,
 `deepwater`, `deepsignal`, `deeptest`, and `docgen`. Each receives top-up and

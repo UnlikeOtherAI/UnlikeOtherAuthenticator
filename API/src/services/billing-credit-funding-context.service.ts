@@ -49,7 +49,7 @@ export type CreditFundingActionRequest = {
 
 export type CreditFundingStripeClient = Pick<
   Stripe,
-  'accounts' | 'checkout' | 'customers' | 'paymentIntents' | 'paymentMethods' | 'prices'
+  'accounts' | 'checkout' | 'customers' | 'paymentIntents' | 'paymentMethods' | 'prices' | 'rawRequest'
 >;
 
 export type CreditFundingActionContext = {
@@ -206,8 +206,9 @@ export async function resolveCreditFundingActionContext(
   };
 }
 
+/** An offer in a currency the organisation may buy in: USD, or its billing region's. */
 export async function resolveCreditTopUpOffer(
-  params: { serviceId: string; accountId: string; offerId: string },
+  params: { serviceId: string; accountId: string; offerId: string; currencies?: string[] },
   deps?: { prisma?: PrismaClient },
 ) {
   const prisma = deps?.prisma ?? getAdminPrisma();
@@ -216,7 +217,8 @@ export async function resolveCreditTopUpOffer(
       id: params.offerId,
       serviceId: params.serviceId,
       active: true,
-      policy: { serviceId: params.serviceId, currency: 'USD', active: true, topUpEnabled: true },
+      policy: { serviceId: params.serviceId, currency: { in: params.currencies ?? ['USD'] }, active: true,
+        topUpEnabled: true },
     },
     include: { policy: true },
   });
@@ -230,7 +232,7 @@ export async function resolveCreditTopUpOffer(
       },
     },
   });
-  assertCatalogBinding(catalog, offer);
+  assertCatalogBinding(catalog, offer, offer.policy.currency);
   return { policy: offer.policy, offer, catalog: catalog as NonNullable<typeof catalog> };
 }
 
@@ -265,7 +267,7 @@ export async function resolveCreditAutoTopUpOption(
       },
     },
   });
-  assertCatalogBinding(catalog, option.refillOffer);
+  assertCatalogBinding(catalog, option.refillOffer, option.policy.currency);
   if (option.monthlyChargeCapMinor < option.refillOffer.paymentAmountMinor) {
     throw new AppError('INTERNAL', 409, 'BILLING_CREDIT_AUTO_TOP_UP_TERMS_INVALID');
   }
@@ -291,10 +293,11 @@ function assertCatalogBinding(
     paymentAmountMinor: bigint;
     creditsReceivedMicrocredits: bigint;
   },
+  currency: string,
 ): void {
   if (
     !catalog ||
-    catalog.currency !== 'USD' ||
+    catalog.currency !== currency ||
     catalog.paymentAmountMinor !== offer.paymentAmountMinor ||
     catalog.creditsReceivedMicrocredits !== offer.creditsReceivedMicrocredits ||
     !catalog.stripeProductId ||
@@ -308,6 +311,7 @@ export async function assertCreditCatalogPrice(
   stripe: Pick<Stripe, 'prices'>,
   account: StripeAccountContext,
   catalog: {
+    currency: string;
     stripeLookupKey: string;
     stripeProductId: string | null;
     stripePriceId: string | null;
@@ -322,7 +326,8 @@ export async function assertCreditCatalogPrice(
   assertStripeObjectLivemode(price, account.livemode);
   const productId = stripeExternalId(price.product);
   const product = typeof price.product === 'string' ? null : price.product;
-  const credits = catalog.creditsReceivedMicrocredits / 1_000_000n;
+  // A USD Price fixes its credits; a GBP or EUR Price follows the live rate at checkout.
+  const credits = catalog.currency === 'USD' ? catalog.creditsReceivedMicrocredits / 1_000_000n : null;
   const exactMetadata = (actual: Stripe.Metadata, expected: Record<string, string>): boolean => {
     const actualKeys = Object.keys(actual).sort();
     const expectedKeys = Object.keys(expected).sort();
@@ -335,7 +340,7 @@ export async function assertCreditCatalogPrice(
     price.id !== catalog.stripePriceId ||
     !price.active ||
     price.type !== 'one_time' ||
-    price.currency.toUpperCase() !== 'USD' ||
+    price.currency.toUpperCase() !== catalog.currency ||
     price.unit_amount === null ||
     BigInt(price.unit_amount) !== catalog.paymentAmountMinor ||
     price.lookup_key !== catalog.stripeLookupKey ||

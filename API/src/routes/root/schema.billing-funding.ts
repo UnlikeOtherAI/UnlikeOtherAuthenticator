@@ -100,7 +100,7 @@ export const billingFundingEndpoints: EndpointSchema[] = [
       '502/503': 'Ledger portfolio evidence or Stripe collection context is unavailable',
     },
     notes:
-      'Settlement is deterministic, serializable, and cursor-idempotent. Available credits stop at zero while UOA retains the full centrally rated service/user liability; only a verified reversal may create debt. Products render the returned model and never rate or reallocate credits locally.',
+      'Settlement is deterministic, serializable, and cursor-idempotent. Available credits stop at zero while UOA retains the full centrally rated service/user liability; only a verified reversal may create debt. Products render the returned model and never rate or reallocate credits locally. With x-uoa-billing-credits-protocol: 2.1.0 the one-time offers are in the organisation billing region currency (USD, EUR or GBP; USD until a region is chosen) and a GBP or EUR offer carries credit_rate; older versions receive the USD offers.',
   },
   {
     method: 'POST',
@@ -150,10 +150,10 @@ export const billingFundingEndpoints: EndpointSchema[] = [
       200: '{ redirect_url } for legacy clients; negotiated presentation adds the opaque purchase_id',
       '401/403': 'Invalid app key, actor, exact-team manager, or subject',
       409: 'Offer/catalog unavailable or another exact-team Checkout is pending',
-      '502/503': 'Stripe binding invalid or reconciliation pending',
+      '502/503': 'Stripe binding invalid, reconciliation pending, or 503 BILLING_CREDIT_FX_RATE_UNAVAILABLE for a GBP or EUR offer while its purchase rate cannot be read',
     },
     notes:
-      'The body is frozen: callers cannot supply an amount, price, currency, quantity, customer, metadata, or return URL. UOA persists immutable intent before Stripe and uses server-derived idempotency.',
+      'The body is frozen: callers cannot supply an amount, price, currency, quantity, customer, metadata, or return URL. UOA persists immutable intent before Stripe and uses server-derived idempotency. A USD offer, or one in the organisation billing region currency, is accepted; a GBP or EUR checkout fixes its credits at the live rate read as it is created (BILLING_CREDIT_FX_RATE_SOURCE, default Stripe) and stores the rate as evidence.',
   },
   {
     method: 'POST',

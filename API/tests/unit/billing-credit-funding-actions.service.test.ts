@@ -36,6 +36,7 @@ const request = {
 const account = { id: 'account_1', stripeAccountId: 'acct_uoa', livemode: false };
 const policy = {
   id: 'policy_1',
+  currency: 'USD',
   automaticConsentVersion: 'credits-auto-2026-07',
 };
 const offer = {
@@ -141,6 +142,7 @@ function checkoutRow(kind: 'setup' | 'top_up', actorJti = 'actor_jti_1') {
         offerId: offer.id,
         paymentAmountMinor: offer.paymentAmountMinor,
         creditsReceivedMicrocredits: offer.creditsReceivedMicrocredits,
+        currency: 'USD',
       }
     : {
         ...common,
@@ -223,6 +225,7 @@ describe('UOA credit funding mutation services', () => {
         resolveContext: vi.fn().mockResolvedValue(state.context),
         resolveOffer: vi.fn().mockResolvedValue(selections().offer),
         validateCatalog: vi.fn(),
+        readRegion: vi.fn().mockResolvedValue(null),
       },
     );
 
@@ -398,6 +401,7 @@ describe('UOA credit funding mutation services', () => {
         resolveContext: vi.fn().mockResolvedValue(state.context),
         resolveOffer: vi.fn().mockResolvedValue(selections().offer),
         validateCatalog: vi.fn(),
+        readRegion: vi.fn().mockResolvedValue(null),
       },
     );
 
@@ -453,6 +457,7 @@ describe('UOA credit funding mutation services', () => {
           resolveContext: vi.fn().mockResolvedValue(state.context),
           resolveOffer: vi.fn().mockResolvedValue(selected),
           validateCatalog: vi.fn(),
+          readRegion: vi.fn().mockResolvedValue(null),
         },
       ),
     ).rejects.toMatchObject({ message: 'BILLING_CREDIT_TOP_UP_PENDING' });
@@ -484,6 +489,7 @@ describe('UOA credit funding mutation services', () => {
       resolveContext: vi.fn().mockResolvedValue(state.context),
       resolveOffer: vi.fn().mockResolvedValue(selections().offer),
       validateCatalog: vi.fn(),
+      readRegion: vi.fn().mockResolvedValue(null),
     };
 
     const results = await Promise.all([

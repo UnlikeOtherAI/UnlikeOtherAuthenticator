@@ -73,7 +73,7 @@ async function applyTopUpSucceeded(
       kind: BillingCreditEntryKind.TOP_UP,
       amountMicrocredits: checkout.creditsReceivedMicrocredits,
       balanceAfterMicrocredits: balance + checkout.creditsReceivedMicrocredits,
-      currency: checkout.currency,
+      currency: checkout.creditAccount.currency,
       idempotencyKey: `stripe:payment-intent:${intent.id}`,
       sourceType: 'credit_top_up_checkout',
       sourceId: checkout.id,

@@ -24,7 +24,14 @@ import {
   assertCreditFundingMetadata,
   creditFundingMetadata,
 } from './billing-credit-funding-binding.service.js';
+import {
+  creditsForPayment,
+  readCreditPurchaseRateWithAlert,
+} from './billing-credit-purchase-rate.service.js';
+import { readOrganisationBillingRegion } from './billing-organisation-region.service.js';
+import type { CreditPurchaseCurrency } from './billing-stripe-catalog-provisioning-spec.js';
 import { pinnedBillingReturnUrls } from './billing-return-url-policy.service.js';
+import type { SmsPolicyAlertLog } from './billing-sms-policy-alert.service.js';
 import { assertStripeObjectLivemode } from './billing-stripe-client.service.js';
 import { stripeExternalId } from './billing-stripe-webhook-utils.service.js';
 
@@ -50,6 +57,7 @@ function assertLocalBinding(
     requestedByUserId: string;
     paymentAmountMinor: bigint;
     creditsReceivedMicrocredits: bigint;
+    currency: string;
     successUrlDigest: string;
     cancelUrlDigest: string;
   },
@@ -61,6 +69,7 @@ function assertLocalBinding(
     userId: string;
     paymentAmountMinor: bigint;
     creditsReceivedMicrocredits: bigint;
+    currency: string;
     successUrlDigest: string;
     cancelUrlDigest: string;
   },
@@ -86,7 +95,10 @@ function sameScopeBinding(
     checkout.appKeyId === expected.credential.id &&
     checkout.offerId === expected.offerId &&
     checkout.paymentAmountMinor === expected.paymentAmountMinor &&
-    checkout.creditsReceivedMicrocredits === expected.creditsReceivedMicrocredits &&
+    checkout.currency === expected.currency &&
+    // A GBP or EUR checkout keeps the credits its own rate bought; a USD one its offer's.
+    (expected.currency !== 'USD' ||
+      checkout.creditsReceivedMicrocredits === expected.creditsReceivedMicrocredits) &&
     checkout.successUrlDigest === expected.successUrlDigest &&
     checkout.cancelUrlDigest === expected.cancelUrlDigest
   );
@@ -105,6 +117,8 @@ type Dependencies = {
   resolveContext?: typeof resolveCreditFundingActionContext;
   resolveOffer?: typeof resolveCreditTopUpOffer;
   validateCatalog?: typeof assertCreditCatalogPrice;
+  readRegion?: typeof readOrganisationBillingRegion;
+  readRate?: typeof readCreditPurchaseRateWithAlert;
   afterStripeSessionCreated?: () => void | Promise<void>;
 };
 
@@ -116,6 +130,7 @@ export async function createBillingCreditTopUpCheckout(
     endpoint: BillingActorEndpoint;
     includePurchaseId?: boolean;
     locale?: BillingCustomerLocale;
+    log?: SmsPolicyAlertLog;
   },
   deps?: Dependencies,
 ): Promise<{ redirect_url: string; purchase_id?: string }> {
@@ -136,14 +151,19 @@ export async function createBillingCreditTopUpCheckout(
     },
     { prisma },
   );
+  // An organisation buys in its billing region's currency; USD offers stay open to
+  // consumers that predate region pricing. The offer decides the checkout's currency.
+  const region = await (deps?.readRegion ?? readOrganisationBillingRegion)(params.request.organisationId, prisma);
   const selection = await (deps?.resolveOffer ?? resolveCreditTopUpOffer)(
     {
       serviceId: params.credential.service.id,
       accountId: context.account.id,
       offerId: params.request.offerId,
+      currencies: [...new Set(['USD', region?.currency ?? 'USD'])],
     },
     { prisma },
   );
+  const currency = selection.policy.currency as CreditPurchaseCurrency;
   await (deps?.validateCatalog ?? assertCreditCatalogPrice)(
     context.stripe,
     context.account,
@@ -161,6 +181,7 @@ export async function createBillingCreditTopUpCheckout(
     userId: params.request.userId,
     paymentAmountMinor: selection.offer.paymentAmountMinor,
     creditsReceivedMicrocredits: selection.offer.creditsReceivedMicrocredits,
+    currency,
     successUrlDigest,
     cancelUrlDigest,
   };
@@ -229,6 +250,14 @@ export async function createBillingCreditTopUpCheckout(
 
   await context.authorizeAction();
   context.customer = await context.ensureCustomer();
+  // The rate is read as the checkout is created; the credits it buys are fixed on the row.
+  const rate = await (deps?.readRate ?? readCreditPurchaseRateWithAlert)(currency, {
+    stripe: context.stripe, prisma, now: () => now, ...(params.log ? { log: params.log } : {}),
+  });
+  const credits = rate.source === 'usd'
+    ? selection.offer.creditsReceivedMicrocredits
+    : creditsForPayment(selection.offer.paymentAmountMinor, rate.baseRate);
+  if (credits <= 0n) throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_CREDIT_FX_RATE_UNAVAILABLE');
 
   let checkout;
   try {
@@ -244,8 +273,12 @@ export async function createBillingCreditTopUpCheckout(
         actorJti: context.actor.jti,
         requestedByUserId: params.request.userId,
         paymentAmountMinor: selection.offer.paymentAmountMinor,
-        creditsReceivedMicrocredits: selection.offer.creditsReceivedMicrocredits,
-        currency: 'USD',
+        creditsReceivedMicrocredits: credits,
+        currency,
+        ...(rate.source === 'usd' ? {} : {
+          fxRateSource: rate.source, fxBaseRate: rate.baseRate, fxExchangeRate: rate.exchangeRate,
+          fxQuoteId: rate.quoteId, fxSnapshotId: rate.fxSnapshotId,
+        }),
         successUrlDigest,
         cancelUrlDigest,
         leaseExpiresAt: new Date(now.getTime() + CHECKOUT_LEASE_MS),

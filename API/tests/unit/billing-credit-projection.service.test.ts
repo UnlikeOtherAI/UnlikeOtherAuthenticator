@@ -65,6 +65,8 @@ function projectionData(balanceMicrocredits = 2_000_000_000n): BillingCreditProj
       autoTopUpConsentedBy: { id: 'user_1', name: 'Viewer' },
     },
     policy: null,
+    purchaseCurrency: 'USD',
+    regionPolicy: null,
     catalogs: [],
     prepaidReservations: [],
     activeReservedMicrocredits: 0n,

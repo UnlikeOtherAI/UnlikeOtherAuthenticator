@@ -40,6 +40,8 @@ function projectionData(overrides: Record<string, unknown> = {}) {
       ...overrides,
     },
     policy: { topUpOffers: [offer], autoTopUpOptions: [] },
+    purchaseCurrency: 'USD',
+    regionPolicy: null,
     catalogs: [catalog],
     unresolvedAttempts: [],
     unresolvedTopUpCheckouts: [],

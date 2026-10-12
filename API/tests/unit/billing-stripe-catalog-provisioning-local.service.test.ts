@@ -3,8 +3,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { reconcileLocalStripeCommercialCatalog } from '../../src/services/billing-stripe-catalog-provisioning-local.service.js';
 import {
   CREDIT_AUTO_TOP_UP_SPEC,
-  CREDIT_FUNDING_POLICY_SPEC,
+  CREDIT_PURCHASE_CURRENCIES,
   CREDIT_TOP_UP_SPECS,
+  creditFundingPolicySpec,
   DEEPWATER_PRIVACY_SPEC,
   PROVISIONED_BILLING_SERVICE_IDENTIFIERS,
 } from '../../src/services/billing-stripe-catalog-provisioning-spec.js';
@@ -87,22 +88,23 @@ function emptyLocalCatalog(activeServices = services) {
 }
 
 function completeLocalCatalog() {
+  // One policy per service and purchase currency, each with its own currency's offers.
   const policies = new Map(
-    services.map((service) => [
-      service.id,
+    services.flatMap((service) => CREDIT_PURCHASE_CURRENCIES.map((currency) => [
+      `${service.id}:${currency}`,
       {
-        id: `policy_${service.identifier}`,
+        id: `policy_${service.identifier}_${currency}`,
         serviceId: service.id,
-        ...CREDIT_FUNDING_POLICY_SPEC,
+        ...creditFundingPolicySpec(currency),
         active: true,
         deactivatedAt: null,
       },
-    ]),
+    ])),
   );
   const offers = new Map(
     [...policies.values()].map((policy) => [
       policy.id,
-      CREDIT_TOP_UP_SPECS.map((spec) => ({
+      CREDIT_TOP_UP_SPECS.filter((spec) => spec.currency === policy.currency).map((spec) => ({
         id: `offer_${policy.serviceId}_${spec.key}`,
         policyId: policy.id,
         serviceId: policy.serviceId,
@@ -157,7 +159,7 @@ function completeLocalCatalog() {
       create,
     },
     billingCreditFundingPolicy: {
-      findMany: vi.fn(({ where }) => Promise.resolve([policies.get(where.serviceId)])),
+      findMany: vi.fn(({ where }) => Promise.resolve([policies.get(`${where.serviceId}:${where.currency}`)])),
       create,
     },
     billingCreditTopUpCatalog: {
@@ -169,7 +171,7 @@ function completeLocalCatalog() {
             accountId: 'account_1',
             key: spec.catalogKey,
             version: spec.catalogVersion,
-            currency: 'USD',
+            currency: spec.currency,
             paymentAmountMinor: spec.paymentAmountMinor,
             creditsReceivedMicrocredits: spec.creditsReceivedMicrocredits,
             stripeLookupKey: spec.stripeLookupKey,
@@ -254,7 +256,9 @@ describe('local Stripe commercial catalog reconciliation', () => {
       write: false,
     });
 
-    expect(actions).toHaveLength(39);
+    // Per service: three currency policies, fifteen offers and the USD option;
+    // then the account, fifteen credit catalogs and the four DeepWater rows.
+    expect(actions).toHaveLength(115);
     expect(actions.every((action) => action.outcome === 'created')).toBe(true);
     expect(actions).toContainEqual({
       resource: 'credit_auto_top_up_option',
@@ -266,6 +270,12 @@ describe('local Stripe commercial catalog reconciliation', () => {
       key: 'docgen/default/v1',
       outcome: 'created',
     });
+    expect(actions).toContainEqual({
+      resource: 'credit_top_up_offer',
+      key: 'nessie/credits_gbp_1000/v1',
+      outcome: 'created',
+    });
+    expect(actions.filter((action) => action.resource === 'credit_auto_top_up_option')).toHaveLength(5);
     expect(actions).toContainEqual({
       resource: 'recurring_addon_feature_policy',
       key: 'deepwater/privacy/team',
@@ -302,7 +312,9 @@ describe('local Stripe commercial catalog reconciliation', () => {
       write: true,
     });
 
-    expect(actions).toHaveLength(39);
+    // Per service: three currency policies, fifteen offers and the USD option;
+    // then the account, fifteen credit catalogs and the four DeepWater rows.
+    expect(actions).toHaveLength(115);
     expect(actions.every((action) => action.outcome === 'no-op')).toBe(true);
     expect(db.featureFlagDefinition.create).not.toHaveBeenCalled();
     expect(db.billingCreditTopUpCatalog.update).not.toHaveBeenCalled();

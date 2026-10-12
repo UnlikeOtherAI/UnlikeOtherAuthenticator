@@ -163,6 +163,8 @@ const EnvSchema = z
     BILLING_SMS_POLICY_AUTORENEW_ENABLED: z.preprocess(normalizeBoolean, z.boolean().default(false)),
     BILLING_SMS_POLICY_AUTORENEW_FX_BAND_BPS: z.coerce.number().int().min(1).max(2000).default(500),
     BILLING_SMS_POLICY_AUTORENEW_LOOKAHEAD_DAYS: z.coerce.number().int().min(1).max(20).default(7),
+    // Rate for GBP/EUR credit purchases: Stripe's live FX quote, or (explicit flip) the accepted ECB snapshot.
+    BILLING_CREDIT_FX_RATE_SOURCE: z.enum(['stripe', 'ecb']).default('stripe'),
     STRIPE_USAGE_EXPORT_INTERVAL_MINUTES: z.coerce.number().int().min(5).max(1440).default(60),
     STRIPE_AUTO_TOP_UP_INTERVAL_MINUTES: z.coerce.number().int().min(1).max(60).default(1),
     STRIPE_PRE_BOUNDARY_SAFETY_LEAD_MINUTES: z.coerce.number().int().min(5).max(1440).default(360),

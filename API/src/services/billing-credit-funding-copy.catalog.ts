@@ -13,6 +13,9 @@ export type BillingCreditFundingCopy = Readonly<{
   buyOffer: string;
   buyOfferDescription: string;
   unavailableForPayment: string;
+  buyOfferAtRate: string;
+  liveRate: string;
+  rateUnavailable: string;
 }>;
 
 export const BILLING_CREDIT_FUNDING_COPY = {
@@ -28,6 +31,9 @@ export const BILLING_CREDIT_FUNDING_COPY = {
     buyOffer: 'Koupit {credits}',
     buyOfferDescription: 'Zaplaťte jednorázové dobití. Nezapíná automatické dobíjení.',
     unavailableForPayment: 'Tuto nabídku teď nelze použít.',
+    buyOfferAtRate: 'Koupit asi {credits}',
+    liveRate: 'Podle dnešního kurzu 1 {currency} = {rate} USD. Počet kreditů se určí při zahájení platby.',
+    rateUnavailable: 'Ceny kreditů v {currency} teď nejsou dostupné. Zkuste to prosím za chvíli.',
   },
   'en-US': {
     title: 'Add team credits',
@@ -41,6 +47,9 @@ export const BILLING_CREDIT_FUNDING_COPY = {
     buyOffer: 'Buy {credits}',
     buyOfferDescription: 'Pay for a one-time top-up. This does not enable automatic top-up.',
     unavailableForPayment: 'This offer is unavailable right now.',
+    buyOfferAtRate: 'Buy about {credits}',
+    liveRate: 'At today\'s rate, 1 {currency} = {rate} USD. Your credits are fixed when you start the payment.',
+    rateUnavailable: 'Credit prices in {currency} are unavailable right now. Please try again shortly.',
   },
   'en-GB': {
     title: 'Add team credits',
@@ -54,6 +63,9 @@ export const BILLING_CREDIT_FUNDING_COPY = {
     buyOffer: 'Buy {credits}',
     buyOfferDescription: 'Pay for a one-time top-up. This does not enable automatic top-up.',
     unavailableForPayment: 'This offer is unavailable right now.',
+    buyOfferAtRate: 'Buy about {credits}',
+    liveRate: 'At today\'s rate, 1 {currency} = {rate} USD. Your credits are fixed when you start the payment.',
+    rateUnavailable: 'Credit prices in {currency} are unavailable right now. Please try again shortly.',
   },
   de: {
     title: 'Team-Credits aufladen',
@@ -67,6 +79,9 @@ export const BILLING_CREDIT_FUNDING_COPY = {
     buyOffer: '{credits} kaufen',
     buyOfferDescription: 'Für eine einmalige Aufladung bezahlen. Dadurch wird die automatische Aufladung nicht aktiviert.',
     unavailableForPayment: 'Dieses Angebot ist derzeit nicht verfügbar.',
+    buyOfferAtRate: 'Etwa {credits} kaufen',
+    liveRate: 'Zum heutigen Kurs: 1 {currency} = {rate} USD. Ihre Credits werden beim Start der Zahlung festgelegt.',
+    rateUnavailable: 'Credit-Preise in {currency} sind derzeit nicht verfügbar. Bitte versuchen Sie es gleich noch einmal.',
   },
   es: {
     title: 'Añadir créditos al equipo',
@@ -80,6 +95,9 @@ export const BILLING_CREDIT_FUNDING_COPY = {
     buyOffer: 'Comprar {credits}',
     buyOfferDescription: 'Paga una recarga única. Esto no activa la recarga automática.',
     unavailableForPayment: 'Esta oferta no está disponible ahora.',
+    buyOfferAtRate: 'Comprar unos {credits}',
+    liveRate: 'Al cambio de hoy, 1 {currency} = {rate} USD. Tus créditos se fijan al iniciar el pago.',
+    rateUnavailable: 'Los precios de los créditos en {currency} no están disponibles ahora. Inténtalo de nuevo en unos minutos.',
   },
   fr: {
     title: 'Ajouter des crédits à l’équipe',
@@ -93,6 +111,9 @@ export const BILLING_CREDIT_FUNDING_COPY = {
     buyOffer: 'Acheter {credits}',
     buyOfferDescription: 'Payez une recharge ponctuelle. Cela n’active pas la recharge automatique.',
     unavailableForPayment: 'Cette offre est indisponible pour le moment.',
+    buyOfferAtRate: 'Acheter environ {credits}',
+    liveRate: 'Au taux du jour, 1 {currency} = {rate} USD. Vos crédits sont fixés au début du paiement.',
+    rateUnavailable: 'Les prix des crédits en {currency} sont indisponibles pour le moment. Réessayez dans quelques instants.',
   },
   it: {
     title: 'Aggiungi crediti al team',
@@ -106,6 +127,9 @@ export const BILLING_CREDIT_FUNDING_COPY = {
     buyOffer: 'Acquista {credits}',
     buyOfferDescription: 'Paga una ricarica singola. Questo non attiva la ricarica automatica.',
     unavailableForPayment: 'Questa offerta non è disponibile al momento.',
+    buyOfferAtRate: 'Acquista circa {credits}',
+    liveRate: 'Al cambio di oggi, 1 {currency} = {rate} USD. I crediti vengono fissati quando inizi il pagamento.',
+    rateUnavailable: 'I prezzi dei crediti in {currency} non sono disponibili al momento. Riprova tra poco.',
   },
 } satisfies BillingLocaleCatalog<BillingCreditFundingCopy>;
 

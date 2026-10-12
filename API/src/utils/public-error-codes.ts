@@ -82,4 +82,7 @@ export const PRODUCTION_PUBLIC_ERROR_CODES = new Set([
   // A product's monthly SMS number quote for a country whose provider rental reaches the flat
   // price: the product says numbers there are not offered. It names no cost or margin.
   'BILLING_SMS_MONTHLY_PRICE_BELOW_COST',
+  // A GBP or EUR credit top-up while the purchase rate cannot be read: the product says purchases
+  // in that currency are briefly unavailable. It names no rate, source or account detail.
+  'BILLING_CREDIT_FX_RATE_UNAVAILABLE',
 ]);

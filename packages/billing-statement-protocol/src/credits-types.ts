@@ -7,7 +7,7 @@ export const BILLING_CREDITS_SCHEMA_VERSION = 1 as const;
 // BillingCreditsV1 is shared by UOA and pinned consumer package revisions.
 // Additive fields require an explicit read capability header while older
 // consumers still validate the previous strict schema.
-export const BILLING_CREDITS_PROTOCOL_VERSION = '2.0.0' as const;
+export const BILLING_CREDITS_PROTOCOL_VERSION = '2.1.0' as const;
 export const BILLING_CREDITS_PROTOCOL_HEADER = 'x-uoa-billing-credits-protocol' as const;
 export const BILLING_CREDITS_SCHEMA_PATH = '/schemas/billing-credits-v1.json' as const;
 export const BILLING_CREDITS_EXAMPLE_PATH = '/schemas/billing-credits-v1.example.json' as const;
@@ -29,9 +29,26 @@ export type BillingCreditAmount = {
   usd_equivalent: ExactMoney & { currency: 'USD' };
 };
 
+/** The currencies credits are bought in: USD, or a billing region's GBP or EUR (protocol 2.1.0). */
+export type BillingCreditPurchaseCurrency = 'USD' | 'EUR' | 'GBP';
+
 export type BillingCreditsPaymentMoney = ExactMoney & {
   amount_minor: string;
-  currency: 'USD';
+  currency: BillingCreditPurchaseCurrency;
+};
+
+/**
+ * The live rate a GBP or EUR offer's credits follow (protocol 2.1.0). The
+ * credits shown are what today's rate buys; the exact credits are fixed when
+ * the checkout is created.
+ */
+export type BillingCreditPurchaseRateV1 = {
+  currency: 'EUR' | 'GBP';
+  /** USD per one unit of `currency`. */
+  usd_per_unit: string;
+  source: 'stripe' | 'ecb';
+  as_of: string;
+  display: string;
 };
 
 type BillingCreditsActionBase = {
@@ -151,6 +168,8 @@ type BillingCreditsFundingOfferBase = {
   description: string;
   payment_amount: BillingCreditsPaymentMoney;
   credits_received: BillingCreditAmount;
+  /** Present on a GBP or EUR offer, whose credits follow the live rate. */
+  credit_rate?: BillingCreditPurchaseRateV1;
   available: boolean;
   unavailable_reason: string | null;
 };
