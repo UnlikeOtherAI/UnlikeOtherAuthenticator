@@ -4,15 +4,23 @@ import type {
   BillingCreditsManagerV1,
   BillingCreditsMemberV1,
 } from '../contracts/billing-statement-v1.js';
-import { billingCreditAmount } from './billing-credit-display.service.js';
+import { billingCreditAmount, billingCreditsValueMoney } from './billing-credit-display.service.js';
+import type { CreditDisplayValues } from './billing-credit-lot-value.service.js';
 import { billingCreditCopy, billingLocalizedCreditDisplay } from './billing-credit-copy.catalog.js';
 import { formatBillingCreditEntryCopy } from './billing-credit-entry-copy.catalog.js';
 import type { BillingCustomerLocale } from './billing-copy-locale.js';
 import type { BillingCreditProjectionData } from './billing-credit-projection-data.service.js';
 
+/** Credits protocol 2.3.0: the entry's value from its own lot movements, or null without any. */
+function entryValue(entryId: string, values: CreditDisplayValues, locale?: BillingCustomerLocale) {
+  const value = values.entries.get(entryId);
+  return value ? billingCreditsValueMoney(value.amountMinor, values.currency, locale) : null;
+}
+
 function commonEntry(
   entry: BillingCreditProjectionData['entries'][number],
   locale?: BillingCustomerLocale,
+  values?: CreditDisplayValues,
 ) {
   const amount = billingCreditAmount(entry.amountMicrocredits, locale);
   return {
@@ -37,6 +45,7 @@ function commonEntry(
       ...billingCreditAmount(entry.balanceAfterMicrocredits, locale),
       display: billingLocalizedCreditDisplay(billingCreditAmount(entry.balanceAfterMicrocredits, locale).credits, locale),
     },
+    ...(values ? { value: entryValue(entry.id, values, locale) } : {}),
   };
 }
 
@@ -54,11 +63,12 @@ function nullAttribution(kind: BillingCreditEntryKind) {
 export function buildManagerCreditRecentEntries(
   data: BillingCreditProjectionData,
   locale?: BillingCustomerLocale,
+  values?: CreditDisplayValues,
 ): BillingCreditsManagerV1['recent_entries'] {
   return data.entries
     .filter((entry) => entry.amountMicrocredits > 0n)
     .map((entry) => ({
-      ...commonEntry(entry, locale),
+      ...commonEntry(entry, locale, values),
       attribution: entry.attributedUserId
         ? {
             kind: 'user',
@@ -73,11 +83,12 @@ export function buildMemberCreditRecentEntries(
   data: BillingCreditProjectionData,
   viewerId: string,
   locale?: BillingCustomerLocale,
+  values?: CreditDisplayValues,
 ): BillingCreditsMemberV1['recent_entries'] {
   return data.entries
     .filter((entry) => entry.amountMicrocredits > 0n)
     .map((entry) => ({
-      ...commonEntry(entry, locale),
+      ...commonEntry(entry, locale, values),
       attribution:
         entry.attributedUserId === viewerId
           ? 'viewer'

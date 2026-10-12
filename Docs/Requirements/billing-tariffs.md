@@ -1617,17 +1617,30 @@ are valued at one rate the region row captures when the region is chosen
 (`billing_organisation_regions.usd_per_unit`, Stripe's live rate; 1 for US; a
 region chosen while no rate could be read captures it on its first valuation).
 That is the only change a region row accepts. One debit's value
-(`creditMovementValue`) comes from the lots it drew. Products see these values
-from the display release.
+(`creditMovementValue`) comes from the lots it drew.
+
+A consumer on credits protocol 2.3.0 sees these values in the credits view
+(`readCreditDisplayValues`); charges stay in credits:
+
+- `credit_balance.value`: the available balance in the region currency, with a
+  label ("€42.18 left", or "€1.20 owed" for debt). Null while credits bought in
+  USD need a region rate that is not captured yet.
+- `recent_entries[].value`, a positive amount: a purchase is worth the lot it
+  opened (what was paid in the region currency, or a USD purchase's credits at
+  the captured rate); any other entry is its draws from (or returns to) its
+  lots, summed. Null for history from before lots.
+- `region_rate`: the rate the next credits used are valued at, so a product can
+  show an estimate beside a price in credits. It is the oldest remaining lot's
+  purchase rate when that lot is in the region currency (`purchase`), otherwise
+  the region's captured rate (`region`); `usd` for a US region or none.
 
 The same offers are projected for the covered services `nessie`, `deepwater`,
 `deeptest`, `salesnerd` and `docgen` that are registered and active. A covered
 one not yet registered is skipped until it is. Another active service (such as
 `deepsignal`) is not provisioned, and the catalog retires what it had given it
 beyond its original USD policy, offers and option. Each receives top-up and
-automatic-top-up policy plus the default automatic option: refill 25,000
-credits below 5,000, with a US$100 monthly cap and consent version
-`credits-auto-top-up-v1`.
+automatic-top-up policy plus the fifteen reload options above (consent version
+`credits-auto-top-up-v1`).
 
 DeepWater privacy is a separate US$50/month licensed Price with lookup key
 `deepwater_privacy_usd_month_v1`. It is bound to the active,

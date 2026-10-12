@@ -45,6 +45,22 @@ const creditRateSchema = {
   },
 } as const;
 
+// Credits protocol 2.3.0: a value in the region currency (negative for debt) and the rate behind estimates.
+const signedPurchaseMoney = moneySchema({ signed: true, currencies: purchaseCurrencies });
+const regionRateSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['currency', 'usd_per_unit', 'credits_per_unit', 'source', 'as_of', 'display'],
+  properties: {
+    currency: { enum: [...purchaseCurrencies] },
+    usd_per_unit: { type: 'string', pattern: positiveDecimalPattern },
+    credits_per_unit: { type: 'string', pattern: positiveDecimalPattern },
+    source: { enum: ['usd', 'purchase', 'region'] },
+    as_of: { type: 'string', format: 'date-time' },
+    display: { type: 'string', minLength: 1 },
+  },
+} as const;
+
 export const billingCreditsV1JsonSchema = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',
   $id: BILLING_CREDITS_SCHEMA_PATH,
@@ -151,6 +167,16 @@ export const billingCreditsV1JsonSchema = {
         state: { enum: ['available', 'zero', 'debt'] },
         label: { type: 'string', minLength: 1 },
         description: { type: 'string' },
+        value: {
+          oneOf: [
+            {
+              ...signedPurchaseMoney,
+              required: [...signedPurchaseMoney.required, 'label'],
+              properties: { ...signedPurchaseMoney.properties, label: { type: 'string', minLength: 1 } },
+            },
+            { type: 'null' },
+          ],
+        },
       },
     },
     pending_credits: {
@@ -332,5 +358,6 @@ export const billingCreditsV1JsonSchema = {
       type: 'array', maxItems: 5, uniqueItems: true, items: billingCreditAttentionV1JsonSchema,
     },
     funding_request: billingCreditFundingRequestActionV1JsonSchema,
+    region_rate: { oneOf: [regionRateSchema, { type: 'null' }] },
   },
 } as const;

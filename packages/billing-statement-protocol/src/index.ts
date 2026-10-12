@@ -173,11 +173,13 @@ export type {
   BillingCreditAmount,
   BillingCreditPurchaseCurrency,
   BillingCreditPurchaseRateV1,
+  BillingCreditRegionRateV1,
   BillingCreditsManagerV1,
   BillingCreditsMemberV1,
   BillingCreditsPaymentMoney,
   BillingCreditsTopUpAction,
   BillingCreditsV1,
+  BillingCreditsValueMoney,
 } from './credits-types.js';
 export { billingSubjectRequestJsonSchema } from './funding-schema-primitives.js';
 export type { BillingSubjectRequest } from './funding-schema-primitives.js';

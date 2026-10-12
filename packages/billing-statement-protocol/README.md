@@ -369,3 +369,28 @@ everything in 2.1.0 and 2.0.0.
   `payment_action_required` attention item until the card is updated; there is
   no retry.
 
+
+## Credits valued in the region currency (5.8.0, credits protocol 2.3.0)
+
+A consumer that sends `x-uoa-billing-credits-protocol: 2.3.0` also receives
+what credits are worth in the billing region's currency. Charges stay in
+credits; these are display values. 2.3.0 includes everything in 2.2.0.
+
+- `credit_balance.value` is the available balance in the region currency, with
+  a `label` such as "€42.18 left" (or "€1.20 owed" for debt, where the amount is
+  negative). Each credit lot counts at the rate it was bought at, so the value
+  never moves with exchange rates. Credits bought in USD before the region was
+  chosen count at the rate captured when it was chosen. It is null while that
+  rate is needed but not known yet. A US region (or none) sees dollars.
+- Each `recent_entries` item carries `value` as a positive amount; `direction`
+  gives the sign. A purchase is worth what was paid for it (credits bought in
+  USD in a GBP or EUR region, their credits at the captured rate). Any other
+  entry is what it drew from (or gave back to) each lot, summed, so a debit that
+  spans two lots is the sum of its two parts. It is null for history from
+  before lots.
+- `region_rate` {currency, usd_per_unit, credits_per_unit, source, as_of,
+  display} is the rate the next credits used are valued at, for showing an
+  estimate such as "≈ €0.04" beside a price in credits. `source` is `purchase`
+  (the oldest remaining credits' purchase rate), `region` (the captured region
+  rate, for credits bought in USD and for debt) or `usd`. It is null while the
+  rate is not known.

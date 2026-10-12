@@ -70,3 +70,35 @@ describe('reload options in the billing region currency (credits protocol 2.2.0)
   });
 });
 
+
+describe('credits valued in the billing region currency (credits protocol 2.3.0)', () => {
+  const regionRate = { currency: 'EUR', usd_per_unit: '1.16123', credits_per_unit: '1161.23', source: 'purchase',
+    as_of: '2026-10-12T12:00:00.000Z', display: '1 EUR ≈ 1,161 credits' };
+  const value = { amount: '42.18', amount_minor: '4218', currency: 'EUR', display: '€42.18' };
+  const [entry] = fixture.recent_entries;
+
+  it('accepts the balance value, the price rate and entry values', () => {
+    expect(validateCredits({ ...fixture, region_rate: regionRate,
+      credit_balance: { ...fixture.credit_balance, value: { ...value, label: '€42.18 left' } },
+      recent_entries: [{ ...entry, value }] }), JSON.stringify(validateCredits.errors)).toBe(true);
+  });
+
+  it('accepts a debt valued below zero, and values not known yet', () => {
+    expect(validateCredits({ ...fixture, region_rate: null,
+      credit_balance: { ...fixture.credit_balance, value: { amount: '-1.2', amount_minor: '-120', currency: 'EUR',
+        display: '-€1.20', label: '€1.20 owed' } },
+      recent_entries: [{ ...entry, value: null }] }), JSON.stringify(validateCredits.errors)).toBe(true);
+    expect(validateCredits({ ...fixture, credit_balance: { ...fixture.credit_balance, value: null } })).toBe(true);
+  });
+
+  it.each([
+    ['a balance value without its label', { credit_balance: { ...fixture.credit_balance, value } }],
+    ['an unknown rate source', { region_rate: { ...regionRate, source: 'stripe' } }],
+    ['a rate without credits per unit', { region_rate: { ...regionRate, credits_per_unit: undefined } }],
+    ['a negative entry value', { recent_entries: [{ ...entry, value: { ...value, amount: '-1', amount_minor: '-100' } }] }],
+    ['a value in a currency credits are not sold in', { recent_entries: [{ ...entry, value: { ...value,
+      currency: 'CHF' } }] }],
+  ])('rejects %s', (_label, change) => {
+    expect(validateCredits(JSON.parse(JSON.stringify({ ...fixture, ...change })))).toBe(false);
+  });
+});

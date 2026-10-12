@@ -7,6 +7,11 @@ import { billingLocale, billingLocaleText, billingPluralCopy } from './billing-c
 export type BillingCreditCopy = Readonly<{
   conversionDescription: string;
   balanceLabel: string;
+  /** Credits protocol 2.3.0: the balance's value in the region currency. */
+  balanceValueLeft: string;
+  balanceValueOwed: string;
+  /** Credits protocol 2.3.0: the rate behind region-currency estimates of credit prices. */
+  regionRate: string;
   balanceDescription: string;
   organisationBalanceDescription: string;
   pendingSettlementDescription: string;
@@ -28,6 +33,9 @@ export const BILLING_CREDIT_COPY = {
     conversionDescription:
       '1 000 kreditů vždy odpovídá 1,00 USD. Spotřebu a zůstatek evidujeme s přesností na miliontinu kreditu.',
     balanceLabel: 'Zbývající kredity',
+    balanceValueLeft: 'Zbývá {value}',
+    balanceValueOwed: 'Dlužíte {value}',
+    regionRate: '1 {currency} ≈ {credits}',
     balanceDescription: 'Tento zůstatek sdílí celý tým napříč připojenými službami.',
     organisationBalanceDescription: "Tento zůstatek sdílí týmy organizace napříč připojenými službami.",
     pendingSettlementDescription: "Potvrzený zůstatek je dostupný. Nedávnou spotřebu ještě zpracováváme a potvrzený součet ji zatím nezahrnuje.",
@@ -47,6 +55,9 @@ export const BILLING_CREDIT_COPY = {
     conversionDescription:
       '1,000 credits always equal US$1.00. Usage and balances retain microcredit precision.',
     balanceLabel: 'Remaining credits',
+    balanceValueLeft: '{value} left',
+    balanceValueOwed: '{value} owed',
+    regionRate: '1 {currency} ≈ {credits}',
     balanceDescription: 'Your team shares this balance across connected services.',
     organisationBalanceDescription: "This balance is shared across the organisation’s teams and connected services.",
     pendingSettlementDescription: "Your confirmed credit balance is available. Recent usage is still being reconciled and is not included in the confirmed usage total yet.",
@@ -66,6 +77,9 @@ export const BILLING_CREDIT_COPY = {
     conversionDescription:
       '1,000 credits always equal US$1.00. Usage and balances retain microcredit precision.',
     balanceLabel: 'Remaining credits',
+    balanceValueLeft: '{value} left',
+    balanceValueOwed: '{value} owed',
+    regionRate: '1 {currency} ≈ {credits}',
     balanceDescription: 'Your team shares this balance across connected services.',
     organisationBalanceDescription: "This balance is shared across the organisation’s teams and connected services.",
     pendingSettlementDescription: "Your confirmed credit balance is available. Recent usage is still being reconciled and is not included in the confirmed usage total yet.",
@@ -85,6 +99,9 @@ export const BILLING_CREDIT_COPY = {
     conversionDescription:
       '1.000 Credits entsprechen immer 1,00 US$. Nutzung und Guthaben werden auf ein Millionstel Credit genau erfasst.',
     balanceLabel: 'Verbleibende Credits',
+    balanceValueLeft: 'Noch {value} verfügbar',
+    balanceValueOwed: 'Offen: {value}',
+    regionRate: '1 {currency} ≈ {credits}',
     balanceDescription: 'Ihr Team nutzt dieses Guthaben gemeinsam über verbundene Dienste hinweg.',
     organisationBalanceDescription: "Dieses Guthaben wird von den Teams der Organisation über verbundene Dienste hinweg geteilt.",
     pendingSettlementDescription: "Ihr bestätigtes Guthaben ist verfügbar. Neuere Nutzung wird noch abgeglichen und ist noch nicht in der bestätigten Summe enthalten.",
@@ -104,6 +121,9 @@ export const BILLING_CREDIT_COPY = {
     conversionDescription:
       '1.000 créditos equivalen siempre a 1,00 US$. El uso y el saldo conservan una precisión de una millonésima de crédito.',
     balanceLabel: 'Créditos restantes',
+    balanceValueLeft: 'Quedan {value}',
+    balanceValueOwed: 'Debes {value}',
+    regionRate: '1 {currency} ≈ {credits}',
     balanceDescription: 'El equipo comparte este saldo entre los servicios conectados.',
     organisationBalanceDescription: "Los equipos de la organización comparten este saldo entre los servicios conectados.",
     pendingSettlementDescription: "El saldo confirmado está disponible. El uso reciente aún se está conciliando y todavía no está incluido en el total confirmado.",
@@ -123,6 +143,9 @@ export const BILLING_CREDIT_COPY = {
     conversionDescription:
       '1 000 crédits correspondent toujours à 1,00 $US. L’utilisation et le solde sont calculés au millionième de crédit près.',
     balanceLabel: 'Crédits restants',
+    balanceValueLeft: 'Il reste {value}',
+    balanceValueOwed: 'Vous devez {value}',
+    regionRate: '1 {currency} ≈ {credits}',
     balanceDescription: 'Votre équipe partage ce solde entre les services connectés.',
     organisationBalanceDescription: "Les équipes de l’organisation partagent ce solde entre les services connectés.",
     pendingSettlementDescription: "Votre solde confirmé est disponible. L’utilisation récente est en cours de rapprochement et n’est pas encore incluse dans le total confirmé.",
@@ -142,6 +165,9 @@ export const BILLING_CREDIT_COPY = {
     conversionDescription:
       '1.000 crediti equivalgono sempre a 1,00 USD. Utilizzo e saldo mantengono una precisione al milionesimo di credito.',
     balanceLabel: 'Crediti rimanenti',
+    balanceValueLeft: 'Restano {value}',
+    balanceValueOwed: 'Devi {value}',
+    regionRate: '1 {currency} ≈ {credits}',
     balanceDescription: 'Il team condivide questo saldo tra i servizi collegati.',
     organisationBalanceDescription: "I team dell’organizzazione condividono questo saldo tra i servizi collegati.",
     pendingSettlementDescription: "Il saldo confermato è disponibile. L’utilizzo recente è ancora in fase di riconciliazione e non è incluso nel totale confermato.",

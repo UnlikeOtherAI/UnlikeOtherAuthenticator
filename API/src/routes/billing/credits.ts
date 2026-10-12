@@ -24,6 +24,10 @@ export function assertBillingCreditsContract(value: unknown): void {
   }
 }
 
+// 2.0.0 added billing_status, 2.1.0 offers in the billing region's currency, 2.2.0
+// reload options in it, and 2.3.0 the balance, entries and price rate valued in it.
+const CREDITS_PROTOCOL_VERSIONS: string[] = ['2.0.0', '2.1.0', '2.2.0', BILLING_CREDITS_PROTOCOL_VERSION];
+
 export function registerBillingCreditsRoute(app: FastifyInstance): void {
   app.post(
     BILLING_CREDITS_READ_PATH,
@@ -36,17 +40,17 @@ export function registerBillingCreditsRoute(app: FastifyInstance): void {
       const presentation = readBillingPresentation(request.headers);
       const credential = request.billingAppKey;
       if (!credential) throw new AppError('UNAUTHORIZED', 401);
-      const protocol = String(request.headers[BILLING_CREDITS_PROTOCOL_HEADER] ?? '');
+      // Each credits protocol version includes everything before it.
+      const level = CREDITS_PROTOCOL_VERSIONS.indexOf(String(request.headers[BILLING_CREDITS_PROTOCOL_HEADER] ?? ''));
       const credits = await getBillingCredits({
         ...(presentation.enabled ? { locale: presentation.locale } : {}),
         credential,
         actorToken: readBillingActorHeader(request.headers['x-uoa-actor']),
         endpoint: BILLING_CREDITS_READ_PATH,
-        // 2.0.0 added billing_status, 2.1.0 offers in the billing region's currency,
-        // and 2.2.0 reload options in it too.
-        supportsBillingStatus: ['2.0.0', '2.1.0', BILLING_CREDITS_PROTOCOL_VERSION].includes(protocol),
-        supportsPurchaseCurrency: ['2.1.0', BILLING_CREDITS_PROTOCOL_VERSION].includes(protocol),
-        supportsReloadCurrency: protocol === BILLING_CREDITS_PROTOCOL_VERSION,
+        supportsBillingStatus: level >= 0,
+        supportsPurchaseCurrency: level >= 1,
+        supportsReloadCurrency: level >= 2,
+        supportsRegionValue: level >= 3,
         log: request.log,
         request: {
           product: body.product,

@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { lockCreditBalance } from '../../src/services/billing-credit-balance-lock.service.js';
 import { applyCreditFundingWebhook } from '../../src/services/billing-credit-funding-webhook.service.js';
-import { readCreditBalanceValue } from '../../src/services/billing-credit-lot-value.service.js';
+import { readCreditBalanceValue, readCreditDisplayValues } from '../../src/services/billing-credit-lot-value.service.js';
 import { applyPaymentAdjustment } from '../../src/services/billing-credit-payment-adjustment-webhook.service.js';
 import { createTestDb } from '../helpers/test-db.js';
 import {
@@ -153,6 +153,28 @@ describe.skipIf(!databaseTestsEnabled)('credit lots (PostgreSQL)', () => {
     expect(await movements(usdLot)).toEqual([]);
     await expect(db().billingOrganisationRegion.update({ where: { orgId: ids.org },
       data: { usdPerUnit: '1.30' } })).rejects.toThrow(/BILLING_REGION_IMMUTABLE/);
+  });
+
+  it('values each entry from the lots it drew, and the next credits at the oldest lot\'s rate', async () => {
+    const debit = 'bce_lots_debit_spanning';
+    const euro = (await db().billingCreditTopUpCheckout.findUniqueOrThrow({ where: { id: 'bctu_lots_eur_1' } }))
+      .creditEntryId as string;
+    const dollars = (await db().billingCreditTopUpCheckout.findUniqueOrThrow({ where: { id: 'bctu_lots_usd_2' } }))
+      .creditEntryId as string;
+    const values = await readCreditDisplayValues({ creditAccountId: ids.creditAccount, organisationId: ids.org,
+      entryIds: [debit, euro, dollars, 'bce_without_movements'] }, { db: db(), stripe: null });
+    // USD 5.00 from the USD lot at the region's 1.20 (EUR 4.1666) plus 3,000 EUR-lot credits (EUR 2.5834).
+    expect(values.entries.get(debit)).toEqual({ currency: 'EUR', amount: '6.75', amountMinor: 675n });
+    // The EUR 25.00 purchase is worth what was paid for it.
+    expect(values.entries.get(euro)).toEqual({ currency: 'EUR', amount: '25.00', amountMinor: 2_500n });
+    // USD 5.00 bought after the region was chosen is worth its credits at the region's 1.20.
+    expect(values.entries.get(dollars)).toEqual({ currency: 'EUR', amount: '4.16', amountMinor: 416n });
+    expect(values.entries.has('bce_without_movements')).toBe(false);
+    expect(values.balance).toEqual({ currency: 'EUR', amount: '26.58', amountMinor: 2_658n });
+    // The first USD lot is spent, so the next credits come from the EUR lot at its own rate.
+    const eurLot = (await lots()).find((lot) => lot.sourceEntryId === euro)!;
+    expect(values.nextRate).toEqual({ currency: 'EUR', usdPerUnit: '1.16123', source: 'purchase',
+      asOf: eurLot.openedAt });
   });
 
   it('refunds from the refunded purchase\'s own lot and gives a reversal back to it', async () => {

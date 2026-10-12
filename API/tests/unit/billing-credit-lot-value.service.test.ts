@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { creditBalanceValue, creditMovementValue } from '../../src/services/billing-credit-lot-value.service.js';
+import {
+  creditBalanceValue, creditMovementValue, creditNextRate,
+} from '../../src/services/billing-credit-lot-value.service.js';
 
 // A USD 10.00 lot bought before the region was chosen, then a EUR 25.00 lot at 1.16123.
 const usdLot = { currency: 'USD', usdPerUnit: '1', remainingMicrocredits: 10_000_000_000n, sequence: 1 };
 const eurLot = { currency: 'EUR', usdPerUnit: '1.16123', remainingMicrocredits: 29_030_000_000n, sequence: 2 };
 const europe = (usdPerUnit: string | null) => ({ currency: 'EUR' as const, usdPerUnit });
+const now = new Date('2026-10-12T12:00:00Z');
 
 describe('credit lot value', () => {
   it('keeps a region-currency lot at the rate it was bought at, whatever the region rate', () => {
@@ -46,4 +49,26 @@ describe('credit lot value', () => {
       { deltaMicrocredits: -2_000_000_000n, lot: eurLot },
     ], europe('1.25'))).toEqual({ currency: 'EUR', amount: '4.12', amountMinor: 412n });
   });
+
+  it('values the next credits used at the oldest lot\'s purchase rate, or the region\'s', () => {
+    const opened = new Date('2026-10-01T09:00:00Z');
+    const setAt = new Date('2026-09-01T09:00:00Z');
+    const lots = [{ ...usdLot, openedAt: opened }, { ...eurLot, openedAt: opened }];
+    const target = { ...europe('1.25'), setAt };
+    // The USD lot is drawn first, so the next credits are valued at the region's captured rate.
+    expect(creditNextRate({ lots, reservedMicrocredits: 0n, target, now })).toEqual({
+      currency: 'EUR', usdPerUnit: '1.25', source: 'region', asOf: setAt });
+    // Once holds cover the USD lot, the next credits come from the EUR lot at its own rate.
+    expect(creditNextRate({ lots, reservedMicrocredits: 10_000_000_000n, target, now })).toEqual({
+      currency: 'EUR', usdPerUnit: '1.16123', source: 'purchase', asOf: opened });
+    expect(creditNextRate({ lots: [], reservedMicrocredits: 0n, target: europe(null), now })).toBeNull();
+    expect(creditNextRate({ lots, reservedMicrocredits: 0n, target: { currency: 'USD', usdPerUnit: '1' }, now }))
+      .toEqual({ currency: 'USD', usdPerUnit: '1', source: 'usd', asOf: now });
+  });
+
+  it('never shows a value that rounds to zero from below as negative', () => {
+    expect(creditMovementValue([{ deltaMicrocredits: 1_000_000n, lot: usdLot }], europe('1.25')))
+      .toEqual({ currency: 'EUR', amount: '0.00', amountMinor: 0n });
+  });
 });
+
