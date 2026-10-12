@@ -102,7 +102,7 @@ async function pendingTopUpState(
     checkout.serviceId !== credential.service.id ||
     checkout.appKeyId !== credential.id ||
     checkout.paymentAmountMinor !== offer.paymentAmountMinor ||
-    checkout.currency !== creditPurchasePolicy(data)?.currency ||
+    checkout.currency !== data.purchaseCurrency ||
     // A GBP or EUR checkout fixed its own credits at the rate it was created at.
     (checkout.currency === 'USD' && checkout.creditsReceivedMicrocredits !== offer.creditsReceivedMicrocredits) ||
     checkout.successUrlDigest !== digest(returns.checkoutSuccess) ||
