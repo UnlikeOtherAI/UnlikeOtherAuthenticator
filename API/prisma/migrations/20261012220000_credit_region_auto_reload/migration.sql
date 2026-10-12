@@ -30,6 +30,8 @@ ALTER TABLE billing_credit_auto_top_up_consent_revisions ADD COLUMN threshold_am
     AND monthly_charge_cap_minor >= refill_payment_amount_minor);
 
 ALTER TABLE billing_credit_auto_top_up_attempts
+  DROP CONSTRAINT billing_credit_auto_top_up_attempt_usd_only,
+  ADD CONSTRAINT billing_credit_auto_top_up_attempt_currency CHECK (currency IN ('USD', 'EUR', 'GBP')),
   ADD COLUMN threshold_amount_minor BIGINT,
   ADD COLUMN observed_value_minor BIGINT,
   ADD COLUMN fx_rate_source VARCHAR(10),
