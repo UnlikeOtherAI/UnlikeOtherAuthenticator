@@ -230,6 +230,7 @@ describe('credit funding action readiness', () => {
         appKeyId: credential.id,
         stripePaymentIntentId: 'pi_1',
         paymentAmountMinor: 2_000n,
+        currency: 'USD',
         status: 'REQUIRES_ACTION',
         consentRevision: { stripePaymentMethodId: 'pm_1' },
         stateWebhookEvent: { type: 'payment_intent.requires_action' },

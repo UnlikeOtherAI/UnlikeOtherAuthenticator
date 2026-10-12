@@ -176,6 +176,7 @@ describe('shared credits and recurring add-on read routes', () => {
         endpoint: '/billing/v1/credits',
         supportsBillingStatus: false,
         supportsPurchaseCurrency: false,
+        supportsReloadCurrency: false,
         log: expect.anything(),
         request: {
           product: 'deepwater',
@@ -208,7 +209,22 @@ describe('shared credits and recurring add-on read routes', () => {
         payload: body,
       });
       expect(creditsService.getBillingCredits).toHaveBeenLastCalledWith(
-        expect.objectContaining({ supportsBillingStatus: true, supportsPurchaseCurrency: true }),
+        expect.objectContaining({ supportsBillingStatus: true, supportsPurchaseCurrency: true,
+          supportsReloadCurrency: false }),
+      );
+      await app.inject({
+        method: 'POST',
+        url: '/billing/v1/credits',
+        headers: {
+          'x-uoa-app-key': 'uoa_app_key',
+          'x-uoa-actor': 'signed-actor',
+          'x-uoa-billing-credits-protocol': '2.2.0',
+        },
+        payload: body,
+      });
+      expect(creditsService.getBillingCredits).toHaveBeenLastCalledWith(
+        expect.objectContaining({ supportsBillingStatus: true, supportsPurchaseCurrency: true,
+          supportsReloadCurrency: true }),
       );
     });
   });
