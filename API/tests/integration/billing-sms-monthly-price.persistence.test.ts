@@ -129,7 +129,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Flat monthly SMS number price', () =
       setByUserId: smsIds.user, setAt: new Date(Date.now() + 1000) } });
     expect(await monthly('CZ')).toMatchObject({ amount: '5.99', currency: 'EUR' });
     expect(await monthly('CZ', 'sms-org-uk')).toMatchObject({ amount: '4.49', currency: 'GBP' });
-    await expect(prisma.billingSmsMonthlyPrice.create({ data: { amount: '1.00', currency: 'GBP', setBy: 'seed' } }))
+    await expect(prisma.billingSmsMonthlyPrice.create({ data: { amount: '1.00', currency: 'CHF', setBy: 'seed' } }))
       .rejects.toThrow();
   });
 });

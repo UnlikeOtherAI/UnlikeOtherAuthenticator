@@ -38,7 +38,7 @@ test('operator reviews exact SMS evidence, retries acceptance, checks history an
     if (url.pathname.endsWith('/monthly-prices')) {
       if (request.method() === 'POST') {
         writes.push(url.pathname); expect(request.postDataJSON()).toEqual({ amount: '5.49', currency: 'EUR' });
-        monthlyPrices[0] = { ...monthlyPrices[0]!, id: 'price-2', amount: '5.49', set_by: 'operator',
+        monthlyPrices[0] = { ...seed('EUR', '5.49'), id: 'price-2', set_by: 'operator',
           set_by_user_id: 'operator-fixture' };
         return json(monthlyPrices[0]);
       }

@@ -74,7 +74,8 @@
         "currency": {
           "enum": [
             "USD",
-            "EUR"
+            "EUR",
+            "GBP"
           ]
         },
         "expires_at": {
@@ -720,7 +721,8 @@
                 "currency": {
                   "enum": [
                     "USD",
-                    "EUR"
+                    "EUR",
+                    "GBP"
                   ]
                 },
                 "expires_at": {
@@ -993,7 +995,8 @@
             "currency": {
               "enum": [
                 "USD",
-                "EUR"
+                "EUR",
+                "GBP"
               ]
             },
             "expires_at": {
