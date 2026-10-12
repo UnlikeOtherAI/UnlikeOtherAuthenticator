@@ -21,7 +21,8 @@ describe('organisation billing region', () => {
       $transaction: vi.fn(async (run: (tx: unknown) => unknown) => run(db)),
     };
     const deps = { prisma: db as never, resolveTariff: vi.fn(async () => ({ actor: { jti: 'jti', tv: 0, exp: 9 } })) as never,
-      isOrganisationManager: vi.fn(async () => true), authorizeAction: vi.fn(async () => ({})) as never };
+      isOrganisationManager: vi.fn(async () => true), authorizeAction: vi.fn(async () => ({})) as never,
+      captureRate: vi.fn(async () => undefined) };
     return { db, deps };
   }
   const params = { request: { product: 'nessie', organisationId: 'org_1', teamId: 'team_1', userId: 'user_1' },
@@ -35,6 +36,8 @@ describe('organisation billing region', () => {
       can_set: false });
     expect(db.billingOrganisationRegion.create).toHaveBeenCalledWith({ data: expect.objectContaining({
       orgId: 'org_1', region: 'EUROPE', currency: 'EUR', setByUserId: 'user_1' }) });
+    // Credits bought in USD before the choice are valued at the rate captured now.
+    expect(deps.captureRate).toHaveBeenCalledWith('org_1');
     await setOrganisationBillingRegion({ ...params, region: 'EUROPE' }, deps);
     await expect(setOrganisationBillingRegion({ ...params, region: 'UK' }, deps)).rejects.toThrow('BILLING_REGION_IMMUTABLE');
     expect(db.billingOrganisationRegion.create).toHaveBeenCalledTimes(1);
