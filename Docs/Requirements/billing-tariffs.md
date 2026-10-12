@@ -1555,9 +1555,46 @@ region is UK or Europe buys them in GBP or EUR:
 - A consumer on credits protocol 2.1.0 sees the region-currency offers with a
   `credit_rate`; an older consumer sees the USD offers, which stay purchasable.
   Without a region the offers are USD.
-- Not yet: automatic top-up stays USD, refunds and disputes of a GBP or EUR
+- Not yet: automatic top-up stays USD, and refunds and disputes of a GBP or EUR
   purchase are refused at the webhook (fail closed, retried by Stripe) until
-  refunds per lot land, and a mixed-currency balance is valued only in credits.
+  refunds per lot land.
+
+### Credit lots
+
+Every grant of credits is a lot (`billing_credit_lots`): the purchase currency,
+the amount paid, the USD per unit the credits were granted at (1 for USD) and
+what is left. Lots are written only by the credit entry trigger, in the same
+insert as the entry, under the account row lock that already serializes every
+balance change:
+
+- A top-up, automatic top-up or admin credit opens a lot. Its terms come from
+  the checkout or attempt; an admin credit is a USD lot with nothing paid.
+- Every debit draws lots oldest-first, one `billing_credit_lot_movements` row
+  per lot. A refund or dispute draws the refunded purchase's own lot first.
+- Credits given back (a usage correction or a payment reversal) go first to
+  debt, then to the reversed purchase's own lot, then to the newest lot that
+  gave credits.
+- A debit beyond what the lots hold is debt (a movement without a lot); only a
+  verified payment reversal can create it, and the next grant pays it first.
+- After every entry the lots' remaining credits minus debt must equal the
+  account balance, or the entry is refused. Lot terms and movements are
+  immutable.
+- Holds (prepaid AI reservations, SMS reservations and standing holds) do not
+  move lots. Their settlement debits the lots then; a release changes nothing.
+- The migration backfilled every account: each earlier grant is a rate-1 USD lot
+  (every earlier purchase was USD), consumed oldest-first by what was spent;
+  credits no grant explains open one USD lot, and a negative balance is debt.
+
+The available balance is valued in the organisation's region currency
+(`readCreditBalanceValue`): holds come out of the oldest lots, a lot in the
+region currency is worth what was paid for its remaining credits at its own
+rate, so its value never moves with exchange rates, and credits bought in USD
+are valued at one rate the region row captures when the region is chosen
+(`billing_organisation_regions.usd_per_unit`, Stripe's live rate; 1 for US; a
+region chosen while no rate could be read captures it on its first valuation).
+That is the only change a region row accepts. One debit's value
+(`creditMovementValue`) comes from the lots it drew. Products see these values
+from the display release.
 
 The same offers are projected for the exact active services `nessie`,
 `deepwater`, `deepsignal`, `deeptest`, and `docgen`. Each receives top-up and

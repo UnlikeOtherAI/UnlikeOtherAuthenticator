@@ -9,7 +9,9 @@ import {
   BILLING_CUSTOMER_ACTION,
 } from './billing-customer-action-intent.service.js';
 import { resolveEffectiveTariffContext } from './billing-entitlement.service.js';
+import { creditValueTarget } from './billing-credit-lot-value.service.js';
 import { isOrganisationBillingManager } from './billing-org-responsibility.service.js';
+import { requireStripeBillingEnabled } from './billing-stripe-client.service.js';
 import type { BillingOrgResponsibilityRequest } from './billing-org-responsibility-lifecycle.service.js';
 
 /** The three billing regions and the currency each one bills SMS in. AI usage stays USD in all three. */
@@ -89,6 +91,7 @@ export async function setOrganisationBillingRegion(params: {
   credential: VerifiedBillingAppKey; endpoint: BillingActorEndpoint;
 }, deps?: { prisma?: PrismaClient; now?: () => Date; resolveTariff?: typeof resolveEffectiveTariffContext;
   isOrganisationManager?: typeof isOrganisationBillingManager; authorizeAction?: typeof authorizeBillingCustomerAction;
+  captureRate?: (organisationId: string) => Promise<unknown>;
 }): Promise<BillingRegionViewV1> {
   const prisma = deps?.prisma ?? getAdminPrisma();
   const region = known(params.region);
@@ -114,13 +117,20 @@ export async function setOrganisationBillingRegion(params: {
             team_id: params.request.teamId, user_id: params.request.userId, region } }, { prisma: tx });
         await tx.billingOrganisationRegion.create({ data: { orgId: organisationId, region,
           currency: BILLING_REGION_CURRENCY[region], setByUserId: params.request.userId,
-          setAt: deps?.now?.() ?? new Date() } });
+          setAt: deps?.now?.() ?? new Date(), ...(region === 'US' ? { usdPerUnit: '1' } : {}) } });
       });
     } catch (error) {
       // A concurrent choice won the primary key; the same choice is fine, another is not.
       if ((error as { code?: unknown })?.code !== 'P2002') throw error;
     }
     await settled();
+    // Credits bought in USD before the choice are valued at the rate of this moment.
+    // A rate that cannot be read now is captured by the first valuation instead.
+    await (deps?.captureRate ?? captureRegionRate)(organisationId).catch(() => undefined);
   }
   return billingRegionView(organisationId, true, prisma);
+}
+
+async function captureRegionRate(organisationId: string): Promise<unknown> {
+  return creditValueTarget(organisationId, { db: getAdminPrisma(), stripe: requireStripeBillingEnabled().client });
 }

@@ -1911,6 +1911,8 @@ model BillingOrganisationRegion {
   currency    String   @db.Char(3)
   setByUserId String   @map("set_by_user_id")
   setAt       DateTime @default(now()) @map("set_at")
+  /// USD per unit of the region currency, captured once; values credits bought in USD.
+  usdPerUnit  Decimal? @map("usd_per_unit") @db.Decimal(38, 18)
 
   @@map("billing_organisation_regions")
 }
@@ -3170,6 +3172,9 @@ model BillingCreditAccount {
   prepaidRatingBuckets     BillingPrepaidRatingBucket[]
   paymentInvoices          BillingCreditPaymentInvoice[]
 
+  creditLots                 BillingCreditLot[]
+  creditLotMovements         BillingCreditLotMovement[]
+
   @@unique([accountId, scopeKey, currency])
   @@index([orgId, teamId])
   @@index([orgId, scope])
@@ -3632,6 +3637,8 @@ model BillingCreditEntry {
   paymentAdjustmentDebit       BillingCreditPaymentAdjustment?         @relation("CreditPaymentAdjustmentDebit")
   paymentAdjustmentsOriginated BillingCreditPaymentAdjustment[]        @relation("CreditPaymentAdjustmentOriginal")
   paymentInvoice             BillingCreditPaymentInvoice?
+  creditLot                    BillingCreditLot?                       @relation("CreditLotSource")
+  lotMovements                 BillingCreditLotMovement[]
 
   @@unique([creditAccountId, idempotencyKey])
   @@index([creditAccountId, occurredAt])
@@ -3639,6 +3646,47 @@ model BillingCreditEntry {
   @@index([appKeyId])
   @@index([reversesEntryId])
   @@map("billing_credit_entries")
+}
+
+/// A grant of credits as bought: its currency, what was paid and USD per unit.
+/// Debits draw lots oldest-first through movements, written by the entry trigger.
+model BillingCreditLot {
+  id                    String   @id
+  creditAccountId       String   @map("credit_account_id")
+  sourceEntryId         String?  @unique @map("source_entry_id")
+  sequence              Int
+  currency              String   @db.Char(3)
+  paidAmountMinor       BigInt   @map("paid_amount_minor")
+  usdPerUnit            Decimal  @map("usd_per_unit") @db.Decimal(38, 18)
+  grantedMicrocredits   BigInt   @map("granted_microcredits")
+  remainingMicrocredits BigInt   @map("remaining_microcredits")
+  openedAt              DateTime @map("opened_at")
+  updatedAt             DateTime @default(now()) @map("updated_at")
+
+  creditAccount BillingCreditAccount       @relation(fields: [creditAccountId], references: [id], onDelete: Restrict)
+  sourceEntry   BillingCreditEntry?        @relation("CreditLotSource", fields: [sourceEntryId], references: [id], onDelete: Restrict)
+  movements     BillingCreditLotMovement[]
+
+  @@unique([creditAccountId, sequence])
+  @@map("billing_credit_lots")
+}
+
+/// One entry's change to one lot; without a lot it is debt.
+model BillingCreditLotMovement {
+  id                BigInt   @id @default(autoincrement())
+  creditAccountId   String   @map("credit_account_id")
+  lotId             String?  @map("lot_id")
+  entryId           String?  @map("entry_id")
+  deltaMicrocredits BigInt   @map("delta_microcredits")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  creditAccount BillingCreditAccount @relation(fields: [creditAccountId], references: [id], onDelete: Restrict)
+  lot           BillingCreditLot?    @relation(fields: [lotId], references: [id], onDelete: Restrict)
+  entry         BillingCreditEntry?  @relation(fields: [entryId], references: [id], onDelete: Restrict)
+
+  @@index([entryId])
+  @@index([lotId])
+  @@map("billing_credit_lot_movements")
 }
 
 // Platform-superuser credit grants and debits retain their own immutable audit
