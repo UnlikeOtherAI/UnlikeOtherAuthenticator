@@ -1,6 +1,6 @@
 import type { BillingSubjectRequest } from './funding-schema-primitives.js';
 
-export const BILLING_SMS_PROTOCOL_VERSION = '1.0.0' as const;
+export const BILLING_SMS_PROTOCOL_VERSION = '1.1.0' as const;
 export const BILLING_SMS_PATHS = {
   quote: '/billing/v1/sms/quotes',
   verifyQuote: '/billing/v1/sms/quotes/verify',
@@ -36,11 +36,11 @@ export type BillingSmsQuoteScope = {
   mnc: string | null;
 };
 
-/** Customer-safe exact final price. No private provider or tariff evidence. */
+/** Customer-safe exact final price. No private provider or tariff evidence. Render the currency it carries. */
 export type BillingSmsFinalQuoteV1 = {
   id: string;
   amount: string;
-  currency: 'USD';
+  currency: 'USD' | 'EUR' | 'GBP';
   expires_at: string;
   rate_basis: 'monthly_mobile' | 'inbound_mobile' | 'maximum_mobile_carrier';
   scope: BillingSmsQuoteScope;

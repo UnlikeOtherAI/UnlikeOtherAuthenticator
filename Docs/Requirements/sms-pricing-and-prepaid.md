@@ -282,6 +282,17 @@ history, each record names its acceptor: the operator's subject, or
 whether an account price was recorded, which is what lets it renew. The newest
 record for an alerted route or rate carries a **Needs attention** badge.
 
+### Flat monthly number price per region currency — 2026-10-12
+
+The monthly mobile-number charge is a flat price per currency, the same in every
+country (EUR 4.99, GBP 4.49, USD 5.49, editable under **Monthly number prices**),
+not provider rental plus markup. The organisation's one-time billing region picks
+the currency. The quote carries that amount and currency, never falls below the
+provider rental at the accepted ECB rates (`BILLING_SMS_MONTHLY_PRICE_BELOW_COST`
+otherwise), and the number's subscription is charged in that currency on a
+per-currency SMS Stripe Customer. Paid numbers keep the price their quote froze.
+Per-message prices are unchanged in this step.
+
 Under **Product billing → selected product → App keys**, operators can issue an
 **SMS runtime** key through the existing one-time credential reveal and revocation
 workflow. It uses the dedicated `sms_runtime` purpose, refuses redirect origins,

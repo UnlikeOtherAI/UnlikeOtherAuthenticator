@@ -12,6 +12,8 @@ export type SmsFxEvidence = {
   observedAt: Date;
   expiresAt: Date;
   usdPerEur: string;
+  /** GBP per EUR from the same dated cube; null only when the document carries no GBP rate. */
+  gbpPerEur: string | null;
 };
 
 function unavailable(): AppError {
@@ -38,9 +40,15 @@ export function parseSmsFxEvidence(xml: string, now: Date): SmsFxEvidence {
   if (dates.length !== 1 || usd.length !== 1 || !xml.includes('http://www.ecb.int/vocabulary/2002-08-01/eurofxref')) {
     throw unavailable();
   }
+  const gbp = [...xml.matchAll(/<Cube\s+currency=['"]GBP['"]\s+rate=['"](\d+(?:\.\d+)?)['"]\s*\/>/g)];
+  if (gbp.length > 1 || (gbp[0] && !rates.includes(gbp[0][0]))) throw unavailable();
   const date = dates[0]?.[1];
   const rate = usd[0]?.[1];
+  const gbpRate = gbp[0]?.[1] ?? null;
   if (!date || !rate) throw unavailable();
+  if (gbpRate !== null && (!/^(?:0|[1-9]\d{0,19})(?:\.\d{1,18})?$/.test(gbpRate) || /^0(?:\.0+)?$/.test(gbpRate))) {
+    throw unavailable();
+  }
   const rateDate = new Date(`${date}T00:00:00.000Z`);
   if (Number.isNaN(rateDate.getTime()) || rateDate.toISOString().slice(0, 10) !== date ||
       rateDate.getTime() > now.getTime() || now.getTime() - rateDate.getTime() > 7 * 86_400_000 ||
@@ -49,7 +57,7 @@ export function parseSmsFxEvidence(xml: string, now: Date): SmsFxEvidence {
     policy: SMS_FX_POLICY, source: SMS_FX_SOURCE,
     sourceDigest: createHash('sha256').update(xml).digest('hex'), rateDate, observedAt: now,
     // Expiry is based on the source date, so repeated fetching cannot extend stale evidence.
-    expiresAt: new Date(rateDate.getTime() + 7 * 86_400_000), usdPerEur: rate,
+    expiresAt: new Date(rateDate.getTime() + 7 * 86_400_000), usdPerEur: rate, gbpPerEur: gbpRate,
   };
 }
 
@@ -85,6 +93,26 @@ export function smsFxWithinBand(lastAccepted: string, next: string, bandBps: num
   const scaledLast = last.numerator * candidate.denominator;
   const difference = scaledNext > scaledLast ? scaledNext - scaledLast : scaledLast - scaledNext;
   return difference * 10_000n <= scaledLast * BigInt(bandBps);
+}
+
+export type SmsFxRates = { usdPerEur: string; gbpPerEur: string | null };
+
+/** An exact amount in EUR, from USD, GBP or EUR at the accepted ECB rates. */
+function inEur(amount: string, currency: string, rates: SmsFxRates): { numerator: bigint; denominator: bigint } {
+  const value = fraction(amount);
+  if (currency === 'EUR') return value;
+  const perEur = currency === 'USD' ? rates.usdPerEur : currency === 'GBP' ? rates.gbpPerEur : null;
+  if (perEur === null) throw unavailable();
+  const rate = fraction(perEur);
+  return { numerator: value.numerator * rate.denominator, denominator: value.denominator * rate.numerator };
+}
+
+/** Whether a provider cost reaches a price, both converted at the accepted ECB rates, exactly. */
+export function smsCostReachesPrice(input: { costAmount: string; costCurrency: string;
+  priceAmount: string; priceCurrency: string; rates: SmsFxRates }): boolean {
+  const cost = inEur(input.costAmount, input.costCurrency, input.rates);
+  const price = inEur(input.priceAmount, input.priceCurrency, input.rates);
+  return cost.numerator * price.denominator >= price.numerator * cost.denominator;
 }
 
 /** Exact USD rational arithmetic, rounding once upwards at the specified billing quantum. */

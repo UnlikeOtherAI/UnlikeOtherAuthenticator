@@ -4848,6 +4848,8 @@ model BillingSmsFxSnapshot {
   observedAt        DateTime @map("observed_at")
   expiresAt         DateTime @map("expires_at")
   usdPerEur         Decimal  @map("usd_per_eur") @db.Decimal(38, 18)
+  // From the same document; null on snapshots accepted before GBP was recorded.
+  gbpPerEur         Decimal? @map("gbp_per_eur") @db.Decimal(38, 18)
   // `operator` names the exact UOA subject; `renewal_job` has no subject.
   acceptedBy        String   @default("operator") @map("accepted_by") @db.VarChar(20)
   acceptedByUserId   String?  @map("accepted_by_user_id")
@@ -4878,6 +4880,8 @@ model BillingSmsQuote {
   providerObservedAt DateTime @map("provider_observed_at")
   fxSnapshotId       String   @map("fx_snapshot_id")
   routePolicyId      String?  @map("route_policy_id")
+  // The flat monthly price row a monthly quote used; null for message quotes and older quotes.
+  monthlyPriceId     String?  @map("monthly_price_id")
   providerBoundAmount Decimal? @map("provider_bound_amount") @db.Decimal(38, 18)
   finalAmount        Decimal  @map("final_amount") @db.Decimal(38, 18)
   finalCurrency      String   @default("USD") @map("final_currency") @db.Char(3)
@@ -5072,6 +5076,21 @@ model BillingSmsRoutePolicy {
 
   @@index([accountSid, country, direction, expiresAt])
   @@map("billing_sms_route_policies")
+}
+
+// Flat monthly mobile-number price per currency, the same in every country.
+// Append-only; the newest row per currency is current.
+model BillingSmsMonthlyPrice {
+  id          String   @id @default(cuid())
+  amount      Decimal  @db.Decimal(18, 2)
+  currency    String   @db.Char(3)
+  // `seed` (EUR 4.99, GBP 4.49, USD 5.49) or `operator` with the UOA subject.
+  setBy       String   @map("set_by") @db.VarChar(20)
+  setByUserId String?  @map("set_by_user_id")
+  setAt       DateTime @default(now()) @map("set_at")
+
+  @@index([currency, setAt])
+  @@map("billing_sms_monthly_prices")
 }
 
 // Operator attention raised by the SMS policy renewal job. One open alert per

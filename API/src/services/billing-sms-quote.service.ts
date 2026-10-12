@@ -11,6 +11,11 @@ import { smsFinalUsdQuanta } from './billing-sms-fx-evidence.service.js';
 import type { BillingSmsProvider } from './billing-sms-provider.service.js';
 import { runBillingSerializableTransaction } from './billing-serializable-transaction.service.js';
 import { sumSmsAmounts } from './billing-sms-money.service.js';
+import {
+  recordSmsMonthlyQuoteOutcome, SmsMonthlyBelowCostError, smsMonthlyTerms,
+} from './billing-sms-monthly-price.service.js';
+import type { SmsPolicyAlertLog } from './billing-sms-policy-alert.service.js';
+import { requireOrganisationBillingRegion } from './billing-organisation-region.service.js';
 
 const QUOTE_TTL_MS = 5 * 60_000;
 // A microcredit is USD 0.000000001. A displayed maximum must cover the wallet ceiling.
@@ -34,12 +39,13 @@ function formattedQuanta(value: bigint, places: number): string {
 
 export function publicSmsQuote(quote: BillingSmsQuote): BillingSmsFinalQuoteV1 {
   if (!['monthly_mobile', 'inbound_mobile', 'maximum_mobile_carrier'].includes(quote.rateBasis) ||
-      !['monthly', 'inbound', 'outbound'].includes(quote.direction) || quote.finalCurrency !== 'USD') {
+      !['monthly', 'inbound', 'outbound'].includes(quote.direction) ||
+      !(quote.finalCurrency === 'USD' || (quote.direction === 'monthly' && ['EUR', 'GBP'].includes(quote.finalCurrency)))) {
     throw unavailable();
   }
   return {
     id: quote.id, amount: quote.finalAmount.toFixed(quote.direction === 'monthly' ? 2 : 18),
-    currency: 'USD', expires_at: quote.expiresAt.toISOString(),
+    currency: quote.finalCurrency as BillingSmsFinalQuoteV1['currency'], expires_at: quote.expiresAt.toISOString(),
     rate_basis: quote.rateBasis as BillingSmsFinalQuoteV1['rate_basis'],
     scope: { organisation_id: quote.orgId, country: quote.country, number_type: 'mobile',
       direction: quote.direction as BillingSmsFinalQuoteV1['scope']['direction'],
@@ -59,7 +65,7 @@ function assertQuoteScope(quote: BillingSmsQuote, request: BillingSmsQuoteReques
 
 export async function createSmsQuote(input: {
   request: BillingSmsQuoteRequestV1; actorToken: string; credential: VerifiedBillingAppKey;
-}, deps: { provider: BillingSmsProvider; prisma?: PrismaClient; now?: () => Date }): Promise<BillingSmsFinalQuoteV1> {
+}, deps: SmsQuoteDependencies): Promise<BillingSmsFinalQuoteV1> {
   const prisma = deps.prisma ?? getAdminPrisma();
   const actor = await verifySmsActor({ subject: input.request, actorToken: input.actorToken,
     credential: input.credential, endpoint: '/billing/v1/sms/quotes' });
@@ -68,10 +74,13 @@ export async function createSmsQuote(input: {
   { ...deps, prisma });
 }
 
+type SmsQuoteDependencies = { provider: BillingSmsProvider; prisma?: PrismaClient; now?: () => Date;
+  log?: SmsPolicyAlertLog & { warn?: (details: object, message: string) => void } };
+
 /** Internal seam: only verified human or durable delegated authority supplies the transaction admission. */
 export async function issueSmsQuote(input: { request: BillingSmsQuoteRequestV1; credential: VerifiedBillingAppKey;
   authorize: (tx: Prisma.TransactionClient) => Promise<unknown> },
-deps: { provider: BillingSmsProvider; prisma?: PrismaClient; now?: () => Date }): Promise<BillingSmsFinalQuoteV1> {
+deps: SmsQuoteDependencies): Promise<BillingSmsFinalQuoteV1> {
   const prisma = deps.prisma ?? getAdminPrisma();
   const request = input.request;
   const commercial = readSmsCommercialPolicy();
@@ -86,7 +95,8 @@ deps: { provider: BillingSmsProvider; prisma?: PrismaClient; now?: () => Date })
   }
   const price = await deps.provider.price(request.country, request.direction);
   const providerAmount = exactDecimal(price.amount);
-  return runBillingSerializableTransaction(prisma, async (tx) => {
+  const monthly = request.direction === 'monthly';
+  const issue = () => runBillingSerializableTransaction(prisma, async (tx) => {
     await input.authorize(tx);
     const now = deps.now?.() ?? new Date();
     const fx = await tx.billingSmsFxSnapshot.findFirst({
@@ -94,7 +104,6 @@ deps: { provider: BillingSmsProvider; prisma?: PrismaClient; now?: () => Date })
       orderBy: [{ rateDate: 'desc' }, { acceptedAt: 'desc' }],
     });
     if (!fx) throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_SMS_FX_POLICY_REQUIRED');
-    const monthly = request.direction === 'monthly';
     const policy = monthly ? null : await tx.billingSmsRoutePolicy.findFirst({ where: {
       accountSid: deps.provider.configuration.accountSid, country: request.country,
       direction: request.direction, currency: price.currency, expiresAt: { gt: now },
@@ -105,17 +114,25 @@ deps: { provider: BillingSmsProvider; prisma?: PrismaClient; now?: () => Date })
     const providerBound = policy ? sumSmsAmounts([providerAmount.toFixed(),
       policy.additionalPerSegment.toFixed(), policy.additionalPerMessage.toFixed()])
       : providerAmount;
-    const finalQuanta = smsFinalUsdQuanta({ providerAmount: providerBound.toFixed(),
-      providerCurrency: price.currency, usdPerEur: fx.usdPerEur.toFixed(),
-      ...commercial, direction: request.direction, quantum: monthly ? 100n : PRICE_QUANTUM });
+    // A number costs its region currency's flat monthly price in every country; messages keep
+    // provider cost plus markup. The region is chosen once before the first monthly quote.
+    const terms = monthly ? await smsMonthlyTerms(tx, { country: request.country,
+      currency: (await requireOrganisationBillingRegion(request.organisation_id, tx)).currency,
+      providerAmount: providerAmount.toFixed(), providerCurrency: price.currency,
+      rates: { usdPerEur: fx.usdPerEur.toFixed(), gbpPerEur: fx.gbpPerEur?.toFixed() ?? null } })
+      : { finalAmount: formattedQuanta(smsFinalUsdQuanta({ providerAmount: providerBound.toFixed(),
+        providerCurrency: price.currency, usdPerEur: fx.usdPerEur.toFixed(), ...commercial,
+        direction: request.direction, quantum: PRICE_QUANTUM }), 9), finalCurrency: 'USD', monthlyPriceId: null };
     const quote = await tx.billingSmsQuote.create({ data: {
       serviceId: input.credential.service.id, appKeyId: input.credential.id, orgId: request.organisation_id,
       country: request.country, direction: request.direction, destination: request.destination,
-      commercialPolicyVersion: commercial.version, monthlyFeeEur: commercial.monthlyFeeEur,
-      monthlyMarkupBps: commercial.monthlyMarkupBps, messageMarkupBps: commercial.messageMarkupBps, providerAmount, providerCurrency: price.currency, providerSource: price.source,
+      // The flat price carries no fixed increment or rental markup of its own.
+      commercialPolicyVersion: commercial.version, monthlyFeeEur: monthly ? '0' : commercial.monthlyFeeEur,
+      monthlyMarkupBps: monthly ? 0 : commercial.monthlyMarkupBps, messageMarkupBps: commercial.messageMarkupBps,
+      providerAmount, providerCurrency: price.currency, providerSource: price.source,
       providerObservedAt: price.observedAt, fxSnapshotId: fx.id,
-      providerBoundAmount: providerBound, routePolicyId: policy?.id ?? null,
-      finalAmount: formattedQuanta(finalQuanta, monthly ? 2 : 9), finalCurrency: 'USD',
+      providerBoundAmount: providerBound, routePolicyId: policy?.id ?? null, monthlyPriceId: terms.monthlyPriceId,
+      finalAmount: terms.finalAmount, finalCurrency: terms.finalCurrency,
       rateBasis: monthly ? 'monthly_mobile' : request.direction === 'inbound'
         ? 'inbound_mobile' : 'maximum_mobile_carrier',
       expiresAt: new Date(Math.min(now.getTime() + QUOTE_TTL_MS, fx.expiresAt.getTime(),
@@ -123,6 +140,18 @@ deps: { provider: BillingSmsProvider; prisma?: PrismaClient; now?: () => Date })
     } });
     return publicSmsQuote(quote);
   }, 'BILLING_CREDIT_ACCOUNT_RETRY_EXHAUSTED');
+  try {
+    const quote = await issue();
+    if (monthly) {
+      await recordSmsMonthlyQuoteOutcome(prisma, `monthly:${request.country}:${quote.currency}`, null, deps.log);
+    }
+    return quote;
+  } catch (error) {
+    if (error instanceof SmsMonthlyBelowCostError) {
+      await recordSmsMonthlyQuoteOutcome(prisma, error.subject, error, deps.log);
+    }
+    throw error;
+  }
 }
 
 export async function verifySmsQuote(input: {

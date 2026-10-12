@@ -72,7 +72,11 @@
           "maxLength": 80
         },
         "currency": {
-          "const": "USD"
+          "enum": [
+            "USD",
+            "EUR",
+            "GBP"
+          ]
         },
         "expires_at": {
           "type": "string",
@@ -715,7 +719,11 @@
                   "maxLength": 80
                 },
                 "currency": {
-                  "const": "USD"
+                  "enum": [
+                    "USD",
+                    "EUR",
+                    "GBP"
+                  ]
                 },
                 "expires_at": {
                   "type": "string",
@@ -985,7 +993,11 @@
               "maxLength": 80
             },
             "currency": {
-              "const": "USD"
+              "enum": [
+                "USD",
+                "EUR",
+                "GBP"
+              ]
             },
             "expires_at": {
               "type": "string",

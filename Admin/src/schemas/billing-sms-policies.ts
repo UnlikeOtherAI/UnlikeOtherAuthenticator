@@ -7,6 +7,7 @@ export const SmsFxEvidenceSchema = z.object({
   source: z.literal('https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml'),
   source_digest: z.string().regex(/^[a-f0-9]{64}$/), rate_date: z.string().date(),
   observed_at: z.string().datetime(), expires_at: z.string().datetime(), usd_per_eur: decimal,
+  gbp_per_eur: decimal.nullable(),
 }).strict();
 export const SmsRouteImportSchema = z.object({
   account_sid: z.string().regex(/^AC[0-9a-fA-F]{32}$/, 'Enter the exact Twilio account SID.'),
@@ -45,3 +46,15 @@ export type SmsRoutePreview = z.infer<typeof SmsRoutePreviewSchema>;
 export type SmsRouteImport = z.infer<typeof SmsRouteImportSchema>;
 export type SmsPolicies = z.infer<typeof SmsPoliciesSchema>;
 export type SmsPolicyAlert = z.infer<typeof SmsPolicyAlertSchema>;
+
+export const SmsMonthlyPriceSchema = z.object({ id: z.string(),
+  amount: z.string().regex(/^\d{1,6}\.\d{2}$/), currency: z.enum(['EUR', 'GBP', 'USD']),
+  set_by: z.enum(['seed', 'operator']), set_by_user_id: z.string().nullable(), set_at: z.string().datetime() }).strict();
+export const SmsMonthlyPriceInputSchema = z.object({
+  amount: z.string().regex(/^(?:0|[1-9]\d{0,5})\.\d{2}$/, 'Enter an amount with two decimals, for example 4.99.')
+    .refine((value) => value !== '0.00', 'Enter an amount above zero.'),
+  currency: z.enum(['EUR', 'GBP', 'USD']),
+}).strict();
+export const SmsMonthlyPricesSchema = z.object({ prices: z.array(SmsMonthlyPriceSchema) }).strict();
+export type SmsMonthlyPrice = z.infer<typeof SmsMonthlyPriceSchema>;
+export type SmsMonthlyPriceInput = z.infer<typeof SmsMonthlyPriceInputSchema>;

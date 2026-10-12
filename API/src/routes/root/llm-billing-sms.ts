@@ -5,9 +5,14 @@ X-UOA-Actor signed for this exact endpoint. Body contains product,
 organisation_id, team_id, user_id, country, number_type: "mobile", direction,
 destination (outbound E.164 or null), carrier:null, mcc:null and mnc:null.
 UOA verifies outbound country through Basic Lookup and uses the conservative
-maximum mobile carrier basis. Return only opaque id, final exact USD amount,
-expiry, rate_basis and scope. Missing provider or accepted dated currency policy
-returns unavailable; no sample quote or implied currency conversion exists.
+maximum mobile carrier basis. Return only opaque id, final exact amount and its
+currency, expiry, rate_basis and scope. Render the currency the quote carries.
+A monthly quote is UOA's flat monthly number price in the organisation's billing
+region currency (EUR 4.99, GBP 4.49 or USD 5.49 at release), the same in every
+country. 409 BILLING_REGION_REQUIRED means an owner or admin must choose the
+region first; 409 BILLING_SMS_MONTHLY_PRICE_BELOW_COST means UOA does not offer
+numbers in that country at that price. Message quotes are USD. Missing provider
+or accepted dated currency policy returns unavailable; no sample quote exists.
 POST /billing/v1/sms/quotes/verify with the same scope plus quote_id and a fresh
 actor for that exact verification endpoint. It refuses changed scope or expiry.
 Monthly quote expiry is a display/admission limit, not cancellation of already

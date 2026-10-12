@@ -79,4 +79,7 @@ export const PRODUCTION_PUBLIC_ERROR_CODES = new Set([
   // follow fresh actor authentication and name nothing beyond the caller's own organisation.
   'BILLING_REGION_REQUIRED',
   'BILLING_REGION_IMMUTABLE',
+  // A product's monthly SMS number quote for a country whose provider rental reaches the flat
+  // price: the product says numbers there are not offered. It names no cost or margin.
+  'BILLING_SMS_MONTHLY_PRICE_BELOW_COST',
 ]);
