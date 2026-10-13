@@ -554,3 +554,13 @@ capacity revisions and negotiated-contract month boundaries. A generic tariff
 event is not required for an accepted contract transition, so a cached receipt
 cannot carry an old private waiver or capacity across that known boundary.
 These validity queries remain company/product scoped and do not admit a person.
+
+The refactored four-suite financial gate passed all40 PostgreSQL cases with zero
+skips on Maxis. At15c4683c, API typecheck, scoped lint, eight entitlement unit
+cases and four exact-authority/RLS database cases also passed with zero skips.
+
+The focused seat-failure producer suite covers ordinary recurring and verified
+standalone closing invoices, authentication-required-only recovery, original
+failure retention, exclusion of inference-only debt, source drift and a fresh
+paid invoice arriving before a reordered failure. It reuses the separately
+verified line-proof contract and does not bypass its production validation.
