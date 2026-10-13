@@ -301,3 +301,6 @@ that dispatch's timestamp so an older request cannot be re-rated. The prospectiv
 activation evidence is immutable and shared company budget locking prevents new
 admission racing the first-acceptance decision. New producer/publication flows and
 the three database regressions are coded; execution and rendered checks are pending.
+
+Maxis deployed all215 migrations successfully. Prisma generation identified a
+misplaced inverse relation, now corrected before compiler/flow verification.

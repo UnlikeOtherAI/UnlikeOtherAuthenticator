@@ -1303,7 +1303,6 @@ model Organisation {
   billingOrgResponsibility          BillingOrgResponsibility?
   billingSeatSubscriptions          BillingSeatSubscription[]
   customerBillingCycles             BillingCustomerCycle[]
-  seatOffers                        BillingSeatOffer[]
 
   @@unique([domain, slug])
   @@index([domain])
@@ -1807,6 +1806,7 @@ model BillingService {
   customerBillingCycles             BillingCustomerCycle[]
 
   @@map("billing_services")
+  seatOffers                        BillingSeatOffer[]
   stripePaymentInvoiceLines         BillingStripePaymentInvoiceLine[]
 
 }
