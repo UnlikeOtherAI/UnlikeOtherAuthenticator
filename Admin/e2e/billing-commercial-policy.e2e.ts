@@ -49,15 +49,15 @@ test('operator reaches exact company policy, reviews effective date, binds stora
   await page.getByRole('link', { name: 'Nessie', exact: true }).click();
   await page.getByRole('button', { name: 'Company policy', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Company access and trials' })).toBeVisible();
-  await page.getByLabel(/^Company$/).selectOption('o1');
+  await page.locator('select[name="organisation"]').selectOption('o1');
   await page.getByLabel(/^Registered product source/).selectOption('api.nessie.works');
   await page.getByLabel(/^Billing timezone/).fill('Europe/London');
-  await page.getByLabel(/^Company policy$/).selectOption('trial');
+  await page.locator('select[name="policy"]').selectOption('trial');
   await expect(page.getByLabel(/^Trial end/)).toBeVisible();
   await page.getByRole('button', { name: 'Save company policy' }).click();
   await expect(page.getByRole('alert')).toContainText('cannot receive a partial trial waiver');
   await expect(page.getByLabel(/^Billing timezone/)).toHaveValue('Europe/London');
-  await page.getByLabel(/^Company policy$/).selectOption('private');
+  await page.locator('select[name="policy"]').selectOption('private');
   await page.getByRole('button', { name: 'Save company policy' }).click();
   await expect(page.getByRole('status')).toContainText('Policy takes effect Sun, 01 Nov 2026');
   await expect(page.getByRole('cell', { name: 'Private at cost', exact: true })).toBeVisible();
