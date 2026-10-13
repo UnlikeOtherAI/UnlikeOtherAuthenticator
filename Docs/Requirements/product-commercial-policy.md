@@ -331,3 +331,9 @@ further cancellation warnings or occupy event/email work budgets. Final email
 copy states the preserved original deadline and the actual relative24h delivery
 safeguard; it does not promise an absolute deadline computed before SMTP accepts
 the message. Fresh receipt proof still enforces the true earliest release time.
+
+At `33247fde`, all217 migrations deployed and all three Standard acceptance
+database regressions passed without skips. The updated desktop/Pixel7 operator
+publication and withdrawal journey passed2/2. New wire cases verify member
+omission, exact actor/locale forwarding, no-store, explicit accepted frozen action
+and refusal of guessed private tariff selection before mutation.
