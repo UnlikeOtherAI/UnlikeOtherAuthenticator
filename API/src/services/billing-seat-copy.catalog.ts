@@ -1,6 +1,6 @@
 import { billingLocaleText, type BillingCustomerLocale, type BillingLocaleCatalog } from './billing-copy-locale.js';
 
-export const SEAT_TERMS_VERSION = 'company-standard-seat-v1';
+export const SEAT_TERMS_VERSION = 'company-standard-seat-v1' as const;
 const CONSENT = {
   'en-US': 'Accept monthly Standard company seats for each unique human across all company teams, prorated from activation. Trial periods waive only seat and platform fees. Usage remains separately valued in USD, prepaid with a 30% markup; accepted existing usage terms change next UTC month. A company without previous accepted or metered usage starts new usage terms prospectively on acceptance. Inference, storage and phone services are not included.',
   'en-GB': 'Accept monthly Standard company seats for each unique human across all company teams, prorated from activation. Trial periods waive only seat and platform fees. Usage remains separately valued in USD, prepaid with a 30% markup; accepted existing usage terms change next UTC month. A company without previous accepted or metered usage starts new usage terms prospectively on acceptance. Inference, storage and phone services are not included.',

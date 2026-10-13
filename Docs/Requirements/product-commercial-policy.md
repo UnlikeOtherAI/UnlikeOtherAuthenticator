@@ -310,3 +310,6 @@ operator withdraws the current offer before replacing it. Database guards bind
 the accepted seat/usage monetary snapshot and effective timestamp to the exact
 company term event, preventing missing JSON properties or foreign-scope events
 from being accepted as consent/activation evidence.
+
+Generation now passes after the relation correction. API checking identified a
+widened consent-version type, now preserved as the exact protocol literal.
