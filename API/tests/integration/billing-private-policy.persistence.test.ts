@@ -6,6 +6,7 @@ import { setProductPolicy } from '../../src/services/billing-product-policy.serv
 import { privateCompanyPolicy } from '../../src/services/billing-product-private-policy.service.js';
 import { removeBillingTariffAssignment, upsertBillingTariffAssignment } from '../../src/services/billing-tariff.service.js';
 import { nextUtcBillingMonth, utcBillingMonth } from '../../src/services/billing-tariff-history.service.js';
+import { activateBillingContractVersion } from '../../src/services/billing-contract.service.js';
 
 describe.skipIf(!process.env.DATABASE_URL)('private company policy immutable term boundaries', () => {
   let db: NonNullable<Awaited<ReturnType<typeof createTestDb>>>;
@@ -86,11 +87,13 @@ describe.skipIf(!process.env.DATABASE_URL)('private company policy immutable ter
   it('does not carry a private waiver across a later authoritative negotiated contract', async () => {
     const { org, event } = await company('contract-private'); await policy(org.id);
     const contract = await db.prisma.billingOrganisationContract.create({ data: { orgId: org.id,
-      reference: 'synthetic-future-contract', name: 'Future accepted terms', status: 'ACTIVE', activatedAt: now } });
+      reference: 'synthetic-future-contract', name: 'Future accepted terms' } });
     const version = await db.prisma.billingOrganisationContractVersion.create({ data: { contractId: contract.id,
       version: 1, effectiveFromMonth: nextMonth, usageMarkupBps: 3000, currency: 'USD', paymentTermsDays: 30 } });
-    await db.prisma.billingContractServiceTerm.create({ data: { contractVersionId: version.id,
-      serviceId: smsIds.service, tariffId: standardTariff, monthlyAmountMinor: 399n } });
+    await activateBillingContractVersion({ contractId: contract.id, contractVersionId: version.id,
+      services: [{ serviceId: smsIds.service, monthlyAmountMinor: '399', monthlyChargeBasis: 'per_seat',
+        seatPolicy: 'automatic', seatChargeTiming: 'prorated', usagePaymentMode: 'prepaid' }],
+      actor: { ...actor, tokenVersion: 0 } }, { prisma: db.prisma, now: () => now });
     expect(await privateAt(org.id, now)).toMatchObject({ privateTermEventId: event.id });
     expect(await privateAt(org.id, boundary)).toBeNull();
     await expect(setProductPolicy({ serviceId: smsIds.service, organisationId: org.id,

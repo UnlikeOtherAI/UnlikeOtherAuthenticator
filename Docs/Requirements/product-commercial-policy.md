@@ -482,3 +482,8 @@ journey exercises that rejection before accepting compatible future terms.
 The historical-backfill fixture restores the later nullable prospective boundary
 before invoking the current reader. Its reconstructed old events all remain NULL,
 matching the actual forward migration without inventing a past acceptance time.
+
+The private-to-contract regression activates the future agreement through the
+real operator service, so it proves the accepted tariff/contract binding instead
+of seeding an invalid service-term row. It also exercises the newly persisted
+normalized usage currency on that production path.
