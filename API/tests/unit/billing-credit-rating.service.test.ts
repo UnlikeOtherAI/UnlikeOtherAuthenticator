@@ -80,7 +80,7 @@ function portfolio(lines: NormalizedMeteringPortfolio['lines']): NormalizedMeter
 }
 
 describe('canonical all-service credit rating', () => {
-  it('values prepaid usage in USD identically for EUR, GBP and USD monthly seats', () => {
+  it('never re-debits prepaid usage during settlement for EUR, GBP or USD monthly seats', () => {
     const totals = ['EUR', 'GBP', 'USD'].map((currency) => rateCreditPortfolio({
       portfolio: portfolio([line('deepwater', 'user_1', '1')]),
       services: [{ ...deepwater, tariff: { ...deepwater.tariff, currency, usageCurrency: 'USD',
@@ -88,8 +88,8 @@ describe('canonical all-service credit rating', () => {
       previousAllocations: [], balanceMicrocredits: 2_000_000_000n,
       validTeamUserIds: new Set(['user_1']),
     })[0]);
-    expect(totals.map((item) => item?.ratedMicroMinor)).toEqual([130_000_000n, 130_000_000n, 130_000_000n]);
-    expect(totals.map((item) => item?.consumedMicrocredits)).toEqual([1_300_000_000n, 1_300_000_000n, 1_300_000_000n]);
+    expect(totals.map((item) => item?.ratedMicroMinor)).toEqual([0n, 0n, 0n]);
+    expect(totals.map((item) => item?.consumedMicrocredits)).toEqual([0n, 0n, 0n]);
   });
   it('assigns a scarce remainder credit by stable binary identity order without losing liability', () => {
     const users = ['a', 'A', 'ä'];
