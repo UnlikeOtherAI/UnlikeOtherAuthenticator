@@ -41,4 +41,10 @@ describe('company seat access and independent unresolved liabilities', () => {
     await expect(data.read()).resolves.toMatchObject({ full_access: false, standing: 'restricted',
       seats: { can_admit_members: false }, storage: { can_upload: false } });
   });
+  it('does not turn another team or an ended seat debt into a current company agreement', async () => {
+    const data = fixture('active'); data.subscriptions.mockResolvedValueOnce([]);
+    data.incidents.splice(0, 1);
+    await expect(data.read()).resolves.toMatchObject({ full_access: false, history_window_days: 14,
+      seats: { can_admit_members: false }, standing: 'grace', dunning: { incident_id: 'seat-debt' } });
+  });
 });

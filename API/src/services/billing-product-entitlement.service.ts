@@ -62,7 +62,7 @@ export async function getProductEntitlement(input: {
     const trial = Boolean(policy?.trialStartsAt && policy.trialStartsAt <= now && policy.trialEndsAt && policy.trialEndsAt > now);
     const privatePlan = Boolean(await privateCompanyPolicy(tx, credential.service.id, request.organisation_id, now));
     const restricted = Boolean(incident && incident.graceEndsAt <= now);
-    const full = !restricted && (privatePlan || trial || activeSeats.length > 0 || incident?.category === 'seat');
+    const full = !restricted && (privatePlan || trial || activeSeats.length > 0);
     const fixed = activeSeats.filter((row) => row.seatPolicy === 'FIXED');
     const capacity = fixed.length ? Math.min(...fixed.map((row) => {
       if (!row.capacityRevisions[0]) throw new AppError('SERVICE_UNAVAILABLE', 503, 'SEAT_CAPACITY_RECONCILIATION_REQUIRED');

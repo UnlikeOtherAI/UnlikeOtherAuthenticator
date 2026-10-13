@@ -393,3 +393,8 @@ This new full recovery regression is coded and execution is pending.
 Recovery now uses the shared exact invoice/customer/subscription/price/quantity/
 period validator before treating an initial attempt as terminal unpaid. Matching
 only customer and subscription metadata would not prove the required liability.
+
+A seat debt does not itself establish a company paid agreement. Current access
+still requires an independently effective company seat agreement, trial or
+private company policy. Dunning remains visible to managers for old/team-scoped
+debts, but cannot revive an ended agreement or license other company teams.
