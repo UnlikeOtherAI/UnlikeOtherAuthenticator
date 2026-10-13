@@ -16,6 +16,7 @@ const deepwater: CreditRatingService = {
     mode: BillingTariffMode.STANDARD,
     markupBps: 0,
     currency: 'USD',
+    usageCurrency: 'USD',
   },
 };
 const nessie: CreditRatingService = {
@@ -27,6 +28,7 @@ const nessie: CreditRatingService = {
     mode: BillingTariffMode.STANDARD,
     markupBps: 0,
     currency: 'USD',
+    usageCurrency: 'USD',
   },
 };
 
@@ -78,6 +80,17 @@ function portfolio(lines: NormalizedMeteringPortfolio['lines']): NormalizedMeter
 }
 
 describe('canonical all-service credit rating', () => {
+  it('values prepaid usage in USD identically for EUR, GBP and USD monthly seats', () => {
+    const totals = ['EUR', 'GBP', 'USD'].map((currency) => rateCreditPortfolio({
+      portfolio: portfolio([line('deepwater', 'user_1', '1')]),
+      services: [{ ...deepwater, tariff: { ...deepwater.tariff, currency, usageCurrency: 'USD',
+        usagePaymentMode: 'PREPAID', markupBps: 3000 } }],
+      previousAllocations: [], balanceMicrocredits: 2_000_000_000n,
+      validTeamUserIds: new Set(['user_1']),
+    })[0]);
+    expect(totals.map((item) => item?.ratedMicroMinor)).toEqual([130_000_000n, 130_000_000n, 130_000_000n]);
+    expect(totals.map((item) => item?.consumedMicrocredits)).toEqual([1_300_000_000n, 1_300_000_000n, 1_300_000_000n]);
+  });
   it('assigns a scarce remainder credit by stable binary identity order without losing liability', () => {
     const users = ['a', 'A', 'ä'];
     const rate = (order: string[]) => rateCreditPortfolio({

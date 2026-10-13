@@ -5,7 +5,7 @@ import { resolveStripeAccountContext } from './billing-stripe-client.service.js'
 import { readBoundStorageInvoice } from './billing-storage-invoice.service.js';
 import { storageRuntime, STORAGE_CONSENT_TEXT, STORAGE_CONSENT_VERSION, type StorageDependencies } from './billing-storage-mandate.service.js';
 
-function invoiceRecoveryUrl(status: string | null, value: string | null): string | null {
+function invoiceRecoveryUrl(status: string | null | undefined, value: string | null | undefined): string | null {
   if (status !== 'open' || !value) return null;
   const url = new URL(value);
   if (url.protocol !== 'https:' || !['invoice.stripe.com', 'pay.stripe.com'].includes(url.hostname) || url.username || url.password) {
