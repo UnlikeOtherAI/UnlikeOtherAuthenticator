@@ -66,7 +66,7 @@ describe.skipIf(!enabled)('fully funded PAYG usage with no monthly fee', () => {
       mode: BillingTariffMode.STANDARD, collectionMode: BillingCollectionMode.NONE,
       usagePaymentMode: BillingUsagePaymentMode.PAY_AS_YOU_GO,
       monthlyChargeBasis: BillingMonthlyChargeBasis.FLAT,
-      markupBps: 3000, monthlyAmountMinor: 0n, currency: 'USD' } });
+      markupBps: 3000, monthlyAmountMinor: 0n, currency: 'USD', usageCurrency: 'USD' } });
     ids.tariff = tariff.id;
     const stripeAccount = await db.prisma.billingStripeAccount.create({ data: {
       stripeAccountId: `acct_${randomUUID()}`, livemode: false } });

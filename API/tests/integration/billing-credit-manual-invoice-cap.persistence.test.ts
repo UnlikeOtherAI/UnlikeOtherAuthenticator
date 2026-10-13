@@ -76,7 +76,7 @@ describe.skipIf(!enabled)('manual invoice paid receipt wallet cap', () => {
       serviceId: service.id, key: 'manual-cap', version: 1, name: 'Manual cap',
       mode: 'CUSTOM', collectionMode: 'MANUAL', markupBps: 3000,
       monthlyAmountMinor: 0n, monthlyChargeBasis: 'FLAT',
-      usagePaymentMode: 'PAY_AS_YOU_GO', currency: 'USD',
+      usagePaymentMode: 'PAY_AS_YOU_GO', currency: 'USD', usageCurrency: 'USD',
     } });
     ids.tariff = tariff.id;
     await db.prisma.billingTariffTermEvent.create({ data: {

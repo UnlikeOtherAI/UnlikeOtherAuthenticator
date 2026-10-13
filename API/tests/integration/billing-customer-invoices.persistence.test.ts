@@ -205,7 +205,7 @@ describe.skipIf(!enabled)('actual customer invoice persistence and scope', () =>
       const tariff = await db.prisma.billingTariff.create({ data: {
         serviceId: current.id, key: 'manual', version: 1, name: 'Manual',
         mode: BillingTariffMode.CUSTOM, collectionMode: BillingCollectionMode.MANUAL,
-        markupBps: 3000, currency: 'USD',
+        markupBps: 3000, currency: 'USD', usageCurrency: 'USD',
         monthlyAmountMinor: current.id === serviceId ? 1000n : 500n,
       } });
       const assignment = await db.prisma.billingTariffAssignment.create({ data: {

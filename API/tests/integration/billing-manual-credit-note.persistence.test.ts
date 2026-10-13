@@ -103,7 +103,7 @@ describe.skipIf(!enabled)('manual legal credit note', () => {
       mode: BillingTariffMode.CUSTOM, collectionMode: BillingCollectionMode.MANUAL,
       usagePaymentMode: BillingUsagePaymentMode.PAY_AS_YOU_GO,
       monthlyChargeBasis: BillingMonthlyChargeBasis.FLAT,
-      markupBps: 3000, monthlyAmountMinor: 130n, currency: 'USD' } });
+      markupBps: 3000, monthlyAmountMinor: 130n, currency: 'USD', usageCurrency: 'USD' } });
     ids.tariff = tariff.id;
     const contract = await db.prisma.billingOrganisationContract.create({ data: {
       orgId: org.id, reference: `note-${randomUUID()}`, name: 'Agreement',

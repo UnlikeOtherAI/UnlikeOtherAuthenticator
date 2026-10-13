@@ -11,7 +11,7 @@ export async function correctionFixture(prisma: PrismaClient) {
   const tariff = await prisma.billingTariff.create({ data: {
     serviceId: ids.service, key: 'correction', version: 1, name: 'Verified PAYG',
     mode: 'STANDARD', collectionMode: 'STRIPE', usagePaymentMode: 'PAY_AS_YOU_GO',
-    markupBps: 3000, currency: 'USD' } });
+    markupBps: 3000, currency: 'USD', usageCurrency: 'USD' } });
   await prisma.billingStripeCustomer.update({ where: { id: ids.teamCustomer },
     data: { stripeCustomerId: 'cus_correction' } });
   const checkout = await prisma.billingStripeCheckoutSession.create({ data: {

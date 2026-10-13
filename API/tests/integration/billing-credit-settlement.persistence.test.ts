@@ -726,7 +726,7 @@ describe.skipIf(!databaseTestsEnabled)('credit settlement persistence', () => {
       data: {
         id: 'tariff_credit_settlement_org_30', serviceId: ids.deepwater,
         key: 'org_standard', version: 1, name: 'Organisation standard 30%',
-        mode: 'STANDARD', collectionMode: 'NONE', markupBps: 3000, currency: 'USD',
+        mode: 'STANDARD', collectionMode: 'NONE', markupBps: 3000, currency: 'USD', usageCurrency: 'USD',
       },
     });
     await handle.prisma.billingTariffAssignment.create({

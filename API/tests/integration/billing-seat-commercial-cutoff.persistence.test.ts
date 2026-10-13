@@ -38,7 +38,7 @@ describe.skipIf(!process.env.DATABASE_URL)('superseded fixed seat capacity', () 
     const tariff = await db.prisma.billingTariff.create({ data: {
       serviceId: service.id, key: 'fixed-capacity', version: 1,
       name: 'Fixed capacity', mode: 'CUSTOM', collectionMode: 'MANUAL',
-      markupBps: 3000, currency: 'USD', monthlyAmountMinor: 1000n,
+      markupBps: 3000, currency: 'USD', usageCurrency: 'USD', monthlyAmountMinor: 1000n,
       monthlyChargeBasis: 'PER_SEAT', seatPolicy: 'FIXED',
       seatChargeTiming: 'PRORATED',
     } });

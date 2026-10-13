@@ -52,7 +52,7 @@ describe.skipIf(!process.env.DATABASE_URL)('contract and Stripe database exclusi
         collectionMode: BillingCollectionMode.STRIPE,
         markupBps: 2000,
         monthlyAmountMinor: 1000n,
-        currency: 'USD',
+        currency: 'USD', usageCurrency: 'USD',
         isDefault: false,
       },
     });
@@ -138,7 +138,7 @@ describe.skipIf(!process.env.DATABASE_URL)('contract and Stripe database exclusi
         collectionMode: BillingCollectionMode.MANUAL,
         markupBps: 2000,
         monthlyAmountMinor: 1000n,
-        currency: 'USD',
+        currency: 'USD', usageCurrency: 'USD',
         isDefault: false,
       },
     });

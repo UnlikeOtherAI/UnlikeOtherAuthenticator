@@ -59,14 +59,14 @@ describe.skipIf(!enabled)('customer cycle scope persistence', () => {
       serviceId, key: 'standard', version: 1, name: 'Standard',
       mode: BillingTariffMode.STANDARD, collectionMode: BillingCollectionMode.MANUAL,
       markupBps: 3000, monthlyAmountMinor: 2000n,
-      monthlyChargeBasis: BillingMonthlyChargeBasis.FLAT, currency: 'USD',
+      monthlyChargeBasis: BillingMonthlyChargeBasis.FLAT, currency: 'USD', usageCurrency: 'USD',
     } });
     tariffId = tariff.id;
     const usageOnlyTariff = await db.prisma.billingTariff.create({ data: {
       serviceId, key: 'usage-only', version: 1, name: 'Usage only',
       mode: BillingTariffMode.STANDARD, collectionMode: BillingCollectionMode.MANUAL,
       markupBps: 3000, monthlyAmountMinor: 0n,
-      monthlyChargeBasis: BillingMonthlyChargeBasis.FLAT, currency: 'USD',
+      monthlyChargeBasis: BillingMonthlyChargeBasis.FLAT, currency: 'USD', usageCurrency: 'USD',
     } });
     usageOnlyTariffId = usageOnlyTariff.id;
     await db.prisma.billingTariffTermEvent.create({ data: {

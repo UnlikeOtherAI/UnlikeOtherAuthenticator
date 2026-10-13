@@ -445,3 +445,9 @@ omitted the newly required usage valuation currency. Those fixtures now name
 their original USD usage explicitly; the production constraint remains strict.
 Before that correction, API typecheck and27 tariff/rating unit cases passed,
 but prepaid suite setup failed and its15 database cases did not execute.
+
+The same audit covers30 direct Prisma historical tariff fixtures across billing
+cycles, contracts, corrections, seats and customer invoices. Every existing
+literal-currency fixture now explicitly preserves that same usage currency.
+No provider cost, wallet, customer balance, historical invoice or production
+tariff term is changed by this fixture correction.

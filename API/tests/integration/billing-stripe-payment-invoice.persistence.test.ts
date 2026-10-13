@@ -80,7 +80,7 @@ describe.skipIf(!process.env.DATABASE_URL)('regular Stripe payment legal source'
       serviceId, key: 'seat', version: 1, name: 'Seats',
       mode: 'STANDARD', collectionMode: 'STRIPE', markupBps: 3000,
       monthlyAmountMinor: 2500n, monthlyChargeBasis: 'FLAT',
-      currency: 'USD',
+      currency: 'USD', usageCurrency: 'USD',
     } });
     tariffId = tariff.id;
     const appKey = await db.prisma.billingAppKey.create({ data: {

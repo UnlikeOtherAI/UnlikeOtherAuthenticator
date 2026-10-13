@@ -27,7 +27,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Stripe per-seat activation projectio
     const tariff = await db.prisma.billingTariff.create({ data: {
       serviceId: service.id, key: 'stripe-seat-plan', version: 1,
       name: 'Stripe seats', mode: 'STANDARD', collectionMode: 'STRIPE',
-      markupBps: 3000, currency: 'USD', monthlyAmountMinor: 299n,
+      markupBps: 3000, currency: 'USD', usageCurrency: 'USD', monthlyAmountMinor: 299n,
       monthlyChargeBasis: 'PER_SEAT', seatPolicy: 'FIXED',
       seatChargeTiming: 'PRORATED',
     } });

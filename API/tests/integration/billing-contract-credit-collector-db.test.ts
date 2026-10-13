@@ -79,7 +79,7 @@ describe.skipIf(!process.env.DATABASE_URL)('contract invoice canonical credit co
         collectionMode: BillingCollectionMode.MANUAL,
         markupBps: 2000,
         monthlyAmountMinor: 0n,
-        currency: 'USD',
+        currency: 'USD', usageCurrency: 'USD',
         isDefault: false,
       },
     });

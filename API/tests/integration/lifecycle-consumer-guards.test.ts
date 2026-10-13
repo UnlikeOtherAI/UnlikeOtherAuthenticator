@@ -67,7 +67,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           mode: 'STANDARD',
           collectionMode: 'NONE',
           markupBps: 0,
-          currency: 'USD',
+          currency: 'USD', usageCurrency: 'USD',
           isDefault: true,
         },
       });

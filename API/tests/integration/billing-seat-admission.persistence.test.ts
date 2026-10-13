@@ -31,7 +31,7 @@ async function makeSeatSubscription(
   });
   const tariff = await prisma.billingTariff.create({ data: {
     serviceId: service.id, key: id, version: 1, name: id, mode: 'CUSTOM',
-    collectionMode: 'MANUAL', markupBps: 3000, currency: 'USD',
+    collectionMode: 'MANUAL', markupBps: 3000, currency: 'USD', usageCurrency: 'USD',
     monthlyChargeBasis: 'PER_SEAT', seatPolicy: options.policy,
     seatChargeTiming: options.timing ?? 'PRORATED', monthlyAmountMinor: 1000n,
   } });

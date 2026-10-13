@@ -88,7 +88,7 @@ describe.skipIf(!enabled)('issued manual late receipt correction', () => {
       mode: BillingTariffMode.CUSTOM, collectionMode: BillingCollectionMode.MANUAL,
       usagePaymentMode: BillingUsagePaymentMode.PAY_AS_YOU_GO,
       monthlyChargeBasis: BillingMonthlyChargeBasis.FLAT,
-      markupBps: 3000, monthlyAmountMinor: 0n, currency: 'USD',
+      markupBps: 3000, monthlyAmountMinor: 0n, currency: 'USD', usageCurrency: 'USD',
     } });
     ids.tariff = tariff.id;
     const contract = await db.prisma.billingOrganisationContract.create({ data: {

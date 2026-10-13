@@ -39,7 +39,7 @@ describe.skipIf(!enabled)('effective tariff history with PostgreSQL', () => {
     ] as const) {
       await prisma.billingTariff.create({
         data: { id, serviceId, key: id, version: 1, name: id,
-          mode, collectionMode: 'NONE', markupBps, currency: 'USD',
+          mode, collectionMode: 'NONE', markupBps, currency: 'USD', usageCurrency: 'USD',
           isDefault: id === 'default' },
       });
     }
@@ -61,7 +61,7 @@ describe.skipIf(!enabled)('effective tariff history with PostgreSQL', () => {
       mode: 'STANDARD', collectionMode: 'STRIPE', markupBps: 3000,
       monthlyAmountMinor: 2500n, monthlyChargeBasis: 'PER_SEAT',
       seatPolicy: 'AUTOMATIC', seatChargeTiming: 'PRORATED',
-      usagePaymentMode: 'PREPAID', currency: 'USD',
+      usagePaymentMode: 'PREPAID', currency: 'USD', usageCurrency: 'USD',
     } });
     expect(plan.monthlyAmountMinor).toBe(2500n);
     expect(plan.monthlyChargeBasis).toBe('PER_SEAT');

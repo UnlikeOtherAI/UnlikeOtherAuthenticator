@@ -46,7 +46,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Stripe monthly seat charge source', 
       serviceId, key: 'seat', version: 1, name: 'Seats',
       mode: 'STANDARD', collectionMode: 'STRIPE', markupBps: 3000,
       monthlyAmountMinor: 2500n, monthlyChargeBasis: 'PER_SEAT',
-      seatPolicy: 'FIXED', seatChargeTiming: 'FULL_MONTH', currency: 'USD',
+      seatPolicy: 'FIXED', seatChargeTiming: 'FULL_MONTH', currency: 'USD', usageCurrency: 'USD',
     } });
     tariffId = tariff.id;
     const appKey = await db.prisma.billingAppKey.create({ data: {

@@ -40,7 +40,7 @@ describe.skipIf(!process.env.DATABASE_URL)('pending Stripe fixed-seat capacity',
     const tariff = await db.prisma.billingTariff.create({ data: {
       serviceId, key: 'pending-checkout-seats', version: 1, name: 'Fixed seats',
       mode: 'STANDARD', collectionMode: 'STRIPE', markupBps: 3000,
-      currency: 'USD', monthlyAmountMinor: 500n, monthlyChargeBasis: 'PER_SEAT',
+      currency: 'USD', usageCurrency: 'USD', monthlyAmountMinor: 500n, monthlyChargeBasis: 'PER_SEAT',
       seatPolicy: 'FIXED', seatChargeTiming: 'PRORATED',
     } });
     tariffId = tariff.id;

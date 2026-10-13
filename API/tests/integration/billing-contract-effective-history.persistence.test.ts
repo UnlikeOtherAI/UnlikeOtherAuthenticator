@@ -35,7 +35,7 @@ describe.skipIf(!process.env.DATABASE_URL)('manual contract effective history', 
     serviceId = service.id;
     const base = await db.prisma.billingTariff.create({
       data: { serviceId, key: 'base', version: 1, name: 'Base', mode: 'STANDARD',
-        collectionMode: 'NONE', markupBps: 3000, currency: 'USD', isDefault: true },
+        collectionMode: 'NONE', markupBps: 3000, currency: 'USD', usageCurrency: 'USD', isDefault: true },
     });
     await db.prisma.billingTariffTermEvent.create({
       data: { serviceId, source: 'SERVICE_DEFAULT', scopeKey: serviceId,

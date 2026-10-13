@@ -33,7 +33,7 @@ describe.skipIf(!process.env.DATABASE_URL)('historical manual monthly invoice', 
     const tariff = await db.prisma.billingTariff.create({ data: {
       serviceId, key: 'historical-billing', version: 1, name: 'Historical billing',
       mode: 'CUSTOM', collectionMode: 'MANUAL', markupBps: 3000,
-      currency: 'USD', monthlyAmountMinor: 1300n,
+      currency: 'USD', usageCurrency: 'USD', monthlyAmountMinor: 1300n,
       monthlyChargeBasis: 'FLAT', usagePaymentMode: 'PREPAID',
     } });
     const contract = await db.prisma.billingOrganisationContract.create({ data: {
@@ -106,7 +106,7 @@ describe.skipIf(!process.env.DATABASE_URL)('historical manual monthly invoice', 
     const tariff = await db.prisma.billingTariff.create({ data: {
       serviceId: service.id, key: 'historical-second', version: 1, name: 'Second product',
       mode: 'CUSTOM', collectionMode: 'MANUAL', markupBps: 3000,
-      currency: 'USD', monthlyAmountMinor: 700n, monthlyChargeBasis: 'FLAT',
+      currency: 'USD', usageCurrency: 'USD', monthlyAmountMinor: 700n, monthlyChargeBasis: 'FLAT',
       usagePaymentMode: 'PREPAID',
     } });
     const contract = await db.prisma.billingOrganisationContract.create({ data: {

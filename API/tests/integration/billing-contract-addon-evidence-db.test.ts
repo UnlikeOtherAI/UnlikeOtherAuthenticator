@@ -208,7 +208,7 @@ describe.skipIf(!process.env.DATABASE_URL)('contract invoice recurring add-on ev
         collectionMode: BillingCollectionMode.MANUAL,
         markupBps: 2000,
         monthlyAmountMinor: 1000n,
-        currency: 'USD',
+        currency: 'USD', usageCurrency: 'USD',
         isDefault: false,
       },
     });

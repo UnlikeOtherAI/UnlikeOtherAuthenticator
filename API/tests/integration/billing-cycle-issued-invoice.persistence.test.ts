@@ -85,7 +85,7 @@ describe.skipIf(!enabled)('issued manual invoice cycle persistence', () => {
       serviceId, key: 'standard', version: 1, name: 'Standard',
       mode: BillingTariffMode.CUSTOM, collectionMode: BillingCollectionMode.MANUAL,
       markupBps: 3000, monthlyAmountMinor: 2000n,
-      monthlyChargeBasis: BillingMonthlyChargeBasis.FLAT, currency: 'USD',
+      monthlyChargeBasis: BillingMonthlyChargeBasis.FLAT, currency: 'USD', usageCurrency: 'USD',
     } });
     tariffId = tariff.id;
     const contract = await db.prisma.billingOrganisationContract.create({ data: {
@@ -381,7 +381,7 @@ describe.skipIf(!enabled)('issued manual invoice cycle persistence', () => {
         name: 'Other standard', mode: BillingTariffMode.CUSTOM,
         collectionMode: BillingCollectionMode.MANUAL,
         monthlyChargeBasis: BillingMonthlyChargeBasis.FLAT,
-        markupBps: 3000, monthlyAmountMinor: 0n, currency: 'USD',
+        markupBps: 3000, monthlyAmountMinor: 0n, currency: 'USD', usageCurrency: 'USD',
       } });
       const secondAssignment = await db.prisma.billingTariffAssignment.create({ data: {
         serviceId: secondService.id, tariffId: secondTariff.id, orgId,

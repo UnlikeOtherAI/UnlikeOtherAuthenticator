@@ -41,7 +41,7 @@ describe.skipIf(!process.env.DATABASE_URL)('actual Stripe cash source closes a c
     serviceId = service.id;
     const tariff = await db.prisma.billingTariff.create({ data: {
       serviceId, key: 'flat', version: 1, name: 'Monthly', mode: 'STANDARD', collectionMode: 'STRIPE',
-      monthlyAmountMinor: 2000n, monthlyChargeBasis: 'FLAT', currency: 'USD', markupBps: 3000,
+      monthlyAmountMinor: 2000n, monthlyChargeBasis: 'FLAT', currency: 'USD', usageCurrency: 'USD', markupBps: 3000,
     } });
     const key = await db.prisma.billingAppKey.create({ data: { serviceId, name: 'Cycle app',
       keyPrefix: `uoa_${suffix.slice(0, 12)}`, secretDigest: 'a'.repeat(64),

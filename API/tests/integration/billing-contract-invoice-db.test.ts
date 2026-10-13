@@ -151,7 +151,7 @@ describe.skipIf(!process.env.DATABASE_URL)('contract invoice database invariants
             collectionMode: BillingCollectionMode.MANUAL,
             markupBps: 2000,
             monthlyAmountMinor: 500n,
-            currency: 'USD',
+            currency: 'USD', usageCurrency: 'USD',
             isDefault: false,
             createdByEmail: `admin-${index}@example.com`,
           },
