@@ -56,11 +56,14 @@ describe.skipIf(!process.env.DATABASE_URL)('commercial delivery recovery in Post
   }
   it.each([undefined, 'disabled'])('cannot turn email provider=%s into an accepted transport receipt', async (provider) => {
     vi.stubEnv('EMAIL_PROVIDER', provider);
-    const queue = vi.spyOn(db.prisma, '$executeRaw').mockRejectedValue(new Error('DISABLED_TRANSPORT_MUST_NOT_CREATE_WORK'));
+    const queue = vi.fn(async () => { throw new Error('DISABLED_TRANSPORT_MUST_NOT_CREATE_WORK'); });
+    const prisma = new Proxy(db.prisma, { get(target, property) {
+      return property === '$executeRaw' ? queue : Reflect.get(target, property);
+    } });
     try {
-      await expect(deliverCommercialEmails({ prisma: db.prisma, now: () => now })).resolves.toBeUndefined();
+      await expect(deliverCommercialEmails({ prisma, now: () => now })).resolves.toBeUndefined();
       expect(queue).not.toHaveBeenCalled();
-    } finally { queue.mockRestore(); vi.unstubAllEnvs(); }
+    } finally { vi.unstubAllEnvs(); }
   });
   it('delivers later real work despite more than100 resolved warnings, only to current company managers', async () => {
     await incident('resolved', 'phone', true); await incident('live');

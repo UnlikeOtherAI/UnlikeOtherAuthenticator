@@ -499,3 +499,7 @@ An omitted email provider is the existing disabled transport configuration.
 Commercial warnings do not create accepted email receipts when the provider is
 unset or explicitly disabled; both configurations are covered by the focused
 database delivery suite. A logging/no-op provider is never payment-release proof.
+
+The disabled-transport assertion uses a separate Prisma proxy for its rejected
+queue call. It does not replace/restore a virtual method on the shared real client,
+so later actual delivery cases retain their database interface.
