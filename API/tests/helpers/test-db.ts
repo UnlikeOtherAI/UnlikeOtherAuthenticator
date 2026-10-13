@@ -123,7 +123,7 @@ export async function createRlsTestDb(): Promise<RlsTestDbHandle | null> {
   };
 }
 
-export async function createTestDb(): Promise<TestDbHandle | null> {
+export async function createTestDb(options?: { transactionTimeoutMs?: number }): Promise<TestDbHandle | null> {
   const baseUrl = process.env.DATABASE_URL;
   if (!baseUrl) return null;
 
@@ -150,6 +150,7 @@ export async function createTestDb(): Promise<TestDbHandle | null> {
 
   const prisma = new PrismaClient({
     datasources: { db: { url: testUrl } },
+    ...(options?.transactionTimeoutMs ? { transactionOptions: { timeout: options.transactionTimeoutMs } } : {}),
   });
   await prisma.$connect();
 

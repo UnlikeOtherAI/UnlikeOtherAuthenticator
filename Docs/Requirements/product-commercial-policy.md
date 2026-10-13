@@ -462,3 +462,11 @@ existing negotiated-contract precedence, against their immutable private tariff
 evidence. A later accepted normal contract cannot retain an older private waiver;
 an operator attempt to assign conflicting private evidence is rejected before
 mutation. Company-only tariff resolution excludes team override candidates.
+
+The old-prepaid suite now permits a bounded30-second transaction specifically
+for its routed signed-proof fixture, and90seconds for its ten-transaction
+cumulative-liability case. Production transaction bounds are unchanged. Its
+prior30-second test timeout interrupted the loop and contaminated later shared
+fixture expectations; that run is not claimed as passed. The isolated populated
+history migration fixture also discards the empty newer foreign-key consumers
+when rewinding its historical table, without touching any shared/live schema.

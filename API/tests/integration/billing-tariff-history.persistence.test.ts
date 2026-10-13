@@ -158,7 +158,8 @@ describe.skipIf(!enabled)('populated tariff-history migration', () => {
 
   it('preserves proven existing terms and holds the interval before an audited change', async () => {
     try {
-      await db.prisma.$executeRawUnsafe('DROP TABLE "billing_tariff_term_events"');
+      // Rewind this isolated historical-migration fixture, including empty newer FK consumers.
+      await db.prisma.$executeRawUnsafe('DROP TABLE "billing_tariff_term_events" CASCADE');
       await db.prisma.$executeRawUnsafe('DROP FUNCTION reject_billing_tariff_term_event_rewrite()');
       await db.prisma.$executeRawUnsafe(
         'ALTER TABLE "billing_services" DROP COLUMN "tariff_history_from_month"',

@@ -223,7 +223,8 @@ describe.skipIf(!enabled)('prepaid dispatch liability in PostgreSQL', () => {
     process.env.PUBLIC_BASE_URL = issuer;
     process.env.MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK = JSON.stringify(jwk);
     resetAccessTokenKeyCache();
-    const db = await createTestDb();
+    // This routed PostgreSQL journey performs many signed-proof reads per transaction.
+    const db = await createTestDb({ transactionTimeoutMs: 30_000 });
     if (!db) throw new Error('DATABASE_URL required');
     prisma = db.prisma;
     cleanup = db.cleanup;
@@ -448,7 +449,7 @@ describe.skipIf(!enabled)('prepaid dispatch liability in PostgreSQL', () => {
       await prisma.billingCreditBudgetCutover.update({ where: { id: 1 },
         data: { occurredAt: originalCutover.occurredAt } });
     }
-  });
+  }, 90_000);
 
   it('proves an organization cap once per month across two teams', async () => {
     const secondTeam = 'team_prepaid_rating_other';

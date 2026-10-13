@@ -18,6 +18,8 @@ describe.skipIf(!process.env.DATABASE_URL)('private company policy immutable ter
   beforeAll(async () => {
     const handle = await createTestDb(); if (!handle) throw new Error('DATABASE_URL_REQUIRED'); db = handle;
     await seedSmsFinance(db.prisma, false);
+    await db.prisma.billingService.update({ where: { id: smsIds.service },
+      data: { tariffHistoryFromMonth: utcBillingMonth(now) } });
     await db.prisma.clientDomain.create({ data: { domain: 'authentication.unlikeotherai.com', label: 'Registered product source' } });
     await db.prisma.domainRole.create({ data: { domain: getAdminAuthDomain(), userId: smsIds.user, role: 'SUPERUSER' } });
     privateTariff = (await db.prisma.billingTariff.create({ data: { serviceId: smsIds.service, key: 'private', version: 1,
