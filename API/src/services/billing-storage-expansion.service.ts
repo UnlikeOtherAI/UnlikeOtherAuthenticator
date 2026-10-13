@@ -216,13 +216,13 @@ export async function dispatchStorageExpansion(id: string, deps?: StorageDepende
       payment_behavior: 'allow_incomplete', metadata }, { idempotencyKey: `uoa:storage-attempt:${prepared.attempt.id}` });
   }
   assertStripeObjectLivemode(remote, livemode);
+  const acceptedRemote = remote;
   const item = remote.items.data[0];
   if (remote.items.data.length !== 1 || !item || item.quantity !== prepared.expansion.toBlocks ||
     item.price.id !== prepared.catalog.stripePriceId || stripeExternalId(remote.customer) !== prepared.mandate.stripeCustomerId ||
-    Object.entries(metadata).some(([key, value]) => remote!.metadata[key] !== value)) {
+    Object.entries(metadata).some(([key, value]) => acceptedRemote.metadata[key] !== value)) {
     throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_STORAGE_SUBSCRIPTION_BINDING_INVALID');
   }
-  const acceptedRemote = remote;
   const invoiceId = stripeExternalId(acceptedRemote.latest_invoice);
   await prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM organisations WHERE id=${prepared.expansion.orgId} FOR UPDATE`;
