@@ -1,4 +1,5 @@
 import { type Prisma, type BillingProductEnrollment } from '@prisma/client';
+import { isDeepStrictEqual } from 'node:util';
 import { AppError } from '../utils/errors.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
 
@@ -19,8 +20,8 @@ export async function lockCommercialAuthority(tx: Prisma.TransactionClient,
   await tx.$queryRaw`SELECT id FROM billing_app_keys WHERE id=${credential.id} FOR SHARE`;
   const key = await tx.billingAppKey.findFirst({ where: {
     id: credential.id, serviceId: credential.service.id, purpose: input.purpose,
-    actorIssuer: credential.actorIssuer, revokedAt: null,
-    OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }], service: { active: true },
+    actorIssuer: credential.actorIssuer, actorKeyId: credential.actorKeyId, actorAudience: credential.actorAudience, revokedAt: null,
+    OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }], service: { active: true, identifier: input.product },
   } });
   const domain = commercialSourceDomain(credential.actorIssuer);
   await tx.$queryRaw`SELECT id FROM client_domains WHERE domain=${domain} FOR SHARE`;
@@ -31,7 +32,8 @@ export async function lockCommercialAuthority(tx: Prisma.TransactionClient,
   const enrollment = await tx.billingProductEnrollment.findFirst({ where: {
     serviceId: credential.service.id, orgId: input.organisationId, sourceDomain: domain, active: true,
   } });
-  if (!key || !source || !company || !enrollment) {
+  if (!key || !isDeepStrictEqual(key.actorPublicJwk, credential.actorPublicJwk) ||
+    !isDeepStrictEqual(key.checkoutReturnOrigins, credential.checkoutReturnOrigins) || !source || !company || !enrollment) {
     throw new AppError('FORBIDDEN', 403, 'BILLING_COMMERCIAL_SCOPE_NOT_ENTITLED');
   }
   return enrollment;

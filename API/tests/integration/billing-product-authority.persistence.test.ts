@@ -46,6 +46,12 @@ describe.skipIf(!process.env.DATABASE_URL)('commercial company authority and mea
   it('denies cross-company, cross-team and revoked source/key authority', async () => {
     await expect(getProductEntitlement({ request: { ...request, organisation_id: 'another-company' }, credential }, { prisma: db.prisma })).rejects.toThrow();
     await expect(getProductEntitlement({ request: { ...request, user_id: smsIds.user, team_id: 'another-team' }, credential }, { prisma: db.prisma })).rejects.toThrow();
+    await db.prisma.billingAppKey.update({ where: { id: credential.id }, data: { actorKeyId: 'rotated' } });
+    await expect(getProductEntitlement({ request, credential }, { prisma: db.prisma })).rejects.toThrow();
+    const rotated = { ...credential, actorKeyId: 'rotated' };
+    await expect(getProductEntitlement({ request, credential: rotated }, { prisma: db.prisma })).resolves.toMatchObject({ product: 'nessie' });
+    await db.prisma.billingAppKey.update({ where: { id: credential.id }, data: { actorPublicJwk: { kty: 'RSA', e: 'AQAB', n: 'rotated' } } });
+    await expect(getProductEntitlement({ request, credential: rotated }, { prisma: db.prisma })).rejects.toThrow();
     await db.prisma.billingAppKey.update({ where: { id: credential.id }, data: { revokedAt: new Date() } });
     await expect(getProductEntitlement({ request, credential }, { prisma: db.prisma })).rejects.toThrow();
   });

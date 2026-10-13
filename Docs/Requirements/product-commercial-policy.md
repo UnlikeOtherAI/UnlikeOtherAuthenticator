@@ -11,6 +11,9 @@ person is selected. Human reads require the ENTITLEMENT key and an exact
 endpoint-audience RS256 actor. Background calls require a different
 COMMERCIAL_WORKER key with no actor. Every request rechecks current key expiry,
 revocation, active registered source domain, active company and exact enrollment.
+The live key's actor key id, public JWK, audience, allowed return origins and
+current service identifier must still match the verified request credential;
+an in-flight old actor/key context cannot survive rotation unnoticed.
 Current roles/credential epoch/team membership authorize human responses.
 
 Enrollment is confirmed by the product's authenticated direct-session route or
@@ -216,3 +219,9 @@ closed-month cycle preparation and idempotent exact regional seat invoice-item
 collection for EUR, GBP and USD. Its synthetic provider and isolated PostgreSQL
 database cannot charge customers. Execution remains pending until the result
 is recorded; schema compilation alone is not financial verification.
+
+The regional test reached actual seat invoice collection and exposed the old
+USD-only PostgreSQL monthly seat source constraint. A corrective migration
+admits EUR/GBP/USD only when account and currency match the frozen subscription's
+tariff. It retains all original amount/state/evidence invariants and changes
+no wallet, provider receipt, top-up or previous invoice currency.
