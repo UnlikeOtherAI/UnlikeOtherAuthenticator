@@ -131,7 +131,7 @@ export async function createStorageMandate(input: { request: ProductEntitlementR
   const checkout = await runtime.stripe.checkout.sessions.create({ mode: 'setup',
     customer: customer.stripeCustomerId, currency: prepared.catalog.currency.toLowerCase(),
     payment_method_types: ['card'], success_url: mandate.successUrl, cancel_url: mandate.cancelUrl,
-    client_reference_id: mandate.id, metadata, setup_intent_data: { metadata, usage: 'off_session' },
+    client_reference_id: mandate.id, metadata, setup_intent_data: { metadata },
     custom_text: { submit: { message: `${STORAGE_CONSENT_TEXT} Monthly unit price: ${prepared.catalog.currency} ` +
       `${(prepared.catalog.unitAmountMinor / 100n).toString()}.${(prepared.catalog.unitAmountMinor % 100n).toString().padStart(2, '0')}.` } },
   }, { idempotencyKey: `uoa:storage-mandate:${mandate.id}` });
@@ -159,7 +159,7 @@ export async function verifyStorageSetup(mandate: BillingStorageMandate, stripe:
   assertStripeObjectLivemode(setup, livemode);
   const paymentMethodId = stripeExternalId(setup.payment_method);
   if (setup.status !== 'succeeded' || setup.usage !== 'off_session' || !paymentMethodId ||
-    setup.metadata.uoa_storage_mandate_id !== mandate.id || stripeExternalId(setup.customer) !== mandate.stripeCustomerId) {
+    setup.metadata?.uoa_storage_mandate_id !== mandate.id || stripeExternalId(setup.customer) !== mandate.stripeCustomerId) {
     throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_STORAGE_SETUP_INTENT_INVALID');
   }
   const method = await stripe.paymentMethods.retrieve(paymentMethodId);

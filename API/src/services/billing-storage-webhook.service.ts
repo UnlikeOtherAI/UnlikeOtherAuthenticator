@@ -126,6 +126,18 @@ export async function applyStorageWebhook(tx: Prisma.TransactionClient, prepared
   await tx.billingStoragePaymentAttempt.updateMany({ where: { id: binding.attempt.id }, data: {
     stripeSubscriptionId: remote.id, ...(prepared.kind === 'invoice' ? { stripeInvoiceId: prepared.invoice.id } : {}),
   } });
+  const item = remote.items.data[0]!;
+  const existing = await tx.billingStorageSubscription.findUnique({ where: { serviceId_orgId_accountId: {
+    serviceId: binding.expansion.serviceId, orgId: binding.expansion.orgId, accountId: binding.mandate.accountId,
+  } } });
+  if (!existing) {
+    const created = await tx.billingStorageSubscription.create({ data: { serviceId: binding.expansion.serviceId,
+      orgId: binding.expansion.orgId, accountId: binding.mandate.accountId, mandateId: binding.mandate.id,
+      catalogId: binding.catalog.id, stripeSubscriptionId: remote.id, stripeItemId: item.id,
+      purchasedBlocks: 0, pendingBlocks: binding.expansion.toBlocks, state: remote.status,
+      currentPeriodStart: new Date(item.current_period_start * 1000), currentPeriodEnd: new Date(item.current_period_end * 1000) } });
+    await tx.billingStorageExpansion.update({ where: { id: binding.expansion.id }, data: { subscriptionId: created.id } });
+  }
   await tx.billingStorageSubscription.updateMany({ where: { serviceId: binding.expansion.serviceId,
     orgId: binding.expansion.orgId, stripeSubscriptionId: remote.id }, data: { state: remote.status,
     currentPeriodStart: new Date(remote.items.data[0]!.current_period_start * 1000),
@@ -146,11 +158,15 @@ export async function applyStorageWebhook(tx: Prisma.TransactionClient, prepared
     }, update: {} });
     const attempt = await tx.billingStoragePaymentAttempt.findFirst({ where: { expansionId: binding.expansion.id }, orderBy: { generation: 'desc' } });
     if (attempt?.id !== binding.attempt.id) return;
-    await tx.billingStorageExpansion.update({ where: { id: binding.expansion.id }, data: { state: 'paid', paymentProvenAt: prepared.paidAt } });
-    await tx.billingStorageSubscription.updateMany({ where: { serviceId: binding.expansion.serviceId,
-      orgId: binding.expansion.orgId, stripeSubscriptionId: remote.id }, data: {
-      purchasedBlocks: binding.expansion.toBlocks, pendingBlocks: 0,
-    } });
+    await tx.billingStorageExpansion.updateMany({ where: { id: binding.expansion.id, state: { not: 'paid' } },
+      data: { state: 'paid', paymentProvenAt: prepared.paidAt } });
+    const current = await tx.billingStorageSubscription.findFirst({ where: { serviceId: binding.expansion.serviceId,
+      orgId: binding.expansion.orgId, stripeSubscriptionId: remote.id } });
+    if (current) {
+      const purchasedBlocks = Math.max(current.purchasedBlocks, binding.expansion.toBlocks);
+      await tx.billingStorageSubscription.update({ where: { id: current.id }, data: { purchasedBlocks,
+        pendingBlocks: current.pendingBlocks <= purchasedBlocks ? 0 : current.pendingBlocks } });
+    }
     // Replacement pays the same logical purchase; terminal prior debt remains
     // history but cannot keep the company restricted after this exact cash proof.
     const priorAttempts = await tx.billingStoragePaymentAttempt.findMany({ where: { expansionId: binding.expansion.id,
