@@ -29,7 +29,7 @@ import { prepareStripePaymentAdjustment, persistStripePaymentAdjustment }
   from './billing-stripe-payment-adjustment-source.service.js';
 import { prepareRecurringAddonWebhook } from './billing-recurring-addon-webhook.service.js';
 import { applyRecurringAddonWebhook } from './billing-recurring-addon-webhook-apply.service.js';
-import { prepareStorageWebhook, applyStorageWebhook } from './billing-storage-webhook.service.js';
+import { prepareStorageWebhook, applyStorageWebhook, applyStoragePaidBoundary } from './billing-storage-webhook.service.js';
 import { prepareCommercialPayment, applyCommercialPayment } from './billing-commercial-incident.service.js';
 import {
   refreshStripeSubscriptionProjection,
@@ -226,6 +226,42 @@ export async function handleStripeWebhook(
   const livemode = deps?.stripeLivemode ?? configured?.livemode ?? false;
   const account = await resolveStripeAccountContext(stripe, livemode, prisma);
   assertStripeEventAccount(event, account);
+  return applyVerifiedStripeWebhook(event, stripe, account, prisma,
+    deps?.collectionEnabled ?? getEnv().STRIPE_BILLING_ENABLED, deps?.reconcileInvoice);
+}
+
+/** Scheduled recovery accepts only an original Event retrieved using this account's authenticated Stripe client. */
+export async function applyTrustedCommercialStripeEvent(params: {
+  event: Stripe.Event; stripe: Stripe; account: StripeAccountContext; prisma: PrismaClient;
+}) {
+  assertStripeEventApiVersion(params.event);
+  assertStripeEventAccount(params.event, params.account);
+  if (!COMMERCIAL_RECOVERY_EVENT_TYPES.includes(params.event.type)) {
+    throw new AppError('BAD_REQUEST', 400, 'STRIPE_COMMERCIAL_EVENT_TYPE_UNSUPPORTED');
+  }
+  const result = await applyVerifiedStripeWebhook(params.event, params.stripe, params.account, params.prisma, true);
+  if (result.duplicate && params.event.type === 'invoice.paid') {
+    const storage = await prepareStorageWebhook(params.event, params.stripe, params.account, params.prisma);
+    if (storage?.kind === 'invoice' && storage.paidAt) {
+      const evidence = await params.prisma.billingStoragePaymentEvidence.findUnique({ where: { accountId_invoiceId: {
+        accountId: params.account.id, invoiceId: storage.invoice.id,
+      } } });
+      if (!evidence || evidence.attemptId !== storage.binding.attempt.id ||
+        evidence.currency !== storage.invoice.currency.toUpperCase() || evidence.amountMinor !== BigInt(storage.invoice.amount_paid)) {
+        throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_STORAGE_PAID_BOUNDARY_SOURCE_DRIFT');
+      }
+      await params.prisma.$transaction((tx) => applyStoragePaidBoundary(tx, storage));
+    }
+  }
+  return result;
+}
+export const COMMERCIAL_RECOVERY_EVENT_TYPES: Stripe.Event.Type[] = [
+  'invoice.payment_failed', 'invoice.payment_action_required', 'invoice.paid',
+  'customer.subscription.updated', 'customer.subscription.deleted', 'checkout.session.completed',
+];
+async function applyVerifiedStripeWebhook(event: Stripe.Event, stripe: StripeWebhookClient,
+  account: StripeAccountContext, prisma: PrismaClient, collectionEnabled: boolean,
+  reconcileInvoice?: typeof reconcileStripeCycleInvoiceUsage): Promise<{ duplicate: boolean }> {
   const eventKey = {
     accountId_stripeEventId: {
       accountId: account.id,
@@ -235,7 +271,6 @@ export async function handleStripeWebhook(
   if (await prisma.billingStripeWebhookEvent.findUnique({ where: eventKey })) {
     return { duplicate: true };
   }
-  const collectionEnabled = deps?.collectionEnabled ?? getEnv().STRIPE_BILLING_ENABLED;
   const storage = await prepareStorageWebhook(event, stripe as Stripe, account, prisma);
   if (storage) return commitVerifiedStripeEvent({ event, account, prisma, prepared: null,
     applyAdditional: (tx, webhookEventId) => applyStorageWebhook(tx, storage, webhookEventId) });
@@ -274,7 +309,7 @@ export async function handleStripeWebhook(
     if (!invoice.id) {
       throw new AppError('BAD_REQUEST', 400, 'STRIPE_INVOICE_BINDING_INVALID');
     }
-    await (deps?.reconcileInvoice ?? reconcileStripeCycleInvoiceUsage)(
+    await (reconcileInvoice ?? reconcileStripeCycleInvoiceUsage)(
       {
         invoiceId: invoice.id,
         eventType: event.type as StripeInvoiceWebhookType,

@@ -17,7 +17,7 @@ export function storageBlocks(bytes: bigint): number {
   if (blocks > 1_000_000n) throw new AppError('BAD_REQUEST', 400, 'BILLING_STORAGE_CAPACITY_UNSUPPORTED');
   return Number(blocks);
 }
-export async function effectiveStorageCapacity(prisma: Pick<PrismaClient, 'billingStorageSubscription' | 'billingCommercialIncident'>,
+export async function effectiveStorageCapacity(prisma: Pick<PrismaClient, 'billingStorageSubscription' | 'billingCommercialIncident' | 'billingStorageExpansion'>,
   serviceId: string, orgId: string, now: Date) {
   const subscriptions = await prisma.billingStorageSubscription.findMany({ where: { serviceId, orgId,
     state: { notIn: ['canceled', 'ended'] } } });
@@ -26,9 +26,18 @@ export async function effectiveStorageCapacity(prisma: Pick<PrismaClient, 'billi
   const incident = await prisma.billingCommercialIncident.findFirst({ where: { serviceId, orgId,
     category: { in: ['seat', 'storage'] }, resolvedAt: null }, orderBy: [{ graceEndsAt: 'asc' }, { failedAt: 'asc' }, { id: 'asc' }] });
   const restricted = Boolean(incident && incident.graceEndsAt <= now);
-  const pendingIncident = row && !restricted ? await prisma.billingCommercialIncident.findFirst({ where: {
+  const pendingExpansion = row?.pendingBlocks ? await prisma.billingStorageExpansion.findFirst({ where: { serviceId, orgId,
+    subscriptionId: row.id, toBlocks: { gte: row.pendingBlocks }, state: { not: 'paid' } } }) : null;
+  const pendingIncident = pendingExpansion && !restricted ? await prisma.billingCommercialIncident.findFirst({ where: {
     serviceId, orgId, category: 'storage', resolvedAt: null, graceEndsAt: { gt: now },
+    storageExpansionId: pendingExpansion.id,
   } }) : null;
+  const storageGrace = row && !restricted ? await prisma.billingCommercialIncident.findFirst({ where: {
+    serviceId, orgId, accountId: row.accountId, category: 'storage', resolvedAt: null, graceEndsAt: { gt: now },
+  } }) : null;
+  if (row && row.purchasedBlocks > 0 && (!row.paidThrough || row.paidThrough <= now) && !storageGrace && !restricted) {
+    throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_STORAGE_RENEWAL_RECONCILIATION_REQUIRED');
+  }
   const blocks = row ? Math.max(row.purchasedBlocks, pendingIncident ? row.pendingBlocks : 0) : 0;
   return { bytes: blocks > 0 ? BigInt(blocks) * STORAGE_BLOCK_BYTES : FREE_STORAGE_BYTES,
     blocks, restricted, incident, row };

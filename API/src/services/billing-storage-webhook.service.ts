@@ -106,6 +106,7 @@ export async function applyStorageWebhook(tx: Prisma.TransactionClient, prepared
       attemptId: binding.attempt.id, webhookEventId, currency: prepared.invoice.currency.toUpperCase(),
       amountMinor: BigInt(prepared.invoice.amount_paid), cashEvidence: prepared.cashEvidence!, paidAt: prepared.paidAt,
     }, update: {} });
+    await applyStoragePaidBoundary(tx, prepared);
     const attempt = await tx.billingStoragePaymentAttempt.findFirst({ where: { expansionId: binding.expansion.id }, orderBy: { generation: 'desc' } });
     if (attempt?.id !== binding.attempt.id) return;
     await tx.billingStorageExpansion.updateMany({ where: { id: binding.expansion.id, state: { not: 'paid' } },
@@ -129,4 +130,18 @@ export async function applyStorageWebhook(tx: Prisma.TransactionClient, prepared
         create: { incidentId: incident.id, stage: 'resolved', dueAt: now }, update: {} });
     }
   }
+}
+
+/** Invoice period plus independent paid cash proof, never subscription status alone. */
+export async function applyStoragePaidBoundary(tx: Prisma.TransactionClient,
+  prepared: Extract<PreparedStorageWebhook, { kind: 'invoice' }>) {
+  if (!prepared.paidAt) return;
+  const end = Math.max(...prepared.invoice.lines.data.filter((line) => line.amount > 0).map((line) => line.period.end));
+  if (!Number.isSafeInteger(end)) throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_STORAGE_PAID_PERIOD_UNPROVEN');
+  const paidThrough = new Date(end * 1000);
+  await tx.$queryRaw`SELECT id FROM organisations WHERE id=${prepared.binding.expansion.orgId} FOR UPDATE`;
+  await tx.billingStorageSubscription.updateMany({ where: { serviceId: prepared.binding.expansion.serviceId,
+    orgId: prepared.binding.expansion.orgId, accountId: prepared.binding.mandate.accountId,
+    stripeSubscriptionId: prepared.remote.id, OR: [{ paidThrough: null }, { paidThrough: { lt: paidThrough } }] },
+  data: { paidThrough } });
 }

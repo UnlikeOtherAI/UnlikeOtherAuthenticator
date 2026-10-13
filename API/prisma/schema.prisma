@@ -5321,6 +5321,7 @@ model BillingStorageSubscription {
   state                 String
   currentPeriodEnd      DateTime? @map("current_period_end")
   currentPeriodStart    DateTime? @map("current_period_start")
+  paidThrough          DateTime? @map("paid_through")
   createdAt             DateTime @default(now()) @map("created_at")
   updatedAt             DateTime @updatedAt @map("updated_at")
   @@unique([serviceId, orgId, accountId])
@@ -5391,6 +5392,26 @@ model BillingStoragePaymentAttempt {
   @@map("billing_storage_payment_attempts")
 }
 
+model BillingCommercialEventScan {
+  accountId String @id @map("account_id")
+  fromSecond Int @map("from_second")
+  throughSecond Int @map("through_second")
+  cursor String?
+  generation Int @default(0)
+  nextAttemptAt DateTime @default(now()) @map("next_attempt_at")
+  @@map("billing_commercial_event_scans")
+}
+model BillingCommercialEventRecovery {
+  accountId String @map("account_id")
+  eventId String @map("event_id")
+  eventType String @map("event_type")
+  objectId String @map("object_id")
+  completedAt DateTime? @map("completed_at")
+  nextAttemptAt DateTime @default(now()) @map("next_attempt_at")
+  attemptCount Int @default(0) @map("attempt_count")
+  @@id([accountId,eventId])
+  @@map("billing_commercial_event_recovery")
+}
 model BillingCommercialEmailDelivery {
   id String @id @default(cuid())
   notificationId String @map("notification_id")

@@ -17,7 +17,7 @@ function fixture(kind: 'initial' | 'expansion' | 'renewal') {
   const earlierSeat = { id: 'seat-debt', category: 'seat', storageExpansionId: null, invoiceId: 'in_seat',
     graceEndsAt: new Date('2026-10-16T18:00:00Z') };
   const line = { pricing: { price_details: { price: catalog.stripePriceId } }, currency: 'eur', discounts: [],
-    quantity: expansion.toBlocks, amount: 999 * expansion.toBlocks,
+    quantity: expansion.toBlocks, amount: 999 * expansion.toBlocks, period: { start: 1791896400, end: 1794574800 },
     parent: { subscription_item_details: { subscription_item: 'si_storage', proration: kind === 'expansion' } } };
   const invoice = { id: 'in_storage', livemode: false, customer: 'cus_company', currency: 'eur',
     collection_method: 'charge_automatically', discounts: [], parent: { subscription_details: { subscription: 'sub_storage', metadata } },

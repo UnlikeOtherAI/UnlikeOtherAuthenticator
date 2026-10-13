@@ -48,7 +48,8 @@ describe.skipIf(!process.env.DATABASE_URL)('storage cash evidence ordering in Po
       remote: { id: 'sub_fixture', status: 'active', items: { data: [{ id: 'si_fixture', current_period_start: 1791896400,
         current_period_end: 1794574800 }] } } as unknown as Stripe.Subscription,
       invoice: { id: `in_${id}`, amount_paid: Number(catalog.unitAmountMinor) * expansion.toBlocks,
-        currency: 'eur' } as Stripe.Invoice, payment: null, paidAt: new Date('2026-10-13T17:00:00Z'), cashEvidence: { synthetic: event } };
+        currency: 'eur', lines: { data: [{ amount: 999, period: { start: 1791896400, end: 1794574800 } }] } } as Stripe.Invoice,
+      payment: null, paidAt: new Date('2026-10-13T17:00:00Z'), cashEvidence: { synthetic: event } };
     await db.prisma.$transaction((tx) => applyStorageWebhook(tx, prepared, event));
     return db.prisma.billingStorageSubscription.findUniqueOrThrow({ where: { id: 'storage-subscription' } });
   }
@@ -58,5 +59,7 @@ describe.skipIf(!process.env.DATABASE_URL)('storage cash evidence ordering in Po
     expect(await paid('A', 'late-A')).toMatchObject({ purchasedBlocks: 2, pendingBlocks: 0 });
     expect(await paid('A', 'late-A-renewal')).toMatchObject({ purchasedBlocks: 2, pendingBlocks: 0 });
     expect(await db.prisma.billingStoragePaymentEvidence.count()).toBe(2);
+    expect((await db.prisma.billingStorageSubscription.findUniqueOrThrow({ where: { id: 'storage-subscription' } })).paidThrough)
+      .toEqual(new Date(1794574800 * 1000));
   });
 });

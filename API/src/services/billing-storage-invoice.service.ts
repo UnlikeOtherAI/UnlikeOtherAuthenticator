@@ -61,5 +61,9 @@ export async function readBoundStorageInvoice(invoiceId: string, stripe: Stripe,
     invoice.lines.data[0]!.parent?.subscription_item_details?.proration)) {
     throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_STORAGE_RECURRING_AMOUNT_INVALID');
   }
+  if (invoice.lines.data.some((line) => !Number.isSafeInteger(line.period.start) || !Number.isSafeInteger(line.period.end) ||
+    line.period.end <= line.period.start)) {
+    throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_STORAGE_INVOICE_PERIOD_INVALID');
+  }
   return { binding, invoice, remote };
 }

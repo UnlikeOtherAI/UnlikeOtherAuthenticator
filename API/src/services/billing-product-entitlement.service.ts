@@ -71,6 +71,7 @@ export async function getProductEntitlement(input: {
     const boundaries = [now.getTime() + 60_000, ...(trial && policy?.trialEndsAt ? [policy.trialEndsAt.getTime()] : []),
       ...(incident && !restricted ? [incident.graceEndsAt.getTime()] : []),
       ...activeSeats.flatMap((row) => row.commercialEndsAt ? [row.commercialEndsAt.getTime()] : [])];
+    if (storage.row?.paidThrough && storage.row.paidThrough > now) boundaries.push(storage.row.paidThrough.getTime());
     const upcomingPolicy = await tx.billingProductPolicyRevision.findFirst({ where: {
       enrollmentId: enrollment.id, effectiveAt: { gt: now },
     }, orderBy: { effectiveAt: 'asc' } });

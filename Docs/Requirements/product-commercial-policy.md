@@ -164,6 +164,22 @@ Bounded Stripe event scans persist their cursor so unrelated event volume cannot
 hold the same invoice forever at a fixed scan ceiling. Unknown expired evidence
 remains a visible reconciliation hold; no replacement deadline is guessed.
 
+Scheduled commercial recovery scans one bounded Stripe event page per account
+poll through durable time windows. It commits original event identifiers and
+the page cursor together; each event receives its own durable retry slot.
+Source/API-version or first-failure reconciliation holds cannot starve later
+payments. Only authenticated original Stripe Events enter the same verified
+webhook core; HTTP still requires the ordinary webhook signature. This covers
+missed storage renewals and setup completion, not just unfinished expansions.
+Storage capacity has a paid-through boundary from exact verified paid invoice
+line periods. A subscription's advanced renewal date alone never proves the
+renewal paid. Expired/missing paid-through evidence without a confirmed payment
+incident produces reconciliation unavailability, not a guessed failure/grace.
+Confirmed storage grace remains a separate capacity authority. Pending expansion
+capacity requires an incident bound to that expansion, rather than an unrelated
+older storage renewal. Already committed immutable cash evidence can restore
+this boundary after an upgrade through freshly verified original-event replay.
+
 ## Implementation verification
 
 On Maxis at `05ae0679`, protocol/artifact build, Prisma generation, API and Admin
@@ -176,3 +192,12 @@ Storage collection/reordered cash/weekend-expiry, hosted invite waiting and
 operator browser verification remain in progress; this document does not
 claim those are shipped or deployed. Final delivery must replace this progress
 record with actual focused test and headless rendered-flow evidence.
+
+At `90dce07b`, Maxis protocol5.10.1 build and API typecheck passed. Five storage
+manager recovery tests and three wire tests passed. The real Fedora PostgreSQL
+cash-ordering test passed without skips: A paid while B pending preserves B's
+target; B paid followed by old A/renewal does not reduce capacity. The corrected
+prepaid settlement assertion at `c05bef9b` passed alongside all twelve original
+rating tests, and five strict privacy/phone/schema checks passed. This proves
+no duplicate settlement debit; it is not the outstanding regional
+reservation-to-receipt-to-cycle-to-monthly-invoice verification.

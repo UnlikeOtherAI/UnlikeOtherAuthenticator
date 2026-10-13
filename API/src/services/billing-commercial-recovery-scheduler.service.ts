@@ -2,12 +2,16 @@ import { getAdminPrisma } from '../db/prisma.js';
 import { getEnv } from '../config/env.js';
 import { deliverCommercialEmails } from './billing-commercial-email.service.js';
 import { dispatchStorageExpansion } from './billing-storage-expansion.service.js';
+import { recoverCommercialStripeEvents } from './billing-commercial-event-recovery.service.js';
+import { requireStripeBillingEnabled } from './billing-stripe-client.service.js';
 
 /** Persistent retry slots survive replicas/restarts; payment evidence owns outcomes. */
 export async function runCommercialRecovery() {
   const prisma = getAdminPrisma();
   await deliverCommercialEmails();
   if (!getEnv().STRIPE_BILLING_ENABLED) return;
+  const configured = requireStripeBillingEnabled();
+  await recoverCommercialStripeEvents({ prisma, stripe: configured.client, livemode: configured.livemode });
   const now = new Date();
   const work = await prisma.$queryRaw<Array<{ id: string; attempt_id: string }>>`
     SELECT e.id,a.id AS attempt_id FROM billing_storage_expansions e
