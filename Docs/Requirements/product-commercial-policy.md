@@ -474,3 +474,7 @@ when rewinding its historical table, without touching any shared/live schema.
 That opt-in routed fixture bound also applies to acquiring a transaction from
 its own test client pool, so the twenty-request admission race reaches the
 authoritative balance lock rather than failing at a two-second pool wait.
+
+The Company policy form explains an overriding negotiated-contract conflict
+and preserves the proposed private action for correction. The headless operator
+journey exercises that rejection before accepting compatible future terms.

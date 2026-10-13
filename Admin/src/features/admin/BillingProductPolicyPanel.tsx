@@ -19,6 +19,7 @@ const errors: Record<string, string> = {
   BILLING_PRIVATE_RETAIL_STORAGE_ACTIVE: 'End the retail storage subscription and revoke its automatic expansion mandate before assigning private pricing.',
   BILLING_PRIVATE_COLLECTING_TARIFF_REQUIRED: 'Assign an at-cost company tariff with zero monthly fee and enabled cost collection first.',
   BILLING_PRIVATE_TEAM_OVERRIDE_CONFLICT: 'Remove conflicting team tariff overrides before assigning private company pricing.',
+  BILLING_PRIVATE_EFFECTIVE_TARIFF_CONFLICT: 'The negotiated company contract overrides this private tariff. Stage compatible company terms before assigning private pricing.',
   BILLING_CUSTOM_TRIAL_PARTIAL_WAIVER_UNSUPPORTED: 'This accepted flat or full-month agreement cannot receive a partial trial waiver.',
   BILLING_PRIVATE_TRANSITION_TERMS_REQUIRED: 'Stage the replacement company tariff first; private pricing ends on its effective month.',
   BILLING_COMMERCIAL_SOURCE_IMMUTABLE: 'This company is already enrolled to another product source.',

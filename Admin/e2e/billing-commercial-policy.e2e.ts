@@ -10,6 +10,7 @@ test('operator reaches exact company policy, reviews effective date, binds stora
   const offers: Array<Record<string, unknown>> = [];
   const writes: Array<Record<string, unknown>> = [];
   let rejected = true;
+  let contractConflict = true;
   const key = { id: 'lifecycle', service_id: 'billing-1', purpose: 'customer_lifecycle', name: 'Customer lifecycle',
     key_prefix: 'synthetic', actor_issuer: 'https://api.nessie.works', actor_audience: 'https://authentication.unlikeotherai.com',
     actor_key_id: 'synthetic', checkout_return_origins: ['https://app.nessie.works'], last_used_at: null,
@@ -25,6 +26,8 @@ test('operator reaches exact company policy, reviews effective date, binds stora
       const input = req.postDataJSON(); writes.push(input);
       expect(input).toMatchObject({ organisation_id: 'o1', source_domain: 'api.nessie.works', billing_timezone: 'Europe/London' });
       if (rejected) { rejected = false; return json({ error: 'Unsupported partial waiver', code: 'BILLING_CUSTOM_TRIAL_PARTIAL_WAIVER_UNSUPPORTED' }, 409); }
+      if (input.private_at_cost && contractConflict) { contractConflict = false;
+        return json({ error: 'Conflicting accepted company terms', code: 'BILLING_PRIVATE_EFFECTIVE_TARIFF_CONFLICT' }, 409); }
       policies.splice(0, policies.length, { id: 'enrollment', organisation_id: 'o1', source_domain: input.source_domain,
         billing_timezone: input.billing_timezone, active: true, policy: { id: 'revision', privateAtCost: input.private_at_cost,
           effectiveAt: effective, trialStartsAt: null, trialEndsAt: null } });
@@ -71,6 +74,10 @@ test('operator reaches exact company policy, reviews effective date, binds stora
   await expect(page.getByLabel(/^Billing timezone/)).toHaveValue('Europe/London');
   await page.locator('select[name="policy"]').selectOption('private');
   await page.getByRole('button', { name: 'Save company policy' }).click();
+  await expect(page.getByRole('alert')).toContainText('negotiated company contract overrides this private tariff');
+  await expect(page.locator('select[name="policy"]')).toHaveValue('private');
+  await page.screenshot({ path: info.outputPath('private-contract-conflict.png'), fullPage: true });
+  await page.getByRole('button', { name: 'Save company policy' }).click();
   await expect(page.getByRole('status')).toContainText('Policy takes effect Sun, 01 Nov 2026');
   await expect(page.getByRole('cell', { name: 'Private at cost', exact: true })).toBeVisible();
   await page.getByLabel(/^Existing Stripe price/).fill('price_synthetic123');
@@ -99,7 +106,7 @@ test('operator reaches exact company policy, reviews effective date, binds stora
   await page.screenshot({ path: info.outputPath('public-standard-seats.png'), fullPage: true });
   await page.getByRole('button', { name: 'Withdraw new purchases', exact: true }).click();
   await expect(page.getByText('Withdrawn', { exact: true })).toBeVisible();
-  expect(writes).toHaveLength(4);
+  expect(writes).toHaveLength(5);
   expect(fixture.unexpected).toEqual([]); expect(fixture.errors).toEqual([]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
 });
