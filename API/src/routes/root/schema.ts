@@ -3,6 +3,7 @@ import { authEndpoints } from './schema.auth.js';
 import { nativeAppEndpoints } from './schema.native-apps.js';
 import { avatarEndpoints } from './schema.avatars.js';
 import { billingEndpoints } from './schema.billing.js';
+import { commercialPolicyEndpoints } from './schema.commercial-policy.js';
 import { configDebugEndpoints } from './schema.config-debug.js';
 import { integrationsEndpoints } from './schema.integrations.js';
 import { internalAdminEndpoints } from './schema.internal-admin.js';
@@ -51,6 +52,7 @@ export const endpoints: EndpointSchema[] = [
   ...configDebugEndpoints,
   ...authEndpoints,
   ...billingEndpoints,
+  ...commercialPolicyEndpoints,
   ...appEndpoints,
   ...emailEndpoints,
   ...domainEndpoints,

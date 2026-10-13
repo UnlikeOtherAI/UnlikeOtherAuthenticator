@@ -7,7 +7,8 @@ import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
 import { lockSmsSubject, verifySmsActor } from './billing-sms-authority.service.js';
-import { smsFinalUsdQuanta } from './billing-sms-fx-evidence.service.js';
+import { smsFinalUsdQuanta, smsAtCostMonthlyAmount } from './billing-sms-fx-evidence.service.js';
+import { privateCompanyPolicy } from './billing-product-private-policy.service.js';
 import type { BillingSmsProvider } from './billing-sms-provider.service.js';
 import { runBillingSerializableTransaction } from './billing-serializable-transaction.service.js';
 import { sumSmsAmounts } from './billing-sms-money.service.js';
@@ -83,7 +84,6 @@ export async function issueSmsQuote(input: { request: BillingSmsQuoteRequestV1; 
 deps: SmsQuoteDependencies): Promise<BillingSmsFinalQuoteV1> {
   const prisma = deps.prisma ?? getAdminPrisma();
   const request = input.request;
-  const commercial = readSmsCommercialPolicy();
   if (request.carrier !== null || request.mcc !== null || request.mnc !== null ||
       request.number_type !== 'mobile' || !/^[A-Z]{2}$/.test(request.country) ||
       (request.direction === 'outbound' ? !request.destination : request.destination !== null)) {
@@ -99,6 +99,9 @@ deps: SmsQuoteDependencies): Promise<BillingSmsFinalQuoteV1> {
   const issue = () => runBillingSerializableTransaction(prisma, async (tx) => {
     await input.authorize(tx);
     const now = deps.now?.() ?? new Date();
+    const privatePolicy = await privateCompanyPolicy(tx, input.credential.service.id, request.organisation_id, now);
+    const commercial = privatePolicy ? { version: `private-${privatePolicy.id}`, monthlyFeeEur: '0',
+      monthlyMarkupBps: 0, messageMarkupBps: 0 } : readSmsCommercialPolicy();
     const fx = await tx.billingSmsFxSnapshot.findFirst({
       where: { expiresAt: { gt: now }, policy: 'ECB_REFERENCE_USD_PER_EUR_V1' },
       orderBy: [{ rateDate: 'desc' }, { acceptedAt: 'desc' }],
@@ -116,8 +119,12 @@ deps: SmsQuoteDependencies): Promise<BillingSmsFinalQuoteV1> {
       : providerAmount;
     // A number costs its region currency's flat monthly price in every country; messages keep
     // provider cost plus markup. The region is chosen once before the first monthly quote.
-    const terms = monthly ? await smsMonthlyTerms(tx, { country: request.country,
-      currency: (await requireOrganisationBillingRegion(request.organisation_id, tx)).currency,
+    const regionCurrency = monthly ? (await requireOrganisationBillingRegion(request.organisation_id, tx)).currency : null;
+    const terms = monthly && privatePolicy ? { finalAmount: smsAtCostMonthlyAmount({ amount: providerAmount.toFixed(),
+      currency: price.currency, targetCurrency: regionCurrency!, rates: {
+        usdPerEur: fx.usdPerEur.toFixed(), gbpPerEur: fx.gbpPerEur?.toFixed() ?? null,
+      } }), finalCurrency: regionCurrency!, monthlyPriceId: null } : monthly ? await smsMonthlyTerms(tx, { country: request.country,
+      currency: regionCurrency!,
       providerAmount: providerAmount.toFixed(), providerCurrency: price.currency,
       rates: { usdPerEur: fx.usdPerEur.toFixed(), gbpPerEur: fx.gbpPerEur?.toFixed() ?? null } })
       : { finalAmount: formattedQuanta(smsFinalUsdQuanta({ providerAmount: providerBound.toFixed(),

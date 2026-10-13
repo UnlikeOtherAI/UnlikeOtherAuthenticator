@@ -29,6 +29,8 @@ import { prepareStripePaymentAdjustment, persistStripePaymentAdjustment }
   from './billing-stripe-payment-adjustment-source.service.js';
 import { prepareRecurringAddonWebhook } from './billing-recurring-addon-webhook.service.js';
 import { applyRecurringAddonWebhook } from './billing-recurring-addon-webhook-apply.service.js';
+import { prepareStorageWebhook, applyStorageWebhook } from './billing-storage-webhook.service.js';
+import { prepareCommercialPayment, applyCommercialPayment } from './billing-commercial-incident.service.js';
 import {
   refreshStripeSubscriptionProjection,
   syncBaseStripeSubscription,
@@ -45,7 +47,7 @@ export { refreshStripeSubscriptionProjection, syncStripeSubscriptionProjection }
 type StripeWebhookClient = Pick<
   Stripe,
   'accounts' | 'balanceTransactions' | 'billing' | 'charges' | 'checkout' | 'invoicePayments' |
-  'invoices' | 'invoiceItems' | 'subscriptions' | 'webhooks'
+  'invoices' | 'invoiceItems' | 'subscriptions' | 'webhooks' | 'events' | 'products' | 'prices' | 'setupIntents' | 'paymentMethods'
 > &
   CreditFundingWebhookClient;
 
@@ -234,6 +236,9 @@ export async function handleStripeWebhook(
     return { duplicate: true };
   }
   const collectionEnabled = deps?.collectionEnabled ?? getEnv().STRIPE_BILLING_ENABLED;
+  const storage = await prepareStorageWebhook(event, stripe as Stripe, account, prisma);
+  if (storage) return commitVerifiedStripeEvent({ event, account, prisma, prepared: null,
+    applyAdditional: (tx, webhookEventId) => applyStorageWebhook(tx, storage, webhookEventId) });
   const recurringAddon = await prepareRecurringAddonWebhook(event, stripe, account, prisma);
   if (
     !recurringAddon &&
@@ -255,6 +260,8 @@ export async function handleStripeWebhook(
     ? await prepareStripePaymentInvoice(cashInvoiceId, account, prisma, stripe) : null;
   const subscriptionPaymentAdjustment = !recurringAddon && !creditFunding
     ? await prepareStripePaymentAdjustment(event, stripe, account, prisma) : null;
+  const commercialPayment = creditFunding ? null : await prepareCommercialPayment(event, account, prisma,
+    stripe, recurringAddon, subscriptionPaymentInvoice?.invoice.id ?? null);
   if (recurringAddon && creditFunding) {
     throw new AppError('INTERNAL', 503, 'STRIPE_WEBHOOK_BINDING_AMBIGUOUS');
   }
@@ -293,6 +300,7 @@ export async function handleStripeWebhook(
       if (recurringAddon) {
         await applyRecurringAddonWebhook(tx, recurringAddon, webhookEventId, account);
       }
+      if (commercialPayment) await applyCommercialPayment(tx, commercialPayment, webhookEventId);
     },
   });
 }

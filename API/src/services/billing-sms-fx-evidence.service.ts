@@ -115,6 +115,21 @@ export function smsCostReachesPrice(input: { costAmount: string; costCurrency: s
   return cost.numerator * price.denominator >= price.numerator * cost.denominator;
 }
 
+/** Provider cost, converted at accepted evidence, rounded once to a currency cent. */
+export function smsAtCostMonthlyAmount(input: { amount: string; currency: string;
+  targetCurrency: string; rates: SmsFxRates }): string {
+  const cost = inEur(input.amount, input.currency, input.rates);
+  const target = input.targetCurrency === 'EUR' ? fraction('1') :
+    input.targetCurrency === 'USD' ? fraction(input.rates.usdPerEur) :
+      input.targetCurrency === 'GBP' && input.rates.gbpPerEur ? fraction(input.rates.gbpPerEur) : null;
+  if (!target) throw unavailable();
+  const numerator = cost.numerator * target.numerator * 100n;
+  const denominator = cost.denominator * target.denominator;
+  const minor = (2n * numerator + denominator) / (2n * denominator);
+  const digits = minor.toString().padStart(3, '0');
+  return `${digits.slice(0, -2)}.${digits.slice(-2)}`;
+}
+
 /** Exact USD rational arithmetic, rounding once upwards at the specified billing quantum. */
 export function smsFinalUsdQuanta(input: {
   providerAmount: string; providerCurrency: string; usdPerEur: string;

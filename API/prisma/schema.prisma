@@ -244,6 +244,7 @@ enum BillingAppKeyPurpose {
   ENTITLEMENT
   CUSTOMER_LIFECYCLE
   SMS_RUNTIME
+  COMMERCIAL_WORKER
 }
 
 enum BillingAdjustmentKind {
@@ -5173,4 +5174,231 @@ model BillingSmsPolicyAlert {
 
   @@index([resolvedAt, openedAt])
   @@map("billing_sms_policy_alerts")
+}
+// Commercial facts are scoped to one explicitly enrolled product/company.
+// Scalar references have FK constraints in the migration; no identity copy.
+model BillingProductEnrollment {
+  id              String   @id @default(cuid())
+  serviceId       String   @map("service_id")
+  orgId           String   @map("org_id")
+  sourceDomain    String   @map("source_domain")
+  billingTimezone String   @default("UTC") @map("billing_timezone")
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  @@unique([serviceId, orgId])
+  @@map("billing_product_enrollments")
+}
+
+model BillingCommercialIncident {
+  id                   String   @id @default(cuid())
+  serviceId            String   @map("service_id")
+  orgId                String   @map("org_id")
+  category             String
+  baseSubscriptionId   String?  @map("base_subscription_id")
+  addonSubscriptionId  String?  @map("addon_subscription_id")
+  storageExpansionId   String?  @map("storage_expansion_id")
+  invoiceId            String   @map("invoice_id")
+  accountId            String   @map("account_id")
+  resourceId           String?  @map("resource_id")
+  failedAt             DateTime @map("failed_at")
+  graceEndsAt          DateTime @map("grace_ends_at")
+  billingTimezone      String   @map("billing_timezone")
+  failureEventId       String   @map("failure_event_id")
+  resolvedAt           DateTime? @map("resolved_at")
+  resolutionEventId    String?  @map("resolution_event_id")
+  createdAt            DateTime @default(now()) @map("created_at")
+  @@unique([accountId, invoiceId])
+  @@index([serviceId, orgId, resolvedAt, failedAt])
+  @@map("billing_commercial_incidents")
+}
+
+model BillingProductPolicyRevision {
+  id             String   @id @default(cuid())
+  enrollmentId   String   @map("enrollment_id")
+  privateAtCost  Boolean  @map("private_at_cost")
+  privateTermEventId String? @map("private_term_event_id")
+  trialStartsAt  DateTime? @map("trial_starts_at")
+  trialEndsAt    DateTime? @map("trial_ends_at")
+  effectiveAt    DateTime @map("effective_at")
+  actorUserId    String   @map("actor_user_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+  @@index([enrollmentId, effectiveAt])
+  @@map("billing_product_policy_revisions")
+}
+
+model BillingCommercialNotification {
+  id           String   @id @default(cuid())
+  incidentId   String   @map("incident_id")
+  stage        String
+  dueAt        DateTime @map("due_at")
+  emailSentAt  DateTime? @map("email_sent_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+  lastPolledAt DateTime? @map("last_polled_at")
+  @@unique([incidentId, stage])
+  @@map("billing_commercial_notifications")
+}
+
+model BillingCommercialAcknowledgement {
+  serviceId      String   @map("service_id")
+  notificationId String   @map("notification_id")
+  channel        String
+  recipientUserId String  @map("recipient_user_id")
+  receiptId      String   @map("receipt_id")
+  acknowledgedAt DateTime @default(now()) @map("acknowledged_at")
+  @@id([serviceId, notificationId, channel, recipientUserId])
+  @@map("billing_commercial_acknowledgements")
+}
+
+model BillingStorageObservation {
+  id             String   @id @default(cuid())
+  serviceId      String   @map("service_id")
+  orgId          String   @map("org_id")
+  observationId  String   @map("observation_id")
+  measurementVersion String @map("measurement_version")
+  revision       BigInt
+  blobBytes      BigInt   @map("blob_bytes")
+  databaseBytes  BigInt   @map("database_bytes")
+  observedAt     DateTime @map("observed_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+  @@unique([serviceId, orgId, revision])
+  @@unique([serviceId, orgId, observationId])
+  @@map("billing_storage_observations")
+}
+model BillingStorageCatalog {
+  id              String   @id @default(cuid())
+  serviceId       String   @map("service_id")
+  accountId       String   @map("account_id")
+  currency        String
+  unitAmountMinor BigInt   @map("unit_amount_minor")
+  stripeProductId String   @map("stripe_product_id")
+  stripePriceId   String   @map("stripe_price_id")
+  version         Int      @default(1)
+  createdAt       DateTime @default(now()) @map("created_at")
+  @@unique([serviceId, accountId, currency, version])
+  @@map("billing_storage_catalogs")
+}
+
+model BillingStorageMandate {
+  id                    String   @id @default(cuid())
+  serviceId             String   @map("service_id")
+  orgId                 String   @map("org_id")
+  accountId             String   @map("account_id")
+  catalogId             String   @map("catalog_id")
+  appKeyId              String   @map("app_key_id")
+  actionIntentId        String   @unique @map("action_intent_id")
+  requestedByUserId     String   @map("requested_by_user_id")
+  requestedTeamId       String   @map("requested_team_id")
+  consentVersion        String   @map("consent_version")
+  consentTerms          Json     @map("consent_terms")
+  stripeCustomerId      String   @map("stripe_customer_id")
+  stripeCheckoutId      String?  @unique @map("stripe_checkout_id")
+  stripeSetupIntentId   String?  @unique @map("stripe_setup_intent_id")
+  stripePaymentMethodId String?  @map("stripe_payment_method_id")
+  state                 String   @default("creating")
+  acceptedAt            DateTime? @map("accepted_at")
+  revokedAt             DateTime? @map("revoked_at")
+  successUrl            String   @map("success_url")
+  cancelUrl             String   @map("cancel_url")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+  @@index([serviceId, orgId, accountId, state])
+  @@map("billing_storage_mandates")
+}
+
+model BillingStorageSubscription {
+  id                    String   @id @default(cuid())
+  serviceId             String   @map("service_id")
+  orgId                 String   @map("org_id")
+  accountId             String   @map("account_id")
+  mandateId             String   @map("mandate_id")
+  catalogId             String   @map("catalog_id")
+  stripeSubscriptionId String   @unique @map("stripe_subscription_id")
+  stripeItemId          String   @map("stripe_item_id")
+  purchasedBlocks       Int      @default(0) @map("purchased_blocks")
+  pendingBlocks         Int      @default(0) @map("pending_blocks")
+  state                 String
+  currentPeriodEnd      DateTime? @map("current_period_end")
+  currentPeriodStart    DateTime? @map("current_period_start")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+  @@unique([serviceId, orgId, accountId])
+  @@map("billing_storage_subscriptions")
+}
+
+model BillingStorageExpansion {
+  id                String   @id @default(cuid())
+  serviceId         String   @map("service_id")
+  orgId             String   @map("org_id")
+  mandateId         String   @map("mandate_id")
+  subscriptionId    String?  @map("subscription_id")
+  operationId       String   @map("operation_id")
+  minimumBytes      BigInt   @map("minimum_bytes")
+  fromBlocks        Int      @map("from_blocks")
+  toBlocks          Int      @map("to_blocks")
+  state             String   @default("pending")
+  stripeInvoiceId   String?  @unique @map("stripe_invoice_id")
+  firstAttemptedAt  DateTime? @map("first_attempted_at")
+  paymentProvenAt   DateTime? @map("payment_proven_at")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  @@unique([serviceId, orgId, operationId])
+  @@index([serviceId, orgId, state])
+  @@map("billing_storage_expansions")
+}
+model BillingStoragePaymentEvidence {
+  id String @id @default(cuid())
+  accountId String @map("account_id")
+  invoiceId String @map("invoice_id")
+  attemptId String @map("attempt_id")
+  webhookEventId String @map("webhook_event_id")
+  currency String
+  amountMinor BigInt @map("amount_minor")
+  cashEvidence Json @map("cash_evidence")
+  paidAt DateTime @map("paid_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@unique([accountId, invoiceId])
+  @@map("billing_storage_payment_evidence")
+}
+model BillingFailureHistoryProbe {
+  accountId String @map("account_id")
+  invoiceId String @map("invoice_id")
+  cursor String?
+  earliestFailureAt DateTime @map("earliest_failure_at")
+  complete Boolean @default(false)
+  generation Int @default(0)
+  updatedAt DateTime @updatedAt @map("updated_at")
+  @@id([accountId, invoiceId])
+  @@map("billing_failure_history_probes")
+}
+model BillingStoragePaymentAttempt {
+  id String @id @default(cuid())
+  expansionId String @map("expansion_id")
+  mandateId String @map("mandate_id")
+  generation Int
+  stripeSubscriptionId String? @map("stripe_subscription_id")
+  stripeInvoiceId String? @map("stripe_invoice_id")
+  terminalUnpaidProvenAt DateTime? @map("terminal_unpaid_proven_at")
+  firstAttemptedAt DateTime? @map("first_attempted_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  scanCursor String? @map("scan_cursor")
+  scanComplete Boolean @default(false) @map("scan_complete")
+  nextAttemptAt DateTime @default(now()) @map("next_attempt_at")
+  lastAttemptAt DateTime? @map("last_attempt_at")
+  recoveryActionIntentId String? @unique @map("recovery_action_intent_id")
+  @@unique([expansionId,generation])
+  @@map("billing_storage_payment_attempts")
+}
+
+model BillingCommercialEmailDelivery {
+  id String @id @default(cuid())
+  notificationId String @map("notification_id")
+  recipientUserId String @map("recipient_user_id")
+  nextAttemptAt DateTime @default(now()) @map("next_attempt_at")
+  attemptCount Int @default(0) @map("attempt_count")
+  acceptedAt DateTime? @map("accepted_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@unique([notificationId, recipientUserId])
+  @@index([acceptedAt, nextAttemptAt])
+  @@map("billing_commercial_email_deliveries")
 }

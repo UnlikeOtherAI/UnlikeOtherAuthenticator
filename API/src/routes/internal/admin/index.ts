@@ -30,6 +30,7 @@ import { registerInternalAdminTokenRoute } from './token.js';
 import { registerInternalAdminUserRoutes } from './users.js';
 
 export function registerInternalAdminRoutes(app: FastifyInstance): void {
+  registerAdminProductPolicies(app);
   registerInternalAdminLifecycle(app);
   registerInternalAdminNativeApps(app);
   registerInternalAdminConfigRoute(app);
@@ -59,3 +60,4 @@ export function registerInternalAdminRoutes(app: FastifyInstance): void {
   registerInternalAdminSuperuserRoutes(app);
   registerInternalAdminIntegrationRequestRoutes(app);
 }
+import { registerAdminProductPolicies } from './billing-product-policy.js';

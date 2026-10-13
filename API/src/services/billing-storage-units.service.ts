@@ -1,0 +1,2 @@
+export const FREE_STORAGE_BYTES = 100_000_000n;
+export const STORAGE_BLOCK_BYTES = 1_000_000_000_000n;

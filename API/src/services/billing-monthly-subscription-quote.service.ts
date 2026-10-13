@@ -6,6 +6,7 @@ import {
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import { quoteMonthlySeatCharge } from './billing-seat-month-quote.service.js';
+import { productFeeWaivers, unwaivedIntervals } from './billing-product-fee-waiver.service.js';
 
 export type MonthlyChargeSource = { kind: 'stripe' | 'manual'; id: string };
 
@@ -114,6 +115,8 @@ export async function quoteSubscriptionMonthlyCharge(
   const end = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 1));
   if (end > (deps?.now?.() ?? new Date())) hold('BILLING_MONTH_NOT_CLOSED');
   const terms = await loadFrozenTerms(params.source, prisma);
+  const feeWaivers = await productFeeWaivers(prisma, { serviceId: terms.serviceId,
+    organisationId: terms.orgId, startsAt: start, endsAt: end });
   if (terms.sourceStatus === 'paused' || terms.sourceStatus === 'unpaid') {
     hold('BILLING_MONTHLY_SOURCE_STATUS_UNRESOLVED');
   }
@@ -134,6 +137,11 @@ export async function quoteSubscriptionMonthlyCharge(
     }
   }
   if (terms.chargeBasis === BillingMonthlyChargeBasis.FLAT) {
+    const paidTime = unwaivedIntervals(start, end, feeWaivers).reduce((sum, row) =>
+      sum + row.endsAt.getTime() - row.startsAt.getTime(), 0);
+    if (feeWaivers.length && paidTime > 0 && paidTime < end.getTime() - start.getTime()) {
+      hold('BILLING_PARTIAL_FLAT_WAIVER_POLICY_REQUIRED');
+    }
     if (terms.agreement || terms.seatPolicy || terms.seatChargeTiming) {
       hold('BILLING_MONTHLY_SOURCE_DRIFT');
     }
@@ -154,11 +162,11 @@ export async function quoteSubscriptionMonthlyCharge(
       organisationId: terms.orgId, teamId: terms.teamId, scope: terms.scope,
       agreementId: null, billingMonth: params.billingMonth,
       chargeBasis: terms.chargeBasis, seatPolicy: null, seatChargeTiming: null,
-      amountMinor: terms.unitAmountMinor, unitAmountMinor: terms.unitAmountMinor,
+      amountMinor: paidTime === 0 ? 0n : terms.unitAmountMinor, unitAmountMinor: terms.unitAmountMinor,
       uniqueHumanSeats: null, seatMilliseconds: null, monthMilliseconds: null,
       currency: terms.currency, baselineCapturedAt: null, baselineMemberCount: null,
       commercialEffectiveAt: null, commercialEndsAt: null, endedAt: null,
-      intervals: [], capacityRevisions: [], evidenceIds: [] };
+      intervals: [], capacityRevisions: [], evidenceIds: feeWaivers.map((row) => row.id) };
   }
   const agreement = terms.agreement;
   if (!agreement || !terms.seatPolicy || !terms.seatChargeTiming ||
@@ -191,7 +199,7 @@ export async function quoteSubscriptionMonthlyCharge(
     commercialEffectiveAt: agreement.commercialEffectiveAt,
     commercialEndsAt: agreement.commercialEndsAt, endedAt: agreement.endedAt,
     membershipIntervals: agreement.membershipIntervals,
-    capacityRevisions: agreement.capacityRevisions });
+    capacityRevisions: agreement.capacityRevisions, feeWaivers });
   return { source: terms.source, serviceId: terms.serviceId, tariffId: terms.tariffId,
     organisationId: terms.orgId, teamId: terms.teamId, scope: terms.scope,
     agreementId: agreement.id, billingMonth: params.billingMonth,

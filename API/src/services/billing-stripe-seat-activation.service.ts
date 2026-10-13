@@ -50,7 +50,9 @@ export async function syncStripeSeatActivation(
   },
 ): Promise<void> {
   const { row, tariff, subscription, observedAt } = params;
-  const active = subscription.status === 'active' || subscription.status === 'trialing';
+  // Trial access does not establish billable seat evidence. Record the paid
+  // baseline only when Stripe's independently accepted agreement becomes active.
+  const active = subscription.status === 'active';
   const ending = terminal(subscription.status);
   if (active && row.billableFrom === null) {
     await tx.billingStripeSubscription.update({ where: { id: row.id },

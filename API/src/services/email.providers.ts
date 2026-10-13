@@ -15,6 +15,7 @@ export type EmailMessage = {
   html?: string;
   from?: string;
   replyTo?: string;
+  messageId?: string;
 };
 
 export type EmailProvider = {
@@ -132,6 +133,7 @@ function createSmtpProvider(env: Env, deps?: EmailProviderDeps): EmailProvider {
         subject: message.subject,
         text: message.text,
         html: message.html,
+        messageId: message.messageId,
       });
     },
   };
@@ -179,7 +181,7 @@ function createSesProvider(env: Env, deps?: EmailProviderDeps): EmailProvider {
       }
 
       const runtime = await getRuntime();
-      const { SendEmailCommand, SESServiceException } = runtime.mod;
+      const { SendEmailCommand, SendRawEmailCommand, SESServiceException } = runtime.mod;
       const body: { Text: { Data: string }; Html?: { Data: string } } = {
         Text: { Data: message.text },
       };
@@ -189,6 +191,17 @@ function createSesProvider(env: Env, deps?: EmailProviderDeps): EmailProvider {
       }
 
       try {
+        if (message.messageId) {
+          const headers = [message.from, message.to, message.messageId];
+          if (headers.some((value) => /[\r\n]/.test(value))) throw new Error('Invalid email header');
+          const content = [`From: ${message.from}`, `To: ${message.to}`, `Message-ID: ${message.messageId}`,
+            `Subject: =?UTF-8?B?${Buffer.from(message.subject).toString('base64')}?=`,
+            'MIME-Version: 1.0', 'Content-Type: text/plain; charset=UTF-8',
+            'Content-Transfer-Encoding: base64', '', Buffer.from(message.text).toString('base64').match(/.{1,76}/g)?.join('\r\n') ?? ''];
+          await runtime.client.send(new SendRawEmailCommand({ Source: message.from, Destinations: [message.to],
+            RawMessage: { Data: Buffer.from(content.join('\r\n')) } }));
+          return;
+        }
         await runtime.client.send(
           new SendEmailCommand({
             Destination: { ToAddresses: [message.to] },
@@ -223,6 +236,7 @@ type SendgridClient = {
     subject: string;
     text: string;
     html?: string;
+    headers?: Record<string, string>;
   }) => Promise<unknown>;
 };
 
@@ -298,6 +312,7 @@ function createSendgridProvider(env: Env, deps?: EmailProviderDeps): EmailProvid
           subject: message.subject,
           text: message.text,
           html: message.html,
+          ...(message.messageId ? { headers: { 'Message-ID': message.messageId } } : {}),
         });
       } catch (err) {
         throw new ProviderSendError('SendGrid send failed', {
