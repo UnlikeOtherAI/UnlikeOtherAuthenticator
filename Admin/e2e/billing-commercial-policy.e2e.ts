@@ -7,6 +7,7 @@ test('operator reaches exact company policy, reviews effective date, binds stora
   const tariffs: unknown[] = [];
   const policies: unknown[] = [];
   const catalogs: unknown[] = [];
+  const offers: Array<Record<string, unknown>> = [];
   const writes: Array<Record<string, unknown>> = [];
   let rejected = true;
   const key = { id: 'lifecycle', service_id: 'billing-1', purpose: 'customer_lifecycle', name: 'Customer lifecycle',
@@ -34,6 +35,17 @@ test('operator reaches exact company policy, reviews effective date, binds stora
       const input = req.postDataJSON(); expect(input).toEqual({ currency: 'EUR', price_id: 'price_synthetic123' });
       catalogs.push({ id: 'catalog', account_id: 'acct_synthetic', currency: 'EUR', unit_amount_minor: '999', price_id: input.price_id, version: 1 });
       return json(catalogs[0]);
+    }
+    if (url.pathname.endsWith('/seat-offers')) {
+      if (req.method() === 'GET') return json(offers);
+      const input = req.postDataJSON(); writes.push(input); expect(input).toEqual({ tariff_id: 'tariff-eur-v2' });
+      offers.push({ id: 'seat-offer', tariff_id: input.tariff_id, currency: 'EUR', unit_amount_minor: '299',
+        usage_currency: 'USD', published_at: now, withdrawn_at: null });
+      return json({ id: 'seat-offer' });
+    }
+    if (url.pathname.endsWith('/seat-offers/seat-offer/withdraw')) {
+      expect(req.method()).toBe('POST'); offers[0].withdrawn_at = now;
+      return json({ withdrawn: true });
     }
     if (url.pathname.endsWith('/tariffs') && req.method() === 'POST') {
       const input = req.postDataJSON(); writes.push(input);
@@ -79,7 +91,15 @@ test('operator reaches exact company policy, reviews effective date, binds stora
   await page.screenshot({ path: info.outputPath('regional-tariff.png'), fullPage: true });
   await dialog.getByRole('button', { name: 'Create immutable version', exact: true }).click();
   await expect(dialog).toHaveCount(0);
-  expect(writes).toHaveLength(3);
+  await page.getByRole('button', { name: 'Company policy', exact: true }).click();
+  await page.getByLabel(/^Immutable Standard tariff/).selectOption('tariff-eur-v2');
+  await page.getByRole('button', { name: 'Publish Standard plan', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Withdraw new purchases', exact: true })).toBeVisible();
+  await page.getByRole('heading', { name: 'Public Standard seat plans' }).scrollIntoViewIfNeeded();
+  await page.screenshot({ path: info.outputPath('public-standard-seats.png'), fullPage: true });
+  await page.getByRole('button', { name: 'Withdraw new purchases', exact: true }).click();
+  await expect(page.getByRole('cell', { name: 'Withdrawn', exact: true })).toBeVisible();
+  expect(writes).toHaveLength(4);
   expect(fixture.unexpected).toEqual([]); expect(fixture.errors).toEqual([]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
 });

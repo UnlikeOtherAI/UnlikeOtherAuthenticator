@@ -313,3 +313,8 @@ from being accepted as consent/activation evidence.
 
 Generation now passes after the relation correction. API checking identified a
 widened consent-version type, now preserved as the exact protocol literal.
+
+The existing desktop/mobile operator journey now covers publishing the newly
+created EUR-seat/USD-usage version and withdrawing future purchases from its
+Company policy home. It uses synthetic routes and cannot contact live billing;
+rendered execution remains pending at this checkpoint.
