@@ -1,10 +1,13 @@
 import type Stripe from 'stripe';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createTestDb } from '../helpers/test-db.js';
-import { seedSmsFinance, smsIds } from '../helpers/sms-financial-fixture.js';
+import { seedSmsFinance, smsIds, smsCredential } from '../helpers/sms-financial-fixture.js';
 import { applyStorageWebhook, type PreparedStorageWebhook } from '../../src/services/billing-storage-webhook.service.js';
 import { applyCommercialPayment } from '../../src/services/billing-commercial-incident.service.js';
 import { effectiveStorageCapacity } from '../../src/services/billing-storage-expansion.service.js';
+import { recoverStorage } from '../../src/services/billing-storage-recovery.service.js';
+import { billingActorAudience } from '../../src/services/billing-actor-audience.service.js';
+import { generateKeyPair, exportJWK, SignJWT } from 'jose';
 
 describe.skipIf(!process.env.DATABASE_URL)('storage cash evidence ordering in PostgreSQL', () => {
   let db: NonNullable<Awaited<ReturnType<typeof createTestDb>>>;
@@ -92,5 +95,78 @@ describe.skipIf(!process.env.DATABASE_URL)('storage cash evidence ordering in Po
     expect((await effectiveStorageCapacity(db.prisma, smsIds.service, smsIds.org, new Date('2026-10-12T23:00:00Z'))).restricted).toBe(true);
     await expect(db.prisma.billingCommercialIncident.update({ where: { id: second.id },
       data: { graceEndsAt: new Date('2026-10-20T00:00:00Z') } })).rejects.toThrow();
+  });
+  it('keeps Friday-to-Monday capacity after23h expiry and replaces the exact terminal attempt once without restarting grace', async () => {
+    const pair = await generateKeyPair('RS256', { extractable: true });
+    const jwk = { ...await exportJWK(pair.publicKey), kid: 'weekend-recovery', alg: 'RS256', use: 'sig' };
+    await db.prisma.billingAppKey.update({ where: { id: smsIds.lifecycle }, data: { actorKeyId: jwk.kid, actorPublicJwk: jwk } });
+    const credential = { ...smsCredential, id: smsIds.lifecycle, purpose: 'CUSTOMER_LIFECYCLE' as const,
+      actorKeyId: jwk.kid, actorPublicJwk: jwk, checkoutReturnOrigins: ['https://app.example.test'] };
+    const user = await db.prisma.user.create({ data: { email: 'weekend@example.test', userKey: 'weekend@example.test' } });
+    const org = await db.prisma.organisation.create({ data: { ownerId: user.id, domain: 'weekend.example.test', name: 'Weekend', slug: 'weekend' } });
+    const team = await db.prisma.team.create({ data: { orgId: org.id, name: 'Team', slug: 'team' } });
+    await db.prisma.orgMember.create({ data: { orgId: org.id, userId: user.id, role: 'owner' } });
+    await db.prisma.teamMember.create({ data: { teamId: team.id, userId: user.id, teamRole: 'admin' } });
+    await db.prisma.billingProductEnrollment.create({ data: { serviceId: smsIds.service, orgId: org.id,
+      sourceDomain: 'authentication.unlikeotherai.com', billingTimezone: 'UTC' } });
+    const consent = await db.prisma.billingCustomerActionIntent.create({ data: { appKeyId: smsIds.lifecycle, serviceId: smsIds.service,
+      orgId: org.id, teamId: team.id, requestedByUserId: user.id, authorityScope: 'ORGANISATION', operation: 'storage_mandate_setup',
+      actorJti: 'weekend-consent', actorTokenVersion: 0, actorExpiresAt: new Date(Date.now() + 60_000), requestDigest: 'd'.repeat(64) } });
+    const mandate = await db.prisma.billingStorageMandate.create({ data: { serviceId: smsIds.service, orgId: org.id,
+      accountId: smsIds.account, catalogId: 'catalog', appKeyId: smsIds.lifecycle, actionIntentId: consent.id,
+      requestedByUserId: user.id, requestedTeamId: team.id, consentVersion: 'company-storage-auto-expansion-v1', consentTerms: { synthetic: true },
+      stripeCustomerId: 'cus_weekend', stripeSetupIntentId: 'seti_weekend', stripePaymentMethodId: 'pm_weekend', state: 'accepted',
+      acceptedAt: new Date(), successUrl: 'https://app.example.test/admin/billing', cancelUrl: 'https://app.example.test/admin/billing' } });
+    const storage = await db.prisma.billingStorageSubscription.create({ data: { serviceId: smsIds.service, orgId: org.id, accountId: smsIds.account,
+      mandateId: mandate.id, catalogId: 'catalog', stripeSubscriptionId: 'sub_expired', stripeItemId: 'si_expired',
+      purchasedBlocks: 0, pendingBlocks: 1, state: 'incomplete_expired' } });
+    const expansion = await db.prisma.billingStorageExpansion.create({ data: { serviceId: smsIds.service, orgId: org.id,
+      mandateId: mandate.id, subscriptionId: storage.id, operationId: 'weekend-first-block', minimumBytes: 1_000_000_000_000n,
+      fromBlocks: 0, toBlocks: 1, state: 'failed' } });
+    const attempt = await db.prisma.billingStoragePaymentAttempt.create({ data: { expansionId: expansion.id, mandateId: mandate.id,
+      generation: 1, stripeSubscriptionId: 'sub_expired', stripeInvoiceId: 'in_expired', firstAttemptedAt: new Date('2026-10-09T18:00:00Z') } });
+    const event = await db.prisma.billingStripeWebhookEvent.create({ data: { accountId: smsIds.account, stripeEventId: 'evt_weekend_failed',
+      type: 'invoice.payment_failed', livemode: false, stripeCreatedAt: new Date('2026-10-09T18:00:00Z') } });
+    await db.prisma.$transaction((tx) => applyCommercialPayment(tx, { serviceId: smsIds.service, orgId: org.id, accountId: smsIds.account,
+      category: 'storage', invoiceId: 'in_expired', storageExpansionId: expansion.id, paid: false,
+      failedAt: new Date('2026-10-09T18:00:00Z') }, event.id));
+    const grace = await effectiveStorageCapacity(db.prisma, smsIds.service, org.id, new Date('2026-10-12T17:00:00Z'));
+    expect(grace.bytes).toBe(1_000_000_000_000n); expect(grace.restricted).toBe(false);
+    expect(grace.incident?.graceEndsAt).toEqual(new Date('2026-10-12T18:00:00Z'));
+    const originalDeadline = grace.incident?.graceEndsAt;
+    const metadata = { uoa_storage_attempt_id: attempt.id, uoa_storage_expansion_id: expansion.id, uoa_storage_mandate_id: mandate.id, uoa_service: 'nessie' };
+    const expired = { id: 'sub_expired', livemode: false, customer: 'cus_weekend', status: 'incomplete_expired', metadata,
+      latest_invoice: 'in_expired' };
+    const outcomes = new Map<string, Record<string, unknown>>();
+    const stripe = { accounts: { retrieveCurrent: async () => ({ id: 'acct_sms_fixture' }) },
+      paymentMethods: { retrieve: async () => ({ id: 'pm_weekend', customer: 'cus_weekend', livemode: false }) },
+      invoices: { retrieve: async () => ({ id: 'in_expired', livemode: false, customer: 'cus_weekend', status: 'void', amount_paid: 0,
+        parent: { subscription_details: { subscription: 'sub_expired' } } }) },
+      products: { retrieve: async () => ({ id: 'prod_fixture', livemode: false, active: true,
+        metadata: { uoa_kind: 'company_storage', uoa_service: 'nessie', contract_version: '1' } }) },
+      prices: { retrieve: async () => ({ id: 'price_fixture', livemode: false, active: true, product: 'prod_fixture', type: 'recurring', currency: 'eur',
+        unit_amount: 999, billing_scheme: 'per_unit', transform_quantity: null, lookup_key: 'uoa_nessie_storage_eur_tb_month_v1',
+        recurring: { interval: 'month', interval_count: 1, usage_type: 'licensed', meter: null, trial_period_days: null },
+        metadata: { uoa_kind: 'storage_block', uoa_service: 'nessie', storage_block_bytes: '1000000000000', contract_version: '1' } }) },
+      subscriptions: { retrieve: async () => expired, list: async () => ({ data: [...outcomes.values()], has_more: false }),
+        create: async (input: Stripe.SubscriptionCreateParams, options: Stripe.RequestOptions) => {
+          const key = options.idempotencyKey; if (!key) throw new Error('IDEMPOTENCY_REQUIRED');
+          const existing = outcomes.get(key); if (existing) return existing;
+          const created = { id: 'sub_replacement', livemode: false, customer: input.customer, metadata: input.metadata,
+            status: 'incomplete', latest_invoice: 'in_replacement', items: { data: [{ id: 'si_replacement', quantity: 1,
+              price: { id: 'price_fixture' }, current_period_start: 1791896400, current_period_end: 1794574800 }] } };
+          outcomes.set(key, created); return created;
+        } } } as unknown as Stripe;
+    const body = { product: 'nessie', organisation_id: org.id, team_id: team.id, user_id: user.id, expansion_id: expansion.id };
+    async function actor(jti: string) { return new SignJWT({ product: 'nessie', organisation_id: org.id, team_id: team.id, tv: 0 })
+      .setProtectedHeader({ alg: 'RS256', kid: jwk.kid }).setIssuer(credential.actorIssuer)
+      .setAudience(billingActorAudience('/billing/v1/storage/recover')).setSubject(user.id).setJti(jti)
+      .setIssuedAt().setExpirationTime('60s').sign(pair.privateKey); }
+    const result = await recoverStorage({ request: body, credential, actorToken: await actor('weekend-recover') }, { prisma: db.prisma, stripe, livemode: false });
+    const replay = await recoverStorage({ request: body, credential, actorToken: await actor('weekend-recover') }, { prisma: db.prisma, stripe, livemode: false });
+    expect(result).toMatchObject({ state: 'payment_pending' }); expect(replay.attempt_id).toBe(result.attempt_id);
+    expect(await db.prisma.billingStoragePaymentAttempt.count({ where: { expansionId: expansion.id } })).toBe(2); expect(outcomes.size).toBe(1);
+    const debt = await db.prisma.billingCommercialIncident.findUniqueOrThrow({ where: { accountId_invoiceId: { accountId: smsIds.account, invoiceId: 'in_expired' } } });
+    expect(debt.graceEndsAt).toEqual(originalDeadline); expect(debt.resolvedAt).toBeNull();
   });
 });

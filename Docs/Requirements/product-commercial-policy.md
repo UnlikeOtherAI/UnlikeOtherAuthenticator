@@ -383,3 +383,9 @@ instead of issuing another purchase. Focused response-loss regressions are added
 
 After revisiting the head, page progress compares against the reset cursor,
 so a formerly complete multi-page scan can resume instead of rescanning page one.
+
+The database recovery journey covers Friday failure, Stripe initial expiry after
+23h, preserved Monday pending capacity, exact signed manager recovery and same
+action replay. Only one replacement outcome and two total generations are
+permitted; the original weekday deadline and unpaid debt must remain unchanged.
+This new full recovery regression is coded and execution is pending.
