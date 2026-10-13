@@ -3,7 +3,9 @@ import type { ProductEntitlementRequest, StorageManagerV1 } from '@unlikeotherai
 import { AppError } from '../utils/errors.js';
 import { resolveStripeAccountContext } from './billing-stripe-client.service.js';
 import { readBoundStorageInvoice } from './billing-storage-invoice.service.js';
-import { storageRuntime, STORAGE_CONSENT_TEXT, STORAGE_CONSENT_VERSION, type StorageDependencies } from './billing-storage-mandate.service.js';
+import { storageRuntime, type StorageDependencies } from './billing-storage-mandate.service.js';
+import { storageCopy, STORAGE_CONSENT_VERSION } from './billing-storage-copy.catalog.js';
+import type { BillingCustomerLocale } from './billing-copy-locale.js';
 
 function invoiceRecoveryUrl(status: string | null | undefined, value: string | null | undefined): string | null {
   if (status !== 'open' || !value) return null;
@@ -15,7 +17,7 @@ function invoiceRecoveryUrl(status: string | null | undefined, value: string | n
 }
 
 export async function storageManagementSnapshot(prisma: PrismaClient, input: {
-  serviceId: string; request: ProductEntitlementRequest; privateAtCost: boolean;
+  serviceId: string; request: ProductEntitlementRequest; privateAtCost: boolean; locale?: BillingCustomerLocale;
 }, deps?: StorageDependencies): Promise<StorageManagerV1> {
   const now = deps?.now?.() ?? new Date();
   const runtime = storageRuntime(deps);
@@ -80,7 +82,7 @@ export async function storageManagementSnapshot(prisma: PrismaClient, input: {
       : recovered || paymentRecoveries.length ? 'recovery_required' : pending ? 'payment_pending' : mandate?.state === 'accepted' ? 'ready' : 'setup_available',
     setup: !input.privateAtCost && catalog ? { unit_amount_minor: catalog.unitAmountMinor.toString(), currency: catalog.currency,
       block_bytes: '1000000000000', cadence: 'month', current_cycle_proration_minor: '0',
-      consent_text: STORAGE_CONSENT_TEXT, consent_version: STORAGE_CONSENT_VERSION,
+      consent_text: storageCopy(input.locale).consent, consent_version: STORAGE_CONSENT_VERSION,
       action: { method: 'POST', path: '/billing/v1/storage/mandate', body: {
         ...input.request, catalog_id: catalog.id, consent_version: STORAGE_CONSENT_VERSION, accepted: true,
       } } } : null,

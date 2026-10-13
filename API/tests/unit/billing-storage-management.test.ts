@@ -2,6 +2,8 @@ import type { PrismaClient } from '@prisma/client';
 import type Stripe from 'stripe';
 import { describe, expect, it } from 'vitest';
 import { storageManagementSnapshot } from '../../src/services/billing-storage-management.service.js';
+import { BILLING_CUSTOMER_LOCALES } from '@unlikeotherai/billing-statement-protocol';
+import { storageCheckoutText, storageCopy } from '../../src/services/billing-storage-copy.catalog.js';
 
 function fixture(kind: 'initial' | 'expansion' | 'renewal') {
   const expansion = { id: 'expansion', serviceId: 'service', orgId: 'company', fromBlocks: kind === 'initial' ? 0 : 1,
@@ -50,6 +52,19 @@ function fixture(kind: 'initial' | 'expansion' | 'renewal') {
 }
 
 describe('current storage invoice recovery', () => {
+  it.each(BILLING_CUSTOMER_LOCALES)('returns producer-owned %s consent without changing commercial amounts', async (locale) => {
+    const data = fixture('renewal');
+    const result = await storageManagementSnapshot(data.prisma, { serviceId: 'service', privateAtCost: false, locale,
+      request: { product: 'nessie', organisation_id: 'company', team_id: 'team', user_id: 'owner' } },
+    { stripe: data.stripe, livemode: false, now: () => new Date('2026-10-16T17:59:50Z') });
+    expect(result.setup?.consent_text).toBe(storageCopy(locale).consent);
+    expect(result.setup?.unit_amount_minor).toBe('999');
+    expect(result.setup?.action.body.consent_version).toBe('company-storage-auto-expansion-v1');
+    const checkout = storageCheckoutText(locale, 'EUR', 999n);
+    expect(checkout).toContain(result.setup?.consent_text);
+    expect(checkout).toContain('EUR 9.99');
+    expect(checkout.length).toBeLessThanOrEqual(1200);
+  });
   async function read(data: ReturnType<typeof fixture>) {
     return storageManagementSnapshot(data.prisma, { serviceId: 'service', privateAtCost: false,
       request: { product: 'nessie', organisation_id: 'company', team_id: 'team', user_id: 'owner' } },

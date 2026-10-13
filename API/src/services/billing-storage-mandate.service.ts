@@ -13,9 +13,8 @@ import { ensureStripeCustomer } from './billing-stripe-checkout-state.service.js
 import { assertStripeObjectLivemode, requireStripeBillingEnabled, resolveStripeAccountContext } from './billing-stripe-client.service.js';
 import { stripeExternalId } from './billing-stripe-webhook-utils.service.js';
 import { storageManagementSnapshot } from './billing-storage-management.service.js';
-
-export const STORAGE_CONSENT_VERSION = 'company-storage-auto-expansion-v1';
-export const STORAGE_CONSENT_TEXT = 'Authorize automatic monthly storage charges per whole 1 TB block and automatic additional blocks when company usage exceeds capacity. The initial purchase establishes the separate monthly subscription renewal date shown by Stripe; additional blocks are prorated immediately and keep that date. Storage is charged from the first block. This consent does not authorize inference or seat payments.';
+import { storageCopy, storageCheckoutText, STORAGE_CONSENT_VERSION } from './billing-storage-copy.catalog.js';
+import { billingLocale, type BillingCustomerLocale } from './billing-copy-locale.js';
 export type StorageDependencies = { prisma?: PrismaClient; stripe?: Stripe; livemode?: boolean; now?: () => Date };
 export function storageRuntime(deps?: StorageDependencies) {
   if (deps?.stripe) return { stripe: deps.stripe, livemode: deps.livemode ?? false };
@@ -33,7 +32,7 @@ function checkoutUrl(value: string | null) {
 }
 
 export async function readStorageSetup(input: { request: ProductEntitlementRequest;
-  credential: VerifiedBillingAppKey; actorToken: string }, deps?: StorageDependencies): Promise<StorageReadV1> {
+  credential: VerifiedBillingAppKey; actorToken: string; locale?: BillingCustomerLocale }, deps?: StorageDependencies): Promise<StorageReadV1> {
   const { request, credential } = input;
   const actor = await verifyBillingActor({ token: input.actorToken, credential, endpoint: '/billing/v1/storage',
     request: { product: request.product, organisationId: request.organisation_id,
@@ -49,7 +48,8 @@ export async function readStorageSetup(input: { request: ProductEntitlementReque
   if (!access.manager) return { schema_version: 1, can_manage: false, setup: null,
     product: request.product, organisation_id: request.organisation_id,
     subject: { team_id: request.team_id, user_id: request.user_id } };
-  const snapshot = await storageManagementSnapshot(prisma, { serviceId: credential.service.id, request, privateAtCost: access.privateAtCost }, deps);
+  const snapshot = await storageManagementSnapshot(prisma, { serviceId: credential.service.id, request,
+    privateAtCost: access.privateAtCost, locale: input.locale }, deps);
   await prisma.$transaction(async (tx) => {
     await lockCommercialAuthority(tx, { credential, product: request.product,
       organisationId: request.organisation_id, purpose: 'CUSTOMER_LIFECYCLE' });
@@ -65,7 +65,7 @@ export async function readStorageSetup(input: { request: ProductEntitlementReque
 
 export async function createStorageMandate(input: { request: ProductEntitlementRequest & {
   catalog_id: string; consent_version: string; accepted: true };
-  credential: VerifiedBillingAppKey; actorToken: string }, deps?: StorageDependencies): Promise<StorageMandateResultV1> {
+  credential: VerifiedBillingAppKey; actorToken: string; locale?: BillingCustomerLocale }, deps?: StorageDependencies): Promise<StorageMandateResultV1> {
   const { request, credential } = input;
   if (!request.accepted || request.consent_version !== STORAGE_CONSENT_VERSION) {
     throw new AppError('BAD_REQUEST', 400, 'BILLING_STORAGE_CONSENT_REQUIRED');
@@ -114,7 +114,8 @@ export async function createStorageMandate(input: { request: ProductEntitlementR
     create: { serviceId: credential.service.id, orgId: request.organisation_id, accountId: account.id,
       catalogId: prepared.catalog.id, appKeyId: credential.id, actionIntentId: prepared.action.id,
       requestedByUserId: request.user_id, requestedTeamId: request.team_id,
-      consentVersion: STORAGE_CONSENT_VERSION, consentTerms: { text: STORAGE_CONSENT_TEXT,
+      consentVersion: STORAGE_CONSENT_VERSION, consentTerms: { text: storageCopy(input.locale).consent,
+        locale: billingLocale(input.locale), checkout_text: storageCheckoutText(input.locale, prepared.catalog.currency, prepared.catalog.unitAmountMinor),
         unit_amount_minor: prepared.catalog.unitAmountMinor.toString(), currency: prepared.catalog.currency,
         automatic_expansion: true, initial_monthly_cycle: 'stripe_initial_attempt_period',
         expansion_proration: 'immediate_keep_renewal_date' },
@@ -136,13 +137,16 @@ export async function createStorageMandate(input: { request: ProductEntitlementR
   if (Date.now() - mandate.createdAt.getTime() >= 23 * 3_600_000) {
     throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_STORAGE_SETUP_RECONCILIATION_REQUIRED');
   }
+  const terms = mandate.consentTerms;
+  if (!terms || typeof terms !== 'object' || Array.isArray(terms) || typeof terms.checkout_text !== 'string') {
+    throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_STORAGE_CONSENT_EVIDENCE_REQUIRED');
+  }
   const metadata = { uoa_storage_mandate_id: mandate.id, uoa_service: credential.service.identifier };
   const checkout = await runtime.stripe.checkout.sessions.create({ mode: 'setup',
     customer: customer.stripeCustomerId, currency: prepared.catalog.currency.toLowerCase(),
     payment_method_types: ['card'], success_url: mandate.successUrl, cancel_url: mandate.cancelUrl,
     client_reference_id: mandate.id, metadata, setup_intent_data: { metadata },
-    custom_text: { submit: { message: `${STORAGE_CONSENT_TEXT} Monthly unit price: ${prepared.catalog.currency} ` +
-      `${(prepared.catalog.unitAmountMinor / 100n).toString()}.${(prepared.catalog.unitAmountMinor % 100n).toString().padStart(2, '0')}.` } },
+    custom_text: { submit: { message: terms.checkout_text } },
   }, { idempotencyKey: `uoa:storage-mandate:${mandate.id}` });
   assertStripeObjectLivemode(checkout, account.livemode);
   if (checkout.mode !== 'setup' || stripeExternalId(checkout.customer) !== mandate.stripeCustomerId ||

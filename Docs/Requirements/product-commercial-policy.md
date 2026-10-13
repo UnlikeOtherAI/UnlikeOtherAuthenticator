@@ -262,3 +262,11 @@ save. Screenshots were reviewed; no live API/provider request is permitted by
 the harness. Four fresh phone verdict checks at `b87ff4af` also passed, covering
 paid-before-verdict refusal, gross/nominal distinction, late final24h and missing
 email transport refusal. Full changed-source lint is still being completed.
+
+Storage consent uses UOA's existing presentation-version/customer-locale headers
+for all seven billing locales. The read action, accepted mandate evidence and
+Stripe setup page share producer-owned translations of the same versioned terms.
+Locale and complete checkout text are frozen in the mandate before external
+creation; replay does not substitute a later request's language into the same
+Stripe idempotency key. Localized text never changes price, cycle or authority.
+Missing frozen consent evidence holds setup for reconciliation.

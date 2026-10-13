@@ -6,6 +6,7 @@ import { readStorageSetup, createStorageMandate } from '../../services/billing-s
 import { recoverStorage } from '../../services/billing-storage-recovery.service.js';
 import { AppError } from '../../utils/errors.js';
 import { BillingSubjectRequestSchema, readBillingActorHeader } from './billing-request.js';
+import { readBillingPresentation } from './billing-presentation.js';
 
 const mandate = BillingSubjectRequestSchema.extend({ catalog_id: z.string().min(1).max(256),
   consent_version: z.literal('company-storage-auto-expansion-v1'), accepted: z.literal(true) }).strict();
@@ -15,12 +16,14 @@ export function registerStorageRoutes(app: FastifyInstance) {
     if (!request.billingAppKey) throw new AppError('UNAUTHORIZED', 401);
     reply.header('Cache-Control', 'private, no-store');
     return readStorageSetup({ request: BillingSubjectRequestSchema.parse(request.body),
-      credential: request.billingAppKey, actorToken: readBillingActorHeader(request.headers['x-uoa-actor']) });
+      credential: request.billingAppKey, locale: readBillingPresentation(request.headers).locale,
+      actorToken: readBillingActorHeader(request.headers['x-uoa-actor']) });
   });
   app.post('/billing/v1/storage/mandate', { preHandler, schema: { response: { 200: storageMandateResultV1JsonSchema } } }, async (request, reply) => {
     if (!request.billingAppKey) throw new AppError('UNAUTHORIZED', 401);
     reply.header('Cache-Control', 'private, no-store');
     return createStorageMandate({ request: mandate.parse(request.body), credential: request.billingAppKey,
+      locale: readBillingPresentation(request.headers).locale,
       actorToken: readBillingActorHeader(request.headers['x-uoa-actor']) });
   });
   app.post('/billing/v1/storage/recover', { preHandler, schema: { response: { 200: storageRecoveryResultV1JsonSchema } } }, async (request, reply) => {
