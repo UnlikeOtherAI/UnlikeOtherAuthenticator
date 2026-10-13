@@ -6,6 +6,7 @@ export const BILLING_STORAGE_ENSURE_PATH = '/billing/v1/storage/ensure-capacity'
 export const BILLING_STORAGE_OBSERVATION_PATH = '/billing/v1/storage/observations' as const;
 export const BILLING_COMMERCIAL_EVENTS_PATH = '/billing/v1/commercial-events' as const;
 export const BILLING_COMMERCIAL_ACK_PATH = '/billing/v1/commercial-events/acknowledge' as const;
+export const BILLING_PHONE_RELEASE_PATH = '/billing/v1/commercial-events/phone-release' as const;
 
 export type ProductCommercialStanding = 'free' | 'trial' | 'subscribed' | 'private_at_cost'
   | 'grace' | 'restricted';
@@ -45,6 +46,7 @@ export type StorageEnsureV1 = ProductCommercialSubject & {
 };
 export type StorageObservationRequestV1 = ProductCommercialSubject & {
   observation_id: string; revision: string; observed_at: string;
+  measurement_version: string;
   blob_bytes: string; database_bytes: string;
 };
 export type CommercialEventV1 = ProductCommercialSubject & {
@@ -57,3 +59,13 @@ export type CommercialEventV1 = ProductCommercialSubject & {
   resource_id: string | null;
 };
 export type CommercialEventsV1 = { schema_version: 1; events: CommercialEventV1[] };
+export type CommercialAcknowledgementV1 = ProductCommercialSubject & {
+  event_id: string; recipient_user_id: string; channel: 'alert' | 'personal_assistant';
+  /** The successful transport's durable acceptance identifier; queued work is insufficient. */
+  receipt_id: string;
+};
+export type PhoneReleaseRequestV1 = ProductCommercialSubject & { incident_id: string };
+export type PhoneReleaseVerdictV1 = ProductCommercialSubject & {
+  schema_version: 1; incident_id: string; authorized: boolean; resource_id: string;
+  account_sid: string | null; phone_number_sid: string | null; valid_until: string;
+};

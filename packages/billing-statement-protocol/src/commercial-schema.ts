@@ -41,7 +41,7 @@ export const storageEnsureV1JsonSchema = object({ ...subject, schema_version: { 
     'restricted', 'reconciliation_required'] }, capacity_bytes: bytes,
   required_blocks: { type: 'integer', minimum: 0 }, grace_ends_at: nullableDate });
 export const storageObservationRequestV1JsonSchema = object({ ...subject,
-  observation_id: id, revision: bytes, observed_at: timestamp, blob_bytes: bytes,
+  observation_id: id, revision: bytes, observed_at: timestamp, measurement_version: id, blob_bytes: bytes,
   database_bytes: bytes });
 export const commercialEventsV1JsonSchema = object({ schema_version: { const: 1 },
   events: { type: 'array', maxItems: 100, items: object({ ...subject, event_id: id,
@@ -52,10 +52,19 @@ export const commercialEventsV1JsonSchema = object({ schema_version: { const: 1 
     channels: { type: 'array', items: { enum: ['alert', 'personal_assistant', 'email'] }, uniqueItems: true },
     resource_id: { anyOf: [id, { type: 'null' }] },
   }) } });
+export const commercialAcknowledgementV1JsonSchema = object({ ...subject, event_id: id,
+  recipient_user_id: id, channel: { enum: ['alert', 'personal_assistant'] }, receipt_id: id });
+export const phoneReleaseRequestV1JsonSchema = object({ ...subject, incident_id: id });
+export const phoneReleaseVerdictV1JsonSchema = object({ ...subject, schema_version: { const: 1 },
+  incident_id: id, authorized: boolean, resource_id: id,
+  account_sid: { anyOf: [{ type: 'string', pattern: '^AC[0-9a-fA-F]{32}$' }, { type: 'null' }] },
+  phone_number_sid: { anyOf: [{ type: 'string', pattern: '^PN[0-9a-fA-F]{32}$' }, { type: 'null' }] },
+  valid_until: timestamp });
 export const commercialProtocolV1JsonSchema = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',
   $id: 'https://authentication.unlikeotherai.com/schemas/commercial-policy-v1.json',
   $defs: { entitlement: productEntitlementV1JsonSchema, ensure_request: storageEnsureRequestV1JsonSchema,
     ensure_response: storageEnsureV1JsonSchema, observation_request: storageObservationRequestV1JsonSchema,
-    events: commercialEventsV1JsonSchema },
+    events: commercialEventsV1JsonSchema, acknowledgement: commercialAcknowledgementV1JsonSchema,
+    phone_release_request: phoneReleaseRequestV1JsonSchema, phone_release_response: phoneReleaseVerdictV1JsonSchema },
 } as const;
