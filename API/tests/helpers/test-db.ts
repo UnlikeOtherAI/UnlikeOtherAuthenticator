@@ -150,7 +150,9 @@ export async function createTestDb(options?: { transactionTimeoutMs?: number }):
 
   const prisma = new PrismaClient({
     datasources: { db: { url: testUrl } },
-    ...(options?.transactionTimeoutMs ? { transactionOptions: { timeout: options.transactionTimeoutMs } } : {}),
+    ...(options?.transactionTimeoutMs ? { transactionOptions: {
+      timeout: options.transactionTimeoutMs, maxWait: options.transactionTimeoutMs,
+    } } : {}),
   });
   await prisma.$connect();
 

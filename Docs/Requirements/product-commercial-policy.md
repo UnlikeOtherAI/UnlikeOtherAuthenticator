@@ -470,3 +470,7 @@ prior30-second test timeout interrupted the loop and contaminated later shared
 fixture expectations; that run is not claimed as passed. The isolated populated
 history migration fixture also discards the empty newer foreign-key consumers
 when rewinding its historical table, without touching any shared/live schema.
+
+That opt-in routed fixture bound also applies to acquiring a transaction from
+its own test client pool, so the twenty-request admission race reaches the
+authoritative balance lock rather than failing at a two-second pool wait.
