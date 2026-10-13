@@ -138,8 +138,9 @@ export async function locateStorageAttempt(stripe: Stripe, attempt: BillingStora
   // lost. Revisit the collection head instead of freezing absence forever.
   if (attempt.scanComplete) await prisma.billingStoragePaymentAttempt.updateMany({ where: { id: attempt.id,
     stripeSubscriptionId: null, scanComplete: true }, data: { scanComplete: false, scanCursor: null } });
+    const scanCursor = attempt.scanComplete ? null : attempt.scanCursor;
     const list = await stripe.subscriptions.list({ customer: customerId, status: 'all', limit: 100,
-      ...(!attempt.scanComplete && attempt.scanCursor ? { starting_after: attempt.scanCursor } : {}) });
+      ...(scanCursor ? { starting_after: scanCursor } : {}) });
     const found = list.data.filter((row) => row.metadata.uoa_storage_attempt_id === attempt.id);
     if (found.length > 1) throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_STORAGE_ATTEMPT_AMBIGUOUS');
     if (found[0]) {
@@ -148,12 +149,12 @@ export async function locateStorageAttempt(stripe: Stripe, attempt: BillingStora
         stripeSubscriptionId: null }, data: { stripeSubscriptionId: found[0].id } });
       return found[0];
     }
-    const cursor = list.data.at(-1)?.id ?? attempt.scanCursor;
-    if (list.has_more && cursor === attempt.scanCursor) {
+    const cursor = list.data.at(-1)?.id ?? scanCursor;
+    if (list.has_more && cursor === scanCursor) {
       throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_STORAGE_ATTEMPT_SCAN_UNRESOLVED');
     }
     await prisma.billingStoragePaymentAttempt.updateMany({ where: { id: attempt.id,
-      scanCursor: attempt.scanCursor, stripeSubscriptionId: null },
+      scanCursor, stripeSubscriptionId: null },
       data: { scanCursor: cursor, scanComplete: !list.has_more } });
     if (list.has_more) throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_STORAGE_ATTEMPT_SCAN_CONTINUING');
     return null;

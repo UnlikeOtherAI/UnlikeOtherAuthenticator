@@ -22,7 +22,7 @@ describe('storage response-loss evidence discovery', () => {
     const update = vi.fn(async () => ({ count: 1 }));
     const stripe = { subscriptions: { list } } as unknown as Stripe;
     const prisma = { billingStoragePaymentAttempt: { updateMany: update } } as unknown as PrismaClient;
-    await expect(locateStorageAttempt(stripe, attempt, 'cus_exact', false, prisma)).rejects.toThrow('BILLING_STORAGE_ATTEMPT_SCAN_PENDING');
+    await expect(locateStorageAttempt(stripe, attempt, 'cus_exact', false, prisma)).rejects.toThrow('BILLING_STORAGE_ATTEMPT_SCAN_CONTINUING');
     expect(list).toHaveBeenCalledWith(expect.objectContaining({ starting_after: 'page-one' }));
     expect(update).toHaveBeenCalledWith(expect.objectContaining({ data: { scanCursor: 'unrelated', scanComplete: false } }));
     list.mockResolvedValueOnce({ data: [{ id: 'sub_a', metadata: { uoa_storage_attempt_id: attempt.id } },

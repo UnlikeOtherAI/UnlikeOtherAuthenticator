@@ -380,3 +380,6 @@ the original scan can predate an external create whose response was lost.
 Freezing that absence would strand an existing remote payment after23h.
 Incomplete scans retain durable page progress; ambiguous matching outcomes hold
 instead of issuing another purchase. Focused response-loss regressions are added.
+
+After revisiting the head, page progress compares against the reset cursor,
+so a formerly complete multi-page scan can resume instead of rescanning page one.
