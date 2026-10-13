@@ -548,3 +548,9 @@ Stripe/shared-payer funding, and multi-service tax allocation. The same register
 cases retain their original order and shared isolated fixture. All changed code
 files, including these test modules, are now below500lines. The refactored suites
 must pass their full PostgreSQL rerun before this structural change is verified.
+
+Entitlement expiry also covers known future company seat activation, fixed-seat
+capacity revisions and negotiated-contract month boundaries. A generic tariff
+event is not required for an accepted contract transition, so a cached receipt
+cannot carry an old private waiver or capacity across that known boundary.
+These validity queries remain company/product scoped and do not admit a person.

@@ -85,6 +85,22 @@ export async function getProductEntitlement(input: {
       source: 'ORGANISATION', scopeKey: request.organisation_id,
       effectiveFromMonth: { gt: now.toISOString().slice(0, 7) } }, orderBy: { effectiveFromMonth: 'asc' } });
     if (upcomingTerms) boundaries.push(Date.parse(`${upcomingTerms.effectiveFromMonth}-01T00:00:00.000Z`));
+    const companySeatScope = { serviceId: credential.service.id, orgId: request.organisation_id, teamId: null, endedAt: null };
+    const [upcomingSeat, upcomingCapacity, upcomingContract] = await Promise.all([
+      tx.billingSeatSubscription.findFirst({ where: { ...companySeatScope, commercialEffectiveAt: { gt: now } },
+        orderBy: { commercialEffectiveAt: 'asc' }, select: { commercialEffectiveAt: true } }),
+      tx.billingFixedSeatCapacityRevision.findFirst({ where: { effectiveAt: { gt: now },
+        seatSubscription: { ...companySeatScope, commercialEffectiveAt: { lte: now },
+          OR: [{ commercialEndsAt: null }, { commercialEndsAt: { gt: now } }] } },
+        orderBy: { effectiveAt: 'asc' }, select: { effectiveAt: true } }),
+      tx.billingOrganisationContractVersion.findFirst({ where: { effectiveFromMonth: { gt: now.toISOString().slice(0, 7) },
+        contract: { orgId: request.organisation_id, status: 'ACTIVE', versions: {
+          some: { serviceTerms: { some: { serviceId: credential.service.id } } } } } },
+        orderBy: { effectiveFromMonth: 'asc' }, select: { effectiveFromMonth: true } }),
+    ]);
+    if (upcomingSeat) boundaries.push(upcomingSeat.commercialEffectiveAt.getTime());
+    if (upcomingCapacity) boundaries.push(upcomingCapacity.effectiveAt.getTime());
+    if (upcomingContract) boundaries.push(Date.parse(`${upcomingContract.effectiveFromMonth}-01T00:00:00.000Z`));
     const base: ProductEntitlementV1 = { schema_version: 1, viewer: background ? 'background' : manager ? 'manager' : 'member',
       subject: request.team_id && request.user_id ? { team_id: request.team_id, user_id: request.user_id } : null,
       product: request.product, organisation_id: request.organisation_id,
