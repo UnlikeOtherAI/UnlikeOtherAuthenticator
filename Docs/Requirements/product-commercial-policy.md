@@ -342,3 +342,14 @@ Screenshot inspection showed the mobile publication action required horizontal
 table scrolling. Published offer rows now wrap their existing details and action
 within the viewport; the same single rendering is used on desktop and mobile.
 The EUR-seat/USD-usage form screenshot shows both valuation fields explicitly.
+
+Immediate first usage requires complete, fresh Ledger source proof as well as
+absence of durable UOA acceptance/admission/liability evidence. A durable worker
+checks one company-history month per claim using exact organisation metering and
+cryptographically verified organisation budget receipt sets. Unknown, pending,
+unresolved or unavailable evidence holds only the proposed usage activation;
+verified paid seats and existing independently funded terms remain authoritative.
+The cursor resumes after replicas/restarts and does not discard historical source
+months. Any observed prior metering schedules the new usage terms next UTC month;
+all-zero history through the current month permits prospective activation.
+This proof/recovery path is coded and its expanded verification is pending.

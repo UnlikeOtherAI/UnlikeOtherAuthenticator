@@ -4,11 +4,13 @@ import { deliverCommercialEmails } from './billing-commercial-email.service.js';
 import { dispatchStorageExpansion } from './billing-storage-expansion.service.js';
 import { recoverCommercialStripeEvents } from './billing-commercial-event-recovery.service.js';
 import { requireStripeBillingEnabled } from './billing-stripe-client.service.js';
+import { recoverAcceptedSeatUsage } from './billing-seat-usage-recovery.service.js';
 
 /** Persistent retry slots survive replicas/restarts; payment evidence owns outcomes. */
 export async function runCommercialRecovery() {
   const prisma = getAdminPrisma();
   await deliverCommercialEmails();
+  await recoverAcceptedSeatUsage(prisma);
   if (!getEnv().STRIPE_BILLING_ENABLED) return;
   const configured = requireStripeBillingEnabled();
   await recoverCommercialStripeEvents({ prisma, stripe: configured.client, livemode: configured.livemode });

@@ -2266,6 +2266,9 @@ model BillingStripeCheckoutSession {
   seatConsentTerms        Json?                  @map("seat_consent_terms")
   usageTermsEffectiveAt   DateTime?              @map("usage_terms_effective_at")
   usageTermEventId        String?                @unique @map("usage_term_event_id")
+  usageProbeMonth         String?                @map("usage_probe_month") @db.Char(7)
+  usageProbeEvidence      Json?                  @map("usage_probe_evidence")
+  usageProbeNextAttemptAt DateTime                @default(now()) @map("usage_probe_next_attempt_at")
   orgId                   String                 @map("org_id")
   teamId                  String?                @map("team_id")
   scope                   BillingAssignmentScope

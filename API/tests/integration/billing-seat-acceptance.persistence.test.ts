@@ -45,6 +45,10 @@ describe.skipIf(!process.env.DATABASE_URL)('prospective accepted Standard compan
   it('activates genuinely first usage prospectively and rejects historical timestamp re-rating', async () => {
     const { row, team } = await checkout('first-standard');
     await db.prisma.$transaction((tx) => activateAcceptedSeatUsage(tx, row, now));
+    expect((await db.prisma.billingStripeCheckoutSession.findUniqueOrThrow({ where: { id: row.id } })).usageTermEventId).toBeNull();
+    await db.prisma.$transaction((tx) => activateAcceptedSeatUsage(tx, row, now, {
+      serviceId: smsIds.service, orgId: row.orgId, checkedThroughMonth: utcBillingMonth(now), checkedAt: now, hasMetering: false,
+    }));
     const stored = await db.prisma.billingStripeCheckoutSession.findUniqueOrThrow({ where: { id: row.id } });
     expect(stored.usageTermsEffectiveAt).toEqual(now);
     async function effective(at: Date) { return resolveBillingTariffForMonth(db.prisma, { serviceId: smsIds.service,

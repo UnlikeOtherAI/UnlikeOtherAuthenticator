@@ -3,10 +3,12 @@ import { AppError } from '../utils/errors.js';
 import { compatibleStandardSeatTariff } from './billing-seat-offer.service.js';
 import { nextUtcBillingMonth, utcBillingMonth } from './billing-tariff-history.service.js';
 import { lockBudgetOrganisation } from './billing-credit-budget-dispatch.service.js';
+export type FirstSeatUsageProof = { orgId: string; serviceId: string; checkedThroughMonth: string;
+  checkedAt: Date; hasMetering: boolean };
 
 /** Completion alone is insufficient: called only after exact active subscription validation. */
 export async function activateAcceptedSeatUsage(tx: Prisma.TransactionClient,
-  checkout: BillingStripeCheckoutSession, now: Date) {
+  checkout: BillingStripeCheckoutSession, now: Date, proof?: FirstSeatUsageProof) {
   if (!checkout.seatOfferId || checkout.usageTermEventId) return;
   if (checkout.scope !== 'ORGANISATION' || checkout.teamId !== null || checkout.tariffSource !== 'ORGANISATION') {
     throw new AppError('INTERNAL', 409, 'BILLING_SEAT_ACCEPTANCE_SCOPE_INVALID');
@@ -32,7 +34,12 @@ export async function activateAcceptedSeatUsage(tx: Prisma.TransactionClient,
     tx.billingStripeCheckoutSession.findFirst({ where: { serviceId: checkout.serviceId, orgId: checkout.orgId,
       id: { not: checkout.id }, completedAt: { not: null } } }),
   ]);
-  const first = !term && !dispatch && !liability && !cycle && !contract && !priorCheckout;
+  const candidate = !term && !dispatch && !liability && !cycle && !contract && !priorCheckout;
+  if (candidate && (!proof || proof.orgId !== checkout.orgId || proof.serviceId !== checkout.serviceId ||
+    (proof.checkedThroughMonth > utcBillingMonth(now) || (!proof.hasMetering && proof.checkedThroughMonth !== utcBillingMonth(now))) ||
+    proof.checkedAt.getTime() > now.getTime() + 5000 ||
+    now.getTime() - proof.checkedAt.getTime() > 60_000)) return;
+  const first = candidate && proof?.hasMetering === false;
   const month = first ? utcBillingMonth(now) : nextUtcBillingMonth(now);
   const effectiveAt = first ? now : new Date(`${month}-01T00:00:00.000Z`);
   const event = await tx.billingTariffTermEvent.create({ data: {
