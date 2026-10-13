@@ -506,7 +506,7 @@ so later actual delivery cases retain their database interface.
 
 ## Verified checkpoint and remaining implementation
 
-The latest producer source is86db19ef, with frozen commercial protocol5.11.0.
+The latest verified producer source is 40c96cca, with frozen commercial protocol 5.11.0.
 The following results supersede the earlier checkpoint-specific pending notes:
 
 | Scope | Executed host and result |
@@ -547,7 +547,7 @@ responsibilities: canonical synthetic setup, prepaid budget evidence, accepted
 Stripe/shared-payer funding, and multi-service tax allocation. The same registered
 cases retain their original order and shared isolated fixture. All changed code
 files, including these test modules, are now below500lines. The refactored suites
-must pass their full PostgreSQL rerun before this structural change is verified.
+passed their full PostgreSQL rerun: 40 cases with zero skips on Maxis.
 
 Entitlement expiry also covers known future company seat activation, fixed-seat
 capacity revisions and negotiated-contract month boundaries. A generic tariff
@@ -564,3 +564,16 @@ standalone closing invoices, authentication-required-only recovery, original
 failure retention, exclusion of inference-only debt, source drift and a fresh
 paid invoice arriving before a reordered failure. It reuses the separately
 verified line-proof contract and does not bypass its production validation.
+
+At 40c96cca, scoped ESLint and all six focused seat-failure unit cases passed
+on Maxis with zero skips. No live provider or customer payment was invoked.
+Existing company FLAT/manual monthly agreements require an explicit product
+license decision before they can establish full company access; a positive
+monthly amount or usage tariff alone is not that authority. This is an additional
+review prerequisite alongside canonical invitation waiting, positive private
+storage evidence/renewal coverage and non-phone add-on policy termination.
+
+The coding branch is preserved for root review and integration. The isolated
+verification database is outside the checkout and must not be confused with
+customer or product authority. Final catalogue publication, connected first-SSO
+proof, combined verification and the final repository PR remain root-owned.
