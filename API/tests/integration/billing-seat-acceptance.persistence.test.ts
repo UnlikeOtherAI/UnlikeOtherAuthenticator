@@ -91,12 +91,15 @@ describe.skipIf(!process.env.DATABASE_URL)('prospective accepted Standard compan
     await db.prisma.billingStripeSubscription.create({ data: { accountId: smsIds.account, checkoutId: row.id, customerId: row.customerId,
       serviceId: smsIds.service, tariffId: standardId, tariffSource: 'ORGANISATION', orgId: row.orgId,
       scope: 'ORGANISATION', scopeKey: row.orgId, stripeSubscriptionId: 'sub_proof', stripeUsageItemId: 'si_proof', status: 'active', livemode: false } });
-    await recoverAcceptedSeatUsage(db.prisma, { now: () => new Date(now.getTime() + 10_000),
-      fetchMetering: async () => { throw new Error('Synthetic source outage'); }, fetchProof: async () => { throw new Error('Synthetic source outage'); } });
+    const outageAt = new Date(); let attempts = 0;
+    await recoverAcceptedSeatUsage(db.prisma, { now: () => outageAt,
+      fetchMetering: async () => { attempts += 1; throw new Error('Synthetic source outage'); },
+      fetchProof: async () => { throw new Error('Synthetic source outage'); } });
+    expect(attempts).toBe(1);
     expect((await db.prisma.billingStripeCheckoutSession.findUniqueOrThrow({ where: { id: row.id } })).usageTermEventId).toBeNull();
     const pair = await generateKeyPair('RS256', { extractable: true });
     const keys = createLocalJWKSet({ keys: [{ ...await exportJWK(pair.publicKey), kid: 'first-proof', alg: 'RS256', use: 'sig' }] });
-    const checkedAt = new Date(now.getTime() + 80_000);
+    const checkedAt = new Date(outageAt.getTime() + 70_000);
     const digest = (kind: string) => createHash('sha256').update(`ledger-budget-receipt-set-v1:${kind}\n`).digest('hex');
     const proof = { contract: 'ledger-budget-receipt-set-v1', scope: { billing_product: 'nessie', organization_id: row.orgId,
       team_id: null, billing_month: utcBillingMonth(checkedAt), budget_scope_type: 'organization' },

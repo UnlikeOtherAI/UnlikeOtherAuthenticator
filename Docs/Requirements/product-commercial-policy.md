@@ -371,3 +371,6 @@ The first-usage recovery regression now simulates a source outage, retains the
 same durable pending purchase, then supplies a real RS256 signed exact-company
 zero receipt set through the production verification function. It must activate
 only at the new observed source-acceptance time and retain the signed evidence.
+
+The outage regression uses its actual post-fixture time and asserts an attempted
+source read, avoiding a false pass caused by a future durable retry slot.
