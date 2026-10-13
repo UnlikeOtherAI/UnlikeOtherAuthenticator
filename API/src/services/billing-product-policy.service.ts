@@ -67,6 +67,13 @@ export async function setProductPolicy(input: { serviceId: string; organisationI
       }
     }
     if (input.privateAtCost) {
+      const retailStorage = await tx.billingStorageMandate.findFirst({ where: { serviceId: input.serviceId,
+        orgId: input.organisationId, state: 'accepted', revokedAt: null } });
+      const retailSubscription = await tx.billingStorageSubscription.findFirst({ where: { serviceId: input.serviceId,
+        orgId: input.organisationId, state: { notIn: ['canceled', 'ended', 'incomplete_expired'] } } });
+      if (retailStorage || retailSubscription) {
+        throw new AppError('BAD_REQUEST', 409, 'BILLING_PRIVATE_RETAIL_STORAGE_ACTIVE');
+      }
       // Private access may never be a fee waiver layered over marked-up or
       // uncollected inference. Require the separately agreed immutable tariff.
       const assignment = await tx.billingTariffAssignment.findFirst({ where: {

@@ -144,6 +144,13 @@ company reassignment/removal ends that private interval at the same evidenced
 month; historical waivers are clipped there. Conflicting later team overrides
 are rejected while the company private interval remains effective.
 
+Private assignment rejects an accepted unrevoked retail storage mandate or a
+nonterminal retail storage subscription before policy mutation. The operator
+receives the explicit prerequisite to end retail storage and revoke automatic
+expansion. The separate customer cancellation/replacement and attributable
+private storage cost evidence paths remain in progress; no retail amount is
+ever substituted for unknown provider cost.
+
 Regional standard v1 tariffs are currently unassigned. Separate immutable USD
 usage valuation and regional monthly seat currency are approved but remain in
 progress: never assign EUR/GBP versions before end-to-end prepaid currency
@@ -225,3 +232,11 @@ USD-only PostgreSQL monthly seat source constraint. A corrective migration
 admits EUR/GBP/USD only when account and currency match the frozen subscription's
 tariff. It retains all original amount/state/evidence invariants and changes
 no wallet, provider receipt, top-up or previous invoice currency.
+
+At `ef48dc0e`, all three regional financial database cases passed on the dedicated
+Fedora PostgreSQL cluster through Maxis, as did four authority/RLS cases including
+live actor key/JWK rotation. API typecheck passed. Actual UTC observed roster
+activation produces the current month's real prorated regional seat amount;
+the test never fabricates a backdated baseline. At `1d03cd4b`, protocol5.10.2
+build, API typecheck and seven strict contract tests passed; both cash-ordering
+and original weekday-deadline/reordered retry database cases passed.

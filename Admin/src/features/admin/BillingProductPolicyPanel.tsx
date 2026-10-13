@@ -15,6 +15,7 @@ const schema = z.object({ organisation: z.string().min(1, 'Select a company.'),
   source: z.string().min(1, 'Enter the registered source domain.'), timezone: z.string().min(1),
   policy: z.enum(['standard', 'trial', 'private']), end: z.string() });
 const errors: Record<string, string> = {
+  BILLING_PRIVATE_RETAIL_STORAGE_ACTIVE: 'End the retail storage subscription and revoke its automatic expansion mandate before assigning private pricing.',
   BILLING_PRIVATE_COLLECTING_TARIFF_REQUIRED: 'Assign an at-cost company tariff with zero monthly fee and enabled cost collection first.',
   BILLING_PRIVATE_TEAM_OVERRIDE_CONFLICT: 'Remove conflicting team tariff overrides before assigning private company pricing.',
   BILLING_CUSTOM_TRIAL_PARTIAL_WAIVER_UNSUPPORTED: 'This accepted flat or full-month agreement cannot receive a partial trial waiver.',
