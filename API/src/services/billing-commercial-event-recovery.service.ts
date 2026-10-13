@@ -5,6 +5,14 @@ import { resolveStripeAccountContext } from './billing-stripe-client.service.js'
 import { assertStripeEventAccount, assertStripeEventApiVersion } from './billing-stripe-webhook-event.service.js';
 import { applyTrustedCommercialStripeEvent, COMMERCIAL_RECOVERY_EVENT_TYPES } from './billing-stripe-webhook.service.js';
 
+function sourceObjectId(event: Stripe.Event): string {
+  const object = event.data.object;
+  if (!('id' in object) || typeof object.id !== 'string' || !object.id) {
+    throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_COMMERCIAL_EVENT_OBJECT_INVALID');
+  }
+  return object.id;
+}
+
 /** Each window/page and original Event has durable independent progress. */
 export async function recoverCommercialStripeEvents(params: { prisma: PrismaClient; stripe: Stripe; livemode: boolean;
   now?: Date; apply?: typeof applyTrustedCommercialStripeEvent }) {
@@ -34,7 +42,7 @@ export async function recoverCommercialStripeEvents(params: { prisma: PrismaClie
         // Commit page admissions and the cursor together: crash replay is harmless.
         for (const event of page.data) await tx.billingCommercialEventRecovery.upsert({ where: {
           accountId_eventId: { accountId: account.id, eventId: event.id },
-        }, create: { accountId: account.id, eventId: event.id, eventType: event.type, objectId: event.data.object.id }, update: {} });
+        }, create: { accountId: account.id, eventId: event.id, eventType: event.type, objectId: sourceObjectId(event) }, update: {} });
         await tx.billingCommercialEventScan.updateMany({ where: { accountId: account.id, generation: scan.generation },
           data: { generation: { increment: 1 }, ...(page.has_more ? { cursor } : {
             // Overlap the completion second; verified event identity deduplicates it.
@@ -53,7 +61,7 @@ export async function recoverCommercialStripeEvents(params: { prisma: PrismaClie
     try {
       const event = await stripe.events.retrieve(row.eventId);
       assertStripeEventAccount(event, account); assertStripeEventApiVersion(event);
-      if (event.id !== row.eventId || event.type !== row.eventType || event.data.object.id !== row.objectId) {
+      if (event.id !== row.eventId || event.type !== row.eventType || sourceObjectId(event) !== row.objectId) {
         throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_COMMERCIAL_EVENT_RECOVERY_DRIFT');
       }
       await (params.apply ?? applyTrustedCommercialStripeEvent)({ event, stripe, account, prisma });
