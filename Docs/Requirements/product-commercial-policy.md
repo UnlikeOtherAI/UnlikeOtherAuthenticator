@@ -423,3 +423,14 @@ SMTP retries with stable message identity and no fabricated acceptance, fresh
 role revalidation, receipt conflicts, a delayed final warning's full24hours,
 and terminal service filtering that preserves unpaid financial history.
 This new delivery suite is coded; execution results are pending.
+
+At98095c83, Maxis API typecheck and all four commercial-delivery PostgreSQL
+cases passed with zero skips. The mobile Standard plan publication/withdrawal
+screenshot was inspected again after the wrapping-row change; the complete
+withdrawal control is visible inside the viewport.
+
+The private company policy database suite now covers the operator's visible
+future effective date, rejection of a later marked-up team override before any
+assignment mutation, next-month standard reassignment, and append-only removal.
+Current accepted private terms remain effective until the exact transition;
+historical tariff evidence is never rewritten. Execution is pending.
