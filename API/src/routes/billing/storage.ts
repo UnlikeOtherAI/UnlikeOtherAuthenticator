@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { storageReadV1JsonSchema } from '@unlikeotherai/billing-statement-protocol';
+import { storageReadV1JsonSchema, storageMandateResultV1JsonSchema, storageRecoveryResultV1JsonSchema } from '@unlikeotherai/billing-statement-protocol';
 import { requireBillingLifecycleAppKey } from '../../middleware/billing-app-auth.js';
 import { readStorageSetup, createStorageMandate } from '../../services/billing-storage-mandate.service.js';
 import { recoverStorage } from '../../services/billing-storage-recovery.service.js';
@@ -17,13 +17,13 @@ export function registerStorageRoutes(app: FastifyInstance) {
     return readStorageSetup({ request: BillingSubjectRequestSchema.parse(request.body),
       credential: request.billingAppKey, actorToken: readBillingActorHeader(request.headers['x-uoa-actor']) });
   });
-  app.post('/billing/v1/storage/mandate', { preHandler }, async (request, reply) => {
+  app.post('/billing/v1/storage/mandate', { preHandler, schema: { response: { 200: storageMandateResultV1JsonSchema } } }, async (request, reply) => {
     if (!request.billingAppKey) throw new AppError('UNAUTHORIZED', 401);
     reply.header('Cache-Control', 'private, no-store');
     return createStorageMandate({ request: mandate.parse(request.body), credential: request.billingAppKey,
       actorToken: readBillingActorHeader(request.headers['x-uoa-actor']) });
   });
-  app.post('/billing/v1/storage/recover', { preHandler }, async (request, reply) => {
+  app.post('/billing/v1/storage/recover', { preHandler, schema: { response: { 200: storageRecoveryResultV1JsonSchema } } }, async (request, reply) => {
     if (!request.billingAppKey) throw new AppError('UNAUTHORIZED', 401);
     reply.header('Cache-Control', 'private, no-store');
     const body = BillingSubjectRequestSchema.extend({ expansion_id: z.string().min(1).max(256),

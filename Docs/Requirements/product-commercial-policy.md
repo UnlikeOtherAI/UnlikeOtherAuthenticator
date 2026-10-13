@@ -4,7 +4,7 @@ UOA owns commercial facts and identity. Nessie owns its functional restrictions
 and content measurement. A product never infers full access from a positive
 monthly price, a tariff key, a manager statement or a failed network request.
 
-The public protocol is `@unlikeotherai/billing-statement-protocol`5.10.1,
+The public protocol is `@unlikeotherai/billing-statement-protocol`5.10.2,
 `commercial-types.ts` and `commercial-schema.ts`. The additive contract exposes
 exact product/company scope and a returned human team/user pair whenever a
 person is selected. Human reads require the ENTITLEMENT key and an exact
@@ -158,6 +158,14 @@ verified cash evidence commits. Members receive none of these commercial fields.
 Storage reads and webhook preparation reuse one price/customer/subscription/line
 validator; manager authority is rechecked after provider reads. Pending expansion
 also includes its explicit invoice currency. No browser return proves payment.
+
+Storage mutation results are exported strict contracts: `storage_mandate_result`
+binds product/company/mandate and returns either `open` with a verified Checkout
+URL and expiry, or a nonredirect accepted/processing/expired/revoked state.
+`storage_recovery_result` binds the same logical expansion and nullable exact
+generation, with payment_pending/paid/reconciliation_required state. Consumers
+validate scope and URL before navigation, then re-read the authoritative storage
+screen; neither mutation return nor browser return replaces paid proof.
 
 Original failures are established from verified Stripe invoice/payment evidence.
 Bounded Stripe event scans persist their cursor so unrelated event volume cannot

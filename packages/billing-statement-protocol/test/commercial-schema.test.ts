@@ -1,7 +1,8 @@
 import Ajv from 'ajv/dist/2020.js';
 import addFormats from 'ajv-formats';
 import { describe, expect, it } from 'vitest';
-import { productEntitlementV1JsonSchema, phoneReleaseVerdictV1JsonSchema, storageReadV1JsonSchema } from '../src/commercial-schema.js';
+import { productEntitlementV1JsonSchema, phoneReleaseVerdictV1JsonSchema, storageReadV1JsonSchema,
+  storageMandateResultV1JsonSchema, storageRecoveryResultV1JsonSchema } from '../src/commercial-schema.js';
 import { productEntitlementMemberV1Fixture } from '../src/commercial-fixture.js';
 
 describe('commercial entitlement privacy', () => {
@@ -51,5 +52,27 @@ describe('storage manager doorway privacy', () => {
     expect(validate({ ...member, pending_expansion: null })).toBe(false);
     expect(validate({ ...member, mandate: null })).toBe(false);
     expect(validate({ ...member, subject: null })).toBe(false);
+  });
+});
+
+describe('strict scoped storage mutations', () => {
+  const ajv = new Ajv({ strict: true }); addFormats(ajv);
+  const mandate = ajv.compile(storageMandateResultV1JsonSchema);
+  const recovery = ajv.compile(storageRecoveryResultV1JsonSchema);
+  const scope = { schema_version: 1, product: 'nessie', organisation_id: 'company' };
+  it('permits only a bound unexpired redirect shape or explicit nonredirect result', () => {
+    const open = { ...scope, mandate_id: 'mandate', state: 'open', url: 'https://checkout.stripe.com/c/fixture',
+      expires_at: '2026-10-13T18:30:00Z' };
+    expect(mandate(open)).toBe(true);
+    expect(mandate({ ...open, url: 'https://attacker.example/c/fixture' })).toBe(false);
+    expect(mandate({ ...open, state: 'accepted' })).toBe(false);
+    expect(mandate({ ...scope, mandate_id: 'mandate', state: 'processing', url: null, expires_at: null })).toBe(true);
+    expect(mandate({ mandate_id: 'mandate', state: 'open', url: open.url })).toBe(false);
+  });
+  it('rejects internal attempt states and missing expansion scope', () => {
+    const proof = { ...scope, expansion_id: 'expansion', attempt_id: 'attempt', state: 'payment_pending' };
+    expect(recovery(proof)).toBe(true); expect(recovery({ ...proof, state: 'processing' })).toBe(false);
+    expect(recovery({ ...proof, organisation_id: '' })).toBe(false);
+    expect(recovery({ ...proof, state: 'paid', attempt_id: null })).toBe(true);
   });
 });

@@ -1642,6 +1642,153 @@
           }
         }
       ]
+    },
+    "storage_mandate_result": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "product",
+            "organisation_id",
+            "schema_version",
+            "mandate_id",
+            "state",
+            "url",
+            "expires_at"
+          ],
+          "properties": {
+            "product": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "organisation_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "schema_version": {
+              "const": 1
+            },
+            "mandate_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "state": {
+              "const": "open"
+            },
+            "url": {
+              "type": "string",
+              "format": "uri",
+              "pattern": "^https://checkout\\.stripe\\.com/"
+            },
+            "expires_at": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "product",
+            "organisation_id",
+            "schema_version",
+            "mandate_id",
+            "state",
+            "url",
+            "expires_at"
+          ],
+          "properties": {
+            "product": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "organisation_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "schema_version": {
+              "const": 1
+            },
+            "mandate_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "state": {
+              "enum": [
+                "accepted",
+                "processing",
+                "expired",
+                "revoked"
+              ]
+            },
+            "url": {
+              "type": "null"
+            },
+            "expires_at": {
+              "type": "null"
+            }
+          }
+        }
+      ]
+    },
+    "storage_recovery_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "product",
+        "organisation_id",
+        "schema_version",
+        "expansion_id",
+        "attempt_id",
+        "state"
+      ],
+      "properties": {
+        "product": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "organisation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "schema_version": {
+          "const": 1
+        },
+        "expansion_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "attempt_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "state": {
+          "enum": [
+            "payment_pending",
+            "paid",
+            "reconciliation_required"
+          ]
+        }
+      }
     }
   }
 }

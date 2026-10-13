@@ -1,6 +1,6 @@
 import { BillingAssignmentScope, type PrismaClient, type BillingStorageMandate } from '@prisma/client';
 import type Stripe from 'stripe';
-import type { ProductEntitlementRequest, StorageReadV1 } from '@unlikeotherai/billing-statement-protocol';
+import type { ProductEntitlementRequest, StorageReadV1, StorageMandateResultV1 } from '@unlikeotherai/billing-statement-protocol';
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import { verifyBillingActor } from './billing-actor.service.js';
@@ -64,7 +64,7 @@ export async function readStorageSetup(input: { request: ProductEntitlementReque
 
 export async function createStorageMandate(input: { request: ProductEntitlementRequest & {
   catalog_id: string; consent_version: string; accepted: true };
-  credential: VerifiedBillingAppKey; actorToken: string }, deps?: StorageDependencies) {
+  credential: VerifiedBillingAppKey; actorToken: string }, deps?: StorageDependencies): Promise<StorageMandateResultV1> {
   const { request, credential } = input;
   if (!request.accepted || request.consent_version !== STORAGE_CONSENT_VERSION) {
     throw new AppError('BAD_REQUEST', 400, 'BILLING_STORAGE_CONSENT_REQUIRED');
@@ -121,8 +121,16 @@ export async function createStorageMandate(input: { request: ProductEntitlementR
       cancelUrl: `${origin}/admin/billing` }, update: {} });
   if (mandate.stripeCheckoutId) {
     const old = await runtime.stripe.checkout.sessions.retrieve(mandate.stripeCheckoutId);
-    if (old.status !== 'open') return { mandate_id: mandate.id, state: mandate.state, url: null };
-    return { mandate_id: mandate.id, state: 'open', url: checkoutUrl(old.url) };
+    assertStripeObjectLivemode(old, account.livemode);
+    if (old.id !== mandate.stripeCheckoutId || old.mode !== 'setup' || stripeExternalId(old.customer) !== mandate.stripeCustomerId ||
+      old.client_reference_id !== mandate.id || old.metadata?.uoa_storage_mandate_id !== mandate.id) {
+      throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_STORAGE_SETUP_BINDING_INVALID');
+    }
+    const base = { schema_version: 1 as const, product: request.product, organisation_id: request.organisation_id, mandate_id: mandate.id };
+    if (mandate.revokedAt) return { ...base, state: 'revoked', url: null, expires_at: null };
+    if (old.status !== 'open') return { ...base, state: mandate.revokedAt ? 'revoked' : mandate.state === 'accepted' ? 'accepted'
+      : old.status === 'expired' ? 'expired' : 'processing', url: null, expires_at: null };
+    return { ...base, state: 'open', url: checkoutUrl(old.url), expires_at: new Date(old.expires_at * 1000).toISOString() };
   }
   if (Date.now() - mandate.createdAt.getTime() >= 23 * 3_600_000) {
     throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_STORAGE_SETUP_RECONCILIATION_REQUIRED');
@@ -142,7 +150,8 @@ export async function createStorageMandate(input: { request: ProductEntitlementR
   }
   await prisma.billingStorageMandate.updateMany({ where: { id: mandate.id, state: 'creating' },
     data: { stripeCheckoutId: checkout.id, state: 'open' } });
-  return { mandate_id: mandate.id, state: 'open', url: checkoutUrl(checkout.url) };
+  return { schema_version: 1, product: request.product, organisation_id: request.organisation_id,
+    mandate_id: mandate.id, state: 'open', url: checkoutUrl(checkout.url), expires_at: new Date(checkout.expires_at * 1000).toISOString() };
 }
 
 export async function verifyStorageSetup(mandate: BillingStorageMandate, stripe: Stripe, livemode: boolean) {

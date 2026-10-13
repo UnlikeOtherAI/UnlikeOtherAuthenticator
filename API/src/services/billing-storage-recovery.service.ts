@@ -1,5 +1,5 @@
 import { BillingAssignmentScope } from '@prisma/client';
-import type { ProductEntitlementRequest } from '@unlikeotherai/billing-statement-protocol';
+import type { ProductEntitlementRequest, StorageRecoveryResultV1 } from '@unlikeotherai/billing-statement-protocol';
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
@@ -12,7 +12,7 @@ import { resolveStripeAccountContext, assertStripeObjectLivemode } from './billi
 import { stripeExternalId } from './billing-stripe-webhook-utils.service.js';
 
 export async function recoverStorage(input: { request: ProductEntitlementRequest & { expansion_id: string; mandate_id?: string };
-  actorToken: string; credential: VerifiedBillingAppKey }, deps?: StorageDependencies) {
+  actorToken: string; credential: VerifiedBillingAppKey }, deps?: StorageDependencies): Promise<StorageRecoveryResultV1> {
   const { request, credential } = input;
   const actor = await verifyBillingActor({ token: input.actorToken, credential, endpoint: '/billing/v1/storage/recover',
     request: { product: request.product, organisationId: request.organisation_id, teamId: request.team_id, userId: request.user_id } });
@@ -38,8 +38,11 @@ export async function recoverStorage(input: { request: ProductEntitlementRequest
     return { expansion, attempt, mandate, action };
   });
   const replay = await prisma.billingStoragePaymentAttempt.findUnique({ where: { recoveryActionIntentId: prepared.action.id } });
-  if (replay) return { expansion_id: prepared.expansion.id, attempt_id: replay.id, state: prepared.expansion.state };
-  if (prepared.expansion.state === 'paid') return { expansion_id: prepared.expansion.id, state: 'paid' };
+  const base = { schema_version: 1 as const, product: request.product, organisation_id: request.organisation_id,
+    expansion_id: prepared.expansion.id };
+  if (replay) return { ...base, attempt_id: replay.id, state: prepared.expansion.state === 'paid' ? 'paid'
+    : prepared.expansion.state === 'reconciliation_required' ? 'reconciliation_required' : 'payment_pending' };
+  if (prepared.expansion.state === 'paid') return { ...base, attempt_id: null, state: 'paid' };
   const remote = await locateStorageAttempt(stripe, prepared.attempt, prepared.mandate.stripeCustomerId, livemode, prisma);
   if (!remote) throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_STORAGE_ATTEMPT_UNPROVEN');
   const invoiceId = prepared.attempt.stripeInvoiceId ?? stripeExternalId(remote.latest_invoice);
@@ -70,5 +73,5 @@ export async function recoverStorage(input: { request: ProductEntitlementRequest
     return created;
   });
   await dispatchStorageExpansion(prepared.expansion.id, deps);
-  return { expansion_id: prepared.expansion.id, attempt_id: next.id, state: 'payment_pending' };
+  return { ...base, attempt_id: next.id, state: 'payment_pending' };
 }

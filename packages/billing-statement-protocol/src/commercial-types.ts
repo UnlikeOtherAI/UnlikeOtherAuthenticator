@@ -94,3 +94,9 @@ export type StorageManagerV1 = ProductCommercialSubject & { schema_version: 1; c
 export type StorageReadV1 = StorageManagerV1 | (ProductCommercialSubject & {
   schema_version: 1; subject: { team_id: string; user_id: string }; can_manage: false; setup: null;
 });
+export type StorageMandateResultV1 = ProductCommercialSubject & { schema_version: 1; mandate_id: string } & (
+  { state: 'open'; url: string; expires_at: string } |
+  { state: 'accepted' | 'processing' | 'expired' | 'revoked'; url: null; expires_at: null }
+);
+export type StorageRecoveryResultV1 = ProductCommercialSubject & { schema_version: 1; expansion_id: string;
+  attempt_id: string | null; state: 'payment_pending' | 'paid' | 'reconciliation_required' };

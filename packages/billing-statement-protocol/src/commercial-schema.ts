@@ -86,11 +86,20 @@ export const storageReadV1JsonSchema = { oneOf: [
     invoice_currency: { type: 'string', pattern: '^[A-Z]{3}$' }, grace_ends_at: timestamp }) },
   observed_at: timestamp, valid_until: timestamp }),
 ] } as const;
+export const storageMandateResultV1JsonSchema = { oneOf: [
+  object({ ...subject, schema_version: { const: 1 }, mandate_id: id, state: { const: 'open' },
+    url: { type: 'string', format: 'uri', pattern: '^https://checkout\\.stripe\\.com/' }, expires_at: timestamp }),
+  object({ ...subject, schema_version: { const: 1 }, mandate_id: id,
+    state: { enum: ['accepted', 'processing', 'expired', 'revoked'] }, url: { type: 'null' }, expires_at: { type: 'null' } }),
+] } as const;
+export const storageRecoveryResultV1JsonSchema = object({ ...subject, schema_version: { const: 1 },
+  expansion_id: id, attempt_id: nullable(id), state: { enum: ['payment_pending', 'paid', 'reconciliation_required'] } });
 export const commercialProtocolV1JsonSchema = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',
   $id: 'https://authentication.unlikeotherai.com/schemas/commercial-policy-v1.json',
   $defs: { entitlement: productEntitlementV1JsonSchema, ensure_request: storageEnsureRequestV1JsonSchema,
     ensure_response: storageEnsureV1JsonSchema, observation_request: storageObservationRequestV1JsonSchema,
     events: commercialEventsV1JsonSchema, acknowledgement: commercialAcknowledgementV1JsonSchema, storage_read: storageReadV1JsonSchema,
-    phone_release_request: phoneReleaseRequestV1JsonSchema, phone_release_response: phoneReleaseVerdictV1JsonSchema },
+    phone_release_request: phoneReleaseRequestV1JsonSchema, phone_release_response: phoneReleaseVerdictV1JsonSchema,
+    storage_mandate_result: storageMandateResultV1JsonSchema, storage_recovery_result: storageRecoveryResultV1JsonSchema },
 } as const;

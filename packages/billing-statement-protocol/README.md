@@ -394,7 +394,7 @@ credits; these are display values. 2.3.0 includes everything in 2.2.0.
   (the oldest remaining credits' purchase rate), `region` (the captured region
   rate, for credits bought in USD and for debt) or `usd`. It is null while the
   rate is not known.
-## Product commercial standing (5.10.1)
+## Product commercial standing (5.10.2)
 
 The additive `commercial-types`, `commercial-schema` and synthetic member fixture
 define product entitlement reads, company storage admission/observations and
@@ -410,3 +410,8 @@ currency, gross amount, exact recovery URL when open and own grace deadline.
 Pending expansion invoices also expose `invoice_currency`. Strict consumers
 must adopt these required fields before producer rollout. Member storage reads
 exclude all payment and mandate data.
+
+`StorageMandateResultV1` and `StorageRecoveryResultV1` export exact scoped
+mutation results and their JSON schemas. Only an `open` mandate result contains
+a Stripe Checkout URL and expiry; accepted/processing/expired/revoked results
+do not redirect. Re-read current storage management after recovery completes.
