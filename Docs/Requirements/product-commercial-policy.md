@@ -478,3 +478,7 @@ authoritative balance lock rather than failing at a two-second pool wait.
 The Company policy form explains an overriding negotiated-contract conflict
 and preserves the proposed private action for correction. The headless operator
 journey exercises that rejection before accepting compatible future terms.
+
+The historical-backfill fixture restores the later nullable prospective boundary
+before invoking the current reader. Its reconstructed old events all remain NULL,
+matching the actual forward migration without inventing a past acceptance time.

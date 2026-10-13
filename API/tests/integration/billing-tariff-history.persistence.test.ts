@@ -208,6 +208,9 @@ describe.skipIf(!enabled)('populated tariff-history migration', () => {
         env: { ...process.env, DATABASE_URL: db.databaseUrl },
         stdio: 'pipe',
       });
+      // Modern readers select the later nullable prospective boundary. Existing
+      // historical events retain NULL exactly as the forward migration specifies.
+      await db.prisma.$executeRawUnsafe('ALTER TABLE billing_tariff_term_events ADD COLUMN prospective_from TIMESTAMP(3)');
       const stable = await db.prisma.billingService.findUniqueOrThrow({ where: { id: 'old-stable' } });
       const changed = await db.prisma.billingService.findUniqueOrThrow({ where: { id: 'old-changed' } });
       expect(stable.tariffHistoryFromMonth).toBe('2026-05');
