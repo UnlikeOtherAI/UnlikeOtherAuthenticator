@@ -134,9 +134,12 @@ export async function locateStorageAttempt(stripe: Stripe, attempt: BillingStora
     assertStripeObjectLivemode(remote, livemode);
     return remote;
   }
-  if (attempt.scanComplete) return null;
+  // A completed negative scan predates a possible create whose response was
+  // lost. Revisit the collection head instead of freezing absence forever.
+  if (attempt.scanComplete) await prisma.billingStoragePaymentAttempt.updateMany({ where: { id: attempt.id,
+    stripeSubscriptionId: null, scanComplete: true }, data: { scanComplete: false, scanCursor: null } });
     const list = await stripe.subscriptions.list({ customer: customerId, status: 'all', limit: 100,
-      ...(attempt.scanCursor ? { starting_after: attempt.scanCursor } : {}) });
+      ...(!attempt.scanComplete && attempt.scanCursor ? { starting_after: attempt.scanCursor } : {}) });
     const found = list.data.filter((row) => row.metadata.uoa_storage_attempt_id === attempt.id);
     if (found.length > 1) throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_STORAGE_ATTEMPT_AMBIGUOUS');
     if (found[0]) {

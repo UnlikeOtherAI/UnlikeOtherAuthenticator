@@ -374,3 +374,9 @@ only at the new observed source-acceptance time and retain the signed evidence.
 
 The outage regression uses its actual post-fixture time and asserts an attempted
 source read, avoiding a false pass caused by a future durable retry slot.
+
+Storage outcome discovery revisits the head after a completed negative scan:
+the original scan can predate an external create whose response was lost.
+Freezing that absence would strand an existing remote payment after23h.
+Incomplete scans retain durable page progress; ambiguous matching outcomes hold
+instead of issuing another purchase. Focused response-loss regressions are added.
