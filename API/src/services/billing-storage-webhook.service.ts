@@ -104,7 +104,8 @@ export async function prepareStorageWebhook(event: Stripe.Event, stripe: Stripe,
     paidAt = cash.paidAt; cashEvidence = cash.payments;
     payment = { serviceId: binding.expansion.serviceId, orgId: binding.expansion.orgId, category: 'storage',
       accountId: account.id, invoiceId: invoice.id, storageExpansionId: binding.expansion.id, paid: true, failedAt: paidAt };
-  } else if (event.type === 'invoice.payment_failed' && invoice.status === 'open' && invoice.amount_remaining > 0) {
+  } else if (['invoice.payment_failed', 'invoice.payment_action_required'].includes(event.type) &&
+    invoice.status === 'open' && invoice.amount_remaining > 0) {
     payment = { serviceId: binding.expansion.serviceId, orgId: binding.expansion.orgId, category: 'storage',
       accountId: account.id, invoiceId: invoice.id, storageExpansionId: binding.expansion.id, paid: false,
       failedAt: await firstFailure(invoice, event, stripe, prisma, account.id) };

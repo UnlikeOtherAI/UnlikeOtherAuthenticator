@@ -25,7 +25,7 @@ export async function setProductPolicy(input: { serviceId: string; organisationI
     const [service, org, source] = await Promise.all([
       tx.billingService.findFirst({ where: { id: input.serviceId, active: true } }),
       tx.organisation.findFirst({ where: { id: input.organisationId, lifecycleStatus: 'ACTIVE' } }),
-      tx.clientDomain.findFirst({ where: { domain: input.sourceDomain, status: 'ACTIVE' } }),
+      tx.clientDomain.findFirst({ where: { domain: input.sourceDomain, status: 'active' } }),
     ]);
     if (!service || !org || !source) throw new AppError('NOT_FOUND', 404);
     const start = input.trialStartsAt ?? (input.startTrial ? now : null);

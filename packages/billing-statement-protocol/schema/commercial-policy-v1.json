@@ -995,73 +995,116 @@
       }
     },
     "phone_release_response": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "product",
-        "organisation_id",
-        "schema_version",
-        "incident_id",
-        "authorized",
-        "resource_id",
-        "account_sid",
-        "phone_number_sid",
-        "valid_until"
-      ],
-      "properties": {
-        "product": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 256
-        },
-        "organisation_id": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 256
-        },
-        "schema_version": {
-          "const": 1
-        },
-        "incident_id": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 256
-        },
-        "authorized": {
-          "type": "boolean"
-        },
-        "resource_id": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 256
-        },
-        "account_sid": {
-          "anyOf": [
-            {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "product",
+            "organisation_id",
+            "schema_version",
+            "incident_id",
+            "resource_id",
+            "valid_until",
+            "authorized",
+            "account_sid",
+            "phone_number_sid"
+          ],
+          "properties": {
+            "product": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "organisation_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "schema_version": {
+              "const": 1
+            },
+            "incident_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "resource_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "valid_until": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "authorized": {
+              "const": true
+            },
+            "account_sid": {
               "type": "string",
               "pattern": "^AC[0-9a-fA-F]{32}$"
             },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "phone_number_sid": {
-          "anyOf": [
-            {
+            "phone_number_sid": {
               "type": "string",
               "pattern": "^PN[0-9a-fA-F]{32}$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "product",
+            "organisation_id",
+            "schema_version",
+            "incident_id",
+            "resource_id",
+            "valid_until",
+            "authorized",
+            "account_sid",
+            "phone_number_sid"
+          ],
+          "properties": {
+            "product": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
             },
-            {
+            "organisation_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "schema_version": {
+              "const": 1
+            },
+            "incident_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "resource_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "valid_until": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "authorized": {
+              "const": false
+            },
+            "account_sid": {
+              "type": "null"
+            },
+            "phone_number_sid": {
               "type": "null"
             }
-          ]
-        },
-        "valid_until": {
-          "type": "string",
-          "format": "date-time"
+          }
         }
-      }
+      ]
     }
   }
 }

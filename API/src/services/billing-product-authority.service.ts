@@ -24,7 +24,7 @@ export async function lockCommercialAuthority(tx: Prisma.TransactionClient,
   } });
   const domain = commercialSourceDomain(credential.actorIssuer);
   await tx.$queryRaw`SELECT id FROM client_domains WHERE domain=${domain} FOR SHARE`;
-  const source = await tx.clientDomain.findFirst({ where: { domain, status: 'ACTIVE' } });
+  const source = await tx.clientDomain.findFirst({ where: { domain, status: 'active' } });
   const company = await tx.organisation.findFirst({ where: {
     id: input.organisationId, lifecycleStatus: 'ACTIVE',
   } });

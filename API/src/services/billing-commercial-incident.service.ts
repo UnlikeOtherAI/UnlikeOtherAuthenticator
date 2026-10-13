@@ -30,7 +30,7 @@ export async function firstFailure(invoice: Stripe.Invoice, event: Stripe.Event,
   if (probe.complete) return probe.earliestFailureAt;
   // One bounded page per delivery, with committed progress. Unrelated failures
   // cannot trap the same invoice forever at a fixed account-wide scan ceiling.
-  const events = await stripe.events.list({ type: 'invoice.payment_failed', limit: 100,
+  const events = await stripe.events.list({ types: ['invoice.payment_failed', 'invoice.payment_action_required'], limit: 100,
     created: { gte: invoice.created }, ...(probe.cursor ? { starting_after: probe.cursor } : {}) });
   let earliest = probe.earliestFailureAt.getTime();
   for (const candidate of events.data) {
@@ -54,7 +54,7 @@ export async function prepareCommercialPayment(event: Stripe.Event, account: Str
   prisma: PrismaClient, stripe: Pick<Stripe, 'invoices' | 'events'>,
   addon: PreparedRecurringAddonWebhook | null, paidBaseInvoiceId: string | null,
 ): Promise<PreparedCommercialPayment | null> {
-  if (!['invoice.payment_failed', 'invoice.paid'].includes(event.type)) return null;
+  if (!['invoice.payment_failed', 'invoice.payment_action_required', 'invoice.paid'].includes(event.type)) return null;
   const signed = event.data.object as Stripe.Invoice;
   const invoice = addon && 'invoice' in addon ? addon.invoice : await stripe.invoices.retrieve(signed.id);
   assertStripeObjectLivemode(invoice, account.livemode);
@@ -62,10 +62,9 @@ export async function prepareCommercialPayment(event: Stripe.Event, account: Str
     throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_PAYMENT_SOURCE_DRIFT');
   }
   // A delayed failure that is already paid never creates a new incident.
-  if (event.type === 'invoice.payment_failed' && invoice.status === 'paid') return null;
+  if (event.type !== 'invoice.paid' && invoice.status === 'paid') return null;
   const paid = event.type === 'invoice.paid';
   if (!paid && (invoice.status !== 'open' || invoice.amount_remaining <= 0)) return null;
-  if (!['subscription_create', 'subscription_cycle'].includes(invoice.billing_reason ?? '')) return null;
   if (addon && 'local' in addon && 'invoice' in addon) {
     if (paid && !['invoice_paid', 'invoice_renewal'].includes(addon.kind)) return null;
     const resource = await prisma.billingSmsNumberResource.findFirst({ where: {
@@ -77,10 +76,19 @@ export async function prepareCommercialPayment(event: Stripe.Event, account: Str
       failedAt: paid ? new Date(event.created * 1000) : await firstFailure(invoice, event, stripe, prisma, account.id), paid };
   }
   const subscriptionId = stripeExternalId(invoice.parent?.subscription_details?.subscription);
-  if (!subscriptionId) return null;
-  const local = await prisma.billingStripeSubscription.findUnique({ where: {
-    accountId_stripeSubscriptionId: { accountId: account.id, stripeSubscriptionId: subscriptionId },
-  }, include: { customer: true, tariff: true } });
+  const closing = !subscriptionId && invoice.parent === null ? await prisma.billingStripeMonthlyCharge.findFirst({
+    where: { accountId: account.id, stripeInvoiceId: invoice.id, allocationKind: 'CLOSING', state: 'ACCEPTED' },
+    include: { subscription: true },
+  }) : null;
+  if (closing && (invoice.metadata?.uoa_monthly_charge_key !== closing.authorityKey ||
+    invoice.metadata?.uoa_monthly_subscription_id !== closing.subscriptionId)) {
+    throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_PAYMENT_SOURCE_DRIFT');
+  }
+  if (!subscriptionId && !closing) return null;
+  const local = await prisma.billingStripeSubscription.findUnique({ where: closing
+    ? { id: closing.subscriptionId }
+    : { accountId_stripeSubscriptionId: { accountId: account.id, stripeSubscriptionId: subscriptionId! } },
+    include: { customer: true, tariff: true } });
   if (!local || local.scope !== 'ORGANISATION') return null;
   if (local.customer.stripeCustomerId !== stripeExternalId(invoice.customer) ||
     local.tariff.currency !== invoice.currency.toUpperCase() || local.livemode !== account.livemode) {

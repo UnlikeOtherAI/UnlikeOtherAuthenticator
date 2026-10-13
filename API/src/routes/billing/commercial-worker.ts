@@ -37,8 +37,9 @@ export function registerCommercialWorkerRoutes(app: FastifyInstance) {
       reply.header('Cache-Control', 'private, no-store');
       return listCommercialEvents({ request: CommercialScopeSchema.parse(request.body), credential: request.billingAppKey });
     });
-  app.post('/billing/v1/commercial-events/acknowledge', { preHandler }, async (request) => {
+  app.post('/billing/v1/commercial-events/acknowledge', { preHandler }, async (request, reply) => {
     if (!request.billingAppKey) throw new AppError('UNAUTHORIZED', 401);
+    reply.header('Cache-Control', 'private, no-store');
     return acknowledgeCommercialEvent({ request: ack.parse(request.body), credential: request.billingAppKey });
   });
   app.post('/billing/v1/commercial-events/phone-release', { preHandler,

@@ -297,6 +297,7 @@ const INVOICE_EVENTS = new Set([
   'invoice.marked_uncollectible',
   'invoice.paid',
   'invoice.payment_failed',
+  'invoice.payment_action_required',
   'invoice.voided',
 ]);
 
