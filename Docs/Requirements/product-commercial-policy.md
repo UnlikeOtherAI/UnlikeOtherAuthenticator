@@ -503,3 +503,41 @@ database delivery suite. A logging/no-op provider is never payment-release proof
 The disabled-transport assertion uses a separate Prisma proxy for its rejected
 queue call. It does not replace/restore a virtual method on the shared real client,
 so later actual delivery cases retain their database interface.
+
+## Verified checkpoint and remaining implementation
+
+The latest producer source is86db19ef, with frozen commercial protocol5.11.0.
+The following results supersede the earlier checkpoint-specific pending notes:
+
+| Scope | Executed host and result |
+| --- | --- |
+| Regional seats, previous accepted USD usage and original team wallets | Maxis, six PostgreSQL cases passed at84f7f133 |
+| Company entitlement and unrelated/ended seat debts | Maxis, six unit cases passed at84f7f133 |
+| Existing prepaid admission, cumulative rating, budget caps, revocation and twenty-request race | Maxis, fifteen PostgreSQL cases passed at72392aa7 |
+| Actual manual per-seat contract activation | Maxis, one PostgreSQL case passed at72392aa7 |
+| Private policy effective dates, assignment/removal and negotiated-contract precedence | Maxis, five PostgreSQL cases passed at76e897ec |
+| Historical terms and populated migration backfill | Maxis, five PostgreSQL cases passed at76e897ec |
+| Exact company/person/team scope, key rotation, measurement concurrency and production RLS role | Maxis, four PostgreSQL cases passed at76e897ec |
+| Warning delivery fairness, unset/disabled transport, SMTP retry, fresh roles, final24hours and ended resources | Maxis, six PostgreSQL cases passed at86db19ef |
+| Fresh phone invoice binding, taxes, payment arrival and final warning safeguard | Maxis, four unit cases passed at86db19ef |
+| API/Admin typechecks, changed TypeScript lint and reachable operator controls | Maxis, passed;137 changed TypeScript files and two headless desktop/mobile journeys at72392aa7, later scoped source lint/API checks passed |
+| Prisma schema | Local validation and Maxis regeneration/API typecheck passed; scoped read-only foreign-key diff reports zero mismatches at76e897ec |
+
+The latest mobile operator conflict and Standard-plan withdrawal screenshots
+were visually inspected. Tests use isolated synthetic data and provider fakes;
+they do not charge customers, change live Stripe mode or release live numbers.
+
+This checkpoint does not complete the full requested rollout. Canonical delivered
+invitations with a restricted waiting/admission SSO capability remain to be
+implemented and coordinated with the product. Positive private storage cost
+evidence, its accepted finite renewal coverage, and retail cancellation/replacement
+remain to be implemented; the present private storage path deliberately holds
+without attributable cost evidence. Generic non-phone add-on policy termination
+also remains to be implemented with explicitly approved settlement semantics.
+These are integration prerequisites, not optional follow-up features. Existing
+historical test files over500lines also need a coherent fixture/case refactor
+before strict repository delivery; no changed production source exceeds500lines.
+
+Root owns the remaining commercial/authentication decisions and final combined
+review, deployment, catalogue publication and customer rollout. No PR or merge
+has been created by this producer coding agent.
