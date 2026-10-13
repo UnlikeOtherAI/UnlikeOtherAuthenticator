@@ -318,3 +318,10 @@ The existing desktop/mobile operator journey now covers publishing the newly
 created EUR-seat/USD-usage version and withdrawing future purchases from its
 Company policy home. It uses synthetic routes and cannot contact live billing;
 rendered execution remains pending at this checkpoint.
+
+At `7f71d406`, API/admin typechecks passed, eight existing base Checkout tests
+and five entitlement tests passed. The three new persistence cases exposed the
+older operator-assignment-only company source CHECK. The corrective source rule
+permits an unassigned company subscription only through its exact accepted
+published-offer Checkout, verified by a database trigger; ordinary unassigned
+company subscriptions remain forbidden. Acceptance tests are being rerun.
