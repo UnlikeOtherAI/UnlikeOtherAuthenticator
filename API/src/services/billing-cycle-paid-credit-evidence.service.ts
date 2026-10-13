@@ -8,6 +8,7 @@ import {
 
 import { AppError } from '../utils/errors.js';
 import type { RawMeteringLine } from './billing-metering.types.js';
+import type { CycleCreditPayer } from './billing-cycle-usage-terms.service.js';
 import {
   matchUoaPaidReceiptSet, type LedgerPaidReceiptSet, type PaidReceiptScope,
 } from './billing-ledger-paid-receipt-proof.service.js';
@@ -43,7 +44,10 @@ function hold(code: string): never {
 
 function correctPayer(account: { orgId: string; teamId: string | null;
   scope: BillingAssignmentScope }, scope: PaidReceiptScope,
-  payer: BillingAssignmentScope): boolean {
+  payer: CycleCreditPayer): boolean {
+  if (payer === 'RECEIPT') return account.orgId === scope.organisationId &&
+    ((account.scope === BillingAssignmentScope.ORGANISATION && account.teamId === null) ||
+      (account.scope === BillingAssignmentScope.TEAM && account.teamId === scope.teamId));
   return account.orgId === scope.organisationId && account.scope === payer &&
     account.teamId === (payer === BillingAssignmentScope.TEAM ? scope.teamId : null);
 }
@@ -52,7 +56,7 @@ function correctPayer(account: { orgId: string; teamId: string | null;
  * monthly rerating. Funded wallet debit and operator waiver are independent. */
 export async function readVerifiedCycleCreditEvidence(reader: Reader,
   params: { scope: PaidReceiptScope; proof: LedgerPaidReceiptSet;
-    payer: BillingAssignmentScope; tariff: BillingTariff; rawLines: RawMeteringLine[] },
+    payer: CycleCreditPayer; tariff: BillingTariff; rawLines: RawMeteringLine[] },
 ): Promise<VerifiedCycleCreditEvidence> {
   const { scope, proof, tariff } = params;
   if (proof.scope.billing_product !== scope.product ||

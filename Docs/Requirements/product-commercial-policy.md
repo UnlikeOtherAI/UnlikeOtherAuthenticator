@@ -398,3 +398,10 @@ A seat debt does not itself establish a company paid agreement. Current access
 still requires an independently effective company seat agreement, trial or
 private company policy. Dunning remains visible to managers for old/team-scoped
 debts, but cannot revive an ended agreement or license other company teams.
+
+Public company seat purchase does not assume pooled credit responsibility or move
+existing wallets. Its cycle validates each frozen usage receipt's exact company
+pool or exact source-team wallet independently of the seat invoice payer. Another
+team's wallet cannot cover that receipt. Consumption can be aggregated for company
+billing without claiming a pooled opening/closing balance that does not exist.
+Historical non-public subscription evidence keeps its original payer rules.
