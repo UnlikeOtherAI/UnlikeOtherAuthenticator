@@ -161,9 +161,9 @@ async function seed(): Promise<void> {
       VALUES (${ids.service}, 'deepwater', 'DeepWater', '2026-10', CURRENT_TIMESTAMP)`);
     await tx.$executeRaw(Prisma.sql`INSERT INTO "billing_tariffs"
       ("id", "service_id", "key", "version", "name", "mode", "collection_mode",
-       "markup_bps", "currency", "usage_payment_mode")
+       "markup_bps", "currency", "usage_currency", "usage_payment_mode")
       VALUES (${ids.tariff}, ${ids.service}, 'prepaid', 1, 'Prepaid', 'STANDARD',
-        'NONE', 0, 'USD', 'PREPAID')`);
+        'NONE', 0, 'USD', 'USD', 'PREPAID')`);
     await tx.$executeRaw(Prisma.sql`INSERT INTO "billing_stripe_accounts"
       ("id", "stripe_account_id", "livemode", "updated_at")
       VALUES (${ids.account}, 'acct_prepaid_rating', false, CURRENT_TIMESTAMP)`);
@@ -510,9 +510,9 @@ describe.skipIf(!enabled)('prepaid dispatch liability in PostgreSQL', () => {
         VALUES (${otherService}, 'deeptest', 'DeepTest', '2026-10', CURRENT_TIMESTAMP)`);
       await tx.$executeRaw(Prisma.sql`INSERT INTO billing_tariffs
         (id, service_id, key, version, name, mode, collection_mode,
-          markup_bps, currency, usage_payment_mode)
+          markup_bps, currency, usage_currency, usage_payment_mode)
         VALUES (${otherTariff}, ${otherService}, 'prepaid', 1, 'Prepaid', 'STANDARD',
-          'NONE', 1000, 'USD', 'PREPAID')`);
+          'NONE', 1000, 'USD', 'USD', 'PREPAID')`);
       await tx.billingLedgerRuntimeKey.create({ data: {
         id: otherKey, serviceId: otherService,
         secretDigest: createHash('sha256').update(otherSecret).digest('hex'),
@@ -814,9 +814,9 @@ describe.skipIf(!enabled)('prepaid dispatch liability in PostgreSQL', () => {
     const freeTariffId = 'tariff_prepaid_free';
     await prisma.$executeRaw(Prisma.sql`INSERT INTO "billing_tariffs"
       ("id", "service_id", "key", "version", "name", "mode", "collection_mode",
-       "markup_bps", "currency", "usage_payment_mode")
+       "markup_bps", "currency", "usage_currency", "usage_payment_mode")
       VALUES (${freeTariffId}, ${ids.service}, 'free', 1, 'Free', 'FREE',
-        'NONE', 0, 'USD', 'PREPAID')`);
+        'NONE', 0, 'USD', 'USD', 'PREPAID')`);
     await reserveFixture(100, '0.01', freeTariffId, 0n);
     const before = (await prisma.billingCreditAccount.findUniqueOrThrow({
       where: { id: ids.credit },

@@ -439,3 +439,9 @@ Prepaid input-cost validation lives with the existing credit-rating arithmetic;
 the reservation orchestrator imports that single parser for bounds and receipts.
 The accepted decimal format, rejection codes and rating behavior are unchanged.
 This keeps the changed reservation source within the repository's500-line limit.
+
+The expanded old-prepaid verification found historical raw SQL test seeds that
+omitted the newly required usage valuation currency. Those fixtures now name
+their original USD usage explicitly; the production constraint remains strict.
+Before that correction, API typecheck and27 tariff/rating unit cases passed,
+but prepaid suite setup failed and its15 database cases did not execute.

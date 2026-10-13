@@ -97,9 +97,9 @@ describe.skipIf(!process.env.DATABASE_URL)('PAYG finalization with immutable adm
       VALUES (${serviceId}, 'deepwater', 'DeepWater', '2026-10', CURRENT_TIMESTAMP)`);
     await prisma.$executeRaw(Prisma.sql`INSERT INTO billing_tariffs
       (id, service_id, key, version, name, mode, collection_mode,
-       markup_bps, currency, usage_payment_mode)
+       markup_bps, currency, usage_currency, usage_payment_mode)
       VALUES (${tariffId}, ${serviceId}, 'payg', 1, 'PAYG', 'STANDARD',
-        'NONE', 0, 'USD', 'PAY_AS_YOU_GO')`);
+        'NONE', 0, 'USD', 'USD', 'PAY_AS_YOU_GO')`);
     await prisma.billingLedgerRuntimeKey.create({ data: {
       id: runtimeKeyId, serviceId,
       secretDigest: createHash('sha256').update(secret).digest('hex'),

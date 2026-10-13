@@ -172,16 +172,16 @@ describe.skipIf(!enabled)('populated tariff-history migration', () => {
       `);
       await db.prisma.$executeRawUnsafe(`
         INSERT INTO "billing_tariffs" ("id", "service_id", "key", "version", "name",
-          "mode", "collection_mode", "markup_bps", "currency", "is_default", "created_at")
+          "mode", "collection_mode", "markup_bps", "currency", "usage_currency", "is_default", "created_at")
         VALUES
           ('old-stable-tariff', 'old-stable', 'standard', 1, 'Grandfathered',
-            'STANDARD', 'NONE', 1250, 'USD', true, '2026-05-10'),
+            'STANDARD', 'NONE', 1250, 'USD', 'USD', true, '2026-05-10'),
           ('old-changed-tariff', 'old-changed', 'custom', 2, 'Negotiated',
-            'CUSTOM', 'NONE', 1750, 'USD', true, '2026-08-09'),
+            'CUSTOM', 'NONE', 1750, 'USD', 'USD', true, '2026-08-09'),
           ('old-ambiguous-first', 'old-ambiguous', 'standard', 1, 'First',
-            'STANDARD', 'NONE', 1250, 'USD', false, '2026-05-10'),
+            'STANDARD', 'NONE', 1250, 'USD', 'USD', false, '2026-05-10'),
           ('old-ambiguous-current', 'old-ambiguous', 'standard', 2, 'Current',
-            'STANDARD', 'NONE', 3000, 'USD', true, '2026-06-09')
+            'STANDARD', 'NONE', 3000, 'USD', 'USD', true, '2026-06-09')
       `);
       await db.prisma.$executeRawUnsafe(`
         INSERT INTO "admin_audit_log" ("id", "actor_email", "action", "metadata", "created_at")

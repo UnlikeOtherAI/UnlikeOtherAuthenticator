@@ -133,9 +133,9 @@ async function seed(prisma: PrismaClient) {
     `);
     await tx.$executeRaw(Prisma.sql`
       INSERT INTO "billing_tariffs" ("id", "service_id", "key", "version", "name", "mode",
-        "collection_mode", "markup_bps", "currency", "is_default")
+        "collection_mode", "markup_bps", "currency", "usage_currency", "is_default")
       VALUES (${ids.tariff}, ${ids.service}, 'stripe', 1, 'Stripe race', 'STANDARD',
-        'STRIPE', 0, 'USD', true)
+        'STRIPE', 0, 'USD', 'USD', true)
     `);
     await tx.$executeRaw(Prisma.sql`
       INSERT INTO "billing_tariff_term_events" ("id", "service_id", "source", "scope_key",
