@@ -201,3 +201,10 @@ prepaid settlement assertion at `c05bef9b` passed alongside all twelve original
 rating tests, and five strict privacy/phone/schema checks passed. This proves
 no duplicate settlement debit; it is not the outstanding regional
 reservation-to-receipt-to-cycle-to-monthly-invoice verification.
+
+The regional financial persistence regression now exercises authenticated
+dispatch admission, actual receipt finalization, signed Ledger receipt-set proof,
+closed-month cycle preparation and idempotent exact regional seat invoice-item
+collection for EUR, GBP and USD. Its synthetic provider and isolated PostgreSQL
+database cannot charge customers. Execution remains pending until the result
+is recorded; schema compilation alone is not financial verification.
