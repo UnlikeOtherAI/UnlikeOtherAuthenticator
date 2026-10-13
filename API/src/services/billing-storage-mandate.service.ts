@@ -1,6 +1,6 @@
 import { BillingAssignmentScope, type PrismaClient, type BillingStorageMandate } from '@prisma/client';
 import type Stripe from 'stripe';
-import type { ProductEntitlementRequest } from '@unlikeotherai/billing-statement-protocol';
+import type { ProductEntitlementRequest, StorageReadV1 } from '@unlikeotherai/billing-statement-protocol';
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import { verifyBillingActor } from './billing-actor.service.js';
@@ -12,6 +12,7 @@ import { verifyStoragePrice } from './billing-storage-catalog.service.js';
 import { ensureStripeCustomer } from './billing-stripe-checkout-state.service.js';
 import { assertStripeObjectLivemode, requireStripeBillingEnabled, resolveStripeAccountContext } from './billing-stripe-client.service.js';
 import { stripeExternalId } from './billing-stripe-webhook-utils.service.js';
+import { storageManagementSnapshot } from './billing-storage-management.service.js';
 
 export const STORAGE_CONSENT_VERSION = 'company-storage-auto-expansion-v1';
 export const STORAGE_CONSENT_TEXT = 'Authorize automatic monthly storage charges per whole 1 TB block and automatic additional blocks when company usage exceeds capacity. The initial purchase establishes the separate monthly subscription renewal date shown by Stripe; additional blocks are prorated immediately and keep that date. Storage is charged from the first block. This consent does not authorize inference or seat payments.';
@@ -31,35 +32,23 @@ function checkoutUrl(value: string | null) {
 }
 
 export async function readStorageSetup(input: { request: ProductEntitlementRequest;
-  credential: VerifiedBillingAppKey; actorToken: string }, deps?: StorageDependencies) {
+  credential: VerifiedBillingAppKey; actorToken: string }, deps?: StorageDependencies): Promise<StorageReadV1> {
   const { request, credential } = input;
   const actor = await verifyBillingActor({ token: input.actorToken, credential, endpoint: '/billing/v1/storage',
     request: { product: request.product, organisationId: request.organisation_id,
       teamId: request.team_id, userId: request.user_id } });
   const prisma = deps?.prisma ?? getAdminPrisma();
-  return prisma.$transaction(async (tx) => {
+  const access = await prisma.$transaction(async (tx) => {
     await lockCommercialAuthority(tx, { credential, product: request.product,
       organisationId: request.organisation_id, purpose: 'CUSTOMER_LIFECYCLE' });
     const manager = await commercialMember(tx, { organisationId: request.organisation_id,
       teamId: request.team_id, userId: request.user_id, tokenVersion: actor.tv });
-    if (!manager) return { schema_version: 1, can_manage: false, setup: null };
-    if (await privateCompanyPolicy(tx, credential.service.id, request.organisation_id, new Date())) {
-      return { schema_version: 1, can_manage: true, setup: null, state: 'cost_evidence_required' };
-    }
-    const region = await tx.billingOrganisationRegion.findUnique({ where: { orgId: request.organisation_id } });
-    if (!region) return { schema_version: 1, can_manage: true, setup: null, state: 'billing_region_required' };
-    const catalog = await tx.billingStorageCatalog.findFirst({ where: { serviceId: credential.service.id,
-      currency: region.currency }, orderBy: { createdAt: 'desc' } });
-    if (!catalog) return { schema_version: 1, can_manage: true, setup: null, state: 'catalog_required' };
-    return { schema_version: 1, can_manage: true, state: 'setup_available', setup: {
-      unit_amount_minor: catalog.unitAmountMinor.toString(), currency: catalog.currency,
-      block_bytes: '1000000000000', cadence: 'month', current_cycle_proration_minor: '0',
-      consent_text: STORAGE_CONSENT_TEXT, consent_version: STORAGE_CONSENT_VERSION,
-      action: { method: 'POST', path: '/billing/v1/storage/mandate', body: {
-        ...request, catalog_id: catalog.id, consent_version: STORAGE_CONSENT_VERSION, accepted: true,
-      } },
-    } };
+    return { manager, privateAtCost: Boolean(await privateCompanyPolicy(tx, credential.service.id, request.organisation_id, new Date())) };
   });
+  if (!access.manager) return { schema_version: 1, can_manage: false, setup: null,
+    product: request.product, organisation_id: request.organisation_id,
+    subject: { team_id: request.team_id, user_id: request.user_id } };
+  return storageManagementSnapshot(prisma, { serviceId: credential.service.id, request, privateAtCost: access.privateAtCost }, deps);
 }
 
 export async function createStorageMandate(input: { request: ProductEntitlementRequest & {

@@ -1,7 +1,7 @@
 import Ajv from 'ajv/dist/2020.js';
 import addFormats from 'ajv-formats';
 import { describe, expect, it } from 'vitest';
-import { productEntitlementV1JsonSchema, phoneReleaseVerdictV1JsonSchema } from '../src/commercial-schema.js';
+import { productEntitlementV1JsonSchema, phoneReleaseVerdictV1JsonSchema, storageReadV1JsonSchema } from '../src/commercial-schema.js';
 import { productEntitlementMemberV1Fixture } from '../src/commercial-fixture.js';
 
 describe('commercial entitlement privacy', () => {
@@ -38,5 +38,18 @@ describe('phone release proof', () => {
   it('never carries executable provider identities in a refused verdict', () => {
     expect(validate({ ...proof, authorized: false })).toBe(false);
     expect(validate({ ...proof, authorized: false, account_sid: null, phone_number_sid: null })).toBe(true);
+  });
+});
+
+describe('storage manager doorway privacy', () => {
+  const ajv = new Ajv({ strict: true }); addFormats(ajv);
+  const validate = ajv.compile(storageReadV1JsonSchema);
+  it('binds the returned member and never projects payment recovery to members', () => {
+    const member = { schema_version: 1, product: 'nessie', organisation_id: 'company',
+      subject: { team_id: 'team', user_id: 'member' }, can_manage: false, setup: null };
+    expect(validate(member)).toBe(true);
+    expect(validate({ ...member, pending_expansion: null })).toBe(false);
+    expect(validate({ ...member, mandate: null })).toBe(false);
+    expect(validate({ ...member, subject: null })).toBe(false);
   });
 });

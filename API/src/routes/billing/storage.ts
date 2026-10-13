@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { storageReadV1JsonSchema } from '@unlikeotherai/billing-statement-protocol';
 import { requireBillingLifecycleAppKey } from '../../middleware/billing-app-auth.js';
 import { readStorageSetup, createStorageMandate } from '../../services/billing-storage-mandate.service.js';
 import { recoverStorage } from '../../services/billing-storage-recovery.service.js';
@@ -10,7 +11,7 @@ const mandate = BillingSubjectRequestSchema.extend({ catalog_id: z.string().min(
   consent_version: z.literal('company-storage-auto-expansion-v1'), accepted: z.literal(true) }).strict();
 export function registerStorageRoutes(app: FastifyInstance) {
   const preHandler = [requireBillingLifecycleAppKey];
-  app.post('/billing/v1/storage', { preHandler }, async (request, reply) => {
+  app.post('/billing/v1/storage', { preHandler, schema: { response: { 200: storageReadV1JsonSchema } } }, async (request, reply) => {
     if (!request.billingAppKey) throw new AppError('UNAUTHORIZED', 401);
     reply.header('Cache-Control', 'private, no-store');
     return readStorageSetup({ request: BillingSubjectRequestSchema.parse(request.body),

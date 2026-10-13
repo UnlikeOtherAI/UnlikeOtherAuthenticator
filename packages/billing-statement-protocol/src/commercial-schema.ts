@@ -62,11 +62,30 @@ export const phoneReleaseVerdictV1JsonSchema = { oneOf: [
     phone_number_sid: { type: 'string', pattern: '^PN[0-9a-fA-F]{32}$' } }),
   object({ ...releaseProperties, authorized: { const: false }, account_sid: { type: 'null' }, phone_number_sid: { type: 'null' } }),
 ] } as const;
+const human = { ...subject, team_id: id, user_id: id };
+const setup = object({ unit_amount_minor: bytes, currency: { type: 'string', pattern: '^[A-Z]{3}$' },
+  block_bytes: { const: '1000000000000' }, cadence: { const: 'month' }, current_cycle_proration_minor: bytes,
+  consent_text: { type: 'string', minLength: 1, maxLength: 2000 }, consent_version: { const: 'company-storage-auto-expansion-v1' },
+  action: object({ method: { const: 'POST' }, path: { const: '/billing/v1/storage/mandate' },
+    body: object({ ...human, catalog_id: id, consent_version: { const: 'company-storage-auto-expansion-v1' }, accepted: { const: true } }) }) });
+const nullable = (schema: unknown) => ({ anyOf: [schema, { type: 'null' }] });
+export const storageReadV1JsonSchema = { oneOf: [
+  object({ ...subject, subject: object({ team_id: id, user_id: id }), schema_version: { const: 1 }, can_manage: { const: false }, setup: { type: 'null' } }),
+  object({ ...subject, subject: object({ team_id: id, user_id: id }), schema_version: { const: 1 }, can_manage: { const: true }, state: { enum: ['billing_region_required',
+    'catalog_required', 'cost_evidence_required', 'setup_available', 'ready', 'payment_pending', 'recovery_required'] },
+  setup: nullable(setup), mandate: nullable(object({ id, state: id })),
+  subscription: nullable(object({ purchased_blocks: { type: 'integer', minimum: 0 }, pending_blocks: { type: 'integer', minimum: 0 },
+    currency: { type: 'string', pattern: '^[A-Z]{3}$' }, unit_amount_minor: bytes, current_period_start: nullableDate, current_period_end: nullableDate })),
+  pending_expansion: nullable(object({ id, state: id, required_blocks: { type: 'integer', minimum: 1 },
+    invoice_id: nullable(id), invoice_url: nullable({ type: 'string', format: 'uri' }), invoice_amount_minor: nullableBytes,
+    grace_ends_at: nullableDate, recovery_action: nullable(object({ method: { const: 'POST' }, path: { const: '/billing/v1/storage/recover' },
+      body: object({ ...human, expansion_id: id }) })) })), observed_at: timestamp, valid_until: timestamp }),
+] } as const;
 export const commercialProtocolV1JsonSchema = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',
   $id: 'https://authentication.unlikeotherai.com/schemas/commercial-policy-v1.json',
   $defs: { entitlement: productEntitlementV1JsonSchema, ensure_request: storageEnsureRequestV1JsonSchema,
     ensure_response: storageEnsureV1JsonSchema, observation_request: storageObservationRequestV1JsonSchema,
-    events: commercialEventsV1JsonSchema, acknowledgement: commercialAcknowledgementV1JsonSchema,
+    events: commercialEventsV1JsonSchema, acknowledgement: commercialAcknowledgementV1JsonSchema, storage_read: storageReadV1JsonSchema,
     phone_release_request: phoneReleaseRequestV1JsonSchema, phone_release_response: phoneReleaseVerdictV1JsonSchema },
 } as const;

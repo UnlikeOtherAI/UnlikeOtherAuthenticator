@@ -4,7 +4,7 @@ UOA owns commercial facts and identity. Nessie owns its functional restrictions
 and content measurement. A product never infers full access from a positive
 monthly price, a tariff key, a manager statement or a failed network request.
 
-The public protocol is `@unlikeotherai/billing-statement-protocol`5.9.1,
+The public protocol is `@unlikeotherai/billing-statement-protocol`5.10.0,
 `commercial-types.ts` and `commercial-schema.ts`. The additive contract exposes
 exact product/company scope and a returned human team/user pair whenever a
 person is selected. Human reads require the ENTITLEMENT key and an exact
@@ -77,6 +77,14 @@ charge. The initial purchase uses Stripe's disclosed subscription period and
 renewal date; delayed settlement does not reset that date.
 Further blocks use always_invoice proration, retaining its renewal date.
 
+The manager storage read returns the exact company/person/team, current mandate,
+purchased/pending blocks, actual Stripe period dates and original pending
+expansion. A freshly verified invoice URL provides card-authentication recovery;
+terminal initial attempts expose an exact recovery action under the same logical
+purchase. Setup alone charges zero and does not prove storage payment. Returning
+to the allowlisted customer UI `/admin/billing` refreshes UOA facts rather than
+trusting a success query string.
+
 Stripe collection remains charge_automatically. Initial incomplete_expired
 state after23 hours is not resolution of our longer weekday grace. Preserve the
 original incident/pending capacity. Recovery requires fresh terminal unpaid
@@ -138,9 +146,13 @@ remains a visible reconciliation hold; no replacement deadline is guessed.
 
 ## Implementation verification
 
-Protocol compilation, generated artifact checks and strict member privacy/subject
-validation have passed on Minis as a small standalone check. API migration,
-runtime, storage collection, hosted invite waiting, operator browser flows and
-real PostgreSQL/race verification remain in progress; this document does not
+On Maxis at `05ae0679`, protocol/artifact build, Prisma generation, API and Admin
+typechecks passed. Five clock unit checks passed; seven focused wire/database
+checks passed without skips on the dedicated Fedora PostgreSQL cluster. Coverage
+includes exact scope/current key revocation, concurrent observation conflicts,
+stale-zero protection, runtime RLS denial and no-store/email-ack wire semantics.
+All 209 migrations at the foundation checkpoint applied on a fresh cluster.
+Storage collection/reordered cash/weekend-expiry, hosted invite waiting and
+operator browser verification remain in progress; this document does not
 claim those are shipped or deployed. Final delivery must replace this progress
 record with actual focused test and headless rendered-flow evidence.

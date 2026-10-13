@@ -968,6 +968,480 @@
         }
       }
     },
+    "storage_read": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "product",
+            "organisation_id",
+            "subject",
+            "schema_version",
+            "can_manage",
+            "setup"
+          ],
+          "properties": {
+            "product": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "organisation_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "subject": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "team_id",
+                "user_id"
+              ],
+              "properties": {
+                "team_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "user_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                }
+              }
+            },
+            "schema_version": {
+              "const": 1
+            },
+            "can_manage": {
+              "const": false
+            },
+            "setup": {
+              "type": "null"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "product",
+            "organisation_id",
+            "subject",
+            "schema_version",
+            "can_manage",
+            "state",
+            "setup",
+            "mandate",
+            "subscription",
+            "pending_expansion",
+            "observed_at",
+            "valid_until"
+          ],
+          "properties": {
+            "product": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "organisation_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "subject": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "team_id",
+                "user_id"
+              ],
+              "properties": {
+                "team_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "user_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                }
+              }
+            },
+            "schema_version": {
+              "const": 1
+            },
+            "can_manage": {
+              "const": true
+            },
+            "state": {
+              "enum": [
+                "billing_region_required",
+                "catalog_required",
+                "cost_evidence_required",
+                "setup_available",
+                "ready",
+                "payment_pending",
+                "recovery_required"
+              ]
+            },
+            "setup": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "unit_amount_minor",
+                    "currency",
+                    "block_bytes",
+                    "cadence",
+                    "current_cycle_proration_minor",
+                    "consent_text",
+                    "consent_version",
+                    "action"
+                  ],
+                  "properties": {
+                    "unit_amount_minor": {
+                      "type": "string",
+                      "pattern": "^(0|[1-9][0-9]{0,18})$"
+                    },
+                    "currency": {
+                      "type": "string",
+                      "pattern": "^[A-Z]{3}$"
+                    },
+                    "block_bytes": {
+                      "const": "1000000000000"
+                    },
+                    "cadence": {
+                      "const": "month"
+                    },
+                    "current_cycle_proration_minor": {
+                      "type": "string",
+                      "pattern": "^(0|[1-9][0-9]{0,18})$"
+                    },
+                    "consent_text": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 2000
+                    },
+                    "consent_version": {
+                      "const": "company-storage-auto-expansion-v1"
+                    },
+                    "action": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "method",
+                        "path",
+                        "body"
+                      ],
+                      "properties": {
+                        "method": {
+                          "const": "POST"
+                        },
+                        "path": {
+                          "const": "/billing/v1/storage/mandate"
+                        },
+                        "body": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "product",
+                            "organisation_id",
+                            "team_id",
+                            "user_id",
+                            "catalog_id",
+                            "consent_version",
+                            "accepted"
+                          ],
+                          "properties": {
+                            "product": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 256
+                            },
+                            "organisation_id": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 256
+                            },
+                            "team_id": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 256
+                            },
+                            "user_id": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 256
+                            },
+                            "catalog_id": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 256
+                            },
+                            "consent_version": {
+                              "const": "company-storage-auto-expansion-v1"
+                            },
+                            "accepted": {
+                              "const": true
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "mandate": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id",
+                    "state"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "state": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    }
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "subscription": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "purchased_blocks",
+                    "pending_blocks",
+                    "currency",
+                    "unit_amount_minor",
+                    "current_period_start",
+                    "current_period_end"
+                  ],
+                  "properties": {
+                    "purchased_blocks": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "pending_blocks": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "currency": {
+                      "type": "string",
+                      "pattern": "^[A-Z]{3}$"
+                    },
+                    "unit_amount_minor": {
+                      "type": "string",
+                      "pattern": "^(0|[1-9][0-9]{0,18})$"
+                    },
+                    "current_period_start": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "current_period_end": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "pending_expansion": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id",
+                    "state",
+                    "required_blocks",
+                    "invoice_id",
+                    "invoice_url",
+                    "invoice_amount_minor",
+                    "grace_ends_at",
+                    "recovery_action"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "state": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "required_blocks": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "invoice_id": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "invoice_url": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "uri"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "invoice_amount_minor": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "pattern": "^(0|[1-9][0-9]{0,18})$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "grace_ends_at": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "recovery_action": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "method",
+                            "path",
+                            "body"
+                          ],
+                          "properties": {
+                            "method": {
+                              "const": "POST"
+                            },
+                            "path": {
+                              "const": "/billing/v1/storage/recover"
+                            },
+                            "body": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": [
+                                "product",
+                                "organisation_id",
+                                "team_id",
+                                "user_id",
+                                "expansion_id"
+                              ],
+                              "properties": {
+                                "product": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 256
+                                },
+                                "organisation_id": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 256
+                                },
+                                "team_id": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 256
+                                },
+                                "user_id": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 256
+                                },
+                                "expansion_id": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 256
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "observed_at": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "valid_until": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        }
+      ]
+    },
     "phone_release_request": {
       "type": "object",
       "additionalProperties": false,

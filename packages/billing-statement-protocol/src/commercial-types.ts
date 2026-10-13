@@ -69,3 +69,26 @@ export type PhoneReleaseVerdictV1 = ProductCommercialSubject & {
   schema_version: 1; incident_id: string; authorized: boolean; resource_id: string;
   account_sid: string | null; phone_number_sid: string | null; valid_until: string;
 };
+export type StorageSetupActionV1 = { method: 'POST'; path: '/billing/v1/storage/mandate'; body: ProductEntitlementRequest & {
+  catalog_id: string; consent_version: 'company-storage-auto-expansion-v1'; accepted: true;
+} };
+export type StorageRecoveryActionV1 = { method: 'POST'; path: '/billing/v1/storage/recover'; body: ProductEntitlementRequest & { expansion_id: string } };
+export type StorageSetupV1 = { unit_amount_minor: string; currency: string; block_bytes: '1000000000000';
+  cadence: 'month'; current_cycle_proration_minor: string; consent_text: string;
+  consent_version: 'company-storage-auto-expansion-v1'; action: StorageSetupActionV1 };
+export type StorageManagerV1 = ProductCommercialSubject & { schema_version: 1; can_manage: true;
+  subject: { team_id: string; user_id: string };
+  state: 'billing_region_required' | 'catalog_required' | 'cost_evidence_required' | 'setup_available'
+    | 'ready' | 'payment_pending' | 'recovery_required';
+  setup: StorageSetupV1 | null;
+  mandate: { id: string; state: string } | null;
+  subscription: { purchased_blocks: number; pending_blocks: number; currency: string; unit_amount_minor: string;
+    current_period_start: string | null; current_period_end: string | null } | null;
+  pending_expansion: { id: string; state: string; required_blocks: number; invoice_id: string | null;
+    invoice_url: string | null; invoice_amount_minor: string | null; grace_ends_at: string | null;
+    recovery_action: StorageRecoveryActionV1 | null } | null;
+  observed_at: string; valid_until: string;
+};
+export type StorageReadV1 = StorageManagerV1 | (ProductCommercialSubject & {
+  schema_version: 1; subject: { team_id: string; user_id: string }; can_manage: false; setup: null;
+});
