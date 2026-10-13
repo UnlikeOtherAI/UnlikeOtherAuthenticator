@@ -267,6 +267,7 @@ async function settleInTransaction(
         mode: tariff.mode,
         markupBps: tariff.markupBps,
         currency: tariff.currency,
+        usageCurrency: tariff.usageCurrency,
         usagePaymentMode: tariff.usagePaymentMode,
       },
     };

@@ -59,6 +59,13 @@ custom agreement. The operator action rejects these before a policy mutation,
 rather than inventing a discount or stranding later invoices. New-company and
 standard automatic/prorated trials remain supported.
 
+Usage valuation is an immutable `usageCurrency`, independent of monthly seat
+`currency`. Historical tariffs copy their original currency; new EUR/GBP Standard
+versions explicitly choose USD usage. The operator tariff form labels these
+separately. Regional prepaid credits remain USD, with unchanged provider cost,
+wallet, reservation and receipt evidence. A collectible or unproven cross-currency
+usage liability is a reconciliation hold; no FX or balance conversion is implied.
+
 ## Storage
 
 Decimal company capacity is100,000,000 free bytes or purchased blocks of

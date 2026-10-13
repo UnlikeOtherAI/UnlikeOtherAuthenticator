@@ -105,7 +105,7 @@ export async function prepareBillingCycleClose(
     const projected = projectCycleUsage(usage, {
       serviceIdentifier: service.identifier, organisationId: initial.organisationId,
       teamId, billingMonth: params.billingMonth, startsAt, endsAt,
-      currency: initial.currency,
+      currency: tariff.usageCurrency,
     }, tariff);
     ledgerSnapshots.push(projected.evidence);
     const scope = { product: service.identifier, organisationId: initial.organisationId,
@@ -118,9 +118,14 @@ export async function prepareBillingCycleClose(
     });
     const collectible = BigInt(teamCreditEvidence.consumed_microcredits) -
       BigInt(teamCreditEvidence.waived_microcredits);
+    if (tariff.usageCurrency !== initial.currency &&
+      (tariff.usagePaymentMode !== 'PREPAID' || !teamCreditEvidence.covered ||
+        BigInt(teamCreditEvidence.funded_debit_microcredits ?? '-1') !== collectible)) {
+      hold('BILLING_CROSS_CURRENCY_USAGE_UNCOVERED');
+    }
     const line = projected.lines.map((item) => ({ ...item,
       customer_charge: item.usage_payment_mode === 'prepaid' ? null :
-        exactMoney(usdFromRatedMicrocredits(collectible), initial.currency) }));
+        exactMoney(usdFromRatedMicrocredits(collectible), tariff.usageCurrency) }));
     creditEvidence.push(teamCreditEvidence);
     if (initial.teamId !== null) usageLines = line;
     else organisationUsageLines.push(...line.map((item) => ({ ...item,

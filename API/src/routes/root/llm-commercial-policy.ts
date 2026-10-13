@@ -1,6 +1,7 @@
 export const llmCommercialPolicyMarkdown = `
 ## Company commercial policy
 UOA owns identity, invitations, membership, subscriptions, prices, capacity and payment evidence.
+Tariff usage_currency values provider/credit costs independently of monthly_subscription.currency. New regional Standard versions explicitly retain USD prepaid usage. Historical currency, balances and invoices never change; cross-currency collectible/uncovered usage requires reconciliation, never relabelling or guessed FX.
 Use POST /billing/v1/product-entitlement with the ENTITLEMENT key and a fresh exact-endpoint RS256 actor.
 Members receive only functional access/history/admission/storage facts. Company managers additionally receive commercial standing/deadlines.
 An unattended consumer uses a separate commercial_worker app key, no actor, and POST /billing/v1/product-entitlement/background.

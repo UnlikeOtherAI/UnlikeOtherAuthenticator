@@ -251,7 +251,7 @@ export function validatedStripeCumulativeCharges(
   const rated = rateMeteringByCaller({
     usage,
     product: subscription.service.identifier,
-    currency: subscription.tariff.currency,
+    currency: subscription.tariff.usageCurrency,
     terms: {
       mode: subscription.tariff.mode.toLowerCase() as 'standard' | 'at_cost' | 'custom',
       markupBps: subscription.tariff.markupBps,

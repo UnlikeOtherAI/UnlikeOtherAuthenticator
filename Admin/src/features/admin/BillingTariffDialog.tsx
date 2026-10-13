@@ -19,6 +19,7 @@ const defaults: BillingTariffFormValues = {
   collectionMode: 'none',
   markupPercent: '30.00',
   usagePaymentMode: 'prepaid',
+  usageCurrency: 'USD',
   monthlyChargeBasis: 'flat',
   seatPolicy: 'automatic',
   seatChargeTiming: 'prorated',
@@ -164,8 +165,12 @@ export function BillingTariffDialog({
           >
             <TextField {...form.register('monthlyAmount')} inputMode="decimal" />
           </FieldShell>
-          <FieldShell label="Currency" error={form.formState.errors.currency?.message}>
+          <FieldShell label="Monthly seat currency" error={form.formState.errors.currency?.message}>
             <TextField {...form.register('currency')} className="uppercase" maxLength={3} />
+          </FieldShell>
+          <FieldShell label="Usage valuation currency" hint="Nessie credits and provider costs stay USD. This does not convert an existing balance."
+            error={form.formState.errors.usageCurrency?.message}>
+            <TextField {...form.register('usageCurrency')} className="uppercase" maxLength={3} />
           </FieldShell>
         </div>
         <label className="flex items-start gap-3 rounded-xl border border-gray-200 p-4">

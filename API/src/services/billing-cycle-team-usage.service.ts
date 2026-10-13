@@ -93,7 +93,7 @@ export async function prepareBillingTeamUsageCycle(
   const projected = projectCycleUsage(usage, { serviceIdentifier: service.identifier,
     organisationId: params.organisationId, teamId: params.teamId,
     billingMonth: params.billingMonth, startsAt, endsAt,
-    currency: terms.tariff.currency }, terms.tariff);
+    currency: terms.tariff.usageCurrency }, terms.tariff);
   const scope = { product: service.identifier, organisationId: params.organisationId,
     teamId: params.teamId, billingMonth: params.billingMonth, serviceId: params.serviceId };
   const proof = await (deps?.fetchPaidReceiptSet ?? fetchVerifiedLedgerPaidReceiptSet)(scope);
@@ -205,7 +205,7 @@ export async function prepareBillingTeamUsageCycle(
             ...line, customer_charge: line.usage_payment_mode === 'prepaid' ? null :
               exactMoney(usdFromRatedMicrocredits(
                 BigInt(creditEvidence.consumed_microcredits) -
-                BigInt(creditEvidence.waived_microcredits)), terms.tariff.currency),
+                BigInt(creditEvidence.waived_microcredits)), terms.tariff.usageCurrency),
             credits_consumed: creditEvidence.covered ?
               decimalCredits(BigInt(creditEvidence.consumed_microcredits ?? '0')) : null,
           })),

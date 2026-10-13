@@ -62,7 +62,7 @@ export async function readVerifiedCycleCreditEvidence(reader: Reader,
     proof.unresolved_paid_attempts !== '0' || !proof.snapshot.immutable) {
     hold('BILLING_CYCLE_PAID_PROOF_SCOPE_INVALID');
   }
-  if (tariff.currency !== 'USD') hold('BILLING_CYCLE_FX_RECONCILIATION_REQUIRED');
+  if (tariff.usageCurrency !== 'USD') hold('BILLING_CYCLE_FX_RECONCILIATION_REQUIRED');
   const matched = await matchUoaPaidReceiptSet(reader, scope, proof);
   const meteredRaw = params.rawLines.filter((line) => line.billingDisposition === 'paid')
     .reduce((sum, line) => {

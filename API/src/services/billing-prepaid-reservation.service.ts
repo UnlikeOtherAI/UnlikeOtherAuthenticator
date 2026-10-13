@@ -208,7 +208,7 @@ export async function reservePrepaidDispatch(
         dispatch_id: input.dispatchId, request_fingerprint: input.requestFingerprint,
         billing_month: billingMonth, currency: input.currency };
     }
-    if (tariff.currency !== input.currency) {
+    if (tariff.usageCurrency !== input.currency) {
       throw new AppError('BAD_REQUEST', 409, 'PREPAID_CURRENCY_UNSUPPORTED');
     }
     return null;
@@ -281,7 +281,7 @@ export async function reservePrepaidDispatch(
     })).tariff;
     if (tariff.usagePaymentMode !== BillingUsagePaymentMode.PREPAID ||
       tariff.mode === BillingTariffMode.FREE ||
-      tariff.currency !== input.currency) {
+      tariff.usageCurrency !== input.currency) {
       throw new AppError('FORBIDDEN', 403, 'PREPAID_TARIFF_REQUIRED');
     }
     const reserved = ratedMicrocredits(bound, tariff.markupBps);

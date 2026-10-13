@@ -14,6 +14,7 @@ type Tariff = {
   seatPolicy?: string | null;
   seatChargeTiming?: string | null;
   usagePaymentMode: string;
+  usageCurrency: string;
   currency: string;
   isDefault: boolean;
   createdByEmail: string | null;
@@ -32,6 +33,7 @@ export function serializeBillingTariff(tariff: Tariff) {
     markup_bps: tariff.markupBps,
     markup_percent: (tariff.markupBps / 100).toFixed(2),
     usage_payment_mode: tariff.usagePaymentMode.toLowerCase(),
+    usage_currency: tariff.usageCurrency,
     monthly_subscription: {
       amount_minor: tariff.monthlyAmountMinor.toString(),
       currency: tariff.currency,
