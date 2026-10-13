@@ -60,7 +60,7 @@ export async function resolveBillingTariffForMonth(
   params: {
     serviceId: string;
     organisationId: string;
-    teamId: string;
+    teamId: string | null;
     billingMonth: string;
     at?: Date;
   },
@@ -125,7 +125,7 @@ export async function resolveBillingTariffForMonth(
       assignmentId: contract.tariffAssignmentId };
   }
   const choices = [
-    { source: BillingTariffSource.TEAM, scopeKey: `${params.organisationId}:${params.teamId}` },
+    ...(params.teamId ? [{ source: BillingTariffSource.TEAM, scopeKey: `${params.organisationId}:${params.teamId}` }] : []),
     { source: BillingTariffSource.ORGANISATION, scopeKey: params.organisationId },
     { source: BillingTariffSource.SERVICE_DEFAULT, scopeKey: params.serviceId },
   ];

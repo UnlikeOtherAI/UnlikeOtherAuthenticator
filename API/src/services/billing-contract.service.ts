@@ -385,6 +385,7 @@ async function activateInTransaction(
         seatChargeTiming: normalized.seatChargeTiming,
         usagePaymentMode: normalized.usagePaymentMode,
         currency: normalized.currency,
+        usageCurrency: normalized.usageCurrency,
         isDefault: false,
         createdByUserId: params.actor.userId ?? null,
         createdByEmail: actorEmail,

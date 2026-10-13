@@ -451,3 +451,14 @@ cycles, contracts, corrections, seats and customer invoices. Every existing
 literal-currency fixture now explicitly preserves that same usage currency.
 No provider cost, wallet, customer balance, historical invoice or production
 tariff term is changed by this fixture correction.
+
+Contract activation explicitly persists its normalized usage valuation currency
+as well as its seat currency. Existing negotiated terms retain their own original
+currency; this does not extend regional cross-currency Standard terms to manual
+contracts or change any accepted contract.
+
+Private policy assignment and reads resolve actual company terms, including the
+existing negotiated-contract precedence, against their immutable private tariff
+evidence. A later accepted normal contract cannot retain an older private waiver;
+an operator attempt to assign conflicting private evidence is rejected before
+mutation. Company-only tariff resolution excludes team override candidates.

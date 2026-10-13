@@ -3,6 +3,7 @@ import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import { commercialTimezone, defaultTrialEnd } from './billing-commercial-clock.service.js';
 import { requireLifecycleActor, type LifecycleActor } from './internal-admin-lifecycle.service.js';
+import { resolveBillingTariffForMonth } from './billing-tariff-history.service.js';
 
 export async function listProductPolicies(serviceId: string, prisma = getAdminPrisma()) {
   const rows = await prisma.billingProductEnrollment.findMany({ where: { serviceId }, orderBy: { createdAt: 'desc' } });
@@ -98,6 +99,11 @@ export async function setProductPolicy(input: { serviceId: string; organisationI
       if (!event) throw new AppError('BAD_REQUEST', 409, 'BILLING_PRIVATE_EFFECTIVE_EVIDENCE_REQUIRED');
       privateTermEventId = event.id;
       effectiveAt = new Date(Math.max(now.getTime(), Date.parse(`${event.effectiveFromMonth}-01T00:00:00.000Z`)));
+      const effective = await resolveBillingTariffForMonth(tx, { serviceId: input.serviceId,
+        organisationId: input.organisationId, teamId: null, billingMonth: effectiveAt.toISOString().slice(0, 7), at: effectiveAt });
+      if (effective.source !== 'ORGANISATION' || effective.tariff.id !== assignment.tariffId) {
+        throw new AppError('BAD_REQUEST', 409, 'BILLING_PRIVATE_EFFECTIVE_TARIFF_CONFLICT');
+      }
     }
     const timezone = commercialTimezone(input.billingTimezone);
     const enrollment = await tx.billingProductEnrollment.upsert({ where: {

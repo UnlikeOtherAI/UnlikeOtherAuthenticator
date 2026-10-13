@@ -81,4 +81,19 @@ describe.skipIf(!process.env.DATABASE_URL)('private company policy immutable ter
     expect(await privateAt(org.id, boundary)).toBeNull();
     expect((await db.prisma.billingTariffTermEvent.findUniqueOrThrow({ where: { id: event.id } })).tariffId).toBe(privateTariff);
   });
+  it('does not carry a private waiver across a later authoritative negotiated contract', async () => {
+    const { org, event } = await company('contract-private'); await policy(org.id);
+    const contract = await db.prisma.billingOrganisationContract.create({ data: { orgId: org.id,
+      reference: 'synthetic-future-contract', name: 'Future accepted terms', status: 'ACTIVE', activatedAt: now } });
+    const version = await db.prisma.billingOrganisationContractVersion.create({ data: { contractId: contract.id,
+      version: 1, effectiveFromMonth: nextMonth, usageMarkupBps: 3000, currency: 'USD', paymentTermsDays: 30 } });
+    await db.prisma.billingContractServiceTerm.create({ data: { contractVersionId: version.id,
+      serviceId: smsIds.service, tariffId: standardTariff, monthlyAmountMinor: 399n } });
+    expect(await privateAt(org.id, now)).toMatchObject({ privateTermEventId: event.id });
+    expect(await privateAt(org.id, boundary)).toBeNull();
+    await expect(setProductPolicy({ serviceId: smsIds.service, organisationId: org.id,
+      sourceDomain: 'authentication.unlikeotherai.com', privateAtCost: true,
+      actor: { userId: smsIds.user, tokenVersion: 0 } }, { prisma: db.prisma, now: () => boundary }))
+      .rejects.toThrow('BILLING_PRIVATE_EFFECTIVE_TARIFF_CONFLICT');
+  });
 });

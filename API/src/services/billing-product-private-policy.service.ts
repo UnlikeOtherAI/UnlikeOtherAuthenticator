@@ -1,6 +1,7 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { productPolicyAt } from './billing-product-entitlement.service.js';
 import { AppError } from '../utils/errors.js';
+import { resolveBillingTariffForMonth } from './billing-tariff-history.service.js';
 
 export async function privateCompanyPolicy(db: Prisma.TransactionClient | PrismaClient,
   serviceId: string, orgId: string, now: Date) {
@@ -11,7 +12,12 @@ export async function privateCompanyPolicy(db: Prisma.TransactionClient | Prisma
   const current = await db.billingTariffTermEvent.findFirst({ where: { serviceId,
     source: 'ORGANISATION', scopeKey: orgId, effectiveFromMonth: { lte: now.toISOString().slice(0, 7) } },
     orderBy: [{ effectiveFromMonth: 'desc' }, { sequence: 'desc' }] });
-  return current?.id === policy.privateTermEventId ? policy : null;
+  if (current?.id !== policy.privateTermEventId) return null;
+  const effective = await resolveBillingTariffForMonth(db, { serviceId, organisationId: orgId,
+    teamId: null, billingMonth: now.toISOString().slice(0, 7), at: now });
+  // A negotiated contract takes precedence over the generic organisation event.
+  // Its later accepted terms cannot inherit the older private waiver.
+  return effective.source === 'ORGANISATION' && effective.tariff.id === current.tariffId ? policy : null;
 }
 
 export async function assertPrivateTeamTariffChange(db: Prisma.TransactionClient,
