@@ -304,3 +304,9 @@ the three database regressions are coded; execution and rendered checks are pend
 
 Maxis deployed all215 migrations successfully. Prisma generation identified a
 misplaced inverse relation, now corrected before compiler/flow verification.
+
+Public offers permit one active immutable version per regional currency; an
+operator withdraws the current offer before replacing it. Database guards bind
+the accepted seat/usage monetary snapshot and effective timestamp to the exact
+company term event, preventing missing JSON properties or foreign-scope events
+from being accepted as consent/activation evidence.

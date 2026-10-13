@@ -30,7 +30,7 @@ export function baseStripeCheckoutRequest(input: {
         uoa_checkout_id: checkout.id, uoa_service_id: checkout.serviceId, uoa_tariff_id: tariff.id,
         uoa_scope_key: input.scopeKey, uoa_stripe_account_id: account.stripeAccountId,
         uoa_stripe_mode: account.livemode ? 'live' : 'test',
-        ...(checkout.fixedSeatQuantity === null ? {} : { uoa_fixed_seat_quantity: String(checkout.fixedSeatQuantity) }),
+        ...(checkout.fixedSeatQuantity == null ? {} : { uoa_fixed_seat_quantity: String(checkout.fixedSeatQuantity) }),
       },
     },
   };

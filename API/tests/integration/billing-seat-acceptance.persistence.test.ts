@@ -36,7 +36,8 @@ describe.skipIf(!process.env.DATABASE_URL)('prospective accepted Standard compan
     const row = await db.prisma.billingStripeCheckoutSession.create({ data: { accountId: smsIds.account,
       appKeyId: smsIds.lifecycle, customerId: customer.id, serviceId: smsIds.service, tariffId: standardId,
       tariffSource: 'ORGANISATION', seatOfferId: offerId, seatConsentTerms: {
-        terms_version: 'company-standard-seat-v1', accepted: true, checkout_text: 'Synthetic exact accepted terms' },
+        terms_version: 'company-standard-seat-v1', accepted: true, checkout_text: 'Synthetic exact accepted terms',
+        unit_amount_minor: '299', currency: 'EUR', usage_currency: 'USD', usage_payment_mode: 'prepaid', usage_markup_bps: 3000 },
       orgId: org.id, scope: 'ORGANISATION', scopeKey: org.id, actorJti: suffix, requestedByUserId: user.id,
       successUrlDigest: 'a'.repeat(64), cancelUrlDigest: 'b'.repeat(64), leaseExpiresAt: new Date(now.getTime() + 600_000) } });
     return { row, team };
