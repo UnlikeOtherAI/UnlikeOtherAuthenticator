@@ -56,9 +56,10 @@ export async function readBoundStorageInvoice(invoiceId: string, stripe: Stripe,
     ![binding.expansion.fromBlocks, binding.expansion.toBlocks].includes(line.quantity ?? -1))) {
     throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_STORAGE_INVOICE_LINES_INVALID');
   }
-  if (invoice.billing_reason !== 'subscription_update' && (invoice.lines.data.length !== 1 ||
-    invoice.lines.data[0]!.amount !== Number(binding.catalog.unitAmountMinor) * binding.expansion.toBlocks ||
-    invoice.lines.data[0]!.parent?.subscription_item_details?.proration)) {
+  const firstLine = invoice.lines.data[0];
+  if (invoice.billing_reason !== 'subscription_update' && (invoice.lines.data.length !== 1 || !firstLine ||
+    firstLine.amount !== Number(binding.catalog.unitAmountMinor) * binding.expansion.toBlocks ||
+    firstLine.parent?.subscription_item_details?.proration)) {
     throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_STORAGE_RECURRING_AMOUNT_INVALID');
   }
   if (invoice.lines.data.some((line) => !Number.isSafeInteger(line.period.start) || !Number.isSafeInteger(line.period.end) ||

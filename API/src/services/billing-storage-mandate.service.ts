@@ -18,8 +18,9 @@ export const STORAGE_CONSENT_VERSION = 'company-storage-auto-expansion-v1';
 export const STORAGE_CONSENT_TEXT = 'Authorize automatic monthly storage charges per whole 1 TB block and automatic additional blocks when company usage exceeds capacity. The initial purchase establishes the separate monthly subscription renewal date shown by Stripe; additional blocks are prorated immediately and keep that date. Storage is charged from the first block. This consent does not authorize inference or seat payments.';
 export type StorageDependencies = { prisma?: PrismaClient; stripe?: Stripe; livemode?: boolean; now?: () => Date };
 export function storageRuntime(deps?: StorageDependencies) {
-  const configured = deps?.stripe ? null : requireStripeBillingEnabled();
-  return { stripe: deps?.stripe ?? configured!.client, livemode: deps?.livemode ?? configured!.livemode };
+  if (deps?.stripe) return { stripe: deps.stripe, livemode: deps.livemode ?? false };
+  const configured = requireStripeBillingEnabled();
+  return { stripe: configured.client, livemode: deps?.livemode ?? configured.livemode };
 }
 
 function checkoutUrl(value: string | null) {
