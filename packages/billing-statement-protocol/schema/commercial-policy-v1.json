@@ -761,6 +761,7 @@
         "observation_id",
         "revision",
         "observed_at",
+        "measurement_version",
         "blob_bytes",
         "database_bytes"
       ],
@@ -787,6 +788,11 @@
         "observed_at": {
           "type": "string",
           "format": "date-time"
+        },
+        "measurement_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
         },
         "blob_bytes": {
           "type": "string",
@@ -914,6 +920,146 @@
               }
             }
           }
+        }
+      }
+    },
+    "acknowledgement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "product",
+        "organisation_id",
+        "event_id",
+        "recipient_user_id",
+        "channel",
+        "receipt_id"
+      ],
+      "properties": {
+        "product": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "organisation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "event_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "recipient_user_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "channel": {
+          "enum": [
+            "alert",
+            "personal_assistant"
+          ]
+        },
+        "receipt_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      }
+    },
+    "phone_release_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "product",
+        "organisation_id",
+        "incident_id"
+      ],
+      "properties": {
+        "product": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "organisation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "incident_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      }
+    },
+    "phone_release_response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "product",
+        "organisation_id",
+        "schema_version",
+        "incident_id",
+        "authorized",
+        "resource_id",
+        "account_sid",
+        "phone_number_sid",
+        "valid_until"
+      ],
+      "properties": {
+        "product": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "organisation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "schema_version": {
+          "const": 1
+        },
+        "incident_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "authorized": {
+          "type": "boolean"
+        },
+        "resource_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "account_sid": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^AC[0-9a-fA-F]{32}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "phone_number_sid": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^PN[0-9a-fA-F]{32}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "valid_until": {
+          "type": "string",
+          "format": "date-time"
         }
       }
     }
