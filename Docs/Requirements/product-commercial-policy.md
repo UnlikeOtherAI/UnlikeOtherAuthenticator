@@ -277,3 +277,11 @@ An earlier storage debt cannot remove another seat agreement's valid grace.
 `past_due`/`unpaid` without original bound seat failure evidence returns a
 reconciliation error: consumers preserve existing reads and hold allocations,
 rather than inventing a fresh deadline or granting indefinite paid standing.
+
+Protocol5.11.0 freezes `/billing/v1/seats` and `/billing/v1/seats/checkout` for
+the customer billing home. Offers contain only operator-published compatible
+Standard company terms; acceptance is explicit and completes through the
+existing Stripe Checkout and membership-interval billing architecture. The read
+does not authorize charges or mutate usage history. Existing agreement terms,
+prospective offers and usage collection activation remain separate. Producer
+wiring and first-versus-existing-company acceptance verification remain in progress.

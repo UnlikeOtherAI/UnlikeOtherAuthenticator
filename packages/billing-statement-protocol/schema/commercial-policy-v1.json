@@ -1789,6 +1789,470 @@
           ]
         }
       }
+    },
+    "seat_plans_read": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "product",
+            "organisation_id",
+            "schema_version",
+            "can_manage",
+            "subject",
+            "state",
+            "current_human_count",
+            "agreements",
+            "usage",
+            "offers",
+            "observed_at",
+            "valid_until"
+          ],
+          "properties": {
+            "product": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "organisation_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "schema_version": {
+              "const": 1
+            },
+            "can_manage": {
+              "const": true
+            },
+            "subject": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "team_id",
+                "user_id"
+              ],
+              "properties": {
+                "team_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "user_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                }
+              }
+            },
+            "state": {
+              "enum": [
+                "billing_region_required",
+                "catalog_required",
+                "available",
+                "agreement_exists"
+              ]
+            },
+            "current_human_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "agreements": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id",
+                  "policy",
+                  "capacity",
+                  "unit_amount_minor",
+                  "currency",
+                  "effective_at",
+                  "ends_at"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "policy": {
+                    "enum": [
+                      "automatic",
+                      "fixed"
+                    ]
+                  },
+                  "capacity": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "unit_amount_minor": {
+                    "type": "string",
+                    "pattern": "^(0|[1-9][0-9]{0,18})$"
+                  },
+                  "currency": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{3}$"
+                  },
+                  "effective_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "ends_at": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            "usage": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "currency",
+                "payment_mode",
+                "terms_collectible",
+                "effective_at",
+                "pending_effective_at"
+              ],
+              "properties": {
+                "currency": {
+                  "type": "string",
+                  "pattern": "^[A-Z]{3}$"
+                },
+                "payment_mode": {
+                  "enum": [
+                    "prepaid",
+                    "pay_as_you_go"
+                  ]
+                },
+                "terms_collectible": {
+                  "type": "boolean"
+                },
+                "effective_at": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "pending_effective_at": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            },
+            "offers": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id",
+                  "name",
+                  "unit_amount_minor",
+                  "currency",
+                  "cadence",
+                  "charge_basis",
+                  "policy",
+                  "timing",
+                  "usage_currency",
+                  "usage_payment_mode",
+                  "usage_markup_bps",
+                  "terms_version",
+                  "consent_text",
+                  "action"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "name": {
+                    "const": "Standard"
+                  },
+                  "unit_amount_minor": {
+                    "type": "string",
+                    "pattern": "^(0|[1-9][0-9]{0,18})$"
+                  },
+                  "currency": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{3}$"
+                  },
+                  "cadence": {
+                    "const": "month"
+                  },
+                  "charge_basis": {
+                    "const": "per_human"
+                  },
+                  "policy": {
+                    "const": "automatic"
+                  },
+                  "timing": {
+                    "const": "prorated"
+                  },
+                  "usage_currency": {
+                    "const": "USD"
+                  },
+                  "usage_payment_mode": {
+                    "const": "prepaid"
+                  },
+                  "usage_markup_bps": {
+                    "const": 3000
+                  },
+                  "terms_version": {
+                    "const": "company-standard-seat-v1"
+                  },
+                  "consent_text": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  },
+                  "action": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "method",
+                      "path",
+                      "body"
+                    ],
+                    "properties": {
+                      "method": {
+                        "const": "POST"
+                      },
+                      "path": {
+                        "const": "/billing/v1/seats/checkout"
+                      },
+                      "body": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "product",
+                          "organisation_id",
+                          "team_id",
+                          "user_id",
+                          "offer_id",
+                          "terms_version",
+                          "accepted"
+                        ],
+                        "properties": {
+                          "product": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 256
+                          },
+                          "organisation_id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 256
+                          },
+                          "team_id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 256
+                          },
+                          "user_id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 256
+                          },
+                          "offer_id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 256
+                          },
+                          "terms_version": {
+                            "const": "company-standard-seat-v1"
+                          },
+                          "accepted": {
+                            "const": true
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "observed_at": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "valid_until": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "product",
+            "organisation_id",
+            "schema_version",
+            "can_manage",
+            "subject"
+          ],
+          "properties": {
+            "product": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "organisation_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "schema_version": {
+              "const": 1
+            },
+            "can_manage": {
+              "const": false
+            },
+            "subject": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "team_id",
+                "user_id"
+              ],
+              "properties": {
+                "team_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "user_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "seat_checkout_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "product",
+        "organisation_id",
+        "team_id",
+        "user_id",
+        "offer_id",
+        "terms_version",
+        "accepted"
+      ],
+      "properties": {
+        "product": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "organisation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "team_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "user_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "offer_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "terms_version": {
+          "const": "company-standard-seat-v1"
+        },
+        "accepted": {
+          "const": true
+        }
+      }
+    },
+    "seat_checkout_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "product",
+        "organisation_id",
+        "schema_version",
+        "checkout_id",
+        "state",
+        "url",
+        "expires_at"
+      ],
+      "properties": {
+        "product": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "organisation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "schema_version": {
+          "const": 1
+        },
+        "checkout_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "state": {
+          "const": "open"
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://checkout\\.stripe\\.com/"
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
     }
   }
 }

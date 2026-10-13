@@ -4,6 +4,15 @@ Public, open-source-safe consumer contracts for UOA's display-ready
 `BillingStatementV1`, `BillingStatementV2`, shared `BillingCreditsV1`, recurring
 add-ons, customer billing actions, monthly billing cycles, and actual charge invoices.
 
+Package 5.11.0 adds strict company Standard seat plan read and explicit checkout
+acceptance contracts in `commercial-policy-v1.json`. Current agreement terms,
+unique human count and independently effective usage terms are separate from
+published prospective offers. A product relays the exact offered action; it
+never assigns a tariff, multiplies a seat price into an invoice total or treats a
+Checkout return as payment proof. Member reads omit all plan/usage details.
+`terms_collectible` describes effective collection terms, not available credits
+or a provider execution grant. Producers independently admit funded execution.
+
 Package 5.0.0 exposes customer charges, exact consumed credits, and monthly
 subscription/seat terms. Statement V1/V2 and cycle responses omit raw token,
 request, cache, reasoning, modality and provider-cost dimensions. Those facts

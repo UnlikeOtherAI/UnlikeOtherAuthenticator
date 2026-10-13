@@ -94,6 +94,29 @@ export const storageMandateResultV1JsonSchema = { oneOf: [
 ] } as const;
 export const storageRecoveryResultV1JsonSchema = object({ ...subject, schema_version: { const: 1 },
   expansion_id: id, attempt_id: nullable(id), state: { enum: ['payment_pending', 'paid', 'reconciliation_required'] } });
+export const seatCheckoutRequestV1JsonSchema = object({ ...human, offer_id: id,
+  terms_version: { const: 'company-standard-seat-v1' }, accepted: { const: true } });
+const currency = { type: 'string', pattern: '^[A-Z]{3}$' } as const;
+const seatManager = object({ ...subject, schema_version: { const: 1 }, can_manage: { const: true },
+  subject: object({ team_id: id, user_id: id }),
+  state: { enum: ['billing_region_required', 'catalog_required', 'available', 'agreement_exists'] },
+  current_human_count: { type: 'integer', minimum: 0 },
+  agreements: { type: 'array', items: object({ id, policy: { enum: ['automatic', 'fixed'] },
+    capacity: nullable({ type: 'integer', minimum: 0 }), unit_amount_minor: bytes, currency,
+    effective_at: timestamp, ends_at: nullableDate }) },
+  usage: object({ currency, payment_mode: { enum: ['prepaid', 'pay_as_you_go'] }, terms_collectible: boolean,
+    effective_at: nullableDate, pending_effective_at: nullableDate }),
+  offers: { type: 'array', items: object({ id, name: { const: 'Standard' }, unit_amount_minor: bytes, currency,
+    cadence: { const: 'month' }, charge_basis: { const: 'per_human' }, policy: { const: 'automatic' }, timing: { const: 'prorated' },
+    usage_currency: { const: 'USD' }, usage_payment_mode: { const: 'prepaid' }, usage_markup_bps: { const: 3000 },
+    terms_version: { const: 'company-standard-seat-v1' }, consent_text: { type: 'string', minLength: 1, maxLength: 2000 },
+    action: object({ method: { const: 'POST' }, path: { const: '/billing/v1/seats/checkout' }, body: seatCheckoutRequestV1JsonSchema }) }) },
+  observed_at: timestamp, valid_until: timestamp });
+export const seatPlansReadV1JsonSchema = { oneOf: [seatManager,
+  object({ ...subject, schema_version: { const: 1 }, can_manage: { const: false }, subject: object({ team_id: id, user_id: id }) }),
+] } as const;
+export const seatCheckoutResultV1JsonSchema = object({ ...subject, schema_version: { const: 1 }, checkout_id: id,
+  state: { const: 'open' }, url: { type: 'string', format: 'uri', pattern: '^https://checkout\\.stripe\\.com/' }, expires_at: timestamp });
 export const commercialProtocolV1JsonSchema = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',
   $id: 'https://authentication.unlikeotherai.com/schemas/commercial-policy-v1.json',
@@ -101,5 +124,7 @@ export const commercialProtocolV1JsonSchema = {
     ensure_response: storageEnsureV1JsonSchema, observation_request: storageObservationRequestV1JsonSchema,
     events: commercialEventsV1JsonSchema, acknowledgement: commercialAcknowledgementV1JsonSchema, storage_read: storageReadV1JsonSchema,
     phone_release_request: phoneReleaseRequestV1JsonSchema, phone_release_response: phoneReleaseVerdictV1JsonSchema,
-    storage_mandate_result: storageMandateResultV1JsonSchema, storage_recovery_result: storageRecoveryResultV1JsonSchema },
+    storage_mandate_result: storageMandateResultV1JsonSchema, storage_recovery_result: storageRecoveryResultV1JsonSchema,
+    seat_plans_read: seatPlansReadV1JsonSchema, seat_checkout_request: seatCheckoutRequestV1JsonSchema,
+    seat_checkout_result: seatCheckoutResultV1JsonSchema },
 } as const;

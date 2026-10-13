@@ -100,3 +100,29 @@ export type StorageMandateResultV1 = ProductCommercialSubject & { schema_version
 );
 export type StorageRecoveryResultV1 = ProductCommercialSubject & { schema_version: 1; expansion_id: string;
   attempt_id: string | null; state: 'payment_pending' | 'paid' | 'reconciliation_required' };
+
+export const BILLING_SEATS_READ_PATH = '/billing/v1/seats' as const;
+export const BILLING_SEATS_CHECKOUT_PATH = '/billing/v1/seats/checkout' as const;
+export type SeatCheckoutRequestV1 = ProductEntitlementRequest & {
+  offer_id: string; terms_version: 'company-standard-seat-v1'; accepted: true;
+};
+export type SeatPlansManagerV1 = ProductCommercialSubject & { schema_version: 1; can_manage: true;
+  subject: { team_id: string; user_id: string };
+  state: 'billing_region_required' | 'catalog_required' | 'available' | 'agreement_exists';
+  current_human_count: number;
+  agreements: Array<{ id: string; policy: 'automatic' | 'fixed'; capacity: number | null;
+    unit_amount_minor: string; currency: string; effective_at: string; ends_at: string | null }>;
+  usage: { currency: string; payment_mode: 'prepaid' | 'pay_as_you_go';
+    terms_collectible: boolean; effective_at: string | null; pending_effective_at: string | null };
+  offers: Array<{ id: string; name: 'Standard'; unit_amount_minor: string; currency: string;
+    cadence: 'month'; charge_basis: 'per_human'; policy: 'automatic'; timing: 'prorated';
+    usage_currency: 'USD'; usage_payment_mode: 'prepaid'; usage_markup_bps: 3000;
+    terms_version: 'company-standard-seat-v1'; consent_text: string;
+    action: { method: 'POST'; path: typeof BILLING_SEATS_CHECKOUT_PATH; body: SeatCheckoutRequestV1 } }>;
+  observed_at: string; valid_until: string;
+};
+export type SeatPlansReadV1 = SeatPlansManagerV1 | (ProductCommercialSubject & {
+  schema_version: 1; can_manage: false; subject: { team_id: string; user_id: string };
+});
+export type SeatCheckoutResultV1 = ProductCommercialSubject & { schema_version: 1;
+  checkout_id: string; state: 'open'; url: string; expires_at: string };
