@@ -21,6 +21,7 @@ export async function deliverCommercialEmails(deps?: { prisma?: PrismaClient;
     JOIN org_members m ON m.org_id=i.org_id AND m.status='ACTIVE' AND m.role IN('owner','admin')
     JOIN users u ON u.id=m.user_id AND u.lifecycle_status='ACTIVE'
     WHERE i.resolved_at IS NULL AND i.category IN('phone','addon')
+      AND (i.category<>'phone' OR EXISTS(SELECT 1 FROM billing_sms_number_resources r WHERE r.id=i.resource_id AND r.state<>'ended'))
       AND n.stage IN('initial','reminder','final_warning') AND n.due_at<=${now}
       AND NOT EXISTS(SELECT 1 FROM billing_commercial_acknowledgements a
         WHERE a.notification_id=n.id AND a.recipient_user_id=m.user_id AND a.channel='email')
@@ -35,6 +36,7 @@ export async function deliverCommercialEmails(deps?: { prisma?: PrismaClient;
       AND m.status='ACTIVE' AND m.role IN('owner','admin')
     JOIN users u ON u.id=m.user_id AND u.lifecycle_status='ACTIVE'
     WHERE d.accepted_at IS NULL AND d.next_attempt_at<=${now} AND i.resolved_at IS NULL
+      AND (i.category<>'phone' OR EXISTS(SELECT 1 FROM billing_sms_number_resources r WHERE r.id=i.resource_id AND r.state<>'ended'))
       AND NOT EXISTS(SELECT 1 FROM billing_commercial_acknowledgements a
         WHERE a.notification_id=n.id AND a.recipient_user_id=m.user_id AND a.channel='email')
     ORDER BY d.next_attempt_at,d.id LIMIT 100`;
@@ -74,6 +76,7 @@ export async function deliverCommercialEmails(deps?: { prisma?: PrismaClient;
         const origin = [...origins][0];
         if (origins.size !== 1 || !origin) throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_RECOVERY_ORIGIN_UNRESOLVED');
         const resource = incident.resourceId ? await tx.billingSmsNumberResource.findUnique({ where: { id: incident.resourceId } }) : null;
+        if (incident.category === 'phone' && (!resource || resource.state === 'ended')) return;
         const addon = incident.addonSubscriptionId ? await tx.billingRecurringAddonSubscription.findUnique({
           where: { id: incident.addonSubscriptionId }, include: { offer: true } }) : null;
         const subject = resource ? `Phone number ${resource.phoneNumber}` : addon?.offer.name ?? `${service.name} add-on`;
@@ -84,8 +87,8 @@ export async function deliverCommercialEmails(deps?: { prisma?: PrismaClient;
           subject: `${stage.stage === 'final_warning' ? 'Final payment warning' : 'Payment needs attention'}: ${subject}`,
           text: `${subject} recurring payment failed. Recover payment: ${recovery}\n` +
             (stage.stage === 'final_warning'
-              ? `Payment is due by ${new Date(Math.max(incident.graceEndsAt.getTime(), now.getTime() + 86_400_000)).toISOString()}. ` +
-                'You have at least 24 hours after this final warning is delivered before cancellation.'
+              ? `Original payment deadline: ${incident.graceEndsAt.toISOString()}. ` +
+                'Your service remains available for at least 24 hours after this final warning is delivered. Recover payment now to keep it.'
               : `Recover payment by ${incident.graceEndsAt.toISOString()} to keep this service.`) });
         const acceptedAt = deps?.now?.() ?? new Date();
         await tx.billingCommercialAcknowledgement.create({ data: { ...key,

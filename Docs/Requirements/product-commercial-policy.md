@@ -325,3 +325,9 @@ older operator-assignment-only company source CHECK. The corrective source rule
 permits an unassigned company subscription only through its exact accepted
 published-offer Checkout, verified by a database trigger; ordinary unassigned
 company subscriptions remain forbidden. Acceptance tests are being rerun.
+
+Provider-ended phone resources retain unpaid financial history but do not enqueue
+further cancellation warnings or occupy event/email work budgets. Final email
+copy states the preserved original deadline and the actual relative24h delivery
+safeguard; it does not promise an absolute deadline computed before SMTP accepts
+the message. Fresh receipt proof still enforces the true earliest release time.

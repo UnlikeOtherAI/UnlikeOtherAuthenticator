@@ -25,6 +25,8 @@ export async function listCommercialEvents(input: { request: ProductCommercialSu
       WHERE i.service_id=${input.credential.service.id} AND i.org_id=${input.request.organisation_id}
         AND n.due_at<=${now} AND ((i.resolved_at IS NULL AND n.stage<>'resolved')
           OR (i.resolved_at IS NOT NULL AND n.stage='resolved'))
+        AND (i.category<>'phone' OR n.stage='resolved' OR EXISTS(
+          SELECT 1 FROM billing_sms_number_resources r WHERE r.id=i.resource_id AND r.state<>'ended'))
         AND (
           EXISTS(SELECT 1 FROM org_members m JOIN users u ON u.id=m.user_id
             WHERE m.org_id=i.org_id AND m.status='ACTIVE' AND m.role IN('owner','admin') AND u.lifecycle_status='ACTIVE'
