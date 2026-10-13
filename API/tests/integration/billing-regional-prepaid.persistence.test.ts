@@ -63,8 +63,10 @@ describe.skipIf(!process.env.DATABASE_URL)('regional seats and immutable USD pre
       name: 'Standard', mode: 'STANDARD', collectionMode: 'STRIPE', usagePaymentMode: 'PREPAID',
       monthlyChargeBasis: 'PER_SEAT', seatPolicy: 'AUTOMATIC', seatChargeTiming: 'PRORATED',
       monthlyAmountMinor: amount, currency, usageCurrency: 'USD', markupBps: 3000 } });
+    const assignment = await db.prisma.billingTariffAssignment.create({ data: { serviceId, orgId: org.id,
+      teamId: null, scope: 'ORGANISATION', scopeKey: org.id, tariffId: tariff.id } });
     await db.prisma.billingTariffTermEvent.create({ data: { serviceId, source: 'ORGANISATION', scopeKey: org.id,
-      effectiveFromMonth: '2026-09', tariffId: tariff.id, reason: 'Synthetic accepted regional terms' } });
+      effectiveFromMonth: '2026-09', tariffId: tariff.id, assignmentId: assignment.id, reason: 'Synthetic accepted regional terms' } });
     const customer = await db.prisma.billingStripeCustomer.create({ data: { accountId, orgId: org.id, teamId: null,
       scope: 'ORGANISATION', scopeKey: org.id, stripeCustomerId: `cus_${currency}` } });
     const credit = await db.prisma.billingCreditAccount.create({ data: { accountId, customerId: customer.id, orgId: org.id,
@@ -75,11 +77,12 @@ describe.skipIf(!process.env.DATABASE_URL)('regional seats and immutable USD pre
       await tx.$executeRaw(Prisma.sql`UPDATE billing_credit_accounts SET balance_microcredits=100000000 WHERE id=${credit.id}`);
     });
     const checkout = await db.prisma.billingStripeCheckoutSession.create({ data: { accountId, appKeyId, customerId: customer.id,
-      serviceId, tariffId: tariff.id, tariffSource: 'ORGANISATION', orgId: org.id, teamId: null, scope: 'ORGANISATION', scopeKey: org.id,
+      serviceId, tariffId: tariff.id, tariffSource: 'ORGANISATION', tariffAssignmentId: assignment.id,
+      orgId: org.id, teamId: null, scope: 'ORGANISATION', scopeKey: org.id,
       actorJti: `accept-${currency}`, requestedByUserId: user.id, successUrlDigest: 'a'.repeat(64), cancelUrlDigest: 'b'.repeat(64),
       leaseExpiresAt: endsAt } });
     const subscription = await db.prisma.billingStripeSubscription.create({ data: { accountId, checkoutId: checkout.id,
-      customerId: customer.id, serviceId, tariffId: tariff.id, tariffSource: 'ORGANISATION', orgId: org.id,
+      customerId: customer.id, serviceId, tariffId: tariff.id, tariffSource: 'ORGANISATION', tariffAssignmentId: assignment.id, orgId: org.id,
       teamId: null, scope: 'ORGANISATION', scopeKey: org.id, stripeSubscriptionId: `sub_${currency}`,
       stripeUsageItemId: `si_${currency}`, status: 'active', livemode: false, currentPeriodStart: startsAt, currentPeriodEnd: endsAt } });
     await db.prisma.$transaction((tx) => syncStripeSeatActivation(tx, { row: subscription, tariff, checkoutFixedSeatQuantity: null,
