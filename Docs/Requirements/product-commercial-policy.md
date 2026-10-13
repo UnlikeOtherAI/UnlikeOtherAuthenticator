@@ -361,3 +361,8 @@ usage liability without covering debit evidence holds for reconciliation rather
 than being collected through the new agreement or re-rated. Historical subscriptions
 retain their existing frozen source behavior. The mixed-terms financial regression
 is being added before this separation is considered verified.
+
+The real regional financial test now adds public EUR seats over a previously
+accepted, independently funded zero-markup USD prepaid usage agreement. Its
+receipt must debit10 credits, retain90, and close/invoice only the exact EUR seat
+amount; selecting Standard must not turn the older debit into13 credits.

@@ -253,6 +253,8 @@ export async function prepareBillingCycleClose(
       team_discovery: discovery,
       quote: privateMonthlyQuoteEvidence(quote), ledger_snapshots: ledgerSnapshots,
       paid_receipt_proofs: [...proofs.values()],
+      usage_terms: [...usageTariffs.entries()].map(([teamId, row]) => ({ team_id: teamId, tariff_id: row.id,
+        usage_currency: row.usageCurrency, payment_mode: row.usagePaymentMode, markup_bps: row.markupBps })),
       wallet_boundary: walletBoundary,
       credit_evidence: creditEvidence, credit_fingerprint: creditFingerprint };
     const digest = billingCycleSnapshotDigest(publicSnapshot, privateEvidence);
