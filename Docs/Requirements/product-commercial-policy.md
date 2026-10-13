@@ -233,6 +233,14 @@ admits EUR/GBP/USD only when account and currency match the frozen subscription'
 tariff. It retains all original amount/state/evidence invariants and changes
 no wallet, provider receipt, top-up or previous invoice currency.
 
+For an explicitly enrolled Nessie company, an existing FREE or collection-NONE
+usage default cannot authorize a paid provider dispatch. UOA refuses that funded
+admission with `BILLING_PRODUCT_USAGE_FUNDING_NOT_ACCEPTED` until independently
+accepted collecting usage terms are effective. Trial/full-history access does
+not bypass this funding check. Existing collecting manual/at-cost arrangements
+retain their authority; product-local and independently funded providers do not
+derive eligibility from this UOA-funded admission.
+
 At `ef48dc0e`, all three regional financial database cases passed on the dedicated
 Fedora PostgreSQL cluster through Maxis, as did four authority/RLS cases including
 live actor key/JWK rotation. API typecheck passed. Actual UTC observed roster

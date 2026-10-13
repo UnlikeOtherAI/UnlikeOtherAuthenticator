@@ -1,7 +1,7 @@
 import { billingReservedMicrocredits } from './billing-credit-holds.service.js';
 import {
   BillingCreditEntryDirection, BillingCreditEntryKind, BillingPrepaidReservationStatus,
-  BillingTariffMode,
+  BillingTariffMode, BillingCollectionMode,
   BillingUsagePaymentMode, Prisma, type PrismaClient,
 } from '@prisma/client';
 
@@ -185,6 +185,13 @@ export async function reservePrepaidDispatch(
       serviceId: key.serviceId, organisationId: input.organisationId,
       teamId: input.teamId, billingMonth,
     })).tariff;
+    if (key.service.identifier === 'nessie' && (tariff.mode === BillingTariffMode.FREE ||
+      tariff.collectionMode === BillingCollectionMode.NONE)) {
+      const enrolled = await tx.billingProductEnrollment.findUnique({ where: { serviceId_orgId: {
+        serviceId: key.serviceId, orgId: input.organisationId,
+      } } });
+      if (enrolled?.active) throw new AppError('BAD_REQUEST', 409, 'BILLING_PRODUCT_USAGE_FUNDING_NOT_ACCEPTED');
+    }
     if (tariff.usagePaymentMode === BillingUsagePaymentMode.PAY_AS_YOU_GO ||
       tariff.mode === BillingTariffMode.FREE) {
       await reserveBudgetDispatch(tx, { dispatchId: input.dispatchId,
