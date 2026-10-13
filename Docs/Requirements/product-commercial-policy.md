@@ -285,3 +285,19 @@ existing Stripe Checkout and membership-interval billing architecture. The read
 does not authorize charges or mutate usage history. Existing agreement terms,
 prospective offers and usage collection activation remain separate. Producer
 wiring and first-versus-existing-company acceptance verification remain in progress.
+
+Standard publication is reachable in the operator's Nessie Company policy tab,
+beside storage price binding. Only exact requested regional automatic/prorated
+PREPAID tariffs with USD usage valuation and30% markup pass both service and
+database publication guards. Withdrawal affects future selections, never frozen
+purchases. `/billing/v1/seats` separates current agreements, unique humans and
+usage funding dates from public offers; `/seats/checkout` records explicit
+subject-bound acceptance and reuses the base Checkout request constructor.
+Active, exactly verified Stripe subscription projection commits a single usage
+term event. Companies with prior company/team acceptance, dispatch, liability,
+cycle, contract or completed checkout retain usage terms until next UTC month.
+Otherwise the first term starts at observed acceptance; prepaid admission resolves
+that dispatch's timestamp so an older request cannot be re-rated. The prospective
+activation evidence is immutable and shared company budget locking prevents new
+admission racing the first-acceptance decision. New producer/publication flows and
+the three database regressions are coded; execution and rendered checks are pending.

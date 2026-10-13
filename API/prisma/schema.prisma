@@ -1303,6 +1303,7 @@ model Organisation {
   billingOrgResponsibility          BillingOrgResponsibility?
   billingSeatSubscriptions          BillingSeatSubscription[]
   customerBillingCycles             BillingCustomerCycle[]
+  seatOffers                        BillingSeatOffer[]
 
   @@unique([domain, slug])
   @@index([domain])
@@ -1841,6 +1842,7 @@ model BillingTariff {
   prepaidReservations  BillingPrepaidReservation[]
   contractServiceTerms BillingContractServiceTerm[]
   seatSubscriptions    BillingSeatSubscription[]
+  seatOffer            BillingSeatOffer?
 
   @@unique([serviceId, key, version])
   @@index([serviceId, isDefault])
@@ -1856,6 +1858,7 @@ model BillingTariffTermEvent {
   source             BillingTariffSource
   scopeKey           String              @map("scope_key") @db.VarChar(520)
   effectiveFromMonth String              @map("effective_from_month") @db.Char(7)
+  prospectiveFrom    DateTime?           @map("prospective_from")
   tariffId           String?             @map("tariff_id")
   assignmentId       String?             @map("assignment_id")
   reason             String              @db.VarChar(60)
@@ -1864,6 +1867,7 @@ model BillingTariffTermEvent {
 
   service BillingService @relation(fields: [serviceId], references: [id], onDelete: Restrict)
   tariff  BillingTariff? @relation(fields: [tariffId], references: [id], onDelete: Restrict)
+  acceptedSeatCheckout BillingStripeCheckoutSession?
 
   @@index([serviceId, source, scopeKey, effectiveFromMonth, createdAt])
   @@map("billing_tariff_term_events")
@@ -2258,6 +2262,10 @@ model BillingStripeCheckoutSession {
   tariffId                String                 @map("tariff_id")
   tariffSource            BillingTariffSource    @map("tariff_source")
   tariffAssignmentId      String?                @map("tariff_assignment_id")
+  seatOfferId             String?                @map("seat_offer_id")
+  seatConsentTerms        Json?                  @map("seat_consent_terms")
+  usageTermsEffectiveAt   DateTime?              @map("usage_terms_effective_at")
+  usageTermEventId        String?                @unique @map("usage_term_event_id")
   orgId                   String                 @map("org_id")
   teamId                  String?                @map("team_id")
   scope                   BillingAssignmentScope
@@ -2285,6 +2293,8 @@ model BillingStripeCheckoutSession {
   team         Team?                      @relation(fields: [teamId], references: [id], onDelete: Restrict)
   requestedBy  User                       @relation(fields: [requestedByUserId], references: [id], onDelete: Restrict)
   subscription BillingStripeSubscription?
+  seatOffer    BillingSeatOffer? @relation(fields: [seatOfferId], references: [id], onDelete: Restrict)
+  usageTermEvent BillingTariffTermEvent? @relation(fields: [usageTermEventId], references: [id], onDelete: Restrict)
 
   @@unique([accountId, stripeCheckoutSessionId])
   @@index([accountId, appKeyId, actorJti])
@@ -2295,6 +2305,20 @@ model BillingStripeCheckoutSession {
   @@index([teamId])
   @@index([requestedByUserId])
   @@map("billing_stripe_checkout_sessions")
+}
+
+model BillingSeatOffer {
+  id String @id @default(cuid())
+  serviceId String @map("service_id")
+  tariffId String @unique @map("tariff_id")
+  publishedByEmail String @map("published_by_email") @db.VarChar(200)
+  publishedAt DateTime @default(now()) @map("published_at")
+  withdrawnAt DateTime? @map("withdrawn_at")
+  service BillingService @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  tariff BillingTariff @relation(fields: [tariffId], references: [id], onDelete: Restrict)
+  checkouts BillingStripeCheckoutSession[]
+  @@index([serviceId, withdrawnAt])
+  @@map("billing_seat_offers")
 }
 
 model BillingStripeSubscription {

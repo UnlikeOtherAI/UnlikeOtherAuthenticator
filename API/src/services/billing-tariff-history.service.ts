@@ -62,6 +62,7 @@ export async function resolveBillingTariffForMonth(
     organisationId: string;
     teamId: string;
     billingMonth: string;
+    at?: Date;
   },
 ): Promise<EffectiveTariff> {
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(params.billingMonth)) {
@@ -136,6 +137,7 @@ export async function resolveBillingTariffForMonth(
         source: choice.source,
         scopeKey: choice.scopeKey,
         effectiveFromMonth: { lte: params.billingMonth },
+        ...(params.at ? { OR: [{ prospectiveFrom: null }, { prospectiveFrom: { lte: params.at } }] } : {}),
       },
       orderBy: [{ effectiveFromMonth: 'desc' }, { sequence: 'desc' }],
       include: { tariff: true },

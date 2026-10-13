@@ -108,6 +108,7 @@ export function assertCheckoutBinding(
     successUrlDigest: string;
     cancelUrlDigest: string;
     fixedSeatQuantity: number | null;
+    seatOfferId?: string | null;
   },
 ): void {
   if (
@@ -125,6 +126,7 @@ export function assertCheckoutBinding(
     checkout.successUrlDigest !== expected.successUrlDigest ||
     checkout.cancelUrlDigest !== expected.cancelUrlDigest ||
     (checkout.fixedSeatQuantity ?? null) !== expected.fixedSeatQuantity
+    || (checkout.seatOfferId ?? null) !== (expected.seatOfferId ?? null)
   ) {
     throw new AppError('BAD_REQUEST', 409, 'STRIPE_CHECKOUT_SCOPE_CONFLICT');
   }

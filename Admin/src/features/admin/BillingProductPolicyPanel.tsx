@@ -10,6 +10,7 @@ import { ApiRequestError } from '../../services/api-client';
 import { useOrganisationsQuery } from './admin-queries';
 import { useProductPolicies, useSaveProductPolicy } from './billing-commercial-queries';
 import { BillingStorageCatalogPanel } from './BillingStorageCatalogPanel';
+import { BillingSeatOffersPanel } from './BillingSeatOffersPanel';
 
 const schema = z.object({ organisation: z.string().min(1, 'Select a company.'),
   source: z.string().min(1, 'Enter the registered source domain.'), timezone: z.string().min(1),
@@ -73,5 +74,6 @@ export function BillingProductPolicyPanel({ service }: { service: BillingService
       {list.data?.length === 0 ? <tr><Td colSpan={6}>No companies enrolled for this product.</Td></tr> : null}
     </DataTable>
     {service.identifier === 'nessie' ? <BillingStorageCatalogPanel serviceId={service.id} /> : null}
+    {service.identifier === 'nessie' ? <BillingSeatOffersPanel service={service} /> : null}
   </div>;
 }

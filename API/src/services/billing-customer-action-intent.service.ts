@@ -14,6 +14,7 @@ import type { BillingActor } from './billing-actor.service.js';
 export const BILLING_CUSTOMER_ACTION = {
   STORAGE_MANDATE_SETUP: 'storage_mandate_setup',
   STORAGE_RECOVERY: 'storage_recovery',
+  SEAT_CHECKOUT: 'company_seat_checkout',
   STRIPE_CHECKOUT: 'stripe_checkout',
   STRIPE_PORTAL: 'stripe_portal',
   SUBSCRIPTION_CANCEL: 'subscription_cancel',

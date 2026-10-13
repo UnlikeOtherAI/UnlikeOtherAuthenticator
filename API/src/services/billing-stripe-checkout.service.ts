@@ -1,5 +1,5 @@
 import type { BillingCustomerLocale } from '../contracts/billing-statement-v1.js';
-import { stripeCheckoutLocale } from './billing-stripe-locale.js';
+import { baseStripeCheckoutRequest } from './billing-stripe-checkout-request.service.js';
 import { requireIdentityEmail } from './entity-lifecycle.service.js';
 import {
   BillingCollectionMode,
@@ -8,6 +8,7 @@ import {
   BillingTariffMode,
   MembershipStatus,
   type PrismaClient,
+  type Prisma,
 } from '@prisma/client';
 import { createHash } from 'node:crypto';
 import type Stripe from 'stripe';
@@ -63,10 +64,6 @@ function digestUrl(value: string): string {
   return createHash('sha256').update(value).digest('hex');
 }
 
-function nextUtcMonthStart(now: Date): number {
-  return Math.floor(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1) / 1000);
-}
-
 function externalId(value: string | { id: string } | null): string | null {
   if (!value) return null;
   return typeof value === 'string' ? value : value.id;
@@ -95,6 +92,8 @@ export async function createStripeCheckoutSession(
     credential: VerifiedBillingAppKey;
     endpoint: BillingActorEndpoint;
     locale?: BillingCustomerLocale;
+    selectedSeatOfferId?: string;
+    selectedSeatConsent?: Prisma.InputJsonObject;
   },
   deps?: {
     prisma?: PrismaClient;
@@ -311,6 +310,7 @@ export async function createStripeCheckoutSession(
       successUrlDigest,
       cancelUrlDigest,
       fixedSeatQuantity,
+      seatOfferId: params.selectedSeatOfferId,
     });
     const recovered = await reconcileStripeCheckoutLease(
       { checkout, customerStripeId: customer.stripeCustomerId, account, now },
@@ -330,6 +330,8 @@ export async function createStripeCheckoutSession(
       tariffId: details.tariff.id,
       tariffSource: tariffSource(payload),
       tariffAssignmentId: payload.assignment.id,
+      seatOfferId: params.selectedSeatOfferId ?? null,
+      ...(params.selectedSeatConsent ? { seatConsentTerms: params.selectedSeatConsent } : {}),
       orgId: payload.subject.organisation_id,
       teamId: selectedScope.teamId,
       scope: selectedScope.scope,
@@ -367,6 +369,7 @@ export async function createStripeCheckoutSession(
           successUrlDigest,
           cancelUrlDigest,
           fixedSeatQuantity,
+          seatOfferId: params.selectedSeatOfferId,
         });
         const recovered = await reconcileStripeCheckoutLease(
           { checkout, customerStripeId: customer.stripeCustomerId, account, now },
@@ -399,38 +402,9 @@ export async function createStripeCheckoutSession(
   }
 
   const session = await stripe.checkout.sessions.create(
-    {
-      mode: 'subscription',
-      ...stripeCheckoutLocale(checkout.checkoutLocale),
-      customer: customer.stripeCustomerId,
-      client_reference_id: checkout.id,
-      success_url: successUrl,
-      cancel_url: cancelUrl,
-      allow_promotion_codes: false,
-      billing_address_collection: 'required',
-      payment_method_collection: 'always',
-      line_items: [
-        ...(details.tariff.monthlyChargeBasis !== BillingMonthlyChargeBasis.PER_SEAT &&
-          tariffPrice.stripeMonthlyPriceId
-          ? [{ price: tariffPrice.stripeMonthlyPriceId, quantity: 1 }]
-          : []),
-        { price: catalog.stripeUsagePriceId },
-      ],
-      metadata: { uoa_checkout_id: checkout.id },
-      subscription_data: {
-        billing_cycle_anchor: nextUtcMonthStart(now),
-        proration_behavior: 'none',
-        metadata: {
-          uoa_checkout_id: checkout.id,
-          uoa_service_id: params.credential.service.id,
-          uoa_tariff_id: details.tariff.id,
-          uoa_scope_key: selectedScope.scopeKey,
-          uoa_stripe_account_id: account.stripeAccountId,
-          uoa_stripe_mode: account.livemode ? 'live' : 'test',
-          ...(fixedSeatQuantity === null ? {} : { uoa_fixed_seat_quantity: String(fixedSeatQuantity) }),
-        },
-      },
-    },
+    baseStripeCheckoutRequest({ checkout, tariff: details.tariff, account, customerId: customer.stripeCustomerId,
+      successUrl, cancelUrl, monthlyPriceId: tariffPrice.stripeMonthlyPriceId, usagePriceId: catalog.stripeUsagePriceId,
+      scopeKey: selectedScope.scopeKey, now }),
     { idempotencyKey: checkoutIdempotencyKey(account, checkout.id) },
   );
   assertStripeObjectLivemode(session, account.livemode);

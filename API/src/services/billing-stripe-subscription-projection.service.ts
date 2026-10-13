@@ -12,6 +12,7 @@ import {
 } from './billing-stripe-webhook-utils.service.js';
 import { syncStripeSeatActivation } from './billing-stripe-seat-activation.service.js';
 import { observedBillingTime } from './billing-seat-observed-time.service.js';
+import { activateAcceptedSeatUsage } from './billing-seat-acceptance.service.js';
 
 function subscriptionPeriod(subscription: Stripe.Subscription): {
   start: Date | null;
@@ -209,9 +210,11 @@ export async function syncBaseStripeSubscription(
       ...mutable,
     },
   });
+  const observedAt = await observedBillingTime(tx);
+  if (subscription.status === 'active') await activateAcceptedSeatUsage(tx, checkout, observedAt);
   await syncStripeSeatActivation(tx, { row, tariff: checkout.tariff,
     checkoutFixedSeatQuantity: checkout.fixedSeatQuantity ?? null,
-    subscription, observedAt: await observedBillingTime(tx) });
+    subscription, observedAt });
 }
 
 export async function terminalizeMissingBaseStripeSubscription(

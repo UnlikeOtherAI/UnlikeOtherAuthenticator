@@ -1,6 +1,7 @@
 export const llmCommercialPolicyMarkdown = `
 ## Company commercial policy
 UOA owns identity, invitations, membership, subscriptions, prices, capacity and payment evidence.
+Read /billing/v1/seats with lifecycle key and exact actor to show current company agreements, separately effective usage terms and only compatible operator-published Standard offers. Relay the exact accepted offer action to /billing/v1/seats/checkout; never assign a tariff or infer paid standing from redirect. Completion establishes prospective seats. Existing accepted/metered usage changes next UTC month; genuinely first usage terms start at observed acceptance and cannot authorize an earlier dispatch timestamp. Both responses are private, no-store.
 Tariff usage_currency values provider/credit costs independently of monthly_subscription.currency. New regional Standard versions explicitly retain USD prepaid usage. Historical currency, balances and invoices never change; cross-currency collectible/uncovered usage requires reconciliation, never relabelling or guessed FX.
 Use POST /billing/v1/product-entitlement with the ENTITLEMENT key and a fresh exact-endpoint RS256 actor.
 Members receive only functional access/history/admission/storage facts. Company managers additionally receive commercial standing/deadlines.

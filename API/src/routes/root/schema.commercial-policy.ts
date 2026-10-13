@@ -4,6 +4,15 @@ const human = { ...subject, team_id: 'current UOA team in company', user_id: 'cu
 const worker = 'COMMERCIAL_WORKER app key, no actor; exact registered source and company enrollment checked online';
 const lifecycle = 'CUSTOMER_LIFECYCLE app key and endpoint-audience RS256 actor; current company owner/admin for changes';
 export const commercialPolicyEndpoints: EndpointSchema[] = [
+  { method: 'GET', path: '/internal/admin/billing/services/:serviceId/seat-offers', description: 'Read operator-published immutable Standard company plans', auth: 'current admin-domain SUPERUSER' },
+  { method: 'POST', path: '/internal/admin/billing/services/:serviceId/seat-offers', description: 'Publish compatible Standard seats without assigning companies or changing defaults',
+    auth: 'current admin-domain SUPERUSER', body: { tariff_id: 'immutable automatic/prorated regional seat tariff, prepaid USD usage and30% markup' } },
+  { method: 'POST', path: '/internal/admin/billing/services/:serviceId/seat-offers/:offerId/withdraw', description: 'Withdraw future public selections without changing accepted agreements', auth: 'current admin-domain SUPERUSER' },
+  { method: 'POST', path: '/billing/v1/seats', description: 'Current company agreements, independent usage terms and compatible published Standard offers',
+    auth: lifecycle, body: human, response: { contract: 'commercial-policy-v1.json seat_plans_read; member-safe omission of plan details' } },
+  { method: 'POST', path: '/billing/v1/seats/checkout', description: 'Explicit prospective Standard company seat acceptance via existing Checkout',
+    auth: lifecycle, body: { ...human, offer_id: 'exact published offer', terms_version: 'company-standard-seat-v1', accepted: 'true' },
+    response: { contract: 'commercial-policy-v1.json seat_checkout_result; verified hosted URL, never paid proof' } },
   { method: 'GET', path: '/internal/admin/billing/services/:serviceId/storage-catalogs', description: 'Read immutable verified storage price bindings', auth: 'current admin-domain SUPERUSER' },
   { method: 'POST', path: '/internal/admin/billing/services/:serviceId/storage-catalogs', description: 'Verify and bind existing exact storage price on configured account/mode',
     auth: 'current admin-domain SUPERUSER', body: { currency: 'EUR | GBP | USD', price_id: 'existing immutable licensed monthly whole-TB price' },

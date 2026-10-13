@@ -181,9 +181,10 @@ export async function reservePrepaidDispatch(
     if (Math.abs(now.getTime() - dispatchStartedAt.getTime()) > 5 * 60_000) {
       throw new AppError('BAD_REQUEST', 400, 'PREPAID_DISPATCH_TIME_INVALID');
     }
+    if (key.service.identifier === 'nessie') await lockBudgetOrganisation(tx, input.organisationId);
     const tariff = (await resolveBillingTariffForMonth(tx, {
       serviceId: key.serviceId, organisationId: input.organisationId,
-      teamId: input.teamId, billingMonth,
+      teamId: input.teamId, billingMonth, at: dispatchStartedAt,
     })).tariff;
     if (key.service.identifier === 'nessie' && (tariff.mode === BillingTariffMode.FREE ||
       tariff.collectionMode === BillingCollectionMode.NONE)) {
@@ -284,7 +285,7 @@ export async function reservePrepaidDispatch(
     }
     const tariff = (await resolveBillingTariffForMonth(tx, {
       serviceId: key.serviceId, organisationId: input.organisationId,
-      teamId: input.teamId, billingMonth,
+      teamId: input.teamId, billingMonth, at: dispatchStartedAt,
     })).tariff;
     if (tariff.usagePaymentMode !== BillingUsagePaymentMode.PREPAID ||
       tariff.mode === BillingTariffMode.FREE ||

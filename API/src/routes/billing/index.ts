@@ -28,11 +28,13 @@ import { registerSmsReservationRoutes } from './sms-reservations.js';
 import { registerSmsInboundRoutes } from './sms-inbound.js';
 import { registerCommercialWorkerRoutes } from './commercial-worker.js';
 import { registerStorageRoutes } from './storage.js';
+import { registerSeatPlanRoutes } from './seats.js';
 
 export function registerBillingRoutes(app: FastifyInstance): void {
   registerProductEntitlementRoutes(app);
   registerCommercialWorkerRoutes(app);
   registerStorageRoutes(app);
+  registerSeatPlanRoutes(app);
   registerSmsQuoteRoutes(app);
   registerSmsNumberRoutes(app);
   registerSmsGrantRoutes(app);

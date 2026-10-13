@@ -128,7 +128,7 @@ export function customerBillingTariff(
   };
 }
 
-function payloadFor(params: {
+export function effectiveTariffPayload(params: {
   request: EffectiveTariffRequest;
   credential: VerifiedBillingAppKey;
   tariff: TariffRow;
@@ -284,7 +284,7 @@ export async function resolveEffectiveTariffContext(
   const tariff = effective.tariff;
 
   const now = deps?.now?.() ?? Math.floor(Date.now() / 1000);
-  const payload = payloadFor({
+  const payload = effectiveTariffPayload({
     request,
     credential: params.credential,
     tariff,
