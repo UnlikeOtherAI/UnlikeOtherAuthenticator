@@ -37,9 +37,9 @@ export async function getProductEntitlement(input: {
       ...(actor ? { tokenVersion: actor.tv } : {}),
     }) : false;
     const now = deps?.now?.() ?? new Date();
-    const [policy, incident, observation, subscriptions] = await Promise.all([
+    const [policy, incidents, observation, subscriptions] = await Promise.all([
       productPolicyAt(tx, enrollment.id, now),
-      tx.billingCommercialIncident.findFirst({ where: { serviceId: credential.service.id,
+      tx.billingCommercialIncident.findMany({ where: { serviceId: credential.service.id,
         orgId: request.organisation_id, category: { in: ['seat', 'storage'] }, resolvedAt: null },
         orderBy: [{ graceEndsAt: 'asc' }, { failedAt: 'asc' }, { id: 'asc' }] }),
       tx.billingStorageObservation.findFirst({ where: { serviceId: credential.service.id,
@@ -50,10 +50,15 @@ export async function getProductEntitlement(input: {
       }, include: { capacityRevisions: { where: { effectiveAt: { lte: now } },
         orderBy: { effectiveAt: 'desc' }, take: 1 }, stripeSubscription: true } }),
     ]);
-    const activeSeats = subscriptions.filter((row) => !row.stripeSubscription ||
-      row.stripeSubscription.status === 'active' ||
-      (row.stripeSubscription.status === 'past_due' && incident?.category === 'seat' &&
-        incident.baseSubscriptionId === row.stripeSubscription.id));
+    const incident = incidents[0];
+    const activeSeats = subscriptions.filter((row) => {
+      const source = row.stripeSubscription;
+      if (!source || source.status === 'active') return true;
+      if (!['past_due', 'unpaid'].includes(source.status)) return false;
+      const debt = incidents.find((item) => item.category === 'seat' && item.baseSubscriptionId === source.id);
+      if (!debt) throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_SEAT_PAYMENT_RECONCILIATION_REQUIRED');
+      return debt.graceEndsAt > now;
+    });
     const trial = Boolean(policy?.trialStartsAt && policy.trialStartsAt <= now && policy.trialEndsAt && policy.trialEndsAt > now);
     const privatePlan = Boolean(await privateCompanyPolicy(tx, credential.service.id, request.organisation_id, now));
     const restricted = Boolean(incident && incident.graceEndsAt <= now);

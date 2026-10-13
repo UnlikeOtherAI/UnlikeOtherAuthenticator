@@ -270,3 +270,10 @@ Locale and complete checkout text are frozen in the mandate before external
 creation; replay does not substitute a later request's language into the same
 Stripe idempotency key. Localized text never changes price, cycle or authority.
 Missing frozen consent evidence holds setup for reconciliation.
+
+Seat payment status is matched against every unresolved exact seat liability,
+while the earliest unresolved company deadline still controls restrictions.
+An earlier storage debt cannot remove another seat agreement's valid grace.
+`past_due`/`unpaid` without original bound seat failure evidence returns a
+reconciliation error: consumers preserve existing reads and hold allocations,
+rather than inventing a fresh deadline or granting indefinite paid standing.
