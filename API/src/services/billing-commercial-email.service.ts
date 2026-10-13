@@ -71,8 +71,8 @@ export async function deliverCommercialEmails(deps?: { prisma?: PrismaClient;
           const issuer = new URL(key.actorIssuer);
           return `${issuer.host}${issuer.pathname.replace(/\/$/, '')}` === enrollment.sourceDomain;
         }).flatMap((key) => key.checkoutReturnOrigins));
-        if (origins.size !== 1) throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_RECOVERY_ORIGIN_UNRESOLVED');
-        const origin = [...origins][0]!;
+        const origin = [...origins][0];
+        if (origins.size !== 1 || !origin) throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_RECOVERY_ORIGIN_UNRESOLVED');
         const resource = incident.resourceId ? await tx.billingSmsNumberResource.findUnique({ where: { id: incident.resourceId } }) : null;
         const addon = incident.addonSubscriptionId ? await tx.billingRecurringAddonSubscription.findUnique({
           where: { id: incident.addonSubscriptionId }, include: { offer: true } }) : null;

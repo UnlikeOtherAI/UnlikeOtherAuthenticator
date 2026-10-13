@@ -85,9 +85,11 @@ export async function prepareCommercialPayment(event: Stripe.Event, account: Str
     throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_PAYMENT_SOURCE_DRIFT');
   }
   if (!subscriptionId && !closing) return null;
-  const local = await prisma.billingStripeSubscription.findUnique({ where: closing
-    ? { id: closing.subscriptionId }
-    : { accountId_stripeSubscriptionId: { accountId: account.id, stripeSubscriptionId: subscriptionId! } },
+  let source: Prisma.BillingStripeSubscriptionWhereUniqueInput;
+  if (closing) source = { id: closing.subscriptionId };
+  else if (subscriptionId) source = { accountId_stripeSubscriptionId: { accountId: account.id, stripeSubscriptionId: subscriptionId } };
+  else return null;
+  const local = await prisma.billingStripeSubscription.findUnique({ where: source,
     include: { customer: true, tariff: true } });
   if (!local || local.scope !== 'ORGANISATION') return null;
   if (local.customer.stripeCustomerId !== stripeExternalId(invoice.customer) ||

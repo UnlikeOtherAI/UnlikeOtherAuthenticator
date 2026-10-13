@@ -105,7 +105,8 @@ export async function phoneWarningsAccepted(tx: Prisma.TransactionClient, incide
     ['alert', 'personal_assistant', 'email'].every((channel) => receipts.some((receipt) =>
       receipt.notificationId === stage.id && receipt.recipientUserId === recipient.userId && receipt.channel === channel))));
   if (!accepted) return false;
-  const final = stages.find((stage) => stage.stage === 'final_warning')!;
+  const final = stages.find((stage) => stage.stage === 'final_warning');
+  if (!final) return false;
   const lastFinalAcceptance = Math.max(...receipts.filter((receipt) => receipt.notificationId === final.id)
     .map((receipt) => receipt.acknowledgedAt.getTime()));
   return lastFinalAcceptance + 86_400_000 <= now.getTime();

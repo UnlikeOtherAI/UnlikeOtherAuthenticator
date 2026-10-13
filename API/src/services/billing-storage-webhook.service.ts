@@ -76,7 +76,8 @@ export async function applyStorageWebhook(tx: Prisma.TransactionClient, prepared
   await tx.billingStoragePaymentAttempt.updateMany({ where: { id: binding.attempt.id }, data: {
     stripeSubscriptionId: remote.id, ...(prepared.kind === 'invoice' ? { stripeInvoiceId: prepared.invoice.id } : {}),
   } });
-  const item = remote.items.data[0]!;
+  const item = remote.items.data[0];
+  if (!item) throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_STORAGE_SUBSCRIPTION_DRIFT');
   const existing = await tx.billingStorageSubscription.findUnique({ where: { serviceId_orgId_accountId: {
     serviceId: binding.expansion.serviceId, orgId: binding.expansion.orgId, accountId: binding.mandate.accountId,
   } } });
@@ -90,8 +91,8 @@ export async function applyStorageWebhook(tx: Prisma.TransactionClient, prepared
   }
   await tx.billingStorageSubscription.updateMany({ where: { serviceId: binding.expansion.serviceId,
     orgId: binding.expansion.orgId, stripeSubscriptionId: remote.id }, data: { state: remote.status,
-    currentPeriodStart: new Date(remote.items.data[0]!.current_period_start * 1000),
-    currentPeriodEnd: new Date(remote.items.data[0]!.current_period_end * 1000) } });
+    currentPeriodStart: new Date(item.current_period_start * 1000),
+    currentPeriodEnd: new Date(item.current_period_end * 1000) } });
   if (prepared.kind !== 'invoice') return;
   if (prepared.payment) {
     const original = !prepared.payment.paid && prepared.invoice.billing_reason !== 'subscription_cycle'
@@ -100,11 +101,12 @@ export async function applyStorageWebhook(tx: Prisma.TransactionClient, prepared
     if (!original) await applyCommercialPayment(tx, prepared.payment, webhookEventId, now);
   }
   if (prepared.paidAt) {
+    if (!prepared.cashEvidence) throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_STORAGE_PAYMENT_UNPROVEN');
     await tx.billingStoragePaymentEvidence.upsert({ where: { accountId_invoiceId: {
       accountId: binding.mandate.accountId, invoiceId: prepared.invoice.id,
     } }, create: { accountId: binding.mandate.accountId, invoiceId: prepared.invoice.id,
       attemptId: binding.attempt.id, webhookEventId, currency: prepared.invoice.currency.toUpperCase(),
-      amountMinor: BigInt(prepared.invoice.amount_paid), cashEvidence: prepared.cashEvidence!, paidAt: prepared.paidAt,
+      amountMinor: BigInt(prepared.invoice.amount_paid), cashEvidence: prepared.cashEvidence, paidAt: prepared.paidAt,
     }, update: {} });
     await applyStoragePaidBoundary(tx, prepared);
     const attempt = await tx.billingStoragePaymentAttempt.findFirst({ where: { expansionId: binding.expansion.id }, orderBy: { generation: 'desc' } });
@@ -123,7 +125,7 @@ export async function applyStorageWebhook(tx: Prisma.TransactionClient, prepared
     const priorAttempts = await tx.billingStoragePaymentAttempt.findMany({ where: { expansionId: binding.expansion.id,
       generation: { lt: binding.attempt.generation }, terminalUnpaidProvenAt: { not: null }, stripeInvoiceId: { not: null } } });
     const old = await tx.billingCommercialIncident.findMany({ where: { storageExpansionId: binding.expansion.id,
-      invoiceId: { in: priorAttempts.map((row) => row.stripeInvoiceId!) }, resolvedAt: null } });
+      invoiceId: { in: priorAttempts.flatMap((row) => row.stripeInvoiceId ? [row.stripeInvoiceId] : []) }, resolvedAt: null } });
     for (const incident of old) {
       await tx.billingCommercialIncident.update({ where: { id: incident.id }, data: { resolvedAt: now, resolutionEventId: webhookEventId } });
       await tx.billingCommercialNotification.upsert({ where: { incidentId_stage: { incidentId: incident.id, stage: 'resolved' } },

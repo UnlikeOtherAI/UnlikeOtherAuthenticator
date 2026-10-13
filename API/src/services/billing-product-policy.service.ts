@@ -42,15 +42,17 @@ export async function setProductPolicy(input: { serviceId: string; organisationI
     if (!input.privateAtCost && previous?.privateAtCost) {
       if (previous.effectiveAt > now) effectiveAt = previous.effectiveAt;
       else {
+        if (!previous.privateTermEventId) throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_PRIVATE_EFFECTIVE_EVIDENCE_REQUIRED');
         const transition = await tx.billingTariffTermEvent.findFirst({ where: { serviceId: input.serviceId,
           source: 'ORGANISATION', scopeKey: input.organisationId,
-          effectiveFromMonth: { gt: now.toISOString().slice(0, 7) }, id: { not: previous.privateTermEventId! } },
+          effectiveFromMonth: { gt: now.toISOString().slice(0, 7) }, id: { not: previous.privateTermEventId } },
           orderBy: [{ effectiveFromMonth: 'asc' }, { sequence: 'desc' }] });
         if (!transition) throw new AppError('BAD_REQUEST', 409, 'BILLING_PRIVATE_TRANSITION_TERMS_REQUIRED');
         effectiveAt = new Date(`${transition.effectiveFromMonth}-01T00:00:00.000Z`);
       }
     }
     if (start) {
+      if (!end) throw new AppError('BAD_REQUEST', 400, 'BILLING_TRIAL_INVALID');
       const incompatible = await tx.billingStripeSubscription.findFirst({ where: {
         serviceId: input.serviceId, orgId: input.organisationId,
         status: { notIn: ['canceled', 'incomplete_expired'] },
@@ -62,7 +64,7 @@ export async function setProductPolicy(input: { serviceId: string; organisationI
       } });
       const monthlyBoundary = (date: Date) => date.getUTCDate() === 1 &&
         date.getUTCHours() === 0 && date.getUTCMinutes() === 0 && date.getUTCSeconds() === 0 && date.getUTCMilliseconds() === 0;
-      if ((incompatible || manual) && (!monthlyBoundary(start) || !monthlyBoundary(end!))) {
+      if ((incompatible || manual) && (!monthlyBoundary(start) || !monthlyBoundary(end))) {
         throw new AppError('BAD_REQUEST', 409, 'BILLING_CUSTOM_TRIAL_PARTIAL_WAIVER_UNSUPPORTED');
       }
     }

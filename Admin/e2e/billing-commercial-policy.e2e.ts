@@ -75,6 +75,7 @@ test('operator reaches exact company policy, reviews effective date, binds stora
   await dialog.getByLabel(/^Monthly price/).fill('2.99');
   await dialog.getByLabel(/^Monthly seat currency/).fill('EUR');
   await expect(dialog.getByLabel(/^Usage valuation currency/)).toHaveValue('USD');
+  await dialog.getByLabel(/^Usage valuation currency/).scrollIntoViewIfNeeded();
   await page.screenshot({ path: info.outputPath('regional-tariff.png'), fullPage: true });
   await dialog.getByRole('button', { name: 'Create immutable version', exact: true }).click();
   await expect(dialog).toHaveCount(0);

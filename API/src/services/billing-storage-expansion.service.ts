@@ -107,7 +107,8 @@ export async function recordStorageObservation(input: { request: StorageObservat
     } });
     const same = await tx.billingStorageObservation.findUnique({ where: { serviceId_orgId_revision: { ...scope, revision } } });
     if (byId || same) {
-      const old = byId ?? same!;
+      const old = byId ?? same;
+      if (!old) throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_STORAGE_OBSERVATION_UNPROVEN');
       if (old.revision !== revision || old.observationId !== request.observation_id || old.blobBytes !== blob ||
         old.databaseBytes !== database || old.measurementVersion !== request.measurement_version ||
         old.observedAt.toISOString() !== request.observed_at) throw new AppError('BAD_REQUEST', 409, 'BILLING_STORAGE_OBSERVATION_CONFLICT');
@@ -184,9 +185,11 @@ export async function dispatchStorageExpansion(id: string, deps?: StorageDepende
     return { expansion, attempt, mandate, catalog, subscription };
   });
   if (!prepared) return;
+  const paymentMethodId = prepared.mandate.stripePaymentMethodId;
+  if (!paymentMethodId) throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_STORAGE_MANDATE_NOT_ACTIVE');
   await verifyStoragePrice(stripe, { priceId: prepared.catalog.stripePriceId, currency: prepared.catalog.currency,
     unitAmountMinor: prepared.catalog.unitAmountMinor, product: 'nessie', account });
-  const method = await stripe.paymentMethods.retrieve(prepared.mandate.stripePaymentMethodId!);
+  const method = await stripe.paymentMethods.retrieve(paymentMethodId);
   assertStripeObjectLivemode(method, livemode);
   if (stripeExternalId(method.customer) !== prepared.mandate.stripeCustomerId) throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_STORAGE_PAYMENT_METHOD_INVALID');
   let remote = prepared.subscription ? await stripe.subscriptions.retrieve(prepared.subscription.stripeSubscriptionId)
@@ -201,7 +204,7 @@ export async function dispatchStorageExpansion(id: string, deps?: StorageDepende
     }
     remote = await stripe.subscriptions.create({ customer: prepared.mandate.stripeCustomerId,
       items: [{ price: prepared.catalog.stripePriceId, quantity: prepared.expansion.toBlocks }],
-      default_payment_method: prepared.mandate.stripePaymentMethodId!, collection_method: 'charge_automatically',
+      default_payment_method: paymentMethodId, collection_method: 'charge_automatically',
       payment_behavior: 'allow_incomplete', metadata }, { idempotencyKey: `uoa:storage-attempt:${prepared.attempt.id}` });
   } else if (prepared.subscription && remote.metadata.uoa_storage_attempt_id !== prepared.attempt.id) {
     const item = remote.items.data[0];
@@ -219,25 +222,30 @@ export async function dispatchStorageExpansion(id: string, deps?: StorageDepende
     Object.entries(metadata).some(([key, value]) => remote!.metadata[key] !== value)) {
     throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_STORAGE_SUBSCRIPTION_BINDING_INVALID');
   }
-  const invoiceId = stripeExternalId(remote.latest_invoice);
+  const acceptedRemote = remote;
+  const invoiceId = stripeExternalId(acceptedRemote.latest_invoice);
   await prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM organisations WHERE id=${prepared.expansion.orgId} FOR UPDATE`;
     const current = await tx.billingStorageExpansion.findUniqueOrThrow({ where: { id } });
+    const latest = await tx.billingStoragePaymentAttempt.findFirstOrThrow({ where: { expansionId: id }, orderBy: { generation: 'desc' } });
+    await tx.billingStoragePaymentAttempt.update({ where: { id: prepared.attempt.id },
+      data: { stripeSubscriptionId: acceptedRemote.id, stripeInvoiceId: invoiceId } });
+    if (latest.id !== prepared.attempt.id || await tx.billingStorageExpansion.findFirst({ where: {
+      serviceId: current.serviceId, orgId: current.orgId, toBlocks: { gt: current.toBlocks },
+    } })) return;
     const row = await tx.billingStorageSubscription.upsert({ where: { serviceId_orgId_accountId: {
       serviceId: current.serviceId, orgId: current.orgId, accountId: account.id,
     } }, create: { serviceId: current.serviceId, orgId: current.orgId, accountId: account.id,
-      mandateId: prepared.mandate.id, catalogId: prepared.catalog.id, stripeSubscriptionId: remote!.id,
-      stripeItemId: item.id, state: remote!.status, pendingBlocks: current.state === 'paid' ? 0 : current.toBlocks,
+      mandateId: prepared.mandate.id, catalogId: prepared.catalog.id, stripeSubscriptionId: acceptedRemote.id,
+      stripeItemId: item.id, state: acceptedRemote.status, pendingBlocks: current.state === 'paid' ? 0 : current.toBlocks,
       purchasedBlocks: current.state === 'paid' ? current.toBlocks : 0,
       currentPeriodStart: new Date(item.current_period_start * 1000),
       currentPeriodEnd: new Date(item.current_period_end * 1000) }, update: {
-      stripeSubscriptionId: remote!.id, stripeItemId: item.id, state: remote!.status,
+      stripeSubscriptionId: acceptedRemote.id, stripeItemId: item.id, state: acceptedRemote.status,
       currentPeriodStart: new Date(item.current_period_start * 1000),
       currentPeriodEnd: new Date(item.current_period_end * 1000),
       ...(current.state === 'paid' ? {} : { pendingBlocks: current.toBlocks }),
     } });
-    await tx.billingStoragePaymentAttempt.update({ where: { id: prepared.attempt.id },
-      data: { stripeSubscriptionId: remote!.id, stripeInvoiceId: invoiceId } });
     await tx.billingStorageExpansion.update({ where: { id }, data: { subscriptionId: row.id,
       stripeInvoiceId: invoiceId } });
   });

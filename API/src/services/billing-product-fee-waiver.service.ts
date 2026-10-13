@@ -18,16 +18,18 @@ export async function productFeeWaivers(prisma: PrismaClient, input: {
     orderBy: [{ effectiveFromMonth: 'asc' }, { sequence: 'asc' }] });
   return policies.flatMap((policy, index) => {
     const next = policies[index + 1]?.effectiveAt ?? input.endsAt;
-    if (!policy.privateAtCost && (!policy.trialStartsAt || !policy.trialEndsAt)) return [];
-    const from = Math.max(input.startsAt.getTime(), policy.effectiveAt.getTime(),
-      policy.privateAtCost ? 0 : policy.trialStartsAt!.getTime());
+    let from = Math.max(input.startsAt.getTime(), policy.effectiveAt.getTime());
+    let to = Math.min(input.endsAt.getTime(), next.getTime());
     const bindingIndex = policy.privateTermEventId ? terms.findIndex((term) => term.id === policy.privateTermEventId) : -1;
-    if (policy.privateAtCost && bindingIndex < 0) return [];
-    const privateEnd = bindingIndex >= 0 && terms[bindingIndex + 1]
-      ? Date.parse(`${terms[bindingIndex + 1]!.effectiveFromMonth}-01T00:00:00.000Z`) : input.endsAt.getTime();
-    const to = Math.min(input.endsAt.getTime(), next.getTime(),
-      policy.privateAtCost ? privateEnd : input.endsAt.getTime(),
-      policy.privateAtCost ? input.endsAt.getTime() : policy.trialEndsAt!.getTime());
+    if (policy.privateAtCost) {
+      if (bindingIndex < 0) return [];
+      const nextTerm = terms[bindingIndex + 1];
+      if (nextTerm) to = Math.min(to, Date.parse(`${nextTerm.effectiveFromMonth}-01T00:00:00.000Z`));
+    } else {
+      if (!policy.trialStartsAt || !policy.trialEndsAt) return [];
+      from = Math.max(from, policy.trialStartsAt.getTime());
+      to = Math.min(to, policy.trialEndsAt.getTime());
+    }
     return from < to ? [{ id: policy.id, startsAt: new Date(from), endsAt: new Date(to) }] : [];
   });
 }

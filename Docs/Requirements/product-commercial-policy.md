@@ -233,6 +233,11 @@ admits EUR/GBP/USD only when account and currency match the frozen subscription'
 tariff. It retains all original amount/state/evidence invariants and changes
 no wallet, provider receipt, top-up or previous invoice currency.
 
+Late storage dispatch responses retain their original attempt evidence but cannot
+replace the company subscription projection after a newer attempt generation or
+larger expansion exists. This check runs under the same company lock as invoice
+cash projection; an expired initial attempt cannot overwrite its replacement.
+
 For an explicitly enrolled Nessie company, an existing FREE or collection-NONE
 usage default cannot authorize a paid provider dispatch. UOA refuses that funded
 admission with `BILLING_PRODUCT_USAGE_FUNDING_NOT_ACCEPTED` until independently
@@ -248,3 +253,12 @@ activation produces the current month's real prorated regional seat amount;
 the test never fabricates a backdated baseline. At `1d03cd4b`, protocol5.10.2
 build, API typecheck and seven strict contract tests passed; both cash-ordering
 and original weekday-deadline/reordered retry database cases passed.
+
+At `8593dbab`, the synthetic operator headless Chrome journey passed on Maxis at
+desktop and Pixel7 sizes (two cases). It verifies reachable Company policy,
+rejected trial input preservation, explicit future private date, existing storage
+price binding and separate EUR seat/USD usage valuation in an unassigned tariff
+save. Screenshots were reviewed; no live API/provider request is permitted by
+the harness. Four fresh phone verdict checks at `b87ff4af` also passed, covering
+paid-before-verdict refusal, gross/nominal distinction, late final24h and missing
+email transport refusal. Full changed-source lint is still being completed.

@@ -39,9 +39,9 @@ export async function verifyStoragePrice(stripe: Pick<Stripe, 'prices' | 'produc
 export async function bindStorageCatalog(input: { serviceId: string; currency: 'EUR' | 'GBP' | 'USD';
   priceId: string; actor: LifecycleActor }, deps?: { prisma?: PrismaClient; stripe?: Stripe; livemode?: boolean }) {
   const prisma = deps?.prisma ?? getAdminPrisma();
-  const configured = deps?.stripe ? null : requireStripeBillingEnabled();
-  const stripe = deps?.stripe ?? configured!.client;
-  const account = await resolveStripeAccountContext(stripe, deps?.livemode ?? configured!.livemode, prisma);
+  const runtime = deps?.stripe ? { client: deps.stripe, livemode: deps.livemode ?? false } : requireStripeBillingEnabled();
+  const stripe = runtime.client;
+  const account = await resolveStripeAccountContext(stripe, deps?.livemode ?? runtime.livemode, prisma);
   const service = await prisma.billingService.findFirst({ where: { id: input.serviceId, identifier: 'nessie', active: true } });
   if (!service) throw new AppError('NOT_FOUND', 404);
   const amount = NESSIE_COMMERCIAL_PRICES[input.currency].storage;

@@ -120,11 +120,12 @@ deps: SmsQuoteDependencies): Promise<BillingSmsFinalQuoteV1> {
     // A number costs its region currency's flat monthly price in every country; messages keep
     // provider cost plus markup. The region is chosen once before the first monthly quote.
     const regionCurrency = monthly ? (await requireOrganisationBillingRegion(request.organisation_id, tx)).currency : null;
-    const terms = monthly && privatePolicy ? { finalAmount: smsAtCostMonthlyAmount({ amount: providerAmount.toFixed(),
-      currency: price.currency, targetCurrency: regionCurrency!, rates: {
+    if (monthly && !regionCurrency) throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_ORGANISATION_REGION_REQUIRED');
+    const terms = monthly && regionCurrency && privatePolicy ? { finalAmount: smsAtCostMonthlyAmount({ amount: providerAmount.toFixed(),
+      currency: price.currency, targetCurrency: regionCurrency, rates: {
         usdPerEur: fx.usdPerEur.toFixed(), gbpPerEur: fx.gbpPerEur?.toFixed() ?? null,
-      } }), finalCurrency: regionCurrency!, monthlyPriceId: null } : monthly ? await smsMonthlyTerms(tx, { country: request.country,
-      currency: regionCurrency!,
+      } }), finalCurrency: regionCurrency, monthlyPriceId: null } : monthly && regionCurrency ? await smsMonthlyTerms(tx, { country: request.country,
+      currency: regionCurrency,
       providerAmount: providerAmount.toFixed(), providerCurrency: price.currency,
       rates: { usdPerEur: fx.usdPerEur.toFixed(), gbpPerEur: fx.gbpPerEur?.toFixed() ?? null } })
       : { finalAmount: formattedQuanta(smsFinalUsdQuanta({ providerAmount: providerBound.toFixed(),
