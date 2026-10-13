@@ -56,16 +56,16 @@ describe.skipIf(!process.env.DATABASE_URL)('regional seats and immutable USD pre
     }
     resetAccessTokenKeyCache(); await db?.cleanup();
   });
-  async function customer(currency: string, amount: bigint) {
-    const user = await db.prisma.user.create({ data: { email: `${currency}@example.test`, userKey: `${currency}@example.test` } });
-    const org = await db.prisma.organisation.create({ data: { ownerId: user.id, domain: `${currency.toLowerCase()}.example.test`,
-      name: `Regional ${currency}`, slug: `regional-${currency.toLowerCase()}` } });
+  async function customer(currency: string, amount: bigint, suffix = currency, collectionMode: 'STRIPE' | 'NONE' = 'STRIPE') {
+    const user = await db.prisma.user.create({ data: { email: `${suffix}@example.test`, userKey: `${suffix}@example.test` } });
+    const org = await db.prisma.organisation.create({ data: { ownerId: user.id, domain: `${suffix.toLowerCase()}.example.test`,
+      name: `Regional ${suffix}`, slug: `regional-${suffix.toLowerCase()}` } });
     const team = await db.prisma.team.create({ data: { orgId: org.id, name: 'Team', slug: 'team' } });
     await db.prisma.orgMember.create({ data: { orgId: org.id, userId: user.id, role: 'owner' } });
     await db.prisma.teamMember.create({ data: { teamId: team.id, userId: user.id, teamRole: 'admin' } });
     await db.prisma.billingOrgResponsibility.create({ data: { orgId: org.id, assumedAt: startsAt, assumedByUserId: user.id } });
-    const tariff = await db.prisma.billingTariff.create({ data: { serviceId, key: `standard-${currency.toLowerCase()}`, version: 2,
-      name: 'Standard', mode: 'STANDARD', collectionMode: 'STRIPE', usagePaymentMode: 'PREPAID',
+    const tariff = await db.prisma.billingTariff.create({ data: { serviceId, key: `standard-${suffix.toLowerCase()}`, version: 2,
+      name: 'Standard', mode: 'STANDARD', collectionMode, usagePaymentMode: 'PREPAID',
       monthlyChargeBasis: 'PER_SEAT', seatPolicy: 'AUTOMATIC', seatChargeTiming: 'PRORATED',
       monthlyAmountMinor: amount, currency, usageCurrency: 'USD', markupBps: 3000 } });
     const assignment = await db.prisma.billingTariffAssignment.create({ data: { serviceId, orgId: org.id,
@@ -73,7 +73,7 @@ describe.skipIf(!process.env.DATABASE_URL)('regional seats and immutable USD pre
     await db.prisma.billingTariffTermEvent.create({ data: { serviceId, source: 'ORGANISATION', scopeKey: org.id,
       effectiveFromMonth: month, tariffId: tariff.id, assignmentId: assignment.id, reason: 'Synthetic accepted regional terms' } });
     const customer = await db.prisma.billingStripeCustomer.create({ data: { accountId, orgId: org.id, teamId: null,
-      scope: 'ORGANISATION', scopeKey: org.id, stripeCustomerId: `cus_${currency}` } });
+      scope: 'ORGANISATION', scopeKey: org.id, stripeCustomerId: `cus_${suffix}` } });
     const credit = await db.prisma.billingCreditAccount.create({ data: { accountId, customerId: customer.id, orgId: org.id,
       teamId: null, scope: 'ORGANISATION', scopeKey: org.id, currency: 'USD' } });
     // Synthetic funded opening evidence, using the existing finance fixture convention.
@@ -81,6 +81,7 @@ describe.skipIf(!process.env.DATABASE_URL)('regional seats and immutable USD pre
       await tx.$executeRawUnsafe('SET LOCAL session_replication_role = replica');
       await tx.$executeRaw(Prisma.sql`UPDATE billing_credit_accounts SET balance_microcredits=100000000 WHERE id=${credit.id}`);
     });
+    if (collectionMode === 'NONE') return { user, org, team, tariff, customer, credit, subscription: null };
     const checkout = await db.prisma.billingStripeCheckoutSession.create({ data: { accountId, appKeyId, customerId: customer.id,
       serviceId, tariffId: tariff.id, tariffSource: 'ORGANISATION', tariffAssignmentId: assignment.id,
       orgId: org.id, teamId: null, scope: 'ORGANISATION', scopeKey: org.id,
@@ -94,19 +95,22 @@ describe.skipIf(!process.env.DATABASE_URL)('regional seats and immutable USD pre
       subscription: { status: 'active' } as Stripe.Subscription, observedAt: await observedBillingTime(tx) }));
     return { user, org, team, tariff, customer, credit, subscription };
   }
-  it.each([['EUR', 299n], ['GBP', 299n], ['USD', 399n]] as const)('keeps %s seats separate through admission, receipt, cycle and monthly invoice item', async (currency, amount) => {
-    const rows = await customer(currency, amount);
+  async function delegation(rows: Awaited<ReturnType<typeof customer>>, dispatchId: string) {
     const issued = Math.floor(Date.now() / 1000);
-    const delegation = await new SignJWT({ tv: 0, email: rows.user.email, source_domain: 'nessie.example.test', azp: 'nessie.example.test',
+    return new SignJWT({ tv: 0, email: rows.user.email, source_domain: 'nessie.example.test', azp: 'nessie.example.test',
       product: 'nessie', scope: 'ai.invoke', active: { orgId: rows.org.id, teamId: rows.team.id },
       org: { org_id: rows.org.id, org_role: 'owner', teams: [rows.team.id], team_roles: { [rows.team.id]: 'admin' } } })
       .setProtectedHeader({ alg: 'RS256', typ: 'at+jwt', kid: 'regional-key' }).setIssuer(issuer).setAudience('https://ledger.example.com')
-      .setSubject(rows.user.id).setJti(`dispatch-${currency}`).setIssuedAt(issued).setExpirationTime(issued + 45).sign(signing);
+      .setSubject(rows.user.id).setJti(dispatchId).setIssuedAt(issued).setExpirationTime(issued + 45).sign(signing);
+  }
+  it.each([['EUR', 299n], ['GBP', 299n], ['USD', 399n]] as const)('keeps %s seats separate through admission, receipt, cycle and monthly invoice item', async (currency, amount) => {
+    const rows = await customer(currency, amount);
+    if (!rows.subscription) throw new Error('FIXTURE_SEAT_ACCEPTANCE_REQUIRED');
     const dispatchId = `dispatch-${currency}`, receiptId = `receipt-${currency}`;
     const input = { dispatchId, requestFingerprint: 'b'.repeat(64), dispatchStartedAt: new Date().toISOString(),
       product: 'nessie', providerServiceId: 'openai', organisationId: rows.org.id, teamId: rows.team.id,
       userId: rows.user.id, rawCostBound: '0.01', currency: 'USD' };
-    await reservePrepaidDispatch({ runtimeSecret: secret, delegation, input }, { prisma: db.prisma });
+    await reservePrepaidDispatch({ runtimeSecret: secret, delegation: await delegation(rows, dispatchId), input }, { prisma: db.prisma });
     const paid = await finalizePrepaidDispatch({ runtimeSecret: secret, dispatchId, receiptId,
       kind: 'settle', rawCostActual: '0.01', currency: 'USD' }, { prisma: db.prisma });
     expect(paid.debited_microcredits).toBe('13000000');
@@ -155,5 +159,21 @@ describe.skipIf(!process.env.DATABASE_URL)('regional seats and immutable USD pre
     expect((await db.prisma.billingCreditAccount.findUniqueOrThrow({ where: { id: rows.credit.id } })))
       .toMatchObject({ currency: 'USD', balanceMicrocredits: 87_000_000n });
     expect((await db.prisma.billingPrepaidReservation.findUniqueOrThrow({ where: { dispatchId } }))).toMatchObject({ currency: 'USD' });
+  });
+  it('does not turn a company trial and unrelated funded wallet into accepted paid-provider terms', async () => {
+    const rows = await customer('USD', 399n, 'uncollected-trial', 'NONE');
+    await db.prisma.clientDomain.create({ data: { domain: 'nessie.example.test', label: 'Synthetic Nessie' } });
+    const enrollment = await db.prisma.billingProductEnrollment.create({ data: { serviceId, orgId: rows.org.id,
+      sourceDomain: 'nessie.example.test' } });
+    const now = new Date();
+    await db.prisma.billingProductPolicyRevision.create({ data: { enrollmentId: enrollment.id, privateAtCost: false,
+      trialStartsAt: now, trialEndsAt: new Date(now.getTime() + 30 * 86_400_000), effectiveAt: now, actorUserId: rows.user.id } });
+    const dispatchId = 'trial-uncollected-dispatch';
+    await expect(reservePrepaidDispatch({ runtimeSecret: secret, delegation: await delegation(rows, dispatchId), input: {
+      dispatchId, requestFingerprint: 'c'.repeat(64), dispatchStartedAt: new Date().toISOString(), product: 'nessie', providerServiceId: 'openai',
+      organisationId: rows.org.id, teamId: rows.team.id, userId: rows.user.id, rawCostBound: '0.01', currency: 'USD',
+    } }, { prisma: db.prisma })).rejects.toThrow('BILLING_PRODUCT_USAGE_FUNDING_NOT_ACCEPTED');
+    expect(await db.prisma.billingLedgerDispatchDecision.findUnique({ where: { dispatchId } })).toBeNull();
+    expect((await db.prisma.billingCreditAccount.findUniqueOrThrow({ where: { id: rows.credit.id } })).balanceMicrocredits).toBe(100_000_000n);
   });
 });
