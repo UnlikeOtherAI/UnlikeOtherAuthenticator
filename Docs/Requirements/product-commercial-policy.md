@@ -410,3 +410,16 @@ The expanded regional database journey includes a paid company seat agreement
 whose prior10-credit usage debit belongs to its original team wallet. It must
 close and invoice the EUR seats without creating an organisation wallet,
 assuming pooled responsibility or moving the remaining90 USD credits.
+
+Maxis verification at84f7f133 passed API typecheck and twelve focused cases:
+six real database regional seat/prepaid journeys and six entitlement cases.
+The independent team wallet remains authoritative for its accepted receipts;
+old or team-only unpaid seat evidence cannot establish company-wide access.
+
+The commercial-delivery database regression covers more than100 old resolved
+warnings before new work, all current company managers without ordinary members,
+the registered application recovery origin independently of its API issuer,
+SMTP retries with stable message identity and no fabricated acceptance, fresh
+role revalidation, receipt conflicts, a delayed final warning's full24hours,
+and terminal service filtering that preserves unpaid financial history.
+This new delivery suite is coded; execution results are pending.
