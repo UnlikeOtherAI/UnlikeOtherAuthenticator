@@ -15,6 +15,10 @@ import { AppError } from '../utils/errors.js';
  * against its route registration in the endpoint-audience tests.
  */
 export const BILLING_ACTOR_ENDPOINTS = [
+  '/billing/v1/product-entitlement',
+  '/billing/v1/storage',
+  '/billing/v1/storage/mandate',
+  '/billing/v1/storage/recover',
   '/billing/v1/sms/quotes',
   '/billing/v1/sms/quotes/verify',
   '/billing/v1/sms/reservations',
@@ -90,6 +94,8 @@ export function assertBillingActorAudience(params: {
   if (
     params.presented === params.legacyAudience &&
     !params.endpoint.startsWith('/billing/v1/sms/') &&
+    params.endpoint !== '/billing/v1/product-entitlement' &&
+    !params.endpoint.startsWith('/billing/v1/storage') &&
     getBillingActorAudienceMode() === 'warn' &&
     // A legacy audience is only ever a transitional stand-in for a real endpoint
     // audience. It must still be one of this deployment's own billing URLs.

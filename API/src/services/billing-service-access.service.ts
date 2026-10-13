@@ -7,6 +7,7 @@ import { verifyBillingActor } from './billing-actor.service.js';
 import type { BillingActorEndpoint } from './billing-actor-audience.service.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
 import { normalizeBillingServiceIdentifier } from './billing-tariff.service.js';
+import { commercialSourceDomain } from './billing-product-authority.service.js';
 
 type AccessPrisma = Pick<PrismaClient, 'billingServiceAccess'>;
 
@@ -79,7 +80,7 @@ export async function confirmAuthenticatedDirectBillingServiceAccess(
     throw new AppError('FORBIDDEN', 403, 'BILLING_PRODUCT_MISMATCH');
   }
   const request = { ...params.request, product };
-  await (deps?.verifyActor ?? verifyBillingActor)({
+  const actor = await (deps?.verifyActor ?? verifyBillingActor)({
     token: params.actorToken,
     credential: params.credential,
     endpoint: params.endpoint,
@@ -124,6 +125,16 @@ export async function confirmAuthenticatedDirectBillingServiceAccess(
       ]);
       if (!service || orgMember?.status !== MembershipStatus.ACTIVE || !team) {
         throw new AppError('FORBIDDEN', 403, 'BILLING_SUBJECT_NOT_ENTITLED');
+      }
+      const user = await tx.user.findFirst({ where: { id: request.userId,
+        lifecycleStatus: 'ACTIVE', tokenVersion: actor.tv } });
+      if (!user) throw new AppError('FORBIDDEN', 403, 'BILLING_SUBJECT_NOT_ENTITLED');
+      const sourceDomain = commercialSourceDomain(params.credential.actorIssuer);
+      const enrollment = await tx.billingProductEnrollment.upsert({ where: {
+        serviceId_orgId: { serviceId: params.credential.service.id, orgId: request.organisationId },
+      }, create: { serviceId: params.credential.service.id, orgId: request.organisationId, sourceDomain }, update: {} });
+      if (enrollment.sourceDomain !== sourceDomain || !enrollment.active) {
+        throw new AppError('FORBIDDEN', 403, 'BILLING_COMMERCIAL_ENROLLMENT_CONFLICT');
       }
       await confirmDirectBillingServiceAccess(
         {

@@ -923,3 +923,13 @@ and passes it to Auth SSR. Product configuration cannot supply this setting.
 SMS number payment implementation: services/billing-sms-number.service.ts owns immutable monthly acceptance and verified Checkout projection; services/billing-sms-number-lifecycle.service.ts owns acquired-number attachment and fenced release/cancellation. routes/billing/sms-numbers.ts is the thin public registration.
 
 SMS prepaid runtime: services/billing-sms-{reservation,dispatch,receipt,grant,standing,inbound}.service.ts own admission, physical dispatch fencing and actual usage settlement; routes/billing/sms-{reservations,grants,inbound}.ts register the public contracts. Exact money arithmetic lives in billing-sms-money.service.ts. All share the canonical wallet and budget services.
+### Company commercial policy (2026-10-13)
+
+`services/billing-product-{authority,entitlement,policy,fee-waiver,private-policy}.service.ts`
+own explicit company enrollment, member-safe standing and immutable operator
+policy. `billing-commercial-{clock,incident,events,email}.service.ts` own weekday
+grace, verified failure lineage, exact recipient receipts and real email transport.
+`billing-storage-catalog.service.ts` validates operator-only account-bound existing
+monthly block prices. Thin routes are `billing/product-entitlement.ts` and
+`internal/admin/billing-product-policy.ts`. See the company commercial policy
+for storage/notification state machines and deployment/verification status.

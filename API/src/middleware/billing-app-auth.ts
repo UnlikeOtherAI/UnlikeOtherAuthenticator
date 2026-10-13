@@ -82,3 +82,12 @@ export function requireBillingSmsRuntimeAppKey(
 ): Promise<void> {
   return requireBillingAppKeyPurpose(request, reply, BillingAppKeyPurpose.SMS_RUNTIME);
 }
+export function requireBillingCommercialWorkerKey(
+  request: FastifyRequest,
+  reply: FastifyReply,
+): Promise<void> {
+  if (request.headers['x-uoa-actor'] !== undefined) {
+    throw new AppError('UNAUTHORIZED', 401, 'BILLING_WORKER_ACTOR_NOT_ALLOWED');
+  }
+  return requireBillingAppKeyPurpose(request, reply, BillingAppKeyPurpose.COMMERCIAL_WORKER);
+}

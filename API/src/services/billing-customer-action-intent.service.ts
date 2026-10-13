@@ -12,6 +12,8 @@ import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
 import type { BillingActor } from './billing-actor.service.js';
 
 export const BILLING_CUSTOMER_ACTION = {
+  STORAGE_MANDATE_SETUP: 'storage_mandate_setup',
+  STORAGE_RECOVERY: 'storage_recovery',
   STRIPE_CHECKOUT: 'stripe_checkout',
   STRIPE_PORTAL: 'stripe_portal',
   SUBSCRIPTION_CANCEL: 'subscription_cancel',

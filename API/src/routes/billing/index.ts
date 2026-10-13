@@ -26,8 +26,13 @@ import { registerSmsNumberRoutes } from './sms-numbers.js';
 import { registerSmsGrantRoutes } from './sms-grants.js';
 import { registerSmsReservationRoutes } from './sms-reservations.js';
 import { registerSmsInboundRoutes } from './sms-inbound.js';
+import { registerCommercialWorkerRoutes } from './commercial-worker.js';
+import { registerStorageRoutes } from './storage.js';
 
 export function registerBillingRoutes(app: FastifyInstance): void {
+  registerProductEntitlementRoutes(app);
+  registerCommercialWorkerRoutes(app);
+  registerStorageRoutes(app);
   registerSmsQuoteRoutes(app);
   registerSmsNumberRoutes(app);
   registerSmsGrantRoutes(app);
@@ -55,3 +60,4 @@ export function registerBillingRoutes(app: FastifyInstance): void {
   registerStripeSubscriptionRoutes(app);
   registerStripeWebhookRoute(app);
 }
+import { registerProductEntitlementRoutes } from './product-entitlement.js';

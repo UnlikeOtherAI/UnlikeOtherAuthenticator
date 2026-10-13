@@ -93,6 +93,7 @@ export function BillingAppKeyDialog({
             <option value="customer_lifecycle">Customer lifecycle</option>
             <option value="entitlement">Entitlement resolver</option>
             <option value="sms_runtime">SMS runtime</option>
+            <option value="commercial_worker">Commercial worker</option>
           </SelectField>
         </FieldShell>
         <FieldShell
@@ -147,7 +148,8 @@ export function BillingAppKeyDialog({
           </FieldShell>
         ) : (
           <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">
-            {purpose === 'sms_runtime' ? 'SMS runtime keys authorize prepaid physical dispatch and provider recovery. They cannot carry redirect origins or create Checkout/top-ups.'
+            {purpose === 'commercial_worker' ? 'Commercial worker keys read enrolled company access and report capacity or accepted notifications without a human actor. They cannot create customer Checkout or funding actions.'
+              : purpose === 'sms_runtime' ? 'SMS runtime keys authorize prepaid physical dispatch and provider recovery. They cannot carry redirect origins or create Checkout/top-ups.'
               : 'Entitlement keys cannot carry redirect origins and are rejected by every Stripe lifecycle route.'}
           </div>
         )}
@@ -160,7 +162,8 @@ export function BillingAppKeyDialog({
         </FieldShell>
         <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800">
           This {purpose.replace('_', ' ')} key authenticates only {service.identifier}. Every
-          {purpose === 'sms_runtime' ? 'human reservation needs a fresh actor assertion; machine delegation needs a current explicit grant. Recovery remains bound to the original dispatch.'
+          {purpose === 'commercial_worker' ? 'request requires current registered-source and exact company enrollment. Do not send X-UOA-Actor.'
+            : purpose === 'sms_runtime' ? 'human reservation needs a fresh actor assertion; machine delegation needs a current explicit grant. Recovery remains bound to the original dispatch.'
             : 'request still needs a fresh, signed actor assertion binding the user, organisation, team, and product.'}
         </div>
         {create.isError ? (

@@ -307,6 +307,7 @@ export async function sendRawEmail(params: {
   from: string;
   fromName?: string | null;
   replyTo?: string | null;
+  messageId?: string;
 }): Promise<void> {
   const env = getEnv();
   const from = params.fromName?.trim()
@@ -320,5 +321,6 @@ export async function sendRawEmail(params: {
     subject: params.subject,
     text: params.text,
     html: params.html,
+    messageId: params.messageId,
   }, { swallowFailures: false });
 }

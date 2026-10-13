@@ -55,11 +55,13 @@ export const commercialEventsV1JsonSchema = object({ schema_version: { const: 1 
 export const commercialAcknowledgementV1JsonSchema = object({ ...subject, event_id: id,
   recipient_user_id: id, channel: { enum: ['alert', 'personal_assistant'] }, receipt_id: id });
 export const phoneReleaseRequestV1JsonSchema = object({ ...subject, incident_id: id });
-export const phoneReleaseVerdictV1JsonSchema = object({ ...subject, schema_version: { const: 1 },
-  incident_id: id, authorized: boolean, resource_id: id,
-  account_sid: { anyOf: [{ type: 'string', pattern: '^AC[0-9a-fA-F]{32}$' }, { type: 'null' }] },
-  phone_number_sid: { anyOf: [{ type: 'string', pattern: '^PN[0-9a-fA-F]{32}$' }, { type: 'null' }] },
-  valid_until: timestamp });
+const releaseProperties = { ...subject, schema_version: { const: 1 }, incident_id: id, resource_id: id, valid_until: timestamp };
+export const phoneReleaseVerdictV1JsonSchema = { oneOf: [
+  object({ ...releaseProperties, authorized: { const: true },
+    account_sid: { type: 'string', pattern: '^AC[0-9a-fA-F]{32}$' },
+    phone_number_sid: { type: 'string', pattern: '^PN[0-9a-fA-F]{32}$' } }),
+  object({ ...releaseProperties, authorized: { const: false }, account_sid: { type: 'null' }, phone_number_sid: { type: 'null' } }),
+] } as const;
 export const commercialProtocolV1JsonSchema = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',
   $id: 'https://authentication.unlikeotherai.com/schemas/commercial-policy-v1.json',

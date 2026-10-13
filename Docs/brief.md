@@ -3185,3 +3185,12 @@ through UOA independently; no duplicate identity, organisation or membership sto
 is permitted. Existing native refresh grants never widen: adding the scope requires
 one fresh registration/sign-in with explicit hosted consent. Operator provisioning,
 wire contract and verification are authoritative in [Kelpie account connectivity](Auth/kelpie-connect.md).
+## Company commercial policy (2026-10-13)
+
+The explicitly approved Nessie company pricing, trials, storage-expansion consent
+and payment-recovery policy extends the commercial control plane. Its exact
+authority, public member/background contracts and operator limitations are in
+[Company commercial policy](Requirements/product-commercial-policy.md).
+Existing blanket FREE usage tariffs are neither this product's free tier nor its
+trials. No deployment/migration implicitly changes customer tariffs, collection
+mode, mandates or live Stripe prices.

@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { llmCommercialPolicyMarkdown } from './llm-commercial-policy.js';
 import { llmSmsOperatorsMarkdown } from './llm-sms-operators.js';
 import { llmNativeAppsMarkdown } from './llm-native-apps.js';
 // Native app integration includes direct connectivity and same-account local pairing proofs.
@@ -31,6 +32,6 @@ ${llmIntroMarkdown}\n## Admin activity and directory reads\nGET /internal/admin/
 export function registerLlmRoute(app: FastifyInstance): void {
   app.get('/llm', async (_request, reply) => {
     reply.header('Cache-Control', 'no-store');
-    reply.type('text/markdown; charset=utf-8').send(`${renderLlmMarkdown()}\n${llmSmsOperatorsMarkdown}`);
+    reply.type('text/markdown; charset=utf-8').send(`${renderLlmMarkdown()}\n${llmSmsOperatorsMarkdown}\n${llmCommercialPolicyMarkdown}`);
   });
 }

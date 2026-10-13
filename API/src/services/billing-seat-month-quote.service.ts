@@ -1,6 +1,7 @@
 import { BillingSeatChargeTiming, BillingSeatPolicy } from '@prisma/client';
 
 import { AppError } from '../utils/errors.js';
+import { unwaivedIntervals, type ProductFeeWaiver } from './billing-product-fee-waiver.service.js';
 
 type MembershipInterval = {
   id: string;
@@ -26,6 +27,7 @@ export type SeatMonthQuoteInput = {
   endedAt: Date | null;
   membershipIntervals: MembershipInterval[];
   capacityRevisions: CapacityRevision[];
+  feeWaivers?: ProductFeeWaiver[];
 };
 
 export type SeatMonthQuote = {
@@ -174,9 +176,21 @@ export function quoteMonthlySeatCharge(input: SeatMonthQuoteInput): SeatMonthQuo
       uniqueHumanSeats: input.seatPolicy === BillingSeatPolicy.AUTOMATIC ? 0 : null,
       seatMilliseconds: 0n, monthMilliseconds, evidenceIds: [] };
   }
-  const evidence = input.seatPolicy === BillingSeatPolicy.AUTOMATIC
-    ? automaticSeatTime(input, from, to, monthMilliseconds)
-    : fixedSeatTime(input, from, to, monthMilliseconds);
+  const waivers = input.feeWaivers ?? [];
+  const paid = unwaivedIntervals(new Date(from), new Date(to), waivers);
+  if (waivers.length && input.seatChargeTiming === BillingSeatChargeTiming.FULL_MONTH &&
+      paid.length && paid.reduce((sum, span) => sum + millis(span.endsAt) - millis(span.startsAt), 0) !== to - from) {
+    throw new AppError('INTERNAL', 409, 'BILLING_PARTIAL_FULL_MONTH_WAIVER_POLICY_REQUIRED');
+  }
+  const pieces = paid.map((span) => input.seatPolicy === BillingSeatPolicy.AUTOMATIC
+    ? automaticSeatTime(input, millis(span.startsAt), millis(span.endsAt), monthMilliseconds)
+    : fixedSeatTime(input, millis(span.startsAt), millis(span.endsAt), monthMilliseconds));
+  const evidence = { uniqueHumanSeats: input.seatPolicy === BillingSeatPolicy.AUTOMATIC
+    ? new Set(input.membershipIntervals.filter((row) => paid.some((span) =>
+      overlap(millis(row.startsAt), row.endsAt ? millis(row.endsAt) : Number.MAX_SAFE_INTEGER,
+        millis(span.startsAt), millis(span.endsAt)) > 0)).map((row) => row.userId)).size : null,
+    seatMilliseconds: pieces.reduce((sum, piece) => sum + piece.seatMilliseconds, 0n),
+    evidenceIds: [...new Set([...pieces.flatMap((piece) => piece.evidenceIds), ...waivers.map((row) => row.id)])].sort() };
   const numerator = input.unitAmountMinor * evidence.seatMilliseconds;
   const amountMinor = (numerator * 2n + monthMilliseconds) / (2n * monthMilliseconds);
   return { ...evidence, amountMinor, unitAmountMinor: input.unitAmountMinor,

@@ -10,6 +10,7 @@ import { normalizeBillingServiceIdentifier, normalizeTariffInput, type TariffInp
 export { normalizeBillingServiceIdentifier, normalizeTariffInput, DEFAULT_STANDARD_MARKUP_BPS } from './billing-tariff-input.service.js';
 export type { TariffInput, PublicTariffMode, PublicBillingCollectionMode } from './billing-tariff-input.service.js';
 import { AppError } from '../utils/errors.js';
+import { assertPrivateTeamTariffChange } from './billing-product-private-policy.service.js';
 import {
   assertContractAssignmentRemovalAllowed,
   assertContractAssignmentWriteAllowed,
@@ -282,6 +283,9 @@ export async function upsertBillingTariffAssignment(
     if (!service?.active || !tariff || !org || (params.teamId && !team)) {
       throw new AppError('BAD_REQUEST', 400, 'INVALID_TARIFF_ASSIGNMENT');
     }
+    if (params.teamId) await assertPrivateTeamTariffChange(tx, {
+      serviceId: params.serviceId, orgId: params.organisationId, tariffId: params.tariffId,
+    });
     await assertContractAssignmentWriteAllowed(tx, {
       serviceId: params.serviceId,
       organisationId: params.organisationId,

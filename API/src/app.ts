@@ -24,6 +24,7 @@ import { startSeatTransitionScheduler } from './services/billing-seat-transition
 import { startManualCycleReconciliationScheduler } from './services/billing-cycle-manual-reconciliation-scheduler.service.js';
 import { startBillingCycleCloseScheduler } from './services/billing-cycle-close-scheduler.service.js';
 import { startSmsPolicyRenewalScheduler } from './services/billing-sms-policy-renewal-scheduler.service.js';
+import { startCommercialRecoveryScheduler } from './services/billing-commercial-recovery-scheduler.service.js';
 import { preloadBillingAssertionSigningKey } from './services/billing-ledger-collector.service.js';
 import { sweepExpiredClaims } from './services/integration-claim.service.js';
 import { pruneExpiredSecurityData } from './services/retention-pruning.service.js';
@@ -283,6 +284,8 @@ export async function createApp(): Promise<FastifyInstance> {
         manualCycleScheduler.stop();
       });
       const closedCycleScheduler = startBillingCycleCloseScheduler({ log: app.log });
+      const commercialRecoveryScheduler = startCommercialRecoveryScheduler({ log: app.log });
+      app.addHook('onClose', async () => { commercialRecoveryScheduler.stop(); });
       app.addHook('onClose', async () => {
         closedCycleScheduler.stop();
       });
