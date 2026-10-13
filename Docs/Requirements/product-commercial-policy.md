@@ -494,3 +494,8 @@ Delete/update behavior and exceptional constraint names match the existing SQL.
 This is a schema declaration correction, with no data rewrite or monetary change.
 Local schema validation passed; remote regeneration, typecheck and the scoped
 read-only migration diff remain pending.
+
+An omitted email provider is the existing disabled transport configuration.
+Commercial warnings do not create accepted email receipts when the provider is
+unset or explicitly disabled; both configurations are covered by the focused
+database delivery suite. A logging/no-op provider is never payment-release proof.

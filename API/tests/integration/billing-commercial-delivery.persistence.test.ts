@@ -54,6 +54,14 @@ describe.skipIf(!process.env.DATABASE_URL)('commercial delivery recovery in Post
     return db.prisma.billingCommercialNotification.create({ data: { id: `notice-${id}-${stage}`,
       incidentId: id, stage, dueAt: new Date(now.getTime() - 86_400_000) } });
   }
+  it.each([undefined, 'disabled'])('cannot turn email provider=%s into an accepted transport receipt', async (provider) => {
+    vi.stubEnv('EMAIL_PROVIDER', provider);
+    const queue = vi.spyOn(db.prisma, '$executeRaw').mockRejectedValue(new Error('DISABLED_TRANSPORT_MUST_NOT_CREATE_WORK'));
+    try {
+      await expect(deliverCommercialEmails({ prisma: db.prisma, now: () => now })).resolves.toBeUndefined();
+      expect(queue).not.toHaveBeenCalled();
+    } finally { queue.mockRestore(); vi.unstubAllEnvs(); }
+  });
   it('delivers later real work despite more than100 resolved warnings, only to current company managers', async () => {
     await incident('resolved', 'phone', true); await incident('live');
     const historical = Array.from({ length: 120 }, (_, index) => ({ id: `old-${index}`, serviceId: smsIds.service,

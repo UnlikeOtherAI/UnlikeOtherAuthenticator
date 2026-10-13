@@ -10,7 +10,7 @@ export async function deliverCommercialEmails(deps?: { prisma?: PrismaClient;
   sendEmail?: typeof sendRawEmail; now?: () => Date }) {
   const prisma = deps?.prisma ?? getAdminPrisma();
   const env = getEnv();
-  if (env.EMAIL_PROVIDER === 'disabled' && !deps?.sendEmail) return;
+  if ((env.EMAIL_PROVIDER ?? 'disabled') === 'disabled' && !deps?.sendEmail) return;
   const now = deps?.now?.() ?? new Date();
   // Historical resolved, seat and accepted rows do not consume the budget.
   await prisma.$executeRaw`
