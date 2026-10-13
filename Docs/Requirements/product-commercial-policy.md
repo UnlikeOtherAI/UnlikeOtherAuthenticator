@@ -337,3 +337,8 @@ database regressions passed without skips. The updated desktop/Pixel7 operator
 publication and withdrawal journey passed2/2. New wire cases verify member
 omission, exact actor/locale forwarding, no-store, explicit accepted frozen action
 and refusal of guessed private tariff selection before mutation.
+
+Screenshot inspection showed the mobile publication action required horizontal
+table scrolling. Published offer rows now wrap their existing details and action
+within the viewport; the same single rendering is used on desktop and mobile.
+The EUR-seat/USD-usage form screenshot shows both valuation fields explicitly.

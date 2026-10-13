@@ -98,7 +98,7 @@ test('operator reaches exact company policy, reviews effective date, binds stora
   await page.getByRole('heading', { name: 'Public Standard seat plans' }).scrollIntoViewIfNeeded();
   await page.screenshot({ path: info.outputPath('public-standard-seats.png'), fullPage: true });
   await page.getByRole('button', { name: 'Withdraw new purchases', exact: true }).click();
-  await expect(page.getByRole('cell', { name: 'Withdrawn', exact: true })).toBeVisible();
+  await expect(page.getByText('Withdrawn', { exact: true })).toBeVisible();
   expect(writes).toHaveLength(4);
   expect(fixture.unexpected).toEqual([]); expect(fixture.errors).toEqual([]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);

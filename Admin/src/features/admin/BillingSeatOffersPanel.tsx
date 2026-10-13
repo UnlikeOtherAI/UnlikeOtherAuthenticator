@@ -2,7 +2,6 @@ import { useState } from 'react';
 import type { BillingService } from '../../schemas/billing';
 import { Button } from '../../components/ui/Button';
 import { FieldShell, SelectField } from '../../components/ui/FormFields';
-import { DataTable, Td } from '../../components/ui/Table';
 import { billingMoney } from './billing-money';
 import { useSeatOffers, usePublishSeatOffer, useWithdrawSeatOffer } from './billing-commercial-queries';
 
@@ -25,12 +24,18 @@ export function BillingSeatOffersPanel({ service }: { service: BillingService })
     {publish.isError ? <p role="alert" className="text-sm text-red-600">Publication failed. Verify the exact Standard seat price, automatic/prorated policy, prepaid USD usage and 30% markup.</p> : null}
     {withdraw.isError ? <p role="alert" className="text-sm text-red-600">Withdrawal failed. Retry.</p> : null}
     {list.isError ? <p role="alert">Could not load published plans. <Button onClick={() => void list.refetch()}>Retry</Button></p> : null}
-    <DataTable headers={['Monthly seat price', 'Usage currency', 'Published', 'Action']}>
-      {(list.data ?? []).map((row) => <tr key={row.id}><Td>{billingMoney(row.unit_amount_minor, row.currency)}</Td><Td>{row.usage_currency}</Td>
-        <Td>{new Date(row.published_at).toLocaleString()}</Td><Td>{row.withdrawn_at ? 'Withdrawn' : <Button disabled={withdraw.isPending}
-          onClick={() => void withdraw.mutateAsync(row.id).catch(() => undefined)}>Withdraw new purchases</Button>}</Td></tr>)}
-      {list.data?.length === 0 ? <tr><Td colSpan={4}>No public Standard plans. Create compatible immutable tariff versions on the Tariffs tab, then publish them here.</Td></tr> : null}
-    </DataTable>
+    <ul className="space-y-3">
+      {(list.data ?? []).map((row) => <li key={row.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 p-3">
+        <dl className="flex flex-wrap gap-6 text-sm">
+          <div><dt className="text-gray-500">Monthly seat price</dt><dd>{billingMoney(row.unit_amount_minor, row.currency)}</dd></div>
+          <div><dt className="text-gray-500">Usage currency</dt><dd>{row.usage_currency}</dd></div>
+          <div><dt className="text-gray-500">Published</dt><dd>{new Date(row.published_at).toLocaleString()}</dd></div>
+        </dl>
+        {row.withdrawn_at ? <span>Withdrawn</span> : <Button disabled={withdraw.isPending}
+          onClick={() => void withdraw.mutateAsync(row.id).catch(() => undefined)}>Withdraw new purchases</Button>}
+      </li>)}
+    </ul>
+    {list.data?.length === 0 ? <p className="text-sm text-gray-500">No public Standard plans. Create compatible immutable tariff versions on the Tariffs tab, then publish them here.</p> : null}
     <p className="text-sm text-gray-500">Withdrawal stops new selections; accepted agreements and completed purchases keep their frozen terms.</p>
   </section>;
 }
