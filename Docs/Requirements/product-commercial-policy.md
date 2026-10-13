@@ -389,3 +389,7 @@ The database recovery journey covers Friday failure, Stripe initial expiry after
 action replay. Only one replacement outcome and two total generations are
 permitted; the original weekday deadline and unpaid debt must remain unchanged.
 This new full recovery regression is coded and execution is pending.
+
+Recovery now uses the shared exact invoice/customer/subscription/price/quantity/
+period validator before treating an initial attempt as terminal unpaid. Matching
+only customer and subscription metadata would not prove the required liability.

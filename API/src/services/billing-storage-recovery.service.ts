@@ -8,8 +8,9 @@ import { commercialMember, lockCommercialAuthority } from './billing-product-aut
 import { authorizeBillingCustomerAction, BILLING_CUSTOMER_ACTION } from './billing-customer-action-intent.service.js';
 import { storageRuntime, type StorageDependencies } from './billing-storage-mandate.service.js';
 import { locateStorageAttempt, dispatchStorageExpansion } from './billing-storage-expansion.service.js';
-import { resolveStripeAccountContext, assertStripeObjectLivemode } from './billing-stripe-client.service.js';
+import { resolveStripeAccountContext } from './billing-stripe-client.service.js';
 import { stripeExternalId } from './billing-stripe-webhook-utils.service.js';
+import { readBoundStorageInvoice } from './billing-storage-invoice.service.js';
 
 export async function recoverStorage(input: { request: ProductEntitlementRequest & { expansion_id: string; mandate_id?: string };
   actorToken: string; credential: VerifiedBillingAppKey }, deps?: StorageDependencies): Promise<StorageRecoveryResultV1> {
@@ -46,9 +47,11 @@ export async function recoverStorage(input: { request: ProductEntitlementRequest
   const remote = await locateStorageAttempt(stripe, prepared.attempt, prepared.mandate.stripeCustomerId, livemode, prisma);
   if (!remote) throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_STORAGE_ATTEMPT_UNPROVEN');
   const invoiceId = prepared.attempt.stripeInvoiceId ?? stripeExternalId(remote.latest_invoice);
-  const invoice = invoiceId ? await stripe.invoices.retrieve(invoiceId) : null;
-  if (invoice) assertStripeObjectLivemode(invoice, livemode);
+  const verified = invoiceId ? await readBoundStorageInvoice(invoiceId, stripe, account, prisma) : null;
+  const invoice = verified?.invoice;
   if (remote.status !== 'incomplete_expired' || !invoice || !['void', 'uncollectible'].includes(invoice.status ?? '') ||
+    verified?.binding.attempt.id !== prepared.attempt.id || verified.binding.expansion.id !== prepared.expansion.id ||
+    verified.remote.id !== remote.id || verified.remote.status !== 'incomplete_expired' ||
     invoice.amount_paid !== 0 || stripeExternalId(invoice.customer) !== prepared.mandate.stripeCustomerId ||
     stripeExternalId(invoice.parent?.subscription_details?.subscription) !== remote.id ||
     remote.metadata.uoa_storage_attempt_id !== prepared.attempt.id || remote.metadata.uoa_storage_expansion_id !== prepared.expansion.id) {

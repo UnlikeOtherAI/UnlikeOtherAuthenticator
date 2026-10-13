@@ -136,12 +136,17 @@ describe.skipIf(!process.env.DATABASE_URL)('storage cash evidence ordering in Po
     const originalDeadline = grace.incident?.graceEndsAt;
     const metadata = { uoa_storage_attempt_id: attempt.id, uoa_storage_expansion_id: expansion.id, uoa_storage_mandate_id: mandate.id, uoa_service: 'nessie' };
     const expired = { id: 'sub_expired', livemode: false, customer: 'cus_weekend', status: 'incomplete_expired', metadata,
-      latest_invoice: 'in_expired' };
+      latest_invoice: 'in_expired', collection_method: 'charge_automatically', discounts: [],
+      items: { data: [{ id: 'si_expired', price: { id: 'price_fixture' }, discounts: [] }] } };
     const outcomes = new Map<string, Record<string, unknown>>();
     const stripe = { accounts: { retrieveCurrent: async () => ({ id: 'acct_sms_fixture' }) },
       paymentMethods: { retrieve: async () => ({ id: 'pm_weekend', customer: 'cus_weekend', livemode: false }) },
       invoices: { retrieve: async () => ({ id: 'in_expired', livemode: false, customer: 'cus_weekend', status: 'void', amount_paid: 0,
-        parent: { subscription_details: { subscription: 'sub_expired' } } }) },
+        currency: 'eur', collection_method: 'charge_automatically', discounts: [], billing_reason: 'subscription_create',
+        parent: { subscription_details: { subscription: 'sub_expired', metadata } }, lines: { has_more: false, data: [{
+          pricing: { price_details: { price: 'price_fixture' } }, currency: 'eur', discounts: [], quantity: 1, amount: 999,
+          period: { start: 1791568800, end: 1794247200 }, parent: { subscription_item_details: { subscription_item: 'si_expired', proration: false } },
+        }] } }) },
       products: { retrieve: async () => ({ id: 'prod_fixture', livemode: false, active: true,
         metadata: { uoa_kind: 'company_storage', uoa_service: 'nessie', contract_version: '1' } }) },
       prices: { retrieve: async () => ({ id: 'price_fixture', livemode: false, active: true, product: 'prod_fixture', type: 'recurring', currency: 'eur',
@@ -162,8 +167,9 @@ describe.skipIf(!process.env.DATABASE_URL)('storage cash evidence ordering in Po
       .setProtectedHeader({ alg: 'RS256', kid: jwk.kid }).setIssuer(credential.actorIssuer)
       .setAudience(billingActorAudience('/billing/v1/storage/recover')).setSubject(user.id).setJti(jti)
       .setIssuedAt().setExpirationTime('60s').sign(pair.privateKey); }
-    const result = await recoverStorage({ request: body, credential, actorToken: await actor('weekend-recover') }, { prisma: db.prisma, stripe, livemode: false });
-    const replay = await recoverStorage({ request: body, credential, actorToken: await actor('weekend-recover') }, { prisma: db.prisma, stripe, livemode: false });
+    const token = await actor('weekend-recover');
+    const result = await recoverStorage({ request: body, credential, actorToken: token }, { prisma: db.prisma, stripe, livemode: false });
+    const replay = await recoverStorage({ request: body, credential, actorToken: token }, { prisma: db.prisma, stripe, livemode: false });
     expect(result).toMatchObject({ state: 'payment_pending' }); expect(replay.attempt_id).toBe(result.attempt_id);
     expect(await db.prisma.billingStoragePaymentAttempt.count({ where: { expansionId: expansion.id } })).toBe(2); expect(outcomes.size).toBe(1);
     const debt = await db.prisma.billingCommercialIncident.findUniqueOrThrow({ where: { accountId_invoiceId: { accountId: smsIds.account, invoiceId: 'in_expired' } } });
