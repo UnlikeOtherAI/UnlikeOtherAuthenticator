@@ -5,6 +5,9 @@ import { fileURLToPath } from 'node:url';
 import { normalizeArtifactLineEndings, serializeArtifact } from './artifact-text.mjs';
 
 import {
+  commercialProtocolV1JsonSchema,
+  productEntitlementV1JsonSchema,
+  productEntitlementMemberV1Fixture,
   billingSmsProtocolV1JsonSchema,
   billingSmsV1OpenApiDocument,
   billingCreditBudgetV1ConformanceFixture,
@@ -42,6 +45,9 @@ import {
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const artifacts = new Map([
+  [resolve(packageRoot, 'schema/commercial-policy-v1.json'), commercialProtocolV1JsonSchema],
+  [resolve(packageRoot, 'schema/product-entitlement-v1.json'), productEntitlementV1JsonSchema],
+  [resolve(packageRoot, 'fixtures/product-entitlement-v1.example.json'), productEntitlementMemberV1Fixture],
   [resolve(packageRoot, 'schema/billing-sms-v1.json'), billingSmsProtocolV1JsonSchema],
   [resolve(packageRoot, 'openapi/billing-sms-v1.openapi.json'), billingSmsV1OpenApiDocument],
   [resolve(packageRoot, 'schema/billing-credit-funding-request-v1.json'), billingCreditFundingRequestV1JsonSchema],

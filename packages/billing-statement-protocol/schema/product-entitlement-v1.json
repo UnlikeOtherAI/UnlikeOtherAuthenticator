@@ -1,0 +1,657 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://authentication.unlikeotherai.com/schemas/product-entitlement-v1.json",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "product",
+        "organisation_id",
+        "schema_version",
+        "subject",
+        "access",
+        "full_access",
+        "history_window_days",
+        "trial_ends_at",
+        "seats",
+        "storage",
+        "observed_at",
+        "valid_until",
+        "viewer"
+      ],
+      "properties": {
+        "product": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "organisation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "schema_version": {
+          "const": 1
+        },
+        "subject": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "team_id",
+            "user_id"
+          ],
+          "properties": {
+            "team_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "user_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          }
+        },
+        "access": {
+          "enum": [
+            "full",
+            "limited"
+          ]
+        },
+        "full_access": {
+          "type": "boolean"
+        },
+        "history_window_days": {
+          "enum": [
+            14,
+            null
+          ]
+        },
+        "trial_ends_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "seats": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "policy",
+            "capacity",
+            "admitted",
+            "can_admit_members"
+          ],
+          "properties": {
+            "policy": {
+              "enum": [
+                "free",
+                "automatic",
+                "fixed"
+              ]
+            },
+            "capacity": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "admitted": {
+              "type": "boolean"
+            },
+            "can_admit_members": {
+              "type": "boolean"
+            }
+          }
+        },
+        "storage": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "capacity_bytes",
+            "used_bytes",
+            "observed_at",
+            "can_upload",
+            "expansion_setup_required"
+          ],
+          "properties": {
+            "capacity_bytes": {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]{0,18})$"
+            },
+            "used_bytes": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^(0|[1-9][0-9]{0,18})$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "observed_at": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "can_upload": {
+              "type": "boolean"
+            },
+            "expansion_setup_required": {
+              "type": "boolean"
+            }
+          }
+        },
+        "observed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "valid_until": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "viewer": {
+          "const": "member"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "product",
+        "organisation_id",
+        "schema_version",
+        "subject",
+        "access",
+        "full_access",
+        "history_window_days",
+        "trial_ends_at",
+        "seats",
+        "storage",
+        "observed_at",
+        "valid_until",
+        "dunning",
+        "standing",
+        "platform_fees_waived",
+        "third_party_costs_payable",
+        "viewer"
+      ],
+      "properties": {
+        "product": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "organisation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "schema_version": {
+          "const": 1
+        },
+        "subject": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "team_id",
+            "user_id"
+          ],
+          "properties": {
+            "team_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "user_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          }
+        },
+        "access": {
+          "enum": [
+            "full",
+            "limited"
+          ]
+        },
+        "full_access": {
+          "type": "boolean"
+        },
+        "history_window_days": {
+          "enum": [
+            14,
+            null
+          ]
+        },
+        "trial_ends_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "seats": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "policy",
+            "capacity",
+            "admitted",
+            "can_admit_members"
+          ],
+          "properties": {
+            "policy": {
+              "enum": [
+                "free",
+                "automatic",
+                "fixed"
+              ]
+            },
+            "capacity": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "admitted": {
+              "type": "boolean"
+            },
+            "can_admit_members": {
+              "type": "boolean"
+            }
+          }
+        },
+        "storage": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "capacity_bytes",
+            "used_bytes",
+            "observed_at",
+            "can_upload",
+            "expansion_setup_required"
+          ],
+          "properties": {
+            "capacity_bytes": {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]{0,18})$"
+            },
+            "used_bytes": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^(0|[1-9][0-9]{0,18})$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "observed_at": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "can_upload": {
+              "type": "boolean"
+            },
+            "expansion_setup_required": {
+              "type": "boolean"
+            }
+          }
+        },
+        "observed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "valid_until": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "dunning": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "incident_id",
+                "category",
+                "failed_at",
+                "grace_ends_at",
+                "billing_timezone"
+              ],
+              "properties": {
+                "incident_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "category": {
+                  "enum": [
+                    "seat",
+                    "storage"
+                  ]
+                },
+                "failed_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "grace_ends_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "billing_timezone": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                }
+              }
+            }
+          ]
+        },
+        "standing": {
+          "enum": [
+            "free",
+            "trial",
+            "subscribed",
+            "private_at_cost",
+            "grace",
+            "restricted"
+          ]
+        },
+        "platform_fees_waived": {
+          "type": "boolean"
+        },
+        "third_party_costs_payable": {
+          "const": true
+        },
+        "viewer": {
+          "const": "manager"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "product",
+        "organisation_id",
+        "schema_version",
+        "subject",
+        "access",
+        "full_access",
+        "history_window_days",
+        "trial_ends_at",
+        "seats",
+        "storage",
+        "observed_at",
+        "valid_until",
+        "dunning",
+        "standing",
+        "platform_fees_waived",
+        "third_party_costs_payable",
+        "viewer"
+      ],
+      "properties": {
+        "product": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "organisation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "schema_version": {
+          "const": 1
+        },
+        "subject": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "team_id",
+                "user_id"
+              ],
+              "properties": {
+                "team_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "user_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "access": {
+          "enum": [
+            "full",
+            "limited"
+          ]
+        },
+        "full_access": {
+          "type": "boolean"
+        },
+        "history_window_days": {
+          "enum": [
+            14,
+            null
+          ]
+        },
+        "trial_ends_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "seats": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "policy",
+            "capacity",
+            "admitted",
+            "can_admit_members"
+          ],
+          "properties": {
+            "policy": {
+              "enum": [
+                "free",
+                "automatic",
+                "fixed"
+              ]
+            },
+            "capacity": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "admitted": {
+              "type": "boolean"
+            },
+            "can_admit_members": {
+              "type": "boolean"
+            }
+          }
+        },
+        "storage": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "capacity_bytes",
+            "used_bytes",
+            "observed_at",
+            "can_upload",
+            "expansion_setup_required"
+          ],
+          "properties": {
+            "capacity_bytes": {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]{0,18})$"
+            },
+            "used_bytes": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^(0|[1-9][0-9]{0,18})$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "observed_at": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "can_upload": {
+              "type": "boolean"
+            },
+            "expansion_setup_required": {
+              "type": "boolean"
+            }
+          }
+        },
+        "observed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "valid_until": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "dunning": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "incident_id",
+                "category",
+                "failed_at",
+                "grace_ends_at",
+                "billing_timezone"
+              ],
+              "properties": {
+                "incident_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "category": {
+                  "enum": [
+                    "seat",
+                    "storage"
+                  ]
+                },
+                "failed_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "grace_ends_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "billing_timezone": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                }
+              }
+            }
+          ]
+        },
+        "standing": {
+          "enum": [
+            "free",
+            "trial",
+            "subscribed",
+            "private_at_cost",
+            "grace",
+            "restricted"
+          ]
+        },
+        "platform_fees_waived": {
+          "type": "boolean"
+        },
+        "third_party_costs_payable": {
+          "const": true
+        },
+        "viewer": {
+          "const": "background"
+        }
+      }
+    }
+  ]
+}
