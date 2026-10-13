@@ -484,6 +484,11 @@ model User {
   agreementSignatures    AgreementSignature[]
   avatar                 UserAvatar?
   settings               UserSetting[]
+  billingCommercialAcknowledgements BillingCommercialAcknowledgement[]
+  billingCommercialEmailDeliveries BillingCommercialEmailDelivery[]
+  billingProductPolicyRevisions BillingProductPolicyRevision[]
+  billingStorageMandates BillingStorageMandate[]
+
 
   @@index([email])
   @@index([domain])
@@ -874,6 +879,8 @@ model ClientDomain {
   agreementSignatures   AgreementSignature[]
   delegationMappings    ConfidentialDelegationMapping[]
   salesResearchJobGrants SalesResearchJobGrant[]
+  billingProductEnrollments BillingProductEnrollment[]
+
 
   @@index([status])
   @@map("client_domains")
@@ -1303,6 +1310,13 @@ model Organisation {
   billingOrgResponsibility          BillingOrgResponsibility?
   billingSeatSubscriptions          BillingSeatSubscription[]
   customerBillingCycles             BillingCustomerCycle[]
+  billingCommercialIncidents BillingCommercialIncident[]
+  billingProductEnrollments BillingProductEnrollment[]
+  billingStorageExpansions BillingStorageExpansion[]
+  billingStorageMandates BillingStorageMandate[]
+  billingStorageObservations BillingStorageObservation[]
+  billingStorageSubscriptions BillingStorageSubscription[]
+
 
   @@unique([domain, slug])
   @@index([domain])
@@ -1510,6 +1524,8 @@ model Team {
   recurringAddonCancellationScopeIntents   BillingRecurringAddonCancellationIntent[] @relation("RecurringAddonCancellationScopeTeam")
   recurringAddonCancellationRequestIntents BillingRecurringAddonCancellationIntent[] @relation("RecurringAddonCancellationRequestTeam")
   avatar                                   TeamAvatar?
+  billingStorageMandates BillingStorageMandate[]
+
 
   @@unique([orgId, name])
   @@unique([orgId, slug])
@@ -1804,6 +1820,15 @@ model BillingService {
   invoiceAddonLines                 BillingInvoiceAddonLine[]
   seatSubscriptions                 BillingSeatSubscription[]
   customerBillingCycles             BillingCustomerCycle[]
+  billingCommercialAcknowledgements BillingCommercialAcknowledgement[]
+  billingCommercialIncidents BillingCommercialIncident[]
+  billingProductEnrollments BillingProductEnrollment[]
+  billingStorageCatalogs BillingStorageCatalog[]
+  billingStorageExpansions BillingStorageExpansion[]
+  billingStorageMandates BillingStorageMandate[]
+  billingStorageObservations BillingStorageObservation[]
+  billingStorageSubscriptions BillingStorageSubscription[]
+
 
   @@map("billing_services")
   seatOffers                        BillingSeatOffer[]
@@ -1868,6 +1893,8 @@ model BillingTariffTermEvent {
   service BillingService @relation(fields: [serviceId], references: [id], onDelete: Restrict)
   tariff  BillingTariff? @relation(fields: [tariffId], references: [id], onDelete: Restrict)
   acceptedSeatCheckout BillingStripeCheckoutSession?
+  billingProductPolicyRevisions BillingProductPolicyRevision[]
+
 
   @@index([serviceId, source, scopeKey, effectiveFromMonth, createdAt])
   @@map("billing_tariff_term_events")
@@ -2002,6 +2029,8 @@ model BillingAppKey {
   creditAutoTopUpDisables           BillingCreditAutoTopUpDisableEvent[]
   recurringAddonCheckouts           BillingRecurringAddonCheckout[]
   recurringAddonCancellationIntents BillingRecurringAddonCancellationIntent[]
+  billingStorageMandates BillingStorageMandate[]
+
 
   @@index([serviceId])
   @@map("billing_app_keys")
@@ -2128,6 +2157,9 @@ model BillingCustomerActionIntent {
   org         Organisation   @relation(fields: [orgId], references: [id], onDelete: Restrict)
   team        Team           @relation(fields: [teamId], references: [id], onDelete: Restrict)
   requestedBy User           @relation(fields: [requestedByUserId], references: [id], onDelete: Restrict)
+  billingStorageMandates BillingStorageMandate?
+  billingStoragePaymentAttempts BillingStoragePaymentAttempt?
+
 
   @@unique([appKeyId, actorJti, operation], map: "billing_customer_action_intents_actor_action_key")
   @@index([serviceId], map: "billing_customer_action_intents_service_idx")
@@ -2172,6 +2204,15 @@ model BillingStripeAccount {
   recurringAddonCheckouts           BillingRecurringAddonCheckout[]
   recurringAddonSubscriptions       BillingRecurringAddonSubscription[]
   recurringAddonCancellationIntents BillingRecurringAddonCancellationIntent[]
+  billingCommercialEventRecovery BillingCommercialEventRecovery[]
+  billingCommercialEventScans BillingCommercialEventScan?
+  billingCommercialIncidents BillingCommercialIncident[]
+  billingFailureHistoryProbes BillingFailureHistoryProbe[]
+  billingStorageCatalogs BillingStorageCatalog[]
+  billingStorageMandates BillingStorageMandate[]
+  billingStoragePaymentEvidence BillingStoragePaymentEvidence[]
+  billingStorageSubscriptions BillingStorageSubscription[]
+
 
   @@unique([stripeAccountId, livemode])
   @@map("billing_stripe_accounts")
@@ -2364,6 +2405,8 @@ model BillingStripeSubscription {
   creditSettlements  BillingCreditUsageSettlement[]
   creditInvoiceLines BillingCreditInvoiceLine[]
   seatSubscription   BillingSeatSubscription?
+  billingCommercialIncidents BillingCommercialIncident[]
+
 
   @@unique([accountId, stripeSubscriptionId])
   @@index([accountId])
@@ -2557,6 +2600,10 @@ model BillingStripeWebhookEvent {
   creditAutoTopUpStates    BillingCreditAutoTopUpAttempt[]     @relation("CreditAutoTopUpStateEvent")
   addonCheckoutCompletions BillingRecurringAddonCheckout[]     @relation("RecurringAddonCheckoutCompletionEvent")
   addonActivations         BillingRecurringAddonSubscription[] @relation("RecurringAddonActivationEvent")
+  commercialFailureIncidents BillingCommercialIncident[] @relation("CommercialIncidentFailureEvent")
+  commercialResolutionIncidents BillingCommercialIncident[] @relation("CommercialIncidentResolutionEvent")
+  billingStoragePaymentEvidence BillingStoragePaymentEvidence[]
+
 
   @@unique([accountId, stripeEventId])
   @@index([accountId])
@@ -4522,6 +4569,8 @@ model BillingRecurringAddonSubscription {
   activationWebhookEvent BillingStripeWebhookEvent?                @relation("RecurringAddonActivationEvent", fields: [activationWebhookEventId], references: [id], onDelete: Restrict)
   cancellationIntents    BillingRecurringAddonCancellationIntent[]
   contractInvoiceLines   BillingInvoiceAddonLine[]
+  billingCommercialIncidents BillingCommercialIncident[]
+
 
   @@unique([accountId, stripeSubscriptionId])
   @@unique([accountId, stripeItemId])
@@ -5013,6 +5062,8 @@ model BillingSmsNumberResource {
   quote                BillingSmsQuote @relation(fields: [quoteId], references: [id], onDelete: Restrict)
   reservations         BillingSmsReservation[]
   standingHolds        BillingSmsStandingHold[]
+  billingCommercialIncidents BillingCommercialIncident[]
+
 
   @@unique([serviceId, accountSid, phoneNumberSid])
   @@index([serviceId, orgId, state])
@@ -5214,6 +5265,11 @@ model BillingProductEnrollment {
   active          Boolean  @default(true)
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
+  org Organisation @relation(fields: [orgId], references: [id], onUpdate: NoAction)
+  service BillingService @relation(fields: [serviceId], references: [id], onUpdate: NoAction)
+  sourceDomainRecord ClientDomain @relation(fields: [sourceDomain], references: [domain], onUpdate: NoAction)
+  billingProductPolicyRevisions BillingProductPolicyRevision[]
+
   @@unique([serviceId, orgId])
   @@map("billing_product_enrollments")
 }
@@ -5236,6 +5292,17 @@ model BillingCommercialIncident {
   resolvedAt           DateTime? @map("resolved_at")
   resolutionEventId    String?  @map("resolution_event_id")
   createdAt            DateTime @default(now()) @map("created_at")
+  account BillingStripeAccount @relation(fields: [accountId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  addonSubscription BillingRecurringAddonSubscription? @relation(fields: [addonSubscriptionId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  baseSubscription BillingStripeSubscription? @relation(fields: [baseSubscriptionId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  failureEvent BillingStripeWebhookEvent @relation("CommercialIncidentFailureEvent", fields: [failureEventId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  org Organisation @relation(fields: [orgId], references: [id], onUpdate: NoAction)
+  resolutionEvent BillingStripeWebhookEvent? @relation("CommercialIncidentResolutionEvent", fields: [resolutionEventId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  resource BillingSmsNumberResource? @relation(fields: [resourceId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  service BillingService @relation(fields: [serviceId], references: [id], onUpdate: NoAction)
+  storageExpansion BillingStorageExpansion? @relation(fields: [storageExpansionId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "billing_commercial_storage_source_fk")
+  billingCommercialNotifications BillingCommercialNotification[]
+
   @@unique([accountId, invoiceId])
   @@index([serviceId, orgId, resolvedAt, failedAt])
   @@map("billing_commercial_incidents")
@@ -5251,6 +5318,10 @@ model BillingProductPolicyRevision {
   effectiveAt    DateTime @map("effective_at")
   actorUserId    String   @map("actor_user_id")
   createdAt      DateTime @default(now()) @map("created_at")
+  actor User @relation(fields: [actorUserId], references: [id], onUpdate: NoAction)
+  enrollment BillingProductEnrollment @relation(fields: [enrollmentId], references: [id], onUpdate: NoAction)
+  privateTermEvent BillingTariffTermEvent? @relation(fields: [privateTermEventId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
   @@index([enrollmentId, effectiveAt])
   @@map("billing_product_policy_revisions")
 }
@@ -5263,6 +5334,10 @@ model BillingCommercialNotification {
   emailSentAt  DateTime? @map("email_sent_at")
   createdAt    DateTime @default(now()) @map("created_at")
   lastPolledAt DateTime? @map("last_polled_at")
+  billingCommercialAcknowledgements BillingCommercialAcknowledgement[]
+  billingCommercialEmailDeliveries BillingCommercialEmailDelivery[]
+  incident BillingCommercialIncident @relation(fields: [incidentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
   @@unique([incidentId, stage])
   @@map("billing_commercial_notifications")
 }
@@ -5274,6 +5349,10 @@ model BillingCommercialAcknowledgement {
   recipientUserId String  @map("recipient_user_id")
   receiptId      String   @map("receipt_id")
   acknowledgedAt DateTime @default(now()) @map("acknowledged_at")
+  notification BillingCommercialNotification @relation(fields: [notificationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  recipient User @relation(fields: [recipientUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  service BillingService @relation(fields: [serviceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
   @@id([serviceId, notificationId, channel, recipientUserId])
   @@map("billing_commercial_acknowledgements")
 }
@@ -5289,6 +5368,9 @@ model BillingStorageObservation {
   databaseBytes  BigInt   @map("database_bytes")
   observedAt     DateTime @map("observed_at")
   createdAt      DateTime @default(now()) @map("created_at")
+  org Organisation @relation(fields: [orgId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  service BillingService @relation(fields: [serviceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
   @@unique([serviceId, orgId, revision])
   @@unique([serviceId, orgId, observationId])
   @@map("billing_storage_observations")
@@ -5303,6 +5385,11 @@ model BillingStorageCatalog {
   stripePriceId   String   @map("stripe_price_id")
   version         Int      @default(1)
   createdAt       DateTime @default(now()) @map("created_at")
+  account BillingStripeAccount @relation(fields: [accountId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  service BillingService @relation(fields: [serviceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  billingStorageMandates BillingStorageMandate[]
+  billingStorageSubscriptions BillingStorageSubscription[]
+
   @@unique([serviceId, accountId, currency, version])
   @@map("billing_storage_catalogs")
 }
@@ -5330,6 +5417,18 @@ model BillingStorageMandate {
   cancelUrl             String   @map("cancel_url")
   createdAt             DateTime @default(now()) @map("created_at")
   updatedAt             DateTime @updatedAt @map("updated_at")
+  billingStorageExpansions BillingStorageExpansion[]
+  account BillingStripeAccount @relation(fields: [accountId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  actionIntent BillingCustomerActionIntent @relation(fields: [actionIntentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  appKey BillingAppKey @relation(fields: [appKeyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  catalog BillingStorageCatalog @relation(fields: [catalogId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  org Organisation @relation(fields: [orgId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  requestedBy User @relation(fields: [requestedByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  requestedTeam Team @relation(fields: [requestedTeamId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  service BillingService @relation(fields: [serviceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  billingStoragePaymentAttempts BillingStoragePaymentAttempt[]
+  billingStorageSubscriptions BillingStorageSubscription[]
+
   @@index([serviceId, orgId, accountId, state])
   @@map("billing_storage_mandates")
 }
@@ -5351,6 +5450,13 @@ model BillingStorageSubscription {
   paidThrough          DateTime? @map("paid_through")
   createdAt             DateTime @default(now()) @map("created_at")
   updatedAt             DateTime @updatedAt @map("updated_at")
+  billingStorageExpansions BillingStorageExpansion[]
+  account BillingStripeAccount @relation(fields: [accountId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  catalog BillingStorageCatalog @relation(fields: [catalogId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  mandate BillingStorageMandate @relation(fields: [mandateId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  org Organisation @relation(fields: [orgId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  service BillingService @relation(fields: [serviceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
   @@unique([serviceId, orgId, accountId])
   @@map("billing_storage_subscriptions")
 }
@@ -5371,6 +5477,13 @@ model BillingStorageExpansion {
   paymentProvenAt   DateTime? @map("payment_proven_at")
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
+  billingCommercialIncidents BillingCommercialIncident[]
+  mandate BillingStorageMandate @relation(fields: [mandateId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  org Organisation @relation(fields: [orgId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  service BillingService @relation(fields: [serviceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  subscription BillingStorageSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  billingStoragePaymentAttempts BillingStoragePaymentAttempt[]
+
   @@unique([serviceId, orgId, operationId])
   @@index([serviceId, orgId, state])
   @@map("billing_storage_expansions")
@@ -5386,6 +5499,10 @@ model BillingStoragePaymentEvidence {
   cashEvidence Json @map("cash_evidence")
   paidAt DateTime @map("paid_at")
   createdAt DateTime @default(now()) @map("created_at")
+  account BillingStripeAccount @relation(fields: [accountId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  attempt BillingStoragePaymentAttempt @relation(fields: [attemptId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  webhookEvent BillingStripeWebhookEvent @relation(fields: [webhookEventId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
   @@unique([accountId, invoiceId])
   @@map("billing_storage_payment_evidence")
 }
@@ -5397,6 +5514,8 @@ model BillingFailureHistoryProbe {
   complete Boolean @default(false)
   generation Int @default(0)
   updatedAt DateTime @updatedAt @map("updated_at")
+  account BillingStripeAccount @relation(fields: [accountId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
   @@id([accountId, invoiceId])
   @@map("billing_failure_history_probes")
 }
@@ -5415,6 +5534,11 @@ model BillingStoragePaymentAttempt {
   nextAttemptAt DateTime @default(now()) @map("next_attempt_at")
   lastAttemptAt DateTime? @map("last_attempt_at")
   recoveryActionIntentId String? @unique @map("recovery_action_intent_id")
+  expansion BillingStorageExpansion @relation(fields: [expansionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  mandate BillingStorageMandate @relation(fields: [mandateId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  recoveryActionIntent BillingCustomerActionIntent? @relation(fields: [recoveryActionIntentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  billingStoragePaymentEvidence BillingStoragePaymentEvidence[]
+
   @@unique([expansionId,generation])
   @@map("billing_storage_payment_attempts")
 }
@@ -5426,6 +5550,8 @@ model BillingCommercialEventScan {
   cursor String?
   generation Int @default(0)
   nextAttemptAt DateTime @default(now()) @map("next_attempt_at")
+  account BillingStripeAccount @relation(fields: [accountId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
   @@map("billing_commercial_event_scans")
 }
 model BillingCommercialEventRecovery {
@@ -5436,6 +5562,8 @@ model BillingCommercialEventRecovery {
   completedAt DateTime? @map("completed_at")
   nextAttemptAt DateTime @default(now()) @map("next_attempt_at")
   attemptCount Int @default(0) @map("attempt_count")
+  account BillingStripeAccount @relation(fields: [accountId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
   @@id([accountId,eventId])
   @@map("billing_commercial_event_recovery")
 }
@@ -5447,6 +5575,9 @@ model BillingCommercialEmailDelivery {
   attemptCount Int @default(0) @map("attempt_count")
   acceptedAt DateTime? @map("accepted_at")
   createdAt DateTime @default(now()) @map("created_at")
+  notification BillingCommercialNotification @relation(fields: [notificationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  recipient User @relation(fields: [recipientUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
   @@unique([notificationId, recipientUserId])
   @@index([acceptedAt, nextAttemptAt])
   @@map("billing_commercial_email_deliveries")

@@ -487,3 +487,10 @@ The private-to-contract regression activates the future agreement through the
 real operator service, so it proves the accepted tariff/contract binding instead
 of seeding an invalid service-term row. It also exercises the newly persisted
 normalized usage currency on that production path.
+
+Prisma declares all51 foreign keys introduced by the product-commercial,
+storage and payment-recovery migrations, with their102 relation/inverse fields.
+Delete/update behavior and exceptional constraint names match the existing SQL.
+This is a schema declaration correction, with no data rewrite or monetary change.
+Local schema validation passed; remote regeneration, typecheck and the scoped
+read-only migration diff remain pending.
