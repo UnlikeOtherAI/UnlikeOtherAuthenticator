@@ -541,3 +541,10 @@ before strict repository delivery; no changed production source exceeds500lines.
 Root owns the remaining commercial/authentication decisions and final combined
 review, deployment, catalogue publication and customer rollout. No PR or merge
 has been created by this producer coding agent.
+
+The four touched oversized historical suites are now split along their actual
+responsibilities: canonical synthetic setup, prepaid budget evidence, accepted
+Stripe/shared-payer funding, and multi-service tax allocation. The same registered
+cases retain their original order and shared isolated fixture. All changed code
+files, including these test modules, are now below500lines. The refactored suites
+must pass their full PostgreSQL rerun before this structural change is verified.
