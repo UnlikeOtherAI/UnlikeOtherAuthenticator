@@ -29,6 +29,13 @@ boundary; include product/company/person/team in consumer cache keys.
 
 ## Operator policy
 
+Home: Admin Billing > selected product > Company policy. The company selector,
+registered source and timezone controls enroll an exact company and assign a
+trial/private revision with its returned effective date visible. The same panel
+binds verified existing storage prices; App keys issues/revokes the separate
+Commercial worker credential. These operator flows still require their focused
+browser verification before final delivery.
+
 Standard monthly human prices are EUR299, GBP299 and USD399 minor units,
 automatic company seats, prorated changes, prepaid usage and standard30% markup.
 UOA retains its existing membership-interval calendar-invoice architecture:

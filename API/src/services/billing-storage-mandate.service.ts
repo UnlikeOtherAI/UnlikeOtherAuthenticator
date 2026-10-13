@@ -117,8 +117,8 @@ export async function createStorageMandate(input: { request: ProductEntitlementR
         unit_amount_minor: prepared.catalog.unitAmountMinor.toString(), currency: prepared.catalog.currency,
         automatic_expansion: true, initial_monthly_cycle: 'stripe_initial_attempt_period',
         expansion_proration: 'immediate_keep_renewal_date' },
-      stripeCustomerId: customer.stripeCustomerId, successUrl: `${origin}/?billing=storage`,
-      cancelUrl: `${origin}/?billing=storage` }, update: {} });
+      stripeCustomerId: customer.stripeCustomerId, successUrl: `${origin}/admin/billing`,
+      cancelUrl: `${origin}/admin/billing` }, update: {} });
   if (mandate.stripeCheckoutId) {
     const old = await runtime.stripe.checkout.sessions.retrieve(mandate.stripeCheckoutId);
     if (old.status !== 'open') return { mandate_id: mandate.id, state: mandate.state, url: null };

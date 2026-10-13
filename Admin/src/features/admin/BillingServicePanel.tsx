@@ -5,6 +5,7 @@ import { BillingSubscriptionsTable } from './BillingSubscriptionsTable';
 import { BillingSeatCapacityPanel } from './BillingSeatCapacityPanel';
 import { BillingRecordDetail } from './BillingRecordDetail';
 import { BillingLedgerRuntimeKeysPanel } from './BillingLedgerRuntimeKeysPanel';
+import { BillingProductPolicyPanel } from './BillingProductPolicyPanel';
 
 import { Badge, type BadgeVariant } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
@@ -20,7 +21,7 @@ import {
   useSetDefaultBillingTariffMutation,
 } from './billing-admin-queries';
 
-type BillingTab = 'tariffs' | 'assignments' | 'adjustments' | 'app-keys' | 'subscriptions' | 'runtime-keys';
+type BillingTab = 'tariffs' | 'assignments' | 'adjustments' | 'app-keys' | 'subscriptions' | 'runtime-keys' | 'company-policy';
 
 function date(value: string | null): string {
   return value ? new Date(value).toLocaleString() : '—';
@@ -63,6 +64,7 @@ export function BillingServicePanel({
     'app-keys',
     'subscriptions',
     'runtime-keys',
+    'company-policy',
   ].includes(requestedTab)
     ? (requestedTab as BillingTab)
     : 'tariffs';
@@ -127,6 +129,7 @@ export function BillingServicePanel({
             },
             { label: 'App keys', value: 'app-keys', count: service.app_keys.length },
             { label: 'Ledger runtime keys', value: 'runtime-keys' },
+            { label: 'Company policy', value: 'company-policy' },
             {
               label: 'Subscriptions',
               value: 'subscriptions',
@@ -462,6 +465,7 @@ export function BillingServicePanel({
         <BillingLedgerRuntimeKeysPanel key={service.id} service={service} />
       ) : null}
       <BillingRecordDetail service={service} />
+      {tab === 'company-policy' ? <BillingProductPolicyPanel key={service.id} service={service} /> : null}
     </Card>
   );
 }

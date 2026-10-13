@@ -4,6 +4,10 @@ const human = { ...subject, team_id: 'current UOA team in company', user_id: 'cu
 const worker = 'COMMERCIAL_WORKER app key, no actor; exact registered source and company enrollment checked online';
 const lifecycle = 'CUSTOMER_LIFECYCLE app key and endpoint-audience RS256 actor; current company owner/admin for changes';
 export const commercialPolicyEndpoints: EndpointSchema[] = [
+  { method: 'GET', path: '/internal/admin/billing/services/:serviceId/storage-catalogs', description: 'Read immutable verified storage price bindings', auth: 'current admin-domain SUPERUSER' },
+  { method: 'POST', path: '/internal/admin/billing/services/:serviceId/storage-catalogs', description: 'Verify and bind existing exact storage price on configured account/mode',
+    auth: 'current admin-domain SUPERUSER', body: { currency: 'EUR | GBP | USD', price_id: 'existing immutable licensed monthly whole-TB price' },
+    response: { id: 'catalog identity', currency: 'regional currency', unit_amount_minor: 'verified approved unit price' } },
   { method: 'POST', path: '/billing/v1/product-entitlement', description: 'Fresh member-safe product access facts',
     auth: 'ENTITLEMENT key and exact endpoint-audience actor', body: human,
     response: { contract: 'product-entitlement-v1.json; subject-bound functional facts, manager-only commercial extension' } },

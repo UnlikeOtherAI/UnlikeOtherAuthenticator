@@ -46,7 +46,7 @@ export async function phoneReleaseVerdict(input: { request: PhoneReleaseRequestV
     invoice.currency.toUpperCase() === prepared.local.catalog.currency &&
     invoice.collection_method === 'charge_automatically' &&
     Number.isSafeInteger(invoice.amount_due) && invoice.amount_due >= 0 &&
-    invoice.amount_paid >= 0 && invoice.amount_paid < invoice.amount_due &&
+    invoice.amount_paid >= 0 && invoice.amount_paid <= invoice.amount_due &&
     !invoice.lines.has_more && invoice.lines.data.length === 1 && line?.quantity === 1 &&
     line.amount === expected && line.parent?.subscription_item_details?.subscription_item === prepared.local.stripeItemId &&
     stripeExternalId(line.pricing?.price_details?.price) === prepared.local.catalog.stripePriceId;
