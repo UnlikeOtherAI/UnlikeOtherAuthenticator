@@ -506,74 +506,52 @@ so later actual delivery cases retain their database interface.
 
 ## Verified checkpoint and remaining implementation
 
-The latest verified producer source is 40c96cca, with frozen commercial protocol 5.11.0.
-The following results supersede the earlier checkpoint-specific pending notes:
+The latest verified producer source is `40c96cca`, with frozen commercial protocol
+5.11.0. This record supersedes earlier checkpoint-specific pending notes.
 
 | Scope | Executed host and result |
 | --- | --- |
-| Regional seats, previous accepted USD usage and original team wallets | Maxis, six PostgreSQL cases passed at84f7f133 |
-| Company entitlement and unrelated/ended seat debts | Maxis, six unit cases passed at84f7f133 |
-| Existing prepaid admission, cumulative rating, budget caps, revocation and twenty-request race | Maxis, fifteen PostgreSQL cases passed at72392aa7 |
-| Actual manual per-seat contract activation | Maxis, one PostgreSQL case passed at72392aa7 |
-| Private policy effective dates, assignment/removal and negotiated-contract precedence | Maxis, five PostgreSQL cases passed at76e897ec |
-| Historical terms and populated migration backfill | Maxis, five PostgreSQL cases passed at76e897ec |
-| Exact company/person/team scope, key rotation, measurement concurrency and production RLS role | Maxis, four PostgreSQL cases passed at76e897ec |
-| Warning delivery fairness, unset/disabled transport, SMTP retry, fresh roles, final24hours and ended resources | Maxis, six PostgreSQL cases passed at86db19ef |
-| Fresh phone invoice binding, taxes, payment arrival and final warning safeguard | Maxis, four unit cases passed at86db19ef |
-| API/Admin typechecks, changed TypeScript lint and reachable operator controls | Maxis, passed;137 changed TypeScript files and two headless desktop/mobile journeys at72392aa7, later scoped source lint/API checks passed |
-| Prisma schema | Local validation and Maxis regeneration/API typecheck passed; scoped read-only foreign-key diff reports zero mismatches at76e897ec |
+| Regional seats, previous accepted USD usage and original team wallets | Maxis, six PostgreSQL cases passed at `84f7f133` |
+| Private policy dates, assignment/removal and negotiated-contract precedence | Maxis, five PostgreSQL cases passed at `76e897ec` |
+| Historical terms and populated migration backfill | Maxis, five PostgreSQL cases passed at `76e897ec` |
+| Warning fairness, unset/disabled SMTP, retry, roles, final 24 hours and ended resources | Maxis, six PostgreSQL cases passed at `86db19ef` |
+| Fresh phone invoice binding, taxes, payment arrival and final-warning safeguard | Maxis, four unit cases passed at `86db19ef` |
+| Prepaid reservation, credit settlement, issued invoices and cycle scope after fixture refactor | Maxis, all 40 PostgreSQL cases passed at `cd954702`, zero skips |
+| Company entitlement, scheduled boundaries and exact authority/RLS | Maxis, eight unit and four PostgreSQL cases passed at `15c4683c`, zero skips |
+| Recurring/standalone seat failure, action-required recovery, source drift and payment arrival | Maxis, six unit cases passed at `40c96cca`, zero skips |
+| API/Admin typechecks, changed TypeScript lint and reachable operator controls | Maxis, passed; 137 changed TypeScript files and two headless desktop/mobile journeys at `72392aa7`, later scoped lint/API checks passed |
+| Prisma schema | Local validation and Maxis regeneration/API typecheck passed; scoped read-only foreign-key diff reports zero mismatches at `76e897ec` |
 
-The latest mobile operator conflict and Standard-plan withdrawal screenshots
-were visually inspected. Tests use isolated synthetic data and provider fakes;
-they do not charge customers, change live Stripe mode or release live numbers.
+The mobile operator conflict and Standard-plan withdrawal screenshots were
+visually inspected. Tests use isolated synthetic data and provider fakes. They
+never charge customers, change live Stripe mode or release live numbers.
 
-This checkpoint does not complete the full requested rollout. Canonical delivered
-invitations with a restricted waiting/admission SSO capability remain to be
-implemented and coordinated with the product. Positive private storage cost
-evidence, its accepted finite renewal coverage, and retail cancellation/replacement
-remain to be implemented; the present private storage path deliberately holds
-without attributable cost evidence. Generic non-phone add-on policy termination
-also remains to be implemented with explicitly approved settlement semantics.
-These are integration prerequisites, not optional follow-up features. Existing
-historical test files over500lines also need a coherent fixture/case refactor
-before strict repository delivery; no changed production source exceeds500lines.
+The four touched historical suites now separate canonical synthetic setup,
+prepaid budget evidence, accepted Stripe/shared-payer funding and multi-service
+tax allocation. The original registered cases retain their order and shared
+isolated fixture. All changed code files, including test modules, are below
+500 lines; the full 40-case PostgreSQL rerun verified the structural refactor.
 
-Root owns the remaining commercial/authentication decisions and final combined
-review, deployment, catalogue publication and customer rollout. No PR or merge
-has been created by this producer coding agent.
+Entitlement expiry includes future company seat activation, fixed capacity
+revisions and negotiated-contract boundaries. A cached receipt cannot carry
+an old private waiver or seat capacity across a known transition. These queries
+remain company/product scoped and do not admit a person.
 
-The four touched oversized historical suites are now split along their actual
-responsibilities: canonical synthetic setup, prepaid budget evidence, accepted
-Stripe/shared-payer funding, and multi-service tax allocation. The same registered
-cases retain their original order and shared isolated fixture. All changed code
-files, including these test modules, are now below500lines. The refactored suites
-passed their full PostgreSQL rerun: 40 cases with zero skips on Maxis.
+The full rollout is incomplete. Required implementation and policy decisions are:
 
-Entitlement expiry also covers known future company seat activation, fixed-seat
-capacity revisions and negotiated-contract month boundaries. A generic tariff
-event is not required for an accepted contract transition, so a cached receipt
-cannot carry an old private waiver or capacity across that known boundary.
-These validity queries remain company/product scoped and do not admit a person.
+- Canonical delivered invitations and a restricted waiting/admission SSO
+  capability; no product-owned invitation or ordinary data credential while waiting.
+- Positive private storage cost evidence, accepted finite renewal coverage and
+  retail cancellation/replacement. The present private path holds without
+  attributable cost evidence and never substitutes the retail price.
+- Generic non-phone add-on termination with approved settlement semantics;
+  customer payment resolution remains distinct from service termination.
+- Explicit company/product license authority for existing FLAT/manual monthly
+  agreements. A positive amount or usage tariff alone cannot establish full access.
 
-The refactored four-suite financial gate passed all40 PostgreSQL cases with zero
-skips on Maxis. At15c4683c, API typecheck, scoped lint, eight entitlement unit
-cases and four exact-authority/RLS database cases also passed with zero skips.
-
-The focused seat-failure producer suite covers ordinary recurring and verified
-standalone closing invoices, authentication-required-only recovery, original
-failure retention, exclusion of inference-only debt, source drift and a fresh
-paid invoice arriving before a reordered failure. It reuses the separately
-verified line-proof contract and does not bypass its production validation.
-
-At 40c96cca, scoped ESLint and all six focused seat-failure unit cases passed
-on Maxis with zero skips. No live provider or customer payment was invoked.
-Existing company FLAT/manual monthly agreements require an explicit product
-license decision before they can establish full company access; a positive
-monthly amount or usage tariff alone is not that authority. This is an additional
-review prerequisite alongside canonical invitation waiting, positive private
-storage evidence/renewal coverage and non-phone add-on policy termination.
-
-The coding branch is preserved for root review and integration. The isolated
-verification database is outside the checkout and must not be confused with
-customer or product authority. Final catalogue publication, connected first-SSO
-proof, combined verification and the final repository PR remain root-owned.
+These are integration prerequisites, not optional follow-ups. Root owns the
+remaining commercial/authentication decisions, combined review, deployment,
+catalogue publication, connected first-SSO proof and final repository PR. No PR
+or merge has been created by this producer coding agent. The pushed coding
+branch and isolated verification state outside the checkout are preserved for
+review and must not be confused with customer or product authority.
