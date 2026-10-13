@@ -2,6 +2,10 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createTestDb } from '../helpers/test-db.js';
 import { seedSmsFinance, smsIds } from '../helpers/sms-financial-fixture.js';
 import { activateAcceptedSeatUsage } from '../../src/services/billing-seat-acceptance.service.js';
+import { recoverAcceptedSeatUsage } from '../../src/services/billing-seat-usage-recovery.service.js';
+import { fetchVerifiedLedgerBudgetReceiptSet } from '../../src/services/billing-ledger-paid-receipt-proof.service.js';
+import { CompactSign, createLocalJWKSet, exportJWK, generateKeyPair } from 'jose';
+import { createHash } from 'node:crypto';
 import { resolveBillingTariffForMonth, utcBillingMonth, nextUtcBillingMonth } from '../../src/services/billing-tariff-history.service.js';
 
 describe.skipIf(!process.env.DATABASE_URL)('prospective accepted Standard company usage terms', () => {
@@ -81,5 +85,36 @@ describe.skipIf(!process.env.DATABASE_URL)('prospective accepted Standard compan
     const { row } = await checkout('bound-standard');
     await expect(db.prisma.billingStripeCheckoutSession.update({ where: { id: row.id }, data: { seatOfferId: null } })).rejects.toThrow();
     await expect(db.prisma.billingSeatOffer.update({ where: { id: offerId }, data: { tariffId: privateTariff.id } })).rejects.toThrow();
+  });
+  it('resumes exact first source proof after an outage and verifies a signed company zero receipt set', async () => {
+    const { row } = await checkout('proof-standard');
+    await db.prisma.billingStripeSubscription.create({ data: { accountId: smsIds.account, checkoutId: row.id, customerId: row.customerId,
+      serviceId: smsIds.service, tariffId: standardId, tariffSource: 'ORGANISATION', orgId: row.orgId,
+      scope: 'ORGANISATION', scopeKey: row.orgId, stripeSubscriptionId: 'sub_proof', stripeUsageItemId: 'si_proof', status: 'active', livemode: false } });
+    await recoverAcceptedSeatUsage(db.prisma, { now: () => new Date(now.getTime() + 10_000),
+      fetchMetering: async () => { throw new Error('Synthetic source outage'); }, fetchProof: async () => { throw new Error('Synthetic source outage'); } });
+    expect((await db.prisma.billingStripeCheckoutSession.findUniqueOrThrow({ where: { id: row.id } })).usageTermEventId).toBeNull();
+    const pair = await generateKeyPair('RS256', { extractable: true });
+    const keys = createLocalJWKSet({ keys: [{ ...await exportJWK(pair.publicKey), kid: 'first-proof', alg: 'RS256', use: 'sig' }] });
+    const checkedAt = new Date(now.getTime() + 80_000);
+    const digest = (kind: string) => createHash('sha256').update(`ledger-budget-receipt-set-v1:${kind}\n`).digest('hex');
+    const proof = { contract: 'ledger-budget-receipt-set-v1', scope: { billing_product: 'nessie', organization_id: row.orgId,
+      team_id: null, billing_month: utcBillingMonth(checkedAt), budget_scope_type: 'organization' },
+    snapshot: { cursor: `mpr_${'a'.repeat(32)}`, captured_at: checkedAt.toISOString(), immutable: true },
+    paid_receipt_count: '0', paid_receipt_sha256: digest('paid'), zero_incremental_count: '0', zero_incremental_sha256: digest('zero'),
+    pending_dispatch_count: '0', pending_dispatch_sha256: digest('pending'), unresolved_paid_attempts: '0' };
+    const signature = await new CompactSign(Buffer.from(JSON.stringify(proof))).setProtectedHeader({ alg: 'RS256', typ: 'ledger-budget-receipt-set+jws', kid: 'first-proof' }).sign(pair.privateKey);
+    await recoverAcceptedSeatUsage(db.prisma, { now: () => checkedAt,
+      fetchProof: async (scope) => fetchVerifiedLedgerBudgetReceiptSet(scope, { keys, fetchRaw: async () => ({ ...proof, signature }) }),
+      fetchMetering: async (scope) => ({ schemaVersion: 1, product: 'nessie', groupBy: 'service', calls: '0', lines: [],
+        billingCompleteness: { state: 'complete', unresolvedPaidAttempts: '0' },
+        scope: { organizationId: scope.organisationId, teamId: null, userId: null, month: scope.billingMonth,
+          startsAt: `${scope.billingMonth}-01T00:00:00.000Z`, endsAt: `${nextUtcBillingMonth(checkedAt)}-01T00:00:00.000Z` },
+        snapshot: { id: 'snapshot', cursor: 'snapshot', capturedAt: checkedAt.toISOString(), immutable: true, sha256: 'b'.repeat(64) } }),
+    });
+    const stored = await db.prisma.billingStripeCheckoutSession.findUniqueOrThrow({ where: { id: row.id } });
+    expect(stored.usageTermsEffectiveAt).toEqual(checkedAt); expect(stored.usageTermEventId).not.toBeNull();
+    expect(stored.usageProbeEvidence).toEqual([expect.objectContaining({ month: utcBillingMonth(checkedAt), has_metering: false,
+      signed_receipt_set: expect.objectContaining({ signature }) })]);
   });
 });

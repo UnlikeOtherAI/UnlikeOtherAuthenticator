@@ -366,3 +366,8 @@ The real regional financial test now adds public EUR seats over a previously
 accepted, independently funded zero-markup USD prepaid usage agreement. Its
 receipt must debit10 credits, retain90, and close/invoice only the exact EUR seat
 amount; selecting Standard must not turn the older debit into13 credits.
+
+The first-usage recovery regression now simulates a source outage, retains the
+same durable pending purchase, then supplies a real RS256 signed exact-company
+zero receipt set through the production verification function. It must activate
+only at the new observed source-acceptance time and retain the signed evidence.
