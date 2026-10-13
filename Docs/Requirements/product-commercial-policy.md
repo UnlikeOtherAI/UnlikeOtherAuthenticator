@@ -434,3 +434,8 @@ future effective date, rejection of a later marked-up team override before any
 assignment mutation, next-month standard reassignment, and append-only removal.
 Current accepted private terms remain effective until the exact transition;
 historical tariff evidence is never rewritten. Execution is pending.
+
+Prepaid input-cost validation lives with the existing credit-rating arithmetic;
+the reservation orchestrator imports that single parser for bounds and receipts.
+The accepted decimal format, rejection codes and rating behavior are unchanged.
+This keeps the changed reservation source within the repository's500-line limit.

@@ -24,24 +24,14 @@ import { assertLedgerBudgetContext, attachLegacyBudgetDispatch,
 import { recordLegacyPrepaidLiability,
   recordPaidUsageLiability } from './billing-paid-liability.service.js';
 import { finalizeUnreservedLedgerDispatch } from './billing-ledger-dispatch-finalization.service.js';
-import { ratedMicrocredits, ratedMicrocreditsFromQuanta, scaledRaw } from
+import { parsePrepaidRawCost, ratedMicrocredits, ratedMicrocreditsFromQuanta, scaledRaw } from
   './billing-prepaid-rating.service.js';
 
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/;
-const DECIMAL_PATTERN = /^(?:0|[1-9]\d*)(?:\.\d{1,18})?$/;
 
 function validId(value: string): string {
   if (!ID_PATTERN.test(value)) throw new AppError('BAD_REQUEST', 400, 'PREPAID_DISPATCH_ID_INVALID');
   return value;
-}
-
-function rawCost(value: string): Prisma.Decimal {
-  if (!DECIMAL_PATTERN.test(value)) throw new AppError('BAD_REQUEST', 400, 'PREPAID_COST_INVALID');
-  const decimal = new Prisma.Decimal(value);
-  if (decimal.decimalPlaces() > 18 || !decimal.isFinite() || decimal.isNegative()) {
-    throw new AppError('BAD_REQUEST', 400, 'PREPAID_COST_INVALID');
-  }
-  return decimal;
 }
 
 export type ReservePrepaidDispatchInput = {
@@ -106,7 +96,7 @@ export async function reservePrepaidDispatch(
     actor.active.teamId !== input.teamId) {
     throw new AppError('FORBIDDEN', 403, 'PREPAID_DELEGATION_MISMATCH');
   }
-  const bound = input.rawCostBound === null ? null : rawCost(input.rawCostBound);
+  const bound = input.rawCostBound === null ? null : parsePrepaidRawCost(input.rawCostBound);
   const dispatchStartedAt = new Date(input.dispatchStartedAt);
   const now = deps?.now ?? new Date();
   if (!Number.isFinite(dispatchStartedAt.getTime()) ||
@@ -387,7 +377,7 @@ export async function finalizePrepaidDispatch(params: {
   validId(params.dispatchId);
   validId(params.receiptId);
   const actual = params.kind === 'settle' && params.rawCostActual !== undefined
-    ? rawCost(params.rawCostActual) : null;
+    ? parsePrepaidRawCost(params.rawCostActual) : null;
   if (params.kind === 'settle' && (!actual || params.currency !== 'USD')) {
     throw new AppError('BAD_REQUEST', 400, 'PREPAID_RECEIPT_INVALID');
   }

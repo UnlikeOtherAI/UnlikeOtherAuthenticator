@@ -1,7 +1,17 @@
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { AppError } from '../utils/errors.js';
 
 const MAX_INT64 = 9_223_372_036_854_775_807n;
+const DECIMAL_PATTERN = /^(?:0|[1-9]\d*)(?:\.\d{1,18})?$/;
+
+export function parsePrepaidRawCost(value: string): Prisma.Decimal {
+  if (!DECIMAL_PATTERN.test(value)) throw new AppError('BAD_REQUEST', 400, 'PREPAID_COST_INVALID');
+  const decimal = new Prisma.Decimal(value);
+  if (decimal.decimalPlaces() > 18 || !decimal.isFinite() || decimal.isNegative()) {
+    throw new AppError('BAD_REQUEST', 400, 'PREPAID_COST_INVALID');
+  }
+  return decimal;
+}
 
 export function scaledRaw(value: Prisma.Decimal): bigint {
   const [whole, fraction = ''] = value.toFixed(18).split('.');
