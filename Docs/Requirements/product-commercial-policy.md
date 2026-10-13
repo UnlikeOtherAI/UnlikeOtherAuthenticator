@@ -353,3 +353,11 @@ The cursor resumes after replicas/restarts and does not discard historical sourc
 months. Any observed prior metering schedules the new usage terms next UTC month;
 all-zero history through the current month permits prospective activation.
 This proof/recovery path is coded and its expanded verification is pending.
+
+For explicitly purchased public seats, cycle closure resolves the team's accepted
+usage tariff for that month independently of the frozen new seat tariff. Earlier
+prepaid receipts retain their exact price and debit evidence. A collectible older
+usage liability without covering debit evidence holds for reconciliation rather
+than being collected through the new agreement or re-rated. Historical subscriptions
+retain their existing frozen source behavior. The mixed-terms financial regression
+is being added before this separation is considered verified.

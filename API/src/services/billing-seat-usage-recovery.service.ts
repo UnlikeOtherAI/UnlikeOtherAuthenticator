@@ -1,4 +1,5 @@
 import { Prisma, type PrismaClient } from '@prisma/client';
+import { createHash } from 'node:crypto';
 import { AppError } from '../utils/errors.js';
 import { fetchLedgerMeteringUsage } from './billing-ledger-collector.service.js';
 import { fetchVerifiedLedgerBudgetReceiptSet } from './billing-ledger-paid-receipt-proof.service.js';
@@ -39,6 +40,11 @@ export async function recoverAcceptedSeatUsage(prisma: PrismaClient, deps?: {
       const hasMetering = metering.calls !== '0' || metering.lines.some((line) => line.calls !== '0' ||
         (line.selectedProviderCost !== null && !new Prisma.Decimal(line.selectedProviderCost).isZero())) ||
         proof.paid_receipt_count !== '0' || proof.zero_incremental_count !== '0';
+      if (!hasMetering && (proof.paid_receipt_sha256 !== createHash('sha256').update('ledger-budget-receipt-set-v1:paid\n').digest('hex') ||
+        proof.zero_incremental_sha256 !== createHash('sha256').update('ledger-budget-receipt-set-v1:zero\n').digest('hex') ||
+        proof.pending_dispatch_sha256 !== createHash('sha256').update('ledger-budget-receipt-set-v1:pending\n').digest('hex'))) {
+        throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_FIRST_USAGE_ZERO_PROOF_INCOHERENT');
+      }
       await prisma.$transaction(async (tx) => {
         await lockBudgetOrganisation(tx, job.orgId);
         await tx.$queryRaw`SELECT id FROM organisations WHERE id=${job.orgId} FOR UPDATE`;
