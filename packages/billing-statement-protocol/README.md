@@ -394,7 +394,7 @@ credits; these are display values. 2.3.0 includes everything in 2.2.0.
   (the oldest remaining credits' purchase rate), `region` (the captured region
   rate, for credits bought in USD and for debt) or `usd`. It is null while the
   rate is not known.
-## Product commercial standing (5.9.0)
+## Product commercial standing (5.10.1)
 
 The additive `commercial-types`, `commercial-schema` and synthetic member fixture
 define product entitlement reads, company storage admission/observations and
@@ -403,3 +403,10 @@ only; private standing and payment recovery are restricted to manager/background
 branches. Require exact product/company and returned human subject binding.
 `valid_until` bounds in-memory reuse and is never durable subscription authority.
 This protocol addition alone does not enable storage collection or create consent.
+
+Manager storage reads include `payment_recoveries` independently of pending
+capacity expansion. Every unresolved storage invoice carries its explicit
+currency, gross amount, exact recovery URL when open and own grace deadline.
+Pending expansion invoices also expose `invoice_currency`. Strict consumers
+must adopt these required fields before producer rollout. Member storage reads
+exclude all payment and mandate data.

@@ -85,8 +85,10 @@ export type StorageManagerV1 = ProductCommercialSubject & { schema_version: 1; c
   subscription: { purchased_blocks: number; pending_blocks: number; currency: string; unit_amount_minor: string;
     current_period_start: string | null; current_period_end: string | null } | null;
   pending_expansion: { id: string; state: string; required_blocks: number; invoice_id: string | null;
-    invoice_url: string | null; invoice_amount_minor: string | null; grace_ends_at: string | null;
+    invoice_url: string | null; invoice_amount_minor: string | null; invoice_currency: string | null; grace_ends_at: string | null;
     recovery_action: StorageRecoveryActionV1 | null } | null;
+  payment_recoveries: Array<{ incident_id: string; invoice_id: string; invoice_url: string | null;
+    invoice_amount_minor: string; invoice_currency: string; grace_ends_at: string }>;
   observed_at: string; valid_until: string;
 };
 export type StorageReadV1 = StorageManagerV1 | (ProductCommercialSubject & {

@@ -78,8 +78,13 @@ export const storageReadV1JsonSchema = { oneOf: [
     currency: { type: 'string', pattern: '^[A-Z]{3}$' }, unit_amount_minor: bytes, current_period_start: nullableDate, current_period_end: nullableDate })),
   pending_expansion: nullable(object({ id, state: id, required_blocks: { type: 'integer', minimum: 1 },
     invoice_id: nullable(id), invoice_url: nullable({ type: 'string', format: 'uri' }), invoice_amount_minor: nullableBytes,
+    invoice_currency: nullable({ type: 'string', pattern: '^[A-Z]{3}$' }),
     grace_ends_at: nullableDate, recovery_action: nullable(object({ method: { const: 'POST' }, path: { const: '/billing/v1/storage/recover' },
-      body: object({ ...human, expansion_id: id }) })) })), observed_at: timestamp, valid_until: timestamp }),
+      body: object({ ...human, expansion_id: id }) })) })),
+  payment_recoveries: { type: 'array', items: object({ incident_id: id, invoice_id: id,
+    invoice_url: nullable({ type: 'string', format: 'uri' }), invoice_amount_minor: bytes,
+    invoice_currency: { type: 'string', pattern: '^[A-Z]{3}$' }, grace_ends_at: timestamp }) },
+  observed_at: timestamp, valid_until: timestamp }),
 ] } as const;
 export const commercialProtocolV1JsonSchema = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',

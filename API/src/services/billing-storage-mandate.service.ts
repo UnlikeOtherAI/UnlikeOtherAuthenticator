@@ -48,7 +48,18 @@ export async function readStorageSetup(input: { request: ProductEntitlementReque
   if (!access.manager) return { schema_version: 1, can_manage: false, setup: null,
     product: request.product, organisation_id: request.organisation_id,
     subject: { team_id: request.team_id, user_id: request.user_id } };
-  return storageManagementSnapshot(prisma, { serviceId: credential.service.id, request, privateAtCost: access.privateAtCost }, deps);
+  const snapshot = await storageManagementSnapshot(prisma, { serviceId: credential.service.id, request, privateAtCost: access.privateAtCost }, deps);
+  await prisma.$transaction(async (tx) => {
+    await lockCommercialAuthority(tx, { credential, product: request.product,
+      organisationId: request.organisation_id, purpose: 'CUSTOMER_LIFECYCLE' });
+    const manager = await commercialMember(tx, { organisationId: request.organisation_id,
+      teamId: request.team_id, userId: request.user_id, tokenVersion: actor.tv });
+    const privateAtCost = Boolean(await privateCompanyPolicy(tx, credential.service.id, request.organisation_id, new Date()));
+    if (!manager || privateAtCost !== access.privateAtCost || Date.parse(snapshot.valid_until) <= Date.now()) {
+      throw new AppError('FORBIDDEN', 403, 'BILLING_STORAGE_RECOVERY_AUTHORITY_CHANGED');
+    }
+  });
+  return snapshot;
 }
 
 export async function createStorageMandate(input: { request: ProductEntitlementRequest & {

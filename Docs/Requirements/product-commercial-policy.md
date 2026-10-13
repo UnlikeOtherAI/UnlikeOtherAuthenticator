@@ -4,7 +4,7 @@ UOA owns commercial facts and identity. Nessie owns its functional restrictions
 and content measurement. A product never infers full access from a positive
 monthly price, a tariff key, a manager statement or a failed network request.
 
-The public protocol is `@unlikeotherai/billing-statement-protocol`5.10.0,
+The public protocol is `@unlikeotherai/billing-statement-protocol`5.10.1,
 `commercial-types.ts` and `commercial-schema.ts`. The additive contract exposes
 exact product/company scope and a returned human team/user pair whenever a
 person is selected. Human reads require the ENTITLEMENT key and an exact
@@ -145,6 +145,19 @@ Regional standard v1 tariffs are currently unassigned. Separate immutable USD
 usage valuation and regional monthly seat currency are approved but remain in
 progress: never assign EUR/GBP versions before end-to-end prepaid currency
 separation verification. No balance/provider/top-up conversion is authorized.
+
+The manager storage response includes `payment_recoveries` for every unresolved
+storage incident on the current Stripe account, independently of whether its
+initial capacity expansion has already paid. Each entry exposes the exact
+verified invoice id, invoice currency, gross amount, own grace deadline and
+allowlisted hosted Stripe payment URL when the invoice remains open. A prior
+paid expansion never proves a later renewal paid. An earlier seat incident may
+cap company access without hiding storage recovery. A remotely paid invoice
+keeps its unresolved local debt visible without a second payment link until
+verified cash evidence commits. Members receive none of these commercial fields.
+Storage reads and webhook preparation reuse one price/customer/subscription/line
+validator; manager authority is rechecked after provider reads. Pending expansion
+also includes its explicit invoice currency. No browser return proves payment.
 
 Original failures are established from verified Stripe invoice/payment evidence.
 Bounded Stripe event scans persist their cursor so unrelated event volume cannot
