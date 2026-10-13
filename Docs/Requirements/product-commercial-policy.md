@@ -405,3 +405,8 @@ pool or exact source-team wallet independently of the seat invoice payer. Anothe
 team's wallet cannot cover that receipt. Consumption can be aggregated for company
 billing without claiming a pooled opening/closing balance that does not exist.
 Historical non-public subscription evidence keeps its original payer rules.
+
+The expanded regional database journey includes a paid company seat agreement
+whose prior10-credit usage debit belongs to its original team wallet. It must
+close and invoice the EUR seats without creating an organisation wallet,
+assuming pooled responsibility or moving the remaining90 USD credits.
