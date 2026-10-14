@@ -1,3 +1,4 @@
+import { asTransaction } from '../helpers/directory-store.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ClientConfig } from '../../src/services/config.service.js';
 import { signLoginSession } from '../../src/services/login-session.service.js';
@@ -40,8 +41,8 @@ vi.mock('../../src/services/ban-policy.service.js', () => ({
   assertNotBannedAtLogin: (...args: unknown[]) => assertNotBannedAtLoginMock(...args),
   isPrincipalBannedForRegistration: vi.fn(async () => false),
 }));
-
 const prismaMock = vi.hoisted(() => ({
+  $transaction: vi.fn(),
   $executeRaw: vi.fn(),
   $queryRaw: vi.fn(),
   domainSignatureSettings: { findUnique: vi.fn() },
@@ -56,14 +57,13 @@ const prismaMock = vi.hoisted(() => ({
   teamInvite: { findUnique: vi.fn(), update: vi.fn(), findMany: vi.fn() },
   teamInviteLink: { findUnique: vi.fn(), updateMany: vi.fn() },
   user: { findUnique: vi.fn(), update: vi.fn() },
-  orgMember: { findFirst: vi.fn(), count: vi.fn(), create: vi.fn() },
+  orgMember: { findMany: vi.fn(), findFirst: vi.fn(), count: vi.fn(), create: vi.fn() },
   loginSessionUse: { create: vi.fn() },
   authorizationCode: { create: vi.fn() },
   billingAppKey: { findMany: vi.fn() },
   clientDomain: { findUnique: vi.fn() },
   organisation: { findMany: vi.fn(), findUnique: vi.fn() },
 }));
-
 vi.mock('../../src/db/prisma.js', () => ({
   getPrisma: vi.fn(() => prismaMock),
   getAdminPrisma: vi.fn(() => prismaMock),
@@ -174,7 +174,10 @@ describe('POST /auth/select-team', () => {
     prismaMock.authorizationCode.create.mockResolvedValue({ id: 'code-row-1' });
     prismaMock.loginSessionUse.create.mockResolvedValue({ id: 'session-use-1' });
     prismaMock.$executeRaw.mockResolvedValue(1);
+    prismaMock.$transaction.mockImplementation(async (body: (tx: unknown) => Promise<unknown>) => body(asTransaction(prismaMock)));
     prismaMock.$queryRaw.mockResolvedValue([]);
+    prismaMock.orgMember.findMany.mockResolvedValue([]);
+    prismaMock.organisation.findMany.mockResolvedValue([]);
     prismaMock.domainSignatureSettings.findUnique.mockResolvedValue(null);
     prismaMock.user.findUnique.mockResolvedValue({ lifecycleStatus: 'ACTIVE',
       id: 'user-1',

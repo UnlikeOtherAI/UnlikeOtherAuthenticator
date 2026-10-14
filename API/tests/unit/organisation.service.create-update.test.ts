@@ -94,6 +94,7 @@ describe('Organisation service: organisation CRUD', () => {
     expect(prisma.organisation.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: {
+          id: expect.any(String),
           domain: 'acme.example.com',
           name: 'Acme Inc',
           slug: 'acme-inc',

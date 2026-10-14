@@ -74,6 +74,7 @@ async function globalKeys(): Promise<Record<string, LimiterCase>> {
   const keys = await import('../../src/routes/auth/rate-limit-keys.js');
   const cases: Record<string, LimiterCase> = {
     loginRateLimiter: { globalKey: 'auth:login:global' },
+    oauthLoginRateLimiter: { globalKey: 'oauth:login:global' },
     registerRateLimiter: { globalKey: 'auth:register:global' },
     authStartRateLimiter: { globalKey: 'auth:start:global' },
     verifyCodeRateLimiter: { globalKey: 'auth:verify-code:global' },
@@ -97,7 +98,9 @@ async function globalKeys(): Promise<Record<string, LimiterCase>> {
   };
   // A limiter added to rate-limit-keys.ts without a row above fails here, so
   // the table can never silently fall behind the module's exports again.
-  expect(Object.keys(cases).sort()).toEqual(Object.keys(keys).sort());
+  expect(typeof keys.beginOAuthLoginAttempt).toBe('function');
+  // The reservation helper returns a completion callback; it is not middleware.
+  expect(Object.keys(cases).sort()).toEqual(Object.keys(keys).filter(key => key !== 'beginOAuthLoginAttempt').sort());
   return cases;
 }
 

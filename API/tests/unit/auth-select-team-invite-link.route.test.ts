@@ -1,3 +1,4 @@
+import { asTransaction } from '../helpers/directory-store.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ClientConfig } from '../../src/services/config.service.js';
@@ -8,6 +9,7 @@ const SHARED_SECRET = 'test-shared-secret-with-enough-length';
 const LOGIN_SESSION_AUDIENCE = 'uoa:login-session';
 
 let currentConfig: ClientConfig | null = null;
+const observedErrors: string[] = [];
 
 const recordLoginLogMock = vi.fn(async () => undefined);
 const assertEmailDomainAllowedForLoginMock = vi.fn(async () => undefined);
@@ -44,6 +46,7 @@ vi.mock('../../src/services/ban-policy.service.js', () => ({
 }));
 
 const prismaMock = vi.hoisted(() => ({
+  $transaction: vi.fn(),
   $executeRaw: vi.fn(),
   $queryRaw: vi.fn(),
   domainSignatureSettings: { findUnique: vi.fn() },
@@ -58,7 +61,7 @@ const prismaMock = vi.hoisted(() => ({
   teamInvite: { findUnique: vi.fn(), update: vi.fn(), findMany: vi.fn() },
   teamInviteLink: { findUnique: vi.fn(), updateMany: vi.fn() },
   user: { findUnique: vi.fn(), update: vi.fn() },
-  orgMember: { findFirst: vi.fn(), count: vi.fn(), create: vi.fn() },
+  orgMember: { findMany: vi.fn(), findFirst: vi.fn(), count: vi.fn(), create: vi.fn() },
   loginSessionUse: { create: vi.fn() },
   authorizationCode: { create: vi.fn() },
   billingAppKey: { findMany: vi.fn() },
@@ -124,6 +127,7 @@ const QUERY_SUFFIX =
 async function postSelectTeam(body: Record<string, unknown>) {
   const { createApp } = await import('../../src/app.js');
   const app = await createApp();
+  app.addHook('onError', async (_request, _reply, error) => { observedErrors.push(`${error.name}: ${error.message}`); });
   await app.ready();
   try {
     return await app.inject({
@@ -155,6 +159,7 @@ async function mintLoginToken(userId: string): Promise<string> {
 
 describe('POST /auth/select-team invite-link redemption', () => {
   beforeEach(() => {
+    observedErrors.length = 0;
     currentConfig = baseConfig();
     process.env.SHARED_SECRET = SHARED_SECRET;
     process.env.AUTH_SERVICE_IDENTIFIER = 'uoa-auth-service';
@@ -175,7 +180,10 @@ describe('POST /auth/select-team invite-link redemption', () => {
     prismaMock.authorizationCode.create.mockResolvedValue({ id: 'code-row-1' });
     prismaMock.loginSessionUse.create.mockResolvedValue({ id: 'session-use-1' });
     prismaMock.$executeRaw.mockResolvedValue(1);
+    prismaMock.$transaction.mockImplementation(async (body: (tx: unknown) => Promise<unknown>) => body(asTransaction(prismaMock)));
     prismaMock.$queryRaw.mockResolvedValue([]);
+    prismaMock.orgMember.findMany.mockResolvedValue([]);
+    prismaMock.organisation.findMany.mockResolvedValue([]);
     prismaMock.domainSignatureSettings.findUnique.mockResolvedValue(null);
     prismaMock.user.findUnique.mockResolvedValue({ lifecycleStatus: 'ACTIVE',
       id: 'user-1',
@@ -224,7 +232,7 @@ describe('POST /auth/select-team invite-link redemption', () => {
       inviteLinkToken: 'plaintext-link-token',
     });
 
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode, observedErrors.join('; ')).toBe(200);
     expect(res.json().ok).toBe(true);
     expect(prismaMock.teamInviteLink.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: expect.objectContaining({ id: 'link-1' }) }),
@@ -276,7 +284,7 @@ describe('POST /auth/select-team invite-link redemption', () => {
       inviteLinkToken: 'plaintext-link-token',
     });
 
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode, observedErrors.join('; ')).toBe(200);
     const body = res.json();
     expect(body).toMatchObject({ ok: true, twofa_required: true });
     expect(typeof body.twofa_token).toBe('string');

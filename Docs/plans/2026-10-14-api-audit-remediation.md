@@ -519,3 +519,24 @@ or missing/duplicate phase metadata fails closed. Bridge deploys require no floo
 so the compatible first phase can roll out. Final cleanup remains stricter: all
 retained writers must be stable. No live GitHub variable, deployment or traffic
 gate was changed by this source edit.
+
+### Default-unit fixture corrections (in progress)
+
+The b95098a6 full default gate is retained as2586pass/75fail/3skip, not described
+as green. Focused fixture corrections now use stable client IDs, explicit current
+user directory scope delegates, online Admin revocation stores and canonical
+lifecycle reads. Unbound factor/profile fixtures are named as unbound; real bound
+writer acceptance continues to use PostgreSQL. Transaction fakes now provide a
+fresh object without $transaction, matching Prisma and preventing a false retained
+directory plan across requests. This fixes the chooser second-org500 rather than
+relaxing the complete-scope guard. Native global-limit coverage explicitly includes
+the new OAuth limiter and distinguishes its reservation helper from middleware.
+
+The existing provisioning guard also caught this branch's shorter beforeAll
+timeout; it now inherits the normal180second budget. The source-only harness uses
+the same30second test budget as the default harness so cold import of createApp
+does not cause a spurious5second failure. Existing oversized group/social test
+files were split with all13 group and10 social cases preserved; touched code stays
+under500lines. These changes do not weaken production authorization/outbox paths.
+Auth HTML/CSP checks still need the actual Auth dist/SSR build before the complete
+default gate can be rerun. Full writer-family/upgrade/race acceptance stays open.

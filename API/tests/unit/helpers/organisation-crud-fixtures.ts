@@ -1,3 +1,4 @@
+import { asTransaction } from '../../helpers/directory-store.js';
 import { afterAll, beforeEach, vi } from 'vitest';
 import type { PrismaClient } from '@prisma/client';
 import type { ClientConfig } from '../../../src/services/config.service.js';
@@ -46,7 +47,7 @@ export function makePrismaMock() {
     $transaction: vi.fn(),
   } as unknown as PrismaClient;
 
-  prisma.$transaction = vi.fn(async (callback: (tx: PrismaClient) => Promise<unknown>) => callback(prisma));
+  prisma.$transaction = vi.fn(async (callback: (tx: PrismaClient) => Promise<unknown>) => callback(asTransaction(prisma)));
 
   return prisma;
 }

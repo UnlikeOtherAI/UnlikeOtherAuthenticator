@@ -1,7 +1,6 @@
 import type { PrismaClient } from '@prisma/client';
 import { describe, expect, it, vi } from 'vitest';
 
-import { createClientId } from '../../src/utils/hash.js';
 import { exchangeAuthorizationCodeForTokens } from '../../src/services/token.service.js';
 import { verifyAccessToken } from '../../src/services/access-token.service.js';
 import {
@@ -30,7 +29,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
       enabled: true,
       groups_enabled: true,
     });
-    const clientId = createClientId(config.domain, sharedSecret);
+    const clientId = 'client-domain-id';
     const configUrl = 'https://client.example.com/auth-config';
     const redirectUrl = 'https://client.example.com/oauth/callback';
 
@@ -153,7 +152,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
     const sharedSecret = process.env.SHARED_SECRET!;
     const code = 'code-without-org';
     const config = makeConfig({ enabled: false });
-    const clientId = createClientId(config.domain, sharedSecret);
+    const clientId = 'client-domain-id';
     const configUrl = 'https://client.example.com/auth-config';
     const redirectUrl = 'https://client.example.com/oauth/callback';
 
@@ -247,7 +246,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
       enabled: true,
       groups_enabled: true,
     });
-    const clientId = createClientId(config.domain, sharedSecret);
+    const clientId = 'client-domain-id';
     const configUrl = 'https://client.example.com/auth-config';
     const redirectUrl = 'https://client.example.com/oauth/callback';
 
@@ -350,7 +349,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
     const code = 'code-with-pkce';
     const codeVerifier = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ';
     const config = makeConfig({ enabled: false });
-    const clientId = createClientId(config.domain, sharedSecret);
+    const clientId = 'client-domain-id';
     const configUrl = 'https://client.example.com/auth-config';
     const redirectUrl = 'https://client.example.com/oauth/callback';
 
@@ -443,7 +442,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
     const sharedSecret = process.env.SHARED_SECRET!;
     const code = 'code-without-pkce';
     const config = makeConfig({ enabled: false });
-    const clientId = createClientId(config.domain, sharedSecret);
+    const clientId = 'client-domain-id';
     const configUrl = 'https://client.example.com/auth-config';
     const redirectUrl = 'https://client.example.com/oauth/callback';
 

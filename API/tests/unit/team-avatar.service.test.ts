@@ -55,7 +55,14 @@ function fakePrisma(
   const avatars = new Map((seed.avatars ?? []).map((row) => [row.teamId, row]));
 
   const store = {
+    $queryRaw: vi.fn().mockResolvedValue([]),
+    organisation: { findUnique: async ({ where }: { where: { id: string } }) =>
+      [...teams.values()].some(team => team.orgId === where.id) ? { lifecycleStatus: 'ACTIVE' } : null },
     team: {
+      findUnique: async ({ where }: { where: { id: string } }) => {
+        const team = teams.get(where.id);
+        return team ? { ...team, lifecycleStatus: 'ACTIVE' } : null;
+      },
       findFirst: async (args: TeamWhere) => {
         const team = teams.get(args.where.id);
         if (!team) return null;

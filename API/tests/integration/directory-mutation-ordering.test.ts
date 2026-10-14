@@ -17,7 +17,7 @@ database('ordered directory transaction seam', () => {
   beforeAll(async () => {
     handle = await createTestDb();
     db = handle!.prisma;
-  }, 120_000);
+  });
   afterAll(async () => {
     await handle?.cleanup();
   });

@@ -151,7 +151,7 @@ describe('admin-domain token issuance', () => {
     } as unknown as ClientConfig;
     const configUrl = 'https://client.example.com/auth-config';
     const redirectUrl = 'https://client.example.com/oauth/callback';
-    const clientId = createClientId(config.domain, sharedSecret);
+    const clientId = 'client-domain-id';
 
     const prisma = {
       $queryRaw: vi.fn().mockResolvedValue([]),

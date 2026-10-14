@@ -43,7 +43,9 @@ export function makeAcceptanceTx() {
       update: vi.fn(),
       updateMany: vi.fn(),
     },
+    organisation: { findMany: vi.fn().mockResolvedValue([]) },
     orgMember: {
+      findMany: vi.fn().mockResolvedValue([]),
       findFirst: vi.fn(),
       count: vi.fn(),
       create: vi.fn(),

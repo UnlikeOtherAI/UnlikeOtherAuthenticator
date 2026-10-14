@@ -21,6 +21,8 @@ describe('exchangeRefreshTokenForTokens signature policy gate (unit)', () => {
     signed?: boolean;
   }) {
     const tx = {
+      orgMember: { findMany: vi.fn().mockResolvedValue([]) },
+      organisation: { findMany: vi.fn().mockResolvedValue([]) },
       $executeRaw: vi.fn().mockResolvedValue(1),
       $queryRaw: vi.fn().mockResolvedValue([]),
       domainSignatureSettings: {

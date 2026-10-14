@@ -1,3 +1,4 @@
+import { asTransaction } from '../helpers/directory-store.js';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PrismaClient } from '@prisma/client';
 
@@ -14,6 +15,7 @@ const now = new Date('2026-02-15T00:00:00.000Z');
 
 function makePrismaMock() {
   const prisma = {
+    $queryRaw: vi.fn().mockResolvedValue([]),
     organisation: {
       findFirst: vi.fn(),
       update: vi.fn(),
@@ -24,7 +26,7 @@ function makePrismaMock() {
     $transaction: vi.fn(),
   } as unknown as PrismaClient;
 
-  prisma.$transaction = vi.fn(async (callback: (tx: PrismaClient) => Promise<unknown>) => callback(prisma));
+  prisma.$transaction = vi.fn(async (callback: (tx: PrismaClient) => Promise<unknown>) => callback(asTransaction(prisma)));
 
   return prisma;
 }

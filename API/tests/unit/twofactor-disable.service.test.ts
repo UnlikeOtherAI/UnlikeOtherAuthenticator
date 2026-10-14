@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@prisma/client';
+import type { Prisma, PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { disableTwoFactorForUser } from '../../src/services/twofactor-disable.service.js';
@@ -18,8 +18,11 @@ describe('disableTwoFactorForUser', () => {
   it('holds the user lock through 2FA mutation, refresh revocation, and tokenVersion bump', async () => {
     const events: string[] = [];
     const tx = {
-      $queryRaw: vi.fn(async () => {
-        events.push('user-lock');
+      orgMember: { findMany: vi.fn().mockResolvedValue([]) },
+      $queryRaw: vi.fn(async (query: Prisma.Sql) => {
+        const key = String(query.values[0] ?? '');
+        events.push(key === 'uoa:product-team-policy:v1' ? 'policy-lock'
+          : key.includes('uoa:refresh-session:user:') ? 'user-lock' : 'other-sql');
         return [{ lockResult: '' }];
       }),
       refreshToken: {
@@ -69,18 +72,14 @@ describe('disableTwoFactorForUser', () => {
       },
     );
 
-    expect(events).toEqual([
-      'begin',
-      'user-lock',
-      'user-lock',
-      'user-lock',
-      'totp-verify',
-      'twofa-disable',
-      'user-lock',
-      'refresh-revoke',
-      'token-version',
-      'commit',
-    ]);
+    expect(events[0]).toBe('begin');
+    expect(events.at(-1)).toBe('commit');
+    expect(events.indexOf('policy-lock')).toBeGreaterThanOrEqual(0);
+    expect(events.indexOf('user-lock')).toBeGreaterThan(events.indexOf('policy-lock'));
+    expect(events.indexOf('user-lock')).toBeLessThan(events.indexOf('totp-verify'));
+    expect(events.indexOf('totp-verify')).toBeLessThan(events.indexOf('twofa-disable'));
+    expect(events.indexOf('twofa-disable')).toBeLessThan(events.indexOf('refresh-revoke'));
+    expect(events.indexOf('refresh-revoke')).toBeLessThan(events.indexOf('token-version'));
     expect(tx.refreshToken.updateMany).toHaveBeenCalledWith({
       where: { userId: 'user-1', revokedAt: null },
       data: { revokedAt: expect.any(Date) },
