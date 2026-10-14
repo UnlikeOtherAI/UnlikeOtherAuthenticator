@@ -6,6 +6,10 @@ import { settledScreenshot } from './audit-screenshot';
 test('U10 Members separates account lifecycle from membership and keeps recovery navigation', async ({
   page,
 }, info) => {
+  // Explicitly check both servers owned by the existing audit configuration.
+  for (const port of [5291, 5292]) {
+    expect((await page.request.get(`http://127.0.0.1:${port}/`)).status()).toBe(200);
+  }
   await installFixtures(page);
   await page.addInitScript(() =>
     sessionStorage.setItem(
@@ -31,6 +35,9 @@ test('U10 Members separates account lifecycle from membership and keeps recovery
     membershipStatus:
       member.id === 'u103' ? 'removed' : member.id === 'u104' ? 'deactivated' : 'active',
   }));
+  const unknownMember = org.members.find((member) => member.id === 'u105');
+  if (!unknownMember) throw new Error('Missing unknown-membership fixture');
+  Reflect.deleteProperty(unknownMember, 'membershipStatus');
   await page.route('**/internal/admin/organisations/o1', (route) => {
     expect(route.request().method()).toBe('GET');
     return route.fulfill({ json: org });
@@ -65,6 +72,7 @@ test('U10 Members separates account lifecycle from membership and keeps recovery
     ['Bob Smith', 'disabled', 'active', 'admin'],
     ['Carol Davis', 'active', 'removed', 'member'],
     ['Dan Lee', 'active', 'deactivated', 'member'],
+    ['Eva Torres', 'active', 'Unavailable', 'member'],
   ]) {
     const row = page
       .getByRole('row')
@@ -78,10 +86,34 @@ test('U10 Members separates account lifecycle from membership and keeps recovery
     .getByRole('columnheader', { name: 'Membership', exact: true })
     .scrollIntoViewIfNeeded();
   await settledScreenshot(page, info, 'members-independent-statuses.png');
+  const unknownRow = page
+    .getByRole('row')
+    .filter({ has: page.getByRole('link', { name: 'Eva Torres', exact: true }) });
+  await unknownRow.getByRole('cell').nth(3).scrollIntoViewIfNeeded();
+  await expect(unknownRow.getByText('Unavailable', { exact: true })).toBeInViewport();
+  const removedStatus = page
+    .getByRole('row')
+    .filter({ has: page.getByRole('link', { name: 'Carol Davis', exact: true }) })
+    .getByRole('cell')
+    .nth(3);
+  await expect(removedStatus).toBeInViewport();
+  await settledScreenshot(page, info, 'members-removed-unknown-states.png');
+  const removedRow = page
+    .getByRole('row')
+    .filter({ has: page.getByRole('link', { name: 'Carol Davis', exact: true }) });
+  await removedRow.getByRole('link', { name: 'Backend', exact: true }).click();
+  await expect(page).toHaveURL(/organisations\/o1\/teams\/t12/);
+  await page.goBack();
+  await expect(page.getByRole('link', { name: 'Alice Chen', exact: true })).toHaveAttribute(
+    'href',
+    '/users/u101',
+  );
   await page.getByRole('link', { name: 'Bob Smith', exact: true }).click();
   await expect(page).toHaveURL(/users\/u102/);
   await page.getByRole('button', { name: 'Security', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Reactivate access', exact: true })).toBeVisible();
+  const recovery = page.getByRole('button', { name: 'Reactivate access', exact: true });
+  await recovery.scrollIntoViewIfNeeded();
+  await expect(recovery).toBeInViewport();
   // Recovery remains reachable; this read-only scenario never changes authority.
   await settledScreenshot(page, info, 'disabled-member-recovery.png');
 });
