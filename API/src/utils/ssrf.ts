@@ -9,6 +9,13 @@ export type PublicDestination = {
   family: 4 | 6;
 };
 
+/** A temporary resolver failure establishes neither a safe nor an unsafe destination. */
+export class PublicDestinationUnavailableError extends AppError {
+  public constructor() {
+    super('SERVICE_UNAVAILABLE', 503, 'DESTINATION_DNS_UNAVAILABLE');
+  }
+}
+
 export function parseHttpsUrl(value: string): URL {
   let url: URL;
   try {
@@ -183,7 +190,10 @@ export async function resolvePublicDestinations(url: URL): Promise<PublicDestina
       }
       return { address: entry.address, family: entry.family };
     });
-  } catch {
+  } catch (error) {
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'EAI_AGAIN') {
+      throw new PublicDestinationUnavailableError();
+    }
     throw new AppError('BAD_REQUEST', 400);
   }
 
