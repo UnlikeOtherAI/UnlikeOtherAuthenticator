@@ -212,3 +212,17 @@ ID fixtures and every first-placement flow before this draft is integrated.
 The remote integration branch was fetched after checkpointing; no newer commits
 were present. Heavy tests/typecheck/build and new server/database work remain
 unstarted because the API slot has not been allocated.
+
+
+### Server-free focused validation
+
+Maxis single-worker `vitest --config vitest.light.config.ts`: 46 passed across
+6 files (15 login-code,16 profile authority,6 directory credential,4 legacy context,
+3 native failure-budget,2 exact admin-bearer revocation tests). No setup server,
+network listener, database or workspace build ran. The initial limiter import
+exposed an unnecessary dependency on the org middleware/service graph; extracting
+pure bearer syntax into a utility preserved the guard export and made these
+checks independent of missing workspace dist. Full default-harness/HTTP and
+PostgreSQL suites, generated schema client, typecheck and builds remain pending.
+The profile specification now explicitly documents the missing email-change API,
+neutral inactive labels and BFF-proxied authenticated images.

@@ -1,3 +1,4 @@
+import { parseBearerOrRawToken } from '../utils/bearer-token.js';
 import { requireIdentityEmail } from '../services/entity-lifecycle.service.js';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
@@ -30,19 +31,7 @@ function resolveOrgIdFromParams(request: FastifyRequest): string | undefined {
   return orgId || undefined;
 }
 
-export function parseBearerOrRawToken(value: unknown): string | null {
-  if (typeof value !== 'string') return null;
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-
-  const lower = trimmed.toLowerCase();
-  if (lower.startsWith('bearer ')) {
-    const token = trimmed.slice('bearer '.length).trim();
-    return token ? token : null;
-  }
-
-  return trimmed;
-}
+export { parseBearerOrRawToken };
 
 export const ORG_ACCESS_TOKEN_HEADER = 'x-uoa-access-token';
 export const ORG_SUBJECT_ASSERTION_HEADER = 'x-uoa-subject-assertion';

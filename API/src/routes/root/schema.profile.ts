@@ -13,7 +13,7 @@ export const profileEndpoints: EndpointSchema[] = [
       pronouns_custom: 'optional null or trimmed1-120characters; required for custom, otherwise null' } },
   { method: 'GET', path: '/profile/me/avatar', auth, query, description: 'Authorized self avatar bytes through canonical upload/provider/generated resolver; private/no-store' },
   { method: 'GET', path: '/org/organisations/:orgId/users/:userId/display', auth, query,
-    description: 'Exact-org authorized subject display. Actor must remain ACTIVE in the exact claimed organisation. Active target membership returns id/name/deleted:false and authorized avatar_image_url; inactive membership/account returns id/name:Former member/deleted:false without avatar. DELETED returns id/name:Deleted user/deleted:true only with exact retained org provenance. Unknown/erased/unproven subject is generic404. Never email or factor data.' },
+    description: 'Exact-org authorized subject display. Actor must remain ACTIVE in the exact claimed organisation. Active target membership returns id/name/deleted:false and authorized avatar_image_url; REMOVED membership returns Former member without avatar; other inactive membership/account returns Unavailable member without avatar, deleted:false. DELETED returns id/name:Deleted user/deleted:true only with exact retained org provenance. Unknown/erased/unproven subject is generic404. Never email or factor data.' },
   { method: 'GET', path: '/org/organisations/:orgId/users/:userId/display/avatar', auth, query,
     description: 'Same exact-org current actor and ACTIVE target membership checks; inactive/deleted/unknown generic404. Private/no-store raster or generated image bytes.' },
 ];

@@ -1,6 +1,6 @@
 import type { FastifyRequest } from 'fastify';
 
-import { parseBearerOrRawToken } from './org-role-guard.js';
+import { parseBearerOrRawToken } from '../utils/bearer-token.js';
 import { AppError } from '../utils/errors.js';
 
 type KeyBuilder = (request: FastifyRequest) => string;

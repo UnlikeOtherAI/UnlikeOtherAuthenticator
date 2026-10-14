@@ -992,3 +992,7 @@ The draft directory ordering seam is `directory-mutation.service.ts`, backed by
 it; remaining canonical writer coverage and tenant-role storage access are still
 required before publishing a consumer revision/cache contract. Its ID-only
 events and cursors survive physical organisation deletion.
+
+The canonical U3 field, display and authenticated-image contract is documented
+in [profile authority](profile-authority.md). Pure bearer syntax is shared via
+`utils/bearer-token.ts`; the org guard preserves its existing export.

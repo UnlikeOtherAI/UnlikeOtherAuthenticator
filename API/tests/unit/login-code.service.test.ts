@@ -66,6 +66,30 @@ describe('login-code.service', () => {
     vi.clearAllMocks();
   });
 
+  it('refuses disabled code authentication before reading or consuming a code', async () => {
+    const prisma = makePrisma();
+    const config = makeConfig({ login_flow: { email_code_enabled: false, team_selection: 'off' } });
+    const input = { email: 'jane@example.com', config, configUrl: 'https://client.example.com/auth-config' };
+    await expect(issueLoginCode(input, { env: baseEnv, prisma })).rejects.toMatchObject({ statusCode: 401 });
+    await expect(verifyLoginCode({ ...input, code: '123456' }, { env: baseEnv, prisma })).rejects.toMatchObject({ statusCode: 401 });
+    expect(prisma.verificationToken.findFirst).not.toHaveBeenCalled();
+    expect(prisma.verificationToken.updateMany).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['client.example.com', 'https://client.example.com/other-config'],
+    ['other.example.com', 'https://client.example.com/auth-config'],
+  ])('does not accept a globally scoped user code through another client context (%s)', async (domain, configUrl) => {
+    const prisma = makePrisma();
+    vi.mocked(prisma.verificationToken.findFirst).mockImplementation(async ({ where }) =>
+      where?.domain === 'client.example.com' && where?.configUrl === 'https://client.example.com/auth-config'
+        ? validLoginCodeRow() as never : null);
+    await expect(verifyLoginCode({ email: 'jane@example.com', code: '123456', config: makeConfig({ domain }), configUrl },
+      { env: baseEnv, prisma, hashEmailToken: () => 'expected-hash' })).rejects.toMatchObject({ statusCode: 401 });
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    expect(prisma.verificationToken.updateMany).not.toHaveBeenCalled();
+  });
+
   describe('issueLoginCode', () => {
     it('returns silently and sends nothing when no user exists for (email, domain)', async () => {
       const prisma = makePrisma();
