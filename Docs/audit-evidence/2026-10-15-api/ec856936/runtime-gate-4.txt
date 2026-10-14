@@ -1,0 +1,74 @@
+
+ RUN  v3.2.6 C:/Users/ondre/Projects/UnlikeOtherAuthenticator/.worktrees/sol-audit-fixes-api-20261014/API
+
+(node:58572) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stdout | tests/integration/oauth-native-refresh.test.ts > public OAuth refresh tokens for native apps
+Retained audit test schema: [token-like test value redacted]
+
+ ✓ tests/integration/oauth-native-refresh.test.ts (9 tests) 61921ms
+   ✓ public OAuth refresh tokens for native apps > advertises refresh and revocation, but grants refresh only to native registrations  667ms
+   ✓ public OAuth refresh tokens for native apps > issues a bound family from hosted login and rotates it into a working session  2621ms
+   ✓ public OAuth refresh tokens for native apps > returns the live successor inside the replay grace and revokes the family on later reuse  3336ms
+   ✓ public OAuth refresh tokens for native apps > binds a family to its exact client without consuming it on foreign presentation  2464ms
+   ✓ public OAuth refresh tokens for native apps > never widens the granted scope or resource  2542ms
+   ✓ public OAuth refresh tokens for native apps > ends the family after any credential-epoch change  3285ms
+   ✓ public OAuth refresh tokens for native apps > re-checks the second-factor policy on every refresh  2265ms
+   ✓ public OAuth refresh tokens for native apps > revokes only the presenting client family and always answers 200  2773ms
+   ✓ public OAuth refresh tokens for native apps > stops refreshing once the native app is disabled or its security policy changes  1484ms
+(node:39220) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stdout | tests/integration/native-app-sign-in.test.ts > admin-managed native sign-in
+Retained audit test schema: [token-like test value redacted]
+
+ ✓ tests/integration/native-app-sign-in.test.ts (11 tests) 51862ms
+   ✓ admin-managed native sign-in > creates the verified Google account, binds the Strict cookie and issues a PKCE-only code  1900ms
+   ✓ admin-managed native sign-in > rejects wrong verifier, redeems once, and accesses shared profile and settings  1335ms
+   ✓ admin-managed native sign-in > preserves clients on cosmetic edits, invalidates pending flows and tokens on policy edits  632ms
+   ✓ admin-managed native sign-in > binds simultaneous pages to their own one-use browser flow  3718ms
+   ✓ admin-managed native sign-in > keeps long client state on the server and returns cancellation to the bound app  317ms
+   ✓ admin-managed native sign-in > rejects unverified Google identities without creating an account  370ms
+   ✓ admin-managed native sign-in > retains enrolled second-factor enforcement  1906ms
+(node:64948) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stdout | tests/integration/oauth-native-account.test.ts > native account PKCE and durable favourites
+Retained audit test schema: [token-like test value redacted]
+
+ ✓ tests/integration/oauth-native-account.test.ts (5 tests) 51622ms
+   ✓ native account PKCE and durable favourites > renders consent, completes login, redeems once and returns the authoritative profile/avatar  2442ms
+   ✓ native account PKCE and durable favourites > persists in the shared user store and rejects stale concurrent writes and missing preconditions  1263ms
+   ✓ native account PKCE and durable favourites > rejects scope escalation, other token classes, wrong audience, missing epoch and cross-user reads  453ms
+   ✓ native account PKCE and durable favourites > honours enrolled TOTP, rejects replay and invalidates access on credential revocation  2628ms
+   ✓ native account PKCE and durable favourites > binds required enrollment to the exact authorization request  3214ms
+ ❯ tests/integration/directory-legacy-upgrade.test.ts (1 test | 1 skipped) 50ms
+   ↓ legacy authority schema upgrade on PostgreSQL > preserves legacy canonical data without inventing historical orgs or outbox revisions
+stdout | tests/integration/authentication-epoch-shared-readers.test.ts > shared authentication epoch reads
+Retained audit test schema: [token-like test value redacted]
+
+ ✓ tests/integration/authentication-epoch-shared-readers.test.ts (1 test) 41525ms
+   ✓ shared authentication epoch reads > overlaps read assertions but waits for the exclusive epoch writer  968ms
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/directory-legacy-upgrade.test.ts > legacy authority schema upgrade on PostgreSQL
+Error: spawnSync git ENOBUFS
+ ❯ tests/integration/directory-legacy-upgrade.test.ts:20:21
+     18|   beforeAll(async () => {
+     19|     temporary = await mkdtemp(path.join(apiRoot, '.audit-upgrade-'));
+     20|     const archive = execFileSync('git', ['archive', baseline, 'API/pri…
+       |                     ^
+     21|     execFileSync('tar', ['-xf', '-', '-C', temporary], { input: archiv…
+     22|     handle = (await createTestDb({ migrationSchema: path.join(temporar…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 4 passed (5)
+      Tests  26 passed | 1 skipped (27)
+   Start at  00:32:08
+   Duration  218.82s (transform 3.55s, setup 228ms, collect 10.70s, tests 206.98s, environment 0ms, prepare 292ms)
+
+undefined
+C:\Users\ondre\Projects\UnlikeOtherAuthenticator\.worktrees\sol-audit-fixes-api-20261014\API:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command "vitest" not found
+EXIT=1
