@@ -1,4 +1,5 @@
 import Fastify from 'fastify';
+import { lookup } from 'node:dns/promises';
 import type { PrismaClient } from '@prisma/client';
 import { exportJWK, generateKeyPair, SignJWT, type JWK, type KeyLike } from 'jose';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -71,6 +72,26 @@ describe('subject assertion verification during partner JWKS outages', () => {
     },
   );
 
+  it('keeps transient DNS retryable before fetch and verifies freshly after resolver recovery', async () => {
+    vi.mocked(lookup).mockRejectedValueOnce(Object.assign(new Error('temporary resolver failure'), { code: 'EAI_AGAIN' }));
+    const fetchMock = vi.fn().mockImplementation(keysResponse);
+    vi.stubGlobal('fetch', fetchMock);
+    const token = await assertion();
+    await expect(verify(token)).rejects.toMatchObject({ statusCode: 503, message: 'INTEGRATION_JWKS_UNAVAILABLE' });
+    expect(fetchMock).not.toHaveBeenCalled();
+    await expect(verify(token)).resolves.toMatchObject({ sub: 'user_1', tv: 0 });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['ENOTFOUND', 'private_ip'])('retains a definitive unsafe destination refusal: %s', async (failure) => {
+    if (failure === 'private_ip') vi.mocked(lookup).mockResolvedValueOnce([{ address: '127.0.0.1', family: 4 }]);
+    else vi.mocked(lookup).mockRejectedValueOnce(Object.assign(new Error('not found'), { code: failure }));
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(verify(await assertion())).rejects.toMatchObject({ statusCode: 401, message: 'INVALID_SUBJECT_TOKEN' });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('retains real invalid-signature, expiry, audience and missing-key refusals', async () => {
     const wrongPair = await generateKeyPair('RS256');
     vi.stubGlobal('fetch', vi.fn().mockImplementation(keysResponse));
@@ -94,8 +115,11 @@ describe('subject assertion verification during partner JWKS outages', () => {
     expect(databaseAccess).not.toHaveBeenCalled();
   });
 
-  it('returns the generic production 503 through the actual org guard without borrowing local authority', async () => {
+  it.each(['http', 'dns'])('returns the generic production 503 through the actual org guard: %s', async (failure) => {
     vi.stubEnv('DEBUG_ENABLED', 'false');
+    if (failure === 'dns') {
+      vi.mocked(lookup).mockRejectedValueOnce(Object.assign(new Error('temporary resolver failure'), { code: 'EAI_AGAIN' }));
+    }
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('', { status: 503 })));
     const token = await assertion();
     const localRead = vi.fn(() => { throw new Error('no identity or membership read before signature verification'); });

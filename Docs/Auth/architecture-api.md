@@ -927,7 +927,8 @@ SMS prepaid runtime: services/billing-sms-{reservation,dispatch,receipt,grant,st
 ### Subject verification dependency failures
 
 `jwks-fetch.service.ts` owns `PartnerJwksUnavailableError` (HTTP 503,
-`INTEGRATION_JWKS_UNAVAILABLE`) for network/timeout failures and partner HTTP
+`INTEGRATION_JWKS_UNAVAILABLE`) for network/timeout failures, transient DNS
+`EAI_AGAIN` and partner HTTP
 408/429/5xx. The confidential subject verifier preserves this typed outage
 instead of converting it into invalid credentials. The org guard propagates
 it through the existing generic error handler; the production body contains
@@ -937,6 +938,12 @@ expired assertions and unsafe destinations retain their existing refusals.
 The source verification contract appears in `/api` and `/llm`. Focused tests
 exercise the actual fetch/verifier/HTTP org-guard path and recovery without
 a negative authority cache.
+
+The shared SSRF resolver preserves `EAI_AGAIN` as
+`PublicDestinationUnavailableError`; the JWKS fetcher maps that typed temporary
+failure to the existing partner outage. Definitive DNS failures, empty/invalid
+results and any private address remain hard destination refusals. No address
+is admitted or network fetch attempted while resolution is unavailable.
 
 ### Auth translation source and timeout
 
