@@ -78,7 +78,7 @@ export async function issueLoginCode(
   const env = deps?.env ?? getEnv();
   if (!env.DATABASE_URL) return;
 
-  const { userKey, domain, email } = buildUserIdentity({
+  const { userKey, email } = buildUserIdentity({
     userScope: params.config.user_scope,
     email: params.email,
     domain: params.config.domain,
@@ -98,7 +98,7 @@ export async function issueLoginCode(
 
   // Supersede any prior unused LOGIN_CODE for this user before minting a new one.
   await prisma.verificationToken.updateMany({
-    where: { userKey, configUrl: params.configUrl, type: 'LOGIN_CODE', usedAt: null },
+    where: { userKey, domain: params.config.domain, configUrl: params.configUrl, type: 'LOGIN_CODE', usedAt: null },
     data: { usedAt: now },
   });
 
@@ -114,7 +114,7 @@ export async function issueLoginCode(
           type: 'LOGIN_CODE',
           email,
           userKey,
-          domain,
+          domain: params.config.domain,
           configUrl: params.configUrl,
           tokenHash,
           expiresAt,
@@ -180,6 +180,7 @@ export async function verifyLoginCode(
       where: {
         userKey,
         configUrl: params.configUrl,
+        domain: params.config.domain,
         type: 'LOGIN_CODE',
         usedAt: null,
         attemptCount: { lt: LOGIN_CODE_MAX_ATTEMPTS },

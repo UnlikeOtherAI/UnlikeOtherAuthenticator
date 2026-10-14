@@ -17,6 +17,8 @@ import { registerIntegrationRoutes } from './integrations/index.js';
 import { registerOAuthRoutes } from './oauth/index.js';
 import { registerOrgRoutes } from './org/index.js';
 import { registerRootRoute } from './root/index.js';
+import { registerDirectoryRoutes } from './directory/index.js';
+import { registerProfileRoutes } from './profile/index.js';
 import { registerSettingsRoutes } from './settings/index.js';
 import { registerSignatureRoutes } from './signatures/index.js';
 import { registerTwoFactorRoutes } from './twofactor/index.js';
@@ -38,6 +40,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   registerInternalAdminRoutes(app);
   registerInternalOrgRoutes(app);
   registerOrgRoutes(app);
+  registerProfileRoutes(app);
+  registerDirectoryRoutes(app);
   registerSettingsRoutes(app);
   registerI18nRoutes(app);
   registerTwoFactorRoutes(app);

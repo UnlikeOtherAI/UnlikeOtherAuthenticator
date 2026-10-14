@@ -3,6 +3,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import { getAdminAuthDomain, getEnv } from '../config/env.js';
 import { getAdminPrisma } from '../db/prisma.js';
 import { verifyAccessToken, type AccessTokenClaims } from '../services/access-token.service.js';
+import { assertAdminAccessNotRevoked } from '../services/admin-access-revocation.service.js';
 import { normalizeDomain } from '../utils/domain.js';
 import { AppError } from '../utils/errors.js';
 
@@ -57,6 +58,7 @@ export async function requireAdminSuperuser(
   }
 
   if (env.DATABASE_URL) {
+    await assertAdminAccessNotRevoked(token, getAdminPrisma());
     const adminRole = await getAdminPrisma().domainRole.findUnique({
       where: { domain_userId: { domain: adminDomain, userId: claims.userId } },
       select: { role: true },

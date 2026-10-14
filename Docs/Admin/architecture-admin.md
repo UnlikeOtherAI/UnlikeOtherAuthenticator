@@ -348,3 +348,14 @@ conditional tab mounting clear reveals on product/tab changes and auth-shell tea
 The shared Modal supplies pending dismissal, dirty form and focus guards. Existing
 server roles/endpoints remain authoritative. Browser checks use isolated synthetic
 responses, not production credentials or proof of deployed issuance.
+
+
+### Exact Admin logout (2026-10-14)
+
+Online Admin APIs additionally reject the expiring digest of a bearer explicitly
+logged out through `/internal/admin/logout`. The same transaction revokes its
+private refresh family and unused debug grants. No raw access token is stored,
+no new cookie requirement is imposed on older valid sessions, no sibling bearer
+is revoked and the global credential epoch is unchanged. Transient lookup errors
+remain5xx; the frontend retains its session for retry. The digest expires only
+after JWT expiry plus verification clock tolerance and is pruned by retention.

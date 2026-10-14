@@ -17,6 +17,8 @@ import { registerConfigValidateRoute } from './config-validate.js';
 import { registerConfigVerifyRoute } from './config-verify.js';
 import { registerLlmRoute } from './llm.js';
 import { endpoints } from './schema.js';
+// Purpose-bound directory credentials, explicit grants and live reads are in schema.directory.
+// Profile read/write/display endpoints are included through schema.profile.
 // Website tokens use stable non-secret client IDs; method/code binding policies
 // are published by the shared config and endpoint schema slices.
 import { readAdminIndexAssetUrls } from '../../services/admin-ui.service.js';

@@ -59,7 +59,7 @@ describe('Team service: self-join & visibility', () => {
 
       expect(member).toMatchObject({ id: 'tm-new', userId: 'u-actor' });
       expect(prisma.teamMember.create).toHaveBeenCalledWith(
-        expect.objectContaining({ data: { teamId: 'team-1', userId: 'u-actor' } }),
+        expect.objectContaining({ data: { teamId: 'team-1', userId: 'u-actor', teamRole: 'member' } }),
       );
     });
 

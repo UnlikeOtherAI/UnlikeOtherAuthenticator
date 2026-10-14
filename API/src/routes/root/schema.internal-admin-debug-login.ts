@@ -11,7 +11,10 @@ export const internalAdminDebugLoginEndpoints: EndpointSchema[] = [
     auth: 'One-use admin code; exact same-origin JSON POST', query, body: { token: 'opaque one-use code' },
     response: { 200: '{access_token,expires_in,token_type:"Bearer"}; private Set-Cookie ownership handle', 401: 'Authentication failed' },
     notes: `${boundary} Atomic single use; fresh short-lived admin bearer and independent private family. No refresh credential in JSON.` },
-  { method: 'POST', path: '/internal/admin/logout', description: 'Revoke only the exact bearer-associated admin source family',
+  { method: 'POST', path: '/internal/admin/logout', description: 'Atomically revoke the exact presented Admin access bearer and its associated refresh family',
     auth: 'Current admin bearer; exact same-origin JSON POST', query, body: {}, response: { 200: '{ok:true}' },
-    notes: 'Clears its private cookie and invalidates unused source debug codes. Independent recipient/source sessions remain active.' },
+    notes: 'Stores only an expiring bearer digest checked by online Admin APIs, including old sessions without a handle. Does not require a new cookie, increment global epoch or end sibling sessions. Clears its private cookie and invalidates unused source debug codes. Independent recipient/source sessions remain active.' },
 ];
+
+// Online Admin logout additionally records only the exact access-bearer digest
+// through expiry+clock tolerance; no cookie requirement or sibling/global revocation.

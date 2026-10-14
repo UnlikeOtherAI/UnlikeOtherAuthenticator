@@ -128,7 +128,7 @@ function parseActorChain(value: unknown, depth = 0): ConfidentialActorChain {
     .parse(value);
   const actorDomain = normalizeDomain(actor.sub);
   if (actor.sub !== actorDomain) throw invalidSubjectToken();
-  httpsOriginForDomain(actorDomain);
+  httpsAudienceForService(actorDomain);
   return {
     sub: actorDomain,
     product: actor.product,
@@ -136,7 +136,7 @@ function parseActorChain(value: unknown, depth = 0): ConfidentialActorChain {
   };
 }
 
-function httpsOriginForDomain(value: string): string {
+function httpsAudienceForService(value: string): string {
   const domain = normalizeDomain(value);
   try {
     const service = clientService(domain);
@@ -184,7 +184,7 @@ export async function verifyChainedSubjectAccessToken(
     const sourceDomain = normalizeDomain(parsed.source_domain);
     const scopes = parseConfidentialDelegationScope(parsed.scope);
     const uniqueTeams = new Set(parsed.org.teams);
-    httpsOriginForDomain(sourceDomain);
+    httpsAudienceForService(sourceDomain);
 
     if (
       parsed.iss !== params.issuer ||
@@ -400,7 +400,7 @@ export async function exchangeConfidentialChainedAccessToken(
 ): Promise<ConfidentialTokenExchangeResult> {
   const prisma = deps.prisma ?? getAdminPrisma();
   const callerDomain = normalizeDomain(params.config.domain);
-  const callerAudience = httpsOriginForDomain(callerDomain);
+  const callerAudience = httpsAudienceForService(callerDomain);
   const resolveDelegation = deps.resolveDelegation ?? resolveConfidentialDelegation;
   // Reject unsupported targets before verification, then repeat the mapping
   // decision under the policy lock so this preflight never becomes authority.

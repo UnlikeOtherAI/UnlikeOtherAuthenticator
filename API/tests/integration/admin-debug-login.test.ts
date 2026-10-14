@@ -102,6 +102,10 @@ describe.skipIf(!process.env.DATABASE_URL)('first-party admin debug login durabl
     expect(recipientRow.familyId).not.toBe(sourceRow.familyId);
     const unused = (await request('debug-login/issue', {}, a)).json<{ token: string }>();
     expect((await request('logout', {}, a)).statusCode).toBe(200);
+    const loggedOut = await app.inject({ method: 'GET', url: '/internal/admin/session', headers: { authorization: `Bearer ${a.pair.accessToken}` } });
+    expect(loggedOut.statusCode).toBe(401);
+    const sibling = await app.inject({ method: 'GET', url: '/internal/admin/session', headers: { authorization: `Bearer ${b.pair.accessToken}` } });
+    expect(sibling.statusCode).toBe(200);
     expect((await request('debug-login/redeem', { token: unused.token })).statusCode).toBe(401);
     expect((await db.prisma.refreshToken.findUniqueOrThrow({ where: { id: recipientRow.id } })).revokedAt).toBeNull();
     expect((await request('logout', {}, { ...a, cookie: cookieHeader.split(';')[0], pair: { ...a.pair, accessToken: recipient.access_token } })).statusCode).toBe(200);

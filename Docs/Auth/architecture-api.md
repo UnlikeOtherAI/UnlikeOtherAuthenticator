@@ -945,3 +945,44 @@ The shared SSRF resolver preserves `EAI_AGAIN` as
 failure to the existing partner outage. Definitive DNS failures, empty/invalid
 results and any private address remain hard destination refusals. No address
 is admitted or network fetch attempted while resolution is unavailable.
+
+
+### Canonical profile and background directory entry points (2026-10-14)
+
+`routes/profile/index.ts` registers self profile/image and exact-org display/image
+routes. `routes/profile/authority.ts` resolves the existing mutually exclusive
+person credentials and captures verified expiry. `services/profile.service.ts`
+owns locked live identity/selected-team authorization, strict name/pronoun writes,
+and minimal exact-org historical display. `profile-display.service.ts` is the shared
+exact-target policy for interactive and explicitly granted background callers. Pronouns live only on canonical User;
+retained deleted subjects need exact HistoricalOrganisationIdentityReference,
+never a product's last-known profile or a domain-wide visibility assumption.
+`schema.profile.ts`, root index and `/llm` publish the contract.
+
+`routes/directory/index.ts` registers separate operator credential management,
+current-canonical-owner product-access grants, and purpose-bound background
+standing/display/image reads. `directory-credential.service.ts` stores only
+purpose-tagged SHA256 secret digests and supports explicit expiry, bounded
+rotation overlap and revocation. `directory-grant.service.ts` checks the current
+owner under locks and audits exact-org permission writes. `directory-read.service.ts`
+rechecks the active credential/domain/grant for every live read; it never uses a
+domain, billing or user credential as background authority. `schema.directory.ts`
+and `/llm` publish the endpoints. All control-plane tables are admin-only under
+forced RLS with deny-all application-role policies. No default credentials/grants
+are installed. Ordered snapshots/deltas and cache-invalidating outbox coverage are
+not yet implemented; no cached-directory cutover is certified by these direct reads.
+
+`team.service.self-join.ts` owns open self-join separately from manager mutations,
+keeping each code file below500lines.
+
+`website-client-context.service.ts` authenticates and converts legacy family
+bindings under existing session locks. `cli/migrate-website-client-context.ts` is
+an explicit post-drain operator cleanup, not a migration at old-revision startup.
+It outputs counts only and cannot restore a revoked legacy credential.
+
+`admin-access-revocation.service.ts` records only the hash of the exact logged-out
+Admin bearer through JWT expiry plus verification tolerance. Logout combines this
+with family revocation in one transaction; Admin middleware checks the marker
+online. It adds no cookie requirement, sibling revocation or global epoch change.
+The existing retention job removes expired markers. Unexpected store failures
+remain5xx, so session UI must retain healthy sessions for retry.

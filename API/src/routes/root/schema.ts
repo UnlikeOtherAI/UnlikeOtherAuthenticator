@@ -13,6 +13,8 @@ import { withOrgContract } from './schema.org-contract.js';
 import { orgInvitationEndpoints } from './schema.org-invitations.js';
 import { orgEndpoints, orgGroupEndpoints, orgTeamMemberEndpoints } from './schema.org.js';
 import { appEndpoints, baseEndpoints, domainEndpoints, emailEndpoints } from './schema.platform.js';
+import { directoryEndpoints } from './schema.directory.js';
+import { profileEndpoints } from './schema.profile.js';
 import { settingsEndpoints } from './schema.settings.js';
 import { signatureEndpoints } from './schema.signatures.js';
 
@@ -55,6 +57,8 @@ export const endpoints: EndpointSchema[] = [
   ...emailEndpoints,
   ...domainEndpoints,
   ...avatarEndpoints,
+  ...profileEndpoints,
+  ...directoryEndpoints,
   ...settingsEndpoints,
   ...orgContractEndpoints,
   ...integrationsEndpoints,

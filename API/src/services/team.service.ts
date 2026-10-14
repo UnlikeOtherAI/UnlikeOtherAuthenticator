@@ -12,8 +12,8 @@ export {
   addTeamMember,
   changeTeamMemberRole,
   removeTeamMember,
-  selfJoinTeam,
 } from './team.service.members.js';
+export { selfJoinTeam } from './team.service.self-join.js';
 
 export { findTeamMemberCandidates, listTeamMembers } from './team.service.roster.js';
 export {

@@ -4,6 +4,7 @@ import { getEnv } from '../config/env.js';
 import { getAdminPrisma } from '../db/prisma.js';
 
 type RetentionPrisma = {
+  adminAccessTokenRevocation?: Pick<PrismaClient['adminAccessTokenRevocation'], 'deleteMany'>;
   debugLoginGrant: Pick<PrismaClient['debugLoginGrant'], 'deleteMany'>;
   authorizationCode: Pick<PrismaClient['authorizationCode'], 'deleteMany'>;
   confidentialAssertionUse: Pick<PrismaClient['confidentialAssertionUse'], 'deleteMany'>;
@@ -59,6 +60,8 @@ export async function pruneExpiredSecurityData(
   const tokenCutoff = subtractDays(now, env.TOKEN_PRUNE_RETENTION_DAYS);
   const loginLogCutoff = subtractDays(now, env.LOG_RETENTION_DAYS);
 
+  // Expired exact-bearer markers cannot revive a JWT; its own expiry already fails.
+  await prisma.adminAccessTokenRevocation?.deleteMany({ where: { expiresAt: { lt: now } } });
   const [
     debugLoginGrants,
     refreshTokens,

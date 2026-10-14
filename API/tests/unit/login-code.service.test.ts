@@ -116,7 +116,7 @@ describe('login-code.service', () => {
       );
 
       expect(prisma.verificationToken.updateMany).toHaveBeenCalledWith({
-        where: { userKey: 'jane@example.com', configUrl: 'https://client.example.com/auth-config', type: 'LOGIN_CODE', usedAt: null },
+        where: { userKey: 'jane@example.com', domain: 'client.example.com', configUrl: 'https://client.example.com/auth-config', type: 'LOGIN_CODE', usedAt: null },
         data: { usedAt: new Date('2026-03-01T00:00:00.000Z') },
       });
       expect(prisma.verificationToken.create).toHaveBeenCalledWith({
@@ -213,6 +213,30 @@ describe('login-code.service', () => {
         },
         data: { attemptCount: { increment: 1 } },
       });
+    });
+
+    it('commits five wrong guesses through a rollback-capable transaction and then refuses the right code', async () => {
+      let attempts = 0;
+      const prisma = makePrisma();
+      (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({ lifecycleStatus: 'ACTIVE', id: 'user-1', tokenVersion: 0, userKey: 'jane@example.com' });
+      (prisma.verificationToken.findFirst as ReturnType<typeof vi.fn>).mockImplementation(async () => attempts < 5 ? validLoginCodeRow() : null);
+      (prisma.verificationToken.updateMany as ReturnType<typeof vi.fn>).mockImplementation(async ({ data }) => {
+        if (data.attemptCount) attempts += 1;
+        return { count: 1 };
+      });
+      prisma.$transaction = vi.fn(async (body) => {
+        const before = attempts;
+        const tx = { ...prisma, $transaction: undefined };
+        try { return await body(tx); } catch (error) { attempts = before; throw error; }
+      }) as never;
+      for (let index = 0; index < 5; index += 1) {
+        await expect(verifyLoginCode({ email: 'jane@example.com', config: makeConfig(), configUrl: 'https://client.example.com/auth-config', code: '000000' },
+          { env: baseEnv, prisma, hashEmailToken: () => 'wrong-hash' })).rejects.toMatchObject({ statusCode: 401 });
+      }
+      expect(attempts).toBe(5);
+      await expect(verifyLoginCode({ email: 'jane@example.com', config: makeConfig(), configUrl: 'https://client.example.com/auth-config', code: '123456' },
+        { env: baseEnv, prisma, hashEmailToken: () => 'expected-hash' })).rejects.toMatchObject({ statusCode: 401 });
+      expect(attempts).toBe(5);
     });
 
     it('excludes a 5th-attempt (dead) code from the lookup, giving the same generic error', async () => {

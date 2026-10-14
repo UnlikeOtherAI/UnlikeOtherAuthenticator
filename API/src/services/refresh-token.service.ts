@@ -193,6 +193,7 @@ async function createRefreshTokenRecord(
   refreshToken: string;
   refreshTokenId: string;
 }> {
+  if (/^[a-f0-9]{64}$/i.test(params.clientId)) throw new AppError('INTERNAL', 500, 'SECRET_CLIENT_IDENTIFIER');
   const prisma = getRefreshTokenPrisma(deps);
   const now = nowDate(deps);
   const ttlSeconds = getRefreshTokenTtlSeconds(deps);

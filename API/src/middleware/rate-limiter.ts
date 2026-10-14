@@ -96,6 +96,18 @@ export function createKeyedRateLimiter({ limit, windowMs }: KeyedRateLimitOption
   };
 }
 
+/** Count unsuccessful authentication, preserving multi-step successful native
+ * flows. Same bounded expiring store as the existing account/IP limiters. */
+export function createFailureRateLimiter({ limit, windowMs }: KeyedRateLimitOptions) {
+  return {
+    assertAllowed(key: string) {
+      const state = windows.get(key);
+      if (key && state && state.resetAt > Date.now() && state.count >= limit) throw new AppError('RATE_LIMITED', 429);
+    },
+    recordFailure(key: string) { consume(key, limit, windowMs); },
+  };
+}
+
 export function createRateLimiter({ keyBuilder, limit, windowMs }: RateLimitOptions) {
   return async function rateLimiter(request: FastifyRequest) {
     consume(keyBuilder(request), typeof limit === 'function' ? limit(request) : limit, windowMs);

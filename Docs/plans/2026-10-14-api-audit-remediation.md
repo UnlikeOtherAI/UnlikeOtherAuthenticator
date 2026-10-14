@@ -30,8 +30,8 @@ frontend writes. No production probes, credential use, rotation or deployment ra
   awaiting incorporation and focused verification. Do not label falsified.
 - [ ] U-26 — confirmed DB errors caught as invalid native account credentials;
   drafted narrow cryptographic catch preserving later dependency failures.
-- [ ] U-27 — confirmed missing account throttle; drafted five guesses per account
-  per15minutes across IPs, using existing bounded per-instance limiter semantics.
+- [ ] U-27 — confirmed missing account throttle; drafted five failed authentication attempts per account
+  per15minutes across IPs (successful MFA continuations do not consume the budget), using existing bounded per-instance limiter semantics.
 - [ ] U-28 — source behavior matches explicit domain-authored capability contract
   (brief24.1a/c and Sept30 parity amendment). No change to grants. Trust-contract
   review remains visible; a different operator boundary requires an explicit amendment.
@@ -39,12 +39,15 @@ frontend writes. No production probes, credential use, rotation or deployment ra
   revision/method/callback reread before factor enrollment or challenge effects.
 - [ ] U-30 — confirmed ignored config quotas and team suspension lift; drafted
   member/team/user caps, role vocabulary, fresh lock-time expiry and suspension refusal.
-- [ ] U-35 — unresolved contract review: family logout revokes refresh/debug grants,
+- [ ] U-35 — drafted exact online Admin bearer digest revocation; verification and
+  usability review pending. Previous behavior: family logout revokes refresh/debug grants,
   while a captured admin access bearer remains valid to expiry absent global epoch.
   Do not silently require a cookie for every admin API or revoke sibling sessions.
-- [ ] U3 — accepted self profile + exact authorized display contract; not implemented.
-- [ ] U1 — required purpose-bound background grants and ordered invalidation outbox;
-  not implemented. No directory fallback or durable product identity mirror is acceptable.
+- [ ] U3 — drafted self profile/pronouns and exact authorized display/image routes;
+  additive schema and erasure coverage drafted. Tests and ordered invalidations pending.
+- [ ] U1 — drafted separate expiring/rotating directory credentials, current-owner
+  exact-org grants and live standing/display/image reads. Ordered invalidation
+  outbox and full writer seam remain unimplemented; do not cut over cached readers. No directory fallback or durable product identity mirror is acceptable.
 
 Translation body timeout (U-21) belongs to frontend/translation owner: the timer
 must cover response body consumption, not end at response headers. Source showed
@@ -75,7 +78,10 @@ bounded JWT behavior stays as documented.
 1. Run synthetic migration/replay/revocation tests and inspect all context consumers.
    Ship API compatibility readers and stable-ID writers first. No startup data
    rewrite runs while older revisions still need bearer-bound client contexts.
-2. Route all new traffic to the verified new revision; drain older revisions.
+2. Use a controlled retryable503 ingress gate for token/refresh/debug operations,
+   drain older revisions through their maximum request/transaction timeout, then
+   route traffic exclusively to the verified new revision and release the gate.
+   Do not mix old and new readers while converting shared refresh families.
    In-flight legacy writes remain readable by the new authenticated compatibility
    path. Healthy renewable sessions keep their family, epoch, scope and MFA proof.
 3. With protected environment variables DATABASE_ADMIN_URL and SHARED_SECRET,
@@ -105,3 +111,34 @@ one-worker focused run:52passed,5failed, seven failed files/two passed files.
 Fixtures for code enablement/config URL, domain status and role reset were updated;
 workspace package build prerequisites and remaining failure diagnostics await the
 allocated heavy compiler slot. No PostgreSQL reproduction or deployment ran.
+
+
+## U3 and U1 contract handoff
+
+U3 routes are in `API/src/routes/root/schema.profile.ts`. Exact self GET includes
+current email; PATCH accepts name and pronouns only. No email-change API exists
+in current source and none is invented here. Email must remain read-only until a
+separate verified protocol is implemented. Other-user display never returns email.
+All images use the same authenticated context, including cross-product members
+without a local domain-role shortcut. Older domain-only deletion references are
+not backfilled into per-org permission; unproven/erased authors return generic404
+for neutral presentation. New retained deletions capture exact prior org IDs,
+while erase-reference deletes those grants and pronouns are scrubbed.
+
+U1 direct routes are in `schema.directory.ts`. Secrets issue once to a backend
+and never enter query cache/browser storage. Only current canonical org owners
+may explicitly grant MEMBERSHIP_READ/DISPLAY_READ/WEBHOOK_MANAGE; admin-like custom
+roles cannot grant product standing. Rotation preserves grants but bounds old
+secret overlap to ten minutes. Revocation/domain disable/expiry are checked on
+every read under the policy fence. Live standing has no email/profile fields;
+permitted display is minimal and memory-only. No snapshot revision is fabricated.
+Outbox and U2 delivery remain required before the consumer's cached authority cutover.
+
+The remaining outbox seam must resolve affected org IDs before the first mutation,
+take sorted per-org transaction locks, commit minimal invalidations/revision with
+the mutation and hold locks through commit. Merely publishing after service return,
+using timestamps, or adding row-trigger locks in arbitrary order is insufficient.
+The targeted writer inventory currently finds60non-create mutations across auth
+recovery, social login, profile/avatar, organisation/member/team/invite lifecycle,
+first-placement/admin additions and entity deletion. Create/nested-create/upsert
+paths must also be covered; this is inventory, not completed verification.

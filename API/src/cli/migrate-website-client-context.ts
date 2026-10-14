@@ -17,12 +17,14 @@ const { isAppError } = await import('../utils/errors.js');
 const db = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_ADMIN_URL } } });
 const apply = args[0] !== '--dry-run';
 try {
-  const rows = await db.refreshToken.findMany({ distinct: ['familyId'],
-    where: { clientId: { not: { startsWith: 'retired:' } } },
-    select: { familyId: true, userId: true, domain: true, clientId: true, configUrl: true },
-  });
+  const rows = await db.$queryRaw<Array<{ familyId: string; userId: string; domain: string; clientId: string; configUrl: string }>>`
+    SELECT DISTINCT family_id AS "familyId", user_id AS "userId", domain,
+      client_id AS "clientId", config_url AS "configUrl"
+    FROM refresh_tokens WHERE client_id ~ '^[a-fA-F0-9]{64}$'
+    ORDER BY family_id, client_id
+  `;
   let migrated = 0, retired = 0;
-  for (const row of rows.filter(row => /^[a-f0-9]{64}$/i.test(row.clientId))) {
+  for (const row of rows) {
     await db.$transaction(async transaction => {
       const tx = transaction as unknown as PrismaClient;
       await lockProductTeamPolicyShared(tx);

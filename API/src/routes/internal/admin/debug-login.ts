@@ -1,3 +1,5 @@
+import { runInTransaction } from '../../../db/tenant-context.js';
+import { revokeAdminAccess } from '../../../services/admin-access-revocation.service.js';
 import { AppError } from '../../../utils/errors.js';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
@@ -49,7 +51,10 @@ export function registerInternalAdminDebugLoginRoutes(app: FastifyInstance): voi
     if (!request.config) throw new AppError('UNAUTHORIZED', 401);
     z.object({}).strict().parse(request.body);
     const refreshToken = request.cookies[adminSessionCookieName(adminBearer(request))];
-    if (refreshToken) await revokeRefreshTokenFamily({ ...adminDebugContext(), refreshToken, familyOnly: true }, { prisma: request.adminDb });
+    await runInTransaction(request.adminDb, async tx => {
+      if (refreshToken) await revokeRefreshTokenFamily({ ...adminDebugContext(), refreshToken, familyOnly: true }, { prisma: tx });
+      await revokeAdminAccess(adminBearer(request), tx);
+    });
     clearAdminSessionHandle(request, reply);
     reply.header('Cache-Control', 'no-store');
     return { ok: true };

@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { FastifyRequest } from 'fastify';
 
-import { createRateLimiter } from '../../middleware/rate-limiter.js';
+import { createFailureRateLimiter, createRateLimiter } from '../../middleware/rate-limiter.js';
 import { TOKEN_EXCHANGE_GRANT_TYPE } from '../../services/confidential-token-exchange.service.js';
 
 const MINUTE_MS = 60 * 1000;
@@ -89,8 +89,16 @@ export const loginRateLimiter = composeRateLimiters(
   bodyRateLimiter('auth:login', 'email', 5, 15 * MINUTE_MS),
 );
 
-// Bound native password guesses across source IPs.
-export const oauthLoginRateLimiter = bodyRateLimiter('oauth:login', 'email', 5, 15 * MINUTE_MS);
+// Successful MFA setup/challenge continuations do not spend password-guess budget.
+const nativeLoginGlobal = globalRateLimiter('oauth:login', 60_000);
+const nativeFailures = createFailureRateLimiter({ limit: 5, windowMs: 15 * MINUTE_MS });
+export async function oauthLoginRateLimiter(request: FastifyRequest): Promise<void> {
+  await nativeLoginGlobal(request);
+  nativeFailures.assertAllowed(authBodyKey('oauth:login:failed', request, 'email'));
+}
+export function recordOAuthLoginFailure(request: FastifyRequest): void {
+  nativeFailures.recordFailure(authBodyKey('oauth:login:failed', request, 'email'));
+}
 
 export const registerRateLimiter = composeRateLimiters(
   ipRateLimiter('auth:register', 10, MINUTE_MS),

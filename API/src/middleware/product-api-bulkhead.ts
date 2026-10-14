@@ -30,6 +30,8 @@ const PRODUCT_API_PREFIXES = [
   '/org/',
   '/domain/',
   '/settings/',
+  '/profile/',
+  '/directory/',
   '/internal/org/',
   '/avatar/',
   '/email/',
@@ -122,6 +124,7 @@ export function createBulkhead(options: BulkheadOptions): Bulkhead {
 const RETRY_AFTER_SECONDS = '1';
 
 const heldSlots = new WeakMap<FastifyRequest, () => void>();
+const executingHandlers = new WeakSet<FastifyRequest>();
 
 function releaseSlot(request: FastifyRequest): void {
   const release = heldSlots.get(request);
@@ -173,13 +176,14 @@ export function registerProductApiBulkhead(
     if (!isProductApiPath(route.url)) return;
     const handler = route.handler;
     route.handler = async function (request, reply) {
+      executingHandlers.add(request);
       try { return await handler.call(this, request, reply); }
-      finally { releaseSlot(request); }
+      finally { executingHandlers.delete(request); releaseSlot(request); }
     };
   });
   // Errors before entering a handler also end their asynchronous pre-handler work.
-  app.addHook('onError', async (request) => releaseSlot(request));
-  app.addHook('onResponse', async (request) => releaseSlot(request));
+  app.addHook('onError', async (request) => { if (!executingHandlers.has(request)) releaseSlot(request); });
+  app.addHook('onResponse', async (request) => { if (!executingHandlers.has(request)) releaseSlot(request); });
 
   return bulkhead;
 }

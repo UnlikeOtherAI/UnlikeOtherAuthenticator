@@ -15,7 +15,7 @@ import { lockProductTeamPolicyShared } from '../../services/product-team-policy-
 import { assertEmailDomainAllowedForLogin } from '../../services/login-domain-policy.service.js';
 import { assertNotBannedAtLogin } from '../../services/ban-policy.service.js';
 import { AppError } from '../../utils/errors.js';
-import { oauthLoginRateLimiter } from '../auth/rate-limit-keys.js';
+import { oauthLoginRateLimiter, recordOAuthLoginFailure } from '../auth/rate-limit-keys.js';
 import { buildPublicErrorBody } from '../../utils/error-response.js';
 import { parseRequiredPkceChallenge } from '../../utils/pkce.js';
 import { requireMcpOAuthPublicProfile } from './public-profile-guard.js';
@@ -128,6 +128,11 @@ export function registerOAuthLoginRoute(app: FastifyInstance): void {
             credentialEpoch,
           },
         };
+      }).catch((error: unknown) => {
+        // Count only authentication failures after the transaction rolled back.
+        // DB outages and successful MFA continuations must not lock out a person.
+        if (error instanceof AppError && error.statusCode === 401) recordOAuthLoginFailure(request);
+        throw error;
       });
 
       reply.header('Cache-Control', 'no-store');

@@ -11,6 +11,7 @@ vi.mock('../../db/prisma.js', () => ({
   // The middleware passes this admin client to verifyAccessToken for the
   // tokenVersion revocation lookup, and uses it for the domainRole check.
   getAdminPrisma: () => ({
+    adminAccessTokenRevocation: { findUnique: async () => null },
     domainRole: {
       findUnique: domainRoleFindUnique,
     },

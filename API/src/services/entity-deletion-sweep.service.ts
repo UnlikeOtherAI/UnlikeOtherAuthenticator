@@ -17,6 +17,10 @@ export async function eraseOperationalIdentity(tx: PrismaClient, userId: string,
   }
   const email = user.email;
   if (mode === 'RETAIN_REFERENCE') {
+    const memberships = await tx.orgMember.findMany({ where: { userId }, select: { orgId: true } });
+    await tx.historicalOrganisationIdentityReference.createMany({
+      data: memberships.map(member => ({ userId, orgId: member.orgId })), skipDuplicates: true,
+    });
     const domains = new Set([
       ...(await tx.domainRole.findMany({ where: { userId }, select: { domain: true } })).map(r => r.domain),
       ...(await tx.loginLog.findMany({ where: { userId }, distinct: ['domain'], select: { domain: true } })).map(r => r.domain),
@@ -30,7 +34,10 @@ export async function eraseOperationalIdentity(tx: PrismaClient, userId: string,
       if (issuer.protocol === 'https:' && issuer.pathname === '/' && !issuer.port && !issuer.username && !issuer.password) domains.add(issuer.hostname.toLowerCase());
     }
     await tx.historicalIdentityReference.createMany({ data: [...domains].map(domain => ({ userId, domain })), skipDuplicates: true });
-  } else await tx.historicalIdentityReference.deleteMany({ where: { userId } });
+  } else {
+    await tx.historicalIdentityReference.deleteMany({ where: { userId } });
+    await tx.historicalOrganisationIdentityReference.deleteMany({ where: { userId } });
+  }
   await tx.authorizationCode.deleteMany({ where: { userId } });
   await tx.verificationToken.deleteMany({ where: { OR: [{ userId }, ...(user.userKey ? [{ userKey: user.userKey }] : [])] } });
   await tx.refreshToken.deleteMany({ where: { userId } });
@@ -42,6 +49,7 @@ export async function eraseOperationalIdentity(tx: PrismaClient, userId: string,
   await tx.billingServiceAccess.deleteMany({ where: { userId } });
   await tx.signingContinuation.deleteMany({ where: { userId, claimIntents: { none: {} }, signatures: { none: {} } } });
   await tx.featureFlagUserOverride.deleteMany({ where: { userId } });
+  await tx.directoryOrganisationGrant.updateMany({ where: { grantedByUserId: userId }, data: { grantedByUserId: null } });
   await tx.groupMember.deleteMany({ where: { userId } });
   await tx.teamMember.deleteMany({ where: { userId } });
   await tx.orgMember.deleteMany({ where: { userId } });
@@ -61,7 +69,7 @@ export async function eraseOperationalIdentity(tx: PrismaClient, userId: string,
   if (!auditsAlreadyScrubbed) await scrubOperationalAudits(tx, user, mode === 'ERASE_REFERENCE');
   const protectedRows = await retainedEvidence(tx, 'USER', userId);
   await tx.user.update({ where: { id: userId }, data: {
-    lifecycleStatus: 'DELETED', lifecycleChangedAt: new Date(), email: null, userKey: null, name: null,
+    lifecycleStatus: 'DELETED', lifecycleChangedAt: new Date(), email: null, userKey: null, name: null, pronounsPreset: null, pronounsCustom: null,
     passwordHash: null, twoFaEnabled: false, twoFaSecret: null, twoFaLastAcceptedCounter: null,
     avatarUrl: null, tokenVersion: { increment: 1 }, lifecycleReason: null, lifecycleInternalNote: null,
     lifecycleTemplateId: null, lifecycleTemplateRevision: null,
@@ -98,6 +106,9 @@ export async function sweepDeletion(tx: PrismaClient, preview: DeletionPreview, 
     for (const candidate of eligibility.filter(c => c.eligible)) await tx.orgMember.deleteMany({ where: { orgId, userId: candidate.id } });
   }
   if (deleteOrg) {
+    // Product access is operational authority, not retained evidence. Remove grants
+    // before either deleting the org or retaining its terminal tombstone.
+    await tx.directoryOrganisationGrant.deleteMany({ where: { orgId } });
     await tx.orgMember.deleteMany({ where: { orgId } });
     await tx.group.deleteMany({ where: { orgId } });
     await tx.ban.deleteMany({ where: { orgId } });

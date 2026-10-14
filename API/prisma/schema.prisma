@@ -435,6 +435,8 @@ model User {
   domain                               String?
   passwordHash                         String?                                   @map("password_hash")
   name                                 String?
+  pronounsPreset                       String? @map("pronouns_preset") @db.VarChar(32)
+  pronounsCustom                       String? @map("pronouns_custom") @db.VarChar(120)
   twoFaEnabled                         Boolean                                   @default(false) @map("2fa_enabled")
   twoFaSecret                          String?                                   @map("2fa_secret")
   twoFaLastAcceptedCounter             Int?                                      @map("2fa_last_accepted_counter")
@@ -465,6 +467,7 @@ model User {
 
   domainRoles            DomainRole[]
   historicalDomains      HistoricalIdentityReference[]
+  historicalOrganisations HistoricalOrganisationIdentityReference[]
   authIdentities         AuthIdentity[]
   tokens                 VerificationToken[]
   authorizationCodes     AuthorizationCode[]
@@ -490,12 +493,76 @@ model User {
 }
 
 // Domain-scoped, content-free historical lookup authority. Never a login or directory membership.
+model AdminAccessTokenRevocation {
+  tokenHash String @id @map("token_hash")
+  expiresAt DateTime @map("expires_at")
+  @@index([expiresAt])
+  @@map("admin_access_token_revocations")
+}
+
 model HistoricalIdentityReference {
   userId String @map("user_id")
   domain String
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   @@id([userId, domain])
   @@map("historical_identity_references")
+}
+
+// Exact historical provenance only; never active membership or profile storage.
+enum DirectoryPermission {
+  MEMBERSHIP_READ
+  DISPLAY_READ
+  WEBHOOK_MANAGE
+}
+
+model DirectoryCredential {
+  id String @id @default(cuid())
+  clientDomainId String @map("client_domain_id")
+  clientDomain ClientDomain @relation(fields: [clientDomainId], references: [id], onDelete: Restrict)
+  label String @db.VarChar(120)
+  expiresAt DateTime @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  secrets DirectoryCredentialSecret[]
+  grants DirectoryOrganisationGrant[]
+  @@index([clientDomainId])
+  @@map("directory_credentials")
+}
+
+model DirectoryCredentialSecret {
+  id String @id @default(cuid())
+  credentialId String @map("credential_id")
+  digest String @unique
+  prefix String @db.VarChar(16)
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  credential DirectoryCredential @relation(fields: [credentialId], references: [id], onDelete: Restrict)
+  @@index([credentialId])
+  @@map("directory_credential_secrets")
+}
+
+model DirectoryOrganisationGrant {
+  id String @id @default(cuid())
+  credentialId String @map("credential_id")
+  orgId String @map("org_id")
+  org Organisation @relation(fields: [orgId], references: [id], onDelete: Restrict)
+  permissions DirectoryPermission[]
+  grantedByUserId String? @map("granted_by_user_id")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  credential DirectoryCredential @relation(fields: [credentialId], references: [id], onDelete: Restrict)
+  @@unique([credentialId, orgId])
+  @@index([orgId])
+  @@map("directory_organisation_grants")
+}
+
+model HistoricalOrganisationIdentityReference {
+  userId String @map("user_id")
+  orgId String @map("org_id")
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@id([userId, orgId])
+  @@map("historical_organisation_identity_references")
 }
 
 // Docs/Auth/avatars.md §3: uploaded avatars live in their own table so a later social login —
@@ -852,6 +919,7 @@ model HandshakeErrorLog {
 }
 
 model ClientDomain {
+  directoryCredentials DirectoryCredential[]
   id                  String      @id @default(cuid())
   domain              String      @unique
   label               String      @db.VarChar(120)
@@ -1247,6 +1315,7 @@ model OrgAuditLog {
 }
 
 model Organisation {
+  directoryGrants DirectoryOrganisationGrant[]
   id                  String       @id @default(cuid())
   billingSeatGuardVersion BigInt   @default(0) @map("billing_seat_guard_version")
   lifecycleStatus     EntityLifecycleStatus @default(ACTIVE) @map("lifecycle_status")
