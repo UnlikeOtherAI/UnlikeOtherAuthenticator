@@ -17,7 +17,9 @@ describe.skipIf(!process.env.DATABASE_URL)('legacy authority schema upgrade on P
 
   beforeAll(async () => {
     temporary = await mkdtemp(path.join(apiRoot, '.audit-upgrade-'));
-    const archive = execFileSync('git', ['archive', baseline, 'API/prisma'], { cwd: path.dirname(apiRoot) });
+    const archive = execFileSync('git', ['archive', baseline, 'API/prisma'], {
+      cwd: path.dirname(apiRoot), maxBuffer: 4 * 1024 * 1024,
+    });
     execFileSync('tar', ['-xf', '-', '-C', temporary], { input: archive });
     handle = (await createTestDb({ migrationSchema: path.join(temporary, 'API/prisma/schema.prisma') }))!;
   });

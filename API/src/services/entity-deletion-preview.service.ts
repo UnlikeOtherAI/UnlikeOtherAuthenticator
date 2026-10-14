@@ -3,10 +3,9 @@ import { createHash } from 'node:crypto';
 import { getEnv, getAdminAuthDomain } from '../config/env.js';
 import { lifecycleTarget } from './internal-admin-lifecycle.service.js';
 
-type Counter = { count(args: { where: Record<string, unknown> }): Promise<number> };
 export async function activeBillingBlockers(tx: PrismaClient, scope: LifecycleScope, id: string) {
   const modelName = scope === 'USER' ? 'User' : scope === 'TEAM' ? 'Team' : 'Organisation';
-  const blockers: string[] = [];
+  const queries: Prisma.Sql[] = [];
   for (const model of Prisma.dmmf.datamodel.models.filter(m => m.name.startsWith('Billing') && /Checkout|Subscription|AutoTopUpAttempt|CancellationIntent|OrgResponsibility/.test(m.name))) {
     const keys = model.fields.filter(f => f.kind === 'object' && f.type === modelName).flatMap(f => f.relationFromFields ?? []);
     const state = model.fields.find(f => ['status', 'state', 'active'].includes(f.name));
@@ -14,10 +13,16 @@ export async function activeBillingBlockers(tx: PrismaClient, scope: LifecycleSc
     const terminal = state.kind === 'enum' ? (Prisma.dmmf.datamodel.enums.find(e => e.name === state.type)?.values ?? [])
       .filter(v => ['COMPLETE', 'COMPLETED', 'EXPIRED', 'ABANDONED', 'CANCELED', 'CANCELLED', 'FAILED'].includes(v.name)).map(v => v.name)
       : ['canceled', 'incomplete_expired', 'complete', 'expired'];
-    const where = { OR: keys.map(key => ({ [key]: id })), [state.name]: state.name === 'active' ? true : { notIn: terminal } };
-    const delegate = (tx as unknown as Record<string, Counter>)[model.name[0].toLowerCase() + model.name.slice(1)];
-    if (await delegate.count({ where })) blockers.push(`Close or transfer active ${model.name} operations before deletion.`);
+    // Identifiers come exclusively from the generated Prisma schema, never a request.
+    const column = (name: string) => Prisma.raw(`"${model.fields.find(f => f.name === name)?.dbName ?? name}"`);
+    const active = state.name === 'active' ? Prisma.sql`${column(state.name)}=true`
+      : terminal.length ? Prisma.sql`${column(state.name)}::text NOT IN (${Prisma.join(terminal)})` : Prisma.sql`true`;
+    queries.push(Prisma.sql`SELECT ${queries.length}::int AS ordinal, ${`Close or transfer active ${model.name} operations before deletion.`}::text AS blocker
+      WHERE EXISTS (SELECT 1 FROM ${Prisma.raw(`"${model.dbName ?? model.name}"`)}
+        WHERE (${Prisma.join(keys.map(key => Prisma.sql`${column(key)}=${id}`), ' OR ')}) AND ${active})`);
   }
+  const blockers = queries.length ? (await tx.$queryRaw<Array<{ ordinal: number; blocker: string }>>(Prisma.join(queries, ' UNION ALL ')))
+    .sort((a, b) => a.ordinal - b.ordinal).map(row => row.blocker) : [];
   const where = scope === 'USER' ? { autoTopUpConsentedByUserId: id } : scope === 'TEAM' ? { teamId: id } : { orgId: id };
   if (await tx.billingCreditAccount.count({ where: { ...where, autoTopUpState: { not: 'DISABLED' } } })) blockers.push('Disable automatic top-up before deletion.');
   return blockers;
@@ -68,25 +73,40 @@ export type DeletionPreview = {
 
 export async function orphanEligibility(tx: PrismaClient, userId: string, orgId: string | null, teamIds: string[], deleteOrg: boolean, committed = false) {
   const reasons: string[] = [];
-  const identity = await tx.user.findUnique({ where: { id: userId }, select: { lifecycleStatus: true } });
-  if (!identity || (identity.lifecycleStatus !== 'DELETING' || !committed) && ['DELETING', 'DELETED'].includes(identity.lifecycleStatus)) reasons.push('Account already has a terminal lifecycle');
-  if (await tx.teamMember.count({ where: { userId, teamId: { notIn: teamIds } } })) reasons.push('Other team membership');
-  if (await tx.orgMember.count({ where: { userId, ...(orgId ? { orgId: { not: orgId } } : {}) } })) reasons.push('Other organisation membership');
-  if (await tx.organisation.count({ where: { ownerId: userId, ...(deleteOrg && orgId ? { id: { not: orgId } } : {}) } })) reasons.push('Organisation ownership');
-  const nativeDomain = getEnv().MCP_OAUTH_DOMAIN;
-  if (nativeDomain && await tx.domainRole.count({ where: { userId, domain: nativeDomain } })) reasons.push('Standalone native account');
-  if (await tx.domainRole.count({ where: { userId, domain: getAdminAuthDomain(), role: 'SUPERUSER' } })) reasons.push('Platform administrator');
-  if (await tx.userSetting.count({ where: { userId } })) reasons.push('Personal settings');
-  if (await tx.billingServiceAccess.count({ where: { userId, teamId: { notIn: teamIds } } })) reasons.push('Other product access dependency');
-  const scopeDomain = orgId ? (await tx.organisation.findUnique({ where: { id: orgId }, select: { domain: true } }))?.domain : undefined;
-  if (await tx.domainRole.count({ where: { userId, ...(scopeDomain ? { domain: { not: scopeDomain } } : {}) } })) reasons.push('Other product identity association');
-  if (await tx.refreshToken.count({ where: { userId, OR: [{ orgId: null }, { orgId: { not: orgId ?? '' } }] } })) reasons.push('Standalone or other product session history');
-  if (await tx.loginLog.count({ where: { userId, ...(scopeDomain ? { domain: { not: scopeDomain } } : {}) } })) reasons.push('Other product authentication history');
+  const teams = teamIds.length ? Prisma.sql`ARRAY[${Prisma.join(teamIds)}]::text[]` : Prisma.sql`ARRAY[]::text[]`;
+  // One round trip for the same refusal predicates. EXISTS also avoids counting
+  // every dependency when the first matching row already makes deletion unsafe.
+  const [facts] = await tx.$queryRaw<Array<{ lifecycle: string | null } & Record<string, boolean | string | null>>>(Prisma.sql`
+    WITH target AS (SELECT ${userId}::text AS id), scope AS (
+      SELECT (SELECT domain FROM organisations WHERE id=${orgId}) AS domain)
+    SELECT u.lifecycle_status::text AS lifecycle,
+      EXISTS(SELECT 1 FROM team_members WHERE user_id=t.id AND team_id<>ALL(${teams})) AS team,
+      EXISTS(SELECT 1 FROM org_members WHERE user_id=t.id AND (${orgId}::text IS NULL OR org_id<>${orgId})) AS org,
+      EXISTS(SELECT 1 FROM organisations WHERE owner_id=t.id AND (NOT ${deleteOrg && Boolean(orgId)} OR id<>${orgId})) AS ownership,
+      EXISTS(SELECT 1 FROM domain_roles WHERE user_id=t.id AND domain=${getEnv().MCP_OAUTH_DOMAIN ?? null}) AS native,
+      EXISTS(SELECT 1 FROM domain_roles WHERE user_id=t.id AND domain=${getAdminAuthDomain()} AND role='SUPERUSER') AS admin,
+      EXISTS(SELECT 1 FROM user_settings WHERE user_id=t.id) AS settings,
+      EXISTS(SELECT 1 FROM billing_service_accesses WHERE user_id=t.id AND team_id<>ALL(${teams})) AS access,
+      EXISTS(SELECT 1 FROM domain_roles WHERE user_id=t.id AND (s.domain IS NULL OR domain<>s.domain)) AS association,
+      EXISTS(SELECT 1 FROM refresh_tokens WHERE user_id=t.id AND (org_id IS NULL OR org_id<>${orgId ?? ''})) AS session,
+      EXISTS(SELECT 1 FROM login_logs WHERE user_id=t.id AND (s.domain IS NULL OR domain<>s.domain)) AS history
+    FROM target t CROSS JOIN scope s LEFT JOIN users u ON u.id=t.id`);
+  if (!facts.lifecycle || (facts.lifecycle !== 'DELETING' || !committed) && ['DELETING', 'DELETED'].includes(facts.lifecycle)) reasons.push('Account already has a terminal lifecycle');
+  for (const [key, reason] of [
+    ['team', 'Other team membership'], ['org', 'Other organisation membership'],
+    ['ownership', 'Organisation ownership'], ['native', 'Standalone native account'],
+    ['admin', 'Platform administrator'], ['settings', 'Personal settings'],
+    ['access', 'Other product access dependency'], ['association', 'Other product identity association'],
+    ['session', 'Standalone or other product session history'], ['history', 'Other product authentication history'],
+  ]) if (facts[key]) reasons.push(reason);
   if ((await retainedEvidence(tx, 'USER', userId)).length) reasons.push('Protected billing or signing dependencies');
   return { id: userId, eligible: reasons.length === 0, reasons };
 }
 
-export async function previewEntityDeletion(tx: PrismaClient, scope: LifecycleScope, id: string, mode: IdentityDeletionMode): Promise<DeletionPreview> {
+/** Resolve the complete lock set without running eligibility/billing work twice.
+ * beginEntityDeletion holds the exclusive policy fence before this read, pins
+ * these users, then performs the full authoritative preview under those locks. */
+export async function resolveDeletionTargets(tx: PrismaClient, scope: LifecycleScope, id: string) {
   const row = await lifecycleTarget(tx, scope, id);
   let effectiveScope = scope, effectiveTargetId = id;
   let orgId: string | null = scope === 'ORGANISATION' ? id : null;
@@ -104,6 +124,11 @@ export async function previewEntityDeletion(tx: PrismaClient, scope: LifecycleSc
   const orgCandidates = effectiveScope === 'ORGANISATION' ? (await tx.orgMember.findMany({ where: { orgId: effectiveTargetId }, select: { userId: true } })).map(m => m.userId) : [];
   const owner = effectiveScope === 'ORGANISATION' ? (await tx.organisation.findUniqueOrThrow({ where: { id: effectiveTargetId }, select: { ownerId: true } })).ownerId : null;
   const candidateIds = scope === 'USER' ? [id] : [...new Set([...teamCandidates, ...orgCandidates, ...(owner ? [owner] : [])])].sort();
+  return { row, effectiveScope, effectiveTargetId, organisationId: orgId, teamIds, deletesEmptyOrganisation, candidateIds };
+}
+
+export async function previewEntityDeletion(tx: PrismaClient, scope: LifecycleScope, id: string, mode: IdentityDeletionMode): Promise<DeletionPreview> {
+  const { row, effectiveScope, effectiveTargetId, organisationId: orgId, teamIds, deletesEmptyOrganisation, candidateIds } = await resolveDeletionTargets(tx, scope, id);
   const candidates = scope === 'USER' ? [] : await Promise.all(candidateIds.map(userId => orphanEligibility(tx, userId, orgId, teamIds, effectiveScope === 'ORGANISATION')));
   const blockers: string[] = [];
   if (orgId && await tx.team.count({ where: { orgId, lifecycleStatus: 'DELETING', id: { notIn: teamIds } } })) blockers.push('Finish the existing deletion in this organisation before confirming another container deletion.');
@@ -133,10 +158,9 @@ export async function previewEntityDeletion(tx: PrismaClient, scope: LifecycleSc
     domainSet.add(org.domain);
     const sessions = await tx.refreshToken.findMany({ where: effectiveScope === 'TEAM' ? { teamId: id } : { orgId: orgId ?? '' }, select: { domain: true } });
     for (const session of sessions) domainSet.add(session.domain);
-    for (const candidate of candidates.filter(c => c.eligible)) {
-      for (const role of await tx.domainRole.findMany({ where: { userId: candidate.id }, select: { domain: true } })) domainSet.add(role.domain);
-      for (const log of await tx.loginLog.findMany({ where: { userId: candidate.id }, distinct: ['domain'], select: { domain: true } })) domainSet.add(log.domain);
-    }
+    const userIds = candidates.filter(c => c.eligible).map(c => c.id);
+    for (const role of await tx.domainRole.findMany({ where: { userId: { in: userIds } }, select: { domain: true }, distinct: ['domain'] })) domainSet.add(role.domain);
+    for (const log of await tx.loginLog.findMany({ where: { userId: { in: userIds } }, distinct: ['domain'], select: { domain: true } })) domainSet.add(log.domain);
   }
   domainSet.delete(getAdminAuthDomain());
   const nativeDomain = getEnv().MCP_OAUTH_DOMAIN;
