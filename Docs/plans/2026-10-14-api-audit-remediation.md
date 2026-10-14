@@ -168,3 +168,23 @@ exact-org permissions, live revocation, dependency failures and bounded rotation
 Native throttling now reserves in-flight account attempts as well as retaining
 failed guesses; successful MFA continuations release the reservation. This closes
 the parallel-IP gap without charging each successful continuation as a failure.
+
+
+### Canonical writer integration in progress
+
+The next draft connects the seam to direct org add/role/remove,
+org deactivate/reactivate, ownership transfer, team add/role/remove/self-join,
+team create/update, org update and team-group assignment. User/session locks
+remain before org ordering locks; container/membership row locks follow them.
+`20261014150000_directory_outbox_tenant_boundary` adds a schema-pinned definer
+function that checks resolved tenant/org or explicit domain-backend/new-owner
+context before recording an invalidation. It revokes PUBLIC execution and leaves
+all direct app-role table access denied. Admin terminal deletion uses the existing
+BYPASSRLS authority. Runtime tenant-role proof is still pending.
+
+Invitations, automatic placement/enrolment, new org creation, lifecycle/deletion,
+profile/avatar/social and credential-epoch writers remain under audit. Do not
+consider a writer family complete from this partial list. No cache contract ships
+until every writer and migration/rollback/concurrency test has been verified.
+Bulkhead tracking now also encloses route preValidation/preHandler async work;
+an early reply cannot release its slot while that phase remains running.

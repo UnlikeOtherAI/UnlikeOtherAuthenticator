@@ -1,3 +1,4 @@
+import { withDirectoryMutation } from './directory-mutation.service.js';
 import type { ClientConfig } from './config.service.js';
 import { getEnv } from '../config/env.js';
 import { getPrisma } from '../db/prisma.js';
@@ -265,15 +266,18 @@ export async function createOrganisation(
     };
   });
 
-  await auditOrg({
-    orgId: created.id,
-    actorUserId,
-    actor: params.actor,
-    action: 'org.created',
-    targetType: 'organisation',
-    targetId: created.id,
-    metadata: { name: created.name, slug: created.slug, ownerId },
-  }, { prisma: deps?.auditPrisma });
+  await auditOrg(
+    {
+      orgId: created.id,
+      actorUserId,
+      actor: params.actor,
+      action: 'org.created',
+      targetType: 'organisation',
+      targetId: created.id,
+      metadata: { name: created.name, slug: created.slug, ownerId },
+    },
+    { prisma: deps?.auditPrisma },
+  );
 
   return created;
 }
@@ -303,7 +307,11 @@ export async function getOrganisation(
   // route refactor omits the role guard. There is no membership to check in
   // backend mode — the caller is the domain, not a member of it.
   if (actorUserId) {
-    const actorMembership = await getOrganisationMember(prisma, { orgId: row.id, userId: actorUserId }, { activeOnly: true });
+    const actorMembership = await getOrganisationMember(
+      prisma,
+      { orgId: row.id, userId: actorUserId },
+      { activeOnly: true },
+    );
     if (!actorMembership) {
       throw new AppError('FORBIDDEN', 403);
     }
@@ -341,7 +349,11 @@ export async function updateOrganisation(
   // containing it. In backend mode there is no acting user — the domain pairing already proved the
   // caller owns this whole tenant, which is strictly more authority than any single member's role.
   if (actorUserId) {
-    const actorMembership = await getOrganisationMember(prisma, { orgId: org.id, userId: actorUserId }, { activeOnly: true });
+    const actorMembership = await getOrganisationMember(
+      prisma,
+      { orgId: org.id, userId: actorUserId },
+      { activeOnly: true },
+    );
     requireOrgCapability(params.config, 'organisation.manage', actorMembership?.role);
   }
 
@@ -360,22 +372,27 @@ export async function updateOrganisation(
           slug: params.slug,
           existingSlugToIgnore: org.slug,
         });
-  const updated = await prisma.organisation.update({
-    where: { id: org.id },
-    data: {
-      name,
-      slug,
-      // Member-initiated invite policy (design §4.7, Phase 4) — owner/admin only, validated against
-      // the allowed/admin_approval/disabled vocabulary; omitted leaves the current setting unchanged.
-      ...(params.memberInvites !== undefined
-        ? { memberInvites: normalizeMemberInvitesSetting(params.memberInvites) }
-        : {}),
-      // Team icon (design §11.3, gap-fix A Task 3) — omitted leaves the current icon
-      // unchanged; `null` clears it; validated https-only/≤2048 chars by normalizeIconUrl.
-      ...(params.iconUrl !== undefined ? { iconUrl: normalizeIconUrl(params.iconUrl) } : {}),
-    },
-    select: ORGANISATION_SELECT,
-  });
+  const updated = await withDirectoryMutation(
+    prisma,
+    [{ orgId: org.id, kind: 'organisation.changed' }],
+    (tx) =>
+      tx.organisation.update({
+        where: { id: org.id },
+        data: {
+          name,
+          slug,
+          // Member-initiated invite policy (design §4.7, Phase 4) — owner/admin only, validated against
+          // the allowed/admin_approval/disabled vocabulary; omitted leaves the current setting unchanged.
+          ...(params.memberInvites !== undefined
+            ? { memberInvites: normalizeMemberInvitesSetting(params.memberInvites) }
+            : {}),
+          // Team icon (design §11.3, gap-fix A Task 3) — omitted leaves the current icon
+          // unchanged; `null` clears it; validated https-only/≤2048 chars by normalizeIconUrl.
+          ...(params.iconUrl !== undefined ? { iconUrl: normalizeIconUrl(params.iconUrl) } : {}),
+        },
+        select: ORGANISATION_SELECT,
+      }),
+  );
 
   await auditOrg({
     orgId: org.id,
@@ -405,6 +422,7 @@ export async function deleteOrganisation(
   },
   deps?: OrgServiceDeps,
 ): Promise<{ deleted: boolean }> {
-  void params; void deps;
+  void params;
+  void deps;
   throw new AppError('BAD_REQUEST', 409, 'ENTITY_DELETION_WORKFLOW_REQUIRED');
 }

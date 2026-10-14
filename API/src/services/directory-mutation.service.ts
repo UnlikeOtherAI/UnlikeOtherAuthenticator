@@ -4,8 +4,14 @@ import { runInTransaction } from '../db/tenant-context.js';
 
 export type DirectoryChange = {
   orgId: string;
-  kind: 'organisation.changed' | 'organisation.deleted' | 'team.changed' |
-    'team.deleted' | 'membership.changed' | 'profile.changed' | 'credential_epoch.changed';
+  kind:
+    | 'organisation.changed'
+    | 'organisation.deleted'
+    | 'team.changed'
+    | 'team.deleted'
+    | 'membership.changed'
+    | 'profile.changed'
+    | 'credential_epoch.changed';
   subjectId?: string;
   teamId?: string;
 };
@@ -24,11 +30,12 @@ export async function withDirectoryMutation<T>(
   changes: readonly DirectoryChange[],
   write: (tx: PrismaClient) => Promise<T>,
 ): Promise<T> {
-  return runInTransaction(prisma, async tx => {
-    const orgIds = [...new Set(changes.map(change => change.orgId))].sort();
-    if (orgIds.some(id => !id)) throw new Error('Directory mutation requires exact organisation IDs');
+  return runInTransaction(prisma, async (tx) => {
+    const orgIds = [...new Set(changes.map((change) => change.orgId))].sort();
+    if (orgIds.some((id) => !id))
+      throw new Error('Directory mutation requires exact organisation IDs');
     const existing = held.get(tx);
-    if (existing && orgIds.some(id => !existing.includes(id))) {
+    if (existing && orgIds.some((id) => !existing.includes(id))) {
       throw new Error('Directory mutation must resolve all organisations before its first write');
     }
     if (!existing) {
@@ -43,12 +50,11 @@ export async function withDirectoryMutation<T>(
     // nested service calls. A TransactionClient has transaction-bounded identity.
     const result = await write(tx);
     for (const change of changes) {
-      const cursor = await tx.directoryOrganisationRevision.upsert({
-        where: { orgId: change.orgId }, create: { orgId: change.orgId, revision: 1n },
-        update: { revision: { increment: 1n } }, select: { revision: true },
-      });
-      await tx.directoryChangeOutbox.create({ data: { id: randomUUID(), ...change,
-        revision: cursor.revision } });
+      // The narrow SQL boundary checks tenant context, keeps direct app-role
+      // access denied, and allocates/inserts atomically under the same lock.
+      await tx.$queryRaw(Prisma.sql`SELECT uoa_record_directory_change(
+        ${randomUUID()}, ${change.orgId}, ${change.kind},
+        ${change.subjectId ?? null}, ${change.teamId ?? null}) AS revision`);
     }
     return result;
   });

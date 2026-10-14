@@ -1,7 +1,7 @@
+import { withDirectoryMutation } from './directory-mutation.service.js';
 import type { ClientConfig } from './config.service.js';
 import { getEnv } from '../config/env.js';
 import { getPrisma } from '../db/prisma.js';
-import { runInTransaction } from '../db/tenant-context.js';
 import { AppError } from '../utils/errors.js';
 import { OWNER_ROLE, resolveDemotedOwnerRole } from './role-grants.js';
 import { lockOrganisationMemberships } from './organisation-membership-lock.service.js';
@@ -78,52 +78,70 @@ export async function transferOrganisationOwnership(
 
   const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgServicePrisma);
   const org = await resolveOrganisation(prisma, { orgId: params.orgId });
-  const { organisation, demoted, outgoingOwnerId } = await runInTransaction(prisma, async (tx) => {
-    // Container lock precedes every membership lock, including organisation deletion.
-    // The canonical owner and both memberships are read again only after these locks.
-    await lockOrganisationMemberships(tx, org.id, [org.ownerId, newOwnerId]);
-    const currentOrg = await resolveOrganisation(tx, { orgId: org.id });
-    if (currentOrg.ownerId !== org.ownerId || (actorUserId && currentOrg.ownerId !== actorUserId)) {
-      throw new AppError('FORBIDDEN', 403);
-    }
-    const outgoingOwnerId = currentOrg.ownerId;
-    if (outgoingOwnerId === newOwnerId) throw new AppError('BAD_REQUEST', 400);
-    const oldOwnerMembership = await getOrganisationMember(
-      tx, { orgId: org.id, userId: outgoingOwnerId }, { activeOnly: true },
-    );
-    // Trusted backend recovery can repair an absent outgoing membership. A person cannot
-    // exercise ownership without ACTIVE standing, even if ownerId still names them.
-    if (actorUserId && oldOwnerMembership?.role !== OWNER_ROLE) {
-      throw new AppError('FORBIDDEN', 403);
-    }
-    const newOwnerMembership = await getOrganisationMember(
-      tx, { orgId: org.id, userId: newOwnerId }, { activeOnly: true },
-    );
-    if (!newOwnerMembership) throw new AppError('NOT_FOUND', 404);
-    const moved = await tx.organisation.updateMany({
-      where: { id: org.id, ownerId: outgoingOwnerId }, data: { ownerId: newOwnerId },
-    });
-    if (moved.count !== 1) throw new AppError('FORBIDDEN', 403);
-    await tx.orgMember.update({ where: { id: newOwnerMembership.id }, data: { role: OWNER_ROLE } });
-    if (oldOwnerMembership) {
-      await tx.orgMember.update({ where: { id: oldOwnerMembership.id }, data: { role: outgoingOwnerRole } });
-    }
+  const { organisation, demoted, outgoingOwnerId } = await withDirectoryMutation(
+    prisma,
+    [{ orgId: org.id, kind: 'organisation.changed' }],
+    async (tx) => {
+      // Container lock precedes every membership lock, including organisation deletion.
+      // The canonical owner and both memberships are read again only after these locks.
+      await lockOrganisationMemberships(tx, org.id, [org.ownerId, newOwnerId]);
+      const currentOrg = await resolveOrganisation(tx, { orgId: org.id });
+      if (
+        currentOrg.ownerId !== org.ownerId ||
+        (actorUserId && currentOrg.ownerId !== actorUserId)
+      ) {
+        throw new AppError('FORBIDDEN', 403);
+      }
+      const outgoingOwnerId = currentOrg.ownerId;
+      if (outgoingOwnerId === newOwnerId) throw new AppError('BAD_REQUEST', 400);
+      const oldOwnerMembership = await getOrganisationMember(
+        tx,
+        { orgId: org.id, userId: outgoingOwnerId },
+        { activeOnly: true },
+      );
+      // Trusted backend recovery can repair an absent outgoing membership. A person cannot
+      // exercise ownership without ACTIVE standing, even if ownerId still names them.
+      if (actorUserId && oldOwnerMembership?.role !== OWNER_ROLE) {
+        throw new AppError('FORBIDDEN', 403);
+      }
+      const newOwnerMembership = await getOrganisationMember(
+        tx,
+        { orgId: org.id, userId: newOwnerId },
+        { activeOnly: true },
+      );
+      if (!newOwnerMembership) throw new AppError('NOT_FOUND', 404);
+      const moved = await tx.organisation.updateMany({
+        where: { id: org.id, ownerId: outgoingOwnerId },
+        data: { ownerId: newOwnerId },
+      });
+      if (moved.count !== 1) throw new AppError('FORBIDDEN', 403);
+      await tx.orgMember.update({
+        where: { id: newOwnerMembership.id },
+        data: { role: OWNER_ROLE },
+      });
+      if (oldOwnerMembership) {
+        await tx.orgMember.update({
+          where: { id: oldOwnerMembership.id },
+          data: { role: outgoingOwnerRole },
+        });
+      }
 
-    const updated = await tx.organisation.findUniqueOrThrow({
-      where: { id: org.id },
-      select: {
-        id: true,
-        domain: true,
-        name: true,
-        slug: true,
-        ownerId: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
+      const updated = await tx.organisation.findUniqueOrThrow({
+        where: { id: org.id },
+        select: {
+          id: true,
+          domain: true,
+          name: true,
+          slug: true,
+          ownerId: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
 
-    return { organisation: updated, demoted: Boolean(oldOwnerMembership), outgoingOwnerId };
-  });
+      return { organisation: updated, demoted: Boolean(oldOwnerMembership), outgoingOwnerId };
+    },
+  );
 
   await auditOrg({
     orgId: org.id,

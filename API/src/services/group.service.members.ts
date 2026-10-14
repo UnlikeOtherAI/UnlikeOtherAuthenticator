@@ -1,3 +1,4 @@
+import { withDirectoryMutation } from './directory-mutation.service.js';
 import type { ClientConfig } from './config.service.js';
 import { getEnv } from '../config/env.js';
 import { getPrisma } from '../db/prisma.js';
@@ -227,21 +228,26 @@ export async function assignTeamToGroup(
     if (!group) throw new AppError('NOT_FOUND', 404);
   }
 
-  const updated = await prisma.team.update({
-    where: { id: team.id },
-    data: { groupId: normalizedGroupId },
-    select: {
-      id: true,
-      orgId: true,
-      groupId: true,
-      name: true,
-      slug: true,
-      description: true,
-      isDefault: true,
-      createdAt: true,
-      updatedAt: true,
-    },
-  });
+  const updated = await withDirectoryMutation(
+    prisma,
+    [{ orgId: org.id, kind: 'team.changed', teamId: team.id }],
+    (tx) =>
+      tx.team.update({
+        where: { id: team.id },
+        data: { groupId: normalizedGroupId },
+        select: {
+          id: true,
+          orgId: true,
+          groupId: true,
+          name: true,
+          slug: true,
+          description: true,
+          isDefault: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      }),
+  );
 
   return toTeamRecord(updated, org.domain);
 }

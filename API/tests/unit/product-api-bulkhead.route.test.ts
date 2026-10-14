@@ -32,7 +32,7 @@ async function until(condition: () => boolean): Promise<void> {
  * A request over a real socket. `app.inject` cannot model a client that goes
  * away — light-my-request treats an early `close` as a harness failure — so the
  * disconnect paths are driven by destroying a genuine connection, which fires the
- * server-side `ServerResponse 'close'` the bulkhead releases on.
+ * server-side `ServerResponse 'close'` used to remove queued work.
  */
 function openRequest(
   baseUrl: string,
@@ -88,6 +88,14 @@ async function buildApp(options: BulkheadOptions): Promise<{
     await parked.promise;
     return { ok: true };
   });
+  app.get('/org/early-response', async (_request, reply) => {
+    const parked = gate(); gates.push(parked);
+    reply.send({ ok: true }); await parked.promise;
+  });
+  app.get('/org/early-prehandler', { preHandler: async (_request, reply) => {
+    const parked = gate(); gates.push(parked);
+    reply.send({ ok: true }); await parked.promise;
+  } }, async () => ({ ok: true }));
   app.get('/org/fast', async () => ({ ok: true }));
   app.get('/org/error', async () => {
     throw new Error('boom');
@@ -136,6 +144,19 @@ describe('product API bulkhead (Fastify)', () => {
 
     expect(built.bulkhead.stats()).toEqual({ active: 0, queued: 0 });
     expect((await app.inject({ method: 'GET', url: '/org/fast' })).statusCode).toBe(200);
+  });
+
+  it.each(['/org/early-response', '/org/early-prehandler'])('holds asynchronous work after an early response from %s', async path => {
+    const built = await buildApp({ maxConcurrency: 1, maxQueue: 0, queueWaitMs: 1000 });
+    app = built.app;
+    const baseUrl = await app.listen({ host: '127.0.0.1', port: 0 });
+    const early = openRequest(baseUrl, path);
+    try {
+      expect(await early.done).toBe(200);
+      expect(built.bulkhead.stats().active).toBe(1);
+      expectBusy(await app.inject({ method: 'GET', url: '/org/fast' }));
+    } finally { built.gates[0]?.open(); }
+    await until(() => built.bulkhead.stats().active === 0);
   });
 
   it('refuses a queued request once the wait budget is spent', async () => {

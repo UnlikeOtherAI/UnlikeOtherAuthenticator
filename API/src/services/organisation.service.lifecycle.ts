@@ -1,3 +1,4 @@
+import { withDirectoryMutation } from './directory-mutation.service.js';
 import type { ClientConfig } from './config.service.js';
 import { getEnv } from '../config/env.js';
 import { getAdminPrisma } from '../db/prisma.js';
@@ -9,7 +10,10 @@ import {
 } from './refresh-token-revocation.service.js';
 import { lockRefreshSessionUserDomain } from './refresh-session-lock.service.js';
 import { lockTeamMembershipRows } from './team-scope.service.js';
-import { assertMutableOrganisationMember, lockOrganisationMemberships } from './organisation-membership-lock.service.js';
+import {
+  assertMutableOrganisationMember,
+  lockOrganisationMemberships,
+} from './organisation-membership-lock.service.js';
 
 import {
   assertDatabaseEnabled,
@@ -61,8 +65,7 @@ export async function deactivateOrganisationMember(
     config: ClientConfig;
   },
   deps?: OrgServiceDeps & {
-    revokeRefreshTokenFamiliesForUserOrganisation?:
-      typeof revokeRefreshTokenFamiliesForUserOrganisation;
+    revokeRefreshTokenFamiliesForUserOrganisation?: typeof revokeRefreshTokenFamiliesForUserOrganisation;
     revokeRefreshTokensForUserDomain?: typeof revokeRefreshTokensForUserDomain;
     afterMembershipStatusWrite?: () => Promise<void>;
   },
@@ -93,50 +96,62 @@ export async function deactivateOrganisationMember(
 
   await runInTransaction(prisma, async (tx) => {
     await lockRefreshSessionUserDomain({ userId, domain: org.domain }, { prisma: tx });
-    await lockOrganisationMemberships(tx, org.id, [userId, ...(actorUserId ? [actorUserId] : [])]);
-    await requireOrgMemberManager(tx, { orgId: org.id, actorUserId, config: params.config });
-    await lockTeamMembershipRows({ userId, orgId: org.id }, { prisma: tx });
-    const lockedMember = await tx.orgMember.findFirst({
-      where: { orgId: org.id, userId, status: 'ACTIVE' },
-      select: { id: true, role: true, userId: true },
-    });
-    if (!lockedMember) throw new AppError('NOT_FOUND', 404);
-    assertMutableOrganisationMember(lockedMember, org.ownerId);
+    return withDirectoryMutation(
+      tx,
+      [{ orgId: org.id, kind: 'membership.changed', subjectId: userId }],
+      async (tx) => {
+        await lockOrganisationMemberships(tx, org.id, [
+          userId,
+          ...(actorUserId ? [actorUserId] : []),
+        ]);
+        await requireOrgMemberManager(tx, { orgId: org.id, actorUserId, config: params.config });
+        await lockTeamMembershipRows({ userId, orgId: org.id }, { prisma: tx });
+        const lockedMember = await tx.orgMember.findFirst({
+          where: { orgId: org.id, userId, status: 'ACTIVE' },
+          select: { id: true, role: true, userId: true },
+        });
+        if (!lockedMember) throw new AppError('NOT_FOUND', 404);
+        assertMutableOrganisationMember(lockedMember, org.ownerId);
 
-    const now = new Date();
-    await tx.orgMember.update({
-      where: { id: lockedMember.id },
-      data: { status: 'DEACTIVATED', statusChangedAt: now },
-    });
-    await tx.teamMember.updateMany({
-      where: { userId, team: { orgId: org.id }, status: 'ACTIVE' },
-      data: { status: 'DEACTIVATED', statusChangedAt: now },
-    });
-    await deps?.afterMembershipStatusWrite?.();
+        const now = new Date();
+        await tx.orgMember.update({
+          where: { id: lockedMember.id },
+          data: { status: 'DEACTIVATED', statusChangedAt: now },
+        });
+        await tx.teamMember.updateMany({
+          where: { userId, team: { orgId: org.id }, status: 'ACTIVE' },
+          data: { status: 'DEACTIVATED', statusChangedAt: now },
+        });
+        await deps?.afterMembershipStatusWrite?.();
 
-    const revokeDeps = { now: () => now, prisma: tx };
-    await (
-      deps?.revokeRefreshTokenFamiliesForUserOrganisation ??
-      revokeRefreshTokenFamiliesForUserOrganisation
-    )(userId, org.id, revokeDeps);
-    // Preserve the historical same-domain contract for legacy unscoped sessions while the exact
-    // organisation revocation above catches scoped sessions issued by every product domain.
-    await (deps?.revokeRefreshTokensForUserDomain ?? revokeRefreshTokensForUserDomain)(
-      userId,
-      org.domain,
-      revokeDeps,
+        const revokeDeps = { now: () => now, prisma: tx };
+        await (
+          deps?.revokeRefreshTokenFamiliesForUserOrganisation ??
+          revokeRefreshTokenFamiliesForUserOrganisation
+        )(userId, org.id, revokeDeps);
+        // Preserve the historical same-domain contract for legacy unscoped sessions while the exact
+        // organisation revocation above catches scoped sessions issued by every product domain.
+        await (deps?.revokeRefreshTokensForUserDomain ?? revokeRefreshTokensForUserDomain)(
+          userId,
+          org.domain,
+          revokeDeps,
+        );
+      },
     );
   });
 
-  await auditOrg({
-    orgId: org.id,
-    actorUserId,
-    actor: params.actor,
-    action: 'member.deactivated',
-    targetType: 'org_member',
-    targetId: member.id,
-    metadata: { userId },
-  }, { prisma });
+  await auditOrg(
+    {
+      orgId: org.id,
+      actorUserId,
+      actor: params.actor,
+      action: 'member.deactivated',
+      targetType: 'org_member',
+      targetId: member.id,
+      metadata: { userId },
+    },
+    { prisma },
+  );
 
   return { deactivated: true };
 }
@@ -175,35 +190,42 @@ export async function reactivateOrganisationMember(
   if (!member) throw new AppError('NOT_FOUND', 404);
 
   const now = new Date();
-  await runInTransaction(prisma, async (tx) => {
-    await lockTeamMembershipRows({ userId, orgId: org.id }, { prisma: tx });
-    const lockedMember = await tx.orgMember.findFirst({
-      where: { orgId: org.id, userId, status: 'DEACTIVATED' },
-      select: { id: true },
-    });
-    if (!lockedMember) throw new AppError('NOT_FOUND', 404);
+  await withDirectoryMutation(
+    prisma,
+    [{ orgId: org.id, kind: 'membership.changed', subjectId: userId }],
+    async (tx) => {
+      await lockTeamMembershipRows({ userId, orgId: org.id }, { prisma: tx });
+      const lockedMember = await tx.orgMember.findFirst({
+        where: { orgId: org.id, userId, status: 'DEACTIVATED' },
+        select: { id: true },
+      });
+      if (!lockedMember) throw new AppError('NOT_FOUND', 404);
 
-    await tx.orgMember.update({
-      where: { id: lockedMember.id },
-      data: { status: 'ACTIVE', statusChangedAt: now },
-    });
-    await tx.teamMember.updateMany({
-      where: { userId, team: { orgId: org.id }, status: 'DEACTIVATED' },
-      data: { status: 'ACTIVE', statusChangedAt: now },
-    });
-    await deps?.afterMembershipStatusWrite?.();
-  });
+      await tx.orgMember.update({
+        where: { id: lockedMember.id },
+        data: { status: 'ACTIVE', statusChangedAt: now },
+      });
+      await tx.teamMember.updateMany({
+        where: { userId, team: { orgId: org.id }, status: 'DEACTIVATED' },
+        data: { status: 'ACTIVE', statusChangedAt: now },
+      });
+      await deps?.afterMembershipStatusWrite?.();
+    },
+  );
 
   // No session restore (design §4.5) — the user simply signs in again.
-  await auditOrg({
-    orgId: org.id,
-    actorUserId,
-    actor: params.actor,
-    action: 'member.reactivated',
-    targetType: 'org_member',
-    targetId: member.id,
-    metadata: { userId },
-  }, { prisma });
+  await auditOrg(
+    {
+      orgId: org.id,
+      actorUserId,
+      actor: params.actor,
+      action: 'member.reactivated',
+      targetType: 'org_member',
+      targetId: member.id,
+      metadata: { userId },
+    },
+    { prisma },
+  );
 
   return { reactivated: true };
 }

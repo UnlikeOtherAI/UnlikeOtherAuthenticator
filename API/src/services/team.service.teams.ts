@@ -1,7 +1,7 @@
+import { withDirectoryMutation } from './directory-mutation.service.js';
 import type { ClientConfig } from './config.service.js';
 import { getEnv } from '../config/env.js';
 import { getPrisma } from '../db/prisma.js';
-import { runInTransaction } from '../db/tenant-context.js';
 import { AppError } from '../utils/errors.js';
 import { resolveTeamCreatorTeamRole } from './role-grants.js';
 
@@ -72,7 +72,8 @@ export async function listTeams(
 
   const rows = await prisma.team.findMany({
     where: {
-      orgId: org.id, lifecycleStatus: 'ACTIVE',
+      orgId: org.id,
+      lifecycleStatus: 'ACTIVE',
       // HIDDEN teams are excluded from any org-MEMBER-visible listing unless the caller is already
       // an ACTIVE member of that specific team (design §4.6) — invite-only discovery is preserved.
       // That is a discovery rule between members of one team. In backend mode the caller is
@@ -157,60 +158,64 @@ export async function createTeam(
     config: params.config,
   });
 
-  const createdTeam = await runInTransaction(prisma, async (tx) => {
-    const teamCount = await tx.team.count({ where: { orgId: org.id } });
-    if (teamCount >= maxTeams) {
-      throw new AppError('BAD_REQUEST', 400);
-    }
-
-    const slug = params.slug
-      ? await ensureAvailableTeamSlug({
-          orgId: org.id,
-          prisma: tx,
-          slug: params.slug,
-        })
-      : await deriveUniqueTeamSlug({
-          orgId: org.id,
-          prisma: tx,
-          name,
-        });
-
-    try {
-      const created = await tx.team.create({
-        data: {
-          orgId: org.id,
-          name,
-          slug,
-          ...(description === undefined ? {} : { description }),
-          ...(joinPolicy === undefined ? {} : { joinPolicy }),
-        },
-        select: TEAM_SELECT,
-      });
-
-      if (params.joinCreator && actorUserId) {
-        // Upsert, never a plain insert: the hosted chooser already calls
-        // `addTeamMember` right after `createTeam`, so a non-idempotent write
-        // would turn that existing flow into a unique-constraint failure the
-        // moment it passes this flag.
-        await tx.teamMember.upsert({
-          where: { teamId_userId: { teamId: created.id, userId: actorUserId } },
-          create: {
-            teamId: created.id,
-            userId: actorUserId,
-            teamRole: resolveTeamCreatorTeamRole(params.config),
-          },
-          update: {},
-        });
-      }
-
-      return toTeamRecord(created, org.domain);
-    } catch (err) {
-      if (isP2002Error(err)) {
+  const createdTeam = await withDirectoryMutation(
+    prisma,
+    [{ orgId: org.id, kind: 'team.changed' }],
+    async (tx) => {
+      const teamCount = await tx.team.count({ where: { orgId: org.id } });
+      if (teamCount >= maxTeams) {
         throw new AppError('BAD_REQUEST', 400);
       }
-      throw err;
-    }
-  });
+
+      const slug = params.slug
+        ? await ensureAvailableTeamSlug({
+            orgId: org.id,
+            prisma: tx,
+            slug: params.slug,
+          })
+        : await deriveUniqueTeamSlug({
+            orgId: org.id,
+            prisma: tx,
+            name,
+          });
+
+      try {
+        const created = await tx.team.create({
+          data: {
+            orgId: org.id,
+            name,
+            slug,
+            ...(description === undefined ? {} : { description }),
+            ...(joinPolicy === undefined ? {} : { joinPolicy }),
+          },
+          select: TEAM_SELECT,
+        });
+
+        if (params.joinCreator && actorUserId) {
+          // Upsert, never a plain insert: the hosted chooser already calls
+          // `addTeamMember` right after `createTeam`, so a non-idempotent write
+          // would turn that existing flow into a unique-constraint failure the
+          // moment it passes this flag.
+          await tx.teamMember.upsert({
+            where: { teamId_userId: { teamId: created.id, userId: actorUserId } },
+            create: {
+              teamId: created.id,
+              userId: actorUserId,
+              teamRole: resolveTeamCreatorTeamRole(params.config),
+            },
+            update: {},
+          });
+        }
+
+        return toTeamRecord(created, org.domain);
+      } catch (err) {
+        if (isP2002Error(err)) {
+          throw new AppError('BAD_REQUEST', 400);
+        }
+        throw err;
+      }
+    },
+  );
 
   await auditOrg({
     orgId: org.id,
@@ -257,7 +262,8 @@ export async function getTeam(
   const row = await prisma.team.findFirst({
     where: {
       id: params.teamId,
-      orgId: org.id, lifecycleStatus: 'ACTIVE',
+      orgId: org.id,
+      lifecycleStatus: 'ACTIVE',
     },
     select: {
       ...TEAM_SELECT,
@@ -382,11 +388,16 @@ export async function updateTeam(
   }
 
   try {
-    const updated = await prisma.team.update({
-      where: { id: existing.id },
-      data,
-      select: TEAM_SELECT,
-    });
+    const updated = await withDirectoryMutation(
+      prisma,
+      [{ orgId: org.id, kind: 'team.changed', teamId: existing.id }],
+      (tx) =>
+        tx.team.update({
+          where: { id: existing.id },
+          data,
+          select: TEAM_SELECT,
+        }),
+    );
 
     await auditOrg({
       orgId: org.id,
@@ -421,6 +432,7 @@ export async function deleteTeam(
     afterMembershipLocks?: () => Promise<void>;
   },
 ): Promise<{ deleted: boolean }> {
-  void params; void deps;
+  void params;
+  void deps;
   throw new AppError('BAD_REQUEST', 409, 'ENTITY_DELETION_WORKFLOW_REQUIRED');
 }

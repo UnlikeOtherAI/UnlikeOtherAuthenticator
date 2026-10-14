@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyRequest } from 'fastify';
+import type { FastifyInstance, FastifyRequest, FastifyReply, preHandlerHookHandler } from 'fastify';
 
 import { AppError } from '../utils/errors.js';
 
@@ -124,7 +124,35 @@ export function createBulkhead(options: BulkheadOptions): Bulkhead {
 const RETRY_AFTER_SECONDS = '1';
 
 const heldSlots = new WeakMap<FastifyRequest, () => void>();
-const executingHandlers = new WeakSet<FastifyRequest>();
+const executingPhases = new WeakMap<FastifyRequest, number>();
+function enterPhase(request: FastifyRequest): void {
+  executingPhases.set(request, (executingPhases.get(request) ?? 0) + 1);
+}
+function leavePhase(request: FastifyRequest, reply: FastifyReply): void {
+  const remaining = (executingPhases.get(request) ?? 1) - 1;
+  executingPhases.set(request, remaining);
+  if (!remaining && reply.sent) releaseSlot(request);
+}
+function wrapHook(hook: preHandlerHookHandler): preHandlerHookHandler {
+  return async function (request, reply) {
+    enterPhase(request);
+    try {
+      await new Promise<void>((resolve, reject) => {
+        if (hook.length >= 3) {
+          hook.call(this, request, reply, (error) => (error ? reject(error) : resolve()));
+        } else {
+          Promise.resolve(hook.call(this, request, reply, () => {})).then(() => resolve(), reject);
+        }
+      });
+      // Once outstanding work ends, prevent a disconnected request proceeding
+      // into another expensive phase. onError releases this request's slot.
+      if (reply.raw.destroyed && !reply.sent)
+        throw new AppError('SERVICE_UNAVAILABLE', 503, 'PRODUCT_API_BUSY');
+    } finally {
+      leavePhase(request, reply);
+    }
+  };
+}
 
 function releaseSlot(request: FastifyRequest): void {
   const release = heldSlots.get(request);
@@ -174,16 +202,28 @@ export function registerProductApiBulkhead(
   // A handler's finally is the completion fence even when no response can be sent.
   app.addHook('onRoute', (route) => {
     if (!isProductApiPath(route.url)) return;
+    for (const phase of ['preValidation', 'preHandler'] as const) {
+      const hooks = route[phase];
+      if (hooks) route[phase] = (Array.isArray(hooks) ? hooks : [hooks]).map(wrapHook);
+    }
     const handler = route.handler;
     route.handler = async function (request, reply) {
-      executingHandlers.add(request);
-      try { return await handler.call(this, request, reply); }
-      finally { executingHandlers.delete(request); releaseSlot(request); }
+      enterPhase(request);
+      try {
+        return await handler.call(this, request, reply);
+      } finally {
+        leavePhase(request, reply);
+        releaseSlot(request);
+      }
     };
   });
   // Errors before entering a handler also end their asynchronous pre-handler work.
-  app.addHook('onError', async (request) => { if (!executingHandlers.has(request)) releaseSlot(request); });
-  app.addHook('onResponse', async (request) => { if (!executingHandlers.has(request)) releaseSlot(request); });
+  app.addHook('onError', async (request) => {
+    if (!(executingPhases.get(request) ?? 0)) releaseSlot(request);
+  });
+  app.addHook('onResponse', async (request) => {
+    if (!(executingPhases.get(request) ?? 0)) releaseSlot(request);
+  });
 
   return bulkhead;
 }

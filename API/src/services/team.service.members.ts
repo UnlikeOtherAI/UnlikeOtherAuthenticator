@@ -1,3 +1,4 @@
+import { withDirectoryMutation } from './directory-mutation.service.js';
 import type { ClientConfig } from './config.service.js';
 import { getEnv } from '../config/env.js';
 import { getAdminPrisma, getPrisma } from '../db/prisma.js';
@@ -79,76 +80,77 @@ export async function addTeamMember(
   if (!team) {
     throw new AppError('NOT_FOUND', 404);
   }
-  const { member, reactivated } = await runInTransaction(prisma, async (tx) => {
-    await lockTeamMembershipRows(
-      { userId, orgId: org.id, teamId: team.id },
-      { prisma: tx },
-    );
-    const memberCount = await tx.teamMember.count({
-      where: { teamId: team.id, status: 'ACTIVE' },
-    });
-    if (memberCount >= maxMembersPerTeam) {
-      throw new AppError('BAD_REQUEST', 400);
-    }
-    const userMemberships = await tx.teamMember.count({
-      where: {
-        userId,
-        team: {
-          orgId: org.id,
-        },
-        status: 'ACTIVE',
-      },
-    });
-    if (userMemberships >= maxTeamMembershipsPerUser) {
-      throw new AppError('BAD_REQUEST', 400);
-    }
-    // A prior DEACTIVATED/REMOVED (teamId, userId) row is reactivated instead of rejected
-    // (design §4.1: statuses are tombstones under the same unique constraint).
-    const existing = await tx.teamMember.findFirst({
-      where: { teamId: team.id, userId },
-      select: { id: true, status: true },
-    });
-    if (existing && existing.status === 'ACTIVE') {
-      throw new AppError('BAD_REQUEST', 400);
-    }
-    try {
-      const record = existing
-        ? await tx.teamMember.update({
-            where: { id: existing.id },
-            data: { teamRole, status: 'ACTIVE', statusChangedAt: new Date() },
-            select: {
-              id: true,
-              teamId: true,
-              userId: true,
-              teamRole: true,
-              createdAt: true,
-              updatedAt: true,
-            },
-          })
-        : await tx.teamMember.create({
-            data: {
-              teamId: team.id,
-              userId,
-              teamRole,
-            },
-            select: {
-              id: true,
-              teamId: true,
-              userId: true,
-              teamRole: true,
-              createdAt: true,
-              updatedAt: true,
-            },
-          });
-
-      return { member: record, reactivated: Boolean(existing) };
-    } catch (err) {
-      if (isP2002Error(err)) {
+  const { member, reactivated } = await withDirectoryMutation(
+    prisma,
+    [{ orgId: org.id, kind: 'membership.changed', subjectId: userId, teamId: team.id }],
+    async (tx) => {
+      await lockTeamMembershipRows({ userId, orgId: org.id, teamId: team.id }, { prisma: tx });
+      const memberCount = await tx.teamMember.count({
+        where: { teamId: team.id, status: 'ACTIVE' },
+      });
+      if (memberCount >= maxMembersPerTeam) {
         throw new AppError('BAD_REQUEST', 400);
       }
-      throw err;
-    }
-  });
+      const userMemberships = await tx.teamMember.count({
+        where: {
+          userId,
+          team: {
+            orgId: org.id,
+          },
+          status: 'ACTIVE',
+        },
+      });
+      if (userMemberships >= maxTeamMembershipsPerUser) {
+        throw new AppError('BAD_REQUEST', 400);
+      }
+      // A prior DEACTIVATED/REMOVED (teamId, userId) row is reactivated instead of rejected
+      // (design §4.1: statuses are tombstones under the same unique constraint).
+      const existing = await tx.teamMember.findFirst({
+        where: { teamId: team.id, userId },
+        select: { id: true, status: true },
+      });
+      if (existing && existing.status === 'ACTIVE') {
+        throw new AppError('BAD_REQUEST', 400);
+      }
+      try {
+        const record = existing
+          ? await tx.teamMember.update({
+              where: { id: existing.id },
+              data: { teamRole, status: 'ACTIVE', statusChangedAt: new Date() },
+              select: {
+                id: true,
+                teamId: true,
+                userId: true,
+                teamRole: true,
+                createdAt: true,
+                updatedAt: true,
+              },
+            })
+          : await tx.teamMember.create({
+              data: {
+                teamId: team.id,
+                userId,
+                teamRole,
+              },
+              select: {
+                id: true,
+                teamId: true,
+                userId: true,
+                teamRole: true,
+                createdAt: true,
+                updatedAt: true,
+              },
+            });
+
+        return { member: record, reactivated: Boolean(existing) };
+      } catch (err) {
+        if (isP2002Error(err)) {
+          throw new AppError('BAD_REQUEST', 400);
+        }
+        throw err;
+      }
+    },
+  );
 
   await auditOrg({
     orgId: org.id,
@@ -232,18 +234,23 @@ export async function changeTeamMemberRole(
   }
 
   const previousTeamRole = member.teamRole;
-  const updated = await prisma.teamMember.update({
-    where: { id: member.id },
-    data: { teamRole },
-    select: {
-      id: true,
-      teamId: true,
-      userId: true,
-      teamRole: true,
-      createdAt: true,
-      updatedAt: true,
-    },
-  });
+  const updated = await withDirectoryMutation(
+    prisma,
+    [{ orgId: org.id, kind: 'membership.changed', subjectId: userId, teamId: team.id }],
+    (tx) =>
+      tx.teamMember.update({
+        where: { id: member.id },
+        data: { teamRole },
+        select: {
+          id: true,
+          teamId: true,
+          userId: true,
+          teamRole: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      }),
+  );
 
   await auditOrg({
     orgId: org.id,
@@ -316,67 +323,73 @@ export async function removeTeamMember(
 
   const removedMember = await runInTransaction(prisma, async (tx) => {
     await lockRefreshSessionUser(userId, { prisma: tx });
-    await lockTeamMembershipRows(
-      { userId, orgId: org.id },
-      { prisma: tx },
+    return withDirectoryMutation(
+      tx,
+      [{ orgId: org.id, kind: 'membership.changed', subjectId: userId, teamId: team.id }],
+      async (tx) => {
+        await lockTeamMembershipRows({ userId, orgId: org.id }, { prisma: tx });
+        const lockedMembership = await tx.teamMember.findFirst({
+          where: {
+            teamId: team.id,
+            userId,
+            status: 'ACTIVE',
+          },
+          // `teamRole` is read for the audit row, mirroring `removeOrganisationMember`'s `role`.
+          select: { id: true, teamRole: true },
+        });
+        if (!lockedMembership) {
+          throw new AppError('NOT_FOUND', 404);
+        }
+
+        // "Cannot leave your last team" counts ACTIVE team memberships only (design §4.5).
+        const userTeamCount = await tx.teamMember.count({
+          where: {
+            userId,
+            team: {
+              orgId: org.id,
+            },
+            status: 'ACTIVE',
+          },
+        });
+
+        if (userTeamCount <= 1) {
+          throw new AppError('BAD_REQUEST', 400);
+        }
+
+        // Team removal is a tombstone, not a delete (design §4.5). Organisation identity remains
+        // active, while only refresh families carrying this exact team scope are revoked.
+        const now = new Date();
+        await tx.teamMember.update({
+          where: { id: lockedMembership.id },
+          data: { status: 'REMOVED', statusChangedAt: now },
+        });
+        await deps?.afterMembershipStatusWrite?.();
+        await (
+          deps?.revokeRefreshTokenFamiliesForUserTeam ?? revokeRefreshTokenFamiliesForUserTeam
+        )(userId, team.id, { now: () => now, prisma: tx });
+
+        return lockedMembership;
+      },
     );
-    const lockedMembership = await tx.teamMember.findFirst({
-      where: {
-        teamId: team.id,
-        userId,
-        status: 'ACTIVE',
-      },
-      // `teamRole` is read for the audit row, mirroring `removeOrganisationMember`'s `role`.
-      select: { id: true, teamRole: true },
-    });
-    if (!lockedMembership) {
-      throw new AppError('NOT_FOUND', 404);
-    }
-
-    // "Cannot leave your last team" counts ACTIVE team memberships only (design §4.5).
-    const userTeamCount = await tx.teamMember.count({
-      where: {
-        userId,
-        team: {
-          orgId: org.id,
-        },
-        status: 'ACTIVE',
-      },
-    });
-
-    if (userTeamCount <= 1) {
-      throw new AppError('BAD_REQUEST', 400);
-    }
-
-    // Team removal is a tombstone, not a delete (design §4.5). Organisation identity remains
-    // active, while only refresh families carrying this exact team scope are revoked.
-    const now = new Date();
-    await tx.teamMember.update({
-      where: { id: lockedMembership.id },
-      data: { status: 'REMOVED', statusChangedAt: now },
-    });
-    await deps?.afterMembershipStatusWrite?.();
-    await (
-      deps?.revokeRefreshTokenFamiliesForUserTeam ?? revokeRefreshTokenFamiliesForUserTeam
-    )(userId, team.id, { now: () => now, prisma: tx });
-
-    return lockedMembership;
   });
 
-  await auditOrg({
-    orgId: org.id,
-    actorUserId,
-    actor: params.actor,
-    action: 'team_member.removed',
-    targetType: 'team_member',
-    targetId: removedMember.id,
-    metadata: {
-      teamId: team.id,
-      userId,
-      teamRole: removedMember.teamRole,
-      via: AUDIT_VIA_MANAGER,
+  await auditOrg(
+    {
+      orgId: org.id,
+      actorUserId,
+      actor: params.actor,
+      action: 'team_member.removed',
+      targetType: 'team_member',
+      targetId: removedMember.id,
+      metadata: {
+        teamId: team.id,
+        userId,
+        teamRole: removedMember.teamRole,
+        via: AUDIT_VIA_MANAGER,
+      },
     },
-  }, { prisma });
+    { prisma },
+  );
 
   return { removed: true };
 }
