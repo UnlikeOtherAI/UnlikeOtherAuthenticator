@@ -499,3 +499,23 @@ PostgreSQL lock waits with expiry, credential revocation serialization and real
 permission failure as500. Failed fixture schemas are retained for diagnosis.
 The next gate must execute these and the distinct real-socket bulkhead route
 fixture; source AST or middleware unit checks cannot substitute for them.
+
+### Verified U1/U3 boundary and pre-stable deployment guard
+
+At7dac9a3f API build and all23 runtime gate2 cases pass:11 actual HTTP/PostgreSQL
+authority cases,4 directory seam/RLS/order/terminal cases and8 genuine-socket
+bulkhead route cases. Exact sanitized output is in the corresponding evidence
+folder. This verifies the supported machine-only operator/owner doorway with real
+uoa_app login/RLS, not a superuser-only approximation. Full113-writer and upgrade
+coverage still remains open; N03 stays blocked.
+
+U01 stable writes also need the reader floor BEFORE deployment, not merely before
+conversion. The deployment source now refuses stable mode unless direct Cloud Run
+inventory has only reviewed bridge/stable image digests with explicit phase markers,
+including every tagged/zero-traffic retained revision, and no retiring revision.
+Repository variable WEBSITE_CLIENT_CONTEXT_COMPATIBLE_IMAGE_DIGESTS is a comma
+list of operator-reviewed immutable sha256 digests. Missing/empty/unknown inventory
+or missing/duplicate phase metadata fails closed. Bridge deploys require no floor
+so the compatible first phase can roll out. Final cleanup remains stricter: all
+retained writers must be stable. No live GitHub variable, deployment or traffic
+gate was changed by this source edit.

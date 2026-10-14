@@ -16,7 +16,8 @@ export function assertWebsiteContextReaderFloor(revisions: unknown, approvedDige
     throw new Error('Website context cutover requires a nonempty reviewed revision inventory');
   }
   for (const revision of revisions as Revision[]) {
-    const mode = revision.spec?.containers?.[0]?.env?.find(env => env.name === 'WEBSITE_CLIENT_CONTEXT_PHASE')?.value;
+    const modes = revision.spec?.containers?.[0]?.env?.filter(env => env.name === 'WEBSITE_CLIENT_CONTEXT_PHASE') ?? [];
+    const mode = modes.length === 1 ? modes[0].value : undefined;
     const digest = revision.status?.imageDigest?.match(/sha256:[a-f0-9]{64}$/)?.[0];
     if (revision.metadata?.deletionTimestamp || !['bridge', 'stable'].includes(mode ?? '') ||
         (requireStableWriters && mode !== 'stable') ||

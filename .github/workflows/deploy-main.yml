@@ -25,6 +25,7 @@ jobs:
       IMAGE: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.GCP_ARTIFACT_REGISTRY_REPOSITORY }}/${{ vars.GCP_CLOUD_RUN_SERVICE }}:${{ github.sha }}
       STRIPE_BILLING_ENABLED: ${{ vars.STRIPE_BILLING_ENABLED || 'false' }}
       WEBSITE_CLIENT_CONTEXT_PHASE: ${{ vars.WEBSITE_CLIENT_CONTEXT_PHASE || 'bridge' }}
+      WEBSITE_CLIENT_CONTEXT_COMPATIBLE_IMAGE_DIGESTS: ${{ vars.WEBSITE_CLIENT_CONTEXT_COMPATIBLE_IMAGE_DIGESTS }}
       UOA_STRIPE_BILLING_CONFIGURED: ${{ vars.UOA_STRIPE_BILLING_CONFIGURED || 'false' }}
       UOA_SMS_CONFIGURED: ${{ vars.UOA_SMS_CONFIGURED || 'false' }}
       BILLING_SMS_ENABLED: ${{ vars.BILLING_SMS_ENABLED || 'false' }}
@@ -59,6 +60,32 @@ jobs:
 
       - name: Set up gcloud
         uses: google-github-actions/setup-gcloud@e427ad8a34f8676edf47cf7d7925499adf3eb74f # v2
+
+      # Stable writes are incompatible with pre-bridge readers even before the
+      # cleanup CLI runs. Inspect every retained revision, including tags/zero
+      # traffic, before building/deploying the first stable writer.
+      - name: Verify website context reader floor before stable deployment
+        if: env.WEBSITE_CLIENT_CONTEXT_PHASE == 'stable'
+        shell: bash
+        run: |
+          set -euo pipefail
+          approved=$(jq -cn --arg value "$WEBSITE_CLIENT_CONTEXT_COMPATIBLE_IMAGE_DIGESTS" '$value | split(",") | map(select(length > 0))')
+          jq -e 'length > 0 and all(.[]; test("^sha256:[a-f0-9]{64}$"))' <<< "$approved" >/dev/null || {
+            echo "Stable deployment requires reviewed bridge/stable image digests"
+            exit 1
+          }
+          inventory=$(gcloud run revisions list --project="$GCP_PROJECT_ID" --region="$GCP_REGION" --service="$GCP_CLOUD_RUN_SERVICE" --format=json --quiet)
+          # Do not print provider inventory: container env may contain secrets.
+          jq -e --argjson approved "$approved" '
+            length > 0 and all(.[];
+              (.metadata.deletionTimestamp == null) and
+              ([.spec.containers[0].env[]? | select(.name == "WEBSITE_CLIENT_CONTEXT_PHASE") | .value] |
+                length == 1 and (.[0] == "bridge" or .[0] == "stable")) and
+              ((.status.imageDigest // "" | split("@") | last) as $digest | $approved | index($digest) != null)
+            )' <<< "$inventory" >/dev/null || {
+            echo "Stable deployment refused: unverified or retiring reader remains"
+            exit 1
+          }
 
       - name: Log in to Artifact Registry
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
