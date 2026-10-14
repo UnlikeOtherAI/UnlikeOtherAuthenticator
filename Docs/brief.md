@@ -3190,7 +3190,8 @@ wire contract and verification are authoritative in [Kelpie account connectivity
 ## 2026-10-14 Subject verification dependency outages
 
 Product-signed subject verification must distinguish unavailable public keys
-from invalid credentials. Partner JWKS network/timeout failures, HTTP 408/429
+from invalid credentials. Partner JWKS network/timeout failures, transient DNS
+`EAI_AGAIN`, HTTP 408/429
 and upstream 5xx return generic HTTP 503 with the production-safe code
 `INTEGRATION_JWKS_UNAVAILABLE`. No identity, authority or resource token is
 admitted while the keys are unavailable. Products retain their own sessions

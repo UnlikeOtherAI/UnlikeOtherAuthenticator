@@ -34,6 +34,8 @@ Password authentication requires email_password in verified enabled_auth_methods
 export function registerLlmRoute(app: FastifyInstance): void {
   app.get('/llm', async (_request, reply) => {
     reply.header('Cache-Control', 'no-store');
-    reply.type('text/markdown; charset=utf-8').send(`${renderLlmMarkdown()}\n${llmSmsOperatorsMarkdown}`);
+    reply.type('text/markdown; charset=utf-8').send(`${renderLlmMarkdown()}\n${llmSmsOperatorsMarkdown}\n` +
+      'Temporary source-JWKS DNS EAI_AGAIN returns 503 INTEGRATION_JWKS_UNAVAILABLE before identity admission. ' +
+      'Retain the product session and retry with backoff; unsafe destinations and invalid assertions remain refused.\n');
   });
 }
