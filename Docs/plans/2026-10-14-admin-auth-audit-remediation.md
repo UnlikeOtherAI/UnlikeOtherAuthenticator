@@ -199,3 +199,80 @@ and dependency-graph verification, not a new CI/container run.
 
 All issue boxes remain open pending parent acceptance, including U-18. U-28/U-36 dispositions and
 normal HTTPS OAuth/PDF behavior remain as recorded above.
+
+## Allocated validation of 57455d4d (U-18 / U-37)
+
+Validated application source **57455d4dab448999a8d7b8b44a9877515e7cc9be** in the same dedicated
+branch/worktree on **Maxis**, Full Access and approval never. Parent reports integration as
+22f9634a; this worktree validates its actual 57455d4d source, not an unverified integration revision.
+Fresh local load was 24.5 GiB free / 2% CPU. One allocated heavy job at a time,
+`NODE_OPTIONS=--max-old-space-size=5120`, with one browser/test worker. Nothing ran remotely on
+Minis or against a database, production endpoint or live provider. API/logout/U1 work remains with
+its existing owner. No application source changed during this validation; additions are local
+browser fixtures, screenshot settling, download assertions and evidence.
+
+- [ ] **U-37:** Late sign-in restoration after explicit clearing was established and corrected in
+  57455d4d. Fresh browser assertions now prove rejection without storage restoration, legitimate
+  fresh sign-in afterward, and same-owner StrictMode completion with exactly one validation call.
+  Provider-unmount protection also passes in the focused rendered component suite. Parent acceptance
+  is still required; this checkbox remains open.
+
+Fresh serial commands and results:
+
+```powershell
+$env:NODE_OPTIONS='--max-old-space-size=5120'
+pnpm --filter @uoa/admin typecheck
+pnpm --filter @uoa/admin build
+pnpm --filter @unlikeotherai/auth-ui-strings build
+pnpm --filter @uoa/auth typecheck
+pnpm --filter @uoa/auth build
+```
+
+All five commands passed. Auth build includes client and SSR; catalogue output is freshly built
+before Auth. Admin build retains its nonfatal >500 kB chunk warning. The application typechecks
+cover src, while browser fixture code is transformed by Vite and checked with scoped ESLint. No
+API/Prisma/native rebuild was needed for this frontend-only correction; those scopes were unchanged.
+
+```powershell
+pnpm --filter @uoa/admin exec vitest run src/pages/BillingPage.test.tsx src/features/admin/DomainOverviewTab.test.tsx src/features/auth/admin-session.test.tsx src/features/admin/credential-cache.test.tsx src/pages/AdminAuthCallbackPage.test.tsx src/pages/DomainDetailPage.test.tsx src/app/AppProviders.test.tsx src/features/auth/admin-session-origin.test.tsx --maxWorkers=1 --reporter=dot
+$env:PLAYWRIGHT_BROWSERS_PATH=Join-Path (Get-Location) 'node_modules/.cache/ms-playwright'
+pnpm --filter @uoa/admin exec playwright test --config=playwright.audit.config.ts
+```
+
+Focused rendered regression: **8 files, 31 passed, 0 failed, 0 skipped**, 18.47 seconds.
+Final headless Chromium run: **26 passed, 0 failed, 0 skipped, 0 retries**, 40.2 seconds, 13 desktop
+and 13 Pixel 7 mobile journeys. An initial 26/26 pass in 43.8 seconds preceded screenshot settling;
+the final evidence comes from the fresh rerun after adding image decoding/font readiness. These
+results replace the pending follow-up validation note above; older 12-case results are historical.
+Scoped ESLint over the six audit flow/config/helper files and whitespace checks passed.
+
+The final browser suite repeats the original 12 journeys and adds 14 lifecycle journeys. Real
+pages exercise delayed domain rotation across Credentials → Overview history navigation, preserve
+the friendly-name draft, reject stale reveal, permit active reveal/close, and navigate to another
+selected domain without carrying a secret. Billing's delayed key cannot reopen after tab history
+navigation; a subsequent active issuance still reveals and closes normally. Automation's delayed
+key cannot reopen after explicit session clearing tears down the auth shell. The existing PDF
+journey additionally completes a Source download with a .pdf filename and no download failure,
+alongside preview bytes, null opener and failed/blocked preview recovery. Registered HTTPS OAuth
+cancellation, email-state recovery and outage/expiry journeys all passed freshly.
+
+Local-only lifecycle fixtures exercise the real product/automation hooks under StrictMode across
+external close/reopen, unmount/remount and explicit session clearing, asserting no plaintext in
+reveals, cache data or browser storage. They also exercise the real AdminSessionProvider for U-37.
+These are mechanism tests with fixture controls, not additional production controls or claims that
+a pending production dialog permits dismissal: pending dismissal remains blocked. The browser
+session-clear cases validate the logout/expiry notification and teardown boundary; they do not
+claim live server logout/revocation verification. Selected-product switching and provider-unmount
+variants are additionally covered by the fresh component tests.
+
+All **26 settled screenshots** were visually inspected and preserved in the
+[57455d4d evidence index](../audit-evidence/2026-10-14-admin-auth/57455d4d/README.md). Active secrets
+wrap legibly and close actions remain reachable on both viewports. Mobile PDF actions require
+horizontal table scrolling, as before. Test-fixture screens are labelled distinctly. No new product
+usability failure was established; the partially decoded logo was corrected in capture timing.
+Browser suites remain local-only; no CI workflow was added or changed.
+
+Both assigned servers returned HTTP 200 during the run. Playwright stopped its own servers after
+each run. Final checks found no listeners on 5291/5292 and no compiler/Vite/esbuild/Chromium process
+for this worktree. **UOA Admin explicitly RELEASED its allocated heavy slot after all children
+finished.** All audit items remain open pending parent acceptance; no PR/main merge was performed.
