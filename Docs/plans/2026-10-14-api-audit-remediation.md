@@ -576,3 +576,14 @@ contains the original READY job with8/26 users completed and its natural lease.
 An explicit owned-database recovery test resumes it through executeEntityDeletion
 only, waiting for lease expiry and checking immutable terminal cursor/250audit rows.
 No record, lease, progress or blocker is cleared by the harness.
+
+### 2026-10-15 lifecycle and dependency runtime acceptance
+
+Source1391d4d0: retained original job recovers via six normal service attempts
+(93.85s), preserving250audit rows and its unchanged terminal cursor. The complete
+lifecycle regression then passes19cases, plus5realPG dependency refusals and the
+source guard (25total,357.97s). The scale case completes in155.313s with its explicit
+240s end-to-end allowance; production transaction/stage budgets remain15s.
+Evidence: `Docs/audit-evidence/2026-10-15-api/1391d4d0/`.
+This closes the observed lifecycle failures; full113-writer runtime coverage and
+remaining authority races are still open. N03 cutover is not authorized.
