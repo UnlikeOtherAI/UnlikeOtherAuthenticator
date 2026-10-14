@@ -11,7 +11,7 @@ import { normalizeDomain } from '../utils/domain.js';
 import { AppError } from '../utils/errors.js';
 import { findJwkByKid, importClientJwkKey, type PublicRsaJwks } from './client-jwk.service.js';
 import type { ClientConfig } from './config.service.js';
-import { fetchPartnerJwks } from './jwks-fetch.service.js';
+import { fetchPartnerJwks, PartnerJwksUnavailableError } from './jwks-fetch.service.js';
 import {
   signConfidentialAccessToken,
   type ConfidentialAccessTokenClaims,
@@ -153,7 +153,8 @@ export async function verifyConfidentialSubjectToken(
     }
 
     return assertion;
-  } catch {
+  } catch (error) {
+    if (error instanceof PartnerJwksUnavailableError) throw error;
     throw invalidSubjectToken();
   }
 }

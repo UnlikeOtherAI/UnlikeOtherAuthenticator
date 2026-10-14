@@ -14,6 +14,13 @@ const DEFAULT_JWKS_FETCH_TIMEOUT_MS = 5_000;
 const MAX_JWKS_RESPONSE_BYTES = 64 * 1024;
 const MAX_JWKS_FETCH_REDIRECTS = 3;
 
+/** Verification could not consult its keys; this proves no credential refusal. */
+export class PartnerJwksUnavailableError extends AppError {
+  public constructor() {
+    super('SERVICE_UNAVAILABLE', 503, 'INTEGRATION_JWKS_UNAVAILABLE');
+  }
+}
+
 async function cancelResponseBody(res: Response): Promise<void> {
   try {
     await res.body?.cancel();
@@ -121,6 +128,9 @@ export async function fetchPartnerJwks(
 
           if (!res.ok) {
             await cancelResponseBody(res);
+            if (res.status >= 500 || res.status === 408 || res.status === 429) {
+              throw new PartnerJwksUnavailableError();
+            }
             throw new AppError('BAD_REQUEST', 400, 'INTEGRATION_JWKS_HTTP_STATUS_REJECTED');
           }
 
@@ -147,14 +157,14 @@ export async function fetchPartnerJwks(
       }
 
       if (lastNetworkError) {
-        throw new AppError('BAD_REQUEST', 400, 'INTEGRATION_JWKS_NETWORK_ERROR');
+        throw new PartnerJwksUnavailableError();
       }
     }
 
     throw new AppError('BAD_REQUEST', 400, 'INTEGRATION_JWKS_TOO_MANY_REDIRECTS');
   } catch (err) {
     if (err instanceof AppError) throw err;
-    throw new AppError('BAD_REQUEST', 400, 'INTEGRATION_JWKS_FETCH_FAILED');
+    throw new PartnerJwksUnavailableError();
   } finally {
     clearTimeout(timeoutId);
   }
