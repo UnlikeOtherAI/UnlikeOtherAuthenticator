@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { createRequire } from 'node:module';
+import { resolve } from 'node:path';
 import { installFixtures, nativeApp } from './fixtures';
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() =>
@@ -65,13 +66,11 @@ test('icon prevalidation and upload retry never recreate or delete a native app'
   await dialog.getByRole('button', { name: 'Save app' }).click();
   await expect(dialog.getByRole('alert')).toContainText('smaller than 256 KB');
   expect(created).toBe(0);
-  await dialog
-    .locator('input[type=file]')
-    .setInputFiles({
-      name: 'icon.png',
-      mimeType: 'image/png',
-      buffer: Buffer.from('synthetic-icon'),
-    });
+  await dialog.locator('input[type=file]').setInputFiles({
+    name: 'icon.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from('synthetic-icon'),
+  });
   await dialog.getByRole('button', { name: 'Save app' }).click();
   await expect(dialog.getByRole('alert')).toContainText('App saved. The icon could not be saved');
   await expect(dialog.locator('[name=identifier]')).toHaveAttribute('readonly', '');
@@ -120,9 +119,7 @@ test('protected PDF preview remains available, detaches opener, and failed/block
   page,
   context,
 }, info) => {
-  const { PDFDocument } = createRequire(new URL('../../API/package.json', import.meta.url))(
-    'pdf-lib',
-  );
+  const { PDFDocument } = createRequire(resolve('..', 'API', 'package.json'))('pdf-lib');
   const pdf = await PDFDocument.create();
   pdf.addPage([300, 200]);
   const bytes = Buffer.from(await pdf.save());
@@ -169,6 +166,12 @@ test('protected PDF preview remains available, detaches opener, and failed/block
   const popup = await popupPromise;
   await expect.poll(() => popup.url()).toMatch(/^blob:/);
   expect(await popup.evaluate(() => window.opener === null)).toBe(true);
+  expect(
+    await page.evaluate(
+      async (url) => (await (await fetch(url)).arrayBuffer()).byteLength,
+      popup.url(),
+    ),
+  ).toBe(bytes.length);
   await page.screenshot({ path: info.outputPath('pdf-preview-source-screen.png'), fullPage: true });
   await popup.close();
   fail = true;

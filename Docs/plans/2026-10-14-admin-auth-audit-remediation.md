@@ -24,7 +24,8 @@ verification. No production requests, credentials, migrations or deployments are
 - [ ] **U-18:** Confirmed plaintext in mutation results. Issuance/rotation mutations now return void,
   deliver only to mounted reveal owners, and have immediate inactive collection. Close/navigation
   clears reveals; confirmed logout clears QueryClient caches. Automation/product-key cache and
-  logout cache regressions pass. Domain reveal and rendered journeys need final verification.
+  logout cache regressions pass. Domain reveal/close and void mutation-result regression passes;
+  rendered journeys need final verification.
 - [ ] **U-19:** Confirmed app creation precedes icon validation/upload. Implemented prevalidation and
   committed-id recovery so upload retry updates the same app. It never deletes a created app.
   Hook regression passes; rendered create/fail/retry journey pending.
@@ -35,12 +36,14 @@ verification. No production requests, credentials, migrations or deployments are
   regression passes without sending bearer credentials. No remotely controlled origin exploit claimed.
 - [ ] **U-32:** Confirmed Admin callback's started-ref plus cancelled subscription suppresses completion
   under StrictMode replay. One exchange promise now receives a fresh active subscription. StrictMode
-  regression proves one exchange and the preserved return destination. Auth callback concern maps to
+  regressions prove one exchange/session validation, the preserved return destination and reuse of
+  an already validated session when revisiting the callback route. Auth callback concern maps to
   this concrete Admin component; inspected other Auth cancellation effects do not share that pattern.
 - [ ] **U-33:** Confirmed same-route domain changes can retain scoped modal/form state. Domain tabs now
   remount for the exact domain. Overview/credentials use a domain-only key to preserve the existing
-  identity draft between those tabs; credential reveals clear on section change. Rendered switching
-  verification pending.
+  identity draft between those tabs; credential reveals clear on section change. Component journeys
+  prove email drafts and open signing-key editors do not cross same-route domain switches, including
+  identical friendly labels. Headless browser switching verification remains pending.
 - [ ] **U-34:** Confirmed preview usability bug: noopener window.open returns null, which the old helper
   treated as blocked and immediately revoked. Preview now opens synchronously, detaches opener,
   fetches protected bytes through the shared client and navigates to a blob URL. Failure closes only
@@ -49,7 +52,9 @@ verification. No production requests, credentials, migrations or deployments are
 - [ ] **U-36:** Exploit hypothesis not established. Configured language is model input, but no tools,
   identity authority, private data lookup or arbitrary output keys are available. Cache identity is
   exact language plus source hash. Known-key/string normalization remains unchanged; no capability
-  is disabled. This disposition requires parent review rather than a speculative code change.
+  is disabled. A transport regression also proves unexpected output keys and non-string values are
+  refused/fallback-normalized and no model tools are supplied. This disposition requires parent review
+  rather than a speculative capability change.
 
 ## Human-flow review
 
@@ -69,3 +74,19 @@ found one forbidden non-null assertion, corrected before checkpoint. Typechecks,
 builds, Playwright desktop/mobile flows and screenshot review remain pending the allocated build slot.
 No native inputs changed, so no native builds are required. No database is required for these injected
 translation/frontend tests. Full integration checks remain the orchestrator's responsibility.
+
+## Restart checkpoint
+
+The replacement writer verified the exact worktree, branch and harmless create/read/delete probe
+under Full Access on Maxis. Checkpoint e56afa78 and integration merge a02582e6 were pushed, followed
+by a826e4da preserving registered HTTPS handoffs and existing authenticated callback navigation.
+The integration merge retained both DNS recovery and translation architecture documentation.
+The public OAuth cancellation caller uses the same handoff renderer even for HTTPS callbacks, so
+validation accepts exact safe allowlisted HTTPS callbacks as well as custom schemes; arbitrary
+HTTPS targets remain refused. No confidential/native authorization boundary changes.
+
+Focused validation now covers 19 Admin recovery/cache/form cases, 15 additional existing Admin
+compatibility cases, 56 Auth cases across selected files and 5 translation service cases. All passed
+after correcting the existing NativeAppsPage test's partial mock to preserve the new error export.
+Scoped ESLint and git whitespace checks pass. Playwright discovers 12 desktop/mobile journeys.
+No new servers/databases or heavy compiler jobs started while awaiting the allocated slot.
