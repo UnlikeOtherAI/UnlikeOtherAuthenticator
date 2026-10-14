@@ -1,0 +1,54 @@
+
+ RUN  v3.2.6 C:/Users/ondre/Projects/UnlikeOtherAuthenticator/.worktrees/sol-audit-fixes-api-20261014/API
+
+stdout | tests/integration/entity-lifecycle.test.ts > entity lifecycle on PostgreSQL
+Retained audit test schema: [token-like test value redacted]
+
+ ❯ tests/integration/entity-lifecycle.test.ts (19 tests | 1 failed) 193728ms
+   ✓ entity lifecycle on PostgreSQL > inherits parent denial without overwriting a separately disabled child or membership  3091ms
+   ✓ entity lifecycle on PostgreSQL > protects the last active platform administrator and rejects stale actor epochs  2071ms
+   ✓ entity lifecycle on PostgreSQL > snapshots the chosen template revision and rejects stale selections  3100ms
+   ✓ entity lifecycle on PostgreSQL > erases PII while retaining a terminal historical subject and permits a fresh registration identity  9076ms
+   ✓ entity lifecycle on PostgreSQL > deletes an empty organisation with its sole team and org-only orphan while preserving shared accounts  15149ms
+   ✓ entity lifecycle on PostgreSQL > refuses stale previews after a new dependency and freezes dispatched candidates against new membership  5862ms
+   ✓ entity lifecycle on PostgreSQL > serializes simultaneous product acknowledgements and rejects wrong domain or conflicting replay  3147ms
+   ✓ entity lifecycle on PostgreSQL > requires ownership transfer and preserves an unknown-product blocker  3513ms
+   ✓ entity lifecycle on PostgreSQL > mailbox proof reveals only authorized reasons, is one-use, and mail failure is non-enumerating  2808ms
+   ✓ entity lifecycle on PostgreSQL > never replaces a short name inside unrelated JSON strings  1498ms
+   ✓ entity lifecycle on PostgreSQL > scrubs target PII while keeping a retained ID and unrelated actor details  8078ms
+   ✓ entity lifecycle on PostgreSQL > erases mutable references and retains an idempotent digest receipt after physical identity removal  9274ms
+   ✓ entity lifecycle on PostgreSQL > lists restricted signing audit evidence and preserves its immutable data while clearing operational identity  9260ms
+   ✓ entity lifecycle on PostgreSQL > blocks overlapping sibling jobs and promotes a disabled surviving default deterministically  15064ms
+   × entity lifecycle on PostgreSQL > persists bounded progress for 25 members with 250 audit rows, resuming without duplicate effects 61534ms
+     → Test timed out in 60000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+   · entity lifecycle on PostgreSQL > denies exact disabled team management to both organisation owners and backend actors
+   · entity lifecycle on PostgreSQL > removes operational service access and unsigned continuations without inventing retention exceptions
+   · entity lifecycle on PostgreSQL > cascades an organisation after an earlier child deletion retained immutable billing evidence
+   · entity lifecycle on PostgreSQL > returns workplace labels for mapped cross-product memberships without leaking them to unmapped products
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/entity-lifecycle.test.ts > entity lifecycle on PostgreSQL > persists bounded progress for 25 members with 250 audit rows, resuming without duplicate effects
+Error: Test timed out in 60000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ tests/integration/entity-lifecycle.test.ts:211:3
+    209|     expect(await handle.prisma.organisation.findUnique({ where: { id: …
+    210|   });
+    211|   it('persists bounded progress for 25 members with 250 audit rows, re…
+       |   ^
+    212|     const admin = await actor(), { org, team } = await container();
+    213|     const members = await Promise.all(Array.from({ length: 25 }, (_, i…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (3)
+      Tests  1 failed | 14 passed (19)
+   Start at  00:45:04
+   Duration  194.57s (transform 291ms, setup 73ms, collect 554ms, tests 193.73s, environment 0ms, prepare 70ms)
+
+undefined
+C:\Users\ondre\Projects\UnlikeOtherAuthenticator\.worktrees\sol-audit-fixes-api-20261014\API:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command "vitest" not found
+EXIT=1
