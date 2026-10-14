@@ -877,7 +877,7 @@ admin client because every avatar route authenticates before a tenant context ex
   from inside checks out a second connection from a pool whose per-instance cap is 2–3,
   and under concurrent load that waits on the connection its own transaction owns until
   the 5 s interactive-transaction timeout (P2028) — the 2026-09-26 sign-in outage. Using
-  the *other* pool's client inside a transaction is fine. `db/pool-checkout-guard.ts`
+  the _other_ pool's client inside a transaction is fine. `db/pool-checkout-guard.ts`
   wraps both global clients to enforce this: a same-pool nested checkout throws under
   `NODE_ENV=test` and is logged once per call site everywhere else.
 - Production container startup keeps schema authority and request authority
@@ -924,7 +924,6 @@ SMS number payment implementation: services/billing-sms-number.service.ts owns i
 
 SMS prepaid runtime: services/billing-sms-{reservation,dispatch,receipt,grant,standing,inbound}.service.ts own admission, physical dispatch fencing and actual usage settlement; routes/billing/sms-{reservations,grants,inbound}.ts register the public contracts. Exact money arithmetic lives in billing-sms-money.service.ts. All share the canonical wallet and budget services.
 
-
 ### Subject verification dependency failures
 
 `jwks-fetch.service.ts` owns `PartnerJwksUnavailableError` (HTTP 503,
@@ -945,3 +944,11 @@ The shared SSRF resolver preserves `EAI_AGAIN` as
 failure to the existing partner outage. Definitive DNS failures, empty/invalid
 results and any private address remain hard destination refusals. No address
 is admitted or network fetch attempted while resolution is unavailable.
+
+### Auth translation source and timeout
+
+The translation service imports the complete English catalogue from the dependency-free
+@unlikeotherai/auth-ui-strings package. Its source hash invalidates older incomplete translations.
+The OpenAI abort deadline spans response headers and body consumption. Aborted/invalid body reads
+fail without persisting a completed translation. Language text has no tool or credential authority;
+output is restricted to known source keys and string values.

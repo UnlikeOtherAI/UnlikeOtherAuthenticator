@@ -304,7 +304,6 @@ Capability evidence and remaining backend gaps are recorded in the
 suspension/deactivation and deletion-job contracts; this UI amendment does not certify that
 work as complete or authorize a legacy delete bypass.
 
-
 ## 2026-10-06 First-party admin debug login
 
 The Admin login screen now waits for the operator to choose Continue with Google
@@ -348,3 +347,26 @@ conditional tab mounting clear reveals on product/tab changes and auth-shell tea
 The shared Modal supplies pending dismissal, dirty form and focus guards. Existing
 server roles/endpoints remain authoritative. Browser checks use isolated synthetic
 responses, not production credentials or proof of deployed issuance.
+
+## 2026-10-14 session and operator recovery
+
+Bootstrap and OAuth exchange use the shared same-origin API client. Session bootstrap retains
+credentials on transport/server failures, with bounded exponential retry, and withholds protected
+content until successful validation. Confirmed 401/403 rejection or local expiry clears storage,
+React state and QueryClient caches. Failed logout retains the existing source for retry.
+Callback effect replay reuses one exchange promise and a fresh active subscription.
+One-time credential mutations return no plaintext result: mounted reveal state alone receives it.
+Domain tabs remount on an exact domain change; billing selection/navigation clears reveals.
+Pending one-time responses also capture the committed owner's delivery generation. Leaving the
+credentials section, changing the billing location, closing the issuance dialog, unmounting or
+clearing the session invalidates that delivery, including an away-and-back transition. The shared
+guard holds no credential; successful mutations still resolve void and refresh metadata. The
+original active dialog receives its reveal normally. Issued keys are neither cancelled nor deleted
+when their UI owner goes away. Async sign-in validation uses the same lifecycle guard, so explicit
+session clearing or provider teardown cannot be undone by a late validation response; a fresh
+sign-in started afterward remains available.
+Native-app icons are prevalidated before creation. Upload failures retain the committed id in the
+dialog so retry updates that app. Closing preserves the created record for later editing.
+Protected agreement preview opens its owned blank tab synchronously, detaches opener immediately,
+then fetches the PDF through the bearer client and navigates to an ephemeral blob URL. Failure closes
+only that owned preview; blocked popups leave the retry/download controls reachable.

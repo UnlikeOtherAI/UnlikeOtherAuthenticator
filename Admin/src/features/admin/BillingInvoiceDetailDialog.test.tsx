@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { BillingInvoice } from '../../schemas/billing-contracts';
+import { billingContractAdminService } from '../../services/billing-contract-admin-service';
 import { BillingInvoiceDetailDialog } from './BillingInvoiceDetailDialog';
 
 const mocks = vi.hoisted(() => ({
@@ -119,10 +120,14 @@ function invoice(overrides: Partial<BillingInvoice> = {}): BillingInvoice {
 
 describe('BillingInvoiceDetailDialog server-authored actions', () => {
   beforeEach(() => {
+    vi.spyOn(billingContractAdminService, 'getManualCreditNote').mockResolvedValue(null);
     Object.values(mocks).forEach((mock) => mock.mockReset());
   });
 
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
 
   it('requires confirmation before issuing a ready draft', async () => {
     const user = userEvent.setup();

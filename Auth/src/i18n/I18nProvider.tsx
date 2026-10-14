@@ -76,7 +76,7 @@ export function I18nProvider(props: {
       ? language
       : (initial.languages[0] ?? 'en');
     if (safeLanguage === 'en') return;
-    if (!props.configUrl) return;
+    if (!props.configUrl || remoteByLanguage[safeLanguage]) return;
 
     const builtIn =
       safeLanguage in translationsByLanguage
@@ -85,7 +85,7 @@ export function I18nProvider(props: {
     const existing = remoteByLanguage[safeLanguage] ?? builtIn;
 
     const needsAi =
-      !builtIn ||
+      !existing ||
       enKeys.some((k) => {
         const v = (existing as Record<string, unknown> | null)?.[k];
         return typeof v !== 'string' || !v.trim();

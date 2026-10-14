@@ -47,24 +47,51 @@ export function ApiKeysPage() {
       <PageHeader
         title="Automation API keys"
         description="Admin API keys for terminal/CI control of feature flags and kill switches."
-        actions={<Button icon="plus" variant="primary" onClick={() => setCreateOpen(true)}>Create API key</Button>}
+        actions={
+          <Button icon="plus" variant="primary" onClick={() => setCreateOpen(true)}>
+            Create API key
+          </Button>
+        }
       />
       <Card>
-        {isError ? <QueryError retry={refetch} /> : isLoading ? (
+        {isError ? (
+          <QueryError retry={refetch} />
+        ) : isLoading ? (
           <p className="px-5 py-6 text-sm text-gray-400">Loading API keys...</p>
         ) : (
           <>
-            <DataTable headers={['Name', 'Key prefix', 'Last used', 'Expires', 'Status', 'Created by', 'Action']}>
+            <DataTable
+              headers={[
+                'Name',
+                'Key prefix',
+                'Last used',
+                'Expires',
+                'Status',
+                'Created by',
+                'Action',
+              ]}
+            >
               {pageItems.map((key) => {
                 const status = keyStatus(key);
                 const revoked = Boolean(key.revoked_at);
                 return (
                   <tr key={key.id}>
-                    <Td><Link className="font-medium text-indigo-700 hover:underline" to={`?${new URLSearchParams({ ...Object.fromEntries(state.params), selected: key.id })}`}>{key.name}</Link></Td>
-                    <Td><code className="text-xs">{key.key_prefix}</code></Td>
+                    <Td>
+                      <Link
+                        className="font-medium text-indigo-700 hover:underline"
+                        to={`?${new URLSearchParams({ ...Object.fromEntries(state.params), selected: key.id })}`}
+                      >
+                        {key.name}
+                      </Link>
+                    </Td>
+                    <Td>
+                      <code className="text-xs">{key.key_prefix}</code>
+                    </Td>
                     <Td className="text-xs text-gray-400">{formatDate(key.last_used_at)}</Td>
                     <Td className="text-xs text-gray-400">{formatDate(key.expires_at)}</Td>
-                    <Td><Badge variant={status.variant}>{status.label}</Badge></Td>
+                    <Td>
+                      <Badge variant={status.variant}>{status.label}</Badge>
+                    </Td>
                     <Td className="text-xs text-gray-400">{key.created_by_email ?? '—'}</Td>
                     <Td>
                       <Button
@@ -80,14 +107,37 @@ export function ApiKeysPage() {
                 );
               })}
               {keys.length === 0 ? (
-                <tr><Td colSpan={7} className="text-sm text-gray-400">No API keys yet.</Td></tr>
+                <tr>
+                  <Td colSpan={7} className="text-sm text-gray-400">
+                    No API keys yet.
+                  </Td>
+                </tr>
               ) : null}
             </DataTable>
             <PaginationFooter {...pagination} />
           </>
         )}
       </Card>
-      {selected ? <Card className="mt-4 p-5"><h2 className="font-semibold">{selected.name}</h2><dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">{[['ID',selected.id],['Prefix',selected.key_prefix],['Created',formatDate(selected.created_at)],['Created by',selected.created_by_email ?? 'Unknown'],['Last used',formatDate(selected.last_used_at)],['Expires',formatDate(selected.expires_at)]].map(([label,value]) => <div key={label}><dt className="text-gray-500">{label}</dt><dd className="break-all">{value}</dd></div>)}</dl></Card> : null}
+      {selected ? (
+        <Card className="mt-4 p-5">
+          <h2 className="font-semibold">{selected.name}</h2>
+          <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+            {[
+              ['ID', selected.id],
+              ['Prefix', selected.key_prefix],
+              ['Created', formatDate(selected.created_at)],
+              ['Created by', selected.created_by_email ?? 'Unknown'],
+              ['Last used', formatDate(selected.last_used_at)],
+              ['Expires', formatDate(selected.expires_at)],
+            ].map(([label, value]) => (
+              <div key={label}>
+                <dt className="text-gray-500">{label}</dt>
+                <dd className="break-all">{value}</dd>
+              </div>
+            ))}
+          </dl>
+        </Card>
+      ) : null}
 
       <CreateApiKeyModal
         isOpen={createOpen}
@@ -106,9 +156,11 @@ export function ApiKeysPage() {
         onClose={() => setPendingRevoke(null)}
         title="Revoke API key?"
         widthClassName="max-w-sm"
-        footer={(
+        footer={
           <>
-            <Button disabled={revoke.isPending} onClick={() => setPendingRevoke(null)}>Cancel</Button>
+            <Button disabled={revoke.isPending} onClick={() => setPendingRevoke(null)}>
+              Cancel
+            </Button>
             <Button
               variant="danger"
               disabled={!pendingRevoke || revoke.isPending}
@@ -120,13 +172,17 @@ export function ApiKeysPage() {
               Revoke key
             </Button>
           </>
-        )}
+        }
       >
         <p className="text-sm text-gray-500">
-          Revoking <span className="font-semibold">{pendingRevoke?.name}</span> immediately blocks any terminal or CI
-          job using it. This cannot be undone.
+          Revoking <span className="font-semibold">{pendingRevoke?.name}</span> immediately blocks
+          any terminal or CI job using it. This cannot be undone.
         </p>
-        {revoke.isError ? <p role="alert" className="mt-3 text-sm text-red-700">Could not revoke this key. Try again.</p> : null}
+        {revoke.isError ? (
+          <p role="alert" className="mt-3 text-sm text-red-700">
+            Could not revoke this key. Try again.
+          </p>
+        ) : null}
       </Modal>
     </>
   );
@@ -144,7 +200,7 @@ function CreateApiKeyModal({
   const [name, setName] = useState('');
   const [expiresAt, setExpiresAt] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const create = useCreateApiKeyMutation();
+  const create = useCreateApiKeyMutation(onCreated, isOpen);
 
   useEffect(() => {
     if (isOpen) {
@@ -166,7 +222,6 @@ function CreateApiKeyModal({
     create.mutate(
       { name: trimmed, expiresAt: expiry },
       {
-        onSuccess: onCreated,
         onError: (err) => setError(err instanceof Error ? err.message : 'Create failed'),
       },
     );
@@ -179,20 +234,32 @@ function CreateApiKeyModal({
       isDirty={Boolean(name || expiresAt)}
       onClose={onClose}
       title="Create API key"
-      footer={(
+      footer={
         <>
           <Button icon="plus" variant="primary" disabled={create.isPending} onClick={submit}>
             Create key
           </Button>
         </>
-      )}
+      }
     >
       <div className="space-y-4">
-        <FieldShell label="Name" hint="A label so you can recognise this key later (e.g. “CI deploy bot”)." error={error ?? undefined}>
-          <TextField value={name} onChange={(event) => setName(event.target.value)} placeholder="CI deploy bot" />
+        <FieldShell
+          label="Name"
+          hint="A label so you can recognise this key later (e.g. “CI deploy bot”)."
+          error={error ?? undefined}
+        >
+          <TextField
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="CI deploy bot"
+          />
         </FieldShell>
         <FieldShell label="Expiry (optional)" hint="Leave empty for a key that never expires.">
-          <TextField type="date" value={expiresAt} onChange={(event) => setExpiresAt(event.target.value)} />
+          <TextField
+            type="date"
+            value={expiresAt}
+            onChange={(event) => setExpiresAt(event.target.value)}
+          />
         </FieldShell>
       </div>
     </Modal>
@@ -230,17 +297,17 @@ function ApiKeyRevealModal({
       onClose={onClose}
       title="API key created"
       widthClassName="max-w-2xl"
-      footer={(
+      footer={
         <Button variant="primary" onClick={onClose}>
           I have copied my key
         </Button>
-      )}
+      }
     >
       {createdKey ? (
         <div className="space-y-4">
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-            Copy this key now — it is shown <span className="font-semibold">only once</span> and cannot be retrieved
-            again. If you lose it, revoke it and create a new one.
+            Copy this key now — it is shown <span className="font-semibold">only once</span> and
+            cannot be retrieved again. If you lose it, revoke it and create a new one.
           </div>
           <CopyBlock label="API key" value={createdKey.key} sensitive />
           <details>
@@ -263,7 +330,15 @@ function ApiKeyRevealModal({
   );
 }
 
-function CopyBlock({ label, value, sensitive }: { label: string; value: string; sensitive?: boolean }) {
+function CopyBlock({
+  label,
+  value,
+  sensitive,
+}: {
+  label: string;
+  value: string;
+  sensitive?: boolean;
+}) {
   const [copied, setCopied] = useState(false);
 
   async function copy() {
@@ -280,7 +355,9 @@ function CopyBlock({ label, value, sensitive }: { label: string; value: string; 
     <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
       <div className="mb-1 flex items-center justify-between gap-2">
         <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</span>
-        <Button icon="copy" onClick={copy}>{copied ? 'Copied' : 'Copy'}</Button>
+        <Button icon="copy" onClick={copy}>
+          {copied ? 'Copied' : 'Copy'}
+        </Button>
       </div>
       <pre
         className={
