@@ -321,3 +321,55 @@ and small cached serial tests ran on Maxis with a 2 GiB heap; no typecheck, buil
 browser scenario has run for this U-10 change. Allocation is required for those next checks and
 screenshot review. Prior 57455d4d evidence does not validate these new changes. All items remain
 open for parent acceptance; no PR/main merge or other worktree write was performed.
+
+## Allocated U-10 validation of 019b6fa9
+
+Application input remained fixed at **019b6fa98956d9a7271be24b27af8e20090e65c9** on
+`fix/sol-audit-admin-20261014`, dedicated Maxis worktree, Full Access / approval never. Initial
+git status was clean; host load was 25 GiB free / 0% CPU. The allocated heavy slot ran serially
+with `NODE_OPTIONS=--max-old-space-size=5120`, one browser worker. No API-owned source, database,
+native build or CI workflow was changed. No third compiler or other worktree writer was started.
+
+Fresh commands:
+
+```powershell
+$env:NODE_OPTIONS='--max-old-space-size=5120'
+pnpm --filter @uoa/admin typecheck
+pnpm --filter @uoa/admin build
+$env:PLAYWRIGHT_BROWSERS_PATH=Join-Path (Get-Location) 'node_modules/.cache/ms-playwright'
+pnpm --filter @uoa/admin exec playwright test audit-members.flow.ts --config=playwright.audit.config.ts --project=desktop-admin --project=mobile-admin
+pnpm exec eslint Admin/e2e/audit-members.flow.ts
+git diff --check
+```
+
+All passed. Admin typecheck covers the member DTO, typed mock factory and src consumers/tests;
+there is no new workspace declaration package or shared dependency build involved in this change.
+Admin build retains the existing nonfatal >500 kB Vite chunk warning. The prior **24/24 focused
+tests** on this exact application input were not repeated, nor were unrelated Auth/lifecycle browser
+journeys. Final scoped browser result: **2 passed, 0 failed, 0 skipped, 0 retries**, 9.0 seconds.
+The preceding 2/2 pass in 9.2 seconds prompted stronger capture/viewport assertions, not a product
+change. Browser-fixture additions check unknown state and removed-member team navigation explicitly.
+
+The desktop and Pixel 7 journeys verify active account + removed membership, disabled account +
+active membership, active + deactivated, owner + active and a missing membership field displayed
+as Unavailable. Each row preserves its server-returned role and has no invented mutation action.
+The removed member's Backend link reaches the canonical team; the owner link remains canonical;
+the disabled user's record reaches Security and the existing Reactivate access control. No
+reactivation or other authority-changing write is submitted. The test uses coherent synthetic
+organisation list/detail, user and lifecycle responses, not the live API/provider.
+
+All **six settled screenshots** were visually inspected and preserved in the
+[019b6fa9 evidence index](../audit-evidence/2026-10-14-admin-auth/019b6fa9/README.md). On phone,
+the existing table requires horizontal scrolling and the lower rows require vertical scrolling.
+Both status columns are legible/reachable together; separate captures show the owner/disabled
+rows and the removed/deactivated/unknown rows. User/team navigation remains reachable after
+scrolling. Recovery is explicitly scrolled into the viewport before capture. No new product
+usability failure was established; application code remained unchanged during this validation.
+
+The existing audit config health-polls both local server URLs before tests; the final scenario also
+asserts HTTP 200 from both 5291/5292 on each viewport. Both ports were initially free. Playwright
+stopped only its owned servers. Final checks found no listeners on those ports and no
+compiler/Vite/esbuild/Chromium children for this worktree. **UOA Admin explicitly RELEASED its
+heavy slot after all children finished.** UI suites remain local-only. U-10 and all other audit
+items remain open for parent acceptance; combined fd54d5fa API + Admin/CI acceptance belongs to
+the parent. No PR/main merge was performed.
