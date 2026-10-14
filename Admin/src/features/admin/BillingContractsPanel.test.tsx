@@ -8,6 +8,7 @@ import type { ReactElement } from 'react';
 import { MemoryRouter, useLocation } from 'react-router';
 
 import type { BillingService } from '../../schemas/billing';
+import { billingContractAdminService } from '../../services/billing-contract-admin-service';
 import { BillingContractsPanel } from './BillingContractsPanel';
 
 const state = vi.hoisted(() => {
@@ -201,6 +202,8 @@ vi.mock('./admin-queries', () => ({
 }));
 
 vi.mock('./billing-contract-queries', () => ({
+  useBillingCycleCorrectionsQuery: () => ({ data: [], isError: false, isLoading: false }),
+  usePrepareBillingCycleCorrectionMutation: () => mutation(vi.fn(), vi.fn()),
   useBillingContractsQuery: () => ({
     data: [
       state.contract,
@@ -277,6 +280,7 @@ function render(ui: ReactElement, entry = '/billing?section=contracts&contract=c
 
 describe('BillingContractsPanel', () => {
   beforeEach(() => {
+    vi.spyOn(billingContractAdminService, 'getManualCreditNote').mockResolvedValue(null);
     state.calculate.mockReset().mockResolvedValue(state.invoice);
     state.calculateReset.mockReset();
     state.issue.mockReset();
@@ -287,7 +291,10 @@ describe('BillingContractsPanel', () => {
     state.paymentReset.mockReset();
   });
 
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
 
   it('shows contract terms, invoice totals, and lifecycle affordances without private usage data', async () => {
     const user = userEvent.setup();
@@ -336,6 +343,7 @@ describe('BillingContractsPanel', () => {
       );
     });
     expect((screen.getByLabelText('Billing month') as HTMLInputElement).value).toBe(closedMonth);
+    await user.type(screen.getByLabelText('Tax legal basis'), 'Outside the scope of UK VAT');
     await user.click(screen.getByRole('button', { name: 'Calculate draft' }));
 
     await waitFor(() =>
@@ -343,6 +351,9 @@ describe('BillingContractsPanel', () => {
         contractId: 'contract-1',
         issuerProfileId: 'issuer-1',
         billingMonth: closedMonth,
+        taxTreatment: 'no_tax_charged',
+        taxRatePercent: '0',
+        taxLegalBasis: 'Outside the scope of UK VAT',
       }),
     );
     const detail = await screen.findByRole('dialog', { name: 'UOA-2026-000001' });
@@ -359,6 +370,7 @@ describe('BillingContractsPanel', () => {
       <BillingContractsPanel services={services} />,
       '/billing?section=contracts&contract=contract-2',
     );
+    await user.type(screen.getByLabelText('Tax legal basis'), 'Outside the scope of UK VAT');
     await user.click(screen.getByRole('button', { name: 'Calculate draft' }));
     await waitFor(() =>
       expect(state.calculate).toHaveBeenCalledWith(

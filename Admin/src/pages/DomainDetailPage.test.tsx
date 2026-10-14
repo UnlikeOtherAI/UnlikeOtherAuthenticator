@@ -56,7 +56,7 @@ it('does not carry email drafts into another domain with the same friendly label
 
 it('closes a domain-bound public-key editor instead of retargeting it', async () => {
   mount('keys');
-  await userEvent.click(screen.getByRole('button', { name: 'Add signing key', exact: true }));
+  await userEvent.click(screen.getByRole('button', { name: 'Add signing key' }));
   await userEvent.type(screen.getByRole('textbox'), 'old-domain-public-key-draft');
   await userEvent.click(screen.getByRole('link', { name: 'Switch website' }));
   expect(screen.queryByRole('dialog')).toBeNull();

@@ -6,7 +6,7 @@ export default defineConfig({
   timeout: 30000,
   outputDir: './e2e/artifacts/audit',
   reporter: [['list']],
-  use: { headless: true, trace: 'retain-on-failure' },
+  use: { channel: 'chromium', headless: true, trace: 'retain-on-failure' },
   projects: ['desktop', 'mobile'].flatMap((name) => [
     {
       name: name + '-auth',

@@ -17,16 +17,17 @@ test.beforeEach(async ({ page }) => {
 test('outage recovery preserves login and expiry returns to a reachable login screen', async ({
   page,
 }, info) => {
-  let attempts = 0;
+  let recovering = false;
   await page.route('**/internal/admin/session', (route) =>
     route.fulfill({
-      status: ++attempts === 1 ? 503 : 200,
+      status: recovering ? 200 : 503,
       json: { adminUser: { email: 'operator@example.test' } },
     }),
   );
   await page.goto('/dashboard');
   await expect(page.getByRole('status')).toContainText('Connecting to UOA');
   expect(await page.evaluate(() => sessionStorage.getItem('uoa-admin-session'))).not.toBeNull();
+  recovering = true;
   await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
   await page.evaluate(() =>
     sessionStorage.setItem(

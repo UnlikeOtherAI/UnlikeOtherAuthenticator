@@ -40,6 +40,7 @@ test('remote translation settles; email code, resend, verify and registration pr
   let translations = 0;
   const calls: string[] = [];
   await page.route('**/i18n/**', (route) => {
+    if (!new URL(route.request().url()).pathname.startsWith('/i18n/')) return route.continue();
     translations++;
     return route.fulfill({ json: en });
   });
@@ -71,7 +72,10 @@ test('remote translation settles; email code, resend, verify and registration pr
 test('arbitrary HTTPS handoff remains on login while exact native callback retains handoff', async ({
   page,
 }, info) => {
-  await page.route('**/i18n/**', (route) => route.fulfill({ json: en }));
+  await page.route('**/i18n/**', (route) => {
+    if (!new URL(route.request().url()).pathname.startsWith('/i18n/')) return route.continue();
+    return route.fulfill({ json: en });
+  });
   await page.goto('/?handoff_target=https%3A%2F%2Fattacker.example%2F');
   await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
   expect(new URL(page.url()).hostname).toBe('127.0.0.1');

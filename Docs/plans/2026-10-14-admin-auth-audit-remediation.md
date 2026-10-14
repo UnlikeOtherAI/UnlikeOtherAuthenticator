@@ -90,3 +90,61 @@ compatibility cases, 56 Auth cases across selected files and 5 translation servi
 after correcting the existing NativeAppsPage test's partial mock to preserve the new error export.
 Scoped ESLint and git whitespace checks pass. Playwright discovers 12 desktop/mobile journeys.
 No new servers/databases or heavy compiler jobs started while awaiting the allocated slot.
+
+## Allocated Maxis validation
+
+The restart used the assigned worktree on Maxis, Full Access (`danger-full-access`), approval
+policy `never`; a temporary file was created, read and deleted in that worktree. Git remained on
+`fix/sol-audit-admin-20261014`. Before heavy work, Maxis had about 25 GiB free and negligible CPU
+load; Fedora had about 7 GiB available with negligible load. All compilers ran sequentially in
+the allocated slot with `NODE_OPTIONS=--max-old-space-size=5120`. No database, migration or remote
+Minis build was used. API tests inject storage and do not connect to a database.
+
+Passed on Maxis:
+
+- Scoped Prisma client generation.
+- Builds of `auth-ui-strings`, `slug`, and `billing-statement-protocol`, including its artifact check.
+- API, Auth and Admin typechecks and builds (Auth client and SSR). Admin retains the nonfatal Vite
+  large-chunk warning. A test-only unsupported `getByRole` option was removed before typechecking.
+- All 12 discovered audit browser journeys, one worker, Chromium 145 headless: six desktop and six
+  Pixel 7 mobile journeys. `pnpm --filter @uoa/admin exec playwright test
+  --config=playwright.audit.config.ts` completed in 26.9 seconds with no retries or skips.
+
+The browser run covers remote partial translation settling and email-code/resend OAuth state;
+arbitrary handoff refusal, registered native handoff and registered HTTPS cancellation; bootstrap
+outage recovery and expiry returning to a reachable login; native create/icon-failure/retry using
+one saved app; one-time automation key close/navigation; and authenticated PDF blob bytes,
+detached opener, failed-preview tab cleanup and blocked-popup recovery with a reachable source.
+Desktop and mobile screenshots for each journey were visually inspected. Dialog save/close actions
+remain reachable, synthetic credential text wraps, and recovery/handoff/code-error screens remain
+legible. PDF source actions remain reachable by horizontal table scrolling on mobile.
+
+Initial browser failures were fixture/environment defects: pinned Chromium was absent; an overly
+broad i18n route intercepted Vite source modules; the outage fixture recovered during StrictMode's
+second fetch before its assertion; and the old headless shell downloaded PDFs instead of rendering
+them. The pinned browser was installed inside ignored worktree cache, routes now match API paths,
+the outage fixture waits for the recovery assertion, and the config uses full Chromium new headless.
+No product authorization or PDF lifecycle was weakened to satisfy the tests.
+
+Evidence: [reviewed screenshot index](../audit-evidence/2026-10-14-admin-auth/README.md).
+These browser results supersede the pending browser notes above for U-14, U-16, U-17, U-18,
+U-19 and U-34. Shared-source builds resolve the U-13 build note. U-33 domain switching is verified
+by component journeys, not a separate browser journey. No live provider or production endpoint was
+exercised; browser API responses are synthetic fixtures. Native provider handshakes and deployments
+remain integration responsibilities.
+
+U-35 exact-bearer logout remains with the existing API owner and was not duplicated. U-28 is not
+closed here: capability counterevidence must be considered by its owner. U-36 remains an
+unestablished exploit hypothesis, with normalization regression evidence rather than a claimed
+security closure. Nessie name/email are read-only; no email-save flow was added. Every checklist
+item remains open pending parent acceptance. No PR or main merge is authorized in this branch.
+
+Final serial regression run: Admin **49 files / 167 tests passed**, Auth **25 files / 162 tests
+passed**, translation API **1 file / 5 tests passed**. No skips. Broad Admin validation initially
+exposed stale billing fixtures: missing correction query/mutation exports and omitted now-required
+tax attestation. The fixtures now supply the exact explicit tax inputs and mock the credit-note
+lookup instead of attempting localhost API calls. No billing runtime code changed. Final Admin
+typecheck, scoped ESLint and `git diff --check` passed after those fixture repairs.
+
+The browser servers on 5291/5292 were verified stopped after validation. This writer explicitly
+released its allocated heavy compiler slot; no heavy job or database remains owned by this work.
