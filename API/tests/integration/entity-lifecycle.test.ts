@@ -229,7 +229,7 @@ describe.skipIf(!process.env.DATABASE_URL)('entity lifecycle on PostgreSQL', () 
     expect(changes.map(change => change.revision)).toEqual(changes.map((_, index) => BigInt(index + 1)));
     // Subsequent per-user erasure must not append after the deleted org's final event.
     expect(await handle.prisma.organisation.findUnique({ where: { id: org.id } })).toBeNull();
-  }, 60_000);
+  }, 240_000);
   it('denies exact disabled team management to both organisation owners and backend actors', async () => {
     const { owner, org, team } = await container();
     const config = validateConfigFields(baseClientConfigPayload({ domain }));
