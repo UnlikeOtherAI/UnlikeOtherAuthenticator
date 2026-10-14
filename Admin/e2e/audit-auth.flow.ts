@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { en } from '../../packages/auth-ui-strings/src/index';
+import { settledScreenshot } from './audit-screenshot';
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() =>
     Object.assign(window, {
@@ -60,7 +61,7 @@ test('remote translation settles; email code, resend, verify and registration pr
   await page.getByRole('button', { name: 'Verify', exact: true }).click();
   await expect.poll(() => calls.length).toBe(3);
   await expect(page.getByText('Could not verify the code. Please try again.')).toBeVisible();
-  await page.screenshot({ path: info.outputPath('email-code-retry.png'), fullPage: true });
+  await settledScreenshot(page, info, 'email-code-retry.png');
   await page.goto('/?state=opaque-state');
   await page.getByRole('button', { name: 'Create an account', exact: true }).click();
   await page.getByLabel('Email', { exact: true }).fill('new@example.test');
@@ -83,7 +84,7 @@ test('arbitrary HTTPS handoff remains on login while exact native callback retai
     '/?handoff_target=example%3A%2F%2Foauth%2Fcallback%3Fcode%3Done-use%26state%3Dopaque',
   );
   await expect(page.getByRole('button', { name: 'Open the app' })).toBeVisible();
-  await page.screenshot({ path: info.outputPath('native-handoff.png'), fullPage: true });
+  await settledScreenshot(page, info, 'native-handoff.png');
   await page.route('https://product.example/**', (route) =>
     route.fulfill({ contentType: 'text/html', body: '<p>Returned to product</p>' }),
   );

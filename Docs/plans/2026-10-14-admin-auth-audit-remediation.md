@@ -199,3 +199,177 @@ and dependency-graph verification, not a new CI/container run.
 
 All issue boxes remain open pending parent acceptance, including U-18. U-28/U-36 dispositions and
 normal HTTPS OAuth/PDF behavior remain as recorded above.
+
+## Allocated validation of 57455d4d (U-18 / U-37)
+
+Validated application source **57455d4dab448999a8d7b8b44a9877515e7cc9be** in the same dedicated
+branch/worktree on **Maxis**, Full Access and approval never. Parent reports integration as
+22f9634a; this worktree validates its actual 57455d4d source, not an unverified integration revision.
+Fresh local load was 24.5 GiB free / 2% CPU. One allocated heavy job at a time,
+`NODE_OPTIONS=--max-old-space-size=5120`, with one browser/test worker. Nothing ran remotely on
+Minis or against a database, production endpoint or live provider. API/logout/U1 work remains with
+its existing owner. No application source changed during this validation; additions are local
+browser fixtures, screenshot settling, download assertions and evidence.
+
+- [ ] **U-37:** Late sign-in restoration after explicit clearing was established and corrected in
+  57455d4d. Fresh browser assertions now prove rejection without storage restoration, legitimate
+  fresh sign-in afterward, and same-owner StrictMode completion with exactly one validation call.
+  Provider-unmount protection also passes in the focused rendered component suite. Parent acceptance
+  is still required; this checkbox remains open.
+
+Fresh serial commands and results:
+
+```powershell
+$env:NODE_OPTIONS='--max-old-space-size=5120'
+pnpm --filter @uoa/admin typecheck
+pnpm --filter @uoa/admin build
+pnpm --filter @unlikeotherai/auth-ui-strings build
+pnpm --filter @uoa/auth typecheck
+pnpm --filter @uoa/auth build
+```
+
+All five commands passed. Auth build includes client and SSR; catalogue output is freshly built
+before Auth. Admin build retains its nonfatal >500 kB chunk warning. The application typechecks
+cover src, while browser fixture code is transformed by Vite and checked with scoped ESLint. No
+API/Prisma/native rebuild was needed for this frontend-only correction; those scopes were unchanged.
+
+```powershell
+pnpm --filter @uoa/admin exec vitest run src/pages/BillingPage.test.tsx src/features/admin/DomainOverviewTab.test.tsx src/features/auth/admin-session.test.tsx src/features/admin/credential-cache.test.tsx src/pages/AdminAuthCallbackPage.test.tsx src/pages/DomainDetailPage.test.tsx src/app/AppProviders.test.tsx src/features/auth/admin-session-origin.test.tsx --maxWorkers=1 --reporter=dot
+$env:PLAYWRIGHT_BROWSERS_PATH=Join-Path (Get-Location) 'node_modules/.cache/ms-playwright'
+pnpm --filter @uoa/admin exec playwright test --config=playwright.audit.config.ts
+```
+
+Focused rendered regression: **8 files, 31 passed, 0 failed, 0 skipped**, 18.47 seconds.
+Final headless Chromium run: **26 passed, 0 failed, 0 skipped, 0 retries**, 40.2 seconds, 13 desktop
+and 13 Pixel 7 mobile journeys. An initial 26/26 pass in 43.8 seconds preceded screenshot settling;
+the final evidence comes from the fresh rerun after adding image decoding/font readiness. These
+results replace the pending follow-up validation note above; older 12-case results are historical.
+Scoped ESLint over the six audit flow/config/helper files and whitespace checks passed.
+
+The final browser suite repeats the original 12 journeys and adds 14 lifecycle journeys. Real
+pages exercise delayed domain rotation across Credentials → Overview history navigation, preserve
+the friendly-name draft, reject stale reveal, permit active reveal/close, and navigate to another
+selected domain without carrying a secret. Billing's delayed key cannot reopen after tab history
+navigation; a subsequent active issuance still reveals and closes normally. Automation's delayed
+key cannot reopen after explicit session clearing tears down the auth shell. The existing PDF
+journey additionally completes a Source download with a .pdf filename and no download failure,
+alongside preview bytes, null opener and failed/blocked preview recovery. Registered HTTPS OAuth
+cancellation, email-state recovery and outage/expiry journeys all passed freshly.
+
+Local-only lifecycle fixtures exercise the real product/automation hooks under StrictMode across
+external close/reopen, unmount/remount and explicit session clearing, asserting no plaintext in
+reveals, cache data or browser storage. They also exercise the real AdminSessionProvider for U-37.
+These are mechanism tests with fixture controls, not additional production controls or claims that
+a pending production dialog permits dismissal: pending dismissal remains blocked. The browser
+session-clear cases validate the logout/expiry notification and teardown boundary; they do not
+claim live server logout/revocation verification. Selected-product switching and provider-unmount
+variants are additionally covered by the fresh component tests.
+
+All **26 settled screenshots** were visually inspected and preserved in the
+[57455d4d evidence index](../audit-evidence/2026-10-14-admin-auth/57455d4d/README.md). Active secrets
+wrap legibly and close actions remain reachable on both viewports. Mobile PDF actions require
+horizontal table scrolling, as before. Test-fixture screens are labelled distinctly. No new product
+usability failure was established; the partially decoded logo was corrected in capture timing.
+Browser suites remain local-only; no CI workflow was added or changed.
+
+Both assigned servers returned HTTP 200 during the run. Playwright stopped its own servers after
+each run. Final checks found no listeners on 5291/5292 and no compiler/Vite/esbuild/Chromium process
+for this worktree. **UOA Admin explicitly RELEASED its allocated heavy slot after all children
+finished.** All audit items remain open pending parent acceptance; no PR/main merge was performed.
+
+## Dependent U-10 Members usability completion
+
+- [ ] **U-10:** Frontend changes prepared against the parent-reviewed API contract in fd54d5fa.
+  `formatAdminOrganisation` returns current account lifecycle in status and independent organisation
+  membership in membershipStatus. The exact commit and Prisma enums were inspected read-only.
+  The Admin service passes these DTO fields through, without coercion or a local identity store.
+  The dedicated branch still has its preceding API baseline; fd54d5fa must be included by parent
+  integration before treating the combined behavior as implemented server-side.
+
+OrganisationMember now declares membershipStatus as active/deactivated/removed. The existing
+OrganisationDetailPage Members table displays separate Account status and Membership columns,
+alongside the existing role, teams and recent-login information. No member is filtered out or
+labelled active based on the other state. An older payload missing membershipStatus displays
+Unavailable. Synthetic mock factories now include the independent field, including add-to-team
+fixture responses. No API-owned file was changed.
+
+Account-disabled and membership-removed rows retain their canonical user/team navigation, owner
+roles remain server-owned, and the existing read-only Members surface gained no mutation controls.
+Lifecycle recovery stays on the user Security surface with existing server authorization. This
+change neither reactivates a removed membership nor grants a disabled account access; no owner,
+removal, deletion or disabled-account authorization rule was changed.
+
+Focused component coverage includes active account + removed membership; disabled account + active
+membership; active + deactivated; owner + active; deleted + removed; banned + deactivated; deleting
++ removed; missing membership state; and the empty table. Every populated case keeps its role,
+team link and user-record navigation, with no new row action. Service regression checks list/detail
+payloads retain both fields. Existing Directory navigation cases are included.
+
+Maxis focused command: `pnpm --filter @uoa/admin exec vitest run
+src/pages/OrganisationDetailPage.test.tsx src/pages/DirectoryPages.test.tsx
+src/services/admin-service.test.ts --maxWorkers=1 --reporter=dot` — **3 files / 24 passed,
+0 failed, 0 skipped**, 3.76 seconds. Scoped ESLint and `git diff --check` passed.
+
+Prepared local browser scenario: audit-members.flow.ts, desktop and Pixel 7 through the existing
+audit config. It asserts both status columns on owner/disabled/removed/deactivated rows, preserves
+the user-record route and reaches the existing Reactivate access control without submitting any
+write. Fixture account state, organisation list/detail and lifecycle response agree. It will capture
+the settled Members table and disabled-account recovery surface. UI suites remain outside CI.
+
+No heavy compiler slot is allocated to this writer at this stage. Only source review, scoped lint
+and small cached serial tests ran on Maxis with a 2 GiB heap; no typecheck, build, browser server or
+browser scenario has run for this U-10 change. Allocation is required for those next checks and
+screenshot review. Prior 57455d4d evidence does not validate these new changes. All items remain
+open for parent acceptance; no PR/main merge or other worktree write was performed.
+
+## Allocated U-10 validation of 019b6fa9
+
+Application input remained fixed at **019b6fa98956d9a7271be24b27af8e20090e65c9** on
+`fix/sol-audit-admin-20261014`, dedicated Maxis worktree, Full Access / approval never. Initial
+git status was clean; host load was 25 GiB free / 0% CPU. The allocated heavy slot ran serially
+with `NODE_OPTIONS=--max-old-space-size=5120`, one browser worker. No API-owned source, database,
+native build or CI workflow was changed. No third compiler or other worktree writer was started.
+
+Fresh commands:
+
+```powershell
+$env:NODE_OPTIONS='--max-old-space-size=5120'
+pnpm --filter @uoa/admin typecheck
+pnpm --filter @uoa/admin build
+$env:PLAYWRIGHT_BROWSERS_PATH=Join-Path (Get-Location) 'node_modules/.cache/ms-playwright'
+pnpm --filter @uoa/admin exec playwright test audit-members.flow.ts --config=playwright.audit.config.ts --project=desktop-admin --project=mobile-admin
+pnpm exec eslint Admin/e2e/audit-members.flow.ts
+git diff --check
+```
+
+All passed. Admin typecheck covers the member DTO, typed mock factory and src consumers/tests;
+there is no new workspace declaration package or shared dependency build involved in this change.
+Admin build retains the existing nonfatal >500 kB Vite chunk warning. The prior **24/24 focused
+tests** on this exact application input were not repeated, nor were unrelated Auth/lifecycle browser
+journeys. Final scoped browser result: **2 passed, 0 failed, 0 skipped, 0 retries**, 9.0 seconds.
+The preceding 2/2 pass in 9.2 seconds prompted stronger capture/viewport assertions, not a product
+change. Browser-fixture additions check unknown state and removed-member team navigation explicitly.
+
+The desktop and Pixel 7 journeys verify active account + removed membership, disabled account +
+active membership, active + deactivated, owner + active and a missing membership field displayed
+as Unavailable. Each row preserves its server-returned role and has no invented mutation action.
+The removed member's Backend link reaches the canonical team; the owner link remains canonical;
+the disabled user's record reaches Security and the existing Reactivate access control. No
+reactivation or other authority-changing write is submitted. The test uses coherent synthetic
+organisation list/detail, user and lifecycle responses, not the live API/provider.
+
+All **six settled screenshots** were visually inspected and preserved in the
+[019b6fa9 evidence index](../audit-evidence/2026-10-14-admin-auth/019b6fa9/README.md). On phone,
+the existing table requires horizontal scrolling and the lower rows require vertical scrolling.
+Both status columns are legible/reachable together; separate captures show the owner/disabled
+rows and the removed/deactivated/unknown rows. User/team navigation remains reachable after
+scrolling. Recovery is explicitly scrolled into the viewport before capture. No new product
+usability failure was established; application code remained unchanged during this validation.
+
+The existing audit config health-polls both local server URLs before tests; the final scenario also
+asserts HTTP 200 from both 5291/5292 on each viewport. Both ports were initially free. Playwright
+stopped only its owned servers. Final checks found no listeners on those ports and no
+compiler/Vite/esbuild/Chromium children for this worktree. **UOA Admin explicitly RELEASED its
+heavy slot after all children finished.** UI suites remain local-only. U-10 and all other audit
+items remain open for parent acceptance; combined fd54d5fa API + Admin/CI acceptance belongs to
+the parent. No PR/main merge was performed.

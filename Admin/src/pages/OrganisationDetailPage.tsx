@@ -108,7 +108,7 @@ export function OrganisationDetailPage() {
           <CardHeader>
             <span className="text-sm font-semibold text-gray-900">Members</span>
           </CardHeader>
-          <DataTable headers={['User', 'Role', 'Teams', 'Last Login']}>
+          <DataTable headers={['User', 'Role', 'Account status', 'Membership', 'Teams', 'Last Login']}>
             {memberPageItems.map((member) => (
               <tr
                 key={member.id}
@@ -131,6 +131,12 @@ export function OrganisationDetailPage() {
                   </div>
                 </Td>
                 <Td><StatusBadge status={member.role} /></Td>
+                <Td><StatusBadge status={member.status} /></Td>
+                <Td>{member.membershipStatus ? (
+                  <Badge variant={member.membershipStatus === 'active' ? 'green' : member.membershipStatus === 'deactivated' ? 'amber' : 'slate'}>
+                    {member.membershipStatus}
+                  </Badge>
+                ) : <span className="text-xs text-gray-500">Unavailable</span>}</Td>
                 <Td>
                   <div className="flex flex-wrap gap-1">
                     {member.teams.map((teamName) => {
@@ -143,7 +149,7 @@ export function OrganisationDetailPage() {
 
               </tr>
             ))}
-          {memberPageItems.length === 0 ? <tr><Td colSpan={4}>No members found.</Td></tr> : null}
+          {memberPageItems.length === 0 ? <tr><Td colSpan={6}>No members found.</Td></tr> : null}
           </DataTable>
           <PaginationFooter {...memberPagination} />
         </Card>

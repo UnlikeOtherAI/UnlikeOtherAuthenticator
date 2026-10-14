@@ -18,6 +18,17 @@ vi.mock('./api-client', () => ({
 }));
 
 describe('adminService', () => {
+  it('preserves independent account and membership status from organisation list and detail responses', async () => {
+    const org = { id: 'org-1', members: [
+      { id: 'removed', status: 'active', membershipStatus: 'removed' },
+      { id: 'disabled', status: 'disabled', membershipStatus: 'active' },
+    ] };
+    api.get.mockResolvedValueOnce([org]).mockResolvedValueOnce(org);
+    await expect(adminService.getOrganisations()).resolves.toEqual([org]);
+    await expect(adminService.getOrganisation('org-1')).resolves.toEqual(org);
+    expect(api.get).toHaveBeenNthCalledWith(1, '/internal/admin/organisations');
+    expect(api.get).toHaveBeenNthCalledWith(2, '/internal/admin/organisations/org-1');
+  });
   beforeEach(() => {
     Object.values(api).forEach((mock) => mock.mockReset());
   });
