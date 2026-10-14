@@ -276,3 +276,48 @@ Both assigned servers returned HTTP 200 during the run. Playwright stopped its o
 each run. Final checks found no listeners on 5291/5292 and no compiler/Vite/esbuild/Chromium process
 for this worktree. **UOA Admin explicitly RELEASED its allocated heavy slot after all children
 finished.** All audit items remain open pending parent acceptance; no PR/main merge was performed.
+
+## Dependent U-10 Members usability completion
+
+- [ ] **U-10:** Frontend changes prepared against the parent-reviewed API contract in fd54d5fa.
+  `formatAdminOrganisation` returns current account lifecycle in status and independent organisation
+  membership in membershipStatus. The exact commit and Prisma enums were inspected read-only.
+  The Admin service passes these DTO fields through, without coercion or a local identity store.
+  The dedicated branch still has its preceding API baseline; fd54d5fa must be included by parent
+  integration before treating the combined behavior as implemented server-side.
+
+OrganisationMember now declares membershipStatus as active/deactivated/removed. The existing
+OrganisationDetailPage Members table displays separate Account status and Membership columns,
+alongside the existing role, teams and recent-login information. No member is filtered out or
+labelled active based on the other state. An older payload missing membershipStatus displays
+Unavailable. Synthetic mock factories now include the independent field, including add-to-team
+fixture responses. No API-owned file was changed.
+
+Account-disabled and membership-removed rows retain their canonical user/team navigation, owner
+roles remain server-owned, and the existing read-only Members surface gained no mutation controls.
+Lifecycle recovery stays on the user Security surface with existing server authorization. This
+change neither reactivates a removed membership nor grants a disabled account access; no owner,
+removal, deletion or disabled-account authorization rule was changed.
+
+Focused component coverage includes active account + removed membership; disabled account + active
+membership; active + deactivated; owner + active; deleted + removed; banned + deactivated; deleting
++ removed; missing membership state; and the empty table. Every populated case keeps its role,
+team link and user-record navigation, with no new row action. Service regression checks list/detail
+payloads retain both fields. Existing Directory navigation cases are included.
+
+Maxis focused command: `pnpm --filter @uoa/admin exec vitest run
+src/pages/OrganisationDetailPage.test.tsx src/pages/DirectoryPages.test.tsx
+src/services/admin-service.test.ts --maxWorkers=1 --reporter=dot` — **3 files / 24 passed,
+0 failed, 0 skipped**, 3.76 seconds. Scoped ESLint and `git diff --check` passed.
+
+Prepared local browser scenario: audit-members.flow.ts, desktop and Pixel 7 through the existing
+audit config. It asserts both status columns on owner/disabled/removed/deactivated rows, preserves
+the user-record route and reaches the existing Reactivate access control without submitting any
+write. Fixture account state, organisation list/detail and lifecycle response agree. It will capture
+the settled Members table and disabled-account recovery surface. UI suites remain outside CI.
+
+No heavy compiler slot is allocated to this writer at this stage. Only source review, scoped lint
+and small cached serial tests ran on Maxis with a 2 GiB heap; no typecheck, build, browser server or
+browser scenario has run for this U-10 change. Allocation is required for those next checks and
+screenshot review. Prior 57455d4d evidence does not validate these new changes. All items remain
+open for parent acceptance; no PR/main merge or other worktree write was performed.
