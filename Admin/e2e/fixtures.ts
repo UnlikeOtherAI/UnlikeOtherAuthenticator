@@ -209,7 +209,7 @@ export async function installFixtures(page: Page) {
         }
         const defaultTeam = org.teams.find((entry) => entry.isDefault);
         const names = [...new Set([defaultTeam?.name, team.name].filter((name): name is string => !!name))];
-        org.members.push({ ...user, role: 'member', teams: names,
+        org.members.push({ ...user, role: 'member', membershipStatus: 'active', teams: names,
           teamRoles: { ...(defaultTeam ? { [defaultTeam.name]: 'member' as const } : {}), [team.name]: input.teamRole } });
         org.teams.forEach((entry) => { if (names.includes(entry.name)) entry.members += 1; });
         return json({ ok: true, userId: user.id, ...input });

@@ -435,7 +435,7 @@ function member(
   lastLogin: string,
   method: OrganisationMember['method'],
 ): OrganisationMember {
-  return { id, name, email, role, teams, teamRoles, twofa, lastLogin, status: 'active', method };
+  return { id, name, email, role, teams, teamRoles, twofa, lastLogin, status: 'active', membershipStatus: 'active', method };
 }
 
 function user(

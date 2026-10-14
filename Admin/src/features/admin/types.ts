@@ -126,7 +126,11 @@ export type UserSummary = {
   avatarSource?: AvatarSource;
 };
 
+export type OrganisationMembershipStatus = 'active' | 'deactivated' | 'removed';
+
 export type OrganisationMember = Omit<UserSummary, 'domains' | 'created'> & {
+  /** Independent of the user's account lifecycle in status. */
+  membershipStatus: OrganisationMembershipStatus;
   role: UoaRole;
   teams: string[];
   teamRoles: Record<string, TeamRole>;
