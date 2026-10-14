@@ -1,0 +1,39 @@
+HEAD fa53997897dad66e00482d0cd255c57b86ff6970
+Maxis serial build; Node heap3072MiB; no external database; 2026-10-14T23:44:31.5132480+01:00
+
+> @unlikeotherai/slug@1.0.0 build C:\Users\ondre\Projects\UnlikeOtherAuthenticator\.worktrees\sol-audit-fixes-api-20261014\packages\slug
+> tsc -p tsconfig.build.json
+
+
+> @unlikeotherai/billing-statement-protocol@5.8.0 build C:\Users\ondre\Projects\UnlikeOtherAuthenticator\.worktrees\sol-audit-fixes-api-20261014\packages\billing-statement-protocol
+> tsc -p tsconfig.build.json && node scripts/generate-artifacts.mjs --check
+
+
+> @unlikeotherai/auth-ui-strings@1.0.0 build C:\Users\ondre\Projects\UnlikeOtherAuthenticator\.worktrees\sol-audit-fixes-api-20261014\packages\auth-ui-strings
+> tsc -p tsconfig.build.json
+
+Prisma schema loaded from prisma\schema.prisma
+The schema at prisma\schema.prisma is valid 🚀
+Prisma schema loaded from prisma\schema.prisma
+
+┌─────────────────────────────────────────────────────────┐
+✔ Generated Prisma Client (v6.19.3) to .\..\node_modules\.pnpm\@prisma+client@6.19.3_prism_1d040ab5215f59f0e27ddee7f0cf082e\node_modules\@prisma\client in 694ms
+
+Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)
+│  Update available 6.19.3 -> 8.0.0-rc.22                 │
+│                                                         │
+
+Tip: Need your database queries to be 1000x faster? Accelerate offers you that and more: https://pris.ly/tip-2-accelerate
+
+│  This is a major update - please follow the guide at    │
+│  https://pris.ly/d/major-version-upgrade                │
+│                                                         │
+│  Run the following to update                            │
+│    npm i --save-dev prisma@latest                       │
+│    npm i @prisma/client@latest                          │
+└─────────────────────────────────────────────────────────┘
+
+> @uoa/api@0.0.0 build C:\Users\ondre\Projects\UnlikeOtherAuthenticator\.worktrees\sol-audit-fixes-api-20261014\API
+> tsc -p tsconfig.build.json
+
+BUILD_GATE_EXIT=0

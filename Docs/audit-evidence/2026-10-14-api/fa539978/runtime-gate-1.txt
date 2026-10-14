@@ -1,0 +1,89 @@
+HEAD fa53997897dad66e00482d0cd255c57b86ff6970
+Maxis API; owned Fedora PostgreSQL16; workers1; 2026-10-14T23:47:06.3505285+01:00
+@unlikeotherai/slug compiled export import: PASS
+@unlikeotherai/billing-statement-protocol compiled export import: PASS
+@unlikeotherai/auth-ui-strings compiled export import: PASS
+
+ RUN  v3.2.6 C:/Users/ondre/Projects/UnlikeOtherAuthenticator/.worktrees/sol-audit-fixes-api-20261014/API
+
+(node:65836) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/integration/org-team-role-grants.test.ts (17 tests) 74777ms
+   ✓ /org team gates resolve role_grants > with no role_grants (the legacy default table) > lets a team admin who is only an org member change their own team roster  2187ms
+   ✓ /org team gates resolve role_grants > with no role_grants (the legacy default table) > still refuses an org member with no standing in the team  1507ms
+   ✓ /org team gates resolve role_grants > with no role_grants (the legacy default table) > keeps the org-manager reach-down for an org admin outside the team  1716ms
+   ✓ /org team gates resolve role_grants > with no role_grants (the legacy default table) > keeps team creation org-scoped — team standing does not authorise it  1245ms
+   ✓ /org team gates resolve role_grants > with no role_grants (the legacy default table) > rejects a team role outside the default vocabulary  1198ms
+   ✓ /org team gates resolve role_grants > with a domain-authored vocabulary and grant table > grants a custom team role the roster capability the domain gave it  1646ms
+   ✓ /org team gates resolve role_grants > with a domain-authored vocabulary and grant table > gives a custom role the table does not mention nothing at all  1388ms
+   ✓ /org team gates resolve role_grants > with a domain-authored vocabulary and grant table > takes the roster away from an org admin this table only gave teams.manage  1362ms
+   ✓ /org team gates resolve role_grants > with a domain-authored vocabulary and grant table > never locks the owner out, whatever the table says  2043ms
+   ✓ /org team gates resolve role_grants > with a domain-authored vocabulary and grant table > validates the written role against the configured vocabulary  1272ms
+   ✓ /org team gates resolve role_grants > org-scope gates > with no role_grants (the legacy default table) > lets an org admin rename the organisation and run the roster  2945ms
+   ✓ /org team gates resolve role_grants > org-scope gates > with no role_grants (the legacy default table) > still refuses a plain org member  1871ms
+   ✓ /org team gates resolve role_grants > org-scope gates > with no role_grants (the legacy default table) > never reaches up from team standing — a team admin is not an org manager  1891ms
+   ✓ /org team gates resolve role_grants > org-scope gates > with a domain-authored grant table splitting the two > lets `registrar` rename but not touch the roster  1921ms
+   ✓ /org team gates resolve role_grants > org-scope gates > with a domain-authored grant table splitting the two > lets `steward` run the roster but not rename  2589ms
+   ✓ /org team gates resolve role_grants > org-scope gates > with a domain-authored grant table splitting the two > gives a role the table does not mention nothing at all  1901ms
+   ✓ /org team gates resolve role_grants > org-scope gates > with a domain-authored grant table splitting the two > never locks the owner out, whatever the table says  2817ms
+(node:15552) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/integration/admin-debug-login.test.ts (3 tests) 53396ms
+   ✓ first-party admin debug login durable routes > normal PKCE token exchange installs the private ownership cookie and issues a usable admin code  2247ms
+   ✓ first-party admin debug login durable routes > issues, renews and consumes once into a separately signed independent family  4906ms
+   ✓ first-party admin debug login durable routes > refuses wrong source cookie, wrong config/origin, customer bearer, current demotion and expiry  2321ms
+ ❯ tests/integration/directory-mutation-ordering.test.ts (4 tests | 1 failed) 44088ms
+   × ordered directory transaction seam > records only the resolved tenant and keeps direct table access denied 34ms
+     → 
+Invalid `db.organisation.create()` invocation in
+C:\Users\ondre\Projects\UnlikeOtherAuthenticator\.worktrees\sol-audit-fixes-api-20261014\API\tests\integration\directory-mutation-ordering.test.ts:26:39
+
+  23 });
+  24 
+  25 it('records only the resolved tenant and keeps direct table access denied', async () => {
+→ 26   const org = await db.organisation.create(
+Error occurred during query execution:
+ConnectorError(ConnectorError { user_facing_error: None, kind: QueryError(PostgresError { code: "23514", message: "new row for relation \"organisations\" violates check constraint \"organisations_live_owner\"", severity: "ERROR", detail: Some("Failing row contains (cmv8pdged0000ff1cfeh0s3st, directory.example.com, Directory, directory-context, null, 2026-10-14 22:50:10.117, 2026-10-14 22:50:10.117, {}, {}, null, null, allowed, null, null, null, ACTIVE, null, null, 0)."), column: None, hint: None }), transient: false })
+   ✓ ordered directory transaction seam > publishes nothing when the enclosing transaction rolls back 247ms
+   ✓ ordered directory transaction seam > does not allocate a later revision until the prior mutation commits  504ms
+   ✓ ordered directory transaction seam > locks a multi-org change in sorted order and preserves terminal deletion evidence  842ms
+ ✓ src/middleware/__tests__/product-api-bulkhead.test.ts (37 tests) 99ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/directory-mutation-ordering.test.ts > ordered directory transaction seam > records only the resolved tenant and keeps direct table access denied
+PrismaClientUnknownRequestError: 
+Invalid `db.organisation.create()` invocation in
+C:\Users\ondre\Projects\UnlikeOtherAuthenticator\.worktrees\sol-audit-fixes-api-20261014\API\tests\integration\directory-mutation-ordering.test.ts:26:39
+
+  23 });
+  24 
+  25 it('records only the resolved tenant and keeps direct table access denied', async () => {
+→ 26   const org = await db.organisation.create(
+Error occurred during query execution:
+ConnectorError(ConnectorError { user_facing_error: None, kind: QueryError(PostgresError { code: "23514", message: "new row for relation \"organisations\" violates check constraint \"organisations_live_owner\"", severity: "ERROR", detail: Some("Failing row contains (cmv8pdged0000ff1cfeh0s3st, directory.example.com, Directory, directory-context, null, 2026-10-14 22:50:10.117, 2026-10-14 22:50:10.117, {}, {}, null, null, allowed, null, null, null, ACTIVE, null, null, 0)."), column: None, hint: None }), transient: false })
+ ❯ ei.handleRequestError ../node_modules/.pnpm/@prisma+client@6.19.3_prism_1d040ab5215f59f0e27ddee7f0cf082e/node_modules/@prisma/client/src/runtime/RequestHandler.ts:237:13
+ ❯ ei.handleAndLogRequestError ../node_modules/.pnpm/@prisma+client@6.19.3_prism_1d040ab5215f59f0e27ddee7f0cf082e/node_modules/@prisma/client/src/runtime/RequestHandler.ts:174:12
+ ❯ ei.request ../node_modules/.pnpm/@prisma+client@6.19.3_prism_1d040ab5215f59f0e27ddee7f0cf082e/node_modules/@prisma/client/src/runtime/RequestHandler.ts:143:12
+ ❯ a ../node_modules/.pnpm/@prisma+client@6.19.3_prism_1d040ab5215f59f0e27ddee7f0cf082e/node_modules/@prisma/client/src/runtime/getPrismaClient.ts:833:24
+ ❯ tests/integration/directory-mutation-ordering.test.ts:26:17
+     24| 
+     25|   it('records only the resolved tenant and keeps direct table access d…
+     26|     const org = await db.organisation.create({
+       |                 ^
+     27|       data: { domain: 'directory.example.com', name: 'Directory', slug…
+     28|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 3 passed (4)
+      Tests  1 failed | 60 passed (61)
+   Start at  23:47:07
+   Duration  186.31s (transform 3.35s, setup 196ms, collect 13.02s, tests 172.36s, environment 0ms, prepare 245ms)
+
+undefined
+C:\Users\ondre\Projects\UnlikeOtherAuthenticator\.worktrees\sol-audit-fixes-api-20261014\API:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command "vitest" not found
+Program "node.exe" ended with non-zero exit code: 1 (0x00000001).
+RUNTIME_GATE_1_EXIT=1
