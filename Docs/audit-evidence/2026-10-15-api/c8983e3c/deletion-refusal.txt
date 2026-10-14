@@ -1,0 +1,60 @@
+
+ RUN  v3.2.6 C:/Users/ondre/Projects/UnlikeOtherAuthenticator/.worktrees/sol-audit-fixes-api-20261014/API
+
+stdout | tests/integration/entity-deletion-eligibility.test.ts > deletion dependency refusal on PostgreSQL
+Retained audit test schema: [token-like test value redacted]
+
+ ❯ tests/integration/entity-deletion-eligibility.test.ts (5 tests | 1 failed) 41143ms
+   ✓ deletion dependency refusal on PostgreSQL > admits only the eligible lifecycle, including the already committed deleting subject 227ms
+   ✓ deletion dependency refusal on PostgreSQL > preserves other-team, other-organisation and ownership refusals 97ms
+   ✓ deletion dependency refusal on PostgreSQL > keeps native/platform roles and unrelated product identity outside orphan deletion 109ms
+   ✓ deletion dependency refusal on PostgreSQL > retains settings, standalone sessions and other-product authentication history 74ms
+   × deletion dependency refusal on PostgreSQL > distinguishes live financial responsibility from protected inactive history 76ms
+     → 
+Invalid `f.db.billingOrgResponsibility.update()` invocation in
+C:\Users\ondre\Projects\UnlikeOtherAuthenticator\.worktrees\sol-audit-fixes-api-20261014\API\tests\integration\entity-deletion-eligibility.test.ts:78:41
+
+  75 const message = 'Close or transfer active BillingOrgResponsibility operations before deletion.';
+  76 expect(await activeBillingBlockers(f.db, 'ORGANISATION', f.org.id)).toContain(message);
+  77 expect(await activeBillingBlockers(f.db, 'USER', f.user.id)).toContain(message);
+→ 78 await f.db.billingOrgResponsibility.update(
+Error occurred during query execution:
+ConnectorError(ConnectorError { user_facing_error: None, kind: QueryError(PostgresError { code: "23514", message: "new row for relation \"billing_org_responsibilities\" violates check constraint \"billing_org_responsibilities_release_check\"", severity: "ERROR", detail: Some("Failing row contains (cmv8raa1c001mffcsu24iibre, cmv8raa08001effcs7y9fogyp, f, 2026-10-14 23:43:41.136, cmv8raa04001cffcs4m7vpme5, null, null, 2026-10-14 23:43:41.137, 2026-10-14 23:43:41.15)."), column: None, hint: None }), transient: false })
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/entity-deletion-eligibility.test.ts > deletion dependency refusal on PostgreSQL > distinguishes live financial responsibility from protected inactive history
+PrismaClientUnknownRequestError: 
+Invalid `f.db.billingOrgResponsibility.update()` invocation in
+C:\Users\ondre\Projects\UnlikeOtherAuthenticator\.worktrees\sol-audit-fixes-api-20261014\API\tests\integration\entity-deletion-eligibility.test.ts:78:41
+
+  75 const message = 'Close or transfer active BillingOrgResponsibility operations before deletion.';
+  76 expect(await activeBillingBlockers(f.db, 'ORGANISATION', f.org.id)).toContain(message);
+  77 expect(await activeBillingBlockers(f.db, 'USER', f.user.id)).toContain(message);
+→ 78 await f.db.billingOrgResponsibility.update(
+Error occurred during query execution:
+ConnectorError(ConnectorError { user_facing_error: None, kind: QueryError(PostgresError { code: "23514", message: "new row for relation \"billing_org_responsibilities\" violates check constraint \"billing_org_responsibilities_release_check\"", severity: "ERROR", detail: Some("Failing row contains (cmv8raa1c001mffcsu24iibre, cmv8raa08001effcs7y9fogyp, f, 2026-10-14 23:43:41.136, cmv8raa04001cffcs4m7vpme5, null, null, 2026-10-14 23:43:41.137, 2026-10-14 23:43:41.15)."), column: None, hint: None }), transient: false })
+ ❯ ei.handleRequestError ../node_modules/.pnpm/@prisma+client@6.19.3_prism_1d040ab5215f59f0e27ddee7f0cf082e/node_modules/@prisma/client/src/runtime/RequestHandler.ts:237:13
+ ❯ ei.handleAndLogRequestError ../node_modules/.pnpm/@prisma+client@6.19.3_prism_1d040ab5215f59f0e27ddee7f0cf082e/node_modules/@prisma/client/src/runtime/RequestHandler.ts:174:12
+ ❯ ei.request ../node_modules/.pnpm/@prisma+client@6.19.3_prism_1d040ab5215f59f0e27ddee7f0cf082e/node_modules/@prisma/client/src/runtime/RequestHandler.ts:143:12
+ ❯ a ../node_modules/.pnpm/@prisma+client@6.19.3_prism_1d040ab5215f59f0e27ddee7f0cf082e/node_modules/@prisma/client/src/runtime/getPrismaClient.ts:833:24
+ ❯ tests/integration/entity-deletion-eligibility.test.ts:78:5
+     76|     expect(await activeBillingBlockers(f.db, 'ORGANISATION', f.org.id)…
+     77|     expect(await activeBillingBlockers(f.db, 'USER', f.user.id)).toCon…
+     78|     await f.db.billingOrgResponsibility.update({ where: { id: row.id }…
+       |     ^
+     79|     expect(await activeBillingBlockers(f.db, 'ORGANISATION', f.org.id)…
+     80|     expect((await f.read()).reasons).toEqual(['Protected billing or si…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (2)
+      Tests  1 failed | 4 passed (5)
+   Start at  00:42:59
+   Duration  41.59s (transform 117ms, setup 70ms, collect 192ms, tests 41.14s, environment 0ms, prepare 63ms)
+
+undefined
+C:\Users\ondre\Projects\UnlikeOtherAuthenticator\.worktrees\sol-audit-fixes-api-20261014\API:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command "vitest" not found
+EXIT=1
