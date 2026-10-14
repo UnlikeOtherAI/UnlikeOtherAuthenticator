@@ -142,3 +142,29 @@ The targeted writer inventory currently finds60non-create mutations across auth
 recovery, social login, profile/avatar, organisation/member/team/invite lifecycle,
 first-placement/admin additions and entity deletion. Create/nested-create/upsert
 paths must also be covered; this is inventory, not completed verification.
+
+
+### Ordered outbox foundation checkpoint (not complete writer coverage)
+
+`directory-mutation.service.ts` locks the complete declared org set in sorted
+order before its callback, allocates each revision under those locks, and writes
+ID-only events in the same transaction. Revisions and terminal events deliberately
+have no org FK, so physical deletion cannot erase invalidation evidence. Nested
+writers cannot extend an already-declared set midway through a transaction.
+Profile PATCH now uses this seam after canonical user/policy locks and before
+team-scope row locks. No delta/snapshot/cached-authority cutover is exposed yet.
+All org/team/member/invite/automatic-enrolment/avatar/lifecycle writers still need
+explicit integration and a complete coverage audit; this foundation does not
+certify U1. Tenant-role writer integration also needs an explicit RLS-safe storage
+boundary: the new outbox tables currently deny direct app-role access.
+
+Focused lint passed on drafted changed tracked TypeScript files; Prisma schema
+validation passed with a synthetic unreachable URL (no DB connection). New real
+PostgreSQL seam tests cover rollback, waiting on the actual advisory lock,
+concurrent commit order, reversed multi-org input and terminal evidence. They
+have not run because the heavy compiler/server/database slot is not allocated.
+Directory credential unit fixtures cover purpose separation, one-time secrets,
+exact-org permissions, live revocation, dependency failures and bounded rotation.
+Native throttling now reserves in-flight account attempts as well as retaining
+failed guesses; successful MFA continuations release the reservation. This closes
+the parallel-IP gap without charging each successful continuation as a failure.

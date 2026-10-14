@@ -986,3 +986,9 @@ with family revocation in one transaction; Admin middleware checks the marker
 online. It adds no cookie requirement, sibling revocation or global epoch change.
 The existing retention job removes expired markers. Unexpected store failures
 remain5xx, so session UI must retain healthy sessions for retry.
+
+The draft directory ordering seam is `directory-mutation.service.ts`, backed by
+`DirectoryOrganisationRevision` and `DirectoryChangeOutbox`. Profile PATCH uses
+it; remaining canonical writer coverage and tenant-role storage access are still
+required before publishing a consumer revision/cache contract. Its ID-only
+events and cursors survive physical organisation deletion.

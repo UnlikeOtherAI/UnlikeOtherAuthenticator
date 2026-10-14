@@ -20,7 +20,9 @@ function fixture() {
     domainRole: { findUnique: vi.fn(async () => ({ userId: 'person' })) },
     user: { findUnique: vi.fn(async () => ({ ...user })), update: vi.fn(async ({ data }: { data: Record<string, unknown> }) => { Object.assign(user, data); return { ...user }; }) },
     organisation: { findUnique: vi.fn(async () => ({ lifecycleStatus: 'ACTIVE' })) },
-    orgMember: { findUnique: vi.fn(async () => ({ status: 'ACTIVE', user: { id: 'target', name: 'Current name', lifecycleStatus: 'ACTIVE' } })) },
+    orgMember: { findMany: vi.fn(async () => [{ orgId: 'org' }]), findUnique: vi.fn(async () => ({ status: 'ACTIVE', user: { id: 'target', name: 'Current name', lifecycleStatus: 'ACTIVE' } })) },
+    directoryOrganisationRevision: { upsert: vi.fn(async () => ({ revision: 1n })) },
+    directoryChangeOutbox: { create: vi.fn(async () => ({})) },
     historicalOrganisationIdentityReference: { findUnique: vi.fn(async () => null) },
   };
   return { raw, db: raw as unknown as PrismaClient, user, authority };
@@ -40,6 +42,7 @@ describe('canonical self profile authority', () => {
     const result = await readOrUpdateSelfProfile(f.authority, f.db, { name: ' New name ', pronouns_preset: 'he_him' });
     expect(result).toMatchObject({ name: 'New name', pronouns_display: 'he/him', pronouns_custom: null });
     expect(f.user.email).toBe('self@example.com');
+    expect(f.raw.directoryChangeOutbox.create).toHaveBeenCalledWith({ data: expect.objectContaining({ orgId: 'org', kind: 'profile.changed', subjectId: 'person', revision: 1n }) });
   });
   it.each([{ email: 'other@example.com' }, { role: 'owner' }, { name: '  ' }, {}, { password: 'invalid' }])('rejects unsupported or invalid patch %j', patch => {
     expect(ProfilePatch.safeParse(patch).success).toBe(false);

@@ -5243,3 +5243,23 @@ model BillingSmsPolicyAlert {
   @@index([resolvedAt, openedAt])
   @@map("billing_sms_policy_alerts")
 }
+
+// Directory cursors and invalidations survive physical org deletion. These stable
+// references contain no profile text, membership payload or copied hierarchy.
+model DirectoryOrganisationRevision {
+  orgId String @id @map("org_id")
+  revision BigInt @default(0)
+  @@map("directory_organisation_revisions")
+}
+
+model DirectoryChangeOutbox {
+  id String @id @default(uuid())
+  orgId String @map("org_id")
+  revision BigInt
+  kind String @db.VarChar(40)
+  subjectId String? @map("subject_id")
+  teamId String? @map("team_id")
+  occurredAt DateTime @default(now()) @map("occurred_at")
+  @@unique([orgId, revision])
+  @@map("directory_change_outbox")
+}

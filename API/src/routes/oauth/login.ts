@@ -15,7 +15,7 @@ import { lockProductTeamPolicyShared } from '../../services/product-team-policy-
 import { assertEmailDomainAllowedForLogin } from '../../services/login-domain-policy.service.js';
 import { assertNotBannedAtLogin } from '../../services/ban-policy.service.js';
 import { AppError } from '../../utils/errors.js';
-import { oauthLoginRateLimiter, recordOAuthLoginFailure } from '../auth/rate-limit-keys.js';
+import { oauthLoginRateLimiter, beginOAuthLoginAttempt } from '../auth/rate-limit-keys.js';
 import { buildPublicErrorBody } from '../../utils/error-response.js';
 import { parseRequiredPkceChallenge } from '../../utils/pkce.js';
 import { requireMcpOAuthPublicProfile } from './public-profile-guard.js';
@@ -80,6 +80,7 @@ export function registerOAuthLoginRoute(app: FastifyInstance): void {
       }
       request.tenantContext = { domain: config.domain, orgId: null, userId: null };
 
+      const finishAttempt = beginOAuthLoginAttempt(request);
       const outcome = await request.adminDb.$transaction(async (tx) => {
         const prisma = asPrismaClient(tx);
         await lockProductTeamPolicyShared(prisma);
@@ -131,9 +132,9 @@ export function registerOAuthLoginRoute(app: FastifyInstance): void {
       }).catch((error: unknown) => {
         // Count only authentication failures after the transaction rolled back.
         // DB outages and successful MFA continuations must not lock out a person.
-        if (error instanceof AppError && error.statusCode === 401) recordOAuthLoginFailure(request);
+        finishAttempt(error instanceof AppError && error.statusCode === 401);
         throw error;
-      });
+      }).finally(() => finishAttempt());
 
       reply.header('Cache-Control', 'no-store');
       if (outcome.kind === 'factor') {

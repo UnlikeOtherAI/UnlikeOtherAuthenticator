@@ -11,6 +11,15 @@ describe('native authentication failure budget', () => {
     expect(() => limiter.assertAllowed(key)).toThrow();
     expect(() => limiter.assertAllowed(key + ':different-account')).not.toThrow();
   });
+  it('reserves in-flight guesses across IPs and releases successful continuations idempotently', () => {
+    const key = randomUUID(); const limiter = createFailureRateLimiter({ limit: 2, windowMs: 900_000 });
+    const first = limiter.beginAttempt(key), second = limiter.beginAttempt(key);
+    expect(() => limiter.beginAttempt(key)).toThrow();
+    first(); first(true); // response/error cleanup cannot count a finished attempt twice
+    const third = limiter.beginAttempt(key);
+    second(true); third(true);
+    expect(() => limiter.beginAttempt(key)).toThrow();
+  });
   it('recovers automatically when its bounded window expires', () => {
     vi.useFakeTimers(); const key = randomUUID(); const limiter = createFailureRateLimiter({ limit: 1, windowMs: 1000 });
     limiter.recordFailure(key); expect(() => limiter.assertAllowed(key)).toThrow();

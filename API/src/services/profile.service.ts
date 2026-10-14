@@ -9,6 +9,7 @@ import { lockTokenIssuanceProductPolicy } from './product-team-policy-lock.servi
 import { lockAndAssertAuthenticationEpoch, lockAndAssertAuthenticationEpochShared } from './authentication-epoch.service.js';
 import { assertActiveClientTeamScope, lockTeamMembershipRows } from './team-scope.service.js';
 import { readTargetDisplay } from './profile-display.service.js';
+import { withDirectoryMutation } from './directory-mutation.service.js';
 import { verifyDomainAuthToken } from './domain-secret.service.js';
 
 export const ProfilePatch = z.object({
@@ -27,7 +28,7 @@ const profileSelect = { id: true, email: true, name: true, pronounsPreset: true,
 const pronouns = { he_him: 'he/him', she_her: 'she/her', they_them: 'they/them',
   any_pronouns: 'any pronouns', ask_me: 'ask me', prefer_not_to_say: null } as const;
 
-export async function assertProfileAuthority(authority: ProfileAuthority, tx: PrismaClient, write = false) {
+export async function assertProfileAuthority(authority: ProfileAuthority, tx: PrismaClient, write = false, pinTeamScope = true) {
   const { claims, config } = authority;
   if (claims.domain !== config.domain) throw forbidden();
   await lockTokenIssuanceProductPolicy({ domain: config.domain, clientDomainId: authority.clientDomainId }, { prisma: tx });
@@ -37,7 +38,7 @@ export async function assertProfileAuthority(authority: ProfileAuthority, tx: Pr
   await lockEpoch({ userId: claims.userId, domain: claims.domain, credentialEpoch: claims.tokenVersion }, { prisma: tx });
   const role = await tx.domainRole.findUnique({ where: { domain_userId: { domain: claims.domain, userId: claims.userId } }, select: { userId: true } });
   if (!role) throw forbidden();
-  if (claims.active) {
+  if (pinTeamScope && claims.active) {
     await lockTeamMembershipRows({ userId: claims.userId, ...claims.active }, { prisma: tx });
     await assertActiveClientTeamScope({ userId: claims.userId, domain: config.domain, ...claims.active },
       { prisma: tx, crossProductPrisma: tx, policyPrisma: tx });
@@ -48,6 +49,17 @@ export async function assertProfileAuthority(authority: ProfileAuthority, tx: Pr
 export async function readOrUpdateSelfProfile(authority: ProfileAuthority, prisma: PrismaClient,
   patch?: z.infer<typeof ProfilePatch>) {
   return runInTransaction(prisma, async tx => {
+    if (!patch) return readOrWriteProfile(authority, tx);
+    // User authority precedes sorted org locks, which precede scope row locks.
+    await assertProfileAuthority(authority, tx, true, false);
+    const memberships = await tx.orgMember.findMany({ where: { userId: authority.claims.userId }, select: { orgId: true } });
+    const changes = [...new Set(memberships.map(member => member.orgId))].sort()
+      .map(orgId => ({ orgId, kind: 'profile.changed' as const, subjectId: authority.claims.userId }));
+    return withDirectoryMutation(tx, changes, locked => readOrWriteProfile(authority, locked, patch));
+  });
+}
+
+async function readOrWriteProfile(authority: ProfileAuthority, tx: PrismaClient, patch?: z.infer<typeof ProfilePatch>) {
     await assertProfileAuthority(authority, tx, patch !== undefined);
     const user = await tx.user.findUnique({ where: { id: authority.claims.userId }, select: profileSelect });
     if (!user) throw forbidden();
@@ -68,7 +80,6 @@ export async function readOrUpdateSelfProfile(authority: ProfileAuthority, prism
       pronouns_display: current.pronounsPreset === 'custom' ? current.pronounsCustom :
         pronouns[current.pronounsPreset as keyof typeof pronouns] ?? null,
       twofa_enabled: current.twoFaEnabled, created_at: current.createdAt.toISOString() };
-  });
 }
 
 /** Exact live actor + exact target provenance. No domain-directory fallback. */

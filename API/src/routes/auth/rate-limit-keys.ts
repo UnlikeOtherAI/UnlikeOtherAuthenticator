@@ -96,8 +96,8 @@ export async function oauthLoginRateLimiter(request: FastifyRequest): Promise<vo
   await nativeLoginGlobal(request);
   nativeFailures.assertAllowed(authBodyKey('oauth:login:failed', request, 'email'));
 }
-export function recordOAuthLoginFailure(request: FastifyRequest): void {
-  nativeFailures.recordFailure(authBodyKey('oauth:login:failed', request, 'email'));
+export function beginOAuthLoginAttempt(request: FastifyRequest) {
+  return nativeFailures.beginAttempt(authBodyKey('oauth:login:failed', request, 'email'));
 }
 
 export const registerRateLimiter = composeRateLimiters(

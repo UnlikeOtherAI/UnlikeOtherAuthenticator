@@ -23,6 +23,7 @@ type KeyedRateLimitOptions = { limit: number; windowMs: number };
 type WindowState = {
   count: number;
   resetAt: number;
+  pending?: number;
 };
 
 const windows = new Map<string, WindowState>();
@@ -102,9 +103,29 @@ export function createFailureRateLimiter({ limit, windowMs }: KeyedRateLimitOpti
   return {
     assertAllowed(key: string) {
       const state = windows.get(key);
-      if (key && state && state.resetAt > Date.now() && state.count >= limit) throw new AppError('RATE_LIMITED', 429);
+      if (key && state && state.resetAt > Date.now() && state.count + (state.pending ?? 0) >= limit) throw new AppError('RATE_LIMITED', 429);
     },
     recordFailure(key: string) { consume(key, limit, windowMs); },
+    beginAttempt(key: string) {
+      if (!key) return (_failed = false) => {};
+      const now = Date.now();
+      let state = windows.get(key);
+      if (!state || state.resetAt <= now) {
+        ensureCapacity(now);
+        state = { count: 0, pending: 0, resetAt: now + windowMs };
+        windows.set(key, state);
+      }
+      if (state.count + (state.pending ?? 0) >= limit) throw new AppError('RATE_LIMITED', 429);
+      state.pending = (state.pending ?? 0) + 1;
+      const reserved = state;
+      let finished = false;
+      return (failed = false) => {
+        if (finished) return;
+        finished = true;
+        reserved.pending = (reserved.pending ?? 1) - 1;
+        if (failed) reserved.count += 1;
+      };
+    },
   };
 }
 
