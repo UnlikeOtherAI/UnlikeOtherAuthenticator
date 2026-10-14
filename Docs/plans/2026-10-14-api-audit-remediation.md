@@ -368,3 +368,19 @@ allowlist refusal, ban refusal and in-transaction dependency outage. Password/MF
 effects are absent when current client policy refuses; bans/allowlists stop MFA
 and signing, and dependency outages retain500. No network listener is opened.
 These are injected order/refusal checks, not a real concurrent native-app-edit test.
+
+### U1 current-owner and live-standing regression checkpoint
+
+Added13 server-free current-owner grant cases using the actual profile/domain
+secret/epoch checks and injected stores: exact permission/audit writes, mismatched
+org claims, changed owner, non-owner role, suspended/removed membership, inactive
+org/account, stale epoch, expired actor, revoked/expired credential and idempotent
+revocation. Added12 live-standing/display cases: minimal inactive results, exact
+active teams/epoch, bounded overflow refusal, expiry after the subject-lock boundary,
+dependency errors preserved, separate display permission and shared neutral former
+member projection. No authority service is replaced with a test bypass. Synthetic
+DATABASE_URL only enables the real injected-store path; no connection occurs.
+
+Latest expanded source suite147/147 across16files passed on Maxis. This includes
+the additional7 native request regressions. Real PostgreSQL and compiled export
+checks still await allocation; U1/U3 acceptance remains unchecked.
