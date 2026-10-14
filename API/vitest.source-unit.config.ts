@@ -5,6 +5,7 @@ import { defineConfig } from 'vitest/config';
 // default harness still verifies compiled package exports after slot allocation.
 export default defineConfig({
   resolve: { alias: [
+    { find: /^@unlikeotherai\/auth-ui-strings$/, replacement: fileURLToPath(new URL('../packages/auth-ui-strings/src/index.ts', import.meta.url)) },
     { find: /^@unlikeotherai\/slug$/, replacement: fileURLToPath(new URL('../packages/slug/src/index.ts', import.meta.url)) },
     { find: /^@unlikeotherai\/billing-statement-protocol$/, replacement: fileURLToPath(new URL('../packages/billing-statement-protocol/src/index.ts', import.meta.url)) },
   ] },
@@ -21,6 +22,8 @@ export default defineConfig({
       'tests/unit/refresh-token*.test.ts',
       'tests/unit/verification-token-epoch.service.test.ts',
       'tests/unit/oauth-login.signature-gate.route.test.ts',
+      'tests/unit/profile-authority.route.test.ts',
+      'tests/unit/directory-authority.route.test.ts',
     ],
     env: { NODE_ENV: 'test', SHARED_SECRET: 'synthetic-source-test-material-32-characters', AUTH_SERVICE_IDENTIFIER: 'uoa-auth-service' },
   },

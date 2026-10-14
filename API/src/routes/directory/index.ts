@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyRequest } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { requireAdminSuperuser } from '../../middleware/admin-superuser.js';
 import { configVerifier } from '../../middleware/config-verifier.js';
@@ -21,9 +21,12 @@ function admin(request: FastifyRequest) {
   const { userId, tokenVersion } = request.adminAccessTokenClaims;
   return { userId, tokenVersion };
 }
-const operator = { preHandler: [requireAdminSuperuser] };
-const owner = { preHandler: [configVerifier, requireDomainHashAuth] };
-const backend = { preHandler: [createRateLimiter({ limit: 1200, windowMs: 60_000,
+async function noStore(_request: FastifyRequest, reply: FastifyReply) {
+  reply.header('Cache-Control', 'private, no-store');
+}
+const operator = { onRequest: noStore, preHandler: [requireAdminSuperuser] };
+const owner = { onRequest: noStore, preHandler: [configVerifier, requireDomainHashAuth] };
+const backend = { onRequest: noStore, preHandler: [createRateLimiter({ limit: 1200, windowMs: 60_000,
   keyBuilder: request => `directory:ip:${request.ip}` })] };
 
 export function registerDirectoryRoutes(app: FastifyInstance): void {

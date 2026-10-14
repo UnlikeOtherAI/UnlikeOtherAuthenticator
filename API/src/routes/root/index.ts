@@ -19,6 +19,7 @@ import { registerLlmRoute } from './llm.js';
 import { endpoints } from './schema.js';
 // Purpose-bound directory credentials, explicit grants and live reads are in schema.directory.
 // Admin organisation member account status and membershipStatus are independent in schema.internal-admin.
+// Profile/directory responses set private/no-store before authorization, including errors.
 // Profile read/write/display endpoints are included through schema.profile.
 // Native attempt/MFA policies are included through schema.oauth; directory metadata is bounded.
 // Website tokens use stable non-secret client IDs; method/code binding policies

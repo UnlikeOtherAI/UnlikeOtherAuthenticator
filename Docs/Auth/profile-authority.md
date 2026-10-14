@@ -57,3 +57,13 @@ Machine contracts: `API/src/routes/root/schema.profile.ts`, `schema.directory.ts
 and root `/api`. Readable integration contract: `/llm`. Focused authority fixtures
 are in `tests/unit/profile-authority.service.test.ts`; these do not replace real
 HTTP, RLS, migration and concurrent mutation proofs.
+
+Profile and directory routes set private/no-store before authorization, so refused,
+invalid, missing-subject and dependency-error responses carry the same cache
+boundary. Server-free HTTP fixtures use Fastify.inject with the production error
+handler: profile requests exercise actual HS256 user JWT, domain bearer, epoch
+and service checks while seeding the already-verified config result; directory
+requests exercise actual purpose/grant/standing/display checks. Avatar byte
+resolution is substituted with synthetic bytes. These fixtures open no listener
+or DB and do not verify config fetching/JWKS, RLS, upgrades, real races or BFF
+rendering. Those runtime proofs remain required.

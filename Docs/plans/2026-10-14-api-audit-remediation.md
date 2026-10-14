@@ -384,3 +384,26 @@ DATABASE_URL only enables the real injected-store path; no connection occurs.
 Latest expanded source suite147/147 across16files passed on Maxis. This includes
 the additional7 native request regressions. Real PostgreSQL and compiled export
 checks still await allocation; U1/U3 acceptance remains unchecked.
+
+### U3/U1 request cache and authority checkpoint
+
+Added15 profile HTTP and10 directory HTTP Fastify.inject cases using the production
+error handler. The profile harness verifies actual HS256 user JWT, live domain
+bearer and epoch with injected stores; verified config fetching is seeded, and
+image bytes are synthetic. Coverage includes current own email rather than JWT
+profile, partial edits, unsupported edits, missing/blank/conflicting credentials,
+stale epoch/inactive self, neutral removed-target display and credentialed image
+reads. Directory coverage exercises actual separate purpose credentials and
+permissions, inactive/refused/unknown authority, immediate image grant revocation,
+neutral removed displays and dependency-error preservation. No listener/DB.
+
+Usability/cache review found route cache headers were applied only after service
+success. Both route families now set private/no-store in onRequest before auth,
+including401/403/404/400/500. Schema slices/root registration and LLM docs match.
+Source harness also maps the new shared auth-ui-strings package to actual TS
+source so the production error handler can run without a workspace build; its
+compiled package export remains unverified until the heavy slot is allocated.
+
+Latest complete light suite98/98 across13files passed on Maxis. Combined with
+the last source147/147 and25 new request cases,270 scoped cases are exercised;
+a fresh complete source run is recorded with this checkpoint.

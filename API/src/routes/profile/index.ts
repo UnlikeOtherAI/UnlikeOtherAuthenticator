@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyRequest } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { configVerifier } from '../../middleware/config-verifier.js';
 import { requireDomainHashAuth } from '../../middleware/domain-hash-auth.js';
@@ -13,7 +13,10 @@ function imageUrl(request: FastifyRequest, path: string): string {
   const query = ProfileQuery.parse(request.query);
   return `${avatarImageBaseUrl()}${path}?${new URLSearchParams(query)}`;
 }
-const options = { preHandler: [configVerifier, requireDomainHashAuth] };
+async function noStore(_request: FastifyRequest, reply: FastifyReply) {
+  reply.header('Cache-Control', 'private, no-store');
+}
+const options = { onRequest: noStore, preHandler: [configVerifier, requireDomainHashAuth] };
 
 export function registerProfileRoutes(app: FastifyInstance): void {
   app.get('/profile/me', options, async (request, reply) => {
