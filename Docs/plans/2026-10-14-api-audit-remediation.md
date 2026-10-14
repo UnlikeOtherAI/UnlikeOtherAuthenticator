@@ -540,3 +540,11 @@ files were split with all13 group and10 social cases preserved; touched code sta
 under500lines. These changes do not weaken production authorization/outbox paths.
 Auth HTML/CSP checks still need the actual Auth dist/SSR build before the complete
 default gate can be rerun. Full writer-family/upgrade/race acceptance stays open.
+
+### 2026-10-15 complete default unit gate
+
+At source 5de6df8c on Maxis: Auth assets/SSR build passes; normal serial API
+unit/source gate passes all 397 files, 2661 tests, with 3 skipped (2664 total),
+exit 0. Sanitized stdout: `Docs/audit-evidence/2026-10-15-api/5de6df8c/`.
+This resolves the previous 75 failures, without weakening production guards.
+Runtime writer/upgrade acceptance remains unchecked and N03 remains blocked.
