@@ -31,7 +31,7 @@ export async function websiteRefreshStorageClientId(context: RefreshTokenContext
   if (!credential || getEnv().WEBSITE_CLIENT_CONTEXT_PHASE === 'stable') return context.clientId;
   const binding = await verifyDomainAuthToken({ domain: context.domain, token: credential }, { prisma });
   if (binding.clientId !== context.clientId) throw new AppError('UNAUTHORIZED', 401);
-  return credential;
+  return credential.trim().toLowerCase();
 }
 
 /** Offline phase-two CLI only, never a request path. Called after product-policy and canonical refresh-session locks. Rewrite

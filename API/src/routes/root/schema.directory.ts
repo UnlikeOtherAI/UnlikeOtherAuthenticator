@@ -1,5 +1,5 @@
 import type { EndpointSchema } from './schema.js';
-const cacheNote = 'Every response, including authorization, validation, missing-subject and dependency errors, is private/no-store.';
+const cacheNote = 'Deliberate machine-only operator/owner provisioning is documented in Docs/Auth/directory-provisioning.md; no Admin UI is supplied. Every response, including authorization, validation, missing-subject and dependency errors, is private/no-store.';
 const operator = 'current online Admin-domain superuser bearer, rechecked epoch/lifecycle/role';
 const owner = 'active domain pairing plus exactly one current person credential; ACTIVE canonical org owner only; no backend mode';
 const query = { domain: 'exact verified domain', config_url: 'verified signed config URL' };

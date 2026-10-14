@@ -23,8 +23,9 @@ database('ordered directory transaction seam', () => {
   });
 
   it('records only the resolved tenant and keeps direct table access denied', async () => {
+    const owner = await db.user.create({ data: { email: 'directory-owner@example.com', userKey: 'directory-owner@example.com' } });
     const org = await db.organisation.create({
-      data: { domain: 'directory.example.com', name: 'Directory', slug: 'directory-context' },
+      data: { domain: 'directory.example.com', name: 'Directory', slug: 'directory-context', ownerId: owner.id },
     });
     // Grants apply only to this disposable schema; no shared role attributes or
     // passwords are changed. SET LOCAL ROLE is automatically restored at end.

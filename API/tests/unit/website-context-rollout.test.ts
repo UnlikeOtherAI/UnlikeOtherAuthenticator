@@ -36,6 +36,11 @@ describe('website two-phase client context rollout', () => {
     expect(await matchesWebsiteRefreshContext(stored[0].data, context, db)).toBe(true);
   });
 
+  it('normalizes uppercase request credentials to the old reader storage format', async () => {
+    const db = { clientDomain: domainStore() } as unknown as PrismaClient;
+    expect(await websiteRefreshStorageClientId(context, credential.toUpperCase(), db)).toBe(credential);
+  });
+
   it('rotates and replays an old family without rewriting any family edge', async () => {
     const now = new Date('2026-10-14T12:00:00Z');
     const { store, initial } = await createRefreshFixture(now);

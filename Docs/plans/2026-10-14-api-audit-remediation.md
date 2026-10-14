@@ -472,3 +472,30 @@ rotation, new readers against legacy families, replay and revoke without family
 rewrites, config/domain/revocation refusal, stable503 gating and strict revision
 inventory rejection. Actual rollout/provider verification remains an operator
 acceptance step; this run never called Cloud Run or changed any live deployment.
+
+### First allocated runtime gate and follow-up fixtures
+
+Atfa539978 Maxis serial builds of slug/billing-protocol/auth-strings, Prisma
+validate/generate, API build and all3 compiled imports pass. The owned512MiB
+Fedora PostgreSQL16 instance on55460 applies all206 migrations cleanly. Protected
+55440/55445 instances are unchanged. Durable sanitized stdout is in
+`Docs/audit-evidence/2026-10-14-api/fa539978`. First runtime gate60pass/1fail:
+17 signed capability route cases and3 Admin debug/logout cases pass, as do37
+bulkhead middleware cases and3 directory order/rollback/terminal tests. The
+directory RLS case failed fixture setup by omitting the required ACTIVE-org owner.
+The fixture is corrected with a real owner, preserving the production constraint.
+No API compiler/test children remained before the source correction.
+
+U01 bridge storage now normalizes an uppercase authenticated bearer to the same
+lowercase legacy format that old readers expect. Added a focused regression.
+U1 provisioning is explicitly machine-only, documented at
+`Docs/Auth/directory-provisioning.md`, exposed in root machine/LLM contracts and
+exercised through real operator/owner HTTP in the new PostgreSQL fixture.
+
+The new unexecuted profile/directory fixture connects as real uoa_app and uoa_admin
+roles; checks scoped RLS/rollback, canonical self writes/outbox, nullable/historical
+displays and actual authenticated image bytes, signed credential refusal, observed
+PostgreSQL lock waits with expiry, credential revocation serialization and real
+permission failure as500. Failed fixture schemas are retained for diagnosis.
+The next gate must execute these and the distinct real-socket bulkhead route
+fixture; source AST or middleware unit checks cannot substitute for them.

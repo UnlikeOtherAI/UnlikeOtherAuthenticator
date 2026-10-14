@@ -17,6 +17,7 @@ import { registerConfigValidateRoute } from './config-validate.js';
 import { registerConfigVerifyRoute } from './config-verify.js';
 import { registerLlmRoute } from './llm.js';
 import { endpoints } from './schema.js';
+// Directory provisioning is deliberate machine-only HTTP; see Docs/Auth/directory-provisioning.md.
 // Purpose-bound directory credentials, explicit grants and live reads are in schema.directory.
 // Admin organisation member account status and membershipStatus are independent in schema.internal-admin.
 // Profile/directory responses set private/no-store before authorization, including errors.
