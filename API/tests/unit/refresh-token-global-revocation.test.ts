@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@prisma/client';
+import type { Prisma, PrismaClient } from '@prisma/client';
 import { describe, expect, it, vi } from 'vitest';
 
 import { revokeAllRefreshTokensForUser } from '../../src/services/refresh-token-revocation.service.js';
@@ -8,8 +8,10 @@ describe('global refresh revocation', () => {
   it('commits lock, all-token revocation, and tokenVersion in one transaction', async () => {
     const events: string[] = [];
     const tx = {
-      $queryRaw: vi.fn(async () => {
-        events.push('user-lock');
+      orgMember: { findMany: vi.fn().mockResolvedValue([{ orgId: 'org-1' }]) },
+      organisation: { findMany: vi.fn().mockResolvedValue([]) },
+      $queryRaw: vi.fn(async (query: Prisma.Sql) => {
+        events.push(query.sql.includes('uoa_record_directory_change') ? 'directory-event' : 'lock');
         return [{ lockResult: '' }];
       }),
       refreshToken: {
@@ -35,12 +37,16 @@ describe('global refresh revocation', () => {
 
     await revokeAllRefreshTokensForUser('user-1', { prisma });
 
-    expect(events).toEqual([
-      'begin',
-      'user-lock',
-      'refresh-revoke',
-      'token-version',
-      'commit',
+    expect(events[0]).toBe('begin');
+    expect(events.at(-1)).toBe('commit');
+    expect(events.indexOf('lock')).toBeLessThan(events.indexOf('refresh-revoke'));
+    expect(events.indexOf('refresh-revoke')).toBeLessThan(events.indexOf('token-version'));
+    expect(events.indexOf('token-version')).toBeLessThan(events.indexOf('directory-event'));
+    const eventQuery = vi.mocked(tx.$queryRaw).mock.calls
+      .map(([query]) => query as Prisma.Sql)
+      .find((query) => query.sql.includes('uoa_record_directory_change'));
+    expect(eventQuery?.values.slice(1)).toEqual([
+      'org-1', 'credential_epoch.changed', 'user-1', null,
     ]);
     expect(tx.refreshToken.updateMany).toHaveBeenCalledWith({
       where: { userId: 'user-1', revokedAt: null },

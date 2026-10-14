@@ -43,6 +43,9 @@ export class FakeRefreshStore {
   private nextId = 1;
 
   readonly client = {
+    $queryRaw: vi.fn().mockResolvedValue([{ revision: 1n }]),
+    orgMember: { findMany: vi.fn().mockResolvedValue([{ orgId: 'org-1' }]) },
+    organisation: { findMany: vi.fn().mockResolvedValue([]) },
     refreshToken: {
       create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
         const id = `refresh-${this.nextId++}`;

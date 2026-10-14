@@ -396,6 +396,7 @@ describe('refresh-token.service (unit)', () => {
       replacedByTokenId: null,
     };
     const prisma = {
+      orgMember: { findMany: vi.fn().mockResolvedValue([]) }, organisation: { findMany: vi.fn().mockResolvedValue([]) },
       user: { update: vi.fn().mockResolvedValue({ id: 'user-1' }) },
       refreshToken: {
         findUnique: vi
@@ -439,6 +440,7 @@ describe('refresh-token.service (unit)', () => {
   it('revokes the refresh-token family and bumps the user token version on logout', async () => {
     const userUpdate = vi.fn().mockResolvedValue({ id: 'user-1' });
     const prisma = {
+      orgMember: { findMany: vi.fn().mockResolvedValue([]) }, organisation: { findMany: vi.fn().mockResolvedValue([]) },
       $queryRaw: vi.fn().mockResolvedValue([{ lockResult: '' }]),
       refreshToken: {
         findUnique: vi.fn().mockResolvedValue({

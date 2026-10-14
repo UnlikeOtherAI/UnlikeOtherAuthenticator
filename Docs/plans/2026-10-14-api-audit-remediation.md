@@ -350,3 +350,21 @@ operator-visible acceptance remains unchecked until that consumer work is tested
 Fresh post-merge Maxis server-free checks: light73/73 across11files and source
 services91/91 across7files (164 total). No listeners, DB, generated-client update,
 workspace builds or production operations. Heavy/compiler slot remains unallocated.
+
+### Refresh and native admission request regression checkpoint
+
+Expanded the source-only single-worker harness to existing refresh rotation,
+replay, binding, global/domain/membership revocation and verification epoch suites.
+The first expanded run had16 failures:15 fixtures lacked the required directory
+scope store and1 native fixture omitted current client scopes/policy dependencies.
+Updated injected stores explicitly; production authority/outbox checks stay intact.
+Global revocation now asserts the same transaction records the exact org/subject
+credential epoch event after the version write and before commit. The refresh
+suite's corruption, response-loss and post-grace theft behavior remains exercised.
+
+Native route fixtures now include7 additional Fastify.inject regressions: client
+removal, revision change, callback removal, current disabled password method,
+allowlist refusal, ban refusal and in-transaction dependency outage. Password/MFA
+effects are absent when current client policy refuses; bans/allowlists stop MFA
+and signing, and dependency outages retain500. No network listener is opened.
+These are injected order/refusal checks, not a real concurrent native-app-edit test.
