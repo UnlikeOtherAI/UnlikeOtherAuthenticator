@@ -9,7 +9,6 @@ import { AppError } from '../utils/errors.js';
 import {
   deriveRefreshTokenSuccessor,
   hashRefreshToken,
-  matchesRefreshTokenContext,
   REFRESH_TOKEN_REPLAY_GRACE_MS,
   refreshTokenGrantBinding,
   refreshTokenSelect,
@@ -19,6 +18,7 @@ import {
   type RefreshTokenRow,
 } from './refresh-token-replay.service.js';
 import { bumpUserTokenVersion } from './refresh-token-revocation.service.js';
+import { matchesWebsiteRefreshContext, migrateWebsiteRefreshFamily } from './website-client-context.service.js';
 import { lockRefreshSessionUserDomain } from './refresh-session-lock.service.js';
 
 const MIN_INHERITED_REFRESH_TTL_SECONDS = 5 * 60;
@@ -277,7 +277,7 @@ export async function exchangeRefreshToken(
     throw new AppError('UNAUTHORIZED', 401, 'INVALID_REFRESH_TOKEN');
   }
 
-  if (!matchesRefreshTokenContext(row, params)) {
+  if (!await matchesWebsiteRefreshContext(row, params, prisma as PrismaClient)) {
     throw new AppError('UNAUTHORIZED', 401, 'INVALID_REFRESH_TOKEN');
   }
 
@@ -292,8 +292,10 @@ export async function exchangeRefreshToken(
       teamId: row.teamId,
       twoFaCompleted: row.twoFaCompleted === true,
     });
+    const lockedRow = (await findTokenRow()) as RefreshTokenRow | null;
+    if (lockedRow) await migrateWebsiteRefreshFamily(lockedRow, params, prisma as PrismaClient);
     row = (await findTokenRow()) as RefreshTokenRow | null;
-    if (!row || !matchesRefreshTokenContext(row, params)) {
+    if (!row || !await matchesWebsiteRefreshContext(row, params, prisma as PrismaClient)) {
       throw new AppError('UNAUTHORIZED', 401, 'INVALID_REFRESH_TOKEN');
     }
   }
@@ -438,13 +440,15 @@ export async function revokeRefreshTokenFamily(
         },
       });
     let row = await findTokenRow();
-    if (!row || !matchesRefreshTokenContext(row, params)) return;
+    if (!row || !await matchesWebsiteRefreshContext(row, params, tx)) return;
 
     await deps?.beforeFamilyRevocationLock?.();
     await lockRefreshSessionUserDomain({ userId: row.userId, domain: row.domain }, { prisma: tx });
     await deps?.afterFamilyRevocationLock?.(row);
+    const lockedRow = await findTokenRow();
+    if (lockedRow) await migrateWebsiteRefreshFamily(lockedRow, params, tx);
     row = await findTokenRow();
-    if (!row || !matchesRefreshTokenContext(row, params)) return;
+    if (!row || !await matchesWebsiteRefreshContext(row, params, tx)) return;
 
     // Claim the exact presented capability once, then mark the whole family. Logout retries and
     // later presentation of the same predecessor cannot repeatedly bump the global epoch.

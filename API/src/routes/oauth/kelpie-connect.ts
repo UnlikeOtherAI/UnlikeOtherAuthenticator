@@ -31,7 +31,7 @@ export function registerKelpieConnectRoutes(app: FastifyInstance): void {
     }, async (request) => {
       const { domain } = z.object({ domain: z.string().min(1).max(253) }).strict().parse(request.query);
       const { ticket } = z.object({ ticket: z.string().min(1).max(8192) }).strict().parse(request.body);
-      const domainCredential = request.domainAuthClientId;
+      const domainCredential = request.domainAuthCredential;
       if (!domainCredential) throw new AppError('UNAUTHORIZED', 401);
       return validateKelpieConnectionTicket({ domain, ticket, domainCredential }, request.adminDb);
     });

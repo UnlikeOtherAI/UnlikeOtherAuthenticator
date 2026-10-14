@@ -39,6 +39,9 @@ export async function loginWithEmailPassword(
   },
   deps?: LoginDeps,
 ): Promise<{ userId: string; twoFaEnabled: boolean; credentialEpoch: number }> {
+  if (!params.config.enabled_auth_methods.includes('email_password')) {
+    throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
+  }
   const env = deps?.env ?? getEnv();
 
   if (!env.DATABASE_URL) {

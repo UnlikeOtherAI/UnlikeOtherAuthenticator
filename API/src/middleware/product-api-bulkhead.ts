@@ -18,7 +18,7 @@ import { AppError } from '../utils/errors.js';
  *
  * The slot is taken in `onRequest` — before the preHandlers whose own DB reads
  * (domain-hash auth, config verification) are part of the cost — and released exactly
- * once when the response finishes, the request errors, or the client goes away.
+ * once when service work finishes. Disconnect does not cancel ongoing work.
  */
 
 // Prefixes product backends call on their users' request paths. Everything else is
@@ -160,14 +160,26 @@ export function registerProductApiBulkhead(
     }
     reply.raw.off('close', onCloseWhileQueued);
 
+    if (clientGone.signal.aborted) {
+      release();
+      throw new AppError('SERVICE_UNAVAILABLE', 503, 'PRODUCT_API_BUSY');
+    }
     heldSlots.set(request, release);
-    // `onResponse` releases on the normal and error paths; the raw 'close' covers a
-    // client that disconnects mid-handler, which Fastify never reports as a response.
-    reply.raw.once('close', () => releaseSlot(request));
   });
 
+  // Fastify does not cancel service/database work when its socket closes.
+  // A handler's finally is the completion fence even when no response can be sent.
+  app.addHook('onRoute', (route) => {
+    if (!isProductApiPath(route.url)) return;
+    const handler = route.handler;
+    route.handler = async function (request, reply) {
+      try { return await handler.call(this, request, reply); }
+      finally { releaseSlot(request); }
+    };
+  });
+  // Errors before entering a handler also end their asynchronous pre-handler work.
+  app.addHook('onError', async (request) => releaseSlot(request));
   app.addHook('onResponse', async (request) => releaseSlot(request));
-  app.addHook('onRequestAbort', async (request) => releaseSlot(request));
 
   return bulkhead;
 }

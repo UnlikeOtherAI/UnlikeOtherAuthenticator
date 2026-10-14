@@ -33,7 +33,7 @@ export const authEndpoints: EndpointSchema[] = [
     method: 'POST',
     path: '/auth/login',
     description:
-      'Email/password login. team_selection="auto" may return the chooser; "off" suppresses it. A server-recognized product still resolves its mandatory exact team before 2FA, applies that Organisation policy strongest-wins, and fails closed on ambiguous placement.',
+      'Email/password login requires email_password in the verified enabled_auth_methods. team_selection="auto" may return the chooser; "off" suppresses it. A server-recognized product still resolves its mandatory exact team before 2FA, applies that Organisation policy strongest-wins, and fails closed on ambiguous placement.',
     auth: 'config_url query param',
     query: {
       state:

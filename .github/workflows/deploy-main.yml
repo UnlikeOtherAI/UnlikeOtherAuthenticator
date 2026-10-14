@@ -212,13 +212,12 @@ jobs:
               secret_vars="$secret_vars,BILLING_SMS_TWILIO_IE1_API_KEY_SID=uoa-auth-sms-twilio-ie1-api-key-sid:latest,BILLING_SMS_TWILIO_IE1_API_KEY_SECRET=uoa-auth-sms-twilio-ie1-api-key-secret:latest"
             fi
           fi
-          scaling_args=(--min-instances 0 --cpu-throttling)
+          # Durable credit/manual-cycle/seat workers also run with Stripe disabled.
+          # They need a warm instance and idle CPU independently of collection.
+          scaling_args=(--min-instances 1 --no-cpu-throttling)
 
           if [[ "$UOA_STRIPE_BILLING_CONFIGURED" == "true" ]]; then
             secret_vars="$secret_vars,STRIPE_SECRET_KEY=uoa-auth-stripe-secret-key:latest,STRIPE_WEBHOOK_SECRET=uoa-auth-stripe-webhook-secret:latest"
-          fi
-          if [[ "$STRIPE_BILLING_ENABLED" == "true" ]]; then
-            scaling_args=(--min-instances 1 --no-cpu-throttling)
           fi
 
           gcloud run deploy "$GCP_CLOUD_RUN_SERVICE" \

@@ -9,7 +9,7 @@ import { verifyDomainAuthToken } from '../../services/domain-secret.service.js';
 
 vi.mock('../../services/domain-secret.service.js', () => ({
   verifyDomainAuthToken: vi.fn(async ({ domain, token }: { domain: string; token: string }) => ({
-    clientId: token,
+    clientId: 'client-domain-1',
     clientDomainId: 'client-domain-1',
     domain,
     hashPrefix: token.slice(0, 12),
@@ -68,7 +68,8 @@ describe('domain hash auth middleware', () => {
       domain: 'client.example.com',
       token: 'a'.repeat(64),
     });
-    expect(request.domainAuthClientId).toBe('a'.repeat(64));
+    expect(request.domainAuthClientId).toBe('client-domain-1');
+    expect(request.domainAuthCredential).toBe('a'.repeat(64));
     expect(request.domainAuthClientDomainId).toBe('client-domain-1');
   });
 

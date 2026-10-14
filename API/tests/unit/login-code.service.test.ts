@@ -9,6 +9,7 @@ function makeConfig(overrides?: Partial<ClientConfig>): ClientConfig {
     domain: 'client.example.com',
     redirect_urls: ['https://client.example.com/oauth/callback'],
     enabled_auth_methods: ['email_password'],
+    login_flow: { email_code_enabled: true, team_selection: 'off' },
     ui_theme: testUiTheme(),
     language_config: 'en',
     user_scope: 'global',
@@ -115,7 +116,7 @@ describe('login-code.service', () => {
       );
 
       expect(prisma.verificationToken.updateMany).toHaveBeenCalledWith({
-        where: { userKey: 'jane@example.com', type: 'LOGIN_CODE', usedAt: null },
+        where: { userKey: 'jane@example.com', configUrl: 'https://client.example.com/auth-config', type: 'LOGIN_CODE', usedAt: null },
         data: { usedAt: new Date('2026-03-01T00:00:00.000Z') },
       });
       expect(prisma.verificationToken.create).toHaveBeenCalledWith({
@@ -150,7 +151,7 @@ describe('login-code.service', () => {
       });
 
       const result = await verifyLoginCode(
-        { email: 'jane@example.com', config: makeConfig(), code: '123456' },
+        { email: 'jane@example.com', config: makeConfig(), code: '123456', configUrl: 'https://client.example.com/auth-config' },
         {
           env: baseEnv,
           prisma,
@@ -167,6 +168,7 @@ describe('login-code.service', () => {
           tokenVersion: 0,
           userId: 'user-1',
           usedAt: null,
+          attemptCount: { lt: 5 },
           expiresAt: { gt: new Date('2026-03-01T00:05:00.000Z') },
         },
         data: { usedAt: new Date('2026-03-01T00:05:00.000Z') },
@@ -187,7 +189,7 @@ describe('login-code.service', () => {
       let hashCallCount = 0;
       await expect(
         verifyLoginCode(
-          { email: 'jane@example.com', config: makeConfig(), code: '000000' },
+          { email: 'jane@example.com', config: makeConfig(), code: '000000', configUrl: 'https://client.example.com/auth-config' },
           {
             env: baseEnv,
             prisma,
@@ -206,6 +208,7 @@ describe('login-code.service', () => {
           tokenVersion: 0,
           userId: 'user-1',
           usedAt: null,
+          attemptCount: { lt: 5 },
           expiresAt: { gt: expect.any(Date) },
         },
         data: { attemptCount: { increment: 1 } },
@@ -220,7 +223,7 @@ describe('login-code.service', () => {
 
       await expect(
         verifyLoginCode(
-          { email: 'jane@example.com', config: makeConfig(), code: '123456' },
+          { email: 'jane@example.com', config: makeConfig(), code: '123456', configUrl: 'https://client.example.com/auth-config' },
           { env: baseEnv, prisma },
         ),
       ).rejects.toMatchObject({ statusCode: 401, code: 'UNAUTHORIZED' });
@@ -232,7 +235,7 @@ describe('login-code.service', () => {
 
       await expect(
         verifyLoginCode(
-          { email: 'unknown@example.com', config: makeConfig(), code: '999999' },
+          { email: 'unknown@example.com', config: makeConfig(), code: '999999', configUrl: 'https://client.example.com/auth-config' },
           { env: baseEnv, prisma },
         ),
       ).rejects.toMatchObject({ statusCode: 401, code: 'UNAUTHORIZED' });
@@ -248,7 +251,7 @@ describe('login-code.service', () => {
 
       await expect(
         verifyLoginCode(
-          { email: 'jane@example.com', config: makeConfig(), code: '123456' },
+          { email: 'jane@example.com', config: makeConfig(), code: '123456', configUrl: 'https://client.example.com/auth-config' },
           { env: baseEnv, prisma },
         ),
       ).rejects.toMatchObject({ statusCode: 401, code: 'UNAUTHORIZED' });
@@ -270,7 +273,7 @@ describe('login-code.service', () => {
 
       await expect(
         verifyLoginCode(
-          { email: 'jane@example.com', config: makeConfig(), code: '123456' },
+          { email: 'jane@example.com', config: makeConfig(), code: '123456', configUrl: 'https://client.example.com/auth-config' },
           { env: baseEnv, prisma, hashEmailToken: () => 'expected-hash' },
         ),
       ).rejects.toMatchObject({ statusCode: 401, code: 'UNAUTHORIZED' });
@@ -289,7 +292,7 @@ describe('login-code.service', () => {
 
       await expect(
         verifyLoginCode(
-          { email: 'jane@example.com', config: makeConfig(), code: '123456' },
+          { email: 'jane@example.com', config: makeConfig(), code: '123456', configUrl: 'https://client.example.com/auth-config' },
           { env: baseEnv, prisma, hashEmailToken: () => 'expected-hash' },
         ),
       ).rejects.toMatchObject({ statusCode: 401, code: 'UNAUTHORIZED' });
@@ -305,7 +308,7 @@ describe('login-code.service', () => {
 
       await expect(
         verifyLoginCode(
-          { email: 'jane@example.com', config: makeConfig(), code: '123456' },
+          { email: 'jane@example.com', config: makeConfig(), code: '123456', configUrl: 'https://client.example.com/auth-config' },
           { env: baseEnv, prisma, hashEmailToken: () => 'expected-hash' },
         ),
       ).rejects.toMatchObject({ statusCode: 401, code: 'UNAUTHORIZED' });
@@ -327,7 +330,7 @@ describe('login-code.service', () => {
 
       await expect(
         verifyLoginCode(
-          { email: 'jane@example.com', config: makeConfig(), code: '123456' },
+          { email: 'jane@example.com', config: makeConfig(), code: '123456', configUrl: 'https://client.example.com/auth-config' },
           {
             env: baseEnv,
             prisma,

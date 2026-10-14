@@ -161,8 +161,8 @@ type DomainAvatarAuditAction =
  * image that the others then render. See the header note on `registerDomainUserAvatarRoutes`.
  *
  * The actor is a client, not a person, so `actorEmail` carries a `client:` principal built from
- * `domainAuthClientDomainId` (a `ClientDomain` row cuid) — never `domainAuthClientId`, which is the
- * caller's live bearer token, not an id. See `machineActor`.
+ * `domainAuthClientDomainId` (a stable `ClientDomain` row cuid). Never use
+ * `domainAuthCredential`, which carries the request-only bearer. See `machineActor`.
  *
  * The write is awaited and its failure propagates, matching the `/internal/admin/*` avatar routes:
  * an unrecorded change to shared state is not an acceptable success. It is not yet atomic with the

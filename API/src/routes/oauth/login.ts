@@ -12,6 +12,10 @@ import { finalizePublicOAuthAuthorizationWithSignatures } from '../../services/s
 import { selectRedirectUrl } from '../../services/authorization-code.service.js';
 import { completePublicSecondFactor } from '../../services/oauth/second-factor.service.js';
 import { lockProductTeamPolicyShared } from '../../services/product-team-policy-lock.service.js';
+import { assertEmailDomainAllowedForLogin } from '../../services/login-domain-policy.service.js';
+import { assertNotBannedAtLogin } from '../../services/ban-policy.service.js';
+import { AppError } from '../../utils/errors.js';
+import { oauthLoginRateLimiter } from '../auth/rate-limit-keys.js';
 import { buildPublicErrorBody } from '../../utils/error-response.js';
 import { parseRequiredPkceChallenge } from '../../utils/pkce.js';
 import { requireMcpOAuthPublicProfile } from './public-profile-guard.js';
@@ -51,7 +55,7 @@ export function registerOAuthLoginRoute(app: FastifyInstance): void {
 
   app.post(
     '/oauth/login',
-    { preHandler: [requireMcpOAuthPublicProfile, limiter] },
+    { preHandler: [requireMcpOAuthPublicProfile, limiter, oauthLoginRateLimiter] },
     async (request, reply) => {
       const { email, password, remember_me, code, setup_token } = BodySchema.parse(request.body);
       const q = QuerySchema.parse(request.query);
@@ -79,13 +83,25 @@ export function registerOAuthLoginRoute(app: FastifyInstance): void {
       const outcome = await request.adminDb.$transaction(async (tx) => {
         const prisma = asPrismaClient(tx);
         await lockProductTeamPolicyShared(prisma);
+        // Re-read native policy under its mutation fence before any factor effects.
+        const currentClient = await getOAuthClient(q.client_id, prisma);
+        if (!currentClient || currentClient.nativeAppRevision !== client.nativeAppRevision ||
+            !currentClient.redirectUris.includes(q.redirect_uri)) {
+          throw new AppError('BAD_REQUEST', 400, 'INVALID_CLIENT');
+        }
+        const currentConfig = buildMcpClientConfig(currentClient.redirectUris, currentClient.nativeApp);
+        if (!currentConfig.enabled_auth_methods.includes('email_password')) {
+          throw new AppError('FORBIDDEN', 403);
+        }
         const { userId, twoFaEnabled, credentialEpoch } = await loginWithEmailPassword(
-          { email, password, config },
+          { email, password, config: currentConfig },
           { prisma },
         );
 
+        await assertEmailDomainAllowedForLogin({ userId, domain: currentConfig.domain }, { prisma });
+        await assertNotBannedAtLogin({ userId, domain: currentConfig.domain, ip: request.ip }, { prisma });
         const factor = await completePublicSecondFactor({
-          userId, credentialEpoch, twoFaEnabled, config, context: q,
+          userId, credentialEpoch, twoFaEnabled, config: currentConfig, context: q,
           code, setupToken: setup_token,
         }, prisma);
         if (factor.response) return { kind: 'factor' as const, response: factor.response };

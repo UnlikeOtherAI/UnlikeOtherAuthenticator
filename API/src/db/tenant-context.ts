@@ -76,9 +76,9 @@ export type RunWithTenantContextDeps = {
  * `app.user_id` set for the lifetime of the transaction.
  *
  * The settings are applied with `set_config(..., true)`, so they are scoped to
- * the transaction and safe under any pooling mode. Nested `prisma.$transaction`
- * inside services becomes a savepoint on this outer transaction and inherits
- * the session settings.
+ * the transaction and safe under any pooling mode. Services use `runInTransaction` to reuse this outer transaction and inherit
+ * its settings. Prisma does not provide nested savepoints; failures abort the
+ * outer unit of work.
  */
 export async function runWithTenantContext<T>(
   params: { context: TenantContext } & RunWithTenantContextDeps,

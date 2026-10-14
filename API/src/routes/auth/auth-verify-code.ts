@@ -76,7 +76,7 @@ export function registerAuthVerifyCodeRoute(app: FastifyInstance): void {
       const requestAccess = parseRequestAccessFlag(request_access);
 
       const { userId, credentialEpoch } = await verifyLoginCode(
-        { email, config, code },
+        { email, config, code, configUrl },
         { prisma: request.adminDb },
       );
 

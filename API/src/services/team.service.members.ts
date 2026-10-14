@@ -448,7 +448,7 @@ export async function selfJoinTeam(
       where: { teamId: team.id, userId: actorUserId },
       select: { id: true, status: true },
     });
-    if (existing && existing.status === 'ACTIVE') {
+    if (existing && existing.status !== 'REMOVED') {
       throw new AppError('BAD_REQUEST', 400);
     }
 
@@ -456,7 +456,7 @@ export async function selfJoinTeam(
       return existing
         ? await tx.teamMember.update({
             where: { id: existing.id },
-            data: { status: 'ACTIVE', statusChangedAt: new Date() },
+            data: { teamRole: normalizeTeamRole(undefined, params.config), status: 'ACTIVE', statusChangedAt: new Date() },
             select: {
               id: true,
               teamId: true,

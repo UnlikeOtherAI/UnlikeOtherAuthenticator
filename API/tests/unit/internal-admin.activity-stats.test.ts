@@ -159,7 +159,7 @@ describe('admin dashboard counts', () => {
       loginsToday: 6,
     });
     expect(prisma.clientDomain.count).toHaveBeenCalledExactlyOnceWith({
-      where: { status: 'ACTIVE' },
+      where: { status: 'active' },
     });
     expect(prisma.user.count).toHaveBeenCalledExactlyOnceWith();
     expect(prisma.organisation.count).toHaveBeenCalledExactlyOnceWith();

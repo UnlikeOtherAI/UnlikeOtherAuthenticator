@@ -254,7 +254,7 @@ export const accessTokenDocumentation = {
     domain:
       'string — integration domain from the config JWT. Confirms which integration minted this token.',
     client_id:
-      'string — SHA256(domain + clientSecret) hex. Identifies the exact client credential used.',
+      'string — stable non-secret ClientDomain record id, independent of secret rotation. Never a backend bearer.',
     org: 'object | absent — present when org_features.enabled and the user has a live org context. This is normally same-domain; an exact team-scoped session for a server-recognized all_active_memberships product carries its selected cross-domain org instead. Shape: { org_id, org_role, teams[], team_roles{}, groups?[], group_admin?[] }.',
     iss: 'string — UOA host (e.g. authentication.unlikeotherai.com).',
     aud: 'string — always "uoa:access-token".',

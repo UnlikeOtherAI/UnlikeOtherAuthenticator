@@ -1,5 +1,18 @@
 # Roles & ACL — Requirements
 
+> Current shipped contract (2026-10-14): the historical ReBAC/custom-role design
+> below is a plan, not evidence that every field/endpoint shipped. Website user
+> tokens currently carry optional singular `org` (`org_id`, `org_role`, `teams`,
+> `team_roles`, optional groups), optional exact `active`, and credential epoch
+> `tv`. Membership role strings and domain-authored capability grants are live;
+> `owner` remains structurally protected. `role: superuser` can denote platform
+> OR product-domain bootstrap authority; only live `system_admin` from `/org/me`
+> proves platform administration. New `client_id` is a stable non-secret
+> ClientDomain ID. `/api`, `/llm` and `Docs/brief.md` dated amendments describe
+> shipped behavior. Planned `orgs[]`, separate custom roles, role CRUD and SCIM
+> are not a supported alternate token profile.
+
+
 ## Two distinct role systems
 
 There are two completely separate concepts that must not be conflated.

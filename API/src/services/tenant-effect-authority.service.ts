@@ -14,7 +14,7 @@ import {
 } from './refresh-session-lock.service.js';
 
 type EffectRequest = Pick<FastifyRequest, 'accessTokenClaims' | 'adminAccessTokenClaims' |
-  'orgBackendCaller' | 'domainAuthClientDomainId' | 'domainAuthClientId' | 'params' | 'body'>;
+  'orgBackendCaller' | 'domainAuthClientDomainId' | 'domainAuthCredential' | 'params' | 'body'>;
 
 function field(value: unknown, key: string): string | undefined {
   if (!value || typeof value !== 'object') return undefined;
@@ -81,9 +81,9 @@ export async function assertTenantEffectAuthority(
     }
   }
   if (!request.adminAccessTokenClaims) {
-    if (!request.domainAuthClientDomainId || !request.domainAuthClientId) deny();
+    if (!request.domainAuthClientDomainId || !request.domainAuthCredential) deny();
     const authority = await verifyDomainAuthToken({ domain: context.domain,
-      token: request.domainAuthClientId }, { prisma: adminDb });
+      token: request.domainAuthCredential }, { prisma: adminDb });
     if (authority.clientDomainId !== request.domainAuthClientDomainId) deny();
   }
   if (options?.authority === 'domain' && context.orgId) {

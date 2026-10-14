@@ -72,6 +72,9 @@ export async function issueLoginCode(
   },
   deps?: LoginCodeDeps,
 ): Promise<void> {
+  if (!params.config.login_flow?.email_code_enabled) {
+    throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
+  }
   const env = deps?.env ?? getEnv();
   if (!env.DATABASE_URL) return;
 
@@ -95,7 +98,7 @@ export async function issueLoginCode(
 
   // Supersede any prior unused LOGIN_CODE for this user before minting a new one.
   await prisma.verificationToken.updateMany({
-    where: { userKey, type: 'LOGIN_CODE', usedAt: null },
+    where: { userKey, configUrl: params.configUrl, type: 'LOGIN_CODE', usedAt: null },
     data: { usedAt: now },
   });
 
@@ -148,9 +151,13 @@ export async function verifyLoginCode(
     email: string;
     config: ClientConfig;
     code: string;
+    configUrl: string;
   },
   deps?: LoginCodeDeps,
 ): Promise<{ userId: string; credentialEpoch: number }> {
+  if (!params.config.login_flow?.email_code_enabled) {
+    throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
+  }
   const env = deps?.env ?? getEnv();
   if (!env.DATABASE_URL) {
     throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
@@ -168,10 +175,11 @@ export async function verifyLoginCode(
   const hashFn = deps?.hashEmailToken ?? hashEmailToken;
 
   const candidateHash = hashLoginCode({ code: params.code, userKey, sharedSecret, hashFn });
-  return runInTransaction(prisma, async (tx) => {
+  const result = await runInTransaction(prisma, async (tx) => {
     const token = await tx.verificationToken.findFirst({
       where: {
         userKey,
+        configUrl: params.configUrl,
         type: 'LOGIN_CODE',
         usedAt: null,
         attemptCount: { lt: LOGIN_CODE_MAX_ATTEMPTS },
@@ -205,11 +213,13 @@ export async function verifyLoginCode(
           tokenVersion: epoch.credentialEpoch,
           userId: epoch.userId,
           usedAt: null,
+          attemptCount: { lt: LOGIN_CODE_MAX_ATTEMPTS },
           expiresAt: { gt: decisionNow },
         },
         data: { attemptCount: { increment: 1 } },
       });
-      throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
+      // Commit the failed attempt before returning the authentication error.
+      return null;
     }
 
     const updated = await tx.verificationToken.updateMany({
@@ -218,6 +228,7 @@ export async function verifyLoginCode(
         tokenVersion: epoch.credentialEpoch,
         userId: epoch.userId,
         usedAt: null,
+        attemptCount: { lt: LOGIN_CODE_MAX_ATTEMPTS },
         expiresAt: { gt: decisionNow },
       },
       data: { usedAt: decisionNow },
@@ -228,4 +239,6 @@ export async function verifyLoginCode(
 
     return { userId: epoch.userId, credentialEpoch: epoch.credentialEpoch };
   });
+  if (!result) throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
+  return result;
 }

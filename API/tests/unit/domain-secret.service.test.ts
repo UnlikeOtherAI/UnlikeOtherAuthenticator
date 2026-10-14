@@ -42,7 +42,7 @@ describe('domain-secret.service', () => {
         { prisma: prisma as never },
       ),
     ).resolves.toEqual({
-      clientId: clientHash,
+      clientId: 'client-domain-1',
       clientDomainId: 'client-domain-1',
       domain: 'client.example.com',
       hashPrefix: clientHash.slice(0, 12),

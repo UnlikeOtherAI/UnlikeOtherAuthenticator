@@ -316,10 +316,11 @@ runtime application config:
 - `UOA_STRIPE_BILLING_CONFIGURED` defaults to `false`. Only exact `true`
   attaches the two Stripe Secret Manager entries.
 - `STRIPE_BILLING_ENABLED` defaults to `false`. Exact `true` additionally
-  requires the configured flag and all Ledger collector identifiers, keeps one
-  Cloud Run instance warm, and disables CPU throttling so the recurring
-  scheduler and pre-boundary safety timer run. False deploys with zero minimum
-  instances and throttled idle CPU.
+  requires the configured flag and all Ledger collector identifiers, enables the Stripe
+  collector and pre-boundary safety timer. Deployment keeps one warm instance
+  with unthrottled CPU independently of this flag: durable credit settlement,
+  seat transitions and manual/closed-cycle reconciliation also run while Stripe
+  is disabled. This deliberately incurs idle instance cost to preserve recovery.
 
 Tariff-signing, billing-assertion, and UOA's Ledger collector credentials are
 wired on every deployment because they are required for signed entitlement and

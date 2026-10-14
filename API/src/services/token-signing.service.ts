@@ -24,6 +24,10 @@ export async function signAccessToken(params: {
    *  party, so it stays out of the publishable-signature surface. */
   relyingPartyToken: boolean;
 }): Promise<string> {
+  // Reject credential-shaped identifiers before building a readable token.
+  if (/^[a-f0-9]{64}$/i.test(params.clientId)) {
+    throw new AppError('INTERNAL', 500, 'SECRET_CLIENT_IDENTIFIER');
+  }
   const payload = {
     ...(!params.relyingPartyToken ? { jti: randomUUID() } : {}),
     email: params.email,

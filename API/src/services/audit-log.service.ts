@@ -58,12 +58,9 @@ export type AuditLogPrisma = Pick<PrismaClient, 'adminAuditLog'>;
  * record. The `client:` prefix keeps those rows unmistakable and unmatchable against any real
  * address, so a reader never mistakes a machine action for a human one.
  *
- * `clientDomainId` is `ClientDomain.id` — a plain row cuid. It must NEVER be
- * `request.domainAuthClientId`, which despite its name is the caller's **live domain-hash bearer**
- * (`verifyDomainAuthToken` returns `clientId: clientHash`, the token exactly as presented). Writing
- * that here would persist a full-system-trust credential in plaintext, in an operator-readable
- * table, under a column nobody would think to check for a secret — and it rotates with the domain
- * secret, so it would not even correlate the trail it exists to build.
+ * Both domainAuthClientId and domainAuthClientDomainId name the stable ClientDomain row.
+ * Never use domainAuthCredential: it is request-only backend authority and cannot
+ * enter audit metadata, durable session context, or a readable token.
  */
 export function machineActor(params: { domain: string; clientDomainId?: string | null }): string {
   const client = params.clientDomainId ? `#${params.clientDomainId}` : '';

@@ -88,7 +88,7 @@ describe('Team service: self-join & visibility', () => {
       mockOrgAndActor(prisma);
       prisma.team.findFirst.mockResolvedValue({ id: 'team-1', joinPolicy: 'OPEN_TO_ORG' });
       prisma.teamMember.count.mockResolvedValueOnce(0).mockResolvedValueOnce(0);
-      prisma.teamMember.findFirst.mockResolvedValue({ id: 'tm-old', status: 'REMOVED' });
+      prisma.teamMember.findFirst.mockResolvedValue({ id: 'tm-old', status: 'REMOVED', teamRole: 'admin' });
       prisma.teamMember.update.mockResolvedValue({
         id: 'tm-old',
         teamId: 'team-1',
@@ -113,7 +113,7 @@ describe('Team service: self-join & visibility', () => {
       expect(prisma.teamMember.create).not.toHaveBeenCalled();
       expect(prisma.teamMember.update).toHaveBeenCalledWith({
         where: { id: 'tm-old' },
-        data: { status: 'ACTIVE', statusChangedAt: expect.any(Date) },
+        data: { teamRole: 'member', status: 'ACTIVE', statusChangedAt: expect.any(Date) },
         select: expect.any(Object),
       });
     });

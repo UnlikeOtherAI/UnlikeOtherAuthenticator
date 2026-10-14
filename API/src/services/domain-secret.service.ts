@@ -125,7 +125,7 @@ export async function verifyDomainAuthToken(
   if (!matched) throw new AppError('UNAUTHORIZED', 401);
 
   return {
-    clientId: clientHash,
+    clientId: row.id,
     clientDomainId: row.id,
     domain,
     hashPrefix: matched.hashPrefix,

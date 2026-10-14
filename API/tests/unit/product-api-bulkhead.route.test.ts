@@ -181,7 +181,7 @@ describe('product API bulkhead (Fastify)', () => {
     expect(built.bulkhead.stats()).toEqual({ active: 0, queued: 0 });
   });
 
-  it('releases the slot exactly once when the client disconnects mid-handler', async () => {
+  it('holds the slot after disconnect until asynchronous service work completes', async () => {
     const built = await buildApp({ maxConcurrency: 1, maxQueue: 0, queueWaitMs: 1000 });
     app = built.app;
     const baseUrl = await app.listen({ host: '127.0.0.1', port: 0 });
@@ -191,10 +191,13 @@ describe('product API bulkhead (Fastify)', () => {
     expectBusy(await app.inject({ method: 'GET', url: '/org/fast' }));
 
     holding.req.destroy();
-    await until(() => built.bulkhead.stats().active === 0);
-    expect((await app.inject({ method: 'GET', url: '/org/fast' })).statusCode).toBe(200);
+    expect(await holding.done).toBe('aborted');
+    expect(built.bulkhead.stats().active).toBe(1);
+    expectBusy(await app.inject({ method: 'GET', url: '/org/fast' }));
 
     built.gates[0].open();
+    await until(() => built.bulkhead.stats().active === 0);
+    expect((await app.inject({ method: 'GET', url: '/org/fast' })).statusCode).toBe(200);
     expect(await holding.done).toBe('aborted');
     await new Promise((resolve) => setTimeout(resolve, 20));
     // Completing the abandoned handler must not release a second time: with one

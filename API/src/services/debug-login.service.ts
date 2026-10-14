@@ -7,6 +7,7 @@ import type { ClientConfig } from './config.service.js';
 import { lockAndAssertAuthenticationEpoch } from './authentication-epoch.service.js';
 import { lockRefreshSessionUserDomain } from './refresh-session-lock.service.js';
 import { lockTokenIssuanceProductPolicy } from './product-team-policy-lock.service.js';
+import { matchesWebsiteRefreshContext, migrateWebsiteRefreshFamily } from './website-client-context.service.js';
 import { createRefreshTokenRotationPolicyGuard } from './refresh-token-rotation-policy.service.js';
 import { hashRefreshToken } from './refresh-token-replay.service.js';
 import { issueRefreshToken } from './refresh-token.service.js';
@@ -32,9 +33,9 @@ export function debugLoginConfigIdentity(configUrl: string): string {
   url.searchParams.delete('theme');
   return url.toString();
 }
-function matchesContext(row: { domain: string; clientId: string; configUrl: string }, context: Context) {
-  return row.domain === context.config.domain && row.clientId === context.clientId
-    && debugLoginConfigIdentity(row.configUrl) === debugLoginConfigIdentity(context.configUrl);
+async function matchesContext(row: { domain: string; clientId: string; configUrl: string }, context: Context, prisma: PrismaClient) {
+  return matchesWebsiteRefreshContext({ ...row, configUrl: debugLoginConfigIdentity(row.configUrl) },
+    { domain: context.config.domain, clientId: context.clientId, configUrl: debugLoginConfigIdentity(context.configUrl) }, prisma);
 }
 const fail = () => new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
 const digest = (token: string) => createHash('sha256').update(`uoa:debug-login:v1:${token}`).digest('hex');
@@ -43,7 +44,7 @@ type Deps = { prisma: PrismaClient; now?: () => Date; beforeRedemptionLock?: () 
   assertAuthority?: (source: RefreshToken, prisma: PrismaClient) => Promise<void> };
 
 async function validateSource(context: Context, source: RefreshToken, prisma: PrismaClient, now: Date) {
-  if (!matchesContext(source, context)
+  if (!await matchesContext(source, context, prisma)
     || source.revokedAt || source.securityRevokedAt || source.replacedByTokenId || source.expiresAt <= now
     || source.resource || source.oauthScope || source.credentialEpoch !== null) throw fail();
   const teamPolicy = await resolveProductTeamPolicy({ domain: context.config.domain }, { prisma });
@@ -64,6 +65,8 @@ export async function issueDebugLogin(
     const candidate = await tx.refreshToken.findUnique({ where: { tokenHash } });
     if (!candidate) throw fail();
     await lockRefreshSessionUserDomain(candidate, { prisma: tx });
+    const lockedSource = await tx.refreshToken.findUnique({ where: { tokenHash } });
+    if (lockedSource) await migrateWebsiteRefreshFamily(lockedSource, { domain: input.config.domain, clientId: input.clientId, configUrl: lockedSource.configUrl }, tx);
     const source = await tx.refreshToken.findUnique({ where: { tokenHash } });
     const now = deps.now?.() ?? new Date();
     if (!source) throw fail();
@@ -79,7 +82,7 @@ export async function issueDebugLogin(
       const previous = await tx.debugLoginGrant.findUnique({ where: { tokenHash: digest(input.previousToken) } });
       if (previous) {
         if (previous.userId !== source.userId || previous.sourceFamilyId !== source.familyId
-          || !matchesContext(previous, input)) throw fail();
+          || !await matchesContext(previous, input, tx)) throw fail();
         await tx.debugLoginGrant.updateMany({ where: { id: previous.id, usedAt: null }, data: { usedAt: now } });
       }
       // Pruned expiry metadata means no live grant remains to invalidate.
@@ -101,7 +104,7 @@ export async function redeemDebugLogin(input: Context & { token: string }, deps:
       { domain: input.config.domain, clientDomainId: input.clientDomainId }, { prisma: tx },
     );
     const grant = await tx.debugLoginGrant.findUnique({ where: { tokenHash: digest(input.token) } });
-    if (!grant || !matchesContext(grant, input)) throw fail();
+    if (!grant || !await matchesContext(grant, input, tx)) throw fail();
     await deps.beforeRedemptionLock?.();
     await lockAndAssertAuthenticationEpoch({
       userId: grant.userId, domain: grant.domain, credentialEpoch: grant.tokenVersion,
@@ -112,6 +115,11 @@ export async function redeemDebugLogin(input: Context & { token: string }, deps:
       familyId: grant.sourceFamilyId, userId: grant.userId, revokedAt: null,
       securityRevokedAt: null, replacedByTokenId: null, expiresAt: { gt: now },
     } });
+    if (source) {
+      if (!await matchesContext(source, input, tx)) throw fail();
+      await migrateWebsiteRefreshFamily(source, { domain: input.config.domain, clientId: input.clientId, configUrl: source.configUrl }, tx);
+      source.clientId = input.clientId;
+    }
     if (!source || source.orgId !== grant.orgId || source.teamId !== grant.teamId) throw fail();
     await validateSource(input, source, tx, now);
     await deps.assertAuthority?.(source, tx);

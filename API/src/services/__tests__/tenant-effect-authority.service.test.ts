@@ -28,7 +28,7 @@ function fixture() {
     accessTokenClaims: { userId: 'z-actor', tokenVersion: 4, domain: context.domain,
       role: 'user', email: 'actor@example.com', clientId: 'client',
       active: { orgId: 'org', teamId: 'selected' } },
-    domainAuthClientId: bearer, domainAuthClientDomainId: 'registered',
+    domainAuthClientId: 'registered', domainAuthCredential: bearer, domainAuthClientDomainId: 'registered',
     params: { teamId: 'target', userId: 'a-subject' }, body: { userId: 'a-subject' },
   } as unknown as FastifyRequest;
   const guard = () => assertTenantEffectAuthority(request, context, tx, db as unknown as PrismaClient);

@@ -2,6 +2,8 @@ import { ConfidentialDelegationScope, type Prisma, type PrismaClient } from '@pr
 
 import { getAdminPrisma } from '../db/prisma.js';
 import { normalizeDomain } from '../utils/domain.js';
+import { lockProductTeamPolicyExclusive } from './product-team-policy-lock.service.js';
+import { asPrismaClient } from '../db/tenant-context.js';
 import { AppError } from '../utils/errors.js';
 
 const PRODUCT_PATTERN = /^[a-z0-9][a-z0-9._-]{0,99}$/;
@@ -260,6 +262,7 @@ export async function createConfidentialDelegationMapping(
 
   try {
     return await client(deps).$transaction(async (tx) => {
+      await lockProductTeamPolicyExclusive(asPrismaClient(tx));
       const source = await tx.clientDomain.findUnique({
         where: { domain: sourceDomain },
         select: { id: true, status: true },
@@ -322,6 +325,7 @@ export async function updateConfidentialDelegationMapping(
 
   try {
     return await client(deps).$transaction(async (tx) => {
+      await lockProductTeamPolicyExclusive(asPrismaClient(tx));
       const existing = await tx.confidentialDelegationMapping.findUnique({
         where: { id: params.mappingId },
         include: mappingInclude,
@@ -370,6 +374,7 @@ export async function deleteConfidentialDelegationMapping(
   deps?: { prisma?: PrismaClient },
 ): Promise<void> {
   await client(deps).$transaction(async (tx) => {
+    await lockProductTeamPolicyExclusive(asPrismaClient(tx));
     const existing = await tx.confidentialDelegationMapping.findUnique({
       where: { id: params.mappingId },
       include: mappingInclude,

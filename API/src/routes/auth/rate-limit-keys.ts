@@ -89,6 +89,9 @@ export const loginRateLimiter = composeRateLimiters(
   bodyRateLimiter('auth:login', 'email', 5, 15 * MINUTE_MS),
 );
 
+// Bound native password guesses across source IPs.
+export const oauthLoginRateLimiter = bodyRateLimiter('oauth:login', 'email', 5, 15 * MINUTE_MS);
+
 export const registerRateLimiter = composeRateLimiters(
   ipRateLimiter('auth:register', 10, MINUTE_MS),
   globalRateLimiter('auth:register', 30_000),

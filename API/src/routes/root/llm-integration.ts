@@ -78,7 +78,7 @@ The \`access_token\` is a JWT (compact JWS, three base64url segments). Decode th
 | \`email\` | custom | User's primary email. Advisory — user may change it; \`sub\` is the stable identity. |
 | \`role\` | custom | **Platform-side UOA role** — \`"user"\` or \`"superuser"\`. Do NOT use this for tenant/org authorization. See 4.4. |
 | \`domain\` | custom | The integration domain from your config JWT. Confirms which integration minted this token. |
-| \`client_id\` | custom | \`SHA256(domain + clientSecret)\` hex. Identifies the exact client credential used. |
+| \`client_id\` | custom | Stable non-secret ClientDomain record id, independent of secret rotation; never the backend bearer. |
 | \`org\` | custom (optional) | Present only when \`org_features.enabled\` and the user has an org on this domain. Shape: \`{ org_id, tenant_slug, org_role, teams[], team_roles{}, groups?[], group_admin?[] }\`. |
 | \`active.tenantSlug\` | custom (optional) | Canonical DNS-safe subdomain label for the selected team. It is sourced from the organisation slug and unique within this client domain. Treat its absence as a legacy-token compatibility case; never use \`Team.slug\` as a tenant host key. |
 | \`iss\` | standard | UOA host, e.g. \`authentication.unlikeotherai.com\`. |

@@ -84,7 +84,7 @@ Instead, the context is set **once per request, on the same interactive transact
    - Issues `SELECT set_config('app.domain', $1, true), set_config('app.org_id', $2, true), set_config('app.user_id', $3, true)` with values from `request.tenantContext`.
    - Passes `tx` to the handler. The handler threads `tx` to services (services already accept `deps.prisma`, so this is a plumbing change, not a signature change).
    - Commits or rolls back at the end of the handler.
-4. Nested `prisma.$transaction(async innerTx => ...)` inside services is invoked on `tx` (the outer transactional client). Prisma turns nested interactive transactions into savepoints natively — GUCs stay in scope, rollback semantics are correct.
+4. Nested `prisma.$transaction(async innerTx => ...)` inside services is invoked on `tx` (the outer transactional client). Prisma has no nested interactive transaction/savepoint API. Services use runInTransaction(tx, body), which reuses the outer client; GUCs stay in scope and a failure aborts the outer transaction. Catching an inner error does not create a rollback boundary.
 
 `set_config(..., true)` scopes the setting to the transaction, which is safe under any pooling mode (PgBouncer transaction, Cloud SQL proxy, direct connections). No pooler config change required.
 
@@ -205,7 +205,7 @@ No chunk needs to be rewritten. The app-side changes are:
 
 ## 10. Sharp edges
 
-1. **Nested interactive `$transaction` is the real risk**, not array form. Existing services use `prisma.$transaction(async tx => ...)` at ~25 sites. The design in section 6 runs the entire request inside one interactive transaction, and those nested calls become savepoints on the outer tx — Prisma handles this natively in v5+. Do **not** use the per-query `$allOperations` wrapper pattern: it opens a fresh transaction per operation and loses session vars inside user-owned transactions.
+1. **Nested interactive `$transaction` is the real risk**, not array form. Existing services use `prisma.$transaction(async tx => ...)` at ~25 sites. The design in section 6 runs the entire request inside one interactive transaction, and must use runInTransaction so they reuse the outer tx. Prisma does not create savepoints; inner writes commit or roll back with the outer transaction. Do **not** use the per-query `$allOperations` wrapper pattern: it opens a fresh transaction per operation and loses session vars inside user-owned transactions.
 2. **`audit-log.service.ts` currently calls `getPrisma()` directly** (`API/src/services/audit-log.service.ts:18-19, 31`). That binds it to `uoa_app`, which will permission-deny on `admin_audit_log`. Refactor to accept a prisma client parameter before M2.
 3. **Background retention jobs** (`API/src/app.ts:96-112` → `retention-pruning.service.ts`) run with no request context and delete from domain-scoped tables. They must use `uoa_admin`; pass the admin client in at scheduler setup time.
 4. **Cascade deletes** are evaluated with the parent row's visibility. If a user can see their org, cascading delete of `team_members` proceeds regardless of team-level policies. Acceptable — cascades are app-intended.

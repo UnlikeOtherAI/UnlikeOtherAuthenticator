@@ -44,8 +44,8 @@ function makePrisma() {
     $queryRaw: vi.fn().mockResolvedValue([]),
     organisation: { findFirst: vi.fn() },
     team: { findFirst: vi.fn() },
-    teamMember: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
-    orgMember: { findFirst: vi.fn(), create: vi.fn() },
+    teamMember: { count: vi.fn().mockResolvedValue(0), findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
+    orgMember: { count: vi.fn().mockResolvedValue(0), findFirst: vi.fn(), create: vi.fn() },
     teamInviteLink: {
       create: vi.fn(),
       findMany: vi.fn(),

@@ -135,7 +135,7 @@ export function formatAdminOrganisation(
       ),
       twofa: member.user.twoFaEnabled,
       lastLogin: latestLog ? displayTimestamp(latestLog.createdAt) : 'Never',
-      status: 'active',
+      status: member.status !== 'ACTIVE' ? member.status.toLowerCase() : member.user.lifecycleStatus.toLowerCase(),
       method: method(latestLog?.authMethod),
     };
   });
@@ -254,7 +254,7 @@ export async function getAdminStats() {
   const [users, orgs, domains, loginsToday] = await Promise.all([
     prisma.user.count(),
     prisma.organisation.count(),
-    prisma.clientDomain.count({ where: { status: 'ACTIVE' } }),
+    prisma.clientDomain.count({ where: { status: 'active' } }),
     prisma.loginLog.count({ where: { createdAt: { gte: today } } }),
   ]);
   return { users, domains, orgs, loginsToday };

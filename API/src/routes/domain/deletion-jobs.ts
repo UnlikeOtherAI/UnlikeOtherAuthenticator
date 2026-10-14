@@ -15,8 +15,8 @@ export function registerProductDeletionJobs(app: FastifyInstance) {
     const body = z.object({ revision: z.number().int().positive(), outcome: z.enum(['PURGED', 'RETAINED_EVIDENCE']),
       retainedEvidence: z.array(z.object({ label: z.string().trim().min(1).max(120), count: z.number().int().positive().max(1_000_000_000), reason: z.string().trim().min(1).max(500) }).strict()).max(30).optional(),
     }).strict().refine(value => value.outcome === 'RETAINED_EVIDENCE' || !value.retainedEvidence?.length).parse(request.body);
-    if (!request.domainAuthClientDomainId || !request.domainAuthClientId) throw new AppError('UNAUTHORIZED', 401);
+    if (!request.domainAuthClientDomainId || !request.domainAuthCredential) throw new AppError('UNAUTHORIZED', 401);
     const { domain } = z.object({ domain: z.string().min(1) }).parse(request.query);
-    return acknowledgeProductDeletion({ clientDomainId: request.domainAuthClientDomainId, jobId: id, authority: { domain, token: request.domainAuthClientId }, ...body });
+    return acknowledgeProductDeletion({ clientDomainId: request.domainAuthClientDomainId, jobId: id, authority: { domain, token: request.domainAuthCredential }, ...body });
   });
 }

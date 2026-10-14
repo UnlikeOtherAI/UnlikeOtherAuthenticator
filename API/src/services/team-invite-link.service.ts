@@ -13,7 +13,10 @@ import {
   resolveOrgActor,
   resolveOrganisation,
   type OrgActorProvenance,
+  ensureOrgRole, parseOrgFeatureRoles, parseOrgLimit,
 } from './organisation.service.base.js';
+import { normalizeTeamRole, parseMaxMembersPerTeam, parseMaxTeamMembershipsPerUser } from './team.service.base.js';
+import { lockRefreshSessionUser } from './refresh-session-lock.service.js';
 import {
   DAY_MS,
   TEAM_INVITE_LINK_SELECT,
@@ -26,7 +29,7 @@ import {
   type TeamInviteLinkRecord,
 } from './team-invite-link.base.js';
 import {
-  assertActiveTeamScope,
+  assertActiveTeamMembership,
   lockTeamMembershipRows,
 } from './team-scope.service.js';
 
@@ -345,19 +348,23 @@ export async function redeemTeamInviteLink(
   },
   deps?: InviteLinkDeps,
 ): Promise<RedeemTeamInviteLinkResult> {
-  void params.config;
+
   const env = deps?.env ?? getEnv();
   assertDatabaseEnabled(env);
 
   const prisma = deps?.prisma ?? (getPrisma() as InviteLinkPrisma);
-  const now = deps?.now ? deps.now() : new Date();
   const sharedSecret = deps?.sharedSecret ?? requireEnv('SHARED_SECRET').SHARED_SECRET;
   const hashToken = deps?.hashToken ?? hashEmailToken;
-  const domain = normalizeDomain(params.domain);
+  if (normalizeDomain(params.domain) !== params.config.domain) throw new AppError('BAD_REQUEST', 400);
   const tokenHash = hashToken(params.token, sharedSecret);
 
   const result = await runInTransaction(prisma, async (tx) => {
-    const { link, team } = await findValidInviteLink(tx, { tokenHash, now });
+    await lockRefreshSessionUser(params.userId, { prisma: tx });
+    const decisionNow = deps?.now?.() ?? new Date();
+    const { link, team } = await findValidInviteLink(tx, { tokenHash, now: decisionNow });
+    const role = normalizeTeamRole(link.roleToAssign, params.config);
+    if (role === 'owner') throw new AppError('BAD_REQUEST', 400);
+    ensureOrgRole('member', parseOrgFeatureRoles(params.config));
     await lockTeamMembershipRows(
       { userId: params.userId, orgId: team.orgId, teamId: team.id },
       { prisma: tx },
@@ -370,7 +377,7 @@ export async function redeemTeamInviteLink(
       where: {
         id: link.id,
         revokedAt: null,
-        expiresAt: { gt: now },
+        expiresAt: { gt: decisionNow },
         useCount: { lt: link.maxUses },
       },
       data: { useCount: { increment: 1 } },
@@ -389,6 +396,7 @@ export async function redeemTeamInviteLink(
       throw new AppError('BAD_REQUEST', 400);
     }
     if (!existingMembershipInOrganisation) {
+      if (await tx.orgMember.count({ where: { orgId: team.orgId, status: 'ACTIVE' } }) >= parseOrgLimit(params.config)) throw new AppError('BAD_REQUEST', 400);
       await tx.orgMember.create({
         data: { orgId: team.orgId, userId: params.userId, role: 'member' },
         select: { id: true },
@@ -402,10 +410,16 @@ export async function redeemTeamInviteLink(
       select: { id: true, status: true },
     });
 
+    if (existingTeamMembership?.status === 'DEACTIVATED') throw new AppError('BAD_REQUEST', 400, 'MEMBERSHIP_DEACTIVATED');
+    if (existingTeamMembership?.status !== 'ACTIVE') {
+      const memberCount = await tx.teamMember.count({ where: { teamId: team.id, status: 'ACTIVE' } });
+      const userCount = await tx.teamMember.count({ where: { userId: params.userId, status: 'ACTIVE', team: { orgId: team.orgId } } });
+      if (memberCount >= parseMaxMembersPerTeam(params.config) || userCount >= parseMaxTeamMembershipsPerUser(params.config)) throw new AppError('BAD_REQUEST', 400);
+    }
     let teamMemberId: string;
     if (!existingTeamMembership) {
       const created = await tx.teamMember.create({
-        data: { teamId: team.id, userId: params.userId, teamRole: link.roleToAssign },
+        data: { teamId: team.id, userId: params.userId, teamRole: role },
         select: { id: true },
       });
       teamMemberId = created.id;
@@ -414,15 +428,14 @@ export async function redeemTeamInviteLink(
       if (existingTeamMembership.status !== 'ACTIVE') {
         await tx.teamMember.update({
           where: { id: existingTeamMembership.id },
-          data: { status: 'ACTIVE', statusChangedAt: now, teamRole: link.roleToAssign },
+          data: { status: 'ACTIVE', statusChangedAt: decisionNow, teamRole: role },
         });
       }
     }
 
-    await assertActiveTeamScope(
+    await assertActiveTeamMembership(
       {
         userId: params.userId,
-        domain,
         orgId: team.orgId,
         teamId: team.id,
       },

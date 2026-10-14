@@ -17,7 +17,8 @@ import { registerConfigValidateRoute } from './config-validate.js';
 import { registerConfigVerifyRoute } from './config-verify.js';
 import { registerLlmRoute } from './llm.js';
 import { endpoints } from './schema.js';
-// Admin schema includes exact-user activity filters and canonical invitation history states.
+// Website tokens use stable non-secret client IDs; method/code binding policies
+// are published by the shared config and endpoint schema slices.
 import { readAdminIndexAssetUrls } from '../../services/admin-ui.service.js';
 import { renderRootHoldingPage } from '../../services/root-page.service.js';
 

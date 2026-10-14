@@ -3198,3 +3198,35 @@ and retry with backoff and fresh assertions. Invalid signatures, missing keys,
 expired assertions, unsafe destinations and current credential-epoch or
 membership refusals remain fail-closed. No local identity fallback, cached
 negative authorization or automatic authority restoration is introduced.
+
+
+## 2026-10-14 Website client identifiers and authentication enforcement
+
+This amendment supersedes the historical hash-as-client-ID token examples and
+planned `orgs[]` claims where they conflict with the shipped `/api` contract.
+Website `client_id` and durable refresh/debug context use the stable non-secret
+ClientDomain record ID. The authenticated backend bearer is request-only and
+never copied to a token or new durable context. Existing bearer-bound families
+have an authenticated compatibility reader and are converted under their normal
+policy/session locks, preserving scope, credential epoch, TOTP proof and replay
+edges. Revoked old credentials cannot regain sessions through conversion. After
+old revisions drain, an explicit operator cleanup erases remaining legacy context;
+credential exposure still requires domain-secret rotation. See
+[the remediation rollout](plans/2026-10-14-api-audit-remediation.md).
+
+Website password authentication requires `email_password` in the verified
+configuration. Email-code issue and consumption require enabled email codes and
+the originating exact verified config URL. Failed guesses commit the persisted
+counter before returning the generic error. Native password login applies bans
+and email allowlists before factor effects and issuance, and rereads app policy
+under its mutation fence. Open self-join grants only the default member role;
+suspensions require explicit administrative reactivation. Invite-link joins keep
+exact membership/lifecycle checks and quotas while allowing legitimate cross-product
+redemption through the caller's existing product policy.
+
+The deployed API currently emits a singular optional `org` display claim plus an
+optional exact `active` selection and `tv`, not the historical planned `orgs[]`
+profile. Live capability grants remain domain-authored as specified in the
+September administrator parity amendment; removing them would change the trust
+contract, not repair a demonstrated implementation defect. Offline JWTs retain
+their bounded lifetime; family logout does not inherently increment global epoch.

@@ -8,6 +8,7 @@ import { getAdminPrisma } from '../db/prisma.js';
 import { runInTransaction } from '../db/tenant-context.js';
 import { createKeyedRateLimiter } from '../middleware/rate-limiter.js';
 import { normalizeDomain } from '../utils/domain.js';
+import { clientService } from '../utils/client-service.js';
 import { AppError } from '../utils/errors.js';
 import { hasOwnKey } from '../utils/untrusted-record.js';
 import type { ClientConfig } from './config.service.js';
@@ -138,11 +139,14 @@ function parseActorChain(value: unknown, depth = 0): ConfidentialActorChain {
 function httpsOriginForDomain(value: string): string {
   const domain = normalizeDomain(value);
   try {
+    const service = clientService(domain);
     const url = new URL(`https://${domain}`);
-    if (!domain || url.hostname !== domain || url.origin !== `https://${domain}`) {
+    if (!service || url.hostname !== service.hostname || url.port || url.username || url.password ||
+        url.pathname !== (service.path || '/') || url.search || url.hash ||
+        `${url.origin}${service.path}` !== `https://${domain}`) {
       throw new Error('invalid');
     }
-    return url.origin;
+    return `${url.origin}${service.path}`;
   } catch {
     throw invalidSubjectToken();
   }
