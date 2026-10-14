@@ -6,6 +6,7 @@ import {
   closeSsrfAgent,
   createPinnedAgent,
   parseHttpsUrl,
+  PublicDestinationUnavailableError,
   resolvePublicDestinations,
 } from '../utils/ssrf.js';
 import { parsePublicRsaJwks, type PublicRsaJwks } from './client-jwk.service.js';
@@ -85,7 +86,8 @@ export async function fetchPartnerJwks(
       let destinations;
       try {
         destinations = await resolvePublicDestinations(url);
-      } catch {
+      } catch (error) {
+        if (error instanceof PublicDestinationUnavailableError) throw new PartnerJwksUnavailableError();
         throw new AppError('BAD_REQUEST', 400, 'INTEGRATION_JWKS_DESTINATION_REJECTED');
       }
 
