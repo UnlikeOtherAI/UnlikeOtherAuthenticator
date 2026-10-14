@@ -1,5 +1,4 @@
-import { randomUUID } from 'node:crypto';
-import { withDirectoryMutation } from './directory-mutation.service.js';
+import { withDirectoryMutation, directoryNewOrganisationId } from './directory-mutation.service.js';
 import { lockRefreshSessionUserShared } from './refresh-session-lock.service.js';
 import { Prisma, type PrismaClient } from '@prisma/client';
 
@@ -136,7 +135,7 @@ async function autoCreatePersonalOrgForUser(params: {
         return null;
       }
 
-      const directoryOrgId = randomUUID();
+      const directoryOrgId = directoryNewOrganisationId(tx);
       return withDirectoryMutation(
         tx,
         [{ orgId: directoryOrgId, kind: 'organisation.changed' }],

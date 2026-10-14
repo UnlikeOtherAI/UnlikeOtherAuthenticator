@@ -16,6 +16,17 @@ export type DirectoryChange = {
   teamId?: string;
 };
 const held = new WeakMap<object, string[]>();
+const plannedCreation = new WeakMap<object, string>();
+/** Reserve one opaque org ID for a composed first-placement transaction. The
+ * outer mutation declares it before writing; creation consumes this same ID. */
+export function directoryNewOrganisationId(tx: object): string {
+  let id = plannedCreation.get(tx);
+  if (!id) {
+    id = randomUUID();
+    plannedCreation.set(tx, id);
+  }
+  return id;
+}
 
 /** Call before mutation, after the operation's canonical user/policy locks and
  * before container/membership row locks. Resolve the COMPLETE affected org set
@@ -29,9 +40,12 @@ export async function withDirectoryMutation<T>(
   prisma: PrismaClient,
   changes: readonly DirectoryChange[],
   write: (tx: PrismaClient) => Promise<T>,
+  declaredOrgIds: readonly string[] = [],
 ): Promise<T> {
   return runInTransaction(prisma, async (tx) => {
-    const orgIds = [...new Set(changes.map((change) => change.orgId))].sort();
+    const orgIds = [
+      ...new Set([...changes.map((change) => change.orgId), ...declaredOrgIds]),
+    ].sort();
     if (orgIds.some((id) => !id))
       throw new Error('Directory mutation requires exact organisation IDs');
     const existing = held.get(tx);

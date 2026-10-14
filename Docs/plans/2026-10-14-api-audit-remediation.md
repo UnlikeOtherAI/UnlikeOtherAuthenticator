@@ -226,3 +226,32 @@ checks independent of missing workspace dist. Full default-harness/HTTP and
 PostgreSQL suites, generated schema client, typecheck and builds remain pending.
 The profile specification now explicitly documents the missing email-change API,
 neutral inactive labels and BFF-proxied authenticated images.
+
+
+### Composed profile/admission checkpoint
+
+`directory-user-mutation.service.ts` resolves membership and owner org references
+under the exclusive canonical user lock. Avatar upload/delete, existing-social
+profile writes and credential-epoch bumps now emit org-scoped invalidations.
+Team avatar changes use the exact team org seam. Verified email name fills use
+the same profile boundary, with the verified invitation's org declared up front.
+
+Composed social callbacks predeclare their verified invite org and configured
+access-request target. When first-team creation is possible, an internal plan
+reserves one opaque new-org ID before the profile write; creation reuses it.
+No revision/event is fabricated for an unused planned org. Nested operations can
+reuse this complete sorted set; an undeclared extension is refused before its
+write. Social new-user placement now receives the supplied transaction rather
+than checking out another pool connection.
+
+Access-request admission is transactional, takes shared user then org ordering
+locks, rechecks current lifecycle, counts ACTIVE seats and refuses inactive
+membership rows rather than approving an unusable hidden membership. Operator
+member additions and org/team policy edits now emit invalidations. Policy edits
+fence auth readers before acquiring directory ordering locks.
+
+Maxis server-free single-worker suite:49 passed across7 files, including composed
+scope/creation planning. Focused lint and source syntax/file-size checks pass.
+Real transaction ordering/RLS/upgrade tests and complete auth flows remain pending
+allocation; lifecycle/deletion and the final actual-writer coverage audit remain
+implementation work. No checkbox is promoted to verified completion.

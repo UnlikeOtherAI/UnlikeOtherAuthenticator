@@ -1,3 +1,4 @@
+import { withDirectoryUserMutation } from './directory-user-mutation.service.js';
 import { requireIdentityEmail } from './entity-lifecycle.service.js';
 import type { PrismaClient } from '@prisma/client';
 
@@ -20,14 +21,15 @@ import {
 
 export type { AvatarSource, AvatarUploadResult, ResolvedAvatar };
 
-type AvatarPrisma = {
-  user: Pick<PrismaClient['user'], 'findUnique' | 'findMany'>;
-  userAvatar: Pick<
-    PrismaClient['userAvatar'],
-    'findUnique' | 'findMany' | 'upsert' | 'deleteMany'
-  >;
-  domainRole: Pick<PrismaClient['domainRole'], 'findUnique'>;
-};
+type AvatarPrisma = Pick<PrismaClient, '$queryRaw' | 'orgMember' | 'organisation'> &
+  Partial<Pick<PrismaClient, '$transaction'>> & {
+    user: Pick<PrismaClient['user'], 'findUnique' | 'findMany'>;
+    userAvatar: Pick<
+      PrismaClient['userAvatar'],
+      'findUnique' | 'findMany' | 'upsert' | 'deleteMany'
+    >;
+    domainRole: Pick<PrismaClient['domainRole'], 'findUnique'>;
+  };
 
 export type AvatarDeps = AvatarProviderDeps & {
   prisma?: AvatarPrisma;
@@ -178,12 +180,25 @@ export async function uploadAvatar(
 
   const sizeBytes = params.data.byteLength;
   const data = toAvatarBytes(params.data);
-  const row = await prisma.userAvatar.upsert({
-    where: { userId: params.userId },
-    create: { userId: params.userId, contentType, data, sizeBytes },
-    update: { contentType, data, sizeBytes },
-    select: { contentType: true, sizeBytes: true, updatedAt: true },
-  });
+  const row = await withDirectoryUserMutation(
+    prisma as PrismaClient,
+    params.userId,
+    'profile.changed',
+    async (tx) => {
+      // Recheck after the canonical user lock; deletion may have won the wait.
+      const current = await tx.user.findUnique({
+        where: { id: params.userId, lifecycleStatus: 'ACTIVE' },
+        select: { id: true },
+      });
+      if (!current) throw new AppError('NOT_FOUND', 404, 'USER_NOT_FOUND');
+      return tx.userAvatar.upsert({
+        where: { userId: params.userId },
+        create: { userId: params.userId, contentType, data, sizeBytes },
+        update: { contentType, data, sizeBytes },
+        select: { contentType: true, sizeBytes: true, updatedAt: true },
+      });
+    },
+  );
 
   return {
     source: 'uploaded',
@@ -197,12 +212,11 @@ export async function uploadAvatar(
  * Remove the uploaded avatar. Idempotent: deleting when nothing is stored still succeeds, and
  * resolution simply falls back to the provider URL or the generated image.
  */
-export async function deleteAvatar(
-  params: { userId: string },
-  deps?: AvatarDeps,
-): Promise<void> {
+export async function deleteAvatar(params: { userId: string }, deps?: AvatarDeps): Promise<void> {
   const prisma = prismaFor(deps);
-  await prisma.userAvatar.deleteMany({ where: { userId: params.userId } });
+  await withDirectoryUserMutation(prisma as PrismaClient, params.userId, 'profile.changed', (tx) =>
+    tx.userAvatar.deleteMany({ where: { userId: params.userId } }),
+  );
 }
 
 export type { ProviderAvatarImage };

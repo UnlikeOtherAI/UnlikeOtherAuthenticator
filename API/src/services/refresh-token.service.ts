@@ -37,7 +37,7 @@ export function isRefreshTokenReuseDetectedError(
   return error instanceof RefreshTokenReuseDetectedError;
 }
 
-type RefreshTokenPrisma = Pick<PrismaClient, 'refreshToken' | 'user'>;
+type RefreshTokenPrisma = Pick<PrismaClient, 'refreshToken' | 'user' | '$queryRaw' | 'orgMember' | 'organisation'>;
 
 type RefreshPolicyHook = (row: {
   userId: string;

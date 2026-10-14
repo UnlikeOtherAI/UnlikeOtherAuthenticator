@@ -1,3 +1,4 @@
+import { withDirectoryUserMutation } from './directory-user-mutation.service.js';
 import type { PrismaClient } from '@prisma/client';
 
 import { getAdminPrisma } from '../db/prisma.js';
@@ -7,13 +8,15 @@ import {
   lockRefreshSessionUserDomain,
 } from './refresh-session-lock.service.js';
 
-type UserVersionPrisma = Pick<PrismaClient, 'user'>;
-type RefreshRevocationPrisma = Pick<PrismaClient, '$queryRaw' | 'refreshToken' | 'user'> &
+type UserVersionPrisma = Pick<PrismaClient, 'user' | '$queryRaw' | 'orgMember' | 'organisation'> &
+  Partial<Pick<PrismaClient, '$transaction'>>;
+type RefreshRevocationPrisma = Pick<
+  PrismaClient,
+  '$queryRaw' | 'refreshToken' | 'user' | 'orgMember' | 'organisation'
+> &
   Partial<Pick<PrismaClient, '$transaction'>>;
 
-function adminRevocationPrisma(
-  prisma?: RefreshRevocationPrisma,
-): RefreshRevocationPrisma {
+function adminRevocationPrisma(prisma?: RefreshRevocationPrisma): RefreshRevocationPrisma {
   return prisma ?? (getAdminPrisma() as unknown as RefreshRevocationPrisma);
 }
 
@@ -23,10 +26,16 @@ export async function bumpUserTokenVersion(
   deps?: { prisma?: UserVersionPrisma },
 ): Promise<void> {
   const prisma = deps?.prisma ?? (getAdminPrisma() as unknown as UserVersionPrisma);
-  await prisma.user.update({
-    where: { id: userId },
-    data: { tokenVersion: { increment: 1 } },
-  });
+  await withDirectoryUserMutation(
+    prisma as PrismaClient,
+    userId,
+    'credential_epoch.changed',
+    (tx) =>
+      tx.user.update({
+        where: { id: userId },
+        data: { tokenVersion: { increment: 1 } },
+      }),
+  );
 }
 
 /** Revoke same-domain refresh state without globally invalidating access tokens. */

@@ -1,3 +1,7 @@
+import { runInTransaction } from '../db/tenant-context.js';
+import { withDirectoryMutation } from './directory-mutation.service.js';
+import { lockRefreshSessionUserShared } from './refresh-session-lock.service.js';
+import { assertEntityAccess } from './entity-lifecycle.service.js';
 import type { AccessRequestStatus, PrismaClient } from '@prisma/client';
 import type { ClientConfig } from './config.service.js';
 
@@ -195,74 +199,93 @@ export async function ensureUserAssignedToConfiguredAccessTarget(params: {
   userId: string;
   now: Date;
 }): Promise<void> {
-  const { org, team } = await resolveAccessTarget({
-    prisma: params.prisma,
-    config: params.config,
-  });
+  return runInTransaction(params.prisma, async (tx) => {
+    await lockRefreshSessionUserShared(params.userId, { prisma: tx });
 
-  ensureOrgRole('member', parseOrgFeatureRoles(params.config));
-
-  const existingMembershipInOrganisation = await params.prisma.orgMember.findFirst({
-    where: {
-      userId: params.userId,
-      orgId: org.id,
-    },
-    select: { id: true, orgId: true },
-  });
-
-  if (!existingMembershipInOrganisation) {
-    const memberCount = await params.prisma.orgMember.count({
-      where: { orgId: org.id },
+    const { org, team } = await resolveAccessTarget({
+      prisma: tx,
+      config: params.config,
     });
-    if (memberCount >= parseOrgLimit(params.config)) {
-      throw new AppError('BAD_REQUEST', 400);
-    }
 
-    await params.prisma.orgMember.create({
-      data: {
-        orgId: org.id,
-        userId: params.userId,
-        role: 'member',
+    return withDirectoryMutation(
+      tx,
+      [{ orgId: org.id, kind: 'membership.changed', subjectId: params.userId, teamId: team.id }],
+      async (tx) => {
+        await assertEntityAccess({ userId: params.userId, orgId: org.id, teamId: team.id }, tx);
+        ensureOrgRole('member', parseOrgFeatureRoles(params.config));
+
+        const existingMembershipInOrganisation = await tx.orgMember.findFirst({
+          where: {
+            userId: params.userId,
+            orgId: org.id,
+          },
+          select: { id: true, orgId: true, status: true },
+        });
+
+        if (
+          existingMembershipInOrganisation &&
+          existingMembershipInOrganisation.status !== 'ACTIVE'
+        )
+          throw new AppError('BAD_REQUEST', 400, 'MEMBERSHIP_INACTIVE');
+        if (!existingMembershipInOrganisation) {
+          const memberCount = await tx.orgMember.count({
+            where: { orgId: org.id, status: 'ACTIVE' },
+          });
+          if (memberCount >= parseOrgLimit(params.config)) {
+            throw new AppError('BAD_REQUEST', 400);
+          }
+
+          await tx.orgMember.create({
+            data: {
+              orgId: org.id,
+              userId: params.userId,
+              role: 'member',
+            },
+            select: { id: true },
+          });
+        }
+
+        const existingTeamMembership = await tx.teamMember.findFirst({
+          where: {
+            teamId: team.id,
+            userId: params.userId,
+          },
+          select: { id: true, status: true },
+        });
+        if (existingTeamMembership) {
+          if (existingTeamMembership.status !== 'ACTIVE')
+            throw new AppError('BAD_REQUEST', 400, 'MEMBERSHIP_INACTIVE');
+          return;
+        }
+
+        const teamMemberCount = await tx.teamMember.count({
+          where: { teamId: team.id, status: 'ACTIVE' },
+        });
+        if (teamMemberCount >= parseMaxMembersPerTeam(params.config)) {
+          throw new AppError('BAD_REQUEST', 400);
+        }
+
+        const teamMembershipCount = await tx.teamMember.count({
+          where: {
+            userId: params.userId,
+            status: 'ACTIVE',
+            team: { orgId: org.id },
+          },
+        });
+        if (teamMembershipCount >= parseMaxTeamMembershipsPerUser(params.config)) {
+          throw new AppError('BAD_REQUEST', 400);
+        }
+
+        await tx.teamMember.create({
+          data: {
+            teamId: team.id,
+            userId: params.userId,
+            teamRole: normalizeTeamRole(undefined, params.config),
+          },
+          select: { id: true },
+        });
       },
-      select: { id: true },
-    });
-  }
-
-  const existingTeamMembership = await params.prisma.teamMember.findFirst({
-    where: {
-      teamId: team.id,
-      userId: params.userId,
-    },
-    select: { id: true },
-  });
-  if (existingTeamMembership) {
-    return;
-  }
-
-  const teamMemberCount = await params.prisma.teamMember.count({
-    where: { teamId: team.id },
-  });
-  if (teamMemberCount >= parseMaxMembersPerTeam(params.config)) {
-    throw new AppError('BAD_REQUEST', 400);
-  }
-
-  const teamMembershipCount = await params.prisma.teamMember.count({
-    where: {
-      userId: params.userId,
-      team: { orgId: org.id },
-    },
-  });
-  if (teamMembershipCount >= parseMaxTeamMembershipsPerUser(params.config)) {
-    throw new AppError('BAD_REQUEST', 400);
-  }
-
-  await params.prisma.teamMember.create({
-    data: {
-      teamId: team.id,
-      userId: params.userId,
-      teamRole: normalizeTeamRole(undefined, params.config),
-    },
-    select: { id: true },
+    );
   });
 }
 

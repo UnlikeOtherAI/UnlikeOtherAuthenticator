@@ -1,3 +1,4 @@
+import { withDirectoryUserMutation } from '../directory-user-mutation.service.js';
 import type { PrismaClient } from '@prisma/client';
 
 import type { ClientConfig } from '../config.service.js';
@@ -14,10 +15,11 @@ import { isPrincipalBannedForRegistration } from '../ban-policy.service.js';
 import { placeUserInConfiguredOrganisation } from '../org-placement.service.js';
 import { assertProviderVerifiedEmail, type SocialProfile } from './provider.base.js';
 
-type SocialLoginPrisma = {
-  user: Pick<PrismaClient['user'], 'findUnique' | 'create' | 'update'>;
-  domainRole: Pick<PrismaClient['domainRole'], 'findFirst'>;
-};
+type SocialLoginPrisma = Pick<PrismaClient, '$queryRaw' | 'orgMember' | 'organisation'> &
+  Partial<Pick<PrismaClient, '$transaction'>> & {
+    user: Pick<PrismaClient['user'], 'findUnique' | 'create' | 'update'>;
+    domainRole: Pick<PrismaClient['domainRole'], 'findFirst'>;
+  };
 
 type SocialLoginDeps = {
   env?: ReturnType<typeof getEnv>;
@@ -33,6 +35,8 @@ type SocialLoginDeps = {
   allowInviteRegistration?: boolean;
   /** Invite acceptance itself is the user's first placement, so skip automatic placement. */
   skipAutoPlacement?: boolean;
+  /** Exact orgs of separately verified invitation/continuation operations. */
+  directoryAdditionalOrgIds?: readonly string[];
 };
 
 type SocialLoginResult =
@@ -135,18 +139,35 @@ export async function loginWithSocialProfile(
     // Take it before updating the row: credential reset also takes user-global before its write,
     // so neither side can hold the User row while waiting for the other's advisory lock.
     await deps?.beforeExistingUserUpdate?.(existing.id);
-    const updated = await prisma.user.update({
-      where: { userKey },
-      data: {
-        // Keep identity stable and normalized.
-        email,
-        domain,
-        name: params.profile.name,
-        // Brief 22.7: overwrite avatar URL on every login.
-        avatarUrl: params.profile.avatarUrl,
+    const updated = await withDirectoryUserMutation(
+      prisma as PrismaClient,
+      existing.id,
+      'profile.changed',
+      (tx) =>
+        tx.user.update({
+          where: { userKey },
+          data: {
+            // Keep identity stable and normalized.
+            email,
+            domain,
+            name: params.profile.name,
+            // Brief 22.7: overwrite avatar URL on every login.
+            avatarUrl: params.profile.avatarUrl,
+          },
+          select: { id: true, twoFaEnabled: true, tokenVersion: true },
+        }),
+      {
+        additionalOrgIds: [
+          ...(deps?.directoryAdditionalOrgIds ?? []),
+          ...(params.config.access_requests?.target_org_id
+            ? [params.config.access_requests.target_org_id]
+            : []),
+        ],
+        mayCreateOrganisation:
+          params.config.org_features?.enabled === true &&
+          params.config.org_features.user_needs_team === true,
       },
-      select: { id: true, twoFaEnabled: true, tokenVersion: true },
-    });
+    );
     userId = updated.id;
     twoFaEnabled = updated.twoFaEnabled;
     credentialEpoch = updated.tokenVersion;
@@ -214,11 +235,14 @@ export async function loginWithSocialProfile(
 
   if (createdUser && !deps?.skipAutoPlacement) {
     try {
-      await (deps?.placeUserInConfiguredOrganisation ?? placeUserInConfiguredOrganisation)({
-        userId,
-        email,
-        config: params.config,
-      });
+      await (deps?.placeUserInConfiguredOrganisation ?? placeUserInConfiguredOrganisation)(
+        {
+          userId,
+          email,
+          config: params.config,
+        },
+        { prisma: prisma as PrismaClient },
+      );
     } catch (err) {
       getAppLogger().error(
         {

@@ -1,5 +1,4 @@
-import { randomUUID } from 'node:crypto';
-import { withDirectoryMutation } from './directory-mutation.service.js';
+import { withDirectoryMutation, directoryNewOrganisationId } from './directory-mutation.service.js';
 import { lockRefreshSessionUserShared } from './refresh-session-lock.service.js';
 import { requireIdentityEmail } from './entity-lifecycle.service.js';
 import { Prisma, type PrismaClient } from '@prisma/client';
@@ -86,7 +85,7 @@ async function createPersonalOrgAndTeam(params: {
   domain: string;
   user: UserIdentity;
 }): Promise<RequiredTeamPlacement> {
-  const directoryOrgId = randomUUID();
+  const directoryOrgId = directoryNewOrganisationId(params.tx);
   return withDirectoryMutation(
     asPrismaClient(params.tx),
     [{ orgId: directoryOrgId, kind: 'team.changed', subjectId: params.user.id }],

@@ -1,3 +1,5 @@
+import { withDirectoryUserMutation } from './directory-user-mutation.service.js';
+import { asPrismaClient } from '../db/tenant-context.js';
 import { requireIdentityEmail } from './entity-lifecycle.service.js';
 import type { Prisma, PrismaClient } from '@prisma/client';
 import type { ClientConfig } from './config.service.js';
@@ -331,10 +333,33 @@ export async function verifyEmailToken(
     // person typed themselves wins over the one the inviter guessed.
     const providedName = normalizeProvidedName(params.name);
     if (providedName) {
-      await tx.user.updateMany({
-        where: { id: userId, OR: [{ name: null }, { name: '' }] },
-        data: { name: providedName },
-      });
+      const inviteScope = tokenRow.teamInviteId
+        ? await tx.teamInvite.findUnique({
+            where: { id: tokenRow.teamInviteId },
+            select: { orgId: true },
+          })
+        : null;
+      await withDirectoryUserMutation(
+        asPrismaClient(tx),
+        userId,
+        'profile.changed',
+        (locked) =>
+          locked.user.updateMany({
+            where: { id: userId, OR: [{ name: null }, { name: '' }] },
+            data: { name: providedName },
+          }),
+        {
+          additionalOrgIds: [
+            ...(inviteScope ? [inviteScope.orgId] : []),
+            ...(params.config.access_requests?.target_org_id
+              ? [params.config.access_requests.target_org_id]
+              : []),
+          ],
+          mayCreateOrganisation:
+            params.config.org_features?.enabled === true &&
+            params.config.org_features.user_needs_team === true,
+        },
+      );
     }
 
     let acceptedInvite: AcceptedEmailInviteTeam | null = null;

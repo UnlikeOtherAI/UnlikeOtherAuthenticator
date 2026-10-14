@@ -98,7 +98,8 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
       const { provider } = ParamsSchema.parse(request.params);
       const { code, state, error } = QuerySchema.parse(request.query);
 
-      if (state && isPublicSocialState(state)) return handlePublicGoogleCallback(request, reply, state, code, provider, error);
+      if (state && isPublicSocialState(state))
+        return handlePublicGoogleCallback(request, reply, state, code, provider, error);
 
       // Any provider error is a generic auth failure. Don't leak specifics.
       if (error) {
@@ -195,15 +196,20 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
         // social identity intentionally makes that proof inapplicable afterwards; the consume
         // helper below binds the verified social email and resulting user row instead.
         const invite = inviteToken
-          ? await getTeamInviteLandingData(
-              { token: inviteToken, configUrl, config },
-              { prisma },
-            )
+          ? await getTeamInviteLandingData({ token: inviteToken, configUrl, config }, { prisma })
           : null;
         if (invite && invite.email.toLowerCase() !== profile.email.trim().toLowerCase()) {
           return { kind: 'auth_failed' as const };
         }
 
+        // The verified invite supplies the exact additional org before profile
+        // mutation; later acceptance must reuse this complete sorted lock set.
+        const inviteDirectoryScope = invite
+          ? await prisma.teamInvite.findUnique({
+              where: { id: invite.inviteId },
+              select: { orgId: true },
+            })
+          : null;
         const socialLoginResult = await loginWithSocialProfile(
           {
             profile,
@@ -215,6 +221,7 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
             prisma,
             allowInviteRegistration: Boolean(invite),
             skipAutoPlacement: Boolean(invite),
+            directoryAdditionalOrgIds: inviteDirectoryScope ? [inviteDirectoryScope.orgId] : [],
             beforeExistingUserUpdate: async (userId) =>
               lockRefreshSessionUserDomain({ userId, domain: config.domain }, { prisma }),
           },

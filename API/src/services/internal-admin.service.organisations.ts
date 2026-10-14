@@ -1,6 +1,5 @@
-import { randomUUID } from 'node:crypto';
 import { lockRefreshSessionUserDomainShared } from './refresh-session-lock.service.js';
-import { withDirectoryMutation } from './directory-mutation.service.js';
+import { withDirectoryMutation, directoryNewOrganisationId } from './directory-mutation.service.js';
 import { getAdminPrisma } from '../db/prisma.js';
 import { runInTransaction } from '../db/tenant-context.js';
 import {
@@ -106,7 +105,7 @@ export async function createAdminOrganisation(input: {
 
   const created = await runInTransaction(prisma, async (tx) => {
     await lockRefreshSessionUserDomainShared({ userId: owner.id, domain: domain }, { prisma: tx });
-    const directoryOrgId = randomUUID();
+    const directoryOrgId = directoryNewOrganisationId(tx);
     return withDirectoryMutation(
       tx,
       [{ orgId: directoryOrgId, kind: 'organisation.changed' }],
@@ -167,12 +166,8 @@ export async function updateAdminOrganisation(
 ) {
   const prisma = getAdminPrisma();
   await runInTransaction(prisma, async (tx) => {
-    if (input.twoFaPolicy !== undefined) {
-      // Token issuance holds the shared side of this fence through commit. Taking
-      // the exclusive side before the policy read makes a switch see either the
-      // complete old policy or the complete new policy, never a stale decision.
-      await lockProductTeamPolicyExclusive(tx);
-    }
+    // Every effective org login-policy edit fences in-flight auth readers.
+    await lockProductTeamPolicyExclusive(tx);
     const existing = await tx.organisation.findUnique({
       where: { id: orgId },
       select: { id: true, domain: true, twoFaPolicy: true },
@@ -192,7 +187,9 @@ export async function updateAdminOrganisation(
     }
     if (input.twoFaPolicy !== undefined) data.twoFaPolicy = input.twoFaPolicy;
     if (Object.keys(data).length > 0) {
-      await tx.organisation.update({ where: { id: orgId }, data });
+      await withDirectoryMutation(tx, [{ orgId, kind: 'organisation.changed' }], (locked) =>
+        locked.organisation.update({ where: { id: orgId }, data }),
+      );
     }
 
     if (input.twoFaPolicy !== undefined && input.twoFaPolicy !== existing.twoFaPolicy) {
@@ -251,7 +248,12 @@ export async function updateAdminTeam(
 
   if (Object.keys(data).length > 0) {
     try {
-      await prisma.team.update({ where: { id: teamId }, data });
+      await runInTransaction(prisma, async (tx) => {
+        await lockProductTeamPolicyExclusive(tx);
+        return withDirectoryMutation(tx, [{ orgId, kind: 'team.changed', teamId }], (locked) =>
+          locked.team.update({ where: { id: teamId }, data }),
+        );
+      });
     } catch (err) {
       if (isP2002Error(err)) throw new AppError('BAD_REQUEST', 400, 'TEAM_NAME_EXISTS');
       throw err;

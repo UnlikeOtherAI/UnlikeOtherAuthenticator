@@ -996,3 +996,9 @@ events and cursors survive physical organisation deletion.
 The canonical U3 field, display and authenticated-image contract is documented
 in [profile authority](profile-authority.md). Pure bearer syntax is shared via
 `utils/bearer-token.ts`; the org guard preserves its existing export.
+
+`directory-user-mutation.service.ts` discovers complete user/org invalidation
+scope under canonical user locks. Composed social/invite/first-placement flows
+predeclare verified additional orgs and a possible new-org ID before mutation;
+unused planned IDs produce no revision/event. Canonical avatar, email/social
+profile and credential-epoch mutations reuse this boundary.

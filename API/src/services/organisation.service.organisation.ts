@@ -1,6 +1,5 @@
-import { randomUUID } from 'node:crypto';
 import { lockRefreshSessionUserDomainShared } from './refresh-session-lock.service.js';
-import { withDirectoryMutation } from './directory-mutation.service.js';
+import { withDirectoryMutation, directoryNewOrganisationId } from './directory-mutation.service.js';
 import type { ClientConfig } from './config.service.js';
 import { getEnv } from '../config/env.js';
 import { getPrisma } from '../db/prisma.js';
@@ -159,7 +158,7 @@ export async function createOrganisation(
 
   const created = await runInTransaction(prisma, async (tx) => {
     await lockRefreshSessionUserDomainShared({ userId: ownerId, domain: domain }, { prisma: tx });
-    const directoryOrgId = randomUUID();
+    const directoryOrgId = directoryNewOrganisationId(tx);
     return withDirectoryMutation(
       tx,
       [{ orgId: directoryOrgId, kind: 'organisation.changed' }],

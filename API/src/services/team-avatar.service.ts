@@ -1,3 +1,5 @@
+import { withDirectoryMutation } from './directory-mutation.service.js';
+import { assertEntityAccess } from './entity-lifecycle.service.js';
 import type { PrismaClient } from '@prisma/client';
 
 import type { ClientConfig } from './config.service.js';
@@ -34,10 +36,11 @@ import type { OrgActorProvenance } from './org-audit-log.service.js';
  * (see the 20260725130000 migration), exactly like `user_avatars`.
  */
 
-type TeamAvatarPrisma = {
-  team: Pick<PrismaClient['team'], 'findFirst'>;
-  teamAvatar: Pick<PrismaClient['teamAvatar'], 'findUnique' | 'upsert' | 'deleteMany'>;
-};
+type TeamAvatarPrisma = Pick<PrismaClient, '$queryRaw'> &
+  Partial<Pick<PrismaClient, '$transaction'>> & {
+    team: Pick<PrismaClient['team'], 'findFirst'>;
+    teamAvatar: Pick<PrismaClient['teamAvatar'], 'findUnique' | 'upsert' | 'deleteMany'>;
+  };
 
 export type TeamAvatarDeps = AvatarProviderDeps & {
   prisma?: TeamAvatarPrisma;
@@ -188,18 +191,25 @@ export async function uploadTeamAvatar(
 
   const team = await prisma.team.findFirst({
     where: { id: params.teamId },
-    select: { id: true },
+    select: { id: true, orgId: true },
   });
   if (!team) throw new AppError('NOT_FOUND', 404, 'TEAM_NOT_FOUND');
 
   const sizeBytes = params.data.byteLength;
   const data = toAvatarBytes(params.data);
-  const row = await prisma.teamAvatar.upsert({
-    where: { teamId: params.teamId },
-    create: { teamId: params.teamId, contentType, data, sizeBytes },
-    update: { contentType, data, sizeBytes },
-    select: { contentType: true, sizeBytes: true, updatedAt: true },
-  });
+  const row = await withDirectoryMutation(
+    prisma as PrismaClient,
+    [{ orgId: team.orgId, kind: 'team.changed', teamId: team.id }],
+    async (tx) => {
+      await assertEntityAccess({ orgId: team.orgId, teamId: team.id }, tx);
+      return tx.teamAvatar.upsert({
+        where: { teamId: params.teamId },
+        create: { teamId: params.teamId, contentType, data, sizeBytes },
+        update: { contentType, data, sizeBytes },
+        select: { contentType: true, sizeBytes: true, updatedAt: true },
+      });
+    },
+  );
 
   return {
     source: 'uploaded',
@@ -218,5 +228,14 @@ export async function deleteTeamAvatar(
   deps?: TeamAvatarDeps,
 ): Promise<void> {
   const prisma = prismaFor(deps);
-  await prisma.teamAvatar.deleteMany({ where: { teamId: params.teamId } });
+  const team = await prisma.team.findFirst({
+    where: { id: params.teamId },
+    select: { id: true, orgId: true },
+  });
+  if (!team) return;
+  await withDirectoryMutation(
+    prisma as PrismaClient,
+    [{ orgId: team.orgId, kind: 'team.changed', teamId: team.id }],
+    (tx) => tx.teamAvatar.deleteMany({ where: { teamId: params.teamId } }),
+  );
 }

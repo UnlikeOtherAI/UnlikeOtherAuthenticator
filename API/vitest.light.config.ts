@@ -9,6 +9,7 @@ export default defineConfig({
       'tests/unit/login-code.service.test.ts',
       'tests/unit/profile-authority.service.test.ts',
       'tests/unit/directory-credential-authority.test.ts',
+      'tests/unit/directory-user-mutation.test.ts',
       'tests/unit/admin-access-revocation.service.test.ts',
       'tests/unit/website-client-context.service.test.ts',
     ],
