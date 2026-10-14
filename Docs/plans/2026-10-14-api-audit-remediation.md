@@ -564,3 +564,15 @@ EXISTS/UNION queries consolidate dependency checks; product-domain discovery is
 batched. Refusal reasons and their order, exact locks and15-second production
 transaction budget are preserved. Added real-PG lifecycle/dependency/financial
 refusal regression cases. New source is not yet runtime-accepted.
+
+### Retained lifecycle continuation
+
+The corrected begin-deletion path now passes its unchanged15-second transaction
+budget. The full26-subject/250-audit staged cleanup exceeded its separate60-second
+end-to-end test budget;14 other lifecycle cases passed. The scale test now has a
+240-second end-to-end allowance; production stage/transaction budgets are unchanged.
+The retained schema `test_1792021505371_8ccd14845ee54fb7992a1ed98ebde59b`
+contains the original READY job with8/26 users completed and its natural lease.
+An explicit owned-database recovery test resumes it through executeEntityDeletion
+only, waiting for lease expiry and checking immutable terminal cursor/250audit rows.
+No record, lease, progress or blocker is cleared by the harness.
