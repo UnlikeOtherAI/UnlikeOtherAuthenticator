@@ -123,7 +123,7 @@ export async function createRlsTestDb(): Promise<RlsTestDbHandle | null> {
   };
 }
 
-export async function createTestDb(): Promise<TestDbHandle | null> {
+export async function createTestDb(options: { migrationSchema?: string } = {}): Promise<TestDbHandle | null> {
   const baseUrl = process.env.DATABASE_URL;
   if (!baseUrl) return null;
 
@@ -145,7 +145,8 @@ export async function createTestDb(): Promise<TestDbHandle | null> {
 
   // Apply migrations into the isolated schema.
   await withStartupRetry(() =>
-    runPrisma(['migrate', 'deploy'], { ...process.env, DATABASE_URL: testUrl }),
+    runPrisma(['migrate', 'deploy', ...(options.migrationSchema ? ['--schema', options.migrationSchema] : [])],
+      { ...process.env, DATABASE_URL: testUrl }),
   );
 
   const prisma = new PrismaClient({
@@ -155,6 +156,12 @@ export async function createTestDb(): Promise<TestDbHandle | null> {
 
   const cleanup = async (): Promise<void> => {
     await prisma.$disconnect();
+    // Audit runs preserve database evidence, including failed/stuck records.
+    // Opt-in only; ordinary isolated test cleanup is unchanged.
+    if (process.env.UOA_AUDIT_PRESERVE_SCHEMAS === '1') {
+      console.info(`Retained audit test schema: ${schema}`);
+      return;
+    }
     runPrisma(
       ['db', 'execute', '--stdin', '--schema', 'prisma/schema.prisma'],
       { ...process.env, DATABASE_URL: adminUrl },
