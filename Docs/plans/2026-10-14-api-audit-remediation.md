@@ -407,3 +407,28 @@ compiled package export remains unverified until the heavy slot is allocated.
 Latest complete light suite98/98 across13files passed on Maxis. Combined with
 the last source147/147 and25 new request cases,270 scoped cases are exercised;
 a fresh complete source run is recorded with this checkpoint.
+
+### JWKS recovery and invite-admission regression checkpoint
+
+U-25 upstream implementation is incorporated. Added the existing13 actual-RS256
+subject assertion outage/recovery cases and10 JWKS URL/fetch checks to the
+server-free source harness: transient DNS/HTTP/transport503s retry freshly after
+recovery; unknown/private destinations, wrong signatures/audiences and unknown
+keys remain refused. The normal harness synthetic documentation-domain DNS and
+undici-to-stubbed-fetch seams are supplied separately without its JWKS listener.
+Unexpected DNS destinations throw rather than perform a real lookup.
+
+The existing18 invite-link service cases and12 added admission regressions pass.
+The cross-product fixture now pairs the caller domain with that caller's verified
+config, preserving exact link/org membership without a false origin-domain gate.
+New cases cover existing-role/idempotent admission, organisation suspension/removal,
+team suspension, fresh-role reactivation, org/team/user limits, forbidden link
+roles, expiry after locks, and exact ACTIVE lifecycle/membership query predicates.
+These injected stores do not certify transaction rollback or cross-user capacity
+races; the real PostgreSQL fixtures remain required.
+
+Latest source suite has225 cases across23files; light suite98 cases across13files.
+All323 scoped checks run on Maxis without a listener, DB or workspace build.
+Full client generation/typecheck/build/default harness, migration upgrade/RLS/lock
+races, real socket bulkhead tests and rendered product flows remain blocked on
+the still-unallocated heavy slot. This is a checkpoint, not completed acceptance.

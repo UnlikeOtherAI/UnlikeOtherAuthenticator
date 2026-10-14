@@ -10,7 +10,7 @@ export default defineConfig({
     { find: /^@unlikeotherai\/billing-statement-protocol$/, replacement: fileURLToPath(new URL('../packages/billing-statement-protocol/src/index.ts', import.meta.url)) },
   ] },
   test: {
-    setupFiles: ['./tests/setup.light.ts'], maxWorkers: 1, fileParallelism: false,
+    setupFiles: ['./tests/setup.light.ts', './tests/setup.source-network.ts'], maxWorkers: 1, fileParallelism: false,
     include: [
       'tests/unit/internal-admin.activity-stats.test.ts',
       'tests/unit/internal-admin.organisation-state.test.ts',
@@ -24,6 +24,11 @@ export default defineConfig({
       'tests/unit/oauth-login.signature-gate.route.test.ts',
       'tests/unit/profile-authority.route.test.ts',
       'tests/unit/directory-authority.route.test.ts',
+      'tests/unit/subject-assertion-jwks-outage.test.ts',
+      'tests/unit/jwks-fetch.service.test.ts',
+      'tests/unit/team-invite-link-redeem.service.test.ts',
+      'tests/unit/team-invite-link.service.test.ts',
+      'tests/unit/team-invite-link-admission.test.ts',
     ],
     env: { NODE_ENV: 'test', SHARED_SECRET: 'synthetic-source-test-material-32-characters', AUTH_SERVICE_IDENTIFIER: 'uoa-auth-service' },
   },

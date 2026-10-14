@@ -213,7 +213,7 @@ describe('team-invite-link.service — redemption', () => {
       prisma.teamMember.findFirst.mockResolvedValue({ id: 'tm-1', status: 'ACTIVE' });
 
       const result = await redeemTeamInviteLink(
-        { token: 'plain-token', userId: 'user-1', domain: 'other.example.com', config: makeConfig() },
+        { token: 'plain-token', userId: 'user-1', domain: 'other.example.com', config: makeConfig({ domain: 'other.example.com' }) },
         { prisma, now: () => NOW, sharedSecret: SHARED_SECRET },
       );
 
