@@ -1,3 +1,6 @@
+import { randomUUID } from 'node:crypto';
+import { withDirectoryMutation } from './directory-mutation.service.js';
+import { lockRefreshSessionUserShared } from './refresh-session-lock.service.js';
 import { Prisma, type PrismaClient } from '@prisma/client';
 
 import type { ClientConfig } from './config.service.js';
@@ -6,10 +9,7 @@ import { runInTransaction } from '../db/tenant-context.js';
 import { getAppLogger } from '../utils/app-logger.js';
 import { normalizeDomain } from '../utils/domain.js';
 import { extractEmailDomain } from '../utils/email-domain.js';
-import {
-  deriveSlugWithValidation,
-  ensureOrgName,
-} from './organisation.service.base.js';
+import { deriveSlugWithValidation, ensureOrgName } from './organisation.service.base.js';
 import { deriveUniqueTeamSlug } from './team.service.base.js';
 
 type OrgPlacementPrisma = Pick<PrismaClient, '$transaction'> & {
@@ -122,6 +122,7 @@ async function autoCreatePersonalOrgForUser(params: {
 
   try {
     const created = await runInTransaction(params.prisma as unknown as PrismaClient, async (tx) => {
+      await lockRefreshSessionUserShared(params.userId, { prisma: tx });
       const txClient = tx as OrgPlacementTx;
 
       const existing = await txClient.orgMember.findFirst({
@@ -135,50 +136,58 @@ async function autoCreatePersonalOrgForUser(params: {
         return null;
       }
 
-      const slug = await deriveSlugWithValidation(params.domain, txClient, orgName);
+      const directoryOrgId = randomUUID();
+      return withDirectoryMutation(
+        tx,
+        [{ orgId: directoryOrgId, kind: 'organisation.changed' }],
+        async () => {
+          const slug = await deriveSlugWithValidation(params.domain, txClient, orgName);
 
-      const org = await txClient.organisation.create({
-        data: {
-          domain: params.domain,
-          name: orgName,
-          slug,
-          ownerId: params.userId,
+          const org = await txClient.organisation.create({
+            data: {
+              id: directoryOrgId,
+              domain: params.domain,
+              name: orgName,
+              slug,
+              ownerId: params.userId,
+            },
+            select: { id: true },
+          });
+
+          const team = await txClient.team.create({
+            data: {
+              orgId: org.id,
+              // The first team carries the organisation's name, as on every create path.
+              name: orgName,
+              slug: await deriveUniqueTeamSlug({
+                orgId: org.id,
+                prisma: txClient,
+                name: orgName,
+              }),
+              isDefault: true,
+            },
+            select: { id: true },
+          });
+
+          await txClient.orgMember.create({
+            data: {
+              orgId: org.id,
+              userId: params.userId,
+              role: OWNER_ROLE,
+            },
+          });
+
+          await txClient.teamMember.create({
+            data: {
+              teamId: team.id,
+              userId: params.userId,
+              teamRole: DEFAULT_TEAM_ROLE,
+            },
+          });
+
+          return { orgId: org.id, teamId: team.id };
         },
-        select: { id: true },
-      });
-
-      const team = await txClient.team.create({
-        data: {
-          orgId: org.id,
-          // The first team carries the organisation's name, as on every create path.
-          name: orgName,
-          slug: await deriveUniqueTeamSlug({
-            orgId: org.id,
-            prisma: txClient,
-            name: orgName,
-          }),
-          isDefault: true,
-        },
-        select: { id: true },
-      });
-
-      await txClient.orgMember.create({
-        data: {
-          orgId: org.id,
-          userId: params.userId,
-          role: OWNER_ROLE,
-        },
-      });
-
-      await txClient.teamMember.create({
-        data: {
-          teamId: team.id,
-          userId: params.userId,
-          teamRole: DEFAULT_TEAM_ROLE,
-        },
-      });
-
-      return { orgId: org.id, teamId: team.id };
+      );
     });
 
     if (!created) {
@@ -298,6 +307,7 @@ async function placeFromDomainMapping(params: {
 
   try {
     const created = await runInTransaction(params.prisma as unknown as PrismaClient, async (tx) => {
+      await lockRefreshSessionUserShared(params.userId, { prisma: tx });
       const txClient = tx as OrgPlacementTx;
 
       const membershipInOrganisation = await txClient.orgMember.findFirst({
@@ -311,23 +321,29 @@ async function placeFromDomainMapping(params: {
         return false;
       }
 
-      await txClient.orgMember.create({
-        data: {
-          orgId: org.id,
-          userId: params.userId,
-          role: DEFAULT_MEMBER_ROLE,
-        },
-      });
+      return withDirectoryMutation(
+        tx,
+        [{ orgId: org.id, kind: 'membership.changed', subjectId: params.userId, teamId }],
+        async () => {
+          await txClient.orgMember.create({
+            data: {
+              orgId: org.id,
+              userId: params.userId,
+              role: DEFAULT_MEMBER_ROLE,
+            },
+          });
 
-      await txClient.teamMember.create({
-        data: {
-          teamId,
-          userId: params.userId,
-          teamRole: DEFAULT_TEAM_ROLE,
-        },
-      });
+          await txClient.teamMember.create({
+            data: {
+              teamId,
+              userId: params.userId,
+              teamRole: DEFAULT_TEAM_ROLE,
+            },
+          });
 
-      return true;
+          return true;
+        },
+      );
     });
 
     if (!created) {

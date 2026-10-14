@@ -8,7 +8,10 @@ import {
   revokeRefreshTokenFamiliesForUserOrganisation,
   revokeRefreshTokensForUserDomain,
 } from './refresh-token-revocation.service.js';
-import { lockRefreshSessionUserDomain } from './refresh-session-lock.service.js';
+import {
+  lockRefreshSessionUserDomain,
+  lockRefreshSessionUserDomainShared,
+} from './refresh-session-lock.service.js';
 import { lockTeamMembershipRows } from './team-scope.service.js';
 import {
   assertMutableOrganisationMember,
@@ -73,7 +76,7 @@ export async function addOrganisationMember(
   const org = await resolveOrganisation(prisma, { orgId: params.orgId });
 
   const { member: createdMember, reactivated } = await runInTransaction(prisma, async (tx) => {
-    await lockRefreshSessionUserDomain({ userId, domain: org.domain }, { prisma: tx });
+    await lockRefreshSessionUserDomainShared({ userId, domain: org.domain }, { prisma: tx });
     return withDirectoryMutation(
       tx,
       [{ orgId: org.id, kind: 'membership.changed', subjectId: userId }],

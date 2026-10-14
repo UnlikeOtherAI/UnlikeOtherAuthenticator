@@ -1,3 +1,6 @@
+import { randomUUID } from 'node:crypto';
+import { lockRefreshSessionUserDomainShared } from './refresh-session-lock.service.js';
+import { withDirectoryMutation } from './directory-mutation.service.js';
 import { getAdminPrisma } from '../db/prisma.js';
 import { runInTransaction } from '../db/tenant-context.js';
 import {
@@ -16,11 +19,7 @@ import {
   listLimit,
   normalizeDomain,
 } from './internal-admin.service.base.js';
-import {
-  deriveAvailableOrgSlug,
-  isP2002Error,
-  isP2003Error,
-} from './organisation.service.base.js';
+import { deriveAvailableOrgSlug, isP2002Error, isP2003Error } from './organisation.service.base.js';
 import {
   deriveUniqueTeamSlug,
   normalizeTeamDescription,
@@ -106,40 +105,49 @@ export async function createAdminOrganisation(input: {
   if (!owner) throw new AppError('BAD_REQUEST', 400, 'OWNER_NOT_FOUND');
 
   const created = await runInTransaction(prisma, async (tx) => {
-    const slug = await deriveAvailableOrgSlug({ domain, prisma: tx, name });
-    const org = await tx.organisation.create({
-      data: {
-        domain,
-        name,
-        slug,
-        ownerId: owner.id,
-        allowedEmailDomains: normalizeAllowedEmailDomains(input.allowedEmailDomains ?? []),
-        allowedEmails: normalizeAllowedEmails(input.allowedEmails ?? []),
-      },
-      select: { id: true, createdAt: true },
-    });
-    const team = await tx.team.create({
-      data: {
-        orgId: org.id,
-        // Named after the organisation, like every person-created first team.
-        name,
-        slug: await deriveUniqueTeamSlug({ orgId: org.id, prisma: tx, name }),
-        isDefault: true,
-      },
-      select: { id: true },
-    });
+    await lockRefreshSessionUserDomainShared({ userId: owner.id, domain: domain }, { prisma: tx });
+    const directoryOrgId = randomUUID();
+    return withDirectoryMutation(
+      tx,
+      [{ orgId: directoryOrgId, kind: 'organisation.changed' }],
+      async (tx) => {
+        const slug = await deriveAvailableOrgSlug({ domain, prisma: tx, name });
+        const org = await tx.organisation.create({
+          data: {
+            id: directoryOrgId,
+            domain,
+            name,
+            slug,
+            ownerId: owner.id,
+            allowedEmailDomains: normalizeAllowedEmailDomains(input.allowedEmailDomains ?? []),
+            allowedEmails: normalizeAllowedEmails(input.allowedEmails ?? []),
+          },
+          select: { id: true, createdAt: true },
+        });
+        const team = await tx.team.create({
+          data: {
+            orgId: org.id,
+            // Named after the organisation, like every person-created first team.
+            name,
+            slug: await deriveUniqueTeamSlug({ orgId: org.id, prisma: tx, name }),
+            isDefault: true,
+          },
+          select: { id: true },
+        });
 
-    try {
-      await tx.orgMember.create({ data: { orgId: org.id, userId: owner.id, role: 'owner' } });
-      await tx.teamMember.create({
-        data: { teamId: team.id, userId: owner.id, teamRole: 'owner' },
-      });
-    } catch (err) {
-      if (isP2002Error(err) || isP2003Error(err)) throw new AppError('BAD_REQUEST', 400);
-      throw err;
-    }
+        try {
+          await tx.orgMember.create({ data: { orgId: org.id, userId: owner.id, role: 'owner' } });
+          await tx.teamMember.create({
+            data: { teamId: team.id, userId: owner.id, teamRole: 'owner' },
+          });
+        } catch (err) {
+          if (isP2002Error(err) || isP2003Error(err)) throw new AppError('BAD_REQUEST', 400);
+          throw err;
+        }
 
-    return { id: org.id, createdAt: org.createdAt };
+        return { id: org.id, createdAt: org.createdAt };
+      },
+    );
   });
 
   return {

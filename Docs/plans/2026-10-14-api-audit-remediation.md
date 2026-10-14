@@ -200,3 +200,15 @@ The real-DB seam fixture also sets the existing app role locally in a disposable
 schema: exact context may record, sibling context must fail, direct outbox reads
 remain empty under RLS. No shared role password/attribute is changed by that test.
 All these runtime tests remain unexecuted pending the allocated heavy slot.
+
+
+New-org creation (interactive and operator), automatic mapped placement and
+personal first-team creation now declare the org ID before mutation and enter
+the ordering seam. Admission takes shared canonical user locks, which pin scope
+discovery against exclusive profile changes without upgrading an already-shared
+credential lock. Placement uses canonical-user before placement before org locks.
+Creation IDs remain opaque strings. Fresh runtime tests must verify the explicit
+ID fixtures and every first-placement flow before this draft is integrated.
+The remote integration branch was fetched after checkpointing; no newer commits
+were present. Heavy tests/typecheck/build and new server/database work remain
+unstarted because the API slot has not been allocated.

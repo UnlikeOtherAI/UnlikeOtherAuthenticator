@@ -1,9 +1,12 @@
+import { randomUUID } from 'node:crypto';
+import { withDirectoryMutation } from './directory-mutation.service.js';
+import { lockRefreshSessionUserShared } from './refresh-session-lock.service.js';
 import { requireIdentityEmail } from './entity-lifecycle.service.js';
 import { Prisma, type PrismaClient } from '@prisma/client';
 
 import { getEnv } from '../config/env.js';
 import { getPrisma } from '../db/prisma.js';
-import { runInTransaction } from '../db/tenant-context.js';
+import { asPrismaClient, runInTransaction } from '../db/tenant-context.js';
 import { AppError } from '../utils/errors.js';
 import type { ClientConfig } from './config.service.js';
 import {
@@ -42,6 +45,7 @@ export async function lockRequiredTeamPlacementUser(
   userId: string,
   deps: { prisma: Pick<PrismaClient, '$queryRaw'> },
 ): Promise<void> {
+  await lockRefreshSessionUserShared(userId, { prisma: deps.prisma });
   await deps.prisma.$queryRaw(
     Prisma.sql`
       SELECT pg_advisory_xact_lock(
@@ -82,51 +86,59 @@ async function createPersonalOrgAndTeam(params: {
   domain: string;
   user: UserIdentity;
 }): Promise<RequiredTeamPlacement> {
-  const orgName = buildPersonalOrgName(params.user);
-  const teamName = buildPersonalTeamName(params.user);
+  const directoryOrgId = randomUUID();
+  return withDirectoryMutation(
+    asPrismaClient(params.tx),
+    [{ orgId: directoryOrgId, kind: 'team.changed', subjectId: params.user.id }],
+    async () => {
+      const orgName = buildPersonalOrgName(params.user);
+      const teamName = buildPersonalTeamName(params.user);
 
-  const slug = await deriveSlugWithValidation(params.domain, params.tx, orgName);
-  const org = await params.tx.organisation.create({
-    data: {
-      domain: params.domain,
-      name: orgName,
-      slug,
-      ownerId: params.user.id,
+      const slug = await deriveSlugWithValidation(params.domain, params.tx, orgName);
+      const org = await params.tx.organisation.create({
+        data: {
+          id: directoryOrgId,
+          domain: params.domain,
+          name: orgName,
+          slug,
+          ownerId: params.user.id,
+        },
+        select: { id: true },
+      });
+
+      const team = await params.tx.team.create({
+        data: {
+          orgId: org.id,
+          name: teamName,
+          slug: await deriveUniqueTeamSlug({
+            orgId: org.id,
+            prisma: params.tx,
+            name: teamName,
+          }),
+          isDefault: true,
+        },
+        select: { id: true },
+      });
+
+      await params.tx.orgMember.create({
+        data: {
+          orgId: org.id,
+          userId: params.user.id,
+          role: 'owner',
+        },
+      });
+
+      await params.tx.teamMember.create({
+        data: {
+          teamId: team.id,
+          userId: params.user.id,
+          teamRole: 'admin',
+        },
+      });
+
+      return { orgId: org.id, teamId: team.id };
     },
-    select: { id: true },
-  });
-
-  const team = await params.tx.team.create({
-    data: {
-      orgId: org.id,
-      name: teamName,
-      slug: await deriveUniqueTeamSlug({
-        orgId: org.id,
-        prisma: params.tx,
-        name: teamName,
-      }),
-      isDefault: true,
-    },
-    select: { id: true },
-  });
-
-  await params.tx.orgMember.create({
-    data: {
-      orgId: org.id,
-      userId: params.user.id,
-      role: 'owner',
-    },
-  });
-
-  await params.tx.teamMember.create({
-    data: {
-      teamId: team.id,
-      userId: params.user.id,
-      teamRole: 'admin',
-    },
-  });
-
-  return { orgId: org.id, teamId: team.id };
+  );
 }
 
 async function createPersonalTeamForExistingOrg(params: {
@@ -135,47 +147,53 @@ async function createPersonalTeamForExistingOrg(params: {
   user: UserIdentity;
   orgMembership: { id: string; orgId: string; role: string; status: string };
 }): Promise<RequiredTeamPlacement> {
-  const teamCount = await params.tx.team.count({
-    where: { orgId: params.orgMembership.orgId },
-  });
-  if (teamCount >= parseMaxTeamsPerOrg(params.config)) {
-    throw new AppError('INTERNAL', 500, 'USER_NEEDS_TEAM_TEAM_LIMIT_REACHED');
-  }
+  return withDirectoryMutation(
+    asPrismaClient(params.tx),
+    [{ orgId: params.orgMembership.orgId, kind: 'team.changed', subjectId: params.user.id }],
+    async () => {
+      const teamCount = await params.tx.team.count({
+        where: { orgId: params.orgMembership.orgId },
+      });
+      if (teamCount >= parseMaxTeamsPerOrg(params.config)) {
+        throw new AppError('INTERNAL', 500, 'USER_NEEDS_TEAM_TEAM_LIMIT_REACHED');
+      }
 
-  const teamName = buildPersonalTeamName(params.user);
-  const team = await params.tx.team.create({
-    data: {
-      orgId: params.orgMembership.orgId,
-      name: teamName,
-      slug: await deriveUniqueTeamSlug({
-        orgId: params.orgMembership.orgId,
-        prisma: params.tx,
-        name: teamName,
-      }),
-      isDefault: false,
+      const teamName = buildPersonalTeamName(params.user);
+      const team = await params.tx.team.create({
+        data: {
+          orgId: params.orgMembership.orgId,
+          name: teamName,
+          slug: await deriveUniqueTeamSlug({
+            orgId: params.orgMembership.orgId,
+            prisma: params.tx,
+            name: teamName,
+          }),
+          isDefault: false,
+        },
+        select: { id: true },
+      });
+
+      await params.tx.teamMember.create({
+        data: {
+          teamId: team.id,
+          userId: params.user.id,
+          teamRole: 'admin',
+        },
+      });
+
+      if (
+        params.orgMembership.role === 'member' &&
+        params.config.org_features?.org_roles?.includes('admin')
+      ) {
+        await params.tx.orgMember.update({
+          where: { id: params.orgMembership.id },
+          data: { role: 'admin' },
+        });
+      }
+
+      return { orgId: params.orgMembership.orgId, teamId: team.id };
     },
-    select: { id: true },
-  });
-
-  await params.tx.teamMember.create({
-    data: {
-      teamId: team.id,
-      userId: params.user.id,
-      teamRole: 'admin',
-    },
-  });
-
-  if (
-    params.orgMembership.role === 'member' &&
-    params.config.org_features?.org_roles?.includes('admin')
-  ) {
-    await params.tx.orgMember.update({
-      where: { id: params.orgMembership.id },
-      data: { role: 'admin' },
-    });
-  }
-
-  return { orgId: params.orgMembership.orgId, teamId: team.id };
+  );
 }
 
 export async function ensureUserHasRequiredTeam(
