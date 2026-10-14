@@ -188,3 +188,15 @@ consider a writer family complete from this partial list. No cache contract ship
 until every writer and migration/rollback/concurrency test has been verified.
 Bulkhead tracking now also encloses route preValidation/preHandler async work;
 an early reply cannot release its slot while that phase remains running.
+
+
+Invitation/link redemption now uses the ordered seam. Invite acceptance resolves
+all prior orgs before its optional name fill and includes the target membership
+change, so a name update is not published only to the invited org. Direct org
+admission now takes the target's canonical user lock before the org seam, keeping
+multi-org profile scope discovery stable against admission. Link validity/expiry
+is checked again after ordering and membership lock waits, before consumption.
+The real-DB seam fixture also sets the existing app role locally in a disposable
+schema: exact context may record, sibling context must fail, direct outbox reads
+remain empty under RLS. No shared role password/attribute is changed by that test.
+All these runtime tests remain unexecuted pending the allocated heavy slot.

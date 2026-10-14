@@ -72,96 +72,101 @@ export async function addOrganisationMember(
   const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgServicePrisma);
   const org = await resolveOrganisation(prisma, { orgId: params.orgId });
 
-  const { member: createdMember, reactivated } = await withDirectoryMutation(
-    prisma,
-    [{ orgId: org.id, kind: 'membership.changed', subjectId: userId }],
-    async (tx) => {
-      await lockOrganisationMemberships(tx, org.id, [
-        userId,
-        ...(actorUserId ? [actorUserId] : []),
-      ]);
-      if (actorUserId) {
-        const actorMembership = await getOrganisationMember(
-          tx,
-          { orgId: org.id, userId: actorUserId },
-          { activeOnly: true },
-        );
-        requireOrgCapability(params.config, 'members.manage', actorMembership?.role);
-      }
-      await lockTeamMembershipRows({ userId, orgId: org.id }, { prisma: tx });
-      // Include the status so a prior DEACTIVATED/REMOVED row can be reactivated instead of
-      // rejected (design §4.1: statuses are tombstones, re-adding flips them back to ACTIVE).
-      const existingMemberInOrg = await tx.orgMember.findFirst({
-        where: { orgId: org.id, userId },
-        select: { id: true, status: true, role: true, userId: true },
-      });
-      if (existingMemberInOrg) assertMutableOrganisationMember(existingMemberInOrg, org.ownerId);
-      if (existingMemberInOrg && existingMemberInOrg.status === 'ACTIVE') {
-        throw new AppError('BAD_REQUEST', 400);
-      }
+  const { member: createdMember, reactivated } = await runInTransaction(prisma, async (tx) => {
+    await lockRefreshSessionUserDomain({ userId, domain: org.domain }, { prisma: tx });
+    return withDirectoryMutation(
+      tx,
+      [{ orgId: org.id, kind: 'membership.changed', subjectId: userId }],
+      async (tx) => {
+        await lockOrganisationMemberships(tx, org.id, [
+          userId,
+          ...(actorUserId ? [actorUserId] : []),
+        ]);
+        if (actorUserId) {
+          const actorMembership = await getOrganisationMember(
+            tx,
+            { orgId: org.id, userId: actorUserId },
+            { activeOnly: true },
+          );
+          requireOrgCapability(params.config, 'members.manage', actorMembership?.role);
+        }
+        await lockTeamMembershipRows({ userId, orgId: org.id }, { prisma: tx });
+        // Include the status so a prior DEACTIVATED/REMOVED row can be reactivated instead of
+        // rejected (design §4.1: statuses are tombstones, re-adding flips them back to ACTIVE).
+        const existingMemberInOrg = await tx.orgMember.findFirst({
+          where: { orgId: org.id, userId },
+          select: { id: true, status: true, role: true, userId: true },
+        });
+        if (existingMemberInOrg) assertMutableOrganisationMember(existingMemberInOrg, org.ownerId);
+        if (existingMemberInOrg && existingMemberInOrg.status === 'ACTIVE') {
+          throw new AppError('BAD_REQUEST', 400);
+        }
 
-      const memberCount = await tx.orgMember.count({ where: { orgId: org.id, status: 'ACTIVE' } });
-      if (memberCount >= maxMembers) throw new AppError('BAD_REQUEST', 400);
+        const memberCount = await tx.orgMember.count({
+          where: { orgId: org.id, status: 'ACTIVE' },
+        });
+        if (memberCount >= maxMembers) throw new AppError('BAD_REQUEST', 400);
 
-      const targetUser = await tx.user.findUnique({
-        where: { lifecycleStatus: 'ACTIVE', id: userId },
-        select: { id: true, domain: true },
-      });
-      if (!targetUser) throw new AppError('BAD_REQUEST', 400);
-      if (targetUser.domain && targetUser.domain !== org.domain) {
-        throw new AppError('BAD_REQUEST', 400);
-      }
+        const targetUser = await tx.user.findUnique({
+          where: { lifecycleStatus: 'ACTIVE', id: userId },
+          select: { id: true, domain: true },
+        });
+        if (!targetUser) throw new AppError('BAD_REQUEST', 400);
+        if (targetUser.domain && targetUser.domain !== org.domain) {
+          throw new AppError('BAD_REQUEST', 400);
+        }
 
-      const defaultTeam = await tx.team.findFirst({
-        where: { orgId: org.id, isDefault: true },
-        select: { id: true },
-      });
-      if (!defaultTeam) {
-        throw new AppError('INTERNAL', 500, 'DEFAULT_TEAM_MISSING');
-      }
+        const defaultTeam = await tx.team.findFirst({
+          where: { orgId: org.id, isDefault: true },
+          select: { id: true },
+        });
+        if (!defaultTeam) {
+          throw new AppError('INTERNAL', 500, 'DEFAULT_TEAM_MISSING');
+        }
 
-      if (existingMemberInOrg) {
-        const now = new Date();
-        const reactivatedMember = await tx.orgMember.update({
-          where: { id: existingMemberInOrg.id },
-          data: { role, status: 'ACTIVE', statusChangedAt: now },
+        if (existingMemberInOrg) {
+          const now = new Date();
+          const reactivatedMember = await tx.orgMember.update({
+            where: { id: existingMemberInOrg.id },
+            data: { role, status: 'ACTIVE', statusChangedAt: now },
+            select: MEMBER_SELECT,
+          });
+
+          const existingTeamMembership = await tx.teamMember.findFirst({
+            where: { teamId: defaultTeam.id, userId },
+            select: { id: true },
+          });
+          if (existingTeamMembership) {
+            await tx.teamMember.update({
+              where: { id: existingTeamMembership.id },
+              data: { status: 'ACTIVE', statusChangedAt: now },
+            });
+          } else {
+            await tx.teamMember.create({
+              data: { teamId: defaultTeam.id, userId },
+            });
+          }
+
+          return { member: reactivatedMember, reactivated: true };
+        }
+
+        const created = await tx.orgMember.create({
+          data: {
+            orgId: org.id,
+            userId,
+            role,
+          },
           select: MEMBER_SELECT,
         });
 
-        const existingTeamMembership = await tx.teamMember.findFirst({
-          where: { teamId: defaultTeam.id, userId },
-          select: { id: true },
+        await tx.teamMember.create({
+          data: { teamId: defaultTeam.id, userId },
         });
-        if (existingTeamMembership) {
-          await tx.teamMember.update({
-            where: { id: existingTeamMembership.id },
-            data: { status: 'ACTIVE', statusChangedAt: now },
-          });
-        } else {
-          await tx.teamMember.create({
-            data: { teamId: defaultTeam.id, userId },
-          });
-        }
 
-        return { member: reactivatedMember, reactivated: true };
-      }
-
-      const created = await tx.orgMember.create({
-        data: {
-          orgId: org.id,
-          userId,
-          role,
-        },
-        select: MEMBER_SELECT,
-      });
-
-      await tx.teamMember.create({
-        data: { teamId: defaultTeam.id, userId },
-      });
-
-      return { member: created, reactivated: false };
-    },
-  );
+        return { member: created, reactivated: false };
+      },
+    );
+  });
 
   await auditOrg({
     orgId: org.id,
