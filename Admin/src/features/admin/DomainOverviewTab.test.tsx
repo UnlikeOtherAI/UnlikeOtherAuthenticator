@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
+import { useState } from 'react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -48,6 +49,33 @@ function mount(section: 'overview' | 'credentials') {
   );
 }
 describe('service identity and credentials', () => {
+  it('does not reopen a delayed reveal after credentials -> overview -> credentials navigation', async () => {
+    let finish!: (value: unknown) => void;
+    mocks.rotate.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    function Page() {
+      const [section, setSection] = useState<'overview' | 'credentials'>('credentials');
+      return <>
+        <button onClick={() => setSection('overview')}>Overview</button>
+        <button onClick={() => setSection('credentials')}>Credentials</button>
+        <DomainOverviewTab domain={domain} section={section}
+          counts={{ organisations: 1, teams: 3, users: 2 }} />
+      </>;
+    }
+    const client = new QueryClient();
+    render(<QueryClientProvider client={client}><MemoryRouter><Page /></MemoryRouter></QueryClientProvider>);
+    await userEvent.click(screen.getByRole('button', { name: 'Rotate and reveal once' }));
+    const pending = mocks.confirm.mock.calls[0]?.[2]();
+    await waitFor(() => expect(mocks.rotate).toHaveBeenCalledOnce());
+    await userEvent.click(screen.getByRole('button', { name: /^Overview$/ }));
+    await userEvent.click(screen.getByRole('button', { name: /^Credentials$/ }));
+    await act(async () => {
+      finish({ delivery_mode: 'reveal', credentials: { client_secret: 'late-domain-secret' } });
+      await pending;
+    });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(JSON.stringify(client.getMutationCache().getAll().map((m) => m.state))).not.toContain('late-domain-secret');
+    expect(mocks.rotate).toHaveBeenCalledOnce();
+  });
   it('keeps revealed domain credentials out of mutation data and clears the closed reveal', async () => {
     const client = new QueryClient();
     mocks.rotate.mockResolvedValueOnce({

@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
-import { cleanup, render as renderBase, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render as renderBase, screen, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -8,13 +9,13 @@ import type { ReactElement } from 'react';
 import { MemoryRouter, useLocation, useNavigate } from 'react-router';
 
 import { BillingPage } from './BillingPage';
+import { billingAdminService } from '../services/billing-admin-service';
 
 const mocks = vi.hoisted(() => ({
   confirm: vi.fn(),
   createService: vi.fn(),
   createTariff: vi.fn(),
   saveAssignment: vi.fn(),
-  createAppKey: vi.fn(),
   setDefault: vi.fn(),
   removeAssignment: vi.fn(),
   revokeAppKey: vi.fn(),
@@ -148,12 +149,19 @@ const service = {
   updated_at: '2026-07-20T00:00:00.000Z',
 };
 
-vi.mock('../features/admin/billing-admin-queries', () => ({
-  useBillingServicesQuery: () => ({ data: [service], isError: false, isLoading: false }),
+vi.mock('../services/billing-admin-service', () => ({
+  billingAdminService: { createAppKey: vi.fn() },
+}));
+vi.mock('../features/admin/billing-admin-queries', async (importOriginal) => ({
+  ...await importOriginal<typeof import('../features/admin/billing-admin-queries')>(),
+  useBillingServicesQuery: () => ({
+    data: [service, { ...service, id: 'service-2', identifier: 'selkie', name: 'Selkie' }],
+    isError: false,
+    isLoading: false,
+  }),
   useCreateBillingServiceMutation: () => mutation(mocks.createService),
   useCreateBillingTariffMutation: () => mutation(mocks.createTariff),
   useSaveBillingAssignmentMutation: () => mutation(mocks.saveAssignment),
-  useCreateBillingAppKeyMutation: () => mutation(mocks.createAppKey),
   useSetDefaultBillingTariffMutation: () => mutation(mocks.setDefault),
   useRemoveBillingAssignmentMutation: () => mutation(mocks.removeAssignment),
   useRevokeBillingAppKeyMutation: () => mutation(mocks.revokeAppKey),
@@ -193,20 +201,53 @@ function Location() {
         {location.search}
       </output>
       <button onClick={() => navigate(-1)}>Browser back</button>
+      <button onClick={() => navigate('/billing?product=service-2&tab=app-keys')}>Switch product</button>
     </>
   );
 }
 function render(ui: ReactElement, entry = '/billing?product=service-1') {
-  return renderBase(
-    <MemoryRouter initialEntries={[entry]}>
-      {ui}
-      <Location />
-    </MemoryRouter>,
+  const client = new QueryClient();
+  const view = renderBase(
+    <QueryClientProvider client={client}>
+      <MemoryRouter initialEntries={[entry]}>
+        {ui}
+        <Location />
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
+  return { ...view, client };
 }
 
 describe('BillingPage', () => {
+  it.each(['tab', 'product', 'signout', 'unmount', 'active'] as const)(
+    'delivers a delayed product key only to its active owner: %s', async (destination) => {
+      let finish!: (value: Awaited<ReturnType<typeof billingAdminService.createAppKey>>) => void;
+      vi.mocked(billingAdminService.createAppKey).mockImplementationOnce(() =>
+        new Promise((resolve) => { finish = resolve; }));
+      const { client, unmount } = render(<BillingPage />, '/billing?product=service-1&tab=app-keys');
+      await userEvent.click(screen.getByRole('button', { name: 'Product key' }));
+      await userEvent.selectOptions(screen.getByLabelText(/^Purpose/), 'entitlement');
+      fireEvent.change(screen.getByLabelText(/^Key name/), { target: { value: 'Deployment' } });
+      fireEvent.change(screen.getByLabelText(/^Actor issuer/), { target: { value: 'https://product.example' } });
+      fireEvent.change(screen.getByLabelText(/^Actor public JWK/), { target: { value: '{}' } });
+      await userEvent.click(screen.getByRole('button', { name: 'Issue app key' }));
+      await waitFor(() => expect(billingAdminService.createAppKey).toHaveBeenCalled());
+      if (destination === 'tab') await userEvent.click(screen.getByRole('button', { name: /Tariffs/ }));
+      if (destination === 'product') await userEvent.click(screen.getByText('Switch product'));
+      if (destination === 'signout') act(() => window.dispatchEvent(new Event('uoa-admin-session-cleared')));
+      if (destination === 'unmount') unmount();
+      await act(async () => finish({ key: 'late-product-secret', key_prefix: 'prefix', actor_key_id: 'actor' } as Awaited<ReturnType<typeof billingAdminService.createAppKey>>));
+      if (destination === 'active') {
+        expect(await screen.findByText('late-product-secret')).toBeTruthy();
+        await userEvent.click(screen.getByRole('button', { name: 'I have stored this key' }));
+      }
+      expect(screen.queryByText('late-product-secret')).toBeNull();
+      expect(JSON.stringify(client.getMutationCache().getAll().map((m) => m.state))).not.toContain('late-product-secret');
+      expect(billingAdminService.createAppKey).toHaveBeenCalledOnce();
+    },
+  );
   beforeEach(() => {
+    vi.mocked(billingAdminService.createAppKey).mockReset();
     Object.values(mocks).forEach((mock) => mock.mockReset());
   });
 

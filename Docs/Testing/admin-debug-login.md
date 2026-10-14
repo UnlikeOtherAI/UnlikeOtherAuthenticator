@@ -7,7 +7,7 @@ operators can reach the importer. The contract is in
 
 ## Focused commands
 
-Build the two local packages, generate Prisma, and build Auth before the API auth
+Build the two local packages and shared Auth catalogue, generate Prisma, and build Auth before the API auth
 render regression tests. Supply a dedicated local PostgreSQL DATABASE_URL through
 the process environment; never point this suite at production. The test harness
 migrates and deletes only its uniquely named schemas.
@@ -15,6 +15,7 @@ migrates and deletes only its uniquely named schemas.
 ```sh
 pnpm --filter @unlikeotherai/billing-statement-protocol build
 pnpm --filter @unlikeotherai/slug build
+pnpm --filter @unlikeotherai/auth-ui-strings build
 pnpm --filter @uoa/api exec prisma generate
 pnpm --filter @uoa/auth build
 pnpm --filter @uoa/api exec vitest run tests/integration/admin-debug-login.test.ts tests/integration/debug-login.test.ts tests/unit/internal-admin-token.route.test.ts tests/integration/internal-admin-auth.test.ts --maxWorkers=1 --fileParallelism=false

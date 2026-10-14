@@ -9,6 +9,7 @@ import { FieldShell, TextField } from '../../components/ui/FormFields';
 import { Modal } from '../../components/ui/Modal';
 import { StatusBadge } from '../../components/ui/Status';
 import { adminService, type DomainRotateResponse } from '../../services/admin-service';
+import { useAsyncDeliveryScope } from '../../utils/use-async-delivery-scope';
 import { useAdminUi } from '../shell/admin-ui';
 import type { Domain } from './types';
 
@@ -28,6 +29,7 @@ export function DomainOverviewTab({
   const [label, setLabel] = useState(domain.label);
   const [rotateResult, setRotateResult] = useState<DomainRotateResponse | null>(null);
   const [rotateError, setRotateError] = useState<string | null>(null);
+  const captureDelivery = useAsyncDeliveryScope(section === 'credentials' ? domain.name : null);
 
   useEffect(() => {
     setLabel(domain.label);
@@ -48,13 +50,20 @@ export function DomainOverviewTab({
   const rotateSecret = useMutation({
     gcTime: 0,
     mutationFn: async (deliveryMode: 'email' | 'reveal') => {
-      setRotateResult(await adminService.rotateDomainSecret(domain.name, deliveryMode));
+      const canDeliver = captureDelivery();
+      try {
+        const result = await adminService.rotateDomainSecret(domain.name, deliveryMode);
+        if (canDeliver()) setRotateResult(result);
+      } catch (err) {
+        if (canDeliver()) {
+          setRotateError(err instanceof Error ? err.message : 'Rotation failed. Please try again.');
+        }
+        throw err;
+      }
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin'] });
     },
-    onError: (err) =>
-      setRotateError(err instanceof Error ? err.message : 'Rotation failed. Please try again.'),
   });
 
   const labelDirty = label.trim() !== domain.label;

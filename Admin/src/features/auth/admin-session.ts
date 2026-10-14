@@ -14,6 +14,7 @@ import {
 import { Navigate, useLocation } from 'react-router';
 
 import { adminEnv } from '../../config/env';
+import { useAsyncDeliveryScope } from '../../utils/use-async-delivery-scope';
 import {
   clearStoredAdminSession,
   readStoredAdminSession,
@@ -40,6 +41,7 @@ type AdminSessionContextValue = {
 const AdminSessionContext = createContext<AdminSessionContextValue | null>(null);
 
 export function AdminSessionProvider({ children }: PropsWithChildren) {
+  const captureCompletion = useAsyncDeliveryScope('admin-session');
   const [adminUser, setAdminUser] = useState<AdminUser | null>(() =>
     adminEnv.bypassAuth ? { email: 'admin@system.local', role: 'superuser' } : null,
   );
@@ -112,12 +114,14 @@ export function AdminSessionProvider({ children }: PropsWithChildren) {
   }, []);
 
   const completeSignIn = useCallback(async (accessToken: string, expiresInSeconds: number) => {
+    const canComplete = captureCompletion();
     const nextUser = await fetchAdminUser(accessToken);
+    if (!canComplete()) throw new Error('Admin sign-in was superseded. Please try again.');
     writeStoredAdminSession(accessToken, expiresInSeconds);
     setAdminUser(nextUser);
     setIsLoading(false);
     return nextUser;
-  }, []);
+  }, [captureCompletion]);
   const clearFailedSignIn = useCallback(() => {
     clearStoredAdminSession();
     setAdminUser(null);

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { adminService } from '../../services/admin-service';
+import { useAsyncDeliveryScope } from '../../utils/use-async-delivery-scope';
 import type { AgreementSignatureSearchInput } from '../../services/admin-service';
 import type { AppFlagSummary, AppPlatformKind, IntegrationRequestStatus } from './types';
 import type { KillSwitchInput } from '../../services/admin-service';
@@ -345,13 +346,17 @@ export function useApiKeysQuery() {
 
 export function useCreateApiKeyMutation(
   onCreated: (created: Awaited<ReturnType<typeof adminService.createApiKey>>) => void,
+  open = true,
 ) {
   const queryClient = useQueryClient();
+  const captureDelivery = useAsyncDeliveryScope(open ? 'automation-key' : null);
 
   return useMutation({
     gcTime: 0,
     mutationFn: async (input: { name: string; expiresAt?: string | null }) => {
-      onCreated(await adminService.createApiKey(input));
+      const canDeliver = captureDelivery();
+      const key = await adminService.createApiKey(input);
+      if (canDeliver()) onCreated(key);
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin', 'api-keys'] });

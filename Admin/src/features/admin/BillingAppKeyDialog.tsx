@@ -36,7 +36,7 @@ export function BillingAppKeyDialog({
   open: boolean;
   service: BillingService;
 }) {
-  const create = useCreateBillingAppKeyMutation(service.id, onCreated);
+  const create = useCreateBillingAppKeyMutation(service.id, onCreated, open);
   const form = useForm<BillingAppKeyFormValues>({
     resolver: zodResolver(BillingAppKeyFormSchema),
     defaultValues: defaults(),

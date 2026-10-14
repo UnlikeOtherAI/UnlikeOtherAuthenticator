@@ -1,10 +1,12 @@
 // @vitest-environment happy-dom
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { StrictMode, useEffect, useRef } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AdminSessionProvider, useAdminSession, useAdminSessionActions } from './admin-session';
 import { logoutAdminSession } from '../../services/admin-debug-login-service';
 import { ApiRequestError } from '../../services/api-client';
+import { clearStoredAdminSession } from './admin-session-storage';
 vi.mock('../../services/admin-debug-login-service', () => ({ logoutAdminSession: vi.fn() }));
 function Actions() {
   const { completeSignIn, signOut } = useAdminSessionActions();
@@ -20,6 +22,43 @@ function Actions() {
   );
 }
 describe('admin session ownership', () => {
+  it('allows an unchanged login owner to finish across StrictMode effect replay', async () => {
+    let finish!: (value: Response) => void;
+    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>((resolve) => { finish = resolve; })));
+    function LoginOnMount() {
+      const { completeSignIn } = useAdminSessionActions();
+      const started = useRef(false);
+      useEffect(() => {
+        if (started.current) return;
+        started.current = true;
+        void completeSignIn('strict-bearer', 1800).catch(() => {});
+      }, [completeSignIn]);
+      return <Actions />;
+    }
+    render(<StrictMode><AdminSessionProvider><LoginOnMount /></AdminSessionProvider></StrictMode>);
+    await act(async () => finish(new Response(JSON.stringify({ adminUser: { email: 'operator@example.test' } }))));
+    expect(screen.getByText('authenticated')).toBeTruthy();
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(sessionStorage.getItem('uoa-admin-session')).toContain('strict-bearer');
+  });
+  it.each(['clear', 'unmount'] as const)('does not restore a login after its owner is invalidated: %s', async (destination) => {
+    let finish!: (value: Response) => void;
+    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>((resolve) => { finish = resolve; })));
+    const { unmount } = render(<AdminSessionProvider><Actions /></AdminSessionProvider>);
+    await userEvent.click(screen.getByText('Login'));
+    await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+    if (destination === 'clear') act(() => clearStoredAdminSession());
+    else unmount();
+    await act(async () => finish(new Response(JSON.stringify({ adminUser: { email: 'operator@example.test' } }))));
+    expect(sessionStorage.getItem('uoa-admin-session')).toBeNull();
+    if (destination === 'clear') {
+      expect(screen.getByText('signed out')).toBeTruthy();
+      vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({ adminUser: { email: 'operator@example.test' } })));
+      await userEvent.click(screen.getByText('Login'));
+      await waitFor(() => expect(screen.getByText('authenticated')).toBeTruthy());
+      expect(sessionStorage.getItem('uoa-admin-session')).toContain('new-bearer');
+    }
+  });
   afterEach(() => {
     cleanup();
     sessionStorage.clear();

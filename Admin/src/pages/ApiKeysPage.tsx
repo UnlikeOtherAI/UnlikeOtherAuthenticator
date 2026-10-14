@@ -200,7 +200,7 @@ function CreateApiKeyModal({
   const [name, setName] = useState('');
   const [expiresAt, setExpiresAt] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const create = useCreateApiKeyMutation(onCreated);
+  const create = useCreateApiKeyMutation(onCreated, isOpen);
 
   useEffect(() => {
     if (isOpen) {

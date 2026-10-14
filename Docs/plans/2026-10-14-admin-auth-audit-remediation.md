@@ -148,3 +148,54 @@ typecheck, scoped ESLint and `git diff --check` passed after those fixture repai
 
 The browser servers on 5291/5292 were verified stopped after validation. This writer explicitly
 released its allocated heavy compiler slot; no heavy job or database remains owned by this work.
+
+## U-18 deferred-response follow-up
+
+Parent review established a remaining navigation race: DomainOverviewTab survives navigation
+between Overview and Credentials to preserve the friendly-name draft, so clearing at navigation
+alone did not stop a pending rotation from reopening its modal. BillingPage similarly retained a
+captured product-key delivery callback across location changes. Rendered deferred-response tests
+failed on both paths before the correction: the domain secret reappeared after Credentials →
+Overview → Credentials, and billing secrets reappeared after a tab change, product change or
+session-clear notification. These are additional U-18 evidence, not new issue IDs.
+
+The common delivery guard now invalidates pending UI ownership at committed scope changes,
+close/reopen, unmount and explicit session clearing. Domain delivery is scoped to the exact domain
+in Credentials; billing issuance is location-keyed and additionally scoped to its product and open
+dialog. The automation API-key hook has the same open/unmount/session guard. Captured callbacks
+cannot deliver a delayed secret into a new scope. Mutations continue to return void with gcTime 0,
+and still refresh non-secret metadata. No request cancellation, key deletion/revocation or plaintext
+cache was introduced. An unchanged active dialog still receives its one-time reveal and can close
+it normally. Operators who navigate away during issuance must inspect the metadata list before
+retrying; the key may have been issued and cannot be revealed a second time.
+
+Inspection also established late session restoration: completeSignIn awaited server validation,
+then wrote a bearer even after clearStoredAdminSession had run. Its deferred-response test failed
+before correction. Completion now verifies the same owner generation before persistence and rejects
+superseded validation. Regressions prove session clearing/provider unmount prevents restoration,
+while a fresh sign-in after clearing still works. No API logout implementation or U-35 owner file
+was modified.
+
+Maxis follow-up validation: **8 focused files / 31 tests passed**, one cached Vitest worker,
+2 GiB heap. This includes the exact rendered DomainOverviewTab/BillingPage races, original active
+reveal/close, product and automation hook callbacks after unmount/session clearing/close-reopen
+under StrictMode, callback replay, cross-origin refusal, domain-switching and logout-cache checks.
+An additional pending sign-in started during effect setup survives StrictMode replay for the same
+owner; replay does not invalidate legitimate completion, while real unmount still blocks delivery.
+Scoped ESLint and whitespace checks passed. There is no current compiler allocation for this
+writer: no follow-up typecheck/build, browser server or browser rerun has started. Allocation was
+requested through the monitored parent coordination output. Earlier build/browser results above
+describe the preceding checkpoint and must not be represented as validation of these corrections.
+Existing screenshots remain historical evidence; these lifecycle changes add no visible controls
+or copy. Full browser rendering of the new deferred races remains pending an allocated slot.
+
+Shared catalogue build-path source review: root `build` and `.github/workflows/ci.yml` use
+`pnpm -r --if-present build`; both Auth/API declare the workspace dependency, and pnpm's dependency
+inventory includes auth-ui-strings for both. Docker explicitly builds the catalogue before either
+consumer and copies its dist into runtime; deploy-main builds that Dockerfile. The focused local
+recipe in Docs/Testing/admin-debug-login.md omitted the catalogue prerequisite and now includes
+it before Auth build/API tests. No CI, container or unchanged build scope was altered. This is source
+and dependency-graph verification, not a new CI/container run.
+
+All issue boxes remain open pending parent acceptance, including U-18. U-28/U-36 dispositions and
+normal HTTPS OAuth/PDF behavior remain as recorded above.

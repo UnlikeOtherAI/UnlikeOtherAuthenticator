@@ -357,6 +357,14 @@ React state and QueryClient caches. Failed logout retains the existing source fo
 Callback effect replay reuses one exchange promise and a fresh active subscription.
 One-time credential mutations return no plaintext result: mounted reveal state alone receives it.
 Domain tabs remount on an exact domain change; billing selection/navigation clears reveals.
+Pending one-time responses also capture the committed owner's delivery generation. Leaving the
+credentials section, changing the billing location, closing the issuance dialog, unmounting or
+clearing the session invalidates that delivery, including an away-and-back transition. The shared
+guard holds no credential; successful mutations still resolve void and refresh metadata. The
+original active dialog receives its reveal normally. Issued keys are neither cancelled nor deleted
+when their UI owner goes away. Async sign-in validation uses the same lifecycle guard, so explicit
+session clearing or provider teardown cannot be undone by a late validation response; a fresh
+sign-in started afterward remains available.
 Native-app icons are prevalidated before creation. Upload failures retain the committed id in the
 dialog so retry updates that app. Closing preserves the created record for later editing.
 Protected agreement preview opens its owned blank tab synchronously, detaches opener immediately,

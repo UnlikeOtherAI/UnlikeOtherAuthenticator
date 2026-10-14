@@ -209,6 +209,7 @@ export function BillingPage() {
             onClose={() => setAssignmentOpen(false)}
           />
           <BillingAppKeyDialog
+            key={location.key}
             open={appKeyOpen}
             service={selectedService}
             onClose={() => setAppKeyOpen(false)}
