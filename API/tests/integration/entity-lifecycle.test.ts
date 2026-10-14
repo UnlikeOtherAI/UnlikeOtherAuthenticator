@@ -222,6 +222,13 @@ describe.skipIf(!process.env.DATABASE_URL)('entity lifecycle on PostgreSQL', () 
     expect(await handle.prisma.user.count({ where: { id: { in: members.map(m => m.id) }, lifecycleStatus: 'DELETED' } })).toBe(25);
     expect(await handle.prisma.adminAuditLog.count({ where: { action: 'scale.test' } })).toBe(250);
     expect(JSON.stringify(await handle.prisma.adminAuditLog.findMany({ where: { action: 'scale.test' } }))).not.toContain('192.0.2.4');
+    const cursor = await handle.prisma.directoryOrganisationRevision.findUniqueOrThrow({ where: { orgId: org.id } });
+    const changes = await handle.prisma.directoryChangeOutbox.findMany({ where: { orgId: org.id }, orderBy: { revision: 'asc' } });
+    expect(cursor.terminal).toBe(true);
+    expect(changes.at(-1)).toMatchObject({ kind: 'organisation.deleted', revision: cursor.revision });
+    expect(changes.map(change => change.revision)).toEqual(changes.map((_, index) => BigInt(index + 1)));
+    // Subsequent per-user erasure must not append after the deleted org's final event.
+    expect(await handle.prisma.organisation.findUnique({ where: { id: org.id } })).toBeNull();
   }, 60_000);
   it('denies exact disabled team management to both organisation owners and backend actors', async () => {
     const { owner, org, team } = await container();

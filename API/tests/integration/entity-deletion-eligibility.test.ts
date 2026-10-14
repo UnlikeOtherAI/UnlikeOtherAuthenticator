@@ -75,7 +75,9 @@ describe.skipIf(!process.env.DATABASE_URL)('deletion dependency refusal on Postg
     const message = 'Close or transfer active BillingOrgResponsibility operations before deletion.';
     expect(await activeBillingBlockers(f.db, 'ORGANISATION', f.org.id)).toContain(message);
     expect(await activeBillingBlockers(f.db, 'USER', f.user.id)).toContain(message);
-    await f.db.billingOrgResponsibility.update({ where: { id: row.id }, data: { active: false } });
+    await f.db.billingOrgResponsibility.update({ where: { id: row.id }, data: {
+      active: false, releasedAt: new Date(), releasedByUserId: f.user.id,
+    } });
     expect(await activeBillingBlockers(f.db, 'ORGANISATION', f.org.id)).not.toContain(message);
     expect((await f.read()).reasons).toEqual(['Protected billing or signing dependencies']);
   });
