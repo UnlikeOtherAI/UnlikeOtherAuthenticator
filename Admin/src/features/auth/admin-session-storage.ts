@@ -28,6 +28,7 @@ export function readAdminAccessToken(): string | null {
 
 export function clearStoredAdminSession(): void {
   window.sessionStorage.removeItem(storageKey);
+  window.dispatchEvent(new Event('uoa-admin-session-cleared'));
 }
 
 export function writeStoredAdminSession(accessToken: string, expiresInSeconds: number): void {
@@ -44,6 +45,10 @@ export function readStoredAdminSessionForLogout(): StoredAdminSession | null {
     const raw = window.sessionStorage.getItem(storageKey);
     if (!raw) return null;
     const value = JSON.parse(raw) as StoredAdminSession;
-    return typeof value.accessToken === 'string' && typeof value.expiresAt === 'number' ? value : null;
-  } catch { return null; }
+    return typeof value.accessToken === 'string' && typeof value.expiresAt === 'number'
+      ? value
+      : null;
+  } catch {
+    return null;
+  }
 }

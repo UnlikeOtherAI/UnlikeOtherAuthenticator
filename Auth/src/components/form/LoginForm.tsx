@@ -10,10 +10,7 @@ import { useTranslation } from '../../i18n/use-translation.js';
 import { postJson } from '../../utils/api.js';
 import { isEmailCodeEnabled, isRegistrationAllowed } from '../../utils/auth-config.js';
 import { requestSignInCode } from '../../utils/team-actions.js';
-import {
-  applyTeamOutcome,
-  interpretTeamResponse,
-} from '../../utils/team-response.js';
+import { applyTeamOutcome, interpretTeamResponse } from '../../utils/team-response.js';
 
 type LoginRequest = {
   email: string;
@@ -125,7 +122,14 @@ export function LoginForm(): React.JSX.Element {
 
     const result = await postJson<LoginRequest, LoginResponse>(
       endpoint,
-      { email, password, remember_me: rememberMe, ...(mcpMode && publicFactor ? { code: code || undefined, setup_token: publicFactor.setup_token } : {}) },
+      {
+        email,
+        password,
+        remember_me: rememberMe,
+        ...(mcpMode && publicFactor
+          ? { code: code || undefined, setup_token: publicFactor.setup_token }
+          : {}),
+      },
       query,
     );
 
@@ -170,6 +174,7 @@ export function LoginForm(): React.JSX.Element {
       codeChallenge,
       codeChallengeMethod,
       requestAccess,
+      state,
     });
     setSendingCode(false);
     setPendingEmail(email);
@@ -200,11 +205,24 @@ export function LoginForm(): React.JSX.Element {
         onChange={(e) => setPassword(e.currentTarget.value)}
       />
 
-      {clientId && publicFactor && <>
-        {publicFactor.manual_secret && <p className="text-sm">Add this secret to your authenticator: <code>{publicFactor.manual_secret}</code></p>}
-        <Input name="code" label="Authenticator code" inputMode="numeric" autoComplete="one-time-code"
-          required value={code} onChange={(event) => setCode(event.currentTarget.value)} />
-      </>}
+      {clientId && publicFactor && (
+        <>
+          {publicFactor.manual_secret && (
+            <p className="text-sm">
+              Add this secret to your authenticator: <code>{publicFactor.manual_secret}</code>
+            </p>
+          )}
+          <Input
+            name="code"
+            label="Authenticator code"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            required
+            value={code}
+            onChange={(event) => setCode(event.currentTarget.value)}
+          />
+        </>
+      )}
       {!clientId && rememberMeEnabled && (
         <Switch
           id={rememberMeId}
@@ -222,24 +240,27 @@ export function LoginForm(): React.JSX.Element {
         </Button>
       </div>
 
-      {!clientId && <div className="flex items-center justify-between text-sm">
-        <button
-          type="button"
-          className="text-[var(--uoa-color-primary)] hover:underline"
-          onClick={() => setView('reset-password')} hidden={Boolean(clientId)}
-        >
-          {t('nav.forgotPassword')}
-        </button>
-        {registrationAllowed ? (
+      {!clientId && (
+        <div className="flex items-center justify-between text-sm">
           <button
             type="button"
             className="text-[var(--uoa-color-primary)] hover:underline"
-            onClick={() => setView('register')}
+            onClick={() => setView('reset-password')}
+            hidden={Boolean(clientId)}
           >
-            {t('nav.createAccount')}
+            {t('nav.forgotPassword')}
           </button>
-        ) : null}
-      </div>}
+          {registrationAllowed ? (
+            <button
+              type="button"
+              className="text-[var(--uoa-color-primary)] hover:underline"
+              onClick={() => setView('register')}
+            >
+              {t('nav.createAccount')}
+            </button>
+          ) : null}
+        </div>
+      )}
 
       {!clientId && emailCodeEnabled ? (
         <div className="text-center text-sm">

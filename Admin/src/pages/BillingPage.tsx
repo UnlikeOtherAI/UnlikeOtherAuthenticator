@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Link } from 'react-router';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useLocation } from 'react-router';
 
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
@@ -24,6 +24,7 @@ import { BillingSmsPoliciesPanel } from '../features/admin/BillingSmsPoliciesPan
 import type { CreatedBillingAppKey } from '../schemas/billing';
 
 export function BillingPage() {
+  const location = useLocation();
   const { data: services = [], isError, isLoading, refetch } = useBillingServicesQuery();
   const { params, href, update } = useBillingNavigation();
   const selectedServiceId = params.get('product') ?? '';
@@ -40,13 +41,22 @@ export function BillingPage() {
   const [appKeyOpen, setAppKeyOpen] = useState(false);
   const [adjustmentOpen, setAdjustmentOpen] = useState(false);
   const [createdKey, setCreatedKey] = useState<CreatedBillingAppKey | null>(null);
-  const section = params.get('section') === 'contracts' ? 'contracts'
-    : params.get('section') === 'exceptions' ? 'exceptions'
-    : params.get('section') === 'sms' ? 'sms' : 'products';
+  const section =
+    params.get('section') === 'contracts'
+      ? 'contracts'
+      : params.get('section') === 'exceptions'
+        ? 'exceptions'
+        : params.get('section') === 'sms'
+          ? 'sms'
+          : 'products';
   const selectedService = useMemo(
     () => services.find((service) => service.id === selectedServiceId) ?? null,
     [selectedServiceId, services],
   );
+  useEffect(() => {
+    setCreatedKey(null);
+    setAppKeyOpen(false);
+  }, [location.key]);
   return (
     <>
       <PageHeader

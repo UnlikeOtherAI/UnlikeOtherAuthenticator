@@ -14,7 +14,8 @@
   "dependencies": {
     "@unlikeotherai/slug": "workspace:*",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-dom": "^19.2.8",
+    "@unlikeotherai/auth-ui-strings": "workspace:*"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",

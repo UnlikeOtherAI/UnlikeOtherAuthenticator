@@ -6,38 +6,12 @@ import { getEnv, type Env } from '../config/env.js';
 import { getPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 
+import { en } from '@unlikeotherai/auth-ui-strings';
+
 type TranslationFile = Record<string, string>;
 
-// Source-of-truth strings for the Auth UI. This is the file that gets translated and cached.
-//
-// Keep this aligned with `Auth/src/i18n/translations/en.ts`.
-const EN_SOURCE: TranslationFile = {
-  'auth.login.title': 'Sign in',
-  'auth.register.title': 'Create your account',
-  'auth.resetPassword.title': 'Reset your password',
-  'auth.twoFactorVerify.title': 'Verify two-factor code',
-  'auth.twoFactorSetup.title': 'Set up two-factor authentication',
-
-  'form.email.label': 'Email',
-  'form.password.label': 'Password',
-
-  'form.login.submit': 'Sign in',
-  'form.register.submit': 'Continue',
-  'form.resetPassword.submit': 'Send reset instructions',
-
-  // Used by registration and reset-password flows; must remain generic.
-  'message.instructionsSent': 'We sent instructions to your email',
-
-  'twoFactor.setup.instructions':
-    'Scan this QR code with an authenticator app, then enter the 6-digit code to verify setup.',
-  'twoFactor.setup.submit': 'Enable 2FA',
-  'twoFactor.setup.success': 'Two-factor authentication is enabled',
-
-  'twoFactor.verify.instructions':
-    'Enter the 6-digit code from your authenticator app to finish signing in.',
-  'twoFactor.verify.submit': 'Verify',
-  'twoFactor.verify.success': 'Verification successful',
-};
+// Shared with the Auth UI; source hashes invalidate older incomplete translations.
+const EN_SOURCE: TranslationFile = en;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -110,9 +84,8 @@ async function translateWithOpenAi(params: {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), OPENAI_TRANSLATION_TIMEOUT_MS);
 
-  let res: Response;
   try {
-    res = await fetch('https://api.openai.com/v1/chat/completions', {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         authorization: `Bearer ${params.apiKey}`,
@@ -128,24 +101,23 @@ async function translateWithOpenAi(params: {
       }),
       signal: controller.signal,
     });
+    if (!res.ok) {
+      throw new AppError('INTERNAL', 500, 'AI_TRANSLATION_FAILED');
+    }
+
+    const json = (await res.json()) as {
+      choices?: Array<{ message?: { content?: string } }>;
+    } | null;
+    const content = json?.choices?.[0]?.message?.content ?? '';
+    const extracted = extractFirstJsonObject(content);
+    const parsed = safeJsonParse(extracted || content);
+
+    return normalizeTranslationResult({ source: params.source, candidate: parsed });
   } catch {
     throw new AppError('INTERNAL', 500, 'AI_TRANSLATION_FAILED');
   } finally {
     clearTimeout(timeoutId);
   }
-
-  if (!res.ok) {
-    throw new AppError('INTERNAL', 500, 'AI_TRANSLATION_FAILED');
-  }
-
-  const json = (await res.json().catch(() => null)) as
-    | { choices?: Array<{ message?: { content?: string } }> }
-    | null;
-  const content = json?.choices?.[0]?.message?.content ?? '';
-  const extracted = extractFirstJsonObject(content);
-  const parsed = safeJsonParse(extracted || content);
-
-  return normalizeTranslationResult({ source: params.source, candidate: parsed });
 }
 
 type TranslationPrisma = Pick<PrismaClient, 'aiTranslation'>;
@@ -158,10 +130,7 @@ export async function getAuthUiTranslations(params: {
 
   const env = getEnv();
   const prisma = env.DATABASE_URL ? (getPrisma() as unknown as TranslationPrisma) : null;
-  return await getAuthUiTranslationsWithDeps(
-    { language: params.language },
-    { env, prisma },
-  );
+  return await getAuthUiTranslationsWithDeps({ language: params.language }, { env, prisma });
 }
 
 export async function getAuthUiTranslationsWithDeps(
@@ -185,7 +154,8 @@ export async function getAuthUiTranslationsWithDeps(
 
   const sourceHash = sourceHashFor(source);
 
-  const prisma = deps.prisma ?? (env.DATABASE_URL ? (getPrisma() as unknown as TranslationPrisma) : null);
+  const prisma =
+    deps.prisma ?? (env.DATABASE_URL ? (getPrisma() as unknown as TranslationPrisma) : null);
   if (prisma) {
     const row = await prisma.aiTranslation.findUnique({ where: { language: lang } });
     if (row && row.sourceHash === sourceHash && isRecord(row.data)) {
@@ -223,4 +193,3 @@ export async function getAuthUiTranslationsWithDeps(
 
   return translated;
 }
-

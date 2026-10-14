@@ -180,7 +180,10 @@ export function useLogsQuery() {
 }
 
 export function useHandshakeErrorsQuery() {
-  return useQuery({ queryKey: ['admin', 'handshake-errors'], queryFn: adminService.getHandshakeErrors });
+  return useQuery({
+    queryKey: ['admin', 'handshake-errors'],
+    queryFn: adminService.getHandshakeErrors,
+  });
 }
 
 export function useSettingsQuery() {
@@ -213,8 +216,13 @@ export function useCreateAppMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (input: { name: string; identifier: string; platform: AppPlatformKind; domain: string; orgId: string }) =>
-      adminService.createApp(input),
+    mutationFn: (input: {
+      name: string;
+      identifier: string;
+      platform: AppPlatformKind;
+      domain: string;
+      orgId: string;
+    }) => adminService.createApp(input),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin', 'dashboard'] });
       void queryClient.invalidateQueries({ queryKey: ['admin', 'settings'] });
@@ -222,7 +230,10 @@ export function useCreateAppMutation() {
   });
 }
 
-function invalidateFeatureFlagQueries(queryClient: ReturnType<typeof useQueryClient>, updatedApp?: AppFlagSummary) {
+function invalidateFeatureFlagQueries(
+  queryClient: ReturnType<typeof useQueryClient>,
+  updatedApp?: AppFlagSummary,
+) {
   if (updatedApp) {
     queryClient.setQueryData<Awaited<ReturnType<typeof adminService.getSettings>>>(
       ['admin', 'settings'],
@@ -282,7 +293,8 @@ export function useUpdateKillSwitchMutation(appId: string, killSwitchId: string)
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (input: KillSwitchInput) => adminService.updateKillSwitch(appId, killSwitchId, input),
+    mutationFn: (input: KillSwitchInput) =>
+      adminService.updateKillSwitch(appId, killSwitchId, input),
     onSuccess: (updatedApp) => invalidateFeatureFlagQueries(queryClient, updatedApp),
   });
 }
@@ -331,11 +343,16 @@ export function useApiKeysQuery() {
   return useQuery({ queryKey: ['admin', 'api-keys'], queryFn: adminService.listApiKeys });
 }
 
-export function useCreateApiKeyMutation() {
+export function useCreateApiKeyMutation(
+  onCreated: (created: Awaited<ReturnType<typeof adminService.createApiKey>>) => void,
+) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (input: { name: string; expiresAt?: string | null }) => adminService.createApiKey(input),
+    gcTime: 0,
+    mutationFn: async (input: { name: string; expiresAt?: string | null }) => {
+      onCreated(await adminService.createApiKey(input));
+    },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin', 'api-keys'] });
     },

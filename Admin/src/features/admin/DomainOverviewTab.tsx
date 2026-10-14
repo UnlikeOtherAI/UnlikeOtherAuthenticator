@@ -18,7 +18,11 @@ type DomainOverviewTabProps = {
   counts: { organisations: number; teams: number; users: number };
 };
 
-export function DomainOverviewTab({ counts, domain, section = 'overview' }: DomainOverviewTabProps) {
+export function DomainOverviewTab({
+  counts,
+  domain,
+  section = 'overview',
+}: DomainOverviewTabProps) {
   const queryClient = useQueryClient();
   const { confirm } = useAdminUi();
   const [label, setLabel] = useState(domain.label);
@@ -27,7 +31,14 @@ export function DomainOverviewTab({ counts, domain, section = 'overview' }: Doma
 
   useEffect(() => {
     setLabel(domain.label);
-  }, [domain.label]);
+    setRotateResult(null);
+    setRotateError(null);
+  }, [domain.name, domain.label]);
+
+  useEffect(() => {
+    setRotateResult(null);
+    setRotateError(null);
+  }, [section]);
 
   const updateDomain = useMutation({
     mutationFn: (input: { label?: string; status?: 'active' | 'disabled' }) =>
@@ -35,12 +46,15 @@ export function DomainOverviewTab({ counts, domain, section = 'overview' }: Doma
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin'] }),
   });
   const rotateSecret = useMutation({
-    mutationFn: (deliveryMode: 'email' | 'reveal') => adminService.rotateDomainSecret(domain.name, deliveryMode),
-    onSuccess: (result) => {
-      setRotateResult(result);
+    gcTime: 0,
+    mutationFn: async (deliveryMode: 'email' | 'reveal') => {
+      setRotateResult(await adminService.rotateDomainSecret(domain.name, deliveryMode));
+    },
+    onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin'] });
     },
-    onError: (err) => setRotateError(err instanceof Error ? err.message : 'Rotation failed. Please try again.'),
+    onError: (err) =>
+      setRotateError(err instanceof Error ? err.message : 'Rotation failed. Please try again.'),
   });
 
   const labelDirty = label.trim() !== domain.label;
@@ -48,123 +62,148 @@ export function DomainOverviewTab({ counts, domain, section = 'overview' }: Doma
 
   return (
     <div className="space-y-5">
-      {section === 'overview' ? <>
-      <div className="grid gap-3 md:grid-cols-3">
-        <MetricCard label="Organisations" value={counts.organisations} href="?tab=organisations" />
-        <MetricCard label="Teams" value={counts.teams} href="?tab=teams" />
-        <MetricCard label="Users" value={counts.users} href="?tab=users" />
-      </div>
+      {section === 'overview' ? (
+        <>
+          <div className="grid gap-3 md:grid-cols-3">
+            <MetricCard
+              label="Organisations"
+              value={counts.organisations}
+              href="?tab=organisations"
+            />
+            <MetricCard label="Teams" value={counts.teams} href="?tab=teams" />
+            <MetricCard label="Users" value={counts.users} href="?tab=users" />
+          </div>
 
-      <Card className="p-5">
-        <div className="mb-4 flex items-start justify-between gap-3">
-          <div>
-            <h3 className="text-sm font-semibold text-gray-900">Identity</h3>
-            <p className="mt-0.5 text-xs text-gray-500">
-              The domain name is immutable — it must match the domain claim in config JWTs. Only the friendly name is editable.
+          <Card className="p-5">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-semibold text-gray-900">Identity</h3>
+                <p className="mt-0.5 text-xs text-gray-500">
+                  The domain name is immutable — it must match the domain claim in config JWTs. Only
+                  the friendly name is editable.
+                </p>
+              </div>
+              <Button
+                icon="check"
+                variant="primary"
+                size="sm"
+                disabled={!labelDirty || updateDomain.isPending}
+                onClick={() => updateDomain.mutate({ label: label.trim() })}
+              >
+                {updateDomain.isPending ? 'Saving…' : 'Save'}
+              </Button>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <FieldShell label="Domain name">
+                <TextField disabled value={domain.name} />
+              </FieldShell>
+              <FieldShell label="Friendly name">
+                <TextField
+                  value={label}
+                  placeholder="Acme Inc."
+                  onChange={(event) => setLabel(event.target.value)}
+                />
+              </FieldShell>
+            </div>
+            <p className="mt-3 text-xs text-gray-400">Added {domain.created}</p>
+          </Card>
+
+          {updateDomain.isError ? (
+            <p role="alert" className="text-sm text-red-600">
+              Could not save the service. Try again.
             </p>
-          </div>
-          <Button
-            icon="check"
-            variant="primary"
-            size="sm"
-            disabled={!labelDirty || updateDomain.isPending}
-            onClick={() => updateDomain.mutate({ label: label.trim() })}
-          >
-            {updateDomain.isPending ? 'Saving…' : 'Save'}
-          </Button>
-        </div>
-        <div className="grid gap-4 md:grid-cols-2">
-          <FieldShell label="Domain name">
-            <TextField disabled value={domain.name} />
-          </FieldShell>
-          <FieldShell label="Friendly name">
-            <TextField value={label} placeholder="Acme Inc." onChange={(event) => setLabel(event.target.value)} />
-          </FieldShell>
-        </div>
-        <p className="mt-3 text-xs text-gray-400">Added {domain.created}</p>
-      </Card>
-
-      {updateDomain.isError ? <p role="alert" className="text-sm text-red-600">Could not save the service. Try again.</p> : null}
-      </> : null}
-      {section === 'credentials' ? <>
-      <Card className="p-5">
-        <div className="mb-4">
-          <h3 className="text-sm font-semibold text-gray-900">Backend credentials</h3>
-          <p className="mt-0.5 text-xs text-gray-500">
-            Rotation issues a new credential. The current credential stays valid until the partner claims or uses its replacement.
-          </p>
-        </div>
-        <dl className="grid gap-4 sm:grid-cols-3">
-          <div>
-            <dt className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Client hash</dt>
-            <dd className="mt-1">
-              <code className="rounded-sm bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600">{domain.hash}</code>
-            </dd>
-          </div>
-          <div>
-            <dt className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Secret age</dt>
-            <dd className="mt-1">
-              {domain.secretAge ? (
-                <Badge variant={domain.secretOld ? 'amber' : 'green'}>{domain.secretAge}</Badge>
-              ) : (
-                <Badge>—</Badge>
-              )}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Status</dt>
-            <dd className="mt-1">
-              <StatusBadge status={domain.status} />
-            </dd>
-          </div>
-        </dl>
-        <div className="mt-4 flex flex-wrap gap-2">
-          <Button
-            onClick={() =>
-              confirm(
-                `Email claim link for ${domain.name}?`,
-                'A one-time claim link will be emailed to the partner contact. The current secret keeps working until the partner claims the new one.',
-                async () => {
-                  await rotateSecret.mutateAsync('email');
-                },
-              )
-            }
-          >
-            Rotate and email claim link
-          </Button>
-          <Button
-            onClick={() =>
-              confirm(
-                `Rotate ${domain.name} and reveal the new secret?`,
-                'A fresh secret will be generated and shown in the admin UI once. No email is sent — deliver the credentials to the partner through your own secure channel. The current secret keeps working until the partner switches to the new one.',
-                async () => {
-                  await rotateSecret.mutateAsync('reveal');
-                },
-              )
-            }
-          >
-            Rotate and reveal once
-          </Button>
-          <Button
-            variant={isActive ? 'danger' : 'secondary'}
-            onClick={() =>
-              confirm(
-                `${isActive ? 'Disable' : 'Enable'} ${domain.name}?`,
-                isActive
-                  ? 'Domain bearer auth will be rejected for this domain.'
-                  : 'Domain bearer auth will be accepted again for active secrets.',
-                async () => {
-                  await updateDomain.mutateAsync({ status: isActive ? 'disabled' : 'active' });
-                },
-              )
-            }
-          >
-            {isActive ? 'Disable domain' : 'Enable domain'}
-          </Button>
-        </div>
-      </Card>
-
-      </> : null}
+          ) : null}
+        </>
+      ) : null}
+      {section === 'credentials' ? (
+        <>
+          <Card className="p-5">
+            <div className="mb-4">
+              <h3 className="text-sm font-semibold text-gray-900">Backend credentials</h3>
+              <p className="mt-0.5 text-xs text-gray-500">
+                Rotation issues a new credential. The current credential stays valid until the
+                partner claims or uses its replacement.
+              </p>
+            </div>
+            <dl className="grid gap-4 sm:grid-cols-3">
+              <div>
+                <dt className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                  Client hash
+                </dt>
+                <dd className="mt-1">
+                  <code className="rounded-sm bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600">
+                    {domain.hash}
+                  </code>
+                </dd>
+              </div>
+              <div>
+                <dt className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                  Secret age
+                </dt>
+                <dd className="mt-1">
+                  {domain.secretAge ? (
+                    <Badge variant={domain.secretOld ? 'amber' : 'green'}>{domain.secretAge}</Badge>
+                  ) : (
+                    <Badge>—</Badge>
+                  )}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                  Status
+                </dt>
+                <dd className="mt-1">
+                  <StatusBadge status={domain.status} />
+                </dd>
+              </div>
+            </dl>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button
+                onClick={() =>
+                  confirm(
+                    `Email claim link for ${domain.name}?`,
+                    'A one-time claim link will be emailed to the partner contact. The current secret keeps working until the partner claims the new one.',
+                    async () => {
+                      await rotateSecret.mutateAsync('email');
+                    },
+                  )
+                }
+              >
+                Rotate and email claim link
+              </Button>
+              <Button
+                onClick={() =>
+                  confirm(
+                    `Rotate ${domain.name} and reveal the new secret?`,
+                    'A fresh secret will be generated and shown in the admin UI once. No email is sent — deliver the credentials to the partner through your own secure channel. The current secret keeps working until the partner switches to the new one.',
+                    async () => {
+                      await rotateSecret.mutateAsync('reveal');
+                    },
+                  )
+                }
+              >
+                Rotate and reveal once
+              </Button>
+              <Button
+                variant={isActive ? 'danger' : 'secondary'}
+                onClick={() =>
+                  confirm(
+                    `${isActive ? 'Disable' : 'Enable'} ${domain.name}?`,
+                    isActive
+                      ? 'Domain bearer auth will be rejected for this domain.'
+                      : 'Domain bearer auth will be accepted again for active secrets.',
+                    async () => {
+                      await updateDomain.mutateAsync({ status: isActive ? 'disabled' : 'active' });
+                    },
+                  )
+                }
+              >
+                {isActive ? 'Disable domain' : 'Enable domain'}
+              </Button>
+            </div>
+          </Card>
+        </>
+      ) : null}
       <RotateNoticeModal result={rotateResult} onClose={() => setRotateResult(null)} />
       <Modal
         isOpen={Boolean(rotateError)}
@@ -187,24 +226,37 @@ function MetricCard({ label, value, href }: { label: string; value: number; href
   return (
     <Card className="p-4">
       <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">{label}</p>
-      <Link state={location.state} to={href} className="mt-1 block text-lg font-semibold text-indigo-600 hover:underline" aria-label={`View ${value} ${label.toLowerCase()}`}>{value}</Link>
+      <Link
+        state={location.state}
+        to={href}
+        className="mt-1 block text-lg font-semibold text-indigo-600 hover:underline"
+        aria-label={`View ${value} ${label.toLowerCase()}`}
+      >
+        {value}
+      </Link>
     </Card>
   );
 }
 
-function RotateNoticeModal({ onClose, result }: { onClose: () => void; result: DomainRotateResponse | null }) {
+function RotateNoticeModal({
+  onClose,
+  result,
+}: {
+  onClose: () => void;
+  result: DomainRotateResponse | null;
+}) {
   const reveal = result?.delivery_mode === 'reveal' && result.credentials;
   const dispatched = result?.email_dispatched ?? false;
   const title = reveal
     ? 'New credentials (shown once)'
     : dispatched
-    ? 'Rotation claim sent'
-    : 'Rotation claim not delivered';
+      ? 'Rotation claim sent'
+      : 'Rotation claim not delivered';
   const description = reveal
     ? 'Copy the secret below now — it will not be displayed again. The previous secret keeps working until the partner switches to the new one. Deliver these through your own secure channel.'
     : dispatched
-    ? `A one-time claim link has been emailed to ${result?.contact_email ?? 'the partner contact'}. The previous secret stays active until they open the link and confirm.`
-    : `A claim token was created but the email to ${result?.contact_email ?? 'the partner contact'} could not be dispatched. Retry the rotation or deliver the link out-of-band.`;
+      ? `A one-time claim link has been emailed to ${result?.contact_email ?? 'the partner contact'}. The previous secret stays active until they open the link and confirm.`
+      : `A claim token was created but the email to ${result?.contact_email ?? 'the partner contact'} could not be dispatched. Retry the rotation or deliver the link out-of-band.`;
 
   return (
     <Modal

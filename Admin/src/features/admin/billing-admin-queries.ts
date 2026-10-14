@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   BillingAdjustmentFormValues,
   BillingAppKeyFormValues,
+  CreatedBillingAppKey,
   BillingAssignmentFormValues,
   BillingServiceFormValues,
   BillingTariffFormValues,
@@ -66,11 +67,16 @@ export function useRemoveBillingAssignmentMutation(serviceId: string) {
   });
 }
 
-export function useCreateBillingAppKeyMutation(serviceId: string) {
+export function useCreateBillingAppKeyMutation(
+  serviceId: string,
+  onCreated: (key: CreatedBillingAppKey) => void,
+) {
   const refresh = useRefreshBillingServices();
   return useMutation({
-    mutationFn: (input: BillingAppKeyFormValues) =>
-      billingAdminService.createAppKey(serviceId, input),
+    gcTime: 0,
+    mutationFn: async (input: BillingAppKeyFormValues) => {
+      onCreated(await billingAdminService.createAppKey(serviceId, input));
+    },
     onSuccess: refresh,
   });
 }

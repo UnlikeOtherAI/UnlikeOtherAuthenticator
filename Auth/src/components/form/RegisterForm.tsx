@@ -10,7 +10,15 @@ type RegisterRequest = { email: string };
 
 export function RegisterForm(): React.JSX.Element {
   const { t } = useTranslation();
-  const { configUrl, redirectUrl, codeChallenge, codeChallengeMethod, requestAccess, setView } = usePopup();
+  const {
+    configUrl,
+    redirectUrl,
+    codeChallenge,
+    codeChallengeMethod,
+    requestAccess,
+    state,
+    setView,
+  } = usePopup();
   const [email, setEmail] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [alreadyRegistered, setAlreadyRegistered] = useState(false);
@@ -27,6 +35,7 @@ export function RegisterForm(): React.JSX.Element {
       query.code_challenge_method = codeChallengeMethod;
     }
     if (requestAccess) query.request_access = true;
+    if (state !== null) query.state = state;
 
     // Most clients keep the default no-enumeration response. A signed config
     // may opt into EMAIL_ALREADY_REGISTERED for products that prefer inline

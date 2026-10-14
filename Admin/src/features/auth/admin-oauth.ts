@@ -1,3 +1,4 @@
+import { createApiClient } from '../../services/api-client';
 import { adminEnv } from '../../config/env';
 
 const pendingLoginKey = 'uoa-admin-pending-login';
@@ -17,7 +18,9 @@ type AdminTokenResponse = {
 };
 
 function apiOrigin(): string {
-  if (adminEnv.apiBaseUrl) return new URL(adminEnv.apiBaseUrl).origin;
+  if (adminEnv.apiBaseUrl && new URL(adminEnv.apiBaseUrl).origin !== window.location.origin) {
+    throw new Error('Cross-origin admin API requests are not permitted');
+  }
   return window.location.origin;
 }
 
@@ -45,11 +48,7 @@ function base64Url(bytes: Uint8Array): string {
   bytes.forEach((byte) => {
     binary += String.fromCharCode(byte);
   });
-  return window
-    .btoa(binary)
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '');
+  return window.btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
 async function codeChallengeFor(verifier: string): Promise<string> {
@@ -110,19 +109,9 @@ export async function exchangeAdminAuthorizationCode(
   const tokenUrl = new URL('/internal/admin/token', apiOrigin());
   tokenUrl.searchParams.set('config_url', pending.configUrl);
 
-  const response = await fetch(tokenUrl.toString(), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({
-      code,
-      redirect_url: pending.redirectUrl,
-      code_verifier: pending.codeVerifier,
-    }),
+  return createApiClient().post<AdminTokenResponse>(tokenUrl.pathname + tokenUrl.search, {
+    code,
+    redirect_url: pending.redirectUrl,
+    code_verifier: pending.codeVerifier,
   });
-
-  if (!response.ok) {
-    throw new Error('Admin token exchange failed.');
-  }
-
-  return response.json() as Promise<AdminTokenResponse>;
 }

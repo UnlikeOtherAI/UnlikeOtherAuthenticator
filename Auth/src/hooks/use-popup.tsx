@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState, useCallback } from 'react';
 
+import { selectAllowedHandoffTarget } from '../utils/handoff-target.js';
 import type { TranslationKey } from '../i18n/translations/en.js';
 import { parsePopupQueryParams, type PopupQueryParams } from './popup-query-params.js';
 
@@ -154,7 +155,10 @@ function deriveInitialView(parsed: PopupQueryParams): AuthView {
   }
   if (parsed.emailToken && parsed.emailTokenType) {
     // Email link landing: show set-password for both registration+password and password reset.
-    if (parsed.emailTokenType === 'VERIFY_EMAIL_SET_PASSWORD' || parsed.emailTokenType === 'PASSWORD_RESET') {
+    if (
+      parsed.emailTokenType === 'VERIFY_EMAIL_SET_PASSWORD' ||
+      parsed.emailTokenType === 'PASSWORD_RESET'
+    ) {
       return 'set-password';
     }
     // VERIFY_EMAIL and LOGIN_LINK are handled by auto-submission on the server; shouldn't reach here,
@@ -184,8 +188,16 @@ export function PopupProvider(props: {
     return props.initialSearch ?? readClientSearch();
   });
 
-  const parsed = useMemo(() => parsePopupQueryParams(search), [search]);
-  const [view, setViewState] = useState<AuthView>(() => props.initialView ?? deriveInitialView(parsed));
+  const parsed = useMemo(() => {
+    const query = parsePopupQueryParams(search);
+    return {
+      ...query,
+      handoffTarget: selectAllowedHandoffTarget(props.config, query.handoffTarget),
+    };
+  }, [search, props.config]);
+  const [view, setViewState] = useState<AuthView>(
+    () => props.initialView ?? deriveInitialView(parsed),
+  );
   const [twoFaToken, setTwoFaToken] = useState<string | null>(() => parsed.twoFaToken);
   const [twoFactorSetup, setTwoFactorSetup] = useState<TwoFactorSetupState | null>(() =>
     parsed.twoFaSetupToken ? { setup_token: parsed.twoFaSetupToken } : null,
@@ -211,7 +223,11 @@ export function PopupProvider(props: {
     if (url.searchParams.get('signing_token') !== parsed.signingToken) return;
     url.searchParams.delete('signing_token');
     if (url.searchParams.get('flow') === 'signatures') url.searchParams.delete('flow');
-    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+    window.history.replaceState(
+      window.history.state,
+      '',
+      `${url.pathname}${url.search}${url.hash}`,
+    );
   }, [parsed.signingToken]);
 
   // Same cleanup for the sibling bridge tokens: once read into React state they must not
@@ -231,7 +247,11 @@ export function PopupProvider(props: {
     const url = new URL(window.location.href);
     if (present.some(([param, token]) => url.searchParams.get(param) !== token)) return;
     for (const [param] of present) url.searchParams.delete(param);
-    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+    window.history.replaceState(
+      window.history.state,
+      '',
+      `${url.pathname}${url.search}${url.hash}`,
+    );
   }, [
     parsed.inviteEmail,
     parsed.inviteName,

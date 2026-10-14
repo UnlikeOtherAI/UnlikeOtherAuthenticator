@@ -1,7 +1,11 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { Env } from '../../src/config/env.js';
 import { getAuthUiTranslationsWithDeps } from '../../src/services/translation.service.js';
+
+vi.mock('../../src/db/prisma.js', () => ({
+  getPrisma: () => { throw new Error('Unit translation tests must inject their database dependency'); },
+}));
 
 type TranslationRow = { language: string; sourceHash: string; data: unknown };
 
@@ -109,3 +113,41 @@ describe('getAuthUiTranslationsWithDeps', () => {
   });
 });
 
+describe('translation transport deadline', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+  it('bounds a body stalled after successful headers', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url, init: RequestInit) => ({
+        ok: true,
+        json: () =>
+          new Promise((_resolve, reject) =>
+            init.signal?.addEventListener('abort', () => reject(new Error('aborted'))),
+          ),
+      })),
+    );
+    const pending = getAuthUiTranslationsWithDeps(
+      { language: 'fr' },
+      {
+        env: testEnv({
+          DATABASE_URL: undefined,
+          AI_TRANSLATION_PROVIDER: 'openai',
+          OPENAI_API_KEY: 'synthetic',
+        }),
+        prisma: null,
+      },
+    );
+    const refusal = expect(pending).rejects.toMatchObject({ message: 'AI_TRANSLATION_FAILED' });
+    await vi.advanceTimersByTimeAsync(10000);
+    await refusal;
+  });
+  it('serves the same complete English catalogue as Auth', async () => {
+    const { en } = await import('@unlikeotherai/auth-ui-strings');
+    expect(await getAuthUiTranslationsWithDeps({ language: 'en' }, { env: testEnv() })).toEqual(en);
+    expect(en['auth.accessStatus.open']).toBe('Check access status');
+  });
+});

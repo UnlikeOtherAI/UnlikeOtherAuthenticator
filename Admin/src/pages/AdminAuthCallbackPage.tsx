@@ -6,24 +6,16 @@ import {
   exchangeAdminAuthorizationCode,
   readPendingAdminLogin,
 } from '../features/auth/admin-oauth';
-import { useAdminSession, useAdminSessionActions } from '../features/auth/admin-session';
+import { useAdminSessionActions } from '../features/auth/admin-session';
 
 export function AdminAuthCallbackPage() {
-  const { isAuthenticated } = useAdminSession();
   const { completeSignIn, clearFailedSignIn } = useAdminSessionActions();
   const location = useLocation();
   const navigate = useNavigate();
   const [error, setError] = useState(false);
-  const hasStarted = useRef(false);
+  const exchange = useRef<Promise<{ access_token: string; expires_in: number }> | null>(null);
 
   useEffect(() => {
-    if (isAuthenticated) {
-      navigate('/dashboard', { replace: true });
-      return;
-    }
-    if (hasStarted.current) return;
-    hasStarted.current = true;
-
     let cancelled = false;
     const params = new URLSearchParams(location.search);
     const code = params.get('code');
@@ -36,8 +28,11 @@ export function AdminAuthCallbackPage() {
       return;
     }
 
-    void exchangeAdminAuthorizationCode(code, pending)
-      .then((token) => completeSignIn(token.access_token, token.expires_in))
+    exchange.current ??= exchangeAdminAuthorizationCode(code, pending);
+    void exchange.current
+      .then((token) => {
+        if (!cancelled) return completeSignIn(token.access_token, token.expires_in);
+      })
       .then(() => {
         if (cancelled) return;
         clearPendingAdminLogin();
@@ -53,7 +48,7 @@ export function AdminAuthCallbackPage() {
     return () => {
       cancelled = true;
     };
-  }, [completeSignIn, isAuthenticated, location.search, navigate, clearFailedSignIn]);
+  }, [completeSignIn, location.search, navigate, clearFailedSignIn]);
 
   return (
     <main className="flex min-h-full items-center justify-center bg-slate-950 px-6 py-12 text-center">
