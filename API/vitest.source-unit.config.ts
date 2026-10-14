@@ -29,6 +29,7 @@ export default defineConfig({
       'tests/unit/team-invite-link-redeem.service.test.ts',
       'tests/unit/team-invite-link.service.test.ts',
       'tests/unit/team-invite-link-admission.test.ts',
+      'tests/unit/website-context-rollout.test.ts',
     ],
     env: { NODE_ENV: 'test', SHARED_SECRET: 'synthetic-source-test-material-32-characters', AUTH_SERVICE_IDENTIFIER: 'uoa-auth-service' },
   },

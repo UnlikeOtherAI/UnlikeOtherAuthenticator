@@ -65,6 +65,7 @@ const EnvSchema = z
     // BYPASSRLS role used for pre-context and admin DB paths (domain-hash auth, admin routes,
     // auto-onboarding, claim flow, retention pruning, etc.). Defaults to DATABASE_URL when unset,
     // so local/dev without RLS keeps working unchanged. See Docs/Requirements/row-level-security.md.
+    WEBSITE_CLIENT_CONTEXT_PHASE: z.enum(['bridge', 'stable']).default('bridge'),
     DATABASE_ADMIN_URL: z.string().min(1).optional(),
     // Email provider abstraction (brief phase 11.1). Provider can be swapped via env without code changes.
     EMAIL_PROVIDER: z.enum(['disabled', 'smtp', 'ses', 'sendgrid']).optional(),

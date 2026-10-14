@@ -22,6 +22,7 @@ import { endpoints } from './schema.js';
 // Profile/directory responses set private/no-store before authorization, including errors.
 // Profile read/write/display endpoints are included through schema.profile.
 // Native attempt/MFA policies are included through schema.oauth; directory metadata is bounded.
+// Website JWTs use stable IDs; bridge refresh/debug storage remains legacy-compatible until operator cleanup.
 // Website tokens use stable non-secret client IDs; method/code binding policies
 // are published by the shared config and endpoint schema slices.
 import { readAdminIndexAssetUrls } from '../../services/admin-ui.service.js';

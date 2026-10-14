@@ -230,6 +230,7 @@ export async function exchangeAuthorizationCodeForTokens(
     redirectUrl: string;
     codeVerifier?: string;
     clientId?: string;
+    websiteCredential?: string;
     authenticatedClientDomainId?: string;
   },
   deps?: TokenIssuerDeps,
@@ -296,6 +297,7 @@ export async function exchangeAuthorizationCodeForTokens(
         userId,
         domain: params.config.domain,
         clientId,
+        websiteCredential: params.websiteCredential,
         configUrl: params.configUrl,
         orgId: active?.orgId,
         teamId: active?.teamId,

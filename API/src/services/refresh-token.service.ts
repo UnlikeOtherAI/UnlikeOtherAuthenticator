@@ -18,7 +18,7 @@ import {
   type RefreshTokenRow,
 } from './refresh-token-replay.service.js';
 import { bumpUserTokenVersion } from './refresh-token-revocation.service.js';
-import { matchesWebsiteRefreshContext, migrateWebsiteRefreshFamily } from './website-client-context.service.js';
+import { matchesWebsiteRefreshContext, websiteRefreshStorageClientId } from './website-client-context.service.js';
 import { lockRefreshSessionUserDomain } from './refresh-session-lock.service.js';
 
 const MIN_INHERITED_REFRESH_TTL_SECONDS = 5 * 60;
@@ -193,7 +193,8 @@ async function createRefreshTokenRecord(
   refreshToken: string;
   refreshTokenId: string;
 }> {
-  if (/^[a-f0-9]{64}$/i.test(params.clientId)) throw new AppError('INTERNAL', 500, 'SECRET_CLIENT_IDENTIFIER');
+  if (/^[a-f0-9]{64}$/i.test(params.clientId) && getEnv().WEBSITE_CLIENT_CONTEXT_PHASE === 'stable')
+    throw new AppError('SERVICE_UNAVAILABLE', 503, 'WEBSITE_CONTEXT_CUTOVER_REQUIRED');
   const prisma = getRefreshTokenPrisma(deps);
   const now = nowDate(deps);
   const ttlSeconds = getRefreshTokenTtlSeconds(deps);
@@ -229,6 +230,7 @@ async function createRefreshTokenRecord(
 
 export async function issueRefreshToken(
   params: RefreshTokenContext & {
+    websiteCredential?: string;
     familyId?: string;
     parentTokenId?: string;
     userId: string;
@@ -244,7 +246,9 @@ export async function issueRefreshToken(
   refreshToken: string;
   refreshTokenId: string;
 }> {
-  return createRefreshTokenRecord(params, generateRefreshTokenValue(), deps);
+  if (/^[a-f0-9]{64}$/i.test(params.clientId)) throw new AppError('INTERNAL', 500, 'SECRET_CLIENT_IDENTIFIER');
+  const clientId = await websiteRefreshStorageClientId(params, params.websiteCredential, getRefreshTokenPrisma(deps) as PrismaClient);
+  return createRefreshTokenRecord({ ...params, clientId }, generateRefreshTokenValue(), deps);
 }
 
 export async function exchangeRefreshToken(
@@ -293,8 +297,6 @@ export async function exchangeRefreshToken(
       teamId: row.teamId,
       twoFaCompleted: row.twoFaCompleted === true,
     });
-    const lockedRow = (await findTokenRow()) as RefreshTokenRow | null;
-    if (lockedRow) await migrateWebsiteRefreshFamily(lockedRow, params, prisma as PrismaClient);
     row = (await findTokenRow()) as RefreshTokenRow | null;
     if (!row || !await matchesWebsiteRefreshContext(row, params, prisma as PrismaClient)) {
       throw new AppError('UNAUTHORIZED', 401, 'INVALID_REFRESH_TOKEN');
@@ -307,6 +309,7 @@ export async function exchangeRefreshToken(
     return resolveRefreshTokenReplay(
       {
         ...params,
+        clientId: row.clientId,
         row,
         sharedSecret,
         expectedTeam,
@@ -446,8 +449,6 @@ export async function revokeRefreshTokenFamily(
     await deps?.beforeFamilyRevocationLock?.();
     await lockRefreshSessionUserDomain({ userId: row.userId, domain: row.domain }, { prisma: tx });
     await deps?.afterFamilyRevocationLock?.(row);
-    const lockedRow = await findTokenRow();
-    if (lockedRow) await migrateWebsiteRefreshFamily(lockedRow, params, tx);
     row = await findTokenRow();
     if (!row || !await matchesWebsiteRefreshContext(row, params, tx)) return;
 

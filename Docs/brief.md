@@ -3231,3 +3231,16 @@ profile. Live capability grants remain domain-authored as specified in the
 September administrator parity amendment; removing them would change the trust
 contract, not repair a demonstrated implementation defect. Offline JWTs retain
 their bounded lifetime; family logout does not inherently increment global epoch.
+
+
+### Website client-context rollout correction (2026-10-14)
+
+The remediation uses a genuine bridge/stable rollout. Bridge readers accept both
+contexts while preserving old refresh/debug storage for legacy readers; public JWT
+client_id is stable. Request paths never convert families. Final conversion is
+operator-only after provider inventory proves all retained revisions are reviewed
+stable writers, including tagged/zero-traffic revisions. Stable mode temporarily
+returns retryable503 for unmigrated legacy families. The corrected sequence in
+[the API remediation plan](plans/2026-10-14-api-audit-remediation.md) supersedes
+earlier claims of safe online family conversion. No live deployment/rotation is
+performed by implementing this source change.

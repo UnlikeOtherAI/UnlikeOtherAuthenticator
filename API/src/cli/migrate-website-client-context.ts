@@ -1,8 +1,17 @@
 import { PrismaClient } from '@prisma/client';
 
+import { verifyCloudRunWebsiteContextReaderFloor } from '../services/website-context-reader-floor.js';
 const args = process.argv.slice(2);
-if (args.length !== 1 || !['--dry-run', '--apply-after-old-revisions-drained'].includes(args[0])) {
-  throw new Error('Use --dry-run or --apply-after-old-revisions-drained');
+const apply = args[0] === '--apply-after-old-revisions-drained';
+const option = (key: string) => args.find(value => value.startsWith(`--${key}=`))?.slice(key.length + 3) ?? '';
+if ((!apply && (args.length !== 1 || args[0] !== '--dry-run')) ||
+    (apply && args.some(value => !/^--(?:apply-after-old-revisions-drained|project=.+|region=.+|service=.+|compatible-image=sha256:[a-f0-9]{64})$/.test(value)))) {
+  throw new Error('Use --dry-run, or --apply-after-old-revisions-drained with explicit --project, --region, --service and reviewed --compatible-image digests');
+}
+if (apply) {
+  if (process.env.WEBSITE_CLIENT_CONTEXT_PHASE !== 'stable') throw new Error('Apply requires stable phase; bridge never converts stored context');
+  verifyCloudRunWebsiteContextReaderFloor({ project: option('project'), region: option('region'), service: option('service'),
+    approvedDigests: args.filter(value => value.startsWith('--compatible-image=')).map(value => value.slice('--compatible-image='.length)) });
 }
 if (!process.env.DATABASE_ADMIN_URL || !process.env.SHARED_SECRET) {
   throw new Error('DATABASE_ADMIN_URL and SHARED_SECRET required');
@@ -15,7 +24,6 @@ const { lockRefreshSessionUserDomain } = await import('../services/refresh-sessi
 const { migrateWebsiteRefreshFamily } = await import('../services/website-client-context.service.js');
 const { isAppError } = await import('../utils/errors.js');
 const db = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_ADMIN_URL } } });
-const apply = args[0] !== '--dry-run';
 try {
   const rows = await db.$queryRaw<Array<{ familyId: string; userId: string; domain: string; clientId: string; configUrl: string }>>`
     SELECT DISTINCT family_id AS "familyId", user_id AS "userId", domain,

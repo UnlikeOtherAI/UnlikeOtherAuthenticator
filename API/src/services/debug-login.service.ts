@@ -7,7 +7,7 @@ import type { ClientConfig } from './config.service.js';
 import { lockAndAssertAuthenticationEpoch } from './authentication-epoch.service.js';
 import { lockRefreshSessionUserDomain } from './refresh-session-lock.service.js';
 import { lockTokenIssuanceProductPolicy } from './product-team-policy-lock.service.js';
-import { matchesWebsiteRefreshContext, migrateWebsiteRefreshFamily } from './website-client-context.service.js';
+import { matchesWebsiteRefreshContext } from './website-client-context.service.js';
 import { createRefreshTokenRotationPolicyGuard } from './refresh-token-rotation-policy.service.js';
 import { hashRefreshToken } from './refresh-token-replay.service.js';
 import { issueRefreshToken } from './refresh-token.service.js';
@@ -65,8 +65,6 @@ export async function issueDebugLogin(
     const candidate = await tx.refreshToken.findUnique({ where: { tokenHash } });
     if (!candidate) throw fail();
     await lockRefreshSessionUserDomain(candidate, { prisma: tx });
-    const lockedSource = await tx.refreshToken.findUnique({ where: { tokenHash } });
-    if (lockedSource) await migrateWebsiteRefreshFamily(lockedSource, { domain: input.config.domain, clientId: input.clientId, configUrl: lockedSource.configUrl }, tx);
     const source = await tx.refreshToken.findUnique({ where: { tokenHash } });
     const now = deps.now?.() ?? new Date();
     if (!source) throw fail();
@@ -117,8 +115,6 @@ export async function redeemDebugLogin(input: Context & { token: string }, deps:
     } });
     if (source) {
       if (!await matchesContext(source, input, tx)) throw fail();
-      await migrateWebsiteRefreshFamily(source, { domain: input.config.domain, clientId: input.clientId, configUrl: source.configUrl }, tx);
-      source.clientId = input.clientId;
     }
     if (!source || source.orgId !== grant.orgId || source.teamId !== grant.teamId) throw fail();
     await validateSource(input, source, tx, now);
@@ -131,7 +127,8 @@ export async function redeemDebugLogin(input: Context & { token: string }, deps:
     const remainingSeconds = Math.floor((source.expiresAt.getTime() - now.getTime()) / 1000);
     if (remainingSeconds <= 0) throw fail();
     const refresh = await issueRefreshToken({
-      userId: source.userId, domain: source.domain, clientId: source.clientId,
+      userId: source.userId, domain: source.domain, clientId: input.clientId,
+      websiteCredential: /^[a-f0-9]{64}$/i.test(source.clientId) ? source.clientId : undefined,
       configUrl: input.configUrl, orgId: source.orgId, teamId: source.teamId,
       twoFaCompleted: source.twoFaCompleted,
     }, { prisma: tx, now: () => now,

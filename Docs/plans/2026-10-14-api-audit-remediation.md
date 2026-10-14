@@ -432,3 +432,43 @@ All323 scoped checks run on Maxis without a listener, DB or workspace build.
 Full client generation/typecheck/build/default harness, migration upgrade/RLS/lock
 races, real socket bulkhead tests and rendered product flows remain blocked on
 the still-unallocated heavy slot. This is a checkpoint, not completed acceptance.
+
+### U01 corrected two-phase rollout — supersedes prior online-conversion instructions
+
+The earlier online migration draft was unsafe while pre-bridge readers could
+still serve requests. Exchange, revoke and debug request paths no longer call
+the family converter. WEBSITE_CLIENT_CONTEXT_PHASE defaults to bridge. During
+bridge, newly issued website refresh families use the authenticated request-only
+domain credential solely as the old storage binding; rotation/replay/debug preserve
+that family context. Public JWTs still use the stable ClientDomain id and never
+contain the bearer. Native OAuth refresh bindings remain unchanged. Temporary old
+storage remains confidential and is not claimed remediated until final cleanup.
+
+Operator sequence (not executed by this run):
+1. Deploy the reviewed bridge build with explicit WEBSITE_CLIENT_CONTEXT_PHASE=bridge
+   everywhere. Keep this phase until every pre-bridge revision is retired/drained.
+   Verify mixed old/new rotation, replay, exact config and debug behavior. This
+   phase must precede stable writers; do not deploy stable directly from pre-bridge.
+2. Switch the repository deployment variable to stable and deploy reviewed stable
+   writers. Bridge readers can read stable families during this rollout. Stable
+   readers return retryable503 for legacy families until cleanup; do not translate
+   that outage into logout. Retire/drain ALL retained bridge/pre-bridge revisions,
+   including zero-traffic/tagged revisions, through the ordinary provider workflow.
+3. The CLI apply now REQUIRES WEBSITE_CLIENT_CONTEXT_PHASE=stable plus explicit
+   --project=<id> --region=<region> --service=<name> and one or more
+   --compatible-image=sha256:<reviewed stable image digest> arguments. It directly
+   queries Cloud Run revisions through gcloud (captured output is never logged),
+   refuses empty/unavailable inventory, unmarked/unreviewed/deleting revisions,
+   and any retained bridge writer. A caller-supplied inventory/acknowledgement is
+   insufficient. Only then may it migrate under policy/user locks. Dry-run remains
+   count-only and does not permit conversion. Do not print DSNs/credentials.
+4. Audit no legacy bindings remain; keep stable phase for future deployments.
+   Rollback targets must be reviewed stable/bridge-capable readers; never resurrect
+   a pre-bridge revision or legacy secret fields. Secret rotation is a separate
+   operator operation and was not performed here.
+
+Eleven light regressions exercise old exact readers against bridge issuance and
+rotation, new readers against legacy families, replay and revoke without family
+rewrites, config/domain/revocation refusal, stable503 gating and strict revision
+inventory rejection. Actual rollout/provider verification remains an operator
+acceptance step; this run never called Cloud Run or changed any live deployment.

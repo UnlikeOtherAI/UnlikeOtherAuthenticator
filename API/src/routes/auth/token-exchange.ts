@@ -218,6 +218,7 @@ export function registerAuthTokenExchangeRoute(app: FastifyInstance): void {
         tokenPair = await exchangeAuthorizationCodeForTokens(
           {
             code: body.code,
+            websiteCredential: request.domainAuthCredential,
             config,
             configUrl,
             redirectUrl: body.redirect_url,
