@@ -1,0 +1,76 @@
+
+ RUN  v3.2.6 C:/Users/ondre/Projects/UnlikeOtherAuthenticator/.worktrees/sol-audit-fixes-api-20261014/API
+
+stdout | tests/integration/entity-lifecycle.test.ts > entity lifecycle on PostgreSQL
+Retained audit test schema: [token-like test value redacted]
+
+ ❯ tests/integration/entity-lifecycle.test.ts (19 tests | 1 failed) 188472ms
+   ✓ entity lifecycle on PostgreSQL > inherits parent denial without overwriting a separately disabled child or membership  3128ms
+   ✓ entity lifecycle on PostgreSQL > protects the last active platform administrator and rejects stale actor epochs  2122ms
+   ✓ entity lifecycle on PostgreSQL > snapshots the chosen template revision and rejects stale selections  3197ms
+   ✓ entity lifecycle on PostgreSQL > erases PII while retaining a terminal historical subject and permits a fresh registration identity  10183ms
+   ✓ entity lifecycle on PostgreSQL > deletes an empty organisation with its sole team and org-only orphan while preserving shared accounts  21638ms
+   ✓ entity lifecycle on PostgreSQL > refuses stale previews after a new dependency and freezes dispatched candidates against new membership  10909ms
+   ✓ entity lifecycle on PostgreSQL > serializes simultaneous product acknowledgements and rejects wrong domain or conflicting replay  5242ms
+   ✓ entity lifecycle on PostgreSQL > requires ownership transfer and preserves an unknown-product blocker  5060ms
+   ✓ entity lifecycle on PostgreSQL > mailbox proof reveals only authorized reasons, is one-use, and mail failure is non-enumerating  2634ms
+   ✓ entity lifecycle on PostgreSQL > never replaces a short name inside unrelated JSON strings  1396ms
+   ✓ entity lifecycle on PostgreSQL > scrubs target PII while keeping a retained ID and unrelated actor details  10196ms
+   ✓ entity lifecycle on PostgreSQL > erases mutable references and retains an idempotent digest receipt after physical identity removal  11058ms
+   ✓ entity lifecycle on PostgreSQL > lists restricted signing audit evidence and preserves its immutable data while clearing operational identity  10646ms
+   ✓ entity lifecycle on PostgreSQL > blocks overlapping sibling jobs and promotes a disabled surviving default deterministically  20540ms
+   × entity lifecycle on PostgreSQL > persists bounded progress for 25 members with 250 audit rows, resuming without duplicate effects 28345ms
+     → 
+Invalid `delegate.count()` invocation in
+C:\Users\ondre\Projects\UnlikeOtherAuthenticator\.worktrees\sol-audit-fixes-api-20261014\API\src\services\entity-deletion-preview.service.ts:19:24
+
+  16   : ['canceled', 'incomplete_expired', 'complete', 'expired'];
+  17 const where = { OR: keys.map(key => ({ [key]: id })), [state.name]: state.name === 'active' ? true : { notIn: terminal } };
+  18 const delegate = (tx as unknown as Record<string, Counter>)[model.name[0].toLowerCase() + model.name.slice(1)];
+→ 19 if (await delegate.count(
+Transaction API error: Transaction not found. Transaction ID is invalid, refers to an old closed transaction Prisma doesn't have information about anymore, or was obtained before disconnecting.
+   · entity lifecycle on PostgreSQL > denies exact disabled team management to both organisation owners and backend actors
+   · entity lifecycle on PostgreSQL > removes operational service access and unsigned continuations without inventing retention exceptions
+   · entity lifecycle on PostgreSQL > cascades an organisation after an earlier child deletion retained immutable billing evidence
+   · entity lifecycle on PostgreSQL > returns workplace labels for mapped cross-product memberships without leaking them to unmapped products
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/entity-lifecycle.test.ts > entity lifecycle on PostgreSQL > persists bounded progress for 25 members with 250 audit rows, resuming without duplicate effects
+PrismaClientKnownRequestError: 
+Invalid `delegate.count()` invocation in
+C:\Users\ondre\Projects\UnlikeOtherAuthenticator\.worktrees\sol-audit-fixes-api-20261014\API\src\services\entity-deletion-preview.service.ts:19:24
+
+  16   : ['canceled', 'incomplete_expired', 'complete', 'expired'];
+  17 const where = { OR: keys.map(key => ({ [key]: id })), [state.name]: state.name === 'active' ? true : { notIn: terminal } };
+  18 const delegate = (tx as unknown as Record<string, Counter>)[model.name[0].toLowerCase() + model.name.slice(1)];
+→ 19 if (await delegate.count(
+Transaction API error: Transaction not found. Transaction ID is invalid, refers to an old closed transaction Prisma doesn't have information about anymore, or was obtained before disconnecting.
+ ❯ ei.handleRequestError ../node_modules/.pnpm/@prisma+client@6.19.3_prism_1d040ab5215f59f0e27ddee7f0cf082e/node_modules/@prisma/client/src/runtime/RequestHandler.ts:228:13
+ ❯ ei.handleAndLogRequestError ../node_modules/.pnpm/@prisma+client@6.19.3_prism_1d040ab5215f59f0e27ddee7f0cf082e/node_modules/@prisma/client/src/runtime/RequestHandler.ts:174:12
+ ❯ ei.request ../node_modules/.pnpm/@prisma+client@6.19.3_prism_1d040ab5215f59f0e27ddee7f0cf082e/node_modules/@prisma/client/src/runtime/RequestHandler.ts:143:12
+ ❯ a ../node_modules/.pnpm/@prisma+client@6.19.3_prism_1d040ab5215f59f0e27ddee7f0cf082e/node_modules/@prisma/client/src/runtime/getPrismaClient.ts:833:24
+ ❯ activeBillingBlockers src/services/entity-deletion-preview.service.ts:19:9
+     17|     const where = { OR: keys.map(key => ({ [key]: id })), [state.name]…
+     18|     const delegate = (tx as unknown as Record<string, Counter>)[model.…
+     19|     if (await delegate.count({ where })) blockers.push(`Close or trans…
+       |         ^
+     20|   }
+     21|   const where = scope === 'USER' ? { autoTopUpConsentedByUserId: id } …
+ ❯ previewEntityDeletion src/services/entity-deletion-preview.service.ts:113:80
+ ❯ $transaction.timeout src/services/entity-deletion-job.service.ts:91:27
+ ❯ Proxy._transactionWithCallback ../node_modules/.pnpm/@prisma+client@6.19.3_prism_1d040ab5215f59f0e27ddee7f0cf082e/node_modules/@prisma/client/src/runtime/getPrismaClient.ts:722:18
+ ❯ tests/integration/entity-lifecycle.test.ts:217:17
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (6)
+      Tests  1 failed | 14 passed (19)
+   Start at  00:27:35
+   Duration  189.23s (transform 264ms, setup 67ms, collect 495ms, tests 188.47s, environment 0ms, prepare 60ms)
+
+undefined
+C:\Users\ondre\Projects\UnlikeOtherAuthenticator\.worktrees\sol-audit-fixes-api-20261014\API:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command "vitest" not found
+EXIT=1
