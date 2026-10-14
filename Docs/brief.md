@@ -3185,3 +3185,16 @@ through UOA independently; no duplicate identity, organisation or membership sto
 is permitted. Existing native refresh grants never widen: adding the scope requires
 one fresh registration/sign-in with explicit hosted consent. Operator provisioning,
 wire contract and verification are authoritative in [Kelpie account connectivity](Auth/kelpie-connect.md).
+
+
+## 2026-10-14 Subject verification dependency outages
+
+Product-signed subject verification must distinguish unavailable public keys
+from invalid credentials. Partner JWKS network/timeout failures, HTTP 408/429
+and upstream 5xx return generic HTTP 503 with the production-safe code
+`INTEGRATION_JWKS_UNAVAILABLE`. No identity, authority or resource token is
+admitted while the keys are unavailable. Products retain their own sessions
+and retry with backoff and fresh assertions. Invalid signatures, missing keys,
+expired assertions, unsafe destinations and current credential-epoch or
+membership refusals remain fail-closed. No local identity fallback, cached
+negative authorization or automatic authority restoration is introduced.

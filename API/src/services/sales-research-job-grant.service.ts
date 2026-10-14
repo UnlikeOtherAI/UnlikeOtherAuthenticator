@@ -176,16 +176,11 @@ export async function issueSalesResearchJobGrant(
 ): Promise<{ grantHandle: string; expiresAt: string; created: boolean }> {
   if (!Uuid.safeParse(params.requestId).success || !params.clientDomainId) invalidRequest();
   const assertionNowSeconds = deps.now?.() ?? Math.floor(Date.now() / 1000);
-  let assertion: VerifiedSubjectAssertion;
-  try {
-    assertion = await verifyConfidentialSubjectToken({
-      subjectToken: params.subjectToken, configJwt: params.configJwt,
-      sourceDomain: params.sourceDomain,
-      audience: `${getPublicBaseUrl()}${SALES_RESEARCH_JOB_GRANT_AUDIENCE_PATH}`,
-    }, { now: () => assertionNowSeconds, fetchJwks: deps.fetchJwks });
-  } catch {
-    throw new AppError('UNAUTHORIZED', 401, 'INVALID_SUBJECT_TOKEN');
-  }
+  const assertion = await verifyConfidentialSubjectToken({
+    subjectToken: params.subjectToken, configJwt: params.configJwt,
+    sourceDomain: params.sourceDomain,
+    audience: `${getPublicBaseUrl()}${SALES_RESEARCH_JOB_GRANT_AUDIENCE_PATH}`,
+  }, { now: () => assertionNowSeconds, fetchJwks: deps.fetchJwks });
   const now = new Date((deps.now?.() ?? Math.floor(Date.now() / 1000)) * 1000);
   if (!assertion.active || assertion.source_domain !== params.sourceDomain) invalidRequest();
   const claim = parseJobClaim(assertion, params.requestId, now);
