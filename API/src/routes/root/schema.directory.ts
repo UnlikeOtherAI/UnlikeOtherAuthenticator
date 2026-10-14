@@ -6,7 +6,7 @@ const base = '/internal/admin/directory-credentials';
 const grant = '/org/organisations/:orgId/product-access';
 const subject = '/directory/v1/organisations/:orgId/subjects/:userId';
 export const directoryEndpoints: EndpointSchema[] = [
-  { method: 'GET', path: base, auth: operator, description: 'List at most200 directory credential metadata rows, newest first, secret prefixes/expiry only. No plaintext/digest. Private/no-store.' },
+  { method: 'GET', path: base, auth: operator, description: 'List at most200 directory credential metadata rows, newest first, at most2 recent secret-prefix/expiry records each. No plaintext/digest. Private/no-store.' },
   { method: 'POST', path: base, auth: operator, description: 'Issue a separate purpose-bound product directory credential; creates no org grant. Secret returned once; private/no-store.',
     body: { client_domain_id: 'active ClientDomain stable id', label: 'trimmed1-120characters', expires_at: 'ISO expiry greater than now, at most90days' },
     response: { id: 'stable credential id', secret: 'one-time uoa_dir_ credential; backend secret store only', expires_at: 'ISO UTC' } },

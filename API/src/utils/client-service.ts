@@ -45,3 +45,28 @@ export function clientServiceContainsUrl(identity: string, value: string): boole
     return false;
   }
 }
+
+/** Exact confidential audience for a canonical website service, including its
+ * mount. URL normalization must not alias a sibling path, port or encoding. */
+export function clientServiceHttpsAudience(value: string): string | null {
+  const domain = normalizeDomain(value);
+  const service = clientService(value);
+  if (!service) return null;
+  try {
+    const url = new URL(`https://${domain}`);
+    if (
+      url.hostname !== service.hostname ||
+      url.port ||
+      url.username ||
+      url.password ||
+      url.pathname !== (service.path || '/') ||
+      url.search ||
+      url.hash ||
+      `${url.origin}${service.path}` !== `https://${domain}`
+    )
+      return null;
+    return `${url.origin}${service.path}`;
+  } catch {
+    return null;
+  }
+}

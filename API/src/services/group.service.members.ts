@@ -1,8 +1,8 @@
+import { withDirectoryMembershipMutation } from './directory-user-mutation.service.js';
 import { withDirectoryMutation } from './directory-mutation.service.js';
 import type { ClientConfig } from './config.service.js';
 import { getEnv } from '../config/env.js';
 import { getPrisma } from '../db/prisma.js';
-import { runInTransaction } from '../db/tenant-context.js';
 
 import {
   assertDatabaseEnabled,
@@ -62,37 +62,42 @@ export async function addGroupMember(
   });
   if (!orgMember) throw new AppError('BAD_REQUEST', 400);
 
-  return await runInTransaction(prisma, async (tx) => {
-    const groupMemberCount = await tx.groupMember.count({ where: { groupId: group.id } });
-    if (groupMemberCount >= maxMembersPerGroup) {
-      throw new AppError('BAD_REQUEST', 400);
-    }
-
-    try {
-      const created = await tx.groupMember.create({
-        data: {
-          groupId: group.id,
-          userId,
-          isAdmin,
-        },
-        select: {
-          id: true,
-          groupId: true,
-          userId: true,
-          isAdmin: true,
-          createdAt: true,
-          updatedAt: true,
-        },
-      });
-
-      return toGroupMemberRecord(created, org.domain);
-    } catch (err) {
-      if (isP2002Error(err)) {
+  return await withDirectoryMembershipMutation(
+    prisma,
+    [userId],
+    [{ orgId: org.id, kind: 'membership.changed', subjectId: userId }],
+    async (tx) => {
+      const groupMemberCount = await tx.groupMember.count({ where: { groupId: group.id } });
+      if (groupMemberCount >= maxMembersPerGroup) {
         throw new AppError('BAD_REQUEST', 400);
       }
-      throw err;
-    }
-  });
+
+      try {
+        const created = await tx.groupMember.create({
+          data: {
+            groupId: group.id,
+            userId,
+            isAdmin,
+          },
+          select: {
+            id: true,
+            groupId: true,
+            userId: true,
+            isAdmin: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        });
+
+        return toGroupMemberRecord(created, org.domain);
+      } catch (err) {
+        if (isP2002Error(err)) {
+          throw new AppError('BAD_REQUEST', 400);
+        }
+        throw err;
+      }
+    },
+  );
 }
 
 export async function removeGroupMember(
@@ -132,7 +137,12 @@ export async function removeGroupMember(
   });
   if (!member) throw new AppError('NOT_FOUND', 404);
 
-  await prisma.groupMember.delete({ where: { id: member.id } });
+  await withDirectoryMembershipMutation(
+    prisma,
+    [userId],
+    [{ orgId: org.id, kind: 'membership.changed', subjectId: userId }],
+    (tx) => tx.groupMember.delete({ where: { id: member.id } }),
+  );
   return { removed: true };
 }
 
@@ -175,18 +185,24 @@ export async function updateGroupMemberAdmin(
   });
   if (!membership) throw new AppError('NOT_FOUND', 404);
 
-  const updated = await prisma.groupMember.update({
-    where: { id: membership.id },
-    data: { isAdmin: params.isAdmin },
-    select: {
-      id: true,
-      groupId: true,
-      userId: true,
-      isAdmin: true,
-      createdAt: true,
-      updatedAt: true,
-    },
-  });
+  const updated = await withDirectoryMembershipMutation(
+    prisma,
+    [userId],
+    [{ orgId: org.id, kind: 'membership.changed', subjectId: userId }],
+    (tx) =>
+      tx.groupMember.update({
+        where: { id: membership.id },
+        data: { isAdmin: params.isAdmin },
+        select: {
+          id: true,
+          groupId: true,
+          userId: true,
+          isAdmin: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      }),
+  );
 
   return toGroupMemberRecord(updated, org.domain);
 }

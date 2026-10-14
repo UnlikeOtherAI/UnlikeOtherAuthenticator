@@ -44,10 +44,12 @@ frontend writes. No production probes, credential use, rotation or deployment ra
   while a captured admin access bearer remains valid to expiry absent global epoch.
   Do not silently require a cookie for every admin API or revoke sibling sessions.
 - [ ] U3 — drafted self profile/pronouns and exact authorized display/image routes;
-  additive schema and erasure coverage drafted. Tests and ordered invalidations pending.
+  additive schema, exact erasure provenance and ordered invalidations drafted.
+  Focused authority checks pass; HTTP/RLS/upgrade/consumer verification remains pending.
 - [ ] U1 — drafted separate expiring/rotating directory credentials, current-owner
   exact-org grants and live standing/display/image reads. Ordered invalidation
-  outbox and full writer seam remain unimplemented; do not cut over cached readers. No directory fallback or durable product identity mirror is acceptable.
+  outbox, terminal revisions and writer integration are drafted; runtime acceptance
+  and the consuming delivery contract remain pending, so do not cut over cached readers. No directory fallback or durable product identity mirror is acceptable.
 
 Translation body timeout (U-21) belongs to frontend/translation owner: the timer
 must cover response body consumption, not end at response headers. Source showed
@@ -282,3 +284,49 @@ syntax/size checks passed for23 changed TypeScript files. This does not certify
 actual lock ordering, migration SQL or full auth-flow behavior; those require
 the allocated PostgreSQL/default-harness slot. Lifecycle/deletion integration
 and final source-writer audit remain open.
+
+
+### Lifecycle/erasure and source acceptance checkpoint
+
+`directory-lifecycle-mutation.service.ts` now plans lifecycle and terminal cleanup
+invalidations, including exact retained history, previous outbox subject scopes
+and org/team allowlist-only scopes discovered before erasure. Final erasure
+scrubs previous outbox subjects and emits org-only facts, so a policy-only org
+cannot learn a deleted nonmember subject. Deleted/absent orgs are never reopened
+as legacy streams. Scope cleanup captures only real prior org membership rows
+before removing them; later account cleanup retains that provenance in retain
+mode. Organisation grants are removed before physical org deletion.
+
+Lifecycle transition/start, bounded deletion stages and group CRUD/member changes
+are integrated into the draft seam. Audit completion is committed as a cursor;
+only the next final identity-erasure stage takes exclusive product policy before
+actor/user locks, because that stage edits live allowlists. Other bounded stages
+use shared policy and permit auth readers. Final allowlist-query timing and retry
+behavior must be measured in real PostgreSQL fixtures before integration.
+
+The [canonical writer ledger](2026-10-14-api-directory-writers.md) records113
+Prisma writes across52 functions plus the raw three-table allowlist loop. A
+source guard checks seam ancestry/private callers and reviewed field exceptions;
+it is not runtime/order/authorization proof. The request-only domain credential
+and subject assertion header were added to structured log redaction. Operator
+directory metadata is bounded to200 credentials and2 recent secret records each.
+
+Server-free Maxis utility run:72passed across10files, plus the new writer-coverage
+guard passed separately. Real-RS256 native-account fixtures preserve DB/key/config
+outages as server failures while refusing bad signatures, claims, revoked clients
+and missing scope. Mounted audience construction has13 focused cases. The broad
+chained suite initially failed import before workspace dist existed; source-only
+checks now use the actual workspace TS, not compiled exports. The6 source-only
+service files passed81 cases, and updated password/self-join regressions passed13
+cases after adding suspension/default-role/method tests. A combined fresh count
+and all full compiled/default-harness/DB/rendered checks remain to be recorded.
+No new server, database, workspace build or production operation ran.
+
+
+Fresh checkpoint validation on Maxis: server-free light suite73/73 across11files;
+source-only service suite84/84 across6files. Both use one worker and no listener,
+global database checkout or workspace build. All89 changed TypeScript files pass
+syntax/500-line checks; focused lint and Prisma schema validation pass. These
+results replace the earlier52pass/5fail unit result for the exercised service
+areas, while compiled package exports, generated client/typecheck, full default
+harness, real PostgreSQL/upgrade/races and rendered flows remain pending allocation.

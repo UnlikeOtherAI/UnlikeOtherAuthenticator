@@ -969,8 +969,9 @@ rechecks the active credential/domain/grant for every live read; it never uses a
 domain, billing or user credential as background authority. `schema.directory.ts`
 and `/llm` publish the endpoints. All control-plane tables are admin-only under
 forced RLS with deny-all application-role policies. No default credentials/grants
-are installed. Ordered snapshots/deltas and cache-invalidating outbox coverage are
-not yet implemented; no cached-directory cutover is certified by these direct reads.
+are installed. Ordered outbox/writer coverage is drafted and recorded in the
+API writer ledger; runtime acceptance and ordered snapshot/delta delivery remain
+pending. No cached-directory cutover is certified by these direct reads.
 
 `team.service.self-join.ts` owns open self-join separately from manager mutations,
 keeping each code file below500lines.
@@ -1008,3 +1009,11 @@ in `team-invite-link.redemption.ts`; the original service preserves its public
 exports. Directory mutation lock order is product policy, sorted canonical
 users, user/domain, sorted org ordering, then container/membership rows. Terminal
 org cursors prevent later cleanup from appending after organisation.deleted.
+
+`directory-lifecycle-mutation.service.ts` prepares lifecycle/deletion org scopes,
+including exact historical and prior outbox references. Identity erasure plans
+allowlist-only orgs before privacy writes and emits subject-free facts; terminal
+org streams cannot be reopened by later cleanup. Deletion audit batching remains
+shared-policy work; a committed completed cursor selects exclusive policy at the
+next final erasure-stage entry before actor/user locks. The writer ledger and
+source guard are source evidence, not a substitute for real DB/order/RLS tests.

@@ -1,3 +1,4 @@
+import { withDirectoryMutation } from './directory-mutation.service.js';
 import type { ClientConfig } from './config.service.js';
 import { getEnv } from '../config/env.js';
 import { getPrisma } from '../db/prisma.js';
@@ -89,25 +90,30 @@ export async function createGroup(
   const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgServicePrisma);
   const org = await resolveOrganisation(prisma, { orgId: params.orgId });
 
-  const groupCount = await prisma.group.count({ where: { orgId: org.id } });
-  if (groupCount >= maxGroups) throw new AppError('BAD_REQUEST', 400);
-
   try {
-    const created = await prisma.group.create({
-      data: {
-        orgId: org.id,
-        name,
-        ...(description === undefined ? {} : { description }),
+    const created = await withDirectoryMutation(
+      prisma,
+      [{ orgId: org.id, kind: 'organisation.changed' }],
+      async (tx) => {
+        const groupCount = await tx.group.count({ where: { orgId: org.id } });
+        if (groupCount >= maxGroups) throw new AppError('BAD_REQUEST', 400);
+        return tx.group.create({
+          data: {
+            orgId: org.id,
+            name,
+            ...(description === undefined ? {} : { description }),
+          },
+          select: {
+            id: true,
+            orgId: true,
+            name: true,
+            description: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        });
       },
-      select: {
-        id: true,
-        orgId: true,
-        name: true,
-        description: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
+    );
     return toGroupRecord(created);
   } catch (err) {
     const maybeConflict = (err as { code?: string } | null)?.code === 'P2002';
@@ -201,7 +207,8 @@ export async function updateGroup(
 
   const data: Partial<{ name: string; description: string | null }> = {};
   if (params.name !== undefined) data.name = normalizeGroupName(params.name);
-  if (params.description !== undefined) data.description = normalizeGroupDescription(params.description);
+  if (params.description !== undefined)
+    data.description = normalizeGroupDescription(params.description);
 
   const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgServicePrisma);
   const org = await resolveOrganisation(prisma, { orgId: params.orgId });
@@ -216,18 +223,23 @@ export async function updateGroup(
   if (!group) throw new AppError('NOT_FOUND', 404);
 
   try {
-    const updated = await prisma.group.update({
-      where: { id: group.id },
-      data,
-      select: {
-        id: true,
-        orgId: true,
-        name: true,
-        description: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
+    const updated = await withDirectoryMutation(
+      prisma,
+      [{ orgId: org.id, kind: 'organisation.changed' }],
+      (tx) =>
+        tx.group.update({
+          where: { id: group.id },
+          data,
+          select: {
+            id: true,
+            orgId: true,
+            name: true,
+            description: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        }),
+    );
     return toGroupRecord(updated);
   } catch (err) {
     const maybeConflict = (err as { code?: string } | null)?.code === 'P2002';
@@ -260,7 +272,9 @@ export async function deleteGroup(
   });
   if (!group) throw new AppError('NOT_FOUND', 404);
 
-  await prisma.group.delete({ where: { id: group.id } });
+  await withDirectoryMutation(prisma, [{ orgId: org.id, kind: 'organisation.changed' }], (tx) =>
+    tx.group.delete({ where: { id: group.id } }),
+  );
 
   return { deleted: true };
 }

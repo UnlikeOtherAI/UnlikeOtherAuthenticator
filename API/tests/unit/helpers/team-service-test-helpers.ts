@@ -53,9 +53,12 @@ export function makePrismaMock(): PrismaClient {
     $transaction: vi.fn(),
   } as unknown as PrismaClient;
 
-  prisma.$transaction = vi.fn(async (callback: (tx: PrismaClient) => Promise<unknown>) =>
-    callback(prisma),
-  );
+  prisma.$transaction = vi.fn(async (callback: (tx: PrismaClient) => Promise<unknown>) => {
+    // Real transaction clients omit $transaction. Nested services reuse this
+    // object; independent root transactions receive independent lock plans.
+    const { $transaction: _transaction, ...tx } = prisma;
+    return callback(tx as unknown as PrismaClient);
+  });
 
   return prisma;
 }

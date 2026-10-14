@@ -73,8 +73,8 @@ export const oauthEndpoints: EndpointSchema[] = [
     method: 'POST',
     path: '/oauth/login',
     description:
-      'Public email/password login (no secret); issues an auth code and returns the redirect target',
-    auth: 'public (IP rate-limited); 404 unless MCP_OAUTH_PUBLIC_PROFILE_ENABLED=true and profile config is valid',
+      'Public registered-client password login with live app/method/callback and canonical ban/allowlist checks before factor effects; issues an auth code and redirect target',
+    auth: 'public (10/5min per-IP; normalized account budget5 failed password/factor attempts per15min with in-flight reservations; successful MFA continuations release their reservation); 404 unless MCP_OAUTH_PUBLIC_PROFILE_ENABLED=true and profile config is valid',
     query: {
       client_id: 'string (required)',
       redirect_uri: 'string (required)',

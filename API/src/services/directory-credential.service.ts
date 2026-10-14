@@ -82,7 +82,7 @@ export async function listDirectoryCredentials(actor: LifecycleActor, prisma: Pr
     await requireLifecycleActor(tx, actor);
     const rows = await tx.directoryCredential.findMany({ orderBy: { createdAt: 'desc' }, take: 200,
       select: { id: true, clientDomainId: true, label: true, expiresAt: true, revokedAt: true,
-        createdAt: true, secrets: { select: { id: true, prefix: true, expiresAt: true } } } });
+        createdAt: true, secrets: { orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 2, select: { id: true, prefix: true, expiresAt: true } } } });
     return { data: rows };
   });
 }

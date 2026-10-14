@@ -61,6 +61,8 @@ export async function createApp(): Promise<FastifyInstance> {
               paths: [
                 // Common sensitive headers (domain hash + access token).
                 'req.headers.authorization',
+                'req.domainAuthCredential',
+                'req.headers["x-uoa-subject-assertion"]',
                 'req.headers.cookie',
                 'req.headers["x-api-key"]',
                 'req.headers["x-uoa-actor"]',
@@ -71,6 +73,8 @@ export async function createApp(): Promise<FastifyInstance> {
                 'req.headers["stripe-signature"]',
                 // Redact common token-like keys if we ever log structured objects containing them.
                 'authorization',
+                'domainAuthCredential',
+                'headers["x-uoa-subject-assertion"]',
                 'headers.authorization',
                 'headers.cookie',
                 'headers["x-api-key"]',

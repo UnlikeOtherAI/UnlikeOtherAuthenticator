@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 import type { PrismaClient } from '@prisma/client';
 
 import { listTeams, selfJoinTeam } from '../../src/services/team.service.js';
-import { makeConfig, makePrismaMock, now, useTeamServiceTestEnv } from './helpers/team-service-test-helpers.js';
+import {
+  makeConfig,
+  makePrismaMock,
+  now,
+  useTeamServiceTestEnv,
+} from './helpers/team-service-test-helpers.js';
 
 // CLAUDE.md 500-line split of team.service.test.ts: Phase 4 self-join and HIDDEN-team visibility.
 // See team.service.test.ts (CRUD) and team.service.members.test.ts (add/remove) for the rest.
@@ -59,7 +64,9 @@ describe('Team service: self-join & visibility', () => {
 
       expect(member).toMatchObject({ id: 'tm-new', userId: 'u-actor' });
       expect(prisma.teamMember.create).toHaveBeenCalledWith(
-        expect.objectContaining({ data: { teamId: 'team-1', userId: 'u-actor', teamRole: 'member' } }),
+        expect.objectContaining({
+          data: { teamId: 'team-1', userId: 'u-actor', teamRole: 'member' },
+        }),
       );
     });
 
@@ -88,7 +95,11 @@ describe('Team service: self-join & visibility', () => {
       mockOrgAndActor(prisma);
       prisma.team.findFirst.mockResolvedValue({ id: 'team-1', joinPolicy: 'OPEN_TO_ORG' });
       prisma.teamMember.count.mockResolvedValueOnce(0).mockResolvedValueOnce(0);
-      prisma.teamMember.findFirst.mockResolvedValue({ id: 'tm-old', status: 'REMOVED', teamRole: 'admin' });
+      prisma.teamMember.findFirst.mockResolvedValue({
+        id: 'tm-old',
+        status: 'REMOVED',
+        teamRole: 'admin',
+      });
       prisma.teamMember.update.mockResolvedValue({
         id: 'tm-old',
         teamId: 'team-1',
@@ -116,6 +127,50 @@ describe('Team service: self-join & visibility', () => {
         data: { teamRole: 'member', status: 'ACTIVE', statusChangedAt: expect.any(Date) },
         select: expect.any(Object),
       });
+    });
+
+    it('refuses an administrative suspension instead of lifting it through open self-join', async () => {
+      const prisma = makePrismaMock();
+      mockOrgAndActor(prisma);
+      prisma.team.findFirst.mockResolvedValue({ id: 'team-1', joinPolicy: 'OPEN_TO_ORG' });
+      prisma.teamMember.count.mockResolvedValue(0);
+      prisma.teamMember.findFirst.mockResolvedValue({
+        id: 'suspended',
+        status: 'DEACTIVATED',
+        teamRole: 'admin',
+      });
+      await expect(
+        selfJoinTeam(
+          {
+            orgId: 'org-1',
+            teamId: 'team-1',
+            domain: 'acme.example.com',
+            actorUserId: 'u-actor',
+            config: makeConfig(),
+          },
+          { prisma },
+        ),
+      ).rejects.toMatchObject({ statusCode: 400 });
+      expect(prisma.teamMember.create).not.toHaveBeenCalled();
+      expect(prisma.teamMember.update).not.toHaveBeenCalled();
+    });
+
+    it('fails closed when the client cannot express the default member role', async () => {
+      const prisma = makePrismaMock();
+      await expect(
+        selfJoinTeam(
+          {
+            orgId: 'org-1',
+            teamId: 'team-1',
+            domain: 'acme.example.com',
+            actorUserId: 'u-actor',
+            config: makeConfig({ team_roles: ['admin'] }),
+          },
+          { prisma },
+        ),
+      ).rejects.toMatchObject({ statusCode: 400 });
+      expect(prisma.teamMember.create).not.toHaveBeenCalled();
+      expect(prisma.teamMember.update).not.toHaveBeenCalled();
     });
 
     it('rejects self-join when the caller already has an ACTIVE membership', async () => {
@@ -172,7 +227,8 @@ describe('Team service: self-join & visibility', () => {
       expect(prisma.team.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: {
-            orgId: 'org-1', lifecycleStatus: 'ACTIVE',
+            orgId: 'org-1',
+            lifecycleStatus: 'ACTIVE',
             OR: [
               { NOT: { joinPolicy: 'HIDDEN' } },
               { members: { some: { userId: 'u-actor', status: 'ACTIVE' } } },

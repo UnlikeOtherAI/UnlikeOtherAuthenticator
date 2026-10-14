@@ -19,9 +19,12 @@ export async function userDirectoryOrganisations(
   tx: PrismaClient,
   userId: string,
 ): Promise<string[]> {
-  const memberships = await tx.orgMember.findMany({ where: { userId }, select: { orgId: true } });
+  const memberships = await tx.orgMember.findMany({
+    where: { userId, org: { lifecycleStatus: { not: 'DELETED' } } },
+    select: { orgId: true },
+  });
   const owned = await tx.organisation.findMany({
-    where: { ownerId: userId },
+    where: { ownerId: userId, lifecycleStatus: { not: 'DELETED' } },
     select: { id: true },
   });
   return [

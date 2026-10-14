@@ -153,6 +153,35 @@ describe('loginWithEmailPassword', () => {
     expect(sawNullHash).toBe(true);
   });
 
+  it('refuses disabled password authentication before identity lookup or password work', async () => {
+    let reads = 0,
+      verifies = 0;
+    const prisma: PrismaStub = {
+      user: {
+        findUnique: async () => {
+          reads += 1;
+          return null;
+        },
+      },
+    };
+    const config = { ...baseConfig(), enabled_auth_methods: ['google'] } as ClientConfig;
+    await expect(
+      loginWithEmailPassword(
+        { email: 'user@example.com', password: 'pw', config },
+        {
+          env: testEnv(),
+          prisma,
+          verifyPassword: async () => {
+            verifies += 1;
+            return false;
+          },
+        },
+      ),
+    ).rejects.toMatchObject({ statusCode: 401 });
+    expect(reads).toBe(0);
+    expect(verifies).toBe(0);
+  });
+
   it('throws INTERNAL when DATABASE_URL is not configured', async () => {
     const prisma: PrismaStub = {
       user: {
