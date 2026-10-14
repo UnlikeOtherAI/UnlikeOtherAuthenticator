@@ -18,7 +18,7 @@ export default defineConfig({
     },
     {
       name: name + '-admin',
-      testMatch: 'audit-admin.flow.ts',
+      testMatch: ['audit-admin.flow.ts', 'audit-lifecycle.flow.ts'],
       use: {
         ...(name === 'mobile' ? devices['Pixel 7'] : devices['Desktop Chrome']),
         baseURL: 'http://127.0.0.1:5291',

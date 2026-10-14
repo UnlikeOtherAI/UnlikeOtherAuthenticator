@@ -79,3 +79,11 @@ role survives a synthetic failed POST and dirty-dismissal guard. Retry submits t
 closes the dialog, refreshes the membership table with the correct role and canonical team link,
 and remains visible after reload. No production UI fix was needed. The suite now defines 20
 checks; the previous 18-case full run and this targeted 2-case merge follow-up are separate runs.
+
+The separate local-only `playwright.audit.config.ts` now runs 26 desktop/mobile checks, including
+deferred credential delivery and session completion. `audit-lifecycle.html` is a Vite-served test
+entry that imports the real hooks/provider under StrictMode; it is not an application entry or
+production build input. Its external lifecycle controls test close/reopen and unmount mechanics
+without changing pending production-dialog dismissal. UI suites remain outside CI. Fresh results
+and settled captures for application source 57455d4d are recorded in
+`Docs/audit-evidence/2026-10-14-admin-auth/57455d4d/README.md`.

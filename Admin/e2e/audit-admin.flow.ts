@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 import { installFixtures, nativeApp } from './fixtures';
+import { settledScreenshot } from './audit-screenshot';
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() =>
     sessionStorage.setItem(
@@ -37,7 +38,7 @@ test('outage recovery preserves login and expiry returns to a reachable login sc
   );
   await expect(page).toHaveURL(/login/);
   await expect(page.getByRole('button', { name: 'Continue with Google' })).toBeVisible();
-  await page.screenshot({ path: info.outputPath('expired-session-login.png'), fullPage: true });
+  await settledScreenshot(page, info, 'expired-session-login.png');
 });
 test('icon prevalidation and upload retry never recreate or delete a native app', async ({
   page,
@@ -75,7 +76,7 @@ test('icon prevalidation and upload retry never recreate or delete a native app'
   await dialog.getByRole('button', { name: 'Save app' }).click();
   await expect(dialog.getByRole('alert')).toContainText('App saved. The icon could not be saved');
   await expect(dialog.locator('[name=identifier]')).toHaveAttribute('readonly', '');
-  await page.screenshot({ path: info.outputPath('native-icon-retry.png'), fullPage: true });
+  await settledScreenshot(page, info, 'native-icon-retry.png');
   await dialog.getByRole('button', { name: 'Save app' }).click();
   await expect(dialog).toHaveCount(0);
   expect(created).toBe(1);
@@ -109,7 +110,7 @@ test('one-time automation key reveal disappears on close and navigation', async 
   await page.getByRole('dialog').locator('input').first().fill('Fixture key');
   await page.getByRole('button', { name: 'Create key', exact: true }).click();
   await expect(page.getByText('synthetic-one-time-key', { exact: true })).toBeVisible();
-  await page.screenshot({ path: info.outputPath('one-time-key-reveal.png'), fullPage: true });
+  await settledScreenshot(page, info, 'one-time-key-reveal.png');
   await page.getByRole('button', { name: 'I have copied my key' }).click();
   await expect(page.getByText('synthetic-one-time-key', { exact: true })).toHaveCount(0);
   await page.goto('/dashboard');
@@ -173,8 +174,13 @@ test('protected PDF preview remains available, detaches opener, and failed/block
       popup.url(),
     ),
   ).toBe(bytes.length);
-  await page.screenshot({ path: info.outputPath('pdf-preview-source-screen.png'), fullPage: true });
+  await settledScreenshot(page, info, 'pdf-preview-source-screen.png');
   await popup.close();
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Source', exact: true }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toMatch(/\.pdf$/);
+  expect(await download.failure()).toBeNull();
   fail = true;
   const failedPromise = page.waitForEvent('popup');
   await page.getByRole('button', { name: 'Preview', exact: true }).click();
