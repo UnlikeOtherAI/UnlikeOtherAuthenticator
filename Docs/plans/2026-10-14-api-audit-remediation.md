@@ -548,3 +548,19 @@ unit/source gate passes all 397 files, 2661 tests, with 3 skipped (2664 total),
 exit 0. Sanitized stdout: `Docs/audit-evidence/2026-10-15-api/5de6df8c/`.
 This resolves the previous 75 failures, without weakening production guards.
 Runtime writer/upgrade acceptance remains unchecked and N03 remains blocked.
+
+### 2026-10-15 retained PostgreSQL failures and correction
+
+Gate3 at ec856936: lifecycle14pass, then the 25-member/250-audit-row case fails
+inside the unchanged15-second begin-deletion transaction. Schema retained;
+no failed/stuck record cleared. Gate4: native refresh9, native sign-in11,
+native account5 and shared reader/exclusive epoch-writer1 pass on real PG.
+Upgrade fixture failed before DB creation because its pinned1.65MB Git archive
+exceeded Node's default1MiB stdout buffer; corrected to a bounded4MiB buffer.
+
+The deletion correction resolves the complete candidate lock set first, then
+runs the full eligibility/billing preview once under the existing locks. Read-only
+EXISTS/UNION queries consolidate dependency checks; product-domain discovery is
+batched. Refusal reasons and their order, exact locks and15-second production
+transaction budget are preserved. Added real-PG lifecycle/dependency/financial
+refusal regression cases. New source is not yet runtime-accepted.

@@ -10,7 +10,7 @@ import {
 import { getAdminPrisma } from '../db/prisma.js';
 import { runInTransaction } from '../db/tenant-context.js';
 import { AppError } from '../utils/errors.js';
-import { previewEntityDeletion, type DeletionPreview } from './entity-deletion-preview.service.js';
+import { previewEntityDeletion, resolveDeletionTargets, type DeletionPreview } from './entity-deletion-preview.service.js';
 import { sweepDeletion, eraseOperationalIdentity } from './entity-deletion-sweep.service.js';
 import {
   lockProductTeamPolicyExclusive,
@@ -88,11 +88,8 @@ export async function beginEntityDeletion(params: {
       const current = await lifecycleTarget(tx, params.scope, params.id);
       if (['DELETING', 'DELETED'].includes(current.lifecycleStatus))
         throw new AppError('BAD_REQUEST', 409, 'ENTITY_TERMINAL');
-      const preliminary = await previewEntityDeletion(tx, params.scope, params.id, params.mode);
-      for (const userId of (params.scope === 'USER'
-        ? [params.id]
-        : preliminary.candidates.map((c) => c.id)
-      ).sort()) {
+      const preliminary = await resolveDeletionTargets(tx, params.scope, params.id);
+      for (const userId of preliminary.candidateIds) {
         await lockRefreshSessionUser(userId, { prisma: tx });
         await tx.$queryRaw(Prisma.sql`SELECT id FROM users WHERE id=${userId} FOR UPDATE`);
       }
