@@ -1,4 +1,4 @@
-import { withDirectoryMutation } from './directory-mutation.service.js';
+import { withDirectoryMembershipMutation } from './directory-user-mutation.service.js';
 import type { ClientConfig } from './config.service.js';
 import { getEnv } from '../config/env.js';
 import { getPrisma } from '../db/prisma.js';
@@ -78,8 +78,9 @@ export async function transferOrganisationOwnership(
 
   const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgServicePrisma);
   const org = await resolveOrganisation(prisma, { orgId: params.orgId });
-  const { organisation, demoted, outgoingOwnerId } = await withDirectoryMutation(
+  const { organisation, demoted, outgoingOwnerId } = await withDirectoryMembershipMutation(
     prisma,
+    [org.ownerId, newOwnerId],
     [{ orgId: org.id, kind: 'organisation.changed' }],
     async (tx) => {
       // Container lock precedes every membership lock, including organisation deletion.

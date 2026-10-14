@@ -255,3 +255,30 @@ scope/creation planning. Focused lint and source syntax/file-size checks pass.
 Real transaction ordering/RLS/upgrade tests and complete auth flows remain pending
 allocation; lifecycle/deletion and the final actual-writer coverage audit remain
 implementation work. No checkbox is promoted to verified completion.
+
+
+### Lock-order and terminal-stream checkpoint
+
+Mutation roots now take shared product policy before canonical user locks;
+operator policy writes retain exclusive policy first. Multi-user membership
+operations pin the complete actor/target set in sorted order (exclusive mode for
+the revoked target, shared for other pinned users), before domain/org ordering
+and membership-row locks. Password/2FA recovery roots take policy before user,
+not while already holding the user lock. Refresh predeclares all potentially
+revoked user orgs before its policy guards take membership rows. This serializes
+same-org refresh mutation decisions with directory writers; latency/contention
+must be measured in the real runtime checks rather than assumed negligible.
+
+The terminal-cursor migration makes organisation.deleted the final event in its
+stream, including later user cleanup. Subject-indexed outbox storage supports
+bounded-index lookups for erasure without scanning every event. The PostgreSQL
+fixture now checks no profile invalidation follows a terminal deletion; it is
+still unexecuted. Shareable-link lookup/redemption were split into focused
+modules to retain the project's 500-line rule while preserving facade exports.
+
+Maxis server-free checks:50passed across7files. The additional fixture checks
+sorted mixed actor/target user locks and their shared/exclusive mode. Source
+syntax/size checks passed for23 changed TypeScript files. This does not certify
+actual lock ordering, migration SQL or full auth-flow behavior; those require
+the allocated PostgreSQL/default-harness slot. Lifecycle/deletion integration
+and final source-writer audit remain open.

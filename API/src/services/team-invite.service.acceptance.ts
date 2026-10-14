@@ -1,3 +1,4 @@
+import { lockProductTeamPolicyShared } from './product-team-policy-lock.service.js';
 import { userDirectoryOrganisations } from './directory-user-mutation.service.js';
 import { withDirectoryMutation } from './directory-mutation.service.js';
 import { lockRefreshSessionUser } from './refresh-session-lock.service.js';
@@ -46,6 +47,7 @@ export async function acceptTeamInviteWithinTransaction(params: {
   config: ClientConfig;
   now: Date;
 }): Promise<{ orgId: string; teamId: string }> {
+  await lockProductTeamPolicyShared(params.prisma);
   const invite = await params.prisma.teamInvite.findUnique({
     where: { id: params.teamInviteId },
     select: {

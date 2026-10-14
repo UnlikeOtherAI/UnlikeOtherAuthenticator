@@ -1,3 +1,4 @@
+import { lockProductTeamPolicyShared } from './product-team-policy-lock.service.js';
 import { lockRefreshSessionUserDomainShared } from './refresh-session-lock.service.js';
 import { withDirectoryMutation, directoryNewOrganisationId } from './directory-mutation.service.js';
 import type { ClientConfig } from './config.service.js';
@@ -157,6 +158,7 @@ export async function createOrganisation(
   const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgServicePrisma);
 
   const created = await runInTransaction(prisma, async (tx) => {
+ await lockProductTeamPolicyShared(tx);
     await lockRefreshSessionUserDomainShared({ userId: ownerId, domain: domain }, { prisma: tx });
     const directoryOrgId = directoryNewOrganisationId(tx);
     return withDirectoryMutation(

@@ -1,3 +1,4 @@
+import { lockProductTeamPolicyShared } from './product-team-policy-lock.service.js';
 import { withDirectoryMutation, directoryNewOrganisationId } from './directory-mutation.service.js';
 import { lockRefreshSessionUserShared } from './refresh-session-lock.service.js';
 import { Prisma, type PrismaClient } from '@prisma/client';
@@ -121,6 +122,7 @@ async function autoCreatePersonalOrgForUser(params: {
 
   try {
     const created = await runInTransaction(params.prisma as unknown as PrismaClient, async (tx) => {
+ await lockProductTeamPolicyShared(tx);
       await lockRefreshSessionUserShared(params.userId, { prisma: tx });
       const txClient = tx as OrgPlacementTx;
 
@@ -306,6 +308,7 @@ async function placeFromDomainMapping(params: {
 
   try {
     const created = await runInTransaction(params.prisma as unknown as PrismaClient, async (tx) => {
+ await lockProductTeamPolicyShared(tx);
       await lockRefreshSessionUserShared(params.userId, { prisma: tx });
       const txClient = tx as OrgPlacementTx;
 

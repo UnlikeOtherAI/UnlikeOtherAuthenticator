@@ -1,3 +1,4 @@
+import { withDirectoryMembershipMutation } from './directory-user-mutation.service.js';
 import { withDirectoryMutation } from './directory-mutation.service.js';
 import type { ClientConfig } from './config.service.js';
 import { getEnv } from '../config/env.js';
@@ -158,8 +159,9 @@ export async function createTeam(
     config: params.config,
   });
 
-  const createdTeam = await withDirectoryMutation(
+  const createdTeam = await withDirectoryMembershipMutation(
     prisma,
+    [actorUserId],
     [{ orgId: org.id, kind: 'team.changed' }],
     async (tx) => {
       const teamCount = await tx.team.count({ where: { orgId: org.id } });

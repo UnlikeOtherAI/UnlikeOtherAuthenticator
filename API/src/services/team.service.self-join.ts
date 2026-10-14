@@ -1,4 +1,4 @@
-import { withDirectoryMutation } from './directory-mutation.service.js';
+import { withDirectoryMembershipMutation } from './directory-user-mutation.service.js';
 import type { ClientConfig } from './config.service.js';
 import { getEnv } from '../config/env.js';
 import { getPrisma } from '../db/prisma.js';
@@ -63,8 +63,9 @@ export async function selfJoinTeam(
     throw new AppError('BAD_REQUEST', 400);
   }
 
-  const record = await withDirectoryMutation(
+  const record = await withDirectoryMembershipMutation(
     prisma,
+    [actorUserId],
     [{ orgId: org.id, kind: 'membership.changed', subjectId: actorUserId, teamId: team.id }],
     async (tx) => {
       await lockTeamMembershipRows(

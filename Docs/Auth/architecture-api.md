@@ -1002,3 +1002,9 @@ scope under canonical user locks. Composed social/invite/first-placement flows
 predeclare verified additional orgs and a possible new-org ID before mutation;
 unused planned IDs produce no revision/event. Canonical avatar, email/social
 profile and credential-epoch mutations reuse this boundary.
+
+Shareable-link validity lookup lives in `team-invite-link.lookup.ts`, redemption
+in `team-invite-link.redemption.ts`; the original service preserves its public
+exports. Directory mutation lock order is product policy, sorted canonical
+users, user/domain, sorted org ordering, then container/membership rows. Terminal
+org cursors prevent later cleanup from appending after organisation.deleted.

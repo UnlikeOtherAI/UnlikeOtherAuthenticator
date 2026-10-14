@@ -1,3 +1,4 @@
+import { lockProductTeamPolicyShared } from './product-team-policy-lock.service.js';
 import { lockRefreshSessionUserDomainShared } from './refresh-session-lock.service.js';
 import { withDirectoryMutation, directoryNewOrganisationId } from './directory-mutation.service.js';
 import { getAdminPrisma } from '../db/prisma.js';
@@ -104,6 +105,7 @@ export async function createAdminOrganisation(input: {
   if (!owner) throw new AppError('BAD_REQUEST', 400, 'OWNER_NOT_FOUND');
 
   const created = await runInTransaction(prisma, async (tx) => {
+ await lockProductTeamPolicyShared(tx);
     await lockRefreshSessionUserDomainShared({ userId: owner.id, domain: domain }, { prisma: tx });
     const directoryOrgId = directoryNewOrganisationId(tx);
     return withDirectoryMutation(

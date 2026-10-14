@@ -5249,6 +5249,7 @@ model BillingSmsPolicyAlert {
 model DirectoryOrganisationRevision {
   orgId String @id @map("org_id")
   revision BigInt @default(0)
+  terminal Boolean @default(false)
   @@map("directory_organisation_revisions")
 }
 
@@ -5261,5 +5262,6 @@ model DirectoryChangeOutbox {
   teamId String? @map("team_id")
   occurredAt DateTime @default(now()) @map("occurred_at")
   @@unique([orgId, revision])
+  @@index([subjectId])
   @@map("directory_change_outbox")
 }

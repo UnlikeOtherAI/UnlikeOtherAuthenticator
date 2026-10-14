@@ -1,3 +1,4 @@
+import { lockProductTeamPolicyShared } from './product-team-policy-lock.service.js';
 import { randomBytes } from 'node:crypto';
 
 import type { Prisma, PrismaClient } from '@prisma/client';
@@ -234,6 +235,7 @@ export async function resetPasswordWithToken(
   const passwordHash = await (deps?.hashPassword ?? hashPassword)(params.password);
 
   const result = await runInTransaction(prisma as unknown as PrismaClient, async (tx) => {
+    await lockProductTeamPolicyShared(tx);
     const tokenRow = await tx.verificationToken.findUnique({
       where: { tokenHash },
       select: {

@@ -1,3 +1,4 @@
+import { lockProductTeamPolicyShared } from './product-team-policy-lock.service.js';
 import { withDirectoryUserMutation } from './directory-user-mutation.service.js';
 import type { PrismaClient } from '@prisma/client';
 
@@ -47,6 +48,7 @@ export async function revokeRefreshTokensForUserDomain(
   const prisma = adminRevocationPrisma(deps?.prisma);
   const now = deps?.now ? deps.now() : new Date();
   return runInTransaction(prisma as PrismaClient, async (tx) => {
+ await lockProductTeamPolicyShared(tx);
     await lockRefreshSessionUserDomain({ userId, domain }, { prisma: tx });
     const result = await tx.refreshToken.updateMany({
       where: { userId, domain, revokedAt: null },
@@ -65,6 +67,7 @@ export async function revokeRefreshTokenFamiliesForUserOrganisation(
   const prisma = adminRevocationPrisma(deps?.prisma);
   const now = deps?.now ? deps.now() : new Date();
   return runInTransaction(prisma as PrismaClient, async (tx) => {
+ await lockProductTeamPolicyShared(tx);
     await lockRefreshSessionUser(userId, { prisma: tx });
     const result = await tx.refreshToken.updateMany({
       where: { userId, orgId, revokedAt: null },
@@ -83,6 +86,7 @@ export async function revokeRefreshTokenFamiliesForUserTeam(
   const prisma = adminRevocationPrisma(deps?.prisma);
   const now = deps?.now ? deps.now() : new Date();
   return runInTransaction(prisma as PrismaClient, async (tx) => {
+ await lockProductTeamPolicyShared(tx);
     await lockRefreshSessionUser(userId, { prisma: tx });
     const result = await tx.refreshToken.updateMany({
       where: { userId, teamId, revokedAt: null },
@@ -109,6 +113,7 @@ export async function revokeAllRefreshTokensForUser(
   const prisma = adminRevocationPrisma(deps?.prisma);
   const now = deps?.now ? deps.now() : new Date();
   await runInTransaction(prisma as PrismaClient, async (tx) => {
+ await lockProductTeamPolicyShared(tx);
     await lockRefreshSessionUser(userId, { prisma: tx });
     await deps?.afterUserLock?.();
     await tx.refreshToken.updateMany({

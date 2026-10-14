@@ -1,3 +1,6 @@
+import { withDirectoryMembershipMutation } from './directory-user-mutation.service.js';
+import { lockDirectoryMutationUsers } from './directory-user-mutation.service.js';
+import { lockProductTeamPolicyShared } from './product-team-policy-lock.service.js';
 import { withDirectoryMutation } from './directory-mutation.service.js';
 import type { ClientConfig } from './config.service.js';
 import { getEnv } from '../config/env.js';
@@ -76,6 +79,8 @@ export async function addOrganisationMember(
   const org = await resolveOrganisation(prisma, { orgId: params.orgId });
 
   const { member: createdMember, reactivated } = await runInTransaction(prisma, async (tx) => {
+    await lockProductTeamPolicyShared(tx);
+    await lockDirectoryMutationUsers(tx, [userId, actorUserId]);
     await lockRefreshSessionUserDomainShared({ userId, domain: org.domain }, { prisma: tx });
     return withDirectoryMutation(
       tx,
@@ -210,8 +215,9 @@ export async function changeOrganisationMemberRole(
 
   const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgServicePrisma);
   const org = await resolveOrganisation(prisma, { orgId: params.orgId });
-  const { updated, previousRole } = await withDirectoryMutation(
+  const { updated, previousRole } = await withDirectoryMembershipMutation(
     prisma,
+    [userId, actorUserId],
     [{ orgId: org.id, kind: 'membership.changed', subjectId: userId }],
     async (tx) => {
       await lockOrganisationMemberships(tx, org.id, [
@@ -299,6 +305,8 @@ export async function removeOrganisationMember(
   assertMutableOrganisationMember(member, org.ownerId);
 
   await runInTransaction(prisma, async (tx) => {
+    await lockProductTeamPolicyShared(tx);
+    await lockDirectoryMutationUsers(tx, [userId, actorUserId], [userId]);
     await lockRefreshSessionUserDomain({ userId, domain: org.domain }, { prisma: tx });
     return withDirectoryMutation(
       tx,

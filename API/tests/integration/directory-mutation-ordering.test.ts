@@ -152,6 +152,8 @@ database('ordered directory transaction seam', () => {
       [{ orgId: 'erased-org', kind: 'organisation.deleted' }],
       async () => undefined,
     );
+    await withDirectoryMutation(db, [{ orgId: 'erased-org', kind: 'profile.changed', subjectId: 'later-erasure' }], async () => undefined);
+    expect(await db.directoryChangeOutbox.count({ where: { orgId: 'erased-org' } })).toBe(1);
     expect(
       await db.directoryOrganisationRevision.findUnique({ where: { orgId: 'erased-org' } }),
     ).toMatchObject({ revision: 1n });

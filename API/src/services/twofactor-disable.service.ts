@@ -117,6 +117,7 @@ export async function resetTwoFactorForUser(
 
   const prisma = adminPrisma(deps);
   await runInTransaction(prisma, async (tx) => {
+    await lockProductTeamPolicyShared(tx);
     await deps?.beforeRefreshSessionLock?.();
     await lockRefreshSessionUser(params.userId, { prisma: tx });
     await deps?.afterRefreshSessionLock?.();

@@ -1,3 +1,6 @@
+import { lockProductTeamPolicyShared } from './product-team-policy-lock.service.js';
+import { userDirectoryOrganisations } from './directory-user-mutation.service.js';
+import { withDirectoryMutation } from './directory-mutation.service.js';
 import type { PrismaClient } from '@prisma/client';
 
 import { AppError } from '../utils/errors.js';
@@ -21,7 +24,13 @@ export function createRefreshTokenFamilyDecisionLock(params: {
   afterLock?: () => Promise<void>;
 }): (row: RefreshRotationRow) => Promise<void> {
   return async ({ userId, domain }) => {
+    await lockProductTeamPolicyShared(params.prisma);
     await lockRefreshSessionUserDomain({ userId, domain }, { prisma: params.prisma });
+    // Reuse/corruption may bump the global epoch. Declare its full directory
+    // scope before policy guards take membership rows; otherwise a later bump
+    // could invert directory/row lock order against a membership writer.
+    const orgIds = await userDirectoryOrganisations(params.prisma, userId);
+    await withDirectoryMutation(params.prisma, [], async () => undefined, orgIds);
     await params.afterLock?.();
   };
 }

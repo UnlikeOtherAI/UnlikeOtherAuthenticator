@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { PrismaClient } from '@prisma/client';
-import { withDirectoryUserMutation } from '../../src/services/directory-user-mutation.service.js';
+import {
+  withDirectoryUserMutation,
+  lockDirectoryMutationUsers,
+} from '../../src/services/directory-user-mutation.service.js';
 import {
   withDirectoryMutation,
   directoryNewOrganisationId,
@@ -20,22 +23,39 @@ describe('composed user directory mutations', () => {
       const sql = f.raw.$queryRaw.mock.calls.map(
         (call) => (call[0] as { values: unknown[] }).values,
       );
-      expect(sql[0]).toEqual([JSON.stringify(['uoa:refresh-session:user:v1', 'person'])]);
-      expect(sql.slice(1)).toEqual([
-        ['uoa:directory-org:v1:org-a'],
-        ['uoa:directory-org:v1:org-b'],
-        ['uoa:directory-org:v1:org-owner'],
-      ]);
+      expect(sql[0]).toEqual(['uoa:product-team-policy:v1']);
+      expect(sql[1]).toEqual([JSON.stringify(['uoa:refresh-session:user:v1', 'person'])]);
+      expect(sql.filter((values) => String(values[0]).startsWith('uoa:directory-org:v1:'))).toEqual(
+        [
+          ['uoa:directory-org:v1:org-a'],
+          ['uoa:directory-org:v1:org-b'],
+          ['uoa:directory-org:v1:org-owner'],
+        ],
+      );
     });
     const emitted = f.raw.$queryRaw.mock.calls
-      .slice(4)
-      .map((call) => (call[0] as { values: unknown[] }).values);
+      .map((call) => (call[0] as { values: unknown[] }).values)
+      .filter((values) => values[2] === 'profile.changed');
     expect(emitted.map((values) => values.slice(1))).toEqual([
       ['org-a', 'profile.changed', 'person', null],
       ['org-b', 'profile.changed', 'person', null],
       ['org-owner', 'profile.changed', 'person', null],
     ]);
   });
+  it('orders mixed actor/target user locks before any org or row lock', async () => {
+    const f = fixture();
+    await lockDirectoryMutationUsers(f.db, ['z-target', 'a-actor', 'a-actor', null], ['z-target']);
+    const sql = f.raw.$queryRaw.mock.calls.map(
+      (call) => call[0] as { values: unknown[]; strings: string[] },
+    );
+    expect(sql.map((query) => query.values)).toEqual([
+      [JSON.stringify(['uoa:refresh-session:user:v1', 'a-actor'])],
+      [JSON.stringify(['uoa:refresh-session:user:v1', 'z-target'])],
+    ]);
+    expect(sql[0].strings.join('')).toContain('pg_advisory_xact_lock_shared');
+    expect(sql[1].strings.join('')).not.toContain('pg_advisory_xact_lock_shared');
+  });
+
   it('declares a verified invite and a potential new-org ID before a composed profile write', async () => {
     const f = fixture();
     let createdId = '';

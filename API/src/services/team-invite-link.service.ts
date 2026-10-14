@@ -1,29 +1,18 @@
-import { withDirectoryMutation } from './directory-mutation.service.js';
+import { findValidInviteLink } from './team-invite-link.lookup.js';
 import type { PrismaClient } from '@prisma/client';
 
 import type { ClientConfig } from './config.service.js';
 import { getEnv, requireEnv } from '../config/env.js';
 import { getPrisma } from '../db/prisma.js';
-import { runInTransaction } from '../db/tenant-context.js';
 import { AppError } from '../utils/errors.js';
 import { hashEmailToken } from '../utils/verification-token.js';
 import {
   assertDatabaseEnabled,
   auditOrg,
-  normalizeDomain,
   resolveOrgActor,
   resolveOrganisation,
   type OrgActorProvenance,
-  ensureOrgRole,
-  parseOrgFeatureRoles,
-  parseOrgLimit,
 } from './organisation.service.base.js';
-import {
-  normalizeTeamRole,
-  parseMaxMembersPerTeam,
-  parseMaxTeamMembershipsPerUser,
-} from './team.service.base.js';
-import { lockRefreshSessionUser } from './refresh-session-lock.service.js';
 import {
   DAY_MS,
   TEAM_INVITE_LINK_SELECT,
@@ -35,7 +24,6 @@ import {
   toInviteLinkRecord,
   type TeamInviteLinkRecord,
 } from './team-invite-link.base.js';
-import { assertActiveTeamMembership, lockTeamMembershipRows } from './team-scope.service.js';
 
 // Phase 5 (design §4.7, §7 step 6, §8): shareable team invite links. A link authorizes JOINING a
 // team, never AUTHENTICATION — redemption only happens on the verified-session path
@@ -252,63 +240,6 @@ export async function revokeTeamInviteLink(
   return { revoked: true };
 }
 
-type InviteLinkLookupPrisma = {
-  teamInviteLink: Pick<PrismaClient['teamInviteLink'], 'findUnique'>;
-  team: Pick<PrismaClient['team'], 'findFirst'>;
-};
-
-type InviteLinkLookup = {
-  id: string;
-  orgId: string;
-  teamId: string;
-  roleToAssign: string;
-  maxUses: number;
-  useCount: number;
-  revokedAt: Date | null;
-  expiresAt: Date;
-};
-
-/**
- * Shared validity lookup for both the landing check (Task 4) and redemption (Task 2). Every
- * failure — unknown token, revoked, expired, over-cap, a dangling or HIDDEN team — throws the
- * SAME generic error so there is no oracle on which specific condition failed.
- */
-async function findValidInviteLink(
-  prisma: InviteLinkLookupPrisma,
-  params: { tokenHash: string; now: Date },
-): Promise<{ link: InviteLinkLookup; team: { id: string; orgId: string; orgDomain: string } }> {
-  const link = await prisma.teamInviteLink.findUnique({
-    where: { tokenHash: params.tokenHash },
-    select: {
-      id: true,
-      orgId: true,
-      teamId: true,
-      roleToAssign: true,
-      maxUses: true,
-      useCount: true,
-      revokedAt: true,
-      expiresAt: true,
-    },
-  });
-  if (!link) throw new AppError('BAD_REQUEST', 400);
-  if (link.revokedAt) throw new AppError('BAD_REQUEST', 400);
-  if (link.expiresAt.getTime() <= params.now.getTime()) throw new AppError('BAD_REQUEST', 400);
-  if (link.useCount >= link.maxUses) throw new AppError('BAD_REQUEST', 400);
-
-  // Looked up by the ids the link carries, not by the redeeming product's domain: one organisation
-  // is usable from every UOA-integrated product, and the link is already a bearer credential
-  // scoped to one team. The org's ORIGIN domain comes back because the caller's next checks bind
-  // the invitation and its accepted membership to that tenant, not to who is redeeming.
-  const team = await prisma.team.findFirst({
-    where: { id: link.teamId, orgId: link.orgId },
-    select: { id: true, orgId: true, joinPolicy: true, org: { select: { domain: true } } },
-  });
-  if (!team) throw new AppError('BAD_REQUEST', 400);
-  if (team.joinPolicy === 'HIDDEN') throw new AppError('BAD_REQUEST', 400);
-
-  return { link, team: { id: team.id, orgId: team.orgId, orgDomain: team.org.domain } };
-}
-
 /**
  * Landing-page validation (Task 4, `GET /auth/team-invite-link/:token`) — checks the token WITHOUT
  * redeeming or mutating anything (no `useCount` increment). Throws the same generic error as
@@ -333,167 +264,7 @@ export async function assertTeamInviteLinkValidForLanding(
   await findValidInviteLink(prisma, { tokenHash, now });
 }
 
-export type RedeemTeamInviteLinkResult = { teamId: string; orgId: string };
-
-/**
- * The core join (Task 2). Only ever called on the verified-session path
- * (`POST /auth/select-team`, after the `login_token` bridge proves the email was already
- * verified) — a link never grants membership on its own. Atomically increments `useCount` with a
- * conditional `updateMany` (`useCount: { lt: maxUses }`) so concurrent redemptions can never push
- * `useCount` past `maxUses`.
- */
-export async function redeemTeamInviteLink(
-  params: {
-    token: string;
-    userId: string;
-    actor?: OrgActorProvenance;
-    domain: string;
-    config: ClientConfig;
-  },
-  deps?: InviteLinkDeps,
-): Promise<RedeemTeamInviteLinkResult> {
-  const env = deps?.env ?? getEnv();
-  assertDatabaseEnabled(env);
-
-  const prisma = deps?.prisma ?? (getPrisma() as InviteLinkPrisma);
-  const sharedSecret = deps?.sharedSecret ?? requireEnv('SHARED_SECRET').SHARED_SECRET;
-  const hashToken = deps?.hashToken ?? hashEmailToken;
-  if (normalizeDomain(params.domain) !== params.config.domain)
-    throw new AppError('BAD_REQUEST', 400);
-  const tokenHash = hashToken(params.token, sharedSecret);
-
-  const result = await runInTransaction(prisma, async (tx) => {
-    await lockRefreshSessionUser(params.userId, { prisma: tx });
-    let decisionNow = deps?.now?.() ?? new Date();
-    const { link, team } = await findValidInviteLink(tx, { tokenHash, now: decisionNow });
-    const role = normalizeTeamRole(link.roleToAssign, params.config);
-    if (role === 'owner') throw new AppError('BAD_REQUEST', 400);
-    ensureOrgRole('member', parseOrgFeatureRoles(params.config));
-    return withDirectoryMutation(
-      tx,
-      [
-        {
-          orgId: team.orgId,
-          kind: 'membership.changed',
-          subjectId: params.userId,
-          teamId: team.id,
-        },
-      ],
-      async (tx) => {
-        await lockTeamMembershipRows(
-          { userId: params.userId, orgId: team.orgId, teamId: team.id },
-          { prisma: tx },
-        );
-
-        // Lock waits can cross expiry. Revalidate current link state before consumption.
-        decisionNow = deps?.now?.() ?? new Date();
-        await findValidInviteLink(tx, { tokenHash, now: decisionNow });
-
-        // Atomic cap guard: only ONE concurrent redemption can win when useCount is one below
-        // maxUses. `link.maxUses` is immutable (never updated after creation), so comparing against
-        // the snapshot value read above is safe.
-        const claimed = await tx.teamInviteLink.updateMany({
-          where: {
-            id: link.id,
-            revokedAt: null,
-            expiresAt: { gt: decisionNow },
-            useCount: { lt: link.maxUses },
-          },
-          data: { useCount: { increment: 1 } },
-        });
-        if (claimed.count !== 1) {
-          throw new AppError('BAD_REQUEST', 400);
-        }
-
-        // Ensure membership in the target organisation. A user may independently belong to other
-        // organisations on the same origin domain, so only this exact org membership is relevant.
-        const existingMembershipInOrganisation = await tx.orgMember.findFirst({
-          where: { userId: params.userId, orgId: team.orgId },
-          select: { id: true, orgId: true, status: true },
-        });
-        if (
-          existingMembershipInOrganisation &&
-          existingMembershipInOrganisation.status !== 'ACTIVE'
-        ) {
-          throw new AppError('BAD_REQUEST', 400);
-        }
-        if (!existingMembershipInOrganisation) {
-          if (
-            (await tx.orgMember.count({ where: { orgId: team.orgId, status: 'ACTIVE' } })) >=
-            parseOrgLimit(params.config)
-          )
-            throw new AppError('BAD_REQUEST', 400);
-          await tx.orgMember.create({
-            data: { orgId: team.orgId, userId: params.userId, role: 'member' },
-            select: { id: true },
-          });
-        }
-
-        // Add/reactivate the ACTIVE TeamMember row (Phase 2 lifecycle semantics). Idempotent when
-        // already an ACTIVE member — the join still succeeds and returns the team.
-        const existingTeamMembership = await tx.teamMember.findFirst({
-          where: { teamId: team.id, userId: params.userId },
-          select: { id: true, status: true },
-        });
-
-        if (existingTeamMembership?.status === 'DEACTIVATED')
-          throw new AppError('BAD_REQUEST', 400, 'MEMBERSHIP_DEACTIVATED');
-        if (existingTeamMembership?.status !== 'ACTIVE') {
-          const memberCount = await tx.teamMember.count({
-            where: { teamId: team.id, status: 'ACTIVE' },
-          });
-          const userCount = await tx.teamMember.count({
-            where: { userId: params.userId, status: 'ACTIVE', team: { orgId: team.orgId } },
-          });
-          if (
-            memberCount >= parseMaxMembersPerTeam(params.config) ||
-            userCount >= parseMaxTeamMembershipsPerUser(params.config)
-          )
-            throw new AppError('BAD_REQUEST', 400);
-        }
-        let teamMemberId: string;
-        if (!existingTeamMembership) {
-          const created = await tx.teamMember.create({
-            data: { teamId: team.id, userId: params.userId, teamRole: role },
-            select: { id: true },
-          });
-          teamMemberId = created.id;
-        } else {
-          teamMemberId = existingTeamMembership.id;
-          if (existingTeamMembership.status !== 'ACTIVE') {
-            await tx.teamMember.update({
-              where: { id: existingTeamMembership.id },
-              data: { status: 'ACTIVE', statusChangedAt: decisionNow, teamRole: role },
-            });
-          }
-        }
-
-        await assertActiveTeamMembership(
-          {
-            userId: params.userId,
-            orgId: team.orgId,
-            teamId: team.id,
-          },
-          { prisma: tx },
-        );
-
-        return { teamId: team.id, orgId: team.orgId, teamMemberId };
-      },
-    );
-  });
-
-  await auditOrg(
-    {
-      orgId: result.orgId,
-      actorUserId: params.userId,
-      actor: params.actor,
-      action: 'team_member.added',
-      targetType: 'team_member',
-      targetId: result.teamMemberId,
-      metadata: { teamId: result.teamId, via: 'invite_link' },
-    },
-    { prisma },
-  );
-
-  return { teamId: result.teamId, orgId: result.orgId };
-}
+export {
+  redeemTeamInviteLink,
+  type RedeemTeamInviteLinkResult,
+} from './team-invite-link.redemption.js';

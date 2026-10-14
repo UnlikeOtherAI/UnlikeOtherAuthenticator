@@ -1,3 +1,6 @@
+import { lockDirectoryMutationUsers } from './directory-user-mutation.service.js';
+import { withDirectoryMembershipMutation } from './directory-user-mutation.service.js';
+import { lockProductTeamPolicyShared } from './product-team-policy-lock.service.js';
 import { withDirectoryMutation } from './directory-mutation.service.js';
 import type { ClientConfig } from './config.service.js';
 import { getEnv } from '../config/env.js';
@@ -80,8 +83,9 @@ export async function addTeamMember(
   if (!team) {
     throw new AppError('NOT_FOUND', 404);
   }
-  const { member, reactivated } = await withDirectoryMutation(
+  const { member, reactivated } = await withDirectoryMembershipMutation(
     prisma,
+    [userId, actorUserId],
     [{ orgId: org.id, kind: 'membership.changed', subjectId: userId, teamId: team.id }],
     async (tx) => {
       await lockTeamMembershipRows({ userId, orgId: org.id, teamId: team.id }, { prisma: tx });
@@ -234,8 +238,9 @@ export async function changeTeamMemberRole(
   }
 
   const previousTeamRole = member.teamRole;
-  const updated = await withDirectoryMutation(
+  const updated = await withDirectoryMembershipMutation(
     prisma,
+    [userId, actorUserId],
     [{ orgId: org.id, kind: 'membership.changed', subjectId: userId, teamId: team.id }],
     (tx) =>
       tx.teamMember.update({
@@ -322,6 +327,8 @@ export async function removeTeamMember(
   }
 
   const removedMember = await runInTransaction(prisma, async (tx) => {
+    await lockProductTeamPolicyShared(tx);
+    await lockDirectoryMutationUsers(tx, [userId, actorUserId], [userId]);
     await lockRefreshSessionUser(userId, { prisma: tx });
     return withDirectoryMutation(
       tx,

@@ -1,6 +1,10 @@
+import { lockProductTeamPolicyShared } from './product-team-policy-lock.service.js';
 import type { PrismaClient } from '@prisma/client';
 import { runInTransaction } from '../db/tenant-context.js';
-import { lockRefreshSessionUser } from './refresh-session-lock.service.js';
+import {
+  lockRefreshSessionUser,
+  lockRefreshSessionUserShared,
+} from './refresh-session-lock.service.js';
 import {
   withDirectoryMutation,
   directoryNewOrganisationId,
@@ -36,6 +40,7 @@ export function withDirectoryUserMutation<T>(
   plan: { additionalOrgIds?: readonly string[]; mayCreateOrganisation?: boolean } = {},
 ) {
   return runInTransaction(prisma, async (tx) => {
+    await lockProductTeamPolicyShared(tx);
     await lockRefreshSessionUser(userId, { prisma: tx });
     const orgIds = await userDirectoryOrganisations(tx, userId);
     const declared = [
@@ -49,5 +54,35 @@ export function withDirectoryUserMutation<T>(
       write,
       declared,
     );
+  });
+}
+
+/** Pin every user row an operation may lock, in one stable global order. */
+export async function lockDirectoryMutationUsers(
+  tx: PrismaClient,
+  userIds: readonly (string | null | undefined)[],
+  exclusive: readonly string[] = [],
+) {
+  const ids = [
+    ...new Set(userIds.filter((id): id is string => typeof id === 'string' && id.length > 0)),
+  ].sort();
+  for (const userId of ids) {
+    await (exclusive.includes(userId) ? lockRefreshSessionUser : lockRefreshSessionUserShared)(
+      userId,
+      { prisma: tx },
+    );
+  }
+}
+
+export function withDirectoryMembershipMutation<T>(
+  prisma: PrismaClient,
+  userIds: readonly (string | null | undefined)[],
+  changes: readonly DirectoryChange[],
+  write: (tx: PrismaClient) => Promise<T>,
+) {
+  return runInTransaction(prisma, async (tx) => {
+    await lockProductTeamPolicyShared(tx);
+    await lockDirectoryMutationUsers(tx, userIds);
+    return withDirectoryMutation(tx, changes, write);
   });
 }

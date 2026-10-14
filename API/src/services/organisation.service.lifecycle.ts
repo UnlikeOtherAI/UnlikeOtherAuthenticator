@@ -1,3 +1,6 @@
+import { withDirectoryMembershipMutation } from './directory-user-mutation.service.js';
+import { lockDirectoryMutationUsers } from './directory-user-mutation.service.js';
+import { lockProductTeamPolicyShared } from './product-team-policy-lock.service.js';
 import { withDirectoryMutation } from './directory-mutation.service.js';
 import type { ClientConfig } from './config.service.js';
 import { getEnv } from '../config/env.js';
@@ -95,6 +98,8 @@ export async function deactivateOrganisationMember(
   assertMutableOrganisationMember(member, org.ownerId);
 
   await runInTransaction(prisma, async (tx) => {
+    await lockProductTeamPolicyShared(tx);
+    await lockDirectoryMutationUsers(tx, [userId, actorUserId], [userId]);
     await lockRefreshSessionUserDomain({ userId, domain: org.domain }, { prisma: tx });
     return withDirectoryMutation(
       tx,
@@ -190,8 +195,9 @@ export async function reactivateOrganisationMember(
   if (!member) throw new AppError('NOT_FOUND', 404);
 
   const now = new Date();
-  await withDirectoryMutation(
+  await withDirectoryMembershipMutation(
     prisma,
+    [userId, actorUserId],
     [{ orgId: org.id, kind: 'membership.changed', subjectId: userId }],
     async (tx) => {
       await lockTeamMembershipRows({ userId, orgId: org.id }, { prisma: tx });

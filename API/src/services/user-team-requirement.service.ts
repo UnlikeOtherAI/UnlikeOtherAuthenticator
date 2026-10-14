@@ -1,3 +1,4 @@
+import { lockProductTeamPolicyShared } from './product-team-policy-lock.service.js';
 import { withDirectoryMutation, directoryNewOrganisationId } from './directory-mutation.service.js';
 import { lockRefreshSessionUserShared } from './refresh-session-lock.service.js';
 import { requireIdentityEmail } from './entity-lifecycle.service.js';
@@ -44,6 +45,7 @@ export async function lockRequiredTeamPlacementUser(
   userId: string,
   deps: { prisma: Pick<PrismaClient, '$queryRaw'> },
 ): Promise<void> {
+  await lockProductTeamPolicyShared(deps.prisma);
   await lockRefreshSessionUserShared(userId, { prisma: deps.prisma });
   await deps.prisma.$queryRaw(
     Prisma.sql`

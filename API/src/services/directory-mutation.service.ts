@@ -1,3 +1,4 @@
+import { lockProductTeamPolicyShared } from './product-team-policy-lock.service.js';
 import { randomUUID } from 'node:crypto';
 import { Prisma, type PrismaClient } from '@prisma/client';
 import { runInTransaction } from '../db/tenant-context.js';
@@ -43,6 +44,7 @@ export async function withDirectoryMutation<T>(
   declaredOrgIds: readonly string[] = [],
 ): Promise<T> {
   return runInTransaction(prisma, async (tx) => {
+    await lockProductTeamPolicyShared(tx);
     const orgIds = [
       ...new Set([...changes.map((change) => change.orgId), ...declaredOrgIds]),
     ].sort();
