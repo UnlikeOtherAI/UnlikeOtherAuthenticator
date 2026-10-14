@@ -50,4 +50,33 @@ it('exchanges one code under StrictMode and reaches the stored return destinatio
   );
   await waitFor(() => expect(screen.getByText('Returned to users')).toBeTruthy());
   expect(exchangeAdminAuthorizationCode).toHaveBeenCalledTimes(1);
+  expect(fetch).toHaveBeenCalledTimes(1);
+});
+
+it('preserves a validated existing session when revisiting the callback route', async () => {
+  sessionStorage.setItem(
+    'uoa-admin-session',
+    JSON.stringify({ accessToken: 'existing-synthetic', expiresAt: Date.now() + 60000 }),
+  );
+  vi.stubGlobal(
+    'fetch',
+    vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ adminUser: { email: 'operator@example.test' } })),
+      ),
+  );
+  render(
+    <MemoryRouter initialEntries={['/auth/callback']}>
+      <AdminSessionProvider>
+        <Routes>
+          <Route path="/auth/callback" element={<AdminAuthCallbackPage />} />
+          <Route path="/dashboard" element={<p>Existing administrator</p>} />
+        </Routes>
+      </AdminSessionProvider>
+    </MemoryRouter>,
+  );
+  expect(await screen.findByText('Existing administrator')).toBeTruthy();
+  expect(exchangeAdminAuthorizationCode).not.toHaveBeenCalled();
+  expect(sessionStorage.getItem('uoa-admin-session')).toContain('existing-synthetic');
 });

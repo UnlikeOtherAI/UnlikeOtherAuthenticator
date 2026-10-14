@@ -15,8 +15,9 @@ verification. No production requests, credentials, migrations or deployments are
 - [ ] **U-15:** Confirmed stored expiry previously left React authenticated. Implemented expiry/focus
   synchronization and session-clear notification. Real-polling expiry regression passes.
 - [ ] **U-16:** Confirmed arbitrary query-seeded handoff navigation. Implemented safe exact signed
-  custom callback reconstruction with only OAuth response fields. Ordinary HTTPS OAuth completion
-  remains unchanged. Destination positive/negative unit cases pass; browser journey pending.
+  callback reconstruction with only OAuth response fields. Ordinary HTTPS OAuth completion and
+  the public profile's registered HTTPS cancellation handoff remain available. Destination
+  positive/negative unit cases pass; browser journey pending.
 - [ ] **U-17:** Confirmed email initiation/resend/code verification/registration omit OAuth state.
   Implemented state forwarding at all four boundaries. Password login already forwards it and is
   preserved. Existing code-entry/team tests pass; browser request assertions pending.

@@ -8,19 +8,81 @@ import { DomainOverviewTab } from './DomainOverviewTab';
 import type { Domain } from './types';
 const mocks = vi.hoisted(() => ({ confirm: vi.fn(), rotate: vi.fn(), update: vi.fn() }));
 vi.mock('../shell/admin-ui', () => ({ useAdminUi: () => ({ confirm: mocks.confirm }) }));
-vi.mock('../../services/admin-service', () => ({ adminService: { rotateDomainSecret: mocks.rotate, updateDomain: mocks.update } }));
-const domain: Domain = { id: 'example.com/app', name: 'example.com/app', label: 'Example', secretAge: '1 day', secretOld: false,
-  users: 2, orgs: 1, status: 'active', twoFaPolicy: 'optional', allowedEmailDomains: [], allowedEmails: [],
-  allowedRedirectUrls: [], created: '2026-10-01', hash: 'prefix…' };
+vi.mock('../../services/admin-service', () => ({
+  adminService: { rotateDomainSecret: mocks.rotate, updateDomain: mocks.update },
+}));
+const domain: Domain = {
+  id: 'example.com/app',
+  name: 'example.com/app',
+  label: 'Example',
+  secretAge: '1 day',
+  secretOld: false,
+  users: 2,
+  orgs: 1,
+  status: 'active',
+  twoFaPolicy: 'optional',
+  allowedEmailDomains: [],
+  allowedEmails: [],
+  allowedRedirectUrls: [],
+  created: '2026-10-01',
+  hash: 'prefix…',
+};
 afterEach(cleanup);
-beforeEach(() => { mocks.confirm.mockReset(); mocks.rotate.mockReset().mockResolvedValue({ delivery_mode: 'email', email_dispatched: true }); });
+beforeEach(() => {
+  mocks.confirm.mockReset();
+  mocks.rotate.mockReset().mockResolvedValue({ delivery_mode: 'email', email_dispatched: true });
+});
 function mount(section: 'overview' | 'credentials') {
-  render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter><DomainOverviewTab domain={domain} section={section} counts={{ organisations: 1, teams: 3, users: 2 }} /></MemoryRouter></QueryClientProvider>);
+  render(
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
+      <MemoryRouter>
+        <DomainOverviewTab
+          domain={domain}
+          section={section}
+          counts={{ organisations: 1, teams: 3, users: 2 }}
+        />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
 }
 describe('service identity and credentials', () => {
+  it('keeps revealed domain credentials out of mutation data and clears the closed reveal', async () => {
+    const client = new QueryClient();
+    mocks.rotate.mockResolvedValueOnce({
+      delivery_mode: 'reveal',
+      domain: domain.name,
+      credentials: {
+        domain: domain.name,
+        client_secret: 'synthetic-domain-secret',
+        client_hash: 'synthetic-hash',
+        hash_prefix: 'prefix',
+      },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <DomainOverviewTab
+            domain={domain}
+            section="credentials"
+            counts={{ organisations: 1, teams: 3, users: 2 }}
+          />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Rotate and reveal once' }));
+    await mocks.confirm.mock.calls[0]?.[2]();
+    expect(await screen.findByText('synthetic-domain-secret')).toBeTruthy();
+    expect(client.getMutationCache().getAll()[0]?.state.data).toBeUndefined();
+    await userEvent.click(screen.getByRole('button', { name: 'Done' }));
+    expect(screen.queryByText('synthetic-domain-secret')).toBeNull();
+  });
   it('links directory counts and keeps credential controls in their own tab', () => {
     mount('overview');
-    expect(screen.getByRole('link', { name: 'View 3 teams' }).getAttribute('href')).toBe('/?tab=teams');
+    expect(screen.getByRole('link', { name: 'View 3 teams' }).getAttribute('href')).toBe(
+      '/?tab=teams',
+    );
     expect(screen.queryByRole('button', { name: /Rotate/ })).toBeNull();
     expect(screen.getByDisplayValue('Example')).toBeTruthy();
   });

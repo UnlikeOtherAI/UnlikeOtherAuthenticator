@@ -80,4 +80,12 @@ test('arbitrary HTTPS handoff remains on login while exact native callback retai
   );
   await expect(page.getByRole('button', { name: 'Open the app' })).toBeVisible();
   await page.screenshot({ path: info.outputPath('native-handoff.png'), fullPage: true });
+  await page.route('https://product.example/**', (route) =>
+    route.fulfill({ contentType: 'text/html', body: '<p>Returned to product</p>' }),
+  );
+  await page.goto(
+    '/?handoff_target=' +
+      encodeURIComponent('https://product.example/callback?error=access_denied&state=opaque'),
+  );
+  await expect(page).toHaveURL('https://product.example/callback?error=access_denied&state=opaque');
 });
