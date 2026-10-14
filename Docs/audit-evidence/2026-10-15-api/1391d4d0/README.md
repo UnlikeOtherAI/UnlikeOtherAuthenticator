@@ -11,3 +11,15 @@ cancel or record removal. The recovered schema remains retained.
 
 This proves recovery of that actual failed job. Full lifecycle regression,
 refusal cases, full113-writer runtime and remaining race gates stay open.
+
+## Full lifecycle regression
+
+Executed at a6cd0ced with identical production/test inputs to1391d4d0;
+d6541be9 adds only two unselected U01 test files while this gate runs.
+All3selected files pass:19lifecycle,5dependency-refusal,1source guard,25total,
+357.97seconds, exit0. Scale case completes in155.313seconds using the explicit
+240-second end-to-end budget; every production transaction retains15seconds.
+It proves26-subject staged completion,250audit rows retained/scrubbed, contiguous
+outbox revisions and a final organisation.deleted cursor after user erasure.
+Source guard remains structural evidence, distinct from the24realPG cases.
+All schemas retained; no compiler/test child remains after completion.
