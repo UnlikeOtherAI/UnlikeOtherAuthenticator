@@ -1,0 +1,39 @@
+HEAD 7dac9a3fd95dbf5d654264e79f7ca7732cb73574
+Maxis serial build/API; owned Fedora PostgreSQL16; workers1; heap3072MiB; 2026-10-14T23:55:41.7448230+01:00
+
+> @uoa/api@0.0.0 build C:\Users\ondre\Projects\UnlikeOtherAuthenticator\.worktrees\sol-audit-fixes-api-20261014\API
+> tsc -p tsconfig.build.json
+
+BUILD_EXIT=0
+
+ RUN  v3.2.6 C:/Users/ondre/Projects/UnlikeOtherAuthenticator/.worktrees/sol-audit-fixes-api-20261014/API
+
+(node:37232) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/integration/profile-directory-authority.test.ts (11 tests) 66360ms
+   ✓ profile and directory real HTTP/PostgreSQL authority > uses real uoa_app login with tenant RLS and machine-only outbox protection  994ms
+   ✓ profile and directory real HTTP/PostgreSQL authority > reads/patches canonical self through signed config/domain/JWT and commits exact invalidations  2011ms
+   ✓ profile and directory real HTTP/PostgreSQL authority > refuses missing/conflicting person credentials and stale live epoch without modifying a profile  547ms
+   ✓ profile and directory real HTTP/PostgreSQL authority > refuses an expired profile capability after an observed PostgreSQL lock wait  2037ms
+   ✓ profile and directory real HTTP/PostgreSQL authority > preserves nullable active display, exact retained history and neutral removed/erased references  4746ms
+   ✓ profile and directory real HTTP/PostgreSQL authority > returns actual uploaded avatar bytes through authenticated no-store HTTP  1221ms
+   ✓ profile and directory real HTTP/PostgreSQL authority > provisions through the documented operator/owner HTTP doorway and separates permissions  2507ms
+   ✓ profile and directory real HTTP/PostgreSQL authority > denies a former owner from granting access using stale owner claims  1794ms
+   ✓ profile and directory real HTTP/PostgreSQL authority > rechecks real directory credential expiry after a PostgreSQL subject-lock wait  3368ms
+   ✓ profile and directory real HTTP/PostgreSQL authority > holds directory read authority through commit and serializes current credential revocation  2161ms
+   ✓ profile and directory real HTTP/PostgreSQL authority > keeps an actual PostgreSQL authority-store outage as generic 500  330ms
+ ✓ tests/integration/directory-mutation-ordering.test.ts (4 tests) 45554ms
+   ✓ ordered directory transaction seam > records only the resolved tenant and keeps direct table access denied  808ms
+   ✓ ordered directory transaction seam > publishes nothing when the enclosing transaction rolls back  320ms
+   ✓ ordered directory transaction seam > does not allocate a later revision until the prior mutation commits  613ms
+   ✓ ordered directory transaction seam > locks a multi-org change in sorted order and preserves terminal deletion evidence  817ms
+(node:57692) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/unit/product-api-bulkhead.route.test.ts (8 tests) 415ms
+
+ Test Files  3 passed (3)
+      Tests  23 passed (23)
+   Start at  23:56:01
+   Duration  121.26s (transform 3.23s, setup 153ms, collect 8.20s, tests 112.33s, environment 0ms, prepare 188ms)
+
+RUNTIME_GATE_2_EXIT=0
