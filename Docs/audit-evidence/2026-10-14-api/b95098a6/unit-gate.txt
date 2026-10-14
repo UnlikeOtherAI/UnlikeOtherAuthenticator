@@ -1,0 +1,2339 @@
+HEAD b95098a61b365b3cc97e4b3545c37b7a38fa58a0
+Maxis serial build/default API unit+source harness;workers1;heap3072MiB;no DB; 2026-10-15T00:01:50.4921370+01:00
+PASS reviewed bridge reader: exit=0, expected=0
+PASS reviewed stable reader: exit=0, expected=0
+PASS empty inventory: exit=1, expected=1
+PASS legacy reader: exit=1, expected=1
+PASS unknown image: exit=1, expected=1
+PASS retiring reader: exit=1, expected=1
+PASS unreviewed zero-traffic reader: exit=1, expected=1
+PASS duplicate phase metadata: exit=1, expected=1
+PASS missing reviewed digests: exit=1, expected=1
+PASS provider unavailable: exit=17, expected=17
+
+> @uoa/api@0.0.0 build C:\Users\ondre\Projects\UnlikeOtherAuthenticator\.worktrees\sol-audit-fixes-api-20261014\API
+> tsc -p tsconfig.build.json
+
+BUILD_EXIT=0
+
+ RUN  v3.2.6 C:/Users/ondre/Projects/UnlikeOtherAuthenticator/.worktrees/sol-audit-fixes-api-20261014/API
+
+ ✓ tests/unit/billing-credit-projection.service.test.ts (16 tests) 67ms
+ ✓ tests/unit/billing-stripe-usage.service.test.ts (16 tests) 86ms
+ ✓ tests/unit/billing-credit-funding-actions.service.test.ts (18 tests) 21ms
+ ✓ tests/unit/billing-recurring-addon-webhook.service.test.ts (16 tests) 25ms
+(node:56076) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:56076) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:56076) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:56076) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:56076) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:56076) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:56076) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:56076) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:56076) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:56076) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:56076) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:56076) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:56076) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:56076) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/email-registration-link.route.test.ts (14 tests) 7380ms
+   ✓ GET /auth/email/link > renders the login screen instead of an auth error when a one-time email link is already used  6248ms
+ ❯ tests/unit/social-login.service.test.ts (10 tests | 2 failed) 26ms
+   ✓ social-login.service > rejects unverified provider emails 1ms
+   × social-login.service > creates a new user and overwrites avatar on subsequent logins 5ms
+     → Cannot read properties of undefined (reading 'findMany')
+   ✓ social-login.service > blocks new social users whose email domain is not allowed 1ms
+   ✓ social-login.service > blocks new social users when registration is disabled, even during access requests 1ms
+   ✓ social-login.service > admits a new social user when the admin allowlist overrides disabled registration 1ms
+   × social-login.service > allows existing social users even when their email domain is not allowed for new registration 1ms
+     → Cannot read properties of undefined (reading 'findMany')
+   ✓ social-login.service > bootstraps the first superuser on the admin domain even when registration is disabled 1ms
+   ✓ social-login.service > bootstraps the first admin superuser when the email is on the optional allowlist 1ms
+   ✓ social-login.service > blocks the first admin-domain login when its email is not on the optional allowlist 1ms
+   ✓ social-login.service > blocks new admin-domain users once a superuser already exists, with registration disabled 2ms
+ ✓ tests/unit/billing-credit-purchase-status.service.test.ts (48 tests) 23ms
+ ✓ tests/unit/team-invite-member.service.test.ts (12 tests) 17ms
+(node:19744) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:19744) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:19744) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:19744) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:19744) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:19744) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:19744) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:19744) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:19744) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:19744) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:19744) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ❯ tests/unit/auth-select-team.route.test.ts (11 tests | 1 failed) 3361ms
+   ✓ POST /auth/select-team > rejects an invalid login_token with a generic error  2405ms
+   ✓ POST /auth/select-team > rejects an expired login_token with a generic error 138ms
+   ✓ POST /auth/select-team > does not decline an invite when the login_token expires waiting for the lock 109ms
+   ✓ POST /auth/select-team > rejects a teamId the user is not an ACTIVE member of 81ms
+   ✓ POST /auth/select-team > rejects a cross-domain team for an unknown product domain (IDOR) 94ms
+   ✓ POST /auth/select-team > accepts a cross-domain ACTIVE team for one centrally bound product 108ms
+   ✓ POST /auth/select-team > accepts a valid ACTIVE team selection and issues a scoped authorization code 100ms
+   ✓ POST /auth/select-team > finalizes with no team scope when neither teamId nor inviteId is given 86ms
+   ✓ POST /auth/select-team > enforces the selected org 2FA policy — returns a twofa challenge instead of finalizing 75ms
+   × POST /auth/select-team > accepts a pending invite and finalizes scoped to the invite team/org 83ms
+     → expected 500 to be 200 // Object.is equality
+   ✓ POST /auth/select-team > declines a pending invite and returns a refreshed chooser payload 69ms
+ ✓ tests/unit/billing-stripe-catalog-provisioning-local.service.test.ts (10 tests) 25ms
+ ✓ src/middleware/__tests__/org-role-guard.test.ts (28 tests) 11ms
+ ✓ tests/unit/billing-statement.service.test.ts (4 tests) 96ms
+ ✓ tests/unit/billing-ledger-collector.service.test.ts (9 tests) 50ms
+ ✓ tests/unit/refresh-token-replay.service.test.ts (22 tests) 24ms
+ ❯ tests/unit/token.service.active-claim.test.ts (7 tests | 3 failed) 26ms
+   × exchangeAuthorizationCodeForTokens active claim (unit) > emits the active claim and persists it on the refresh token when the code carries both orgId and teamId 6ms
+     → SECRET_CLIENT_IDENTIFIER
+   ✓ exchangeAuthorizationCodeForTokens active claim (unit) > rejects a recognized-product code that deferred team binding until exchange 2ms
+   × exchangeAuthorizationCodeForTokens active claim (unit) > fails closed if a product mapping is revoked after code validation but before signing 4ms
+     → expected Error: SECRET_CLIENT_IDENTIFIER { …(2) } to match object { statusCode: 401, …(1) }
+(1 matching property omitted from actual)
+   ✓ exchangeAuthorizationCodeForTokens active claim (unit) > rejects a legacy authorization code whose issue-time credential epoch is unknown 1ms
+   ✓ exchangeAuthorizationCodeForTokens active claim (unit) > rejects a malformed authorization code carrying only part of a team scope 1ms
+   ✓ exchangeAuthorizationCodeForTokens active claim (unit) > rejects exchange when the exact scoped memberships are no longer ACTIVE 1ms
+   × exchangeAuthorizationCodeForTokens active claim (unit) > omits the active claim when the code carries neither orgId nor teamId 1ms
+     → SECRET_CLIENT_IDENTIFIER
+(node:67412) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:67412) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:67412) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:67412) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:67412) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:67412) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:67412) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:67412) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:67412) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/billing-funding-read.routes.test.ts (9 tests) 807ms
+(node:52152) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:52152) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:52152) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:52152) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:52152) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:52152) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:52152) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:52152) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:52152) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:52152) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:52152) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/internal-admin-integration-requests.route.test.ts (11 tests) 2807ms
+   ✓ /internal/admin/integration-requests > requires a superuser access token  2065ms
+(node:65376) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:65376) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:65376) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:65376) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:65376) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:65376) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:65376) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:65376) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:65376) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:65376) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:65376) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:65376) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/billing-canonical.routes.test.ts (10 tests) 928ms
+ ❯ tests/unit/token.service.required-placement.test.ts (6 tests | 1 failed) 23ms
+   × required team placement during token exchange > creates, validates, persists, and signs the exact team for a brand-new user 8ms
+     → SECRET_CLIENT_IDENTIFIER
+   ✓ required team placement during token exchange > fails closed on multiple product teams before personal placement 1ms
+   ✓ required team placement during token exchange > preserves legacy unscoped login without healing around 'a DEACTIVATED organisation membership' 1ms
+   ✓ required team placement during token exchange > preserves legacy unscoped login without healing around 'a REMOVED team membership' 0ms
+   ✓ required team placement during token exchange > preserves a legacy off-flow as unscoped when an active team already satisfies placement 0ms
+   ✓ required team placement during token exchange > serializes simultaneous product placement and makes the loser reuse the winner team 2ms
+(node:69452) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:69452) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:69452) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:69452) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:69452) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:69452) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:69452) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:69452) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/twofactor-config-gating.routes.test.ts (8 tests) 2398ms
+   ✓ 2FA gated by config `2fa_enabled` > does not require 2FA when config disables it, even if the user has 2FA enabled  1920ms
+ ✓ tests/unit/billing-credit-action-readiness.service.test.ts (22 tests) 17ms
+ ❯ tests/unit/token.service.test.ts (5 tests | 4 failed) 22ms
+   × exchangeAuthorizationCodeForTokens (unit) > includes org claim in an issued JWT and round-trips the org context 7ms
+     → SECRET_CLIENT_IDENTIFIER
+   × exchangeAuthorizationCodeForTokens (unit) > omits the org claim when org_features is disabled 1ms
+     → SECRET_CLIENT_IDENTIFIER
+   × exchangeAuthorizationCodeForTokens (unit) > omits the org claim when the user has no organisation on the domain 1ms
+     → SECRET_CLIENT_IDENTIFIER
+   × exchangeAuthorizationCodeForTokens (unit) > requires a matching PKCE verifier when the authorization code has a challenge 2ms
+     → SECRET_CLIENT_IDENTIFIER
+   ✓ exchangeAuthorizationCodeForTokens (unit) > rejects an authorization code that has no PKCE challenge (no downgrade) 1ms
+(node:29336) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:29336) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:29336) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:29336) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:29336) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:29336) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/billing-contract-invoice.routes.test.ts (6 tests) 565ms
+ ✓ tests/unit/auth-register.service.test.ts (8 tests) 133ms
+ ✓ tests/unit/billing-stripe-checkout.service.test.ts (8 tests) 23ms
+ ✓ tests/unit/first-login.service.test.ts (10 tests) 18ms
+(node:40064) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:40064) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:40064) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:40064) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:40064) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:40064) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:40064) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:40064) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:40064) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/verify-email.route.test.ts (9 tests) 2383ms
+   ✓ POST /auth/verify-email — team chooser wiring (gap-fix B Task 1, design §4.3) > team_selection "off" (default): behaves exactly like before — no login_token, direct finalize  1840ms
+ ❯ tests/unit/group.service.test.ts (13 tests | 9 failed) 35ms
+   ✓ Group service > lists groups for an organisation with cursor pagination 4ms
+   × Group service > creates a group when under the organisation group quota 4ms
+     → prisma.$queryRaw is not a function
+   × Group service > rejects creating a group when max_groups_per_org is reached 4ms
+     → expected TypeError: prisma.$queryRaw is not a func… to match object { Object (code, statusCode) }
+   ✓ Group service > reads a group and maps teams and members 1ms
+   × Group service > updates a group name and description 1ms
+     → prisma.$queryRaw is not a function
+   ✓ Group service > rejects updating a group without fields 1ms
+   × Group service > deletes a group when it exists 2ms
+     → prisma.$queryRaw is not a function
+   × Group service > adds a group member when under the per-group membership limit 1ms
+     → prisma.$queryRaw is not a function
+   × Group service > rejects adding a group member when max_members_per_group is reached 1ms
+     → expected TypeError: prisma.$queryRaw is not a func… to match object { Object (code, statusCode) }
+   × Group service > updates a group member admin flag 1ms
+     → prisma.$queryRaw is not a function
+   × Group service > removes a group member 1ms
+     → prisma.$queryRaw is not a function
+   × Group service > assigns and unassigns a team to a group 1ms
+     → prisma.$queryRaw is not a function
+   ✓ Group service > returns 404 when group features are disabled 1ms
+ ✓ tests/unit/integration-claim.service.test.ts (10 tests) 36ms
+ ✓ tests/unit/organisation.service.membership.test.ts (11 tests) 112ms
+ ✓ tests/unit/refresh-token.service.test.ts (9 tests) 20ms
+ ❯ tests/unit/organisation.service.create-update.test.ts (11 tests | 1 failed) 72ms
+   × Organisation service: organisation CRUD > creates an organisation, owner membership, and default team 47ms
+     → expected "spy" to be called with arguments: [ ObjectContaining{…} ]
+
+Received: 
+
+  1st spy call:
+
+  [
+-   ObjectContaining {
++   {
+      "data": {
+        "domain": "acme.example.com",
++       "id": "55381bcc-c683-4d57-87a3-c758cb509618",
+        "name": "Acme Inc",
+        "ownerId": "u-owner",
+        "slug": "acme-inc",
++     },
++     "select": {
++       "createdAt": true,
++       "domain": true,
++       "iconUrl": true,
++       "id": true,
++       "memberInvites": true,
++       "name": true,
++       "ownerId": true,
++       "slug": true,
++       "updatedAt": true,
+      },
+    },
+  ]
+
+
+Number of calls: 1
+
+   ✓ Organisation service: organisation CRUD > refuses a name whose derived address another organisation holds 1ms
+   ✓ Organisation service: organisation CRUD > lets an owner who already belongs to an org on the domain create another 4ms
+   ✓ Organisation service: organisation CRUD > leaves the tenant address alone when the organisation is only renamed 3ms
+   ✓ Organisation service: organisation CRUD > moves the tenant address only when a slug is explicitly supplied 3ms
+   ✓ Organisation service: organisation CRUD > refuses an explicitly supplied slug that another organisation holds 1ms
+   ✓ Organisation service: organisation CRUD > lists organisations for a domain with cursor pagination 1ms
+   ✓ Organisation service: organisation CRUD > reads an organisation by id, from any UOA-integrated product 1ms
+   ✓ Organisation service: organisation CRUD > refuses to read an organisation when the actor has no membership 1ms
+   ✓ Organisation service: organisation CRUD > requires deletion workflow for u-owner without writes 0ms
+   ✓ Organisation service: organisation CRUD > requires deletion workflow for u-not-owner without writes 0ms
+ ✓ tests/unit/env.test.ts (24 tests) 20ms
+ ✓ tests/unit/email.templates.test.ts (18 tests) 14ms
+(node:68984) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:68984) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:68984) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:68984) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:68984) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:68984) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:68984) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/internal-admin-domain-signatures.route.test.ts (7 tests) 2432ms
+   ✓ /internal/admin/domains/:domain/signatures > requires a platform superuser  1942ms
+ ✓ tests/unit/email.service.test.ts (10 tests) 11ms
+ ✓ tests/unit/organisation.service.capabilities.test.ts (15 tests) 135ms
+ ❯ tests/unit/org-placement.service.test.ts (8 tests | 3 failed) 21ms
+   × org-placement.service > places a new user in mapped org and team when email domain matches 6ms
+     → App logger not initialized
+   × org-placement.service > uses the default team when mapping omits team_id 1ms
+     → App logger not initialized
+   ✓ org-placement.service > skips placement when mapped org does not exist 1ms
+   ✓ org-placement.service > skips placement when mapped org belongs to another domain 0ms
+   ✓ org-placement.service > skips placement when user is already a member of the mapped organisation 0ms
+   × org-placement.service > places a user who belongs to another organisation on the same domain 1ms
+     → App logger not initialized
+   ✓ org-placement.service > rolls back org membership when team membership create fails in the transaction 1ms
+   ✓ org-placement.service > skips with no_placement_configured when no mapping matches and auto-create is disabled 0ms
+ ✓ tests/unit/integration-accept.service.test.ts (8 tests) 20ms
+ ✓ tests/unit/integration-request.service.test.ts (15 tests) 19ms
+(node:48484) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:48484) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:48484) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:48484) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:48484) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:48484) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:48484) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:48484) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:48484) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:48484) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:48484) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:48484) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/internal-admin-api-keys.route.test.ts (12 tests) 2689ms
+   ✓ /internal/admin api-key auth > allows an API key to GET /internal/admin/apps via X-API-Key  1939ms
+ ✓ tests/unit/role-grants.test.ts (15 tests) 15ms
+ ✓ tests/unit/production-startup.test.ts (8 tests) 842ms
+ ✓ tests/unit/signature-access.service.test.ts (5 tests) 37ms
+ ✓ tests/unit/org-me.route.test.ts (6 tests) 101ms
+ ✓ tests/unit/directory-writer-coverage.test.ts (1 test) 829ms
+   ✓ directory canonical writer coverage > keeps direct canonical writes behind the declared seam or a reviewed non-directory field boundary  817ms
+ ✓ tests/unit/oauth-login.signature-gate.route.test.ts (8 tests) 260ms
+(node:30160) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/unit/product-api-bulkhead.route.test.ts (8 tests) 430ms
+ ✓ tests/unit/profile-authority.route.test.ts (15 tests) 129ms
+ ✓ tests/unit/login-code.service.test.ts (15 tests) 19ms
+ ✓ tests/unit/billing-credit-funding-webhook-apply.service.test.ts (6 tests) 16ms
+ ✓ tests/unit/billing-credit-funding-request.service.test.ts (12 tests) 18ms
+ ✓ tests/unit/billing-credit-auto-top-up-recovery.service.test.ts (8 tests) 11ms
+ ✓ tests/unit/team-invite-revoke.service.test.ts (15 tests) 19ms
+ ✓ tests/unit/confidential-token-exchange.service.test.ts (9 tests) 100ms
+ ✓ tests/unit/confidential-chained-token-exchange.service.test.ts (7 tests) 36ms
+ ✓ tests/unit/signature-admin-lifecycle.service.test.ts (11 tests) 30ms
+ ✓ tests/unit/billing-invoice-calculation.service.test.ts (3 tests) 18ms
+(node:23536) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:23536) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:23536) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:23536) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:23536) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:23536) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:23536) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:23536) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:23536) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/auth-callback-team.route.test.ts (9 tests) 2609ms
+   ✓ GET /auth/callback/:provider team selection > keeps the chooser and PKCE context for multiple ACTIVE teams  2017ms
+ ✓ tests/unit/signature-signing.service.test.ts (18 tests) 96ms
+ ✓ tests/unit/confidential-delegation.service.test.ts (25 tests) 23ms
+(node:65680) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:65680) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:65680) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:65680) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:65680) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:65680) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:65680) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/auth-callback.route.test.ts (7 tests) 2401ms
+   ✓ GET /auth/callback/:provider > redirects with generic auth_failed when social registration is blocked by domain policy  1944ms
+ ✓ tests/unit/team-invite-token.service.test.ts (7 tests) 16ms
+ ✓ tests/unit/twofactor-reset.service.test.ts (7 tests) 55ms
+ ✓ tests/unit/team-invite.service.test.ts (7 tests) 12ms
+ ❯ tests/unit/avatar.service.test.ts (18 tests | 3 failed) 16ms
+   ✓ avatar resolution precedence > prefers the uploaded image over everything else 1ms
+   ✓ avatar resolution precedence > proxies the provider URL when there is no upload 1ms
+   ✓ avatar resolution precedence > falls back to the generated image when the provider fetch fails 0ms
+   ✓ avatar resolution precedence > generates without any network call when the provider URL is null (e.g. Apple) 0ms
+   ✓ avatar resolution precedence > applies the query override, then the config default, then the per-user pick 0ms
+   ✓ avatar resolution precedence > is a generic 404 for an unknown user 1ms
+   ✓ avatar resolution precedence > returns a stable ETag for identical bytes and a different one otherwise 0ms
+   × upload validation > stores the sniffed type, not the caller-supplied one 4ms
+     → Cannot read properties of undefined (reading 'findMany')
+   ✓ upload validation > rejects SVG, HTML and PDF uploads with a generic error 0ms
+   ✓ upload validation > rejects an empty upload 0ms
+   ✓ upload validation > rejects anything over the 1 MiB cap before sniffing 1ms
+   × upload validation > replaces an existing upload rather than adding a second row 1ms
+     → Cannot read properties of undefined (reading 'findMany')
+   ✓ upload validation > is a generic 404 for an unknown user 0ms
+   × delete and source reporting > deletes idempotently and falls back to the provider afterwards 1ms
+     → Cannot read properties of undefined (reading 'findMany')
+   ✓ delete and source reporting > reports the source per user without fetching bytes 0ms
+   ✓ domain user visibility > accepts a user with a role on the authenticated domain 0ms
+   ✓ domain user visibility > is a generic 404 for a cross-domain or unknown user 0ms
+   ✓ domain user visibility > resolves the email and owning domain for the admin routes, 404 otherwise 0ms
+ ✓ tests/unit/signature-evidence.service.test.ts (11 tests) 116ms
+(node:62372) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:62372) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:62372) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:62372) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:62372) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:62372) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/auth-token-confidential-exchange.route.test.ts (6 tests) 2501ms
+   ✓ POST /auth/token confidential grant > returns the RFC 8693 response without refresh or client credentials  1958ms
+ ✓ tests/unit/team-invite-link-redeem.service.test.ts (12 tests) 25ms
+ ✓ tests/unit/auth-create-team.route.test.ts (7 tests) 265ms
+ ❯ tests/unit/team-avatar.service.test.ts (16 tests | 3 failed) 14ms
+   ✓ team avatar resolution precedence > prefers the uploaded image over the team icon URL 1ms
+   ✓ team avatar resolution precedence > proxies the team icon URL when there is no upload 1ms
+   ✓ team avatar resolution precedence > falls back to the generated image when the icon URL fetch fails 0ms
+   ✓ team avatar resolution precedence > generates without any network call when the team has no icon URL 0ms
+   ✓ team avatar resolution precedence > seeds the generated image from the team id, and applies the style selection order 0ms
+   ✓ team avatar resolution precedence > honours ?size= and keeps the ETag stable for identical bytes 0ms
+   ✓ team avatar resolution precedence > is a generic 404 for an unknown team 1ms
+   × team avatar upload validation > stores the sniffed type, not the caller-supplied one 3ms
+     → tx.$queryRaw is not a function
+   ✓ team avatar upload validation > rejects SVG, HTML and PDF uploads with a generic error 0ms
+   ✓ team avatar upload validation > rejects an empty upload and anything over the 1 MiB cap 0ms
+   × team avatar upload validation > replaces an existing upload rather than adding a second row 0ms
+     → tx.$queryRaw is not a function
+   ✓ team avatar upload validation > is a generic 404 for an unknown team 0ms
+   × team avatar delete > deletes idempotently and falls back to the icon URL afterwards 0ms
+     → tx.$queryRaw is not a function
+   ✓ team domain visibility > accepts a team whose organisation belongs to the authenticated domain 0ms
+   ✓ team domain visibility > is a generic 404 for a cross-domain or unknown team id 0ms
+   ✓ team domain visibility > resolves the org and owning domain for the admin routes, 404 otherwise 0ms
+ ✓ tests/unit/billing-statement-v2.service.test.ts (3 tests) 110ms
+(node:33008) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:33008) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:33008) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:33008) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:33008) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/auth-verify-code.route.test.ts (5 tests) 2232ms
+   ✓ POST /auth/verify-code > returns the same generic error for a wrong/expired/unknown code  1917ms
+ ✓ tests/unit/team-directory.service.test.ts (10 tests) 23ms
+00:03:20 [vite] (ssr) warning: Duplicate key "prepaidReservations" in object literal
+57 |      unresolvedSetupCheckouts: [],
+58 |      autoTopUpChargedMinor: 0n,
+59 |      prepaidReservations: [],
+   |      ^
+60 |      activeReservedMicrocredits: 0n,
+61 |    };
+
+  Plugin: vite:esbuild
+  File: C:/Users/ondre/Projects/UnlikeOtherAuthenticator/.worktrees/sol-audit-fixes-api-20261014/API/tests/unit/billing-credits.service.test.ts
+00:03:20 [vite] (ssr) warning: Duplicate key "activeReservedMicrocredits" in object literal
+58 |      autoTopUpChargedMinor: 0n,
+59 |      prepaidReservations: [],
+60 |      activeReservedMicrocredits: 0n,
+   |      ^
+61 |    };
+62 |  }
+
+  Plugin: vite:esbuild
+  File: C:/Users/ondre/Projects/UnlikeOtherAuthenticator/.worktrees/sol-audit-fixes-api-20261014/API/tests/unit/billing-credits.service.test.ts
+ ✓ tests/unit/billing-credits.service.test.ts (3 tests) 22ms
+ ✓ tests/unit/team.service.members.audit.test.ts (10 tests) 25ms
+ ✓ tests/unit/signature-continuation.service.test.ts (7 tests) 21ms
+ ✓ tests/unit/billing-contract.service.test.ts (7 tests) 20ms
+ ❯ tests/unit/token.service.refresh-active-claim.test.ts (7 tests | 7 failed) 27ms
+   × exchangeRefreshTokenForTokens active-claim re-validation (unit) > keeps the active claim, including first-login placement, when the rotated token's team remains ACTIVE 7ms
+     → tx.orgMember.findMany is not a function
+   × exchangeRefreshTokenForTokens active-claim re-validation (unit) > rejects refresh when the selected team membership is no longer active 5ms
+     → expected TypeError: tx.orgMember.findMany is not a… to match object { statusCode: 401, …(1) }
+   × exchangeRefreshTokenForTokens active-claim re-validation (unit) > retains a valid stored active scope even when org_features display is disabled 1ms
+     → tx.orgMember.findMany is not a function
+   × exchangeRefreshTokenForTokens active-claim re-validation (unit) > retains a cross-domain scope only for the exact active product mapping 1ms
+     → tx.orgMember.findMany is not a function
+   × exchangeRefreshTokenForTokens active-claim re-validation (unit) > rejects a cross-domain refresh after its product key is revoked 1ms
+     → expected TypeError: tx.orgMember.findMany is not a… to match object { statusCode: 401, …(1) }
+   × exchangeRefreshTokenForTokens active-claim re-validation (unit) > rejects an unscoped refresh when automatic team selection requires an exact team 1ms
+     → expected TypeError: tx.orgMember.findMany is not a… to match object { statusCode: 401, …(1) }
+   × exchangeRefreshTokenForTokens active-claim re-validation (unit) > preserves a legacy unscoped refresh for an off-flow user who already has a team 1ms
+     → tx.orgMember.findMany is not a function
+(node:50376) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:50376) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:50376) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:50376) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:50376) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:50376) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:50376) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/billing.routes.test.ts (8 tests) 644ms
+ ✓ tests/unit/billing-stripe-invoice.service.test.ts (8 tests) 20ms
+ ✓ tests/unit/billing-stripe-subscription.service.test.ts (8 tests) 20ms
+(node:38448) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38448) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:38448) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:38448) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ❯ tests/unit/auth-select-team-invite-link.route.test.ts (4 tests | 1 failed) 2148ms
+   ✓ POST /auth/select-team invite-link redemption > redeems a valid token and finalizes scoped to its team  1899ms
+   × POST /auth/select-team invite-link redemption > enforces the selected org 2FA policy after redemption 99ms
+     → expected 500 to be 200 // Object.is equality
+   ✓ POST /auth/select-team invite-link redemption > rejects an invalid or unknown token with a generic error 79ms
+   ✓ POST /auth/select-team invite-link redemption > rejects a request combining a token with teamId 59ms
+ ❯ tests/unit/access-request.service.test.ts (4 tests | 2 failed) 13ms
+   × access request services > auto-grants users whose verified email domain matches the configured allowlist 4ms
+     → tx.$queryRaw is not a function
+   ✓ access request services > creates or refreshes a pending request and emails configured reviewers when auto-grant does not apply 2ms
+   × access request services > approves a pending request and adds the requester to the configured team 1ms
+     → tx.$queryRaw is not a function
+   ✓ access request services > rejects a pending request without adding memberships 1ms
+ ✓ tests/unit/team-hostname.service.test.ts (21 tests) 15ms
+(node:58664) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:58664) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:58664) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:58664) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:58664) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:58664) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:58664) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:58664) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:58664) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:58664) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/billing-credit-funding-actions.routes.test.ts (10 tests) 737ms
+ ✓ src/middleware/__tests__/error-handler.test.ts (11 tests) 88ms
+ ✓ tests/unit/team.service.test.ts (8 tests) 173ms
+ ✓ tests/unit/billing-credit-region-offers.projection.test.ts (7 tests) 44ms
+(node:30948) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:30948) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:30948) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:30948) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:30948) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/auth-login-team-chooser.route.test.ts (5 tests) 2151ms
+   ✓ POST /auth/login — team chooser wiring (Phase 3b Task 7) > team_selection "off" (default): behaves exactly like before — no login_token, direct finalize  1842ms
+ ✓ tests/unit/auth-reset-password.service.test.ts (6 tests) 10ms
+ ✓ tests/unit/billing-cancellation-preview.service.test.ts (4 tests) 17ms
+ ✓ tests/unit/billing-credit-rating.service.test.ts (12 tests) 16ms
+ ✓ tests/unit/billing-entitlement.service.test.ts (7 tests) 21ms
+ ✓ tests/unit/auto-onboarding.service.test.ts (16 tests) 34ms
+ ✓ tests/unit/team-invite-link.service.test.ts (6 tests) 145ms
+ ✓ tests/unit/billing-sms-refund-recovery.service.test.ts (5 tests) 26ms
+ ✓ tests/unit/team-invite-state-machine.test.ts (19 tests) 16ms
+ ✓ tests/unit/billing-contract-invoice-migration.test.ts (8 tests) 21ms
+ ✓ tests/unit/billing-credit-auto-top-up-runtime.service.test.ts (7 tests) 13ms
+ ✓ tests/unit/billing-cancellation-confirm.service.test.ts (2 tests) 16ms
+ ✓ tests/unit/billing-credit-payment-adjustment-webhook.service.test.ts (8 tests) 17ms
+ ✓ tests/unit/billing-funding-migration.test.ts (12 tests) 23ms
+ ❯ tests/unit/billing-sms-policies.routes.test.ts (6 tests | 5 failed) 172ms
+   ✓ guards every private evidence and recovery route against absent/ordinary/product/wrong-domain credentials 154ms
+   × requires explicit existing refund verification with unique refund IDs and propagates verified operator only 6ms
+     → expected 500 to be 400 // Object.is equality
+   × requires explicit acceptance of both route dimensions and rejects caller-supplied acceptance provenance 2ms
+     → expected 500 to be 400 // Object.is equality
+   × uses the fixed refresh service with verified actor and refuses current revoked role/epoch 2ms
+     → expected 500 to be 200 // Object.is equality
+   × accepts Refresh and accept only with the explicit policy statement and never a caller-chosen reason 2ms
+     → expected 500 to be 400 // Object.is equality
+   × adds a country only with every attestation and never a caller-chosen account or reason 2ms
+     → expected 500 to be 400 // Object.is equality
+ ✓ tests/unit/auth-create-organisation.route.test.ts (4 tests) 264ms
+(node:61208) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:61208) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/user-access-token-rs256.test.ts (12 tests) 1970ms
+   ✓ user access token — key publication > serves the user key at /oauth/jwks.json even with no resource-token key  1814ms
+ ✓ tests/unit/billing-app-key.service.test.ts (8 tests) 73ms
+ ✓ tests/unit/billing-actor.service.test.ts (14 tests) 56ms
+ ❯ tests/unit/team-invite.acceptance.test.ts (6 tests | 4 failed) 19ms
+   × team invite acceptance > accepts a pending invite by creating memberships and marking the invite accepted 4ms
+     → tx.orgMember.findMany is not a function
+   × team invite acceptance > never backfills over a name the user already has 1ms
+     → tx.orgMember.findMany is not a function
+   × team invite acceptance > accepts an invite into a second organisation on the same domain 2ms
+     → promise rejected "TypeError: tx.orgMember.findMany is not a…" instead of resolving
+   × team invite acceptance > accepting an invite never overwrites an existing team membership role 0ms
+     → promise rejected "TypeError: tx.orgMember.findMany is not a…" instead of resolving
+   ✓ team invite acceptance > rejects accepting an expired invite with a generic error 1ms
+   ✓ team invite acceptance > rejects accepting a PENDING (unapproved member-invite) invite with a generic error 0ms
+ ✓ tests/unit/access-token.service.test.ts (10 tests) 26ms
+ ✓ tests/unit/billing-stripe-scheduler.service.test.ts (6 tests) 12ms
+(node:42604) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:42604) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:42604) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:42604) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:42604) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/auth-session-choices.route.test.ts (5 tests) 2150ms
+   ✓ POST /auth/session-choices > rejects an invalid login_token with a generic error (no enumeration)  1840ms
+ ✓ src/middleware/__tests__/admin-superuser.test.ts (10 tests) 23ms
+(node:57032) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:57032) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:57032) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:57032) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:57032) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:57032) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:57032) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:57032) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:57032) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:57032) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:57032) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:57032) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:57032) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:57032) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:57032) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:57032) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:57032) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:57032) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:57032) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:57032) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:57032) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/auth-token-team-switch.route.test.ts (21 tests) 3084ms
+   ✓ POST /auth/token team-switch grant > dispatches the exact target and returns the standard pair without firstLogin  1812ms
+ ✓ tests/unit/billing-invoice-view.service.test.ts (4 tests) 925ms
+   ✓ customer-safe contract invoice view > preserves Unicode metadata and wraps long invoice content across pages  740ms
+ ✓ tests/unit/team-invite-resend.service.test.ts (2 tests) 10ms
+(node:46916) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:46916) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:46916) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:46916) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:46916) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:46916) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/signature-session.route.test.ts (6 tests) 2380ms
+   ✓ signing capability session routes > returns only current missing versions and no-store continuation state  1992ms
+ ❯ tests/unit/auth-rate-limit-global.test.ts (4 tests | 3 failed) 259ms
+   ✓ auth limiters global ceiling > POST /auth/reset-password/request consumes the fixed global bucket even when IP and email keys are fresh 241ms
+   × auth limiters global ceiling > table covers every limiter exported from rate-limit-keys.ts 4ms
+     → expected [ 'authStartRateLimiter', …(20) ] to deeply equal [ 'authStartRateLimiter', …(22) ]
+   × auth limiters global ceiling > every limiter with a global bucket consumes its global key 1ms
+     → expected [ 'authStartRateLimiter', …(20) ] to deeply equal [ 'authStartRateLimiter', …(22) ]
+   × auth limiters global ceiling > limiters without a global bucket do not consume one 1ms
+     → expected [ 'authStartRateLimiter', …(20) ] to deeply equal [ 'authStartRateLimiter', …(22) ]
+ ✓ tests/unit/authorize-state.test.ts (13 tests) 18ms
+ ✓ tests/unit/billing-credit-auto-top-up-event-recovery.service.test.ts (8 tests) 15ms
+ ✓ tests/unit/api-schema-invite-contract.test.ts (16 tests) 14ms
+ ✓ tests/unit/team.service.capabilities.test.ts (11 tests) 107ms
+ ✓ tests/unit/billing-recurring-addons.service.test.ts (7 tests) 24ms
+ ✓ src/services/__tests__/app-startup.service.test.ts (6 tests) 18ms
+ ✓ tests/unit/team.service.members.test.ts (5 tests) 68ms
+ ❯ tests/unit/token.service.admin.test.ts (2 tests | 1 failed) 23ms
+   ✓ admin-domain token issuance > signs access tokens for the admin auth domain with the admin-only secret 7ms
+   × admin-domain token issuance > marks a platform superuser (SUPERUSER on ADMIN_AUTH_DOMAIN) as superuser on a client-domain token 4ms
+     → SECRET_CLIENT_IDENTIFIER
+ ✓ tests/unit/team-invitation-management.route.test.ts (36 tests) 205ms
+(node:67288) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:67288) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:67288) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:67288) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:67288) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:67288) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:67288) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/integrations-claim.route.test.ts (7 tests) 2588ms
+   ✓ /integrations/claim/:token > GET renders the confirm page for a valid token  2118ms
+ ✓ tests/unit/confidential-chained-token-verification.service.test.ts (5 tests) 42ms
+ ✓ tests/unit/billing-sms-policy-renewal.service.test.ts (5 tests) 13ms
+ ✓ tests/unit/signature-admin-operations.service.test.ts (6 tests) 17ms
+ ✓ tests/unit/team-invite-get.service.test.ts (8 tests) 12ms
+(node:58396) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:58396) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:58396) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:58396) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/internal-admin-domain-signature-operations.route.test.ts (4 tests) 2235ms
+   ✓ internal Admin signature records > requires a platform superuser for record search  1958ms
+ ✓ tests/unit/subject-assertion-jwks-outage.test.ts (13 tests) 130ms
+ ✓ src/middleware/__tests__/config-verifier-redaction.test.ts (4 tests) 8ms
+(node:15232) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:15232) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:15232) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/internal-admin-token.route.test.ts (3 tests) 2224ms
+   ✓ POST /internal/admin/token > exchanges an admin-domain authorization code without domain-hash auth or refresh-token output  2033ms
+ ✓ tests/unit/domain-secret.service.test.ts (6 tests) 23ms
+(node:58568) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:58568) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:58568) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ❯ tests/unit/csp-script-nonce.test.ts (5 tests | 3 failed) 2096ms
+   ✓ script-src CSP nonce > serves non-auth responses with a script nonce and an unsafe-inline, nonce-free style-src  1884ms
+   ✓ script-src CSP nonce > serves the inline-style 2FA reset page under a style-src that permits its inline styles 101ms
+   × script-src CSP nonce > titles the auth window with the product, escaped and with no replacement patterns 9ms
+     → ENOENT: no such file or directory, open 'C:\Users\ondre\Projects\UnlikeOtherAuthenticator\.worktrees\sol-audit-fixes-api-20261014\Auth\dist\index.html'
+   × script-src CSP nonce > emits the bootstrap <script> with the per-request nonce 1ms
+     → ENOENT: no such file or directory, open 'C:\Users\ondre\Projects\UnlikeOtherAuthenticator\.worktrees\sol-audit-fixes-api-20261014\Auth\dist\index.html'
+   × script-src CSP nonce > nonce in the header matches the nonce on the bootstrap script tag, and no unsafe-inline 91ms
+     → expected 500 to be 200 // Object.is equality
+ ✓ src/plugins/__tests__/tenant-context.plugin.test.ts (10 tests) 17ms
+ ✓ tests/unit/team.service.self-join.test.ts (7 tests) 141ms
+ ✓ tests/unit/avatar-provider-teardown.test.ts (5 tests) 800ms
+ ✓ src/services/__tests__/totp-qr.service.test.ts (17 tests) 121ms
+ ✓ src/services/__tests__/feature-flag-resolution.service.test.ts (12 tests) 17ms
+ ✓ tests/unit/billing-sms-policy-admin.service.test.ts (7 tests) 24ms
+ ✓ tests/unit/organisation.service.ownership.test.ts (8 tests) 220ms
+(node:32396) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:32396) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:32396) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:32396) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/signature-access.routes.test.ts (4 tests) 2257ms
+   ✓ signer, domain, and public signature routes > restricts signer status to the access-token subject and domain  1968ms
+ ✓ tests/unit/billing-credit-funding-webhook.service.test.ts (13 tests) 19ms
+ ✓ tests/unit/billing-snapshot.service.test.ts (4 tests) 44ms
+ ✓ tests/unit/billing-tariff-history.service.test.ts (6 tests) 17ms
+ ✓ tests/unit/billing-customer-invoice-prepaid.service.test.ts (4 tests) 14ms
+ ✓ tests/unit/billing-stripe-webhook.service.test.ts (13 tests) 29ms
+ ✓ tests/unit/billing-migration.test.ts (7 tests) 17ms
+ ❯ tests/unit/organisation.service.icon-url.test.ts (4 tests | 4 failed) 23ms
+   × Organisation service: updateOrganisation icon_url > accepts an https icon_url and echoes it on the updated record 6ms
+     → prisma.$queryRaw is not a function
+   × Organisation service: updateOrganisation icon_url > clears icon_url when explicitly set to null 1ms
+     → prisma.$queryRaw is not a function
+   × Organisation service: updateOrganisation icon_url > rejects a non-https icon_url with a generic error 5ms
+     → expected TypeError: prisma.$queryRaw is not a func… to match object { Object (code, statusCode) }
+   × Organisation service: updateOrganisation icon_url > rejects an icon_url over 2048 characters with a generic error 1ms
+     → expected TypeError: prisma.$queryRaw is not a func… to match object { Object (code, statusCode) }
+(node:48308) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:48308) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:48308) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:48308) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/internal-admin-confidential-delegations.route.test.ts (4 tests) 2264ms
+   ✓ internal confidential delegation admin routes > requires the superuser guard on the collection  1984ms
+ ✓ tests/unit/billing-service-access.service.test.ts (4 tests) 18ms
+ ✓ tests/unit/billing-credit-purchase-rate.service.test.ts (16 tests) 16ms
+(node:67960) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:67960) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:67960) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/billing-customer-invoices.routes.test.ts (3 tests) 369ms
+ ✓ tests/unit/profile-authority.service.test.ts (16 tests) 32ms
+ ✓ src/db/__tests__/pool-checkout-guard.test.ts (13 tests) 22ms
+(node:4100) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4100) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:4100) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:4100) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/billing-cycle.routes.test.ts (4 tests) 426ms
+ ✓ tests/unit/team-invite-approval-queue.service.test.ts (3 tests) 9ms
+(node:66260) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:66260) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:66260) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:66260) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/billing-stripe-subscription.routes.test.ts (4 tests) 405ms
+ ✓ tests/unit/organisation.service.membership.lifecycle.test.ts (5 tests) 20ms
+ ✓ src/services/oauth/__tests__/access-token.service.test.ts (6 tests) 49ms
+ ✓ tests/unit/website-context-rollout.test.ts (12 tests) 27ms
+(node:58376) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:58376) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/email-registration-link-twofactor.route.test.ts (2 tests) 1982ms
+   ✓ GET /auth/email/link exact-one team 2FA > redirects with a challenge that carries the exact team  1873ms
+ ✓ tests/unit/billing-stripe-catalog.service.test.ts (3 tests) 17ms
+ ✓ tests/unit/billing-recurring-addon-checkout-locale.test.ts (1 test) 15ms
+(node:56372) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:56372) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:56372) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:56372) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:56372) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:56372) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:56372) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/auth-start.route.test.ts (7 tests) 2378ms
+   ✓ POST /auth/start > returns the identical generic body for an existing email  1944ms
+(node:22620) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:22620) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:22620) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:22620) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/internal-admin-domain-jwks.route.test.ts (4 tests) 2195ms
+   ✓ /internal/admin/domains/:domain/jwks > requires a superuser access token  1906ms
+ ✓ tests/unit/billing-monthly-subscription-quote.service.test.ts (4 tests) 15ms
+ ✓ tests/unit/billing-credit-region-top-up.service.test.ts (3 tests) 10ms
+ ✓ tests/unit/translation.service.test.ts (5 tests) 17ms
+ ✓ tests/unit/access-request-flow.signature-gate.test.ts (3 tests) 66ms
+ ❯ tests/unit/org-placement.auto-create.test.ts (3 tests | 2 failed) 19ms
+   × personal organisation placement > auto-creates a personal org when no mapping matches and auto_create_personal_org_on_first_login is true 6ms
+     → App logger not initialized
+   ✓ personal organisation placement > skips auto-create when pending_invites_block_auto_create is true and a pending invite exists 1ms
+   × personal organisation placement > auto-creates even with a pending invite when pending_invites_block_auto_create is false 1ms
+     → App logger not initialized
+ ✓ tests/unit/signature-policy.service.test.ts (7 tests) 16ms
+ ✓ tests/unit/login-session.service.test.ts (7 tests) 18ms
+ ✓ tests/unit/user-team-requirement.service.test.ts (2 tests) 16ms
+ ✓ tests/unit/billing-org-responsibility.service.test.ts (3 tests) 15ms
+ ❯ tests/unit/token.service.signature-refresh.test.ts (4 tests | 4 failed) 26ms
+   × exchangeRefreshTokenForTokens signature policy gate (unit) > does not create, consume, or rotate a valid token when a required signature is missing 10ms
+     → expected TypeError: Cannot read properties of unde… to match object { statusCode: 401, …(1) }
+   × exchangeRefreshTokenForTokens signature policy gate (unit) > treats a revoked signature as missing without consuming the refresh token 2ms
+     → expected [Function] to throw error including 'INVALID_REFRESH_TOKEN' but got 'Cannot read properties of undefined (…'
+   × exchangeRefreshTokenForTokens signature policy gate (unit) > locks policy state and rotates normally when the current signature is valid 1ms
+     → Cannot read properties of undefined (reading 'findMany')
+   × exchangeRefreshTokenForTokens signature policy gate (unit) > preserves legacy refresh behavior when the domain service is disabled 1ms
+     → Cannot read properties of undefined (reading 'findMany')
+ ✓ tests/unit/billing-tariff.service.test.ts (7 tests) 15ms
+ ✓ tests/unit/login-domain-policy.service.test.ts (17 tests) 14ms
+ ✓ src/services/__tests__/tenant-effect-authority.service.test.ts (10 tests) 21ms
+ ✓ tests/unit/domain-role.service.test.ts (6 tests | 3 skipped) 14ms
+ ✓ src/middleware/__tests__/org-backend-only-guard.test.ts (19 tests) 9ms
+ ✓ src/middleware/__tests__/org-role-guard-subject-assertion.test.ts (6 tests) 16ms
+ ✓ tests/unit/team-invite-link-admission.test.ts (12 tests) 23ms
+ ✓ tests/unit/billing-rating.service.test.ts (5 tests) 19ms
+ ✓ tests/unit/billing-invoice-lifecycle.service.test.ts (5 tests) 15ms
+ ✓ tests/unit/team-invite-page.service.test.ts (17 tests) 14ms
+ ✓ tests/unit/directory-authority.route.test.ts (10 tests) 100ms
+(node:56004) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:56004) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:56004) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:56004) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:56004) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:56004) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/billing-credit-purchase-status.routes.test.ts (6 tests) 556ms
+ ✓ tests/unit/billing-credit-settlement-scheduler.service.test.ts (2 tests) 16ms
+ ✓ tests/unit/social-state.service.test.ts (6 tests) 18ms
+ ❯ tests/unit/billing-ledger-runtime-keys.route.test.ts (4 tests | 3 failed) 114ms
+   ✓ all three operations refuse absent, ordinary, wrong-domain and product credentials 96ms
+   × checks the live admin role and credential epoch before issuing or listing 7ms
+     → expected 500 to be 403 // Object.is equality
+   × returns only nonsecret metadata with no-store; create secret appears once with verified actor 2ms
+     → expected 500 to be 200 // Object.is equality
+   × refuses caller-provided actor/unknown fields before service writes 4ms
+     → expected 500 to be 400 // Object.is equality
+ ✓ tests/unit/billing-stripe-catalog-provisioning-remote.service.test.ts (6 tests) 17ms
+ ✓ tests/unit/billing-customer-invoice-manual.service.test.ts (5 tests) 15ms
+ ✓ tests/unit/login-log.service.test.ts (4 tests) 15ms
+ ✓ tests/unit/billing-seat-month-quote.service.test.ts (6 tests) 14ms
+(node:16356) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:16356) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:16356) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/billing-credit-funding-request.routes.test.ts (3 tests) 368ms
+ ✓ tests/unit/team.service.invited.test.ts (2 tests) 17ms
+ ✓ tests/unit/org-organisation-members.route.test.ts (1 test) 162ms
+(node:61332) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:61332) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:61332) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/email-reset-password.route.test.ts (3 tests) 2130ms
+   ✓ GET /auth/email/reset-password > renders the login screen instead of an auth error when a reset link is already used  1933ms
+ ✓ tests/unit/config.service.test.ts (12 tests) 12ms
+ ✓ tests/unit/config.role-grants.test.ts (14 tests) 12ms
+ ✓ tests/unit/org-caller-resolution.test.ts (12 tests) 13ms
+ ✓ tests/unit/billing-commercial-adjustment.service.test.ts (4 tests) 16ms
+ ✓ tests/unit/config-fetch.service.test.ts (21 tests) 18ms
+ ✓ tests/unit/directory-owner-grants.test.ts (13 tests) 29ms
+ ✓ tests/unit/signature-migration.test.ts (8 tests) 19ms
+(node:28712) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:28712) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/team-invite-link-landing.route.test.ts (2 tests) 2220ms
+   ✓ GET /auth/team-invite-link/:token > renders the generic invalid-link page for a bad token (no oracle)  2106ms
+(node:56396) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:56396) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/oauth-public-profile-gate.route.test.ts (2 tests) 332ms
+ ✓ tests/unit/twofactor-challenge.service.test.ts (5 tests) 17ms
+ ✓ src/middleware/__tests__/product-api-bulkhead.test.ts (37 tests) 88ms
+ ✓ tests/unit/jwks-fetch.service.test.ts (10 tests) 16ms
+ ✓ tests/unit/directory-credential-authority.test.ts (6 tests) 18ms
+ ✓ tests/unit/auth-login.service.test.ts (6 tests) 15ms
+ ✓ tests/unit/access-status-gate.route.test.ts (6 tests) 105ms
+ ✓ tests/unit/avatar-provider.service.test.ts (10 tests) 13ms
+ ✓ tests/unit/billing-contract-funding-evidence.service.test.ts (3 tests) 17ms
+ ✓ tests/unit/billing-recurring-addon-cancellation-copy.test.ts (2 tests) 13ms
+ ✓ tests/unit/admin-superusers.service.test.ts (5 tests) 69ms
+ ✓ tests/unit/confidential-subject-token-verification.service.test.ts (5 tests) 28ms
+ ✓ tests/unit/confidential-assertion-use.service.test.ts (4 tests) 15ms
+ ✓ tests/unit/team.service.roster.test.ts (3 tests) 18ms
+ ✓ tests/unit/directory-live-standing.test.ts (12 tests) 17ms
+ ✓ tests/unit/internal-admin.activity-stats.test.ts (16 tests) 17ms
+ ✓ tests/unit/organisation.service.membership.list-actor.test.ts (4 tests) 18ms
+(node:65592) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:65592) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:65592) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/internal-admin-organisations.route.test.ts (3 tests) 1977ms
+   ✓ DELETE /internal/admin/organisations/:orgId > requires an admin superuser  1790ms
+ ✓ tests/unit/org-audit-log.service.test.ts (5 tests) 13ms
+ ✓ tests/unit/org-context.service.test.ts (4 tests) 14ms
+ ✓ tests/unit/internal-admin-users.service.test.ts (3 tests) 99ms
+ ✓ tests/unit/handshake-error-log.service.test.ts (2 tests) 14ms
+ ✓ tests/unit/organisation.service.owner-protection.test.ts (7 tests) 24ms
+ ✓ tests/unit/github.service.test.ts (3 tests) 15ms
+ ✓ tests/unit/native-account-dependency-errors.test.ts (5 tests) 65ms
+ ✓ tests/unit/directory-user-mutation.test.ts (4 tests) 14ms
+ ✓ tests/unit/directory-lifecycle-mutation.test.ts (4 tests) 14ms
+(node:46900) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:46900) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:46900) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/internal-admin-superusers.route.test.ts (3 tests) 1990ms
+   ✓ /internal/admin/superusers > requires admin superuser access  1800ms
+ ✓ tests/unit/team.service.icon-url.test.ts (3 tests) 95ms
+ ✓ tests/unit/team-invite.roster.test.ts (3 tests) 13ms
+ ✓ tests/unit/team-creation-membership.test.ts (5 tests) 67ms
+ ✓ src/middleware/__tests__/org-role-guard-backend-origin.test.ts (4 tests) 9ms
+ ✓ tests/unit/totp.service.test.ts (7 tests) 19ms
+ ✓ tests/unit/email-invite-continuation.service.test.ts (7 tests) 7ms
+ ✓ tests/unit/twofactor-enroll.service.test.ts (4 tests) 16ms
+ ✓ tests/unit/google.service.test.ts (4 tests) 15ms
+ ✓ tests/unit/website-client-context.service.test.ts (4 tests) 18ms
+ ✓ tests/unit/retention-pruning.service.test.ts (1 test) 12ms
+ ✓ tests/unit/product-team-policy.service.test.ts (6 tests) 13ms
+ ✓ tests/unit/refresh-token-grant-binding.test.ts (3 tests) 15ms
+ ✓ tests/unit/refresh-token-rotation-policy.service.test.ts (4 tests) 16ms
+ ✓ tests/unit/avatar-svg.test.ts (12 tests) 34ms
+ ✓ tests/unit/avatar-url.test.ts (8 tests) 14ms
+ ✓ tests/unit/avatar-public-team-rate-limit.test.ts (1 test) 302ms
+(node:64588) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:64588) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:64588) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:64588) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:64588) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/billing-organisation-region.routes.test.ts (2 tests) 455ms
+ ✓ tests/unit/[token-like test value redacted].service.test.ts (10 tests) 27ms
+ ✓ tests/unit/admin-api-key.service.test.ts (7 tests) 22ms
+ ✓ tests/unit/ban-policy.service.test.ts (10 tests) 17ms
+ ✓ tests/unit/billing-credit-funding-context.service.test.ts (3 tests) 15ms
+ ✓ tests/unit/billing-sms-country-policy.service.test.ts (3 tests) 16ms
+ ✓ tests/unit/billing-credit-payment-stripe-invoice.service.test.ts (5 tests) 15ms
+ ✓ tests/unit/billing-credit-lot-value.service.test.ts (7 tests) 8ms
+ ✓ tests/unit/billing-credit-checkout-recovery.service.test.ts (3 tests) 14ms
+(node:61052) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/unit/billing-actor-audience.test.ts (7 tests) 183ms
+ ✓ tests/unit/billing-organisation-region.service.test.ts (4 tests) 9ms
+(node:42588) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/unit/billing-admin-tariff.routes.test.ts (1 test) 198ms
+ ✓ tests/unit/billing-stripe-invoice-close-quote.service.test.ts (4 tests) 15ms
+(node:61240) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/unit/auth-register.route.test.ts (1 test) 2024ms
+   ✓ POST /auth/register > returns EMAIL_ALREADY_REGISTERED when signed config opts into inline existing-user handling  2013ms
+ ✓ tests/unit/billing-env-validation.test.ts (1 test) 17ms
+ ✓ tests/unit/billing-sms-eur-number-subscription.test.ts (2 tests) 14ms
+ ✓ tests/unit/api-schema-roster-contract.test.ts (4 tests) 13ms
+ ✓ tests/unit/billing-cycle-usage-projection.service.test.ts (2 tests) 14ms
+(node:18716) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:18716) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/app-flags.route.test.ts (2 tests) 281ms
+ ✓ tests/unit/billing-serializable-transaction.service.test.ts (5 tests) 13ms
+ ✓ tests/unit/billing-cycle-breakdown.service.test.ts (4 tests) 1772ms
+   ✓ frozen customer billing breakdown > neutralizes control-prefixed spreadsheet formulas and fits long labels across pages  1410ms
+ ✓ tests/unit/signature-storage.service.test.ts (4 tests) 26ms
+ ✓ tests/unit/billing-credit-auto-top-up-setup-race.service.test.ts (1 test) 9ms
+(node:53972) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/unit/avatar-auth-before-config.routes.test.ts (7 tests) 187ms
+ ✓ tests/unit/billing-recurring-addon-catalog.service.test.ts (2 tests) 13ms
+ ✓ tests/unit/billing-invoice-action-readiness.service.test.ts (3 tests) 12ms
+ ✓ tests/unit/billing-copy-catalog.test.ts (5 tests) 22ms
+ ✓ tests/unit/billing-sms-fx-refresh-accept.service.test.ts (3 tests) 15ms
+ ✓ tests/unit/auth-register.service.timing.test.ts (1 test) 6ms
+ ✓ tests/unit/billing-sms-recovery-admin.service.test.ts (3 tests) 15ms
+ ✓ tests/unit/apple.service.test.ts (2 tests) 47ms
+ ✓ tests/unit/billing-ledger-runtime-key.service.test.ts (6 tests) 15ms
+ ✓ tests/unit/refresh-token-global-revocation.test.ts (2 tests) 15ms
+ ✓ tests/unit/billing-customer-action-intent.service.test.ts (3 tests) 18ms
+(node:51608) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:51608) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:51608) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/billing-stripe.routes.test.ts (3 tests) 308ms
+ ✓ tests/unit/twofactor-login.service.test.ts (4 tests) 13ms
+(node:33544) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:33544) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:33544) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:33544) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:33544) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:33544) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/internal-admin-team-members.route.test.ts (3 tests) 2430ms
+   ✓ POST /internal/admin/users/:userId/teams > requires an authenticated platform superuser  2150ms
+ ✓ src/middleware/__tests__/config-jwt-header-verifier.test.ts (5 tests) 18ms
+ ✓ tests/unit/auth-identity.service.test.ts (6 tests) 13ms
+ ✓ tests/unit/billing-stripe-tariff-guard.service.test.ts (4 tests) 14ms
+ ✓ tests/unit/session-broker-route.test.ts (2 tests) 198ms
+ ✓ tests/unit/confidential-delegation-migration.test.ts (4 tests) 14ms
+ ✓ tests/unit/oauth-code.scope.test.ts (2 tests) 17ms
+ ❯ tests/unit/twofactor-disable.service.test.ts (1 test | 1 failed) 15ms
+   × disableTwoFactorForUser > holds the user lock through 2FA mutation, refresh revocation, and tokenVersion bump 5ms
+     → Cannot read properties of undefined (reading 'findMany')
+ ✓ src/services/__tests__/email-providers-log.test.ts (4 tests) 8ms
+ ✓ tests/unit/billing-cycle-quote-projection.service.test.ts (1 test) 12ms
+ ✓ src/services/oauth/__tests__/resource-validation.service.test.ts (5 tests) 14ms
+ ✓ tests/unit/verification-token-epoch.service.test.ts (5 tests) 13ms
+ ✓ tests/unit/auth-registration-email-link.service.test.ts (3 tests) 15ms
+ ✓ tests/unit/billing-stripe-catalog-provisioning.service.test.ts (2 tests) 14ms
+ ✓ tests/unit/billing-credit-payer-period.service.test.ts (3 tests) 13ms
+ ✓ tests/unit/linkedin.service.test.ts (3 tests) 15ms
+ ✓ tests/unit/billing-invoice-storage.service.test.ts (3 tests) 22ms
+ ✓ tests/unit/facebook.service.test.ts (3 tests) 16ms
+ ✓ src/services/__tests__/twofactor-policy.service.test.ts (5 tests) 13ms
+ ✓ src/middleware/__tests__/domain-hash-auth.test.ts (3 tests) 13ms
+ ✓ src/utils/__tests__/http-url.test.ts (8 tests) 12ms
+ ✓ tests/unit/team-invite-copy.test.ts (11 tests) 12ms
+ ✓ tests/unit/billing-paid-usage-exceptions.routes.test.ts (1 test) 74ms
+ ✓ tests/unit/billing-invoice-issue-readiness-migration.test.ts (3 tests) 14ms
+ ✓ tests/unit/billing-ledger-team-discovery.service.test.ts (2 tests) 15ms
+ ✓ tests/unit/auth-entrypoint-team-hint.test.ts (7 tests) 6ms
+ ✓ tests/unit/member-team-access.service.test.ts (2 tests) 19ms
+ ✓ tests/unit/billing-customer-display.service.test.ts (3 tests) 24ms
+ ✓ tests/unit/domain-debug.route.test.ts (2 tests) 81ms
+ ✓ tests/unit/billing-credit-account.service.test.ts (5 tests) 15ms
+ ✓ tests/unit/audit-log.service.test.ts (5 tests) 13ms
+ ✓ tests/unit/claim-secret-crypto.test.ts (5 tests) 14ms
+ ✓ tests/unit/client-service.test.ts (23 tests) 9ms
+ ✓ tests/unit/image-sniff.test.ts (6 tests) 13ms
+ ✓ tests/unit/billing-ledger-http.service.test.ts (4 tests) 17ms
+ ✓ src/db/__tests__/tenant-context.test.ts (3 tests) 13ms
+ ✓ tests/unit/billing-invoice-line-credit-allocation.service.test.ts (3 tests) 12ms
+ ✓ tests/unit/email-theme.service.test.ts (2 tests) 14ms
+ ❯ tests/unit/social-login-lock-order.test.ts (1 test | 1 failed) 17ms
+   × social login credential lock order > takes the callback user lock before updating an existing profile and returns its epoch 7ms
+     → promise rejected "TypeError: Cannot read properties of unde…" instead of resolving
+ ✓ src/services/oauth/__tests__/config.service.test.ts (3 tests) 9ms
+ ❯ tests/unit/db-provisioning-hook-timeouts.test.ts (1 test | 1 failed) 187ms
+   × database-provisioning hooks > take their timeout from vitest.config.ts, never their own argument 176ms
+     → integration\directory-mutation-ordering.test.ts:17 — beforeAll sets 120_000ms: expected [ Array(1) ] to deeply equal []
+ ✓ tests/unit/billing-sms-liability-admin.service.test.ts (2 tests) 13ms
+ ✓ src/services/__tests__/authorization-twofactor-proof.service.test.ts (4 tests) 14ms
+ ✓ tests/unit/billing-stripe-payment-line-payer.test.ts (4 tests) 13ms
+ ✓ tests/unit/first-login-auto-selection.service.test.ts (3 tests) 13ms
+ ✓ tests/unit/billing-admin-effect-authority.service.test.ts (3 tests) 17ms
+ ✓ src/services/__tests__/twofactor-setup-token.service.test.ts (2 tests) 15ms
+ ✓ tests/unit/billing-credit-settlement-migration.test.ts (3 tests) 14ms
+ ✓ tests/unit/client-jwk.service.test.ts (8 tests) 15ms
+ ✓ src/services/oauth/__tests__/kelpie-connect-policy.test.ts (3 tests) 14ms
+ ✓ tests/unit/billing-contract-guard.service.test.ts (3 tests) 14ms
+ ✓ tests/unit/billing-stripe-client.service.test.ts (2 tests) 12ms
+ ✓ tests/unit/billing-customer-action-intent-migration.test.ts (2 tests) 12ms
+ ✓ tests/unit/internal-admin.invitation-mapping.test.ts (1 test) 12ms
+ ✓ tests/unit/roster-pagination.service.test.ts (3 tests) 13ms
+ ✓ tests/unit/billing-credit-funding-binding.service.test.ts (2 tests) 14ms
+ ✓ tests/unit/deploy-main-workflow.test.ts (3 tests) 14ms
+ ✓ tests/unit/organisation.service.membership.active-only.test.ts (2 tests) 14ms
+ ✓ tests/unit/signature-malware.service.test.ts (3 tests) 22ms
+ ✓ tests/unit/login-session-use.service.test.ts (3 tests) 14ms
+(node:40028) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:40028) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/security-headers.test.ts (2 tests) 276ms
+ ✓ tests/unit/password.service.test.ts (7 tests) 180ms
+ ✓ tests/unit/native-login-failure-limit.test.ts (3 tests) 15ms
+ ✓ tests/unit/admin-access-revocation.service.test.ts (2 tests) 14ms
+ ✓ tests/unit/billing-credit-display.service.test.ts (10 tests) 21ms
+ ✓ tests/unit/billing-credit-payment-invoice-pdf.service.test.ts (1 test) 314ms
+   ✓ prepaid legal PDF pagination > continues unusually long legal parties before the charge table  302ms
+ ✓ tests/unit/ssrf-destination-resolution.test.ts (11 tests) 8ms
+ ✓ tests/unit/billing-stripe-credit-allocation-order.service.test.ts (2 tests) 11ms
+ ✓ tests/unit/org-domain-context.test.ts (4 tests) 12ms
+ ✓ tests/unit/billing-sms-route-bound-rule.test.ts (2 tests) 13ms
+ ✓ tests/unit/billing-stripe-invoice-close-account.service.test.ts (1 test) 13ms
+ ✓ tests/unit/billing-stripe-catalog-provisioning-args.test.ts (6 tests) 13ms
+ ✓ tests/unit/refresh-token-membership-revocation.test.ts (2 tests) 13ms
+ ✓ tests/unit/billing-cycle-binary-order.service.test.ts (1 test) 12ms
+ ✓ tests/unit/user-scope.service.test.ts (4 tests) 12ms
+ ✓ tests/unit/avatar-response.test.ts (1 test) 67ms
+ ❯ tests/unit/access-status-bootstrap.service.test.ts (3 tests | 3 failed) 9ms
+   × Auth server-owned diagnostic bootstrap > keeps SSR and hydration consistent for undefined 3ms
+     → ENOENT: no such file or directory, open 'C:\Users\ondre\Projects\UnlikeOtherAuthenticator\.worktrees\sol-audit-fixes-api-20261014\Auth\dist\index.html'
+   × Auth server-owned diagnostic bootstrap > keeps SSR and hydration consistent for false 0ms
+     → ENOENT: no such file or directory, open 'C:\Users\ondre\Projects\UnlikeOtherAuthenticator\.worktrees\sol-audit-fixes-api-20261014\Auth\dist\index.html'
+   × Auth server-owned diagnostic bootstrap > keeps SSR and hydration consistent for true 0ms
+     → ENOENT: no such file or directory, open 'C:\Users\ondre\Projects\UnlikeOtherAuthenticator\.worktrees\sol-audit-fixes-api-20261014\Auth\dist\index.html'
+ ✓ tests/unit/avatar-config-claim.test.ts (5 tests) 8ms
+ ✓ tests/unit/refresh-token-domain-revocation.test.ts (1 test) 13ms
+ ✓ tests/unit/internal-admin.organisation-state.test.ts (7 tests) 13ms
+ ✓ tests/unit/billing-statement-action.service.test.ts (1 test) 13ms
+ ✓ src/services/oauth/__tests__/client.service.test.ts (4 tests) 12ms
+ ✓ tests/unit/billing-money.service.test.ts (3 tests) 12ms
+ ✓ tests/unit/billing-payment-copy.catalog.test.ts (14 tests) 12ms
+ ✓ src/services/oauth/__tests__/native-app-policy.test.ts (2 tests) 12ms
+ ✓ tests/unit/stripe-catalog-provisioning-report.test.ts (2 tests) 12ms
+ ✓ tests/unit/static-file.test.ts (2 tests) 17ms
+ ✓ tests/unit/client-service-audience.test.ts (13 tests) 13ms
+ ✓ tests/unit/admin-ui.service.test.ts (3 tests) 13ms
+ ✓ tests/unit/debug-login-context.test.ts (2 tests) 12ms
+ ✓ tests/unit/billing-serialization.test.ts (1 test) 11ms
+ ✓ tests/unit/lifecycle-error-response.test.ts (9 tests) 15ms
+ ✓ tests/unit/twofa-secret.test.ts (2 tests) 12ms
+ ✓ tests/unit/organisation.service.admin-delete.test.ts (2 tests) 14ms
+ ✓ tests/unit/billing-privacy-feature-flag-migration.test.ts (1 test) 11ms
+ ✓ tests/unit/[token-like test value redacted].test.ts (3 tests) 12ms
+ ✓ tests/unit/billing-seat-capacity-error.route.test.ts (1 test) 68ms
+ ✓ tests/unit/billing-credit-budget-scope-order.test.ts (1 test) 12ms
+ ✓ src/services/confidential-delegation.service.test.ts (2 tests) 11ms
+ ✓ tests/unit/domain-user-subject-lookup.test.ts (1 test) 13ms
+ ✓ tests/unit/pkce.test.ts (1 test) 12ms
+ ✓ tests/unit/billing-markup-percent.service.test.ts (14 tests) 12ms
+ ✓ tests/unit/hash.test.ts (1 test) 11ms
+ ✓ tests/unit/setting-version.test.ts (1 test) 16ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 75 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/unit/access-request.service.test.ts > access request services > auto-grants users whose verified email domain matches the configured allowlist
+ FAIL  tests/unit/access-request.service.test.ts > access request services > approves a pending request and adds the requester to the configured team
+ FAIL  tests/unit/team-avatar.service.test.ts > team avatar upload validation > stores the sniffed type, not the caller-supplied one
+ FAIL  tests/unit/team-avatar.service.test.ts > team avatar upload validation > replaces an existing upload rather than adding a second row
+ FAIL  tests/unit/team-avatar.service.test.ts > team avatar delete > deletes idempotently and falls back to the icon URL afterwards
+TypeError: tx.$queryRaw is not a function
+ ❯ src/services/directory-mutation.service.ts:60:18
+     58|       for (const orgId of orgIds) {
+     59|         const key = `uoa:directory-org:v1:${orgId}`;
+     60|         await tx.$queryRaw(Prisma.sql`SELECT pg_advisory_xact_lock(
+       |                  ^
+     61|           hashtextextended(${key}, 0))::text AS "lockResult"`);
+     62|       }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/75]⎯
+
+ FAIL  tests/unit/access-status-bootstrap.service.test.ts > Auth server-owned diagnostic bootstrap > keeps SSR and hydration consistent for undefined
+ FAIL  tests/unit/access-status-bootstrap.service.test.ts > Auth server-owned diagnostic bootstrap > keeps SSR and hydration consistent for false
+ FAIL  tests/unit/access-status-bootstrap.service.test.ts > Auth server-owned diagnostic bootstrap > keeps SSR and hydration consistent for true
+Error: ENOENT: no such file or directory, open 'C:\Users\ondre\Projects\UnlikeOtherAuthenticator\.worktrees\sol-audit-fixes-api-20261014\Auth\dist\index.html'
+ ❯ readAuthIndexHtml src/services/auth-ui.service.ts:94:21
+     92|   if (cachedIndexHtml) return cachedIndexHtml;
+     93|   const distDir = authDistDirFrom(import.meta.url);
+     94|   cachedIndexHtml = await readFile(path.join(distDir, 'index.html'), '…
+       |                     ^
+     95|   return cachedIndexHtml;
+     96| }
+ ❯ renderAuthEntrypointHtml src/services/auth-ui.service.ts:111:15
+ ❯ tests/unit/access-status-bootstrap.service.test.ts:17:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/75]⎯
+
+ FAIL  tests/unit/auth-rate-limit-global.test.ts > auth limiters global ceiling > table covers every limiter exported from rate-limit-keys.ts
+AssertionError: expected [ 'authStartRateLimiter', …(20) ] to deeply equal [ 'authStartRateLimiter', …(22) ]
+
+- Expected
++ Received
+
+@@ -1,15 +1,13 @@
+  [
+    "authStartRateLimiter",
+-   "beginOAuthLoginAttempt",
+    "confidentialJobGrantRateLimiter",
+    "confidentialTokenExchangeDomainRateLimiter",
+    "configFetchRateLimiter",
+    "emailSendRateLimiter",
+    "emailTeamInviteOpenRateLimiter",
+    "loginRateLimiter",
+-   "oauthLoginRateLimiter",
+    "registerRateLimiter",
+    "resetRequestRateLimiter",
+    "revokeRateLimiter",
+    "selectTeamRateLimiter",
+    "sessionChoicesRateLimiter",
+
+ ❯ globalKeys tests/unit/auth-rate-limit-global.test.ts:100:37
+     98|   // A limiter added to rate-limit-keys.ts without a row above fails h…
+     99|   // the table can never silently fall behind the module's exports aga…
+    100|   expect(Object.keys(cases).sort()).toEqual(Object.keys(keys).sort());
+       |                                     ^
+    101|   return cases;
+    102| }
+ ❯ tests/unit/auth-rate-limit-global.test.ts:166:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/75]⎯
+
+ FAIL  tests/unit/auth-rate-limit-global.test.ts > auth limiters global ceiling > every limiter with a global bucket consumes its global key
+AssertionError: expected [ 'authStartRateLimiter', …(20) ] to deeply equal [ 'authStartRateLimiter', …(22) ]
+
+- Expected
++ Received
+
+@@ -1,15 +1,13 @@
+  [
+    "authStartRateLimiter",
+-   "beginOAuthLoginAttempt",
+    "confidentialJobGrantRateLimiter",
+    "confidentialTokenExchangeDomainRateLimiter",
+    "configFetchRateLimiter",
+    "emailSendRateLimiter",
+    "emailTeamInviteOpenRateLimiter",
+    "loginRateLimiter",
+-   "oauthLoginRateLimiter",
+    "registerRateLimiter",
+    "resetRequestRateLimiter",
+    "revokeRateLimiter",
+    "selectTeamRateLimiter",
+    "sessionChoicesRateLimiter",
+
+ ❯ globalKeys tests/unit/auth-rate-limit-global.test.ts:100:37
+     98|   // A limiter added to rate-limit-keys.ts without a row above fails h…
+     99|   // the table can never silently fall behind the module's exports aga…
+    100|   expect(Object.keys(cases).sort()).toEqual(Object.keys(keys).sort());
+       |                                     ^
+    101|   return cases;
+    102| }
+ ❯ tests/unit/auth-rate-limit-global.test.ts:170:19
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/75]⎯
+
+ FAIL  tests/unit/auth-rate-limit-global.test.ts > auth limiters global ceiling > limiters without a global bucket do not consume one
+AssertionError: expected [ 'authStartRateLimiter', …(20) ] to deeply equal [ 'authStartRateLimiter', …(22) ]
+
+- Expected
++ Received
+
+@@ -1,15 +1,13 @@
+  [
+    "authStartRateLimiter",
+-   "beginOAuthLoginAttempt",
+    "confidentialJobGrantRateLimiter",
+    "confidentialTokenExchangeDomainRateLimiter",
+    "configFetchRateLimiter",
+    "emailSendRateLimiter",
+    "emailTeamInviteOpenRateLimiter",
+    "loginRateLimiter",
+-   "oauthLoginRateLimiter",
+    "registerRateLimiter",
+    "resetRequestRateLimiter",
+    "revokeRateLimiter",
+    "selectTeamRateLimiter",
+    "sessionChoicesRateLimiter",
+
+ ❯ globalKeys tests/unit/auth-rate-limit-global.test.ts:100:37
+     98|   // A limiter added to rate-limit-keys.ts without a row above fails h…
+     99|   // the table can never silently fall behind the module's exports aga…
+    100|   expect(Object.keys(cases).sort()).toEqual(Object.keys(keys).sort());
+       |                                     ^
+    101|   return cases;
+    102| }
+ ❯ tests/unit/auth-rate-limit-global.test.ts:179:19
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/75]⎯
+
+ FAIL  tests/unit/auth-select-team-invite-link.route.test.ts > POST /auth/select-team invite-link redemption > enforces the selected org 2FA policy after redemption
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ tests/unit/auth-select-team-invite-link.route.test.ts:279:28
+    277|     });
+    278| 
+    279|     expect(res.statusCode).toBe(200);
+       |                            ^
+    280|     const body = res.json();
+    281|     expect(body).toMatchObject({ ok: true, twofa_required: true });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/75]⎯
+
+ FAIL  tests/unit/auth-select-team.route.test.ts > POST /auth/select-team > accepts a pending invite and finalizes scoped to the invite team/org
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ tests/unit/auth-select-team.route.test.ts:448:28
+    446|     const res = await postSelectTeam({ login_token: loginToken, invite…
+    447| 
+    448|     expect(res.statusCode).toBe(200);
+       |                            ^
+    449|     expect(res.json().ok).toBe(true);
+    450|     expect(prismaMock.authorizationCode.create).toHaveBeenCalledWith(
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/75]⎯
+
+ FAIL  tests/unit/avatar.service.test.ts > upload validation > stores the sniffed type, not the caller-supplied one
+TypeError: Cannot read properties of undefined (reading 'findMany')
+ ❯ userDirectoryOrganisations src/services/directory-user-mutation.service.ts:22:42
+     20|   userId: string,
+     21| ): Promise<string[]> {
+     22|   const memberships = await tx.orgMember.findMany({
+       |                                          ^
+     23|     where: { userId, org: { lifecycleStatus: { not: 'DELETED' } } },
+     24|     select: { orgId: true },
+ ❯ src/services/directory-user-mutation.service.ts:48:26
+ ❯ uploadAvatar src/services/avatar.service.ts:183:15
+ ❯ tests/unit/avatar.service.test.ts:213:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/75]⎯
+
+ FAIL  tests/unit/avatar.service.test.ts > upload validation > replaces an existing upload rather than adding a second row
+TypeError: Cannot read properties of undefined (reading 'findMany')
+ ❯ userDirectoryOrganisations src/services/directory-user-mutation.service.ts:22:42
+     20|   userId: string,
+     21| ): Promise<string[]> {
+     22|   const memberships = await tx.orgMember.findMany({
+       |                                          ^
+     23|     where: { userId, org: { lifecycleStatus: { not: 'DELETED' } } },
+     24|     select: { orgId: true },
+ ❯ src/services/directory-user-mutation.service.ts:48:26
+ ❯ uploadAvatar src/services/avatar.service.ts:183:15
+ ❯ tests/unit/avatar.service.test.ts:254:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/75]⎯
+
+ FAIL  tests/unit/avatar.service.test.ts > delete and source reporting > deletes idempotently and falls back to the provider afterwards
+TypeError: Cannot read properties of undefined (reading 'findMany')
+ ❯ userDirectoryOrganisations src/services/directory-user-mutation.service.ts:22:42
+     20|   userId: string,
+     21| ): Promise<string[]> {
+     22|   const memberships = await tx.orgMember.findMany({
+       |                                          ^
+     23|     where: { userId, org: { lifecycleStatus: { not: 'DELETED' } } },
+     24|     select: { orgId: true },
+ ❯ src/services/directory-user-mutation.service.ts:48:26
+ ❯ deleteAvatar src/services/avatar.service.ts:217:3
+ ❯ tests/unit/avatar.service.test.ts:285:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/75]⎯
+
+ FAIL  tests/unit/billing-ledger-runtime-keys.route.test.ts > checks the live admin role and credential epoch before issuing or listing
+AssertionError: expected 500 to be 403 // Object.is equality
+
+- Expected
++ Received
+
+- 403
++ 500
+
+ ❯ tests/unit/billing-ledger-runtime-keys.route.test.ts:59:55
+     57|   const credential = await token();
+     58|   db.domainRole.findUnique.mockResolvedValue({ role: 'USER' });
+     59|   expect((await call('POST', credential)).statusCode).toBe(403);
+       |                                                       ^
+     60|   expect((await call('GET', credential)).statusCode).toBe(403);
+     61|   db.domainRole.findUnique.mockResolvedValue({ role: 'SUPERUSER' });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/75]⎯
+
+ FAIL  tests/unit/billing-ledger-runtime-keys.route.test.ts > returns only nonsecret metadata with no-store; create secret appears once with verified actor
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ tests/unit/billing-ledger-runtime-keys.route.test.ts:75:27
+     73|   const credential = await token();
+     74|   const list = await call('GET', credential);
+     75|   expect(list.statusCode).toBe(200); expect(list.headers['cache-contro…
+       |                           ^
+     76|   expect(list.json().keys[0]).toEqual({ id: 'key-1', ...body, key_pref…
+     77|     created_at: createdAt.toISOString(), revoked_at: null });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/75]⎯
+
+ FAIL  tests/unit/billing-ledger-runtime-keys.route.test.ts > refuses caller-provided actor/unknown fields before service writes
+AssertionError: expected 500 to be 400 // Object.is equality
+
+- Expected
++ Received
+
+- 400
++ 500
+
+ ❯ tests/unit/billing-ledger-runtime-keys.route.test.ts:93:31
+     91| it('refuses caller-provided actor/unknown fields before service writes…
+     92|   const response = await call('POST', await token(), { ...body, actorE…
+     93|   expect(response.statusCode).toBe(400); expect(service.createLedgerRu…
+       |                               ^
+     94| });
+     95| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/75]⎯
+
+ FAIL  tests/unit/billing-sms-policies.routes.test.ts > requires explicit existing refund verification with unique refund IDs and propagates verified operator only
+AssertionError: expected 500 to be 400 // Object.is equality
+
+- Expected
++ Received
+
+- 400
++ 500
+
+ ❯ tests/unit/billing-sms-policies.routes.test.ts:64:120
+     62|   for (const change of [{ verify_existing_refunds: false }, { refund_i…
+     63|     { refund_ids: [] }, { accepted_by_user_id: 'other' }]) {
+     64|     expect((await call('/recovery/resource-1/verify-refund', 'POST', c…
+       |                                                                                                                        ^
+     65|   }
+     66|   expect(refunds.verifySmsNumberRefund).not.toHaveBeenCalled();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/75]⎯
+
+ FAIL  tests/unit/billing-sms-policies.routes.test.ts > requires explicit acceptance of both route dimensions and rejects caller-supplied acceptance provenance
+AssertionError: expected 500 to be 400 // Object.is equality
+
+- Expected
++ Received
+
+- 400
++ 500
+
+ ❯ tests/unit/billing-sms-policies.routes.test.ts:80:105
+     78|   for (const change of [{ complete_segment_bound: false }, { complete_…
+     79|     { accepted_by_user_id: 'other' }, { evidence_digest: 'x' }]) {
+     80|     expect((await call('/routes/accept', 'POST', credential, { ...acce…
+       |                                                                                                         ^
+     81|   }
+     82|   expect(service.acceptSmsRoutePolicy).not.toHaveBeenCalled();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/75]⎯
+
+ FAIL  tests/unit/billing-sms-policies.routes.test.ts > uses the fixed refresh service with verified actor and refuses current revoked role/epoch
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ tests/unit/billing-sms-policies.routes.test.ts:92:30
+     90|   const credential = await token(); service.previewSmsFxPolicy.mockRes…
+     91|   const preview = await call('/fx/preview', 'POST', credential);
+     92|   expect(preview.statusCode).toBe(200); expect(preview.headers['cache-…
+       |                              ^
+     93|   db.domainRole.findUnique.mockResolvedValue({ role: 'USER' });
+     94|   expect((await call('', 'GET', credential)).statusCode).toBe(403);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/75]⎯
+
+ FAIL  tests/unit/billing-sms-policies.routes.test.ts > accepts Refresh and accept only with the explicit policy statement and never a caller-chosen reason
+AssertionError: expected 500 to be 400 // Object.is equality
+
+- Expected
++ Received
+
+- 400
++ 500
+
+ ❯ tests/unit/billing-sms-policies.routes.test.ts:102:85
+    100|   const credential = await token();
+    101|   for (const body of [{}, { policy_understood: false }, { policy_under…
+    102|     expect((await call('/fx/refresh-accept', 'POST', credential, body)…
+       |                                                                                     ^
+    103|   }
+    104|   expect(service.acceptSmsFxRefresh).not.toHaveBeenCalled();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/75]⎯
+
+ FAIL  tests/unit/billing-sms-policies.routes.test.ts > adds a country only with every attestation and never a caller-chosen account or reason
+AssertionError: expected 500 to be 400 // Object.is equality
+
+- Expected
++ Received
+
+- 400
++ 500
+
+ ❯ tests/unit/billing-sms-policies.routes.test.ts:114:90
+    112|   const credential = await token(); const operator = { userId: 'admin-…
+    113|   for (const body of [{}, { country: 'gb' }, { country: 'GB', account_…
+    114|     expect((await call('/routes/country/preview', 'POST', credential, …
+       |                                                                                          ^
+    115|   }
+    116|   country.previewSmsCountryPolicy.mockResolvedValue({ evidence: { coun…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[18/75]⎯
+
+ FAIL  tests/unit/csp-script-nonce.test.ts > script-src CSP nonce > titles the auth window with the product, escaped and with no replacement patterns
+Error: ENOENT: no such file or directory, open 'C:\Users\ondre\Projects\UnlikeOtherAuthenticator\.worktrees\sol-audit-fixes-api-20261014\Auth\dist\index.html'
+ ❯ readAuthIndexHtml src/services/auth-ui.service.ts:94:21
+     92|   if (cachedIndexHtml) return cachedIndexHtml;
+     93|   const distDir = authDistDirFrom(import.meta.url);
+     94|   cachedIndexHtml = await readFile(path.join(distDir, 'index.html'), '…
+       |                     ^
+     95|   return cachedIndexHtml;
+     96| }
+ ❯ Module.renderAuthEntrypointHtml src/services/auth-ui.service.ts:111:15
+ ❯ tests/unit/csp-script-nonce.test.ts:126:18
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[19/75]⎯
+
+ FAIL  tests/unit/csp-script-nonce.test.ts > script-src CSP nonce > emits the bootstrap <script> with the per-request nonce
+Error: ENOENT: no such file or directory, open 'C:\Users\ondre\Projects\UnlikeOtherAuthenticator\.worktrees\sol-audit-fixes-api-20261014\Auth\dist\index.html'
+ ❯ readAuthIndexHtml src/services/auth-ui.service.ts:94:21
+     92|   if (cachedIndexHtml) return cachedIndexHtml;
+     93|   const distDir = authDistDirFrom(import.meta.url);
+     94|   cachedIndexHtml = await readFile(path.join(distDir, 'index.html'), '…
+       |                     ^
+     95|   return cachedIndexHtml;
+     96| }
+ ❯ Module.renderAuthEntrypointHtml src/services/auth-ui.service.ts:111:15
+ ❯ tests/unit/csp-script-nonce.test.ts:141:18
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[20/75]⎯
+
+ FAIL  tests/unit/csp-script-nonce.test.ts > script-src CSP nonce > nonce in the header matches the nonce on the bootstrap script tag, and no unsafe-inline
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ tests/unit/csp-script-nonce.test.ts:162:30
+    160|       });
+    161| 
+    162|       expect(res.statusCode).toBe(200);
+       |                              ^
+    163|       expect(res.headers['content-type']).toContain('text/html');
+    164| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[21/75]⎯
+
+ FAIL  tests/unit/db-provisioning-hook-timeouts.test.ts > database-provisioning hooks > take their timeout from vitest.config.ts, never their own argument
+AssertionError: integration\directory-mutation-ordering.test.ts:17 — beforeAll sets 120_000ms: expected [ Array(1) ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   "integration\\directory-mutation-ordering.test.ts:17 — beforeAll sets 120_000ms",
++ ]
+
+ ❯ tests/unit/db-provisioning-hook-timeouts.test.ts:59:45
+     57|     const offenders = testFiles(testsDir).flatMap(provisioningHooksWit…
+     58| 
+     59|     expect(offenders, offenders.join('\n')).toEqual([]);
+       |                                             ^
+     60|   });
+     61| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22/75]⎯
+
+ FAIL  tests/unit/group.service.test.ts > Group service > creates a group when under the organisation group quota
+TypeError: prisma.$queryRaw is not a function
+ ❯ lockProductTeamPolicyShared src/services/product-team-policy-lock.service.ts:17:16
+     15| ): Promise<void> {
+     16|   if (typeof prisma.$queryRaw !== 'function' && !getEnv().DATABASE_URL…
+     17|   await prisma.$queryRaw(
+       |                ^
+     18|     Prisma.sql`
+     19|       SELECT pg_advisory_xact_lock_shared(
+ ❯ src/services/directory-mutation.service.ts:47:11
+ ❯ src/db/tenant-context.ts:39:40
+ ❯ Object.<anonymous> tests/unit/group.service.test.ts:64:91
+ ❯ runInTransaction src/db/tenant-context.ts:39:19
+ ❯ withDirectoryMutation src/services/directory-mutation.service.ts:46:10
+ ❯ createGroup src/services/group.service.groups.ts:94:27
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[23/75]⎯
+
+ FAIL  tests/unit/group.service.test.ts > Group service > rejects creating a group when max_groups_per_org is reached
+AssertionError: expected TypeError: prisma.$queryRaw is not a func… to match object { Object (code, statusCode) }
+
+- Expected
++ Received
+
+- {
+-   "code": "BAD_REQUEST",
+-   "statusCode": 400,
++ TypeError {
++   "message": "prisma.$queryRaw is not a function",
+  }
+
+ ❯ tests/unit/group.service.test.ts:222:5
+    220|     );
+    221| 
+    222|     await expect(promise).rejects.toMatchObject({
+       |     ^
+    223|       code: 'BAD_REQUEST',
+    224|       statusCode: 400,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[24/75]⎯
+
+ FAIL  tests/unit/group.service.test.ts > Group service > updates a group name and description
+TypeError: prisma.$queryRaw is not a function
+ ❯ lockProductTeamPolicyShared src/services/product-team-policy-lock.service.ts:17:16
+     15| ): Promise<void> {
+     16|   if (typeof prisma.$queryRaw !== 'function' && !getEnv().DATABASE_URL…
+     17|   await prisma.$queryRaw(
+       |                ^
+     18|     Prisma.sql`
+     19|       SELECT pg_advisory_xact_lock_shared(
+ ❯ src/services/directory-mutation.service.ts:47:11
+ ❯ src/db/tenant-context.ts:39:40
+ ❯ Object.<anonymous> tests/unit/group.service.test.ts:64:91
+ ❯ runInTransaction src/db/tenant-context.ts:39:19
+ ❯ withDirectoryMutation src/services/directory-mutation.service.ts:46:10
+ ❯ updateGroup src/services/group.service.groups.ts:226:27
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[25/75]⎯
+
+ FAIL  tests/unit/group.service.test.ts > Group service > deletes a group when it exists
+TypeError: prisma.$queryRaw is not a function
+ ❯ lockProductTeamPolicyShared src/services/product-team-policy-lock.service.ts:17:16
+     15| ): Promise<void> {
+     16|   if (typeof prisma.$queryRaw !== 'function' && !getEnv().DATABASE_URL…
+     17|   await prisma.$queryRaw(
+       |                ^
+     18|     Prisma.sql`
+     19|       SELECT pg_advisory_xact_lock_shared(
+ ❯ src/services/directory-mutation.service.ts:47:11
+ ❯ src/db/tenant-context.ts:39:40
+ ❯ Object.<anonymous> tests/unit/group.service.test.ts:64:91
+ ❯ runInTransaction src/db/tenant-context.ts:39:19
+ ❯ withDirectoryMutation src/services/directory-mutation.service.ts:46:10
+ ❯ deleteGroup src/services/group.service.groups.ts:275:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[26/75]⎯
+
+ FAIL  tests/unit/group.service.test.ts > Group service > adds a group member when under the per-group membership limit
+TypeError: prisma.$queryRaw is not a function
+ ❯ lockProductTeamPolicyShared src/services/product-team-policy-lock.service.ts:17:16
+     15| ): Promise<void> {
+     16|   if (typeof prisma.$queryRaw !== 'function' && !getEnv().DATABASE_URL…
+     17|   await prisma.$queryRaw(
+       |                ^
+     18|     Prisma.sql`
+     19|       SELECT pg_advisory_xact_lock_shared(
+ ❯ src/services/directory-user-mutation.service.ts:87:11
+ ❯ src/db/tenant-context.ts:39:40
+ ❯ Object.<anonymous> tests/unit/group.service.test.ts:64:91
+ ❯ runInTransaction src/db/tenant-context.ts:39:19
+ ❯ withDirectoryMembershipMutation src/services/directory-user-mutation.service.ts:86:10
+ ❯ addGroupMember src/services/group.service.members.ts:65:16
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[27/75]⎯
+
+ FAIL  tests/unit/group.service.test.ts > Group service > rejects adding a group member when max_members_per_group is reached
+AssertionError: expected TypeError: prisma.$queryRaw is not a func… to match object { Object (code, statusCode) }
+
+- Expected
++ Received
+
+- {
+-   "code": "BAD_REQUEST",
+-   "statusCode": 400,
++ TypeError {
++   "message": "prisma.$queryRaw is not a function",
+  }
+
+ ❯ tests/unit/group.service.test.ts:464:5
+    462|     );
+    463| 
+    464|     await expect(promise).rejects.toMatchObject({
+       |     ^
+    465|       code: 'BAD_REQUEST',
+    466|       statusCode: 400,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[28/75]⎯
+
+ FAIL  tests/unit/group.service.test.ts > Group service > updates a group member admin flag
+TypeError: prisma.$queryRaw is not a function
+ ❯ lockProductTeamPolicyShared src/services/product-team-policy-lock.service.ts:17:16
+     15| ): Promise<void> {
+     16|   if (typeof prisma.$queryRaw !== 'function' && !getEnv().DATABASE_URL…
+     17|   await prisma.$queryRaw(
+       |                ^
+     18|     Prisma.sql`
+     19|       SELECT pg_advisory_xact_lock_shared(
+ ❯ src/services/directory-user-mutation.service.ts:87:11
+ ❯ src/db/tenant-context.ts:39:40
+ ❯ Object.<anonymous> tests/unit/group.service.test.ts:64:91
+ ❯ runInTransaction src/db/tenant-context.ts:39:19
+ ❯ withDirectoryMembershipMutation src/services/directory-user-mutation.service.ts:86:10
+ ❯ updateGroupMemberAdmin src/services/group.service.members.ts:188:25
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[29/75]⎯
+
+ FAIL  tests/unit/group.service.test.ts > Group service > removes a group member
+TypeError: prisma.$queryRaw is not a function
+ ❯ lockProductTeamPolicyShared src/services/product-team-policy-lock.service.ts:17:16
+     15| ): Promise<void> {
+     16|   if (typeof prisma.$queryRaw !== 'function' && !getEnv().DATABASE_URL…
+     17|   await prisma.$queryRaw(
+       |                ^
+     18|     Prisma.sql`
+     19|       SELECT pg_advisory_xact_lock_shared(
+ ❯ src/services/directory-user-mutation.service.ts:87:11
+ ❯ src/db/tenant-context.ts:39:40
+ ❯ Object.<anonymous> tests/unit/group.service.test.ts:64:91
+ ❯ runInTransaction src/db/tenant-context.ts:39:19
+ ❯ withDirectoryMembershipMutation src/services/directory-user-mutation.service.ts:86:10
+ ❯ removeGroupMember src/services/group.service.members.ts:140:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[30/75]⎯
+
+ FAIL  tests/unit/group.service.test.ts > Group service > assigns and unassigns a team to a group
+TypeError: prisma.$queryRaw is not a function
+ ❯ lockProductTeamPolicyShared src/services/product-team-policy-lock.service.ts:17:16
+     15| ): Promise<void> {
+     16|   if (typeof prisma.$queryRaw !== 'function' && !getEnv().DATABASE_URL…
+     17|   await prisma.$queryRaw(
+       |                ^
+     18|     Prisma.sql`
+     19|       SELECT pg_advisory_xact_lock_shared(
+ ❯ src/services/directory-mutation.service.ts:47:11
+ ❯ src/db/tenant-context.ts:39:40
+ ❯ Object.<anonymous> tests/unit/group.service.test.ts:64:91
+ ❯ runInTransaction src/db/tenant-context.ts:39:19
+ ❯ withDirectoryMutation src/services/directory-mutation.service.ts:46:10
+ ❯ assignTeamToGroup src/services/group.service.members.ts:247:25
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[31/75]⎯
+
+ FAIL  tests/unit/org-placement.auto-create.test.ts > personal organisation placement > auto-creates a personal org when no mapping matches and auto_create_personal_org_on_first_login is true
+Error: App logger not initialized
+ ❯ getAppLogger src/utils/app-logger.ts:11:11
+      9| export function getAppLogger(): FastifyBaseLogger {
+     10|   if (!appLogger) {
+     11|     throw new Error('App logger not initialized');
+       |           ^
+     12|   }
+     13| 
+ ❯ Object.defaultLogError [as logError] src/services/org-placement.service.ts:84:3
+ ❯ autoCreatePersonalOrgForUser src/services/org-placement.service.ts:200:12
+ ❯ tests/unit/org-placement.auto-create.test.ts:53:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[32/75]⎯
+
+ FAIL  tests/unit/org-placement.auto-create.test.ts > personal organisation placement > auto-creates even with a pending invite when pending_invites_block_auto_create is false
+Error: App logger not initialized
+ ❯ getAppLogger src/utils/app-logger.ts:11:11
+      9| export function getAppLogger(): FastifyBaseLogger {
+     10|   if (!appLogger) {
+     11|     throw new Error('App logger not initialized');
+       |           ^
+     12|   }
+     13| 
+ ❯ Object.defaultLogError [as logError] src/services/org-placement.service.ts:84:3
+ ❯ autoCreatePersonalOrgForUser src/services/org-placement.service.ts:200:12
+ ❯ tests/unit/org-placement.auto-create.test.ts:179:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[33/75]⎯
+
+ FAIL  tests/unit/org-placement.service.test.ts > org-placement.service > places a new user in mapped org and team when email domain matches
+Error: App logger not initialized
+ ❯ getAppLogger src/utils/app-logger.ts:11:11
+      9| export function getAppLogger(): FastifyBaseLogger {
+     10|   if (!appLogger) {
+     11|     throw new Error('App logger not initialized');
+       |           ^
+     12|   }
+     13| 
+ ❯ Object.defaultLogError [as logError] src/services/org-placement.service.ts:84:3
+ ❯ placeFromDomainMapping src/services/org-placement.service.ts:370:12
+ ❯ tests/unit/org-placement.service.test.ts:34:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[34/75]⎯
+
+ FAIL  tests/unit/org-placement.service.test.ts > org-placement.service > uses the default team when mapping omits team_id
+Error: App logger not initialized
+ ❯ getAppLogger src/utils/app-logger.ts:11:11
+      9| export function getAppLogger(): FastifyBaseLogger {
+     10|   if (!appLogger) {
+     11|     throw new Error('App logger not initialized');
+       |           ^
+     12|   }
+     13| 
+ ❯ Object.defaultLogError [as logError] src/services/org-placement.service.ts:84:3
+ ❯ placeFromDomainMapping src/services/org-placement.service.ts:370:12
+ ❯ tests/unit/org-placement.service.test.ts:89:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[35/75]⎯
+
+ FAIL  tests/unit/org-placement.service.test.ts > org-placement.service > places a user who belongs to another organisation on the same domain
+Error: App logger not initialized
+ ❯ getAppLogger src/utils/app-logger.ts:11:11
+      9| export function getAppLogger(): FastifyBaseLogger {
+     10|   if (!appLogger) {
+     11|     throw new Error('App logger not initialized');
+       |           ^
+     12|   }
+     13| 
+ ❯ Object.defaultLogError [as logError] src/services/org-placement.service.ts:84:3
+ ❯ placeFromDomainMapping src/services/org-placement.service.ts:370:12
+ ❯ tests/unit/org-placement.service.test.ts:228:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[36/75]⎯
+
+ FAIL  tests/unit/organisation.service.create-update.test.ts > Organisation service: organisation CRUD > creates an organisation, owner membership, and default team
+AssertionError: expected "spy" to be called with arguments: [ ObjectContaining{…} ]
+
+Received: 
+
+  1st spy call:
+
+  [
+-   ObjectContaining {
++   {
+      "data": {
+        "domain": "acme.example.com",
++       "id": "55381bcc-c683-4d57-87a3-c758cb509618",
+        "name": "Acme Inc",
+        "ownerId": "u-owner",
+        "slug": "acme-inc",
++     },
++     "select": {
++       "createdAt": true,
++       "domain": true,
++       "iconUrl": true,
++       "id": true,
++       "memberInvites": true,
++       "name": true,
++       "ownerId": true,
++       "slug": true,
++       "updatedAt": true,
+      },
+    },
+  ]
+
+
+Number of calls: 1
+
+ ❯ tests/unit/organisation.service.create-update.test.ts:94:40
+     92|     );
+     93| 
+     94|     expect(prisma.organisation.create).toHaveBeenCalledWith(
+       |                                        ^
+     95|       expect.objectContaining({
+     96|         data: {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[37/75]⎯
+
+ FAIL  tests/unit/organisation.service.icon-url.test.ts > Organisation service: updateOrganisation icon_url > accepts an https icon_url and echoes it on the updated record
+ FAIL  tests/unit/organisation.service.icon-url.test.ts > Organisation service: updateOrganisation icon_url > clears icon_url when explicitly set to null
+TypeError: prisma.$queryRaw is not a function
+ ❯ lockProductTeamPolicyShared src/services/product-team-policy-lock.service.ts:17:16
+     15| ): Promise<void> {
+     16|   if (typeof prisma.$queryRaw !== 'function' && !getEnv().DATABASE_URL…
+     17|   await prisma.$queryRaw(
+       |                ^
+     18|     Prisma.sql`
+     19|       SELECT pg_advisory_xact_lock_shared(
+ ❯ src/services/directory-mutation.service.ts:47:11
+ ❯ src/db/tenant-context.ts:39:40
+ ❯ Object.<anonymous> tests/unit/organisation.service.icon-url.test.ts:27:91
+ ❯ runInTransaction src/db/tenant-context.ts:39:19
+ ❯ withDirectoryMutation src/services/directory-mutation.service.ts:46:10
+ ❯ updateOrganisation src/services/organisation.service.organisation.ts:387:25
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[38/75]⎯
+
+ FAIL  tests/unit/organisation.service.icon-url.test.ts > Organisation service: updateOrganisation icon_url > rejects a non-https icon_url with a generic error
+AssertionError: expected TypeError: prisma.$queryRaw is not a func… to match object { Object (code, statusCode) }
+
+- Expected
++ Received
+
+- {
+-   "code": "BAD_REQUEST",
+-   "statusCode": 400,
++ TypeError {
++   "message": "prisma.$queryRaw is not a function",
+  }
+
+ ❯ tests/unit/organisation.service.icon-url.test.ts:204:5
+    202|     );
+    203| 
+    204|     await expect(promise).rejects.toMatchObject({ code: 'BAD_REQUEST',…
+       |     ^
+    205|     expect(prisma.organisation.update).not.toHaveBeenCalled();
+    206|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[39/75]⎯
+
+ FAIL  tests/unit/organisation.service.icon-url.test.ts > Organisation service: updateOrganisation icon_url > rejects an icon_url over 2048 characters with a generic error
+AssertionError: expected TypeError: prisma.$queryRaw is not a func… to match object { Object (code, statusCode) }
+
+- Expected
++ Received
+
+- {
+-   "code": "BAD_REQUEST",
+-   "statusCode": 400,
++ TypeError {
++   "message": "prisma.$queryRaw is not a function",
+  }
+
+ ❯ tests/unit/organisation.service.icon-url.test.ts:242:5
+    240|     );
+    241| 
+    242|     await expect(promise).rejects.toMatchObject({ code: 'BAD_REQUEST',…
+       |     ^
+    243|     expect(prisma.organisation.update).not.toHaveBeenCalled();
+    244|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[40/75]⎯
+
+ FAIL  tests/unit/social-login-lock-order.test.ts > social login credential lock order > takes the callback user lock before updating an existing profile and returns its epoch
+AssertionError: promise rejected "TypeError: Cannot read properties of unde…" instead of resolving
+ ❯ tests/unit/social-login-lock-order.test.ts:70:23
+     68|     expect(update).not.toHaveBeenCalled();
+     69|     releaseLock();
+     70|     await expect(login).resolves.toEqual({
+       |                       ^
+     71|       status: 'authenticated',
+     72|       userId: 'user-1',
+
+Caused by: TypeError: Cannot read properties of undefined (reading 'findMany')
+ ❯ userDirectoryOrganisations src/services/directory-user-mutation.service.ts:22:42
+ ❯ src/services/directory-user-mutation.service.ts:48:26
+ ❯ loginWithSocialProfile src/services/social/social-login.service.ts:142:21
+ ❯ tests/unit/social-login-lock-order.test.ts:70:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[41/75]⎯
+
+ FAIL  tests/unit/social-login.service.test.ts > social-login.service > creates a new user and overwrites avatar on subsequent logins
+TypeError: Cannot read properties of undefined (reading 'findMany')
+ ❯ userDirectoryOrganisations src/services/directory-user-mutation.service.ts:22:42
+     20|   userId: string,
+     21| ): Promise<string[]> {
+     22|   const memberships = await tx.orgMember.findMany({
+       |                                          ^
+     23|     where: { userId, org: { lifecycleStatus: { not: 'DELETED' } } },
+     24|     select: { orgId: true },
+ ❯ src/services/directory-user-mutation.service.ts:48:26
+ ❯ loginWithSocialProfile src/services/social/social-login.service.ts:142:21
+ ❯ tests/unit/social-login.service.test.ts:148:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[42/75]⎯
+
+ FAIL  tests/unit/social-login.service.test.ts > social-login.service > allows existing social users even when their email domain is not allowed for new registration
+TypeError: Cannot read properties of undefined (reading 'findMany')
+ ❯ userDirectoryOrganisations src/services/directory-user-mutation.service.ts:22:42
+     20|   userId: string,
+     21| ): Promise<string[]> {
+     22|   const memberships = await tx.orgMember.findMany({
+       |                                          ^
+     23|     where: { userId, org: { lifecycleStatus: { not: 'DELETED' } } },
+     24|     select: { orgId: true },
+ ❯ src/services/directory-user-mutation.service.ts:48:26
+ ❯ loginWithSocialProfile src/services/social/social-login.service.ts:142:21
+ ❯ tests/unit/social-login.service.test.ts:430:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[43/75]⎯
+
+ FAIL  tests/unit/team-invite.acceptance.test.ts > team invite acceptance > accepts a pending invite by creating memberships and marking the invite accepted
+TypeError: tx.orgMember.findMany is not a function
+ ❯ userDirectoryOrganisations src/services/directory-user-mutation.service.ts:22:42
+     20|   userId: string,
+     21| ): Promise<string[]> {
+     22|   const memberships = await tx.orgMember.findMany({
+       |                                          ^
+     23|     where: { userId, org: { lifecycleStatus: { not: 'DELETED' } } },
+     24|     select: { orgId: true },
+ ❯ acceptTeamInviteWithinTransaction src/services/team-invite.service.acceptance.ts:126:30
+ ❯ tests/unit/team-invite.acceptance.test.ts:51:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[44/75]⎯
+
+ FAIL  tests/unit/team-invite.acceptance.test.ts > team invite acceptance > never backfills over a name the user already has
+TypeError: tx.orgMember.findMany is not a function
+ ❯ userDirectoryOrganisations src/services/directory-user-mutation.service.ts:22:42
+     20|   userId: string,
+     21| ): Promise<string[]> {
+     22|   const memberships = await tx.orgMember.findMany({
+       |                                          ^
+     23|     where: { userId, org: { lifecycleStatus: { not: 'DELETED' } } },
+     24|     select: { orgId: true },
+ ❯ acceptTeamInviteWithinTransaction src/services/team-invite.service.acceptance.ts:126:30
+ ❯ tests/unit/team-invite.acceptance.test.ts:127:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[45/75]⎯
+
+ FAIL  tests/unit/team-invite.acceptance.test.ts > team invite acceptance > accepts an invite into a second organisation on the same domain
+AssertionError: promise rejected "TypeError: tx.orgMember.findMany is not a…" instead of resolving
+ ❯ tests/unit/team-invite.acceptance.test.ts:183:5
+    181|         now: new Date('2026-03-02T00:00:00.000Z'),
+    182|       }),
+    183|     ).resolves.toEqual({ orgId: 'org-1', teamId: 'team-1' });
+       |     ^
+    184| 
+    185|     expect(tx.orgMember.findFirst).toHaveBeenCalledWith({
+
+Caused by: TypeError: tx.orgMember.findMany is not a function
+ ❯ userDirectoryOrganisations src/services/directory-user-mutation.service.ts:22:42
+ ❯ acceptTeamInviteWithinTransaction src/services/team-invite.service.acceptance.ts:126:30
+ ❯ tests/unit/team-invite.acceptance.test.ts:175:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[46/75]⎯
+
+ FAIL  tests/unit/team-invite.acceptance.test.ts > team invite acceptance > accepting an invite never overwrites an existing team membership role
+AssertionError: promise rejected "TypeError: tx.orgMember.findMany is not a…" instead of resolving
+ ❯ tests/unit/team-invite.acceptance.test.ts:210:7
+    208|       prisma: tx, teamInviteId: 'invite-1', userId: 'user-1', config: …
+    209|       now: new Date('2026-03-02T00:00:00.000Z'),
+    210|     })).resolves.toEqual({ orgId: 'org-1', teamId: 'team-1' });
+       |       ^
+    211| 
+    212|     expect(tx.teamMember.create).not.toHaveBeenCalled();
+
+Caused by: TypeError: tx.orgMember.findMany is not a function
+ ❯ userDirectoryOrganisations src/services/directory-user-mutation.service.ts:22:42
+ ❯ acceptTeamInviteWithinTransaction src/services/team-invite.service.acceptance.ts:126:30
+ ❯ tests/unit/team-invite.acceptance.test.ts:207:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[47/75]⎯
+
+ FAIL  tests/unit/token.service.active-claim.test.ts > exchangeAuthorizationCodeForTokens active claim (unit) > emits the active claim and persists it on the refresh token when the code carries both orgId and teamId
+Error: SECRET_CLIENT_IDENTIFIER
+ ❯ issueRefreshToken src/services/refresh-token.service.ts:249:54
+    247|   refreshTokenId: string;
+    248| }> {
+    249|   if (/^[a-f0-9]{64}$/i.test(params.clientId)) throw new AppError('INT…
+       |                                                      ^
+    250|   const clientId = await websiteRefreshStorageClientId(params, params.…
+    251|   return createRefreshTokenRecord({ ...params, clientId }, generateRef…
+ ❯ src/services/token.service.ts:295:38
+ ❯ tests/unit/token.service.active-claim.test.ts:98:29
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[48/75]⎯
+
+ FAIL  tests/unit/token.service.active-claim.test.ts > exchangeAuthorizationCodeForTokens active claim (unit) > fails closed if a product mapping is revoked after code validation but before signing
+AssertionError: expected Error: SECRET_CLIENT_IDENTIFIER { …(2) } to match object { statusCode: 401, …(1) }
+(1 matching property omitted from actual)
+
+- Expected
++ Received
+
+- {
+-   "message": "AUTHENTICATION_FAILED",
+-   "statusCode": 401,
++ AppError {
++   "statusCode": 500,
+  }
+
+ ❯ tests/unit/token.service.active-claim.test.ts:277:5
+    275|     });
+    276| 
+    277|     await expect(
+       |     ^
+    278|       exchangeAuthorizationCodeForTokens(
+    279|         {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[49/75]⎯
+
+ FAIL  tests/unit/token.service.active-claim.test.ts > exchangeAuthorizationCodeForTokens active claim (unit) > omits the active claim when the code carries neither orgId nor teamId
+Error: SECRET_CLIENT_IDENTIFIER
+ ❯ issueRefreshToken src/services/refresh-token.service.ts:249:54
+    247|   refreshTokenId: string;
+    248| }> {
+    249|   if (/^[a-f0-9]{64}$/i.test(params.clientId)) throw new AppError('INT…
+       |                                                      ^
+    250|   const clientId = await websiteRefreshStorageClientId(params, params.…
+    251|   return createRefreshTokenRecord({ ...params, clientId }, generateRef…
+ ❯ src/services/token.service.ts:295:38
+ ❯ tests/unit/token.service.active-claim.test.ts:449:29
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[50/75]⎯
+
+ FAIL  tests/unit/token.service.admin.test.ts > admin-domain token issuance > marks a platform superuser (SUPERUSER on ADMIN_AUTH_DOMAIN) as superuser on a client-domain token
+Error: SECRET_CLIENT_IDENTIFIER
+ ❯ issueRefreshToken src/services/refresh-token.service.ts:249:54
+    247|   refreshTokenId: string;
+    248| }> {
+    249|   if (/^[a-f0-9]{64}$/i.test(params.clientId)) throw new AppError('INT…
+       |                                                      ^
+    250|   const clientId = await websiteRefreshStorageClientId(params, params.…
+    251|   return createRefreshTokenRecord({ ...params, clientId }, generateRef…
+ ❯ src/services/token.service.ts:295:38
+ ❯ tests/unit/token.service.admin.test.ts:192:29
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[51/75]⎯
+
+ FAIL  tests/unit/token.service.refresh-active-claim.test.ts > exchangeRefreshTokenForTokens active-claim re-validation (unit) > keeps the active claim, including first-login placement, when the rotated token's team remains ACTIVE
+TypeError: tx.orgMember.findMany is not a function
+ ❯ userDirectoryOrganisations src/services/directory-user-mutation.service.ts:22:42
+     20|   userId: string,
+     21| ): Promise<string[]> {
+     22|   const memberships = await tx.orgMember.findMany({
+       |                                          ^
+     23|     where: { userId, org: { lifecycleStatus: { not: 'DELETED' } } },
+     24|     select: { orgId: true },
+ ❯ Object.beforeFamilyDecision src/services/refresh-token-rotation-policy.service.ts:32:26
+ ❯ exchangeRefreshToken src/services/refresh-token.service.ts:293:5
+ ❯ exchangeInsideTransaction src/services/token.service.ts:368:33
+ ❯ captureReuseRevocation src/services/refresh-token-transaction.service.ts:15:37
+ ❯ runRefreshTokenExchangeTransaction src/services/refresh-token-transaction.service.ts:32:9
+ ❯ tests/unit/token.service.refresh-active-claim.test.ts:120:29
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[52/75]⎯
+
+ FAIL  tests/unit/token.service.refresh-active-claim.test.ts > exchangeRefreshTokenForTokens active-claim re-validation (unit) > rejects refresh when the selected team membership is no longer active
+AssertionError: expected TypeError: tx.orgMember.findMany is not a… to match object { statusCode: 401, …(1) }
+
+- Expected
++ Received
+
+- {
+-   "message": "INVALID_REFRESH_TOKEN",
+-   "statusCode": 401,
++ TypeError {
++   "message": "tx.orgMember.findMany is not a function",
+  }
+
+ ❯ tests/unit/token.service.refresh-active-claim.test.ts:156:5
+    154|     const configUrl = 'https://client.example.com/auth-config';
+    155| 
+    156|     await expect(
+       |     ^
+    157|       exchangeRefreshTokenForTokens(
+    158|         { config, configUrl, refreshToken: 'current-refresh-token', cl…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[53/75]⎯
+
+ FAIL  tests/unit/token.service.refresh-active-claim.test.ts > exchangeRefreshTokenForTokens active-claim re-validation (unit) > retains a valid stored active scope even when org_features display is disabled
+TypeError: tx.orgMember.findMany is not a function
+ ❯ userDirectoryOrganisations src/services/directory-user-mutation.service.ts:22:42
+     20|   userId: string,
+     21| ): Promise<string[]> {
+     22|   const memberships = await tx.orgMember.findMany({
+       |                                          ^
+     23|     where: { userId, org: { lifecycleStatus: { not: 'DELETED' } } },
+     24|     select: { orgId: true },
+ ❯ Object.beforeFamilyDecision src/services/refresh-token-rotation-policy.service.ts:32:26
+ ❯ exchangeRefreshToken src/services/refresh-token.service.ts:293:5
+ ❯ exchangeInsideTransaction src/services/token.service.ts:368:33
+ ❯ captureReuseRevocation src/services/refresh-token-transaction.service.ts:15:37
+ ❯ runRefreshTokenExchangeTransaction src/services/refresh-token-transaction.service.ts:32:9
+ ❯ tests/unit/token.service.refresh-active-claim.test.ts:181:29
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[54/75]⎯
+
+ FAIL  tests/unit/token.service.refresh-active-claim.test.ts > exchangeRefreshTokenForTokens active-claim re-validation (unit) > retains a cross-domain scope only for the exact active product mapping
+TypeError: tx.orgMember.findMany is not a function
+ ❯ userDirectoryOrganisations src/services/directory-user-mutation.service.ts:22:42
+     20|   userId: string,
+     21| ): Promise<string[]> {
+     22|   const memberships = await tx.orgMember.findMany({
+       |                                          ^
+     23|     where: { userId, org: { lifecycleStatus: { not: 'DELETED' } } },
+     24|     select: { orgId: true },
+ ❯ Object.beforeFamilyDecision src/services/refresh-token-rotation-policy.service.ts:32:26
+ ❯ exchangeRefreshToken src/services/refresh-token.service.ts:293:5
+ ❯ exchangeInsideTransaction src/services/token.service.ts:368:33
+ ❯ captureReuseRevocation src/services/refresh-token-transaction.service.ts:15:37
+ ❯ runRefreshTokenExchangeTransaction src/services/refresh-token-transaction.service.ts:32:9
+ ❯ tests/unit/token.service.refresh-active-claim.test.ts:216:29
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[55/75]⎯
+
+ FAIL  tests/unit/token.service.refresh-active-claim.test.ts > exchangeRefreshTokenForTokens active-claim re-validation (unit) > rejects a cross-domain refresh after its product key is revoked
+AssertionError: expected TypeError: tx.orgMember.findMany is not a… to match object { statusCode: 401, …(1) }
+
+- Expected
++ Received
+
+- {
+-   "message": "INVALID_REFRESH_TOKEN",
+-   "statusCode": 401,
++ TypeError {
++   "message": "tx.orgMember.findMany is not a function",
+  }
+
+ ❯ tests/unit/token.service.refresh-active-claim.test.ts:260:5
+    258|     };
+    259| 
+    260|     await expect(
+       |     ^
+    261|       exchangeRefreshTokenForTokens(
+    262|         {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[56/75]⎯
+
+ FAIL  tests/unit/token.service.refresh-active-claim.test.ts > exchangeRefreshTokenForTokens active-claim re-validation (unit) > rejects an unscoped refresh when automatic team selection requires an exact team
+AssertionError: expected TypeError: tx.orgMember.findMany is not a… to match object { statusCode: 401, …(1) }
+
+- Expected
++ Received
+
+- {
+-   "message": "INVALID_REFRESH_TOKEN",
+-   "statusCode": 401,
++ TypeError {
++   "message": "tx.orgMember.findMany is not a function",
+  }
+
+ ❯ tests/unit/token.service.refresh-active-claim.test.ts:290:5
+    288|     };
+    289| 
+    290|     await expect(
+       |     ^
+    291|       exchangeRefreshTokenForTokens(
+    292|         {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[57/75]⎯
+
+ FAIL  tests/unit/token.service.refresh-active-claim.test.ts > exchangeRefreshTokenForTokens active-claim re-validation (unit) > preserves a legacy unscoped refresh for an off-flow user who already has a team
+TypeError: tx.orgMember.findMany is not a function
+ ❯ userDirectoryOrganisations src/services/directory-user-mutation.service.ts:22:42
+     20|   userId: string,
+     21| ): Promise<string[]> {
+     22|   const memberships = await tx.orgMember.findMany({
+       |                                          ^
+     23|     where: { userId, org: { lifecycleStatus: { not: 'DELETED' } } },
+     24|     select: { orgId: true },
+ ❯ Object.beforeFamilyDecision src/services/refresh-token-rotation-policy.service.ts:32:26
+ ❯ exchangeRefreshToken src/services/refresh-token.service.ts:293:5
+ ❯ exchangeInsideTransaction src/services/token.service.ts:368:33
+ ❯ captureReuseRevocation src/services/refresh-token-transaction.service.ts:15:37
+ ❯ runRefreshTokenExchangeTransaction src/services/refresh-token-transaction.service.ts:32:9
+ ❯ tests/unit/token.service.refresh-active-claim.test.ts:315:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[58/75]⎯
+
+ FAIL  tests/unit/token.service.required-placement.test.ts > required team placement during token exchange > creates, validates, persists, and signs the exact team for a brand-new user
+Error: SECRET_CLIENT_IDENTIFIER
+ ❯ issueRefreshToken src/services/refresh-token.service.ts:249:54
+    247|   refreshTokenId: string;
+    248| }> {
+    249|   if (/^[a-f0-9]{64}$/i.test(params.clientId)) throw new AppError('INT…
+       |                                                      ^
+    250|   const clientId = await websiteRefreshStorageClientId(params, params.…
+    251|   return createRefreshTokenRecord({ ...params, clientId }, generateRef…
+ ❯ src/services/token.service.ts:295:38
+ ❯ tests/unit/token.service.required-placement.test.ts:122:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[59/75]⎯
+
+ FAIL  tests/unit/token.service.signature-refresh.test.ts > exchangeRefreshTokenForTokens signature policy gate (unit) > does not create, consume, or rotate a valid token when a required signature is missing
+AssertionError: expected TypeError: Cannot read properties of unde… to match object { statusCode: 401, …(1) }
+
+- Expected
++ Received
+
+- {
+-   "message": "INVALID_REFRESH_TOKEN",
+-   "statusCode": 401,
++ TypeError {
++   "message": "Cannot read properties of undefined (reading 'findMany')",
+  }
+
+ ❯ tests/unit/token.service.signature-refresh.test.ts:106:5
+    104|     });
+    105| 
+    106|     await expect(
+       |     ^
+    107|       exchangeRefreshTokenForTokens(context, {
+    108|         now: () => now,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[60/75]⎯
+
+ FAIL  tests/unit/token.service.signature-refresh.test.ts > exchangeRefreshTokenForTokens signature policy gate (unit) > treats a revoked signature as missing without consuming the refresh token
+AssertionError: expected [Function] to throw error including 'INVALID_REFRESH_TOKEN' but got 'Cannot read properties of undefined (…'
+
+Expected: "INVALID_REFRESH_TOKEN"
+Received: "Cannot read properties of undefined (reading 'findMany')"
+
+ ❯ tests/unit/token.service.signature-refresh.test.ts:128:5
+    126|     });
+    127| 
+    128|     await expect(
+       |     ^
+    129|       exchangeRefreshTokenForTokens(context, {
+    130|         now: () => now,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[61/75]⎯
+
+ FAIL  tests/unit/token.service.signature-refresh.test.ts > exchangeRefreshTokenForTokens signature policy gate (unit) > locks policy state and rotates normally when the current signature is valid
+ FAIL  tests/unit/token.service.signature-refresh.test.ts > exchangeRefreshTokenForTokens signature policy gate (unit) > preserves legacy refresh behavior when the domain service is disabled
+TypeError: Cannot read properties of undefined (reading 'findMany')
+ ❯ userDirectoryOrganisations src/services/directory-user-mutation.service.ts:22:42
+     20|   userId: string,
+     21| ): Promise<string[]> {
+     22|   const memberships = await tx.orgMember.findMany({
+       |                                          ^
+     23|     where: { userId, org: { lifecycleStatus: { not: 'DELETED' } } },
+     24|     select: { orgId: true },
+ ❯ Object.beforeFamilyDecision src/services/refresh-token-rotation-policy.service.ts:32:26
+ ❯ exchangeRefreshToken src/services/refresh-token.service.ts:293:5
+ ❯ exchangeInsideTransaction src/services/token.service.ts:368:33
+ ❯ captureReuseRevocation src/services/refresh-token-transaction.service.ts:15:37
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[62/75]⎯
+
+ FAIL  tests/unit/token.service.test.ts > exchangeAuthorizationCodeForTokens (unit) > includes org claim in an issued JWT and round-trips the org context
+Error: SECRET_CLIENT_IDENTIFIER
+ ❯ issueRefreshToken src/services/refresh-token.service.ts:249:54
+    247|   refreshTokenId: string;
+    248| }> {
+    249|   if (/^[a-f0-9]{64}$/i.test(params.clientId)) throw new AppError('INT…
+       |                                                      ^
+    250|   const clientId = await websiteRefreshStorageClientId(params, params.…
+    251|   return createRefreshTokenRecord({ ...params, clientId }, generateRef…
+ ❯ src/services/token.service.ts:295:38
+ ❯ tests/unit/token.service.test.ts:112:43
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[63/75]⎯
+
+ FAIL  tests/unit/token.service.test.ts > exchangeAuthorizationCodeForTokens (unit) > omits the org claim when org_features is disabled
+Error: SECRET_CLIENT_IDENTIFIER
+ ❯ issueRefreshToken src/services/refresh-token.service.ts:249:54
+    247|   refreshTokenId: string;
+    248| }> {
+    249|   if (/^[a-f0-9]{64}$/i.test(params.clientId)) throw new AppError('INT…
+       |                                                      ^
+    250|   const clientId = await websiteRefreshStorageClientId(params, params.…
+    251|   return createRefreshTokenRecord({ ...params, clientId }, generateRef…
+ ❯ src/services/token.service.ts:295:38
+ ❯ tests/unit/token.service.test.ts:211:43
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[64/75]⎯
+
+ FAIL  tests/unit/token.service.test.ts > exchangeAuthorizationCodeForTokens (unit) > omits the org claim when the user has no organisation on the domain
+Error: SECRET_CLIENT_IDENTIFIER
+ ❯ issueRefreshToken src/services/refresh-token.service.ts:249:54
+    247|   refreshTokenId: string;
+    248| }> {
+    249|   if (/^[a-f0-9]{64}$/i.test(params.clientId)) throw new AppError('INT…
+       |                                                      ^
+    250|   const clientId = await websiteRefreshStorageClientId(params, params.…
+    251|   return createRefreshTokenRecord({ ...params, clientId }, generateRef…
+ ❯ src/services/token.service.ts:295:38
+ ❯ tests/unit/token.service.test.ts:318:43
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[65/75]⎯
+
+ FAIL  tests/unit/token.service.test.ts > exchangeAuthorizationCodeForTokens (unit) > requires a matching PKCE verifier when the authorization code has a challenge
+Error: SECRET_CLIENT_IDENTIFIER
+ ❯ issueRefreshToken src/services/refresh-token.service.ts:249:54
+    247|   refreshTokenId: string;
+    248| }> {
+    249|   if (/^[a-f0-9]{64}$/i.test(params.clientId)) throw new AppError('INT…
+       |                                                      ^
+    250|   const clientId = await websiteRefreshStorageClientId(params, params.…
+    251|   return createRefreshTokenRecord({ ...params, clientId }, generateRef…
+ ❯ src/services/token.service.ts:295:38
+ ❯ tests/unit/token.service.test.ts:421:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[66/75]⎯
+
+ FAIL  tests/unit/twofactor-disable.service.test.ts > disableTwoFactorForUser > holds the user lock through 2FA mutation, refresh revocation, and tokenVersion bump
+TypeError: Cannot read properties of undefined (reading 'findMany')
+ ❯ userDirectoryOrganisations src/services/directory-user-mutation.service.ts:22:42
+     20|   userId: string,
+     21| ): Promise<string[]> {
+     22|   const memberships = await tx.orgMember.findMany({
+       |                                          ^
+     23|     where: { userId, org: { lifecycleStatus: { not: 'DELETED' } } },
+     24|     select: { orgId: true },
+ ❯ src/services/directory-user-mutation.service.ts:48:26
+ ❯ bumpUserTokenVersion src/services/refresh-token-revocation.service.ts:30:3
+ ❯ src/services/refresh-token-revocation.service.ts:123:5
+ ❯ revokeAllRefreshTokensForUser src/services/refresh-token-revocation.service.ts:115:3
+ ❯ src/services/twofactor-disable.service.ts:99:5
+ ❯ Object.<anonymous> tests/unit/twofactor-disable.service.test.ts:51:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[67/75]⎯
+
+
+ Test Files  26 failed | 369 passed (395)
+      Tests  75 failed | 2586 passed | 3 skipped (2664)
+   Start at  00:02:08
+   Duration  251.93s (transform 6.02s, setup 15.56s, collect 66.26s, tests 105.25s, environment 36ms, prepare 22.71s)
+
+undefined
+C:\Users\ondre\Projects\UnlikeOtherAuthenticator\.worktrees\sol-audit-fixes-api-20261014\API:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command "vitest" not found
+Program "node.exe" ended with non-zero exit code: 1 (0x00000001).
+UNIT_GATE_EXIT=1
