@@ -5,7 +5,7 @@ import { ACCESS_TOKEN_AUDIENCE } from '../../src/config/constants.js';
 import { registerErrorHandler } from '../../src/middleware/error-handler.js';
 import { registerInternalAdminLedgerRuntimeKeyRoutes } from '../../src/routes/internal/admin/billing-ledger-runtime-keys.js';
 
-const db = vi.hoisted(() => ({ user: { findUnique: vi.fn() },
+const db = vi.hoisted(() => ({ adminAccessTokenRevocation: { findUnique: vi.fn().mockResolvedValue(null) }, user: { findUnique: vi.fn() },
   domainRole: { findUnique: vi.fn() }, billingLedgerRuntimeKey: { findMany: vi.fn() } }));
 const service = vi.hoisted(() => ({ createLedgerRuntimeKey: vi.fn(), revokeLedgerRuntimeKey: vi.fn() }));
 vi.mock('../../src/db/prisma.js', () => ({ getAdminPrisma: () => db }));

@@ -1,3 +1,4 @@
+import { unboundDirectoryUserStore } from '../helpers/directory-store.js';
 import { describe, expect, it, vi } from 'vitest';
 
 import { parseEnv } from '../../src/config/env.js';
@@ -21,6 +22,7 @@ describe('social login credential lock order', () => {
       twoFaEnabled: true,
     });
     const prisma = {
+      ...unboundDirectoryUserStore(),
       user: {
         findUnique: vi.fn().mockResolvedValue({ id: 'user-1' }),
         create: vi.fn(),

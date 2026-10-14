@@ -5,7 +5,7 @@ import { ACCESS_TOKEN_AUDIENCE } from '../../src/config/constants.js';
 import { registerErrorHandler } from '../../src/middleware/error-handler.js';
 import { registerInternalAdminSmsPolicyRoutes } from '../../src/routes/internal/admin/billing-sms-policies.js';
 
-const db = vi.hoisted(() => ({ user: { findUnique: vi.fn() }, domainRole: { findUnique: vi.fn() } }));
+const db = vi.hoisted(() => ({ adminAccessTokenRevocation: { findUnique: vi.fn().mockResolvedValue(null) }, user: { findUnique: vi.fn() }, domainRole: { findUnique: vi.fn() } }));
 const service = vi.hoisted(() => ({ previewSmsFxPolicy: vi.fn(), previewSmsRoutePolicy: vi.fn(),
   acceptSmsFxPolicy: vi.fn(), acceptSmsFxRefresh: vi.fn(), acceptSmsRoutePolicy: vi.fn(), listSmsPolicies: vi.fn(),
   serializeSmsFxPolicy: vi.fn((value) => value), serializeSmsRoutePolicy: vi.fn((value) => value) }));

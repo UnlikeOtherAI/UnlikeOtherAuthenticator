@@ -20,6 +20,7 @@ describe('org-placement.service', () => {
       },
       $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => {
         return await fn({
+          $queryRaw: vi.fn().mockResolvedValue([]),
           orgMember: {
             findFirst: txOrgMemberFindFirst,
             create: txOrgMemberCreate,
@@ -75,6 +76,7 @@ describe('org-placement.service', () => {
       },
       $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => {
         return await fn({
+          $queryRaw: vi.fn().mockResolvedValue([]),
           orgMember: {
             findFirst: txOrgMemberFindFirst,
             create: txOrgMemberCreate,
@@ -214,6 +216,7 @@ describe('org-placement.service', () => {
       },
       $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) =>
         await fn({
+          $queryRaw: vi.fn().mockResolvedValue([]),
           orgMember: {
             findFirst: txOrgMemberFindFirst,
             create: vi.fn(async () => ({ id: 'org-member-1' })),

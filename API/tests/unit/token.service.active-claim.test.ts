@@ -1,7 +1,6 @@
 import type { PrismaClient } from '@prisma/client';
 import { describe, expect, it, vi } from 'vitest';
 
-import { createClientId } from '../../src/utils/hash.js';
 import { exchangeAuthorizationCodeForTokens } from '../../src/services/token.service.js';
 import { verifyAccessToken } from '../../src/services/access-token.service.js';
 import {
@@ -57,7 +56,7 @@ describe('exchangeAuthorizationCodeForTokens active claim (unit)', () => {
     const sharedSecret = process.env.SHARED_SECRET!;
     const code = 'code-with-active-scope';
     const config = makeConfig({ enabled: false });
-    const clientId = createClientId(config.domain, sharedSecret);
+    const clientId = 'client-domain-id';
     const configUrl = 'https://client.example.com/auth-config';
     const redirectUrl = 'https://client.example.com/oauth/callback';
 
@@ -138,7 +137,7 @@ describe('exchangeAuthorizationCodeForTokens active claim (unit)', () => {
       domain: 'api.deepsignal.live',
       login_flow: { email_code_enabled: false, team_selection: 'off' as const },
     };
-    const clientId = createClientId(config.domain, sharedSecret);
+    const clientId = 'client-domain-id';
     const configUrl = 'https://api.deepsignal.live/auth-config';
     const redirectUrl = 'https://api.deepsignal.live/oauth/callback';
     const prisma = makePrisma();
@@ -281,7 +280,7 @@ describe('exchangeAuthorizationCodeForTokens active claim (unit)', () => {
           config,
           configUrl,
           redirectUrl,
-          clientId: createClientId(config.domain, sharedSecret),
+          clientId: 'client-domain-id',
           codeVerifier: TEST_CODE_VERIFIER,
         },
         { now: () => now, sharedSecret, adminPrisma: prisma, prisma },
@@ -318,7 +317,7 @@ describe('exchangeAuthorizationCodeForTokens active claim (unit)', () => {
           config,
           configUrl,
           redirectUrl,
-          clientId: createClientId(config.domain, sharedSecret),
+          clientId: 'client-domain-id',
           codeVerifier: TEST_CODE_VERIFIER,
         },
         { now: () => now, sharedSecret, prisma },
@@ -333,7 +332,7 @@ describe('exchangeAuthorizationCodeForTokens active claim (unit)', () => {
     const sharedSecret = process.env.SHARED_SECRET!;
     const code = 'code-with-partial-scope';
     const config = makeConfig({ enabled: false });
-    const clientId = createClientId(config.domain, sharedSecret);
+    const clientId = 'client-domain-id';
     const configUrl = 'https://client.example.com/auth-config';
     const redirectUrl = 'https://client.example.com/oauth/callback';
 
@@ -383,7 +382,7 @@ describe('exchangeAuthorizationCodeForTokens active claim (unit)', () => {
     const sharedSecret = process.env.SHARED_SECRET!;
     const code = 'code-with-inactive-scope';
     const config = makeConfig({ enabled: false });
-    const clientId = createClientId(config.domain, sharedSecret);
+    const clientId = 'client-domain-id';
     const configUrl = 'https://client.example.com/auth-config';
     const redirectUrl = 'https://client.example.com/oauth/callback';
     const prisma = makePrisma();
@@ -419,7 +418,7 @@ describe('exchangeAuthorizationCodeForTokens active claim (unit)', () => {
     const sharedSecret = process.env.SHARED_SECRET!;
     const code = 'code-with-no-scope';
     const config = makeConfig({ enabled: false });
-    const clientId = createClientId(config.domain, sharedSecret);
+    const clientId = 'client-domain-id';
     const configUrl = 'https://client.example.com/auth-config';
     const redirectUrl = 'https://client.example.com/oauth/callback';
 

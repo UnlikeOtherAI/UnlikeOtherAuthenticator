@@ -31,6 +31,7 @@ describe('personal organisation placement', () => {
       },
       $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => {
         return await fn({
+          $queryRaw: vi.fn().mockResolvedValue([]),
           organisation: {
             findFirst: txOrgFindFirst,
             create: txOrgCreate,
@@ -157,6 +158,7 @@ describe('personal organisation placement', () => {
       },
       $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => {
         return await fn({
+          $queryRaw: vi.fn().mockResolvedValue([]),
           organisation: {
             findFirst: vi.fn(async () => null),
             create: txOrgCreate,

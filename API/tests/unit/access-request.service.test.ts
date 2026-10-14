@@ -85,14 +85,17 @@ function makeAccessRequestRow(overrides?: Record<string, unknown>) {
 
 function makePrisma() {
   return {
+    $queryRaw: vi.fn().mockResolvedValue([]),
     organisation: {
+      findUnique: vi.fn().mockResolvedValue({ id: 'org-1', lifecycleStatus: 'ACTIVE' }),
       findFirst: vi.fn(),
     },
     team: {
+      findUnique: vi.fn().mockResolvedValue({ id: 'team-1', orgId: 'org-1', lifecycleStatus: 'ACTIVE' }),
       findFirst: vi.fn(),
     },
     user: {
-      findUnique: vi.fn(),
+      findUnique: vi.fn().mockResolvedValue({ id: 'user-1', lifecycleStatus: 'ACTIVE' }),
     },
     teamMember: {
       findFirst: vi.fn(),
@@ -139,6 +142,7 @@ describe('access request services', () => {
     });
     prisma.user.findUnique.mockResolvedValue({
       id: 'user-1',
+      lifecycleStatus: 'ACTIVE',
       email: 'alex@example.com',
       name: 'Alex Example',
     });

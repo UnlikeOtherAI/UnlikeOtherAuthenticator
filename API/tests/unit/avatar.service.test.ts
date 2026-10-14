@@ -1,3 +1,4 @@
+import { unboundDirectoryUserStore } from '../helpers/directory-store.js';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -59,6 +60,7 @@ function fakePrisma(
   const roles = new Set((seed.roles ?? []).map((role) => `${role.domain}|${role.userId}`));
 
   const store = {
+    ...unboundDirectoryUserStore(),
     user: {
       findUnique: async (args: IdWhere) => users.get(args.where.id) ?? null,
       findMany: async (args: IdInWhere) =>

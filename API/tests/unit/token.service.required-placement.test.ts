@@ -5,7 +5,6 @@ import { verifyAccessToken } from '../../src/services/access-token.service.js';
 import type { ClientConfig } from '../../src/services/config.service.js';
 import { resolveRequiredAuthorizationTeam } from '../../src/services/required-team-placement.service.js';
 import { exchangeAuthorizationCodeForTokens } from '../../src/services/token.service.js';
-import { createClientId } from '../../src/utils/hash.js';
 import {
   makeConfig,
   TEST_CODE_CHALLENGE,
@@ -125,7 +124,7 @@ describe('required team placement during token exchange', () => {
         config,
         configUrl: 'https://client.example.com/auth-config',
         redirectUrl: 'https://client.example.com/oauth/callback',
-        clientId: createClientId(config.domain, sharedSecret),
+        clientId: 'client-domain-id',
         codeVerifier: TEST_CODE_VERIFIER,
       },
       { now: () => now, prisma, sharedSecret },
