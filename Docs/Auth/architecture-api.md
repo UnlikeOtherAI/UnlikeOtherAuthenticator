@@ -877,7 +877,7 @@ admin client because every avatar route authenticates before a tenant context ex
   from inside checks out a second connection from a pool whose per-instance cap is 2–3,
   and under concurrent load that waits on the connection its own transaction owns until
   the 5 s interactive-transaction timeout (P2028) — the 2026-09-26 sign-in outage. Using
-  the *other* pool's client inside a transaction is fine. `db/pool-checkout-guard.ts`
+  the _other_ pool's client inside a transaction is fine. `db/pool-checkout-guard.ts`
   wraps both global clients to enforce this: a same-pool nested checkout throws under
   `NODE_ENV=test` and is logged once per call site everywhere else.
 - Production container startup keeps schema authority and request authority
@@ -923,7 +923,6 @@ and passes it to Auth SSR. Product configuration cannot supply this setting.
 SMS number payment implementation: services/billing-sms-number.service.ts owns immutable monthly acceptance and verified Checkout projection; services/billing-sms-number-lifecycle.service.ts owns acquired-number attachment and fenced release/cancellation. routes/billing/sms-numbers.ts is the thin public registration.
 
 SMS prepaid runtime: services/billing-sms-{reservation,dispatch,receipt,grant,standing,inbound}.service.ts own admission, physical dispatch fencing and actual usage settlement; routes/billing/sms-{reservations,grants,inbound}.ts register the public contracts. Exact money arithmetic lives in billing-sms-money.service.ts. All share the canonical wallet and budget services.
-
 
 ### Subject verification dependency failures
 
@@ -1017,3 +1016,11 @@ org streams cannot be reopened by later cleanup. Deletion audit batching remains
 shared-policy work; a committed completed cursor selects exclusive policy at the
 next final erasure-stage entry before actor/user locks. The writer ledger and
 source guard are source evidence, not a substitute for real DB/order/RLS tests.
+
+### Auth translation source and timeout
+
+The translation service imports the complete English catalogue from the dependency-free
+@unlikeotherai/auth-ui-strings package. Its source hash invalidates older incomplete translations.
+The OpenAI abort deadline spans response headers and body consumption. Aborted/invalid body reads
+fail without persisting a completed translation. Language text has no tool or credential authority;
+output is restricted to known source keys and string values.

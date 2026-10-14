@@ -3,11 +3,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   BillingAdjustmentFormValues,
   BillingAppKeyFormValues,
+  CreatedBillingAppKey,
   BillingAssignmentFormValues,
   BillingServiceFormValues,
   BillingTariffFormValues,
 } from '../../schemas/billing';
 import { billingAdminService } from '../../services/billing-admin-service';
+import { useAsyncDeliveryScope } from '../../utils/use-async-delivery-scope';
 
 const billingServicesKey = ['admin', 'billing', 'services'] as const;
 
@@ -66,11 +68,20 @@ export function useRemoveBillingAssignmentMutation(serviceId: string) {
   });
 }
 
-export function useCreateBillingAppKeyMutation(serviceId: string) {
+export function useCreateBillingAppKeyMutation(
+  serviceId: string,
+  onCreated: (key: CreatedBillingAppKey) => void,
+  open = true,
+) {
   const refresh = useRefreshBillingServices();
+  const captureDelivery = useAsyncDeliveryScope(open ? serviceId : null);
   return useMutation({
-    mutationFn: (input: BillingAppKeyFormValues) =>
-      billingAdminService.createAppKey(serviceId, input),
+    gcTime: 0,
+    mutationFn: async (input: BillingAppKeyFormValues) => {
+      const canDeliver = captureDelivery();
+      const key = await billingAdminService.createAppKey(serviceId, input);
+      if (canDeliver()) onCreated(key);
+    },
     onSuccess: refresh,
   });
 }

@@ -55,6 +55,9 @@ importers:
 
   API:
     dependencies:
+      '@unlikeotherai/auth-ui-strings':
+        specifier: workspace:*
+        version: link:../packages/auth-ui-strings
       '@aws-sdk/client-ses':
         specifier: ^3.994.0
         version: 3.1033.0
@@ -225,6 +228,9 @@ importers:
 
   Auth:
     dependencies:
+      '@unlikeotherai/auth-ui-strings':
+        specifier: workspace:*
+        version: link:../packages/auth-ui-strings
       '@unlikeotherai/slug':
         specifier: workspace:*
         version: link:../packages/slug
@@ -268,6 +274,12 @@ importers:
       vitest:
         specifier: ^3.2.6
         version: 3.2.6(@types/node@22.19.17)(happy-dom@20.11.0)(jiti@2.7.0)(jsdom@30.0.1)(lightningcss@1.32.0)(tsx@4.21.0)
+
+  packages/auth-ui-strings:
+    devDependencies:
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
 
   packages/billing-statement-protocol:
     devDependencies:

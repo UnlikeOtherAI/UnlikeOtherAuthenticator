@@ -299,3 +299,15 @@ value). `utils/access-status.tsx` provides it to LoginPage independently of
 product config, query parameters and browser storage. Only auth-server
 `AUTH_ACCESS_STATUS_ENABLED=true` enables the entry and server endpoints.
 The API also refuses previously issued proofs when disabled.
+
+## 2026-10-14 Auth recovery boundaries
+
+The dependency-free packages/auth-ui-strings/src/index.ts is the canonical English
+catalogue imported by Auth and the API translation service. Remote responses are loaded once per
+mounted language even if partial; display falls back to bundled English for missing keys.
+Email code initiation, resend, verification and registration preserve the original OAuth state.
+The URL-seeded handoff accepts only a safe callback from the server-resolved redirect_urls,
+reconstructed with OAuth code/error/state response fields. For websites the callback allowlist
+comes from signed configuration; public/native clients use the separately validated registered
+client allowlist. Normal HTTPS completion redirects remain unchanged, and the public OAuth
+cancellation handoff retains its registered HTTPS callback. Arbitrary query destinations are refused.

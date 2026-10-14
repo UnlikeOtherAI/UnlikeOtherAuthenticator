@@ -36,7 +36,7 @@ export function BillingAppKeyDialog({
   open: boolean;
   service: BillingService;
 }) {
-  const create = useCreateBillingAppKeyMutation(service.id);
+  const create = useCreateBillingAppKeyMutation(service.id, onCreated, open);
   const form = useForm<BillingAppKeyFormValues>({
     resolver: zodResolver(BillingAppKeyFormSchema),
     defaultValues: defaults(),
@@ -55,8 +55,7 @@ export function BillingAppKeyDialog({
 
   async function submit(values: BillingAppKeyFormValues) {
     try {
-      const created = await create.mutateAsync(values);
-      onCreated(created);
+      await create.mutateAsync(values);
     } catch {
       /* Keep values and show the mutation error for retry. */
     }
@@ -147,7 +146,8 @@ export function BillingAppKeyDialog({
           </FieldShell>
         ) : (
           <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">
-            {purpose === 'sms_runtime' ? 'SMS runtime keys authorize prepaid physical dispatch and provider recovery. They cannot carry redirect origins or create Checkout/top-ups.'
+            {purpose === 'sms_runtime'
+              ? 'SMS runtime keys authorize prepaid physical dispatch and provider recovery. They cannot carry redirect origins or create Checkout/top-ups.'
               : 'Entitlement keys cannot carry redirect origins and are rejected by every Stripe lifecycle route.'}
           </div>
         )}
@@ -160,7 +160,8 @@ export function BillingAppKeyDialog({
         </FieldShell>
         <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800">
           This {purpose.replace('_', ' ')} key authenticates only {service.identifier}. Every
-          {purpose === 'sms_runtime' ? 'human reservation needs a fresh actor assertion; machine delegation needs a current explicit grant. Recovery remains bound to the original dispatch.'
+          {purpose === 'sms_runtime'
+            ? 'human reservation needs a fresh actor assertion; machine delegation needs a current explicit grant. Recovery remains bound to the original dispatch.'
             : 'request still needs a fresh, signed actor assertion binding the user, organisation, team, and product.'}
         </div>
         {create.isError ? (

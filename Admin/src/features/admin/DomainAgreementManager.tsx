@@ -6,8 +6,12 @@ import { Button } from '../../components/ui/Button';
 import { Card, CardHeader } from '../../components/ui/Card';
 import { DataTable, Td } from '../../components/ui/Table';
 import { useAdminUi } from '../shell/admin-ui';
-import { adminService, type AgreementInput, type AgreementVersionInput } from '../../services/admin-service';
-import { downloadBlob, previewPdfBlob } from '../../utils/blob-download';
+import {
+  adminService,
+  type AgreementInput,
+  type AgreementVersionInput,
+} from '../../services/admin-service';
+import { downloadBlob, openPdfPreview, previewPdfBlob } from '../../utils/blob-download';
 import {
   AgreementDialog,
   AgreementVersionDialog,
@@ -26,11 +30,19 @@ export function DomainAgreementManager({ agreements, domain, enabled, refresh }:
   const { confirm } = useAdminUi();
   const [params] = useSearchParams();
   const selectedId = params.get('agreement');
-  const visible = selectedId ? agreements.filter((agreement) => agreement.id === selectedId) : agreements;
+  const visible = selectedId
+    ? agreements.filter((agreement) => agreement.id === selectedId)
+    : agreements;
   const [agreementDialog, setAgreementDialog] = useState<DomainAgreement | 'new' | null>(null);
   const [versionAgreement, setVersionAgreement] = useState<DomainAgreement | null>(null);
-  const [editingVersion, setEditingVersion] = useState<{ agreement: DomainAgreement; version: DomainAgreementVersion } | null>(null);
-  const [replacement, setReplacement] = useState<{ agreement: DomainAgreement; version: DomainAgreementVersion } | null>(null);
+  const [editingVersion, setEditingVersion] = useState<{
+    agreement: DomainAgreement;
+    version: DomainAgreementVersion;
+  } | null>(null);
+  const [replacement, setReplacement] = useState<{
+    agreement: DomainAgreement;
+    version: DomainAgreementVersion;
+  } | null>(null);
   const [operationError, setOperationError] = useState(false);
 
   async function update(action: () => Promise<unknown>) {
@@ -65,7 +77,9 @@ export function DomainAgreementManager({ agreements, domain, enabled, refresh }:
       return;
     }
     if (!versionAgreement || !file) throw new Error('Missing agreement version upload');
-    await update(() => adminService.uploadDomainAgreementVersion(domain, versionAgreement.id, file, input));
+    await update(() =>
+      adminService.uploadDomainAgreementVersion(domain, versionAgreement.id, file, input),
+    );
   }
 
   function confirmed(title: string, body: string, action: () => Promise<unknown>) {
@@ -80,14 +94,21 @@ export function DomainAgreementManager({ agreements, domain, enabled, refresh }:
     mode: 'download' | 'preview',
   ) {
     setOperationError(false);
+    let preview: Window | undefined;
     try {
-      const blob = await adminService.downloadDomainAgreementVersionSource(domain, agreement.id, version.id);
+      if (mode === 'preview') preview = openPdfPreview();
+      const blob = await adminService.downloadDomainAgreementVersionSource(
+        domain,
+        agreement.id,
+        version.id,
+      );
       if (mode === 'preview') {
-        previewPdfBlob(blob);
+        previewPdfBlob(blob, preview);
       } else {
         downloadBlob(blob, version.original_filename);
       }
     } catch {
+      preview?.close();
       setOperationError(true);
     }
   }
@@ -95,36 +116,60 @@ export function DomainAgreementManager({ agreements, domain, enabled, refresh }:
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-xs text-gray-500">Published versions are immutable. Upload changes as a new draft version.</p>
-        <Button icon="plus" variant="primary" size="sm" onClick={() => setAgreementDialog('new')}>New agreement</Button>
+        <p className="text-xs text-gray-500">
+          Published versions are immutable. Upload changes as a new draft version.
+        </p>
+        <Button icon="plus" variant="primary" size="sm" onClick={() => setAgreementDialog('new')}>
+          New agreement
+        </Button>
       </div>
 
       {operationError ? (
-        <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">The operation could not be completed. The domain policy may have changed; refresh and try again.</p>
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
+          The operation could not be completed. The domain policy may have changed; refresh and try
+          again.
+        </p>
       ) : null}
 
-      {selectedId ? <Link className="text-sm text-indigo-600 hover:underline" to="?tab=agreements">All agreements</Link> : null}
+      {selectedId ? (
+        <Link className="text-sm text-indigo-600 hover:underline" to="?tab=agreements">
+          All agreements
+        </Link>
+      ) : null}
       {selectedId && !visible.length ? <p>Agreement not found.</p> : null}
       {visible.map((agreement) => (
         <Card key={agreement.id}>
           <CardHeader>
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <h3><Link to={`?tab=agreements&agreement=${encodeURIComponent(agreement.id)}`} className="text-sm font-semibold text-indigo-600 hover:underline">{agreement.title}</Link></h3>
+                <h3>
+                  <Link
+                    to={`?tab=agreements&agreement=${encodeURIComponent(agreement.id)}`}
+                    className="text-sm font-semibold text-indigo-600 hover:underline"
+                  >
+                    {agreement.title}
+                  </Link>
+                </h3>
                 <Badge variant={agreement.required_for_access ? 'purple' : 'slate'}>
                   {agreement.required_for_access ? 'Required' : 'Optional'}
                 </Badge>
                 <Badge>Order {agreement.display_order}</Badge>
               </div>
-              <p className="mt-1 text-xs text-gray-400">{agreement.description || 'No description'}</p>
+              <p className="mt-1 text-xs text-gray-400">
+                {agreement.description || 'No description'}
+              </p>
             </div>
             <div className="flex flex-wrap justify-end gap-2">
-              <Button size="sm" onClick={() => setAgreementDialog(agreement)}>Edit</Button>
+              <Button size="sm" onClick={() => setAgreementDialog(agreement)}>
+                Edit
+              </Button>
               <Button
                 size="sm"
                 onClick={() =>
                   confirmed(
-                    agreement.required_for_access ? 'Make agreement optional?' : 'Require agreement for access?',
+                    agreement.required_for_access
+                      ? 'Make agreement optional?'
+                      : 'Require agreement for access?',
                     agreement.required_for_access
                       ? 'Users will no longer need this agreement for authorization. At least one other active required agreement must remain while the service is enabled.'
                       : 'Users will need the current published version before authorization. A valid active version is required.',
@@ -140,7 +185,14 @@ export function DomainAgreementManager({ agreements, domain, enabled, refresh }:
               >
                 {agreement.required_for_access ? 'Make optional' : 'Require for access'}
               </Button>
-              <Button icon="plus" size="sm" variant="primary" onClick={() => setVersionAgreement(agreement)}>Upload version</Button>
+              <Button
+                icon="plus"
+                size="sm"
+                variant="primary"
+                onClick={() => setVersionAgreement(agreement)}
+              >
+                Upload version
+              </Button>
             </div>
           </CardHeader>
           <VersionTable
@@ -180,7 +232,10 @@ export function DomainAgreementManager({ agreements, domain, enabled, refresh }:
       {agreements.length === 0 ? (
         <Card className="p-8 text-center">
           <p className="text-sm font-medium text-gray-700">No agreements configured</p>
-          <p className="mt-1 text-xs text-gray-400">Create an agreement, upload a safe PDF draft, then publish it before enabling the service.</p>
+          <p className="mt-1 text-xs text-gray-400">
+            Create an agreement, upload a safe PDF draft, then publish it before enabling the
+            service.
+          </p>
         </Card>
       ) : null}
 
@@ -241,7 +296,9 @@ function VersionTable({
   onWithdraw: (version: DomainAgreementVersion) => void;
 }) {
   return (
-    <DataTable headers={['Version', 'Method', 'Source SHA-256', 'Published', 'Signatures', 'Actions']}>
+    <DataTable
+      headers={['Version', 'Method', 'Source SHA-256', 'Published', 'Signatures', 'Actions']}
+    >
       {agreement.versions.map((version) => (
         <tr key={version.id}>
           <Td>
@@ -249,26 +306,63 @@ function VersionTable({
               <span className="font-semibold">v{version.version}</span>
               <Badge variant={statusTone(version.status)}>{version.status}</Badge>
             </div>
-            <p className="mt-0.5 max-w-52 truncate text-xs text-gray-400" title={version.title}>{version.title}</p>
+            <p className="mt-0.5 max-w-52 truncate text-xs text-gray-400" title={version.title}>
+              {version.title}
+            </p>
           </Td>
-          <Td className="text-xs">{version.signing_method === 'typed_name' ? 'Typed name' : 'Click-wrap'}</Td>
-          <Td><code className="block max-w-48 truncate text-xs text-gray-500" title={version.source_pdf_sha256}>{version.source_pdf_sha256}</code></Td>
-          <Td className="text-xs text-gray-400">{version.published_at ? new Date(version.published_at).toLocaleString() : '—'}</Td>
+          <Td className="text-xs">
+            {version.signing_method === 'typed_name' ? 'Typed name' : 'Click-wrap'}
+          </Td>
+          <Td>
+            <code
+              className="block max-w-48 truncate text-xs text-gray-500"
+              title={version.source_pdf_sha256}
+            >
+              {version.source_pdf_sha256}
+            </code>
+          </Td>
+          <Td className="text-xs text-gray-400">
+            {version.published_at ? new Date(version.published_at).toLocaleString() : '—'}
+          </Td>
           <Td>{version.signature_count ?? 0}</Td>
           <Td>
             <div className="flex flex-wrap gap-1.5">
-              <Button size="sm" onClick={() => onPreview(version)}>Preview</Button>
-              <Button icon="download" size="sm" onClick={() => onDownload(version)}>Source</Button>
-              {version.status === 'draft' ? <Button size="sm" onClick={() => onEdit(version)}>Edit</Button> : null}
-              {version.status === 'draft' ? <Button size="sm" onClick={() => onReplace(version)}>Replace PDF</Button> : null}
-              {version.status === 'draft' ? <Button size="sm" variant="primary" onClick={() => onPublish(version)}>Publish</Button> : null}
-              {version.status === 'draft' ? <Button size="sm" variant="danger" onClick={() => onDelete(version)}>Delete</Button> : null}
+              <Button size="sm" onClick={() => onPreview(version)}>
+                Preview
+              </Button>
+              <Button icon="download" size="sm" onClick={() => onDownload(version)}>
+                Source
+              </Button>
+              {version.status === 'draft' ? (
+                <Button size="sm" onClick={() => onEdit(version)}>
+                  Edit
+                </Button>
+              ) : null}
+              {version.status === 'draft' ? (
+                <Button size="sm" onClick={() => onReplace(version)}>
+                  Replace PDF
+                </Button>
+              ) : null}
+              {version.status === 'draft' ? (
+                <Button size="sm" variant="primary" onClick={() => onPublish(version)}>
+                  Publish
+                </Button>
+              ) : null}
+              {version.status === 'draft' ? (
+                <Button size="sm" variant="danger" onClick={() => onDelete(version)}>
+                  Delete
+                </Button>
+              ) : null}
               {version.status === 'published' ? (
                 <Button
                   size="sm"
                   variant="danger"
                   disabled={enabled && agreement.required_for_access}
-                  title={enabled && agreement.required_for_access ? 'Disable the signature service before withdrawing a required version.' : undefined}
+                  title={
+                    enabled && agreement.required_for_access
+                      ? 'Disable the signature service before withdrawing a required version.'
+                      : undefined
+                  }
                   onClick={() => onWithdraw(version)}
                 >
                   Withdraw
@@ -279,7 +373,11 @@ function VersionTable({
         </tr>
       ))}
       {agreement.versions.length === 0 ? (
-        <tr><Td colSpan={6} className="text-sm text-gray-400">No versions uploaded.</Td></tr>
+        <tr>
+          <Td colSpan={6} className="text-sm text-gray-400">
+            No versions uploaded.
+          </Td>
+        </tr>
       ) : null}
     </DataTable>
   );

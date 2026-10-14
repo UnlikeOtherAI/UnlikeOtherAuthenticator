@@ -18,7 +18,17 @@ import {
 import { useDirectoryNavigation } from '../features/admin/useDirectoryNavigation';
 import { useDomainQuery } from '../features/admin/admin-queries';
 
-const DOMAIN_TABS = ['overview', 'credentials', 'organisations', 'teams', 'users', 'access', 'agreements', 'keys', 'email'] as const;
+const DOMAIN_TABS = [
+  'overview',
+  'credentials',
+  'organisations',
+  'teams',
+  'users',
+  'access',
+  'agreements',
+  'keys',
+  'email',
+] as const;
 type DomainTab = (typeof DOMAIN_TABS)[number];
 
 function isDomainTab(value: string | null): value is DomainTab {
@@ -56,7 +66,12 @@ export function DomainDetailPage() {
     return <p className="text-sm text-gray-400">Loading domain...</p>;
   }
 
-  if (isError) return <p role="alert">Could not load service. <button onClick={() => refetch()}>Retry</button></p>;
+  if (isError)
+    return (
+      <p role="alert">
+        Could not load service. <button onClick={() => refetch()}>Retry</button>
+      </p>
+    );
 
   if (!data) {
     return <p className="text-sm text-gray-400">Domain not found.</p>;
@@ -90,6 +105,7 @@ export function DomainDetailPage() {
       />
       {tab === 'overview' || tab === 'credentials' ? (
         <DomainOverviewTab
+          key={domain.name}
           domain={domain}
           section={tab}
           counts={{ organisations: organisations.length, teams: teams.length, users: users.length }}
@@ -98,14 +114,14 @@ export function DomainDetailPage() {
       {tab === 'organisations' ? <DomainOrganisationsTab organisations={organisations} /> : null}
       {tab === 'teams' ? <DomainTeamsTab teams={teams} /> : null}
       {tab === 'users' ? <DomainUsersTab users={users} /> : null}
-      {tab === 'access' ? <DomainAccessTab domain={domain} /> : null}
-      {tab === 'agreements' ? <DomainAgreementsTab domain={domain.name} /> : null}
+      {tab === 'access' ? <DomainAccessTab key={domain.name} domain={domain} /> : null}
+      {tab === 'agreements' ? <DomainAgreementsTab key={domain.name} domain={domain.name} /> : null}
       {tab === 'keys' ? (
         <Card className="p-5">
-          <DomainSigningKeysSection domain={domain.name} />
+          <DomainSigningKeysSection key={domain.name} domain={domain.name} />
         </Card>
       ) : null}
-      {tab === 'email' ? <DomainEmailSection domain={domain.name} /> : null}
+      {tab === 'email' ? <DomainEmailSection key={domain.name} domain={domain.name} /> : null}
     </>
   );
 }

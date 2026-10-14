@@ -27,6 +27,7 @@ export function CodeEntryPage(): React.JSX.Element {
     codeChallenge,
     codeChallengeMethod,
     requestAccess,
+    state,
     setView,
     setLoginToken,
     setSessionChoices,
@@ -43,8 +44,8 @@ export function CodeEntryPage(): React.JSX.Element {
   const [resent, setResent] = useState(false);
 
   const query = useMemo<AuthFlowQuery>(
-    () => ({ configUrl, redirectUrl, codeChallenge, codeChallengeMethod, requestAccess }),
-    [configUrl, redirectUrl, codeChallenge, codeChallengeMethod, requestAccess],
+    () => ({ configUrl, redirectUrl, codeChallenge, codeChallengeMethod, requestAccess, state }),
+    [configUrl, redirectUrl, codeChallenge, codeChallengeMethod, requestAccess, state],
   );
 
   // Not reachable directly (no email pending yet) — bounce back to login.
@@ -104,7 +105,11 @@ export function CodeEntryPage(): React.JSX.Element {
         {error ? <p className="text-sm text-[var(--uoa-color-danger)]">{error}</p> : null}
 
         <div className="mt-2">
-          <Button variant="primary" type="submit" disabled={submitting || code.length !== CODE_LENGTH}>
+          <Button
+            variant="primary"
+            type="submit"
+            disabled={submitting || code.length !== CODE_LENGTH}
+          >
             {submitting ? '...' : t('codeEntry.submit')}
           </Button>
         </div>
