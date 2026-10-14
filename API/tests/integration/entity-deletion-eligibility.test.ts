@@ -33,7 +33,10 @@ describe.skipIf(!process.env.DATABASE_URL)('deletion dependency refusal on Postg
     await f.db.user.update({ where: { id: f.user.id }, data: { lifecycleStatus: 'DELETING' } });
     expect((await f.read()).reasons).toEqual(['Account already has a terminal lifecycle']);
     expect(await f.read(true)).toMatchObject({ eligible: true, reasons: [] });
-    await f.db.user.update({ where: { id: f.user.id }, data: { lifecycleStatus: 'DELETED' } });
+    await f.db.user.update({ where: { id: f.user.id }, data: {
+      lifecycleStatus: 'DELETED', email: null, userKey: null, name: null,
+      passwordHash: null, twoFaSecret: null, twoFaEnabled: false, avatarUrl: null,
+    } });
     expect((await f.read(true)).reasons).toEqual(['Account already has a terminal lifecycle']);
     expect((await orphanEligibility(f.db, randomUUID(), f.org.id, [f.team.id], true)).reasons)
       .toEqual(['Account already has a terminal lifecycle']);
