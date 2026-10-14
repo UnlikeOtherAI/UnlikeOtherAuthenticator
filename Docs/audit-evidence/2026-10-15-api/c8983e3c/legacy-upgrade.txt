@@ -1,0 +1,15 @@
+
+ RUN  v3.2.6 C:/Users/ondre/Projects/UnlikeOtherAuthenticator/.worktrees/sol-audit-fixes-api-20261014/API
+
+stdout | tests/integration/directory-legacy-upgrade.test.ts > legacy authority schema upgrade on PostgreSQL
+Retained audit test schema: [token-like test value redacted]
+
+ ✓ tests/integration/directory-legacy-upgrade.test.ts (1 test) 44801ms
+   ✓ legacy authority schema upgrade on PostgreSQL > preserves legacy canonical data without inventing historical orgs or outbox revisions  2957ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  00:41:15
+   Duration  45.20s (transform 86ms, setup 69ms, collect 134ms, tests 44.80s, environment 0ms, prepare 68ms)
+
+EXIT=0
