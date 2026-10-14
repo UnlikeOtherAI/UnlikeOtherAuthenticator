@@ -330,3 +330,23 @@ syntax/500-line checks; focused lint and Prisma schema validation pass. These
 results replace the earlier52pass/5fail unit result for the exercised service
 areas, while compiled package exports, generated client/typecheck, full default
 harness, real PostgreSQL/upgrade/races and rendered flows remain pending allocation.
+
+### Post-integration member-state contract checkpoint
+
+Merged origin/fix/sol-audit-integration-20261014 at22f9634a after pushing the
+API checkpoint; additive architecture conflicts retain both complete sections.
+No API implementation was discarded. Offline dependency metadata installation
+used frozen lockfile and disabled lifecycle scripts; no package build ran.
+
+U-10 API projection now preserves account lifecycle in `members[].status` and
+exposes independent `membershipStatus` (active/deactivated/removed). This avoids
+masking a banned/disabled account behind a removed membership and preserves the
+existing account-status DTO contract. Root endpoint schema and LLM docs describe
+both. Seven formatter cases pass. Frontend handoff remains: add membershipStatus
+to OrganisationMember and render it in the existing organisation member table,
+which currently does not show membership state. No Admin UI was changed here;
+operator-visible acceptance remains unchecked until that consumer work is tested.
+
+Fresh post-merge Maxis server-free checks: light73/73 across11files and source
+services91/91 across7files (164 total). No listeners, DB, generated-client update,
+workspace builds or production operations. Heavy/compiler slot remains unallocated.

@@ -300,7 +300,7 @@ export const internalAdminEndpoints: EndpointSchema[] = [
     auth: adminAuth,
     query: listLimit,
     response: {
-      200: 'Admin organisation summary array — owner and each members[] entry carry avatarImageUrl',
+      200: 'Admin organisation summary array — owner and each members[] entry carry avatarImageUrl; each member has account lifecycle status and independent membershipStatus (active/deactivated/removed)',
       '401/403': authFailures,
     },
     notes: IDENTITY_AVATAR_URL_NOTE,
@@ -325,7 +325,7 @@ export const internalAdminEndpoints: EndpointSchema[] = [
     description: 'Get one organisation with teams, members, and pre-approval rows',
     auth: adminAuth,
     response: {
-      200: 'Admin organisation object or null — owner and each members[] entry carry avatarImageUrl',
+      200: 'Admin organisation object or null — owner and each members[] entry carry avatarImageUrl; each member has account lifecycle status and independent membershipStatus (active/deactivated/removed)',
       '401/403': authFailures,
     },
     notes: IDENTITY_AVATAR_URL_NOTE,

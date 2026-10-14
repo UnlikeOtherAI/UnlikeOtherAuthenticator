@@ -135,7 +135,8 @@ export function formatAdminOrganisation(
       ),
       twofa: member.user.twoFaEnabled,
       lastLogin: latestLog ? displayTimestamp(latestLog.createdAt) : 'Never',
-      status: member.status !== 'ACTIVE' ? member.status.toLowerCase() : member.user.lifecycleStatus.toLowerCase(),
+      status: member.user.lifecycleStatus.toLowerCase(),
+      membershipStatus: member.status.toLowerCase(),
       method: method(latestLog?.authMethod),
     };
   });

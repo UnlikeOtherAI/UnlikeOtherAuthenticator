@@ -12,6 +12,7 @@ export default defineConfig({
     setupFiles: ['./tests/setup.light.ts'], maxWorkers: 1, fileParallelism: false,
     include: [
       'tests/unit/internal-admin.activity-stats.test.ts',
+      'tests/unit/internal-admin.organisation-state.test.ts',
       'tests/unit/confidential-chained-token-exchange.service.test.ts',
       'tests/unit/confidential-delegation.service.test.ts',
       'tests/unit/client-service.test.ts',
