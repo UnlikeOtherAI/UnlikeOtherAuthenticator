@@ -79,8 +79,8 @@ describe('fetchPartnerJwks', () => {
     ).rejects.toMatchObject({ statusCode: 400, message: 'INTEGRATION_JWKS_NOT_JSON' });
   });
 
-  it('rejects HTTP error statuses', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response('', { status: 500 }));
+  it('rejects definitive HTTP error statuses', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('', { status: 404 }));
     vi.stubGlobal('fetch', fetchMock);
 
     await expect(

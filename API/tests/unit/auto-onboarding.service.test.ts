@@ -259,8 +259,9 @@ describe('tryAutoOnboard', () => {
     });
   });
 
-  it('rejects when the partner JWKS cannot be fetched', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('', { status: 500 })));
+  it.each([408, 429, 500, 503])('keeps a JWKS HTTP %s outage retryable without onboarding effects', async (status) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('', { status })));
+    notifyMocks.dispatchNewIntegrationRequestNotification.mockClear();
 
     const jwt = await signTestConfigJwt(
       baseClientConfigPayload({
@@ -269,7 +270,11 @@ describe('tryAutoOnboard', () => {
       }),
     );
 
-    await expect(tryAutoOnboard(jwt, CONFIG_URL)).rejects.toMatchObject({ statusCode: 400 });
+    await expect(tryAutoOnboard(jwt, CONFIG_URL)).rejects.toMatchObject({
+      statusCode: 503, message: 'INTEGRATION_JWKS_UNAVAILABLE',
+    });
+    expect(integrationRequestMocks.upsertPendingIntegrationRequest).not.toHaveBeenCalled();
+    expect(notifyMocks.dispatchNewIntegrationRequestNotification).not.toHaveBeenCalled();
   });
 
   it('reports "unchanged" when the same fingerprint+jwks_url+contact_email is re-submitted', async () => {

@@ -35,6 +35,13 @@ gate and writes ordinary user audit attribution. A product assertion is not a
 UOA access token, is never persisted by UOA, and cannot grant tenant-wide
 backend authority.
 
+If UOA cannot fetch the product’s public verification keys because of a network
+error, timeout, rate limit or upstream server error, it returns
+\`503 INTEGRATION_JWKS_UNAVAILABLE\`. No authority is admitted; retain the
+product session and retry with backoff and a fresh assertion. A genuine invalid
+signature, missing key, expired assertion or unsafe JWKS destination remains a
+401 refusal. Never substitute local membership records for UOA’s answer.
+
 Send exactly one user credential. A request with both headers, a blank or
 repeated assertion, a stale epoch, invalid signature/audience/lifetime, or a
 different active organisation is refused; it never falls through to backend mode.

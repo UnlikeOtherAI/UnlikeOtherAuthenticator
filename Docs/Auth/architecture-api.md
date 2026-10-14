@@ -923,3 +923,18 @@ and passes it to Auth SSR. Product configuration cannot supply this setting.
 SMS number payment implementation: services/billing-sms-number.service.ts owns immutable monthly acceptance and verified Checkout projection; services/billing-sms-number-lifecycle.service.ts owns acquired-number attachment and fenced release/cancellation. routes/billing/sms-numbers.ts is the thin public registration.
 
 SMS prepaid runtime: services/billing-sms-{reservation,dispatch,receipt,grant,standing,inbound}.service.ts own admission, physical dispatch fencing and actual usage settlement; routes/billing/sms-{reservations,grants,inbound}.ts register the public contracts. Exact money arithmetic lives in billing-sms-money.service.ts. All share the canonical wallet and budget services.
+
+
+### Subject verification dependency failures
+
+`jwks-fetch.service.ts` owns `PartnerJwksUnavailableError` (HTTP 503,
+`INTEGRATION_JWKS_UNAVAILABLE`) for network/timeout failures and partner HTTP
+408/429/5xx. The confidential subject verifier preserves this typed outage
+instead of converting it into invalid credentials. The org guard propagates
+it through the existing generic error handler; the production body contains
+only the fixed safe code. No identity/membership check is bypassed and no
+authority is admitted during the outage. Invalid signatures, missing keys,
+expired assertions and unsafe destinations retain their existing refusals.
+The source verification contract appears in `/api` and `/llm`. Focused tests
+exercise the actual fetch/verifier/HTTP org-guard path and recovery without
+a negative authority cache.

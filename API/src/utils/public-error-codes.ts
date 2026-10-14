@@ -66,6 +66,9 @@ export const PRODUCTION_PUBLIC_ERROR_CODES = new Set([
   // queue. Products branch on it to back off and retry after `Retry-After`. Not an oracle: it
   // says nothing about any user, domain or record — only that this instance is busy.
   'PRODUCT_API_BUSY',
+  // Key retrieval was temporarily unavailable, not a rejected user or signature.
+  // Products retry without ending the session; no subject or key details are exposed.
+  'INTEGRATION_JWKS_UNAVAILABLE',
   // Admin › SMS policies › Refresh and accept, reached only by an authenticated platform superuser:
   // the Admin says which manual review to open instead. Not an oracle — the operator already sees
   // the accepted rates these codes compare against.
