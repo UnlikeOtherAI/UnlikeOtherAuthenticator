@@ -642,3 +642,12 @@ then upgrades normally at73338de9:1invalid grant repaired with its old events
 preserved and a new repair event; second migrate deploy idempotent. No manual
 record/job/lease reset. See corresponding `Docs/audit-evidence/2026-10-15-api/`
 folders. This closes the observed group defect, not full113-writer acceptance.
+
+### Complete unit gate after group repair and focused authority races
+
+At76790e42 complete normal API unit/source run passes397files,2661tests,3skipped,
+exit0(242.31s). Prior75failures remain resolved after the group admission/migration
+correction. At a2ac1103 all21real PG races pass across refresh replay10,
+membership/token4, credential reset/code/continuation4 and ClientDomain disable3.
+Evidence is in each source-named `Docs/audit-evidence/2026-10-15-api/` folder.
+Remaining writer-family/runtime aggregate coverage is still open; N03 stays blocked.
