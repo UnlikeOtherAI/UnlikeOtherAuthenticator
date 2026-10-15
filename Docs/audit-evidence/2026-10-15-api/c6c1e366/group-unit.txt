@@ -1,0 +1,12 @@
+
+ RUN  v3.2.6 C:/Users/ondre/Projects/UnlikeOtherAuthenticator/.worktrees/sol-audit-fixes-api-20261014/API
+
+ ✓ tests/unit/group.service.test.ts (8 tests) 11ms
+ ✓ tests/unit/group.service.members.test.ts (5 tests) 8ms
+
+ Test Files  2 passed (2)
+      Tests  13 passed (13)
+   Start at  01:23:58
+   Duration  744ms (transform 155ms, setup 36ms, collect 325ms, tests 19ms, environment 0ms, prepare 126ms)
+
+EXIT=0

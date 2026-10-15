@@ -1,0 +1,5 @@
+
+> @uoa/api@0.0.0 build C:\Users\ondre\Projects\UnlikeOtherAuthenticator\.worktrees\sol-audit-fixes-api-20261014\API
+> tsc -p tsconfig.build.json
+
+BUILD_EXIT=0
