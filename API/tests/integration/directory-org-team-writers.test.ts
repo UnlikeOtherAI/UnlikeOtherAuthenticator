@@ -8,7 +8,7 @@ describe.skipIf(!process.env.DATABASE_URL)('organisation/team canonical writers 
   let suite: Awaited<ReturnType<typeof createProfileDirectoryFixture>>;
   let base: string, retain = false;
   beforeAll(async () => {
-    suite = await createProfileDirectoryFixture();
+    suite = await createProfileDirectoryFixture({ backendOrgManagement: true });
     expect(await suite.appDb.$queryRaw<Array<{ role: string; bypass: boolean }>>`
       SELECT current_user AS role, rolbypassrls AS bypass FROM pg_roles WHERE rolname=current_user`)
       .toEqual([{ role: 'uoa_app', bypass: false }]);

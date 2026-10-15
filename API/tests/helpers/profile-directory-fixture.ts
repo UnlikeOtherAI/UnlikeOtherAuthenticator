@@ -22,7 +22,7 @@ function latch() {
   return { promise, release };
 }
 
-export async function createProfileDirectoryFixture() {
+export async function createProfileDirectoryFixture(options: { backendOrgManagement?: boolean } = {}) {
   const saved = Object.fromEntries(environmentKeys.map(key => [key, process.env[key]]));
   const handle = await createRlsTestDb();
   if (!handle) throw new Error('Owned test database is required');
@@ -40,7 +40,7 @@ export async function createProfileDirectoryFixture() {
   const domainHash = await seedDomainSecret(db, profileDirectoryDomain);
   const domain = await db.clientDomain.findUniqueOrThrow({ where: { domain: profileDirectoryDomain } });
   const configJwt = await signTestConfigJwt(baseClientConfigPayload({ domain: profileDirectoryDomain,
-    org_features: { enabled: true, groups_enabled: true }, login_flow: { team_selection: 'off' } }));
+    org_features: { enabled: true, groups_enabled: true, backend_org_management: options.backendOrgManagement ?? false }, login_flow: { team_selection: 'off' } }));
   vi.stubGlobal('fetch', vi.fn(await createTestConfigFetchHandler(configJwt)));
   const operator = await db.user.create({ data: { email: 'directory-operator@example.com', userKey: 'directory-operator@example.com' } });
   await db.domainRole.create({ data: { domain: adminDomain, userId: operator.id, role: 'SUPERUSER' } });
