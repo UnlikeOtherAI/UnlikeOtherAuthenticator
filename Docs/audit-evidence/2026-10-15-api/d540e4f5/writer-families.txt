@@ -1,0 +1,23 @@
+
+ RUN  v3.2.6 C:/Users/ondre/Projects/UnlikeOtherAuthenticator/.worktrees/sol-audit-fixes-api-20261014/API
+
+(node:24832) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stdout | tests/integration/directory-writer-families.test.ts > canonical writer families on PostgreSQL/TCP/RLS
+Retained audit test schema: [token-like test value redacted]
+
+ ✓ tests/integration/directory-writer-families.test.ts (7 tests) 55498ms
+   ✓ canonical writer families on PostgreSQL/TCP/RLS > invalidates every current organisation for global profile/avatar/credential-epoch writes  2765ms
+   ✓ canonical writer families on PostgreSQL/TCP/RLS > commits each group/member/team-assignment write with its ordered outbox event through uoa_app  4588ms
+   ✓ canonical writer families on PostgreSQL/TCP/RLS > rolls back actual group creation, allocated revision and event together under tenant RLS  489ms
+   ✓ canonical writer families on PostgreSQL/TCP/RLS > rechecks removed membership after an observed canonical user-lock wait before group insertion  1701ms
+   ✓ canonical writer families on PostgreSQL/TCP/RLS > resolves a cross-origin subject and keeps guard permission outages as generic failures  2628ms
+   ✓ canonical writer families on PostgreSQL/TCP/RLS > does not let the definer admission check escape missing or sibling tenant context  574ms
+   ✓ canonical writer families on PostgreSQL/TCP/RLS > freezes group admission for deleting subjects, including an older raw writer  1582ms
+
+ Test Files  1 passed (1)
+      Tests  7 passed (7)
+   Start at  01:27:23
+   Duration  61.16s (transform 2.68s, setup 80ms, collect 5.38s, tests 55.50s, environment 0ms, prepare 60ms)
+
+EXIT=0
