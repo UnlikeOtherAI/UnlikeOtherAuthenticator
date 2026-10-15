@@ -3244,3 +3244,15 @@ returns retryable503 for unmigrated legacy families. The corrected sequence in
 [the API remediation plan](plans/2026-10-14-api-audit-remediation.md) supersedes
 earlier claims of safe online family conversion. No live deployment/rotation is
 performed by implementing this source change.
+
+## 2026-10-15 Post-removal group admission
+
+Group admission and group-admin flag changes recheck current canonical membership
+under the user/directory locks. Missing or REMOVED organisation membership and
+DELETING/DELETED subjects are refused; the parent organisation must remain ACTIVE.
+DEACTIVATED membership retains administrative metadata and confers no active access.
+A schema-pinned, tenant-bound boolean SQL guard supports cross-origin canonical
+subjects without widening RLS or creating identity copies. The database trigger
+also refuses older-writer inserts/key changes that would recreate invalid grants.
+The forward migration repairs orphaned/REMOVED grants atomically with minimal
+ordered directory invalidations. It never restores prior roles on readmission.

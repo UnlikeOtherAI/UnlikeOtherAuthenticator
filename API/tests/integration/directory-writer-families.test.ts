@@ -64,13 +64,17 @@ describe.skipIf(!process.env.DATABASE_URL)('canonical writer families on Postgre
   });
 
   it('commits each group/member/team-assignment write with its ordered outbox event through uoa_app', async () => {
-    const f = await suite.subject(), id = await group(f.org.id);
+    const f = await suite.subject();
+    await suite.db.team.update({ where: { id: f.team.id }, data: { joinPolicy: 'OPEN_TO_ORG', iconUrl: 'https://media.example.com/team.png' } });
+    const id = await group(f.org.id);
     const path = `/internal/org/organisations/${f.org.id}/groups/${id}`;
     expect((await socketRequest(base, path + query, { method: 'PUT', headers: admin(), json: { name: 'Updated group' } })).status).toBe(200);
     expect((await socketRequest(base, path + '/members' + query, { method: 'POST', headers: admin(), json: { userId: f.target.id, isAdmin: false } })).status).toBe(200);
     expect((await socketRequest(base, path + `/members/${f.target.id}` + query, { method: 'PUT', headers: admin(), json: { isAdmin: true } })).status).toBe(200);
-    expect((await socketRequest(base, `/internal/org/organisations/${f.org.id}/teams/${f.team.id}/group${query}`, {
-      method: 'PUT', headers: admin(), json: { groupId: id } })).status).toBe(200);
+    const assigned = await socketRequest(base, `/internal/org/organisations/${f.org.id}/teams/${f.team.id}/group${query}`, {
+      method: 'PUT', headers: admin(), json: { groupId: id } });
+    expect(assigned.status).toBe(200);
+    expect(assigned.json()).toMatchObject({ groupId: id, joinPolicy: 'OPEN_TO_ORG', iconUrl: 'https://media.example.com/team.png' });
     expect((await socketRequest(base, path + `/members/${f.target.id}` + query, { method: 'DELETE', headers: admin() })).status).toBe(200);
     expect((await socketRequest(base, path + query, { method: 'DELETE', headers: admin() })).status).toBe(200);
     expect(await changes(f.org.id)).toEqual([
@@ -117,5 +121,23 @@ describe.skipIf(!process.env.DATABASE_URL)('canonical writer families on Postgre
     expect(await suite.db.groupMember.count({ where: { groupId: id, userId: f.target.id } })).toBe(0);
     expect((await suite.db.orgMember.findUniqueOrThrow({ where: { orgId_userId: { orgId: f.org.id, userId: f.target.id } } })).status).toBe('REMOVED');
     expect((await changes(f.org.id)).map(change => change.kind)).toEqual(['organisation.changed', 'membership.changed']);
+  });
+
+  it('resolves a cross-origin subject and keeps guard permission outages as generic failures', async () => {
+    const f = await suite.subject(), id = await group(f.org.id);
+    await suite.db.user.update({ where: { id: f.target.id }, data: { domain: 'other-origin.example.com' } });
+    const path = `/internal/org/organisations/${f.org.id}/groups/${id}/members`;
+    const added = await socketRequest(base, path + query, { method: 'POST', headers: admin(), json: { userId: f.target.id } });
+    expect(added.status).toBe(200);
+    const cursor = await changes(f.org.id);
+    await suite.db.$executeRawUnsafe(`REVOKE EXECUTE ON FUNCTION "${suite.handle.schema}".uoa_group_membership_admission(text,text) FROM uoa_app`);
+    try {
+      const failed = await socketRequest(base, path + `/${f.target.id}` + query, { method: 'PUT', headers: admin(), json: { isAdmin: true } });
+      expect(failed.status).toBe(500);
+      expect(await changes(f.org.id)).toEqual(cursor);
+      expect((await suite.db.groupMember.findUniqueOrThrow({ where: { groupId_userId: { groupId: id, userId: f.target.id } } })).isAdmin).toBe(false);
+    } finally {
+      await suite.db.$executeRawUnsafe(`GRANT EXECUTE ON FUNCTION "${suite.handle.schema}".uoa_group_membership_admission(text,text) TO uoa_app`);
+    }
   });
 });
