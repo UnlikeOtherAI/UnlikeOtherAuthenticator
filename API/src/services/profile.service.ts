@@ -13,6 +13,7 @@ import {
 import { assertActiveClientTeamScope, lockTeamMembershipRows } from './team-scope.service.js';
 import { readTargetDisplay } from './profile-display.service.js';
 import { withDirectoryMutation } from './directory-mutation.service.js';
+import { userDirectoryOrganisations } from './directory-user-mutation.service.js';
 import { verifyDomainAuthToken } from './domain-secret.service.js';
 
 export const ProfilePatch = z
@@ -109,12 +110,8 @@ export async function readOrUpdateSelfProfile(
     if (!patch) return readOrWriteProfile(authority, tx);
     // User authority precedes sorted org locks, which precede scope row locks.
     await assertProfileAuthority(authority, tx, true, false);
-    const memberships = await tx.orgMember.findMany({
-      where: { userId: authority.claims.userId, org: { lifecycleStatus: { not: 'DELETED' } } },
-      select: { orgId: true },
-    });
-    const changes = [...new Set(memberships.map((member) => member.orgId))]
-      .sort()
+    const orgIds = await userDirectoryOrganisations(tx, authority.claims.userId);
+    const changes = orgIds
       .map((orgId) => ({
         orgId,
         kind: 'profile.changed' as const,
