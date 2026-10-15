@@ -1,6 +1,7 @@
 import { runInTransaction } from '../db/tenant-context.js';
 import { withDirectoryMutation } from './directory-mutation.service.js';
 import { lockRefreshSessionUserShared } from './refresh-session-lock.service.js';
+import { lockProductTeamPolicyShared } from './product-team-policy-lock.service.js';
 import { assertEntityAccess } from './entity-lifecycle.service.js';
 import type { AccessRequestStatus, PrismaClient } from '@prisma/client';
 import type { ClientConfig } from './config.service.js';
@@ -200,6 +201,7 @@ export async function ensureUserAssignedToConfiguredAccessTarget(params: {
   now: Date;
 }): Promise<void> {
   return runInTransaction(params.prisma, async (tx) => {
+    await lockProductTeamPolicyShared(tx);
     await lockRefreshSessionUserShared(params.userId, { prisma: tx });
 
     const { org, team } = await resolveAccessTarget({
