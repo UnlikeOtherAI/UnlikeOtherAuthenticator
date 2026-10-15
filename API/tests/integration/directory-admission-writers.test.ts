@@ -120,14 +120,14 @@ describe.skipIf(!process.env.DATABASE_URL)('admission and team-avatar directory 
     expect(await events(f.org.id)).toEqual([]);
   });
 
-  it('rechecks actual expiry after an observed team-row lock wait without consuming the link', async () => {
-    const f = await suite.subject(), target = await user(), expiresAt = new Date(Date.now() + 4_000);
+  it('rechecks actual expiry after an observed membership-row lock wait without consuming the link', async () => {
+    const f = await suite.subject(), target = f.target, expiresAt = new Date(Date.now() + 4_000);
     const invitation = await link(f, { expiresAt });
     let entered!: () => void, release!: () => void, pid = 0;
     const held = new Promise<void>(resolve => { entered = resolve; });
     const released = new Promise<void>(resolve => { release = resolve; });
     const blocker = suite.db.$transaction(async tx => {
-      await tx.$queryRaw`SELECT id FROM teams WHERE id=${f.team.id} FOR UPDATE`;
+      await tx.$queryRaw`SELECT id FROM team_members WHERE team_id=${f.team.id} AND user_id=${target.id} FOR UPDATE`;
       pid = (await tx.$queryRaw<Array<{ pid: number }>>`SELECT pg_backend_pid() AS pid`)[0].pid;
       entered(); await released;
     }, { timeout: 15_000 });
@@ -139,7 +139,7 @@ describe.skipIf(!process.env.DATABASE_URL)('admission and team-avatar directory 
     } finally { release(); await blocker; }
     expect(await outcome).toMatchObject({ error: { statusCode: 400 } });
     expect((await suite.db.teamInviteLink.findUniqueOrThrow({ where: { id: invitation.row.id } })).useCount).toBe(0);
-    expect(await suite.db.orgMember.count({ where: { orgId: f.org.id, userId: target.id } })).toBe(0);
+    expect(await suite.db.orgMember.count({ where: { orgId: f.org.id, userId: target.id, status: 'ACTIVE' } })).toBe(1);
     expect(await events(f.org.id)).toEqual([]);
   });
 
