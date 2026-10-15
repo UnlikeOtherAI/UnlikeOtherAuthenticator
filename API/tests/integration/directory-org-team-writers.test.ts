@@ -118,16 +118,21 @@ describe.skipIf(!process.env.DATABASE_URL)('organisation/team canonical writers 
       .toEqual(Array.from({ length: 4 }, () => ['membership.changed', f.target.id, team.id]));
   });
 
-  it('transfers canonical ownership and immediately refuses the prior owner grant authority', async () => {
+  it('transfers grant management to the canonical new owner while preserving explicit org consent', async () => {
     const f = await suite.subject(), credential = await suite.directory(f);
     const path = `/org/organisations/${f.org.id}`;
     await call(path + '/transfer-ownership', 'POST', f.headers, { newOwnerId: f.target.id, previousOwnerRole: 'member' });
     expect((await suite.db.organisation.findUniqueOrThrow({ where: { id: f.org.id } })).ownerId).toBe(f.target.id);
     expect((await suite.db.orgMember.findUniqueOrThrow({ where: { orgId_userId: { orgId: f.org.id, userId: f.owner.id } } })).role).toBe('member');
     expect((await suite.db.orgMember.findUniqueOrThrow({ where: { orgId_userId: { orgId: f.org.id, userId: f.target.id } } })).role).toBe('owner');
-    expect((await socketRequest(base, `/directory/v1/organisations/${f.org.id}/subjects/${f.owner.id}/standing`, { headers: credential.headers })).status).toBe(403);
+    const standing = `/directory/v1/organisations/${f.org.id}/subjects/${f.owner.id}/standing`;
+    expect((await socketRequest(base, standing, { headers: credential.headers })).status).toBe(200);
     expect((await socketRequest(base, path + `/product-access/${credential.id}` + query, {
       method: 'PUT', headers: f.headers, json: { permissions: ['MEMBERSHIP_READ'] } })).status).toBe(403);
+    const newOwnerHeaders = await targetHeaders(f);
+    expect((await socketRequest(base, path + `/product-access/${credential.id}` + query, {
+      method: 'DELETE', headers: newOwnerHeaders })).status).toBe(200);
+    expect((await socketRequest(base, standing, { headers: credential.headers })).status).toBe(403);
     expect((await events(f.org.id)).map(row => [row.kind, row.subjectId, row.teamId])).toEqual([['organisation.changed', null, null]]);
   });
 
