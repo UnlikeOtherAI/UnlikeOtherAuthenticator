@@ -14,6 +14,16 @@ and credential epoch writes, after the exclusive user lock and before sorted org
 locks. The failing schema and outbox remain retained. Runtime rerun is pending;
 this correction does not authorize N03 or certify all113writers.
 
+### Access assignment policy order correction — 2026-10-15
+
+Actual PostgreSQL contention between configured access assignment and canonical
+lifecycle writes exposes a user-before-policy deadlock. The access-assignment
+entry now takes shared policy before shared user, followed by sorted directory
+org locks. Its exported helper no longer depends on an outer auth caller having
+already taken policy. Original failed schema
+test_1792026835119_a39de205a04b4ea2886b97f681acbe0c remains retained; correction
+requires a passing actual race rerun, not source guard approval alone.
+
 ## Dispositions
 
 - [ ] U-01 — drafted stable ClientDomain ID, request-only credential consumers,
