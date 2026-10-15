@@ -1,0 +1,89 @@
+
+ RUN  v3.2.6 C:/Users/ondre/Projects/UnlikeOtherAuthenticator/.worktrees/sol-audit-fixes-api-20261014/API
+
+(node:68672) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:68672) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:68672) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+stdout | tests/integration/auth-email-first-placement-race.test.ts > email-route first-product placement transaction
+Retained audit test schema: [token-like test value redacted]
+
+ ✓ tests/integration/auth-email-first-placement-race.test.ts (3 tests) 51235ms
+   ✓ email-route first-product placement transaction > serializes concurrent GET and POST first placement across two products  4790ms
+   ✓ email-route first-product placement transaction > rolls GET placement back when authorization-code issuance fails  2505ms
+   ✓ email-route first-product placement transaction > rolls POST placement back when authorization-code issuance fails  2439ms
+(node:50380) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:50380) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:50380) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:50380) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:50380) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+stdout | tests/integration/auth-verify-email.test.ts > Email verification flow
+Retained audit test schema: [token-like test value redacted]
+
+ ✓ tests/integration/auth-verify-email.test.ts (5 tests) 49578ms
+   ✓ Email verification flow > validates the link on GET and creates a user on POST (one-time token)  2785ms
+   ✓ Email verification flow > returns generic 400 for invalid tokens  835ms
+   ✓ Email verification flow > consumes VERIFY_EMAIL tokens without requiring password and creates a null-password user  1760ms
+   ✓ Email verification flow > auto-places a newly verified user into mapped org/team when registration_domain_mapping matches  2306ms
+   ✓ Email verification flow > returns generic 400 when VERIFY_EMAIL_SET_PASSWORD token is consumed without password  611ms
+(node:59716) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stdout | tests/integration/auth-social-auto-team-token.test.ts > social auto-selected team token flow
+Retained audit test schema: [token-like test value redacted]
+
+ ✓ tests/integration/auth-social-auto-team-token.test.ts (1 test) 44913ms
+   ✓ social auto-selected team token flow > binds the sole ACTIVE team to the code, access token, refresh row, and rotation  4078ms
+stdout | tests/integration/first-placement-advisory-race.test.ts > first-placement per-user advisory lock
+Retained audit test schema: [token-like test value redacted]
+
+ ❯ tests/integration/first-placement-advisory-race.test.ts (1 test | 1 failed) 43407ms
+   × first-placement per-user advisory lock > creates one team when two products place the same new user simultaneously 2085ms
+     → 
+Invalid `prisma.$queryRaw()` invocation:
+
+
+Raw query failed. Code: `40P01`. Message: `ERROR: deadlock detected
+DETAIL: Process 715 waits for ExclusiveLock on advisory lock [16384,3448480063,892329319,1]; blocked by process 716.
+Process 716 waits for ExclusiveLock on advisory lock [16384,3178548875,3486169732,1]; blocked by process 715.
+HINT: See server log for query details.`
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/first-placement-advisory-race.test.ts > first-placement per-user advisory lock > creates one team when two products place the same new user simultaneously
+PrismaClientKnownRequestError: 
+Invalid `prisma.$queryRaw()` invocation:
+
+
+Raw query failed. Code: `40P01`. Message: `ERROR: deadlock detected
+DETAIL: Process 715 waits for ExclusiveLock on advisory lock [16384,3448480063,892329319,1]; blocked by process 716.
+Process 716 waits for ExclusiveLock on advisory lock [16384,3178548875,3486169732,1]; blocked by process 715.
+HINT: See server log for query details.`
+ ❯ ei.handleRequestError ../node_modules/.pnpm/@prisma+client@6.19.3_prism_1d040ab5215f59f0e27ddee7f0cf082e/node_modules/@prisma/client/src/runtime/RequestHandler.ts:228:13
+ ❯ ei.handleAndLogRequestError ../node_modules/.pnpm/@prisma+client@6.19.3_prism_1d040ab5215f59f0e27ddee7f0cf082e/node_modules/@prisma/client/src/runtime/RequestHandler.ts:174:12
+ ❯ ei.request ../node_modules/.pnpm/@prisma+client@6.19.3_prism_1d040ab5215f59f0e27ddee7f0cf082e/node_modules/@prisma/client/src/runtime/RequestHandler.ts:143:12
+ ❯ a ../node_modules/.pnpm/@prisma+client@6.19.3_prism_1d040ab5215f59f0e27ddee7f0cf082e/node_modules/@prisma/client/src/runtime/getPrismaClient.ts:833:24
+ ❯ lockRequiredTeamPlacementUser src/services/user-team-requirement.service.ts:50:3
+     48|   await lockProductTeamPolicyShared(deps.prisma);
+     49|   await lockRefreshSessionUserShared(userId, { prisma: deps.prisma });
+     50|   await deps.prisma.$queryRaw(
+       |   ^
+     51|     Prisma.sql`
+     52|       SELECT pg_advisory_xact_lock(
+ ❯ resolveRequiredAuthorizationTeam src/services/required-team-placement.service.ts:55:3
+ ❯ tests/integration/first-placement-advisory-race.test.ts:100:20
+ ❯ Proxy._transactionWithCallback ../node_modules/.pnpm/@prisma+client@6.19.3_prism_1d040ab5215f59f0e27ddee7f0cf082e/node_modules/@prisma/client/src/runtime/getPrismaClient.ts:722:18
+ ❯ tests/integration/first-placement-advisory-race.test.ts:210:57
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 3 passed (9)
+      Tests  1 failed | 9 passed (10)
+   Start at  01:43:25
+   Duration  199.46s (transform 2.90s, setup 186ms, collect 9.39s, tests 189.13s, environment 0ms, prepare 233ms)
+
+undefined
+C:\Users\ondre\Projects\UnlikeOtherAuthenticator\.worktrees\sol-audit-fixes-api-20261014\API:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command "vitest" not found
+EXIT=1
