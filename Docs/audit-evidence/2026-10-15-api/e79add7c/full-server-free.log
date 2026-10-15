@@ -1,0 +1,1040 @@
+
+ RUN  v3.2.6 C:/Users/ondre/Projects/UnlikeOtherAuthenticator/.worktrees/sol-audit-fixes-api-20261014/API
+
+ ↓ tests/integration/billing-prepaid-reservation.persistence.test.ts (15 tests | 15 skipped)
+ ↓ tests/integration/billing-credit-auto-top-up-runtime.persistence.test.ts (10 tests | 10 skipped)
+ ↓ tests/integration/billing-credit-settlement.persistence.test.ts (10 tests | 10 skipped)
+ ↓ tests/integration/billing-cycle-issued-invoice.persistence.test.ts (7 tests | 7 skipped)
+ ↓ tests/integration/billing-cycle-scope.persistence.test.ts (8 tests | 8 skipped)
+ ↓ tests/integration/billing-stripe-payment-invoice.persistence.test.ts (9 tests | 9 skipped)
+ ↓ tests/integration/team-avatar-routes.test.ts (18 tests | 18 skipped)
+ ↓ tests/integration/org-backend-mode.test.ts (15 tests | 15 skipped)
+ ↓ tests/integration/team-switch-token.test.ts (10 tests | 10 skipped)
+ ↓ tests/integration/org-user-endpoints-me.test.ts (4 tests | 4 skipped)
+(node:58396) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/integration/root.test.ts (8 tests) 256ms
+ ↓ tests/integration/refresh-membership-revocation.test.ts (5 tests | 5 skipped)
+ ↓ tests/integration/org-user-endpoints-org.test.ts (3 tests | 3 skipped)
+ ↓ tests/integration/refresh-token-replay-races.test.ts (10 tests | 10 skipped)
+ ↓ tests/integration/org-team-role-grants.test.ts (17 tests | 17 skipped)
+ ↓ tests/integration/user-settings-routes.test.ts (8 tests | 8 skipped)
+ ↓ tests/integration/org-user-endpoints-teams.test.ts (1 test | 1 skipped)
+ ↓ tests/integration/sales-research-job-grant.test.ts (5 tests | 5 skipped)
+ ↓ tests/integration/profile-directory-authority.test.ts (11 tests | 11 skipped)
+ ↓ tests/integration/directory-registration-factor-writers.test.ts (10 tests | 10 skipped)
+ ↓ tests/integration/team-invite-reinvite-removed-member.test.ts (6 tests | 6 skipped)
+ ↓ tests/integration/[token-like test value redacted].test.ts (12 tests | 12 skipped)
+ ↓ tests/integration/signature-flow.e2e.test.ts (2 tests | 2 skipped)
+ ↓ tests/integration/product-team-policy-race.test.ts (7 tests | 7 skipped)
+ ↓ tests/integration/refresh-token-revocation-races.test.ts (6 tests | 6 skipped)
+ ↓ tests/integration/refresh-token-session-races.test.ts (5 tests | 5 skipped)
+ ↓ tests/integration/directory-org-team-writers.test.ts (6 tests | 6 skipped)
+ ↓ tests/integration/entity-lifecycle.test.ts (19 tests | 19 skipped)
+ ↓ tests/integration/billing-credit-manual-invoice-cap.persistence.test.ts (4 tests | 4 skipped)
+ ↓ tests/integration/billing-cycle-manual-correction.persistence.test.ts (3 tests | 3 skipped)
+ ↓ tests/integration/billing-stripe-monthly-charge.persistence.test.ts (6 tests | 6 skipped)
+ ↓ tests/integration/billing-org-responsibility.persistence.test.ts (8 tests | 8 skipped)
+ ↓ tests/integration/billing-customer-invoices.persistence.test.ts (4 tests | 4 skipped)
+ ↓ tests/integration/billing-credit-funding-actions.persistence.test.ts (7 tests | 7 skipped)
+ ↓ tests/integration/billing-recurring-addon-cancellation.persistence.test.ts (4 tests | 4 skipped)
+ ↓ tests/integration/kelpie-connect.test.ts (16 tests | 16 skipped)
+ ↓ tests/integration/avatar-routes.test.ts (12 tests | 12 skipped)
+ ↓ tests/integration/billing-seat-admission.persistence.test.ts (5 tests | 5 skipped)
+ ↓ tests/integration/billing-contract-credit-collector-db.test.ts (1 test | 1 skipped)
+ ↓ tests/integration/billing-credit-stripe-race.persistence.test.ts (1 test | 1 skipped)
+ ↓ tests/integration/billing-credit-lots.persistence.test.ts (8 tests | 8 skipped)
+ ↓ tests/integration/billing-job-compute-renewal.recovery.test.ts (7 tests | 7 skipped)
+(node:25272) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:25272) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:25272) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:25272) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:25272) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:25272) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:25272) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:25272) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:25272) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:25272) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:25272) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:25272) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:25272) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:25272) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:25272) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/integration/auth-entrypoint.test.ts (15 tests) 1131ms
+ ↓ tests/integration/org-me-cross-org-invites-rls.test.ts (2 tests | 2 skipped)
+ ↓ tests/integration/billing-manual-credit-note.persistence.test.ts (1 test | 1 skipped)
+ ↓ tests/integration/billing-credit-payment-invoice.persistence.test.ts (2 tests | 2 skipped)
+ ↓ tests/integration/auth-secure-login-continuation.test.ts (6 tests | 6 skipped)
+ ↓ tests/integration/billing-credit-payment-adjustment.persistence.test.ts (6 tests | 6 skipped)
+ ↓ tests/integration/internal-org-endpoints.test.ts (5 tests | 5 skipped)
+ ↓ tests/integration/billing-contract-invoice-db.test.ts (1 test | 1 skipped)
+ ↓ tests/integration/billing-cycle-prepaid-correction.persistence.test.ts (1 test | 1 skipped)
+ ↓ tests/integration/billing-cycle-funded-payg.persistence.test.ts (1 test | 1 skipped)
+ ↓ tests/integration/auth-token-exchange.test.ts (9 tests | 9 skipped)
+ ↓ tests/integration/backend-team-invite-accept.test.ts (5 tests | 5 skipped)
+ ↓ tests/integration/oauth-native-refresh.test.ts (9 tests | 9 skipped)
+ ↓ tests/integration/auth-verify-email.test.ts (5 tests | 5 skipped)
+ ↓ tests/integration/billing-credit-region-reload.persistence.test.ts (3 tests | 3 skipped)
+ ↓ tests/integration/auth-login-continuation-races.test.ts (4 tests | 4 skipped)
+ ↓ tests/integration/org-backend-mode-rls-authority.test.ts (10 tests | 10 skipped)
+ ↓ tests/integration/billing-recurring-addon-webhook.persistence.test.ts (1 test | 1 skipped)
+ ↓ tests/integration/billing-customer-action-intent.persistence.test.ts (6 tests | 6 skipped)
+ ↓ tests/integration/directory-writer-families.test.ts (7 tests | 7 skipped)
+ ↓ tests/integration/native-app-sign-in.test.ts (11 tests | 11 skipped)
+ ↓ tests/integration/billing-job-compute-renewal.persistence.test.ts (5 tests | 5 skipped)
+ ↓ tests/integration/debug-login.test.ts (9 tests | 9 skipped)
+ ↓ tests/integration/confidential-cross-product-team.test.ts (2 tests | 2 skipped)
+ ↓ tests/integration/auth-email-auto-team-twofactor.test.ts (4 tests | 4 skipped)
+ ↓ tests/integration/auth-token-membership-race.test.ts (4 tests | 4 skipped)
+(node:50940) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:50940) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:50940) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:50940) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:50940) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:50940) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:50940) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:50940) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:50940) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:50940) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:50940) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/integration/auth-entrypoint.config-validation.test.ts (11 tests) 847ms
+ ↓ tests/integration/directory-admission-writers.test.ts (8 tests | 8 skipped)
+ ↓ tests/integration/billing-contract-addon-evidence-db.test.ts (1 test | 1 skipped)
+ ↓ tests/integration/org-features-disabled.integration.test.ts (2 tests | 2 skipped)
+ ↓ tests/integration/org-groups.test.ts (3 tests | 3 skipped)
+ ↓ tests/integration/billing-tariff-history.persistence.test.ts (5 tests | 5 skipped)
+ ↓ tests/integration/auth-login-link-existing-user.test.ts (3 tests | 3 skipped)
+(node:29692) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:29692) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:29692) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/integration/auth-domain-mapping.test.ts (8 tests | 5 skipped) 502ms
+ ↓ tests/integration/login-email-domain-policy.test.ts (12 tests | 12 skipped)
+ ↓ tests/integration/org-list-pagination-ties.test.ts (4 tests | 4 skipped)
+ ↓ tests/integration/org-backend-mode-rls.test.ts (31 tests | 31 skipped)
+ ↓ tests/integration/billing-payg-finalization.persistence.test.ts (4 tests | 4 skipped)
+ ↓ tests/integration/billing-stripe-corrections.persistence.test.ts (5 tests | 5 skipped)
+ ↓ tests/integration/session-broker.test.ts (13 tests | 13 skipped)
+ ↓ tests/integration/admin-user-avatar-routes.test.ts (4 tests | 4 skipped)
+ ↓ tests/integration/org-rls-policy-predicates.test.ts (9 tests | 9 skipped)
+ ↓ tests/integration/profile-directory-socket.test.ts (6 tests | 6 skipped)
+ ↓ tests/integration/website-context-legacy-readers.test.ts (5 tests | 5 skipped)
+ ↓ tests/integration/authorization-epoch-races.test.ts (4 tests | 4 skipped)
+ ↓ tests/integration/org-user-endpoints-rate-limits.test.ts (3 tests | 3 skipped)
+ ↓ tests/integration/auth-email-invite-team-token.test.ts (1 test | 1 skipped)
+ ↓ tests/integration/auth-login.test.ts (3 tests | 3 skipped)
+ ↓ tests/integration/auth-social-auto-team-token.test.ts (1 test | 1 skipped)
+ ↓ tests/integration/org-user-endpoints-idor.test.ts (3 tests | 3 skipped)
+ ✓ tests/unit/profile-authority.route.test.ts (15 tests) 118ms
+(node:35500) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:35500) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:35500) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/csp-script-nonce.test.ts (5 tests) 1959ms
+   ✓ script-src CSP nonce > serves non-auth responses with a script nonce and an unsafe-inline, nonce-free style-src  1743ms
+(node:60624) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:60624) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:60624) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:60624) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:60624) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:60624) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:60624) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:60624) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:60624) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:60624) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:60624) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:60624) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:60624) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:60624) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:60624) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:60624) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:60624) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:60624) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:60624) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:60624) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:60624) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/auth-token-team-switch.route.test.ts (21 tests) 3010ms
+   ✓ POST /auth/token team-switch grant > dispatches the exact target and returns the standard pair without firstLogin  1800ms
+(node:65196) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:65196) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:65196) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:65196) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:65196) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:65196) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:65196) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:65196) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:65196) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:65196) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:65196) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:65196) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/internal-admin-api-keys.route.test.ts (12 tests) 2789ms
+   ✓ /internal/admin api-key auth > allows an API key to GET /internal/admin/apps via X-API-Key  2036ms
+(node:54324) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:54324) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:54324) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:54324) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:54324) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:54324) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:54324) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:54324) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:54324) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:54324) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:54324) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/auth-select-team.route.test.ts (11 tests) 2678ms
+   ✓ POST /auth/select-team > rejects an invalid login_token with a generic error  1987ms
+(node:46736) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:46736) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:46736) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:46736) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:46736) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:46736) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:46736) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:46736) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:46736) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:46736) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:46736) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/internal-admin-integration-requests.route.test.ts (11 tests) 2614ms
+   ✓ /internal/admin/integration-requests > requires a superuser access token  1920ms
+(node:54380) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:54380) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:54380) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:54380) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:54380) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:54380) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:54380) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:54380) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:54380) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:54380) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:54380) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:54380) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:54380) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:54380) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/email-registration-link.route.test.ts (14 tests) 2607ms
+   ✓ GET /auth/email/link > renders the login screen instead of an auth error when a one-time email link is already used  1774ms
+(node:38688) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38688) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:38688) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:38688) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:38688) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:38688) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:38688) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:38688) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:38688) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/auth-callback-team.route.test.ts (9 tests) 2355ms
+   ✓ GET /auth/callback/:provider team selection > keeps the chooser and PKCE context for multiple ACTIVE teams  1798ms
+(node:65120) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:65120) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:65120) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:65120) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:65120) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:65120) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/auth-token-confidential-exchange.route.test.ts (6 tests) 2312ms
+   ✓ POST /auth/token confidential grant > returns the RFC 8693 response without refresh or client credentials  1802ms
+(node:52336) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:52336) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:52336) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:52336) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:52336) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:52336) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:52336) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:52336) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:52336) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/verify-email.route.test.ts (9 tests) 2303ms
+   ✓ POST /auth/verify-email — team chooser wiring (gap-fix B Task 1, design §4.3) > team_selection "off" (default): behaves exactly like before — no login_token, direct finalize  1770ms
+(node:61812) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:61812) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:61812) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:61812) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:61812) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:61812) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:61812) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:61812) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/twofactor-config-gating.routes.test.ts (8 tests) 2253ms
+   ✓ 2FA gated by config `2fa_enabled` > does not require 2FA when config disables it, even if the user has 2FA enabled  1770ms
+(node:43128) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:43128) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:43128) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:43128) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:43128) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:43128) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:43128) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/internal-admin-domain-signatures.route.test.ts (7 tests) 2226ms
+   ✓ /internal/admin/domains/:domain/signatures > requires a platform superuser  1759ms
+ ↓ tests/integration/billing-contract-stripe-exclusivity-db.test.ts (1 test | 1 skipped)
+ ↓ tests/integration/team-delete-membership-race.test.ts (2 tests | 2 skipped)
+ ↓ tests/integration/billing-ledger-paid-receipt-proof.persistence.test.ts (3 tests | 3 skipped)
+ ↓ tests/integration/auth-token-exchange-org-flow.test.ts (1 test | 1 skipped)
+ ✓ tests/integration/billing-cycle-stripe-invoice.persistence.test.ts (4 tests | 3 skipped) 13ms
+(node:61424) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/integration/auth-reset-password.test.ts (3 tests | 2 skipped) 200ms
+(node:27268) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:27268) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:27268) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:27268) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:27268) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:27268) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:27268) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/integrations-claim.route.test.ts (7 tests) 2229ms
+   ✓ /integrations/claim/:token > GET renders the confirm page for a valid token  1794ms
+(node:48040) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:48040) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:48040) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:48040) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:48040) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:48040) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/signature-session.route.test.ts (6 tests) 2157ms
+   ✓ signing capability session routes > returns only current missing versions and no-store continuation state  1779ms
+ ✓ tests/billing-sms-provider.test.ts (13 tests) 19ms
+ ↓ tests/integration/billing-manual-historical-invoice.persistence.test.ts (2 tests | 2 skipped)
+ ↓ tests/integration/billing-credit-region-top-up.persistence.test.ts (3 tests | 3 skipped)
+(node:69332) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/integration/twofactor-reset.test.ts (2 tests | 1 skipped) 204ms
+ ↓ tests/integration/org-user-endpoints-org-ownership-transfer.test.ts (1 test | 1 skipped)
+ ↓ tests/integration/auth-email-invite-existing-account.test.ts (1 test | 1 skipped)
+ ↓ tests/integration/auth-email-invite-continue-link.test.ts (1 test | 1 skipped)
+(node:62084) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:62084) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:62084) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:62084) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:62084) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:62084) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/internal-admin-team-members.route.test.ts (3 tests) 2564ms
+   ✓ POST /internal/admin/users/:userId/teams > requires an authenticated platform superuser  2278ms
+(node:65156) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:65156) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:65156) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:65156) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/internal-admin-domain-jwks.route.test.ts (4 tests) 2081ms
+   ✓ /internal/admin/domains/:domain/jwks > requires a superuser access token  1800ms
+(node:48928) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:48928) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:48928) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:48928) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/signature-access.routes.test.ts (4 tests) 2153ms
+   ✓ signer, domain, and public signature routes > restricts signer status to the access-token subject and domain  1889ms
+(node:64984) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:64984) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:64984) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/internal-admin-token.route.test.ts (3 tests) 1980ms
+   ✓ POST /internal/admin/token > exchanges an admin-domain authorization code without domain-hash auth or refresh-token output  1792ms
+(node:63544) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:63544) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:63544) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/internal-admin-superusers.route.test.ts (3 tests) 1992ms
+   ✓ /internal/admin/superusers > requires admin superuser access  1802ms
+(node:61176) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:61176) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:61176) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:61176) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/internal-admin-confidential-delegations.route.test.ts (4 tests) 2063ms
+   ✓ internal confidential delegation admin routes > requires the superuser guard on the collection  1786ms
+(node:56484) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:56484) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:56484) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/email-reset-password.route.test.ts (3 tests) 1952ms
+   ✓ GET /auth/email/reset-password > renders the login screen instead of an auth error when a reset link is already used  1765ms
+(node:18108) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:18108) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:18108) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:18108) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/internal-admin-domain-signature-operations.route.test.ts (4 tests) 2094ms
+   ✓ internal Admin signature records > requires a platform superuser for record search  1821ms
+(node:60236) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:60236) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:60236) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/internal-admin-organisations.route.test.ts (3 tests) 2000ms
+   ✓ DELETE /internal/admin/organisations/:orgId > requires an admin superuser  1803ms
+(node:69072) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:69072) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/user-access-token-rs256.test.ts (12 tests) 1969ms
+   ✓ user access token — key publication > serves the user key at /oauth/jwks.json even with no resource-token key  1817ms
+(node:42196) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:42196) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/email-registration-link-twofactor.route.test.ts (2 tests) 1895ms
+   ✓ GET /auth/email/link exact-one team 2FA > redirects with a challenge that carries the exact team  1791ms
+(node:67064) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:67064) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/team-invite-link-landing.route.test.ts (2 tests) 1932ms
+   ✓ GET /auth/team-invite-link/:token > renders the generic invalid-link page for a bad token (no oracle)  1831ms
+ ✓ tests/unit/billing-invoice-view.service.test.ts (4 tests) 858ms
+   ✓ customer-safe contract invoice view > preserves Unicode metadata and wraps long invoice content across pages  676ms
+ ✓ tests/unit/directory-writer-coverage.test.ts (1 test) 787ms
+   ✓ directory canonical writer coverage > keeps direct canonical writes behind the declared seam or a reviewed non-directory field boundary  775ms
+ ✓ tests/unit/production-startup.test.ts (8 tests) 678ms
+(node:10868) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:10868) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:10868) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:10868) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:10868) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:10868) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:10868) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/billing.routes.test.ts (8 tests) 624ms
+(node:67784) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:67784) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:67784) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:67784) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:67784) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/billing-organisation-region.routes.test.ts (2 tests) 456ms
+(node:57540) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/unit/product-api-bulkhead.route.test.ts (8 tests) 417ms
+(node:52532) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:52532) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:52532) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:52532) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/billing-stripe-subscription.routes.test.ts (4 tests) 388ms
+(node:2752) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2752) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/oauth-public-profile-gate.route.test.ts (2 tests) 339ms
+(node:65380) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:65380) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:65380) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/billing-stripe.routes.test.ts (3 tests) 330ms
+ ✓ tests/unit/oauth-login.signature-gate.route.test.ts (8 tests) 233ms
+(node:16952) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:16952) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/security-headers.test.ts (2 tests) 266ms
+ ✓ tests/unit/billing-sms-policies.routes.test.ts (6 tests) 196ms
+ ✓ tests/unit/db-provisioning-hook-timeouts.test.ts (1 test) 149ms
+ ✓ tests/unit/team-invitation-management.route.test.ts (36 tests) 176ms
+ ✓ tests/unit/session-broker-route.test.ts (2 tests) 184ms
+ ✓ tests/unit/subject-assertion-jwks-outage.test.ts (13 tests) 180ms
+ ✓ tests/unit/password.service.test.ts (7 tests) 171ms
+ ✓ tests/unit/org-organisation-members.route.test.ts (1 test) 150ms
+ ✓ tests/unit/organisation.service.capabilities.test.ts (15 tests) 542ms
+ ✓ src/services/__tests__/totp-qr.service.test.ts (17 tests) 117ms
+ ✓ tests/unit/team.service.test.ts (8 tests) 167ms
+ ✓ tests/unit/organisation.service.ownership.test.ts (8 tests) 234ms
+ ✓ tests/unit/organisation.service.create-update.test.ts (11 tests) 185ms
+ ✓ tests/unit/team-invite-link.service.test.ts (6 tests) 130ms
+ ✓ tests/unit/signature-evidence.service.test.ts (11 tests) 111ms
+ ✓ tests/unit/billing-ledger-runtime-keys.route.test.ts (4 tests) 107ms
+ ✓ tests/unit/billing-statement-v2.service.test.ts (3 tests) 106ms
+ ✓ tests/unit/billing-snapshot.service.test.ts (4 tests) 56ms
+ ✓ tests/unit/org-me.route.test.ts (6 tests) 108ms
+ ✓ tests/unit/directory-authority.route.test.ts (10 tests) 89ms
+ ✓ src/middleware/__tests__/product-api-bulkhead.test.ts (37 tests) 92ms
+ ✓ tests/unit/internal-admin-users.service.test.ts (3 tests) 92ms
+ ✓ tests/unit/organisation.service.membership.test.ts (11 tests) 100ms
+ ✓ tests/unit/signature-signing.service.test.ts (18 tests) 90ms
+ ✓ tests/unit/billing-statement.service.test.ts (4 tests) 84ms
+ ✓ src/middleware/__tests__/error-handler.test.ts (11 tests) 90ms
+ ✓ tests/unit/billing-stripe-usage.service.test.ts (16 tests) 83ms
+ ✓ tests/unit/confidential-token-exchange.service.test.ts (9 tests) 137ms
+ ✓ tests/unit/domain-debug.route.test.ts (2 tests) 80ms
+ ✓ tests/unit/team.service.capabilities.test.ts (11 tests) 69ms
+ ✓ tests/unit/billing-seat-capacity-error.route.test.ts (1 test) 65ms
+ ✓ tests/unit/confidential-chained-token-verification.service.test.ts (5 tests) 44ms
+ ✓ tests/unit/billing-paid-usage-exceptions.routes.test.ts (1 test) 96ms
+ ✓ tests/unit/team.service.self-join.test.ts (7 tests) 63ms
+ ✓ src/services/oauth/__tests__/access-token.service.test.ts (6 tests) 45ms
+ ✓ tests/unit/team-creation-membership.test.ts (5 tests) 94ms
+ ✓ tests/unit/organisation.service.icon-url.test.ts (4 tests) 62ms
+ ✓ tests/unit/team.service.members.test.ts (5 tests) 59ms
+ ✓ tests/unit/team.service.icon-url.test.ts (3 tests) 59ms
+ ✓ tests/unit/billing-ledger-collector.service.test.ts (9 tests) 43ms
+ ✓ tests/unit/twofactor-reset.service.test.ts (7 tests) 52ms
+ ✓ tests/unit/confidential-subject-token-verification.service.test.ts (5 tests) 51ms
+ ✓ tests/unit/signature-access.service.test.ts (5 tests) 46ms
+ ✓ tests/unit/confidential-chained-token-exchange.service.test.ts (7 tests) 92ms
+ ✓ tests/unit/native-account-dependency-errors.test.ts (5 tests) 46ms
+ ✓ tests/unit/signature-admin-lifecycle.service.test.ts (11 tests) 32ms
+ ✓ tests/unit/profile-authority.service.test.ts (16 tests) 28ms
+ ✓ tests/unit/billing-stripe-webhook.service.test.ts (13 tests) 32ms
+ ✓ tests/unit/directory-owner-grants.test.ts (13 tests) 28ms
+ ✓ tests/unit/team-invite-link-redeem.service.test.ts (12 tests) 24ms
+ ✓ tests/unit/[token-like test value redacted].service.test.ts (10 tests) 26ms
+ ✓ tests/unit/token.service.refresh-active-claim.test.ts (7 tests) 25ms
+ ✓ tests/unit/token.service.active-claim.test.ts (7 tests) 28ms
+ ✓ tests/unit/website-context-rollout.test.ts (12 tests) 25ms
+ ✓ tests/unit/domain-secret.service.test.ts (6 tests) 22ms
+ ✓ tests/unit/billing-recurring-addon-webhook.service.test.ts (16 tests) 32ms
+ ✓ tests/unit/signature-storage.service.test.ts (4 tests) 29ms
+ ✓ tests/unit/integration-claim.service.test.ts (10 tests) 35ms
+ ✓ tests/unit/token.service.test.ts (5 tests) 26ms
+ ✓ tests/unit/billing-sms-policy-admin.service.test.ts (7 tests) 26ms
+ ✓ tests/unit/token.service.required-placement.test.ts (6 tests) 27ms
+ ✓ tests/unit/team.service.members.audit.test.ts (10 tests) 24ms
+ ✓ tests/unit/refresh-token-replay.service.test.ts (22 tests) 26ms
+ ✓ tests/unit/confidential-delegation.service.test.ts (25 tests) 24ms
+ ✓ src/middleware/__tests__/admin-superuser.test.ts (10 tests) 26ms
+ ✓ tests/unit/billing-sms-refund-recovery.service.test.ts (5 tests) 30ms
+ ✓ tests/unit/organisation.service.owner-protection.test.ts (7 tests) 28ms
+ ✓ tests/unit/team-directory.service.test.ts (10 tests) 24ms
+ ✓ tests/unit/team-invite.acceptance.test.ts (6 tests) 17ms
+ ✓ tests/unit/billing-stripe-catalog-provisioning-local.service.test.ts (10 tests) 23ms
+ ✓ tests/unit/team-invite-link-admission.test.ts (12 tests) 22ms
+ ✓ tests/unit/signature-malware.service.test.ts (3 tests) 22ms
+ ✓ src/services/__tests__/tenant-effect-authority.service.test.ts (10 tests) 22ms
+ ✓ tests/unit/billing-stripe-invoice.service.test.ts (8 tests) 17ms
+ ✓ tests/unit/token.service.admin.test.ts (2 tests) 20ms
+ ✓ tests/unit/env.test.ts (24 tests) 22ms
+ ✓ tests/unit/signature-continuation.service.test.ts (7 tests) 21ms
+ ✓ tests/unit/billing-stripe-checkout.service.test.ts (8 tests) 21ms
+ ✓ tests/unit/translation.service.test.ts (5 tests) 16ms
+ ✓ tests/unit/refresh-token.service.test.ts (9 tests) 20ms
+ ✓ tests/unit/billing-invoice-storage.service.test.ts (3 tests) 20ms
+ ✓ src/db/__tests__/pool-checkout-guard.test.ts (13 tests) 20ms
+ ↓ tests/integration/tenant-effect-authority.test.ts (5 tests | 5 skipped)
+(node:60280) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:60280) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:60280) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:60280) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:60280) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:60280) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:60280) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/auth-start.route.test.ts (7 tests) 2273ms
+   ✓ POST /auth/start > returns the identical generic body for an existing email  1846ms
+(node:65176) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:65176) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:65176) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:65176) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:65176) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:65176) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:65176) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/auth-callback.route.test.ts (7 tests) 2324ms
+   ✓ GET /auth/callback/:provider > redirects with generic auth_failed when social registration is blocked by domain policy  1865ms
+(node:30708) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:30708) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:30708) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:30708) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:30708) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/auth-session-choices.route.test.ts (5 tests) 2186ms
+   ✓ POST /auth/session-choices > rejects an invalid login_token with a generic error (no enumeration)  1875ms
+(node:33380) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:33380) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:33380) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:33380) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:33380) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/auth-verify-code.route.test.ts (5 tests) 2094ms
+   ✓ POST /auth/verify-code > returns the same generic error for a wrong/expired/unknown code  1784ms
+(node:61192) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:61192) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:61192) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:61192) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:61192) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/auth-login-team-chooser.route.test.ts (5 tests) 2122ms
+   ✓ POST /auth/login — team chooser wiring (Phase 3b Task 7) > team_selection "off" (default): behaves exactly like before — no login_token, direct finalize  1820ms
+(node:46384) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:46384) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:46384) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:46384) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/auth-select-team-invite-link.route.test.ts (4 tests) 2049ms
+   ✓ POST /auth/select-team invite-link redemption > redeems a valid token and finalizes scoped to its team  1800ms
+(node:47228) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:47228) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/integration/auto-onboarding-entrypoint.test.ts (2 tests) 317ms
+ ↓ tests/integration/billing-cycle-close-watch.persistence.test.ts (3 tests | 3 skipped)
+ ↓ tests/integration/billing-contract-effective-history.persistence.test.ts (1 test | 1 skipped)
+ ✓ tests/billing-sms-fx-evidence.test.ts (7 tests) 14ms
+(node:60524) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"level":40,"time":1792027444205,"pid":60524,"hostname":"Maxis","msg":"DATABASE_URL not set; database is disabled"}
+{"level":50,"time":1792027444363,"pid":60524,"hostname":"Maxis","reqId":"req-1","err":{"type":"AppError","message":"CONFIG_SCHEMA_INVALID","stack":"Error: CONFIG_SCHEMA_INVALID\n    at Object.configVerifier (C:\\Users\\ondre\\Projects\\UnlikeOtherAuthenticator\\.worktrees\\sol-audit-fixes-api-20261014\\API\\src\\middleware\\config-verifier.ts:269:13)","code":"BAD_REQUEST","statusCode":400},"msg":"request failed"}
+(node:60524) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/integration/auth-entrypoint.config-disclosure.test.ts (2 tests) 584ms
+   ✓ GET /auth (config failure disclosure) > serves a generic, non-disclosing HTML page to an anonymous production browser on config schema failure  469ms
+ ✓ tests/billing-sms-regions.test.ts (6 tests) 18ms
+ ↓ tests/integration/billing-cycle-wallet-boundary.persistence.test.ts (1 test | 1 skipped)
+ ↓ tests/integration/billing-credit-payment-invoice-scheduler.persistence.test.ts (1 test | 1 skipped)
+ ↓ tests/integration/access-request-policy-race.test.ts (1 test | 1 skipped)
+ ↓ tests/integration/admin-debug-login.test.ts (3 tests | 3 skipped)
+ ↓ tests/integration/oauth-native-account.test.ts (5 tests | 5 skipped)
+ ↓ tests/integration/auth-email-first-placement-race.test.ts (3 tests | 3 skipped)
+ ↓ tests/integration/org-backend-mode-rls-organisations.test.ts (8 tests | 8 skipped)
+ ↓ tests/integration/first-placement-advisory-race.test.ts (1 test | 1 skipped)
+ ↓ tests/integration/billing-paid-usage-exception.persistence.test.ts (2 tests | 2 skipped)
+ ↓ tests/integration/confidential-token-exchange-refusal-codes.test.ts (4 tests | 4 skipped)
+ ↓ tests/integration/billing-sms-policy-renewal.persistence.test.ts (3 tests | 3 skipped)
+ ↓ tests/integration/billing-sms-monthly-price.persistence.test.ts (6 tests | 6 skipped)
+ ↓ tests/integration/org-shared-organisations.test.ts (3 tests | 3 skipped)
+ ↓ tests/integration/billing-sms-dispatch.persistence.test.ts (6 tests | 6 skipped)
+ ↓ tests/integration/admin-team-members.test.ts (8 tests | 8 skipped)
+ ↓ tests/integration/client-domain-token-race.test.ts (3 tests | 3 skipped)
+ ↓ tests/integration/org-invitation-approvals-query.test.ts (5 tests | 5 skipped)
+ ↓ tests/integration/billing-sms-financial.persistence.test.ts (7 tests | 7 skipped)
+ ↓ tests/integration/[token-like test value redacted].persistence.test.ts (1 test | 1 skipped)
+ ↓ tests/integration/confidential-delegation-policy-race.test.ts (3 tests | 3 skipped)
+ ↓ tests/integration/domain-debug.test.ts (4 tests | 4 skipped)
+(node:56924) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/integration/config-verify.test.ts (7 tests) 213ms
+ ↓ tests/integration/billing-stripe-seat-activation.persistence.test.ts (1 test | 1 skipped)
+ ↓ tests/integration/directory-mutation-ordering.test.ts (4 tests | 4 skipped)
+ ↓ tests/integration/directory-legacy-upgrade.test.ts (1 test | 1 skipped)
+ ↓ tests/integration/billing-manual-seat-activation.persistence.test.ts (1 test | 1 skipped)
+ ↓ tests/integration/lifecycle-consumer-guards.test.ts (3 tests | 3 skipped)
+ ↓ tests/integration/oauth-flow.e2e.test.ts (1 test | 1 skipped)
+ ↓ tests/integration/action-verification.test.ts (7 tests | 7 skipped)
+ ↓ tests/integration/auth-verify-email-name.test.ts (4 tests | 4 skipped)
+(node:67688) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:67688) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/integration/config-jwt-integrity.test.ts (2 tests) 320ms
+ ↓ tests/integration/billing-stripe-checkout-capacity.persistence.test.ts (2 tests | 2 skipped)
+(node:64564) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:64564) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:64564) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:64564) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:64564) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/integration/internal-admin-auth.test.ts (5 tests) 520ms
+ ↓ tests/integration/billing-sms-fx-readd-gbp.persistence.test.ts (3 tests | 3 skipped)
+ ↓ tests/integration/domain-users-rls.test.ts (5 tests | 5 skipped)
+ ↓ tests/integration/entity-deletion-eligibility.test.ts (5 tests | 5 skipped)
+ ↓ tests/integration/domain-users.test.ts (2 tests | 2 skipped)
+ ↓ tests/integration/billing-seat-commercial-cutoff.persistence.test.ts (1 test | 1 skipped)
+ ↓ tests/integration/domain-logs.test.ts (2 tests | 2 skipped)
+ ↓ tests/integration/ban-enforcement.test.ts (2 tests | 2 skipped)
+ ↓ tests/integration/entity-deletion-retained-recovery.test.ts (1 test | 1 skipped)
+ ↓ tests/integration/authentication-epoch-shared-readers.test.ts (1 test | 1 skipped)
+ ↓ tests/integration/confidential-assertion-replay.test.ts (2 tests | 2 skipped)
+ ↓ tests/integration/group-membership-retained-repair.test.ts (1 test | 1 skipped)
+(node:64948) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/unit/auth-register.route.test.ts (1 test) 1854ms
+   ✓ POST /auth/register > returns EMAIL_ALREADY_REGISTERED when signed config opts into inline existing-user handling  1843ms
+ ✓ tests/unit/auth-rate-limit-global.test.ts (4 tests) 1079ms
+   ✓ auth limiters global ceiling > every limiter with a global bucket consumes its global key  687ms
+(node:60532) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:60532) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/app-flags.route.test.ts (2 tests) 271ms
+ ✓ tests/unit/auth-create-team.route.test.ts (7 tests) 246ms
+ ✓ tests/unit/auth-create-organisation.route.test.ts (4 tests) 237ms
+ ✓ tests/unit/auth-register.service.test.ts (8 tests) 138ms
+ ✓ tests/unit/access-status-gate.route.test.ts (6 tests) 86ms
+ ✓ tests/unit/access-request-flow.signature-gate.test.ts (3 tests) 65ms
+ ↓ tests/integration/team-invite-cross-domain-acceptance.test.ts (2 tests | 2 skipped)
+ ↓ tests/integration/team-hostname-rls.test.ts (6 tests | 6 skipped)
+ ↓ tests/integration/team-invite-active-membership.test.ts (5 tests | 5 skipped)
+ ↓ tests/integration/organisation-ownership-concurrency.test.ts (4 tests | 4 skipped)
+ ↓ tests/integration/product-team-policy-rls.test.ts (1 test | 1 skipped)
+ ✓ tests/unit/admin-superusers.service.test.ts (5 tests) 69ms
+ ↓ tests/integration/organisation.service.admin-delete.persistence.test.ts (2 tests | 2 skipped)
+ ↓ tests/integration/tenant-context-rls.test.ts (4 tests | 4 skipped)
+ ✓ tests/unit/billing-cycle-breakdown.service.test.ts (4 tests) 1707ms
+   ✓ frozen customer billing breakdown > neutralizes control-prefixed spreadsheet formulas and fits long labels across pages  1348ms
+(node:65360) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:65360) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:65360) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:65360) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:65360) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:65360) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:65360) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:65360) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:65360) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:65360) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:65360) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:65360) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/billing-canonical.routes.test.ts (10 tests) 896ms
+ ✓ tests/unit/avatar-provider-teardown.test.ts (5 tests) 798ms
+(node:44800) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:44800) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:44800) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:44800) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:44800) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:44800) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:44800) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:44800) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:44800) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/billing-funding-read.routes.test.ts (9 tests) 723ms
+(node:16820) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:16820) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:16820) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:16820) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:16820) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:16820) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:16820) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:16820) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:16820) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:16820) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/billing-credit-funding-actions.routes.test.ts (10 tests) 732ms
+(node:49936) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:49936) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:49936) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:49936) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:49936) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:49936) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/billing-contract-invoice.routes.test.ts (6 tests) 578ms
+(node:36292) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:36292) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:36292) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:36292) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:36292) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:36292) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/billing-credit-purchase-status.routes.test.ts (6 tests) 650ms
+(node:62592) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:62592) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:62592) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:62592) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/billing-cycle.routes.test.ts (4 tests) 415ms
+(node:54196) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:54196) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:54196) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/billing-customer-invoices.routes.test.ts (3 tests) 368ms
+(node:49228) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:49228) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:49228) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/unit/billing-credit-funding-request.routes.test.ts (3 tests) 341ms
+ ✓ tests/unit/billing-credit-payment-invoice-pdf.service.test.ts (1 test) 309ms
+ ✓ tests/unit/avatar-public-team-rate-limit.test.ts (1 test) 273ms
+(node:31892) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/unit/avatar-auth-before-config.routes.test.ts (7 tests) 184ms
+(node:59492) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/unit/billing-actor-audience.test.ts (7 tests) 199ms
+(node:49204) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/unit/billing-admin-tariff.routes.test.ts (1 test) 185ms
+ ✓ tests/unit/avatar-response.test.ts (1 test) 65ms
+ ✓ tests/unit/billing-actor.service.test.ts (14 tests) 65ms
+ ✓ tests/unit/billing-credit-projection.service.test.ts (16 tests) 64ms
+ ✓ tests/unit/apple.service.test.ts (2 tests) 57ms
+ ✓ tests/unit/billing-credit-region-offers.projection.test.ts (7 tests) 44ms
+ ✓ tests/unit/access-status-bootstrap.service.test.ts (3 tests) 41ms
+ ✓ tests/unit/billing-app-key.service.test.ts (8 tests) 35ms
+ ✓ tests/unit/auto-onboarding.service.test.ts (16 tests) 28ms
+ ✓ tests/unit/avatar-svg.test.ts (12 tests) 25ms
+ ✓ tests/unit/access-token.service.test.ts (10 tests) 28ms
+ ✓ tests/unit/billing-credit-purchase-status.service.test.ts (48 tests) 21ms
+ ✓ tests/unit/billing-customer-display.service.test.ts (3 tests) 22ms
+ ✓ tests/unit/billing-credit-display.service.test.ts (10 tests) 23ms
+ ✓ tests/unit/billing-funding-migration.test.ts (12 tests) 25ms
+ ✓ tests/unit/billing-copy-catalog.test.ts (5 tests) 23ms
+ ✓ tests/unit/admin-api-key.service.test.ts (7 tests) 23ms
+02:25:31 [vite] (ssr) warning: Duplicate key "prepaidReservations" in object literal
+57 |      unresolvedSetupCheckouts: [],
+58 |      autoTopUpChargedMinor: 0n,
+59 |      prepaidReservations: [],
+   |      ^
+60 |      activeReservedMicrocredits: 0n,
+61 |    };
+
+  Plugin: vite:esbuild
+  File: C:/Users/ondre/Projects/UnlikeOtherAuthenticator/.worktrees/sol-audit-fixes-api-20261014/API/tests/unit/billing-credits.service.test.ts
+02:25:31 [vite] (ssr) warning: Duplicate key "activeReservedMicrocredits" in object literal
+58 |      autoTopUpChargedMinor: 0n,
+59 |      prepaidReservations: [],
+60 |      activeReservedMicrocredits: 0n,
+   |      ^
+61 |    };
+62 |  }
+
+  Plugin: vite:esbuild
+  File: C:/Users/ondre/Projects/UnlikeOtherAuthenticator/.worktrees/sol-audit-fixes-api-20261014/API/tests/unit/billing-credits.service.test.ts
+ ✓ tests/unit/billing-credits.service.test.ts (3 tests) 21ms
+ ✓ tests/unit/group.service.members.test.ts (5 tests) 19ms
+ ✓ tests/unit/billing-contract.service.test.ts (7 tests) 21ms
+ ✓ tests/unit/group.service.test.ts (8 tests) 20ms
+ ✓ tests/unit/token.service.signature-refresh.test.ts (4 tests) 20ms
+ ✓ tests/unit/organisation.service.membership.lifecycle.test.ts (5 tests) 19ms
+ ✓ tests/unit/billing-customer-action-intent.service.test.ts (3 tests) 18ms
+ ✓ tests/unit/billing-credit-funding-webhook-apply.service.test.ts (6 tests) 16ms
+ ✓ tests/unit/billing-recurring-addons.service.test.ts (7 tests) 20ms
+ ✓ tests/unit/billing-stripe-subscription.service.test.ts (8 tests) 20ms
+ ✓ tests/unit/website-client-context.service.test.ts (4 tests) 18ms
+ ✓ tests/unit/billing-credit-funding-actions.service.test.ts (18 tests) 18ms
+ ✓ tests/unit/team-hostname.service.test.ts (21 tests) 15ms
+ ✓ tests/unit/totp.service.test.ts (7 tests) 19ms
+ ✓ tests/unit/integration-accept.service.test.ts (8 tests) 18ms
+ ✓ tests/unit/first-login.service.test.ts (10 tests) 19ms
+ ✓ tests/unit/signature-migration.test.ts (8 tests) 18ms
+ ✓ tests/unit/billing-migration.test.ts (7 tests) 18ms
+ ✓ tests/unit/org-placement.service.test.ts (8 tests) 18ms
+ ✓ tests/unit/team-invite-revoke.service.test.ts (15 tests) 19ms
+ ✓ tests/unit/billing-ledger-http.service.test.ts (4 tests) 19ms
+ ✓ tests/unit/team.service.invited.test.ts (2 tests) 16ms
+ ✓ tests/unit/billing-rating.service.test.ts (5 tests) 20ms
+ ✓ tests/unit/team.service.roster.test.ts (3 tests) 18ms
+ ✓ tests/unit/organisation.service.membership.list-actor.test.ts (4 tests) 17ms
+ ✓ tests/unit/billing-invoice-calculation.service.test.ts (3 tests) 18ms
+ ✓ tests/unit/login-session.service.test.ts (7 tests) 17ms
+ ✓ tests/unit/social-login.service.test.ts (6 tests) 19ms
+ ✓ tests/unit/billing-credit-action-readiness.service.test.ts (22 tests) 17ms
+ ✓ tests/unit/billing-contract-invoice-migration.test.ts (8 tests) 18ms
+ ✓ tests/unit/directory-credential-authority.test.ts (6 tests) 18ms
+ ✓ tests/unit/billing-entitlement.service.test.ts (7 tests) 17ms
+ ✓ tests/unit/billing-ledger-runtime-key.service.test.ts (6 tests) 15ms
+ ✓ tests/unit/native-login-failure-limit.test.ts (3 tests) 14ms
+ ✓ tests/unit/setting-version.test.ts (1 test) 17ms
+ ✓ tests/unit/billing-cancellation-preview.service.test.ts (4 tests) 15ms
+ ✓ tests/unit/refresh-token-grant-binding.test.ts (3 tests) 15ms
+ ✓ tests/unit/billing-credit-funding-request.service.test.ts (12 tests) 17ms
+ ✓ tests/unit/integration-request.service.test.ts (15 tests) 18ms
+ ✓ tests/unit/authorize-state.test.ts (13 tests) 17ms
+ ✓ tests/unit/signature-admin-operations.service.test.ts (6 tests) 16ms
+ ✓ tests/unit/auth-registration-email-link.service.test.ts (3 tests) 17ms
+ ✓ tests/unit/oauth-code.scope.test.ts (2 tests) 16ms
+ ✓ src/services/__tests__/feature-flag-resolution.service.test.ts (12 tests) 18ms
+ ✓ tests/unit/github.service.test.ts (3 tests) 15ms
+ ✓ tests/unit/config-fetch.service.test.ts (21 tests) 16ms
+ ✓ tests/unit/billing-org-responsibility.service.test.ts (3 tests) 15ms
+ ✓ tests/unit/billing-customer-invoice-manual.service.test.ts (5 tests) 14ms
+ ✓ tests/unit/internal-admin.activity-stats.test.ts (16 tests) 16ms
+ ✓ tests/unit/billing-credit-auto-top-up-event-recovery.service.test.ts (8 tests) 15ms
+ ✓ src/middleware/__tests__/org-role-guard-subject-assertion.test.ts (6 tests) 15ms
+ ✓ tests/unit/team-invite-member.service.test.ts (12 tests) 16ms
+ ✓ tests/unit/signature-policy.service.test.ts (7 tests) 15ms
+ ✓ tests/unit/directory-live-standing.test.ts (12 tests) 17ms
+ ✓ tests/unit/social-login.admin-registration.test.ts (4 tests) 16ms
+ ✓ tests/unit/billing-credit-payment-stripe-invoice.service.test.ts (5 tests) 16ms
+ ✓ tests/unit/billing-credit-funding-webhook.service.test.ts (13 tests) 18ms
+ ✓ tests/unit/static-file.test.ts (2 tests) 16ms
+ ✓ tests/unit/member-team-access.service.test.ts (2 tests) 17ms
+ ✓ tests/unit/login-code.service.test.ts (15 tests) 16ms
+ ✓ src/plugins/__tests__/tenant-context.plugin.test.ts (10 tests) 16ms
+ ✓ tests/unit/billing-service-access.service.test.ts (4 tests) 16ms
+ ✓ tests/unit/refresh-token-global-revocation.test.ts (2 tests) 15ms
+ ✓ tests/unit/billing-credit-account.service.test.ts (5 tests) 16ms
+ ✓ tests/unit/org-context.service.test.ts (4 tests) 14ms
+ ✓ tests/unit/billing-seat-month-quote.service.test.ts (6 tests) 13ms
+ ✓ tests/unit/billing-cancellation-confirm.service.test.ts (2 tests) 15ms
+ ✓ tests/unit/billing-tariff.service.test.ts (7 tests) 14ms
+ ✓ tests/unit/team-invite-token.service.test.ts (7 tests) 15ms
+ ✓ tests/unit/social-login-lock-order.test.ts (1 test) 14ms
+ ✓ tests/unit/google.service.test.ts (4 tests) 15ms
+ ✓ tests/unit/billing-sms-country-policy.service.test.ts (3 tests) 16ms
+ ✓ tests/unit/refresh-token-rotation-policy.service.test.ts (4 tests) 16ms
+ ✓ tests/unit/user-team-requirement.service.test.ts (2 tests) 15ms
+ ✓ tests/unit/linkedin.service.test.ts (3 tests) 15ms
+ ✓ src/middleware/__tests__/config-jwt-header-verifier.test.ts (5 tests) 15ms
+ ✓ tests/unit/social-state.service.test.ts (6 tests) 15ms
+ ✓ tests/unit/twofactor-disable.service.test.ts (1 test) 16ms
+ ✓ tests/unit/facebook.service.test.ts (3 tests) 16ms
+ ✓ tests/unit/billing-commercial-adjustment.service.test.ts (4 tests) 16ms
+ ✓ tests/unit/billing-credit-payment-adjustment-webhook.service.test.ts (8 tests) 15ms
+ ✓ tests/unit/billing-ledger-team-discovery.service.test.ts (2 tests) 14ms
+ ✓ tests/unit/billing-tariff-history.service.test.ts (6 tests) 14ms
+ ✓ tests/unit/org-placement.auto-create.test.ts (3 tests) 15ms
+ ✓ tests/unit/billing-credit-purchase-rate.service.test.ts (16 tests) 15ms
+ ✓ tests/unit/ban-policy.service.test.ts (10 tests) 14ms
+ ✓ tests/unit/billing-stripe-catalog.service.test.ts (3 tests) 16ms
+ ✓ tests/unit/confidential-delegation-migration.test.ts (4 tests) 14ms
+ ✓ tests/unit/login-log.service.test.ts (4 tests) 13ms
+ ✓ src/services/__tests__/app-startup.service.test.ts (6 tests) 15ms
+ ✓ tests/unit/billing-contract-guard.service.test.ts (3 tests) 14ms
+ ✓ tests/unit/billing-stripe-catalog-provisioning-remote.service.test.ts (6 tests) 14ms
+ ✓ tests/unit/jwks-fetch.service.test.ts (10 tests) 15ms
+ ✓ tests/unit/billing-credit-funding-context.service.test.ts (3 tests) 14ms
+ ✓ tests/unit/lifecycle-error-response.test.ts (9 tests) 15ms
+ ✓ tests/unit/billing-monthly-subscription-quote.service.test.ts (4 tests) 14ms
+ ✓ tests/unit/billing-sms-eur-number-subscription.test.ts (2 tests) 14ms
+ ✓ tests/unit/billing-invoice-lifecycle.service.test.ts (5 tests) 14ms
+ ✓ tests/unit/admin-access-revocation.service.test.ts (2 tests) 14ms
+ ✓ src/services/oauth/__tests__/kelpie-connect-policy.test.ts (3 tests) 14ms
+ ✓ tests/unit/billing-credit-rating.service.test.ts (12 tests) 14ms
+ ✓ tests/unit/email.templates.test.ts (18 tests) 14ms
+ ✓ tests/unit/billing-contract-funding-evidence.service.test.ts (3 tests) 14ms
+ ✓ src/services/oauth/__tests__/resource-validation.service.test.ts (5 tests) 14ms
+ ✓ tests/unit/billing-credit-checkout-recovery.service.test.ts (3 tests) 14ms
+ ✓ tests/unit/billing-recurring-addon-checkout-locale.test.ts (1 test) 14ms
+ ✓ tests/unit/twofactor-challenge.service.test.ts (5 tests) 16ms
+ ✓ tests/unit/billing-env-validation.test.ts (1 test) 15ms
+ ✓ tests/unit/login-session-use.service.test.ts (3 tests) 14ms
+ ✓ tests/unit/billing-credit-settlement-scheduler.service.test.ts (2 tests) 15ms
+ ✓ tests/unit/role-grants.test.ts (15 tests) 15ms
+ ✓ tests/unit/team-invite-state-machine.test.ts (19 tests) 14ms
+ ✓ tests/unit/billing-customer-invoice-prepaid.service.test.ts (4 tests) 15ms
+ ✓ tests/unit/directory-user-mutation.test.ts (4 tests) 14ms
+ ✓ tests/unit/billing-sms-fx-refresh-accept.service.test.ts (3 tests) 14ms
+ ✓ tests/unit/auth-login.service.test.ts (6 tests) 14ms
+ ✓ tests/unit/billing-sms-recovery-admin.service.test.ts (3 tests) 15ms
+ ✓ tests/unit/domain-role.service.test.ts (6 tests | 3 skipped) 12ms
+ ✓ tests/unit/billing-admin-effect-authority.service.test.ts (3 tests) 15ms
+ ✓ tests/unit/directory-lifecycle-mutation.test.ts (4 tests) 13ms
+ ✓ src/services/__tests__/authorization-twofactor-proof.service.test.ts (4 tests) 13ms
+ ✓ tests/unit/billing-stripe-invoice-close-quote.service.test.ts (4 tests) 14ms
+ ✓ tests/unit/twofactor-enroll.service.test.ts (4 tests) 14ms
+ ✓ tests/unit/billing-serializable-transaction.service.test.ts (5 tests) 14ms
+ ✓ tests/unit/client-jwk.service.test.ts (8 tests) 15ms
+ ✓ tests/unit/confidential-assertion-use.service.test.ts (4 tests) 15ms
+ ✓ tests/unit/deploy-main-workflow.test.ts (3 tests) 18ms
+ ✓ tests/unit/admin-ui.service.test.ts (3 tests) 14ms
+ ✓ tests/unit/billing-invoice-issue-readiness-migration.test.ts (3 tests) 14ms
+ ✓ tests/unit/billing-stripe-tariff-guard.service.test.ts (4 tests) 15ms
+ ✓ tests/unit/domain-user-subject-lookup.test.ts (1 test) 14ms
+ ✓ src/services/__tests__/twofactor-setup-token.service.test.ts (2 tests) 14ms
+ ✓ tests/unit/billing-credit-auto-top-up-runtime.service.test.ts (7 tests) 13ms
+ ✓ tests/unit/billing-stripe-catalog-provisioning.service.test.ts (2 tests) 14ms
+ ✓ tests/unit/billing-credit-settlement-migration.test.ts (3 tests) 14ms
+ ✓ tests/unit/claim-secret-crypto.test.ts (5 tests) 14ms
+ ✓ tests/unit/billing-sms-liability-admin.service.test.ts (2 tests) 14ms
+ ✓ tests/unit/product-team-policy.service.test.ts (6 tests) 14ms
+ ✓ tests/unit/internal-admin.invitation-mapping.test.ts (1 test) 13ms
+ ✓ tests/unit/avatar-url.test.ts (8 tests) 14ms
+ ✓ tests/unit/billing-credit-payer-period.service.test.ts (3 tests) 12ms
+ ✓ tests/unit/billing-invoice-line-credit-allocation.service.test.ts (3 tests) 17ms
+ ✓ tests/unit/handshake-error-log.service.test.ts (2 tests) 15ms
+ ✓ tests/unit/login-domain-policy.service.test.ts (17 tests) 16ms
+ ✓ tests/unit/billing-stripe-client.service.test.ts (2 tests) 15ms
+ ✓ tests/unit/debug-login-context.test.ts (2 tests) 13ms
+ ✓ tests/unit/org-audit-log.service.test.ts (5 tests) 14ms
+ ✓ tests/unit/api-schema-invite-contract.test.ts (16 tests) 14ms
+ ✓ tests/unit/billing-recurring-addon-cancellation-copy.test.ts (2 tests) 13ms
+ ✓ src/middleware/__tests__/domain-hash-auth.test.ts (3 tests) 15ms
+ ✓ tests/unit/billing-cycle-usage-projection.service.test.ts (2 tests) 14ms
+ ✓ tests/unit/team-invite-page.service.test.ts (17 tests) 14ms
+ ✓ tests/unit/org-caller-resolution.test.ts (12 tests) 13ms
+ ✓ tests/unit/billing-payment-copy.catalog.test.ts (14 tests) 13ms
+ ✓ tests/unit/billing-money.service.test.ts (3 tests) 12ms
+ ✓ tests/unit/billing-sms-policy-renewal.service.test.ts (5 tests) 13ms
+ ✓ tests/unit/auth-identity.service.test.ts (6 tests) 14ms
+ ✓ tests/unit/roster-pagination.service.test.ts (3 tests) 15ms
+ ✓ tests/unit/billing-stripe-invoice-close-account.service.test.ts (1 test) 14ms
+ ✓ tests/unit/billing-stripe-payment-line-payer.test.ts (4 tests) 14ms
+ ✓ tests/unit/twofactor-login.service.test.ts (4 tests) 13ms
+ ✓ tests/unit/client-service-audience.test.ts (13 tests) 15ms
+ ✓ tests/unit/organisation.service.admin-delete.test.ts (2 tests) 13ms
+ ✓ tests/unit/verification-token-epoch.service.test.ts (5 tests) 12ms
+ ✓ tests/unit/billing-markup-percent.service.test.ts (14 tests) 12ms
+ ✓ tests/unit/email-theme.service.test.ts (2 tests) 12ms
+ ✓ tests/unit/twofa-secret.test.ts (2 tests) 12ms
+ ✓ tests/unit/refresh-token-domain-revocation.test.ts (1 test) 13ms
+ ✓ src/services/__tests__/twofactor-policy.service.test.ts (5 tests) 12ms
+ ✓ src/utils/__tests__/http-url.test.ts (8 tests) 12ms
+ ✓ tests/unit/billing-stripe-catalog-provisioning-args.test.ts (6 tests) 13ms
+ ✓ tests/unit/team-invite-copy.test.ts (11 tests) 13ms
+ ✓ tests/unit/billing-cycle-quote-projection.service.test.ts (1 test) 13ms
+ ✓ tests/unit/refresh-token-membership-revocation.test.ts (2 tests) 13ms
+ ✓ tests/unit/billing-recurring-addon-catalog.service.test.ts (2 tests) 12ms
+ ✓ tests/unit/audit-log.service.test.ts (5 tests) 13ms
+ ✓ tests/unit/user-scope.service.test.ts (4 tests) 12ms
+ ✓ tests/unit/internal-admin.organisation-state.test.ts (7 tests) 13ms
+ ✓ tests/unit/billing-invoice-action-readiness.service.test.ts (3 tests) 13ms
+ ✓ tests/unit/billing-stripe-scheduler.service.test.ts (6 tests) 12ms
+ ✓ tests/unit/retention-pruning.service.test.ts (1 test) 13ms
+ ✓ tests/unit/billing-credit-funding-binding.service.test.ts (2 tests) 14ms
+ ✓ tests/unit/billing-statement-action.service.test.ts (1 test) 13ms
+ ✓ tests/unit/team-invite.service.test.ts (7 tests) 12ms
+ ✓ tests/unit/billing-cycle-binary-order.service.test.ts (1 test) 12ms
+ ✓ tests/unit/organisation.service.membership.active-only.test.ts (2 tests) 13ms
+ ✓ tests/unit/first-login-auto-selection.service.test.ts (3 tests) 15ms
+ ✓ tests/unit/billing-sms-route-bound-rule.test.ts (2 tests) 12ms
+ ✓ src/services/oauth/__tests__/native-app-policy.test.ts (2 tests) 12ms
+ ✓ tests/unit/billing-customer-action-intent-migration.test.ts (2 tests) 14ms
+ ✓ tests/unit/image-sniff.test.ts (6 tests) 12ms
+ ✓ tests/unit/access-request.service.test.ts (4 tests) 13ms
+ ✓ tests/unit/billing-serialization.test.ts (1 test) 11ms
+ ✓ tests/unit/org-domain-context.test.ts (4 tests) 12ms
+ ✓ tests/unit/[token-like test value redacted].test.ts (3 tests) 11ms
+ ✓ tests/unit/stripe-catalog-provisioning-report.test.ts (2 tests) 12ms
+ ✓ tests/unit/api-schema-roster-contract.test.ts (4 tests) 12ms
+ ✓ tests/unit/avatar-provider.service.test.ts (10 tests) 11ms
+ ✓ tests/unit/pkce.test.ts (1 test) 13ms
+ ✓ tests/unit/billing-stripe-credit-allocation-order.service.test.ts (2 tests) 12ms
+ ✓ src/services/confidential-delegation.service.test.ts (2 tests) 11ms
+ ✓ tests/unit/team-invite-get.service.test.ts (8 tests) 11ms
+ ✓ tests/unit/hash.test.ts (1 test) 11ms
+ ✓ src/services/oauth/__tests__/client.service.test.ts (4 tests) 12ms
+ ✓ tests/unit/team-invite.roster.test.ts (3 tests) 13ms
+ ✓ tests/unit/billing-privacy-feature-flag-migration.test.ts (1 test) 11ms
+ ✓ tests/unit/avatar.service.test.ts (18 tests) 12ms
+ ✓ tests/unit/team-avatar.service.test.ts (16 tests) 11ms
+ ✓ tests/unit/config.role-grants.test.ts (14 tests) 11ms
+ ✓ tests/unit/billing-credit-budget-scope-order.test.ts (1 test) 11ms
+ ✓ tests/unit/email.service.test.ts (10 tests) 11ms
+ ✓ src/middleware/__tests__/org-role-guard.test.ts (28 tests) 12ms
+ ✓ tests/unit/billing-credit-auto-top-up-recovery.service.test.ts (8 tests) 11ms
+ ✓ tests/unit/config.service.test.ts (12 tests) 11ms
+ ✓ tests/unit/billing-credit-region-top-up.service.test.ts (3 tests) 10ms
+ ✓ tests/unit/team-invite-resend.service.test.ts (2 tests) 11ms
+ ✓ tests/unit/client-service.test.ts (23 tests) 9ms
+ ✓ src/middleware/__tests__/org-role-guard-backend-origin.test.ts (4 tests) 9ms
+ ✓ tests/unit/team-invite-approval-queue.service.test.ts (3 tests) 9ms
+ ✓ src/middleware/__tests__/config-verifier-redaction.test.ts (4 tests) 8ms
+ ✓ src/services/oauth/__tests__/config.service.test.ts (3 tests) 9ms
+ ✓ tests/unit/auth-reset-password.service.test.ts (6 tests) 11ms
+ ✓ tests/unit/billing-organisation-region.service.test.ts (4 tests) 9ms
+ ↓ tests/integration/billing-organisation-region.persistence.test.ts (2 tests | 2 skipped)
+(node:54616) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:54616) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:54616) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/integration/auth-social-select-account.test.ts (3 tests) 371ms
+ ↓ tests/integration/memory-delegation-migration.test.ts (1 test | 1 skipped)
+ ↓ tests/integration/billing-privacy-feature-flag-db.test.ts (1 test | 1 skipped)
+ ✓ tests/billing-sms-commercial-policy.test.ts (4 tests) 13ms
+ ✓ src/db/__tests__/tenant-context.test.ts (3 tests) 12ms
+ ↓ tests/integration/[token-like test value redacted].persistence.test.ts (1 test | 1 skipped)
+ ✓ tests/billing-sms-runtime.test.ts (4 tests) 12ms
+ ↓ tests/integration/billing-invoice-credit-order.persistence.test.ts (1 test | 1 skipped)
+(node:66756) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/integration/auth-register.test.ts (1 test) 217ms
+ ↓ tests/integration/billing-seat-schema-authority.persistence.test.ts (2 tests | 2 skipped)
+ ✓ tests/unit/avatar-config-claim.test.ts (5 tests) 9ms
+ ✓ tests/unit/billing-credit-auto-top-up-setup-race.service.test.ts (1 test) 9ms
+ ✓ tests/unit/ssrf-destination-resolution.test.ts (11 tests) 9ms
+ ✓ src/services/__tests__/email-providers-log.test.ts (4 tests) 9ms
+ ✓ tests/unit/email-invite-continuation.service.test.ts (7 tests) 8ms
+ ✓ src/middleware/__tests__/org-backend-only-guard.test.ts (19 tests) 8ms
+ ✓ tests/unit/billing-credit-lot-value.service.test.ts (7 tests) 8ms
+ ✓ tests/unit/auth-register.service.timing.test.ts (1 test) 7ms
+ ✓ tests/unit/auth-entrypoint-team-hint.test.ts (7 tests) 7ms
+(node:51616) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/integration/ingress-proxy.test.ts (3 tests) 179ms
+(node:60928) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/integration/generic-errors.test.ts (1 test) 179ms
+(node:62812) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/integration/health.test.ts (1 test) 192ms
+
+ Test Files  419 passed | 154 skipped (573)
+      Tests  2762 passed | 771 skipped (3533)
+   Start at  02:19:45
+   Duration  425.99s (transform 6.83s, setup 22.17s, collect 207.27s, tests 103.23s, environment 50ms, prepare 32.32s)
+
+EXIT=0
