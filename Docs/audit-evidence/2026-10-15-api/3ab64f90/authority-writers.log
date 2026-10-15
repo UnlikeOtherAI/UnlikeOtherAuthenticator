@@ -1,0 +1,64 @@
+
+ RUN  v3.2.6 C:/Users/ondre/Projects/UnlikeOtherAuthenticator/.worktrees/sol-audit-fixes-api-20261014/API
+
+(node:67632) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stdout | tests/integration/access-request-policy-race.test.ts > access-request policy/user/directory lock hierarchy on PostgreSQL
+Retained audit test schema: [token-like test value redacted]
+
+ ✓ tests/integration/access-request-policy-race.test.ts (1 test) 43144ms
+   ✓ access-request policy/user/directory lock hierarchy on PostgreSQL > commits access assignment and a concurrent policy-exclusive lifecycle writer without a lock-order cycle  1525ms
+(node:52492) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stdout | tests/integration/directory-admission-writers.test.ts > admission and team-avatar directory writers on PostgreSQL
+Retained failed authority fixture schema: [token-like test value redacted]
+
+ ❯ tests/integration/directory-admission-writers.test.ts (9 tests | 1 failed) 56241ms
+   ✓ admission and team-avatar directory writers on PostgreSQL > publishes team-avatar create, replacement and deletion through real HTTP  2332ms
+   ✓ admission and team-avatar directory writers on PostgreSQL > accepts new and freshly re-invited members atomically and invalidates a prior owner-only profile scope  3083ms
+   ✓ admission and team-avatar directory writers on PostgreSQL > rolls back invitation, name, both memberships, revision and events in one real transaction  996ms
+   ✓ admission and team-avatar directory writers on PostgreSQL > serializes the final link use and publishes only the successful new membership  763ms
+   ✓ admission and team-avatar directory writers on PostgreSQL > does not consume a link or allocate events when exact-org user or team quotas refuse admission  2255ms
+   × admission and team-avatar directory writers on PostgreSQL > rechecks actual expiry after an observed team-row lock wait without consuming the link 4318ms
+     → expected { admitted: true } to match object { error: { statusCode: 400 } }
+(1 matching property omitted from actual)
+   · admission and team-avatar directory writers on PostgreSQL > refuses a suspended team seat without lifting suspension or consuming a link
+   · admission and team-avatar directory writers on PostgreSQL > refuses a persisted unsupported link role before any membership or usage write
+   · admission and team-avatar directory writers on PostgreSQL > refuses self-avatar upload when canonical credential revocation wins an observed user-lock wait
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/directory-admission-writers.test.ts > admission and team-avatar directory writers on PostgreSQL > rechecks actual expiry after an observed team-row lock wait without consuming the link
+AssertionError: expected { admitted: true } to match object { error: { statusCode: 400 } }
+(1 matching property omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "error": {
+-     "statusCode": 400,
+-   },
++   "admitted": true,
+  }
+
+ ❯ tests/integration/directory-admission-writers.test.ts:140:27
+    138|       await new Promise(resolve => setTimeout(resolve, Math.max(0, exp…
+    139|     } finally { release(); await blocker; }
+    140|     expect(await outcome).toMatchObject({ error: { statusCode: 400 } }…
+       |                           ^
+    141|     expect((await suite.db.teamInviteLink.findUniqueOrThrow({ where: {…
+    142|     expect(await suite.db.orgMember.count({ where: { orgId: f.org.id, …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 1 passed (4)
+      Tests  1 failed | 6 passed (10)
+   Start at  02:28:21
+   Duration  108.11s (transform 3.24s, setup 113ms, collect 8.20s, tests 99.39s, environment 0ms, prepare 129ms)
+
+undefined
+C:\Users\ondre\Projects\UnlikeOtherAuthenticator\.worktrees\sol-audit-fixes-api-20261014\API:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command "vitest" not found
+EXIT=1
