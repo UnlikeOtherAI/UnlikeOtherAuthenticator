@@ -24,6 +24,9 @@ describe.skipIf(!process.env.DATABASE_URL)('canonical writer families on Postgre
   let base: string, retain = false;
   beforeAll(async () => {
     suite = await createProfileDirectoryFixture();
+    expect(await suite.appDb.$queryRaw<Array<{ role: string; bypass: boolean }>>`
+      SELECT current_user AS role, rolbypassrls AS bypass FROM pg_roles WHERE rolname=current_user`)
+      .toEqual([{ role: 'uoa_app', bypass: false }]);
     base = await suite.app.listen({ host: '127.0.0.1', port: 0 });
   });
   afterEach(({ task }) => { if (task.result?.state === 'fail') retain = true; });
@@ -139,5 +142,32 @@ describe.skipIf(!process.env.DATABASE_URL)('canonical writer families on Postgre
     } finally {
       await suite.db.$executeRawUnsafe(`GRANT EXECUTE ON FUNCTION "${suite.handle.schema}".uoa_group_membership_admission(text,text) TO uoa_app`);
     }
+  });
+
+  it('does not let the definer admission check escape missing or sibling tenant context', async () => {
+    const f = await suite.subject(), sibling = await suite.subject();
+    expect(await suite.appDb.$queryRaw<Array<{ allowed: boolean }>>`
+      SELECT uoa_group_membership_admission(${f.org.id},${f.target.id}) AS allowed`)
+      .toEqual([{ allowed: false }]);
+    await runWithTenantContext({ context: { domain, orgId: f.org.id, userId: f.owner.id }, prisma: suite.appDb }, async tx => {
+      expect(await tx.$queryRaw<Array<{ allowed: boolean }>>`
+        SELECT uoa_group_membership_admission(${f.org.id},${f.target.id}) AS allowed`)
+        .toEqual([{ allowed: true }]);
+      expect(await tx.$queryRaw<Array<{ allowed: boolean }>>`
+        SELECT uoa_group_membership_admission(${sibling.org.id},${sibling.target.id}) AS allowed`)
+        .toEqual([{ allowed: false }]);
+    });
+  });
+
+  it('freezes group admission for deleting subjects, including an older raw writer', async () => {
+    const f = await suite.subject();
+    await suite.db.user.update({ where: { id: f.target.id }, data: { lifecycleStatus: 'DELETING' } });
+    const id = await group(f.org.id);
+    expect((await socketRequest(base, `/internal/org/organisations/${f.org.id}/groups/${id}/members${query}`, {
+      method: 'POST', headers: admin(), json: { userId: f.target.id } })).status).toBe(400);
+    await expect(suite.db.groupMember.create({ data: { groupId: id, userId: f.target.id } }))
+      .rejects.toMatchObject({ code: 'P2003' });
+    expect((await changes(f.org.id)).map(change => change.kind)).toEqual(['organisation.changed']);
+    expect(await suite.db.groupMember.count({ where: { groupId: id } })).toBe(0);
   });
 });
