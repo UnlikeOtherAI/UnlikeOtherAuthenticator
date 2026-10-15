@@ -7,7 +7,6 @@ import { issueAuthorizationCode } from '../../src/services/authorization-code.se
 import { validateConfigFields } from '../../src/services/config.service.js';
 import { deactivateOrganisationMember } from '../../src/services/organisation.service.lifecycle.js';
 import { exchangeAuthorizationCodeForTokens } from '../../src/services/token.service.js';
-import { createClientId } from '../../src/utils/hash.js';
 import { baseClientConfigPayload } from '../helpers/test-config.js';
 import { createTestDb } from '../helpers/test-db.js';
 
@@ -54,6 +53,7 @@ function config(teamSelection: 'off' | 'auto' = 'off'): ClientConfig {
 
 describe.skipIf(!hasDatabase)('authorization-code and membership lifecycle race', () => {
   let handle: Awaited<ReturnType<typeof createTestDb>>;
+  let clientId: string;
   const originalEnv = {
     DATABASE_URL: process.env.DATABASE_URL,
     DATABASE_ADMIN_URL: process.env.DATABASE_ADMIN_URL,
@@ -90,11 +90,11 @@ describe.skipIf(!hasDatabase)('authorization-code and membership lifecycle race'
     await handle.prisma.team.deleteMany();
     await handle.prisma.organisation.deleteMany();
     await handle.prisma.user.deleteMany();
-    await handle.prisma.clientDomain.upsert({
+    clientId = (await handle.prisma.clientDomain.upsert({
       where: { domain },
       create: { domain, label: 'Client', twoFaPolicy: 'OPTIONAL' },
       update: { allowedRedirectUrls: [], twoFaPolicy: 'OPTIONAL' },
-    });
+    })).id;
   });
 
   async function seedTeam(): Promise<SeededTeam> {
@@ -180,7 +180,8 @@ describe.skipIf(!hasDatabase)('authorization-code and membership lifecycle race'
         configUrl,
         redirectUrl,
         codeVerifier: verifier,
-        clientId: createClientId(domain, process.env.SHARED_SECRET!),
+        clientId,
+        authenticatedClientDomainId: clientId,
       },
       {
         prisma: handle.prisma,
@@ -199,7 +200,8 @@ describe.skipIf(!hasDatabase)('authorization-code and membership lifecycle race'
         configUrl,
         redirectUrl,
         codeVerifier: verifier,
-        clientId: createClientId(domain, process.env.SHARED_SECRET!),
+        clientId,
+        authenticatedClientDomainId: clientId,
       },
       {
         prisma: handle.prisma,

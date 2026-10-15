@@ -9,7 +9,6 @@ import {
   exchangeAuthorizationCodeForTokens,
   exchangeRefreshTokenForTokens,
 } from '../../src/services/token.service.js';
-import { createClientId } from '../../src/utils/hash.js';
 import { baseClientConfigPayload } from '../helpers/test-config.js';
 import { createTestDb } from '../helpers/test-db.js';
 
@@ -132,7 +131,7 @@ describe.skipIf(!hasDatabase)('ClientDomain disable versus token issuance', () =
     return exchangeAuthorizationCodeForTokens(
       {
         authenticatedClientDomainId: seedRow.clientDomainId,
-        clientId: createClientId(domain, process.env.SHARED_SECRET!),
+        clientId: seedRow.clientDomainId,
         code: seedRow.code,
         codeVerifier: verifier,
         config: config(),
@@ -152,7 +151,7 @@ describe.skipIf(!hasDatabase)('ClientDomain disable versus token issuance', () =
     return exchangeRefreshTokenForTokens(
       {
         authenticatedClientDomainId: seedRow.clientDomainId,
-        clientId: createClientId(domain, process.env.SHARED_SECRET!),
+        clientId: seedRow.clientDomainId,
         config: config(),
         configUrl,
         refreshToken,
