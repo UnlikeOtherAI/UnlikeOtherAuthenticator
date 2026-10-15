@@ -599,3 +599,15 @@ wrong-context consumption. No old server/build or production operation occurred.
 Evidence: `Docs/audit-evidence/2026-10-15-api/f1d1a448/`; executable deployment
 preflight floor10cases previously passed atb95098a6. Real rollout still requires
 that documented/provider-verified reader floor; no live gate/secret changed here.
+
+### 2026-10-15 literal TCP profile/directory authority gate
+
+At832c4eca all6new TCP/PG tests pass: actualRS256 same-host JWKS self reads/PATCH,
+canonical email/read-only refusal/no duplicate user row, actual multipart/avatar
+bytes, nullableACTIVE display and exact historical/erased references, user/directory
+expiry after observed PG lock waits, supported operator+exact owner provisioning,
+independent permissions and actual authority-store outage500/no-store.
+Real uoa_app is asserted non-BYPASSRLS; runtime uses uoa_app/uoa_admin clients.
+Evidence: `Docs/audit-evidence/2026-10-15-api/832c4eca/`. Earlier injected-route
+HTTP/PG evidence remains separate. All6pass, exit0; listener closed, schema retained.
+Full113-writer/race coverage and N03 cutover remain open.

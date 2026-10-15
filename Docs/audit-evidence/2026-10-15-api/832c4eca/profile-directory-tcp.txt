@@ -1,0 +1,22 @@
+
+ RUN  v3.2.6 C:/Users/ondre/Projects/UnlikeOtherAuthenticator/.worktrees/sol-audit-fixes-api-20261014/API
+
+(node:66184) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stdout | tests/integration/profile-directory-socket.test.ts > profile/directory TCP HTTP with real PostgreSQL roles
+Retained audit test schema: [token-like test value redacted]
+
+ ✓ tests/integration/profile-directory-socket.test.ts (6 tests) 57111ms
+   ✓ profile/directory TCP HTTP with real PostgreSQL roles > reads and patches canonical self using actual RS256 subject assertions over TCP  2070ms
+   ✓ profile/directory TCP HTTP with real PostgreSQL roles > uploads raster bytes and serves the exact authenticated no-store avatar over TCP  1478ms
+   ✓ profile/directory TCP HTTP with real PostgreSQL roles > preserves nullable ACTIVE display and exact historical provenance over TCP  4390ms
+   ✓ profile/directory TCP HTTP with real PostgreSQL roles > refuses an expired user token after an observed PostgreSQL lock wait over TCP  2358ms
+   ✓ profile/directory TCP HTTP with real PostgreSQL roles > uses the supported operator/owner doorway and expires directory authority after a TCP lock wait  3701ms
+   ✓ profile/directory TCP HTTP with real PostgreSQL roles > keeps a real authority-store outage generic and no-store over TCP  362ms
+
+ Test Files  1 passed (1)
+      Tests  6 passed (6)
+   Start at  01:03:52
+   Duration  63.79s (transform 3.17s, setup 78ms, collect 6.38s, tests 57.11s, environment 0ms, prepare 69ms)
+
+EXIT=0
