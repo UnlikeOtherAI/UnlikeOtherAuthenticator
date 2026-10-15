@@ -1,0 +1,90 @@
+
+ RUN  v3.2.6 C:/Users/ondre/Projects/UnlikeOtherAuthenticator/.worktrees/sol-audit-fixes-api-20261014/API
+
+(node:37092) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stdout | tests/integration/directory-org-team-writers.test.ts > organisation/team canonical writers over TCP and tenant RLS
+Retained failed authority fixture schema: [token-like test value redacted]
+
+ ❯ tests/integration/directory-org-team-writers.test.ts (6 tests | 1 failed) 45547ms
+   ✓ organisation/team canonical writers over TCP and tenant RLS > creates one canonical org/default-team/owner membership set and publishes its update  1294ms
+   × organisation/team canonical writers over TCP and tenant RLS > publishes new, removed and re-added org memberships including both default-team branches 2082ms
+     →
+Invalid `suite.db.group.create()` invocation in
+C:\Users\ondre\Projects\UnlikeOtherAuthenticator\.worktrees\sol-audit-fixes-api-20261014\API\tests\integration\directory-org-team-writers.test.ts:64:40
+
+  61 await call(path, 'POST', f.headers, { userId: fresh.id });
+  62 const original = await suite.db.orgMember.findUniqueOrThrow({ where: { orgId_userId: { orgId: f.org.id, userId: fresh.id } } });
+  63 await call(`${path}/${fresh.id}`, 'PUT', f.headers, { role: 'admin' });
+→ 64 const group = await suite.db.group.create({
+       data: {
+         orgId: "cmv8u7lvm000offmcxlyzd319",
+         name: "Membership cleanup",
+         slug: "fa7d516b-bb57-427e-849e-e3fd7bbf8a83",
+         ~~~~
+     ?   id?: String,
+     ?   description?: String | Null,
+     ?   createdAt?: DateTime,
+     ?   updatedAt?: DateTime,
+     ?   teams?: [token-like test value redacted],
+     ?   members?: [token-like test value redacted]
+       }
+     })
+
+Unknown argument `slug`. Available options are marked with ?.
+   · organisation/team canonical writers over TCP and tenant RLS > publishes team CRUD, role changes, removal, deactivation and status-only restoration
+   · organisation/team canonical writers over TCP and tenant RLS > self-joins a fresh and removed team seat with the configured default role
+   · organisation/team canonical writers over TCP and tenant RLS > transfers canonical ownership and immediately refuses the prior owner grant authority
+   · organisation/team canonical writers over TCP and tenant RLS > publishes operator org/team provisioning and AddUserToTeam create/update upserts
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/directory-org-team-writers.test.ts > organisation/team canonical writers over TCP and tenant RLS > publishes new, removed and re-added org memberships including both default-team branches
+PrismaClientValidationError:
+Invalid `suite.db.group.create()` invocation in
+C:\Users\ondre\Projects\UnlikeOtherAuthenticator\.worktrees\sol-audit-fixes-api-20261014\API\tests\integration\directory-org-team-writers.test.ts:64:40
+
+  61 await call(path, 'POST', f.headers, { userId: fresh.id });
+  62 const original = await suite.db.orgMember.findUniqueOrThrow({ where: { orgId_userId: { orgId: f.org.id, userId: fresh.id } } });
+  63 await call(`${path}/${fresh.id}`, 'PUT', f.headers, { role: 'admin' });
+→ 64 const group = await suite.db.group.create({
+       data: {
+         orgId: "cmv8u7lvm000offmcxlyzd319",
+         name: "Membership cleanup",
+         slug: "fa7d516b-bb57-427e-849e-e3fd7bbf8a83",
+         ~~~~
+     ?   id?: String,
+     ?   description?: String | Null,
+     ?   createdAt?: DateTime,
+     ?   updatedAt?: DateTime,
+     ?   teams?: [token-like test value redacted],
+     ?   members?: [token-like test value redacted]
+       }
+     })
+
+Unknown argument `slug`. Available options are marked with ?.
+ ❯ throwValidationException ../node_modules/.pnpm/@prisma+client@6.19.3_prism_1d040ab5215f59f0e27ddee7f0cf082e/node_modules/@prisma/client/src/runtime/core/errorRendering/throwValidationException.ts:45:9
+ ❯ ei.handleRequestError ../node_modules/.pnpm/@prisma+client@6.19.3_prism_1d040ab5215f59f0e27ddee7f0cf082e/node_modules/@prisma/client/src/runtime/RequestHandler.ts:202:7
+ ❯ ei.handleAndLogRequestError ../node_modules/.pnpm/@prisma+client@6.19.3_prism_1d040ab5215f59f0e27ddee7f0cf082e/node_modules/@prisma/client/src/runtime/RequestHandler.ts:174:12
+ ❯ ei.request ../node_modules/.pnpm/@prisma+client@6.19.3_prism_1d040ab5215f59f0e27ddee7f0cf082e/node_modules/@prisma/client/src/runtime/RequestHandler.ts:143:12
+ ❯ a ../node_modules/.pnpm/@prisma+client@6.19.3_prism_1d040ab5215f59f0e27ddee7f0cf082e/node_modules/@prisma/client/src/runtime/getPrismaClient.ts:833:24
+ ❯ tests/integration/directory-org-team-writers.test.ts:64:19
+     62|     const original = await suite.db.orgMember.findUniqueOrThrow({ wher…
+     63|     await call(`${path}/${fresh.id}`, 'PUT', f.headers, { role: 'admin…
+     64|     const group = await suite.db.group.create({ data: { orgId: f.org.i…
+       |                   ^
+     65|     await suite.db.groupMember.create({ data: { groupId: group.id, use…
+     66|     await call(`${path}/${fresh.id}`, 'DELETE', f.headers);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (7)
+      Tests  1 failed | 1 passed (6)
+   Start at  02:04:46
+   Duration  51.37s (transform 2.79s, setup 65ms, collect 5.53s, tests 45.55s, environment 0ms, prepare 67ms)
+
+undefined
+C:\Users\ondre\Projects\UnlikeOtherAuthenticator\.worktrees\sol-audit-fixes-api-20261014\API:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command "vitest" not found
+EXIT=1
