@@ -1,0 +1,66 @@
+
+ RUN  v3.2.6 C:/Users/ondre/Projects/UnlikeOtherAuthenticator/.worktrees/sol-audit-fixes-api-20261014/API
+
+(node:17996) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stdout | tests/integration/directory-writer-families.test.ts > canonical writer families on PostgreSQL/TCP/RLS
+Retained failed authority fixture schema: [token-like test value redacted]
+
+ ❯ tests/integration/directory-writer-families.test.ts (7 tests | 1 failed) 45114ms
+   × canonical writer families on PostgreSQL/TCP/RLS > invalidates every current organisation for global profile/avatar/credential-epoch writes 2776ms
+     → expected [ { revision: 1n, …(3) }, …(2) ] to deeply equal [ { revision: 1n, …(3) }, …(3) ]
+   · canonical writer families on PostgreSQL/TCP/RLS > commits each group/member/team-assignment write with its ordered outbox event through uoa_app
+   · canonical writer families on PostgreSQL/TCP/RLS > rolls back actual group creation, allocated revision and event together under tenant RLS
+   · canonical writer families on PostgreSQL/TCP/RLS > rechecks removed membership after an observed canonical user-lock wait before group insertion
+   · canonical writer families on PostgreSQL/TCP/RLS > resolves a cross-origin subject and keeps guard permission outages as generic failures
+   · canonical writer families on PostgreSQL/TCP/RLS > does not let the definer admission check escape missing or sibling tenant context
+   · canonical writer families on PostgreSQL/TCP/RLS > freezes group admission for deleting subjects, including an older raw writer
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/directory-writer-families.test.ts > canonical writer families on PostgreSQL/TCP/RLS > invalidates every current organisation for global profile/avatar/credential-epoch writes
+AssertionError: expected [ { revision: 1n, …(3) }, …(2) ] to deeply equal [ { revision: 1n, …(3) }, …(3) ]
+
+- Expected
++ Received
+
+@@ -10,17 +10,11 @@
+      "revision": 2n,
+      "subjectId": "cmv8u0d9y0003ffvwusekgsjh",
+      "teamId": null,
+    },
+    {
+-     "kind": "profile.changed",
++     "kind": "credential_epoch.changed",
+      "revision": 3n,
+-     "subjectId": "cmv8u0d9y0003ffvwusekgsjh",
+-     "teamId": null,
+-   },
+-   {
+-     "kind": "credential_epoch.changed",
+-     "revision": 4n,
+      "subjectId": "cmv8u0d9y0003ffvwusekgsjh",
+      "teamId": null,
+    },
+  ]
+
+ ❯ tests/integration/directory-writer-families.test.ts:64:36
+     62|     expect((await suite.db.user.findUniqueOrThrow({ where: { id: f.own…
+     63|     for (const orgId of [f.org.id, second.id, third.id]) {
+     64|       expect(await changes(orgId)).toEqual([
+       |                                    ^
+     65|         { revision: 1n, kind: 'profile.changed', subjectId: f.owner.id…
+     66|         { revision: 2n, kind: 'profile.changed', subjectId: f.owner.id…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (7)
+      Tests  1 failed (7)
+   Start at  01:59:09
+   Duration  50.95s (transform 2.80s, setup 68ms, collect 5.54s, tests 45.11s, environment 0ms, prepare 66ms)
+
+undefined
+C:\Users\ondre\Projects\UnlikeOtherAuthenticator\.worktrees\sol-audit-fixes-api-20261014\API:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command "vitest" not found
+EXIT=1
