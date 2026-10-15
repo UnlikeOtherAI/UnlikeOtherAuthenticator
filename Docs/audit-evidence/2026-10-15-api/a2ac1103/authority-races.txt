@@ -1,0 +1,47 @@
+
+ RUN  v3.2.6 C:/Users/ondre/Projects/UnlikeOtherAuthenticator/.worktrees/sol-audit-fixes-api-20261014/API
+
+stdout | tests/integration/refresh-token-replay-races.test.ts > refresh response-loss PostgreSQL serialization
+Retained audit test schema: [token-like test value redacted]
+
+ ✓ tests/integration/refresh-token-replay-races.test.ts (10 tests) 76292ms
+   ✓ refresh response-loss PostgreSQL serialization > recovers the exact successor when the first successful response is lost  1263ms
+   ✓ refresh response-loss PostgreSQL serialization > makes concurrent predecessor submissions converge on one successor  905ms
+   ✓ refresh response-loss PostgreSQL serialization > replays through a concurrent current-token rotation to its newest descendant  1903ms
+   ✓ refresh response-loss PostgreSQL serialization > commits family and access-token epoch revocation after the grace window  1261ms
+   ✓ refresh response-loss PostgreSQL serialization > bumps the epoch once when theft follows an earlier policy retirement  1978ms
+   ✓ refresh response-loss PostgreSQL serialization > revokes all user refresh state when a post-grace successor is detached  2182ms
+   ✓ refresh response-loss PostgreSQL serialization > does not let the same corrupt capability revoke a subsequently issued family  1845ms
+   ✓ refresh response-loss PostgreSQL serialization > retires only a valid family whose rotation chain exceeds the traversal bound  22236ms
+   ✓ refresh response-loss PostgreSQL serialization > makes sequential logout retries idempotent and lets a sibling domain heal  1364ms
+   ✓ refresh response-loss PostgreSQL serialization > makes concurrent logout retries bump the user epoch exactly once  669ms
+stdout | tests/integration/auth-token-membership-race.test.ts > authorization-code and membership lifecycle race
+Retained audit test schema: [token-like test value redacted]
+
+ ✓ tests/integration/auth-token-membership-race.test.ts (4 tests) 48581ms
+   ✓ authorization-code and membership lifecycle race > rejects exchange when deactivation obtains the membership locks first  1850ms
+   ✓ authorization-code and membership lifecycle race > finishes exchange before a deactivation waiting on the same locks  2120ms
+   ✓ authorization-code and membership lifecycle race > rejects an unscoped required exchange when deactivation locks the resolved team first  1916ms
+   ✓ authorization-code and membership lifecycle race > commits required placement before waiting deactivation revokes the newly issued refresh  2531ms
+stdout | tests/integration/authorization-epoch-races.test.ts > authorization credential-epoch races
+Retained audit test schema: [token-like test value redacted]
+
+ ✓ tests/integration/authorization-epoch-races.test.ts (4 tests) 46340ms
+   ✓ authorization credential-epoch races > reset-first rejects a waiting code without consuming it  978ms
+   ✓ authorization credential-epoch races > redemption-first commits before reset revokes the new family and epoch  1464ms
+   ✓ authorization credential-epoch races > reset-first rejects a waiting signing continuation before consumption  816ms
+   ✓ authorization credential-epoch races > continuation-first mints a code that a waiting reset makes stale  1341ms
+stdout | tests/integration/client-domain-token-race.test.ts > ClientDomain disable versus token issuance
+Retained audit test schema: [token-like test value redacted]
+
+ ✓ tests/integration/client-domain-token-race.test.ts (3 tests) 46461ms
+   ✓ ClientDomain disable versus token issuance > lets an exchange commit before a waiting domain disable  1429ms
+   ✓ ClientDomain disable versus token issuance > rejects exchange without consuming its code when domain disable wins  1560ms
+   ✓ ClientDomain disable versus token issuance > rejects refresh without rotating when domain disable wins  1557ms
+
+ Test Files  4 passed (4)
+      Tests  21 passed (21)
+   Start at  01:30:28
+   Duration  219.60s (transform 336ms, setup 180ms, collect 1.08s, tests 217.67s, environment 0ms, prepare 235ms)
+
+EXIT=0
