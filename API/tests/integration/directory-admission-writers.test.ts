@@ -139,4 +139,23 @@ describe.skipIf(!process.env.DATABASE_URL)('admission and team-avatar directory 
     expect(await suite.db.orgMember.count({ where: { orgId: f.org.id, userId: target.id } })).toBe(0);
     expect(await events(f.org.id)).toEqual([]);
   });
+
+  it('refuses a suspended team seat without lifting suspension or consuming a link', async () => {
+    const f = await suite.subject(), invitation = await link(f);
+    await suite.db.teamMember.update({ where: { teamId_userId: { teamId: f.team.id, userId: f.target.id } },
+      data: { status: 'DEACTIVATED' } });
+    await expect(redeem(invitation.token, f.target.id)).rejects.toMatchObject({ statusCode: 400, message: 'MEMBERSHIP_DEACTIVATED' });
+    expect((await suite.db.teamMember.findUniqueOrThrow({ where: { teamId_userId: { teamId: f.team.id, userId: f.target.id } } })).status).toBe('DEACTIVATED');
+    expect((await suite.db.teamInviteLink.findUniqueOrThrow({ where: { id: invitation.row.id } })).useCount).toBe(0);
+    expect(await events(f.org.id)).toEqual([]);
+  });
+
+  it('refuses a persisted unsupported link role before any membership or usage write', async () => {
+    const f = await suite.subject(), target = await user(), invitation = await link(f);
+    await suite.db.teamInviteLink.update({ where: { id: invitation.row.id }, data: { roleToAssign: 'unconfigured-role' } });
+    await expect(redeem(invitation.token, target.id)).rejects.toMatchObject({ statusCode: 400 });
+    expect((await suite.db.teamInviteLink.findUniqueOrThrow({ where: { id: invitation.row.id } })).useCount).toBe(0);
+    expect(await suite.db.orgMember.count({ where: { orgId: f.org.id, userId: target.id } })).toBe(0);
+    expect(await events(f.org.id)).toEqual([]);
+  });
 });
