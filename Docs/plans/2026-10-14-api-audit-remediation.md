@@ -5,6 +5,15 @@ All boxes stay unchecked until integration and appropriate verification. Source
 review is not runtime evidence. This branch is the API tranche, with no Auth/Admin
 frontend writes. No production probes, credential use, rotation or deployment ran.
 
+### Three-org profile scope correction — 2026-10-15
+
+The strengthened real TCP/PostgreSQL test exposes a missing self-profile PATCH
+invalidation for a legacy ownership reference without OrgMember. PATCH now uses
+the same canonical complete membership-plus-ownership scope resolver as avatar
+and credential epoch writes, after the exclusive user lock and before sorted org
+locks. The failing schema and outbox remain retained. Runtime rerun is pending;
+this correction does not authorize N03 or certify all113writers.
+
 ## Dispositions
 
 - [ ] U-01 — drafted stable ClientDomain ID, request-only credential consumers,
