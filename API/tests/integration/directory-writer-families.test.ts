@@ -43,8 +43,13 @@ describe.skipIf(!process.env.DATABASE_URL)('canonical writer families on Postgre
 
   it('invalidates every current organisation for global profile/avatar/credential-epoch writes', async () => {
     const f = await suite.subject();
-    const second = await suite.db.organisation.create({ data: { domain, name: 'Second canonical org', slug: randomUUID(), ownerId: f.owner.id } });
-    await suite.db.orgMember.create({ data: { orgId: second.id, userId: f.owner.id, role: 'owner' } });
+    const second = await suite.db.organisation.create({ data: { domain, name: 'Membership-only scope', slug: randomUUID(), ownerId: f.target.id } });
+    await suite.db.orgMember.createMany({ data: [
+      { orgId: second.id, userId: f.owner.id, role: 'member' }, { orgId: second.id, userId: f.target.id, role: 'owner' },
+    ] });
+    // Legacy owner references can survive without an OrgMember row. Both scope
+    // sources must participate, with the first org deduplicated across them.
+    const third = await suite.db.organisation.create({ data: { domain, name: 'Ownership-only scope', slug: randomUUID(), ownerId: f.owner.id } });
     const patched = await socketRequest(base, '/profile/me' + query, { method: 'PATCH', headers: f.headers, json: { name: 'Global profile' } });
     expect(patched.status).toBe(200);
     const bytes = Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), Buffer.alloc(32, 0x21)]);
@@ -55,7 +60,7 @@ describe.skipIf(!process.env.DATABASE_URL)('canonical writer families on Postgre
     expect((await socketRequest(base, `/avatar/me?domain=${domain}`, { method: 'DELETE', headers: f.headers })).status).toBe(200);
     await revokeAllRefreshTokensForUser(f.owner.id);
     expect((await suite.db.user.findUniqueOrThrow({ where: { id: f.owner.id } })).tokenVersion).toBe(1);
-    for (const orgId of [f.org.id, second.id]) {
+    for (const orgId of [f.org.id, second.id, third.id]) {
       expect(await changes(orgId)).toEqual([
         { revision: 1n, kind: 'profile.changed', subjectId: f.owner.id, teamId: null },
         { revision: 2n, kind: 'profile.changed', subjectId: f.owner.id, teamId: null },
