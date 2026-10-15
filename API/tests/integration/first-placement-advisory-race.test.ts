@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 
-import { BillingAppKeyPurpose } from '@prisma/client';
+import { BillingAppKeyPurpose, PrismaClient } from '@prisma/client';
 import { decodeJwt } from 'jose';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -9,13 +9,13 @@ import { issueAuthorizationCode } from '../../src/services/authorization-code.se
 import { validateConfigFields, type ClientConfig } from '../../src/services/config.service.js';
 import { resolveProductTeamBeforeTwoFa } from '../../src/services/required-team-placement.service.js';
 import { exchangeAuthorizationCodeForTokens } from '../../src/services/token.service.js';
-import { createClientId } from '../../src/utils/hash.js';
 import { baseClientConfigPayload } from '../helpers/test-config.js';
 import { createTestDb } from '../helpers/test-db.js';
 
 const hasDatabase = Boolean(process.env.DATABASE_URL);
 const verifier = 'first-placement-race-verifier-abcdefghijklmnopqrstuvwxyz';
 const productDomains = ['api.first-product.example', 'api.second-product.example'] as const;
+const recoverySchema = process.env.UOA_AUDIT_PLACEMENT_RECOVERY_SCHEMA;
 
 function deferred(): { promise: Promise<void>; resolve: () => void } {
   let resolve!: () => void;
@@ -47,7 +47,15 @@ describe.skipIf(!hasDatabase)('first-placement per-user advisory lock', () => {
   };
 
   beforeAll(async () => {
-    handle = await createTestDb();
+    if (recoverySchema) {
+      const url = new URL(process.env.DATABASE_URL!);
+      if (url.hostname !== '127.0.0.1' || url.port !== '55460' || url.pathname !== '/uoa_api_audit' ||
+        !/^test_\d+_[a-f0-9]{32}$/.test(recoverySchema)) throw new Error('Placement recovery requires the owned audit database/schema');
+      url.searchParams.set('schema', recoverySchema);
+      const prisma = new PrismaClient({ datasources: { db: { url: url.toString() } } });
+      await prisma.$connect();
+      handle = { prisma, schema: recoverySchema, databaseUrl: url.toString(), cleanup: () => prisma.$disconnect() };
+    } else handle = await createTestDb();
     if (!handle) throw new Error('DATABASE_URL is required for DB-backed tests');
     process.env.DATABASE_URL = handle.databaseUrl;
     process.env.DATABASE_ADMIN_URL = handle.databaseUrl;
@@ -135,7 +143,7 @@ describe.skipIf(!hasDatabase)('first-placement per-user advisory lock', () => {
     return exchangeAuthorizationCodeForTokens(
       {
         authenticatedClientDomainId: params.clientDomainId,
-        clientId: createClientId(params.domain, process.env.SHARED_SECRET!),
+        clientId: params.clientDomainId,
         code: params.code,
         codeVerifier: verifier,
         config: productConfig(params.domain),
@@ -150,21 +158,22 @@ describe.skipIf(!hasDatabase)('first-placement per-user advisory lock', () => {
     );
   }
 
-  async function waitForPlacementLockWaiter(userId: string): Promise<void> {
+  async function waitForCanonicalUserLockWaiter(userId: string): Promise<void> {
     const deadline = Date.now() + 4_000;
     while (Date.now() < deadline) {
       const [row] = await handle.prisma.$queryRaw<Array<{ count: number }>>`
-        WITH placement_key AS (
+        WITH user_key AS (
           SELECT hashtextextended(
-            ${`uoa:required-team-placement:${userId}`}, 0
+            ${JSON.stringify(['uoa:refresh-session:user:v1', userId])}, 0
           ) AS value
         )
         SELECT count(*)::int AS count
-        FROM pg_locks, placement_key
+        FROM pg_locks, user_key
         WHERE locktype = 'advisory'
           AND classid::bigint = ((value >> 32) & 4294967295)::bigint
           AND objid::bigint = (value & 4294967295)::bigint
           AND objsubid = 1
+          AND mode = 'ExclusiveLock'
           AND NOT granted
       `;
       if ((row?.count ?? 0) >= 1) return;
@@ -174,7 +183,9 @@ describe.skipIf(!hasDatabase)('first-placement per-user advisory lock', () => {
   }
 
   it('creates one team when two products place the same new user simultaneously', async () => {
-    const user = await handle.prisma.user.create({
+    const user = recoverySchema ? await handle.prisma.user.findUniqueOrThrow({
+      where: { email: 'first-placement@example.com' }, select: { id: true },
+    }) : await handle.prisma.user.create({
       data: {
         email: 'first-placement@example.com',
         userKey: randomUUID(),
@@ -183,7 +194,9 @@ describe.skipIf(!hasDatabase)('first-placement per-user advisory lock', () => {
       select: { id: true },
     });
     const [firstDomain, secondDomain] = productDomains;
-    const [firstClientDomainId, secondClientDomainId] = await Promise.all([
+    const [firstClientDomainId, secondClientDomainId] = recoverySchema
+      ? await Promise.all(productDomains.map(async domain => (await handle.prisma.clientDomain.findUniqueOrThrow({ where: { domain } })).id))
+      : await Promise.all([
       createProduct(firstDomain, 1),
       createProduct(secondDomain, 2),
     ]);
@@ -204,7 +217,7 @@ describe.skipIf(!hasDatabase)('first-placement per-user advisory lock', () => {
         domain: secondDomain,
         userId: user.id,
       });
-      await waitForPlacementLockWaiter(user.id);
+      await waitForCanonicalUserLockWaiter(user.id);
       release.resolve();
 
       const [firstAuthorization, secondAuthorization] = await Promise.all([first, second]);
