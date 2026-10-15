@@ -587,3 +587,15 @@ source guard (25total,357.97s). The scale case completes in155.313s with its exp
 Evidence: `Docs/audit-evidence/2026-10-15-api/1391d4d0/`.
 This closes the observed lifecycle failures; full113-writer runtime coverage and
 remaining authority races are still open. N03 cutover is not authorized.
+
+### 2026-10-15 U01 actual mixed-version PostgreSQL gate
+
+Sourcef1d1a448:5actual old/current reader cases plus12rollout tests pass (17total).
+Actual pre-audit source0bd21cb7 rotates/replays bridge-written rows with current
+API routes. Debug grants/independent families and revoke retain legacy context.
+Stable-mode legacy503, old refusal of stable rows, reviewed bridge compatibility,
+exact config/domain mismatch and revoked pairing all pass without conversion or
+wrong-context consumption. No old server/build or production operation occurred.
+Evidence: `Docs/audit-evidence/2026-10-15-api/f1d1a448/`; executable deployment
+preflight floor10cases previously passed atb95098a6. Real rollout still requires
+that documented/provider-verified reader floor; no live gate/secret changed here.
