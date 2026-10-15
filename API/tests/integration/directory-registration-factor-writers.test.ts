@@ -14,6 +14,7 @@ import { generateTotpSecret } from '../../src/services/totp.service.js';
 import { hashEmailToken } from '../../src/utils/verification-token.js';
 import { baseClientConfigPayload } from '../helpers/test-config.js';
 import { computeTotp } from '../helpers/totp.js';
+import { socketRequest } from '../helpers/http-socket.js';
 import { createProfileDirectoryFixture, profileDirectoryDomain as domain } from '../helpers/profile-directory-fixture.js';
 
 describe.skipIf(!process.env.DATABASE_URL)('registration, social and private factor canonical writer transactions', () => {
@@ -151,5 +152,27 @@ describe.skipIf(!process.env.DATABASE_URL)('registration, social and private fac
     expect(await suite.db.refreshToken.count({ where: { userId: f.owner.id } })).toBe(0);
     expect(await suite.db.authorizationCode.count({ where: { userId: f.owner.id } })).toBe(0);
     expect(await events(f.org.id)).toEqual([]);
+  });
+
+  it('sets an existing null-password account and blank name over HTTP with atomic profile/epoch invalidations', async () => {
+    const f = await suite.subject(), rawToken = randomUUID();
+    await suite.db.user.update({ where: { id: f.owner.id }, data: { name: null } });
+    const configUrl = `https://${domain}/auth-config`;
+    await suite.db.verificationToken.create({ data: { type: 'VERIFY_EMAIL_SET_PASSWORD', email: f.owner.email!,
+      userKey: f.owner.userKey, userId: f.owner.id, tokenVersion: 0, domain: null, configUrl,
+      tokenHash: hashEmailToken(rawToken, process.env.SHARED_SECRET!), expiresAt: new Date(Date.now() + 60_000) } });
+    const base = await suite.app.listen({ host: '127.0.0.1', port: 0 });
+    const query = new URLSearchParams({ config_url: configUrl, code_challenge: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ', code_challenge_method: 'S256' });
+    const response = await socketRequest(base, '/auth/verify-email?' + query, { method: 'POST',
+      json: { token: rawToken, password: 'Synthetic-password-123!', name: 'Verified canonical name' } });
+    expect(response.status).toBe(200);
+    const current = await suite.db.user.findUniqueOrThrow({ where: { id: f.owner.id } });
+    expect(current).toMatchObject({ name: 'Verified canonical name', tokenVersion: 1, email: f.owner.email });
+    expect(Boolean(current.passwordHash)).toBe(true);
+    expect(await suite.db.user.count({ where: { email: f.owner.email } })).toBe(1);
+    expect(await events(f.org.id)).toEqual([
+      { revision: 1n, kind: 'profile.changed', subjectId: f.owner.id, teamId: null },
+      { revision: 2n, kind: 'credential_epoch.changed', subjectId: f.owner.id, teamId: null },
+    ]);
   });
 });
