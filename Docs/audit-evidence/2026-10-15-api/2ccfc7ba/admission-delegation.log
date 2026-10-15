@@ -1,0 +1,67 @@
+
+ RUN  v3.2.6 C:/Users/ondre/Projects/UnlikeOtherAuthenticator/.worktrees/sol-audit-fixes-api-20261014/API
+
+(node:63700) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:63700) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:63700) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+stdout | tests/integration/auth-reset-password.test.ts > Password reset flow
+Retained audit test schema: [token-like test value redacted]
+
+ ✓ tests/integration/auth-reset-password.test.ts (3 tests) 44815ms
+   ✓ POST /auth/reset-password/request > always responds with the same success message (no enumeration)  759ms
+   ✓ Password reset flow > validates the link on GET and resets password on POST (one-time token)  2476ms
+   ✓ Password reset flow > returns generic 400 for invalid tokens  671ms
+stdout | tests/integration/confidential-delegation-policy-race.test.ts > delegation CRUD versus locked real RS256 issuance on PostgreSQL
+Retained audit test schema: [token-like test value redacted]
+
+ ✓ tests/integration/confidential-delegation-policy-race.test.ts (3 tests) 44903ms
+   ✓ delegation CRUD versus locked real RS256 issuance on PostgreSQL > holds supported mapping creation behind an in-flight shared policy reader  451ms
+   ✓ delegation CRUD versus locked real RS256 issuance on PostgreSQL > keeps deletion waiting through real signing and commit, then refuses fresh issuance  811ms
+   ✓ delegation CRUD versus locked real RS256 issuance on PostgreSQL > re-resolves a mapping disabled after preflight and leaves its assertion unconsumed  633ms
+(node:40604) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:40604) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+stdout | tests/integration/twofactor-reset.test.ts > 2FA reset flow
+Retained audit test schema: [token-like test value redacted]
+
+ ✓ tests/integration/twofactor-reset.test.ts (2 tests) 43371ms
+   ✓ POST /2fa/reset/request > always responds with the same success message (no enumeration)  644ms
+   ✓ 2FA reset flow > resets 2FA only after explicit POST confirmation  1663ms
+(node:52532) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:52532) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:52532) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:52532) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+stdout | tests/integration/auth-verify-email-name.test.ts > POST /auth/verify-email optional name
+Retained audit test schema: [token-like test value redacted]
+
+ ✓ tests/integration/auth-verify-email-name.test.ts (4 tests) 47566ms
+   ✓ POST /auth/verify-email optional name > stores the submitted name on an account that has none  1950ms
+   ✓ POST /auth/verify-email optional name > leaves an account that already has a name untouched  2061ms
+   ✓ POST /auth/verify-email optional name > accepts a body without a name exactly as before  1809ms
+   ✓ POST /auth/verify-email optional name > refuses a name longer than the documented limit  386ms
+stdout | tests/integration/action-verification.test.ts > action-bound fresh verification
+Retained audit test schema: [token-like test value redacted]
+
+ ✓ tests/integration/action-verification.test.ts (7 tests) 48146ms
+   ✓ action-bound fresh verification > emails the canonical recipient and consumes the proof only once  599ms
+   ✓ action-bound fresh verification > commits failed guesses and locks out the correct code after five attempts  1736ms
+   ✓ action-bound fresh verification > rejects a different action, domain, person, and expired challenge  1926ms
+   ✓ action-bound fresh verification > invalidates the prior code when a new one is sent  872ms
+   ✓ action-bound fresh verification > rejects a proof after credential revocation  409ms
+   ✓ action-bound fresh verification > allows exactly one concurrent consumption  575ms
+   ✓ action-bound fresh verification > requires a fresh authenticator code for an enrolled account  459ms
+(node:48004) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:48004) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:48004) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+ ✓ tests/integration/auth-social-select-account.test.ts (3 tests) 959ms
+   ✓ GET /auth/social/google (prompt=select_account) > asks Google for its account chooser when the relying party requests it  387ms
+
+ Test Files  6 passed (6)
+      Tests  22 passed (22)
+   Start at  02:08:57
+   Duration  242.19s (transform 2.85s, setup 261ms, collect 11.06s, tests 229.76s, environment 1ms, prepare 351ms)
+
+EXIT=0
