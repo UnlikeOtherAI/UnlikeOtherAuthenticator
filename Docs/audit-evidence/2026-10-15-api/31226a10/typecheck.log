@@ -1,0 +1,5 @@
+
+> @uoa/api@0.0.0 typecheck C:\Users\ondre\Projects\UnlikeOtherAuthenticator\.worktrees\sol-audit-fixes-api-20261014\API
+> tsc -p tsconfig.json
+
+EXIT=0

@@ -1,0 +1,64 @@
+
+ RUN  v3.2.6 C:/Users/ondre/Projects/UnlikeOtherAuthenticator/.worktrees/sol-audit-fixes-api-20261014/API
+
+(node:59952) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stdout | tests/integration/access-request-policy-race.test.ts > access-request policy/user/directory lock hierarchy on PostgreSQL
+Retained failed authority fixture schema: [token-like test value redacted]
+
+ ❯ tests/integration/access-request-policy-race.test.ts (1 test | 1 failed) 43823ms
+   × access-request policy/user/directory lock hierarchy on PostgreSQL > commits access assignment and a concurrent policy-exclusive lifecycle writer without a lock-order cycle 1941ms
+     → expected { …(1) } to deeply equal { committed: true }
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/access-request-policy-race.test.ts > access-request policy/user/directory lock hierarchy on PostgreSQL > commits access assignment and a concurrent policy-exclusive lifecycle writer without a lock-order cycle
+AssertionError: expected { …(1) } to deeply equal { committed: true }
+
+- Expected
++ Received
+
+  {
+-   "committed": true,
++   "error": PrismaClientKnownRequestError {
++     "message": "
++ Invalid `prisma.$queryRaw()` invocation:
++
++
++ Raw query failed. Code: `40P01`. Message: `ERROR: deadlock detected
++ DETAIL: Process 930 waits for ExclusiveLock on advisory lock [16384,361310566,2062128361,1]; blocked by process 929.
++ Process 929 waits for ShareLock on advisory lock [16384,3797541272,2333889138,1]; blocked by process 930.
++ HINT: See server log for query details.`",
++     "code": "P2010",
++     "meta": {
++       "code": "40P01",
++       "message": "ERROR: deadlock detected
++ DETAIL: Process 930 waits for ExclusiveLock on advisory lock [16384,361310566,2062128361,1]; blocked by process 929.
++ Process 929 waits for ShareLock on advisory lock [16384,3797541272,2333889138,1]; blocked by process 930.
++ HINT: See server log for query details.",
++     },
++     "clientVersion": "6.19.3",
++     "name": "PrismaClientKnownRequestError",
++   },
+  }
+
+ ❯ tests/integration/access-request-policy-race.test.ts:61:35
+     59|     const lifecycleResult = lifecycle?.then(() => ({ committed: true }…
+     60|     expect(await assignmentResult).toEqual({ committed: true });
+     61|     expect(await lifecycleResult).toEqual({ committed: true });
+       |                                   ^
+     62|     expect(await suite.db.orgMember.findUniqueOrThrow({ where: { orgId…
+     63|       .toMatchObject({ status: 'ACTIVE', role: 'member' });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed (1)
+   Start at  02:13:49
+   Duration  49.47s (transform 2.70s, setup 67ms, collect 5.37s, tests 43.82s, environment 0ms, prepare 59ms)
+
+undefined
+C:\Users\ondre\Projects\UnlikeOtherAuthenticator\.worktrees\sol-audit-fixes-api-20261014\API:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command "vitest" not found
+EXIT=1
