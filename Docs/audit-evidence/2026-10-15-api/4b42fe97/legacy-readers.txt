@@ -1,0 +1,101 @@
+
+ RUN  v3.2.6 C:/Users/ondre/Projects/UnlikeOtherAuthenticator/.worktrees/sol-audit-fixes-api-20261014/API
+
+(node:51544) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stdout | tests/integration/website-context-legacy-readers.test.ts > real pre-bridge/current website refresh readers
+Retained audit test schema: [token-like test value redacted]
+
+ ❯ tests/integration/website-context-legacy-readers.test.ts (5 tests | 1 failed) 55753ms
+   ✓ real pre-bridge/current website refresh readers > issues stable public JWT IDs while actual old/new readers rotate and replay one legacy family  3024ms
+   ✓ real pre-bridge/current website refresh readers > keeps website debug grants and independent sessions readable without converting source rows on revoke  4475ms
+   ✓ real pre-bridge/current website refresh readers > refuses legacy stable-mode reads without conversion while the actual old reader can still read them  2249ms
+   ✓ real pre-bridge/current website refresh readers > lets the reviewed bridge reader consume stable rows while the actual pre-bridge reader refuses them  1903ms
+   × real pre-bridge/current website refresh readers > rejects exact config/domain mismatches and revoked pairing without consuming the legacy row 1360ms
+     → 
+Invalid `handle.prisma.clientDomainSecret.updateMany()` invocation in
+C:\Users\ondre\Projects\UnlikeOtherAuthenticator\.worktrees\sol-audit-fixes-api-20261014\API\tests\integration\website-context-legacy-readers.test.ts:151:44
+
+  148   .rejects.toMatchObject({ statusCode: 401 });
+  149 await expect(exchangeRefreshToken({ ...currentContext(), domain: 'other.example.com', refreshToken: pair.refresh_token }, deps()))
+  150   .rejects.toMatchObject({ statusCode: 401 });
+→ 151 await handle.prisma.clientDomainSecret.updateMany({
+        where: {
+          clientDomainId: "cmv8rvite0000ffrsxs7999xk",
+          ~~~~~~~~~~~~~~
+      ?   AND?: ClientDomainSecretWhereInput | ClientDomainSecretWhereInput[],
+      ?   OR?: ClientDomainSecretWhereInput[],
+      ?   NOT?: ClientDomainSecretWhereInput | ClientDomainSecretWhereInput[],
+      ?   id?: StringFilter | String,
+      ?   domainId?: StringFilter | String,
+      ?   secretDigest?: StringFilter | String,
+      ?   hashPrefix?: StringFilter | String,
+      ?   active?: BoolFilter | Boolean,
+      ?   createdAt?: DateTimeFilter | DateTime,
+      ?   deactivatedAt?: DateTimeNullableFilter | DateTime | Null,
+      ?   domain?: ClientDomainScalarRelationFilter | ClientDomainWhereInput
+        },
+        data: {
+          active: false
+        }
+      })
+
+Unknown argument `clientDomainId`. Available options are marked with ?.
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/website-context-legacy-readers.test.ts > real pre-bridge/current website refresh readers > rejects exact config/domain mismatches and revoked pairing without consuming the legacy row
+PrismaClientValidationError: 
+Invalid `handle.prisma.clientDomainSecret.updateMany()` invocation in
+C:\Users\ondre\Projects\UnlikeOtherAuthenticator\.worktrees\sol-audit-fixes-api-20261014\API\tests\integration\website-context-legacy-readers.test.ts:151:44
+
+  148   .rejects.toMatchObject({ statusCode: 401 });
+  149 await expect(exchangeRefreshToken({ ...currentContext(), domain: 'other.example.com', refreshToken: pair.refresh_token }, deps()))
+  150   .rejects.toMatchObject({ statusCode: 401 });
+→ 151 await handle.prisma.clientDomainSecret.updateMany({
+        where: {
+          clientDomainId: "cmv8rvite0000ffrsxs7999xk",
+          ~~~~~~~~~~~~~~
+      ?   AND?: ClientDomainSecretWhereInput | ClientDomainSecretWhereInput[],
+      ?   OR?: ClientDomainSecretWhereInput[],
+      ?   NOT?: ClientDomainSecretWhereInput | ClientDomainSecretWhereInput[],
+      ?   id?: StringFilter | String,
+      ?   domainId?: StringFilter | String,
+      ?   secretDigest?: StringFilter | String,
+      ?   hashPrefix?: StringFilter | String,
+      ?   active?: BoolFilter | Boolean,
+      ?   createdAt?: DateTimeFilter | DateTime,
+      ?   deactivatedAt?: DateTimeNullableFilter | DateTime | Null,
+      ?   domain?: ClientDomainScalarRelationFilter | ClientDomainWhereInput
+        },
+        data: {
+          active: false
+        }
+      })
+
+Unknown argument `clientDomainId`. Available options are marked with ?.
+ ❯ throwValidationException ../node_modules/.pnpm/@prisma+client@6.19.3_prism_1d040ab5215f59f0e27ddee7f0cf082e/node_modules/@prisma/client/src/runtime/core/errorRendering/throwValidationException.ts:45:9
+ ❯ ei.handleRequestError ../node_modules/.pnpm/@prisma+client@6.19.3_prism_1d040ab5215f59f0e27ddee7f0cf082e/node_modules/@prisma/client/src/runtime/RequestHandler.ts:202:7
+ ❯ ei.handleAndLogRequestError ../node_modules/.pnpm/@prisma+client@6.19.3_prism_1d040ab5215f59f0e27ddee7f0cf082e/node_modules/@prisma/client/src/runtime/RequestHandler.ts:174:12
+ ❯ ei.request ../node_modules/.pnpm/@prisma+client@6.19.3_prism_1d040ab5215f59f0e27ddee7f0cf082e/node_modules/@prisma/client/src/runtime/RequestHandler.ts:143:12
+ ❯ a ../node_modules/.pnpm/@prisma+client@6.19.3_prism_1d040ab5215f59f0e27ddee7f0cf082e/node_modules/@prisma/client/src/runtime/getPrismaClient.ts:833:24
+ ❯ tests/integration/website-context-legacy-readers.test.ts:151:5
+    149|     await expect(exchangeRefreshToken({ ...currentContext(), domain: '…
+    150|       .rejects.toMatchObject({ statusCode: 401 });
+    151|     await handle.prisma.clientDomainSecret.updateMany({ where: { clien…
+       |     ^
+    152|     expect((await refresh(pair.refresh_token)).statusCode).toBe(401);
+    153|     await expect(exchangeRefreshToken({ ...currentContext(), refreshTo…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 4 passed (5)
+   Start at  00:59:24
+   Duration  61.63s (transform 2.88s, setup 67ms, collect 5.60s, tests 55.75s, environment 0ms, prepare 63ms)
+
+undefined
+C:\Users\ondre\Projects\UnlikeOtherAuthenticator\.worktrees\sol-audit-fixes-api-20261014\API:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command "vitest" not found
+EXIT=1
