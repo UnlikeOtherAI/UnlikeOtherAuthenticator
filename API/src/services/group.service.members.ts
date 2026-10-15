@@ -19,6 +19,7 @@ import {
 } from './group.service.base.js';
 import { toTeamRecord, type TeamRecord } from './team.service.base.js';
 import { AppError as AppError } from '../utils/errors.js';
+import { requireGroupMembershipAdmission } from './group-membership-admission.service.js';
 
 function getGroupIdValue(groupId: string | null): string | null {
   if (groupId === null) return null;
@@ -67,6 +68,7 @@ export async function addGroupMember(
     [userId],
     [{ orgId: org.id, kind: 'membership.changed', subjectId: userId }],
     async (tx) => {
+      await requireGroupMembershipAdmission(tx, org.id, userId);
       const groupMemberCount = await tx.groupMember.count({ where: { groupId: group.id } });
       if (groupMemberCount >= maxMembersPerGroup) {
         throw new AppError('BAD_REQUEST', 400);
@@ -189,8 +191,9 @@ export async function updateGroupMemberAdmin(
     prisma,
     [userId],
     [{ orgId: org.id, kind: 'membership.changed', subjectId: userId }],
-    (tx) =>
-      tx.groupMember.update({
+    async (tx) => {
+      await requireGroupMembershipAdmission(tx, org.id, userId);
+      return tx.groupMember.update({
         where: { id: membership.id },
         data: { isAdmin: params.isAdmin },
         select: {
@@ -201,7 +204,8 @@ export async function updateGroupMemberAdmin(
           createdAt: true,
           updatedAt: true,
         },
-      }),
+      });
+    },
   );
 
   return toGroupMemberRecord(updated, org.domain);
@@ -259,6 +263,8 @@ export async function assignTeamToGroup(
           slug: true,
           description: true,
           isDefault: true,
+          joinPolicy: true,
+          iconUrl: true,
           createdAt: true,
           updatedAt: true,
         },

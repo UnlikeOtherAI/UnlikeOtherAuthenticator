@@ -6,6 +6,7 @@ import { billingEndpoints } from './schema.billing.js';
 import { configDebugEndpoints } from './schema.config-debug.js';
 import { integrationsEndpoints } from './schema.integrations.js';
 import { internalAdminEndpoints } from './schema.internal-admin.js';
+import { internalOrgGroupEndpoints } from './schema.internal-org-groups.js';
 import { internalAdminSmsEndpoints } from './schema.internal-admin-sms.js';
 import { oauthAccountEndpoints } from './schema.oauth-account.js';
 import { oauthEndpoints } from './schema.oauth.js';
@@ -63,6 +64,7 @@ export const endpoints: EndpointSchema[] = [
   ...orgContractEndpoints,
   ...integrationsEndpoints,
   ...internalAdminEndpoints,
+  ...internalOrgGroupEndpoints,
   ...internalAdminSmsEndpoints,
   ...oauthEndpoints,
   ...oauthAccountEndpoints,

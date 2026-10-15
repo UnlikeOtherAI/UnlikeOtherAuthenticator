@@ -80,3 +80,14 @@ consumer cutover; they are not reconstructed live mutation history.
 - [ ] Deletion retry preserves exact prior provenance and final terminal event.
 - [ ] Erase-reference scrubs previous outbox subjects, including policy-only orgs.
 - [ ] Auth/profile/member/first-placement rendered flows and compiled package checks.
+
+## 2026-10-15 runtime evidence and discovered race
+
+cb7e0697 proves global profile/avatar create/delete/epoch invalidations across two
+orgs, all7group CRUD/member/team-assignment commits with ordered events under real
+uoa_app, and rollback of canonical group/revision/outbox. It exposes a post-removal
+group insertion race; the source guard could not detect it. A post-lock admission
+check and schema migration207 now address that path, with fresh-upgrade and retained
+failed-record repair tests pending. The113direct source writes are unchanged;
+the migration's canonical group cleanup is additional SQL work requiring its own
+runtime proof. This is not full113-writer acceptance.

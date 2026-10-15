@@ -1,6 +1,6 @@
 import { asTransaction } from '../../helpers/directory-store.js';
 import { afterAll, beforeEach, vi } from 'vitest';
-import type { PrismaClient } from '@prisma/client';
+import type { Prisma, PrismaClient } from '@prisma/client';
 import type { ClientConfig } from '../../../src/services/config.service.js';
 
 export function makeConfig(overrides?: Partial<ClientConfig['org_features']>): ClientConfig {
@@ -22,7 +22,7 @@ export function makeConfig(overrides?: Partial<ClientConfig['org_features']>): C
 
 export function makePrismaMock() {
   const prisma = {
-    $queryRaw: vi.fn().mockResolvedValue([]),
+    $queryRaw: vi.fn(async (sql: Prisma.Sql) => sql.strings.join(' ').includes('uoa_group_membership_admission') ? [{ allowed: true }] : []),
     organisation: {
       findFirst: vi.fn(),
     },

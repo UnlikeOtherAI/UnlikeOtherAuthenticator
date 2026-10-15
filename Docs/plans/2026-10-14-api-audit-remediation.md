@@ -611,3 +611,22 @@ Real uoa_app is asserted non-BYPASSRLS; runtime uses uoa_app/uoa_admin clients.
 Evidence: `Docs/audit-evidence/2026-10-15-api/832c4eca/`. Earlier injected-route
 HTTP/PG evidence remains separate. All6pass, exit0; listener closed, schema retained.
 Full113-writer/race coverage and N03 cutover remain open.
+
+### 2026-10-15 actual group writer race and forward data repair
+
+Gatecb7e0697 passes global profile/avatar/epoch invalidation across two orgs,
+all7group writers' ordered outbox commits through uoa_app, and RLS rollback.
+It then proves a real bug: group insertion commits after observed user-lock wait
+and successful org removal. Failed schema retained:
+`test_1792022987278_ecd28b77699643bcaf38219a0da3e472`.
+
+Correction: post-lock boolean SQL admission and a narrow database insert/key-change
+guard; current exact org membership, nonterminal subject and ACTIVE parent are
+rechecked. Cross-origin identities use the same canonical UOA store. Missing
+context is false, not privileged. Migration207 repairs orphaned/REMOVED group grants
+with policy/user/org ordering and atomic outbox events. Existing DEACTIVATED
+metadata remains intact. New fresh200->207 and retained-failure forward-migration
+proofs are pending. Original113direct Prisma writer inventory remains unchanged;
+SQL migration repair is additional, separately runtime-audited work.
+/api and /llm now publish all7existing internal group write routes and admission
+semantics. No frontend, production credential or live deployment gate changed.
