@@ -111,8 +111,9 @@ describe.skipIf(!process.env.DATABASE_URL)('canonical writer families on Postgre
     await entered.promise;
     const pending = runWithTenantContext({ context: { domain, orgId: f.org.id, userId: decodeJwt(suite.adminToken).sub }, prisma: suite.appDb }, tx =>
       addGroupMember({ orgId: f.org.id, groupId: id, domain, userId: f.target.id, config }, { prisma: asPrismaClient(tx) }));
+    const outcome = pending.then(() => ({ committed: true }), error => ({ error }));
     try { await suite.waitForBlocked(pid); } finally { release.open(); await removal; }
-    await expect(pending).rejects.toMatchObject({ statusCode: 400 });
+    expect(await outcome).toMatchObject({ error: { statusCode: 400 } });
     expect(await suite.db.groupMember.count({ where: { groupId: id, userId: f.target.id } })).toBe(0);
     expect((await suite.db.orgMember.findUniqueOrThrow({ where: { orgId_userId: { orgId: f.org.id, userId: f.target.id } } })).status).toBe('REMOVED');
     expect((await changes(f.org.id)).map(change => change.kind)).toEqual(['organisation.changed', 'membership.changed']);
