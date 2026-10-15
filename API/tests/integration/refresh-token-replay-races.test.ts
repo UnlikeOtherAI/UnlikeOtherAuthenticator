@@ -9,7 +9,6 @@ import {
   revokeRefreshTokenFamily,
 } from '../../src/services/refresh-token.service.js';
 import { exchangeRefreshTokenForTokens } from '../../src/services/token.service.js';
-import { createClientId } from '../../src/utils/hash.js';
 import { baseClientConfigPayload } from '../helpers/test-config.js';
 import { createTestDb } from '../helpers/test-db.js';
 import { verifyIssuedAccessToken } from '../helpers/access-token.js';
@@ -105,7 +104,9 @@ describe.skipIf(!hasDatabase)('refresh response-loss PostgreSQL serialization', 
     await handle.prisma.domainRole.create({
       data: { domain: issuingDomain, userId, role: 'USER' },
     });
-    const clientId = createClientId(issuingDomain, sharedSecret);
+    const { id: clientId } = await handle.prisma.clientDomain.upsert({
+      where: { domain: issuingDomain }, create: { domain: issuingDomain, label: 'Refresh replay authority' }, update: { status: 'active' },
+    });
     const configUrl = `https://${issuingDomain}/auth-config/${randomUUID()}`;
     const token = await issueRefreshToken(
       { userId, domain: issuingDomain, clientId, configUrl, twoFaCompleted: false },

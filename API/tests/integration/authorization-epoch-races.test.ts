@@ -10,7 +10,6 @@ import {
   hashSigningContinuationToken,
 } from '../../src/services/signature-continuation.service.js';
 import { exchangeAuthorizationCodeForTokens } from '../../src/services/token.service.js';
-import { createClientId } from '../../src/utils/hash.js';
 import { baseClientConfigPayload } from '../helpers/test-config.js';
 import { createTestDb } from '../helpers/test-db.js';
 
@@ -43,6 +42,7 @@ function clientConfig(): ClientConfig {
 
 describe.skipIf(!hasDatabase)('authorization credential-epoch races', () => {
   let handle: Awaited<ReturnType<typeof createTestDb>>;
+  let clientId: string;
   const originalEnv = {
     ACCESS_TOKEN_TTL: process.env.ACCESS_TOKEN_TTL,
     AUTH_SERVICE_IDENTIFIER: process.env.AUTH_SERVICE_IDENTIFIER,
@@ -75,11 +75,11 @@ describe.skipIf(!hasDatabase)('authorization credential-epoch races', () => {
     await handle.prisma.refreshToken.deleteMany();
     await handle.prisma.domainRole.deleteMany();
     await handle.prisma.user.deleteMany();
-    await handle.prisma.clientDomain.upsert({
+    clientId = (await handle.prisma.clientDomain.upsert({
       where: { domain },
       create: { domain, label: 'Authorization epoch race' },
       update: {},
-    });
+    })).id;
   });
 
   async function seedUser(): Promise<{ id: string }> {
@@ -117,7 +117,8 @@ describe.skipIf(!hasDatabase)('authorization credential-epoch races', () => {
         configUrl,
         redirectUrl,
         codeVerifier: verifier,
-        clientId: createClientId(domain, sharedSecret),
+        clientId,
+        authenticatedClientDomainId: clientId,
       },
       {
         adminPrisma: handle.prisma,
