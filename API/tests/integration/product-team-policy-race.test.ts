@@ -10,7 +10,6 @@ import {
   exchangeAuthorizationCodeForTokens,
   exchangeRefreshTokenForTokens,
 } from '../../src/services/token.service.js';
-import { createClientId } from '../../src/utils/hash.js';
 import { baseClientConfigPayload } from '../helpers/test-config.js';
 import { createTestDb } from '../helpers/test-db.js';
 
@@ -170,7 +169,7 @@ describe.skipIf(!hasDatabase)('product team policy token races', () => {
     return exchangeAuthorizationCodeForTokens(
       {
         authenticatedClientDomainId: seedRow.clientDomainId,
-        clientId: createClientId(productDomain, process.env.SHARED_SECRET!),
+        clientId: seedRow.clientDomainId,
         code: seedRow.code,
         codeVerifier: verifier,
         config: productConfig(twoFaEnabled),
@@ -190,7 +189,7 @@ describe.skipIf(!hasDatabase)('product team policy token races', () => {
     return exchangeRefreshTokenForTokens(
       {
         authenticatedClientDomainId: seedRow.clientDomainId,
-        clientId: createClientId(productDomain, process.env.SHARED_SECRET!),
+        clientId: seedRow.clientDomainId,
         config: productConfig(),
         configUrl,
         refreshToken,
