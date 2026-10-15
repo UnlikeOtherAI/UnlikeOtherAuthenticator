@@ -91,3 +91,10 @@ check and schema migration207 now address that path, with fresh-upgrade and reta
 failed-record repair tests pending. The113direct source writes are unchanged;
 the migration's canonical group cleanup is additional SQL work requiring its own
 runtime proof. This is not full113-writer acceptance.
+
+The group correction is now runtime-verified: fresh200->207 upgrade,7real
+uoa_app/TCP writer cases, and normal forward repair of the original failed grant
+all pass. Missing/sibling contexts are refused, cross-origin identity is resolved
+centrally, and guard permission outage rolls back without a fallback. Original
+removed membership and outbox history remain, with an additional repair event;
+repeat migration is idempotent. Remaining writer families are still open.

@@ -630,3 +630,15 @@ proofs are pending. Original113direct Prisma writer inventory remains unchanged;
 SQL migration repair is additional, separately runtime-audited work.
 /api and /llm now publish all7existing internal group write routes and admission
 semantics. No frontend, production credential or live deployment gate changed.
+
+### Group race and original-record repair verified
+
+c6c1e366 API build and13group units pass; fresh200->207 migration passes with
+orphan/REMOVED repair events, retained DEACTIVATED metadata and old-writer refusal.
+d540e4f5's7real RLS/TCP writer cases pass, including observed removal race,
+cross-origin subject admission, missing/sibling tenant confinement, terminal
+subject refusal and permission-outage rollback. Original retained failing schema
+then upgrades normally at73338de9:1invalid grant repaired with its old events
+preserved and a new repair event; second migrate deploy idempotent. No manual
+record/job/lease reset. See corresponding `Docs/audit-evidence/2026-10-15-api/`
+folders. This closes the observed group defect, not full113-writer acceptance.
