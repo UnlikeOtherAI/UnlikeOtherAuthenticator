@@ -61,7 +61,7 @@ describe.skipIf(!process.env.DATABASE_URL)('organisation/team canonical writers 
     await call(path, 'POST', f.headers, { userId: fresh.id });
     const original = await suite.db.orgMember.findUniqueOrThrow({ where: { orgId_userId: { orgId: f.org.id, userId: fresh.id } } });
     await call(`${path}/${fresh.id}`, 'PUT', f.headers, { role: 'admin' });
-    const group = await suite.db.group.create({ data: { orgId: f.org.id, name: 'Membership cleanup', slug: randomUUID() } });
+    const group = await suite.db.group.create({ data: { orgId: f.org.id, name: 'Membership cleanup' } });
     await suite.db.groupMember.create({ data: { groupId: group.id, userId: fresh.id } });
     await call(`${path}/${fresh.id}`, 'DELETE', f.headers);
     expect(await suite.db.groupMember.count({ where: { groupId: group.id, userId: fresh.id } })).toBe(0);
