@@ -41,7 +41,7 @@ async function fixture() {
       secrets: [{ secretDigest: digestDomainClientHash(domainCredential), hashPrefix: 'synthetic' }] })) },
     domainRole: { findUnique: vi.fn(async () => ({ userId: 'self' })) },
     user: { findUnique: vi.fn(async () => self), update: vi.fn(async ({ data }: { data: object }) => Object.assign(self, data)) },
-    organisation: { findUnique: vi.fn(async () => ({ lifecycleStatus: 'ACTIVE' })) },
+    organisation: { findUnique: vi.fn(async () => ({ lifecycleStatus: 'ACTIVE' })), findMany: vi.fn(async () => [{ id: 'org' }]) },
     orgMember: { findMany: vi.fn(async () => [{ orgId: 'org' }]),
       findUnique: vi.fn(async ({ where }: { where: { orgId_userId: { userId: string } } }) =>
         where.orgId_userId.userId === 'self' ? { status: 'ACTIVE', user: self } : target) },
