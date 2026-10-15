@@ -1,0 +1,48 @@
+
+ RUN  v3.2.6 C:/Users/ondre/Projects/UnlikeOtherAuthenticator/.worktrees/sol-audit-fixes-api-20261014/API
+
+(node:27268) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stdout | tests/integration/directory-org-team-writers.test.ts > organisation/team canonical writers over TCP and tenant RLS
+Retained failed authority fixture schema: [token-like test value redacted]
+
+ ❯ tests/integration/directory-org-team-writers.test.ts (6 tests | 1 failed) 65640ms
+   ✓ organisation/team canonical writers over TCP and tenant RLS > creates one canonical org/default-team/owner membership set and publishes its update  1343ms
+   ✓ organisation/team canonical writers over TCP and tenant RLS > publishes new, removed and re-added org memberships including both default-team branches  6391ms
+   ✓ organisation/team canonical writers over TCP and tenant RLS > publishes team CRUD, role changes, removal, deactivation and status-only restoration  8415ms
+   ✓ organisation/team canonical writers over TCP and tenant RLS > self-joins a fresh and removed team seat with the configured default role  4451ms
+   × organisation/team canonical writers over TCP and tenant RLS > transfers canonical ownership and immediately refuses the prior owner grant authority 2498ms
+     → expected 200 to be 403 // Object.is equality
+   · organisation/team canonical writers over TCP and tenant RLS > publishes operator org/team provisioning and AddUserToTeam create/update upserts
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/directory-org-team-writers.test.ts > organisation/team canonical writers over TCP and tenant RLS > transfers canonical ownership and immediately refuses the prior owner grant authority
+AssertionError: expected 200 to be 403 // Object.is equality
+
+- Expected
++ Received
+
+- 403
++ 200
+
+ ❯ tests/integration/directory-org-team-writers.test.ts:128:156
+    126|     expect((await suite.db.orgMember.findUniqueOrThrow({ where: { orgI…
+    127|     expect((await suite.db.orgMember.findUniqueOrThrow({ where: { orgI…
+    128|     expect((await socketRequest(base, `/directory/v1/organisations/${f…
+       |                                                                                                                                                            ^
+    129|     expect((await socketRequest(base, path + `/product-access/${creden…
+    130|       method: 'PUT', headers: f.headers, json: { permissions: ['MEMBER…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (7)
+      Tests  1 failed | 4 passed (6)
+   Start at  02:06:41
+   Duration  72.38s (transform 3.25s, setup 75ms, collect 6.42s, tests 65.64s, environment 0ms, prepare 73ms)
+
+undefined
+C:\Users\ondre\Projects\UnlikeOtherAuthenticator\.worktrees\sol-audit-fixes-api-20261014\API:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command "vitest" not found
+EXIT=1
