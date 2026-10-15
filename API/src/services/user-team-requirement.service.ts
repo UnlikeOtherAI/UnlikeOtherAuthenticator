@@ -1,6 +1,6 @@
 import { lockProductTeamPolicyShared } from './product-team-policy-lock.service.js';
 import { withDirectoryMutation, directoryNewOrganisationId } from './directory-mutation.service.js';
-import { lockRefreshSessionUserShared } from './refresh-session-lock.service.js';
+import { lockRefreshSessionUser } from './refresh-session-lock.service.js';
 import { requireIdentityEmail } from './entity-lifecycle.service.js';
 import { Prisma, type PrismaClient } from '@prisma/client';
 
@@ -46,7 +46,10 @@ export async function lockRequiredTeamPlacementUser(
   deps: { prisma: Pick<PrismaClient, '$queryRaw'> },
 ): Promise<void> {
   await lockProductTeamPolicyShared(deps.prisma);
-  await lockRefreshSessionUserShared(userId, { prisma: deps.prisma });
+  // Placement can create canonical memberships and then mint an auth code.
+  // Acquire the exclusive user key before placement; never upgrade a shared
+  // user lock while a second product holds shared-user and waits on placement.
+  await lockRefreshSessionUser(userId, { prisma: deps.prisma });
   await deps.prisma.$queryRaw(
     Prisma.sql`
       SELECT pg_advisory_xact_lock(

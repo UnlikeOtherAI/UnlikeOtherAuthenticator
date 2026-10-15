@@ -651,3 +651,18 @@ correction. At a2ac1103 all21real PG races pass across refresh replay10,
 membership/token4, credential reset/code/continuation4 and ClientDomain disable3.
 Evidence is in each source-named `Docs/audit-evidence/2026-10-15-api/` folder.
 Remaining writer-family/runtime aggregate coverage is still open; N03 stays blocked.
+
+### 2026-10-15 first-placement upgrade deadlock
+
+The9-file admission/factor gate passes9cases (email first placement race/rollback3,
+email verification5, social exact-team token binding1), then finds real PG40P01
+between shared canonical user and exclusive placement locks. Failure schema retained:
+`test_1792025161536_729754c053794de1b45822462b3e0861`.
+
+Placement now takes the exclusive canonical user key before its placement key,
+matching subsequent code issuance/canonical mutation; it never upgrades shared-user
+while another product waits on placement. Existing route callers already take the
+exclusive authentication epoch lock. The regression observes the actual exclusive
+user-lock waiter. Its optional owned-schema mode retries the original user/products
+through normal authorization/exchange, without seeding, clearing or deleting them.
+This source correction is checkpointed but not yet runtime-accepted.
