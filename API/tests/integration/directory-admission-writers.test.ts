@@ -1,8 +1,10 @@
 import { randomUUID } from 'node:crypto';
-import { decodeJwt } from 'jose';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { getAdminPrisma } from '../../src/db/prisma.js';
-import { runInTransaction } from '../../src/db/tenant-context.js';
+import { asPrismaClient, runInTransaction } from '../../src/db/tenant-context.js';
+import { lockProductTeamPolicyShared } from '../../src/services/product-team-policy-lock.service.js';
+import { lockRefreshSessionUser } from '../../src/services/refresh-session-lock.service.js';
+import { revokeAllRefreshTokensForUser } from '../../src/services/refresh-token-revocation.service.js';
 import { acceptTeamInviteWithinTransaction } from '../../src/services/team-invite.service.acceptance.js';
 import { redeemTeamInviteLink } from '../../src/services/team-invite-link.redemption.js';
 import { validateConfigFields } from '../../src/services/config.service.js';
@@ -160,20 +162,28 @@ describe.skipIf(!process.env.DATABASE_URL)('admission and team-avatar directory 
     expect(await events(f.org.id)).toEqual([]);
   });
 
-  it('refuses self-avatar upload when its signed user authority expires during an observed user-lock wait', async () => {
-    const f = await suite.subject(), boundary = 'avatar-expiry-race';
+  it('refuses self-avatar upload when canonical credential revocation wins an observed user-lock wait', async () => {
+    const f = await suite.subject(), boundary = 'avatar-revocation-race';
     const png = Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), Buffer.alloc(32, 0x21)]);
     const body = Buffer.concat([Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="avatar.png"\r\nContent-Type: image/png\r\n\r\n`), png, Buffer.from(`\r\n--${boundary}--\r\n`)]);
-    const held = await suite.holdUser(f.owner.id);
-    const token = await f.token('2s');
+    let entered!: () => void, release!: () => void, pid = 0;
+    const held = new Promise<void>(resolve => { entered = resolve; });
+    const released = new Promise<void>(resolve => { release = resolve; });
+    const revocation = getAdminPrisma().$transaction(async tx => {
+      await lockProductTeamPolicyShared(asPrismaClient(tx));
+      await lockRefreshSessionUser(f.owner.id, { prisma: tx });
+      pid = (await tx.$queryRaw<Array<{ pid: number }>>`SELECT pg_backend_pid() AS pid`)[0].pid;
+      entered(); await released;
+      await revokeAllRefreshTokensForUser(f.owner.id, { prisma: asPrismaClient(tx) });
+    }, { timeout: 15_000 });
+    await held;
     const pending = socketRequest(base, `/avatar/me?domain=${domain}`, { method: 'PUT',
-      headers: { ...f.headers, 'x-uoa-access-token': token, 'content-type': `multipart/form-data; boundary=${boundary}` }, body });
+      headers: { ...f.headers, 'content-type': `multipart/form-data; boundary=${boundary}` }, body });
     try {
-      await suite.waitForBlocked(held.pid);
-      await new Promise(resolve => setTimeout(resolve, Math.max(0, decodeJwt(token).exp! * 1000 - Date.now()) + 25));
-    } finally { await held.release(); }
+      await suite.waitForBlocked(pid);
+    } finally { release(); await revocation; }
     expect((await pending).status).toBe(401);
     expect(await suite.db.userAvatar.count({ where: { userId: f.owner.id } })).toBe(0);
-    expect(await events(f.org.id)).toEqual([]);
+    expect(await events(f.org.id)).toEqual([{ revision: 1n, kind: 'credential_epoch.changed', subjectId: f.owner.id, teamId: null }]);
   });
 });
