@@ -19,7 +19,7 @@ function fixture() {
       secrets: [{ secretDigest: digestDomainClientHash(authority.domainCredential), hashPrefix: 'synthetic' }] })) },
     domainRole: { findUnique: vi.fn(async () => ({ userId: 'person' })) },
     user: { findUnique: vi.fn(async () => ({ ...user })), update: vi.fn(async ({ data }: { data: Record<string, unknown> }) => { Object.assign(user, data); return { ...user }; }) },
-    organisation: { findUnique: vi.fn(async () => ({ lifecycleStatus: 'ACTIVE' })) },
+    organisation: { findUnique: vi.fn(async () => ({ lifecycleStatus: 'ACTIVE' })), findMany: vi.fn(async () => [{ id: 'org' }]) },
     orgMember: { findMany: vi.fn(async () => [{ orgId: 'org' }]), findUnique: vi.fn(async () => ({ status: 'ACTIVE', user: { id: 'target', name: 'Current name', lifecycleStatus: 'ACTIVE' } })) },
     historicalOrganisationIdentityReference: { findUnique: vi.fn(async () => null) },
   };
