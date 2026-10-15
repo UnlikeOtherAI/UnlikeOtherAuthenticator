@@ -1,0 +1,62 @@
+
+ RUN  v3.2.6 C:/Users/ondre/Projects/UnlikeOtherAuthenticator/.worktrees/sol-audit-fixes-api-20261014/API
+
+(node:65216) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stdout | tests/integration/directory-writer-families.test.ts > canonical writer families on PostgreSQL/TCP/RLS
+Retained audit test schema: [token-like test value redacted]
+
+ ✓ tests/integration/directory-writer-families.test.ts (7 tests) 56980ms
+   ✓ canonical writer families on PostgreSQL/TCP/RLS > invalidates every current organisation for global profile/avatar/credential-epoch writes  3040ms
+   ✓ canonical writer families on PostgreSQL/TCP/RLS > commits each group/member/team-assignment write with its ordered outbox event through uoa_app  4911ms
+   ✓ canonical writer families on PostgreSQL/TCP/RLS > rolls back actual group creation, allocated revision and event together under tenant RLS  466ms
+   ✓ canonical writer families on PostgreSQL/TCP/RLS > rechecks removed membership after an observed canonical user-lock wait before group insertion  1696ms
+   ✓ canonical writer families on PostgreSQL/TCP/RLS > resolves a cross-origin subject and keeps guard permission outages as generic failures  2369ms
+   ✓ canonical writer families on PostgreSQL/TCP/RLS > does not let the definer admission check escape missing or sibling tenant context  496ms
+   ✓ canonical writer families on PostgreSQL/TCP/RLS > freezes group admission for deleting subjects, including an older raw writer  1637ms
+(node:30908) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stdout | tests/integration/directory-org-team-writers.test.ts > organisation/team canonical writers over TCP and tenant RLS
+Retained failed authority fixture schema: [token-like test value redacted]
+
+ ❯ tests/integration/directory-org-team-writers.test.ts (6 tests | 1 failed) 41975ms
+   × organisation/team canonical writers over TCP and tenant RLS > creates one canonical org/default-team/owner membership set and publishes its update 376ms
+     → POST /org/organisations: HTTP 401: expected 401 to be 200 // Object.is equality
+   · organisation/team canonical writers over TCP and tenant RLS > publishes new, removed and re-added org memberships including both default-team branches
+   · organisation/team canonical writers over TCP and tenant RLS > publishes team CRUD, role changes, removal, deactivation and status-only restoration
+   · organisation/team canonical writers over TCP and tenant RLS > self-joins a fresh and removed team seat with the configured default role
+   · organisation/team canonical writers over TCP and tenant RLS > transfers canonical ownership and immediately refuses the prior owner grant authority
+   · organisation/team canonical writers over TCP and tenant RLS > publishes operator org/team provisioning and AddUserToTeam create/update upserts
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/directory-org-team-writers.test.ts > organisation/team canonical writers over TCP and tenant RLS > creates one canonical org/default-team/owner membership set and publishes its update
+AssertionError: POST /org/organisations: HTTP 401: expected 401 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 401
+
+ ❯ call tests/integration/directory-org-team-writers.test.ts:23:75
+     21|   async function call(path: string, method: string, headers: Record<st…
+     22|     const response = await socketRequest(base, path + query, { method,…
+     23|     expect(response.status, `${method} ${path}: HTTP ${response.status…
+       |                                                                           ^
+     24|     return response;
+     25|   }
+ ❯ tests/integration/directory-org-team-writers.test.ts:45:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 1 passed (7)
+      Tests  1 failed | 7 passed (13)
+   Start at  02:01:42
+   Duration  107.09s (transform 3.00s, setup 112ms, collect 7.62s, tests 98.95s, environment 0ms, prepare 120ms)
+
+undefined
+C:\Users\ondre\Projects\UnlikeOtherAuthenticator\.worktrees\sol-audit-fixes-api-20261014\API:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command "vitest" not found
+EXIT=1
