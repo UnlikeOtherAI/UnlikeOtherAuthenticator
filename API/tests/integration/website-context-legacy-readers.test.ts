@@ -148,7 +148,7 @@ describe.skipIf(!process.env.DATABASE_URL)('real pre-bridge/current website refr
       .rejects.toMatchObject({ statusCode: 401 });
     await expect(exchangeRefreshToken({ ...currentContext(), domain: 'other.example.com', refreshToken: pair.refresh_token }, deps()))
       .rejects.toMatchObject({ statusCode: 401 });
-    await handle.prisma.clientDomainSecret.updateMany({ where: { clientDomainId: clientId }, data: { active: false } });
+    await handle.prisma.clientDomainSecret.updateMany({ where: { domainId: clientId }, data: { active: false, deactivatedAt: new Date() } });
     expect((await refresh(pair.refresh_token)).statusCode).toBe(401);
     await expect(exchangeRefreshToken({ ...currentContext(), refreshToken: pair.refresh_token }, deps()))
       .rejects.toMatchObject({ statusCode: 401 });
