@@ -183,7 +183,7 @@ describe.skipIf(!hasDatabase)('first-placement per-user advisory lock', () => {
   }
 
   it('creates one team when two products place the same new user simultaneously', async () => {
-    const user = recoverySchema ? await handle.prisma.user.findUniqueOrThrow({
+    const user = recoverySchema ? await handle.prisma.user.findFirstOrThrow({
       where: { email: 'first-placement@example.com' }, select: { id: true },
     }) : await handle.prisma.user.create({
       data: {

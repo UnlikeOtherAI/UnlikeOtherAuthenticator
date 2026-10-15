@@ -1,0 +1,34 @@
+
+ RUN  v3.2.6 C:/Users/ondre/Projects/UnlikeOtherAuthenticator/.worktrees/sol-audit-fixes-api-20261014/API
+
+stdout | tests/integration/first-placement-advisory-race.test.ts > first-placement per-user advisory lock
+Retained audit test schema: [token-like test value redacted]
+
+ ✓ tests/integration/first-placement-advisory-race.test.ts (1 test) 46501ms
+   ✓ first-placement per-user advisory lock > creates one team when two products place the same new user simultaneously  3800ms
+(node:11524) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:11524) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+(node:11524) [FSTDEP023] FastifyDeprecation: disableRequestLogging option is deprecated. Use the logController option with disableRequestLogging or isLogDisabled override instead. The disableRequestLogging top-level option will be removed in `fastify@6`.
+stdout | tests/integration/auth-email-first-placement-race.test.ts > email-route first-product placement transaction
+Retained audit test schema: [token-like test value redacted]
+
+ ✓ tests/integration/auth-email-first-placement-race.test.ts (3 tests) 50120ms
+   ✓ email-route first-product placement transaction > serializes concurrent GET and POST first placement across two products  4720ms
+   ✓ email-route first-product placement transaction > rolls GET placement back when authorization-code issuance fails  2509ms
+   ✓ email-route first-product placement transaction > rolls POST placement back when authorization-code issuance fails  2352ms
+stdout | tests/integration/auth-token-membership-race.test.ts > authorization-code and membership lifecycle race
+Retained audit test schema: [token-like test value redacted]
+
+ ✓ tests/integration/auth-token-membership-race.test.ts (4 tests) 49131ms
+   ✓ authorization-code and membership lifecycle race > rejects exchange when deactivation obtains the membership locks first  1699ms
+   ✓ authorization-code and membership lifecycle race > finishes exchange before a deactivation waiting on the same locks  2320ms
+   ✓ authorization-code and membership lifecycle race > rejects an unscoped required exchange when deactivation locks the resolved team first  1901ms
+   ✓ authorization-code and membership lifecycle race > commits required placement before waiting deactivation revokes the newly issued refresh  2285ms
+
+ Test Files  3 passed (3)
+      Tests  8 passed (8)
+   Start at  01:54:47
+   Duration  152.75s (transform 3.14s, setup 145ms, collect 6.32s, tests 145.75s, environment 0ms, prepare 169ms)
+
+EXIT=0
