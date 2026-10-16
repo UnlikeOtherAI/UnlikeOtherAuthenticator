@@ -179,6 +179,15 @@ export const domainEndpoints: EndpointSchema[] = [
 
 export const appEndpoints: EndpointSchema[] = [
   {
+    method: 'POST', path: '/apps/v1/deeptest/nessie-inference-access',
+    description: 'Read the current operator-controlled permission to use Nessie executor inference in DeepTest',
+    auth: 'DeepTest customer_lifecycle X-UOA-App-Key and an at-most-60-second credential-bound RS256 X-UOA-Actor with exact endpoint audience; no legacy audience',
+    body: { product: 'deeptest', organisation_id: 'exact active UOA organisation',
+      team_id: 'exact active UOA team in that organisation', user_id: 'exact actor subject' },
+    response: { 200: '{ allowed: boolean }', '401/403': 'Generic refusal for invalid or stale authority' },
+    notes: 'Default deny. Rechecks the live user credential epoch, lifecycle, membership and product key. Private/no-store; consumers must call before every inference dispatch and never positively cache the verdict. This permission grants neither source access nor provider consent.',
+  },
+  {
     method: 'GET',
     path: '/apps/startup',
     description:

@@ -427,6 +427,20 @@ The default remains strict no-enumeration: existing users receive the same gener
 - Optional namespaced per-user settings are stored in a separate table, not on the user
   record — see the 2026-09-25 addendum and [User Settings](./Auth/user-settings.md)
 
+### Operator permission for DeepTest Nessie inference
+
+`User.deeptestNessieInferenceAllowed` defaults to false for all accounts. Only a
+current platform superuser may set it, through User detail → Security or audited
+`PATCH /internal/admin/users/:userId/deeptest-nessie-inference` with `{allowed:boolean}`.
+It is not a self-service setting, organisation flag or role grant. Identity deletion clears it.
+DeepTest checks `POST /apps/v1/deeptest/nessie-inference-access` before every dispatch
+with its own `customer_lifecycle` app key and a fresh exact-endpoint RS256 actor
+containing its exact subject, organisation, team and credential epoch. The response
+is only `{allowed:boolean}`, private/no-store; the live epoch, active identity,
+memberships and key/service are rechecked. Legacy audiences and positive caching
+are forbidden. This permission does not grant source access, inference-material
+consent or active-testing authorization.
+
 ---
 
 ## 16. Login Logging & Auditing

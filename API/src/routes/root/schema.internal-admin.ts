@@ -12,8 +12,13 @@ const keyedAuth =
   'Superuser JWT (see adminAuth) OR an Admin API key sent as `X-API-Key: <key>` or `Authorization: Bearer uoa_ak_…`. The key is minted once by a superuser in the Admin panel and is scoped to exactly these routes (list apps + write feature flags + write kill switches); it cannot reach any other /internal/admin route or mint/list/revoke keys. When an API-key credential is present it is authoritative — an invalid/expired/revoked key returns 401 and never falls back to the JWT.';
 const listLimit = { limit: 'number (optional, max 200)' };
 const authFailures = '401 when bearer token is missing/invalid; 403 when token is not an admin-domain superuser';
-
 export const internalAdminEndpoints: EndpointSchema[] = [
+  {
+    method: 'PATCH', path: '/internal/admin/users/:userId/deeptest-nessie-inference',
+    description: 'Set the exact user permission for DeepTest Nessie executor inference', auth: adminAuth,
+    body: { allowed: 'boolean (required); strict body' }, response: { 200: '{ allowed: boolean }' },
+    notes: 'Available on User detail > Security. Current platform-superuser epoch is rechecked in the write transaction; permission and audit commit together. Existing and new users default to false; no organisation, role or product setting grants this permission.',
+  },
   ...internalAdminDebugLoginEndpoints,
   {
     method: 'POST',

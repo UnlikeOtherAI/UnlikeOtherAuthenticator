@@ -34,6 +34,15 @@ the old config and correctly behaves as though the flag does not exist.
 
 ## Per-product deployment
 
+DeepTest's Nessie executor provider requires the additive
+`20261016150000_deeptest_nessie_inference_access` migration and UOA API/Admin
+release before the consuming DeepTest release. No permission is seeded or granted
+by deployment. In Admin → Users → selected person → Security, a platform superuser
+may enable **Allow Nessie executor inference**. The person still selects an
+available paired computer and consents to the run in DeepTest. Revocation is live
+on the next dispatch; every request uses DeepTest's existing dedicated lifecycle
+key and a fresh exact-endpoint actor. A UOA outage denies this provider.
+
 | Product | Repo | Trigger | Mechanism |
 | --- | --- | --- | --- |
 | UOA | `UnlikeOtherAuthenticator` | push to `main` | GitHub Actions → Cloud Run `uoa-auth` |

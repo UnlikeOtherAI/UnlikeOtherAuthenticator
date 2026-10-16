@@ -116,6 +116,7 @@ export async function getAdminUser(userId: string) {
     email: user.email,
     domains: roles.map((role) => role.domain),
     twofa: user.twoFaEnabled,
+    deeptestNessieInferenceAllowed: user.deeptestNessieInferenceAllowed,
     avatarSource: adminAvatarSource(Boolean(uploadedAvatar), user.avatarUrl),
     avatarImageUrl: adminAvatarImageUrl({ baseUrl: avatarImageBaseUrl(), userId: user.id }),
     lastLogin: latestLog ? displayTimestamp(latestLog.createdAt) : 'Never',
