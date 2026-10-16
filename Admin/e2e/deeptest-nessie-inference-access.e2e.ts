@@ -28,15 +28,15 @@ test('operator grants, revokes and retries the exact user permission', async ({ 
   await page.goto('/users/u101?tab=security');
   const permission = page.getByRole('checkbox', { name: 'Allow Nessie executor inference' });
   await expect(permission).not.toBeChecked();
-  await permission.check();
+  await permission.click();
   await expect(permission).toBeChecked();
   await page.reload();
   await expect(permission).toBeChecked();
   failNext = true;
-  await permission.uncheck();
+  await permission.click();
   await expect(page.getByRole('alert')).toContainText('The permission could not be saved');
   await expect(permission).toBeChecked();
-  await permission.uncheck();
+  await permission.click();
   await expect(permission).not.toBeChecked();
   await page.reload();
   await expect(permission).not.toBeChecked();

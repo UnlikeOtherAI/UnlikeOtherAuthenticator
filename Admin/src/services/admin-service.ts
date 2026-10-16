@@ -29,7 +29,6 @@ import type {
   UserSummary,
 } from '../features/admin/types';
 import { createApiClient } from './api-client';
-
 const api = createApiClient();
 
 export type DomainSecretResponse = {
@@ -496,7 +495,6 @@ function toKillSwitchBody(input: KillSwitchInput) {
     cache_ttl: input.cacheTtl,
   };
 }
-
 export type AdminServiceData = AdminData;
 export type TeamWithOrg = Team & { orgName: string };
 export type UserLookup = UserSummary | null;
