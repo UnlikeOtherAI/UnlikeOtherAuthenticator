@@ -28,7 +28,7 @@ vi.mock('../../src/services/avatar-subject.service.js', () => ({
   })),
 }));
 
-async function buildApp(): Promise<FastifyInstance> {
+async function buildApp(options: { productionErrors?: boolean } = {}): Promise<FastifyInstance> {
   const fastify = (await import('fastify')).default;
   const { registerPublicTeamAvatarRoute } = await import(
     '../../src/routes/avatar/public-team.js'
@@ -45,6 +45,10 @@ async function buildApp(): Promise<FastifyInstance> {
       team: { findFirst: async () => null },
     } as unknown as PrismaClient;
   });
+  if (options.productionErrors) {
+    const { registerErrorHandler } = await import('../../src/middleware/error-handler.js');
+    registerErrorHandler(app);
+  }
   registerPublicTeamAvatarRoute(app);
   await app.ready();
   return app;
@@ -100,6 +104,27 @@ describe('GET /teams/:teamId/avatar global rate limit', () => {
         windowMs: 60 * 60 * 1000,
       });
       await expect(ipProbe({} as Parameters<typeof ipProbe>[0])).resolves.toBeUndefined();
+    } finally {
+      await app.close();
+    }
+  });
+});
+
+describe('GET /teams/:teamId/avatar ?v=', () => {
+  // The chooser and GET /org/me hand out versioned URLs (Docs/Auth/avatars.md §11.4); the strict
+  // query must accept that one unread parameter and still refuse anything it does not define.
+  it('serves a versioned URL and keeps refusing unknown parameters', async () => {
+    vi.resetModules();
+    const app = await buildApp({ productionErrors: true });
+    try {
+      const versioned = await app.inject({ method: 'GET', url: '/teams/team-1/avatar?v=muorpc00' });
+      expect(versioned.statusCode).toBe(200);
+
+      const tooLong = await app.inject({ method: 'GET', url: `/teams/team-1/avatar?v=${'a'.repeat(65)}` });
+      expect(tooLong.statusCode).toBe(400);
+
+      const unknown = await app.inject({ method: 'GET', url: '/teams/team-1/avatar?cache=1' });
+      expect(unknown.statusCode).toBe(400);
     } finally {
       await app.close();
     }

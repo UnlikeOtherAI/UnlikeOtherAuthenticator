@@ -69,13 +69,19 @@ export function domainTeamAvatarImageUrl(params: {
  * are rendered by a page holding no bearer of any class. Carries no `?domain=`: the route resolves
  * the team by id alone and answers every id with an image, so the URL leaks no domain and no
  * existence signal.
+ *
+ * `?v=` is the team row's `updatedAt`, which an avatar upload or removal moves too (§11.4). The
+ * route lets a browser keep a generated image for a day under one URL, so a new logo has to be a
+ * new URL. Only a reader entitled to the team is handed one; the route never reads it.
  */
 export function publicTeamAvatarImageUrl(params: {
   baseUrl?: string | null;
   teamId: string;
+  updatedAt: Date;
 }): string {
   const base = normalizeBaseUrl(params.baseUrl);
-  return `${base}/teams/${encodeURIComponent(params.teamId)}/avatar`;
+  const version = params.updatedAt.getTime().toString(36);
+  return `${base}/teams/${encodeURIComponent(params.teamId)}/avatar?v=${version}`;
 }
 
 /** `<base>/internal/admin/teams/<teamId>/avatar` — fetchable with the admin superuser bearer. */

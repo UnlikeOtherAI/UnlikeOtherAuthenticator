@@ -78,5 +78,7 @@ A few payloads deliberately carry **no** avatar URL: bare actor-attribution emai
 
 The chooser's **teams** and \`GET /org/me\`'s \`team_directory[]\`, unlike its user identities, do carry \`avatarImageUrl\` in the public \`<PUBLIC_BASE_URL>/teams/<teamId>/avatar\` form, the one URL that needs no credential. That is exactly why the public route exists; the user-identity exclusion above is unchanged, because there is no public user-avatar route to point at.
 
+That public URL carries \`?v=<version>\`, which changes whenever the team record does, and an avatar upload or removal changes it too. The route serves a generated image with a day-long cache, so this is what lets a new logo replace a cached one: render the URL exactly as given, never strip or add query parameters, and re-read the directory rather than caching its URLs.
+
 See [the JSON endpoint contract](/api) and \`Docs/Auth/avatars.md\` for the full specification.
 `;

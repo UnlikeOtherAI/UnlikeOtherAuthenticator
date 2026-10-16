@@ -5,6 +5,9 @@ import {
   buildSidebarTeams,
 } from '../../src/services/team-directory.service.js';
 
+// The team row's updatedAt versions the public avatar URL (Docs/Auth/avatars.md §11.4).
+const TEAM_UPDATED_AT = new Date('2026-10-01T00:00:00.000Z');
+
 // Gap-fix A Task 1 (design §11.4 sidebar contract): `GET /org/me`'s `teams[]` and
 // `pending_invites[]` enrichment. Mock-prisma, mirroring org-context.service.test.ts.
 
@@ -40,6 +43,7 @@ describe('team-directory service: buildSidebarTeams', () => {
             name: 'Backend',
             slug: 'backend',
             iconUrl: 'https://cdn.example.com/backend.png',
+            updatedAt: TEAM_UPDATED_AT,
             org: { name: 'Acme Inc' },
           },
         },
@@ -68,7 +72,7 @@ describe('team-directory service: buildSidebarTeams', () => {
         slug: 'backend',
         orgName: 'Acme Inc',
         iconUrl: 'https://cdn.example.com/backend.png',
-        avatarImageUrl: '/teams/team-1/avatar',
+        avatarImageUrl: '/teams/team-1/avatar?v=muorpc00',
         role: 'owner',
         lastLoginAt: null,
       },
@@ -81,7 +85,7 @@ describe('team-directory service: buildSidebarTeams', () => {
         {
           teamId: 'team-1',
           teamRole: 'member',
-          team: { orgId: 'org-1', name: 'Solo', slug: 'solo', iconUrl: null, org: { name: 'Acme' } },
+          team: { orgId: 'org-1', name: 'Solo', slug: 'solo', iconUrl: null, updatedAt: TEAM_UPDATED_AT, org: { name: 'Acme' } },
         },
       ],
       refreshTokenGroupBy: [],
@@ -104,22 +108,22 @@ describe('team-directory service: buildSidebarTeams', () => {
         {
           teamId: 'team-zzz-null',
           teamRole: 'member',
-          team: { orgId: 'org-1', name: 'Zzz No Login', slug: 'zzz', iconUrl: null, org: { name: 'Acme' } },
+          team: { orgId: 'org-1', name: 'Zzz No Login', slug: 'zzz', iconUrl: null, updatedAt: TEAM_UPDATED_AT, org: { name: 'Acme' } },
         },
         {
           teamId: 'team-older',
           teamRole: 'member',
-          team: { orgId: 'org-1', name: 'Older Login', slug: 'older', iconUrl: null, org: { name: 'Acme' } },
+          team: { orgId: 'org-1', name: 'Older Login', slug: 'older', iconUrl: null, updatedAt: TEAM_UPDATED_AT, org: { name: 'Acme' } },
         },
         {
           teamId: 'team-aaa-null',
           teamRole: 'member',
-          team: { orgId: 'org-1', name: 'Aaa No Login', slug: 'aaa', iconUrl: null, org: { name: 'Acme' } },
+          team: { orgId: 'org-1', name: 'Aaa No Login', slug: 'aaa', iconUrl: null, updatedAt: TEAM_UPDATED_AT, org: { name: 'Acme' } },
         },
         {
           teamId: 'team-recent',
           teamRole: 'member',
-          team: { orgId: 'org-1', name: 'Recent Login', slug: 'recent', iconUrl: null, org: { name: 'Acme' } },
+          team: { orgId: 'org-1', name: 'Recent Login', slug: 'recent', iconUrl: null, updatedAt: TEAM_UPDATED_AT, org: { name: 'Acme' } },
         },
       ],
       refreshTokenGroupBy: [
@@ -159,7 +163,7 @@ describe('team-directory service: buildSidebarTeams', () => {
         {
           teamId: 'team-local',
           teamRole: 'member',
-          team: { orgId: 'org-local', name: 'Local', slug: 'local', iconUrl: null, org: { name: 'Local org' } },
+          team: { orgId: 'org-local', name: 'Local', slug: 'local', iconUrl: null, updatedAt: TEAM_UPDATED_AT, org: { name: 'Local org' } },
         },
       ],
     });
@@ -169,12 +173,12 @@ describe('team-directory service: buildSidebarTeams', () => {
           {
             teamId: 'team-local',
             teamRole: 'member',
-            team: { orgId: 'org-local', name: 'Local', slug: 'local', iconUrl: null, org: { name: 'Local org' } },
+            team: { orgId: 'org-local', name: 'Local', slug: 'local', iconUrl: null, updatedAt: TEAM_UPDATED_AT, org: { name: 'Local org' } },
           },
           {
             teamId: 'team-other',
             teamRole: 'owner',
-            team: { orgId: 'org-other', name: 'Other', slug: 'other', iconUrl: null, org: { name: 'Other org' } },
+            team: { orgId: 'org-other', name: 'Other', slug: 'other', iconUrl: null, updatedAt: TEAM_UPDATED_AT, org: { name: 'Other org' } },
           },
         ]),
       },
@@ -191,8 +195,8 @@ describe('team-directory service: buildSidebarTeams', () => {
 
     expect(result.map((team) => team.teamId)).toEqual(['team-local', 'team-other']);
     expect(result.map((team) => team.avatarImageUrl)).toEqual([
-      '/teams/team-local/avatar',
-      '/teams/team-other/avatar',
+      '/teams/team-local/avatar?v=muorpc00',
+      '/teams/team-other/avatar?v=muorpc00',
     ]);
     expect(result[1]?.lastLoginAt).toBeNull();
     expect(crossProductPrisma.teamMember.findMany).toHaveBeenCalledWith(

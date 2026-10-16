@@ -4,6 +4,9 @@ import type { ClientConfig } from '../../src/services/config.service.js';
 import { signLoginSession } from '../../src/services/login-session.service.js';
 import { testUiTheme } from '../helpers/test-config.js';
 
+// The team row's updatedAt versions the public avatar URL (Docs/Auth/avatars.md §11.4).
+const TEAM_UPDATED_AT = new Date('2026-10-01T00:00:00.000Z');
+
 const SHARED_SECRET = 'test-shared-secret-with-enough-length';
 const LOGIN_SESSION_AUDIENCE = 'uoa:login-session';
 
@@ -222,12 +225,12 @@ describe('POST /auth/session-choices', () => {
       {
         teamId: 'team-1',
         teamRole: 'member',
-        team: { name: 'Backend Team', orgId: 'org-1' },
+        team: { name: 'Backend Team', orgId: 'org-1', updatedAt: TEAM_UPDATED_AT },
       },
       {
         teamId: 'team-2',
         teamRole: 'owner',
-        team: { name: 'Design Team', orgId: 'org-1' },
+        team: { name: 'Design Team', orgId: 'org-1', updatedAt: TEAM_UPDATED_AT },
       },
     ]);
     prismaMock.teamInvite.findMany.mockResolvedValue([]);
@@ -244,7 +247,7 @@ describe('POST /auth/session-choices', () => {
           role: 'member',
           // Docs/Auth/avatars.md §11.4 — the public, credential-free form, because the chooser
           // renders in a popup that holds no bearer. Root-relative with PUBLIC_BASE_URL unset.
-          avatarImageUrl: '/teams/team-1/avatar',
+          avatarImageUrl: '/teams/team-1/avatar?v=muorpc00',
           // This mock's team rows carry no org join, so the grouping name comes back null.
           orgName: null,
         },
@@ -253,7 +256,7 @@ describe('POST /auth/session-choices', () => {
           orgId: 'org-1',
           name: 'Design Team',
           role: 'owner',
-          avatarImageUrl: '/teams/team-2/avatar',
+          avatarImageUrl: '/teams/team-2/avatar?v=muorpc00',
           orgName: null,
         },
       ],
