@@ -35,7 +35,7 @@ import type { OrgActorProvenance } from './org-audit-log.service.js';
  */
 
 type TeamAvatarPrisma = {
-  team: Pick<PrismaClient['team'], 'findFirst'>;
+  team: Pick<PrismaClient['team'], 'findFirst' | 'update'>;
   teamAvatar: Pick<PrismaClient['teamAvatar'], 'findUnique' | 'upsert' | 'deleteMany'>;
 };
 
@@ -200,6 +200,7 @@ export async function uploadTeamAvatar(
     update: { contentType, data, sizeBytes },
     select: { contentType: true, sizeBytes: true, updatedAt: true },
   });
+  await touchTeam(prisma, params.teamId, row.updatedAt);
 
   return {
     source: 'uploaded',
@@ -218,5 +219,14 @@ export async function deleteTeamAvatar(
   deps?: TeamAvatarDeps,
 ): Promise<void> {
   const prisma = prismaFor(deps);
-  await prisma.teamAvatar.deleteMany({ where: { teamId: params.teamId } });
+  const removed = await prisma.teamAvatar.deleteMany({ where: { teamId: params.teamId } });
+  if (removed.count > 0) await touchTeam(prisma, params.teamId, new Date());
+}
+
+/**
+ * The public team avatar URL is versioned by the team row's `updatedAt` (Docs/Auth/avatars.md
+ * §11.4), which `@updatedAt` moves for an `icon_url` edit but not for a change to `team_avatars`.
+ */
+async function touchTeam(prisma: TeamAvatarPrisma, teamId: string, updatedAt: Date): Promise<void> {
+  await prisma.team.update({ where: { id: teamId }, data: { updatedAt }, select: { id: true } });
 }
