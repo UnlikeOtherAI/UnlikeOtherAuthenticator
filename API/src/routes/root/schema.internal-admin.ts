@@ -14,6 +14,12 @@ const listLimit = { limit: 'number (optional, max 200)' };
 const authFailures = '401 when bearer token is missing/invalid; 403 when token is not an admin-domain superuser';
 
 export const internalAdminEndpoints: EndpointSchema[] = [
+  {
+    method: 'PATCH', path: '/internal/admin/users/:userId/deeptest-nessie-inference',
+    description: 'Set the exact user permission for DeepTest Nessie executor inference', auth: adminAuth,
+    body: { allowed: 'boolean (required); strict body' }, response: { 200: '{ allowed: boolean }' },
+    notes: 'Available on User detail > Security. Current platform-superuser epoch is rechecked in the write transaction; permission and audit commit together. Existing and new users default to false; no organisation, role or product setting grants this permission.',
+  },
   ...internalAdminDebugLoginEndpoints,
   {
     method: 'POST',

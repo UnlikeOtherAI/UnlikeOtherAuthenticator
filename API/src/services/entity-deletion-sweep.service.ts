@@ -63,7 +63,8 @@ export async function eraseOperationalIdentity(tx: PrismaClient, userId: string,
   await tx.user.update({ where: { id: userId }, data: {
     lifecycleStatus: 'DELETED', lifecycleChangedAt: new Date(), email: null, userKey: null, name: null,
     passwordHash: null, twoFaEnabled: false, twoFaSecret: null, twoFaLastAcceptedCounter: null,
-    avatarUrl: null, tokenVersion: { increment: 1 }, lifecycleReason: null, lifecycleInternalNote: null,
+    avatarUrl: null, deeptestNessieInferenceAllowed: false,
+    tokenVersion: { increment: 1 }, lifecycleReason: null, lifecycleInternalNote: null,
     lifecycleTemplateId: null, lifecycleTemplateRevision: null,
   } });
   if (mode === 'ERASE_REFERENCE' && protectedRows.length === 0) await tx.user.delete({ where: { id: userId } });
