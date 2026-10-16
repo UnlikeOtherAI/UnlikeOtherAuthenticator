@@ -4,6 +4,8 @@ import { installFixtures } from './fixtures';
 import { mockAdminData } from '../src/features/admin/__mocks__/mock-data';
 
 test('operator grants, revokes and retries the exact user permission', async ({ page }) => {
+  await page.setViewportSize(test.info().project.name === 'mobile'
+    ? { width: 390, height: 844 } : { width: 1440, height: 900 });
   const fixtures = await installFixtures(page);
   let allowed = false;
   let failNext = false;

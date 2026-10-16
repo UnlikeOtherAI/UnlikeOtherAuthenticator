@@ -1,8 +1,12 @@
 import { randomUUID } from 'node:crypto';
+import Fastify from 'fastify';
 import { exportJWK, generateKeyPair, SignJWT } from 'jose';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { getAdminAuthDomain } from '../../src/config/env.js';
+import * as database from '../../src/db/prisma.js';
+import { registerErrorHandler } from '../../src/middleware/error-handler.js';
+import { registerDeepTestNessieInferenceAccessRoute } from '../../src/routes/apps/deeptest-nessie-inference-access.js';
 import { createBillingAppKey, verifyBillingAppKey, type VerifiedBillingAppKey } from '../../src/services/billing-app-key.service.js';
 import {
   DEEPTEST_NESSIE_INFERENCE_ACCESS_ENDPOINT,
@@ -16,6 +20,7 @@ describe.skipIf(!process.env.DATABASE_URL)('DeepTest Nessie permission persisten
   let db: NonNullable<Awaited<ReturnType<typeof createTestDb>>>;
   let privateKey: CryptoKey;
   let credential: VerifiedBillingAppKey;
+  let appKey: string;
   let userId: string;
   let orgId: string;
   let teamId: string;
@@ -25,6 +30,7 @@ describe.skipIf(!process.env.DATABASE_URL)('DeepTest Nessie permission persisten
   beforeAll(async () => {
     vi.stubEnv('PUBLIC_BASE_URL', publicBase);
     db = (await createTestDb())!;
+    vi.spyOn(database, 'getAdminPrisma').mockReturnValue(db.prisma);
     const pair = await generateKeyPair('RS256', { extractable: true });
     privateKey = pair.privateKey;
     const jwk = { ...await exportJWK(pair.publicKey), kid: 'deeptest-test' };
@@ -50,17 +56,20 @@ describe.skipIf(!process.env.DATABASE_URL)('DeepTest Nessie permission persisten
       actorAudience: `${publicBase}/billing/v1/effective-tariff`, actorPublicJwk: jwk,
       checkoutReturnOrigins: ['https://app.deeptest.live'] }, { prisma: db.prisma });
     credential = await verifyBillingAppKey(key.plaintext, { prisma: db.prisma });
+    appKey = key.plaintext;
   });
 
-  afterAll(async () => { await db?.cleanup(); vi.unstubAllEnvs(); });
+  afterAll(async () => { await db?.cleanup(); vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 
-  async function read(tv = 0) {
-    const token = await new SignJWT({ product: 'deeptest', organisation_id: orgId, team_id: teamId, tv })
+  async function actorToken(tv = 0) {
+    return new SignJWT({ product: 'deeptest', organisation_id: orgId, team_id: teamId, tv })
       .setProtectedHeader({ alg: 'RS256', kid: credential.actorKeyId })
       .setSubject(userId).setIssuer(credential.actorIssuer)
       .setAudience(`${publicBase}${DEEPTEST_NESSIE_INFERENCE_ACCESS_ENDPOINT}`)
       .setJti(randomUUID()).setIssuedAt().setExpirationTime('60s').sign(privateKey);
-    return getDeepTestNessieInferenceAccess({ credential, actorToken: token,
+  }
+  async function read(tv = 0) {
+    return getDeepTestNessieInferenceAccess({ credential, actorToken: await actorToken(tv),
       request: { product: 'deeptest', organisationId: orgId, teamId, userId } }, { prisma: db.prisma });
   }
   const set = (allowed: boolean) => setDeepTestNessieInferenceAccess({ userId, allowed, actor: operator }, { prisma: db.prisma });
@@ -100,6 +109,30 @@ describe.skipIf(!process.env.DATABASE_URL)('DeepTest Nessie permission persisten
     release();
     await writer;
     expect(await reader).toEqual({ allowed: false });
+  });
+
+  it('serves the strict private HTTP verdict only to the authenticated product actor', async () => {
+    const app = Fastify();
+    registerErrorHandler(app);
+    registerDeepTestNessieInferenceAccessRoute(app);
+    const payload = { product: 'deeptest', organisation_id: orgId, team_id: teamId, user_id: userId };
+    try {
+      const unauthenticated = await app.inject({ method: 'POST', url: DEEPTEST_NESSIE_INFERENCE_ACCESS_ENDPOINT, payload });
+      expect(unauthenticated.statusCode).toBe(401);
+      await set(true);
+      const headers = { 'x-uoa-app-key': appKey, 'x-uoa-actor': await actorToken() };
+      const allowed = await app.inject({ method: 'POST', url: DEEPTEST_NESSIE_INFERENCE_ACCESS_ENDPOINT, headers, payload });
+      expect(allowed.statusCode).toBe(200);
+      expect(allowed.json()).toEqual({ allowed: true });
+      expect(allowed.headers['cache-control']).toBe('private, no-store');
+      const malformed = await app.inject({ method: 'POST', url: DEEPTEST_NESSIE_INFERENCE_ACCESS_ENDPOINT,
+        headers, payload: { ...payload, allowed: true } });
+      expect(malformed.statusCode).toBe(400);
+      await set(false);
+      const revoked = await app.inject({ method: 'POST', url: DEEPTEST_NESSIE_INFERENCE_ACCESS_ENDPOINT,
+        headers: { 'x-uoa-app-key': appKey, 'x-uoa-actor': await actorToken() }, payload });
+      expect(revoked.json()).toEqual({ allowed: false });
+    } finally { await app.close(); }
   });
 
   it('refuses membership removal, stale epochs and suspended containers', async () => {
