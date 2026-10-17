@@ -33,9 +33,27 @@ describe('organisation access browser boundary', () => {
   it('rejects malformed hydration and cross-origin or unrelated test destinations', async () => {
     const { decodeSettings, trustedTestUrl } = await import('./organisation-access.js');
     expect(() => decodeSettings({ ...settings, csrf_token: undefined })).toThrow();
+    expect(() => decodeSettings({ ...settings, policy: { ...settings.policy, reauth_mode: 'guess' } })).toThrow();
+    const connection = { id: 'c', preset: 'entra', protocol: 'oidc', display_name: 'Corporate', status: 'draft',
+      revision: 1, configuration: {}, secret_configured: false, tested_revision: null };
+    expect(() => decodeSettings({ ...settings, connections: [{ ...connection, callback_url: 'https://evil.example/callback' }] })).toThrow();
+    expect(() => decodeSettings({ ...settings, connections: [{ ...connection, last_test: { status: 'invented', code: null, at: 'today' } }] })).toThrow();
     expect(() => trustedTestUrl('https://evil.example/sso/c/start')).toThrow();
     expect(() => trustedTestUrl('/auth/token')).toThrow();
     expect(trustedTestUrl('/sso/c/start')).toContain('/sso/c/start');
+  });
+  it('allows a transient bootstrap failure to retry without caching a rejection', async () => {
+    request.mockResolvedValueOnce({ ok: false, status: 503 }).mockResolvedValueOnce({ ok: true, data: settings });
+    const { openOrganisationAccess } = await import('./organisation-access.js');
+    await expect(openOrganisationAccess()).rejects.toMatchObject({ status: 503 });
+    await expect(openOrganisationAccess()).resolves.toMatchObject({ org: settings.org });
+  });
+  it('recovers a lost exchange response through the cookie without replaying the continuation', async () => {
+    window.history.replaceState(null, '', '/auth/organisation-access#continuation=one-use');
+    request.mockResolvedValueOnce({ ok: false, status: 0 }).mockResolvedValueOnce({ ok: true, data: settings });
+    const { openOrganisationAccess } = await import('./organisation-access.js');
+    await expect(openOrganisationAccess()).resolves.toMatchObject({ org: settings.org });
+    expect(request.mock.calls.filter((call) => call[1].endsWith('/exchange'))).toHaveLength(1);
   });
   it('keeps failures retryable and does not reinterpret an outage as successful authorization', async () => {
     request.mockResolvedValue({ ok: false, status: 503 });

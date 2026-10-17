@@ -1,4 +1,9 @@
 export const accessEn = {
+  reissueDns: 'Get a new DNS record',
+  issuerHelp: 'Create a web application in your identity provider and add the reply URL below. Copy its exact organisation or realm issuer URL, client ID and secret here. UOA loads the provider details securely.',
+  domainExpired: 'Verification expired', domainRevoked: 'Domain no longer in use',
+  dnsOnce: 'Copy this DNS record now. If you leave this page, request a new record before continuing.',
+  continueSetup: 'Continue setup', setupIncomplete: 'Setup not finished', finishSetup: 'Add your provider’s application details before testing this connection.',
   providerHelp: 'Open provider setup', readinessDetails: 'Why activation is unavailable',
   entraHelp: 'In Microsoft Entra admin center, open App registrations. Create or select a web application and add the reply URL below. Then copy its directory and application IDs and create a client secret.',
   googleHelp: 'In Google Cloud, create a web application OAuth client for your Workspace and add the reply URL below. Then copy its client ID and secret here.',
@@ -51,6 +56,11 @@ export const accessEn = {
 } as const;
 export type AccessKey = keyof typeof accessEn;
 export const accessCs: Record<AccessKey, string> = {
+  reissueDns: 'Získat nový DNS záznam',
+  issuerHelp: 'U poskytovatele identity vytvořte webovou aplikaci a přidejte níže uvedenou URL odpovědi. Sem zkopírujte přesnou URL vydavatele organizace nebo realmu, ID klienta a tajný klíč. UOA bezpečně načte údaje poskytovatele.',
+  domainExpired: 'Platnost ověření vypršela', domainRevoked: 'Doména se již nepoužívá',
+  dnsOnce: 'DNS záznam si nyní zkopírujte. Pokud tuto stránku opustíte, před pokračováním si vyžádejte nový.',
+  continueSetup: 'Pokračovat v nastavení', setupIncomplete: 'Nastavení není dokončeno', finishSetup: 'Před testováním připojení doplňte údaje aplikace poskytovatele.',
   providerHelp: 'Otevřít nastavení poskytovatele', readinessDetails: 'Proč zapnutí není dostupné',
   entraHelp: 'V centru pro správu Microsoft Entra otevřete Registrace aplikací. Vytvořte nebo vyberte webovou aplikaci a přidejte níže uvedenou URL odpovědi. Poté zkopírujte ID adresáře a aplikace a vytvořte tajný klíč klienta.',
   googleHelp: 'V Google Cloud vytvořte klienta OAuth webové aplikace pro váš Workspace a přidejte níže uvedenou URL odpovědi. Poté sem zkopírujte ID klienta a tajný klíč.',
@@ -102,6 +112,11 @@ export const accessCs: Record<AccessKey, string> = {
   overview: 'Připojení', settings: 'Nastavení přístupu organizace',
 };
 export const accessEs: Record<AccessKey, string> = {
+  reissueDns: 'Obtener un nuevo registro DNS',
+  issuerHelp: 'Crea una aplicación web en tu proveedor de identidad y añade la URL de respuesta de abajo. Copia aquí la URL exacta del emisor de la organización o realm, el ID del cliente y el secreto. UOA carga los detalles del proveedor de forma segura.',
+  domainExpired: 'La verificación ha caducado', domainRevoked: 'El dominio ya no se utiliza',
+  dnsOnce: 'Copia este registro DNS ahora. Si sales de esta página, solicita uno nuevo antes de continuar.',
+  continueSetup: 'Continuar configuración', setupIncomplete: 'Configuración sin terminar', finishSetup: 'Añade los datos de la aplicación del proveedor antes de probar la conexión.',
   providerHelp: 'Abrir configuración del proveedor', readinessDetails: 'Por qué la activación no está disponible',
   entraHelp: 'En el centro de administración de Microsoft Entra, abre Registros de aplicaciones. Crea o selecciona una aplicación web y añade la URL de respuesta de abajo. Después copia los ID de directorio y aplicación y crea un secreto del cliente.',
   googleHelp: 'En Google Cloud, crea un cliente OAuth de aplicación web para tu Workspace y añade la URL de respuesta de abajo. Después copia aquí su ID y secreto.',

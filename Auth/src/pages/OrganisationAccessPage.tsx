@@ -40,18 +40,22 @@ export function OrganisationAccessPage() {
 
   async function reload() {
     setError(null);
-    try { setSettings(await loadOrganisationAccess()); }
+    try { setSettings(await openOrganisationAccess()); }
     catch (cause) { setError(cause instanceof AccessError ? cause.status : 0); }
   }
   async function mutate(method: 'POST' | 'DELETE', path: string, body?: unknown) {
     if (!settings) return;
     setBusy(true); setSaveError(false);
-    try { await accessMutation(settings, method, path, body); setSettings(await loadOrganisationAccess()); }
+    try {
+      const result = await accessMutation(settings, method, path, body);
+      setSettings(await loadOrganisationAccess());
+      return result;
+    }
     catch { setSaveError(true); }
     finally { setBusy(false); }
   }
   async function save(draft: ConnectionDraft) {
-    if (!settings) return;
+    if (!settings) return false;
     setBusy(true); setSaveError(false);
     try {
       const result = await accessMutation(settings, connectionId ? 'PATCH' : 'POST',
@@ -60,7 +64,8 @@ export function OrganisationAccessPage() {
       const saved = result.connection;
       if (!saved || typeof saved !== 'object' || !('id' in saved) || typeof saved.id !== 'string') throw new Error('Invalid connection');
       setConnectionId(saved.id); setView('review');
-    } catch { setSaveError(true); }
+      return true;
+    } catch { setSaveError(true); return false; }
     finally { setBusy(false); }
   }
   function navigate(next: View) { setSaveError(false); setView(next); }
@@ -80,6 +85,9 @@ export function OrganisationAccessPage() {
   }
   const connection = settings?.connections.find((c) => c.id === connectionId);
   const presets = settings?.presets ?? [];
+  const currentStep = view === 'review'
+    ? connection && connection.tested_revision === connection.revision ? 'enable' : 'test'
+    : view;
 
   return <div className={classNames.appShell}>
     <main className={classNames.pageContainer.replace('max-w-lg', 'max-w-3xl')}>
@@ -96,8 +104,8 @@ export function OrganisationAccessPage() {
           {view !== 'overview' && view !== 'connect' && <Button className="w-auto!" variant="secondary" onClick={() => navigate('overview')} disabled={busy}>{t('back')}</Button>}
           {['choose', 'connect', 'review'].includes(view) && <ol className="flex flex-wrap gap-x-4 gap-y-2 text-sm text-[var(--uoa-color-muted)]">
             {(['choose', 'connect', 'test', 'enable'] as const).map((step, index) => <li key={step}
-              className={(view === step || (view === 'review' && step === 'test')) ? 'font-semibold text-[var(--uoa-color-text)]' : undefined}
-              aria-current={(view === step || (view === 'review' && step === 'test')) ? 'step' : undefined}>
+              className={currentStep === step ? 'font-semibold text-[var(--uoa-color-text)]' : undefined}
+              aria-current={currentStep === step ? 'step' : undefined}>
               {index + 1}. {t(step)}
             </li>)}
           </ol>}
@@ -109,7 +117,7 @@ export function OrganisationAccessPage() {
                   className="flex min-h-16 w-full items-center justify-between gap-4 py-4 text-left"
                   onClick={() => { setConnectionId(c.id); navigate('review'); }}>
                   <span><span className="block font-medium">{c.display_name}</span>
-                    <span className="text-sm text-[var(--uoa-color-muted)]">{t(c.status === 'active' ? 'active' : c.status === 'suspended' ? 'suspended' : 'off')}</span></span>
+                    <span className="text-sm text-[var(--uoa-color-muted)]">{t(Object.keys(c.configuration).length === 0 ? 'setupIncomplete' : c.status === 'active' ? 'active' : c.status === 'suspended' ? 'suspended' : c.tested_revision === c.revision ? 'passedStatus' : 'saved')}</span></span>
                   <span aria-hidden="true">›</span>
                 </button>)}
               </div><Button variant="secondary" onClick={() => navigate('choose')}>{t('newConnection')}</Button>

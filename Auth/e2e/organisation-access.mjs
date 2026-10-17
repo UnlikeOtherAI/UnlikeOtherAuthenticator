@@ -30,6 +30,7 @@ const saved = {
   id: 'connection-one', preset: 'entra', protocol: 'oidc', display_name: 'Acme Microsoft', status: 'draft',
   revision: 1, configuration: {}, secret_configured: true, tested_revision: null,
   callback_url: `${origin}/sso/connection-one/callback`,
+  acs_url: `${origin}/sso/connection-one/acs`, sp_entity_id: `${origin}/sso/connection-one/metadata`,
 };
 const browser = await chromium.launch({ headless: true });
 try {
@@ -47,11 +48,11 @@ try {
     });
     await page.route('**/auth/organisation-access/**', async (route) => {
       const request = route.request(); const path = new URL(request.url()).pathname;
-      if (path.endsWith('/exchange')) return route.fulfill({ json: { ok: true } });
+      if (path.endsWith('/exchange')) return route.fulfill({ json: data });
       if (request.method() === 'GET' && path.endsWith('/sso')) {
         if (mode === 'outage') return route.fulfill({ status: 503, json: { error: 'Request failed' } });
         if (mode === 'expired') return route.fulfill({ status: 401, json: { error: 'Request failed' } });
-        return route.fulfill({ json: data });
+        return route.fulfill({ json: { ...data, domains: data.domains.map((domain) => ({ ...domain, challenge: undefined })) } });
       }
       assert.equal(request.headers()['x-uoa-csrf'], 'fixture-csrf');
       mutations.push({ path, body: request.postDataJSON() });
@@ -68,10 +69,18 @@ try {
         assert.equal(request.postDataJSON().revision, 2);
         return route.fulfill({ json: { ok: true, test_url: `${origin}/sso/connection-one/start`, expires_at: '2026-10-18T12:00:00Z' } });
       }
+      if (path.endsWith('/connections/connection-one/scim-token')) {
+        return route.fulfill({ json: { ok: true, token: 'fixture-one-time-provisioning-token', base_url: `${origin}/scim/v2/c/connection-one` } });
+      }
       if (path.endsWith('/domains')) {
         data.domains.push({ id: 'domain-one', email_domain: 'acme.example', status: 'PENDING',
           challenge: { name: '_uoa-verify.acme.example', value: 'public-dns-proof', expires_at: '2026-10-18T12:00:00Z' } });
-        return route.fulfill({ json: { ok: true } });
+        return route.fulfill({ json: { ok: true, domain: data.domains.at(-1) } });
+      }
+      if (path.endsWith('/domains/domain-one/reissue')) {
+        const domain = data.domains[0];
+        domain.challenge.value = 'replacement-public-dns-proof';
+        return route.fulfill({ json: { ok: true, domain } });
       }
       return route.fulfill({ status: 400, json: { error: 'Request failed' } });
     });
@@ -106,12 +115,27 @@ try {
     await page.getByLabel('Email domain', { exact: true }).fill('acme.example');
     await page.getByRole('button', { name: 'Add domain', exact: true }).click();
     await page.getByText('public-dns-proof', { exact: true }).waitFor(); await shot('domain-pending');
+    await page.reload(); await page.getByRole('button', { name: 'Email domains', exact: true }).click();
+    await page.getByRole('button', { name: 'Get a new DNS record', exact: true }).click();
+    await page.getByText('replacement-public-dns-proof', { exact: true }).waitFor(); await shot('domain-reissued');
     await page.getByRole('button', { name: 'Back', exact: true }).click();
     await page.getByRole('button', { name: 'Recovery and required sign-in', exact: true }).click(); await shot('recovery');
     await page.getByTestId('language-selector').selectOption('cs'); await shot('recovery-cs');
     await page.getByTestId('language-selector').selectOption('es'); await shot('recovery-es');
     mode = 'outage'; await page.reload(); await page.getByRole('alert').waitFor(); await shot('outage');
     mode = 'expired'; await page.reload(); await page.getByRole('alert').waitFor(); await shot('expired');
+    mode = 'normal'; data.scim.enabled = true;
+    await page.reload(); await page.getByRole('button', { name: /Microsoft Entra ID/ }).click();
+    await page.getByText('Automatic access management', { exact: true }).click();
+    await page.getByRole('button', { name: 'Create provisioning token', exact: true }).click();
+    await page.getByText('fixture-one-time-provisioning-token', { exact: true }).waitFor(); await shot('provisioning-token-once');
+    await page.getByRole('button', { name: 'I have saved the token', exact: true }).click();
+    assert.equal(await page.getByText('fixture-one-time-provisioning-token', { exact: true }).count(), 0);
+    await page.getByRole('button', { name: 'Back', exact: true }).click();
+    await page.getByRole('button', { name: 'Add connection', exact: true }).click();
+    await page.getByRole('button', { name: 'Other SAML', exact: true }).click();
+    await page.getByLabel('Identity provider identifier', { exact: true }).waitFor(); await shot('saml-connect');
+    assert.ok((await page.locator('code').first().boundingBox()).width > 150);
     await page.close();
   }
   console.log('Organisation access headless journeys passed at 390px and 1280px.');
