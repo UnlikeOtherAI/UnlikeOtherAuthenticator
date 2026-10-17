@@ -1,3 +1,4 @@
+import { registerOrganisationAccessStart } from './organisation-access-start.js';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { decodeJwt } from 'jose';
@@ -29,6 +30,7 @@ const csrf = (request: FastifyRequest): string | undefined => {
 };
 
 export function registerOrganisationAccessRoutes(app: FastifyInstance): void {
+  registerOrganisationAccessStart(app);
   const limiter = createRateLimiter({ keyBuilder: (request) => `enterprise-management:${request.ip}`, limit: 30, windowMs: 60000 });
   app.get(base, async (request, reply) => {
     const config = validateConfigFields(decodeJwt(readAdminConfigJwt()));
@@ -39,7 +41,7 @@ export function registerOrganisationAccessRoutes(app: FastifyInstance): void {
   });
   app.post(`${base}/exchange`, { preHandler: [requireSameOriginBrowserRequest, limiter] }, async (request, reply) => {
     const body = z.object({ continuation: z.string().min(32).max(256) }).strict().parse(request.body);
-    const session = await exchangeManagementContinuation(body.continuation);
+    const session = await exchangeManagementContinuation(body.continuation, request.cookies.uoa_management_intent);
     reply.setCookie(MANAGEMENT_COOKIE, session.browser, { path: base, httpOnly: true,
       secure: new URL(getPublicBaseUrl()).protocol === 'https:', sameSite: 'strict', expires: session.expiresAt });
     const hydrated = await managementSession(session.browser);
@@ -82,7 +84,7 @@ export function registerOrganisationAccessRoutes(app: FastifyInstance): void {
       const row = await tx.orgSsoConnection.findFirst({ where: { id, clientDomain: session.clientDomain, orgId: session.orgId } });
       if (!row || row.revision !== body.revision) throw new AppError('BAD_REQUEST', 409, 'SSO_REVISION_CONFLICT');
       if (body.status === 'active') {
-        const readiness = await enterpriseReadiness(session.clientDomain, tx as ReturnType<typeof getAdminPrisma>);
+        const readiness = await enterpriseReadiness(session.clientDomain, tx as ReturnType<typeof getAdminPrisma>, session.orgId);
         if (!readiness.activation_allowed || row.testedRevision !== row.revision) {
           throw new AppError('FORBIDDEN', 403, 'SSO_ACTIVATION_NOT_READY');
         }

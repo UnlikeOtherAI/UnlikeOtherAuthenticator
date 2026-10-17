@@ -250,6 +250,8 @@ export function registerTwoFactorSelfServiceRoutes(app: FastifyInstance): void {
             requestAccess: lockedSetup.requestAccess,
             state: lockedSetup.state,
             authMethod: lockedSetup.authMethod ?? 'email_password',
+            authenticationEvidenceId: lockedSetup.authenticationEvidenceId,
+            managementIntentId: lockedSetup.managementIntentId,
             twoFaCompleted: true,
             codeChallenge: lockedSetup.codeChallenge,
             codeChallengeMethod: lockedSetup.codeChallengeMethod,
@@ -264,6 +266,8 @@ export function registerTwoFactorSelfServiceRoutes(app: FastifyInstance): void {
           result,
           userId: lockedSetup.userId,
           authMethod: lockedSetup.authMethod ?? 'email_password',
+            authenticationEvidenceId: lockedSetup.authenticationEvidenceId,
+            managementIntentId: lockedSetup.managementIntentId,
         };
       });
 

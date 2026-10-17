@@ -162,7 +162,7 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
               codeChallengeMethod: pkce.codeChallengeMethod,
               sharedSecret: SHARED_SECRET,
               audience: LOGIN_SESSION_AUDIENCE,
-            });
+            }, { prisma: tx });
             return { kind: 'team_chooser' as const, choices, loginToken };
           }
         }
@@ -182,6 +182,7 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
             state,
             rememberMe,
             requestAccess,
+            primaryJustVerified: true,
             authMethod,
             codeChallenge: pkce.codeChallenge,
             codeChallengeMethod: pkce.codeChallengeMethod,

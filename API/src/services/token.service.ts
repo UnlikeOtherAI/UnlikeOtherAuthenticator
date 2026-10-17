@@ -113,7 +113,7 @@ export async function issueTokenPairForUser(
     userId: string;
     includeFirstLogin?: boolean;
     active?: ActiveTeam | null;
-    independentAuthenticatedAt?: Date;
+    authenticationEvidenceId?: string;
   },
   deps?: TokenIssuerDeps,
 ): Promise<IssuedTokenPair> {
@@ -132,7 +132,7 @@ export async function issueTokenPairForUser(
   const { assuranceId, assuranceConnectionId, assuranceRef, assuranceExpiresAt, globalAccountControl } =
     await resolveTokenFamilyAssurance({ prisma, userId: params.userId, domain: params.config.domain,
       refreshToken: params.refreshToken, sharedSecret, credentialEpoch: user.tokenVersion,
-      independentAuthenticatedAt: params.independentAuthenticatedAt });
+      authenticationEvidenceId: params.authenticationEvidenceId });
   const domainRole = await ensureDomainRoleForUser({ prisma, domain: params.config.domain,
     userId: params.userId, allowBootstrap: globalAccountControl });
   const role = globalAccountControl && (
@@ -266,7 +266,7 @@ export async function exchangeAuthorizationCodeForTokens(
       { prisma: tx, afterLock: deps?.afterProductTeamPolicyLock },
     );
     const now = deps?.now ? deps.now() : new Date();
-    const { userId, rememberMe, twoFaCompleted, orgId, teamId } = await consumeAuthorizationCode({
+    const { userId, rememberMe, twoFaCompleted, orgId, teamId, authenticationEvidenceId } = await consumeAuthorizationCode({
       code: params.code,
       configUrl: params.configUrl,
       domain: params.config.domain,
@@ -329,7 +329,7 @@ export async function exchangeAuthorizationCodeForTokens(
         refreshToken: issuedRefreshToken.refreshToken,
         refreshTokenExpiresInSeconds: issuedRefreshToken.expiresInSeconds,
         includeFirstLogin: true,
-        independentAuthenticatedAt: now,
+        authenticationEvidenceId,
         active,
       },
       {
