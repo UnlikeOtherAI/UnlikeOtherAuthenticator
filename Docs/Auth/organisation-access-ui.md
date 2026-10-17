@@ -24,8 +24,11 @@ remain visible throughout setup.
 1. Choose a server-advertised provider. UOA reserves a draft with a stable
    reply URL and SAML service-provider identity before asking for credentials.
 2. Connect using the preset's required fields. Entra and Workspace provide
-   their fixed protocol endpoints; other connections require their provider
-   details. Connection credentials are write-only. Leaving an existing secret
+   their fixed protocol settings; Okta and Keycloak need only their exact
+   organisation/realm issuer, client ID and secret. The server resolves discovery
+   and owns every secret-bearing endpoint allowlist; the browser cannot bless
+   endpoints by listing them as trusted. Other OIDC providers also require
+   explicit signed tenant proof. Connection credentials are write-only. Leaving an existing secret
    field empty preserves it.
 3. Copy the generated reply URL or SAML service-provider details shown above
    the credential fields into the provider, save, then run a real server-owned test. Test mode grants no product
@@ -37,7 +40,10 @@ remain visible throughout setup.
    provider compatibility or rollout readiness.
 
 Email-domain verification has its own view, with TXT record copy actions and
-an explicit DNS check. Verification alone neither turns on discovery nor
+an explicit DNS check. New TXT values are shown from the one-time creation or
+reissue response and held only in component memory. After leaving the page,
+an owner can atomically request a new record for a pending or expired claim.
+Verification alone neither turns on discovery nor
 requires single sign-on. Recovery is a separate view: it accurately reports
 the unresolved independent-recovery gate and exposes no fictitious custodian
 enrollment or backup codes. Enforcement remains unavailable until its approved
@@ -62,11 +68,21 @@ headless Chromium, supplies an isolated API fixture through request routing,
 and saves screenshots under ignored `Auth/e2e/artifacts/organisation-access`.
 It checks the first-use setup, required preset inputs, a saved connection,
 passed and failed tests, blocked activation, pending DNS proof, recovery,
-Czech/Spanish copy, outage and expired-session states at 390px and 1280px.
+Czech/Spanish copy, outage, expired sessions, SAML setup and one-time
+provisioning-token dismissal at 390px and 1280px.
 The fixture never replaces production persistence or runs in CI. These browser
 checks establish rendering and client behavior; live provider and server
 security tests remain separate requirements.
 
 `Auth/src/utils/organisation-access.test.ts` covers one-use fragment cleanup,
 StrictMode exchange deduplication, scoped CSRF mutations, malformed responses,
-test destination restrictions and outage refusal.
+test destination restrictions, lost-response cookie recovery, retryable bootstrap
+failures and outage refusal. Domain TXT proofs remain in component memory only;
+ordinary hydration does not retrieve their plaintext.
+
+The separate local command
+`pnpm --filter @uoa/auth exec vitest run --config vitest.ui.config.ts` runs
+`Auth/e2e/ConnectionForm.ui.tsx`. It checks reply details precede credentials,
+minimal issuer setup never supplies trusted endpoints, and failed saves preserve
+the entered secret. Its filename and explicit configuration keep these rendered
+component checks out of the ordinary unit command and CI.

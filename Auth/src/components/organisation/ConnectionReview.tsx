@@ -14,13 +14,14 @@ export function ConnectionReview(props: {
   settings: AccessSettings; connection: Connection; busy: boolean;
   onEdit: () => void; onError: () => void;
   onRecovery: () => void;
-  mutate: (method: 'POST' | 'DELETE', path: string, body?: unknown) => Promise<void>;
+  mutate: (method: 'POST' | 'DELETE', path: string, body?: unknown) => Promise<Record<string, unknown> | undefined>;
 }) {
   const t = useAccessTranslation();
   const c = props.connection;
   const [token, setToken] = useState<{ token: string; base_url: string } | null>(null);
   const [testing, setTesting] = useState(false);
   const tested = c.tested_revision === c.revision;
+  const configured = Object.keys(c.configuration).length > 0;
   const lastTest = c.last_test?.status;
   const path = `/connections/${encodeURIComponent(c.id)}`;
   async function test() {
@@ -40,8 +41,8 @@ export function ConnectionReview(props: {
   return <section className="space-y-6">
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div><h2 className="text-xl font-semibold">{c.display_name}</h2>
-        <p className="text-sm text-[var(--uoa-color-muted)]">{t(c.status === 'active' ? 'active' : c.status === 'suspended' ? 'suspended' : tested ? 'passedStatus' : 'saved')}</p></div>
-      <Button variant="secondary" disabled={props.busy} onClick={props.onEdit}>{t('edit')}</Button>
+        <p className="text-sm text-[var(--uoa-color-muted)]">{t(!configured ? 'setupIncomplete' : c.status === 'active' ? 'active' : c.status === 'suspended' ? 'suspended' : tested ? 'passedStatus' : 'saved')}</p></div>
+      <Button className="w-auto!" variant="secondary" disabled={props.busy} onClick={props.onEdit}>{t(configured ? 'edit' : 'continueSetup')}</Button>
     </div>
     <div className="space-y-3"><p>{t('providerInstructions')}</p>
       {c.protocol === 'oidc' && c.callback_url && <CopyValue label={t('callback')} value={c.callback_url} />}
@@ -52,8 +53,8 @@ export function ConnectionReview(props: {
     </div>
     <div className="space-y-3 border-t border-[var(--uoa-color-border)] pt-5">
       <h3 className="font-semibold">{t('test')}</h3>
-      <p role="status">{t(tested ? 'testPassed' : lastTest === 'failed' ? 'testFailed' : 'testIntro')}</p>
-      <Button disabled={props.busy || testing} onClick={() => void test()}>{t(tested ? 'testAgain' : 'test')}</Button>
+      <p role="status">{t(!configured ? 'finishSetup' : tested ? 'testPassed' : lastTest === 'failed' ? 'testFailed' : 'testIntro')}</p>
+      {configured && <Button disabled={props.busy || testing} onClick={() => void test()}>{t(tested ? 'testAgain' : 'test')}</Button>}
     </div>
     <div className="space-y-3 border-t border-[var(--uoa-color-border)] pt-5">
       <h3 className="font-semibold">{t('enable')}</h3>
