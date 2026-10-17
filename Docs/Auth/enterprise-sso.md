@@ -144,3 +144,5 @@ The unknown value survives token-family derivation. Sensitive owner management
 requires a fresh independently verified primary event or an existing UOA TOTP
 factor. A recent social callback cannot enroll a new factor and use that new
 factor to manufacture independent freshness.
+
+UOA owner management requires personal authentication independently of the consuming product's 2fa_enabled setting. Only a verified management-purpose challenge may continue through /2fa/verify when ordinary product 2FA is disabled; live owner, browser intent and authentication evidence checks still apply at finalization.
