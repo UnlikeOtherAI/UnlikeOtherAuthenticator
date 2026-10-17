@@ -3,6 +3,7 @@ import type { PrismaClient } from '@prisma/client';
 import { getEnv } from '../config/env.js';
 import { getAdminPrisma, getPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
+import { assertOrgAccessPolicy } from './org-sso-policy.service.js';
 import type { ClientConfig } from './config.service.js';
 import { assertDatabaseEnabled, normalizeDomain } from './organisation.service.base.js';
 import {
@@ -82,6 +83,8 @@ export async function getActiveUserOrgContext(
   });
 
   if (!orgMembership) return null;
+
+  await assertOrgAccessPolicy({ userId, domain, orgId: orgMembership.orgId }, prisma);
 
   const teamMemberships = await prisma.teamMember.findMany({
     where: {

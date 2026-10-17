@@ -17,6 +17,8 @@ export async function signAccessToken(params: {
   ttl: string;
   issuer: string;
   tokenVersion: number;
+  assuranceId?: string;
+  assuranceConnectionId?: string;
   org?: OrgContext | null;
   active?: ActiveTeamClaim | null;
   /** False for the first-party admin domain, which signs with its own separate
@@ -25,6 +27,8 @@ export async function signAccessToken(params: {
   relyingPartyToken: boolean;
 }): Promise<string> {
   const payload = {
+    ...(params.assuranceId ? { assurance_id: params.assuranceId } : {}),
+    ...(params.assuranceConnectionId ? { assurance_connection_id: params.assuranceConnectionId } : {}),
     ...(!params.relyingPartyToken ? { jti: randomUUID() } : {}),
     email: params.email,
     domain: params.domain,
