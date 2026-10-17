@@ -7,8 +7,9 @@ import type { AccessKey } from '../../i18n/organisation-access.js';
 
 const blockers: Record<string, AccessKey> = {
   ASSURANCE_CONTRACT_REQUIRED: 'assurance', NESSIE_AUTHORITY_MIGRATION_REQUIRED: 'migration',
-  REVOCATION_CONSUMERS_REQUIRED: 'revocation', RECOVERY_DESIGN_REQUIRED: 'recovery',
+  REVOCATION_CONSUMERS_REQUIRED: 'revocation', RECOVERY_SETUP_REQUIRED: 'recovery',
   CONNECTION_TEST_REQUIRED: 'testNeeded',
+  CUSTOM_ARRANGEMENT_REQUIRED: 'customArrangement', LIVE_IDENTITY_FLOW_REQUIRED: 'liveSignIn',
 };
 export function ConnectionReview(props: {
   settings: AccessSettings; connection: Connection; busy: boolean;
@@ -60,7 +61,7 @@ export function ConnectionReview(props: {
       <h3 className="font-semibold">{t('enable')}</h3>
       <p>{t(props.settings.readiness.activation_allowed && tested ? 'ready' : tested ? 'blockedPassed' : 'blocked')}</p>
       {!tested && <p>{t('testNeeded')}</p>}
-      {props.settings.readiness.blockers.includes('RECOVERY_DESIGN_REQUIRED') && <Button variant="secondary" onClick={props.onRecovery}>{t('recoveryTitle')}</Button>}
+      {props.settings.readiness.blockers.includes('RECOVERY_SETUP_REQUIRED') && <Button variant="secondary" onClick={props.onRecovery}>{t('recoveryTitle')}</Button>}
       {props.settings.readiness.blockers.length > 0 && <details><summary className="min-h-11 cursor-pointer text-sm">{t('readinessDetails')}</summary><ul className="list-disc space-y-2 pl-5 text-sm">
         {[...new Set(props.settings.readiness.blockers.map((code) => blockers[code] ?? 'unknownBlocker'))].map((key) => <li key={key}>{t(key)}</li>)}
       </ul></details>}

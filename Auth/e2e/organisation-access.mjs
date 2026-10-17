@@ -22,7 +22,7 @@ const config = {
 const base = {
   ok: true, org: { id: 'org-acme', name: 'Acme Research' }, client_domain: 'api.nessie.works', csrf_token: 'fixture-csrf',
   connections: [], domains: [], policy: { enforcement: 'off', revision: 1, session_max_age_seconds: 28800, reauth_mode: 'detect_only' },
-  readiness: { activation_allowed: false, enforcement_allowed: false, blockers: ['RECOVERY_DESIGN_REQUIRED', 'REVOCATION_CONSUMERS_REQUIRED'] },
+  readiness: { activation_allowed: false, enforcement_allowed: false, blockers: ['RECOVERY_SETUP_REQUIRED', 'REVOCATION_CONSUMERS_REQUIRED'] },
   presets: ['entra', 'okta', 'google_workspace', 'keycloak', 'adfs', 'other_oidc', 'other_saml'].map((id) => ({ id, protocols: ['adfs', 'other_saml'].includes(id) ? ['saml'] : ['oidc'] })),
   scim: { enabled: false },
 };
