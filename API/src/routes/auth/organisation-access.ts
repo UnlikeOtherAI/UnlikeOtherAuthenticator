@@ -1,3 +1,4 @@
+import { EnterprisePolicyPatch, updateEnterprisePolicy } from '../../services/org-sso-policy-management.service.js';
 import { registerOrganisationAccessStart } from './organisation-access-start.js';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
@@ -113,13 +114,7 @@ export function registerOrganisationAccessRoutes(app: FastifyInstance): void {
     return mutation(request, (session, tx) => revokeEnterpriseDomain(session, id, tx));
   });
   app.patch(`${base}/sso/policy`, { preHandler: [requireSameOriginBrowserRequest, limiter] }, async (request) => {
-    const body = z.object({ revision: z.number().int().nonnegative(), enforcement: z.enum(['off', 'required_for_verified_domains',
-      'required_for_all_members']), session_max_age_seconds: z.number().int().min(300).max(86400),
-    reauth_mode: z.enum(['detect_only', 'force']) }).strict().parse(request.body);
-    return mutation(request, async () => {
-      // Pending explicit recovery approval and real drills. Do not mutate to pretend that gate passed.
-      if (body.enforcement !== 'off') throw new AppError('FORBIDDEN', 403, 'SSO_RECOVERY_NOT_READY');
-      throw new AppError('FORBIDDEN', 403, 'SSO_POLICY_NOT_READY');
-    });
+    const body = EnterprisePolicyPatch.parse(request.body);
+    return mutation(request, (session, tx) => updateEnterprisePolicy(session, body, tx));
   });
 }

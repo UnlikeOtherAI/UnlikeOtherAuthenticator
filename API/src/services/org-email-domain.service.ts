@@ -7,6 +7,9 @@ import { AppError } from '../utils/errors.js';
 import { hashAssuranceReference } from './session-assurance.service.js';
 import { lockEnterpriseScope, type managementSession } from './org-sso-management.service.js';
 import { revokeEnterpriseScope } from './org-sso-revocation.service.js';
+import { withdrawConnectionMemberships } from './membership-provenance.service.js';
+import { lockRefreshSessionUserDomain } from './refresh-session-lock.service.js';
+import { lockTeamMembershipRows } from './team-scope.service.js';
 
 const PUBLIC_MAIL = new Set(['gmail.com', 'googlemail.com', 'outlook.com', 'hotmail.com', 'live.com',
   'yahoo.com', 'icloud.com', 'aol.com', 'proton.me', 'protonmail.com', 'mail.com']);
@@ -82,7 +85,11 @@ export async function revokeEnterpriseDomain(session: Session, id: string, tx: P
   await tx.organisationEmailDomain.update({ where: { id }, data: { status: 'REVOKED' } });
   const links = await tx.externalIdentity.findMany({ where: { domainClaimId: id }, select: { id: true, userId: true, connectionId: true } });
   await tx.externalIdentity.updateMany({ where: { domainClaimId: id }, data: { status: 'SUSPENDED' } });
-  for (const link of links) {
+  for (const link of links.sort((a, b) => a.userId.localeCompare(b.userId) || a.id.localeCompare(b.id))) {
+    await lockRefreshSessionUserDomain({ userId: link.userId, domain: session.clientDomain }, { prisma: tx });
+    await lockTeamMembershipRows({ userId: link.userId, orgId: session.orgId }, { prisma: tx });
+    await withdrawConnectionMemberships({ connectionId: link.connectionId, userId: link.userId,
+      sourceKind: 'sso', sourceId: link.id }, tx);
     await tx.orgSsoGrant.updateMany({ where: { connectionId: link.connectionId, userId: link.userId }, data: { revokedAt: new Date() } });
     await revokeEnterpriseScope({ scope: 'connection', clientDomain: session.clientDomain,
       orgId: session.orgId, userId: link.userId, connectionId: link.connectionId, revision: 1 }, tx);

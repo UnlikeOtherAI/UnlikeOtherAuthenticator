@@ -7,7 +7,7 @@ import { sealEnterpriseSecret } from './enterprise-secret.service.js';
 import { validateEnterpriseConfiguration } from './org-sso-configuration.service.js';
 import { enterpriseOidcAuthorize, randomEnterpriseValue, validateEnterpriseOidcCallback } from './org-sso-oidc.service.js';
 import { enterpriseSamlAuthorize, validateEnterpriseSamlCallback } from './org-sso-saml.service.js';
-import { lockEnterpriseScope, type managementSession } from './org-sso-management.service.js';
+import { lockEnterpriseScope, assertManagementOwner, type managementSession } from './org-sso-management.service.js';
 
 export async function startEnterpriseTest(session: Awaited<ReturnType<typeof managementSession>>,
   id: string, revision: number, browser: string, tx: Prisma.TransactionClient) {
@@ -58,6 +58,9 @@ export async function finishEnterpriseTest(connectionId: string, flowId: string,
     const session = flow.managementSessionId ? await tx.orgSsoManagementSession.findUnique({
       where: { id: flow.managementSessionId } }) : null;
     if (!session || session.revokedAt || session.expiresAt <= new Date()) passed = false;
+    else {
+      try { await assertManagementOwner(session, tx); } catch { passed = false; }
+    }
     await tx.orgSsoConnection.updateMany({ where: { id: connectionId, revision: flow.revision,
       status: { in: ['testing', 'active'] } }, data: { testedRevision: passed ? flow.revision : null,
       lastTestCode: passed ? 'PASSED' : 'PROVIDER_VALIDATION_FAILED', lastTestAt: new Date() } });

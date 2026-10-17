@@ -1,6 +1,7 @@
 vi.mock('../../src/services/authentication-evidence.service.js', () => ({
   recordIndependentAuthentication: vi.fn().mockResolvedValue('test-evidence'),
   finalizeAuthenticationEvidence: vi.fn(),
+  assertIndependentChooserMutation: vi.fn(),
 }));
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ClientConfig } from '../../src/services/config.service.js';
@@ -46,6 +47,7 @@ vi.mock('../../src/services/ban-policy.service.js', () => ({
 }));
 
 const prismaMock = vi.hoisted(() => ({
+  orgSsoPolicy: { findUnique: vi.fn().mockResolvedValue(null) },
   $executeRaw: vi.fn(),
   $queryRaw: vi.fn(),
   domainSignatureSettings: { findUnique: vi.fn() },

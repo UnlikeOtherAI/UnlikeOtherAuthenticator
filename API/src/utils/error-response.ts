@@ -91,6 +91,10 @@ function explainKnownCode(
   error: unknown,
 ): PublicExplanation | null {
   switch (code) {
+    case 'SSO_MANAGEMENT_REAUTH_REQUIRED':
+      return { summary: 'Sign in again in UOA with an independent personal method to manage organisation access.' };
+    case 'SSO_MANAGEMENT_ACCESS_WITHDRAWN':
+      return { summary: 'Organisation access management is no longer available to this session.' };
     case 'REQUEST_VALIDATION_FAILED':
       return {
         summary: 'The request did not match the expected body, query, or path parameter schema.',

@@ -85,6 +85,7 @@ async function engine(connection: OrgSsoConnection,
   }
   const issuer = `${getPublicBaseUrl()}/sso/saml/${connection.id}`;
   return new SAML({ issuer, audience: issuer, callbackUrl: `${issuer}/acs`, entryPoint: config.sso_url,
+    forceAuthn: config.force_authn === true,
     idpIssuer: config.entity_id, idpCert: config.certificates, privateKey: keys.private_key,
     publicCert: keys.certificate, decryptionPvk: keys.decryption_private_key,
     signatureAlgorithm: 'sha256', digestAlgorithm: 'sha256', wantAssertionsSigned: true,
@@ -157,7 +158,12 @@ export async function validateEnterpriseSamlCallback(connection: OrgSsoConnectio
   try { await getAdminPrisma().orgSsoReplay.create({ data: { key: replayKey, value: '',
     expiresAt: new Date(Math.max(Date.now() + 900000, expires.getTime() || 0)) } }); }
   catch (error) { if ((error as { code?: string }).code === 'P2002') invalid(); throw error; }
-  return { issuer: config.entity_id, tenant: config.tenant.value, subject,
-    emailVerified: false, authenticatedAt, observedAt: new Date(),
+  const rawEmail = config.email_attribute ? profile[config.email_attribute] : undefined;
+  const email = typeof rawEmail === 'string' ? z.string().email().max(320).parse(rawEmail).toLowerCase() : undefined;
+  const rawGroups = config.groups_attribute ? profile[config.groups_attribute] : undefined;
+  const groups = z.array(z.string().min(1).max(256)).max(1000).parse(rawGroups === undefined ? [] :
+    typeof rawGroups === 'string' ? [rawGroups] : rawGroups);
+  return { groups: [...new Set(groups)], ...(email ? { email } : {}), issuer: config.entity_id, tenant: config.tenant.value, subject,
+    emailVerified: Boolean(email), authenticatedAt, observedAt: new Date(),
     sessionExpiresAt: Number.isFinite(expires.getTime()) ? expires : new Date(Date.now() + 28800000), amr: [] };
 }

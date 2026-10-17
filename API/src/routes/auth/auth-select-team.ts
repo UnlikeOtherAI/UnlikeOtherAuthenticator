@@ -1,3 +1,4 @@
+import { assertIndependentChooserMutation } from '../../services/authentication-evidence.service.js';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
@@ -146,6 +147,7 @@ export function registerAuthSelectTeamRoute(app: FastifyInstance): void {
             audience: LOGIN_SESSION_AUDIENCE,
             now: new Date(),
           });
+          await assertIndependentChooserMutation(lockedSession, tx);
           await declineTeamInviteForUser({
             prisma: tx,
             teamInviteId: inviteId,
@@ -154,7 +156,7 @@ export function registerAuthSelectTeamRoute(app: FastifyInstance): void {
             now: new Date(),
           });
           return buildSessionChoices(
-            { userId: lockedSession.userId, config },
+            { userId: lockedSession.userId, config, authenticationEvidenceId: lockedSession.authenticationEvidenceId },
             { crossProductPrisma: tx, policyPrisma: tx, prisma: tx },
           );
         });
@@ -201,6 +203,7 @@ export function registerAuthSelectTeamRoute(app: FastifyInstance): void {
         let orgId: string | undefined;
         let resolvedTeamId: string | undefined;
 
+        if (inviteLinkToken || inviteId) await assertIndependentChooserMutation(lockedSession, tx);
         if (inviteLinkToken) {
           // Redemption, finalization, and the one-time capability claim share
           // this transaction; a replay loser cannot retain a membership grant.

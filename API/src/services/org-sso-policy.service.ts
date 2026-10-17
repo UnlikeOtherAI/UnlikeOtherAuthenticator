@@ -2,6 +2,7 @@ import type { PrismaClient } from '@prisma/client';
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import { currentSessionAssurance, validateSessionAssurance, type AssuranceDb } from './session-assurance.service.js';
+import { requireAuthenticationEvidence } from './authentication-evidence.service.js';
 
 export async function enterpriseReadiness(clientDomain: string, db = getAdminPrisma(), orgId?: string) {
   const product = await db.enterpriseProductReadiness.findUnique({ where: { clientDomain } });
@@ -22,9 +23,19 @@ export async function enterpriseReadiness(clientDomain: string, db = getAdminPri
 
 /** The direct lookup invokes this seam too: callers cannot bypass policy via a lower-level helper. */
 export async function assertOrgAccessPolicy(
-  binding: { userId: string; domain: string; orgId: string; assuranceId?: string },
+  binding: { userId: string; domain: string; orgId: string; assuranceId?: string; authenticationEvidenceId?: string },
   db: AssuranceDb & Pick<PrismaClient, 'organisationEmailDomain'> = getAdminPrisma(),
 ): Promise<void> {
+  let evidence: Awaited<ReturnType<typeof requireAuthenticationEvidence>> | undefined;
+  if (binding.authenticationEvidenceId) {
+    const user = await db.user.findUnique({ where: { id: binding.userId }, select: { tokenVersion: true } });
+    if (!user) throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
+    evidence = await requireAuthenticationEvidence({ id: binding.authenticationEvidenceId,
+      userId: binding.userId, credentialEpoch: user.tokenVersion, clientDomain: binding.domain }, db as PrismaClient);
+    if (evidence.purpose !== 'authorize' || (evidence.provenance !== 'independent' && evidence.orgId !== binding.orgId)) {
+      throw new AppError('FORBIDDEN', 403, 'SSO_TEAM_REAUTH_REQUIRED');
+    }
+  }
   const policy = await db.orgSsoPolicy.findUnique({ where: { clientDomain_orgId: {
     clientDomain: binding.domain, orgId: binding.orgId,
   } } });
@@ -40,6 +51,7 @@ export async function assertOrgAccessPolicy(
     }, select: { id: true } }));
   }
   if (!governed) return;
+  if (evidence?.provenance === 'sso' && evidence.orgId === binding.orgId) return;
   const proof = binding.assuranceId ? await db.sessionAssurance.findUnique({ where: { id: binding.assuranceId } }) : currentSessionAssurance();
   if (!proof || proof.userId !== binding.userId || proof.clientDomain !== binding.domain ||
     proof.orgId !== binding.orgId || proof.method !== 'sso') {

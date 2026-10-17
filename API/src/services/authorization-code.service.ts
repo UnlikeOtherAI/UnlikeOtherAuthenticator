@@ -1,4 +1,5 @@
 import { requireAuthenticationEvidence } from './authentication-evidence.service.js';
+import { assertOrgAccessPolicy } from './org-sso-policy.service.js';
 import { createHmac, randomBytes } from 'node:crypto';
 
 import type { PrismaClient } from '@prisma/client';
@@ -142,9 +143,15 @@ export async function issueAuthorizationCode(
       },
     );
 
+    if (params.orgId) await assertOrgAccessPolicy({ userId: params.userId, domain: params.domain,
+      orgId: params.orgId, authenticationEvidenceId: params.authenticationEvidenceId }, tx);
     if (params.authenticationEvidenceId) {
       const evidence = await requireAuthenticationEvidence({ id: params.authenticationEvidenceId, userId: params.userId,
         credentialEpoch: params.credentialEpoch, clientDomain: params.domain }, tx);
+      if (evidence.provenance !== 'independent' && (!params.orgId || evidence.orgId !== params.orgId ||
+        (evidence.teamId && evidence.teamId !== params.teamId))) {
+        throw new AppError('FORBIDDEN', 403, 'SSO_TEAM_REAUTH_REQUIRED');
+      }
       if (params.twoFaCompleted && !evidence.mfaCompletedAt) throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_EVIDENCE_REQUIRED');
       await tx.authenticationEvidence.update({ where: { id: evidence.id }, data: { signatureCompletedAt: new Date() } });
     }

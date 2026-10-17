@@ -19,14 +19,18 @@ export const OidcEnterpriseConfiguration = z.object({
   tenant: z.object({ claim: z.string().min(1).max(100), value: z.string().min(1).max(256) }).strict(),
   hosted_domains: z.array(z.string().min(1).max(253)).max(20).optional(),
   subject_claim: z.enum(['sub', 'oid']).default('sub'),
+  groups_claim: z.string().min(1).max(256).optional(),
   authorization_response_iss_required: z.boolean().default(false),
   client_auth_method: z.enum(['client_secret_post', 'client_secret_basic']).default('client_secret_post'),
   max_age: z.number().int().nonnegative().max(86400).optional(),
 }).strict();
 export const SamlEnterpriseConfiguration = z.object({
+  force_authn: z.boolean().optional(),
   entity_id: z.string().min(1).max(1000), sso_url: https,
   certificates: z.array(z.string().min(100).max(20000)).min(1).max(3),
   subject_attribute: z.string().min(1).max(256).optional(),
+  email_attribute: z.string().min(1).max(256).optional(),
+  groups_attribute: z.string().min(1).max(256).optional(),
   tenant: z.object({ attribute: z.string().min(1).max(256), value: z.string().min(1).max(256) }).strict(),
   trusted_origins: z.array(https).min(1).max(10), authn_context: z.string().min(1).max(1000).optional(),
 }).strict();
