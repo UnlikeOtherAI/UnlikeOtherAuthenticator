@@ -37,7 +37,9 @@ export const accessEn = {
   blocked: 'You can save and test this connection. Turning it on is not available yet.',
   assurance: 'Secure sign-in handover is still being verified. You can return to this connection later.', migration: 'Product account migration is still being verified. You can return to this connection later.',
   revocation: 'Access removal is still being verified. You can return to this connection later.',
-  recovery: 'Independent recovery has not been approved and tested. Required sign-in stays off.',
+  recovery: 'Set up and test two independently authenticated recovery contacts before requiring single sign-on.',
+  customArrangement: 'Contact UnlikeOtherAI to enable single sign-on for your organisation.',
+  liveSignIn: 'Connecting this provider to your organisation’s accounts is still being verified.',
   unknownBlocker: 'A launch prerequisite still needs verification.',
   off: 'Turned off', active: 'On', saved: 'Saved', suspended: 'Suspended',
   disable: 'Turn off connection', newConnection: 'Add connection',
@@ -51,7 +53,7 @@ export const accessEn = {
   tokenOnce: 'Copy this token to your provider now. You won’t be able to see it again.',
   token: 'Provisioning token', baseUrl: 'Provisioning URL', dismissToken: 'I have saved the token',
   recoveryTitle: 'Recovery and required sign-in',
-  recoveryIntro: 'Recovery lets you regain access if your identity provider is unavailable. Recovery setup is not available yet, so required sign-in remains off.',
+  recoveryIntro: 'Two recovery contacts will help restore access if your identity provider is unavailable. They will need their own independent ways to sign in. Setup is not available yet, so required sign-in remains off.',
   overview: 'Connections', settings: 'Organisation access settings',
 } as const;
 export type AccessKey = keyof typeof accessEn;
@@ -94,7 +96,9 @@ export const accessCs: Record<AccessKey, string> = {
   blocked: 'Připojení můžete uložit a otestovat. Zapnutí zatím není dostupné.',
   assurance: 'Bezpečné předání přihlášení se ještě ověřuje. K připojení se můžete vrátit později.', migration: 'Migrace účtů produktu se ještě ověřuje. K připojení se můžete vrátit později.',
   revocation: 'Odebírání přístupu se ještě ověřuje. K připojení se můžete vrátit později.',
-  recovery: 'Nezávislé obnovení přístupu nebylo schváleno a otestováno. Povinné přihlášení zůstává vypnuté.',
+  recovery: 'Před vynucením jednotného přihlášení nastavte a otestujte dva kontakty pro obnovení přístupu s nezávislým ověřením.',
+  customArrangement: 'Pro zapnutí jednotného přihlášení ve vaší organizaci kontaktujte UnlikeOtherAI.',
+  liveSignIn: 'Propojení tohoto poskytovatele s účty vaší organizace se ještě ověřuje.',
   unknownBlocker: 'Jeden z předpokladů spuštění ještě vyžaduje ověření.',
   off: 'Vypnuto', active: 'Zapnuto', saved: 'Uloženo', suspended: 'Pozastaveno',
   disable: 'Vypnout připojení', newConnection: 'Přidat připojení',
@@ -108,7 +112,7 @@ export const accessCs: Record<AccessKey, string> = {
   tokenOnce: 'Zkopírujte token k poskytovateli nyní. Později jej už neuvidíte.',
   token: 'Token pro správu přístupu', baseUrl: 'URL pro správu přístupu', dismissToken: 'Token mám uložený',
   recoveryTitle: 'Obnovení přístupu a povinné přihlášení',
-  recoveryIntro: 'Obnovení přístupu umožní vstup při výpadku poskytovatele identity. Jeho nastavení zatím není dostupné, proto povinné přihlášení zůstává vypnuté.',
+  recoveryIntro: 'Při výpadku poskytovatele identity pomohou obnovit přístup dva kontakty. Každý bude potřebovat vlastní nezávislý způsob přihlášení. Nastavení zatím není dostupné, proto povinné přihlášení zůstává vypnuté.',
   overview: 'Připojení', settings: 'Nastavení přístupu organizace',
 };
 export const accessEs: Record<AccessKey, string> = {
@@ -150,7 +154,9 @@ export const accessEs: Record<AccessKey, string> = {
   blocked: 'Puedes guardar y probar esta conexión. La activación todavía no está disponible.',
   assurance: 'La transferencia segura del inicio de sesión aún se está verificando. Puedes volver a esta conexión más tarde.', migration: 'La migración de cuentas del producto aún se está verificando. Puedes volver a esta conexión más tarde.',
   revocation: 'La retirada de acceso aún se está verificando. Puedes volver a esta conexión más tarde.',
-  recovery: 'La recuperación independiente no se ha aprobado ni probado. El inicio de sesión obligatorio sigue desactivado.',
+  recovery: 'Configura y prueba dos contactos de recuperación con autenticación independiente antes de exigir el inicio de sesión único.',
+  customArrangement: 'Contacta con UnlikeOtherAI para activar el inicio de sesión único en tu organización.',
+  liveSignIn: 'Aún se está verificando la conexión de este proveedor con las cuentas de tu organización.',
   unknownBlocker: 'Un requisito de lanzamiento todavía necesita verificación.',
   off: 'Desactivado', active: 'Activado', saved: 'Guardado', suspended: 'Suspendido',
   disable: 'Desactivar conexión', newConnection: 'Añadir conexión',
@@ -164,6 +170,6 @@ export const accessEs: Record<AccessKey, string> = {
   tokenOnce: 'Copia este token a tu proveedor ahora. No podrás volver a verlo.',
   token: 'Token de aprovisionamiento', baseUrl: 'URL de aprovisionamiento', dismissToken: 'He guardado el token',
   recoveryTitle: 'Recuperación e inicio de sesión obligatorio',
-  recoveryIntro: 'La recuperación permite volver a entrar si el proveedor de identidad no está disponible. Su configuración aún no está disponible, por lo que el inicio de sesión obligatorio sigue desactivado.',
+  recoveryIntro: 'Dos contactos ayudarán a recuperar el acceso si el proveedor de identidad no está disponible. Cada uno necesitará su propio método independiente para iniciar sesión. La configuración aún no está disponible, por lo que el inicio de sesión obligatorio sigue desactivado.',
   overview: 'Conexiones', settings: 'Configuración de acceso de la organización',
 };

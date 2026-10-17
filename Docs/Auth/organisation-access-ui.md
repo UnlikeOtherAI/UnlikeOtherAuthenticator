@@ -45,9 +45,12 @@ reissue response and held only in component memory. After leaving the page,
 an owner can atomically request a new record for a pending or expired claim.
 Verification alone neither turns on discovery nor
 requires single sign-on. Recovery is a separate view: it accurately reports
-the unresolved independent-recovery gate and exposes no fictitious custodian
-enrollment or backup codes. Enforcement remains unavailable until its approved
-server workflow exists and has passed verification.
+the setup and test requirements for two independently authenticated recovery
+contacts. Those contacts receive narrow recovery powers; the organisation keeps
+one canonical owner. There are no backup codes or fictitious enrollment controls.
+Enforcement remains unavailable until the server workflow exists and has passed
+verification. Activation also respects UOA's custom commercial arrangement;
+Nessie has no billing or subscription gate for SSO or its associated SCIM.
 
 Optional provisioning appears within the selected connection. When the server
 enables it, token issuance displays the plaintext once in component memory;
