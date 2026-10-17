@@ -21,6 +21,8 @@ describe('social login credential lock order', () => {
       twoFaEnabled: true,
     });
     const prisma = {
+      externalIdentity: { findFirst: vi.fn().mockResolvedValue(null) },
+      organisationEmailDomain: { findFirst: vi.fn().mockResolvedValue(null) },
       user: {
         findUnique: vi.fn().mockResolvedValue({ id: 'user-1' }),
         create: vi.fn(),

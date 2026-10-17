@@ -229,7 +229,7 @@ describe('Organisation service: membership', () => {
     expect(result).toMatchObject({ id: 'member-target', role: 'admin' });
   });
 
-  it('removes a member and atomically revokes exact-org plus legacy domain sessions', async () => {
+  it('removes a member and atomically revokes exact-org sessions and scoped downstream grants', async () => {
     const prisma = makePrismaMock();
 
     prisma.organisation.findFirst.mockResolvedValue(baseOrg);
@@ -271,9 +271,12 @@ describe('Organisation service: membership', () => {
       data: { revokedAt: expect.any(Date) },
     });
     expect(prisma.refreshToken.updateMany).toHaveBeenNthCalledWith(2, {
-      where: { userId: 'u-member', domain: 'acme.example.com', revokedAt: null },
+      where: { userId: 'u-member', domain: 'acme.example.com', orgId: 'org-1' },
       data: { revokedAt: expect.any(Date) },
     });
+    expect(prisma.orgRevocationEvent.create).toHaveBeenCalledWith({ data: {
+      clientDomain: 'acme.example.com', scope: 'organisation', orgId: 'org-1', userId: 'u-member', revision: 1,
+    } });
   });
 
   it('fails closed when session revocation throws', async () => {

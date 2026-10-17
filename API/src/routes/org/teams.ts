@@ -354,7 +354,7 @@ export function registerTeamRoutes(app: FastifyInstance): void {
       const { teamRole } = ChangeTeamMemberRoleBodySchema.parse(request.body ?? {});
 
       setTenantContextFromRequest(request, { orgId, userId: tenantUserId(request) });
-      const member = await request.withTenantTx((tx) =>
+      const member = await runWithOrgAdminEffectTransaction(request, (tx) =>
         changeTeamMemberRole(
           {
             orgId,

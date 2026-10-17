@@ -99,8 +99,9 @@ Remaining activation prerequisites include complete live identity linking/JIT,
 all credential bridges and native/debug/broker/resource boundaries, the Nessie
 authority migration and all revocation consumers, browser-bound management
 initiation, deployed custody verification, actual protocol attack fixtures,
-vendor sandboxes and deployed-version verification. Recovery design is still an
-explicit decision, so enforcement fails closed. Do not mark readiness satisfied
+vendor sandboxes and deployed-version verification. Recovery uses two independently authenticated custodians, with one canonical
+owner and no backup codes. Its tested drill remains a gate, so enforcement
+fails closed until that implementation and evidence exist. Do not mark readiness satisfied
 on the strength of this foundation tranche.
 
 ## Authentication evidence and owner entry
@@ -146,3 +147,34 @@ factor. A recent social callback cannot enroll a new factor and use that new
 factor to manufacture independent freshness.
 
 UOA owner management requires personal authentication independently of the consuming product's 2fa_enabled setting. Only a verified management-purpose challenge may continue through /2fa/verify when ordinary product 2FA is disabled; live owner, browser intent and authentication evidence checks still apply at finalization.
+
+## Ordinary authority mutations
+
+Organisation/team removals and role changes, ownership handover, organisation
+factor-policy changes, lifecycle suspension/deletion and global password/factor
+resets share the durable enterprise outbox. The outer effect transaction takes
+its feed fence before policy/user/row locks; nested service calls keep that same
+transaction. The mutation, scoped assurance/family revocation and event either
+commit together or all roll back. Membership writes use the authenticated admin
+effect boundary because the tenant RLS role cannot write the revocation ledger.
+
+An organisation/team change notifies each actual consuming domain found on that
+exact scope's assurances and refresh families, including authorized cross-origin
+consumers. Other organisations, even on the same origin, retain their sessions
+and credential epoch. A global credential reset instead advances the user's
+epoch and notifies all affected consumers. Origin-only legacy sessions are not
+misrepresented as references to a particular organisation. Ordinary events use
+revision1; the durable sequence and unique event ID order them, and consumers
+revalidate the original proof rather than comparing that number as a policy age.
+
+Mailbox admission also protects existing, not-yet-linked accounts whose email
+belongs to any previously verified enterprise domain, including lapsed/revoked
+claims. Domain control cannot first reset a global password and then present it
+as independent linking proof. The legacy social adapter has no stable provider
+subject, so its email match and best-effort identity audit cannot bypass this
+fence or overwrite the account profile. Ordinary unclaimed-mailbox behaviour is
+unchanged; full social-provider subject migration remains separate.
+
+The focused real PostgreSQL `enterprise-ordinary-authority.test.ts` gate checks
+failed-write rollback, exact-org sibling preservation across consuming domains,
+global epoch propagation and the pre-link corporate-mailbox takeover boundary.

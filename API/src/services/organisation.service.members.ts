@@ -1,11 +1,12 @@
+import { runInTransaction } from '../db/tenant-context.js';
+import { revokeEnterpriseOrganisation } from './enterprise-authority-revocation.service.js';
 import type { ClientConfig } from './config.service.js';
 import { getEnv } from '../config/env.js';
 import { getAdminPrisma, getPrisma } from '../db/prisma.js';
-import { runInTransaction } from '../db/tenant-context.js';
+import { runEnterpriseAuthorityTransaction } from './enterprise-authority-transaction.service.js';
 import { AppError } from '../utils/errors.js';
 import {
   revokeRefreshTokenFamiliesForUserOrganisation,
-  revokeRefreshTokensForUserDomain,
 } from './refresh-token-revocation.service.js';
 import { lockRefreshSessionUserDomain } from './refresh-session-lock.service.js';
 import { lockTeamMembershipRows } from './team-scope.service.js';
@@ -188,9 +189,10 @@ export async function changeOrganisationMemberRole(
   ensureOrgRole(role, orgRoles);
   if (role === 'owner') throw new AppError('BAD_REQUEST', 400, 'OWNER_ROLE_RESERVED');
 
-  const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgServicePrisma);
+  const prisma = deps?.prisma ?? (getAdminPrisma() as unknown as OrgServicePrisma);
   const org = await resolveOrganisation(prisma, { orgId: params.orgId });
-  const { updated, previousRole } = await runInTransaction(prisma, async (tx) => {
+  const { updated, previousRole } = await runEnterpriseAuthorityTransaction(prisma, async (tx) => {
+    await lockRefreshSessionUserDomain({ userId, domain: org.domain }, { prisma: tx });
     await lockOrganisationMemberships(tx, org.id, [userId, ...(actorUserId ? [actorUserId] : [])]);
     if (actorUserId) {
       const actorMembership = await getOrganisationMember(tx, { orgId: org.id, userId: actorUserId }, { activeOnly: true });
@@ -205,6 +207,7 @@ export async function changeOrganisationMemberRole(
     const updatedMember = await tx.orgMember.update({
       where: { id: member.id }, data: { role }, select: MEMBER_SELECT,
     });
+    if (member.role !== role) await revokeEnterpriseOrganisation(tx, org.id, userId);
     return { updated: updatedMember, previousRole: member.role };
   });
 
@@ -233,7 +236,6 @@ export async function removeOrganisationMember(
   deps?: OrgServiceDeps & {
     afterMembershipStatusWrite?: () => Promise<void>;
     revokeRefreshTokenFamiliesForUserOrganisation?: typeof revokeRefreshTokenFamiliesForUserOrganisation;
-    revokeRefreshTokensForUserDomain?: typeof revokeRefreshTokensForUserDomain;
   },
 ): Promise<{ removed: boolean }> {
   const env = deps?.env ?? getEnv();
@@ -243,8 +245,8 @@ export async function removeOrganisationMember(
   const userId = params.userId.trim();
   if (!userId) throw new AppError('BAD_REQUEST', 400);
 
-  // This destructive lifecycle boundary must revoke scoped sessions issued by every product
-  // domain in the same transaction, which requires the BYPASSRLS client.
+  // This destructive lifecycle boundary revokes exact-org sessions across authorized issuing
+  // domains in the same transaction, which requires the BYPASSRLS client.
   const prisma = deps?.prisma ?? (getAdminPrisma() as unknown as OrgServicePrisma);
   const org = await resolveOrganisation(prisma, { orgId: params.orgId });
 
@@ -265,7 +267,7 @@ export async function removeOrganisationMember(
 
   assertMutableOrganisationMember(member, org.ownerId);
 
-  await runInTransaction(prisma, async (tx) => {
+  await runEnterpriseAuthorityTransaction(prisma, async (tx) => {
     await lockRefreshSessionUserDomain({ userId, domain: org.domain }, { prisma: tx });
     await lockOrganisationMemberships(tx, org.id, [userId, ...(actorUserId ? [actorUserId] : [])]);
     if (actorUserId) {
@@ -314,11 +316,6 @@ export async function removeOrganisationMember(
       deps?.revokeRefreshTokenFamiliesForUserOrganisation ??
       revokeRefreshTokenFamiliesForUserOrganisation
     )(userId, org.id, revokeDeps);
-    await (deps?.revokeRefreshTokensForUserDomain ?? revokeRefreshTokensForUserDomain)(
-      userId,
-      org.domain,
-      revokeDeps,
-    );
   });
 
   await auditOrg({

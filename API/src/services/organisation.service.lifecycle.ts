@@ -1,11 +1,11 @@
+import { runInTransaction } from '../db/tenant-context.js';
 import type { ClientConfig } from './config.service.js';
 import { getEnv } from '../config/env.js';
 import { getAdminPrisma } from '../db/prisma.js';
-import { runInTransaction } from '../db/tenant-context.js';
+import { runEnterpriseAuthorityTransaction } from './enterprise-authority-transaction.service.js';
 import { AppError } from '../utils/errors.js';
 import {
   revokeRefreshTokenFamiliesForUserOrganisation,
-  revokeRefreshTokensForUserDomain,
 } from './refresh-token-revocation.service.js';
 import { lockRefreshSessionUserDomain } from './refresh-session-lock.service.js';
 import { lockTeamMembershipRows } from './team-scope.service.js';
@@ -63,7 +63,6 @@ export async function deactivateOrganisationMember(
   deps?: OrgServiceDeps & {
     revokeRefreshTokenFamiliesForUserOrganisation?:
       typeof revokeRefreshTokenFamiliesForUserOrganisation;
-    revokeRefreshTokensForUserDomain?: typeof revokeRefreshTokensForUserDomain;
     afterMembershipStatusWrite?: () => Promise<void>;
   },
 ): Promise<{ deactivated: boolean }> {
@@ -74,7 +73,7 @@ export async function deactivateOrganisationMember(
   const userId = params.userId.trim();
   if (!userId) throw new AppError('BAD_REQUEST', 400);
 
-  // Membership status and cross-product refresh-family revocation must commit together. The
+  // Membership status and exact-org refresh-family revocation must commit together. The
   // tenant role cannot see refresh rows issued by sibling product domains, so this lifecycle
   // boundary deliberately uses the BYPASSRLS client and repeats every authorization check.
   const prisma = deps?.prisma ?? (getAdminPrisma() as unknown as OrgServicePrisma);
@@ -91,7 +90,7 @@ export async function deactivateOrganisationMember(
   if (!member) throw new AppError('NOT_FOUND', 404);
   assertMutableOrganisationMember(member, org.ownerId);
 
-  await runInTransaction(prisma, async (tx) => {
+  await runEnterpriseAuthorityTransaction(prisma, async (tx) => {
     await lockRefreshSessionUserDomain({ userId, domain: org.domain }, { prisma: tx });
     await lockOrganisationMemberships(tx, org.id, [userId, ...(actorUserId ? [actorUserId] : [])]);
     await requireOrgMemberManager(tx, { orgId: org.id, actorUserId, config: params.config });
@@ -119,13 +118,6 @@ export async function deactivateOrganisationMember(
       deps?.revokeRefreshTokenFamiliesForUserOrganisation ??
       revokeRefreshTokenFamiliesForUserOrganisation
     )(userId, org.id, revokeDeps);
-    // Preserve the historical same-domain contract for legacy unscoped sessions while the exact
-    // organisation revocation above catches scoped sessions issued by every product domain.
-    await (deps?.revokeRefreshTokensForUserDomain ?? revokeRefreshTokensForUserDomain)(
-      userId,
-      org.domain,
-      revokeDeps,
-    );
   });
 
   await auditOrg({

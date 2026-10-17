@@ -1,3 +1,4 @@
+import { enterpriseAuthorityStores } from '../helpers/enterprise-authority-stores.js';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { Env } from '../../src/config/env.js';
@@ -104,6 +105,7 @@ describe('requestTwoFaReset', () => {
       .mockResolvedValue({ id: 't1' });
 
     const prisma: PrismaStub = {
+      ...enterpriseAuthorityStores(),
       $transaction: async (fn) => await fn(prisma),
       user: { findUnique, update: vi.fn() as never },
       verificationToken: {
@@ -163,6 +165,7 @@ describe('requestTwoFaReset', () => {
     const createToken = vi.fn<PrismaStub['verificationToken']['create']>();
 
     const prisma: PrismaStub = {
+      ...enterpriseAuthorityStores(),
       $transaction: async (fn) => await fn(prisma),
       user: { findUnique, update: vi.fn() as never },
       verificationToken: {
@@ -200,6 +203,7 @@ describe('requestTwoFaReset', () => {
 
   it('is a no-op when the database is disabled', async () => {
     const prisma: PrismaStub = {
+      ...enterpriseAuthorityStores(),
       $transaction: async (fn) => await fn(prisma),
       user: { findUnique: vi.fn() as never, update: vi.fn() as never },
       verificationToken: {
@@ -235,6 +239,7 @@ describe('requestTwoFaReset', () => {
 describe('resetTwoFaWithToken', () => {
   it('consumes token, disables 2FA, and marks the token as used', async () => {
     const prisma: PrismaStub = {
+      ...enterpriseAuthorityStores(),
       $queryRaw: vi.fn(),
       $transaction: async (fn) => await fn(prisma),
       user: {
@@ -320,6 +325,7 @@ describe('resetTwoFaWithToken', () => {
     const updateUser = vi.fn().mockResolvedValue({ id: 'u1' });
     const updateToken = vi.fn().mockResolvedValue({ count: 1 });
     const prisma: PrismaStub = {
+      ...enterpriseAuthorityStores(),
       $queryRaw: vi.fn(),
       $transaction: async (fn) => await fn(prisma),
       user: {
@@ -380,6 +386,7 @@ describe('resetTwoFaWithToken', () => {
     const updateUser = vi.fn().mockResolvedValue({ id: 'u1' });
     const updateToken = vi.fn().mockResolvedValue({ count: 1 });
     const prisma: PrismaStub = {
+      ...enterpriseAuthorityStores(),
       $queryRaw: vi.fn(),
       $transaction: async (fn) => await fn(prisma),
       user: {

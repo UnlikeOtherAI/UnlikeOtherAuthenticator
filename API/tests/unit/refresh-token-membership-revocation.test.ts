@@ -1,3 +1,4 @@
+import { enterpriseAuthorityStores } from '../helpers/enterprise-authority-stores.js';
 import type { PrismaClient } from '@prisma/client';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -11,8 +12,10 @@ describe('refresh-token membership revocation', () => {
 
   function makePrisma(count: number): PrismaClient {
     return {
+      ...enterpriseAuthorityStores(),
       $queryRaw: vi.fn().mockResolvedValue([{ lockResult: '' }]),
       refreshToken: {
+        findMany: vi.fn().mockResolvedValue([]),
         updateMany: vi.fn().mockResolvedValue({ count }),
       },
     } as unknown as PrismaClient;
