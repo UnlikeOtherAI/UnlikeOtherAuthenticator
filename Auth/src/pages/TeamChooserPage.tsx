@@ -3,7 +3,10 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CreateFirstTeamForm } from '../components/team/CreateFirstTeamForm.js';
 import { CreateTeamDialog } from '../components/team/CreateTeamDialog.js';
 import { InviteCard } from '../components/team/InviteCard.js';
+import { OrganisationManagementChoices } from '../components/team/OrganisationManagementChoices.js';
 import { TeamList } from '../components/team/TeamList.js';
+import { Button } from '../components/ui/Button.js';
+import { useAccessTranslation } from '../hooks/use-access-translation.js';
 import { usePopup } from '../hooks/use-popup.js';
 import { useTheme } from '../hooks/use-theme.js';
 import { useTranslation } from '../i18n/use-translation.js';
@@ -29,6 +32,7 @@ import {
 export function TeamChooserPage(): React.JSX.Element {
   const { classNames } = useTheme();
   const { t } = useTranslation();
+  const accessT = useAccessTranslation();
   const {
     loginToken,
     teamChoices,
@@ -39,6 +43,7 @@ export function TeamChooserPage(): React.JSX.Element {
     codeChallengeMethod,
     requestAccess,
     teamHint,
+    managementOrgId,
     setView,
     setLoginToken,
     setSessionChoices,
@@ -54,10 +59,11 @@ export function TeamChooserPage(): React.JSX.Element {
   const [hydrateFailed, setHydrateFailed] = useState(false);
   const autoSkipStarted = useRef(false);
   const hydrateStarted = useRef(false);
+  const [hydrateAttempt, setHydrateAttempt] = useState(0);
 
   const query = useMemo<AuthFlowQuery>(
-    () => ({ configUrl, redirectUrl, codeChallenge, codeChallengeMethod, requestAccess }),
-    [configUrl, redirectUrl, codeChallenge, codeChallengeMethod, requestAccess],
+    () => ({ configUrl, redirectUrl, codeChallenge, codeChallengeMethod, requestAccess, managementOrgId }),
+    [configUrl, redirectUrl, codeChallenge, codeChallengeMethod, requestAccess, managementOrgId],
   );
 
   const handleOutcome = useCallback(
@@ -113,14 +119,14 @@ export function TeamChooserPage(): React.JSX.Element {
         setError(t('form.error.generic'));
       }
     })();
-  }, [loginToken, teamChoices, query, setSessionChoices, handleOutcome, t]);
+  }, [loginToken, teamChoices, query, setSessionChoices, handleOutcome, t, hydrateAttempt]);
 
   // Design §11.2: a user with exactly one ACTIVE team and no pending invites never sees a
   // one-item chooser — select it for them as soon as the payload lands. Gap-fix B Task 2 (design
   // §11.4): a `team_hint` deep-link/switch preselect rides the SAME auto-select code path — it
   // only ever matches a team already present in this user's own chooser payload.
   useEffect(() => {
-    if (!loginToken || !teamChoices || autoSkipStarted.current) return;
+    if (managementOrgId || !loginToken || !teamChoices || autoSkipStarted.current) return;
     const skipTeam = pickAutoSkipTeam(teamChoices) ?? pickHintTeam(teamChoices, teamHint);
     if (!skipTeam) return;
 
@@ -134,7 +140,7 @@ export function TeamChooserPage(): React.JSX.Element {
       const applied = handleOutcome(outcome);
       if (!applied) setAutoSkipFailed(true);
     })();
-  }, [loginToken, teamChoices, teamHint, query, handleOutcome]);
+  }, [loginToken, teamChoices, teamHint, managementOrgId, query, handleOutcome]);
 
   if (!loginToken || !teamChoices) {
     if (hydrateFailed) {
@@ -143,19 +149,30 @@ export function TeamChooserPage(): React.JSX.Element {
           <p className="text-sm text-[var(--uoa-color-danger)]">
             {error ?? t('form.error.generic')}
           </p>
+          <Button onClick={() => {
+            hydrateStarted.current = false;
+            setHydrateFailed(false);
+            setError(null);
+            setHydrateAttempt(value => value + 1);
+          }}>{accessT('retry')}</Button>
         </div>
       );
     }
     return <div />;
   }
 
-  const skipTeam = pickAutoSkipTeam(teamChoices) ?? pickHintTeam(teamChoices, teamHint);
+  const skipTeam = managementOrgId ? null : pickAutoSkipTeam(teamChoices) ?? pickHintTeam(teamChoices, teamHint);
   if (skipTeam && !autoSkipFailed) {
     return (
       <div>
         <p className="text-sm text-[var(--uoa-color-muted)]">{t('teamChooser.autoSkip')}</p>
       </div>
     );
+  }
+
+  if (managementOrgId) {
+    return <OrganisationManagementChoices choices={teamChoices} loginToken={loginToken}
+      query={query} targetOrgId={managementOrgId} onOutcome={handleOutcome} />;
   }
 
   const hasInvites = teamChoices.pending_invites.length > 0;
@@ -239,6 +256,9 @@ export function TeamChooserPage(): React.JSX.Element {
           onOutcome={handleOutcome}
         />
       ) : null}
+
+      <OrganisationManagementChoices choices={teamChoices} loginToken={loginToken}
+        query={query} onOutcome={handleOutcome} />
 
       {isCreateDialogOpen ? (
         <CreateTeamDialog

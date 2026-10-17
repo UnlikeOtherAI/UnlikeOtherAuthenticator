@@ -172,6 +172,7 @@ export async function postBinary<TReq>(path: string, body: TReq): Promise<ApiBin
  */
 export type AuthFlowQuery = {
   configUrl: string;
+  managementOrgId?: string | null;
   redirectUrl?: string | null;
   codeChallenge?: string | null;
   codeChallengeMethod?: 'S256' | null;
@@ -191,6 +192,7 @@ function buildAuthFlowQuery(params: AuthFlowQuery): Record<string, QueryValue> {
   }
   if (params.requestAccess) query.request_access = true;
   if (params.state) query.state = params.state;
+  if (params.managementOrgId) query.management_org_id = params.managementOrgId;
   return query;
 }
 
@@ -329,6 +331,11 @@ export function selectTeam(
     body,
     buildAuthFlowQuery(query),
   );
+}
+
+/** Begins exact-org management; the server completes the existing personal factor policy. */
+export function startOrganisationManagement(body: { login_token: string; org_id: string }, query: AuthFlowQuery) {
+  return postJson<typeof body, AuthFlowResponse>('/auth/organisation-access/start', body, buildAuthFlowQuery(query));
 }
 
 /**

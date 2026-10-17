@@ -84,6 +84,7 @@ export function interpretTeamResponse(data: unknown): TeamResponseOutcome {
         pending_invites: toInviteChoices(data.pending_invites),
         can_create_org: Boolean(data.can_create_org),
         creatable_orgs: toCreatableOrgs(data.creatable_orgs),
+        manageable_orgs: toCreatableOrgs(data.manageable_orgs),
       },
     };
   }
@@ -124,6 +125,7 @@ export function toSessionChoices(data: unknown): SessionChoices | null {
     pending_invites: toInviteChoices(data.pending_invites),
     can_create_org: Boolean(data.can_create_org),
     creatable_orgs: toCreatableOrgs(data.creatable_orgs),
+    manageable_orgs: toCreatableOrgs(data.manageable_orgs),
   };
 }
 
@@ -137,7 +139,9 @@ export function pickAutoSkipTeam(choices: SessionChoices): TeamChoice | null {
     choices.teams.length === 1 &&
     choices.pending_invites.length === 0 &&
     !choices.can_create_org &&
-    choices.creatable_orgs.length === 0
+    choices.creatable_orgs.length === 0 &&
+    !(choices.manageable_orgs?.length) &&
+    !choices.teams.some(team => team.can_manage_sso === true)
   ) {
     return choices.teams[0] ?? null;
   }
