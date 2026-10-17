@@ -56,6 +56,8 @@ export async function ensureDomainRoleForUser(params: {
   domain: string;
   userId: string;
   prisma?: PrismaClient | Prisma.TransactionClient;
+  /** Enterprise/provisioning authentication never participates in domain bootstrap. */
+  allowBootstrap?: boolean;
 }): Promise<DomainRole> {
   const prisma = params.prisma ?? getAdminPrisma();
   const domain = normalizeDomain(params.domain);
@@ -71,7 +73,7 @@ export async function ensureDomainRoleForUser(params: {
     where: { domain, role: 'SUPERUSER' },
     select: { userId: true },
   });
-  const role: UserRole = existingSuperuser ? 'USER' : 'SUPERUSER';
+  const role: UserRole = existingSuperuser || params.allowBootstrap === false ? 'USER' : 'SUPERUSER';
 
   return await prisma.domainRole.create({
     data: { domain, userId: params.userId, role },

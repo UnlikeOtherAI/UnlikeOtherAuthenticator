@@ -14,6 +14,9 @@ import { ensureDomainRoleForUser, isPlatformSuperuser } from './domain-role.serv
 import { exchangeRefreshToken, issueRefreshToken } from './refresh-token.service.js';
 import { consumeAuthorizationCode } from './authorization-code.service.js';
 import { AppError } from '../utils/errors.js';
+import { hashRefreshToken } from './refresh-token-replay.service.js';
+import { issueSessionAssurance, validateSessionAssurance } from './session-assurance.service.js';
+import { sealEnterpriseSecret, openEnterpriseSecret } from './enterprise-secret.service.js';
 import { normalizeDomain } from '../utils/domain.js';
 import type { ClientConfig } from './config.service.js';
 import {
@@ -93,6 +96,8 @@ export type TokenIssuerDeps = TokenDeps & {
 };
 
 export type IssuedTokenPair = {
+  assuranceRef?: string;
+  assuranceExpiresAt?: string;
   accessToken: string;
   expiresInSeconds: number;
   refreshToken: string;
@@ -110,6 +115,7 @@ export async function issueTokenPairForUser(
     userId: string;
     includeFirstLogin?: boolean;
     active?: ActiveTeam | null;
+    independentAuthenticatedAt?: Date;
   },
   deps?: TokenIssuerDeps,
 ): Promise<IssuedTokenPair> {
@@ -119,22 +125,56 @@ export async function issueTokenPairForUser(
   const ttl = deps?.accessTokenTtl ?? env.ACCESS_TOKEN_TTL;
   const prisma = deps?.prisma ?? getPrisma();
 
-  const domainRole = await ensureDomainRoleForUser({
-    prisma,
-    domain: params.config.domain,
-    userId: params.userId,
-  });
-
   const user = await prisma.user.findUnique({
     where: { lifecycleStatus: 'ACTIVE', id: params.userId },
     select: { email: true, tokenVersion: true },
   });
   if (!user) throw new AppError('INTERNAL', 500, 'MISSING_USER');
 
-  const role =
+  const product = await prisma.enterpriseProductReadiness.findUnique({ where: { clientDomain: params.config.domain } });
+  let assuranceId: string | undefined;
+  let assuranceConnectionId: string | undefined;
+  let assuranceRef: string | undefined;
+  let assuranceExpiresAt: string | undefined;
+  let globalAccountControl = true;
+  const family = product?.minimumAssuranceVersion ? await prisma.refreshToken.findUnique({ where: {
+    tokenHash: hashRefreshToken(params.refreshToken, sharedSecret),
+  } }) : null;
+  if (family?.assuranceId) {
+    const proof = await validateSessionAssurance({ id: family.assuranceId, userId: params.userId,
+      clientDomain: params.config.domain, credentialEpoch: user.tokenVersion,
+      orgId: family.orgId, teamId: family.teamId }, prisma);
+    if (!family.encryptedAssuranceReference) throw new AppError('UNAUTHORIZED', 401, 'INVALID_SESSION_ASSURANCE');
+    assuranceRef = openEnterpriseSecret(family.encryptedAssuranceReference, `assurance:${proof.id}`);
+    assuranceId = proof.id;
+    assuranceConnectionId = proof.connectionId ?? undefined;
+    assuranceExpiresAt = proof.expiresAt.toISOString();
+    globalAccountControl = proof.method === 'independent';
+  } else if (product?.minimumAssuranceVersion) {
+    if (!family || !params.independentAuthenticatedAt) throw new AppError('FORBIDDEN', 403, 'INDEPENDENT_REAUTH_REQUIRED');
+    const policy = family.orgId ? await prisma.orgSsoPolicy.findUnique({ where: { clientDomain_orgId: {
+      clientDomain: family.domain, orgId: family.orgId,
+    } } }) : null;
+    const issued = await issueSessionAssurance({ userId: params.userId, credentialEpoch: user.tokenVersion,
+      clientDomain: family.domain, orgId: family.orgId, teamId: family.teamId, familyId: family.familyId,
+      method: 'independent', observedAt: params.independentAuthenticatedAt, authenticatedAt: params.independentAuthenticatedAt,
+      mfaSource: family.twoFaCompleted ? 'uoa_totp' : 'none', amr: family.twoFaCompleted ? ['independent', 'otp'] : ['independent'],
+      policyGeneration: policy?.generation ?? 0, expiresAt: family.expiresAt,
+    }, prisma);
+    assuranceId = issued.assurance.id;
+    assuranceRef = issued.reference;
+    assuranceExpiresAt = issued.assurance.expiresAt.toISOString();
+    await prisma.refreshToken.updateMany({ where: { familyId: family.familyId }, data: {
+      assuranceId, encryptedAssuranceReference: sealEnterpriseSecret(assuranceRef, `assurance:${assuranceId}`),
+    } });
+  }
+
+  const domainRole = await ensureDomainRoleForUser({ prisma, domain: params.config.domain,
+    userId: params.userId, allowBootstrap: globalAccountControl });
+  const role = globalAccountControl && (
     domainRole.role === 'SUPERUSER' ||
     (await isPlatformSuperuser({ userId: params.userId, prisma: deps?.adminPrisma ?? prisma, env }))
-      ? 'superuser'
+    ) ? 'superuser'
       : 'user';
   const accessTokenContext = resolveAccessTokenContext({
     domain: params.config.domain,
@@ -197,6 +237,8 @@ export async function issueTokenPairForUser(
     ttl,
     issuer,
     tokenVersion: user.tokenVersion,
+    assuranceId,
+    assuranceConnectionId,
     org,
     active,
     relyingPartyToken: accessTokenContext.relyingPartyToken,
@@ -219,6 +261,8 @@ export async function issueTokenPairForUser(
     refreshToken: params.refreshToken,
     refreshTokenExpiresInSeconds: params.refreshTokenExpiresInSeconds,
     firstLogin,
+    assuranceRef,
+    assuranceExpiresAt,
   };
 }
 
@@ -319,6 +363,7 @@ export async function exchangeAuthorizationCodeForTokens(
         refreshToken: issuedRefreshToken.refreshToken,
         refreshTokenExpiresInSeconds: issuedRefreshToken.expiresInSeconds,
         includeFirstLogin: true,
+        independentAuthenticatedAt: now,
         active,
       },
       {

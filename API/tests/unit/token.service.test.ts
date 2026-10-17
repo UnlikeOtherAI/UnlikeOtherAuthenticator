@@ -41,6 +41,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
         findUnique: vi.fn(),
         updateMany: vi.fn(),
       },
+      enterpriseProductReadiness: { findUnique: vi.fn().mockResolvedValue(null) },
       refreshToken: {
         create: vi.fn(),
       },
@@ -50,7 +51,8 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
       domainRole: {
         findUnique: vi.fn(),
       },
-      orgMember: {
+      orgSsoPolicy: { findUnique: vi.fn().mockResolvedValue(null) },
+    orgMember: {
         findFirst: vi.fn(),
         findMany: vi.fn(),
       },
@@ -164,6 +166,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
         findUnique: vi.fn(),
         updateMany: vi.fn(),
       },
+      enterpriseProductReadiness: { findUnique: vi.fn().mockResolvedValue(null) },
       refreshToken: {
         create: vi.fn(),
       },
@@ -173,7 +176,8 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
       domainRole: {
         findUnique: vi.fn(),
       },
-      orgMember: {
+      orgSsoPolicy: { findUnique: vi.fn().mockResolvedValue(null) },
+    orgMember: {
         findFirst: vi.fn(),
       },
       teamMember: {
@@ -258,6 +262,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
         findUnique: vi.fn(),
         updateMany: vi.fn(),
       },
+      enterpriseProductReadiness: { findUnique: vi.fn().mockResolvedValue(null) },
       refreshToken: {
         create: vi.fn(),
       },
@@ -267,7 +272,8 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
       domainRole: {
         findUnique: vi.fn(),
       },
-      orgMember: {
+      orgSsoPolicy: { findUnique: vi.fn().mockResolvedValue(null) },
+    orgMember: {
         findFirst: vi.fn(),
         findMany: vi.fn(),
       },
@@ -361,6 +367,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
         findUnique: vi.fn(),
         updateMany: vi.fn(),
       },
+      enterpriseProductReadiness: { findUnique: vi.fn().mockResolvedValue(null) },
       refreshToken: {
         create: vi.fn(),
       },
@@ -370,7 +377,8 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
       domainRole: {
         findUnique: vi.fn(),
       },
-      orgMember: {
+      orgSsoPolicy: { findUnique: vi.fn().mockResolvedValue(null) },
+    orgMember: {
         findFirst: vi.fn(),
       },
       teamMember: {
@@ -451,10 +459,12 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
       organisation: { findUnique: vi.fn().mockResolvedValue({ lifecycleStatus: 'ACTIVE' }) },
       $queryRaw: vi.fn().mockResolvedValue([]),
       authorizationCode: { findUnique: vi.fn(), updateMany: vi.fn() },
+      enterpriseProductReadiness: { findUnique: vi.fn().mockResolvedValue(null) },
       refreshToken: { create: vi.fn() },
       user: { findUnique: vi.fn() },
       domainRole: { findUnique: vi.fn() },
-      orgMember: { findFirst: vi.fn() },
+      orgSsoPolicy: { findUnique: vi.fn().mockResolvedValue(null) },
+    orgMember: { findFirst: vi.fn() },
       teamMember: { findMany: vi.fn() },
       groupMember: { findMany: vi.fn() },
     } as unknown as PrismaClient;

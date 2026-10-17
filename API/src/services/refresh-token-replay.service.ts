@@ -25,6 +25,8 @@ export type RefreshTokenContext = {
  * `/auth/token` families leave every field null.
  */
 export type RefreshTokenGrantBinding = {
+  assuranceId?: string | null;
+  encryptedAssuranceReference?: string | null;
   credentialEpoch: number | null;
   oauthScope: string | null;
   resource: string | null;
@@ -52,6 +54,8 @@ export type RefreshTokenRow = {
 type ReplayPrisma = Pick<PrismaClient, 'refreshToken'>;
 
 export const refreshTokenSelect = {
+  assuranceId: true,
+  encryptedAssuranceReference: true,
   id: true,
   tokenHash: true,
   familyId: true,
@@ -78,6 +82,8 @@ export function refreshTokenGrantBinding(
   row: Partial<RefreshTokenGrantBinding>,
 ): RefreshTokenGrantBinding {
   return {
+    ...(row.assuranceId ? { assuranceId: row.assuranceId,
+      encryptedAssuranceReference: row.encryptedAssuranceReference } : {}),
     credentialEpoch: row.credentialEpoch ?? null,
     oauthScope: row.oauthScope ?? null,
     resource: row.resource ?? null,

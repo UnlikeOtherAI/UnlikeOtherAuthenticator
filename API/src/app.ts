@@ -157,8 +157,16 @@ export async function createApp(): Promise<FastifyInstance> {
   app.addContentTypeParser(
     'application/x-www-form-urlencoded',
     { parseAs: 'string' },
-    (_request, _body, done) => {
-      done(null, {});
+    (request, body, done) => {
+      if (request.url.startsWith('/sso/saml/')) {
+        const values = new URLSearchParams(String(body));
+        const parsed: Record<string, string> = {};
+        for (const [key, value] of values) {
+          if (Object.hasOwn(parsed, key)) return done(new Error('duplicate SAML form field'));
+          parsed[key] = value;
+        }
+        done(null, parsed);
+      } else done(null, {});
     },
   );
 

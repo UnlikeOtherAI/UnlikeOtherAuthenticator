@@ -3,7 +3,8 @@ import type { PrismaClient } from '@prisma/client';
 import { decodeJwt, decodeProtectedHeader, jwtVerify } from 'jose';
 import { z } from 'zod';
 
-import { getPublicBaseUrl } from '../config/env.js';
+import { getEnv, getPublicBaseUrl } from '../config/env.js';
+import { requireProductAssurance } from './session-assurance.service.js';
 import { getAdminPrisma } from '../db/prisma.js';
 import { runInTransaction } from '../db/tenant-context.js';
 import { createKeyedRateLimiter } from '../middleware/rate-limiter.js';
@@ -54,6 +55,7 @@ const SubjectAssertionSchema = z
     aud: z.string().trim().min(1),
     sub: z.string().trim().min(1).max(256),
     tv: z.number().int().nonnegative(),
+    assurance_ref: z.string().min(32).max(256).optional(),
     source_domain: z.string().trim().min(1),
     jti: z.string().trim().min(1).max(256),
     iat: z.number().int().positive(),
@@ -69,7 +71,7 @@ const SubjectAssertionSchema = z
   })
   .passthrough();
 
-export type VerifiedSubjectAssertion = z.infer<typeof SubjectAssertionSchema>;
+export type VerifiedSubjectAssertion = z.infer<typeof SubjectAssertionSchema> & { verifiedAssuranceId?: string };
 
 export interface ConfidentialTokenExchangeResult {
   accessToken: string;
@@ -111,7 +113,7 @@ export async function verifyConfidentialSubjectToken(
     sourceDomain: string;
     audience: string;
   },
-  deps: Pick<ExchangeDeps, 'fetchJwks' | 'now'> = {},
+  deps: Pick<ExchangeDeps, 'fetchJwks' | 'now' | 'prisma'> = {},
 ): Promise<VerifiedSubjectAssertion> {
   const sourceDomain = normalizeDomain(params.sourceDomain);
   if (!sourceDomain) throw invalidSubjectToken();
@@ -152,7 +154,11 @@ export async function verifyConfidentialSubjectToken(
       throw invalidSubjectToken();
     }
 
-    return assertion;
+    const assurance = getEnv().DATABASE_URL ? await requireProductAssurance({
+      reference: assertion.assurance_ref, userId: assertion.sub, credentialEpoch: assertion.tv,
+      clientDomain: sourceDomain, orgId: assertion.active?.orgId, teamId: assertion.active?.teamId,
+    }, deps.prisma ?? getAdminPrisma()) : null;
+    return { ...assertion, verifiedAssuranceId: assurance?.id };
   } catch (error) {
     if (error instanceof PartnerJwksUnavailableError) throw error;
     throw invalidSubjectToken();
