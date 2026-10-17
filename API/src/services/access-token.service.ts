@@ -14,6 +14,7 @@ import { AppError } from '../utils/errors.js';
 import { verifyUserAccessTokenRs256 } from './user-access-token-key.service.js';
 import { isActiveLifecycle, assertEntityAccess } from './entity-lifecycle.service.js';
 import { requireProductAssurance, type AccountRequirement, type AssuranceDb } from './session-assurance.service.js';
+import { assertOrgAccessPolicy } from './org-sso-policy.service.js';
 
 // Both are accepted for the whole transition, and neither can stand in for the
 // other: the branch is chosen by the protected header and each branch pins its
@@ -188,6 +189,9 @@ export async function verifyAccessToken(
     // credentials never become independent proof just because an older caller omitted a requirement.
     if (assurance && (deps?.requirement ?? 'global_account_control') === 'global_account_control' &&
       assurance.method !== 'independent') throw new AppError('FORBIDDEN', 403, 'INDEPENDENT_REAUTH_REQUIRED');
+    const orgId = parsed.active?.orgId ?? parsed.org?.org_id;
+    if (orgId) await assertOrgAccessPolicy({ userId, domain: parsed.domain, orgId,
+      assuranceId: assurance?.id }, prisma as PrismaClient);
   } else if (parsed.assurance_id) {
     throw new AppError('SERVICE_UNAVAILABLE', 503, 'ASSURANCE_STORE_REQUIRED');
   }

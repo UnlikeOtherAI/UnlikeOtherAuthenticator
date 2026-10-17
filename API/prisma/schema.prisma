@@ -5206,6 +5206,7 @@ model OrgSsoConnection {
   generation Int @default(1)
   configuration Json
   encryptedSecret String? @map("encrypted_secret")
+  publicSigningCertificates String[] @default([]) @map("public_signing_certificates")
   testedRevision Int? @map("tested_revision")
   lastTestCode String? @map("last_test_code")
   lastTestAt DateTime? @map("last_test_at")
@@ -5392,7 +5393,22 @@ model OrgRevocationConsumer {
   encryptedSecret String @map("encrypted_secret")
   deliveredSequence BigInt @default(0) @map("delivered_sequence")
   enabled Boolean @default(false)
+  readyChallengeHash String? @map("ready_challenge_hash")
+  readyChallengeExpiresAt DateTime? @map("ready_challenge_expires_at")
+  acknowledgedAt DateTime? @map("acknowledged_at")
+  nextAttemptAt DateTime @default(now()) @map("next_attempt_at")
+  failureCount Int @default(0) @map("failure_count")
+  retentionSequence BigInt @default(0) @map("retention_sequence")
   @@map("org_revocation_consumers")
+}
+
+model OrgRevocationDelivery {
+  clientDomain String @map("client_domain")
+  eventId String @map("event_id")
+  keyId String @map("key_id")
+  deliveredAt DateTime @default(now()) @map("delivered_at")
+  @@id([clientDomain,eventId])
+  @@map("org_revocation_deliveries")
 }
 
 model EnterpriseProductReadiness {
@@ -5401,5 +5417,6 @@ model EnterpriseProductReadiness {
   authorityMigrationRevision String? @map("authority_migration_revision")
   revocationConsumersRevision String? @map("revocation_consumers_revision")
   recoveryDesignRevision String? @map("recovery_design_revision")
+  retentionSequence BigInt @default(0) @map("retention_sequence")
   @@map("enterprise_product_readiness")
 }

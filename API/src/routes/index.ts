@@ -25,6 +25,7 @@ import { registerEnterpriseSsoRoutes } from './auth/enterprise-sso.js';
 import { registerOrgEnterpriseRoutes } from './org/enterprise-sso.js';
 import { registerRevocationFeedRoute } from './domain/revocations.js';
 import { registerScimRoutes } from './scim.js';
+import { registerAdminEnterpriseRevocationRoutes } from './internal/admin/enterprise-revocations.js';
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
   registerRootRoute(app);
@@ -39,6 +40,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   registerOrgEnterpriseRoutes(app);
   registerRevocationFeedRoute(app);
   registerScimRoutes(app);
+  registerAdminEnterpriseRevocationRoutes(app);
   registerAvatarRoutes(app);
   registerBillingRoutes(app);
   registerDomainRoutes(app);

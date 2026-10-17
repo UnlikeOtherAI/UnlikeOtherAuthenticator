@@ -11,7 +11,7 @@ import { exchangeManagementContinuation, managementSession, managementView,
 import { createEnterpriseDomain, verifyEnterpriseDomain, revokeEnterpriseDomain,
   reissueEnterpriseDomain } from '../../services/org-email-domain.service.js';
 import { enterpriseReadiness } from '../../services/org-sso-policy.service.js';
-import { revokeEnterpriseScope } from '../../services/org-sso-revocation.service.js';
+import { revokeEnterpriseScope, lockEnterpriseOutbox } from '../../services/org-sso-revocation.service.js';
 import { startEnterpriseTest } from '../../services/org-sso-flow.service.js';
 import { renderAuthEntrypointHtml, sendAuthHtml } from '../../services/auth-ui.service.js';
 import { readAdminConfigJwt } from '../../services/admin-auth-config.service.js';
@@ -52,6 +52,7 @@ export function registerOrganisationAccessRoutes(app: FastifyInstance): void {
   const mutation = async <T>(request: FastifyRequest, run: (
     session: Awaited<ReturnType<typeof managementSession>>, tx: Prisma.TransactionClient,
   ) => Promise<T>) => getAdminPrisma().$transaction(async (tx) => {
+    await lockEnterpriseOutbox(tx);
     const session = await managementSession(request.cookies[MANAGEMENT_COOKIE], csrf(request), true, tx);
     return run(session, tx);
   });

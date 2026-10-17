@@ -161,7 +161,7 @@ export function registerTeamRoutes(app: FastifyInstance): void {
       ],
     },
     async (request, reply) => {
-      const { domain, limit, cursor, direction, status } = parseTeamMembersRosterQuery(request);
+      const { domain, limit, cursor, direction, status, subject_ids: subjectIds } = parseTeamMembersRosterQuery(request);
       const orgId = getOrgIdFromParams(request.params);
       const teamId = getTeamIdFromParams(request.params);
       const config = requireVerifiedConfig(request);
@@ -179,6 +179,7 @@ export function registerTeamRoutes(app: FastifyInstance): void {
             cursor,
             direction,
             status,
+            subjectIds,
           },
           { prisma: asPrismaClient(tx) },
         ),

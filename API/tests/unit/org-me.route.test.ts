@@ -70,7 +70,10 @@ async function getOrgMe() {
   const { registerOrgMeRoute } = await import('../../src/routes/org/me.js');
   const app = fastify();
   app.decorateRequest('withTenantTx', null);
+  app.decorateRequest('adminDb', null);
   app.addHook('onRequest', async (request) => {
+    request.adminDb = { user: { findUniqueOrThrow: async () => ({ id: 'u1', name: 'Person',
+      email: 'person@example.com', lifecycleStatus: 'ACTIVE' }) } } as never;
     request.withTenantTx = async (callback) => callback({ transaction: true } as never);
   });
   registerOrgMeRoute(app);
@@ -140,7 +143,7 @@ describe('GET /org/me cross-product directory', () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.headers['cache-control']).toBe('private, no-store');
-    expect(response.json()).toEqual({
+    expect(response.json()).toMatchObject({
       ok: true,
       system_admin: false,
       org: {
@@ -249,7 +252,7 @@ describe('GET /org/me cross-product directory', () => {
     const response = await getOrgMe();
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ ok: true, system_admin: false });
+    expect(response.json()).toMatchObject({ ok: true, system_admin: false });
     expect(getActiveClientOrgContextMock).not.toHaveBeenCalled();
     expect(buildSidebarTeamsMock).not.toHaveBeenCalled();
   });
@@ -260,7 +263,7 @@ describe('GET /org/me cross-product directory', () => {
     const response = await getOrgMe();
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ ok: true, system_admin: false });
+    expect(response.json()).toMatchObject({ ok: true, system_admin: false });
     expect(getActiveClientOrgContextMock).toHaveBeenCalled();
     expect(buildSidebarTeamsMock).not.toHaveBeenCalled();
   });

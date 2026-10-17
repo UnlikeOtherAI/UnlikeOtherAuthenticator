@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes, createPublicKey } from 'node:crypto';
 import { createLocalJWKSet, jwtVerify, decodeProtectedHeader, type JWTPayload } from 'jose';
 import { z } from 'zod';
 import type { OrgSsoConnection, OrgSsoFlow } from '@prisma/client';
@@ -32,7 +32,7 @@ export function validateEnterpriseOidcClaims(connection: OrgSsoConnection, paylo
   const config = OidcEnterpriseConfiguration.parse(connection.configuration);
   const audiences = typeof payload.aud === 'string' ? [payload.aud] : payload.aud;
   if (payload.iss !== config.issuer || !audiences?.length ||
-    audiences.some((audience) => audience !== config.client_id) ||
+    !audiences.includes(config.client_id) ||
     (payload.azp !== undefined && payload.azp !== config.client_id) ||
     (audiences.length > 1 && payload.azp !== config.client_id) || payload.nonce !== nonce ||
     payload[config.tenant.claim] !== config.tenant.value ||
@@ -75,11 +75,11 @@ export async function validateEnterpriseOidcCallback(connection: OrgSsoConnectio
     (config.authorization_response_iss_required && input.iss !== config.issuer)) {
     throw new AppError('UNAUTHORIZED', 401, 'SSO_RESPONSE_ISSUER_INVALID');
   }
-  const secret = connection.encryptedSecret ? openEnterpriseSecret(connection.encryptedSecret, `connection:${connection.id}`) : '';
+  const secret = connection.encryptedSecret ? await openEnterpriseSecret(connection.encryptedSecret, `connection:${connection.id}`) : '';
   if (!secret) throw new AppError('BAD_REQUEST', 400, 'SSO_CLIENT_SECRET_REQUIRED');
   const body = new URLSearchParams({ grant_type: 'authorization_code', code: input.code,
     redirect_uri: `${getPublicBaseUrl()}/sso/oidc/${connection.id}/callback`,
-    code_verifier: openEnterpriseSecret(flow.encryptedVerifier, `flow:${flow.id}`) });
+    code_verifier: await openEnterpriseSecret(flow.encryptedVerifier, `flow:${flow.id}`) });
   const headers: Record<string, string> = { 'content-type': 'application/x-www-form-urlencoded' };
   if (config.client_auth_method === 'client_secret_basic') {
     headers.authorization = `Basic ${Buffer.from(`${encodeURIComponent(config.client_id)}:${encodeURIComponent(secret)}`).toString('base64')}`;
@@ -91,14 +91,20 @@ export async function validateEnterpriseOidcCallback(connection: OrgSsoConnectio
   if (header.alg !== 'RS256' || typeof header.kid !== 'string') throw new AppError('UNAUTHORIZED', 401, 'SSO_SIGNATURE_INVALID');
   // One bounded fetch per callback, with start/callback rate limits; no unbounded unknown-kid retry.
   const jwks = JSON.parse(await enterpriseFetch(config.jwks_uri, config.trusted_origins)) as {
-    keys: Array<{ kty: string; n?: string; alg?: string; use?: string; d?: string }>;
+    keys: Array<{ kid?: string; kty: string; n?: string; e?: string; alg?: string; use?: string; d?: string }>;
   };
-  if (!Array.isArray(jwks.keys) || jwks.keys.length > 20 || jwks.keys.some((key) => key.kty !== 'RSA' ||
-    key.d !== undefined || !key.n || Buffer.from(key.n, 'base64url').length < 256 ||
-    (key.alg !== undefined && key.alg !== 'RS256') || (key.use !== undefined && key.use !== 'sig'))) {
+  if (!Array.isArray(jwks.keys) || jwks.keys.length > 20) throw new AppError('UNAUTHORIZED', 401, 'SSO_JWKS_INVALID');
+  const selected = jwks.keys.filter((key) => key.kid === header.kid);
+  const key = selected[0];
+  if (selected.length !== 1 || key.kty !== 'RSA' || key.d !== undefined || !key.n || !key.e ||
+    (key.alg !== undefined && key.alg !== 'RS256') || (key.use !== undefined && key.use !== 'sig')) {
     throw new AppError('UNAUTHORIZED', 401, 'SSO_JWKS_INVALID');
   }
-  const { payload } = await jwtVerify(tokens.id_token, createLocalJWKSet(jwks), {
+  try {
+    const bits = createPublicKey({ key, format: 'jwk' }).asymmetricKeyDetails?.modulusLength ?? 0;
+    if (bits < 2048 || bits > 8192) throw new Error();
+  } catch { throw new AppError('UNAUTHORIZED', 401, 'SSO_JWKS_INVALID'); }
+  const { payload } = await jwtVerify(tokens.id_token, createLocalJWKSet({ keys: selected }), {
     algorithms: ['RS256'], issuer: config.issuer, audience: config.client_id,
     clockTolerance: MAX_AUTH_AGE_SKEW, requiredClaims: ['sub', 'iss', 'aud', 'exp', 'iat', 'nonce'],
   });

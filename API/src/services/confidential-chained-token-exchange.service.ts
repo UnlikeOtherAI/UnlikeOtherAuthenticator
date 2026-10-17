@@ -3,7 +3,8 @@ import type { PrismaClient } from '@prisma/client';
 import { createLocalJWKSet, decodeProtectedHeader, jwtVerify } from 'jose';
 import { z } from 'zod';
 
-import { getPublicBaseUrl } from '../config/env.js';
+import { getEnv, getPublicBaseUrl } from '../config/env.js';
+import { requireProductAssurance } from './session-assurance.service.js';
 import { getAdminPrisma } from '../db/prisma.js';
 import { runInTransaction } from '../db/tenant-context.js';
 import { createKeyedRateLimiter } from '../middleware/rate-limiter.js';
@@ -75,6 +76,7 @@ const ChainedSubjectAccessTokenSchema = z
     aud: z.string().trim().min(1),
     sub: z.string().trim().min(1).max(256),
     tv: z.number().int().nonnegative(),
+    assurance_id: z.string().min(1).max(256).optional(),
     email: z.string().trim().email(),
     source_domain: z.string().trim().min(1),
     azp: z.string().trim().min(1),
@@ -154,7 +156,7 @@ export async function verifyChainedSubjectAccessToken(
     callerAudience: string;
     issuer: string;
   },
-  deps: Pick<ChainedExchangeDeps, 'getAccessTokenJwks' | 'now'> = {},
+  deps: Pick<ChainedExchangeDeps, 'getAccessTokenJwks' | 'now' | 'prisma'> = {},
 ): Promise<VerifiedChainedSubjectAccessToken> {
   const now = deps.now?.() ?? Math.floor(Date.now() / 1000);
   try {
@@ -206,11 +208,16 @@ export async function verifyChainedSubjectAccessToken(
     }
 
     const { act, ...claims } = parsed;
-    return {
+    const verified = {
       ...claims,
       ...(act === undefined ? {} : { act: parseActorChain(act) }),
     };
-  } catch {
+    if (getEnv().DATABASE_URL) await requireProductAssurance({ id: parsed.assurance_id,
+      userId: parsed.sub, credentialEpoch: parsed.tv, clientDomain: originalIdentityDomain(verified),
+      orgId: parsed.active.orgId, teamId: parsed.active.teamId }, deps.prisma ?? getAdminPrisma());
+    return verified;
+  } catch (error) {
+    if (error instanceof AppError && error.statusCode === 503) throw error;
     throw invalidSubjectToken();
   }
 }
@@ -331,6 +338,7 @@ async function exchangeConfidentialChainedAccessTokenInsidePolicyLock(
         userId: subject.sub,
         domain: identityDomain,
         orgId: subject.active.orgId,
+        assuranceId: subject.assurance_id,
         groupsEnabled: false,
       },
       { crossProductPrisma: prisma, policyPrisma: prisma, prisma },
@@ -360,6 +368,7 @@ async function exchangeConfidentialChainedAccessTokenInsidePolicyLock(
     ...(subject.act ? { act: subject.act } : {}),
   };
   const accessToken = await (deps.signAccessToken ?? signConfidentialAccessToken)({
+    assuranceId: subject.assurance_id,
     subject: subject.sub,
     credentialEpoch,
     email: requireIdentityEmail(user.email),
