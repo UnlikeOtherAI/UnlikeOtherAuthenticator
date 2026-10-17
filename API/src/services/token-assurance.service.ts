@@ -28,7 +28,7 @@ export async function resolveTokenFamilyAssurance(params: {
   if (!product?.minimumAssuranceVersion) return { globalAccountControl: true };
   const evidence = await requireAuthenticationEvidence({ id: params.authenticationEvidenceId, userId: params.userId,
     credentialEpoch: params.credentialEpoch, clientDomain: params.domain }, prisma);
-  if (evidence.provenance !== 'independent' || evidence.purpose !== 'authorize' || !evidence.authenticatedAt || !evidence.signatureCompletedAt) {
+  if (evidence.provenance !== 'independent' || evidence.purpose !== 'authorize' || !evidence.signatureCompletedAt) {
     throw new AppError('FORBIDDEN', 403, 'INDEPENDENT_REAUTH_REQUIRED');
   }
   const policy = family.orgId ? await prisma.orgSsoPolicy.findUnique({ where: { clientDomain_orgId: {

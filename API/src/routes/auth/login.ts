@@ -120,7 +120,7 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
               sharedSecret: SHARED_SECRET,
               // Must match the audience verify-code/select-team/session-choices verify against.
               audience: LOGIN_SESSION_AUDIENCE,
-            }, { prisma: prisma });
+            }, { prisma: prisma, verifiedEvent: { kind: 'local_credential' } });
             return { kind: 'team_chooser' as const, loginToken, choices };
           }
         }
@@ -142,6 +142,7 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
             rememberMe,
             requestAccess,
             primaryJustVerified: true,
+            verifiedPrimaryEvent: { kind: 'local_credential' },
             authMethod: 'email_password',
             codeChallenge: pkce.codeChallenge,
             codeChallengeMethod: pkce.codeChallengeMethod,

@@ -136,3 +136,11 @@ all technical readiness. No subscription tier or new billing system is involved.
 Recovery selection is delegated to implementation; enforcement still requires
 completed independent custodians and a successful recovery drill. Live SSO
 linking/provisioning and some artifact consumers remain unfinished release gates.
+
+Provider callback receipt is an observation, not an authentication timestamp.
+Local password/OTP verification records its actual factor time; a social provider
+without a validated signed authentication time records `authenticatedAt: null`.
+The unknown value survives token-family derivation. Sensitive owner management
+requires a fresh independently verified primary event or an existing UOA TOTP
+factor. A recent social callback cannot enroll a new factor and use that new
+factor to manufacture independent freshness.
