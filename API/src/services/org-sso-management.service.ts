@@ -133,17 +133,22 @@ export function publicConnection(row: {
 export async function managementView(session: Awaited<ReturnType<typeof managementSession>>,
   db: ManagementDb = getAdminPrisma()) {
   const where = { clientDomain: session.clientDomain, orgId: session.orgId };
-  const [org, policy, connections, domains, readiness] = await Promise.all([
+  const [org, policy, connections, domains, readiness, teams] = await Promise.all([
     db.organisation.findUniqueOrThrow({ where: { id: session.orgId }, select: { id: true, name: true } }),
     db.orgSsoPolicy.findUnique({ where: { clientDomain_orgId: where } }),
     db.orgSsoConnection.findMany({ where, orderBy: { createdAt: 'asc' } }),
     db.organisationEmailDomain.findMany({ where, select: { id: true, emailDomain: true, status: true,
       verifiedAt: true, checkedAt: true, challengeExpiresAt: true } }), enterpriseReadiness(session.clientDomain, db as PrismaClient, session.orgId),
+    db.team.findMany({ where: { orgId: session.orgId, lifecycleStatus: 'ACTIVE' }, select: { id: true, name: true }, orderBy: { name: 'asc' } }),
   ]);
   return { ok: true, version: 1, org, client_domain: session.clientDomain, csrf_token: session.csrf,
     expires_at: session.expiresAt.toISOString(), capabilities: { manage_sso: true },
     policy: { arrangement_enabled: policy?.arrangementEnabled ?? false, revision: policy?.revision ?? 0, enforcement: policy?.enforcement ?? 'off',
-      session_max_age_seconds: policy?.sessionMaxAgeSeconds ?? 28800, reauth_mode: policy?.reauthMode ?? 'detect_only' },
+      session_max_age_seconds: policy?.sessionMaxAgeSeconds ?? 28800, reauth_mode: policy?.reauthMode ?? 'detect_only',
+      jit_enabled: policy?.jitEnabled ?? false, default_team_id: policy?.defaultTeamId ?? null,
+      allow_unverified_contractors: policy?.allowUnverifiedContractors ?? false, group_mappings: policy?.groupMappings ?? [],
+      discovery_enabled: policy?.discoveryEnabled ?? false },
+    teams,
     connections: connections.map(publicConnection), domains: domains.map((d) => ({ id: d.id,
       email_domain: d.emailDomain, status: d.status, verified_at: d.verifiedAt, checked_at: d.checkedAt,
       challenge_expires_at: d.challengeExpiresAt.toISOString() })),

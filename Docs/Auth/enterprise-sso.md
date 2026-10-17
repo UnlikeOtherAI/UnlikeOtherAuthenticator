@@ -178,3 +178,33 @@ unchanged; full social-provider subject migration remains separate.
 The focused real PostgreSQL `enterprise-ordinary-authority.test.ts` gate checks
 failed-write rollback, exact-org sibling preservation across consuming domains,
 global epoch propagation and the pre-link corporate-mailbox takeover boundary.
+
+### Scoped live entry and membership sources
+
+The operator registers each consuming product's fixed HTTPS login initializer
+and canonical signed configuration URL through
+`PUT /internal/admin/enterprise/products/:domain`. Its compatibility revisions
+record the authority migration and webhook plus feed/reconciliation consumers.
+The assurance minimum is monotonic. A connection tile at `/sso/:id/start` returns
+to that registered login initializer with a random, two-minute, one-use
+`sso_intent`. The relying product creates its own fresh state and PKCE verifier,
+then forwards the intent through its normal UOA `/auth` request. UOA refuses a
+different client, configuration source, connection revision or generation.
+Owner protocol testing never enters this relying-product flow.
+
+The live callback revalidates signed product configuration and exact connection
+and policy generations. Known identities resolve only by the stable connection,
+issuer, tenant and subject tuple. An email match enters explicit account-link
+proof; it never selects or mutates that existing person. New JIT identities need
+an active verified domain claim and explicit JIT/default-team policy. They have
+no password and their evidence remains scoped SSO evidence with the original
+nullable upstream authentication time and bounded session deadline. Existing
+account-link completion is still under implementation; activation remains gated.
+
+Manual, SSO and SCIM membership contributions are separate sources. Replacing
+one source does not overwrite another. Ordinary manual deactivation/removal
+records a suppression tombstone that managed sources cannot clear. Aggregate
+writes cannot silently become manual grants. Database constraints reject owner
+mapping and foreign-organisation team references. A scoped SSO chooser exposes
+only its exact organisation and cannot accept invitations, create teams or
+present owner-management authority from that organisation's IdP evidence.

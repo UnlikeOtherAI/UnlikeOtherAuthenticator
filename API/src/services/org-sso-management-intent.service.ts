@@ -47,6 +47,7 @@ export async function finishManagementIntent(input: { id: string; userId: string
     parentId: evidence.id, referenceHash: hashAssuranceReference(randomBytes(32).toString('base64url')),
     userId: evidence.userId, credentialEpoch: evidence.credentialEpoch, clientDomain: evidence.clientDomain,
     method: evidence.method, provenance: evidence.provenance, authenticatedAt: evidence.authenticatedAt,
+    amr: evidence.amr, acr: evidence.acr, policyGeneration: evidence.policyGeneration, sessionDeadline: evidence.sessionDeadline,
     observedAt: evidence.observedAt, purpose: 'management', actionBinding: intent.id, browserHash: intent.browserHash,
     mfaCompletedAt: evidence.mfaCompletedAt, signatureCompletedAt: new Date(),
     consumedAt: new Date(), expiresAt: new Date(Math.min(evidence.expiresAt.getTime(), freshAt + 600000, intent.expiresAt.getTime())) } });

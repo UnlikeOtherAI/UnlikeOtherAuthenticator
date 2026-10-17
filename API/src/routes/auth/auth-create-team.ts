@@ -1,3 +1,4 @@
+import { assertIndependentChooserMutation } from '../../services/authentication-evidence.service.js';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
@@ -154,6 +155,7 @@ export function registerAuthCreateTeamRoute(app: FastifyInstance): void {
         }
         // Serializes concurrent login bridges the same way `/auth/create-organisation` does, so two
         // of them cannot each create a team from the same chooser.
+        await assertIndependentChooserMutation(lockedSession, tx);
         await lockRequiredTeamPlacementUser(lockedSession.userId, { prisma: tx });
 
         // Claim before writing. A later failure rolls the claim and the team back together,

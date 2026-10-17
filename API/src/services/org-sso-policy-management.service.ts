@@ -1,0 +1,55 @@
+import type { Prisma } from '@prisma/client';
+import { z } from 'zod';
+import { AppError } from '../utils/errors.js';
+import { enterpriseReadiness } from './org-sso-policy.service.js';
+import { getAdminPrisma } from '../db/prisma.js';
+import { revokeEnterpriseScope } from './org-sso-revocation.service.js';
+import type { managementSession } from './org-sso-management.service.js';
+
+export const GroupMapping = z.object({ external_group_id: z.string().min(1).max(256),
+  team_id: z.string().min(1).max(100), team_role: z.enum(['member', 'admin']) }).strict();
+export const EnterprisePolicyPatch = z.object({ revision: z.number().int().nonnegative(),
+  enforcement: z.enum(['off', 'required_for_verified_domains', 'required_for_all_members']).optional(),
+  session_max_age_seconds: z.number().int().min(300).max(86400).optional(), reauth_mode: z.enum(['detect_only', 'force']).optional(),
+  jit_enabled: z.boolean().optional(), default_team_id: z.string().min(1).max(100).nullable().optional(),
+  allow_unverified_contractors: z.boolean().optional(), group_mappings: z.array(GroupMapping).max(100).optional(),
+  discovery_enabled: z.boolean().optional() }).strict();
+
+/** Called in the owner transaction after outbox-prefix, epoch and enterprise locks. */
+export async function updateEnterprisePolicy(session: Awaited<ReturnType<typeof managementSession>>,
+  input: z.infer<typeof EnterprisePolicyPatch>, tx: Prisma.TransactionClient) {
+  const scope = { clientDomain: session.clientDomain, orgId: session.orgId };
+  const prior = await tx.orgSsoPolicy.findUnique({ where: { clientDomain_orgId: scope } });
+  if ((prior?.revision ?? 0) !== input.revision) throw new AppError('BAD_REQUEST', 409, 'SSO_REVISION_CONFLICT');
+  if (input.enforcement && input.enforcement !== 'off') {
+    const ready = await enterpriseReadiness(session.clientDomain, tx as ReturnType<typeof getAdminPrisma>, session.orgId);
+    if (!ready.enforcement_allowed) throw new AppError('FORBIDDEN', 403, 'SSO_RECOVERY_NOT_READY');
+    if (!await tx.orgSsoConnection.findFirst({ where: { ...scope, status: 'active' } })) {
+      throw new AppError('FORBIDDEN', 403, 'SSO_ACTIVATION_NOT_READY');
+    }
+  }
+  const ids = [...new Set([...(input.default_team_id ? [input.default_team_id] : []),
+    ...(input.group_mappings ?? []).map((mapping) => mapping.team_id)])];
+  if (ids.length && await tx.team.count({ where: { id: { in: ids }, orgId: session.orgId, lifecycleStatus: 'ACTIVE' } }) !== ids.length) {
+    throw new AppError('BAD_REQUEST', 400, 'SSO_TEAM_UNAVAILABLE');
+  }
+  const jit = input.jit_enabled ?? prior?.jitEnabled ?? false;
+  const defaultTeam = input.default_team_id === undefined ? prior?.defaultTeamId : input.default_team_id;
+  if (jit && !defaultTeam) throw new AppError('BAD_REQUEST', 400, 'SSO_DEFAULT_TEAM_REQUIRED');
+  const securityChange = Object.keys(input).some((key) => !['revision', 'discovery_enabled'].includes(key));
+  const data = { ...(input.enforcement === undefined ? {} : { enforcement: input.enforcement }),
+    ...(input.session_max_age_seconds === undefined ? {} : { sessionMaxAgeSeconds: input.session_max_age_seconds }),
+    ...(input.reauth_mode === undefined ? {} : { reauthMode: input.reauth_mode }),
+    ...(input.jit_enabled === undefined ? {} : { jitEnabled: input.jit_enabled }),
+    ...(input.default_team_id === undefined ? {} : { defaultTeamId: input.default_team_id }),
+    ...(input.allow_unverified_contractors === undefined ? {} : { allowUnverifiedContractors: input.allow_unverified_contractors }),
+    ...(input.group_mappings === undefined ? {} : { groupMappings: input.group_mappings }),
+    ...(input.discovery_enabled === undefined ? {} : { discoveryEnabled: input.discovery_enabled }) };
+  const row = await tx.orgSsoPolicy.upsert({ where: { clientDomain_orgId: scope }, create: { ...scope, ...data },
+    update: { ...data, revision: { increment: 1 }, ...(securityChange ? { generation: { increment: 1 } } : {}) } });
+  if (securityChange) await revokeEnterpriseScope({ ...scope, scope: 'product_org', revision: row.generation }, tx);
+  await tx.orgAuditLog.create({ data: { orgId: session.orgId, actorUserId: session.userId,
+    action: 'sso.policy_updated', targetType: 'organisation', targetId: session.orgId,
+    metadata: { revision: row.revision, generation: row.generation, enforcement: row.enforcement } } });
+  return { ok: true, revision: row.revision };
+}
