@@ -1,5 +1,23 @@
 # Central OAuth & Auth Service — Full Build Brief
 
+## Enterprise connection authority (2026-10-17)
+
+Enterprise organisation SSO is configured only in UOA and introduces no Nessie
+billing/plan gate. Its write-only encrypted customer-IdP connection credentials
+are a narrowly separate class from product-client OAuth secrets; the historical
+"no per-client OAuth secrets" rule does not prohibit this class. Existing
+consumer/social account resolution remains a separate migration. Enterprise
+identity keys are exact connection/issuer/tenant/stable-subject tuples, never
+email. Verified email or DNS control cannot link an existing global account,
+change its profile, acquire platform authority or authorize global credentials.
+Independent existing-account proof and explicit confirmation remain required.
+Multiple UOA organisations and authorized cross-origin selection stay supported.
+See [the backend integration guide](Auth/enterprise-sso.md) and the canonical
+[enterprise plan](plans/2026-10-17-organisation-enterprise-sso.md). Live rollout
+requires the complete authority/provenance/revocation gates; enforcement also
+requires an explicitly approved, tested recovery design. No such recovery
+approval or customer activation is claimed by the foundation implementation.
+
 ## Same-account Kelpie local pairing (2026-10-11)
 
 Authorized same-subject account connections and LAN CLI/MCP pairing require no

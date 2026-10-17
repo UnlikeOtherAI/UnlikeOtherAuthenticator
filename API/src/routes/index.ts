@@ -20,6 +20,11 @@ import { registerRootRoute } from './root/index.js';
 import { registerSettingsRoutes } from './settings/index.js';
 import { registerSignatureRoutes } from './signatures/index.js';
 import { registerTwoFactorRoutes } from './twofactor/index.js';
+import { registerOrganisationAccessRoutes } from './auth/organisation-access.js';
+import { registerEnterpriseSsoRoutes } from './auth/enterprise-sso.js';
+import { registerOrgEnterpriseRoutes } from './org/enterprise-sso.js';
+import { registerRevocationFeedRoute } from './domain/revocations.js';
+import { registerScimRoutes } from './scim.js';
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
   registerRootRoute(app);
@@ -29,6 +34,11 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   registerAdminUiRoutes(app);
   registerAppRoutes(app);
   registerAuthRoutes(app);
+  registerOrganisationAccessRoutes(app);
+  registerEnterpriseSsoRoutes(app);
+  registerOrgEnterpriseRoutes(app);
+  registerRevocationFeedRoute(app);
+  registerScimRoutes(app);
   registerAvatarRoutes(app);
   registerBillingRoutes(app);
   registerDomainRoutes(app);

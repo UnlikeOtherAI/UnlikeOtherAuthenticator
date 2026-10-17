@@ -9,6 +9,8 @@ import {
   type BillingActorEndpoint,
 } from './billing-actor-audience.service.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
+import { getEnv } from '../config/env.js';
+import { requireProductAssurance } from './session-assurance.service.js';
 
 export const BILLING_ACTOR_MAX_TTL_SECONDS = 60;
 export const BILLING_ACTOR_CLOCK_TOLERANCE_SECONDS = 5;
@@ -22,6 +24,7 @@ const BillingActorSchema = z
     organisation_id: z.string().trim().min(1).max(256),
     team_id: z.string().trim().min(1).max(256),
     tv: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+    assurance_ref: z.string().min(32).max(256).optional(),
     jti: z.string().trim().min(1).max(256),
     iat: z.number().int().positive(),
     exp: z.number().int().positive(),
@@ -62,6 +65,15 @@ export async function verifyBillingActor(
       product: actor.product,
       appKeyId: params.credential.id,
     });
+  }
+  if (getEnv().DATABASE_URL) {
+    const issuer = new URL(params.credential.actorIssuer);
+    if (issuer.protocol !== 'https:' || issuer.username || issuer.password || issuer.search || issuer.hash) {
+      throw new AppError('FORBIDDEN', 403, 'INVALID_BILLING_ACTOR');
+    }
+    const clientDomain = issuer.hostname + (issuer.pathname === '/' ? '' : issuer.pathname);
+    await requireProductAssurance({ reference: actor.assurance_ref, clientDomain, userId: actor.sub,
+      credentialEpoch: actor.tv, orgId: actor.organisation_id, teamId: actor.team_id });
   }
   return actor;
 }

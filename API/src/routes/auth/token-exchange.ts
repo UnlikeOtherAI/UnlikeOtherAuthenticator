@@ -236,6 +236,8 @@ export function registerAuthTokenExchangeRoute(app: FastifyInstance): void {
         refresh_token: tokenPair.refreshToken,
         refresh_token_expires_in: tokenPair.refreshTokenExpiresInSeconds,
         token_type: 'Bearer',
+        ...(tokenPair.assuranceRef ? { assurance_ref: tokenPair.assuranceRef,
+          assurance_expires_at: tokenPair.assuranceExpiresAt } : {}),
       };
       if (tokenPair.firstLogin) {
         responseBody.firstLogin = tokenPair.firstLogin;
