@@ -51,8 +51,9 @@ All upstream fetches are HTTPS, DNS-pinned, bounded and refuse redirects.
 SAML uses `@node-saml/node-saml`, signed requests/responses/assertions, pinned
 certificates, mandatory request correlation, exact issuer/audience/recipient,
 bounded XML, unique IDs, strong algorithm checks and durable replay records.
-Upstream credentials for SAML are JSON containing private_key and certificate,
-with optional decryption_private_key, encrypted like other connection secrets.
+Draft SAML connections generate a dedicated signing/decryption key and public
+certificate on the server. Private keys stay in encrypted custody; metadata and
+callback values exist before the customer registers the IdP application.
 Encrypted/wrapping/comment attack integration fixtures and real vendor sandboxes
 remain required before any SAML support claim.
 
@@ -67,26 +68,33 @@ contribution admission and recorded Entra/Okta integration remain release gates.
 
 ## Custody and operations
 
-`ENTERPRISE_SSO_KEYRING` is a separate keyring JSON object with `current` key ID
-and a `keys` map containing base64 32-byte values. The present local provider
-uses context-bound AES-256-GCM, random nonces, key IDs and overlap decryption.
-It is not a completed KMS-envelope production provider. Never use SHARED_SECRET
-as an enterprise encryption key or put plaintext key material in instructions,
-logs, repositories or browser state. Production envelope custody remains gated.
+`ENTERPRISE_SSO_CUSTODY_PROVIDER` explicitly selects `local` or `gcp_kms`.
+Each record uses a random data key and context-bound AES-256-GCM. The data key
+is wrapped with the selected provider. The separate local keyring has a current
+key ID and overlapping keys; the GCP provider uses a configured Cloud KMS key,
+authenticated context and bounded RPC deadlines. No enterprise key is derived
+from SHARED_SECRET. Cloud IAM, actual KMS operations and rotation drills still
+need deployment verification. Never log plaintext credentials or keys.
 
-Revocation mutations and their scoped event commit together. Connection events
-revoke only their source assurance/families; organisation/team/product events
-include their exact scope and do not increment User.tokenVersion. The pull feed
-is product-authenticated and ordered, with a thirty-day opaque cursor lifetime.
-Cursor expiry requires fresh authority reconciliation, never a durable copied
-directory. Webhook delivery/receipts/rotation and scheduled claim rechecks must
-be completed and tested before rollout; the signature primitive alone is not a
-delivery worker.
+Revocation mutations and their scoped event commit together. Event-producing
+transactions acquire the global outbox fence before authority locks or writes,
+so feed cursors describe a committed prefix. Connection events revoke only their
+source assurance/families; wider events preserve unrelated organisation access
+and do not increment User.tokenVersion. Feed cursors expire after thirty days.
+Capture the checkpoint BEFORE a full live reconciliation and publish it only
+after that walk commits, then resume the feed from the captured cursor.
+
+Operators provision an encrypted webhook key and destination through the
+machine-only internal registration endpoint. Delivery starts only after the
+product acknowledges its one-time challenge with the installed key. The durable
+worker signs exact JSON bytes, records successful receipts, and retries failures
+with bounded backoff. Receivers accept duplicate delivery idempotently. The feed
+remains available independently. Scheduled domain rechecks remain unfinished.
 
 Remaining activation prerequisites include complete live identity linking/JIT,
 all credential bridges and native/debug/broker/resource boundaries, the Nessie
 authority migration and all revocation consumers, browser-bound management
-initiation, production envelope custody, actual protocol attack fixtures,
+initiation, deployed custody verification, actual protocol attack fixtures,
 vendor sandboxes and deployed-version verification. Recovery design is still an
 explicit decision, so enforcement fails closed. Do not mark readiness satisfied
 on the strength of this foundation tranche.

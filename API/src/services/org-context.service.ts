@@ -44,6 +44,7 @@ function ensureFeatureEnabled(config: ClientConfig): void {
 export async function getActiveUserOrgContext(
   params: {
     userId: string;
+    assuranceId?: string;
     domain: string;
     /** Resolve one requested organisation instead of the first active membership. */
     orgId?: string;
@@ -84,7 +85,7 @@ export async function getActiveUserOrgContext(
 
   if (!orgMembership) return null;
 
-  await assertOrgAccessPolicy({ userId, domain, orgId: orgMembership.orgId }, prisma);
+  await assertOrgAccessPolicy({ userId, domain, orgId: orgMembership.orgId, assuranceId: params.assuranceId }, prisma);
 
   const teamMemberships = await prisma.teamMember.findMany({
     where: {
@@ -155,6 +156,7 @@ export async function getActiveUserOrgContext(
 export async function getActiveClientOrgContext(
   params: {
     userId: string;
+    assuranceId?: string;
     domain: string;
     orgId: string;
     groupsEnabled?: boolean;
@@ -183,6 +185,7 @@ export async function getActiveClientOrgContext(
 export async function getUserOrgContext(
   params: {
     userId: string;
+    assuranceId?: string;
     domain: string;
     config: ClientConfig;
     /** Resolve one requested organisation instead of the first active membership. */
@@ -194,6 +197,7 @@ export async function getUserOrgContext(
   return getActiveUserOrgContext(
     {
       userId: params.userId,
+      assuranceId: params.assuranceId,
       domain: params.domain,
       orgId: params.orgId,
       groupsEnabled: params.config.org_features?.groups_enabled,

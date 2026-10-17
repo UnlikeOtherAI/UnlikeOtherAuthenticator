@@ -1,7 +1,7 @@
 import type { PrismaClient } from '@prisma/client';
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
-import { currentSessionAssurance, validateSessionAssurance } from './session-assurance.service.js';
+import { currentSessionAssurance, validateSessionAssurance, type AssuranceDb } from './session-assurance.service.js';
 
 export async function enterpriseReadiness(clientDomain: string, db = getAdminPrisma()) {
   const product = await db.enterpriseProductReadiness.findUnique({ where: { clientDomain } });
@@ -17,8 +17,8 @@ export async function enterpriseReadiness(clientDomain: string, db = getAdminPri
 
 /** The direct lookup invokes this seam too: callers cannot bypass policy via a lower-level helper. */
 export async function assertOrgAccessPolicy(
-  binding: { userId: string; domain: string; orgId: string },
-  db: Pick<PrismaClient, 'orgSsoPolicy' | 'user' | 'organisationEmailDomain'> = getAdminPrisma(),
+  binding: { userId: string; domain: string; orgId: string; assuranceId?: string },
+  db: AssuranceDb & Pick<PrismaClient, 'organisationEmailDomain'> = getAdminPrisma(),
 ): Promise<void> {
   const policy = await db.orgSsoPolicy.findUnique({ where: { clientDomain_orgId: {
     clientDomain: binding.domain, orgId: binding.orgId,
@@ -35,12 +35,12 @@ export async function assertOrgAccessPolicy(
     }, select: { id: true } }));
   }
   if (!governed) return;
-  const proof = currentSessionAssurance();
+  const proof = binding.assuranceId ? await db.sessionAssurance.findUnique({ where: { id: binding.assuranceId } }) : currentSessionAssurance();
   if (!proof || proof.userId !== binding.userId || proof.clientDomain !== binding.domain ||
     proof.orgId !== binding.orgId || proof.method !== 'sso') {
     throw new AppError('FORBIDDEN', 403, 'SSO_TEAM_REAUTH_REQUIRED');
   }
   await validateSessionAssurance({ id: proof.id, userId: binding.userId,
     clientDomain: binding.domain, orgId: binding.orgId, teamId: proof.teamId,
-    credentialEpoch: proof.credentialEpoch });
+    credentialEpoch: proof.credentialEpoch }, db);
 }

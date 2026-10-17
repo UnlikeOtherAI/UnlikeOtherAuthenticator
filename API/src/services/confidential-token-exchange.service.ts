@@ -4,7 +4,7 @@ import { decodeJwt, decodeProtectedHeader, jwtVerify } from 'jose';
 import { z } from 'zod';
 
 import { getEnv, getPublicBaseUrl } from '../config/env.js';
-import { requireProductAssurance } from './session-assurance.service.js';
+import { requireProductAssurance, validateSessionAssurance } from './session-assurance.service.js';
 import { getAdminPrisma } from '../db/prisma.js';
 import { runInTransaction } from '../db/tenant-context.js';
 import { createKeyedRateLimiter } from '../middleware/rate-limiter.js';
@@ -161,6 +161,7 @@ export async function verifyConfidentialSubjectToken(
     return { ...assertion, verifiedAssuranceId: assurance?.id };
   } catch (error) {
     if (error instanceof PartnerJwksUnavailableError) throw error;
+    if (error instanceof AppError && error.statusCode === 503) throw error;
     throw invalidSubjectToken();
   }
 }
@@ -199,6 +200,13 @@ async function exchangeConfidentialSubjectTokenInsidePolicyLock(
   }
 
   const prisma = deps.prisma ?? getAdminPrisma();
+  const sourceAssurance = assertion.verifiedAssuranceId ? await validateSessionAssurance({
+    id: assertion.verifiedAssuranceId, userId: assertion.sub, credentialEpoch: assertion.tv,
+    clientDomain: sourceDomain, orgId: assertion.active?.orgId, teamId: assertion.active?.teamId,
+  }, prisma) : null;
+  if (delegation.scope === 'session:broker' && sourceAssurance && sourceAssurance.method !== 'independent') {
+    throw new AppError('FORBIDDEN', 403, 'SSO_NARROW_DELEGATION_REQUIRED');
+  }
   // Whether the assertion's team context fits the product is decided by the
   // product's own config and server-owned team policy alone, so these are the
   // product's refusals, never the person's. They run before any subject lookup:
@@ -252,6 +260,7 @@ async function exchangeConfidentialSubjectTokenInsidePolicyLock(
             userId: assertion.sub,
             domain: sourceDomain,
             orgId: assertion.active.orgId,
+            assuranceId: assertion.verifiedAssuranceId,
             groupsEnabled: params.config.org_features?.groups_enabled,
           },
           { crossProductPrisma: prisma, policyPrisma: prisma, prisma },
@@ -284,7 +293,12 @@ async function exchangeConfidentialSubjectTokenInsidePolicyLock(
       ? { org, active: { ...assertion.active, tenantSlug: org.tenant_slug } }
       : {};
 
+  const now = deps.now?.() ?? Math.floor(Date.now() / 1000);
+  const expiresInSeconds = Math.min(CONFIDENTIAL_ACCESS_TOKEN_TTL_SECONDS,
+    sourceAssurance ? Math.floor(sourceAssurance.expiresAt.getTime() / 1000) - now : CONFIDENTIAL_ACCESS_TOKEN_TTL_SECONDS);
+  if (expiresInSeconds <= 0) throw invalidSubjectToken();
   const accessToken = await (deps.signAccessToken ?? signConfidentialAccessToken)({
+    assuranceId: sourceAssurance?.id,
     subject: assertion.sub,
     credentialEpoch,
     email: requireIdentityEmail(user.email),
@@ -292,14 +306,15 @@ async function exchangeConfidentialSubjectTokenInsidePolicyLock(
     product: delegation.product,
     resource: delegation.resource,
     issuer,
-    ttlSeconds: CONFIDENTIAL_ACCESS_TOKEN_TTL_SECONDS,
+    ttlSeconds: expiresInSeconds,
+    expiresAtEpochSeconds: now + expiresInSeconds,
     scope: delegation.scope,
     ...teamClaims,
   });
 
   return {
     accessToken,
-    expiresInSeconds: CONFIDENTIAL_ACCESS_TOKEN_TTL_SECONDS,
+    expiresInSeconds,
     issuedTokenType: ACCESS_TOKEN_ISSUED_TOKEN_TYPE,
     scope: delegation.scope,
   };

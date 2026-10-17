@@ -7,6 +7,8 @@ import { hashAssuranceReference, validateSessionAssurance } from './session-assu
 import { enterpriseReadiness } from './org-sso-policy.service.js';
 import { sealEnterpriseSecret } from './enterprise-secret.service.js';
 import { resolveEnterpriseConfiguration, enterprisePresets } from './org-sso-configuration.service.js';
+import { createEnterpriseSpKey } from './org-sso-sp-key.service.js';
+import { lockAndAssertAuthenticationEpoch } from './authentication-epoch.service.js';
 
 export type ManagementDb = PrismaClient | Prisma.TransactionClient;
 const TEN_MINUTES = 600_000;
@@ -28,6 +30,8 @@ export async function assertManagementOwner(
   const org = await db.organisation.findUnique({ where: { id: row.orgId },
     select: { ownerId: true, lifecycleStatus: true } });
   if (!org || org.ownerId !== row.userId || org.lifecycleStatus !== 'ACTIVE') failure();
+  const client = await db.clientDomain.findUnique({ where: { domain: row.clientDomain }, select: { status: true } });
+  if (client?.status !== 'active') failure();
   const proof = await db.sessionAssurance.findUnique({ where: { id: row.assuranceId } });
   if (!proof || proof.method !== 'independent') failure();
   await validateSessionAssurance({ id: proof.id, userId: row.userId,
@@ -83,6 +87,8 @@ export async function managementSession(cookie: string | undefined, csrf?: strin
     const expected = Buffer.from(csrfFor(browser));
     const provided = Buffer.from(csrf ?? '');
     if (expected.length !== provided.length || !timingSafeEqual(expected, provided)) failure();
+    await lockAndAssertAuthenticationEpoch({ userId: row.userId, domain: row.clientDomain,
+      credentialEpoch: row.credentialEpoch }, { prisma: db });
     await lockEnterpriseScope(db, row.clientDomain, row.orgId);
   }
   await assertManagementOwner(row, db);
@@ -143,10 +149,13 @@ export async function saveEnterpriseConnection(session: Awaited<ReturnType<typeo
   }
   if (!prior && await db.orgSsoConnection.count({ where }) >= 10) throw new AppError('BAD_REQUEST', 409, 'SSO_CONNECTION_LIMIT');
   const connectionId = prior?.id ?? randomBytes(20).toString('hex');
-  const encryptedSecret = input.secret === undefined ? prior?.encryptedSecret ?? null :
-    sealEnterpriseSecret(input.secret, `connection:${connectionId}`);
+  if (input.protocol === 'saml' && input.secret !== undefined) throw new AppError('BAD_REQUEST', 400, 'SSO_SP_KEYS_SERVER_OWNED');
+  const generated = !prior && input.protocol === 'saml' ? await createEnterpriseSpKey(connectionId) : null;
+  const encryptedSecret = generated?.encryptedSecret ?? (input.secret === undefined ? prior?.encryptedSecret ?? null :
+    await sealEnterpriseSecret(input.secret, `connection:${connectionId}`));
   const data = { ...where, preset: input.preset, protocol: input.protocol, displayName: input.display_name,
-    configuration: configuration as Prisma.InputJsonValue, encryptedSecret, testedRevision: null,
+    configuration: configuration as Prisma.InputJsonValue, encryptedSecret,
+    publicSigningCertificates: generated ? [generated.publicCertificate] : prior?.publicSigningCertificates ?? [], testedRevision: null,
     lastTestCode: null, lastTestAt: null };
   const row = prior ? await db.orgSsoConnection.update({ where: { id: prior.id },
     data: { ...data, revision: { increment: 1 } } }) : await db.orgSsoConnection.create({ data: { id: connectionId, ...data } });

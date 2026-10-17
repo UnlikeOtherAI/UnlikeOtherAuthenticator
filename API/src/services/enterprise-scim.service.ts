@@ -6,7 +6,7 @@ import { getPublicBaseUrl } from '../config/env.js';
 import { AppError } from '../utils/errors.js';
 import { hashAssuranceReference } from './session-assurance.service.js';
 import { lockEnterpriseScope } from './org-sso-management.service.js';
-import { revokeEnterpriseScope } from './org-sso-revocation.service.js';
+import { revokeEnterpriseScope, lockEnterpriseOutbox } from './org-sso-revocation.service.js';
 
 const USER = 'urn:ietf:params:scim:schemas:core:2.0:User';
 const GROUP = 'urn:ietf:params:scim:schemas:core:2.0:Group';
@@ -110,9 +110,11 @@ export async function mutateScimResource(connectionId: string, resourceType: str
   options: { id?: string; patch?: boolean; remove?: boolean; ifMatch?: string }) {
   const db = getAdminPrisma();
   return db.$transaction(async (tx) => {
+    await lockEnterpriseOutbox(tx);
     const connection = await tx.orgSsoConnection.findUniqueOrThrow({ where: { id: connectionId } });
     await lockEnterpriseScope(tx, connection.clientDomain, connection.orgId);
-    if (connection.status !== 'active') throw new AppError('UNAUTHORIZED', 401);
+    const current = await tx.orgSsoConnection.findUniqueOrThrow({ where: { id: connectionId } });
+    if (current.status !== 'active') throw new AppError('UNAUTHORIZED', 401);
     const prior = options.id ? await tx.scimResourceLink.findFirst({ where: {
       id: options.id, connectionId, resourceType, deletedAt: null } }) : null;
     if (options.id && !prior) throw new AppError('NOT_FOUND', 404);

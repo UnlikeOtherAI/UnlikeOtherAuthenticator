@@ -8,12 +8,22 @@ export type RevocationScope = 'user' | 'organisation' | 'product_org' | 'team' |
 export type RevocationInput = { clientDomain: string; scope: RevocationScope; revision: number;
   orgId?: string; teamId?: string; userId?: string; connectionId?: string };
 
-/** Authority mutation and this operation MUST share a transaction and enterprise scope lock. */
+/** Acquire FIRST in every event-producing transaction, before any authority locks or writes.
+ * Serializing sequence allocation through commit makes feed cursors an ordered committed prefix. */
+export async function lockEnterpriseOutbox(tx: Prisma.TransactionClient): Promise<void> {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(78281461924301::bigint)`;
+}
+
+/** Caller must acquire lockEnterpriseOutbox at transaction entry, before authority locks. */
 export async function revokeEnterpriseScope(input: RevocationInput, tx: Prisma.TransactionClient) {
   if (!input.orgId && input.scope !== 'user') throw new AppError('BAD_REQUEST', 400, 'REVOCATION_SCOPE_REQUIRED');
   if (input.scope === 'user' && !input.userId) throw new AppError('BAD_REQUEST', 400, 'REVOCATION_SCOPE_REQUIRED');
   if (input.scope === 'team' && !input.teamId) throw new AppError('BAD_REQUEST', 400, 'REVOCATION_SCOPE_REQUIRED');
   if (input.scope === 'connection' && !input.connectionId) throw new AppError('BAD_REQUEST', 400, 'REVOCATION_SCOPE_REQUIRED');
+  if (input.scope === 'user' && (input.orgId || input.teamId || input.connectionId)) throw new AppError('BAD_REQUEST', 400, 'REVOCATION_SCOPE_INVALID');
+  if (['organisation', 'product_org'].includes(input.scope) && (input.teamId || input.connectionId)) throw new AppError('BAD_REQUEST', 400, 'REVOCATION_SCOPE_INVALID');
+  if (input.scope === 'team' && input.connectionId) throw new AppError('BAD_REQUEST', 400, 'REVOCATION_SCOPE_INVALID');
+  if (input.scope === 'connection' && input.teamId) throw new AppError('BAD_REQUEST', 400, 'REVOCATION_SCOPE_INVALID');
   const now = new Date();
   const scope = { clientDomain: input.clientDomain, ...(input.orgId ? { orgId: input.orgId } : {}),
     ...(input.teamId ? { teamId: input.teamId } : {}), ...(input.userId ? { userId: input.userId } : {}),
@@ -58,12 +68,50 @@ function decodeCursor(cursor: string, domain: string): bigint {
 }
 export async function enterpriseRevocationFeed(domain: string, cursor?: string, limit = 100) {
   const sequence = cursor ? decodeCursor(cursor, domain) : 0n;
+  const retention = await getAdminPrisma().enterpriseProductReadiness.findUnique({ where: { clientDomain: domain },
+    select: { retentionSequence: true } });
+  if (cursor && sequence < (retention?.retentionSequence ?? 0n)) throw new AppError('BAD_REQUEST', 409, 'REVOCATION_CURSOR_EXPIRED');
   const rows = await getAdminPrisma().orgRevocationEvent.findMany({ where: { clientDomain: domain,
     sequence: { gt: sequence } }, orderBy: { sequence: 'asc' }, take: Math.min(limit, 200) + 1 });
   const hasMore = rows.length > limit;
   const events = rows.slice(0, limit);
   return { ok: true, version: 1, events: events.map(publicRevocationEvent), has_more: hasMore,
     next_cursor: encodeCursor(domain, events.at(-1)?.sequence ?? sequence) };
+}
+
+/** Capture BEFORE a full live reconciliation; resume from this cursor only AFTER it commits. */
+export async function enterpriseRevocationCheckpoint(domain: string) {
+  return getAdminPrisma().$transaction(async (tx) => {
+  await lockEnterpriseOutbox(tx);
+  const latest = await tx.orgRevocationEvent.findFirst({ where: { clientDomain: domain },
+    orderBy: { sequence: 'desc' }, select: { sequence: true } });
+  const retention = await tx.enterpriseProductReadiness.findUnique({ where: { clientDomain: domain },
+    select: { retentionSequence: true } });
+  return { ok: true, version: 1, next_cursor: encodeCursor(domain, latest?.sequence ?? retention?.retentionSequence ?? 0n) };
+  });
+}
+
+export async function pruneEnterpriseRevocations() {
+  const db = getAdminPrisma(); const cutoff = new Date(Date.now() - 30 * 86400000);
+  const scopes = await db.orgRevocationEvent.groupBy({ by: ['clientDomain'], where: { occurredAt: { lt: cutoff } },
+    _max: { sequence: true }, take: 100, orderBy: { clientDomain: 'asc' } });
+  for (const scope of scopes) {
+    const sequence = scope._max.sequence;
+    if (sequence === null) continue;
+    await db.$transaction(async (tx) => {
+      await lockEnterpriseOutbox(tx);
+      const firstFresh = await tx.orgRevocationEvent.findFirst({ where: { clientDomain: scope.clientDomain,
+        occurredAt: { gte: cutoff } }, orderBy: { sequence: 'asc' }, select: { sequence: true } });
+      const boundary = firstFresh && firstFresh.sequence <= sequence ? firstFresh.sequence - 1n : sequence;
+      if (boundary <= 0n) return;
+      await tx.enterpriseProductReadiness.upsert({ where: { clientDomain: scope.clientDomain },
+        create: { clientDomain: scope.clientDomain, retentionSequence: boundary }, update: {} });
+      await tx.enterpriseProductReadiness.updateMany({ where: { clientDomain: scope.clientDomain,
+        retentionSequence: { lt: boundary } }, data: { retentionSequence: boundary } });
+      await tx.orgRevocationDelivery.deleteMany({ where: { clientDomain: scope.clientDomain, deliveredAt: { lt: cutoff } } });
+      await tx.orgRevocationEvent.deleteMany({ where: { clientDomain: scope.clientDomain, sequence: { lte: boundary } } });
+    });
+  }
 }
 
 export function signRevocationDelivery(body: string, secret: string, timestamp: number): string {

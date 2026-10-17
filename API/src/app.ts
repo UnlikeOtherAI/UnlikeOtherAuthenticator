@@ -28,6 +28,8 @@ import { preloadBillingAssertionSigningKey } from './services/billing-ledger-col
 import { sweepExpiredClaims } from './services/integration-claim.service.js';
 import { pruneExpiredSecurityData } from './services/retention-pruning.service.js';
 import { setAppLogger } from './utils/app-logger.js';
+import { startEnterpriseRevocationDelivery } from './services/org-sso-delivery.service.js';
+import { pruneEnterpriseRevocations } from './services/org-sso-revocation.service.js';
 
 export async function createApp(): Promise<FastifyInstance> {
   const env = getEnv();
@@ -87,6 +89,15 @@ export async function createApp(): Promise<FastifyInstance> {
                 'pairing_ticket',
                 'connection_ticket',
                 'refresh_token',
+                'assurance_ref',
+                'SAMLResponse',
+                'encryptedSecret',
+                'encryptedAssuranceReference',
+                'req.body.assurance_ref',
+                'req.body.SAMLResponse',
+                'req.body.continuation',
+                'req.body.secret',
+                'req.headers["x-uoa-csrf"]',
                 'previous_token',
                 'req.body.token',
                 'req.body.ticket',
@@ -260,11 +271,15 @@ export async function createApp(): Promise<FastifyInstance> {
 
       void runPrune();
       void runClaimSweep();
+      const enterpriseDelivery = startEnterpriseRevocationDelivery(app.log);
+      app.addHook('onClose', async () => enterpriseDelivery.stop());
 
       const intervalMs = 6 * 60 * 60 * 1000;
       const timer = setInterval(() => {
         void runPrune();
         void runClaimSweep();
+        void pruneEnterpriseRevocations().catch(() => app.log.error({ code: 'ENTERPRISE_RETENTION_UNAVAILABLE' },
+          'enterprise retention unavailable'));
       }, intervalMs);
       timer.unref();
 

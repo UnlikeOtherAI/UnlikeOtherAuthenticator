@@ -38,6 +38,8 @@ const EnvSchema = z
     // Optional access-status diagnostics; never enabled by client config or DEBUG_ENABLED.
     AUTH_ACCESS_STATUS_ENABLED: z.preprocess(normalizeBoolean, z.boolean().default(false)),
     ENTERPRISE_SSO_KEYRING: z.string().min(1).optional(),
+    ENTERPRISE_SSO_CUSTODY_PROVIDER: z.enum(['local', 'gcp_kms']).optional(),
+    ENTERPRISE_SSO_KMS_KEY: z.string().min(1).optional(),
     DEBUG_ENABLED: z.preprocess(normalizeBoolean, z.boolean().default(false)),
     // Single global shared secret used for domain hashing and client-domain access tokens.
     SHARED_SECRET: z.string().min(32),

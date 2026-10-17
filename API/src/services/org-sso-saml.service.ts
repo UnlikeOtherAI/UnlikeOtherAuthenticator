@@ -1,6 +1,6 @@
 import { createHash, X509Certificate } from 'node:crypto';
 import { DOMParser } from '@xmldom/xmldom';
-import { SAML, ValidateInResponseTo, type CacheProvider } from '@node-saml/node-saml';
+import { SAML, ValidateInResponseTo, generateServiceProviderMetadata, type CacheProvider } from '@node-saml/node-saml';
 import { z } from 'zod';
 import type { OrgSsoConnection, OrgSsoFlow, Prisma } from '@prisma/client';
 import { getAdminPrisma } from '../db/prisma.js';
@@ -66,12 +66,16 @@ function cache(connectionId: string, db: Pick<Prisma.TransactionClient, 'orgSsoR
   };
 }
 
-function engine(connection: OrgSsoConnection, db = getAdminPrisma() as Pick<Prisma.TransactionClient, 'orgSsoReplay'>) {
-  const config = SamlEnterpriseConfiguration.parse(connection.configuration);
+async function connectionKeys(connection: OrgSsoConnection) {
   if (!connection.encryptedSecret) throw new AppError('BAD_REQUEST', 400, 'SSO_SP_KEY_REQUIRED');
-  const keys = z.object({ private_key: z.string().min(100), certificate: z.string().min(100),
+  return z.object({ private_key: z.string().min(100), certificate: z.string().min(100),
     decryption_private_key: z.string().min(100).optional() }).strict().parse(JSON.parse(
-    openEnterpriseSecret(connection.encryptedSecret, `connection:${connection.id}`)));
+    await openEnterpriseSecret(connection.encryptedSecret, `connection:${connection.id}`)));
+}
+async function engine(connection: OrgSsoConnection,
+  db = getAdminPrisma() as Pick<Prisma.TransactionClient, 'orgSsoReplay'>, requestId?: string) {
+  const config = SamlEnterpriseConfiguration.parse(connection.configuration);
+  const keys = await connectionKeys(connection);
   const now = new Date();
   for (const pem of [...config.certificates, keys.certificate]) {
     const certificate = new X509Certificate(pem);
@@ -87,26 +91,38 @@ function engine(connection: OrgSsoConnection, db = getAdminPrisma() as Pick<Pris
     wantAuthnResponseSigned: true, validateInResponseTo: ValidateInResponseTo.always,
     acceptedClockSkewMs: 120000, maxAssertionAgeMs: 600000, requestIdExpirationPeriodMs: 600000,
     cacheProvider: cache(connection.id, db), identifierFormat: 'urn:oasis:names:tc:SAML:2.0:nameid-format:persistent',
+    ...(requestId ? { generateUniqueId: () => requestId } : {}),
     disableRequestedAuthnContext: !config.authn_context,
     ...(config.authn_context ? { authnContext: [config.authn_context], racComparison: 'exact' as const } : {}),
   });
 }
 
 export async function enterpriseSamlAuthorize(connection: OrgSsoConnection, flow: OrgSsoFlow, db: Prisma.TransactionClient): Promise<string> {
-  return engine(connection, db).getAuthorizeUrlAsync(flow.id, undefined, {});
+  return (await engine(connection, db, `_${flow.id}`)).getAuthorizeUrlAsync(flow.id, undefined, {});
 }
-export function enterpriseSamlMetadata(connection: OrgSsoConnection): string {
-  return engine(connection).generateServiceProviderMetadata(null, undefined);
+export async function enterpriseSamlMetadata(connection: OrgSsoConnection): Promise<string> {
+  const issuer = `${getPublicBaseUrl()}/sso/saml/${connection.id}`;
+  if (!connection.publicSigningCertificates.length) throw new AppError('BAD_REQUEST', 400, 'SSO_SP_KEY_REQUIRED');
+  const keys = await connectionKeys(connection);
+  return generateServiceProviderMetadata({ issuer, callbackUrl: `${issuer}/acs`,
+    privateKey: keys.private_key, decryptionPvk: keys.decryption_private_key,
+    signatureAlgorithm: 'sha256', digestAlgorithm: 'sha256',
+    publicCerts: connection.publicSigningCertificates, decryptionCert: connection.publicSigningCertificates[0],
+    wantAssertionsSigned: true, identifierFormat: 'urn:oasis:names:tc:SAML:2.0:nameid-format:persistent' });
 }
 
-export async function validateEnterpriseSamlCallback(connection: OrgSsoConnection, encoded: string): Promise<VerifiedEnterpriseIdentity> {
+export async function validateEnterpriseSamlCallback(connection: OrgSsoConnection, encoded: string,
+  flowId: string): Promise<VerifiedEnterpriseIdentity> {
   if (encoded.length > 360000 || !/^[A-Za-z0-9+/]*={0,2}$/.test(encoded)) invalid();
   const xml = Buffer.from(encoded, 'base64').toString('utf8');
   const outer = parseBoundedSaml(xml);
+  const acs = `${getPublicBaseUrl()}/sso/saml/${connection.id}/acs`;
+  if (outer.documentElement?.getAttribute('Destination') !== acs ||
+    outer.documentElement.getAttribute('InResponseTo') !== `_${flowId}`) invalid();
   const assertions = outer.getElementsByTagNameNS(NS, 'Assertion');
   const encrypted = outer.getElementsByTagNameNS(NS, 'EncryptedAssertion');
   if (assertions.length + encrypted.length !== 1) invalid();
-  const result = await engine(connection).validatePostResponseAsync({ SAMLResponse: encoded });
+  const result = await (await engine(connection)).validatePostResponseAsync({ SAMLResponse: encoded });
   const profile = result.profile;
   if (!profile || result.loggedOut || !profile.getAssertionXml) invalid();
   const validatedXml = profile.getAssertionXml();
@@ -122,9 +138,17 @@ export async function validateEnterpriseSamlCallback(connection: OrgSsoConnectio
   const confirmations = assertion.getElementsByTagNameNS(NS, 'SubjectConfirmationData');
   if (authn.length !== 1 || confirmations.length !== 1) invalid();
   const recipient = confirmations.item(0)?.getAttribute('Recipient');
-  if (recipient !== `${getPublicBaseUrl()}/sso/saml/${connection.id}/acs`) invalid();
+  if (recipient !== acs || confirmations.item(0)?.getAttribute('InResponseTo') !== `_${flowId}`) invalid();
+  const confirmationExpiry = new Date(confirmations.item(0)?.getAttribute('NotOnOrAfter') ?? '');
+  if (!Number.isFinite(confirmationExpiry.getTime()) || confirmationExpiry.getTime() + 120000 <= Date.now()) invalid();
+  const confirmation = assertion.getElementsByTagNameNS(NS, 'SubjectConfirmation').item(0);
+  if (confirmation?.getAttribute('Method') !== 'urn:oasis:names:tc:SAML:2.0:cm:bearer') invalid();
   const authenticatedAt = new Date(authn.item(0)?.getAttribute('AuthnInstant') ?? '');
   const expires = new Date(authn.item(0)?.getAttribute('SessionNotOnOrAfter') ?? '');
+  if (config.authn_context) {
+    const contexts = assertion.getElementsByTagNameNS(NS, 'AuthnContextClassRef');
+    if (contexts.length !== 1 || contexts.item(0)?.textContent !== config.authn_context) invalid();
+  }
   if (!Number.isFinite(authenticatedAt.getTime()) || authenticatedAt.getTime() > Date.now() + 120000) invalid();
   const subject = config.subject_attribute ? profile[config.subject_attribute] : profile.nameID;
   if (!config.subject_attribute && profile.nameIDFormat !== 'urn:oasis:names:tc:SAML:2.0:nameid-format:persistent') invalid();

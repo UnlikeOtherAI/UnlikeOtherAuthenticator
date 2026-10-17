@@ -17,18 +17,19 @@ export async function enterpriseFetch(url: string, trustedOrigins: readonly stri
   const timeout = setTimeout(() => abort.abort(), 5000);
   try {
     const response = await fetchPinned(target, { dispatcher: agent, redirect: 'manual',
-      method: options.method ?? 'GET', headers: { accept: 'application/json', ...options.headers },
+      method: options.method ?? 'GET', headers: { accept: 'application/json', 'accept-encoding': 'identity', ...options.headers },
       body: options.body, signal: abort.signal });
-    if (!response.ok || !response.body || response.headers.get('content-encoding')) {
+    if (!response.ok || response.headers.get('content-encoding')) {
       await response.body?.cancel();
       throw new AppError('BAD_REQUEST', 400, 'SSO_PROVIDER_RESPONSE_INVALID');
     }
+    if (!response.body) return '';
     const limit = options.limit ?? 65536;
     let size = 0;
     const chunks: Buffer[] = [];
     for await (const chunk of response.body) {
       size += chunk.length;
-      if (size > limit) { await response.body.cancel(); throw new AppError('BAD_REQUEST', 400, 'SSO_RESPONSE_TOO_LARGE'); }
+      if (size > limit) throw new AppError('BAD_REQUEST', 400, 'SSO_RESPONSE_TOO_LARGE');
       chunks.push(Buffer.from(chunk));
     }
     return Buffer.concat(chunks).toString('utf8');
