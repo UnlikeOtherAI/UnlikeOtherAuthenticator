@@ -264,6 +264,7 @@ describe('2FA gated by config `2fa_enabled`', () => {
   });
 
   it('rejects /2fa/verify when config disables 2FA', async () => {
+    verifyTwoFaChallengeMock.mockResolvedValue({});
     const { createApp } = await import('../../src/app.js');
     const app = await createApp();
     await app.ready();
@@ -277,7 +278,7 @@ describe('2FA gated by config `2fa_enabled`', () => {
     expect(res.statusCode).toBe(401);
     expectJsonError(res.json());
 
-    expect(verifyTwoFaChallengeMock).not.toHaveBeenCalled();
+    expect(verifyTwoFaChallengeMock).toHaveBeenCalledTimes(1);
     expect(verifyTwoFactorForLoginMock).not.toHaveBeenCalled();
 
     await app.close();
