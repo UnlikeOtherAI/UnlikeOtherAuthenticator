@@ -25,7 +25,7 @@ export function registerOrgEnterpriseRoutes(app: FastifyInstance): void {
       db.orgSsoPolicy.findUnique({ where: { clientDomain_orgId: { clientDomain: domain, orgId } } }),
       db.orgSsoConnection.findMany({ where: { clientDomain: domain, orgId },
         select: { id: true, displayName: true, protocol: true, status: true }, orderBy: { createdAt: 'asc' } }),
-      enterpriseReadiness(domain),
+      enterpriseReadiness(domain, db, orgId),
     ]);
     return reply.header('Cache-Control', 'private, no-store').send({ ok: true, version: 1,
       client_domain: domain, org_id: orgId, enforcement: policy?.enforcement ?? 'off',
@@ -37,12 +37,12 @@ export function registerOrgEnterpriseRoutes(app: FastifyInstance): void {
     const { orgId } = z.object({ orgId: z.string().min(1) }).parse(request.params);
     const claims = await resolveOrgUserClaims(request);
     const domain = request.config?.domain;
-    if (!domain || !claims.assuranceId || claims.org?.org_id !== orgId) {
+    if (!domain || !request.configUrl || claims.org?.org_id !== orgId) {
       throw new AppError('FORBIDDEN', 403, 'INDEPENDENT_REAUTH_REQUIRED');
     }
     return reply.header('Cache-Control', 'no-store').send(await createManagementContinuation({
       userId: claims.userId, credentialEpoch: claims.tokenVersion, clientDomain: domain, orgId,
-      assuranceId: claims.assuranceId,
+      configUrl: request.configUrl,
     }));
   });
   app.post('/org/assurance/validate', { preHandler }, async (request, reply) => {

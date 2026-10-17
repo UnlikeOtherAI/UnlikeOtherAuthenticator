@@ -1,3 +1,4 @@
+import { assertMailboxCredentialAdmission } from './credential-admission.service.js';
 import { randomBytes } from 'node:crypto';
 
 import type { Prisma, PrismaClient } from '@prisma/client';
@@ -268,6 +269,7 @@ export async function resetPasswordWithToken(
       now: decisionNow,
     });
 
+    await assertMailboxCredentialAdmission(epoch.userId, tx);
     await tx.user.update({
       where: { id: epoch.userId },
       data: { passwordHash },

@@ -57,6 +57,7 @@ type ConfigGateInput = {
   requestAccess: boolean;
   orgId?: string;
   teamId?: string;
+  authenticationEvidenceId?: string;
   authMethod: string;
   twoFaCompleted: boolean;
   credentialEpoch: number;
@@ -72,6 +73,7 @@ export type PublicOAuthGateInput = {
   scope?: string;
   codeChallenge: string;
   rememberMe: boolean;
+  authenticationEvidenceId?: string;
   authMethod: string;
   twoFaCompleted: boolean;
   credentialEpoch: number;
@@ -177,6 +179,7 @@ async function createContinuation(
       orgId: configInput?.orgId ?? null,
       teamId: configInput?.teamId ?? null,
       authMethod: params.authMethod,
+      authenticationEvidenceId: params.authenticationEvidenceId,
       twoFaCompleted: params.twoFaCompleted,
       tokenVersion: params.credentialEpoch,
       policyRevision,
@@ -227,6 +230,7 @@ export async function finalizeConfigAuthorizationWithSignatures(
           ...pkce,
           domain,
           twoFaCompleted: input.twoFaCompleted,
+          authenticationEvidenceId: input.authenticationEvidenceId,
           credentialEpoch: input.credentialEpoch,
         },
         {
@@ -300,6 +304,7 @@ export async function finalizePublicOAuthAuthorizationWithSignatures(
         rememberMe: input.rememberMe,
         credentialEpoch: input.credentialEpoch,
         twoFaCompleted: input.twoFaCompleted,
+          authenticationEvidenceId: input.authenticationEvidenceId,
       };
       const issued = await (deps?.issuePublicCode ?? issueOAuthCode)(
         issueInput,
@@ -382,6 +387,7 @@ export async function completeSigningContinuation(
           codeChallengeMethod: 'S256',
           rememberMe: continuation.rememberMe,
           twoFaCompleted: continuation.twoFaCompleted,
+          authenticationEvidenceId: continuation.authenticationEvidenceId ?? undefined,
           credentialEpoch: continuation.tokenVersion ?? rejectContinuation(),
           orgId: continuation.orgId ?? undefined,
           teamId: continuation.teamId ?? undefined,
@@ -419,6 +425,7 @@ export async function completeSigningContinuation(
         rememberMe: continuation.rememberMe,
         credentialEpoch: publicInput.credentialEpoch,
         twoFaCompleted: continuation.twoFaCompleted,
+          authenticationEvidenceId: continuation.authenticationEvidenceId ?? undefined,
       },
       tx as unknown as Prisma.TransactionClient,
       consumedAt,
@@ -441,6 +448,7 @@ function continuationToPublicInput(continuation: {
   oauthScope: string | null;
   codeChallenge: string;
   rememberMe: boolean;
+  authenticationEvidenceId?: string | null;
   authMethod: string;
   twoFaCompleted: boolean;
   tokenVersion: number | null;
@@ -459,6 +467,7 @@ function continuationToPublicInput(continuation: {
     codeChallenge: continuation.codeChallenge,
     rememberMe: continuation.rememberMe,
     authMethod: continuation.authMethod,
+    authenticationEvidenceId: continuation.authenticationEvidenceId ?? undefined,
     twoFaCompleted: continuation.twoFaCompleted,
     credentialEpoch: continuation.tokenVersion,
   };

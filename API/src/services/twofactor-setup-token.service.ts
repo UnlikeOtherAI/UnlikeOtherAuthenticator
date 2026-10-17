@@ -13,6 +13,8 @@ const TwoFaSetupSchema = z.object({
   encrypted_secret: z.string().min(1),
   config_url: z.string().min(1),
   domain: z.string().min(1),
+  management_intent_id: z.string().min(1).max(100).optional(),
+  authentication_evidence_id: z.string().min(1).max(100).optional(),
   auth_method: z.string().min(1).optional(),
   redirect_url: z.string().min(1).optional(),
   // Relying-party opaque `state`, bound here so a bridge hop cannot swap the
@@ -34,6 +36,8 @@ export type TwoFaSetupToken = {
   encryptedSecret: string;
   configUrl: string;
   domain: string;
+  managementIntentId?: string;
+  authenticationEvidenceId?: string;
   authMethod?: string;
   redirectUrl?: string;
   state?: string;
@@ -55,6 +59,8 @@ export async function signTwoFaSetupToken(params: {
   encryptedSecret: string;
   configUrl: string;
   domain: string;
+  managementIntentId?: string;
+  authenticationEvidenceId?: string;
   authMethod?: string;
   redirectUrl?: string;
   state?: string;
@@ -80,6 +86,8 @@ export async function signTwoFaSetupToken(params: {
       config_url: params.configUrl,
       domain: params.domain,
       auth_method: params.authMethod,
+      authentication_evidence_id: params.authenticationEvidenceId,
+      management_intent_id: params.managementIntentId,
       redirect_url: params.redirectUrl,
       state: params.state,
       remember_me: params.rememberMe ?? false,
@@ -136,6 +144,8 @@ export async function verifyTwoFaSetupToken(params: {
     rememberMe: parsed.remember_me ?? false,
     requestAccess: parsed.request_access ?? false,
   };
+  if (parsed.management_intent_id) token.managementIntentId = parsed.management_intent_id;
+  if (parsed.authentication_evidence_id) token.authenticationEvidenceId = parsed.authentication_evidence_id;
   if (parsed.auth_method) token.authMethod = parsed.auth_method;
   if (parsed.redirect_url) token.redirectUrl = parsed.redirect_url;
   if (parsed.state) token.state = parsed.state;

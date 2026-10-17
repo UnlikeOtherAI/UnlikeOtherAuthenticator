@@ -91,6 +91,8 @@ export function registerTwoFactorVerifyRoute(app: FastifyInstance): void {
             requestAccess: lockedChallenge.requestAccess,
             state: lockedChallenge.state,
             authMethod: lockedChallenge.authMethod,
+            authenticationEvidenceId: lockedChallenge.authenticationEvidenceId,
+            managementIntentId: lockedChallenge.managementIntentId,
             twoFaCompleted: true,
             codeChallenge: lockedChallenge.codeChallenge,
             codeChallengeMethod: lockedChallenge.codeChallengeMethod,
@@ -105,6 +107,8 @@ export function registerTwoFactorVerifyRoute(app: FastifyInstance): void {
           decision,
           userId: lockedChallenge.userId,
           authMethod: lockedChallenge.authMethod,
+            authenticationEvidenceId: lockedChallenge.authenticationEvidenceId,
+            managementIntentId: lockedChallenge.managementIntentId,
         };
       });
 

@@ -17,6 +17,7 @@ export const authEndpoints: EndpointSchema[] = [
     path: '/auth',
     description: 'OAuth entrypoint — renders the auth UI',
     query: {
+      management_org_id: 'Optional exact organisation hint for UOA fresh owner reauthentication; grants no authority and holds the chooser even for one team',
       state:
         'string (optional, ≤2048) — opaque relying-party CSRF value, forwarded to the auth UI and replayed on the call that begins the flow. Bound to that login and echoed beside `code` on the final redirect. PKCE protects the code exchange; `state` protects the redirect binding, and neither substitutes for the other.',
       config_url: 'string (required) — HTTPS URL to fetch signed config JWT',
@@ -36,6 +37,7 @@ export const authEndpoints: EndpointSchema[] = [
       'Email/password login. team_selection="auto" may return the chooser; "off" suppresses it. A server-recognized product still resolves its mandatory exact team before 2FA, applies that Organisation policy strongest-wins, and fails closed on ambiguous placement.',
     auth: 'config_url query param',
     query: {
+      management_org_id: 'Optional exact organisation hint for UOA fresh owner reauthentication; grants no authority and holds the chooser even for one team',
       state:
         'string (optional, ≤2048) — opaque relying-party CSRF value. UOA does not interpret it; it is bound to this login (login_token, 2FA bridge, social state) and echoed verbatim beside `code` on the final redirect, and beside `error` on a failed social callback. Later hops must not re-supply it: a hop presenting a different value is refused.',
       redirect_url: 'string (optional, redirect_uri also accepted)',
@@ -93,6 +95,7 @@ export const authEndpoints: EndpointSchema[] = [
       'Verify a 6-digit sign-in code issued by /auth/start (requires config.login_flow.email_code_enabled). 5 wrong attempts kill the code; every failure mode (no code, wrong code, expired, dead) returns the same generic auth error. IP + email rate-limited. With team_selection="off", recognized products suppress the chooser but resolve and bind their exact team before 2FA.',
     auth: 'config_url query param',
     query: {
+      management_org_id: 'Optional exact organisation hint for UOA fresh owner reauthentication; grants no authority and holds the chooser even for one team',
       state:
         'string (optional, ≤2048) — opaque relying-party CSRF value. UOA does not interpret it; it is bound to this login (login_token, 2FA bridge, social state) and echoed verbatim beside `code` on the final redirect, and beside `error` on a failed social callback. Later hops must not re-supply it: a hop presenting a different value is refused.',
       redirect_url: 'string (optional, redirect_uri also accepted)',
@@ -341,6 +344,7 @@ export const authEndpoints: EndpointSchema[] = [
     description:
       'Initiate social OAuth flow (google, facebook, github, linkedin, apple). Sets a signed, HttpOnly `uoa_social_state` cookie (SameSite=Lax, Path=/auth) that binds the OAuth `state` to the browser; the cookie must be returned to /auth/callback. A direct team invitation may use invite_token without PKCE; its raw capability is retained only in a second signed HttpOnly cookie and never placed in provider-visible state.',
     query: {
+      management_org_id: 'Optional exact organisation hint for UOA fresh owner reauthentication; grants no authority and holds the chooser even for one team',
       state:
         'string (optional, ≤2048) — opaque relying-party CSRF value. UOA does not interpret it; it is bound to this login (login_token, 2FA bridge, social state) and echoed verbatim beside `code` on the final redirect, and beside `error` on a failed social callback. Later hops must not re-supply it: a hop presenting a different value is refused.',
       config_url: 'string (required)',

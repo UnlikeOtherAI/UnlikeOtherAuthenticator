@@ -267,6 +267,7 @@ export function registerAuthSelectTeamRoute(app: FastifyInstance): void {
             requestAccess: lockedSession.requestAccess,
             state: lockedSession.state,
             authMethod: lockedSession.authMethod,
+            authenticationEvidenceId: lockedSession.authenticationEvidenceId,
             codeChallenge: lockedSession.codeChallenge,
             codeChallengeMethod: lockedSession.codeChallengeMethod,
             ip: request.ip ?? null,
@@ -279,6 +280,7 @@ export function registerAuthSelectTeamRoute(app: FastifyInstance): void {
           finalized,
           userId: lockedSession.userId,
           authMethod: lockedSession.authMethod,
+            authenticationEvidenceId: lockedSession.authenticationEvidenceId,
         };
       });
 

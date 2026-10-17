@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@prisma/client';
+import { requireAuthenticationEvidence } from './authentication-evidence.service.js';
 import { AppError } from '../utils/errors.js';
 import { hashRefreshToken } from './refresh-token-replay.service.js';
 import { issueSessionAssurance, validateSessionAssurance } from './session-assurance.service.js';
@@ -6,12 +7,11 @@ import { sealEnterpriseSecret, openEnterpriseSecret } from './enterprise-secret.
 
 export async function resolveTokenFamilyAssurance(params: {
   prisma: PrismaClient; userId: string; domain: string; refreshToken: string;
-  sharedSecret: string; credentialEpoch: number; independentAuthenticatedAt?: Date;
+  sharedSecret: string; credentialEpoch: number; authenticationEvidenceId?: string;
 }): Promise<{ assuranceId?: string; assuranceConnectionId?: string; assuranceRef?: string;
   assuranceExpiresAt?: string; globalAccountControl: boolean }> {
   const { prisma } = params;
   const product = await prisma.enterpriseProductReadiness.findUnique({ where: { clientDomain: params.domain } });
-  if (!product?.minimumAssuranceVersion) return { globalAccountControl: true };
   const family = await prisma.refreshToken.findUnique({ where: {
     tokenHash: hashRefreshToken(params.refreshToken, params.sharedSecret),
   } });
@@ -25,16 +25,24 @@ export async function resolveTokenFamilyAssurance(params: {
       assuranceId: proof.id, assuranceConnectionId: proof.connectionId ?? undefined,
       assuranceExpiresAt: proof.expiresAt.toISOString(), globalAccountControl: proof.method === 'independent' };
   }
-  if (!params.independentAuthenticatedAt) throw new AppError('FORBIDDEN', 403, 'INDEPENDENT_REAUTH_REQUIRED');
+  if (!product?.minimumAssuranceVersion) return { globalAccountControl: true };
+  const evidence = await requireAuthenticationEvidence({ id: params.authenticationEvidenceId, userId: params.userId,
+    credentialEpoch: params.credentialEpoch, clientDomain: params.domain }, prisma);
+  if (evidence.provenance !== 'independent' || evidence.purpose !== 'authorize' || !evidence.authenticatedAt || !evidence.signatureCompletedAt) {
+    throw new AppError('FORBIDDEN', 403, 'INDEPENDENT_REAUTH_REQUIRED');
+  }
   const policy = family.orgId ? await prisma.orgSsoPolicy.findUnique({ where: { clientDomain_orgId: {
     clientDomain: family.domain, orgId: family.orgId,
   } } }) : null;
   const issued = await issueSessionAssurance({ userId: params.userId, credentialEpoch: params.credentialEpoch,
     clientDomain: family.domain, orgId: family.orgId, teamId: family.teamId, familyId: family.familyId,
-    method: 'independent', observedAt: params.independentAuthenticatedAt, authenticatedAt: params.independentAuthenticatedAt,
+    method: 'independent', observedAt: evidence.observedAt, authenticatedAt: evidence.authenticatedAt,
     mfaSource: family.twoFaCompleted ? 'uoa_totp' : 'none', amr: family.twoFaCompleted ? ['independent', 'otp'] : ['independent'],
     policyGeneration: policy?.generation ?? 0, expiresAt: family.expiresAt,
   }, prisma);
+  const consumed = await prisma.authenticationEvidence.updateMany({ where: { id: evidence.id, consumedAt: null, revokedAt: null },
+    data: { consumedAt: new Date() } });
+  if (consumed.count !== 1) throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_EVIDENCE_REQUIRED');
   const assuranceId = issued.assurance.id;
   await prisma.refreshToken.updateMany({ where: { familyId: family.familyId }, data: {
     assuranceId, encryptedAssuranceReference: await sealEnterpriseSecret(issued.reference, `assurance:${assuranceId}`),

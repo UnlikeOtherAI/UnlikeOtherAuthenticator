@@ -30,6 +30,7 @@ const ParamsSchema = z.object({
 const QuerySchema = z
   .object({
     config_url: z.string().min(1).max(2048),
+    management_org_id: z.string().min(1).max(100).optional(),
     redirect_url: z.string().min(1).max(2048).optional(),
     redirect_uri: z.string().min(1).max(2048).optional(),
     code_challenge: z.string().min(1).max(256).optional(),
@@ -75,6 +76,7 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
       const {
         redirect_url,
         redirect_uri,
+        management_org_id,
         code_challenge,
         code_challenge_method,
         request_access,
@@ -121,6 +123,7 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
       const signStateForProvider = async (providerKey: SocialProviderKey): Promise<string> => {
         const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
         const state = await signSocialState({
+          managementOrgId: management_org_id,
           provider: providerKey,
           configUrl: requestConfigUrl,
           redirectUrl,

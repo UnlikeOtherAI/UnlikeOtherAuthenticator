@@ -235,6 +235,7 @@ export function registerAuthCreateTeamRoute(app: FastifyInstance): void {
             requestAccess: lockedSession.requestAccess,
             state: lockedSession.state,
             authMethod: lockedSession.authMethod,
+            authenticationEvidenceId: lockedSession.authenticationEvidenceId,
             codeChallenge: lockedSession.codeChallenge,
             codeChallengeMethod: lockedSession.codeChallengeMethod,
             ip: request.ip ?? null,
