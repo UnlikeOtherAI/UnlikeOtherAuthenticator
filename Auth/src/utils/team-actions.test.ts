@@ -202,7 +202,7 @@ describe('submitSessionChoices', () => {
       pending_invites: [],
       can_create_org: true,
       // A server that hasn't shipped `creatable_orgs` yet decodes to empty, not undefined.
-      creatable_orgs: [],
+      creatable_orgs: [], manageable_orgs: [],
     });
   });
 

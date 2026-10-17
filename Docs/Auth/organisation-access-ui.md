@@ -5,15 +5,28 @@ The customer-facing home for enterprise connections is UOA Auth at
 shared form controls. It is separate from the platform-superuser Admin app;
 an organisation owner does not need platform administration rights.
 
-The consuming product obtains an exact organisation/client management
-continuation through its authenticated backend. The browser receives a
-short-lived, single-purpose link, removes its fragment immediately, and
-exchanges the one-use continuation for a protected management cookie. The
-frontend retains only the server's CSRF value and settings in memory. It
-never receives a product bearer or refresh token. Reload hydrates the same
-cookie session; an expired/unauthorized session directs the person back to
-the product to reopen settings. Every API mutation still requires live server
-authorization and suitable fresh proof.
+The consuming product obtains an exact organisation/client reauthentication link
+through its authenticated backend. This `/auth` link names the organisation but
+carries no management authority. UOA asks for independent personal sign-in, keeps
+the owner chooser visible even with one team, and offers only the requested
+organisation. Owners without teams are supported. Ownership hints come from the
+server; role names do not grant management access. The start endpoint rechecks
+current ownership and completes existing personal-factor policy before redirecting
+to a one-use browser-bound management fragment. No product code or refresh family
+is issued for this purpose.
+
+The browser removes the fragment immediately and exchanges the continuation for
+a protected management cookie. The frontend retains only the server's CSRF value
+and settings in memory. It never receives a product bearer or refresh token.
+Reload hydrates the cookie session; expired authority requires fresh sign-in.
+
+Local verification uses `pnpm --filter @uoa/auth exec vitest run --config
+vitest.management.config.ts` after building Auth and its API dependency packages,
+with `DATABASE_URL` set to an isolated UOA test database and `PLAYWRIGHT_MODULE`
+pointing to the installed Playwright entry. This local-only headless journey uses
+real Fastify routes and a migrated random PostgreSQL schema. Only the public
+signed-config/JWKS transport uses the existing test fixture; production SSRF,
+proof, factor and cookie checks remain active. It is not a vendor certification.
 
 ## Customer journey
 

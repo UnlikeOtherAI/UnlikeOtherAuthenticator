@@ -1,4 +1,12 @@
 export const accessEn = {
+  managementTitle: "Manage single sign-on",
+  managementHint: "Use your personal UOA account to manage these settings. Your organisation’s provider cannot authorise these changes.",
+  managementUnavailable: "This account cannot manage the requested organisation. Sign in with its UnlikeOtherAI owner account.",
+  managementOther: "Use another account",
+  managementContinue: "Continue",
+  managementSection: "Organisation sign-in settings",
+  managementFailed: "Unable to continue. Try again, or use another account.",
+
   reissueDns: 'Get a new DNS record',
   issuerHelp: 'Create a web application in your identity provider and add the reply URL below. Copy its exact organisation or realm issuer URL, client ID and secret here. UOA loads the provider details securely.',
   domainExpired: 'Verification expired', domainRevoked: 'Domain no longer in use',
@@ -58,6 +66,14 @@ export const accessEn = {
 } as const;
 export type AccessKey = keyof typeof accessEn;
 export const accessCs: Record<AccessKey, string> = {
+  managementTitle: "Správa jednotného přihlášení",
+  managementHint: "Tato nastavení spravujte osobním účtem UOA. Poskytovatel identity vaší organizace nemůže tyto změny povolit.",
+  managementUnavailable: "Tento účet nemůže spravovat požadovanou organizaci. Přihlaste se jejím účtem vlastníka UnlikeOtherAI.",
+  managementOther: "Použít jiný účet",
+  managementContinue: "Pokračovat",
+  managementSection: "Přihlašování do organizace",
+  managementFailed: "Nelze pokračovat. Zkuste to znovu nebo použijte jiný účet.",
+
   reissueDns: 'Získat nový DNS záznam',
   issuerHelp: 'U poskytovatele identity vytvořte webovou aplikaci a přidejte níže uvedenou URL odpovědi. Sem zkopírujte přesnou URL vydavatele organizace nebo realmu, ID klienta a tajný klíč. UOA bezpečně načte údaje poskytovatele.',
   domainExpired: 'Platnost ověření vypršela', domainRevoked: 'Doména se již nepoužívá',
@@ -116,6 +132,14 @@ export const accessCs: Record<AccessKey, string> = {
   overview: 'Připojení', settings: 'Nastavení přístupu organizace',
 };
 export const accessEs: Record<AccessKey, string> = {
+  managementTitle: "Gestionar el inicio de sesión único",
+  managementHint: "Usa tu cuenta personal de UOA para gestionar esta configuración. El proveedor de tu organización no puede autorizar estos cambios.",
+  managementUnavailable: "Esta cuenta no puede gestionar la organización solicitada. Inicia sesión con su cuenta de propietario de UnlikeOtherAI.",
+  managementOther: "Usar otra cuenta",
+  managementContinue: "Continuar",
+  managementSection: "Inicio de sesión de la organización",
+  managementFailed: "No se puede continuar. Inténtalo de nuevo o usa otra cuenta.",
+
   reissueDns: 'Obtener un nuevo registro DNS',
   issuerHelp: 'Crea una aplicación web en tu proveedor de identidad y añade la URL de respuesta de abajo. Copia aquí la URL exacta del emisor de la organización o realm, el ID del cliente y el secreto. UOA carga los detalles del proveedor de forma segura.',
   domainExpired: 'La verificación ha caducado', domainRevoked: 'El dominio ya no se utiliza',
