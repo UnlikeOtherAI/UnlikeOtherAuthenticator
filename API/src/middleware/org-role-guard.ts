@@ -193,6 +193,7 @@ async function resolveSubjectAssertionClaims(
         userId: assertion.sub,
         domain: sourceDomain,
         orgId: assertion.active.orgId,
+        assuranceId: assertion.verifiedAssuranceId,
         groupsEnabled: request.config?.org_features?.groups_enabled,
       },
       {

@@ -45,7 +45,7 @@ export function registerEnterpriseSsoRoutes(app: FastifyInstance): void {
     const connection = await getAdminPrisma().orgSsoConnection.findUnique({ where: { id } });
     if (!connection || connection.protocol !== 'saml') throw new AppError('NOT_FOUND', 404);
     return reply.header('Cache-Control', 'no-store').type('application/samlmetadata+xml')
-      .send(enterpriseSamlMetadata(connection));
+      .send(await enterpriseSamlMetadata(connection));
   });
   app.get('/sso/:id/start', { preHandler: rate }, async () => {
     // Live entry remains fail-closed until every issuance/consumer and authority migration gate passes.

@@ -19,6 +19,12 @@ const claims = { iss: config.issuer, sub: 'stable', aud: 'client', nonce: 'nonce
   exp: now.getTime() / 1000 + 300, iat: now.getTime() / 1000, email: 'person@example.com', email_verified: true };
 
 describe('enterprise protocol trust boundaries', () => {
+  it('accepts multiple audiences only with the exact authorized party', () => {
+    expect(validateEnterpriseOidcClaims(connection, { ...claims, aud: ['client', 'other'], azp: 'client' },
+      'nonce', undefined, now).subject).toBe('stable');
+    expect(() => validateEnterpriseOidcClaims(connection, { ...claims, aud: ['client', 'other'] },
+      'nonce', undefined, now)).toThrow();
+  });
   it('never lets caller trusted_origins authorize a foreign secret endpoint', () => {
     expect(() => validateEnterpriseConfiguration('other_oidc', 'oidc', { ...config,
       token_endpoint: 'https://attacker.example.com/token', trusted_origins: ['https://idp.example.com', 'https://attacker.example.com'] }))
@@ -84,7 +90,7 @@ describe('opaque assurance and lineage', () => {
   function db(row: SessionAssurance = proof): AssuranceDb {
     return { sessionAssurance: { findUnique: vi.fn().mockResolvedValue(row) },
       user: { findUnique: vi.fn().mockResolvedValue({ tokenVersion: 2, lifecycleStatus: 'ACTIVE' }) },
-      refreshToken: { findFirst: vi.fn().mockResolvedValue({ id: 'r1' }) } } as unknown as AssuranceDb;
+      refreshToken: { findFirst: vi.fn().mockResolvedValue({ id: 'r1', expiresAt: new Date(now.getTime() + 3600000) }) } } as unknown as AssuranceDb;
   }
   it('looks up the hash, not raw backend custody reference', async () => {
     const store = db(); await validateSessionAssurance(binding, store, now);
@@ -107,5 +113,14 @@ describe('opaque assurance and lineage', () => {
   it('refuses a source family already revoked even if the assurance has time left', async () => {
     const store = db(); vi.mocked(store.refreshToken.findFirst).mockResolvedValue(null);
     await expect(validateSessionAssurance(binding, store, now)).rejects.toThrow();
+  });
+  it.each([{ clientDomain: 'another.example.com' }, { orgId: 'another-org' },
+    { method: 'recovery' }, { connectionId: 'another-connection' }])
+  ('rejects ancestor scope or provenance substitution %j', async (override) => {
+    const child = { ...proof, parentId: 'parent' };
+    const parent = { ...proof, id: 'parent', ...override } as SessionAssurance;
+    const store = db(child);
+    vi.mocked(store.sessionAssurance.findUnique).mockResolvedValueOnce(child).mockResolvedValueOnce(parent);
+    await expect(validateSessionAssurance(binding, store, now)).rejects.toThrow('INVALID_SESSION_ASSURANCE');
   });
 });

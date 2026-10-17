@@ -19,6 +19,8 @@ export const ListQuerySchema = DomainQuerySchema.extend({
 export const TeamMemberStatusQuerySchema = z.enum(['ACTIVE', 'DEACTIVATED', 'REMOVED', 'all']);
 
 export const TeamMembersRosterQuerySchema = ListQuerySchema.extend({
+  subject_ids: z.string().min(1).max(10000).transform((value) => value.split(',')).pipe(
+    z.array(z.string().trim().min(1).max(256)).min(1).max(100)).optional(),
   direction: z.enum(['forward', 'backward']).optional(),
   status: TeamMemberStatusQuerySchema.optional(),
 }).strict();

@@ -1,4 +1,5 @@
 import type { MembershipStatus } from '@prisma/client';
+import { createHash } from 'node:crypto';
 
 import type { ClientConfig } from './config.service.js';
 import { AppError } from '../utils/errors.js';
@@ -201,6 +202,7 @@ export async function listTeamMembers(
     cursor?: string;
     direction?: RosterDirection;
     status?: MembershipStatus | 'all';
+    subjectIds?: string[];
   },
   deps?: OrgServiceDeps,
 ): Promise<TeamRosterPage> {
@@ -225,19 +227,25 @@ export async function listTeamMembers(
   const limit = toListLimit(params.limit);
   const direction = params.direction ?? 'forward';
   const status = params.status ?? 'ACTIVE';
-  const binding = `team:${team.id}:status:${status}`;
+  if (params.subjectIds && (params.subjectIds.length > 100 || params.subjectIds.some((id) => !id || id.length > 256))) {
+    throw new AppError('BAD_REQUEST', 400, 'ROSTER_SUBJECT_FILTER_INVALID');
+  }
+  const subjectIds = params.subjectIds ? [...new Set(params.subjectIds)].sort() : undefined;
+  const subjectBinding = subjectIds ? `:subjects:${createHash('sha256').update(JSON.stringify(subjectIds)).digest('hex')}` : '';
+  const binding = `team:${team.id}:status:${status}${subjectBinding}`;
   const cursor = params.cursor
     ? decodeRosterCursor(params.cursor, env.SHARED_SECRET, binding)
     : undefined;
   const statusWhere = status === 'all' ? {} : { status };
+  const subjectWhere = subjectIds ? { userId: { in: subjectIds } } : {};
   const [rows, total] = await Promise.all([
     prisma.teamMember.findMany({
-      where: { teamId: team.id, ...statusWhere, ...rosterKeysetWhere(cursor, direction) },
+      where: { teamId: team.id, ...statusWhere, ...subjectWhere, ...rosterKeysetWhere(cursor, direction) },
       orderBy: rosterOrder(direction),
       take: limit + 1,
       select: TEAM_ROSTER_SELECT,
     }),
-    prisma.teamMember.count({ where: { teamId: team.id, ...statusWhere } }),
+    prisma.teamMember.count({ where: { teamId: team.id, ...statusWhere, ...subjectWhere } }),
   ]);
 
   const hasMore = rows.length > limit;

@@ -23,7 +23,7 @@ export async function validateSessionBroker(params: { token: string; targetConfi
   if (targetDomain !== 'api.selkie.live' || typeof teamScoped !== 'boolean') throw forbidden();
   const now = deps.now?.() ?? Math.floor(Date.now() / 1000);
   const subject = await verifyChainedSubjectAccessToken({ subjectToken: params.token,
-    callerAudience: SESSION_BROKER_RESOURCE, issuer: getPublicBaseUrl() }, { now: () => now });
+    callerAudience: SESSION_BROKER_RESOURCE, issuer: getPublicBaseUrl() }, { now: () => now, prisma: deps.prisma });
   if (subject.source_domain !== SESSION_BROKER_SOURCE || subject.azp !== SESSION_BROKER_SOURCE ||
     subject.product !== 'coder' || subject.scope !== SESSION_BROKER_SCOPE || subject.act) throw forbidden();
   const prisma = deps.prisma ?? getAdminPrisma();
@@ -53,7 +53,7 @@ export async function validateSessionBroker(params: { token: string; targetConfi
       tx.domainRole.findUnique({ where: { domain_userId: { domain: targetDomain, userId: subject.sub } },
         select: { role: true } }),
       getActiveClientOrgContext({ userId: subject.sub, domain: SESSION_BROKER_SOURCE,
-        orgId: subject.active.orgId, groupsEnabled: false }, { prisma: tx, crossProductPrisma: tx, policyPrisma: tx }),
+        orgId: subject.active.orgId, groupsEnabled: false, assuranceId: subject.assurance_id }, { prisma: tx, crossProductPrisma: tx, policyPrisma: tx }),
       teamScoped ? getActiveClientOrgContext({ userId: subject.sub, domain: targetDomain,
         orgId: subject.active.orgId, groupsEnabled: false }, { prisma: tx, crossProductPrisma: tx, policyPrisma: tx }) : Promise.resolve(null),
     ]);

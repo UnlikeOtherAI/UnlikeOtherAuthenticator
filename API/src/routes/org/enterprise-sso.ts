@@ -59,6 +59,9 @@ export function registerOrgEnterpriseRoutes(app: FastifyInstance): void {
       assurance_id: proof.id, method: proof.method, expires_at: proof.expiresAt.toISOString(),
       client_domain: proof.clientDomain,
       recheck_by: new Date(Math.min(Date.now() + 1800000, proof.expiresAt.getTime())).toISOString(),
-      policy_generation: proof.policyGeneration, ...(proof.connectionId ? { connection_id: proof.connectionId } : {}) });
+      policy_generation: proof.policyGeneration,
+      connection_generation: proof.connectionGeneration, connection_revision: proof.connectionRevision,
+      authenticated_at: proof.authenticatedAt?.toISOString() ?? null, observed_at: proof.observedAt.toISOString(),
+      ...(proof.connectionId ? { connection_id: proof.connectionId } : {}) });
   });
 }

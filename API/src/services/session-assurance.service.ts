@@ -4,6 +4,7 @@ import type { Prisma, PrismaClient, SessionAssurance } from '@prisma/client';
 
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
+import { runInTransaction } from '../db/tenant-context.js';
 
 export type AssuranceDb = Pick<PrismaClient,
   'sessionAssurance' | 'refreshToken' | 'user' | 'orgSsoPolicy' | 'orgSsoConnection' |
@@ -29,6 +30,16 @@ export async function validateSessionAssurance(
   db: AssuranceDb = getAdminPrisma(),
   now = new Date(),
 ): Promise<SessionAssurance> {
+  try { return await validateSessionAssuranceInside(binding, db, now); }
+  catch (error) {
+    if (error instanceof AppError) throw error;
+    throw new AppError('SERVICE_UNAVAILABLE', 503, 'ASSURANCE_AUTHORITY_UNAVAILABLE');
+  }
+}
+async function validateSessionAssuranceInside(
+  binding: AssuranceBinding & { reference?: string; id?: string; requirement?: AccountRequirement },
+  db: AssuranceDb, now: Date,
+): Promise<SessionAssurance> {
   if ((!binding.reference && !binding.id) || (binding.reference && binding.id)) reject();
   let row = await db.sessionAssurance.findUnique({ where: binding.reference
     ? { referenceHash: hashAssuranceReference(binding.reference) } : { id: binding.id ?? reject() } });
@@ -40,14 +51,20 @@ export async function validateSessionAssurance(
   for (let depth = 0; row; depth++) {
     if (depth >= 8 || visited.has(row.id) || row.revokedAt || row.expiresAt <= now ||
       row.userId !== leaf.userId || row.credentialEpoch !== leaf.credentialEpoch ||
-      row.expiresAt < leaf.expiresAt) reject();
+      row.expiresAt < leaf.expiresAt || row.method !== leaf.method ||
+      row.clientDomain !== leaf.clientDomain || row.orgId !== leaf.orgId || row.teamId !== leaf.teamId ||
+      row.connectionId !== leaf.connectionId || row.externalIdentityId !== leaf.externalIdentityId) reject();
+    if (row.observedAt.getTime() > now.getTime() + 120000 ||
+      (row.authenticatedAt && row.authenticatedAt.getTime() > now.getTime() + 120000)) reject();
     visited.add(row.id);
     const [user, family] = await Promise.all([
       db.user.findUnique({ where: { id: row.userId }, select: { lifecycleStatus: true, tokenVersion: true } }),
       db.refreshToken.findFirst({ where: { familyId: row.familyId, userId: row.userId,
-        domain: row.clientDomain, revokedAt: null, expiresAt: { gt: now } }, select: { id: true } }),
+        domain: row.clientDomain, orgId: row.orgId, teamId: row.teamId,
+        revokedAt: null, expiresAt: { gt: now } }, select: { id: true, expiresAt: true } }),
     ]);
-    if (!user || user.lifecycleStatus !== 'ACTIVE' || user.tokenVersion !== row.credentialEpoch || !family) reject();
+    if (!user || user.lifecycleStatus !== 'ACTIVE' || user.tokenVersion !== row.credentialEpoch ||
+      !family || family.expiresAt < row.expiresAt) reject();
     if (row.orgId) {
       const member = await db.orgMember.findUnique({ where: { orgId_userId: { orgId: row.orgId, userId: row.userId } },
         select: { status: true, org: { select: { lifecycleStatus: true } } } });
@@ -75,8 +92,6 @@ export async function validateSessionAssurance(
     if (!row.parentId) break;
     row = await db.sessionAssurance.findUnique({ where: { id: row.parentId } });
     if (!row) reject();
-    // Enterprise/recovery authority must never be laundered through an independent child.
-    if (row.method !== 'independent' && leaf.method === 'independent') reject();
   }
   if (binding.requirement === 'global_account_control' && leaf.method !== 'independent') reject();
   if (binding.requirement === 'sso_recovery' && leaf.method !== 'recovery') reject();
@@ -88,7 +103,18 @@ export async function issueSessionAssurance(
   data: Omit<Prisma.SessionAssuranceUncheckedCreateInput, 'id' | 'referenceHash'>,
   db: AssuranceDb,
 ): Promise<{ assurance: SessionAssurance; reference: string }> {
+  if (typeof (db as Partial<PrismaClient>).$transaction === 'function') {
+    return runInTransaction(db as PrismaClient, (tx) => issueSessionAssurance(data, tx));
+  }
   if (data.method !== 'independent' && data.method !== 'sso' && data.method !== 'recovery') reject();
+  if (data.parentId) {
+    const parent = await db.sessionAssurance.findUnique({ where: { id: data.parentId } });
+    if (!parent || parent.method !== data.method || parent.userId !== data.userId ||
+      parent.credentialEpoch !== data.credentialEpoch || parent.clientDomain !== data.clientDomain ||
+      parent.orgId !== (data.orgId ?? null) || parent.teamId !== (data.teamId ?? null) ||
+      parent.connectionId !== (data.connectionId ?? null) || parent.externalIdentityId !== (data.externalIdentityId ?? null) ||
+      parent.expiresAt < new Date(data.expiresAt) || parent.observedAt.getTime() !== new Date(data.observedAt).getTime()) reject();
+  }
   const reference = randomBytes(32).toString('base64url');
   const assurance = await db.sessionAssurance.create({ data: {
     ...data, referenceHash: hashAssuranceReference(reference),
@@ -103,7 +129,9 @@ export async function issueSessionAssurance(
 export async function requireProductAssurance(
   binding: AssuranceBinding & { reference?: string; id?: string }, db: AssuranceDb = getAdminPrisma(),
 ): Promise<SessionAssurance | null> {
-  const product = await db.enterpriseProductReadiness.findUnique({ where: { clientDomain: binding.clientDomain } });
+  let product;
+  try { product = await db.enterpriseProductReadiness.findUnique({ where: { clientDomain: binding.clientDomain } }); }
+  catch { throw new AppError('SERVICE_UNAVAILABLE', 503, 'ASSURANCE_AUTHORITY_UNAVAILABLE'); }
   if (!binding.reference && !binding.id && !product?.minimumAssuranceVersion) return null;
   return validateSessionAssurance(binding, db);
 }

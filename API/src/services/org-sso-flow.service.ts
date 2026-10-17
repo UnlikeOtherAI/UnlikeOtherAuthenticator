@@ -18,7 +18,7 @@ export async function startEnterpriseTest(session: Awaited<ReturnType<typeof man
   const flowId = randomEnterpriseValue(); const verifier = randomEnterpriseValue();
   const flow = await tx.orgSsoFlow.create({ data: { id: flowId, connectionId: id, revision,
     browserHash: hashAssuranceReference(browser), nonce: randomEnterpriseValue(),
-    encryptedVerifier: sealEnterpriseSecret(verifier, `flow:${flowId}`), mode: 'test', managementSessionId: session.id,
+    encryptedVerifier: await sealEnterpriseSecret(verifier, `flow:${flowId}`), mode: 'test', managementSessionId: session.id,
     context: {}, expiresAt: new Date(Math.min(Date.now() + 600000, session.expiresAt.getTime())) } });
   const target = connection.protocol === 'oidc' ? enterpriseOidcAuthorize(connection, flow, verifier) :
     await enterpriseSamlAuthorize(connection, flow, tx);
@@ -49,7 +49,7 @@ export async function finishEnterpriseTest(connectionId: string, flowId: string,
     if (connection.protocol === 'oidc' && response.code) {
       await validateEnterpriseOidcCallback(connection, flow, { code: response.code, iss: response.iss });
     } else if (connection.protocol === 'saml' && response.SAMLResponse) {
-      await validateEnterpriseSamlCallback(connection, response.SAMLResponse);
+      await validateEnterpriseSamlCallback(connection, response.SAMLResponse, flow.id);
     } else throw new AppError('UNAUTHORIZED', 401, 'SSO_ASSERTION_INVALID');
     passed = true;
   } catch { /* Public test diagnostics deliberately contain no raw provider response or claims. */ }
