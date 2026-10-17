@@ -299,3 +299,13 @@ value). `utils/access-status.tsx` provides it to LoginPage independently of
 product config, query parameters and browser storage. Only auth-server
 `AUTH_ACCESS_STATUS_ENABLED=true` enables the entry and server endpoints.
 The API also refuses previously issued proofs when disabled.
+
+### Organisation access management
+
+The customer owner management continuation renders `OrganisationAccessPage`
+at `/auth/organisation-access`, outside `PopupProvider` while reusing Auth's
+theme, language selector, and controls. Typed cookie/CSRF calls live in
+`utils/organisation-access.ts` and use the shared `utils/api.ts` transport.
+Connection setup, test/readiness review and domain verification compose
+`components/organisation/`. See [the customer journey and local evaluation](organisation-access-ui.md).
+The platform Admin superuser boundary is unchanged.

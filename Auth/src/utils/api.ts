@@ -69,12 +69,13 @@ async function parseJsonSafe(response: Response): Promise<unknown> {
   }
 }
 
-async function request<T>(
-  method: 'GET' | 'POST',
+export async function request<T>(
+  method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
   path: string,
   options: {
     query?: Record<string, QueryValue>;
     body?: unknown;
+    csrfToken?: string;
   } = {},
 ): Promise<ApiResult<T>> {
   const url = buildUrl(path, options.query);
@@ -85,6 +86,7 @@ async function request<T>(
       method,
       headers: {
         accept: 'application/json',
+        ...(options.csrfToken ? { 'X-UOA-CSRF': options.csrfToken } : {}),
         ...(options.body !== undefined ? { 'content-type': 'application/json' } : {}),
       },
       body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
