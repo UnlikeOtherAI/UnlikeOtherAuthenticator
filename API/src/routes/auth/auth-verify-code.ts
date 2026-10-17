@@ -103,7 +103,7 @@ export function registerAuthVerifyCodeRoute(app: FastifyInstance): void {
             codeChallengeMethod: pkce.codeChallengeMethod,
             sharedSecret: SHARED_SECRET,
             audience: LOGIN_SESSION_AUDIENCE,
-          }, { prisma: prisma });
+          }, { prisma: prisma, verifiedEvent: { kind: 'local_credential' } });
           const choices = await buildSessionChoices(
             { userId, config },
             { crossProductPrisma: prisma, policyPrisma: prisma, prisma },
@@ -137,6 +137,7 @@ export function registerAuthVerifyCodeRoute(app: FastifyInstance): void {
             rememberMe,
             requestAccess,
             primaryJustVerified: true,
+            verifiedPrimaryEvent: { kind: 'local_credential' },
             authMethod: 'email_code',
             codeChallenge: pkce.codeChallenge,
             codeChallengeMethod: pkce.codeChallengeMethod,

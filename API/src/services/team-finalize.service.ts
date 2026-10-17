@@ -1,4 +1,4 @@
-import { recordIndependentAuthentication } from './authentication-evidence.service.js';
+import { recordIndependentAuthentication, type VerifiedAuthenticationEvent } from './authentication-evidence.service.js';
 import type { PrismaClient } from '@prisma/client';
 
 import { getAuthServiceIdentifier, requireEnv } from '../config/env.js';
@@ -50,6 +50,7 @@ export async function finalizeWithTwoFaPolicy(
     rememberMe: boolean;
     requestAccess: boolean;
     primaryJustVerified?: boolean;
+    verifiedPrimaryEvent?: VerifiedAuthenticationEvent;
     managementIntentId?: string;
     authenticationEvidenceId?: string;
   authMethod: string;
@@ -89,8 +90,9 @@ export async function finalizeWithTwoFaPolicy(
   }
 
   if (!params.authenticationEvidenceId && params.primaryJustVerified) {
+    if (!params.verifiedPrimaryEvent) throw new Error('verified authentication event required');
     params = { ...params, authenticationEvidenceId: await recordIndependentAuthentication({ userId: params.userId,
-      credentialEpoch: params.credentialEpoch, method: params.authMethod, config: params.config,
+      credentialEpoch: params.credentialEpoch, method: params.authMethod, verifiedEvent: params.verifiedPrimaryEvent, config: params.config,
       configUrl: params.configUrl, redirectUrl: params.redirectUrl, codeChallenge: params.codeChallenge }, deps?.prisma) };
   }
   const { SHARED_SECRET } = requireEnv('SHARED_SECRET');

@@ -6,23 +6,26 @@ import { AppError } from '../utils/errors.js';
 import { fingerprintClientConfig } from './client-config-fingerprint.service.js';
 import type { ClientConfig } from './config.service.js';
 
+export type VerifiedAuthenticationEvent = { kind: 'local_credential' } | { kind: 'provider'; authenticatedAt: Date | null };
 type EvidenceDb = PrismaClient | Prisma.TransactionClient;
 const digest = (value: string) => createHash('sha256').update(value).digest('hex');
 function deny(): never { throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_EVIDENCE_REQUIRED'); }
 
 /** Only actual independently verified primary authentication callers may invoke this mint. */
 export async function recordIndependentAuthentication(input: { userId: string; credentialEpoch: number;
-  method: string; config: ClientConfig; configUrl: string; redirectUrl: string; codeChallenge?: string;
+  method: string; verifiedEvent: VerifiedAuthenticationEvent; config: ClientConfig; configUrl: string; redirectUrl: string; codeChallenge?: string;
 }, db: EvidenceDb = getAdminPrisma()): Promise<string> {
   if (input.method === 'sso' || input.method === 'sso_recovery') deny();
   // Corporate mailbox access cannot become independent proof for a managed identity.
   if (['email_code', 'email_registration', 'email_link', 'login_link', 'verify_email', 'verify_email_set_password']
     .includes(input.method)) await assertMailboxCredentialAdmission(input.userId, db);
   const now = new Date();
+  const authenticatedAt = input.verifiedEvent.kind === 'local_credential' ? now : input.verifiedEvent.authenticatedAt;
+  if (authenticatedAt && (!Number.isFinite(authenticatedAt.getTime()) || authenticatedAt.getTime() > now.getTime() + 120000)) deny();
   const reference = randomBytes(32).toString('base64url');
   const row = await db.authenticationEvidence.create({ data: { referenceHash: digest(reference),
     userId: input.userId, credentialEpoch: input.credentialEpoch, clientDomain: input.config.domain,
-    method: input.method, provenance: 'independent', authenticatedAt: now, observedAt: now,
+    method: input.method, provenance: 'independent', authenticatedAt, observedAt: now,
     purpose: 'authorize', actionBinding: digest(JSON.stringify({ config: fingerprintClientConfig(input.config),
       configUrl: input.configUrl, redirectUrl: input.redirectUrl, codeChallenge: input.codeChallenge ?? null })),
     expiresAt: new Date(now.getTime() + 15 * 60000) } });
@@ -37,6 +40,9 @@ async function validateAuthenticationEvidence(input: { id?: string; userId: stri
   if (!row || row.userId !== input.userId || row.credentialEpoch !== input.credentialEpoch ||
     row.clientDomain !== input.clientDomain || row.revokedAt || (!input.allowConsumed && row.consumedAt) ||
     row.expiresAt <= new Date()) deny();
+  const latestAllowed = Date.now() + 120000;
+  if (row.observedAt.getTime() > latestAllowed || (row.authenticatedAt?.getTime() ?? 0) > latestAllowed ||
+    (row.mfaCompletedAt?.getTime() ?? 0) > latestAllowed) deny();
   let ancestor = row; const seen = new Set([row.id]);
   while (ancestor.parentId) {
     if (seen.size >= 8 || seen.has(ancestor.parentId)) deny();

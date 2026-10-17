@@ -300,7 +300,7 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
               codeChallengeMethod: socialState.code_challenge_method,
               sharedSecret: SHARED_SECRET,
               audience: LOGIN_SESSION_AUDIENCE,
-            }, { prisma: prisma });
+            }, { prisma: prisma, verifiedEvent: { kind: 'provider', authenticatedAt: null } });
             return { kind: 'team_chooser' as const, loginToken };
           }
         }
@@ -324,6 +324,7 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
             state: socialState.state,
             requestAccess: socialState.request_access === true,
             primaryJustVerified: true,
+            verifiedPrimaryEvent: { kind: 'provider', authenticatedAt: null },
             authMethod: provider,
             codeChallenge: socialState.code_challenge,
             codeChallengeMethod: socialState.code_challenge_method,
