@@ -1,3 +1,4 @@
+import { enterpriseAuthorityStores } from '../../helpers/enterprise-authority-stores.js';
 import { afterAll, beforeEach, vi } from 'vitest';
 import type { PrismaClient } from '@prisma/client';
 
@@ -22,10 +23,12 @@ export const baseOrg = {
 
 export function makePrismaMock(): PrismaClient {
   const prisma = {
+    ...enterpriseAuthorityStores(),
     organisation: {
+      ...enterpriseAuthorityStores().organisation,
       findFirst: vi.fn(),
       findUnique: vi.fn(),
-      findUniqueOrThrow: vi.fn(),
+      findUniqueOrThrow: vi.fn().mockResolvedValue(baseOrg),
       update: vi.fn(),
       updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       delete: vi.fn().mockResolvedValue(baseOrg),
@@ -41,6 +44,7 @@ export function makePrismaMock(): PrismaClient {
       count: vi.fn(),
     },
     team: {
+      ...enterpriseAuthorityStores().team,
       findFirst: vi.fn(),
       create: vi.fn(),
     },
@@ -61,6 +65,7 @@ export function makePrismaMock(): PrismaClient {
       findUnique: vi.fn(),
     },
     refreshToken: {
+      findMany: vi.fn().mockResolvedValue([]),
       updateMany: vi.fn().mockResolvedValue({ count: 0 }),
     },
     $queryRaw: vi.fn().mockResolvedValue([{ id: 'org-1' }]),

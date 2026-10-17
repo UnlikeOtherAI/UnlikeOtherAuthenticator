@@ -172,7 +172,7 @@ export function registerOrganisationMemberRoutes(app: FastifyInstance) {
       const { role } = SetRoleBodySchema.parse(request.body ?? {});
 
       setTenantContextFromRequest(request, { orgId, userId: tenantUserId(request) });
-      const member = await request.withTenantTx((tx) =>
+      const member = await runWithOrgAdminEffectTransaction(request, (tx) =>
         changeOrganisationMemberRole(
           {
             orgId,
@@ -282,8 +282,8 @@ export function registerOrganisationMemberRoutes(app: FastifyInstance) {
     );
 
     setTenantContextFromRequest(request, { orgId, userId: tenantUserId(request) });
-    const org = await request.withTenantTx((tx) =>
-      transferOrganisationOwnership(
+    const org = await runWithOrgAdminEffectTransaction(request, (tx) =>
+        transferOrganisationOwnership(
         { orgId, domain, ...orgCaller(request), newOwnerId, previousOwnerRole, config },
         { prisma: asPrismaClient(tx) },
       ),

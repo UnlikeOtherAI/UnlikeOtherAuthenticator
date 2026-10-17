@@ -222,6 +222,16 @@ Only the **team admin** and the **org owner** can create, rename, delete, or cha
 
 ## Enterprise features (in scope from the start)
 
+> **Superseded enterprise design (2026-10-18).** The Microsoft and SCIM sections
+> below are retained historical requirements. Their common-tenant acceptance,
+> same-email account merging, global-user deactivation, mutable global externalId,
+> and implicit first-member admin grants must not be implemented for enterprise
+> SSO. The authoritative replacement is the
+> [organisation enterprise SSO plan](../plans/2026-10-17-organisation-enterprise-sso.md),
+> especially its exact consuming product/organisation scope, stable provider
+> identity, independent existing-account proof, contribution-based provisioning
+> and scoped revocation. SSO/SCIM use custom arrangements enabled only in UOA.
+
 ### Microsoft SSO (Azure AD / Entra ID)
 
 Required for enterprise clients (e.g. automotive, manufacturing, finance) whose employees authenticate via corporate Microsoft accounts.

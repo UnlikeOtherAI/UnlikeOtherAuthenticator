@@ -1,3 +1,4 @@
+import { enterpriseAuthorityStores } from '../../helpers/enterprise-authority-stores.js';
 import { afterAll, beforeEach, vi } from 'vitest';
 import type { PrismaClient } from '@prisma/client';
 
@@ -12,7 +13,9 @@ export const now = new Date('2026-02-15T00:00:00.000Z');
 
 export function makePrismaMock(): PrismaClient {
   const prisma = {
+    ...enterpriseAuthorityStores(),
     organisation: {
+      ...enterpriseAuthorityStores().organisation,
       findFirst: vi.fn(),
     },
     orgMember: {
@@ -21,6 +24,7 @@ export function makePrismaMock(): PrismaClient {
       count: vi.fn(),
     },
     team: {
+      ...enterpriseAuthorityStores().team,
       findMany: vi.fn(),
       findFirst: vi.fn(),
       count: vi.fn(),
@@ -47,6 +51,7 @@ export function makePrismaMock(): PrismaClient {
       count: vi.fn(),
     },
     refreshToken: {
+      findMany: vi.fn().mockResolvedValue([]),
       updateMany: vi.fn().mockResolvedValue({ count: 0 }),
     },
     $queryRaw: vi.fn().mockResolvedValue([{ id: 'locked-row', isDefault: false }]),

@@ -1,3 +1,4 @@
+import { runEnterpriseAuthorityTransaction } from '../services/enterprise-authority-transaction.service.js';
 import type { FastifyInstance, FastifyPluginAsync, FastifyRequest } from 'fastify';
 import fp from 'fastify-plugin';
 import type { Prisma, PrismaClient } from '@prisma/client';
@@ -130,7 +131,7 @@ export function runWithOrgAdminEffectTransaction<T>(
   const context = request.tenantContext;
   if (!context) throw new Error('Organisation effect transaction requires tenantContext');
   if (!getEnv().DATABASE_URL) return handler(request.adminDb);
-  return runInTransaction(request.adminDb, async tx => {
+  return runEnterpriseAuthorityTransaction(request.adminDb, async tx => {
     await assertTenantEffectAuthority(request, context, tx as unknown as Prisma.TransactionClient, tx);
     return handler(tx);
   });
