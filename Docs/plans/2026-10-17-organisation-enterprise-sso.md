@@ -426,6 +426,14 @@ An arbitrary return URL, connection ID or hint cannot select a different
 product, organisation or account. Preserve the relying product's state through
 all continuations without reinterpreting it as a redirect.
 
+A tile or bookmark begins without a relying-product PKCE verifier or pending
+state. The start URL must therefore hand off to the registered product login
+entry so the product begins its normal browser-bound authorization flow, carrying
+only the connection/target hint or a bounded UOA launch intent. UOA validates that
+selection again after signed-config verification. Do not issue a code directly
+to a product callback that has no matching product-owned pending flow. Test-mode
+callbacks remain separate and never issue a product code.
+
 Optional `POST /auth/sso/route` is an Auth UI email-step endpoint. The product
 integration advertises support through `sso` in `enabled_auth_methods` and
 `org_features.enabled`; this is protocol capability, not a Nessie administrator
