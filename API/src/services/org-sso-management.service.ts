@@ -4,7 +4,7 @@ import type { Prisma, PrismaClient } from '@prisma/client';
 import { getAdminPrisma } from '../db/prisma.js';
 import { getPublicBaseUrl, requireEnv } from '../config/env.js';
 import { AppError } from '../utils/errors.js';
-import { hashAssuranceReference, validateSessionAssurance } from './session-assurance.service.js';
+import { hashAssuranceReference } from './session-assurance.service.js';
 import { enterpriseReadiness } from './org-sso-policy.service.js';
 import { sealEnterpriseSecret } from './enterprise-secret.service.js';
 import { resolveEnterpriseConfiguration, enterprisePresets } from './org-sso-configuration.service.js';
@@ -38,19 +38,16 @@ export async function assertManagementOwner(
     try {
       const evidence = await requireAuthenticationEvidence({ id: row.authenticationEvidenceId, userId: row.userId,
         credentialEpoch: row.credentialEpoch, clientDomain: row.clientDomain, allowConsumed: true }, db);
-      if (evidence.provenance !== 'independent' || evidence.purpose !== 'management' || !evidence.browserHash || !evidence.consumedAt) failure();
+      const freshAt = Math.max(evidence.authenticatedAt?.getTime() ?? 0, evidence.mfaCompletedAt?.getTime() ?? 0);
+      if (evidence.provenance !== 'independent' || evidence.purpose !== 'management' || !evidence.browserHash ||
+        !evidence.consumedAt || freshAt !== row.authenticatedAt.getTime() || freshAt + TEN_MINUTES <= Date.now()) failure();
     } catch (error) {
       if (error instanceof AppError && error.statusCode < 500) failure();
       throw error;
     }
     return;
   }
-  if (!row.assuranceId) failure();
-  const proof = await db.sessionAssurance.findUnique({ where: { id: row.assuranceId } });
-  if (!proof || proof.method !== 'independent') failure();
-  await validateSessionAssurance({ id: proof.id, userId: row.userId,
-    clientDomain: row.clientDomain, credentialEpoch: row.credentialEpoch,
-    orgId: proof.orgId, teamId: proof.teamId, requirement: 'global_account_control' }, db);
+  failure();
 }
 
 /** Product handoff is an intent to reauthenticate in UOA, never a management grant. */

@@ -8,7 +8,7 @@ import { z } from 'zod';
 import { LOGIN_SESSION_TTL_MS } from '../config/constants.js';
 import { AppError } from '../utils/errors.js';
 import type { Prisma, PrismaClient } from '@prisma/client';
-import { recordIndependentAuthentication } from './authentication-evidence.service.js';
+import { recordIndependentAuthentication, type VerifiedAuthenticationEvent } from './authentication-evidence.service.js';
 import type { ClientConfig } from './config.service.js';
 
 const LOGIN_SESSION_ALLOWED_ALGS = ['HS256'] as const;
@@ -102,11 +102,11 @@ export async function signLoginSession(
     ttlMs?: number;
     jti?: string;
   },
-  deps?: { prisma: PrismaClient | Prisma.TransactionClient },
+  deps?: { prisma: PrismaClient | Prisma.TransactionClient; verifiedEvent: VerifiedAuthenticationEvent },
 ): Promise<string> {
   const now = params.now ?? new Date();
   const authenticationEvidenceId = params.authenticationEvidenceId ?? (deps ? await recordIndependentAuthentication({
-    userId: params.userId, credentialEpoch: params.credentialEpoch, method: params.authMethod,
+    userId: params.userId, credentialEpoch: params.credentialEpoch, method: params.authMethod, verifiedEvent: deps.verifiedEvent,
     config: params.config, configUrl: params.configUrl, redirectUrl: params.redirectUrl, codeChallenge: params.codeChallenge }, deps.prisma) : undefined);
   const ttlMs = params.ttlMs ?? LOGIN_SESSION_TTL_MS;
   const expSeconds = Math.floor((now.getTime() + ttlMs) / 1000);

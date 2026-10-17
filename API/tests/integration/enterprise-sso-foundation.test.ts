@@ -119,7 +119,7 @@ describe('enterprise scoped authority transactions with real PostgreSQL', () => 
     const [families, codes, proofs] = await Promise.all([handle.prisma.refreshToken.count(),
       handle.prisma.authorizationCode.count(), handle.prisma.sessionAssurance.count()]);
     const result = await handle.prisma.$transaction(async (tx) => {
-      const evidence = await recordIndependentAuthentication({ userId, credentialEpoch: 0, method: 'email_password',
+      const evidence = await recordIndependentAuthentication({ userId, credentialEpoch: 0, method: 'email_password', verifiedEvent: { kind: 'local_credential' },
         config, configUrl: `https://${domain}/config`, redirectUrl: `https://${domain}/callback` }, tx);
       const intent = await createManagementIntent({ userId, credentialEpoch: 0, clientDomain: domain,
         orgId: orgB, authenticationEvidenceId: evidence, browser }, tx);
@@ -138,7 +138,7 @@ describe('enterprise scoped authority transactions with real PostgreSQL', () => 
   });
   it('cannot complete an owner management intent before the personal final factor', async () => {
     await handle.prisma.user.update({ where: { id: userId }, data: { twoFaEnabled: true } });
-    const evidence = await recordIndependentAuthentication({ userId, credentialEpoch: 0, method: 'email_password',
+    const evidence = await recordIndependentAuthentication({ userId, credentialEpoch: 0, method: 'email_password', verifiedEvent: { kind: 'local_credential' },
       config: { domain } as ClientConfig, configUrl: `https://${domain}/config`, redirectUrl: `https://${domain}/callback` }, handle.prisma);
     const intent = await handle.prisma.$transaction((tx) => createManagementIntent({ userId, credentialEpoch: 0,
       clientDomain: domain, orgId: orgB, authenticationEvidenceId: evidence, browser: 'factor-browser' }, tx));
@@ -150,6 +150,36 @@ describe('enterprise scoped authority transactions with real PostgreSQL', () => 
       clientDomain: domain, authenticationEvidenceId: evidence, twoFaCompleted: true }, tx))).resolves.toHaveProperty('status', 'management');
     await expect(handle.prisma.authenticationEvidence.update({ where: { id: evidence }, data: { observedAt: new Date() } }))
       .rejects.toThrow('authentication evidence is immutable');
+    await handle.prisma.user.update({ where: { id: userId }, data: { twoFaEnabled: false } });
+  });
+  it.each([null, new Date(Date.now() - 86400000)])('never treats recent social callback as fresh provider authentication: %s', async (providerTime) => {
+    const evidenceId = await recordIndependentAuthentication({ userId, credentialEpoch: 0, method: 'google',
+      verifiedEvent: { kind: 'provider', authenticatedAt: providerTime }, config: { domain } as ClientConfig,
+      configUrl: `https://${domain}/config`, redirectUrl: `https://${domain}/callback` }, handle.prisma);
+    const evidence = await handle.prisma.authenticationEvidence.findUniqueOrThrow({ where: { id: evidenceId } });
+    expect(evidence.authenticatedAt).toEqual(providerTime);
+    expect(evidence.observedAt.getTime()).toBeGreaterThan(Date.now() - 60000);
+    await expect(handle.prisma.$transaction((tx) => createManagementIntent({ userId, credentialEpoch: 0,
+      clientDomain: domain, orgId: orgB, authenticationEvidenceId: evidenceId, browser: 'social-browser' }, tx)))
+      .rejects.toThrow('SSO_MANAGEMENT_REAUTH_REQUIRED');
+  });
+  it('uses an existing final factor without replacing unknown provider authentication time', async () => {
+    await handle.prisma.user.update({ where: { id: userId }, data: { twoFaEnabled: true } });
+    const evidenceId = await recordIndependentAuthentication({ userId, credentialEpoch: 0, method: 'google',
+      verifiedEvent: { kind: 'provider', authenticatedAt: null }, config: { domain } as ClientConfig,
+      configUrl: `https://${domain}/config`, redirectUrl: `https://${domain}/callback` }, handle.prisma);
+    const intent = await handle.prisma.$transaction((tx) => createManagementIntent({ userId, credentialEpoch: 0,
+      clientDomain: domain, orgId: orgB, authenticationEvidenceId: evidenceId, browser: 'existing-factor-browser' }, tx));
+    await expect(handle.prisma.$transaction((tx) => finishManagementIntent({ id: intent.id, userId, credentialEpoch: 0,
+      clientDomain: domain, authenticationEvidenceId: evidenceId, twoFaCompleted: false }, tx))).rejects.toThrow('SSO_MANAGEMENT_REAUTH_REQUIRED');
+    await handle.prisma.authenticationEvidence.update({ where: { id: evidenceId }, data: { mfaCompletedAt: new Date() } });
+    const completed = await handle.prisma.$transaction((tx) => finishManagementIntent({ id: intent.id, userId,
+      credentialEpoch: 0, clientDomain: domain, authenticationEvidenceId: evidenceId, twoFaCompleted: true }, tx));
+    const child = await handle.prisma.authenticationEvidence.findFirstOrThrow({ where: { parentId: evidenceId } });
+    expect(child.authenticatedAt).toBeNull(); expect(child.mfaCompletedAt).not.toBeNull();
+    const token = new URL(completed.redirectTo).hash.slice('#continuation='.length);
+    const exchanged = await exchangeManagementContinuation(token, 'existing-factor-browser', handle.prisma);
+    await expect(managementSession(exchanged.browser, undefined, false, handle.prisma)).resolves.toHaveProperty('orgId', orgB);
     await handle.prisma.user.update({ where: { id: userId }, data: { twoFaEnabled: false } });
   });
   it('derives family proof from original evidence time and consumes the evidence only once', async () => {

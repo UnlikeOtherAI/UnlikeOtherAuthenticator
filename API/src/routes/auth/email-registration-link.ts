@@ -306,7 +306,7 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
                   codeChallengeMethod: pkce.codeChallengeMethod,
                   sharedSecret: SHARED_SECRET,
                   audience: LOGIN_SESSION_AUDIENCE,
-                }, { prisma: tx });
+                }, { prisma: tx, verifiedEvent: { kind: 'local_credential' } });
                 return { kind: 'team_chooser' as const, loginToken };
               }
             }
@@ -327,6 +327,7 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
                 rememberMe,
                 requestAccess,
                 primaryJustVerified: true,
+            verifiedPrimaryEvent: { kind: 'local_credential' },
             authMethod,
                 codeChallenge: pkce.codeChallenge,
                 codeChallengeMethod: pkce.codeChallengeMethod,
