@@ -1,4 +1,11 @@
-import { randomUUID } from 'node:crypto';
+import { recordIndependentAuthentication } from '../../src/services/authentication-evidence.service.js';
+import { createManagementIntent, finishManagementIntent } from '../../src/services/org-sso-management-intent.service.js';
+import { exchangeManagementContinuation, managementSession } from '../../src/services/org-sso-management.service.js';
+import type { ClientConfig } from '../../src/services/config.service.js';
+import { resolveTokenFamilyAssurance } from '../../src/services/token-assurance.service.js';
+import { hashRefreshToken } from '../../src/services/refresh-token-replay.service.js';
+import { asPrismaClient } from '../../src/db/tenant-context.js';
+import { randomUUID, randomBytes } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createRlsTestDb, type RlsTestDbHandle } from '../helpers/test-db.js';
@@ -13,7 +20,11 @@ describe('enterprise scoped authority transactions with real PostgreSQL', () => 
   const orgA = `sso-org-a-${randomUUID()}`;
   const orgB = `sso-org-b-${randomUUID()}`;
   const now = new Date();
+  const priorProvider = process.env.ENTERPRISE_SSO_CUSTODY_PROVIDER;
+  const priorRing = process.env.ENTERPRISE_SSO_KEYRING;
   beforeAll(async () => {
+    process.env.ENTERPRISE_SSO_CUSTODY_PROVIDER = 'local';
+    process.env.ENTERPRISE_SSO_KEYRING = JSON.stringify({ current: 'test', keys: { test: randomBytes(32).toString('base64') } });
     const created = await createRlsTestDb();
     if (!created) throw new Error('DATABASE_URL must name a real isolated PostgreSQL test database');
     handle = created;
@@ -30,7 +41,10 @@ describe('enterprise scoped authority transactions with real PostgreSQL', () => 
         expiresAt: new Date(now.getTime() + 3600000) } });
     }
   });
-  afterAll(async () => { await app?.$disconnect(); await handle?.cleanup(); });
+  afterAll(async () => { await app?.$disconnect(); await handle?.cleanup();
+    if (priorProvider === undefined) delete process.env.ENTERPRISE_SSO_CUSTODY_PROVIDER; else process.env.ENTERPRISE_SSO_CUSTODY_PROVIDER = priorProvider;
+    if (priorRing === undefined) delete process.env.ENTERPRISE_SSO_KEYRING; else process.env.ENTERPRISE_SSO_KEYRING = priorRing;
+  });
 
   it('preserves two active memberships on the same origin', async () => {
     const memberships = await handle.prisma.orgMember.findMany({ where: { userId, status: 'ACTIVE' } });
@@ -99,8 +113,66 @@ describe('enterprise scoped authority transactions with real PostgreSQL', () => 
     const [a, b] = await Promise.all([first, second]);
     expect(a.sequence < b.sequence).toBe(true);
   });
+  it('finishes owner management from fresh evidence without issuing a product family or code', async () => {
+    const config = { domain } as ClientConfig;
+    const browser = 'independent-test-browser';
+    const [families, codes, proofs] = await Promise.all([handle.prisma.refreshToken.count(),
+      handle.prisma.authorizationCode.count(), handle.prisma.sessionAssurance.count()]);
+    const result = await handle.prisma.$transaction(async (tx) => {
+      const evidence = await recordIndependentAuthentication({ userId, credentialEpoch: 0, method: 'email_password',
+        config, configUrl: `https://${domain}/config`, redirectUrl: `https://${domain}/callback` }, tx);
+      const intent = await createManagementIntent({ userId, credentialEpoch: 0, clientDomain: domain,
+        orgId: orgB, authenticationEvidenceId: evidence, browser }, tx);
+      return finishManagementIntent({ id: intent.id, userId, credentialEpoch: 0, clientDomain: domain,
+        authenticationEvidenceId: evidence, twoFaCompleted: false }, tx);
+    });
+    const token = new URL(result.redirectTo).hash.slice('#continuation='.length);
+    await expect(exchangeManagementContinuation(token, 'other-browser', handle.prisma)).rejects.toThrow('SSO_MANAGEMENT_REAUTH_REQUIRED');
+    const exchanged = await exchangeManagementContinuation(token, browser, handle.prisma);
+    const session = await managementSession(exchanged.browser, undefined, false, handle.prisma);
+    expect(session.orgId).toBe(orgB);
+    await expect(exchangeManagementContinuation(token, browser, handle.prisma)).rejects.toThrow('SSO_MANAGEMENT_REAUTH_REQUIRED');
+    expect(await handle.prisma.refreshToken.count()).toBe(families);
+    expect(await handle.prisma.authorizationCode.count()).toBe(codes);
+    expect(await handle.prisma.sessionAssurance.count()).toBe(proofs);
+  });
+  it('cannot complete an owner management intent before the personal final factor', async () => {
+    await handle.prisma.user.update({ where: { id: userId }, data: { twoFaEnabled: true } });
+    const evidence = await recordIndependentAuthentication({ userId, credentialEpoch: 0, method: 'email_password',
+      config: { domain } as ClientConfig, configUrl: `https://${domain}/config`, redirectUrl: `https://${domain}/callback` }, handle.prisma);
+    const intent = await handle.prisma.$transaction((tx) => createManagementIntent({ userId, credentialEpoch: 0,
+      clientDomain: domain, orgId: orgB, authenticationEvidenceId: evidence, browser: 'factor-browser' }, tx));
+    await expect(handle.prisma.$transaction((tx) => finishManagementIntent({ id: intent.id, userId, credentialEpoch: 0,
+      clientDomain: domain, authenticationEvidenceId: evidence, twoFaCompleted: false }, tx))).rejects.toThrow('SSO_MANAGEMENT_REAUTH_REQUIRED');
+    expect((await handle.prisma.orgSsoManagementIntent.findUniqueOrThrow({ where: { id: intent.id } })).consumedAt).toBeNull();
+    await handle.prisma.authenticationEvidence.update({ where: { id: evidence }, data: { mfaCompletedAt: new Date() } });
+    await expect(handle.prisma.$transaction((tx) => finishManagementIntent({ id: intent.id, userId, credentialEpoch: 0,
+      clientDomain: domain, authenticationEvidenceId: evidence, twoFaCompleted: true }, tx))).resolves.toHaveProperty('status', 'management');
+    await expect(handle.prisma.authenticationEvidence.update({ where: { id: evidence }, data: { observedAt: new Date() } }))
+      .rejects.toThrow('authentication evidence is immutable');
+    await handle.prisma.user.update({ where: { id: userId }, data: { twoFaEnabled: false } });
+  });
+  it('derives family proof from original evidence time and consumes the evidence only once', async () => {
+    await handle.prisma.enterpriseProductReadiness.upsert({ where: { clientDomain: domain },
+      create: { clientDomain: domain, minimumAssuranceVersion: 1 }, update: { minimumAssuranceVersion: 1 } });
+    const original = new Date(Date.now() - 300000);
+    const evidence = await handle.prisma.authenticationEvidence.create({ data: { userId, credentialEpoch: 0,
+      clientDomain: domain, referenceHash: randomBytes(32).toString('hex'), method: 'email_password', provenance: 'independent',
+      purpose: 'authorize', actionBinding: 'verified-code-binding', observedAt: original, authenticatedAt: original,
+      signatureCompletedAt: new Date(), expiresAt: new Date(Date.now() + 600000) } });
+    const raw = randomUUID(); const secret = 'bounded-test-only-hash-key';
+    const family = await handle.prisma.refreshToken.create({ data: { tokenHash: hashRefreshToken(raw, secret),
+      familyId: randomUUID(), userId, domain, clientId: 'client', configUrl: `https://${domain}/config`, orgId: orgB,
+      expiresAt: new Date(Date.now() + 3600000) } });
+    const resolved = await handle.prisma.$transaction((tx) => resolveTokenFamilyAssurance({ prisma: asPrismaClient(tx),
+      userId, domain, credentialEpoch: 0, refreshToken: raw, sharedSecret: secret, authenticationEvidenceId: evidence.id }));
+    const proof = await handle.prisma.sessionAssurance.findUniqueOrThrow({ where: { id: resolved.assuranceId } });
+    expect(proof.observedAt).toEqual(original); expect(proof.authenticatedAt).toEqual(original);
+    expect((await handle.prisma.authenticationEvidence.findUniqueOrThrow({ where: { id: evidence.id } })).consumedAt).not.toBeNull();
+    expect(proof.familyId).toBe(family.familyId);
+  });
   it('makes the server assurance minimum monotonic', async () => {
-    await handle.prisma.enterpriseProductReadiness.create({ data: { clientDomain: domain, minimumAssuranceVersion: 1 } });
+    await handle.prisma.enterpriseProductReadiness.upsert({ where: { clientDomain: domain }, create: { clientDomain: domain, minimumAssuranceVersion: 1 }, update: {} });
     await expect(handle.prisma.enterpriseProductReadiness.update({ where: { clientDomain: domain },
       data: { minimumAssuranceVersion: 0 } })).rejects.toThrow('cannot downgrade');
   });

@@ -1,3 +1,4 @@
+import { recordIndependentAuthentication } from './authentication-evidence.service.js';
 import type { PrismaClient } from '@prisma/client';
 
 import { getAuthServiceIdentifier, requireEnv } from '../config/env.js';
@@ -48,7 +49,10 @@ export async function finalizeWithTwoFaPolicy(
     state?: string;
     rememberMe: boolean;
     requestAccess: boolean;
-    authMethod: string;
+    primaryJustVerified?: boolean;
+    managementIntentId?: string;
+    authenticationEvidenceId?: string;
+  authMethod: string;
     codeChallenge?: string;
     codeChallengeMethod?: 'S256';
     ip?: string | null;
@@ -84,9 +88,14 @@ export async function finalizeWithTwoFaPolicy(
     });
   }
 
+  if (!params.authenticationEvidenceId && params.primaryJustVerified) {
+    params = { ...params, authenticationEvidenceId: await recordIndependentAuthentication({ userId: params.userId,
+      credentialEpoch: params.credentialEpoch, method: params.authMethod, config: params.config,
+      configUrl: params.configUrl, redirectUrl: params.redirectUrl, codeChallenge: params.codeChallenge }, deps?.prisma) };
+  }
   const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
   const audience = getAuthServiceIdentifier();
-  if ((params.orgId === undefined) !== (params.teamId === undefined)) {
+  if (!params.managementIntentId && (params.orgId === undefined) !== (params.teamId === undefined)) {
     throw new Error('team scope requires both orgId and teamId');
   }
   const team =
@@ -108,7 +117,7 @@ export async function finalizeWithTwoFaPolicy(
   );
 
   const twoFaEnabled = deps?.currentTwoFaEnabled ?? params.twoFaEnabled;
-  if (twoFaPolicy !== 'OFF' && twoFaEnabled) {
+  if ((twoFaPolicy !== 'OFF' || params.managementIntentId) && twoFaEnabled) {
     const twofa_token = await signTwoFaChallenge({
       userId: params.userId,
       credentialEpoch: params.credentialEpoch,
@@ -117,6 +126,8 @@ export async function finalizeWithTwoFaPolicy(
       redirectUrl: params.redirectUrl,
       state: params.state,
       authMethod: params.authMethod,
+      authenticationEvidenceId: params.authenticationEvidenceId,
+      managementIntentId: params.managementIntentId,
       rememberMe: params.rememberMe,
       requestAccess: params.requestAccess,
       codeChallenge: params.codeChallenge,
@@ -137,6 +148,8 @@ export async function finalizeWithTwoFaPolicy(
         configUrl: params.configUrl,
         finalize: {
           authMethod: params.authMethod,
+      authenticationEvidenceId: params.authenticationEvidenceId,
+      managementIntentId: params.managementIntentId,
           redirectUrl: params.redirectUrl,
           state: params.state,
           rememberMe: params.rememberMe,
@@ -162,6 +175,8 @@ export async function finalizeWithTwoFaPolicy(
       rememberMe: params.rememberMe,
       requestAccess: params.requestAccess,
       authMethod: params.authMethod,
+      authenticationEvidenceId: params.authenticationEvidenceId,
+      managementIntentId: params.managementIntentId,
       twoFaCompleted: false,
       codeChallenge: params.codeChallenge,
       codeChallengeMethod: params.codeChallengeMethod,

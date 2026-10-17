@@ -652,6 +652,8 @@ model AuthorizationCode {
   @@index([expiresAt])
   @@index([createdAt])
   @@map("authorization_codes")
+  authenticationEvidenceId String? @map("authentication_evidence_id")
+
 }
 
 // One-time use ledger for confidential subject assertions. The source-provided
@@ -1021,6 +1023,8 @@ model SigningContinuation {
   @@index([userId, domain])
   @@index([expiresAt])
   @@map("signing_continuations")
+  authenticationEvidenceId String? @map("authentication_evidence_id")
+
 }
 
 model SignatureClaimIntent {
@@ -5179,6 +5183,7 @@ model BillingSmsPolicyAlert {
 }
 
 model OrgSsoPolicy {
+  arrangementEnabled Boolean @default(false) @map("arrangement_enabled")
   clientDomain String @map("client_domain")
   orgId String @map("org_id")
   revision Int @default(1)
@@ -5291,7 +5296,9 @@ model OrgSsoManagementSession {
   csrfHash String? @map("csrf_hash")
   userId String @map("user_id")
   credentialEpoch Int @map("credential_epoch")
-  assuranceId String @map("assurance_id")
+  assuranceId String? @map("assurance_id")
+  authenticationEvidenceId String? @map("authentication_evidence_id")
+  initiatingBrowserHash String? @map("initiating_browser_hash")
   clientDomain String @map("client_domain")
   orgId String @map("org_id")
   authenticatedAt DateTime @map("authenticated_at")
@@ -5419,4 +5426,51 @@ model EnterpriseProductReadiness {
   recoveryDesignRevision String? @map("recovery_design_revision")
   retentionSequence BigInt @default(0) @map("retention_sequence")
   @@map("enterprise_product_readiness")
+}
+
+// Durable authentication evidence predates and does not depend on a product refresh family.
+model AuthenticationEvidence {
+  id String @id @default(cuid())
+  parentId String? @map("parent_id")
+  referenceHash String @unique @map("reference_hash") @db.Char(64)
+  userId String @map("user_id")
+  credentialEpoch Int @map("credential_epoch")
+  clientDomain String @map("client_domain")
+  method String @db.VarChar(32)
+  provenance String @db.VarChar(32)
+  authenticatedAt DateTime? @map("authenticated_at")
+  observedAt DateTime @map("observed_at")
+  connectionId String? @map("connection_id")
+  externalIdentityId String? @map("external_identity_id")
+  connectionRevision Int? @map("connection_revision")
+  connectionGeneration Int? @map("connection_generation")
+  orgId String? @map("org_id")
+  teamId String? @map("team_id")
+  purpose String @db.VarChar(32)
+  actionBinding String @map("action_binding")
+  browserHash String? @map("browser_hash") @db.Char(64)
+  mfaCompletedAt DateTime? @map("mfa_completed_at")
+  signatureCompletedAt DateTime? @map("signature_completed_at")
+  expiresAt DateTime @map("expires_at")
+  consumedAt DateTime? @map("consumed_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@index([userId, expiresAt])
+  @@index([expiresAt])
+  @@map("authentication_evidence")
+}
+
+model OrgSsoManagementIntent {
+  id String @id @default(cuid())
+  userId String @map("user_id")
+  credentialEpoch Int @map("credential_epoch")
+  clientDomain String @map("client_domain")
+  orgId String @map("org_id")
+  authenticationEvidenceId String @map("authentication_evidence_id")
+  browserHash String @map("browser_hash") @db.Char(64)
+  expiresAt DateTime @map("expires_at")
+  consumedAt DateTime? @map("consumed_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@index([expiresAt])
+  @@map("org_sso_management_intents")
 }

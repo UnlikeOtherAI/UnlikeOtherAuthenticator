@@ -215,6 +215,7 @@ export async function buildFirstLoginBlock(
 }
 
 export type TeamChoiceTeam = {
+  can_manage_sso?: boolean;
   teamId: string;
   orgId: string;
   name: string;
@@ -266,6 +267,7 @@ export type TeamChoiceCreatableOrg = {
 };
 
 export type SessionChoices = {
+  manageable_orgs?: TeamChoiceCreatableOrg[];
   teams: TeamChoiceTeam[];
   pending_invites: TeamChoicePendingInvite[];
   can_create_org: boolean;
@@ -378,7 +380,7 @@ export async function buildSessionChoices(
       select: {
         teamId: true,
         teamRole: true,
-        team: { select: { name: true, slug: true, orgId: true, iconUrl: true, org: { select: { name: true } } } },
+        team: { select: { name: true, slug: true, orgId: true, iconUrl: true, org: { select: { name: true, ownerId: true } } } },
       },
     }),
     prisma.teamInvite.findMany({
@@ -431,7 +433,7 @@ export async function buildSessionChoices(
       select: {
         teamId: true,
         teamRole: true,
-        team: { select: { name: true, slug: true, orgId: true, iconUrl: true, org: { select: { name: true } } } },
+        team: { select: { name: true, slug: true, orgId: true, iconUrl: true, org: { select: { name: true, ownerId: true } } } },
       },
     });
   }
@@ -452,6 +454,7 @@ export async function buildSessionChoices(
     avatarImageUrl: publicTeamAvatarImageUrl({ baseUrl: avatarBaseUrl, teamId: row.teamId }),
     orgName: row.team.org?.name ?? null,
     slug: row.team.slug,
+    ...(row.team.org?.ownerId === params.userId ? { can_manage_sso: true } : {}),
   }));
 
   // Member-initiated invitations record only `invitedByUserId` — resolve those inviters.
@@ -472,9 +475,16 @@ export async function buildSessionChoices(
     .filter((row) => configRoleHoldsCapability(params.config, 'org', row.role, 'teams.manage'))
     .map((row) => ({ orgId: row.orgId, orgName: row.org.name }));
 
+  const manageableOrgs = await (deps?.crossProductPrisma ?? prisma).orgMember.findMany({
+    where: { userId: params.userId, status: 'ACTIVE', org: { ownerId: params.userId, lifecycleStatus: 'ACTIVE',
+      ...(policy.scope === 'all_active_memberships' ? {} : { domain }) } },
+    select: { orgId: true, org: { select: { name: true } } },
+  });
+
   return {
     teams,
     pending_invites: pendingInvites,
+    ...(manageableOrgs.length ? { manageable_orgs: manageableOrgs.map((m) => ({ orgId: m.orgId, orgName: m.org.name })) } : {}),
     can_create_org: Boolean(params.config.org_features?.allow_user_create_org),
     creatable_orgs: creatableOrgs,
   };

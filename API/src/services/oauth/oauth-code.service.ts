@@ -31,6 +31,7 @@ function hashCode(code: string, pepper: string): string {
 }
 
 export interface IssueOAuthCodeInput {
+  authenticationEvidenceId?: string;
   userId: string;
   domain: string;
   oauthClientId: string;
@@ -81,6 +82,7 @@ export async function issueOAuthCode(
           rememberMe: input.rememberMe ?? false,
           tokenVersion: input.credentialEpoch,
           twoFaCompleted: input.twoFaCompleted ?? false,
+          authenticationEvidenceId: input.authenticationEvidenceId,
           expiresAt: new Date(now.getTime() + AUTHORIZATION_CODE_TTL_MS),
         },
         select: { id: true },

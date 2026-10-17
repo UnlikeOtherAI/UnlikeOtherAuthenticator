@@ -102,3 +102,37 @@ initiation, deployed custody verification, actual protocol attack fixtures,
 vendor sandboxes and deployed-version verification. Recovery design is still an
 explicit decision, so enforcement fails closed. Do not mark readiness satisfied
 on the strength of this foundation tranche.
+
+## Authentication evidence and owner entry
+
+Primary verification records immutable authentication evidence with the original
+observed and authenticated times. Signed chooser, TOTP, forced-enrollment and
+signature artifacts carry its identifier; the authorization code stores it.
+Code exchange consumes it once and derives the product-family assurance without
+rebasing authentication time. Managed-identity mailboxes cannot reset or add a
+global password, or mint independent mailbox-login evidence.
+
+The product management-continuation endpoint returns an `/auth` entry hint with
+`flow=organisation_management`, `management_org_id`, the verified source config,
+and a server-generated S256 challenge/state. It grants no authority. Its verifier
+is discarded: an accidental product-code path cannot finish at the relying party.
+The owner authenticates again in UOA. Password and login-code flows hold the team
+chooser even for a single team when the management hint is present.
+
+The chooser posts `login_token` and `org_id` to
+`/auth/organisation-access/start` with the existing signed-config query. It consumes
+the chooser once, rechecks canonical ownership, creates an HttpOnly browser-bound
+intent, then uses the existing personal TOTP or enrollment verifier. Finalization
+consumes the original evidence into an exact-purpose management child and mints a
+fragment continuation. Exchange requires the initiating browser nonce. No product
+code or refresh family is created. Lost ownership returns
+`SSO_MANAGEMENT_ACCESS_WITHDRAWN`; expired or unsuitable proof returns
+`SSO_MANAGEMENT_REAUTH_REQUIRED`.
+
+Custom arrangements are enabled only by the UOA operator for the exact
+`(client_domain, org_id)` policy through the machine-only arrangements endpoint.
+Owners may prepare drafts while disabled; activation requires the arrangement and
+all technical readiness. No subscription tier or new billing system is involved.
+Recovery selection is delegated to implementation; enforcement still requires
+completed independent custodians and a successful recovery drill. Live SSO
+linking/provisioning and some artifact consumers remain unfinished release gates.

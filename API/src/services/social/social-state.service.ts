@@ -10,6 +10,7 @@ const SOCIAL_STATE_ALLOWED_ALGS = ['HS256'] as const;
 const SocialStateSchema = z.object({
   provider: z.enum(['google', 'apple', 'facebook', 'github', 'linkedin']),
   config_url: z.string().min(1),
+  management_org_id: z.string().min(1).max(100).optional(),
   redirect_url: z.string().min(1),
   // Relying-party opaque `state`, bound here so a bridge hop cannot swap the
   // value the final callback echoes.
@@ -38,6 +39,7 @@ function normalizeBaseUrl(value: string): string {
 
 export async function signSocialState(params: {
   provider: SocialProviderKey;
+  managementOrgId?: string;
   configUrl: string;
   redirectUrl: string;
   state?: string;
@@ -60,6 +62,7 @@ export async function signSocialState(params: {
     return await new SignJWT({
       provider: params.provider,
       config_url: params.configUrl,
+      management_org_id: params.managementOrgId,
       redirect_url: params.redirectUrl,
       state: params.state,
       request_access: params.requestAccess ?? false,

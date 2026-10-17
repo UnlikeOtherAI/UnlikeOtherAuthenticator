@@ -306,7 +306,7 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
                   codeChallengeMethod: pkce.codeChallengeMethod,
                   sharedSecret: SHARED_SECRET,
                   audience: LOGIN_SESSION_AUDIENCE,
-                });
+                }, { prisma: tx });
                 return { kind: 'team_chooser' as const, loginToken };
               }
             }
@@ -326,7 +326,8 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
                 state,
                 rememberMe,
                 requestAccess,
-                authMethod,
+                primaryJustVerified: true,
+            authMethod,
                 codeChallenge: pkce.codeChallenge,
                 codeChallengeMethod: pkce.codeChallengeMethod,
                 ip: request.ip ?? null,

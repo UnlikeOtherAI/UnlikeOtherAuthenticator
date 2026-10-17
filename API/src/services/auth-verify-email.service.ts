@@ -1,3 +1,4 @@
+import { assertMailboxCredentialAdmission } from './credential-admission.service.js';
 import { requireIdentityEmail } from './entity-lifecycle.service.js';
 import type { Prisma, PrismaClient } from '@prisma/client';
 import type { ClientConfig } from './config.service.js';
@@ -268,6 +269,7 @@ export async function verifyEmailToken(
       }
 
       if (existingUser) {
+        await assertMailboxCredentialAdmission(existingUser.id, tx);
         const updated = await tx.user.updateMany({
           where: {
             id: existingUser.id,

@@ -1,4 +1,5 @@
-import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { requireAuthenticationEvidence } from './authentication-evidence.service.js';
+import { createHmac, createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { getAdminPrisma } from '../db/prisma.js';
 import { getPublicBaseUrl, requireEnv } from '../config/env.js';
@@ -15,6 +16,7 @@ const TEN_MINUTES = 600_000;
 const CSRF_CONTEXT = 'uoa.enterprise-management.csrf.v1\0';
 const csrfFor = (browser: string): string => createHmac('sha256', requireEnv('SHARED_SECRET').SHARED_SECRET)
   .update(CSRF_CONTEXT).update(browser).digest('base64url');
+function withdrawn(): never { throw new AppError('FORBIDDEN', 403, 'SSO_MANAGEMENT_ACCESS_WITHDRAWN'); }
 function failure(): never { throw new AppError('FORBIDDEN', 403, 'SSO_MANAGEMENT_REAUTH_REQUIRED'); }
 export async function lockEnterpriseScope(db: ManagementDb, domain: string, orgId: string): Promise<void> {
   await db.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`enterprise:${domain}:${orgId}`}, 0))`;
@@ -22,16 +24,28 @@ export async function lockEnterpriseScope(db: ManagementDb, domain: string, orgI
 
 export async function assertManagementOwner(
   row: { userId: string; orgId: string; clientDomain: string; credentialEpoch: number;
-    assuranceId: string; authenticatedAt: Date; expiresAt: Date; revokedAt: Date | null },
+    assuranceId: string | null; authenticationEvidenceId?: string | null; authenticatedAt: Date; expiresAt: Date; revokedAt: Date | null },
   db: ManagementDb,
 ): Promise<void> {
   const now = new Date();
   if (row.revokedAt || row.expiresAt <= now || row.authenticatedAt.getTime() + TEN_MINUTES <= now.getTime()) failure();
   const org = await db.organisation.findUnique({ where: { id: row.orgId },
     select: { ownerId: true, lifecycleStatus: true } });
-  if (!org || org.ownerId !== row.userId || org.lifecycleStatus !== 'ACTIVE') failure();
+  if (!org || org.ownerId !== row.userId || org.lifecycleStatus !== 'ACTIVE') withdrawn();
   const client = await db.clientDomain.findUnique({ where: { domain: row.clientDomain }, select: { status: true } });
-  if (client?.status !== 'active') failure();
+  if (client?.status !== 'active') withdrawn();
+  if (row.authenticationEvidenceId) {
+    try {
+      const evidence = await requireAuthenticationEvidence({ id: row.authenticationEvidenceId, userId: row.userId,
+        credentialEpoch: row.credentialEpoch, clientDomain: row.clientDomain, allowConsumed: true }, db);
+      if (evidence.provenance !== 'independent' || evidence.purpose !== 'management' || !evidence.browserHash || !evidence.consumedAt) failure();
+    } catch (error) {
+      if (error instanceof AppError && error.statusCode < 500) failure();
+      throw error;
+    }
+    return;
+  }
+  if (!row.assuranceId) failure();
   const proof = await db.sessionAssurance.findUnique({ where: { id: row.assuranceId } });
   if (!proof || proof.method !== 'independent') failure();
   await validateSessionAssurance({ id: proof.id, userId: row.userId,
@@ -39,36 +53,45 @@ export async function assertManagementOwner(
     orgId: proof.orgId, teamId: proof.teamId, requirement: 'global_account_control' }, db);
 }
 
+/** Product handoff is an intent to reauthenticate in UOA, never a management grant. */
 export async function createManagementContinuation(input: {
-  userId: string; credentialEpoch: number; clientDomain: string; orgId: string; assuranceId: string;
+  userId: string; credentialEpoch: number; clientDomain: string; orgId: string; configUrl: string;
 }) {
   const db = getAdminPrisma();
-  return db.$transaction(async (tx) => {
-    await lockEnterpriseScope(tx, input.clientDomain, input.orgId);
-    const proof = await tx.sessionAssurance.findUnique({ where: { id: input.assuranceId } });
-    if (!proof) failure();
-    const expiresAt = new Date(Math.min(Date.now() + 120_000, proof.expiresAt.getTime(),
-      proof.observedAt.getTime() + TEN_MINUTES));
-    const row = { ...input, authenticatedAt: proof.observedAt, expiresAt, revokedAt: null };
-    await assertManagementOwner(row, tx);
-    const token = randomBytes(32).toString('base64url');
-    await tx.orgSsoManagementSession.create({ data: { ...row, tokenHash: hashAssuranceReference(token) } });
-    return { ok: true, management_url: `${getPublicBaseUrl()}/auth/organisation-access#continuation=${token}`,
-      expires_at: expiresAt.toISOString() };
-  });
+  const [org, user] = await Promise.all([
+    db.organisation.findUnique({ where: { id: input.orgId }, select: { ownerId: true, lifecycleStatus: true } }),
+    db.user.findUnique({ where: { id: input.userId }, select: { tokenVersion: true, lifecycleStatus: true } }),
+  ]);
+  if (!org || org.ownerId !== input.userId || org.lifecycleStatus !== 'ACTIVE' || !user ||
+    user.lifecycleStatus !== 'ACTIVE') withdrawn();
+  if (user.tokenVersion !== input.credentialEpoch) failure();
+  const url = new URL('/auth', getPublicBaseUrl());
+  url.searchParams.set('config_url', input.configUrl);
+  url.searchParams.set('management_org_id', input.orgId);
+  url.searchParams.set('flow', 'organisation_management');
+  // This verifier is deliberately never disclosed. An accidental product-code path
+  // cannot complete at the RP; management finalization never issues that code.
+  url.searchParams.set('code_challenge', createHash('sha256').update(randomBytes(32)).digest('base64url'));
+  url.searchParams.set('code_challenge_method', 'S256');
+  url.searchParams.set('state', randomBytes(32).toString('base64url'));
+  return { ok: true, management_url: url.toString(), expires_at: null };
 }
 
-export async function exchangeManagementContinuation(continuation: string) {
-  return getAdminPrisma().$transaction(async (tx) => {
+export async function exchangeManagementContinuation(continuation: string, initiatingBrowser?: string, prisma = getAdminPrisma()) {
+  return prisma.$transaction(async (tx) => {
     const row = await tx.orgSsoManagementSession.findUnique({ where: { tokenHash: hashAssuranceReference(continuation) } });
-    if (!row) failure();
+    if (!row || !row.initiatingBrowserHash || !initiatingBrowser ||
+      row.initiatingBrowserHash !== hashAssuranceReference(initiatingBrowser)) failure();
     await lockEnterpriseScope(tx, row.clientDomain, row.orgId);
     await assertManagementOwner(row, tx);
     if (row.exchangedAt) failure();
     const browser = randomBytes(32).toString('base64url');
     const csrf = csrfFor(browser);
-    const expiresAt = new Date(Math.min(row.authenticatedAt.getTime() + TEN_MINUTES,
-      (await tx.sessionAssurance.findUniqueOrThrow({ where: { id: row.assuranceId } })).expiresAt.getTime()));
+    if (!row.authenticationEvidenceId && !row.assuranceId) failure();
+    const source = row.authenticationEvidenceId
+      ? await tx.authenticationEvidence.findUniqueOrThrow({ where: { id: row.authenticationEvidenceId } })
+      : await tx.sessionAssurance.findUniqueOrThrow({ where: { id: row.assuranceId ?? '' } });
+    const expiresAt = new Date(Math.min(row.authenticatedAt.getTime() + TEN_MINUTES, source.expiresAt.getTime()));
     const result = await tx.orgSsoManagementSession.updateMany({ where: { id: row.id, exchangedAt: null },
       data: { exchangedAt: new Date(), browserHash: hashAssuranceReference(browser),
         csrfHash: hashAssuranceReference(csrf), expiresAt } });
@@ -118,11 +141,11 @@ export async function managementView(session: Awaited<ReturnType<typeof manageme
     db.orgSsoPolicy.findUnique({ where: { clientDomain_orgId: where } }),
     db.orgSsoConnection.findMany({ where, orderBy: { createdAt: 'asc' } }),
     db.organisationEmailDomain.findMany({ where, select: { id: true, emailDomain: true, status: true,
-      verifiedAt: true, checkedAt: true, challengeExpiresAt: true } }), enterpriseReadiness(session.clientDomain, db as PrismaClient),
+      verifiedAt: true, checkedAt: true, challengeExpiresAt: true } }), enterpriseReadiness(session.clientDomain, db as PrismaClient, session.orgId),
   ]);
   return { ok: true, version: 1, org, client_domain: session.clientDomain, csrf_token: session.csrf,
     expires_at: session.expiresAt.toISOString(), capabilities: { manage_sso: true },
-    policy: { revision: policy?.revision ?? 0, enforcement: policy?.enforcement ?? 'off',
+    policy: { arrangement_enabled: policy?.arrangementEnabled ?? false, revision: policy?.revision ?? 0, enforcement: policy?.enforcement ?? 'off',
       session_max_age_seconds: policy?.sessionMaxAgeSeconds ?? 28800, reauth_mode: policy?.reauthMode ?? 'detect_only' },
     connections: connections.map(publicConnection), domains: domains.map((d) => ({ id: d.id,
       email_domain: d.emailDomain, status: d.status, verified_at: d.verifiedAt, checked_at: d.checkedAt,

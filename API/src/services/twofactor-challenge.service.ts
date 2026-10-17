@@ -16,6 +16,8 @@ const TwoFaChallengeSchema = z.object({
   // value the final callback echoes.
   state: z.string().min(1).max(2048).optional(),
   domain: z.string().min(1),
+  management_intent_id: z.string().min(1).max(100).optional(),
+  authentication_evidence_id: z.string().min(1).max(100).optional(),
   auth_method: z.string().min(1),
   remember_me: z.boolean().optional(),
   request_access: z.boolean().optional(),
@@ -34,6 +36,8 @@ export type TwoFaChallenge = {
   redirectUrl: string;
   state?: string;
   domain: string;
+  managementIntentId?: string;
+  authenticationEvidenceId?: string;
   authMethod: string;
   rememberMe: boolean;
   requestAccess: boolean;
@@ -60,6 +64,8 @@ export async function signTwoFaChallenge(params: {
   redirectUrl: string;
   state?: string;
   domain: string;
+  managementIntentId?: string;
+  authenticationEvidenceId?: string;
   authMethod: string;
   rememberMe?: boolean;
   requestAccess?: boolean;
@@ -84,6 +90,8 @@ export async function signTwoFaChallenge(params: {
       state: params.state,
       domain: params.domain,
       auth_method: params.authMethod,
+      authentication_evidence_id: params.authenticationEvidenceId,
+      management_intent_id: params.managementIntentId,
       remember_me: params.rememberMe ?? false,
       request_access: params.requestAccess ?? false,
       code_challenge: params.codeChallenge,
@@ -137,6 +145,8 @@ export async function verifyTwoFaChallenge(params: {
     redirectUrl: parsed.redirect_url,
     domain: parsed.domain,
     authMethod: parsed.auth_method,
+    authenticationEvidenceId: parsed.authentication_evidence_id,
+    managementIntentId: parsed.management_intent_id,
     rememberMe: parsed.remember_me ?? false,
     requestAccess: parsed.request_access ?? false,
   };

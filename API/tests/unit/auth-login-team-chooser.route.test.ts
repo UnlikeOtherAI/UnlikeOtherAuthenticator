@@ -1,3 +1,7 @@
+vi.mock('../../src/services/authentication-evidence.service.js', () => ({
+  recordIndependentAuthentication: vi.fn().mockResolvedValue('test-evidence'),
+  finalizeAuthenticationEvidence: vi.fn(),
+}));
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LOGIN_SESSION_AUDIENCE } from '../../src/config/constants.js';
@@ -194,6 +198,7 @@ describe('POST /auth/login — team chooser wiring (Phase 3b Task 7)', () => {
     // token verification.
     expect(signLoginSessionMock).toHaveBeenCalledWith(
       expect.objectContaining({ audience: LOGIN_SESSION_AUDIENCE }),
+      expect.objectContaining({ prisma: expect.anything() }),
     );
   });
 
