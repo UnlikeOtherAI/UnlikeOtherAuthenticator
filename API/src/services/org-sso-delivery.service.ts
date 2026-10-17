@@ -1,4 +1,5 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { z } from 'zod';
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import { clientServiceContainsUrl } from '../utils/client-service.js';
@@ -27,8 +28,11 @@ export async function registerRevocationConsumer(input: { client_domain: string;
   const data = { destination: input.destination, keyId: input.key_id, encryptedSecret, enabled: false,
     readyChallengeHash: hashAssuranceReference(challenge), readyChallengeExpiresAt: new Date(Date.now() + 3600000),
     acknowledgedAt: null, failureCount: 0 };
-  await db.orgRevocationConsumer.upsert({ where: { clientDomain: input.client_domain },
-    create: { clientDomain: input.client_domain, ...data }, update: data });
+  await db.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`revocation-consumer:${input.client_domain}`}, 0))`;
+    await tx.orgRevocationConsumer.upsert({ where: { clientDomain: input.client_domain },
+      create: { clientDomain: input.client_domain, ...data }, update: data });
+  });
   return { ok: true, client_domain: input.client_domain, key_id: input.key_id, secret,
     challenge, challenge_expires_at: data.readyChallengeExpiresAt.toISOString(), delivery_enabled: false };
 }
@@ -70,16 +74,21 @@ export async function deliverEnterpriseRevocations(shouldContinue: () => boolean
         if (!shouldContinue()) return;
         // Rotation/readiness revocation takes effect before each attempt, not just at the batch read.
         const current = await db.orgRevocationConsumer.findUniqueOrThrow({ where: { clientDomain: consumer.clientDomain } });
-        if (!current.enabled || current.keyId !== consumer.keyId || !current.acknowledgedAt) break;
+        if (!current.enabled || current.keyId !== consumer.keyId || !current.acknowledgedAt ||
+          current.encryptedSecret !== consumer.encryptedSecret || current.destination !== consumer.destination) break;
         const body = JSON.stringify({ version: 1, audience: consumer.clientDomain, event: publicRevocationEvent(event) });
         const timestamp = Math.floor(Date.now() / 1000);
-        await enterpriseFetch(consumer.destination, [new URL(consumer.destination).origin], { method: 'POST',
+        const acknowledgement = await enterpriseFetch(consumer.destination, [new URL(consumer.destination).origin], { method: 'POST',
           headers: { 'content-type': 'application/json', 'x-uoa-revocation-key-id': consumer.keyId,
             'x-uoa-revocation-timestamp': String(timestamp),
             'x-uoa-revocation-signature': signRevocationDelivery(body, secret, timestamp) }, body, limit: 4096 });
+        const receipt = z.object({ ok: z.literal(true), version: z.literal(1), event_id: z.literal(event.id) })
+          .strict().parse(JSON.parse(acknowledgement));
+        if (!receipt.ok) throw new Error('REVOCATION_ACK_INVALID');
         await db.$transaction(async (tx) => {
           const updated = await tx.orgRevocationConsumer.updateMany({ where: { clientDomain: consumer.clientDomain,
-            keyId: consumer.keyId, enabled: true, deliveredSequence: { lt: event.sequence } },
+            keyId: consumer.keyId, encryptedSecret: consumer.encryptedSecret, destination: consumer.destination,
+            acknowledgedAt: consumer.acknowledgedAt, enabled: true, deliveredSequence: { lt: event.sequence } },
           data: { deliveredSequence: event.sequence, failureCount: 0, nextAttemptAt: new Date() } });
           if (updated.count) await tx.orgRevocationDelivery.upsert({ where: { clientDomain_eventId: {
             clientDomain: consumer.clientDomain, eventId: event.id } }, create: { clientDomain: consumer.clientDomain,
@@ -91,7 +100,8 @@ export async function deliverEnterpriseRevocations(shouldContinue: () => boolean
       // No raw response, provider payload, destination credential or secret goes into diagnostics.
       const failures = Math.min(consumer.failureCount + 1, 10);
       await db.orgRevocationConsumer.updateMany({ where: { clientDomain: consumer.clientDomain,
-        keyId: consumer.keyId, enabled: true, deliveredSequence: { lte: delivered } }, data: {
+        keyId: consumer.keyId, encryptedSecret: consumer.encryptedSecret, destination: consumer.destination,
+            acknowledgedAt: consumer.acknowledgedAt, enabled: true, deliveredSequence: { lte: delivered } }, data: {
         failureCount: failures, nextAttemptAt: new Date(Date.now() + Math.min(300000, 1000 * 2 ** failures)) } });
     }
   }

@@ -87,7 +87,11 @@ after that walk commits, then resume the feed from the captured cursor.
 Operators provision an encrypted webhook key and destination through the
 machine-only internal registration endpoint. Delivery starts only after the
 product acknowledges its one-time challenge with the installed key. The durable
-worker signs exact JSON bytes, records successful receipts, and retries failures
+worker signs exact JSON bytes and requires a JSON acknowledgement containing
+`ok: true`, `version: 1` and the exact `event_id` before recording a receipt.
+Progress writes bind the captured encrypted key, destination and readiness
+acknowledgement, so re-registration cannot inherit an old in-flight success.
+The worker retries failures
 with bounded backoff. Receivers accept duplicate delivery idempotently. The feed
 remains available independently. Scheduled domain rechecks remain unfinished.
 
