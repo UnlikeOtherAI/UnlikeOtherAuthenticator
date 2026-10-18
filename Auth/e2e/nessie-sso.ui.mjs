@@ -1,7 +1,6 @@
 // Explicit local browser evaluation, never included in either application's CI.
 import { createHash, generateKeyPairSync, randomBytes, randomUUID } from 'node:crypto';
-import { mkdir } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { afterAll, beforeAll, expect, it, vi } from 'vitest';
 import { createApp } from '../../API/src/app.js';
@@ -14,7 +13,7 @@ import { resolveEnterpriseConfiguration } from '../../API/src/services/org-sso-c
 import { registerRevocationConsumer, acknowledgeRevocationConsumer, revocationReadinessProof } from '../../API/src/services/org-sso-delivery.service.js';
 import { removeOrganisationMember } from '../../API/src/services/organisation.service.members.js';
 import { validateConfigFields } from '../../API/src/services/config.service.js';
-import { nessieAppFixture } from './nessie-app.fixture.mjs';
+import { loadNessieBuild, nessieAppFixture, readNessieAsset, closeNessieAssetTransport } from './nessie-app.fixture.mjs';
 
 const providerTransport = vi.hoisted(() => ({ fetch: vi.fn() }));
 vi.mock('../../API/src/services/enterprise-http.service.js', () => ({ enterpriseFetch: providerTransport.fetch }));
@@ -27,6 +26,23 @@ const previousEnv = { ...process.env };
 let db, uoa, nessie, provider, browser, adminServer, stopAdmin, nativeFetch;
 let org, team, member, config;
 const output = 'e2e/artifacts/nessie-sso';
+
+const fulfillAuthorityResponse = async (route, status, sourceHeaders, body) => {
+  const headers = Object.fromEntries(Object.entries(sourceHeaders)
+    .filter(([, value]) => value !== undefined)
+    .map(([key, value]) => [key, Array.isArray(value) ? value.join('\n') : String(value)]));
+  if ([301, 302, 303, 307, 308].includes(status) && headers.location) {
+    // Playwright intercepts only the first request of a redirect chain. Start a
+    // new navigation to the application's exact returned location, retaining its
+    // actual browser cookies without sending the next hop to the public host.
+    const target = JSON.stringify(headers.location).replaceAll('<', '\\u003c');
+    delete headers.location; delete headers['content-length']; delete headers['content-encoding'];
+    delete headers['content-security-policy']; delete headers['content-type'];
+    return route.fulfill({ status: 200, headers, contentType: 'text/html',
+      body: `<!doctype html><script>location.replace(${target})</script>` });
+  }
+  return route.fulfill({ status, headers, body });
+};
 
 beforeAll(async () => {
   const checkout = process.env.NESSIE_CHECKOUT;
@@ -48,7 +64,7 @@ beforeAll(async () => {
     UOA_BILLING_APP_KEY_NESSIE: `uoa_app_${randomBytes(24).toString('base64url')}`,
     NESSIE_API_PUBLIC_URL: 'https://api.example.com',
     UOA_BILLING_ACTOR_PRIVATE_JWK_NESSIE: JSON.stringify({ ...key.privateKey.export({ format: 'jwk' }), kid: 'test-billing' }),
-    NESSIE_API_PORT: '6434', NESSIE_ADMIN_PORT: '6435' });
+    NAV_E2E_SERVER_LOGS: '1', NESSIE_API_PORT: '6434', NESSIE_ADMIN_PORT: '6435' });
   const transport = async (url, init = {}) => {
     // Ordinary product billing is outside enterprise enablement and is a separate fixture here.
     if (url.origin === origin && url.pathname === '/billing/v1/service-access/confirm') {
@@ -107,7 +123,7 @@ beforeAll(async () => {
     userId: member.id, issuer: provider.issuer, tenant: 'exact-tenant', subject: 'stable-subject',
     identityScope: config.user_scope, linkedVia: 'independent_session' } });
   uoa = await createApp(); await uoa.ready();
-  const servers = await import(pathToFileURL(resolve(checkout, 'admin/e2e/navigation/lib/servers.mjs')).href);
+  const servers = await loadNessieBuild(checkout, 'admin/e2e/navigation/lib/servers.mjs');
   // Server readiness uses its own local transport, not the authority fixture above.
   globalThis.fetch = nativeFetch;
   adminServer = await servers.startAdmin({ reuseExisting: false }); stopAdmin = servers.stopProcess;
@@ -124,7 +140,11 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await browser?.close();
-  if (adminServer) await stopAdmin(adminServer);
+  if (adminServer) {
+    await writeFile(`${output}/vite.log`, adminServer.output());
+    await stopAdmin(adminServer);
+  }
+  closeNessieAssetTransport();
   if (nessie && org) await nessie.prisma.organization.deleteMany({ where: { externalOrgId: org.id } });
   if (nessie && member) {
     await nessie.prisma.uoaAssuranceCredential.deleteMany({ where: { subject: member.id } });
@@ -137,47 +157,95 @@ afterAll(async () => {
 it('enters through the actual Nessie login and UOA tile, redeems PKCE once and enforces canonical removal', async () => {
   for (const width of [390, 1280]) {
     const context = await browser.newContext({ viewport: { width, height: 900 } });
+    await context.routeWebSocket('**', socket => socket.close());
     const page = await context.newPage();
+    page.setDefaultNavigationTimeout(120000);
+    const errors = [];
+    page.on('pageerror', error => errors.push(error.message));
+    page.on('console', message => { if (message.type() === 'error' && errors.length < 12) errors.push(message.text().replace(/(?:https?|wss?):\/\/[^ )']+/g, '[URL]')); });
+    const assetResults = [];
     let exchange;
     let loginBody;
-    await context.route(`${origin}/**`, async route => {
+    let loginSlot;
+    const stages = [];
+    const assets = new Set();
+    await context.route('**/*', async route => {
       const request = route.request(); const url = new URL(request.url());
+      if (url.origin === origin) {
       const response = await uoa.inject({ method: request.method(), url: url.pathname + url.search,
         headers: await request.allHeaders(), payload: request.postData() ?? undefined });
-      const headers = Object.fromEntries(Object.entries(response.headers).map(([k, v]) => [k, Array.isArray(v) ? v.join('\n') : String(v)]));
-      await route.fulfill({ status: response.statusCode, headers, body: response.rawPayload });
-    });
-    await context.route(`${provider.issuer}/**`, async route => {
+      stages.push(`uoa:${url.pathname}:${response.statusCode}`);
+      return fulfillAuthorityResponse(route, response.statusCode, response.headers, response.rawPayload);
+      }
+      if (url.origin === provider.issuer) {
       const response = await provider.wire(route.request().url());
-      await route.fulfill({ status: response.status, headers: response.headers, body: response.body });
-    });
-    await context.route(`${productOrigin}/**`, async route => {
-      const request = route.request(); const url = new URL(request.url());
+      stages.push(`idp:${url.pathname}:${response.status}`);
+      return fulfillAuthorityResponse(route, response.status, response.headers, response.body);
+      }
+      if (url.origin !== productOrigin) throw new Error(`Unexpected browser destination: ${url.origin}`);
       if (url.pathname.startsWith('/api/')) {
-        if (url.pathname === '/api/auth/refresh') return route.fulfill({ status: 401 });
         if (url.pathname === '/api/brand') return route.fulfill({ json: { data: { name: 'Nessie' } } });
         if (url.pathname === '/api/auth/session') {
           loginBody = request.postDataJSON();
+          loginSlot = (await request.allHeaders())['x-nessie-account-slot'];
           const wrong = await nessie.app.inject({ method: 'POST', url: url.pathname,
             payload: { ...loginBody, codeVerifier: 'wrong-verifier-'.repeat(4) } });
           expect(wrong.statusCode).toBe(401);
         }
         const response = await nessie.app.inject({ method: request.method(), url: url.pathname + url.search,
           headers: await request.allHeaders(), payload: request.postData() ?? undefined });
+        stages.push(`nessie:${url.pathname}:${response.statusCode}`);
         if (url.pathname === '/api/auth/session') exchange = response;
-        return route.fulfill({ status: response.statusCode, contentType: 'application/json', body: response.rawPayload });
+        return fulfillAuthorityResponse(route, response.statusCode, response.headers, response.rawPayload);
       }
-      const response = await nativeFetch(`http://127.0.0.1:6435${url.pathname}${url.search}`);
-      return route.fulfill({ status: response.status, headers: Object.fromEntries(response.headers), body: Buffer.from(await response.arrayBuffer()) });
+      assets.add(url.pathname);
+      try {
+        const response = await readNessieAsset(`http://127.0.0.1:6435${url.pathname}${url.search}`);
+        assetResults.push(`${url.pathname}:${response.status}:${response.headers['content-type']}`);
+        const headers = Object.fromEntries(Object.entries(response.headers).filter(([, value]) => value !== undefined).map(([key, value]) => [key, Array.isArray(value) ? value.join(', ') : String(value)]));
+        delete headers['content-length']; delete headers['content-encoding'];
+        await route.fulfill({ status: response.status, headers, body: response.body });
+      } catch (error) {
+        if (errors.length < 18) errors.push(`asset ${url.pathname}: ${error.message}; ${error.cause?.code ?? ''}`);
+        if (!page.isClosed()) await route.fulfill({ status: 503, body: 'Local fixture transport unavailable' }).catch(() => {});
+      } finally { assets.delete(url.pathname); }
     });
-    await page.goto(`${origin}/sso/${connectionId}/start`);
-    await page.getByRole('button', { name: 'Continue with UnlikeOtherAI', exact: true }).waitFor();
+    await page.goto(`${origin}/sso/${connectionId}/start`, { waitUntil: 'commit' }).catch(error => {
+      throw new Error(`Browser entry failed after ${stages.join(', ') || 'no intercepted request'}; ${adminServer.output().slice(-2000)}`, { cause: error });
+    });
+    await page.getByRole('button', { name: 'Continue with UnlikeOtherAI', exact: true }).waitFor({ timeout: 60000 }).catch(async error => {
+      await page.screenshot({ path: `${output}/${width}-entry-failed.png` });
+      const current = new URL(page.url());
+      const text = await page.locator('body').innerText();
+      const scripts = await page.locator('script').evaluateAll(nodes => nodes.map(node => node.src ? new URL(node.src).pathname : 'inline'));
+      errors.push(`assets: ${assetResults.length}; first: ${assetResults.slice(0, 10).join(', ')}; last: ${assetResults.slice(-8).join(', ')}; scripts: ${scripts.join(', ')}`);
+      throw new Error(`Login did not render at ${current.origin}${current.pathname}: ${stages.join(', ')}; ${errors.join('; ')}; pending assets ${assets.size}: ${[...assets].slice(0, 6).join(', ')}; ${text.slice(0, 1200)}`, { cause: error });
+    });
     await page.screenshot({ path: `${output}/${width}-login.png` });
     const received = page.waitForResponse(response => new URL(response.url()).pathname === '/api/auth/session');
     await page.getByRole('button', { name: 'Continue with UnlikeOtherAI', exact: true }).click();
-    await received;
+    await received.catch(async error => {
+      await page.screenshot({ path: `${output}/${width}-exchange-failed.png` });
+      const current = new URL(page.url());
+      throw new Error(`Session exchange missing at ${current.origin}${current.pathname}: ${stages.join(', ')}; ${errors.slice(0, 8).join('; ')}; ${(await page.locator('body').innerText()).slice(0, 900)}`, { cause: error });
+    });
     expect(exchange.statusCode, exchange.body).toBe(200);
-    const result = exchange.json().data;
+    const originalUserId = exchange.json().data.me.user.id;
+    await page.waitForURL(url => url.origin === productOrigin && url.pathname !== '/login');
+    await page.screenshot({ path: `${output}/${width}-signed-in.png` });
+    const cookiesBefore = (await context.cookies(`${productOrigin}/api/auth/refresh`)).filter(cookie => cookie.httpOnly).map(cookie => cookie.value);
+    expect(cookiesBefore.length > 0).toBe(true);
+    const refreshed = await page.evaluate(async slot => {
+      const response = await fetch('/api/auth/refresh', { method: 'POST', credentials: 'include',
+        headers: { 'content-type': 'application/json', ...(slot ? { 'x-nessie-account-slot': slot } : {}) }, body: '{}' });
+      return { status: response.status, payload: await response.json() };
+    }, loginSlot);
+    expect(refreshed.status, `Refresh refused: ${refreshed.payload.error?.code ?? 'unknown'}`).toBe(200);
+    expect(typeof refreshed.payload.data?.token).toBe('string');
+    const result = refreshed.payload.data;
+    expect(result.me.user.id).toBe(originalUserId);
+    const cookiesAfter = (await context.cookies(`${productOrigin}/api/auth/refresh`)).filter(cookie => cookie.httpOnly);
+    expect(cookiesAfter.some(cookie => !cookiesBefore.includes(cookie.value))).toBe(true);
     const me = await nessie.app.inject({ url: '/api/auth/me', headers: { authorization: `Bearer ${result.token}` } });
     expect(me.statusCode, me.body).toBe(200);
     expect(me.json().data.user.id).toBe(result.me.user.id);
@@ -185,6 +253,26 @@ it('enters through the actual Nessie login and UOA tile, redeems PKCE once and e
     expect(await nessie.prisma.teamMember.count({ where: { userId: result.me.user.id } })).toBe(0);
     const principal = await nessie.prisma.user.findUniqueOrThrow({ where: { id: result.me.user.id } });
     expect(principal.uoaSub).toBe(member.id); expect(principal.email).toBeNull(); expect(principal.displayName).toBeNull();
+    if (width === 390) {
+      // Existing-install migration fixture: stale copies must neither authorize
+      // this person nor survive the explicitly reviewed cleanup.
+      const organizationId = result.me.context.organizationId;
+      const teamId = result.me.context.teamId;
+      await nessie.prisma.user.update({ where: { id: principal.id },
+        data: { email: 'stale-copy@example.com', displayName: 'Stale copy' } });
+      await nessie.prisma.organizationMember.create({ data: { organizationId, userId: principal.id, role: 'owner' } });
+      await nessie.prisma.teamMember.create({ data: { teamId, userId: principal.id, role: 'admin' } });
+      const cleanup = await loadNessieBuild(process.env.NESSIE_CHECKOUT, 'scripts/uoa-authority-cutover.mjs');
+      const scope = { organizationIds: [organizationId] };
+      const report = await cleanup.inventoryUoaAuthority(nessie.prisma, scope);
+      expect(report.conflicts).toEqual([]);
+      await cleanup.applyUoaAuthorityCutover(nessie.prisma, scope, report.digest, { readerVersion: 1 });
+      const cleaned = await nessie.app.inject({ url: '/api/auth/me', headers: { authorization: `Bearer ${result.token}` } });
+      expect(cleaned.statusCode, cleaned.body).toBe(200);
+      expect(cleaned.json().data.user.roleIds).toEqual(['member']);
+      expect(await nessie.prisma.organizationMember.count({ where: { userId: principal.id } })).toBe(0);
+      expect(await nessie.prisma.teamMember.count({ where: { userId: principal.id } })).toBe(0);
+    }
     const replay = await nessie.app.inject({ method: 'POST', url: '/api/auth/session', payload: loginBody });
     expect(replay.statusCode).toBe(401);
     await context.close();
@@ -195,4 +283,4 @@ it('enters through the actual Nessie login and UOA tile, redeems PKCE once and e
       expect([401, 403]).toContain(removed.statusCode);
     }
   }
-}, 180000);
+}, 300000);

@@ -447,8 +447,10 @@ Nessie's focused runtime verification now passes 56 SSO cases and 21 disclosure
 cases with no skipped database cases. The disclosure fixture retains separate
 original grants for one person, rejects a legacy grant with no original, and
 requires an explicit new share after revocation; a healthy later login alone
-cannot revive it. Combined consumer builds and the cross-application sign-in
-journey remain in progress.
+cannot revive it. The actual cross-application browser journey passes at 390 and 1280 pixels,
+including sign-in, HttpOnly refresh-cookie rotation, reviewed canonical cleanup,
+code replay refusal and removal at the next authenticated read. Final combined
+consumer integration checks remain in progress.
 
 `LIVE_IDENTITY_FLOW_REQUIRED` remains the explicit integration hold. Remove it only after the consuming application's canonical authority cutover, original-source admission and revocation consumers, strict acknowledgement/reconciliation, minimum assurance floor and integrated browser sign-in journeys pass together. Customer IdP interoperability and production activation are separate evidence; neither is asserted by these local checks.
 
@@ -464,7 +466,8 @@ serves its current login source with Vite on its own reserved ports 6434/6435.
 The journey follows the actual UOA tile into Nessie's login screen, then its
 authorize and session routes through the real UOA callback and signed HTTPS
 test IdP. It checks wrong PKCE, code replay, canonical identity with no copied
-membership/profile rows, and removal at the next authenticated read. Public
+membership/profile rows, actual cookie-based refresh and rotation, reviewed
+cleanup of existing copies, and removal at the next authenticated read. Public
 HTTP transport is confined to the two test applications; ordinary product
 service-access billing is a separate 204 fixture. This is an explicit local
 evaluation, excluded from ordinary unit tests and CI. Its presence alone does
