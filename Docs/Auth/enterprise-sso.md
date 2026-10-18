@@ -277,6 +277,7 @@ connection/issuer/tenant/subject tuple. Subsequent admission refuses that tuple.
 It never deletes lifecycle jobs or receipts. RETAIN preserves the canonical
 deleted person and suspends their stable external links.
 
+
 ### Recovery contacts
 
 The canonical owner remains the only owner. Recovery uses two distinct active
@@ -333,3 +334,8 @@ transient class per tick. It preserves live account-link children of expired
 protocol flows and source evidence still referenced by authorization artifacts.
 Stable identity links, provisioning tombstones and erasure hashes are excluded
 from transient pruning. Recovery action evidence is retained for 90 days.
+
+Both seams run inside the existing lifecycle sweep after the canonical person
+becomes terminal and before any hard delete. ERASE also scrubs enterprise links
+when protected financial evidence requires a terminal canonical stub to remain.
+

@@ -7,6 +7,7 @@ import { lockRefreshSessionUser } from './refresh-session-lock.service.js';
 export { scrubIdentityJson } from './identity-audit-sweep.service.js';
 import { scrubOperationalAudits } from './identity-audit-sweep.service.js';
 import { scrubOperatorAttribution } from './identity-operational-sweep.service.js';
+import { eraseEnterprisePerson, retainEnterprisePerson } from './enterprise-identity-retention.service.js';
 
 export async function eraseOperationalIdentity(tx: PrismaClient, userId: string, mode: IdentityDeletionMode, auditsAlreadyScrubbed = false): Promise<void> {
   await lockRefreshSessionUser(userId, { prisma: tx });
@@ -67,6 +68,8 @@ export async function eraseOperationalIdentity(tx: PrismaClient, userId: string,
     tokenVersion: { increment: 1 }, lifecycleReason: null, lifecycleInternalNote: null,
     lifecycleTemplateId: null, lifecycleTemplateRevision: null,
   } });
+  if (mode === 'ERASE_REFERENCE') await eraseEnterprisePerson(userId, tx);
+  else await retainEnterprisePerson(userId, tx);
   if (mode === 'ERASE_REFERENCE' && protectedRows.length === 0) await tx.user.delete({ where: { id: userId } });
 }
 
