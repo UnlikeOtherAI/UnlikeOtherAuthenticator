@@ -1,13 +1,18 @@
 import type { FastifyInstance } from 'fastify';
+import { registerEnterpriseAccountLinkRoutes } from './enterprise-account-link.js';
 import { z } from 'zod';
 import { getAdminPrisma } from '../../db/prisma.js';
 import { createRateLimiter } from '../../middleware/rate-limiter.js';
 import { finishEnterpriseTest } from '../../services/org-sso-flow.service.js';
+import { finishEnterpriseLogin } from '../../services/org-sso-login.service.js';
+import { enterpriseTileRedirect } from '../../services/org-sso-entry.service.js';
 import { enterpriseSamlMetadata } from '../../services/org-sso-saml.service.js';
 import { AppError } from '../../utils/errors.js';
+import { getPublicBaseUrl } from '../../config/env.js';
 import { hashAssuranceReference } from '../../services/session-assurance.service.js';
 
 export function registerEnterpriseSsoRoutes(app: FastifyInstance): void {
+  registerEnterpriseAccountLinkRoutes(app);
   const rate = createRateLimiter({ keyBuilder: (request) => `enterprise-callback:${request.ip}`, limit: 20, windowMs: 60000 });
   app.get('/sso/:id/test', { preHandler: rate }, async (request, reply) => {
     const { id } = z.object({ id: z.string().max(100) }).parse(request.params);
@@ -27,18 +32,27 @@ export function registerEnterpriseSsoRoutes(app: FastifyInstance): void {
       iss: z.string().max(2000).optional(), error: z.string().max(200).optional() }).passthrough().parse(request.query);
     const browser = request.cookies[`uoa_sso_${body.state}`];
     if (!browser) throw new AppError('UNAUTHORIZED', 401, 'SSO_FLOW_INVALID');
-    const destination = await finishEnterpriseTest(id, body.state, browser, { code: body.code, iss: body.iss });
-    reply.clearCookie(`uoa_sso_${body.state}`, { path: '/sso' });
-    return reply.header('Cache-Control', 'no-store').redirect(destination);
+    const flow = await getAdminPrisma().orgSsoFlow.findUnique({ where: { id: body.state }, select: { mode: true } });
+    const result = flow?.mode === 'login' ? await finishEnterpriseLogin(id, body.state, browser,
+      { code: body.code, iss: body.iss }, request.ip) :
+      { destination: await finishEnterpriseTest(id, body.state, browser, { code: body.code, iss: body.iss }), retainBrowser: false };
+    if ('linkExpiresAt' in result && result.linkExpiresAt instanceof Date) reply.setCookie('uoa_sso_link', browser, { path: '/auth', httpOnly: true,
+      secure: new URL(getPublicBaseUrl()).protocol === 'https:', sameSite: 'strict', expires: result.linkExpiresAt });
+    if (!result.retainBrowser) reply.clearCookie(`uoa_sso_${body.state}`, { path: '/sso' });
+    return reply.header('Cache-Control', 'no-store').redirect(result.destination);
   });
   app.post('/sso/saml/:id/acs', { preHandler: rate, bodyLimit: 380000 }, async (request, reply) => {
     const { id } = z.object({ id: z.string().max(100) }).parse(request.params);
     const body = z.object({ RelayState: z.string().min(32).max(100), SAMLResponse: z.string().max(360000) }).strict().parse(request.body);
     const browser = request.cookies[`uoa_sso_${body.RelayState}`];
     if (!browser) throw new AppError('UNAUTHORIZED', 401, 'SSO_FLOW_INVALID');
-    const destination = await finishEnterpriseTest(id, body.RelayState, browser, body);
-    reply.clearCookie(`uoa_sso_${body.RelayState}`, { path: '/sso' });
-    return reply.header('Cache-Control', 'no-store').redirect(destination);
+    const flow = await getAdminPrisma().orgSsoFlow.findUnique({ where: { id: body.RelayState }, select: { mode: true } });
+    const result = flow?.mode === 'login' ? await finishEnterpriseLogin(id, body.RelayState, browser, body, request.ip) :
+      { destination: await finishEnterpriseTest(id, body.RelayState, browser, body), retainBrowser: false };
+    if ('linkExpiresAt' in result && result.linkExpiresAt instanceof Date) reply.setCookie('uoa_sso_link', browser, { path: '/auth', httpOnly: true,
+      secure: new URL(getPublicBaseUrl()).protocol === 'https:', sameSite: 'strict', expires: result.linkExpiresAt });
+    if (!result.retainBrowser) reply.clearCookie(`uoa_sso_${body.RelayState}`, { path: '/sso' });
+    return reply.header('Cache-Control', 'no-store').redirect(result.destination);
   });
   app.get('/sso/saml/:id/metadata', { preHandler: rate }, async (request, reply) => {
     const { id } = z.object({ id: z.string().max(100) }).parse(request.params);
@@ -47,8 +61,8 @@ export function registerEnterpriseSsoRoutes(app: FastifyInstance): void {
     return reply.header('Cache-Control', 'no-store').type('application/samlmetadata+xml')
       .send(await enterpriseSamlMetadata(connection));
   });
-  app.get('/sso/:id/start', { preHandler: rate }, async () => {
-    // Live entry remains fail-closed until every issuance/consumer and authority migration gate passes.
-    throw new AppError('FORBIDDEN', 403, 'SSO_ACTIVATION_NOT_READY');
+  app.get('/sso/:id/start', { preHandler: rate }, async (request, reply) => {
+    const { id } = z.object({ id: z.string().min(1).max(100) }).parse(request.params);
+    return reply.header('Cache-Control', 'no-store').redirect(await enterpriseTileRedirect(id));
   });
 }

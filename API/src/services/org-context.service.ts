@@ -45,6 +45,7 @@ export async function getActiveUserOrgContext(
   params: {
     userId: string;
     assuranceId?: string;
+    authenticationEvidenceId?: string;
     domain: string;
     /** Resolve one requested organisation instead of the first active membership. */
     orgId?: string;
@@ -85,7 +86,7 @@ export async function getActiveUserOrgContext(
 
   if (!orgMembership) return null;
 
-  await assertOrgAccessPolicy({ userId, domain, orgId: orgMembership.orgId, assuranceId: params.assuranceId }, prisma);
+  await assertOrgAccessPolicy({ userId, domain, orgId: orgMembership.orgId, assuranceId: params.assuranceId, authenticationEvidenceId: params.authenticationEvidenceId }, prisma);
 
   const teamMemberships = await prisma.teamMember.findMany({
     where: {
@@ -157,6 +158,7 @@ export async function getActiveClientOrgContext(
   params: {
     userId: string;
     assuranceId?: string;
+    authenticationEvidenceId?: string;
     domain: string;
     orgId: string;
     groupsEnabled?: boolean;
@@ -186,6 +188,7 @@ export async function getUserOrgContext(
   params: {
     userId: string;
     assuranceId?: string;
+    authenticationEvidenceId?: string;
     domain: string;
     config: ClientConfig;
     /** Resolve one requested organisation instead of the first active membership. */
@@ -198,6 +201,7 @@ export async function getUserOrgContext(
     {
       userId: params.userId,
       assuranceId: params.assuranceId,
+      authenticationEvidenceId: params.authenticationEvidenceId,
       domain: params.domain,
       orgId: params.orgId,
       groupsEnabled: params.config.org_features?.groups_enabled,

@@ -1,4 +1,5 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { debugLoginSourceAssurance, inheritDebugLoginAssurance } from './debug-login-assurance.service.js';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import type { PrismaClient, RefreshToken } from '@prisma/client';
 import { getEnv } from '../config/env.js';
 import { runInTransaction } from '../db/tenant-context.js';
@@ -67,6 +68,7 @@ export async function issueDebugLogin(
     const source = await tx.refreshToken.findUnique({ where: { tokenHash } });
     const now = deps.now?.() ?? new Date();
     if (!source) throw fail();
+    const sourceAssurance = await debugLoginSourceAssurance(source, tx);
     await validateSource(input, source, tx, now);
     await deps.assertAuthority?.(source, tx);
     const user = await tx.user.findUnique({ where: { lifecycleStatus: 'ACTIVE', id: source.userId }, select: { tokenVersion: true } });
@@ -85,13 +87,15 @@ export async function issueDebugLogin(
       // Pruned expiry metadata means no live grant remains to invalidate.
     }
     const token = randomBytes(32).toString('base64url');
+    const expiresAt = new Date(Math.min(now.getTime() + TTL_SECONDS * 1000, source.expiresAt.getTime(),
+      sourceAssurance?.expiresAt.getTime() ?? Infinity));
     await tx.debugLoginGrant.create({ data: {
       tokenHash: digest(token), sourceFamilyId: source.familyId, userId: source.userId,
       tokenVersion: user.tokenVersion, domain: source.domain, clientId: source.clientId,
       configUrl: source.configUrl, orgId: source.orgId, teamId: source.teamId,
-      expiresAt: new Date(now.getTime() + TTL_SECONDS * 1000), createdAt: now,
+      expiresAt, createdAt: now,
     } });
-    return { token, expires_in: TTL_SECONDS };
+    return { token, expires_in: Math.floor((expiresAt.getTime() - now.getTime()) / 1000) };
   });
 }
 
@@ -113,21 +117,26 @@ export async function redeemDebugLogin(input: Context & { token: string }, deps:
       securityRevokedAt: null, replacedByTokenId: null, expiresAt: { gt: now },
     } });
     if (!source || source.orgId !== grant.orgId || source.teamId !== grant.teamId) throw fail();
+    const sourceAssurance = await debugLoginSourceAssurance(source, tx);
     await validateSource(input, source, tx, now);
     await deps.assertAuthority?.(source, tx);
     const consumed = await tx.debugLoginGrant.updateMany({
       where: { id: grant.id, usedAt: null, expiresAt: { gt: now } }, data: { usedAt: now },
     });
     if (consumed.count !== 1) throw fail();
-    // Bound the independent family's lifetime to the source's remaining lifetime.
-    const remainingSeconds = Math.floor((source.expiresAt.getTime() - now.getTime()) / 1000);
+    // The new family retains the original method and cannot outlive its source proof.
+    const remainingSeconds = Math.floor((Math.min(source.expiresAt.getTime(),
+      sourceAssurance?.expiresAt.getTime() ?? Infinity) - now.getTime()) / 1000);
     if (remainingSeconds <= 0) throw fail();
+    const familyId = randomUUID();
     const refresh = await issueRefreshToken({
-      userId: source.userId, domain: source.domain, clientId: source.clientId,
+      familyId, userId: source.userId, domain: source.domain, clientId: source.clientId,
       configUrl: input.configUrl, orgId: source.orgId, teamId: source.teamId,
       twoFaCompleted: source.twoFaCompleted,
     }, { prisma: tx, now: () => now,
       refreshTokenTtlSeconds: remainingSeconds });
+    await inheritDebugLoginAssurance(sourceAssurance, { familyId,
+      expiresAt: new Date(now.getTime() + remainingSeconds * 1000) }, tx);
     return issueTokenPairForUser({
       config: input.config, configUrl: input.configUrl, clientId: input.clientId, userId: source.userId,
       refreshToken: refresh.refreshToken, refreshTokenExpiresInSeconds: refresh.expiresInSeconds,

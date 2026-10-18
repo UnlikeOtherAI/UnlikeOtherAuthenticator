@@ -15,8 +15,10 @@ Multiple UOA organisations and authorized cross-origin selection stay supported.
 See [the backend integration guide](Auth/enterprise-sso.md) and the canonical
 [enterprise plan](plans/2026-10-17-organisation-enterprise-sso.md). Live rollout
 requires the complete authority/provenance/revocation gates; enforcement also
-requires an explicitly approved, tested recovery design. No such recovery
-approval or customer activation is claimed by the foundation implementation.
+requires two independently authenticated recovery custodians and a successful
+current recovery drill. The product owner delegated this design on 2026-10-18;
+UOA retains one canonical owner and does not introduce backup codes. A chosen
+design is not evidence of a tested drill or customer activation.
 
 ## Same-account Kelpie local pairing (2026-10-11)
 

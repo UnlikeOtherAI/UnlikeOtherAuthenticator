@@ -14,7 +14,7 @@ export async function signAccessToken(params: {
   role: 'superuser' | 'user';
   clientId: string;
   sharedSecret: string;
-  ttl: string;
+  ttl: string | number;
   issuer: string;
   tokenVersion: number;
   assuranceId?: string;

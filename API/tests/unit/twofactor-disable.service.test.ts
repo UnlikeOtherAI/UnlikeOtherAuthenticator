@@ -1,3 +1,4 @@
+import { enterpriseAuthorityStores } from '../helpers/enterprise-authority-stores.js';
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
@@ -18,11 +19,13 @@ describe('disableTwoFactorForUser', () => {
   it('holds the user lock through 2FA mutation, refresh revocation, and tokenVersion bump', async () => {
     const events: string[] = [];
     const tx = {
+      ...enterpriseAuthorityStores(),
       $queryRaw: vi.fn(async () => {
         events.push('user-lock');
         return [{ lockResult: '' }];
       }),
       refreshToken: {
+        findMany: vi.fn().mockResolvedValue([]),
         updateMany: vi.fn(async () => {
           events.push('refresh-revoke');
           return { count: 2 };
@@ -46,6 +49,7 @@ describe('disableTwoFactorForUser', () => {
       },
     } as unknown as PrismaClient;
     const prisma = {
+      ...enterpriseAuthorityStores(),
       $transaction: vi.fn(async (body: (client: PrismaClient) => Promise<void>) => {
         events.push('begin');
         await body(tx);

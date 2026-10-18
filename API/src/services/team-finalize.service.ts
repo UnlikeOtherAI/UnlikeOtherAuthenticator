@@ -1,5 +1,6 @@
-import { recordIndependentAuthentication, type VerifiedAuthenticationEvent } from './authentication-evidence.service.js';
+import { recordIndependentAuthentication, requireAuthenticationEvidence, type VerifiedAuthenticationEvent } from './authentication-evidence.service.js';
 import type { PrismaClient } from '@prisma/client';
+import { AppError } from '../utils/errors.js';
 
 import { getAuthServiceIdentifier, requireEnv } from '../config/env.js';
 import { getAdminPrisma } from '../db/prisma.js';
@@ -119,7 +120,12 @@ export async function finalizeWithTwoFaPolicy(
   );
 
   const twoFaEnabled = deps?.currentTwoFaEnabled ?? params.twoFaEnabled;
-  if ((twoFaPolicy !== 'OFF' || params.managementIntentId) && twoFaEnabled) {
+  const evidence = params.authMethod === 'sso' && params.authenticationEvidenceId ? await requireAuthenticationEvidence({
+    id: params.authenticationEvidenceId, userId: params.userId, credentialEpoch: params.credentialEpoch,
+    clientDomain: params.config.domain }, deps?.prisma ?? getAdminPrisma()) : null;
+  const personalFactorCompleted = evidence?.provenance === 'sso' && Boolean(evidence.mfaCompletedAt &&
+    evidence.mfaCompletedAt.getTime() + 600000 > Date.now());
+  if ((twoFaPolicy !== 'OFF' || params.managementIntentId) && twoFaEnabled && !personalFactorCompleted) {
     const twofa_token = await signTwoFaChallenge({
       userId: params.userId,
       credentialEpoch: params.credentialEpoch,
@@ -141,7 +147,10 @@ export async function finalizeWithTwoFaPolicy(
     return { kind: 'twofa', twofa_token };
   }
 
-  if (twoFaPolicy === 'REQUIRED') {
+  if (twoFaPolicy === 'REQUIRED' && !personalFactorCompleted) {
+    if (evidence?.provenance === 'sso') {
+      throw new AppError('FORBIDDEN', 403, 'INDEPENDENT_REAUTH_REQUIRED');
+    }
     const setup = await startTwoFactorSetup(
       {
         userId: params.userId,
@@ -179,7 +188,7 @@ export async function finalizeWithTwoFaPolicy(
       authMethod: params.authMethod,
       authenticationEvidenceId: params.authenticationEvidenceId,
       managementIntentId: params.managementIntentId,
-      twoFaCompleted: false,
+      twoFaCompleted: personalFactorCompleted,
       codeChallenge: params.codeChallenge,
       codeChallengeMethod: params.codeChallengeMethod,
       ip: params.ip,

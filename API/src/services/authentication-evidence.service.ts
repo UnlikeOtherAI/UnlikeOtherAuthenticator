@@ -1,4 +1,5 @@
 import { assertMailboxCredentialAdmission } from './credential-admission.service.js';
+import { assertEnterpriseProvisioningActive } from './enterprise-identity-status.service.js';
 import { randomBytes, createHash } from 'node:crypto';
 import type { PrismaClient, Prisma } from '@prisma/client';
 import { getAdminPrisma } from '../db/prisma.js';
@@ -8,6 +9,15 @@ import type { ClientConfig } from './config.service.js';
 
 export type VerifiedAuthenticationEvent = { kind: 'local_credential' } | { kind: 'provider'; authenticatedAt: Date | null };
 type EvidenceDb = PrismaClient | Prisma.TransactionClient;
+
+/** A signed chooser continuation does not expand an organisation IdP's authority. */
+export async function assertIndependentChooserMutation(input: { authenticationEvidenceId?: string;
+  userId: string; credentialEpoch: number; domain: string }, db: EvidenceDb): Promise<void> {
+  if (!input.authenticationEvidenceId) return;
+  const evidence = await requireAuthenticationEvidence({ id: input.authenticationEvidenceId,
+    userId: input.userId, credentialEpoch: input.credentialEpoch, clientDomain: input.domain }, db);
+  if (evidence.provenance !== 'independent') throw new AppError('FORBIDDEN', 403, 'SSO_TEAM_REAUTH_REQUIRED');
+}
 const digest = (value: string) => createHash('sha256').update(value).digest('hex');
 function deny(): never { throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_EVIDENCE_REQUIRED'); }
 
@@ -25,7 +35,7 @@ export async function recordIndependentAuthentication(input: { userId: string; c
   const reference = randomBytes(32).toString('base64url');
   const row = await db.authenticationEvidence.create({ data: { referenceHash: digest(reference),
     userId: input.userId, credentialEpoch: input.credentialEpoch, clientDomain: input.config.domain,
-    method: input.method, provenance: 'independent', authenticatedAt, observedAt: now,
+    method: input.method, provenance: 'independent', amr: [input.method], authenticatedAt, observedAt: now,
     purpose: 'authorize', actionBinding: digest(JSON.stringify({ config: fingerprintClientConfig(input.config),
       configUrl: input.configUrl, redirectUrl: input.redirectUrl, codeChallenge: input.codeChallenge ?? null })),
     expiresAt: new Date(now.getTime() + 15 * 60000) } });
@@ -52,10 +62,29 @@ async function validateAuthenticationEvidence(input: { id?: string; userId: stri
       parent.clientDomain !== row.clientDomain || parent.provenance !== row.provenance || parent.method !== row.method ||
       parent.connectionId !== row.connectionId || parent.externalIdentityId !== row.externalIdentityId ||
       parent.connectionRevision !== row.connectionRevision || parent.connectionGeneration !== row.connectionGeneration ||
+      parent.policyGeneration !== row.policyGeneration || parent.sessionDeadline?.getTime() !== row.sessionDeadline?.getTime() ||
+      JSON.stringify(parent.amr) !== JSON.stringify(row.amr) || parent.acr !== row.acr ||
       (row.provenance !== 'independent' && (parent.orgId !== row.orgId || parent.teamId !== row.teamId)) ||
       (ancestor.purpose === 'management' && (parent.purpose !== 'authorize' || row.provenance !== 'independent')) ||
       parent.authenticatedAt?.getTime() !== row.authenticatedAt?.getTime() || parent.observedAt.getTime() !== row.observedAt.getTime()) deny();
     seen.add(parent.id); ancestor = parent;
+  }
+  if (row.provenance !== 'independent') {
+    if (!row.orgId || !row.connectionId || !row.externalIdentityId) deny();
+    const [connection, identity, policy, member] = await Promise.all([
+      db.orgSsoConnection.findUnique({ where: { id: row.connectionId } }),
+      db.externalIdentity.findUnique({ where: { id: row.externalIdentityId } }),
+      db.orgSsoPolicy.findUnique({ where: { clientDomain_orgId: { clientDomain: row.clientDomain, orgId: row.orgId } } }),
+      db.orgMember.findFirst({ where: { orgId: row.orgId, userId: row.userId, status: 'ACTIVE' } }),
+    ]);
+    if (row.provenance !== 'sso' || connection?.status !== 'active' || connection.clientDomain !== row.clientDomain ||
+      connection.orgId !== row.orgId || connection.revision !== row.connectionRevision || connection.generation !== row.connectionGeneration ||
+      identity?.status !== 'ACTIVE' || identity.userId !== row.userId || identity.connectionId !== row.connectionId ||
+      identity.clientDomain !== row.clientDomain || identity.orgId !== row.orgId || !policy?.arrangementEnabled ||
+      policy.generation !== row.policyGeneration || !member || !row.sessionDeadline || row.sessionDeadline <= new Date()) deny();
+    await assertEnterpriseProvisioningActive(row.connectionId, row.externalIdentityId, row.userId, db);
+    if (row.teamId && !await db.teamMember.findFirst({ where: { userId: row.userId, teamId: row.teamId, status: 'ACTIVE',
+      team: { orgId: row.orgId, lifecycleStatus: 'ACTIVE' } } })) deny();
   }
   const user = await db.user.findUnique({ where: { id: row.userId }, select: { tokenVersion: true, lifecycleStatus: true } });
   if (!user || user.lifecycleStatus !== 'ACTIVE' || user.tokenVersion !== row.credentialEpoch) deny();

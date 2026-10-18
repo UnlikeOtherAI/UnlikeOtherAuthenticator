@@ -7,13 +7,42 @@ import { lockEnterpriseScope } from '../../../services/org-sso-management.servic
 import { resolveProductTeamPolicy } from '../../../services/product-team-policy.service.js';
 import { AppError } from '../../../utils/errors.js';
 import { getAdminPrisma } from '../../../db/prisma.js';
+import { assertConfigDomainMatchesConfigUrl } from '../../../services/config.service.js';
+import { lockProductTeamPolicyShared } from '../../../services/product-team-policy-lock.service.js';
+import { lockAndWithdrawConnectionMemberships } from '../../../services/membership-provenance.service.js';
 
 export function registerAdminEnterpriseRevocationRoutes(app: FastifyInstance): void {
+  app.put('/internal/admin/enterprise/products/:domain', { preHandler: requireAdminSuperuser }, async (request, reply) => {
+    const { domain } = z.object({ domain: z.string().min(1).max(256) }).parse(request.params);
+    const input = z.object({ minimum_assurance_version: z.literal(1), authority_migration_revision: z.string().min(1).max(200),
+      revocation_consumers_revision: z.string().min(1).max(200), login_entry_url: z.string().url().max(2048),
+      config_url: z.string().url().max(2048) }).strict().parse(request.body);
+    for (const value of [input.login_entry_url, input.config_url]) {
+      const url = new URL(value);
+      if (url.protocol !== 'https:' || url.username || url.password || url.hash || url.search) {
+        throw new AppError('BAD_REQUEST', 400, 'SSO_RELYING_ENTRY_INVALID');
+      }
+    }
+    assertConfigDomainMatchesConfigUrl(domain, input.config_url);
+    const result = await getAdminPrisma().$transaction(async (tx) => {
+      await lockEnterpriseOutbox(tx);
+      if (!(await tx.clientDomain.findUnique({ where: { domain }, select: { status: true } }))?.status) {
+        throw new AppError('NOT_FOUND', 404);
+      }
+      const data = { minimumAssuranceVersion: 1, authorityMigrationRevision: input.authority_migration_revision,
+        revocationConsumersRevision: input.revocation_consumers_revision, loginEntryUrl: input.login_entry_url, configUrl: input.config_url };
+      return tx.enterpriseProductReadiness.upsert({ where: { clientDomain: domain },
+        create: { clientDomain: domain, ...data }, update: data });
+    });
+    return reply.header('Cache-Control', 'no-store').send({ ok: true, client_domain: result.clientDomain,
+      minimum_assurance_version: result.minimumAssuranceVersion, login_entry_url: result.loginEntryUrl, config_url: result.configUrl });
+  });
   app.post('/internal/admin/enterprise/arrangements', { preHandler: requireAdminSuperuser }, async (request, reply) => {
     const input = z.object({ client_domain: z.string().min(1).max(256), org_id: z.string().min(1).max(100),
       enabled: z.boolean(), revision: z.number().int().nonnegative() }).strict().parse(request.body);
     const result = await getAdminPrisma().$transaction(async (tx) => {
       await lockEnterpriseOutbox(tx);
+      await lockProductTeamPolicyShared(tx);
       await lockEnterpriseScope(tx, input.client_domain, input.org_id);
       const [client, org, product] = await Promise.all([
         tx.clientDomain.findUnique({ where: { domain: input.client_domain } }),
@@ -31,7 +60,12 @@ export function registerAdminEnterpriseRevocationRoutes(app: FastifyInstance): v
         create: { ...scope, arrangementEnabled: input.enabled, revision: 1 },
         update: { arrangementEnabled: input.enabled, revision: { increment: 1 }, generation: { increment: 1 } } });
       if (!input.enabled) {
-        await tx.orgSsoConnection.updateMany({ where: scope, data: { status: 'suspended', generation: { increment: 1 } } });
+        const connections = await tx.orgSsoConnection.findMany({ where: scope, select: { id: true } });
+        await tx.orgSsoConnection.updateMany({ where: scope, data: { status: 'suspended', generation: { increment: 1 },
+          scimEnabled: false, scimRevision: { increment: 1 } } });
+        await tx.scimConnectionToken.updateMany({ where: { connectionId: { in: connections.map((connection) => connection.id) },
+          revokedAt: null }, data: { revokedAt: new Date() } });
+        for (const connection of connections) await lockAndWithdrawConnectionMemberships(connection.id, tx);
         await revokeEnterpriseScope({ ...scope, scope: 'product_org', revision: row.generation }, tx);
       }
       return { ok: true, client_domain: row.clientDomain, org_id: row.orgId,

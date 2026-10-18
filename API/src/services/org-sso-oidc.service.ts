@@ -10,7 +10,7 @@ import { openEnterpriseSecret } from './enterprise-secret.service.js';
 
 const MAX_AUTH_AGE_SKEW = 120;
 export type VerifiedEnterpriseIdentity = {
-  issuer: string; tenant: string; subject: string; email?: string; emailVerified: boolean;
+  groups: string[]; issuer: string; tenant: string; subject: string; email?: string; emailVerified: boolean;
   authenticatedAt: Date | null; observedAt: Date; sessionExpiresAt: Date; amr: string[]; acr?: string;
 };
 export const randomEnterpriseValue = (): string => randomBytes(32).toString('base64url');
@@ -60,7 +60,9 @@ export function validateEnterpriseOidcClaims(connection: OrgSsoConnection, paylo
     const expected = createHash('sha256').update(accessToken).digest().subarray(0, 16).toString('base64url');
     if (payload.at_hash !== expected) throw new AppError('UNAUTHORIZED', 401, 'SSO_ACCESS_HASH_INVALID');
   }
-  return { issuer: config.issuer, tenant: config.tenant.value, subject,
+  const groups = config.groups_claim ? z.array(z.string().min(1).max(256)).max(1000)
+    .parse(payload[config.groups_claim] ?? []) : [];
+  return { groups: [...new Set(groups)], issuer: config.issuer, tenant: config.tenant.value, subject,
     ...(typeof payload.email === 'string' ? { email: payload.email } : {}),
     emailVerified: payload.email_verified === true, authenticatedAt: authTime === null ? null : new Date(authTime * 1000),
     observedAt: now, sessionExpiresAt: new Date(payload.exp * 1000),

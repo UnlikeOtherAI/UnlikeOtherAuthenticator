@@ -28,6 +28,8 @@ describe('exchangeRefreshTokenForTokens active-claim re-validation (unit)', () =
         organisation: { findUnique: vi.fn().mockResolvedValue({ lifecycleStatus: 'ACTIVE' }) },
         team: { findUnique: vi.fn().mockResolvedValue({ lifecycleStatus: 'ACTIVE', orgId: params.storedOrgId }) },
         $executeRaw: vi.fn().mockResolvedValue(1),
+        enterpriseProductReadiness: { findUnique: vi.fn().mockResolvedValue(null) },
+        orgSsoPolicy: { findUnique: vi.fn().mockResolvedValue(null) },
         $queryRaw: vi.fn().mockResolvedValue([]),
         domainSignatureSettings: {
           findUnique: vi.fn().mockResolvedValue(null),

@@ -100,6 +100,35 @@ describe.skipIf(!process.env.DATABASE_URL)('entity lifecycle on PostgreSQL', () 
     const audit = await handle.prisma.adminAuditLog.findFirstOrThrow({ where: { action: 'operation' } });
     expect(audit.metadata).toMatchObject({ name: 'Deleted user', email: null, unrelated: 'All systems are available' });
   });
+  it.each(['RETAIN_REFERENCE', 'ERASE_REFERENCE'] as const)(
+    'completes the real lifecycle job for an enterprise-linked person in %s mode', async (mode) => {
+      const admin = await actor(), { org, team } = await container(), target = await user('Enterprise person');
+      await handle.prisma.orgMember.create({ data: { orgId: org.id, userId: target.id, role: 'member' } });
+      await handle.prisma.teamMember.create({ data: { teamId: team.id, userId: target.id } });
+      await handle.prisma.orgSsoPolicy.create({ data: { clientDomain: domain, orgId: org.id } });
+      const connection = await handle.prisma.orgSsoConnection.create({ data: {
+        clientDomain: domain, orgId: org.id, preset: 'other_oidc', protocol: 'oidc',
+        displayName: 'Corporate sign-in', configuration: {},
+      } });
+      const identity = await handle.prisma.externalIdentity.create({ data: {
+        connectionId: connection.id, clientDomain: domain, orgId: org.id, userId: target.id,
+        issuer: 'https://idp.example.com', tenant: 'tenant', subject: `upstream-${randomUUID()}`,
+        identityScope: 'global', linkedVia: 'independent_proof',
+      } });
+      const job = await start('USER', target.id, admin, mode);
+      await acknowledge(job);
+      await executeEntityDeletion(job.id, admin);
+      const person = await handle.prisma.user.findUnique({ where: { id: target.id } });
+      const link = await handle.prisma.externalIdentity.findUnique({ where: { id: identity.id } });
+      if (mode === 'RETAIN_REFERENCE') {
+        expect(person?.lifecycleStatus).toBe('DELETED');
+        expect(link?.status).toBe('SUSPENDED');
+      } else {
+        expect(person).toBeNull(); expect(link).toBeNull();
+        expect(await handle.prisma.externalIdentityTombstone.count({ where: { connectionId: connection.id } })).toBe(1);
+      }
+      expect((await handle.prisma.entityDeletionJob.findUniqueOrThrow({ where: { id: job.id } })).status).toBe('COMPLETE');
+    });
   it('deletes an empty organisation with its sole team and org-only orphan while preserving shared accounts', async () => {
     const admin = await actor(), { owner, org, team } = await container();
     const member = await user('Org-only member'), shared = await user('Shared');

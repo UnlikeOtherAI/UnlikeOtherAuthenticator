@@ -1,7 +1,8 @@
 # Organisation-level enterprise SSO — implementation plan
 
-**Status: proposed design, revised 2026-10-17. No implementation or deployment is
-claimed by this document.** Phase 0 is proposed work, not a shipped fix.
+**Status: implementation in progress; customer activation remains gated.**
+The implementation branches do not establish deployment or closure of all
+review findings. The activation gates below still apply.
 
 This revision replaces the working `org-sso-plan.md` supplied for review. Its
 reported Fable review contained 19 findings; §15 preserves their traceability.
@@ -15,14 +16,17 @@ line numbers from the earlier draft are not current evidence.
 
 **Confirmed product decisions:** enterprise SSO is enabled and managed only in
 UOA. It sits outside Nessie billing: no Nessie plan, subscription or paid-tier
-gate is added. SSO-associated SCIM follows the same boundary unless a later
-explicit decision separates it. Nessie provides live status and an in-context
+gate is added. SSO and SCIM use custom commercial arrangements for now, managed
+in UOA. Nessie provides live status and an in-context
 UOA settings link, never its own enablement switch. Administration must be
-simple and intuitive (§6.8).
+simple and intuitive (§6.8). Self-hosted arrangements are managed internally;
+contractors on unverified domains are off by default. Recovery uses two narrow,
+independently authenticated custodians, while UOA retains one canonical owner
+and its prohibition on backup codes.
 
 **Do not activate customer SSO until the account-authority boundary, exact
 session-assurance contract, Nessie identity migration and credential revocation
-gates in §9 have passed.** Recovery and commercial decisions remain in §12.
+gates in §9 have passed.** The product decisions are recorded in §12.
 
 ## 1. Goal and scope
 
@@ -426,6 +430,14 @@ An arbitrary return URL, connection ID or hint cannot select a different
 product, organisation or account. Preserve the relying product's state through
 all continuations without reinterpreting it as a redirect.
 
+A tile or bookmark begins without a relying-product PKCE verifier or pending
+state. The start URL must therefore hand off to the registered product login
+entry so the product begins its normal browser-bound authorization flow, carrying
+only the connection/target hint or a bounded UOA launch intent. UOA validates that
+selection again after signed-config verification. Do not issue a code directly
+to a product callback that has no matching product-owned pending flow. Test-mode
+callbacks remain separate and never issue a product code.
+
 Optional `POST /auth/sso/route` is an Auth UI email-step endpoint. The product
 integration advertises support through `sso` in `enabled_auth_methods` and
 `org_features.enabled`; this is protocol capability, not a Nessie administrator
@@ -663,11 +675,16 @@ issued tokens require the live/bounded revocation checks in §6.6. Never claim
 that revoking a refresh family instantly rewrites an access JWT.
 
 **Recovery is a release gate.** The earlier draft both allowed one owner and
-required two, and current UOA has one canonical owner. Proposed resolution is
+required two, and current UOA has one canonical owner. The chosen resolution is
 two independently authenticated, explicitly designated recovery custodians,
-with a narrowly scoped UOA recovery capability; this needs the decision in
-§12 and a reachable implementation before enforcement. Do not create fake
+with a narrowly scoped UOA recovery capability. The user delegated the recovery
+choice; its reachable implementation must pass a recovery drill before
+enforcement. Do not create fake
 owner memberships. Backup codes remain prohibited under current UOA rules.
+The real canonical owner may be one of the two explicitly designated custodians;
+designation is separate from ownership. The second custodian must be another
+active canonical member with their own existing independent factor. This requires
+two people rather than a third administrator solely for recovery.
 
 Recovery must be independent of the failing IdP: tested password plus enrolled
 TOTP or another explicitly approved independent UOA factor flow; no email-only
@@ -1017,8 +1034,9 @@ Generic non-UOA OIDC hardening is separate work: proper confidential-client
 handling where applicable, validated ID tokens, `(issuer, subject)` identity
 keying, constrained mappings and its own migrations. It must remain exclusive
 with UOA human authentication and cannot operate inside a bound tenant. The
-product proposal is that enterprise organisation SSO on self-hosted Nessie uses
-UOA; packaging/availability is pending §12, not a shipped requirement.
+enterprise organisation SSO on self-hosted Nessie uses UOA. Deployment and
+commercial arrangements are managed internally; this work adds no separate
+broker or self-service packaging flow.
 
 ## 9. Delivery order and activation gates
 
@@ -1143,15 +1161,16 @@ blocking defect until the boundary is enforced.
 
 Record actual decisions and the resulting contract before enabling dependent
 functionality. UOA-only enablement and exclusion from Nessie billing are
-confirmed; the recovery authority remains unresolved.
+confirmed. The user has answered the five product decisions and delegated the
+recovery implementation choice.
 
 | Decision | Current status | Recommendation / implementation boundary |
 |---|---|---|
 | UOA sole broker, authority and management | Confirmed: SSO can be enabled only from UOA. | UOA owns connection setup, activation, enforcement and revocation. Nessie exposes only live status and its UOA doorway; integration capability advertisement is not a second enablement control. |
-| Enterprise self-hosted packaging | Product confirmation pending. | Require access to a supported UOA deployment; do not invent a separate local enterprise broker. Specify availability/licensing before advertising support. |
-| Contractors/unverified organisation email domains | Source default proposed, not recorded approved. | Default off; any enabled path uses verified address, stable tenant proof and explicit admission. Existing-account proof never relaxes. |
-| Recovery | Unresolved design; current UOA has one canonical owner and prohibits backup codes. | Prefer two designated independently authenticated recovery custodians with an explicit narrowly scoped UOA capability. An expanded multi-owner model needs separate approval/migration. No enforced SSO until one approved design passes. |
-| SSO and SCIM billing | Confirmed: custom SSO is outside Nessie billing. | No Nessie subscription, plan-tier or pricing gate. Apply the same scope to associated SCIM unless explicitly separated later. Add no alternative billing subsystem. |
+| Enterprise self-hosted packaging | Internally managed. | Use a supported UOA deployment. Deployment and commercial arrangements are handled internally; add no separate broker, installer or self-service packaging flow. |
+| Contractors/unverified organisation email domains | Default off, confirmed by the user. | Any explicitly enabled exception still needs verified address, stable tenant proof and explicit admission. Existing-account proof never relaxes. |
+| Recovery | Implementation choice delegated; two narrow independent custodians selected. | Keep one canonical owner and no backup codes. Recovery grants only the named product/org's SSO repair capability, with fresh independent authentication and a tested continuity path before enforcement. |
+| SSO and SCIM billing | Custom commercial arrangements for now, managed in UOA. | No Nessie subscription, plan-tier or pricing gate. UOA owns custom enablement for SSO and SCIM; add no alternative billing subsystem or public tier matrix. |
 | Simple administration | Confirmed user requirement. | Short guided presets, essential inputs, plain test outcomes and next actions, secondary advanced diagnostics, clear recovery readiness and one UOA owning surface. |
 | Pre-auth domain discovery | Earlier corporate-domain plan says no; amendment is proposed. | Explicit product and org opt-in, domain-only disclosure. Start URLs work without approving discovery. |
 | Cross-origin connection/domain-claim scope | Current code supports cross-origin contexts; old claim proposal derives origin domain. | Freeze and implement exact consuming-domain/org binding before extending to these orgs. No copied org or implicit global policy. Origin-only activation can be a stated first slice. |
@@ -1220,7 +1239,7 @@ Several source resolutions needed stronger corrections during this revision.
 | 13 | SCIM subject transform; password-reset bypass | §§6.3, 6.5, 6.9 use proven immutable reconciliation, no email fallback, scoped admission and independent global credential proof. | Provisioning race plus reset/registration/invite bypass tests. |
 | 14 | `/auth/start` and discovery decision 7 | §6.1 keeps a dedicated proposed endpoint and explicit product/org consent; start URLs remain available. | Decision approval, no-account-oracle and target-binding tests. |
 | 15 | Nessie team enablement, email uniqueness, errors | §§6.4, 8.3–8.4 keep exact team enablement/errors and replace local email writes/merges with authority migration. | Dirty-data migration and real login/team-switch journeys. |
-| 16 | Recovery lockout and carve-out | §§6.5, 12 reject inconsistent one/two-owner assumptions; named custodians are proposed, backup codes still prohibited. | Approved authority model and independent recovery drill before enforcement. |
+| 16 | Recovery lockout and carve-out | §§6.5, 12 retain one canonical owner and select two narrow independent custodians; backup codes remain prohibited. | Implemented authority model and independent recovery drill before enforcement. |
 | 17 | Settings surface; audit/2FA reuse; allowed domains | §§5, 6.7–6.8 reuse UOA foundations, explicitly build continuation and preserve upstream owner contract with Nessie parity. | Capability, fresh-proof, translations and doorway tests. |
 | 18 | Membership source; teams vs Groups | §§5, 6.4, 6.9 use independently revocable source contributions, existing UOA teams and no resurrection/elevated-owner mapping. | Overlapping-source and incomplete-group tests. |
 | 19 | Scope cuts | §§1, 4, 5, 11 retain seven presets, separate social migration, no extra nonce store or unnecessary OIDC encryption keys; optional capabilities stay gated. | Each claimed preset has evidence; no deferred path silently enabled. |

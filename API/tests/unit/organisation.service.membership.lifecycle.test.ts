@@ -19,7 +19,7 @@ import {
 describe('Organisation service: member lifecycle (deactivate/reactivate)', () => {
   useOrganisationMembershipLifecycleTestEnv();
 
-  it('deactivates an ACTIVE member and atomically revokes org and legacy domain sessions', async () => {
+  it('deactivates an ACTIVE member and atomically revokes exact-org sessions and scoped downstream grants', async () => {
     const prisma = makePrismaMock();
 
     prisma.organisation.findFirst.mockResolvedValue(baseOrg);
@@ -56,9 +56,12 @@ describe('Organisation service: member lifecycle (deactivate/reactivate)', () =>
       data: { revokedAt: expect.any(Date) },
     });
     expect(prisma.refreshToken.updateMany).toHaveBeenNthCalledWith(2, {
-      where: { userId: 'u-member', domain: 'acme.example.com', revokedAt: null },
+      where: { userId: 'u-member', domain: 'acme.example.com', orgId: 'org-1' },
       data: { revokedAt: expect.any(Date) },
     });
+    expect(prisma.orgRevocationEvent.create).toHaveBeenCalledWith({ data: {
+      clientDomain: 'acme.example.com', scope: 'organisation', orgId: 'org-1', userId: 'u-member', revision: 1,
+    } });
   });
 
   it('rejects deactivating an owner', async () => {

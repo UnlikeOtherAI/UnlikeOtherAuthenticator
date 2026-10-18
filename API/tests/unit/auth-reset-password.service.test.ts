@@ -1,3 +1,4 @@
+import { enterpriseAuthorityStores } from '../helpers/enterprise-authority-stores.js';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { Env } from '../../src/config/env.js';
@@ -200,6 +201,7 @@ describe('resetPasswordWithToken', () => {
     const userId = 'u1';
     const userKey = 'existing@example.com';
     const prisma = {
+      ...enterpriseAuthorityStores(),
       $queryRaw: vi.fn(),
       user: {
         findUnique: vi.fn().mockResolvedValue({ lifecycleStatus: 'ACTIVE',

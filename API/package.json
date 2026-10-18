@@ -56,9 +56,12 @@
     "@types/node": "^22.13.1",
     "@types/nodemailer": "^6.4.17",
     "@types/qrcode": "^1.5.6",
+    "@types/xml-encryption": "^1.2.4",
     "prisma": "^6.3.1",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3",
-    "vitest": "^3.2.6"
+    "vitest": "^3.2.6",
+    "xml-crypto": "^6.4.0",
+    "xml-encryption": "^3.1.0"
   }
 }

@@ -1,3 +1,4 @@
+import { lockEnterpriseOutbox } from './org-sso-revocation.service.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { scrubOperationalAuditsBatch, type AuditProgress } from './identity-audit-sweep.service.js';
 import { Prisma, type LifecycleScope, type IdentityDeletionMode, type PrismaClient } from '@prisma/client';
@@ -39,6 +40,7 @@ export async function beginEntityDeletion(params: {
   confirmation: string; requestKey: string; actor: LifecycleActor;
 }) {
   return getAdminPrisma().$transaction(async transaction => {
+    await lockEnterpriseOutbox(transaction);
     const tx = transaction as unknown as PrismaClient;
     await lockProductTeamPolicyExclusive(tx);
     const actorEmail = await requireLifecycleActor(tx, params.actor);
@@ -83,6 +85,7 @@ const targetDigest = (id: string) => createHash('sha256').update(id).digest('hex
 export async function executeEntityDeletion(id: string, actor: LifecycleActor) {
   const leaseOwner = randomUUID(), prisma = getAdminPrisma();
   let job = await prisma.$transaction(async tx => {
+    await lockEnterpriseOutbox(tx);
     const client = tx as unknown as PrismaClient;
     await requireLifecycleActor(client, actor);
     await client.$queryRaw(Prisma.sql`SELECT id FROM entity_deletion_jobs WHERE id=${id} FOR UPDATE`);
@@ -100,6 +103,7 @@ export async function executeEntityDeletion(id: string, actor: LifecycleActor) {
     // Every stage commits its cursor with its effects. No all-auth policy lock is held during cleanup.
     for (let stage = 0; stage < 20; stage++) {
       job = await prisma.$transaction(async tx => {
+        await lockEnterpriseOutbox(tx);
         const client = tx as unknown as PrismaClient;
         const actorEmail = await requireLifecycleActor(client, actor);
         await client.$queryRaw(Prisma.sql`SELECT id FROM entity_deletion_jobs WHERE id=${id} FOR UPDATE`);

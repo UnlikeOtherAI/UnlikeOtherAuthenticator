@@ -5,10 +5,11 @@ import type { Prisma, PrismaClient, SessionAssurance } from '@prisma/client';
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import { runInTransaction } from '../db/tenant-context.js';
+import { assertEnterpriseProvisioningActive } from './enterprise-identity-status.service.js';
 
 export type AssuranceDb = Pick<PrismaClient,
   'sessionAssurance' | 'refreshToken' | 'user' | 'orgSsoPolicy' | 'orgSsoConnection' |
-  'externalIdentity' | 'orgMember' | 'teamMember' | 'enterpriseProductReadiness'>;
+  'externalIdentity' | 'orgMember' | 'teamMember' | 'enterpriseProductReadiness' | 'scimResourceLink' | 'organisationEmailDomain'>;
 export type AssuranceBinding = {
   userId: string; clientDomain: string; credentialEpoch: number;
   orgId?: string | null; teamId?: string | null;
@@ -53,7 +54,9 @@ async function validateSessionAssuranceInside(
       row.userId !== leaf.userId || row.credentialEpoch !== leaf.credentialEpoch ||
       row.expiresAt < leaf.expiresAt || row.method !== leaf.method ||
       row.clientDomain !== leaf.clientDomain || row.orgId !== leaf.orgId || row.teamId !== leaf.teamId ||
-      row.connectionId !== leaf.connectionId || row.externalIdentityId !== leaf.externalIdentityId) reject();
+      row.connectionId !== leaf.connectionId || row.externalIdentityId !== leaf.externalIdentityId ||
+      row.authenticatedAt?.getTime() !== leaf.authenticatedAt?.getTime() || row.observedAt.getTime() !== leaf.observedAt.getTime() ||
+      row.mfaSource !== leaf.mfaSource || row.acr !== leaf.acr || JSON.stringify(row.amr) !== JSON.stringify(leaf.amr)) reject();
     if (row.observedAt.getTime() > now.getTime() + 120000 ||
       (row.authenticatedAt && row.authenticatedAt.getTime() > now.getTime() + 120000)) reject();
     visited.add(row.id);
@@ -88,6 +91,7 @@ async function validateSessionAssuranceInside(
         connection.orgId !== row.orgId || connection.revision !== row.connectionRevision ||
         connection.generation !== row.connectionGeneration || identity?.status !== 'ACTIVE' ||
         identity.connectionId !== connection.id || identity.userId !== row.userId) reject();
+      await assertEnterpriseProvisioningActive(connection.id, identity.id, row.userId, db);
     }
     if (!row.parentId) break;
     row = await db.sessionAssurance.findUnique({ where: { id: row.parentId } });
@@ -113,7 +117,9 @@ export async function issueSessionAssurance(
       parent.credentialEpoch !== data.credentialEpoch || parent.clientDomain !== data.clientDomain ||
       parent.orgId !== (data.orgId ?? null) || parent.teamId !== (data.teamId ?? null) ||
       parent.connectionId !== (data.connectionId ?? null) || parent.externalIdentityId !== (data.externalIdentityId ?? null) ||
-      parent.expiresAt < new Date(data.expiresAt) || parent.observedAt.getTime() !== new Date(data.observedAt).getTime()) reject();
+      parent.expiresAt < new Date(data.expiresAt) || parent.observedAt.getTime() !== new Date(data.observedAt).getTime() ||
+      parent.authenticatedAt?.getTime() !== (data.authenticatedAt ? new Date(data.authenticatedAt).getTime() : undefined) ||
+      parent.mfaSource !== data.mfaSource || parent.acr !== (data.acr ?? null) || JSON.stringify(parent.amr) !== JSON.stringify(data.amr)) reject();
   }
   const reference = randomBytes(32).toString('base64url');
   const assurance = await db.sessionAssurance.create({ data: {

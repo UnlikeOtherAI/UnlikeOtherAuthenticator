@@ -1,4 +1,10 @@
+import { EnterprisePolicyPatch, updateEnterprisePolicy } from '../../services/org-sso-policy-management.service.js';
 import { registerOrganisationAccessStart } from './organisation-access-start.js';
+import { registerOrganisationAccessScim } from './organisation-access-scim.js';
+import { registerOrganisationRecovery } from './organisation-recovery.js';
+import { registerOrganisationAccessCredentials } from './organisation-access-credentials.js';
+import { lockProductTeamPolicyShared } from '../../services/product-team-policy-lock.service.js';
+import { lockAndWithdrawConnectionMemberships } from '../../services/membership-provenance.service.js';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { decodeJwt } from 'jose';
@@ -55,9 +61,13 @@ export function registerOrganisationAccessRoutes(app: FastifyInstance): void {
     session: Awaited<ReturnType<typeof managementSession>>, tx: Prisma.TransactionClient,
   ) => Promise<T>) => getAdminPrisma().$transaction(async (tx) => {
     await lockEnterpriseOutbox(tx);
+    await lockProductTeamPolicyShared(tx);
     const session = await managementSession(request.cookies[MANAGEMENT_COOKIE], csrf(request), true, tx);
     return run(session, tx);
-  });
+  }, { timeout: 30000 });
+  registerOrganisationAccessScim(app, mutation, limiter);
+  registerOrganisationRecovery(app, mutation);
+  registerOrganisationAccessCredentials(app, mutation);
   app.post(`${base}/sso/connections`, { preHandler: [requireSameOriginBrowserRequest, limiter] }, async (request, reply) => {
     const body = Connection.parse(request.body);
     return reply.header('Cache-Control', 'no-store').send(await mutation(request,
@@ -89,7 +99,12 @@ export function registerOrganisationAccessRoutes(app: FastifyInstance): void {
           throw new AppError('FORBIDDEN', 403, 'SSO_ACTIVATION_NOT_READY');
         }
       }
-      await tx.orgSsoConnection.update({ where: { id }, data: { status: body.status, generation: { increment: 1 } } });
+      await tx.orgSsoConnection.update({ where: { id }, data: { status: body.status, generation: { increment: 1 },
+        ...(body.status === 'active' ? {} : { scimEnabled: false, scimRevision: { increment: 1 } }) } });
+      if (body.status !== 'active') {
+        await tx.scimConnectionToken.updateMany({ where: { connectionId: id, revokedAt: null }, data: { revokedAt: new Date() } });
+        await lockAndWithdrawConnectionMemberships(id, tx);
+      }
       await revokeEnterpriseScope({ scope: 'connection', clientDomain: session.clientDomain, orgId: session.orgId,
         connectionId: id, revision: row.generation + 1 }, tx);
       return { ok: true };
@@ -101,7 +116,9 @@ export function registerOrganisationAccessRoutes(app: FastifyInstance): void {
   });
   app.post(`${base}/sso/domains/:id/verify`, { preHandler: [requireSameOriginBrowserRequest, limiter] }, async (request) => {
     const { id } = Params.parse(request.params);
-    return mutation(request, (session, tx) => verifyEnterpriseDomain(session, id, tx));
+    const result = await mutation(request, (session, tx) => verifyEnterpriseDomain(session, id, tx));
+    if (!result.ok) throw new AppError('BAD_REQUEST', 400, result.code);
+    return result;
   });
   app.post(`${base}/sso/domains/:id/reissue`, { preHandler: [requireSameOriginBrowserRequest, limiter] }, async (request) => {
     z.object({}).strict().parse(request.body);
@@ -113,13 +130,7 @@ export function registerOrganisationAccessRoutes(app: FastifyInstance): void {
     return mutation(request, (session, tx) => revokeEnterpriseDomain(session, id, tx));
   });
   app.patch(`${base}/sso/policy`, { preHandler: [requireSameOriginBrowserRequest, limiter] }, async (request) => {
-    const body = z.object({ revision: z.number().int().nonnegative(), enforcement: z.enum(['off', 'required_for_verified_domains',
-      'required_for_all_members']), session_max_age_seconds: z.number().int().min(300).max(86400),
-    reauth_mode: z.enum(['detect_only', 'force']) }).strict().parse(request.body);
-    return mutation(request, async () => {
-      // Pending explicit recovery approval and real drills. Do not mutate to pretend that gate passed.
-      if (body.enforcement !== 'off') throw new AppError('FORBIDDEN', 403, 'SSO_RECOVERY_NOT_READY');
-      throw new AppError('FORBIDDEN', 403, 'SSO_POLICY_NOT_READY');
-    });
+    const body = EnterprisePolicyPatch.parse(request.body);
+    return mutation(request, (session, tx) => updateEnterprisePolicy(session, body, tx));
   });
 }

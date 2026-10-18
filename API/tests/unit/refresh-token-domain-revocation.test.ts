@@ -1,3 +1,4 @@
+import { enterpriseAuthorityStores } from '../helpers/enterprise-authority-stores.js';
 import type { PrismaClient } from '@prisma/client';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -10,8 +11,10 @@ describe('refresh-token domain revocation (unit)', () => {
     const now = new Date('2026-03-10T13:30:00.000Z');
     const userUpdate = vi.fn();
     const prisma = {
+      ...enterpriseAuthorityStores(),
       $queryRaw: vi.fn().mockResolvedValue([{ lockResult: '' }]),
       refreshToken: {
+        findMany: vi.fn().mockResolvedValue([]),
         updateMany: vi.fn().mockResolvedValue({ count: 3 }),
       },
       user: {

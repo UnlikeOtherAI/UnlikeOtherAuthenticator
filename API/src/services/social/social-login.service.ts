@@ -1,3 +1,4 @@
+import { assertMailboxCredentialAdmission } from '../credential-admission.service.js';
 import type { PrismaClient } from '@prisma/client';
 
 import type { ClientConfig } from '../config.service.js';
@@ -17,6 +18,8 @@ import { assertProviderVerifiedEmail, type SocialProfile } from './provider.base
 type SocialLoginPrisma = {
   user: Pick<PrismaClient['user'], 'findUnique' | 'create' | 'update'>;
   domainRole: Pick<PrismaClient['domainRole'], 'findFirst'>;
+  externalIdentity: Pick<PrismaClient['externalIdentity'], 'findFirst'>;
+  organisationEmailDomain: Pick<PrismaClient['organisationEmailDomain'], 'findFirst'>;
 };
 
 type SocialLoginDeps = {
@@ -135,6 +138,10 @@ export async function loginWithSocialProfile(
     // Take it before updating the row: credential reset also takes user-global before its write,
     // so neither side can hold the User row while waiting for the other's advisory lock.
     await deps?.beforeExistingUserUpdate?.(existing.id);
+    // This legacy provider adapter has no stable provider subject. Its email match and
+    // best-effort AuthIdentity audit cannot prove ownership of an enterprise-linked account.
+    // Suspended enterprise links remain protected; domain lapse must never reopen email linking.
+    await assertMailboxCredentialAdmission(existing.id, prisma);
     const updated = await prisma.user.update({
       where: { userKey },
       data: {

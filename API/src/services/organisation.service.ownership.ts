@@ -1,7 +1,9 @@
+import { lockRefreshSessionUser } from './refresh-session-lock.service.js';
+import { revokeEnterpriseOrganisation } from './enterprise-authority-revocation.service.js';
 import type { ClientConfig } from './config.service.js';
 import { getEnv } from '../config/env.js';
-import { getPrisma } from '../db/prisma.js';
-import { runInTransaction } from '../db/tenant-context.js';
+import { getAdminPrisma } from '../db/prisma.js';
+import { runEnterpriseAuthorityTransaction } from './enterprise-authority-transaction.service.js';
 import { AppError } from '../utils/errors.js';
 import { OWNER_ROLE, resolveDemotedOwnerRole } from './role-grants.js';
 import { lockOrganisationMemberships } from './organisation-membership-lock.service.js';
@@ -76,9 +78,12 @@ export async function transferOrganisationOwnership(
   // organisation half-transferred.
   const outgoingOwnerRole = resolveOutgoingOwnerRole(params.config, params.previousOwnerRole);
 
-  const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgServicePrisma);
+  const prisma = deps?.prisma ?? (getAdminPrisma() as unknown as OrgServicePrisma);
   const org = await resolveOrganisation(prisma, { orgId: params.orgId });
-  const { organisation, demoted, outgoingOwnerId } = await runInTransaction(prisma, async (tx) => {
+  const { organisation, demoted, outgoingOwnerId } = await runEnterpriseAuthorityTransaction(prisma, async (tx) => {
+    for (const userId of [...new Set([org.ownerId, newOwnerId])].sort()) {
+      await lockRefreshSessionUser(userId, { prisma: tx });
+    }
     // Container lock precedes every membership lock, including organisation deletion.
     // The canonical owner and both memberships are read again only after these locks.
     await lockOrganisationMemberships(tx, org.id, [org.ownerId, newOwnerId]);
@@ -122,6 +127,8 @@ export async function transferOrganisationOwnership(
       },
     });
 
+    await revokeEnterpriseOrganisation(tx, org.id, outgoingOwnerId);
+    await revokeEnterpriseOrganisation(tx, org.id, newOwnerId);
     return { organisation: updated, demoted: Boolean(oldOwnerMembership), outgoingOwnerId };
   });
 

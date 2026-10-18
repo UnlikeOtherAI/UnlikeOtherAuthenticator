@@ -119,10 +119,15 @@ export function publicConnection(row: {
   id: string; preset: string; protocol: string; displayName: string; status: string; revision: number;
   configuration: Prisma.JsonValue; encryptedSecret: string | null; testedRevision: number | null;
   lastTestCode: string | null; lastTestAt: Date | null;
+  scimEnabled: boolean; scimRevision: number;
+  encryptedNextSecret: string | null; encryptedPreviousSecret: string | null; keyOverlapExpiresAt: Date | null;
 }) {
   const base = `${getPublicBaseUrl()}/sso`;
   return { id: row.id, preset: row.preset, protocol: row.protocol, display_name: row.displayName,
     status: row.status, revision: row.revision, configuration: row.configuration,
+    scim_enabled: row.scimEnabled, scim_revision: row.scimRevision,
+    sp_key_state: row.encryptedNextSecret ? 'prepared' : row.encryptedPreviousSecret ? 'overlap' : 'current',
+    key_overlap_expires_at: row.keyOverlapExpiresAt?.toISOString() ?? null,
     secret_configured: Boolean(row.encryptedSecret), tested_revision: row.testedRevision,
     last_test: row.lastTestAt ? { status: row.lastTestCode === 'PASSED' ? 'passed' : 'failed',
       code: row.lastTestCode, at: row.lastTestAt.toISOString() } : null,
@@ -133,21 +138,27 @@ export function publicConnection(row: {
 export async function managementView(session: Awaited<ReturnType<typeof managementSession>>,
   db: ManagementDb = getAdminPrisma()) {
   const where = { clientDomain: session.clientDomain, orgId: session.orgId };
-  const [org, policy, connections, domains, readiness] = await Promise.all([
+  const [org, policy, connections, domains, readiness, teams] = await Promise.all([
     db.organisation.findUniqueOrThrow({ where: { id: session.orgId }, select: { id: true, name: true } }),
     db.orgSsoPolicy.findUnique({ where: { clientDomain_orgId: where } }),
     db.orgSsoConnection.findMany({ where, orderBy: { createdAt: 'asc' } }),
     db.organisationEmailDomain.findMany({ where, select: { id: true, emailDomain: true, status: true,
-      verifiedAt: true, checkedAt: true, challengeExpiresAt: true } }), enterpriseReadiness(session.clientDomain, db as PrismaClient, session.orgId),
+      verifiedAt: true, checkedAt: true, lastVerifiedAt: true, failures: true, challengeExpiresAt: true } }), enterpriseReadiness(session.clientDomain, db as PrismaClient, session.orgId),
+    db.team.findMany({ where: { orgId: session.orgId, lifecycleStatus: 'ACTIVE' }, select: { id: true, name: true }, orderBy: { name: 'asc' } }),
   ]);
   return { ok: true, version: 1, org, client_domain: session.clientDomain, csrf_token: session.csrf,
     expires_at: session.expiresAt.toISOString(), capabilities: { manage_sso: true },
     policy: { arrangement_enabled: policy?.arrangementEnabled ?? false, revision: policy?.revision ?? 0, enforcement: policy?.enforcement ?? 'off',
-      session_max_age_seconds: policy?.sessionMaxAgeSeconds ?? 28800, reauth_mode: policy?.reauthMode ?? 'detect_only' },
+      session_max_age_seconds: policy?.sessionMaxAgeSeconds ?? 28800, reauth_mode: policy?.reauthMode ?? 'detect_only',
+      jit_enabled: policy?.jitEnabled ?? false, default_team_id: policy?.defaultTeamId ?? null,
+      allow_unverified_contractors: policy?.allowUnverifiedContractors ?? false, group_mappings: policy?.groupMappings ?? [],
+      discovery_enabled: policy?.discoveryEnabled ?? false },
+    teams,
     connections: connections.map(publicConnection), domains: domains.map((d) => ({ id: d.id,
       email_domain: d.emailDomain, status: d.status, verified_at: d.verifiedAt, checked_at: d.checkedAt,
+      last_verified_at: d.lastVerifiedAt, failure_count: d.failures,
       challenge_expires_at: d.challengeExpiresAt.toISOString() })),
-    readiness, presets: enterprisePresets, scim: { enabled: false } };
+    readiness, presets: enterprisePresets, scim: { enabled: policy?.arrangementEnabled ?? false } };
 }
 
 export async function saveEnterpriseConnection(session: Awaited<ReturnType<typeof managementSession>>,
@@ -158,15 +169,16 @@ export async function saveEnterpriseConnection(session: Awaited<ReturnType<typeo
   if (!enterprisePresets.some((p) => p.id === input.preset && (p.protocols as readonly string[]).includes(input.protocol))) {
     throw new AppError('BAD_REQUEST', 400, 'SSO_PRESET_INVALID');
   }
-  const configuration = isEmptyDraft ? {} : await resolveEnterpriseConfiguration(input.preset, input.protocol, input.configuration);
   const where = { clientDomain: session.clientDomain, orgId: session.orgId };
   await db.orgSsoPolicy.upsert({ where: { clientDomain_orgId: where }, create: where, update: {} });
   const prior = id ? await db.orgSsoConnection.findFirst({ where: { id, ...where } }) : null;
   if (id && (!prior || prior.revision !== input.revision)) throw new AppError('BAD_REQUEST', 409, 'SSO_REVISION_CONFLICT');
-  if (prior && prior.status !== 'draft' && prior.status !== 'testing') {
+  if (prior && (prior.activatedAt || (prior.status !== 'draft' && prior.status !== 'testing'))) {
     // Identity-affecting config is locked after activation, including while disabled.
     throw new AppError('FORBIDDEN', 403, 'SSO_IDENTITY_MIGRATION_REQUIRED');
   }
+  if (prior && (prior.protocol !== input.protocol || prior.preset !== input.preset)) throw new AppError('BAD_REQUEST', 409, 'SSO_IDENTITY_MIGRATION_REQUIRED');
+  const configuration = isEmptyDraft ? {} : await resolveEnterpriseConfiguration(input.preset, input.protocol, input.configuration);
   if (!prior && await db.orgSsoConnection.count({ where }) >= 10) throw new AppError('BAD_REQUEST', 409, 'SSO_CONNECTION_LIMIT');
   const connectionId = prior?.id ?? randomBytes(20).toString('hex');
   if (input.protocol === 'saml' && input.secret !== undefined) throw new AppError('BAD_REQUEST', 400, 'SSO_SP_KEYS_SERVER_OWNED');
