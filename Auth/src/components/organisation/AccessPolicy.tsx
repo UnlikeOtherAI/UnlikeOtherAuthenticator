@@ -48,9 +48,9 @@ export function AccessPolicy({settings,onSaved,onConnect}:{settings:AccessSettin
           onChange={event=>setGroups(previous=>previous.map((item,i)=>i===index?{...item,external_group_id:event.target.value}:item))}/>
         <label className="block text-sm">{t('groupTeam')}<select aria-label={t('groupTeam')} required className={fieldInputClassName()} value={mapping.team_id} disabled={busy}
           onChange={event=>setGroups(previous=>previous.map((item,i)=>i===index?{...item,team_id:event.target.value}:item))}>{teamOptions}</select></label>
-        <select aria-label={t('teamRole')} className={fieldInputClassName()} value={mapping.team_role} disabled={busy}
+        <label className="block text-sm">{t('teamRole')}<select aria-label={t('teamRole')} className={fieldInputClassName()} value={mapping.team_role} disabled={busy}
           onChange={event=>{const role=event.target.value;if(role==='member'||role==='admin')setGroups(previous=>previous.map((item,i)=>i===index?{...item,team_role:role}:item));}}>
-          <option value="member">{t('memberRole')}</option><option value="admin">{t('adminRole')}</option></select>
+          <option value="member">{t('memberRole')}</option><option value="admin">{t('adminRole')}</option></select></label>
         <Button type="button" variant="secondary" disabled={busy} onClick={()=>setGroups(previous=>previous.filter((_,i)=>i!==index))}>{t('removeMapping')}</Button>
       </div>)}{settings.connections.length===0?<><p>{t('connectBeforeGroups')}</p><Button type="button" variant="secondary" onClick={onConnect}>{common('choose')}</Button></>:<Button type="button" variant="secondary" disabled={busy||groups.length>=100}
         onClick={()=>setGroups(previous=>[...previous,{connection_id:'',external_group_id:'',team_id:'',team_role:'member'}])}>{t('addMapping')}</Button>}
