@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { AppError } from '../utils/errors.js';
 import { enterpriseFetch } from './enterprise-http.service.js';
+import { validateEnterpriseSigningCertificate } from './enterprise-signing-certificate.service.js';
 
 export const enterprisePresets = [
   { id: 'entra', protocols: ['oidc'] }, { id: 'okta', protocols: ['oidc', 'saml'] },
@@ -40,7 +41,11 @@ export function validateEnterpriseConfiguration(preset: string, protocol: string
   if (!definition || !(definition.protocols as readonly string[]).includes(protocol)) {
     throw new AppError('BAD_REQUEST', 400, 'SSO_PRESET_INVALID');
   }
-  if (protocol === 'saml') return SamlEnterpriseConfiguration.parse(raw);
+  if (protocol === 'saml') {
+    const config = SamlEnterpriseConfiguration.parse(raw);
+    config.certificates.forEach(validateEnterpriseSigningCertificate);
+    return config;
+  }
   const config = OidcEnterpriseConfiguration.parse(raw);
   const trusted = new Set(preset === 'google_workspace' ? ['https://accounts.google.com', 'https://oauth2.googleapis.com',
     'https://www.googleapis.com'] : [new URL(config.issuer).origin]);

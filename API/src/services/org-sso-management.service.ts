@@ -120,11 +120,14 @@ export function publicConnection(row: {
   configuration: Prisma.JsonValue; encryptedSecret: string | null; testedRevision: number | null;
   lastTestCode: string | null; lastTestAt: Date | null;
   scimEnabled: boolean; scimRevision: number;
+  encryptedNextSecret: string | null; encryptedPreviousSecret: string | null; keyOverlapExpiresAt: Date | null;
 }) {
   const base = `${getPublicBaseUrl()}/sso`;
   return { id: row.id, preset: row.preset, protocol: row.protocol, display_name: row.displayName,
     status: row.status, revision: row.revision, configuration: row.configuration,
     scim_enabled: row.scimEnabled, scim_revision: row.scimRevision,
+    sp_key_state: row.encryptedNextSecret ? 'prepared' : row.encryptedPreviousSecret ? 'overlap' : 'current',
+    key_overlap_expires_at: row.keyOverlapExpiresAt?.toISOString() ?? null,
     secret_configured: Boolean(row.encryptedSecret), tested_revision: row.testedRevision,
     last_test: row.lastTestAt ? { status: row.lastTestCode === 'PASSED' ? 'passed' : 'failed',
       code: row.lastTestCode, at: row.lastTestAt.toISOString() } : null,
@@ -166,15 +169,16 @@ export async function saveEnterpriseConnection(session: Awaited<ReturnType<typeo
   if (!enterprisePresets.some((p) => p.id === input.preset && (p.protocols as readonly string[]).includes(input.protocol))) {
     throw new AppError('BAD_REQUEST', 400, 'SSO_PRESET_INVALID');
   }
-  const configuration = isEmptyDraft ? {} : await resolveEnterpriseConfiguration(input.preset, input.protocol, input.configuration);
   const where = { clientDomain: session.clientDomain, orgId: session.orgId };
   await db.orgSsoPolicy.upsert({ where: { clientDomain_orgId: where }, create: where, update: {} });
   const prior = id ? await db.orgSsoConnection.findFirst({ where: { id, ...where } }) : null;
   if (id && (!prior || prior.revision !== input.revision)) throw new AppError('BAD_REQUEST', 409, 'SSO_REVISION_CONFLICT');
-  if (prior && prior.status !== 'draft' && prior.status !== 'testing') {
+  if (prior && (prior.activatedAt || (prior.status !== 'draft' && prior.status !== 'testing'))) {
     // Identity-affecting config is locked after activation, including while disabled.
     throw new AppError('FORBIDDEN', 403, 'SSO_IDENTITY_MIGRATION_REQUIRED');
   }
+  if (prior && (prior.protocol !== input.protocol || prior.preset !== input.preset)) throw new AppError('BAD_REQUEST', 409, 'SSO_IDENTITY_MIGRATION_REQUIRED');
+  const configuration = isEmptyDraft ? {} : await resolveEnterpriseConfiguration(input.preset, input.protocol, input.configuration);
   if (!prior && await db.orgSsoConnection.count({ where }) >= 10) throw new AppError('BAD_REQUEST', 409, 'SSO_CONNECTION_LIMIT');
   const connectionId = prior?.id ?? randomBytes(20).toString('hex');
   if (input.protocol === 'saml' && input.secret !== undefined) throw new AppError('BAD_REQUEST', 400, 'SSO_SP_KEYS_SERVER_OWNED');

@@ -276,6 +276,9 @@ only the stable inactive SCIM resource ID and an append-only hash of the upstrea
 connection/issuer/tenant/subject tuple. Subsequent admission refuses that tuple.
 It never deletes lifecycle jobs or receipts. RETAIN preserves the canonical
 deleted person and suspends their stable external links.
+Both seams run inside the existing lifecycle sweep after the canonical person
+becomes terminal and before any hard delete. ERASE also scrubs enterprise links
+when protected financial evidence requires a terminal canonical stub to remain.
 
 
 ### Recovery contacts
@@ -335,7 +338,37 @@ protocol flows and source evidence still referenced by authorization artifacts.
 Stable identity links, provisioning tombstones and erasure hashes are excluded
 from transient pruning. Recovery action evidence is retained for 90 days.
 
-Both seams run inside the existing lifecycle sweep after the canonical person
-becomes terminal and before any hard delete. ERASE also scrubs enterprise links
-when protected financial evidence requires a terminal canonical stub to remain.
+
+### Metadata and credential rotation
+
+Owner `POST /auth/organisation-access/sso/connections/:id/metadata/parse {xml}`
+parses at most 256 KiB of pasted or locally uploaded IdP metadata. It returns
+`{ok,configuration:{entity_id,sso_url,certificates}}` without saving configuration
+or fetching remote URLs. Only one entity, one IdP descriptor and one unambiguous
+HTTPS Redirect endpoint are accepted. External entities, ambiguous issuers and
+invalid or weak signing certificates are refused. Tenant and subject mappings
+remain explicit owner configuration.
+
+`POST /credentials/rotate {revision,secret}` replaces an OIDC secret;
+`{revision,certificates:[PEM]}` replaces SAML IdP trust with up to three overlapping
+RSA certificates. The stable connection, issuer, tenant, client ID and subject
+mapping do not change. A durable activation marker prevents a later test or
+suspension from reopening identity configuration. RSA signing keys are bounded
+to 2048–8192 bits and certificates must be suitable for current use.
+
+SAML SP keys are generated and sealed by UOA. `POST /sp-key/prepare {revision}`
+publishes the next signing and encryption certificates beside the current ones.
+After an owner test, `/sp-key/activate` switches the active key while retaining
+the previous decryption key. Test again, then `/sp-key/retire` removes overlap.
+At most two context-bound key pairs are accepted for at most 14 days. The
+maintained [node-saml metadata contract](https://github.com/node-saml/node-saml#service-provider-metadata)
+publishes signing certificates; UOA also publishes both encryption certificates
+and bounds full-signature-verified decryption attempts during overlap.
+Request-cache removal is committed after those attempts, including failure.
+
+These actions return the redacted connection with `sp_key_state` (`current`,
+`prepared`, `overlap`) and `key_overlap_expires_at`. Private keys and client
+secrets never appear in responses or audit data. Every credential change advances
+the connection revision and invalidation generation, invalidates previous proof,
+and requires a successful owner test before new product sign-ins resume.
 
