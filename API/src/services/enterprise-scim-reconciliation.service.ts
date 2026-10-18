@@ -1,6 +1,6 @@
 import type { Prisma, ScimResourceLink } from '@prisma/client';
 import { AppError } from '../utils/errors.js';
-import { GroupMapping } from './org-sso-policy-management.service.js';
+import { connectionGroupMappings } from './enterprise-group-mapping.service.js';
 import { replaceManagedMemberships, withdrawConnectionMemberships, type ManagedMembershipGrant } from './membership-provenance.service.js';
 import { parseScimAttributes } from './enterprise-scim-protocol.service.js';
 import { lockRefreshSessionUserDomain } from './refresh-session-lock.service.js';
@@ -29,7 +29,7 @@ export async function reconcileScimUsers(connectionId: string, resourceIds: stri
   const policy = await tx.orgSsoPolicy.findUniqueOrThrow({ where: { clientDomain_orgId: { clientDomain: connection.clientDomain, orgId: connection.orgId } } });
   const groups = await tx.scimResourceLink.findMany({ where: { connectionId, resourceType: 'Groups', active: true, deletedAt: null }, take: 1001 });
   if (groups.length > 1000) throw new AppError('BAD_REQUEST', 409, 'SCIM_GROUP_LIMIT');
-  const mappings = GroupMapping.array().max(100).parse(policy.groupMappings);
+  const mappings = connectionGroupMappings(policy.groupMappings, connectionId);
   for (const row of users) {
     if (!row.userId || !row.subjectBinding) throw new AppError('INTERNAL', 500, 'SCIM_RECONCILIATION_REQUIRED');
     const userId = row.userId;
