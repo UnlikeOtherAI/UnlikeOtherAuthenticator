@@ -1,4 +1,5 @@
 import { assertMailboxCredentialAdmission } from './credential-admission.service.js';
+import { assertEnterpriseProvisioningActive } from './enterprise-identity-status.service.js';
 import { randomBytes, createHash } from 'node:crypto';
 import type { PrismaClient, Prisma } from '@prisma/client';
 import { getAdminPrisma } from '../db/prisma.js';
@@ -81,6 +82,7 @@ async function validateAuthenticationEvidence(input: { id?: string; userId: stri
       identity?.status !== 'ACTIVE' || identity.userId !== row.userId || identity.connectionId !== row.connectionId ||
       identity.clientDomain !== row.clientDomain || identity.orgId !== row.orgId || !policy?.arrangementEnabled ||
       policy.generation !== row.policyGeneration || !member || !row.sessionDeadline || row.sessionDeadline <= new Date()) deny();
+    await assertEnterpriseProvisioningActive(row.connectionId, row.externalIdentityId, row.userId, db);
     if (row.teamId && !await db.teamMember.findFirst({ where: { userId: row.userId, teamId: row.teamId, status: 'ACTIVE',
       team: { orgId: row.orgId, lifecycleStatus: 'ACTIVE' } } })) deny();
   }

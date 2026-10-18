@@ -8,6 +8,8 @@ import { resolveProductTeamPolicy } from '../../../services/product-team-policy.
 import { AppError } from '../../../utils/errors.js';
 import { getAdminPrisma } from '../../../db/prisma.js';
 import { assertConfigDomainMatchesConfigUrl } from '../../../services/config.service.js';
+import { lockProductTeamPolicyShared } from '../../../services/product-team-policy-lock.service.js';
+import { lockAndWithdrawConnectionMemberships } from '../../../services/membership-provenance.service.js';
 
 export function registerAdminEnterpriseRevocationRoutes(app: FastifyInstance): void {
   app.put('/internal/admin/enterprise/products/:domain', { preHandler: requireAdminSuperuser }, async (request, reply) => {
@@ -40,6 +42,7 @@ export function registerAdminEnterpriseRevocationRoutes(app: FastifyInstance): v
       enabled: z.boolean(), revision: z.number().int().nonnegative() }).strict().parse(request.body);
     const result = await getAdminPrisma().$transaction(async (tx) => {
       await lockEnterpriseOutbox(tx);
+      await lockProductTeamPolicyShared(tx);
       await lockEnterpriseScope(tx, input.client_domain, input.org_id);
       const [client, org, product] = await Promise.all([
         tx.clientDomain.findUnique({ where: { domain: input.client_domain } }),
@@ -57,7 +60,12 @@ export function registerAdminEnterpriseRevocationRoutes(app: FastifyInstance): v
         create: { ...scope, arrangementEnabled: input.enabled, revision: 1 },
         update: { arrangementEnabled: input.enabled, revision: { increment: 1 }, generation: { increment: 1 } } });
       if (!input.enabled) {
-        await tx.orgSsoConnection.updateMany({ where: scope, data: { status: 'suspended', generation: { increment: 1 } } });
+        const connections = await tx.orgSsoConnection.findMany({ where: scope, select: { id: true } });
+        await tx.orgSsoConnection.updateMany({ where: scope, data: { status: 'suspended', generation: { increment: 1 },
+          scimEnabled: false, scimRevision: { increment: 1 } } });
+        await tx.scimConnectionToken.updateMany({ where: { connectionId: { in: connections.map((connection) => connection.id) },
+          revokedAt: null }, data: { revokedAt: new Date() } });
+        for (const connection of connections) await lockAndWithdrawConnectionMemberships(connection.id, tx);
         await revokeEnterpriseScope({ ...scope, scope: 'product_org', revision: row.generation }, tx);
       }
       return { ok: true, client_domain: row.clientDomain, org_id: row.orgId,

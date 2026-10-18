@@ -5,6 +5,10 @@ import { enterpriseReadiness } from './org-sso-policy.service.js';
 import { getAdminPrisma } from '../db/prisma.js';
 import { revokeEnterpriseScope } from './org-sso-revocation.service.js';
 import type { managementSession } from './org-sso-management.service.js';
+import { reconcileScimUsers } from './enterprise-scim-reconciliation.service.js';
+import { withdrawConnectionMemberships } from './membership-provenance.service.js';
+import { lockRefreshSessionUserDomain } from './refresh-session-lock.service.js';
+import { lockTeamMembershipRows } from './team-scope.service.js';
 
 export const GroupMapping = z.object({ external_group_id: z.string().min(1).max(256),
   team_id: z.string().min(1).max(100), team_role: z.enum(['member', 'admin']) }).strict();
@@ -47,6 +51,25 @@ export async function updateEnterprisePolicy(session: Awaited<ReturnType<typeof 
     ...(input.discovery_enabled === undefined ? {} : { discoveryEnabled: input.discovery_enabled }) };
   const row = await tx.orgSsoPolicy.upsert({ where: { clientDomain_orgId: scope }, create: { ...scope, ...data },
     update: { ...data, revision: { increment: 1 }, ...(securityChange ? { generation: { increment: 1 } } : {}) } });
+  if (input.group_mappings !== undefined || input.default_team_id !== undefined || input.jit_enabled !== undefined) {
+    // Old signed group claims are not standing authority for new mappings. A fresh SSO login rebuilds that source.
+    const sources = await tx.membershipContribution.findMany({ where: { ...scope, sourceKind: 'sso', active: true },
+      distinct: ['userId', 'connectionId'], select: { userId: true, connectionId: true }, orderBy: { userId: 'asc' } });
+    for (const source of sources) {
+      if (!source.connectionId) throw new AppError('INTERNAL', 500, 'SSO_SOURCE_INVALID');
+      await lockRefreshSessionUserDomain({ userId: source.userId, domain: session.clientDomain }, { prisma: tx });
+      await lockTeamMembershipRows({ userId: source.userId, orgId: session.orgId }, { prisma: tx });
+      await withdrawConnectionMemberships({ connectionId: source.connectionId, userId: source.userId, sourceKind: 'sso' }, tx);
+    }
+    // Provisioner resources remain standing scoped authority, but only after immutable owner reconciliation.
+    const connections = await tx.orgSsoConnection.findMany({ where: { ...scope, status: { notIn: ['disabled', 'suspended'] } }, select: { id: true } });
+    for (const connection of connections) {
+      const resources = await tx.scimResourceLink.findMany({ where: { connectionId: connection.id, resourceType: 'Users',
+        subjectBinding: { not: null } }, select: { id: true }, take: 10001 });
+      if (resources.length > 10000) throw new AppError('BAD_REQUEST', 409, 'SCIM_RESOURCE_LIMIT');
+      await reconcileScimUsers(connection.id, resources.map((resource) => resource.id), tx);
+    }
+  }
   if (securityChange) await revokeEnterpriseScope({ ...scope, scope: 'product_org', revision: row.generation }, tx);
   await tx.orgAuditLog.create({ data: { orgId: session.orgId, actorUserId: session.userId,
     action: 'sso.policy_updated', targetType: 'organisation', targetId: session.orgId,

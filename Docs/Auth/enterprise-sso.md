@@ -238,3 +238,41 @@ stable identity link and normal SSO continuation. It returns
 the original upstream authentication time, including unknown time. A separate
 verified personal factor marker may satisfy UOA MFA; upstream AMR never becomes
 that marker. SSO and recovery sources cannot enter global TOTP enrollment.
+
+### Scoped provisioning and erasure
+
+SCIM is enabled by a UOA custom arrangement and an explicit per-connection
+owner switch. It has no product subscription gate. The product must acknowledge
+authority migration and revocation consumers before tokens are accepted.
+The owner uses `/auth/organisation-access/sso/connections/:id/scim` to inspect
+transport state, token metadata, pending resources and already linked stable
+identities. `POST /state {revision,enabled}` changes transport state;
+`POST /tokens {}` returns a token once, and `DELETE /tokens/:tokenId` revokes
+that exact token. At most two unexpired tokens overlap for rotation.
+
+Incoming User resources remain unbound until the owner submits
+`POST /reconcile {resource_id,external_identity_id,version}`. The selected
+external identity must already have independent account-link proof. User names,
+email addresses, group names and external IDs never select canonical people.
+The resource-to-identity binding is immutable, including after deletion.
+Groups refer only to User resource IDs in the same connection. Group mappings
+grant member or team-admin authority; they cannot grant ownership.
+
+The protocol supports bounded User/Group CRUD, equality filters, pagination,
+attribute projection, weak ETags, sequential PATCH and Entra member-list removal.
+Its dialect follows [SCIM HTTP](https://www.rfc-editor.org/rfc/rfc7644.html) and
+[Entra provisioning](https://learn.microsoft.com/en-us/entra/identity/app-provisioning/use-scim-to-provision-users-and-groups).
+Updates recheck bearer authority inside the same transaction as reconciliation.
+Deactivation and deletion withdraw only the matching managed sources and emit
+scoped revocation atomically. Independent manual grants survive. Manual removal
+suppression survives future provisioning, and canonical deleted people cannot
+be reactivated by the provisioner. Disabling the transport revokes tokens;
+disabling the connection also withdraws its managed membership contributions.
+
+The lifecycle ERASE seam is `eraseEnterprisePerson(userId, tx)`, called before
+canonical hard deletion under the existing outbox, product and user locks.
+It removes private link/evidence data, scrubs provisioning attributes, and keeps
+only the stable inactive SCIM resource ID and an append-only hash of the upstream
+connection/issuer/tenant/subject tuple. Subsequent admission refuses that tuple.
+It never deletes lifecycle jobs or receipts. RETAIN preserves the canonical
+deleted person and suspends their stable external links.

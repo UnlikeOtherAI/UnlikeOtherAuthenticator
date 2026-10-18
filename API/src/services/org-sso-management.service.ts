@@ -119,10 +119,12 @@ export function publicConnection(row: {
   id: string; preset: string; protocol: string; displayName: string; status: string; revision: number;
   configuration: Prisma.JsonValue; encryptedSecret: string | null; testedRevision: number | null;
   lastTestCode: string | null; lastTestAt: Date | null;
+  scimEnabled: boolean; scimRevision: number;
 }) {
   const base = `${getPublicBaseUrl()}/sso`;
   return { id: row.id, preset: row.preset, protocol: row.protocol, display_name: row.displayName,
     status: row.status, revision: row.revision, configuration: row.configuration,
+    scim_enabled: row.scimEnabled, scim_revision: row.scimRevision,
     secret_configured: Boolean(row.encryptedSecret), tested_revision: row.testedRevision,
     last_test: row.lastTestAt ? { status: row.lastTestCode === 'PASSED' ? 'passed' : 'failed',
       code: row.lastTestCode, at: row.lastTestAt.toISOString() } : null,
@@ -152,7 +154,7 @@ export async function managementView(session: Awaited<ReturnType<typeof manageme
     connections: connections.map(publicConnection), domains: domains.map((d) => ({ id: d.id,
       email_domain: d.emailDomain, status: d.status, verified_at: d.verifiedAt, checked_at: d.checkedAt,
       challenge_expires_at: d.challengeExpiresAt.toISOString() })),
-    readiness, presets: enterprisePresets, scim: { enabled: false } };
+    readiness, presets: enterprisePresets, scim: { enabled: policy?.arrangementEnabled ?? false } };
 }
 
 export async function saveEnterpriseConnection(session: Awaited<ReturnType<typeof managementSession>>,

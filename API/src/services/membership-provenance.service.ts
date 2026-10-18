@@ -2,6 +2,8 @@ import type { Prisma } from '@prisma/client';
 import { AppError } from '../utils/errors.js';
 import { asPrismaClient } from '../db/tenant-context.js';
 import { revokeEnterpriseOrganisation, revokeEnterpriseTeam } from './enterprise-authority-revocation.service.js';
+import { lockRefreshSessionUserDomain } from './refresh-session-lock.service.js';
+import { lockTeamMembershipRows } from './team-scope.service.js';
 
 export type ManagedMembershipGrant = { teamId: string | null; role: 'member' | 'admin'; resourceId: string };
 function roleFor(roles: string[], org: boolean): string {
@@ -42,7 +44,7 @@ export async function reconcileEffectiveMembership(userId: string, orgId: string
       await tx.orgMember.upsert({ where: { orgId_userId: { orgId, userId } },
         create: { orgId, userId, role: roleFor(orgRoles, true), status: 'ACTIVE' },
         update: { role: roleFor(orgRoles, true), status: 'ACTIVE' } });
-    } else await tx.orgMember.updateMany({ where: { orgId, userId, role: { not: 'owner' } }, data: { status: 'DEACTIVATED' } });
+    } else await tx.orgMember.updateMany({ where: { orgId, userId, status: 'ACTIVE', role: { not: 'owner' } }, data: { status: 'DEACTIVATED' } });
     const teamIds = new Set([...teams.map((row) => row.teamId), ...contributions.flatMap((row) => row.teamId ? [row.teamId] : [])]);
     for (const teamId of [...teamIds].sort()) {
       const grants = contributions.filter((row) => row.teamId === teamId);
@@ -52,7 +54,7 @@ export async function reconcileEffectiveMembership(userId: string, orgId: string
         const role = roleFor(grants.map((row) => row.role), false);
         await tx.teamMember.upsert({ where: { teamId_userId: { teamId, userId } },
           create: { teamId, userId, teamRole: role, status: 'ACTIVE' }, update: { teamRole: role, status: 'ACTIVE' } });
-      } else await tx.teamMember.updateMany({ where: { teamId, userId }, data: { status: 'DEACTIVATED' } });
+      } else await tx.teamMember.updateMany({ where: { teamId, userId, status: 'ACTIVE' }, data: { status: 'DEACTIVATED' } });
     }
   });
   const nextOrg = await tx.orgMember.findUnique({ where: { orgId_userId: { orgId, userId } }, select: { status: true, role: true } });
@@ -106,4 +108,16 @@ export async function withdrawConnectionMemberships(input: { connectionId: strin
   const affected = await tx.membershipContribution.findMany({ where, distinct: ['userId', 'orgId'], select: { userId: true, orgId: true } });
   await tx.membershipContribution.updateMany({ where, data: { active: false } });
   for (const row of affected) await reconcileEffectiveMembership(row.userId, row.orgId, tx);
+}
+
+/** Connection suspension uses the same user→membership lock order as live authentication. */
+export async function lockAndWithdrawConnectionMemberships(connectionId: string, tx: Prisma.TransactionClient) {
+  const connection = await tx.orgSsoConnection.findUniqueOrThrow({ where: { id: connectionId } });
+  const affected = await tx.membershipContribution.findMany({ where: { connectionId, active: true },
+    distinct: ['userId', 'orgId'], select: { userId: true, orgId: true }, orderBy: { userId: 'asc' } });
+  for (const row of affected) {
+    await lockRefreshSessionUserDomain({ userId: row.userId, domain: connection.clientDomain }, { prisma: tx });
+    await lockTeamMembershipRows({ userId: row.userId, orgId: row.orgId }, { prisma: tx });
+    await withdrawConnectionMemberships({ connectionId, userId: row.userId }, tx);
+  }
 }

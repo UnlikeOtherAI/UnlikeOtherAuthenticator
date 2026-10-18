@@ -5212,6 +5212,8 @@ model OrgSsoConnection {
   status String @default("draft")
   revision Int @default(1)
   generation Int @default(1)
+  scimEnabled Boolean @default(false) @map("scim_enabled")
+  scimRevision Int @default(1) @map("scim_revision")
   configuration Json
   encryptedSecret String? @map("encrypted_secret")
   publicSigningCertificates String[] @default([]) @map("public_signing_certificates")
@@ -5384,7 +5386,19 @@ model ScimResourceLink {
   updatedAt DateTime @updatedAt @map("updated_at")
   connection OrgSsoConnection @relation(fields:[connectionId,clientDomain,orgId],references:[id,clientDomain,orgId],onDelete:Restrict)
   @@unique([connectionId,resourceType,externalId])
+  @@unique([connectionId,resourceType,subjectBinding])
   @@map("scim_resource_links")
+}
+
+model ExternalIdentityTombstone {
+  id String @id @default(cuid())
+  connectionId String @map("connection_id")
+  clientDomain String @map("client_domain")
+  orgId String @map("org_id")
+  tupleHash String @unique @map("tuple_hash")
+  reason String
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("external_identity_tombstones")
 }
 
 model ScimConnectionToken {
@@ -5531,6 +5545,7 @@ model MembershipSuppression {
   @@map("membership_suppressions")
 }
 model OrgSsoLinkIntent {
+  candidateUserIds String[] @default([]) @map("candidate_user_ids")
   id String @id @default(cuid())
   connectionId String @map("connection_id")
   revision Int
