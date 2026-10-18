@@ -58,6 +58,8 @@ describe('existing personal factor account linking with real PostgreSQL', () => 
     await db.orgSsoPolicy.create({ data: { clientDomain: domain, orgId, arrangementEnabled: true } });
     await db.enterpriseProductReadiness.create({ data: { clientDomain: domain, minimumAssuranceVersion: 1,
       authorityMigrationRevision: 'test', revocationConsumersRevision: 'test' } });
+    await db.orgRevocationConsumer.create({ data: { clientDomain: domain, destination: `https://${domain}/revocations`,
+      keyId: 'fixture', encryptedSecret: 'fixture-not-used-for-delivery', enabled: true, acknowledgedAt: new Date(), capabilityVersion: 1 } });
     connectionId = (await db.orgSsoConnection.create({ data: { clientDomain: domain, orgId,
       preset: 'other_oidc', protocol: 'oidc', displayName: 'Test', configuration: {}, status: 'active', testedRevision: 1 } })).id;
   });

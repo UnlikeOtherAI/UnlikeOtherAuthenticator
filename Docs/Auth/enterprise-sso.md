@@ -375,3 +375,28 @@ Access JWT expiry and the returned `expires_in` are also capped to the exact
 authoritative assurance deadline, including when it is shorter than the product
 access-token setting. An invalid or expired deadline cannot issue a token.
 
+### Receiver capability acknowledgment and protocol verification
+
+The authenticated `POST /domain/revocation-consumers/ready?domain=...` body is
+`{key_id,challenge,proof,capabilities:{version:1,feed:true,reconciliation:true,
+use_time_assurance:true,immutable_custody:true}}`. Both objects are strict.
+The existing `uoa.revocation-ready.v1` HMAC input remains unchanged; domain
+authentication and TLS bind the capability declaration to the consuming client.
+Only a verified acknowledgment stores capability version 1. Re-registration or
+rotation resets it to 0 and disables delivery until the new challenge is proved.
+`enterpriseRevocationReady` requires an enabled receiver, acknowledgment timestamp
+and version 1. Product revision strings cannot substitute for that state.
+Activation, new enterprise sign-ins and new provisioning tokens require it.
+Existing authorized provisioning remains available during receiver rotation so
+deprovisioning cannot be delayed by transport maintenance.
+
+Focused protocol tests include an actual local HTTPS OIDC provider implementing
+discovery, authorization codes, client authentication, PKCE, RSA token signing
+and mixed-key JWKS. Only the test outbound transport trusts its isolated private
+certificate; production TLS, public-address resolution and redirect refusal are
+unchanged. Cryptographic SAML fixtures sign both response and assertion, encrypt
+to current or overlap keys, and use the real persisted request/replay cache.
+These engine tests complement the real API/PostgreSQL and headless customer
+journeys; they do not replace the final credential-route coverage audit or
+establish compatibility with an untested customer IdP configuration.
+

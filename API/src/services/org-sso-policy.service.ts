@@ -4,13 +4,14 @@ import { AppError } from '../utils/errors.js';
 import { currentSessionAssurance, validateSessionAssurance, type AssuranceDb } from './session-assurance.service.js';
 import { requireAuthenticationEvidence } from './authentication-evidence.service.js';
 import { recoveryReadiness } from './enterprise-recovery-policy.service.js';
+import { enterpriseRevocationReady } from './enterprise-revocation-readiness.service.js';
 
 export async function enterpriseReadiness(clientDomain: string, db = getAdminPrisma(), orgId?: string) {
   const product = await db.enterpriseProductReadiness.findUnique({ where: { clientDomain } });
   const blockers: string[] = [];
   if (product?.minimumAssuranceVersion !== 1) blockers.push('ASSURANCE_CONTRACT_REQUIRED');
   if (!product?.authorityMigrationRevision) blockers.push('NESSIE_AUTHORITY_MIGRATION_REQUIRED');
-  if (!product?.revocationConsumersRevision) blockers.push('REVOCATION_CONSUMERS_REQUIRED');
+  if (!product?.revocationConsumersRevision || !await enterpriseRevocationReady(clientDomain, db)) blockers.push('REVOCATION_CONSUMERS_REQUIRED');
   if (orgId) {
     const policy = await db.orgSsoPolicy.findUnique({ where: { clientDomain_orgId: { clientDomain, orgId } } });
     if (!policy?.arrangementEnabled) blockers.push('CUSTOM_ARRANGEMENT_REQUIRED');
