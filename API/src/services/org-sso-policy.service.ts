@@ -3,6 +3,7 @@ import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import { currentSessionAssurance, validateSessionAssurance, type AssuranceDb } from './session-assurance.service.js';
 import { requireAuthenticationEvidence } from './authentication-evidence.service.js';
+import { recoveryReadiness } from './enterprise-recovery-policy.service.js';
 
 export async function enterpriseReadiness(clientDomain: string, db = getAdminPrisma(), orgId?: string) {
   const product = await db.enterpriseProductReadiness.findUnique({ where: { clientDomain } });
@@ -16,9 +17,10 @@ export async function enterpriseReadiness(clientDomain: string, db = getAdminPri
   }
   blockers.push('LIVE_IDENTITY_FLOW_REQUIRED');
   const activationAllowed = blockers.length === 0;
-  // Recovery needs independently tested custodians and a successful current drill.
-  blockers.push('RECOVERY_SETUP_REQUIRED');
-  return { activation_allowed: activationAllowed, enforcement_allowed: false, blockers };
+  const recovery = orgId ? await recoveryReadiness(clientDomain, orgId, db) : null;
+  if (!recovery?.setup_complete) blockers.push('RECOVERY_SETUP_REQUIRED');
+  else if (!recovery.drill_complete) blockers.push('RECOVERY_DRILL_REQUIRED');
+  return { activation_allowed: activationAllowed, enforcement_allowed: activationAllowed && Boolean(recovery?.drill_complete), blockers };
 }
 
 /** The direct lookup invokes this seam too: callers cannot bypass policy via a lower-level helper. */
