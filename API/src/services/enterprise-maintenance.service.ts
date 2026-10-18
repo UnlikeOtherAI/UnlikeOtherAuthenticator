@@ -10,7 +10,7 @@ import { lockEnterpriseScope } from './org-sso-management.service.js';
 export async function pruneEnterpriseTransients(db = getAdminPrisma()) {
   return db.$transaction(async (tx) => {
     await lockEnterpriseOutbox(tx);
-    const tables = ['native_oauth_flows', 'org_sso_personal_factor_challenges', 'enterprise_recovery_challenges', 'org_sso_management_sessions',
+    const tables = ['org_sso_management_factor_challenges', 'native_oauth_flows', 'org_sso_personal_factor_challenges', 'enterprise_recovery_challenges', 'org_sso_management_sessions',
       'org_sso_management_intents', 'org_sso_link_intents', 'org_sso_relying_intents'] as const;
     let deleted = 0;
     for (const table of tables) {
