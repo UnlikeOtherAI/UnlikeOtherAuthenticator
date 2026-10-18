@@ -36,8 +36,8 @@ describe('narrow independently authenticated recovery with real PostgreSQL', () 
     for (const id of [org, otherOrg]) {
       await db.organisation.create({ data: { id, domain, ownerId: owner, name: id, slug: id } });
       await db.orgMember.create({ data: { orgId: id, userId: owner, role: 'owner' } });
-      await db.orgSsoPolicy.create({ data: { clientDomain: domain, orgId: id, arrangementEnabled: true } });
-      await db.orgSsoConnection.create({ data: { clientDomain: domain, orgId: id, preset: 'other_oidc', protocol: 'oidc',
+      if (id === otherOrg) await db.orgSsoPolicy.create({ data: { clientDomain: domain, orgId: id, arrangementEnabled: true } });
+      if (id === otherOrg) await db.orgSsoConnection.create({ data: { clientDomain: domain, orgId: id, preset: 'other_oidc', protocol: 'oidc',
         configuration: {}, displayName: 'Connection', status: 'active' } });
     }
     await db.orgMember.create({ data: { orgId: org, userId: contact, role: 'member' } });
@@ -45,14 +45,19 @@ describe('narrow independently authenticated recovery with real PostgreSQL', () 
   afterAll(async () => { vi.useRealTimers(); stores.db = null; await db?.$disconnect(); await handle?.cleanup(); });
 
   it('requires two distinct existing-factor members, permits the canonical owner, and grants no owner role', async () => {
+    expect((await recoveryReadiness(domain, org, db)).revision).toBe(1);
+    expect(await db.orgSsoPolicy.findUnique({ where: { clientDomain_orgId: { clientDomain: domain, orgId: org } } })).toBeNull();
     await expect(configure(1, [owner, owner])).rejects.toThrow('RECOVERY_TWO_CONTACTS_REQUIRED');
     handles = (await configure(1, [owner, contact])).invitations;
+    await db.orgSsoConnection.create({ data: { clientDomain: domain, orgId: org, preset: 'other_oidc', protocol: 'oidc',
+      configuration: {}, displayName: 'Connection', status: 'active' } });
     expect((await recoveryReadiness(domain, org, db)).setup_complete).toBe(false);
     expect((await db.orgMember.findUniqueOrThrow({ where: { orgId_userId: { orgId: org, userId: contact } } })).role).toBe('member');
     expect((await db.organisation.findUniqueOrThrow({ where: { id: org } })).ownerId).toBe(owner);
   });
   it('requires original browser binding and commits bounded bad guesses without creating a session', async () => {
     const started = await startRecoveryChallenge({ contact: contactHandle(0), purpose: 'confirm', browser: 'original' });
+    expect(started.client_domain).toBe(domain);
     await expect(completeRecoveryChallenge({ challenge: started.challenge, browser: 'foreign', code: '000000' })).rejects.toThrow();
     for (let i = 0; i < 6; i++) await expect(completeRecoveryChallenge({ challenge: started.challenge, browser: 'original', code: 'bad' })).rejects.toThrow();
     const row = await db.enterpriseRecoveryChallenge.findFirstOrThrow();
