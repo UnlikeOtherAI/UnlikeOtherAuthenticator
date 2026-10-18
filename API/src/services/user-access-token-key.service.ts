@@ -87,7 +87,7 @@ export async function signUserAccessTokenRs256(params: {
   issuer: string;
   audience: string;
   subject: string;
-  ttl: string;
+  ttl: string | number;
 }): Promise<string> {
   const { privateKey, kid } = await loadKey();
   return new SignJWT(params.payload)

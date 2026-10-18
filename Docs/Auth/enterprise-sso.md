@@ -371,4 +371,7 @@ These actions return the redacted connection with `sp_key_state` (`current`,
 secrets never appear in responses or audit data. Every credential change advances
 the connection revision and invalidation generation, invalidates previous proof,
 and requires a successful owner test before new product sign-ins resume.
+Access JWT expiry and the returned `expires_in` are also capped to the exact
+authoritative assurance deadline, including when it is shorter than the product
+access-token setting. An invalid or expired deadline cannot issue a token.
 
