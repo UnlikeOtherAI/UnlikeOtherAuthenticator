@@ -36,8 +36,7 @@ independent authentication's ten-minute management window. Exchanged cookies
 are HttpOnly, SameSite Strict and HTTPS Secure, with same-origin and CSRF checks.
 Every mutation rechecks the live canonical owner, epoch, source family and age
 after acquiring the exact enterprise-scope lock. Owner is not inferred from a
-membership role array. The management initiation/browser binding and chooser
-intent remain release blockers until their full interactive flow is verified.
+membership role array. The management initiation, browser binding and owner chooser have local API/PostgreSQL and headless browser coverage; integrated consuming-product admission remains a release gate.
 
 ## Protocols and provisioning
 
@@ -93,7 +92,7 @@ Progress writes bind the captured encrypted key, destination and readiness
 acknowledgement, so re-registration cannot inherit an old in-flight success.
 The worker retries failures
 with bounded backoff. Receivers accept duplicate delivery idempotently. The feed
-remains available independently. Scheduled domain rechecks remain unfinished.
+remains available independently. Bounded scheduled domain rechecks preserve the observed claim revision before applying continuity changes.
 
 Remaining activation prerequisites include complete live identity linking/JIT,
 all credential bridges and native/debug/broker/resource boundaries, the Nessie
@@ -134,9 +133,7 @@ Custom arrangements are enabled only by the UOA operator for the exact
 `(client_domain, org_id)` policy through the machine-only arrangements endpoint.
 Owners may prepare drafts while disabled; activation requires the arrangement and
 all technical readiness. No subscription tier or new billing system is involved.
-Recovery selection is delegated to implementation; enforcement still requires
-completed independent custodians and a successful recovery drill. Live SSO
-linking/provisioning and some artifact consumers remain unfinished release gates.
+Recovery uses two distinct independent custodians; enforcement requires their completed setup and a successful recovery drill. Integrated live account linking, provisioning and consuming-product artifact journeys remain release verification gates.
 
 Provider callback receipt is an observation, not an authentication timestamp.
 Local password/OTP verification records its actual factor time; a social provider
