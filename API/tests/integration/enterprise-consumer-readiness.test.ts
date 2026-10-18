@@ -10,6 +10,12 @@ import { enterpriseReadiness } from '../../src/services/org-sso-policy.service.j
 import { setOwnerScimState, issueOwnerScimToken } from '../../src/services/enterprise-scim-management.service.js';
 import { authenticateScim } from '../../src/services/enterprise-scim.service.js';
 import { lockEnterpriseOutbox } from '../../src/services/org-sso-revocation.service.js';
+import { setRecoveryContacts } from '../../src/services/enterprise-recovery-policy.service.js';
+import { startRecoveryChallenge, completeRecoveryChallenge } from '../../src/services/enterprise-recovery-action.service.js';
+import { encryptTwoFaSecret } from '../../src/utils/twofa-secret.js';
+import { generateTotpSecret } from '../../src/services/totp.service.js';
+import { TEST_SHARED_SECRET } from '../helpers/test-config.js';
+import { computeTotp } from '../helpers/totp.js';
 import type { managementSession } from '../../src/services/org-sso-management.service.js';
 
 import { registerAdminEnterpriseRevocationRoutes } from '../../src/routes/internal/admin/enterprise-revocations.js';
@@ -95,6 +101,40 @@ describe('actual consumer capability acknowledgment with real PostgreSQL', () =>
       proof: revocationReadinessProof(registration.secret, domain, 'key-1', registration.challenge) });
     expect(await enterpriseRevocationReady(domain, db)).toBe(true);
     expect(await enterpriseRevocationReady('foreign.example.com', db)).toBe(false);
+  });
+  it('permits only an attested custom scope and requires two independently confirmed recovery drills for enforcement', async () => {
+    const contact = `custodian-${suffix}`;
+    const factors = new Map([[owner, generateTotpSecret()], [contact, generateTotpSecret()]]);
+    await db.user.update({ where: { id: owner }, data: { twoFaEnabled: true,
+      twoFaSecret: encryptTwoFaSecret({ secret: factors.get(owner)!, sharedSecret: TEST_SHARED_SECRET }) } });
+    await db.user.create({ data: { id: contact, userKey: contact, email: `${contact}@example.com`, twoFaEnabled: true,
+      twoFaSecret: encryptTwoFaSecret({ secret: factors.get(contact)!, sharedSecret: TEST_SHARED_SECRET }) } });
+    await db.orgMember.createMany({ data: [owner, contact].map(userId => ({ orgId: org, userId, role: userId === owner ? 'owner' : 'member' })) });
+    const configured = await db.$transaction(async tx => {
+      await lockEnterpriseOutbox(tx); return setRecoveryContacts(session, 1, [owner, contact], tx);
+    });
+    expect(await enterpriseReadiness(domain, db, org)).toMatchObject({ activation_allowed: true, enforcement_allowed: false });
+    vi.useFakeTimers({ toFake: ['Date'] }); const baseline = Date.now();
+    try {
+      for (const purpose of ['confirm', 'drill'] as const) {
+        vi.setSystemTime(baseline + (purpose === 'drill' ? 30000 : 0));
+        for (const invitation of configured.invitations) {
+          const handle = new URLSearchParams(new URL(invitation.recovery_url).hash.slice(1)).get('contact')!;
+          const browser = `readiness-${invitation.user_id}`;
+          const challenge = await startRecoveryChallenge({ contact: handle, purpose, browser });
+          await completeRecoveryChallenge({ challenge: challenge.challenge, browser,
+            code: computeTotp({ secret: factors.get(invitation.user_id)!, nowMs: Date.now() }) });
+        }
+        expect(await enterpriseReadiness(domain, db, org)).toMatchObject({ activation_allowed: true,
+          enforcement_allowed: purpose === 'drill' });
+      }
+      await db.orgSsoPolicy.update({ where: { clientDomain_orgId: { clientDomain: domain, orgId: org } }, data: { arrangementEnabled: false } });
+      expect(await enterpriseReadiness(domain, db, org)).toMatchObject({ activation_allowed: false, enforcement_allowed: false });
+      await db.orgSsoPolicy.update({ where: { clientDomain_orgId: { clientDomain: domain, orgId: org } }, data: { arrangementEnabled: true } });
+      expect((await enterpriseReadiness(domain, db, 'another-org')).activation_allowed).toBe(false);
+      await db.user.update({ where: { id: contact }, data: { tokenVersion: { increment: 1 } } });
+      expect(await enterpriseReadiness(domain, db, org)).toMatchObject({ activation_allowed: true, enforcement_allowed: false });
+    } finally { vi.useRealTimers(); }
   });
   it('resets capability acknowledgment during rotation without blocking already-authorized deprovisioning', async () => {
     await db.$transaction(async (tx) => { await lockEnterpriseOutbox(tx); await setOwnerScimState(session, connection, 1, true, tx); });

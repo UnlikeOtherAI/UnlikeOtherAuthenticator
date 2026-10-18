@@ -1,9 +1,10 @@
 # Enterprise SSO backend integration
 
-This implementation is under construction. The canonical design remains
-`Docs/plans/2026-10-17-organisation-enterprise-sso.md`. Protocol test mode is
-separate from live account admission. A schema or passing unit test is not
-evidence that a customer deployment is ready.
+The canonical design is
+`Docs/plans/2026-10-17-organisation-enterprise-sso.md`. Customer activation is
+gated per consuming product and organisation by the checks below. Protocol test
+mode remains separate from live account admission; local verification does not
+attest a customer deployment.
 
 The current backend exposes the version1 exact-product status, assurance
 validation, owner continuation/settings, scoped DNS claim, real OIDC/SAML test
@@ -463,10 +464,23 @@ original grants for one person, rejects a legacy grant with no original, and
 requires an explicit new share after revocation; a healthy later login alone
 cannot revive it. The actual cross-application browser journey passes at 390 and 1280 pixels,
 including sign-in, HttpOnly refresh-cookie rotation, reviewed canonical cleanup,
-code replay refusal and removal at the next authenticated read. Final combined
-consumer integration checks remain in progress.
+code replay refusal and removal at the next authenticated read. Final consumer checks include the actual original-authority notification reader
+and selected-team bell, count and read paths after copied memberships are removed.
+The final focused API gate passes 19 cases, the worker gate nine and the reviewed
+cutover gate one, all without skips; the full MCP package suite passes 554 cases
+without skips. The browser journey also passes using the shipped reader-version
+one cleanup path. Required CI and production preparation remain release gates.
 
-`LIVE_IDENTITY_FLOW_REQUIRED` remains the explicit integration hold. Remove it only after the consuming application's canonical authority cutover, original-source admission and revocation consumers, strict acknowledgement/reconciliation, minimum assurance floor and integrated browser sign-in journeys pass together. Customer IdP interoperability and production activation are separate evidence; neither is asserted by these local checks.
+The temporary global `LIVE_IDENTITY_FLOW_REQUIRED` hold is replaced by the actual
+per-product checks: minimum assurance version one, reviewed authority-migration
+and revocation-consumer revisions, and the current receiver's signed capability
+acknowledgement. The exact organisation still needs its custom arrangement and
+a successful test of the current connection revision. Enforcement additionally
+requires two distinct custodians to confirm and drill their existing personal
+factors. Nine real-PostgreSQL readiness/recovery cases verify these gates,
+including attestation withdrawal, receiver-key rotation, foreign scope and a
+custodian's changed credential epoch. Customer IdP interoperability and production
+activation remain separate evidence; neither is asserted by local checks.
 
 The explicit local cross-application browser evaluation is
 `pnpm --dir Auth exec vitest run --config vitest.nessie.config.ts`. Set
@@ -485,8 +499,9 @@ cleanup of existing copies, the ordinary Channels route with cleared pending
 PKCE state, and removal at the next authenticated read. Public
 HTTP transport is confined to the two test applications; ordinary product
 service-access billing is a separate 204 fixture. This is an explicit local
-evaluation, excluded from ordinary unit tests and CI. Its presence alone does
-not satisfy the integration hold.
+evaluation, excluded from ordinary unit tests and CI. The journey asserts actual product readiness and uses the shipped reader-version
+one cleanup path with its unchanged reviewed digest. Its presence alone does
+not attest any production migration or customer connection.
 
 
 ### Producer-first deployment order

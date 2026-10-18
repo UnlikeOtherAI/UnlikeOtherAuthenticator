@@ -16,7 +16,6 @@ export async function enterpriseReadiness(clientDomain: string, db = getAdminPri
     const policy = await db.orgSsoPolicy.findUnique({ where: { clientDomain_orgId: { clientDomain, orgId } } });
     if (!policy?.arrangementEnabled) blockers.push('CUSTOM_ARRANGEMENT_REQUIRED');
   }
-  blockers.push('LIVE_IDENTITY_FLOW_REQUIRED');
   const activationAllowed = blockers.length === 0;
   const recovery = orgId ? await recoveryReadiness(clientDomain, orgId, db) : null;
   if (!recovery?.setup_complete) blockers.push('RECOVERY_SETUP_REQUIRED');

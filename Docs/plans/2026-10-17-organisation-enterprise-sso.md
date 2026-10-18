@@ -1,6 +1,6 @@
 # Organisation-level enterprise SSO — implementation plan
 
-**Status: implementation in progress; customer activation remains gated.**
+**Status: implemented contracts; customer activation requires exact-product operational readiness.**
 The implementation branches do not establish deployment or closure of all
 review findings. The activation gates below still apply.
 
@@ -1195,7 +1195,7 @@ recovery implementation choice.
 
 ## 13. Evidence and limits
 
-Implementation has progressed beyond this document-only revision. Current wire contracts and verification limits are recorded in [the enterprise SSO integration guide](../Auth/enterprise-sso.md). UOA activation remains held until Nessie completes its authority migration and integrated source/revocation journeys; the original document review is not a release approval.
+Implementation has progressed beyond this document-only revision. Current wire contracts and verification limits are recorded in [the enterprise SSO integration guide](../Auth/enterprise-sso.md). Activation is checked against the consuming product's actual reviewed migration/revocation attestations and signed receiver acknowledgement, plus the exact organisation's custom arrangement and tested connection. Enforcement also requires confirmed recovery custodians and a successful current drill. Local integration evidence does not attest production preparation; the original document review is not a release approval.
 
 Local code evidence in §3 establishes the starting implementation, not vendor
 compatibility or production state. The original source reports Fable's review;

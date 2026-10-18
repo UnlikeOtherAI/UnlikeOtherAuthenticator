@@ -12,6 +12,7 @@ import { openEnterpriseSecret, sealEnterpriseSecret } from '../../API/src/servic
 import { resolveEnterpriseConfiguration } from '../../API/src/services/org-sso-configuration.service.js';
 import { registerRevocationConsumer, acknowledgeRevocationConsumer, revocationReadinessProof } from '../../API/src/services/org-sso-delivery.service.js';
 import { removeOrganisationMember } from '../../API/src/services/organisation.service.members.js';
+import { enterpriseReadiness } from '../../API/src/services/org-sso-policy.service.js';
 import { validateConfigFields } from '../../API/src/services/config.service.js';
 import { loadNessieBuild, nessieAppFixture, readNessieAsset, closeNessieAssetTransport } from './nessie-app.fixture.mjs';
 
@@ -105,6 +106,7 @@ beforeAll(async () => {
   await acknowledgeRevocationConsumer(domain, { key_id: registration.key_id, challenge: registration.challenge,
     proof: revocationReadinessProof(registration.secret, domain, registration.key_id, registration.challenge),
     capabilities: { version: 1, feed: true, reconciliation: true, use_time_assurance: true, immutable_custody: true } });
+  expect((await enterpriseReadiness(domain, db.prisma, org.id)).activation_allowed).toBe(true);
   const tls = await createEnterpriseSpKey('browser-wire-tls');
   provider = await localEnterpriseOidcProvider(JSON.parse(await openEnterpriseSecret(tls.encryptedSecret,
     'connection:browser-wire-tls')), `${origin}/sso/oidc/${connectionId}/callback`);
@@ -271,7 +273,7 @@ it('enters through the actual Nessie login and UOA tile, redeems PKCE once and e
       const scope = { organizationIds: [organizationId] };
       const report = await cleanup.inventoryUoaAuthority(nessie.prisma, scope);
       expect(report.conflicts).toEqual([]);
-      await cleanup.applyUoaAuthorityCutover(nessie.prisma, scope, report.digest, { readerVersion: 1 });
+      await cleanup.applyUoaAuthorityCutover(nessie.prisma, scope, report.digest);
       const cleaned = await nessie.app.inject({ url: '/api/auth/me', headers: { authorization: `Bearer ${result.token}` } });
       expect(cleaned.statusCode, cleaned.body).toBe(200);
       expect(cleaned.json().data.user.roleIds).toEqual(['member']);
