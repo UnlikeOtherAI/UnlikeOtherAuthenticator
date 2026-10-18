@@ -319,7 +319,29 @@ runtime application config:
   requires the configured flag and all Ledger collector identifiers, keeps one
   Cloud Run instance warm, and disables CPU throttling so the recurring
   scheduler and pre-boundary safety timer run. False deploys with zero minimum
-  instances and throttled idle CPU.
+  instances and throttled idle CPU unless enterprise SSO custody is configured.
+
+Enterprise custody has its own deployment configuration, independent of billing:
+
+- `UOA_ENTERPRISE_SSO_CONFIGURED` defaults to `false`. Exact `true` requires
+  `ENTERPRISE_SSO_KMS_KEY` in the form
+  `projects/<project>/locations/<location>/keyRings/<ring>/cryptoKeys/<key>`.
+  The Cloud Run runtime service account needs encrypt/decrypt access to that
+  dedicated symmetric wrapping key; IAM and actual KMS operations must be
+  verified before preparing a product's assurance floor.
+- A configured deployment forwards the key resource and explicitly selects
+  `ENTERPRISE_SSO_CUSTODY_PROVIDER=gcp_kms`. The workflow replaces environment
+  bindings on each deploy, so console-only settings are not durable setup.
+  The wrapping key material stays in KMS. Local keyring custody remains an
+  explicit self-hosted/development configuration outside this Cloud Run workflow.
+- Enterprise configuration keeps one instance warm with idle CPU available for
+  durable revocation delivery and domain continuity checks, even when Stripe
+  collection is off. It neither enables a customer arrangement nor records
+  consumer readiness; those exact product/org operations remain separate.
+
+Unset both deployment variables for a deployment without enterprise custody.
+The workflow refuses a key with a disabled configuration flag and refuses an
+enabled flag without a valid key resource.
 
 Tariff-signing, billing-assertion, and UOA's Ledger collector credentials are
 wired on every deployment because they are required for signed entitlement and

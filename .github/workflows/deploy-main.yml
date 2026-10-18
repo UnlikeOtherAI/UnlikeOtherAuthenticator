@@ -26,6 +26,8 @@ jobs:
       STRIPE_BILLING_ENABLED: ${{ vars.STRIPE_BILLING_ENABLED || 'false' }}
       UOA_STRIPE_BILLING_CONFIGURED: ${{ vars.UOA_STRIPE_BILLING_CONFIGURED || 'false' }}
       UOA_SMS_CONFIGURED: ${{ vars.UOA_SMS_CONFIGURED || 'false' }}
+      UOA_ENTERPRISE_SSO_CONFIGURED: ${{ vars.UOA_ENTERPRISE_SSO_CONFIGURED || 'false' }}
+      ENTERPRISE_SSO_KMS_KEY: ${{ vars.ENTERPRISE_SSO_KMS_KEY }}
       BILLING_SMS_ENABLED: ${{ vars.BILLING_SMS_ENABLED || 'false' }}
       BILLING_SMS_TWILIO_REGION: ${{ vars.BILLING_SMS_TWILIO_REGION || 'us1' }}
       UOA_SMS_PRICING_MODE: ${{ vars.UOA_SMS_PRICING_MODE || 'legacy' }}
@@ -180,6 +182,24 @@ jobs:
             done
           fi
 
+      - name: Validate enterprise SSO deployment configuration
+        run: |
+          case "$UOA_ENTERPRISE_SSO_CONFIGURED" in
+            true)
+              if ! [[ "$ENTERPRISE_SSO_KMS_KEY" =~ ^projects/[a-zA-Z0-9._-]+/locations/[a-zA-Z0-9_-]+/keyRings/[a-zA-Z0-9_-]+/cryptoKeys/[a-zA-Z0-9_-]+$ ]]; then
+                echo "ENTERPRISE_SSO_KMS_KEY must name the configured Cloud KMS wrapping key"
+                exit 1
+              fi
+              ;;
+            false)
+              if [[ -n "$ENTERPRISE_SSO_KMS_KEY" ]]; then
+                echo "A configured enterprise wrapping key requires UOA_ENTERPRISE_SSO_CONFIGURED=true"
+                exit 1
+              fi
+              ;;
+            *) echo "UOA_ENTERPRISE_SSO_CONFIGURED must be exactly true or false"; exit 1 ;;
+          esac
+
       - name: Deploy to Cloud Run
         id: deploy
         # Secrets MUST come from GCP Secret Manager via --set-secrets, not the
@@ -213,6 +233,10 @@ jobs:
             fi
           fi
           scaling_args=(--min-instances 0 --cpu-throttling)
+          if [[ "$UOA_ENTERPRISE_SSO_CONFIGURED" == "true" ]]; then
+            env_vars="$env_vars,ENTERPRISE_SSO_CUSTODY_PROVIDER=gcp_kms,ENTERPRISE_SSO_KMS_KEY=$ENTERPRISE_SSO_KMS_KEY"
+            scaling_args=(--min-instances 1 --no-cpu-throttling)
+          fi
 
           if [[ "$UOA_STRIPE_BILLING_CONFIGURED" == "true" ]]; then
             secret_vars="$secret_vars,STRIPE_SECRET_KEY=uoa-auth-stripe-secret-key:latest,STRIPE_WEBHOOK_SECRET=uoa-auth-stripe-webhook-secret:latest"

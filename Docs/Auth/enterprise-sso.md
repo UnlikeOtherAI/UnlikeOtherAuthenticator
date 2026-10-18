@@ -83,6 +83,12 @@ authenticated context and bounded RPC deadlines. No enterprise key is derived
 from SHARED_SECRET. Cloud IAM, actual KMS operations and rotation drills still
 need deployment verification. Never log plaintext credentials or keys.
 
+Cloud Run's main workflow explicitly preserves enterprise KMS configuration
+through `UOA_ENTERPRISE_SSO_CONFIGURED` and `ENTERPRISE_SSO_KMS_KEY`; see
+[deployment configuration](../deploy.md). Configured enterprise custody keeps
+background CPU available independently of Stripe billing. This infrastructure
+setting does not activate a customer arrangement or attest consumer readiness.
+
 Revocation mutations and their scoped event commit together. Event-producing
 transactions acquire the global outbox fence before authority locks or writes,
 so feed cursors describe a committed prefix. Connection events revoke only their
