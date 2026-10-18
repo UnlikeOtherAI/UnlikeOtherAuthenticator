@@ -1042,7 +1042,7 @@ broker or self-service packaging flow.
 
 These are coherent implementation tranches, not a statement that each incomplete
 tranche can be enabled for customers. The user has requested coding after this
-document update; unresolved decisions remain explicit. Follow each repository's
+document update; confirmed decisions and deferred options are recorded in §12. Follow each repository's
 worktree, review, tests and green-merge workflow. This documentation revision
 does not create implementation PRs or claim completed reviews.
 
@@ -1114,7 +1114,7 @@ Okta org/custom server separately, Google Workspace and AD FS on the relevant
 test infrastructure. These are planned checks, not completed evidence.
 
 Headless end-to-end journeys must cover setup → test → activate → domain proof
-→ explicit discovery/recovery/enforcement; Nessie Login / Register and tile
+→ recovery/enforcement; Nessie Login / Register and tile
 entry; account linking without global escalation; exact-org/team reauth;
 admin/owner capability differences; simple preset setup without raw claims or
 advanced fields in the main flow; UOA-only activation with no Nessie billing
@@ -1255,7 +1255,7 @@ Several source resolutions needed stronger corrections during this revision.
 | 11 | OIDC gaps | §§4–6.2 cover exact tenant/audience/issuer, conditional `at_hash`, typed UserInfo, authenticated client method and state-bound nonce. | RP conformance and provider-specific configuration evidence. |
 | 12 | SAML validation and stable entity ID | §§4–6.2 and 7 preserve stable SP identity, validate the signed node/correlation/time, defer unsolicited SAML and remove unsafe canonicalization advice. | Attack corpus, cert rollover and encrypted-ID interoperability. |
 | 13 | SCIM subject transform; password-reset bypass | §§6.3, 6.5, 6.9 use proven immutable reconciliation, no email fallback, scoped admission and independent global credential proof. | Provisioning race plus reset/registration/invite bypass tests. |
-| 14 | `/auth/start` and discovery decision 7 | §6.1 keeps a dedicated proposed endpoint and explicit product/org consent; start URLs remain available. | Decision approval, no-account-oracle and target-binding tests. |
+| 14 | `/auth/start` and discovery decision 7 | §6.1 uses the dedicated `/sso/:connectionId/start` flow. §12 defers domain discovery; no discovery endpoint or owner toggle ships. | Start-flow target binding and no-account-oracle tests; any future discovery amendment requires explicit product/org consent. |
 | 15 | Nessie team enablement, email uniqueness, errors | §§6.4, 8.3–8.4 keep exact team enablement/errors and replace local email writes/merges with authority migration. | Dirty-data migration and real login/team-switch journeys. |
 | 16 | Recovery lockout and carve-out | §§6.5, 12 retain one canonical owner and select two narrow independent custodians; backup codes remain prohibited. | Implemented authority model and independent recovery drill before enforcement. |
 | 17 | Settings surface; audit/2FA reuse; allowed domains | §§5, 6.7–6.8 reuse UOA foundations, explicitly build continuation and preserve upstream owner contract with Nessie parity. | Capability, fresh-proof, translations and doorway tests. |
