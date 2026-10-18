@@ -1,3 +1,4 @@
+import { authorizeCredentialSurfaceWhenAvailable } from './credential-route-registry.service.js';
 import { SignJWT, jwtVerify, type JWTPayload } from 'jose';
 import { z } from 'zod';
 
@@ -157,5 +158,9 @@ export async function verifyTwoFaChallenge(params: {
   if (parsed.state) challenge.state = parsed.state;
   if (parsed.org_id) challenge.orgId = parsed.org_id;
   if (parsed.team_id) challenge.teamId = parsed.team_id;
+  await authorizeCredentialSurfaceWhenAvailable('factor_challenge', { userId: challenge.userId,
+    clientDomain: challenge.domain, credentialEpoch: challenge.credentialEpoch,
+    authenticationEvidenceId: challenge.authenticationEvidenceId, method: challenge.authMethod,
+    orgId: challenge.orgId, teamId: challenge.teamId });
   return challenge;
 }

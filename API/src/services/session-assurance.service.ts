@@ -1,3 +1,4 @@
+import { assertIndependentSourceStillAdmitted } from './credential-admission.service.js';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { createHash, randomBytes } from 'node:crypto';
 import type { Prisma, PrismaClient, SessionAssurance } from '@prisma/client';
@@ -97,6 +98,8 @@ async function validateSessionAssuranceInside(
     row = await db.sessionAssurance.findUnique({ where: { id: row.parentId } });
     if (!row) reject();
   }
+  if (leaf.method === 'independent') await assertIndependentSourceStillAdmitted({ userId: leaf.userId,
+    methods: leaf.amr, personalFactorCompleted: leaf.mfaSource === 'uoa_totp' }, db);
   if (binding.requirement === 'global_account_control' && leaf.method !== 'independent') reject();
   if (binding.requirement === 'sso_recovery' && leaf.method !== 'recovery') reject();
   return leaf;

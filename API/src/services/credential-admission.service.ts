@@ -19,3 +19,14 @@ export async function assertMailboxCredentialAdmission(userId: string, db: Mailb
     where: { emailDomain, verifiedAt: { not: null } }, select: { id: true },
   })) throw new AppError('FORBIDDEN', 403, 'INDEPENDENT_REAUTH_REQUIRED');
 }
+
+/** Recheck old mailbox/social proofs when a later claim/link changes account authority.
+ * A completed personal UOA factor is independent; upstream AMR never qualifies. */
+export async function assertIndependentSourceStillAdmitted(input: {
+  userId: string; methods: readonly string[]; personalFactorCompleted: boolean;
+}, db: MailboxAdmissionDb): Promise<void> {
+  if (input.personalFactorCompleted) return;
+  const mailboxSources = ['email_code', 'email_registration', 'email_link', 'login_link', 'verify_email',
+    'verify_email_set_password', 'google', 'apple', 'facebook', 'github', 'linkedin'];
+  if (input.methods.some(method => mailboxSources.includes(method))) await assertMailboxCredentialAdmission(input.userId, db);
+}
