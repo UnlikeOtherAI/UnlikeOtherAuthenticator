@@ -43,7 +43,7 @@ export async function startRecoveryChallenge(input: { contact: string; purpose: 
     const token = randomBytes(32).toString('base64url'); const expiresAt = new Date(Date.now() + 300000);
     await tx.enterpriseRecoveryChallenge.create({ data: { contactId: row.id, tokenHash: hashAssuranceReference(token),
       browserHash: hashAssuranceReference(input.browser), purpose: input.purpose, expiresAt } });
-    return { ok: true, challenge: token, expires_at: expiresAt.toISOString(), organisation_name: org.name,
+    return { ok: true, challenge: token, expires_at: expiresAt.toISOString(), organisation_name: org.name, client_domain: contact.clientDomain,
       purpose: input.purpose, confirmed: Boolean(contact.confirmedAt) };
   });
 }

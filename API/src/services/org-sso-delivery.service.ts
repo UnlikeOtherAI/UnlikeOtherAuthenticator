@@ -7,6 +7,7 @@ import { enterpriseFetch } from './enterprise-http.service.js';
 import { openEnterpriseSecret, sealEnterpriseSecret } from './enterprise-secret.service.js';
 import { hashAssuranceReference } from './session-assurance.service.js';
 import { publicRevocationEvent, signRevocationDelivery } from './org-sso-revocation.service.js';
+import { EnterpriseRevocationCapabilities } from './enterprise-revocation-readiness.service.js';
 
 export function revocationReadinessProof(secret: string, domain: string, keyId: string, challenge: string) {
   return createHmac('sha256', secret).update(`uoa.revocation-ready.v1\n${domain}\n${keyId}\n${challenge}`).digest('hex');
@@ -25,7 +26,7 @@ export async function registerRevocationConsumer(input: { client_domain: string;
   const secret = randomBytes(32).toString('base64url');
   const challenge = randomBytes(32).toString('base64url');
   const encryptedSecret = await sealEnterpriseSecret(secret, `revocations:${input.client_domain}:${input.key_id}`);
-  const data = { destination: input.destination, keyId: input.key_id, encryptedSecret, enabled: false,
+  const data = { destination: input.destination, keyId: input.key_id, encryptedSecret, enabled: false, capabilityVersion: 0,
     readyChallengeHash: hashAssuranceReference(challenge), readyChallengeExpiresAt: new Date(Date.now() + 3600000),
     acknowledgedAt: null, failureCount: 0 };
   await db.$transaction(async (tx) => {
@@ -37,7 +38,9 @@ export async function registerRevocationConsumer(input: { client_domain: string;
     challenge, challenge_expires_at: data.readyChallengeExpiresAt.toISOString(), delivery_enabled: false };
 }
 
-export async function acknowledgeRevocationConsumer(domain: string, input: { key_id: string; challenge: string; proof: string }) {
+export async function acknowledgeRevocationConsumer(domain: string, input: { key_id: string; challenge: string; proof: string;
+  capabilities: z.infer<typeof EnterpriseRevocationCapabilities> }) {
+  EnterpriseRevocationCapabilities.parse(input.capabilities);
   const db = getAdminPrisma();
   return db.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`revocation-consumer:${domain}`}, 0))`;
@@ -51,7 +54,7 @@ export async function acknowledgeRevocationConsumer(domain: string, input: { key
     const supplied = Buffer.from(input.proof);
     if (expected.length !== supplied.length || !timingSafeEqual(expected, supplied)) throw new AppError('FORBIDDEN', 403, 'REVOCATION_READINESS_INVALID');
     await tx.orgRevocationConsumer.update({ where: { clientDomain: domain }, data: {
-      enabled: true, acknowledgedAt: new Date(), readyChallengeHash: null, readyChallengeExpiresAt: null,
+      enabled: true, capabilityVersion: 1, acknowledgedAt: new Date(), readyChallengeHash: null, readyChallengeExpiresAt: null,
       nextAttemptAt: new Date() } });
     return { ok: true, delivery_enabled: true, key_id: row.keyId };
   });

@@ -37,7 +37,7 @@ export async function recoveryReadiness(clientDomain: string, orgId: string, db:
 export async function setRecoveryContacts(session: Session, revision: number, ids: string[], tx: Prisma.TransactionClient) {
   if (ids.length !== 2 || new Set(ids).size !== 2) throw new AppError('BAD_REQUEST', 400, 'RECOVERY_TWO_CONTACTS_REQUIRED');
   const scope = { clientDomain: session.clientDomain, orgId: session.orgId };
-  const policy = await tx.orgSsoPolicy.findUniqueOrThrow({ where: { clientDomain_orgId: scope } });
+  const policy = await tx.orgSsoPolicy.upsert({ where: { clientDomain_orgId: scope }, create: scope, update: {} });
   if (revision !== policy.recoveryRevision) throw new AppError('BAD_REQUEST', 409, 'SSO_REVISION_CONFLICT');
   if (policy.enforcement !== 'off') throw new AppError('FORBIDDEN', 403, 'RECOVERY_DISABLE_ENFORCEMENT_FIRST');
   for (const userId of [...ids].sort()) await lockRefreshSessionUserDomain({ userId, domain: session.clientDomain }, { prisma: tx });

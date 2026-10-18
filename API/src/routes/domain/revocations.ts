@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { requireDomainHashAuthForDomainQuery } from '../../middleware/domain-hash-auth.js';
 import { enterpriseRevocationFeed, enterpriseRevocationCheckpoint } from '../../services/org-sso-revocation.service.js';
 import { acknowledgeRevocationConsumer } from '../../services/org-sso-delivery.service.js';
+import { EnterpriseRevocationCapabilities } from '../../services/enterprise-revocation-readiness.service.js';
 
 export function registerRevocationFeedRoute(app: FastifyInstance): void {
   app.post('/domain/revocations/checkpoint', { preHandler: requireDomainHashAuthForDomainQuery }, async (request, reply) => {
@@ -13,7 +14,7 @@ export function registerRevocationFeedRoute(app: FastifyInstance): void {
   app.post('/domain/revocation-consumers/ready', { preHandler: requireDomainHashAuthForDomainQuery }, async (request, reply) => {
     const { domain } = z.object({ domain: z.string().min(1) }).strict().parse(request.query);
     const body = z.object({ key_id: z.string().min(1).max(100), challenge: z.string().min(32).max(100),
-      proof: z.string().regex(/^[a-f0-9]{64}$/) }).strict().parse(request.body);
+      proof: z.string().regex(/^[a-f0-9]{64}$/), capabilities: EnterpriseRevocationCapabilities }).strict().parse(request.body);
     return reply.header('Cache-Control', 'no-store').send(await acknowledgeRevocationConsumer(domain, body));
   });
   app.get('/domain/revocations', { preHandler: requireDomainHashAuthForDomainQuery }, async (request, reply) => {

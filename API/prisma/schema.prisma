@@ -5482,6 +5482,7 @@ model OrgRevocationEvent {
 }
 
 model OrgRevocationConsumer {
+  capabilityVersion Int @default(0) @map("capability_version")
   clientDomain String @id @map("client_domain")
   destination String
   keyId String @map("key_id")
