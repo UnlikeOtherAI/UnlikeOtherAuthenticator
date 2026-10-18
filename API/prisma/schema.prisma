@@ -5257,11 +5257,28 @@ model ExternalIdentity {
   status String @default("ACTIVE")
   linkedVia String @map("linked_via")
   proofAssuranceId String? @map("proof_assurance_id")
+  proofAuthenticationEvidenceId String? @map("proof_authentication_evidence_id")
   domainClaimId String? @map("domain_claim_id")
   lastAuthenticatedAt DateTime? @map("last_authenticated_at")
   connection OrgSsoConnection @relation(fields:[connectionId,clientDomain,orgId],references:[id,clientDomain,orgId],onDelete:Restrict)
   @@unique([connectionId,issuer,tenant,subject])
   @@map("external_identities")
+}
+
+model OrgSsoPersonalFactorChallenge {
+  id String @id @default(cuid())
+  tokenHash String @unique @map("token_hash")
+  linkIntentId String @map("link_intent_id")
+  browserHash String @map("browser_hash")
+  userId String? @map("user_id")
+  credentialEpoch Int? @map("credential_epoch")
+  authenticationEvidenceId String? @map("authentication_evidence_id")
+  attempts Int @default(0)
+  expiresAt DateTime @map("expires_at")
+  consumedAt DateTime? @map("consumed_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@index([expiresAt])
+  @@map("org_sso_personal_factor_challenges")
 }
 
 model SessionAssurance {
