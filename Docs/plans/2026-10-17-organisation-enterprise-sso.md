@@ -1178,6 +1178,8 @@ recovery implementation choice.
 
 ## 13. Evidence and limits
 
+Implementation has progressed beyond this document-only revision. Current wire contracts and verification limits are recorded in [the enterprise SSO integration guide](../Auth/enterprise-sso.md). UOA activation remains held until Nessie completes its authority migration and integrated source/revocation journeys; the original document review is not a release approval.
+
 Local code evidence in §3 establishes the starting implementation, not vendor
 compatibility or production state. The original source reports Fable's review;
 this revision did not rerun that tool. No provider sandbox, conformance suite,

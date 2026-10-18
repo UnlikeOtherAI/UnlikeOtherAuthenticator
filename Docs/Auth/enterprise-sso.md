@@ -439,3 +439,11 @@ Cross-consumer broker and chained delegation currently require independent origi
 Action verification stores the original assurance identifier, exact organisation/team, signed config URL and action digest. Both creation and consumption revalidate the source under the credential-epoch lock. A new email or personal-factor confirmation authorises that action only; it does not issue independent evidence or change session provenance. A different family, scope or config must start a new challenge. Globally scoped proof-bearing tokens omit ambient organisation snapshots; exact selected scope remains mandatory for organisation authority.
 
 The existing exact-team roster now returns `data[].orgRole` to every authorised roster reader, independently of `teamRole`. It is the active canonical membership role in that exact organisation, or null after withdrawal. This grants no additional roster entitlement or email visibility. Consumers must require active selected-team membership separately.
+
+### Integrated verification checkpoint — 18 October 2026
+
+The updated Auth client and SSR production build passes. All 167 Auth component tests and 22 database-backed native sign-in, native-account and organisation-management-factor cases pass against the updated SSR output. The organisation-management personal-factor browser journey also passes using actual API and PostgreSQL state.
+
+Nessie's consumer proves exact readiness-key acknowledgement against the actual UOA endpoint: an incorrect key and acknowledgement replay are refused. Its original-source executor withdrawal and saved-authority database gates pass without copied organisation or team memberships. These checks establish their named contracts, not complete customer readiness.
+
+`LIVE_IDENTITY_FLOW_REQUIRED` remains the explicit integration hold. Remove it only after the consuming application's canonical authority cutover, original-source admission and revocation consumers, strict acknowledgement/reconciliation, minimum assurance floor and integrated browser sign-in journeys pass together. Customer IdP interoperability and production activation are separate evidence; neither is asserted by these local checks.
