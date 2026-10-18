@@ -292,8 +292,6 @@ product-specific enforcement to a global `Organisation` row. Existing org
 
 - `ssoEnforcement`: `off`, `required_for_verified_domains`,
   `required_for_all_members`;
-- discovery opt-in and an explicit default routing connection, or an authorized
-  choice when several active connections match;
 - `ssoSessionMaxAgeSeconds`, `ssoReauthMode` (`detect_only` or `force`);
 - `allowUnverifiedDomainUsers` default false, and JIT enabled/default eligible
   team settings; initial JIT organisation role is `member`;
@@ -438,10 +436,14 @@ selection again after signed-config verification. Do not issue a code directly
 to a product callback that has no matching product-owned pending flow. Test-mode
 callbacks remain separate and never issue a product code.
 
-Optional `POST /auth/sso/route` is an Auth UI email-step endpoint. The product
+**Deferred domain discovery — excluded from this delivery.** The following is
+a future design option, not an implemented endpoint or owner control. The
+published integration keeps `login_flow.sso_discovery` false. A future optional
+`POST /auth/sso/route` would be an Auth UI email-step endpoint. The product
 integration advertises support through `sso` in `enabled_auth_methods` and
 `org_features.enabled`; this is protocol capability, not a Nessie administrator
-or billing flag. UOA alone enables the connection, enforcement and discovery.
+or billing flag. UOA alone enables the connection and enforcement. Any future
+discovery setup must also stay in UOA.
 Any signed `login_flow.sso_discovery` capability must still require the
 organisation's explicit discovery consent in UOA. Resolve only fresh verified
 claims and active connections in the
@@ -841,7 +843,8 @@ The setup journey:
    provision/link a person, change grants or issue a product session from test
    mode. Bind the result to the exact configuration revision.
 4. Activate only after §9 prerequisites. Explain domain verification,
-   optional discovery and enforcement in terms of who can sign in. Present
+   and enforcement in terms of who can sign in. Discovery is deferred; show no
+   discovery control. Present
    recovery readiness as a short actionable check before enforcement, with
    a direct path to fix a missing custodian or failed test. SCIM creation uses
    UOA authorization/readiness, not Nessie billing, and shows its token once.
