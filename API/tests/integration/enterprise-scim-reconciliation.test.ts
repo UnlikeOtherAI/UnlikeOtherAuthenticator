@@ -1,3 +1,5 @@
+import { updateEnterprisePolicy, EnterprisePolicyPatch } from '../../src/services/org-sso-policy-management.service.js';
+import { groupMappingView } from '../../src/services/enterprise-group-mapping.service.js';
 import { randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -29,12 +31,14 @@ describe('SCIM reconciliation and erasure with real PostgreSQL', () => {
     await db.orgMember.create({ data: { orgId, userId: ownerId, role: 'owner' } });
     await db.team.create({ data: { id: teamId, orgId, name: 'Team', slug: teamId } });
     await db.orgSsoPolicy.create({ data: { clientDomain: domain, orgId, arrangementEnabled: true,
-      defaultTeamId: teamId, groupMappings: [{ external_group_id: 'group-external', team_id: teamId, team_role: 'admin' }] } });
+      defaultTeamId: teamId } });
     await db.enterpriseProductReadiness.create({ data: { clientDomain: domain, minimumAssuranceVersion: 1,
       authorityMigrationRevision: 'migration-tested', revocationConsumersRevision: 'consumers-tested' } });
     const connection = await db.orgSsoConnection.create({ data: { clientDomain: domain, orgId, preset: 'other_oidc',
       protocol: 'oidc', displayName: 'SCIM', configuration: {}, scimEnabled: true } });
     connectionId = connection.id;
+    await db.orgSsoPolicy.update({ where: { clientDomain_orgId: { clientDomain: domain, orgId } }, data: {
+      groupMappings: [{ connection_id: connectionId, external_group_id: 'group-external', team_id: teamId, team_role: 'admin' }] } });
     const identity = await db.externalIdentity.create({ data: { connectionId, clientDomain: domain, orgId, userId,
       ...tuple, identityScope: 'global', linkedVia: 'independent_proof' } });
     externalIdentityId = identity.id;
@@ -42,6 +46,21 @@ describe('SCIM reconciliation and erasure with real PostgreSQL', () => {
   }, 120000);
   afterAll(async () => { stores.db = null; await app?.$disconnect(); await db?.$disconnect(); await handle?.cleanup(); });
 
+  it('rejects foreign provider mappings and exposes old unscoped mappings only as repair metadata', async () => {
+    const foreignOrg = await db.organisation.create({ data: { domain, ownerId, name: 'Foreign scope', slug: randomUUID() } });
+    await db.orgSsoPolicy.create({ data: { clientDomain: domain, orgId: foreignOrg.id } });
+    const foreign = await db.orgSsoConnection.create({ data: { clientDomain: domain, orgId: foreignOrg.id,
+      protocol: 'oidc', preset: 'other_oidc', displayName: 'Foreign', configuration: {} } });
+    const revision = (await db.orgSsoPolicy.findUniqueOrThrow({ where: { clientDomain_orgId: { clientDomain: domain, orgId } } })).revision;
+    await expect(db.$transaction(async tx => { await lockEnterpriseOutbox(tx);
+      return updateEnterprisePolicy({ userId: ownerId, orgId, clientDomain: domain } as Parameters<typeof updateEnterprisePolicy>[0],
+        { revision, group_mappings: [{ connection_id: foreign.id, external_group_id: 'group-external', team_id: teamId, team_role: 'admin' }] }, tx);
+    })).rejects.toThrow('SSO_CONNECTION_UNAVAILABLE');
+    expect(EnterprisePolicyPatch.safeParse({ revision, group_mappings: [{ external_group_id: 'group-external', team_id: teamId, team_role: 'admin' }] }).success).toBe(false);
+    expect(EnterprisePolicyPatch.safeParse({ revision, group_mappings: [{ connection_id: connectionId, external_group_id: 'group-external', team_id: teamId, team_role: 'owner' }] }).success).toBe(false);
+    expect(groupMappingView([{ external_group_id: 'unscoped', team_id: teamId, team_role: 'admin' }], [connectionId], [teamId]))
+      .toEqual({ group_mappings: [], invalid_group_mappings: 1 });
+  });
   it('stages resources without email linking, rejects cross-connection members, and checks token scope', async () => {
     const row = await mutateScimResource(connectionId, 'Users', { schemas: [SCIM_USER], externalId: 'upstream-user',
       userName: `${userId}@example.com`, active: true }, { bearer });
@@ -66,6 +85,23 @@ describe('SCIM reconciliation and erasure with real PostgreSQL', () => {
       members: [{ value: resourceId, '$ref': null }] }, { bearer });
     expect((await db.teamMember.findUniqueOrThrow({ where: { teamId_userId: { teamId, userId } } })).teamRole).toBe('admin');
     expect((await db.orgMember.findUniqueOrThrow({ where: { orgId_userId: { orgId, userId } } })).role).toBe('member');
+  });
+  it('does not borrow a same-named group mapping from another connection', async () => {
+    const secondUser = await db.user.create({ data: { userKey: randomUUID(), email: `${randomUUID()}@example.com` } });
+    const connection = await db.orgSsoConnection.create({ data: { clientDomain: domain, orgId, preset: 'other_oidc',
+      protocol: 'oidc', displayName: 'Second source', configuration: {}, scimEnabled: true } });
+    const identity = await db.externalIdentity.create({ data: { connectionId: connection.id, clientDomain: domain, orgId,
+      userId: secondUser.id, ...tuple, subject: randomUUID(), identityScope: 'global', linkedVia: 'independent_proof' } });
+    const token = `Bearer ${(await db.$transaction(tx => issueScimToken(connection.id, tx))).token}`;
+    const resource = await mutateScimResource(connection.id, 'Users', { schemas: [SCIM_USER], externalId: randomUUID(),
+      userName: secondUser.email, active: true }, { bearer: token });
+    if (!resource) throw new Error('Expected resource');
+    await db.$transaction(async tx => { await lockEnterpriseOutbox(tx);
+      await reconcileScimResource({ connectionId: connection.id, resourceId: resource.id,
+        externalIdentityId: identity.id, version: 1, actorUserId: ownerId }, tx); });
+    await mutateScimResource(connection.id, 'Groups', { schemas: [SCIM_GROUP], externalId: 'group-external', displayName: 'Same id',
+      members: [{ value: resource.id }] }, { bearer: token });
+    expect((await db.teamMember.findUniqueOrThrow({ where: { teamId_userId: { teamId, userId: secondUser.id } } })).teamRole).toBe('member');
   });
   it('deprovisions transactionally while preserving an independent manual grant and blocking SSO proof reuse', async () => {
     await db.teamMember.update({ where: { teamId_userId: { teamId, userId } }, data: { teamRole: 'member' } });

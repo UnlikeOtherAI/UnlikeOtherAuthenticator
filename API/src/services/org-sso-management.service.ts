@@ -1,3 +1,4 @@
+import { groupMappingView } from './enterprise-group-mapping.service.js';
 import { requireAuthenticationEvidence } from './authentication-evidence.service.js';
 import { createHmac, createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import type { Prisma, PrismaClient } from '@prisma/client';
@@ -151,7 +152,8 @@ export async function managementView(session: Awaited<ReturnType<typeof manageme
     policy: { arrangement_enabled: policy?.arrangementEnabled ?? false, revision: policy?.revision ?? 0, enforcement: policy?.enforcement ?? 'off',
       session_max_age_seconds: policy?.sessionMaxAgeSeconds ?? 28800, reauth_mode: policy?.reauthMode ?? 'detect_only',
       jit_enabled: policy?.jitEnabled ?? false, default_team_id: policy?.defaultTeamId ?? null,
-      allow_unverified_contractors: policy?.allowUnverifiedContractors ?? false, group_mappings: policy?.groupMappings ?? [],
+      allow_unverified_contractors: policy?.allowUnverifiedContractors ?? false,
+      ...groupMappingView(policy?.groupMappings ?? [], connections.map(connection => connection.id), teams.map(team => team.id)),
       discovery_enabled: policy?.discoveryEnabled ?? false },
     teams,
     connections: connections.map(publicConnection), domains: domains.map((d) => ({ id: d.id,

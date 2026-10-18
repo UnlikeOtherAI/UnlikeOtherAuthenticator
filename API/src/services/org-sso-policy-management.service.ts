@@ -1,3 +1,4 @@
+import { GroupMapping } from './enterprise-group-mapping.service.js';
 import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { AppError } from '../utils/errors.js';
@@ -10,8 +11,6 @@ import { withdrawConnectionMemberships } from './membership-provenance.service.j
 import { lockRefreshSessionUserDomain } from './refresh-session-lock.service.js';
 import { lockTeamMembershipRows } from './team-scope.service.js';
 
-export const GroupMapping = z.object({ external_group_id: z.string().min(1).max(256),
-  team_id: z.string().min(1).max(100), team_role: z.enum(['member', 'admin']) }).strict();
 export const EnterprisePolicyPatch = z.object({ revision: z.number().int().nonnegative(),
   enforcement: z.enum(['off', 'required_for_verified_domains', 'required_for_all_members']).optional(),
   session_max_age_seconds: z.number().int().min(300).max(86400).optional(), reauth_mode: z.enum(['detect_only', 'force']).optional(),
@@ -36,6 +35,10 @@ export async function updateEnterprisePolicy(session: Awaited<ReturnType<typeof 
     ...(input.group_mappings ?? []).map((mapping) => mapping.team_id)])];
   if (ids.length && await tx.team.count({ where: { id: { in: ids }, orgId: session.orgId, lifecycleStatus: 'ACTIVE' } }) !== ids.length) {
     throw new AppError('BAD_REQUEST', 400, 'SSO_TEAM_UNAVAILABLE');
+  }
+  const connectionIds = [...new Set((input.group_mappings ?? []).map(mapping => mapping.connection_id))];
+  if (connectionIds.length && await tx.orgSsoConnection.count({ where: { ...scope, id: { in: connectionIds } } }) !== connectionIds.length) {
+    throw new AppError('BAD_REQUEST', 400, 'SSO_CONNECTION_UNAVAILABLE');
   }
   const jit = input.jit_enabled ?? prior?.jitEnabled ?? false;
   const defaultTeam = input.default_team_id === undefined ? prior?.defaultTeamId : input.default_team_id;
