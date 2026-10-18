@@ -133,6 +133,10 @@ export async function issueTokenPairForUser(
     await resolveTokenFamilyAssurance({ prisma, userId: params.userId, domain: params.config.domain,
       refreshToken: params.refreshToken, sharedSecret, credentialEpoch: user.tokenVersion,
       authenticationEvidenceId: params.authenticationEvidenceId });
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  const expiresInSeconds = Math.floor(Math.min(accessTokenExpiresInSeconds(ttl), assuranceExpiresAt === undefined ? Infinity :
+    Math.floor(Date.parse(assuranceExpiresAt) / 1000) - nowSeconds));
+  if (!Number.isFinite(expiresInSeconds) || expiresInSeconds <= 0) throw new AppError('UNAUTHORIZED', 401, 'INVALID_SESSION_ASSURANCE');
   const domainRole = await ensureDomainRoleForUser({ prisma, domain: params.config.domain,
     userId: params.userId, allowBootstrap: globalAccountControl });
   const role = globalAccountControl && (
@@ -200,7 +204,7 @@ export async function issueTokenPairForUser(
     role,
     clientId: accessTokenContext.clientId,
     sharedSecret: accessTokenContext.sharedSecret,
-    ttl,
+    ttl: assuranceExpiresAt === undefined ? ttl : nowSeconds + expiresInSeconds,
     issuer,
     tokenVersion: user.tokenVersion,
     assuranceId,
@@ -223,7 +227,7 @@ export async function issueTokenPairForUser(
 
   return {
     accessToken,
-    expiresInSeconds: accessTokenExpiresInSeconds(ttl),
+    expiresInSeconds,
     refreshToken: params.refreshToken,
     refreshTokenExpiresInSeconds: params.refreshTokenExpiresInSeconds,
     firstLogin,
