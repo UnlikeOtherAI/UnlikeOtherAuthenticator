@@ -279,3 +279,38 @@ deleted person and suspends their stable external links.
 Both seams run inside the existing lifecycle sweep after the canonical person
 becomes terminal and before any hard delete. ERASE also scrubs enterprise links
 when protected financial evidence requires a terminal canonical stub to remain.
+
+
+### Recovery contacts
+
+The canonical owner remains the only owner. Recovery uses two distinct active
+organisation members; the owner may be one of them. Both must already have a
+personal authenticator. Designation pins each factor fingerprint and credential
+epoch, so factor replacement, global reset, inactive membership or account
+deletion withdraws recovery authority. No mailbox challenge or new enrollment
+can substitute for the pinned factor.
+
+Owner `GET /auth/organisation-access/sso/recovery` returns revision, contact
+statuses, confirmation/drill times and canonical member candidates with
+eligibility. Candidates paginate by `cursor` in pages of 100. `PUT` with
+`{revision,custodian_user_ids:[id,id]}` replaces the contacts while enforcement
+is off and returns their recovery URLs once. The URLs are address hints, not
+login credentials. An unconfirmed invitation expires after seven days.
+
+Each contact opens `/auth/organisation-recovery#contact=<opaque>` and submits
+`POST /challenge {contact,purpose}` for `confirm`, `drill` or `recover`.
+The response contains an opaque challenge, organisation name and expiry;
+a Strict HttpOnly cookie binds the initiating browser. `POST /complete
+{challenge,code}` verifies the original personal authenticator and consumes
+the exact action. Challenges last five minutes and permit six durable guesses.
+Successful confirmation and a separate successful drill by both contacts are
+required before enforcement can activate. Drills are current for 30 days.
+
+Either confirmed contact can perform the narrow emergency action: turn off
+enforcement and suspend connections for that exact organisation and consuming
+product, revoke its provisioning tokens, withdraw its managed memberships and
+publish scoped revocation in the same transaction. This issues no product or
+global-account session, changes no owner, and affects no sibling organisation.
+Immutable action evidence records recovery provenance with global account
+control explicitly false. The customer surface must provide setup, contact
+confirmation, drill and emergency suspension before this flow is ready.

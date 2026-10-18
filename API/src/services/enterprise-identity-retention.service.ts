@@ -32,6 +32,7 @@ export async function eraseEnterprisePerson(userId: string, tx: Prisma.Transacti
   await tx.orgSsoLinkIntent.deleteMany({ where: { id: { in: eraseLinks } } });
   await tx.orgSsoManagementSession.deleteMany({ where: { userId } });
   await tx.orgSsoManagementIntent.deleteMany({ where: { userId } });
+  await tx.enterpriseRecoveryContact.deleteMany({ where: { userId } });
   const resources = await tx.scimResourceLink.findMany({ where: { userId }, select: { id: true, connectionId: true } });
   const resourceIds = new Set(resources.map((row) => row.id));
   const groups = resources.length ? await tx.scimResourceLink.findMany({ where: {
@@ -67,6 +68,7 @@ export async function eraseEnterprisePerson(userId: string, tx: Prisma.Transacti
 
 /** RETAIN keeps the canonical deleted identity and stable source references; no mailbox or SCIM resurrection. */
 export async function retainEnterprisePerson(userId: string, tx: Prisma.TransactionClient | PrismaClient): Promise<void> {
+  await tx.enterpriseRecoveryContact.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date() } });
   await tx.externalIdentity.updateMany({ where: { userId }, data: { status: 'SUSPENDED' } });
   await tx.scimResourceLink.updateMany({ where: { userId }, data: { active: false, version: { increment: 1 } } });
 }

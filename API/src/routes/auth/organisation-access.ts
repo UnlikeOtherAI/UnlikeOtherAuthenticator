@@ -1,6 +1,7 @@
 import { EnterprisePolicyPatch, updateEnterprisePolicy } from '../../services/org-sso-policy-management.service.js';
 import { registerOrganisationAccessStart } from './organisation-access-start.js';
 import { registerOrganisationAccessScim } from './organisation-access-scim.js';
+import { registerOrganisationRecovery } from './organisation-recovery.js';
 import { lockProductTeamPolicyShared } from '../../services/product-team-policy-lock.service.js';
 import { lockAndWithdrawConnectionMemberships } from '../../services/membership-provenance.service.js';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
@@ -64,6 +65,7 @@ export function registerOrganisationAccessRoutes(app: FastifyInstance): void {
     return run(session, tx);
   }, { timeout: 30000 });
   registerOrganisationAccessScim(app, mutation, limiter);
+  registerOrganisationRecovery(app, mutation);
   app.post(`${base}/sso/connections`, { preHandler: [requireSameOriginBrowserRequest, limiter] }, async (request, reply) => {
     const body = Connection.parse(request.body);
     return reply.header('Cache-Control', 'no-store').send(await mutation(request,
