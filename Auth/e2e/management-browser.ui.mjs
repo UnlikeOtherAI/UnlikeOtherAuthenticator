@@ -57,7 +57,11 @@ beforeAll(async () => {
   const payload=baseClientConfigPayload({'2fa_enabled':false,login_flow:{team_selection:'auto'}});
   clientConfig=validateConfigFields(payload);
   const jwt=await signTestConfigJwt(payload);
-  vi.stubGlobal('fetch', vi.fn(await createTestConfigFetchHandler(jwt)));
+  const factorJwt=await signTestConfigJwt({...payload,enabled_auth_methods:['google']});
+  vi.stubGlobal('fetch', vi.fn(await createTestConfigFetchHandler({
+    'https://client.example.com/auth-config':jwt,
+    'https://client.example.com/auth-config-factor':factorJwt,
+  })));
   app = await createApp();
   app.addHook('onError',async(request,_reply,error)=>{
     const path=new URL(request.url,'http://fixture.invalid').pathname;
@@ -68,6 +72,52 @@ beforeAll(async () => {
   const playwright = await import(/* @vite-ignore */ pathToFileURL(process.env.PLAYWRIGHT_MODULE ?? '').href);
   browser = await playwright.chromium.launch({ headless: true });
   await mkdir('e2e/artifacts/management-browser', { recursive: true });
+});
+
+it('lets an owner use an old personal authenticator when password sign-in is disabled',async()=>{
+  const codesBefore=await db.prisma.authorizationCode.count({where:{userId}});
+  const familiesBefore=await db.prisma.refreshToken.count({where:{userId}});
+  const context=await browser.newContext({viewport:{width:390,height:844}});
+  const page=await context.newPage();
+  const pageErrors=[];page.on('pageerror',error=>pageErrors.push(error.message));
+  const query=new URLSearchParams({config_url:'https://client.example.com/auth-config-factor',
+    flow:'organisation_management',management_org_id:orgId,code_challenge:'c'.repeat(43),
+    code_challenge_method:'S256',state:'d'.repeat(43)});
+  await page.goto(`${origin}/auth?${query}`);
+  expect(await page.locator('input[name=password]').count()).toBe(0);
+  await page.getByRole('button',{name:'Use my existing authenticator',exact:true}).click();
+  await page.screenshot({path:'e2e/artifacts/management-browser/390-management-factor-email.png',fullPage:true});
+  await page.getByLabel('UOA account email',{exact:true}).fill('owner@example.com');
+  const started=page.waitForResponse(response=>new URL(response.url()).pathname==='/auth/organisation-access/personal-factor');
+  await page.getByRole('button',{name:'Continue',exact:true}).click();
+  const response=await started;expect(response.status()).toBe(200);
+  const challenge=(await response.json()).challenge;
+  await page.getByText('Email you entered: owner@example.com',{exact:true}).waitFor();
+  expect(await page.getByText(/Acme browser journey/).count()).toBe(1);
+  expect((await context.cookies()).some(cookie=>cookie.name==='uoa_management_factor'&&cookie.httpOnly)).toBe(true);
+  await page.screenshot({path:'e2e/artifacts/management-browser/390-management-factor-code.png',fullPage:true});
+  expect(await page.evaluate(()=>globalThis.document.documentElement.scrollWidth<=globalThis.innerWidth)).toBe(true);
+  await page.setViewportSize({width:1280,height:900});
+  await page.screenshot({path:'e2e/artifacts/management-browser/1280-management-factor-code.png',fullPage:true});
+  const foreign=await browser.newContext();
+  const denied=await foreign.request.post(`${origin}/auth/organisation-access/personal-factor/verify?config_url=${encodeURIComponent('https://client.example.com/auth-config-factor')}`,{
+    data:{challenge,code:'000000'},headers:{origin},
+  });
+  expect(denied.status()).toBe(403);await foreign.close();
+  await page.locator('input[name=code]').fill(await freshCode());
+  const verified=page.waitForResponse(result=>new URL(result.url()).pathname==='/auth/organisation-access/personal-factor/verify');
+  const exchanged=page.waitForResponse(result=>new URL(result.url()).pathname==='/auth/organisation-access/exchange');
+  await page.getByRole('button',{name:'Verify code',exact:true}).click();
+  expect((await verified).status()).toBe(200);expect((await exchanged).status()).toBe(200);
+  await page.getByText('Choose provider',{exact:true}).waitFor();
+  expect(new URL(page.url()).hash).toBe('');
+  expect(await page.evaluate(()=>globalThis.localStorage.length+globalThis.sessionStorage.length)).toBe(0);
+  expect(await page.evaluate(()=>globalThis.document.documentElement.scrollWidth<=globalThis.innerWidth)).toBe(true);
+  await page.screenshot({path:'e2e/artifacts/management-browser/1280-management-factor-settings.png',fullPage:true});
+  expect(await db.prisma.authorizationCode.count({where:{userId}})).toBe(codesBefore);
+  expect(await db.prisma.refreshToken.count({where:{userId}})).toBe(familiesBefore);
+  expect(pageErrors).toEqual([]);
+  await context.close();
 });
 
 afterAll(async () => {

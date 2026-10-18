@@ -142,3 +142,14 @@ capability acknowledgment, and assert the resulting product evidence retains SSO
 provenance. Fixture TOTP codes wait for the next actual counter; replay protection
 is never reset to speed up the journey. No invitation handle or issued product
 code is captured in screenshots.
+
+The management sign-in screen also offers **Use my existing authenticator**,
+including when password sign-in is disabled. The owner enters their UOA email,
+reviews the server's exact organisation/product destination, then supplies a
+fresh code from an already enrolled personal authenticator. Unknown email hints
+receive the same challenge shape. This path never enrolls a new factor or issues
+a product code: the browser-bound continuation enters the existing HttpOnly
+management exchange. Challenge and code stay in component memory, and Back or
+Start again clears the factor step. The real-route browser evaluation covers
+the password-disabled path, foreign-browser refusal, 390/1280 layouts and the
+absence of product credentials or browser storage.
