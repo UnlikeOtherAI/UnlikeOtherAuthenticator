@@ -299,7 +299,7 @@ login credentials. An unconfirmed invitation expires after seven days.
 
 Each contact opens `/auth/organisation-recovery#contact=<opaque>` and submits
 `POST /challenge {contact,purpose}` for `confirm`, `drill` or `recover`.
-The response contains an opaque challenge, organisation name and expiry;
+The response contains an opaque challenge, organisation name, exact `client_domain` and expiry;
 a Strict HttpOnly cookie binds the initiating browser. `POST /complete
 {challenge,code}` verifies the original personal authenticator and consumes
 the exact action. Challenges last five minutes and permit six durable guesses.
