@@ -451,3 +451,21 @@ cannot revive it. Combined consumer builds and the cross-application sign-in
 journey remain in progress.
 
 `LIVE_IDENTITY_FLOW_REQUIRED` remains the explicit integration hold. Remove it only after the consuming application's canonical authority cutover, original-source admission and revocation consumers, strict acknowledgement/reconciliation, minimum assurance floor and integrated browser sign-in journeys pass together. Customer IdP interoperability and production activation are separate evidence; neither is asserted by these local checks.
+
+The explicit local cross-application browser evaluation is
+`pnpm --dir Auth exec vitest run --config vitest.nessie.config.ts`. Set
+`NESSIE_CHECKOUT` to the reviewed Nessie worktree, `NESSIE_DATABASE_URL` to a
+separate migrated database whose name starts with `nessie_sso_cross_app_`, and
+`PLAYWRIGHT_MODULE` to the installed Playwright entry module. Export the isolated
+UOA `DATABASE_URL` for schema provisioning. Build Nessie's API and dependencies
+through its normal Turbo graph first; the evaluation imports that real build and
+serves its current login source with Vite on its own reserved ports 6434/6435.
+
+The journey follows the actual UOA tile into Nessie's login screen, then its
+authorize and session routes through the real UOA callback and signed HTTPS
+test IdP. It checks wrong PKCE, code replay, canonical identity with no copied
+membership/profile rows, and removal at the next authenticated read. Public
+HTTP transport is confined to the two test applications; ordinary product
+service-access billing is a separate 204 fixture. This is an explicit local
+evaluation, excluded from ordinary unit tests and CI. Its presence alone does
+not satisfy the integration hold.
