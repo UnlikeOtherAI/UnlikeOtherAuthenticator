@@ -10,6 +10,7 @@ import { revokeEnterpriseScope } from './org-sso-revocation.service.js';
 import { withdrawConnectionMemberships } from './membership-provenance.service.js';
 import { lockRefreshSessionUserDomain } from './refresh-session-lock.service.js';
 import { lockTeamMembershipRows } from './team-scope.service.js';
+import { resolveProductTeamPolicy } from './product-team-policy.service.js';
 
 const PUBLIC_MAIL = new Set(['gmail.com', 'googlemail.com', 'outlook.com', 'hotmail.com', 'live.com',
   'yahoo.com', 'icloud.com', 'aol.com', 'proton.me', 'protonmail.com', 'mail.com']);
@@ -26,8 +27,9 @@ export async function createEnterpriseDomain(session: Session, raw: string, tx: 
   const emailDomain = normalizeEnterpriseEmailDomain(raw);
   await lockEnterpriseScope(tx, session.clientDomain, `email-domain:${emailDomain}`);
   const org = await tx.organisation.findUniqueOrThrow({ where: { id: session.orgId }, select: { domain: true } });
-  // Cross-origin claim authorization is not yet approved. Existing cross-origin memberships remain supported.
-  if (org.domain !== session.clientDomain) throw new AppError('FORBIDDEN', 403, 'SSO_ORIGIN_DOMAIN_REQUIRED');
+  if (org.domain !== session.clientDomain && (await resolveProductTeamPolicy({ domain: session.clientDomain }, { prisma: tx })).scope !== 'all_active_memberships') {
+    throw new AppError('FORBIDDEN', 403, 'SSO_ORIGIN_DOMAIN_REQUIRED');
+  }
   const now = new Date();
   await tx.organisationEmailDomain.updateMany({ where: { clientDomain: session.clientDomain, emailDomain,
     status: 'PENDING', challengeExpiresAt: { lte: now } }, data: { status: 'EXPIRED' } });
@@ -46,24 +48,29 @@ export async function createEnterpriseDomain(session: Session, raw: string, tx: 
 export async function verifyEnterpriseDomain(session: Session, id: string, tx: Prisma.TransactionClient,
   resolver = resolveTxt) {
   const row = await tx.organisationEmailDomain.findFirst({ where: { id, clientDomain: session.clientDomain, orgId: session.orgId } });
-  if (!row || row.status !== 'PENDING' || row.challengeExpiresAt <= new Date()) {
+  if (row?.status === 'PENDING' && row.challengeExpiresAt <= new Date()) {
+    await tx.organisationEmailDomain.update({ where: { id }, data: { status: 'EXPIRED' } });
+    return { ok: false as const, code: 'SSO_EMAIL_DOMAIN_PROOF_EXPIRED' };
+  }
+  if (!row || row.status !== 'PENDING') {
     throw new AppError('BAD_REQUEST', 400, 'SSO_EMAIL_DOMAIN_PROOF_EXPIRED');
   }
   let records: string[][];
-  try { records = await resolver(`_uoa-verification.${row.emailDomain}`); }
+  try { records = await boundedEnterpriseTxt(row.emailDomain, resolver); }
   catch { throw new AppError('BAD_REQUEST', 400, 'SSO_EMAIL_DOMAIN_PROOF_NOT_FOUND'); }
   if (!records.slice(0, 100).some((record) => hashAssuranceReference(record.join('')) === row.challengeHash)) {
     throw new AppError('BAD_REQUEST', 400, 'SSO_EMAIL_DOMAIN_PROOF_NOT_FOUND');
   }
   const now = new Date();
-  await tx.organisationEmailDomain.update({ where: { id }, data: { status: 'VERIFIED', verifiedAt: now, checkedAt: now, failures: 0 } });
+  await tx.organisationEmailDomain.update({ where: { id }, data: { status: 'VERIFIED', verifiedAt: row.verifiedAt ?? now,
+    lastVerifiedAt: now, checkedAt: now, failures: 0 } });
   return { ok: true, domain: { id, email_domain: row.emailDomain, status: 'VERIFIED' } };
 }
 
 export async function reissueEnterpriseDomain(session: Session, id: string, tx: Prisma.TransactionClient) {
   const row = await tx.organisationEmailDomain.findFirst({ where: { id,
     clientDomain: session.clientDomain, orgId: session.orgId } });
-  if (!row || !['PENDING', 'EXPIRED'].includes(row.status)) throw new AppError('BAD_REQUEST', 409, 'SSO_EMAIL_DOMAIN_REISSUE_REFUSED');
+  if (!row || !['PENDING', 'EXPIRED', 'LAPSED'].includes(row.status)) throw new AppError('BAD_REQUEST', 409, 'SSO_EMAIL_DOMAIN_REISSUE_REFUSED');
   await lockEnterpriseScope(tx, session.clientDomain, `email-domain:${row.emailDomain}`);
   if (await tx.organisationEmailDomain.findFirst({ where: { id: { not: id }, clientDomain: session.clientDomain,
     emailDomain: row.emailDomain, status: { in: ['PENDING', 'VERIFIED'] } } })) {
@@ -83,16 +90,32 @@ export async function revokeEnterpriseDomain(session: Session, id: string, tx: P
   const row = await tx.organisationEmailDomain.findFirst({ where: { id, clientDomain: session.clientDomain, orgId: session.orgId } });
   if (!row) throw new AppError('NOT_FOUND', 404);
   await tx.organisationEmailDomain.update({ where: { id }, data: { status: 'REVOKED' } });
+  await suspendEnterpriseDomainLinks(row, tx);
+  return { ok: true };
+}
+
+export async function boundedEnterpriseTxt(emailDomain: string, resolver = resolveTxt): Promise<string[][]> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const records = await Promise.race([resolver(`_uoa-verification.${emailDomain}`), new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(() => reject(new Error('DNS deadline')), 3000); timer.unref();
+    })]);
+    if (records.length > 100 || records.some((record) => record.join('').length > 4096)) throw new Error('DNS response limit');
+    return records;
+  } finally { if (timer) clearTimeout(timer); }
+}
+
+export async function suspendEnterpriseDomainLinks(row: { id: string; clientDomain: string; orgId: string }, tx: Prisma.TransactionClient) {
+  const id = row.id;
   const links = await tx.externalIdentity.findMany({ where: { domainClaimId: id }, select: { id: true, userId: true, connectionId: true } });
   await tx.externalIdentity.updateMany({ where: { domainClaimId: id }, data: { status: 'SUSPENDED' } });
   for (const link of links.sort((a, b) => a.userId.localeCompare(b.userId) || a.id.localeCompare(b.id))) {
-    await lockRefreshSessionUserDomain({ userId: link.userId, domain: session.clientDomain }, { prisma: tx });
-    await lockTeamMembershipRows({ userId: link.userId, orgId: session.orgId }, { prisma: tx });
+    await lockRefreshSessionUserDomain({ userId: link.userId, domain: row.clientDomain }, { prisma: tx });
+    await lockTeamMembershipRows({ userId: link.userId, orgId: row.orgId }, { prisma: tx });
     await withdrawConnectionMemberships({ connectionId: link.connectionId, userId: link.userId,
       sourceKind: 'sso', sourceId: link.id }, tx);
     await tx.orgSsoGrant.updateMany({ where: { connectionId: link.connectionId, userId: link.userId }, data: { revokedAt: new Date() } });
-    await revokeEnterpriseScope({ scope: 'connection', clientDomain: session.clientDomain,
-      orgId: session.orgId, userId: link.userId, connectionId: link.connectionId, revision: 1 }, tx);
+    await revokeEnterpriseScope({ scope: 'connection', clientDomain: row.clientDomain,
+      orgId: row.orgId, userId: link.userId, connectionId: link.connectionId, revision: 1 }, tx);
   }
-  return { ok: true };
 }

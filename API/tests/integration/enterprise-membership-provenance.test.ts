@@ -107,7 +107,7 @@ describe('managed membership sources with real PostgreSQL', () => {
     expect(pending.kind).toBe('link_required');
     expect(await db.externalIdentity.count({ where: { connectionId: connection } })).toBe(0);
     await db.organisationEmailDomain.create({ data: { clientDomain: domain, orgId: org, emailDomain: 'verified.example.com',
-      status: 'VERIFIED', verifiedAt: new Date(), challengeHash: 'hashed', challengeExpiresAt: new Date() } });
+      status: 'VERIFIED', verifiedAt: new Date(), lastVerifiedAt: new Date(), challengeHash: 'hashed', challengeExpiresAt: new Date() } });
     const admitted = await db.$transaction(async (tx) => {
       await lockEnterpriseOutbox(tx);
       return admitEnterpriseIdentity({ connection: provider, policy, config, context, identity: { ...identity,

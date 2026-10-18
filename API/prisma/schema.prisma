@@ -5232,6 +5232,7 @@ model OrgSsoConnection {
 }
 
 model OrganisationEmailDomain {
+  lastVerifiedAt DateTime? @map("last_verified_at")
   id String @id @default(cuid())
   clientDomain String @map("client_domain")
   orgId String @map("org_id")

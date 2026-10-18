@@ -36,7 +36,7 @@ export async function admitEnterpriseIdentity(input: { connection: OrgSsoConnect
     const domain = identity.email.split('@')[1]?.toLowerCase();
     const claim = domain ? await tx.organisationEmailDomain.findFirst({ where: {
       clientDomain: connection.clientDomain, orgId: connection.orgId, emailDomain: domain,
-      status: 'VERIFIED', verifiedAt: { not: null },
+      status: 'VERIFIED', verifiedAt: { not: null }, lastVerifiedAt: { gt: new Date(Date.now() - 86400000) },
     } }) : null;
     // Contractor exceptions never permit a domain-less automatic account creation.
     if (!claim || !policy.jitEnabled || !policy.defaultTeamId) denied('SSO_JIT_NOT_ALLOWED');
