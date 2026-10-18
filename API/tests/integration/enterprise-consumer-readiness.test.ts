@@ -99,6 +99,12 @@ describe('actual consumer capability acknowledgment with real PostgreSQL', () =>
   it('resets capability acknowledgment during rotation without blocking already-authorized deprovisioning', async () => {
     await db.$transaction(async (tx) => { await lockEnterpriseOutbox(tx); await setOwnerScimState(session, connection, 1, true, tx); });
     const token = await db.$transaction((tx) => issueOwnerScimToken(session, connection, tx));
+    for (const field of ['authorityMigrationRevision', 'revocationConsumersRevision'] as const) {
+      await db.enterpriseProductReadiness.update({ where: { clientDomain: domain }, data: { [field]: null } });
+      await expect(db.$transaction((tx) => issueOwnerScimToken(session, connection, tx))).rejects.toThrow('SSO_ACTIVATION_NOT_READY');
+      await expect(authenticateScim(connection, `Bearer ${token.token}`, db)).rejects.toThrow('UNAUTHORIZED');
+      await db.enterpriseProductReadiness.update({ where: { clientDomain: domain }, data: { [field]: 'audited' } });
+    }
     await registerRevocationConsumer({ client_domain: domain, key_id: 'key-2', destination: `https://${domain}/revocations` });
     expect(await enterpriseRevocationReady(domain, db)).toBe(false);
     expect((await db.orgRevocationConsumer.findUniqueOrThrow({ where: { clientDomain: domain } })).capabilityVersion).toBe(0);

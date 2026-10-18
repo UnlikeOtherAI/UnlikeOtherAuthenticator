@@ -495,3 +495,8 @@ activation still requires its tested configuration; enforcement also requires
 the independent recovery setup and drill. A missing producer preparation blocks
 the Nessie rollout: do not substitute an unproven credential or pre-attest an
 incomplete migration.
+
+Withdrawing a product attestation blocks new SCIM token issuance as well as
+initial enablement. Existing credentials also require the product attestations.
+Receiver-key rotation alone preserves authenticated provisioning so that it can
+still deprovision people while the replacement receiver is acknowledged.

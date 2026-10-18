@@ -41,14 +41,17 @@ export async function ownerScimView(session: Session, id: string, db: Management
       display_name: parseScimAttributes(group.attributes).displayName ?? '', version: group.version })),
   };
 }
+async function requireScimProvisioningReady(clientDomain: string, db: ManagementDb): Promise<void> {
+  const product = await db.enterpriseProductReadiness.findUnique({ where: { clientDomain } });
+  if (product?.minimumAssuranceVersion !== 1 || !product.authorityMigrationRevision || !product.revocationConsumersRevision ||
+    !await enterpriseRevocationReady(clientDomain, db)) {
+    throw new AppError('FORBIDDEN', 403, 'SSO_ACTIVATION_NOT_READY');
+  }
+}
 export async function setOwnerScimState(session: Session, id: string, revision: number, enabled: boolean, tx: Prisma.TransactionClient) {
   const connection = await ownerScimConnection(session, id, tx);
   if (connection.scimRevision !== revision) throw new AppError('BAD_REQUEST', 409, 'SSO_REVISION_CONFLICT');
-  const product = await tx.enterpriseProductReadiness.findUnique({ where: { clientDomain: session.clientDomain } });
-  if (enabled && (product?.minimumAssuranceVersion !== 1 || !product.authorityMigrationRevision || !product.revocationConsumersRevision ||
-    !await enterpriseRevocationReady(session.clientDomain, tx))) {
-    throw new AppError('FORBIDDEN', 403, 'SSO_ACTIVATION_NOT_READY');
-  }
+  if (enabled) await requireScimProvisioningReady(session.clientDomain, tx);
   if (enabled && ['disabled', 'suspended'].includes(connection.status)) throw new AppError('FORBIDDEN', 403, 'SSO_ACTIVATION_NOT_READY');
   const row = await tx.orgSsoConnection.update({ where: { id }, data: { scimEnabled: enabled, scimRevision: { increment: 1 } } });
   if (!enabled) await tx.scimConnectionToken.updateMany({ where: { connectionId: id, revokedAt: null }, data: { revokedAt: new Date() } });
@@ -58,8 +61,10 @@ export async function setOwnerScimState(session: Session, id: string, revision: 
 }
 export async function issueOwnerScimToken(session: Session, id: string, tx: Prisma.TransactionClient) {
   const connection = await ownerScimConnection(session, id, tx);
-  if (!connection.scimEnabled || ['disabled', 'suspended'].includes(connection.status) ||
-    !await enterpriseRevocationReady(session.clientDomain, tx)) throw new AppError('FORBIDDEN', 403, 'SSO_ACTIVATION_NOT_READY');
+  if (!connection.scimEnabled || ['disabled', 'suspended'].includes(connection.status)) {
+    throw new AppError('FORBIDDEN', 403, 'SSO_ACTIVATION_NOT_READY');
+  }
+  await requireScimProvisioningReady(session.clientDomain, tx);
   const result = await issueScimToken(id, tx);
   await tx.orgAuditLog.create({ data: { orgId: session.orgId, actorUserId: session.userId, action: 'scim.token_issued',
     targetType: 'organisation', targetId: id, metadata: { token_id: result.id, expires_at: result.expires_at } } });
