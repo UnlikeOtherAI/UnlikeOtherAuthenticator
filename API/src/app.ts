@@ -30,6 +30,7 @@ import { pruneExpiredSecurityData } from './services/retention-pruning.service.j
 import { setAppLogger } from './utils/app-logger.js';
 import { startEnterpriseRevocationDelivery } from './services/org-sso-delivery.service.js';
 import { pruneEnterpriseRevocations } from './services/org-sso-revocation.service.js';
+import { startEnterpriseMaintenance } from './services/enterprise-maintenance.service.js';
 
 export async function createApp(): Promise<FastifyInstance> {
   const env = getEnv();
@@ -273,6 +274,8 @@ export async function createApp(): Promise<FastifyInstance> {
       void runClaimSweep();
       const enterpriseDelivery = startEnterpriseRevocationDelivery(app.log);
       app.addHook('onClose', async () => enterpriseDelivery.stop());
+      const enterpriseMaintenance = startEnterpriseMaintenance(app.log);
+      app.addHook('onClose', async () => enterpriseMaintenance.stop());
 
       const intervalMs = 6 * 60 * 60 * 1000;
       const timer = setInterval(() => {

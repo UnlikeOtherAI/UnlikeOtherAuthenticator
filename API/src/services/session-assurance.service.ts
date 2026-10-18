@@ -9,7 +9,7 @@ import { assertEnterpriseProvisioningActive } from './enterprise-identity-status
 
 export type AssuranceDb = Pick<PrismaClient,
   'sessionAssurance' | 'refreshToken' | 'user' | 'orgSsoPolicy' | 'orgSsoConnection' |
-  'externalIdentity' | 'orgMember' | 'teamMember' | 'enterpriseProductReadiness' | 'scimResourceLink'>;
+  'externalIdentity' | 'orgMember' | 'teamMember' | 'enterpriseProductReadiness' | 'scimResourceLink' | 'organisationEmailDomain'>;
 export type AssuranceBinding = {
   userId: string; clientDomain: string; credentialEpoch: number;
   orgId?: string | null; teamId?: string | null;

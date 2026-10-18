@@ -114,7 +114,9 @@ export function registerOrganisationAccessRoutes(app: FastifyInstance): void {
   });
   app.post(`${base}/sso/domains/:id/verify`, { preHandler: [requireSameOriginBrowserRequest, limiter] }, async (request) => {
     const { id } = Params.parse(request.params);
-    return mutation(request, (session, tx) => verifyEnterpriseDomain(session, id, tx));
+    const result = await mutation(request, (session, tx) => verifyEnterpriseDomain(session, id, tx));
+    if (!result.ok) throw new AppError('BAD_REQUEST', 400, result.code);
+    return result;
   });
   app.post(`${base}/sso/domains/:id/reissue`, { preHandler: [requireSameOriginBrowserRequest, limiter] }, async (request) => {
     z.object({}).strict().parse(request.body);

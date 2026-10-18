@@ -140,7 +140,7 @@ export async function managementView(session: Awaited<ReturnType<typeof manageme
     db.orgSsoPolicy.findUnique({ where: { clientDomain_orgId: where } }),
     db.orgSsoConnection.findMany({ where, orderBy: { createdAt: 'asc' } }),
     db.organisationEmailDomain.findMany({ where, select: { id: true, emailDomain: true, status: true,
-      verifiedAt: true, checkedAt: true, challengeExpiresAt: true } }), enterpriseReadiness(session.clientDomain, db as PrismaClient, session.orgId),
+      verifiedAt: true, checkedAt: true, lastVerifiedAt: true, failures: true, challengeExpiresAt: true } }), enterpriseReadiness(session.clientDomain, db as PrismaClient, session.orgId),
     db.team.findMany({ where: { orgId: session.orgId, lifecycleStatus: 'ACTIVE' }, select: { id: true, name: true }, orderBy: { name: 'asc' } }),
   ]);
   return { ok: true, version: 1, org, client_domain: session.clientDomain, csrf_token: session.csrf,
@@ -153,6 +153,7 @@ export async function managementView(session: Awaited<ReturnType<typeof manageme
     teams,
     connections: connections.map(publicConnection), domains: domains.map((d) => ({ id: d.id,
       email_domain: d.emailDomain, status: d.status, verified_at: d.verifiedAt, checked_at: d.checkedAt,
+      last_verified_at: d.lastVerifiedAt, failure_count: d.failures,
       challenge_expires_at: d.challengeExpiresAt.toISOString() })),
     readiness, presets: enterprisePresets, scim: { enabled: policy?.arrangementEnabled ?? false } };
 }

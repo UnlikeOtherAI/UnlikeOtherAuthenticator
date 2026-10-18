@@ -310,3 +310,26 @@ global-account session, changes no owner, and affects no sibling organisation.
 Immutable action evidence records recovery provenance with global account
 control explicitly false. The customer surface must provide setup, contact
 confirmation, drill and emergency suspension before this flow is ready.
+
+### Domain continuity and transient retention
+
+Verified domain TXT records are rechecked at six-hour intervals by the bounded
+enterprise maintenance worker. Three failed checks, or a failed check after
+24 hours without a successful verification, mark the claim `LAPSED` and suspend
+only identities originally admitted through that claim. Managed source grants
+and scoped revocation change atomically. Independently linked identities are
+unaffected. JIT and existing claim-backed proof use also require a successful
+verification within 24 hours, so an unavailable scheduler cannot extend trust.
+DNS queries have a three-second deadline and bounded records. Owner reissue
+supports `LAPSED`; fresh proof does not automatically resurrect suspended people.
+Historical `verified_at` remains intact, with `last_verified_at`, `checked_at`
+and `failure_count` describing current continuity.
+
+Cross-origin claims are accepted only when the existing server-owned product
+policy permits all active memberships; origin-only clients retain isolation.
+An expired pending verification is persisted as `EXPIRED` before returning its
+error. Maintenance expires pending claims and removes at most 200 records per
+transient class per tick. It preserves live account-link children of expired
+protocol flows and source evidence still referenced by authorization artifacts.
+Stable identity links, provisioning tombstones and erasure hashes are excluded
+from transient pruning. Recovery action evidence is retained for 90 days.
