@@ -1,3 +1,4 @@
+import { authorizeCredentialSurfaceWhenAvailable } from './credential-route-registry.service.js';
 import { SignJWT, jwtVerify, type JWTPayload } from 'jose';
 import { z } from 'zod';
 
@@ -155,5 +156,13 @@ export async function verifyTwoFaSetupToken(params: {
   }
   if (parsed.org_id) token.orgId = parsed.org_id;
   if (parsed.team_id) token.teamId = parsed.team_id;
+  // Personal settings setup is separately authorized by its global access token at every use.
+  // Login-bound setup carries a primary method/evidence and must retain that authority.
+  if (token.authMethod || token.authenticationEvidenceId || token.managementIntentId) {
+    await authorizeCredentialSurfaceWhenAvailable('factor_enrollment', { userId: token.userId,
+      clientDomain: token.domain, credentialEpoch: token.credentialEpoch,
+      authenticationEvidenceId: token.authenticationEvidenceId, method: token.authMethod,
+      orgId: token.orgId, teamId: token.teamId });
+  }
   return token;
 }

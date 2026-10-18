@@ -1,4 +1,4 @@
-import { assertMailboxCredentialAdmission } from './credential-admission.service.js';
+import { assertMailboxCredentialAdmission, assertIndependentSourceStillAdmitted } from './credential-admission.service.js';
 import { assertEnterpriseProvisioningActive } from './enterprise-identity-status.service.js';
 import { randomBytes, createHash } from 'node:crypto';
 import type { PrismaClient, Prisma } from '@prisma/client';
@@ -69,6 +69,8 @@ async function validateAuthenticationEvidence(input: { id?: string; userId: stri
       parent.authenticatedAt?.getTime() !== row.authenticatedAt?.getTime() || parent.observedAt.getTime() !== row.observedAt.getTime()) deny();
     seen.add(parent.id); ancestor = parent;
   }
+  if (row.provenance === 'independent') await assertIndependentSourceStillAdmitted({ userId: row.userId,
+    methods: row.amr, personalFactorCompleted: Boolean(row.mfaCompletedAt) }, db);
   if (row.provenance !== 'independent') {
     if (!row.orgId || !row.connectionId || !row.externalIdentityId) deny();
     const [connection, identity, policy, member] = await Promise.all([

@@ -1,3 +1,4 @@
+import { authorizeCredentialSurfaceWhenAvailable } from './credential-route-registry.service.js';
 import { fingerprintClientConfig } from './client-config-fingerprint.service.js';
 export { fingerprintClientConfig } from './client-config-fingerprint.service.js';
 import { randomUUID } from 'node:crypto';
@@ -189,6 +190,10 @@ export async function verifyLoginSession(params: {
   ) {
     rejectLoginSession();
   }
+
+  await authorizeCredentialSurfaceWhenAvailable('login_chooser', { userId: parsed.sub,
+    clientDomain: parsed.domain, credentialEpoch: parsed.credential_epoch,
+    authenticationEvidenceId: parsed.authentication_evidence_id, method: parsed.auth_method });
 
   return {
     userId: parsed.sub,

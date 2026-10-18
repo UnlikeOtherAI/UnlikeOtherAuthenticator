@@ -406,3 +406,15 @@ These engine tests complement the real API/PostgreSQL and headless customer
 journeys; they do not replace the final credential-route coverage audit or
 establish compatibility with an untested customer IdP configuration.
 
+
+
+### Credential route admission
+
+`credential-route-registry.service.ts` dispatches source validation and exact target policy checks. The configured human access verifier defaults to global account control; only explicitly requested organisation access applies that organisation's SSO policy. An independent global operation does not become an organisation operation merely because its access token remembers a selected team.
+
+Signed chooser and login-factor capabilities revalidate their original authentication evidence before use. Login-bound factor enrollment requires independent evidence. Personal settings enrollment continues to require its independently validated global access token. Signing continuation reads and signature writes revalidate the original evidence under the authorization locks before exposing documents or accepting a signature. A signed `sso`, `sso_recovery`, or `recovery` method without its source proof is rejected even below the legacy minimum. Revocation, expiry, credential epoch changes and foreign client scope therefore end these continuations rather than minting new proof.
+
+Previously issued mailbox or legacy social evidence and session families are rechecked after a corporate-domain claim or stable enterprise link is introduced. They cannot establish independent authority unless their source records an actually completed personal UOA factor. Password and existing personal-factor credentials retain their independent semantics; upstream AMR is not a personal UOA factor. Public/native grant and bridge propagation remain part of the registry audit, so the launch blocker remains in force until their live paths and consuming products pass that audit.
+
+
+`POST /auth/enterprise-link/context` uses the same signed consuming config and same-origin browser requirement as link completion. Body `{link_intent_id}` plus the original HttpOnly link cookie returns `{ok:true,org:{id,name},client_domain}` from the live canonical destination. It neither consumes the link nor exposes an account/profile hint. Expired, foreign-browser, changed-configuration and unavailable-connection intents fail before disclosing context.

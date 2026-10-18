@@ -13,8 +13,8 @@ import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import { verifyUserAccessTokenRs256 } from './user-access-token-key.service.js';
 import { isActiveLifecycle, assertEntityAccess } from './entity-lifecycle.service.js';
-import { requireProductAssurance, type AccountRequirement, type AssuranceDb } from './session-assurance.service.js';
-import { assertOrgAccessPolicy } from './org-sso-policy.service.js';
+import { type AccountRequirement } from './session-assurance.service.js';
+import { authorizeCredentialSurface } from './credential-route-registry.service.js';
 
 // Both are accepted for the whole transition, and neither can stand in for the
 // other: the branch is chosen by the protected header and each branch pins its
@@ -182,16 +182,10 @@ export async function verifyAccessToken(
   }
 
   if (getEnv().DATABASE_URL) {
-    const assurance = await requireProductAssurance({ id: parsed.assurance_id, userId,
+    await authorizeCredentialSurface((deps?.requirement ?? 'global_account_control') === 'global_account_control'
+      ? 'configured_access' : 'organisation_access', { assuranceId: parsed.assurance_id, userId,
       clientDomain: parsed.domain, credentialEpoch, orgId: parsed.active?.orgId ?? parsed.org?.org_id,
-      teamId: parsed.active?.teamId }, prisma as AssuranceDb);
-    // Unknown provenance may remain legacy only below the server-owned minimum. Known scoped
-    // credentials never become independent proof just because an older caller omitted a requirement.
-    if (assurance && (deps?.requirement ?? 'global_account_control') === 'global_account_control' &&
-      assurance.method !== 'independent') throw new AppError('FORBIDDEN', 403, 'INDEPENDENT_REAUTH_REQUIRED');
-    const orgId = parsed.active?.orgId ?? parsed.org?.org_id;
-    if (orgId) await assertOrgAccessPolicy({ userId, domain: parsed.domain, orgId,
-      assuranceId: assurance?.id }, prisma as PrismaClient);
+      teamId: parsed.active?.teamId }, prisma as PrismaClient);
   } else if (parsed.assurance_id) {
     throw new AppError('SERVICE_UNAVAILABLE', 503, 'ASSURANCE_STORE_REQUIRED');
   }
