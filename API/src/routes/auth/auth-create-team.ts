@@ -90,7 +90,7 @@ export function registerAuthCreateTeamRoute(app: FastifyInstance): void {
       if (!config || !configUrl) throw new AppError('BAD_REQUEST', 400, 'MISSING_CONFIG');
 
       const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
-      const session = await verifyLoginSession({
+      const session = await verifyLoginSession({ prisma: request.adminDb,
         token: login_token,
         config,
         configUrl,
@@ -131,7 +131,7 @@ export function registerAuthCreateTeamRoute(app: FastifyInstance): void {
           },
           { prisma: tx },
         );
-        const lockedSession = await verifyLoginSession({
+        const lockedSession = await verifyLoginSession({ prisma: tx,
           token: login_token,
           config,
           configUrl,

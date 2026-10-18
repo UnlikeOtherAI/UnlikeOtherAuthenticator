@@ -156,6 +156,7 @@ export async function signLoginSession(
  * and must be used at finalization.
  */
 export async function verifyLoginSession(params: {
+  prisma?: PrismaClient | Prisma.TransactionClient;
   token: string;
   config: ClientConfig;
   configUrl: string;
@@ -193,7 +194,7 @@ export async function verifyLoginSession(params: {
 
   await authorizeCredentialSurfaceWhenAvailable('login_chooser', { userId: parsed.sub,
     clientDomain: parsed.domain, credentialEpoch: parsed.credential_epoch,
-    authenticationEvidenceId: parsed.authentication_evidence_id, method: parsed.auth_method });
+    authenticationEvidenceId: parsed.authentication_evidence_id, method: parsed.auth_method }, params.prisma);
 
   return {
     userId: parsed.sub,

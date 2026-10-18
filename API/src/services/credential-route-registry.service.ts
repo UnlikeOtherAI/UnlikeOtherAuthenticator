@@ -18,6 +18,7 @@ export const credentialRouteRegistry = {
   public_authorization: { authority: 'global', source: 'evidence' },
   login_chooser: { authority: 'continuation', source: 'evidence' },
   factor_challenge: { authority: 'continuation', source: 'evidence' },
+  management_factor: { authority: 'global', source: 'evidence' },
   factor_enrollment: { authority: 'global', source: 'evidence' },
   signature_continuation: { authority: 'continuation', source: 'evidence' },
   public_access: { authority: 'global', source: 'either' },
@@ -66,8 +67,8 @@ export async function authorizeCredentialSurface(surface: CredentialSurface, inp
 }
 
 /** Signature-only boot mode cannot accept an artifact advertising known scoped provenance. */
-export async function authorizeCredentialSurfaceWhenAvailable(surface: CredentialSurface, input: CredentialAuthorityInput) {
-  if (getEnv().DATABASE_URL) return authorizeCredentialSurface(surface, input, getAdminPrisma());
+export async function authorizeCredentialSurfaceWhenAvailable(surface: CredentialSurface, input: CredentialAuthorityInput, db?: Db) {
+  if (db || getEnv().DATABASE_URL) return authorizeCredentialSurface(surface, input, db ?? getAdminPrisma());
   if (input.assuranceId || input.assuranceReference || input.authenticationEvidenceId ||
     ['sso', 'sso_recovery', 'recovery'].includes(input.method ?? '')) {
     throw new AppError('SERVICE_UNAVAILABLE', 503, 'ASSURANCE_STORE_REQUIRED');

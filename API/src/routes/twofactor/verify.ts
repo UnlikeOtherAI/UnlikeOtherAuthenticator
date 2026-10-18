@@ -36,7 +36,7 @@ export function registerTwoFactorVerifyRoute(app: FastifyInstance): void {
 
       const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
 
-      const challenge = await verifyTwoFaChallenge({
+      const challenge = await verifyTwoFaChallenge({ prisma: request.adminDb,
         token: twofa_token,
         sharedSecret: SHARED_SECRET,
         audience: getAuthServiceIdentifier(),
@@ -67,7 +67,7 @@ export function registerTwoFactorVerifyRoute(app: FastifyInstance): void {
           },
           { prisma },
         );
-        const lockedChallenge = await verifyTwoFaChallenge({
+        const lockedChallenge = await verifyTwoFaChallenge({ prisma: prisma,
           token: twofa_token,
           sharedSecret: SHARED_SECRET,
           audience: getAuthServiceIdentifier(),

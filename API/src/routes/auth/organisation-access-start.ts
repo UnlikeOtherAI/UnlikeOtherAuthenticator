@@ -23,7 +23,7 @@ export function registerOrganisationAccessStart(app: FastifyInstance) {
     const body = z.object({ login_token: z.string().min(1).max(4096), org_id: z.string().min(1).max(100) }).strict().parse(request.body);
     const config = request.config; const configUrl = request.configUrl;
     if (!config || !configUrl) throw new AppError('BAD_REQUEST', 400, 'MISSING_CONFIG');
-    const session = await verifyLoginSession({ token: body.login_token, config, configUrl,
+    const session = await verifyLoginSession({ prisma: request.adminDb, token: body.login_token, config, configUrl,
       sharedSecret: requireEnv('SHARED_SECRET').SHARED_SECRET, audience: LOGIN_SESSION_AUDIENCE });
     const browser = randomBytes(32).toString('base64url');
     const result = await getAdminPrisma().$transaction(async (tx) => {
