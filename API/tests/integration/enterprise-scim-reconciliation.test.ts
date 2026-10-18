@@ -58,6 +58,7 @@ describe('SCIM reconciliation and erasure with real PostgreSQL', () => {
     })).rejects.toThrow('SSO_CONNECTION_UNAVAILABLE');
     expect(EnterprisePolicyPatch.safeParse({ revision, group_mappings: [{ external_group_id: 'group-external', team_id: teamId, team_role: 'admin' }] }).success).toBe(false);
     expect(EnterprisePolicyPatch.safeParse({ revision, group_mappings: [{ connection_id: connectionId, external_group_id: 'group-external', team_id: teamId, team_role: 'owner' }] }).success).toBe(false);
+    expect(EnterprisePolicyPatch.safeParse({ revision, discovery_enabled: true }).success).toBe(false);
     expect(groupMappingView([{ external_group_id: 'unscoped', team_id: teamId, team_role: 'admin' }], [connectionId], [teamId]))
       .toEqual({ group_mappings: [], invalid_group_mappings: 1 });
   });

@@ -21,7 +21,7 @@ const config = {
 };
 const base = {
   ok: true, org: { id: 'org-acme', name: 'Acme Research' }, client_domain: 'api.nessie.works', csrf_token: 'fixture-csrf',
-  connections: [], domains: [], teams: [{id:'team-one',name:'Research'}], policy: { enforcement: 'off', revision: 1, session_max_age_seconds: 28800, reauth_mode: 'detect_only', jit_enabled:false, default_team_id:null, allow_unverified_contractors:false, discovery_enabled:false, group_mappings:[] },
+  connections: [], domains: [], teams: [{id:'team-one',name:'Research'}], policy: { enforcement: 'off', revision: 1, session_max_age_seconds: 28800, reauth_mode: 'detect_only', jit_enabled:false, default_team_id:null, allow_unverified_contractors:false, group_mappings:[] },
   readiness: { activation_allowed: false, enforcement_allowed: false, blockers: ['RECOVERY_SETUP_REQUIRED', 'REVOCATION_CONSUMERS_REQUIRED'] },
   presets: ['entra', 'okta', 'google_workspace', 'keycloak', 'adfs', 'other_oidc', 'other_saml'].map((id) => ({ id, protocols: ['adfs', 'other_saml'].includes(id) ? ['saml'] : ['oidc'] })),
   scim: { enabled: false },
@@ -81,6 +81,7 @@ try {
       }
       if (path.endsWith('/policy') && request.method()==='PATCH') {
         const body=request.postDataJSON();assert.equal(body.revision,data.policy.revision);
+        assert.equal(Object.hasOwn(body,'discovery_enabled'),false);
         data.policy={...data.policy,...body,revision:data.policy.revision+1};
         return route.fulfill({json:{ok:true,revision:data.policy.revision}});
       }
@@ -134,6 +135,7 @@ try {
     await page.getByRole('button', { name: 'Choose provider', exact: true }).waitFor();
     assert.equal(new URL(page.url()).hash, ''); await shot('first-time');
     await page.getByRole('button',{name:'Who can sign in',exact:true}).click();
+    assert.equal(await page.getByRole('checkbox').count(),2);
     assert.equal(await page.getByRole('checkbox',{name:'Allow existing members outside verified email domains'}).isChecked(),false);
     await page.getByRole('checkbox',{name:'Let people from verified email domains join on their first provider sign-in'}).check();
     await page.getByLabel('Team for new people',{exact:true}).selectOption('team-one');

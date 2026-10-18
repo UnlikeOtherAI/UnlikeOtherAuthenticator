@@ -14,7 +14,7 @@ export type EmailDomain = {
 export type AccessSettings = {
   org: { id: string; name: string }; client_domain: string; csrf_token: string;
   connections: Connection[]; domains: EmailDomain[]; teams: { id: string; name: string }[];
-  policy: { revision: number; enforcement: string; session_max_age_seconds: number; reauth_mode: string; jit_enabled: boolean; default_team_id: string | null; allow_unverified_contractors: boolean; discovery_enabled: boolean; invalid_group_mappings?: number; group_mappings: { connection_id: string; external_group_id: string; team_id: string; team_role: 'member' | 'admin' }[] };
+  policy: { revision: number; enforcement: string; session_max_age_seconds: number; reauth_mode: string; jit_enabled: boolean; default_team_id: string | null; allow_unverified_contractors: boolean; invalid_group_mappings?: number; group_mappings: { connection_id: string; external_group_id: string; team_id: string; team_role: 'member' | 'admin' }[] };
   readiness: { activation_allowed: boolean; enforcement_allowed: boolean; blockers: string[] };
   presets: { id: string; protocols: string[] }[]; scim: { enabled: boolean };
 };
@@ -105,7 +105,7 @@ export function decodeSettings(value: unknown): AccessSettings {
       session_max_age_seconds: integer(policy.session_max_age_seconds, 1),
       reauth_mode: choice(policy.reauth_mode, ['detect_only', 'force']),
       jit_enabled: bool(policy.jit_enabled), default_team_id: policy.default_team_id === null ? null : string(policy.default_team_id),
-      allow_unverified_contractors: bool(policy.allow_unverified_contractors), discovery_enabled: bool(policy.discovery_enabled),
+      allow_unverified_contractors: bool(policy.allow_unverified_contractors),
       ...(policy.invalid_group_mappings === undefined ? {} : { invalid_group_mappings: integer(policy.invalid_group_mappings) }),
       group_mappings: list(policy.group_mappings).map((value) => { const mapping = object(value); return {
         connection_id: string(mapping.connection_id), external_group_id: string(mapping.external_group_id), team_id: string(mapping.team_id),

@@ -16,9 +16,11 @@ membership or issue a relying-product session.
 
 The consuming client domain and exact existing UOA organisation scope every
 policy/connection. Existing multiple organisations and authorized cross-origin
-membership remain intact. Initial email-domain claims require the consuming
-client to equal the organisation origin; refusal uses
-`SSO_ORIGIN_DOMAIN_REQUIRED`, and never removes ordinary cross-origin access.
+membership remain intact. Initial email-domain claims use the organisation
+origin unless the consuming product explicitly supports `all_active_memberships`.
+That mode permits a reachable cross-origin organisation, still under its exact
+consuming-client/org policy. Refusal uses `SSO_ORIGIN_DOMAIN_REQUIRED` and never
+removes ordinary cross-origin access.
 Claims are exact domains, not implicit wildcard suffixes; PENDING claims expire
 after24hours and DNS proof values are hashed. Public suffixes and public mailbox
 providers are refused. Reclaim never restores old links.
@@ -37,6 +39,12 @@ are HttpOnly, SameSite Strict and HTTPS Secure, with same-origin and CSRF checks
 Every mutation rechecks the live canonical owner, epoch, source family and age
 after acquiring the exact enterprise-scope lock. Owner is not inferred from a
 membership role array. The management initiation, browser binding and owner chooser have local API/PostgreSQL and headless browser coverage; integrated consuming-product admission remains a release gate.
+
+Pre-authentication email-domain routing remains deferred. Provider tiles and
+bookmarks use the tested relying-product start flow. There is no discovery
+checkbox or writable discovery policy in the owner surface; a future discovery
+endpoint requires its own explicit product and organisation consent. The unused
+database column does not enable routing.
 
 ## Protocols and provisioning
 

@@ -8,12 +8,12 @@ export function AccessPolicy({settings,onSaved,onConnect}:{settings:AccessSettin
   const t=useEnterpriseTranslation();const common=useAccessTranslation();const p=settings.policy;
   const [enforcement,setEnforcement]=useState(p.enforcement);const [jit,setJit]=useState(p.jit_enabled);
   const [team,setTeam]=useState(p.default_team_id??'');const [contractors,setContractors]=useState(p.allow_unverified_contractors);
-  const [discovery,setDiscovery]=useState(p.discovery_enabled);const [groups,setGroups]=useState(p.group_mappings);
+  const [groups,setGroups]=useState(p.group_mappings);
   const [busy,setBusy]=useState(false);const [error,setError]=useState(false);const [saved,setSaved]=useState(false);
   async function save() {
     setBusy(true);setError(false);setSaved(false);
     try {await accessMutation(settings,'PATCH','/policy',{revision:p.revision,enforcement,jit_enabled:jit,
-      default_team_id:team||null,allow_unverified_contractors:contractors,discovery_enabled:discovery,group_mappings:groups});
+      default_team_id:team||null,allow_unverified_contractors:contractors,group_mappings:groups});
       await onSaved();setSaved(true);
     }catch{setError(true);}finally{setBusy(false);}
   }
@@ -34,8 +34,6 @@ export function AccessPolicy({settings,onSaved,onConnect}:{settings:AccessSettin
       disabled={busy} onChange={event=>setTeam(event.target.value)}>{teamOptions}</select></label>}
     <label className="flex items-start gap-3"><input type="checkbox" checked={contractors} disabled={busy}
       onChange={event=>setContractors(event.target.checked)}/><span>{t('contractors')}</span></label>
-    <label className="flex items-start gap-3"><input type="checkbox" checked={discovery} disabled={busy}
-      onChange={event=>setDiscovery(event.target.checked)}/><span>{t('discovery')}</span></label>
     {(p.invalid_group_mappings??0)>0&&<p role="alert">{t('repairMappings')}</p>}
     <details className="space-y-4" open={(p.invalid_group_mappings??0)>0?true:undefined}><summary className="min-h-11 cursor-pointer font-semibold">{t('mappings')}</summary>
       <p className="text-sm">{t('mappingHint')}</p>{groups.map((mapping,index)=><div key={index} className="space-y-3 border-t border-[var(--uoa-color-border)] pt-3">

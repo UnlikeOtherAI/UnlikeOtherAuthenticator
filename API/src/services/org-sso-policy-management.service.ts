@@ -16,7 +16,7 @@ export const EnterprisePolicyPatch = z.object({ revision: z.number().int().nonne
   session_max_age_seconds: z.number().int().min(300).max(86400).optional(), reauth_mode: z.enum(['detect_only', 'force']).optional(),
   jit_enabled: z.boolean().optional(), default_team_id: z.string().min(1).max(100).nullable().optional(),
   allow_unverified_contractors: z.boolean().optional(), group_mappings: z.array(GroupMapping).max(100).optional(),
-  discovery_enabled: z.boolean().optional() }).strict();
+}).strict();
 
 /** Called in the owner transaction after outbox-prefix, epoch and enterprise locks. */
 export async function updateEnterprisePolicy(session: Awaited<ReturnType<typeof managementSession>>,
@@ -43,15 +43,14 @@ export async function updateEnterprisePolicy(session: Awaited<ReturnType<typeof 
   const jit = input.jit_enabled ?? prior?.jitEnabled ?? false;
   const defaultTeam = input.default_team_id === undefined ? prior?.defaultTeamId : input.default_team_id;
   if (jit && !defaultTeam) throw new AppError('BAD_REQUEST', 400, 'SSO_DEFAULT_TEAM_REQUIRED');
-  const securityChange = Object.keys(input).some((key) => !['revision', 'discovery_enabled'].includes(key));
+  const securityChange = Object.keys(input).some((key) => key !== 'revision');
   const data = { ...(input.enforcement === undefined ? {} : { enforcement: input.enforcement }),
     ...(input.session_max_age_seconds === undefined ? {} : { sessionMaxAgeSeconds: input.session_max_age_seconds }),
     ...(input.reauth_mode === undefined ? {} : { reauthMode: input.reauth_mode }),
     ...(input.jit_enabled === undefined ? {} : { jitEnabled: input.jit_enabled }),
     ...(input.default_team_id === undefined ? {} : { defaultTeamId: input.default_team_id }),
     ...(input.allow_unverified_contractors === undefined ? {} : { allowUnverifiedContractors: input.allow_unverified_contractors }),
-    ...(input.group_mappings === undefined ? {} : { groupMappings: input.group_mappings }),
-    ...(input.discovery_enabled === undefined ? {} : { discoveryEnabled: input.discovery_enabled }) };
+    ...(input.group_mappings === undefined ? {} : { groupMappings: input.group_mappings }) };
   const row = await tx.orgSsoPolicy.upsert({ where: { clientDomain_orgId: scope }, create: { ...scope, ...data },
     update: { ...data, revision: { increment: 1 }, ...(securityChange ? { generation: { increment: 1 } } : {}) } });
   if (input.group_mappings !== undefined || input.default_team_id !== undefined || input.jit_enabled !== undefined) {

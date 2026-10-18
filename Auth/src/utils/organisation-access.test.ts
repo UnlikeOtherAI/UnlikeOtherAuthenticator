@@ -6,7 +6,7 @@ vi.mock('./api.js', () => ({ request }));
 beforeEach(() => { request.mockReset(); vi.resetModules(); window.history.replaceState(null, '', '/auth/organisation-access'); });
 const settings = {
   ok: true, org: { id: 'org-one', name: 'Acme' }, client_domain: 'product.example', csrf_token: 'csrf',
-  connections: [], domains: [], teams: [{id:'team-one',name:'Research'}], policy: { revision: 1, enforcement: 'off', session_max_age_seconds: 28800, reauth_mode: 'detect_only', jit_enabled:false, default_team_id:null, allow_unverified_contractors:false, discovery_enabled:false, group_mappings:[] },
+  connections: [], domains: [], teams: [{id:'team-one',name:'Research'}], policy: { revision: 1, enforcement: 'off', session_max_age_seconds: 28800, reauth_mode: 'detect_only', jit_enabled:false, default_team_id:null, allow_unverified_contractors:false, group_mappings:[] },
   readiness: { activation_allowed: false, enforcement_allowed: false, blockers: [] }, presets: [], scim: { enabled: false },
 };
 describe('organisation access browser boundary', () => {
