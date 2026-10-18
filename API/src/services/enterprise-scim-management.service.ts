@@ -4,6 +4,7 @@ import type { managementSession, ManagementDb } from './org-sso-management.servi
 import { issueScimToken, scimBase } from './enterprise-scim.service.js';
 import { parseScimAttributes } from './enterprise-scim-protocol.service.js';
 import { reconcileScimResource } from './enterprise-scim-reconciliation.service.js';
+import { enterpriseRevocationReady } from './enterprise-revocation-readiness.service.js';
 
 type Session = Awaited<ReturnType<typeof managementSession>>;
 export async function ownerScimConnection(session: Session, id: string, db: ManagementDb) {
@@ -44,7 +45,8 @@ export async function setOwnerScimState(session: Session, id: string, revision: 
   const connection = await ownerScimConnection(session, id, tx);
   if (connection.scimRevision !== revision) throw new AppError('BAD_REQUEST', 409, 'SSO_REVISION_CONFLICT');
   const product = await tx.enterpriseProductReadiness.findUnique({ where: { clientDomain: session.clientDomain } });
-  if (enabled && (product?.minimumAssuranceVersion !== 1 || !product.authorityMigrationRevision || !product.revocationConsumersRevision)) {
+  if (enabled && (product?.minimumAssuranceVersion !== 1 || !product.authorityMigrationRevision || !product.revocationConsumersRevision ||
+    !await enterpriseRevocationReady(session.clientDomain, tx))) {
     throw new AppError('FORBIDDEN', 403, 'SSO_ACTIVATION_NOT_READY');
   }
   if (enabled && ['disabled', 'suspended'].includes(connection.status)) throw new AppError('FORBIDDEN', 403, 'SSO_ACTIVATION_NOT_READY');
@@ -56,7 +58,8 @@ export async function setOwnerScimState(session: Session, id: string, revision: 
 }
 export async function issueOwnerScimToken(session: Session, id: string, tx: Prisma.TransactionClient) {
   const connection = await ownerScimConnection(session, id, tx);
-  if (!connection.scimEnabled || ['disabled', 'suspended'].includes(connection.status)) throw new AppError('FORBIDDEN', 403, 'SSO_ACTIVATION_NOT_READY');
+  if (!connection.scimEnabled || ['disabled', 'suspended'].includes(connection.status) ||
+    !await enterpriseRevocationReady(session.clientDomain, tx)) throw new AppError('FORBIDDEN', 403, 'SSO_ACTIVATION_NOT_READY');
   const result = await issueScimToken(id, tx);
   await tx.orgAuditLog.create({ data: { orgId: session.orgId, actorUserId: session.userId, action: 'scim.token_issued',
     targetType: 'organisation', targetId: id, metadata: { token_id: result.id, expires_at: result.expires_at } } });

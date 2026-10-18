@@ -57,7 +57,7 @@ tx: Prisma.TransactionClient) {
   if (member && member.status !== 'ACTIVE') denied();
   const claim = identity.email && identity.emailVerified ? await tx.organisationEmailDomain.findFirst({ where: {
     clientDomain: link.clientDomain, orgId: link.orgId, emailDomain: identity.email.split('@')[1].toLowerCase(),
-    status: 'VERIFIED', verifiedAt: { not: null },
+    status: 'VERIFIED', verifiedAt: { not: null }, lastVerifiedAt: { gt: new Date(Date.now() - 86400000) },
   } }) : null;
   if (!member && (!policy.jitEnabled || !policy.defaultTeamId || !claim)) denied();
   const tuple = { connectionId: connection.id, issuer: identity.issuer, tenant: identity.tenant, subject: identity.subject };
@@ -70,7 +70,7 @@ tx: Prisma.TransactionClient) {
   if (claimed.count !== 1) denied();
   if (!existing) await tx.externalIdentity.create({ data: { ...tuple, userId: input.userId, clientDomain: link.clientDomain,
     orgId: link.orgId, identityScope: input.config.user_scope, linkedVia: 'independent_account_proof',
-    proofAuthenticationEvidenceId: proof.id, domainClaimId: claim?.id } });
+    proofAuthenticationEvidenceId: proof.id, domainClaimId: member ? null : claim?.id } });
   const consumed = await tx.authenticationEvidence.updateMany({ where: { id: proof.id, consumedAt: null, revokedAt: null }, data: { consumedAt: new Date() } });
   if (consumed.count !== 1) denied();
   const admitted = await admitEnterpriseIdentity({ connection, policy, identity, config: input.config, context }, tx);

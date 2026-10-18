@@ -76,7 +76,7 @@ export function registerAdminEnterpriseRevocationRoutes(app: FastifyInstance): v
   const path = '/internal/admin/enterprise/revocation-consumers';
   app.get(path, { preHandler: requireAdminSuperuser }, async (_request, reply) => {
     const rows = await getAdminPrisma().orgRevocationConsumer.findMany({ select: { clientDomain: true,
-      destination: true, keyId: true, enabled: true, acknowledgedAt: true, failureCount: true } });
+      destination: true, keyId: true, enabled: true, acknowledgedAt: true, capabilityVersion: true, failureCount: true } });
     return reply.header('Cache-Control', 'no-store').send({ ok: true, data: rows });
   });
   app.post(path, { preHandler: requireAdminSuperuser }, async (request, reply) => {

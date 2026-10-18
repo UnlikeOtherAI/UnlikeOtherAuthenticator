@@ -9,6 +9,7 @@ import { enterpriseSamlAuthorize } from './org-sso-saml.service.js';
 import { sealEnterpriseSecret } from './enterprise-secret.service.js';
 import { enterpriseAuthorizationContext } from './enterprise-authorization-context.service.js';
 import { resolveProductTeamPolicy } from './product-team-policy.service.js';
+import { enterpriseRevocationReady } from './enterprise-revocation-readiness.service.js';
 
 export async function requireLiveConnection(connectionId: string, db: Prisma.TransactionClient) {
   const connection = await db.orgSsoConnection.findUnique({ where: { id: connectionId } });
@@ -22,7 +23,8 @@ export async function requireLiveConnection(connectionId: string, db: Prisma.Tra
     db.organisation.findUnique({ where: { id: connection.orgId }, select: { domain: true, lifecycleStatus: true } }),
   ]);
   if (!policy?.arrangementEnabled || product?.minimumAssuranceVersion !== 1 || !product.authorityMigrationRevision ||
-    !product.revocationConsumersRevision || client?.status !== 'active' || org?.lifecycleStatus !== 'ACTIVE') {
+    !product.revocationConsumersRevision || client?.status !== 'active' || org?.lifecycleStatus !== 'ACTIVE' ||
+    !await enterpriseRevocationReady(connection.clientDomain, db)) {
     throw new AppError('FORBIDDEN', 403, 'SSO_ACTIVATION_NOT_READY');
   }
   const reach = await resolveProductTeamPolicy({ domain: connection.clientDomain }, { prisma: db });
