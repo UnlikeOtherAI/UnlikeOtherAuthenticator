@@ -6,7 +6,7 @@ vi.mock('./api.js', () => ({ request }));
 beforeEach(() => { request.mockReset(); vi.resetModules(); window.history.replaceState(null, '', '/auth/organisation-access'); });
 const settings = {
   ok: true, org: { id: 'org-one', name: 'Acme' }, client_domain: 'product.example', csrf_token: 'csrf',
-  connections: [], domains: [], policy: { revision: 1, enforcement: 'off', session_max_age_seconds: 28800, reauth_mode: 'detect_only' },
+  connections: [], domains: [], teams: [{id:'team-one',name:'Research'}], policy: { revision: 1, enforcement: 'off', session_max_age_seconds: 28800, reauth_mode: 'detect_only', jit_enabled:false, default_team_id:null, allow_unverified_contractors:false, discovery_enabled:false, group_mappings:[] },
   readiness: { activation_allowed: false, enforcement_allowed: false, blockers: [] }, presets: [], scim: { enabled: false },
 };
 describe('organisation access browser boundary', () => {
@@ -34,6 +34,8 @@ describe('organisation access browser boundary', () => {
     const { decodeSettings, trustedTestUrl } = await import('./organisation-access.js');
     expect(() => decodeSettings({ ...settings, csrf_token: undefined })).toThrow();
     expect(() => decodeSettings({ ...settings, policy: { ...settings.policy, reauth_mode: 'guess' } })).toThrow();
+    expect(() => decodeSettings({ ...settings, policy: { ...settings.policy, group_mappings: [{connection_id:'connection-one',external_group_id:'group',team_id:'team-one',team_role:'owner'}] } })).toThrow();
+    expect(() => decodeSettings({ ...settings, teams: [{id:'team-one',name:null}] })).toThrow();
     const connection = { id: 'c', preset: 'entra', protocol: 'oidc', display_name: 'Corporate', status: 'draft',
       revision: 1, configuration: {}, secret_configured: false, tested_revision: null };
     expect(() => decodeSettings({ ...settings, connections: [{ ...connection, callback_url: 'https://evil.example/callback' }] })).toThrow();

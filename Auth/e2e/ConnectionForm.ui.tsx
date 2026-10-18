@@ -5,7 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConnectionForm } from '../src/components/organisation/ConnectionForm.js';
 
 vi.mock('../src/hooks/use-access-translation.js', () => ({ useAccessTranslation: () => (key: string) => key }));
+vi.mock('../src/i18n/enterprise-actions.js', () => ({ useEnterpriseTranslation: () => (key: string) => key }));
 vi.mock('../src/hooks/use-theme.js', () => ({ useTheme: () => ({ classNames: {} }) }));
+const parseMetadata = async () => { throw new Error('OIDC does not import SAML metadata'); };
 let host: HTMLDivElement; let root: Root;
 beforeEach(() => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -27,7 +29,7 @@ async function submit() {
 describe('provider connection setup', () => {
   it('keeps a failed save editable and clears the write-only secret only on confirmed success', async () => {
     const save = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
-    await act(async () => root.render(<ConnectionForm preset="okta" protocol="oidc"
+    await act(async () => root.render(<ConnectionForm parseMetadata={parseMetadata} preset="okta" protocol="oidc"
       busy={false} onSave={save} onBack={() => {}} />));
     await fill('issuer', 'https://company.okta.com'); await fill('clientId', 'app-id'); await fill('secret', 'write-only');
     await submit();
@@ -39,7 +41,7 @@ describe('provider connection setup', () => {
     await submit(); expect((host.querySelector('input[type="password"]') as HTMLInputElement).value).toBe('');
   });
   it('shows the reserved reply URL before asking for provider credentials', async () => {
-    await act(async () => root.render(<ConnectionForm preset="entra" protocol="oidc" busy={false}
+    await act(async () => root.render(<ConnectionForm parseMetadata={parseMetadata} preset="entra" protocol="oidc" busy={false}
       onSave={async () => true} onBack={() => {}} existing={{ id: 'c', preset: 'entra', protocol: 'oidc',
         display_name: 'Corporate', status: 'draft', revision: 1, configuration: {}, secret_configured: false,
         tested_revision: null, callback_url: 'https://auth.example/sso/oidc/c/callback' }} />));

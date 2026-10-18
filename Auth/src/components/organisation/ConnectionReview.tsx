@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useAccessTranslation } from '../../hooks/use-access-translation.js';
 import { accessMutation, trustedTestUrl, type AccessSettings, type Connection } from '../../utils/organisation-access.js';
+import { AccessProvisioning } from './AccessProvisioning.js';
+import { ConnectionMaintenance } from './ConnectionMaintenance.js';
 import { Button } from '../ui/Button.js';
 import { CopyValue } from './CopyValue.js';
 import type { AccessKey } from '../../i18n/organisation-access.js';
@@ -8,7 +10,7 @@ import type { AccessKey } from '../../i18n/organisation-access.js';
 const blockers: Record<string, AccessKey> = {
   ASSURANCE_CONTRACT_REQUIRED: 'assurance', NESSIE_AUTHORITY_MIGRATION_REQUIRED: 'migration',
   REVOCATION_CONSUMERS_REQUIRED: 'revocation', RECOVERY_SETUP_REQUIRED: 'recovery',
-  CONNECTION_TEST_REQUIRED: 'testNeeded',
+  CONNECTION_TEST_REQUIRED: 'testNeeded', RECOVERY_DRILL_REQUIRED: 'recovery',
   CUSTOM_ARRANGEMENT_REQUIRED: 'customArrangement', LIVE_IDENTITY_FLOW_REQUIRED: 'liveSignIn',
 };
 export function ConnectionReview(props: {
@@ -19,7 +21,6 @@ export function ConnectionReview(props: {
 }) {
   const t = useAccessTranslation();
   const c = props.connection;
-  const [token, setToken] = useState<{ token: string; base_url: string } | null>(null);
   const [testing, setTesting] = useState(false);
   const tested = c.tested_revision === c.revision;
   const configured = Object.keys(c.configuration).length > 0;
@@ -31,13 +32,6 @@ export function ConnectionReview(props: {
       const result = await accessMutation(props.settings, 'POST', `${path}/test`, { revision: c.revision });
       window.location.assign(trustedTestUrl(result.test_url));
     } catch { props.onError(); setTesting(false); }
-  }
-  async function issueToken() {
-    try {
-      const result = await accessMutation(props.settings, 'POST', `${path}/scim-token`, { revision: c.revision });
-      if (typeof result.token !== 'string' || typeof result.base_url !== 'string') throw new Error('Invalid token response');
-      setToken({ token: result.token, base_url: result.base_url });
-    } catch { props.onError(); }
   }
   return <section className="space-y-6">
     <div className="flex flex-wrap items-start justify-between gap-3">
@@ -61,7 +55,7 @@ export function ConnectionReview(props: {
       <h3 className="font-semibold">{t('enable')}</h3>
       <p>{t(props.settings.readiness.activation_allowed && tested ? 'ready' : tested ? 'blockedPassed' : 'blocked')}</p>
       {!tested && <p>{t('testNeeded')}</p>}
-      {props.settings.readiness.blockers.includes('RECOVERY_SETUP_REQUIRED') && <Button variant="secondary" onClick={props.onRecovery}>{t('recoveryTitle')}</Button>}
+      {props.settings.readiness.blockers.some(code => ['RECOVERY_SETUP_REQUIRED', 'RECOVERY_DRILL_REQUIRED'].includes(code)) && <Button variant="secondary" onClick={props.onRecovery}>{t('recoveryTitle')}</Button>}
       {props.settings.readiness.blockers.length > 0 && <details><summary className="min-h-11 cursor-pointer text-sm">{t('readinessDetails')}</summary><ul className="list-disc space-y-2 pl-5 text-sm">
         {[...new Set(props.settings.readiness.blockers.map((code) => blockers[code] ?? 'unknownBlocker'))].map((key) => <li key={key}>{t(key)}</li>)}
       </ul></details>}
@@ -70,18 +64,7 @@ export function ConnectionReview(props: {
         {t(c.status === 'active' ? 'disable' : 'enable')}
       </Button>}
     </div>
-    <details className="space-y-4 border-t border-[var(--uoa-color-border)] pt-5">
-      <summary className="min-h-11 cursor-pointer font-semibold">{t('provisioning')}</summary>
-      <p>{t('scimIntro')}</p>
-      {!props.settings.scim.enabled ? <p>{t('scimUnavailable')}</p> : <>
-        {token ? <div className="space-y-3"><p role="status">{t('tokenOnce')}</p>
-          <CopyValue label={t('baseUrl')} value={token.base_url} /><CopyValue label={t('token')} value={token.token} />
-          <Button variant="secondary" onClick={() => setToken(null)}>{t('dismissToken')}</Button>
-        </div> : <Button disabled={props.busy} onClick={() => void issueToken()}>{t('issueToken')}</Button>}
-        <Button variant="secondary" disabled={props.busy} onClick={() => {
-          setToken(null); void props.mutate('DELETE', `${path}/scim-token`, { revision: c.revision });
-        }}>{t('revokeToken')}</Button>
-      </>}
-    </details>
+    <ConnectionMaintenance connection={c} busy={props.busy} mutate={props.mutate} />
+    <AccessProvisioning settings={props.settings} connection={c} />
   </section>;
 }

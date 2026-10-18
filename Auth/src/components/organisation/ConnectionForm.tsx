@@ -1,8 +1,10 @@
+import { useEnterpriseTranslation } from '../../i18n/enterprise-actions.js';
 import { useState } from 'react';
 import { useAccessTranslation } from '../../hooks/use-access-translation.js';
 import type { Connection } from '../../utils/organisation-access.js';
 import { Button } from '../ui/Button.js';
 import { Input, fieldInputClassName } from '../ui/Input.js';
+import { SamlMetadata, type SamlMetadataFields } from './SamlMetadata.js';
 import { CopyValue } from './CopyValue.js';
 
 export const providerNames: Record<string, string> = {
@@ -17,9 +19,10 @@ export type ConnectionDraft = {
 
 export function ConnectionForm(props: {
   preset: string; protocol: 'oidc' | 'saml'; existing?: Connection;
+  parseMetadata: (xml: string) => Promise<SamlMetadataFields>;
   busy: boolean; onSave: (draft: ConnectionDraft) => Promise<boolean>; onBack: () => void;
 }) {
-  const t = useAccessTranslation();
+  const t = useAccessTranslation(); const enterpriseT = useEnterpriseTranslation();
   const original = props.existing?.configuration ?? {};
   const tenant = original.tenant as Record<string, string> | undefined;
   const [fields, setFields] = useState<Record<string, string>>({
@@ -55,7 +58,7 @@ export function ConnectionForm(props: {
       };
     } else {
       configuration = { entity_id: fields.entity_id, sso_url: fields.sso_url,
-        certificates: [fields.certificate], subject_attribute: fields.subject_attribute,
+        certificates: fields.certificate?.match(/-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g) ?? [fields.certificate], subject_attribute: fields.subject_attribute,
         tenant: { attribute: fields.tenant_claim, value: fields.tenant },
       };
     }
@@ -80,9 +83,12 @@ export function ConnectionForm(props: {
       {!oidc && <>
         {props.existing.acs_url && <CopyValue label={t('callback')} value={props.existing.acs_url} />}
         {props.existing.sp_entity_id && <CopyValue label={t('sp')} value={props.existing.sp_entity_id} />}
+        {props.existing.metadata_url && <CopyValue label={enterpriseT('metadataUrl')} value={props.existing.metadata_url} />}
       </>}
     </div>}
     {invalid && <p role="alert">{t('saveError')}</p>}
+    {!oidc && <SamlMetadata disabled={props.busy} parse={props.parseMetadata}
+      onImport={(imported) => setFields((previous) => ({ ...previous, ...imported }))} />}
     {input('name', t('name'))}
     {oidc ? <>
       {(entra || google) ? input('tenant', t(entra ? 'tenant' : 'hostedDomain')) : input('issuer', t('issuer'), 'url')}

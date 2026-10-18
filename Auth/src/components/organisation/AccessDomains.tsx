@@ -1,3 +1,4 @@
+import { useEnterpriseTranslation } from '../../i18n/enterprise-actions.js';
 import { useState } from 'react';
 import { useAccessTranslation } from '../../hooks/use-access-translation.js';
 import type { AccessSettings, EmailDomain } from '../../utils/organisation-access.js';
@@ -9,7 +10,7 @@ export function AccessDomains(props: {
   settings: AccessSettings; busy: boolean;
   mutate: (method: 'POST' | 'DELETE', path: string, body?: unknown) => Promise<Record<string, unknown> | undefined>;
 }) {
-  const t = useAccessTranslation();
+  const t = useAccessTranslation(); const enterpriseT = useEnterpriseTranslation();
   const [domain, setDomain] = useState('');
   const [challenges, setChallenges] = useState<Record<string, EmailDomain['challenge']>>({});
   function remember(result: Record<string, unknown> | undefined) {
@@ -28,15 +29,19 @@ export function AccessDomains(props: {
       const status = item.status.toLowerCase();
       return <div key={item.id} className="space-y-3 border-t border-[var(--uoa-color-border)] pt-4">
       <h3 className="break-all font-medium">{item.email_domain}</h3>
-      <p>{t(status === 'verified' ? 'verified' : status === 'expired' ? 'domainExpired' : status === 'revoked' ? 'domainRevoked' : status === 'suspended' ? 'suspended' : 'pending')}</p>
+      <p>{status === 'lapsed' ? enterpriseT('domainLapsed') : t(status === 'verified' ? 'verified' : status === 'expired' ? 'domainExpired' : status === 'revoked' ? 'domainRevoked' : status === 'suspended' ? 'suspended' : 'pending')}</p>
       {challenge && status === 'pending' && <><p className="text-sm">{t('dns')}</p><p className="text-sm">{t('dnsOnce')}</p>
         <CopyValue label={t('recordName')} value={challenge.name} />
         <CopyValue label={t('recordValue')} value={challenge.value} />
       </>}
       {status === 'pending' && <Button variant="secondary" disabled={props.busy}
         onClick={() => void props.mutate('POST', `/domains/${encodeURIComponent(item.id)}/verify`)}>{t('verify')}</Button>}
-      {((status === 'pending' && !challenge) || status === 'expired') && <Button variant="secondary" disabled={props.busy}
-        onClick={() => void props.mutate('POST', `/domains/${encodeURIComponent(item.id)}/reissue`).then(remember)}>{t('reissueDns')}</Button>}
+      {((status === 'pending' && !challenge) || status === 'expired' || status === 'lapsed') && <Button variant="secondary" disabled={props.busy}
+        onClick={() => void props.mutate('POST', `/domains/${encodeURIComponent(item.id)}/reissue`).then(remember)}>{status === 'lapsed' ? enterpriseT('replaceDns') : t('reissueDns')}</Button>}
+      {status !== 'revoked' && <details className="space-y-3"><summary className="min-h-11 cursor-pointer text-sm">{enterpriseT('stopDomain')}</summary>
+        <p className="text-sm">{enterpriseT('stopDomainHint')}</p><Button variant="secondary" disabled={props.busy}
+          onClick={() => void props.mutate('DELETE', `/domains/${encodeURIComponent(item.id)}`)}>{enterpriseT('stopDomain')}</Button>
+      </details>}
     </div>; })}
     <form className="space-y-3" onSubmit={(event) => {
       event.preventDefault();

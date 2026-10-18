@@ -16,7 +16,7 @@ export const accessEn = {
   entraHelp: 'In Microsoft Entra admin center, open App registrations. Create or select a web application and add the reply URL below. Then copy its directory and application IDs and create a client secret.',
   googleHelp: 'In Google Cloud, create a web application OAuth client for your Workspace and add the reply URL below. Then copy its client ID and secret here.',
   oidcHelp: 'Create a web application in your identity provider. Copy its client ID, secret and OpenID Connect details below. Your provider must identify your organisation with a signed tenant claim.',
-  samlHelp: 'Create a SAML application in your identity provider. Copy its identifier, sign-in URL and signing certificate below. Use a permanent user identifier and an attribute identifying your organisation.',
+  samlHelp: 'Create a SAML application in your identity provider and download its metadata XML. Import it below, then choose a permanent user identifier and an attribute identifying your organisation.',
   testAgain: 'Test again', passedStatus: 'Test passed',
   blockedPassed: 'Your connection is saved and its sign-in test passed. Single sign-on is not ready to turn on yet.',
   title: 'Single sign-on', destination: 'Organisation: {org} · Product: {domain}',
@@ -61,7 +61,7 @@ export const accessEn = {
   tokenOnce: 'Copy this token to your provider now. You won’t be able to see it again.',
   token: 'Provisioning token', baseUrl: 'Provisioning URL', dismissToken: 'I have saved the token',
   recoveryTitle: 'Recovery and required sign-in',
-  recoveryIntro: 'Two recovery contacts will help restore access if your identity provider is unavailable. They will need their own independent ways to sign in. Setup is not available yet, so required sign-in remains off.',
+  recoveryIntro: 'Set up two recovery contacts and complete a recovery practice before requiring single sign-on.',
   overview: 'Connections', settings: 'Organisation access settings',
 } as const;
 export type AccessKey = keyof typeof accessEn;
@@ -83,7 +83,7 @@ export const accessCs: Record<AccessKey, string> = {
   entraHelp: 'V centru pro správu Microsoft Entra otevřete Registrace aplikací. Vytvořte nebo vyberte webovou aplikaci a přidejte níže uvedenou URL odpovědi. Poté zkopírujte ID adresáře a aplikace a vytvořte tajný klíč klienta.',
   googleHelp: 'V Google Cloud vytvořte klienta OAuth webové aplikace pro váš Workspace a přidejte níže uvedenou URL odpovědi. Poté sem zkopírujte ID klienta a tajný klíč.',
   oidcHelp: 'U poskytovatele identity vytvořte webovou aplikaci. Níže zkopírujte ID klienta, tajný klíč a údaje OpenID Connect. Poskytovatel musí organizaci určit podepsaným atributem tenantu.',
-  samlHelp: 'U poskytovatele identity vytvořte aplikaci SAML. Níže zkopírujte její identifikátor, přihlašovací URL a podpisový certifikát. Použijte stálý identifikátor uživatele a atribut určující organizaci.',
+  samlHelp: 'U poskytovatele identity vytvořte aplikaci SAML a stáhněte její metadata XML. Níže je importujte a poté zvolte stálý identifikátor uživatele a atribut určující organizaci.',
   testAgain: 'Zopakovat test', passedStatus: 'Test úspěšný',
   blockedPassed: 'Připojení je uložené a test přihlášení byl úspěšný. Jednotné přihlášení zatím nelze zapnout.',
   title: 'Jednotné přihlášení', destination: 'Organizace: {org} · Produkt: {domain}',
@@ -128,7 +128,7 @@ export const accessCs: Record<AccessKey, string> = {
   tokenOnce: 'Zkopírujte token k poskytovateli nyní. Později jej už neuvidíte.',
   token: 'Token pro správu přístupu', baseUrl: 'URL pro správu přístupu', dismissToken: 'Token mám uložený',
   recoveryTitle: 'Obnovení přístupu a povinné přihlášení',
-  recoveryIntro: 'Při výpadku poskytovatele identity pomohou obnovit přístup dva kontakty. Každý bude potřebovat vlastní nezávislý způsob přihlášení. Nastavení zatím není dostupné, proto povinné přihlášení zůstává vypnuté.',
+  recoveryIntro: 'Před vynucením jednotného přihlášení nastavte dva kontakty pro obnovení přístupu a proveďte nácvik.',
   overview: 'Připojení', settings: 'Nastavení přístupu organizace',
 };
 export const accessEs: Record<AccessKey, string> = {
@@ -149,7 +149,7 @@ export const accessEs: Record<AccessKey, string> = {
   entraHelp: 'En el centro de administración de Microsoft Entra, abre Registros de aplicaciones. Crea o selecciona una aplicación web y añade la URL de respuesta de abajo. Después copia los ID de directorio y aplicación y crea un secreto del cliente.',
   googleHelp: 'En Google Cloud, crea un cliente OAuth de aplicación web para tu Workspace y añade la URL de respuesta de abajo. Después copia aquí su ID y secreto.',
   oidcHelp: 'Crea una aplicación web en tu proveedor de identidad. Copia abajo el ID del cliente, el secreto y los detalles de OpenID Connect. El proveedor debe identificar tu organización mediante un atributo de inquilino firmado.',
-  samlHelp: 'Crea una aplicación SAML en tu proveedor de identidad. Copia abajo su identificador, URL de acceso y certificado de firma. Usa un identificador permanente de usuario y un atributo que identifique tu organización.',
+  samlHelp: 'Crea una aplicación SAML en tu proveedor de identidad y descarga sus metadatos XML. Impórtalos abajo y elige un identificador permanente de usuario y un atributo que identifique tu organización.',
   testAgain: 'Repetir prueba', passedStatus: 'Prueba superada',
   blockedPassed: 'La conexión está guardada y la prueba de inicio de sesión se superó. El inicio de sesión único aún no está listo para activarse.',
   title: 'Inicio de sesión único', destination: 'Organización: {org} · Producto: {domain}',
@@ -194,6 +194,6 @@ export const accessEs: Record<AccessKey, string> = {
   tokenOnce: 'Copia este token a tu proveedor ahora. No podrás volver a verlo.',
   token: 'Token de aprovisionamiento', baseUrl: 'URL de aprovisionamiento', dismissToken: 'He guardado el token',
   recoveryTitle: 'Recuperación e inicio de sesión obligatorio',
-  recoveryIntro: 'Dos contactos ayudarán a recuperar el acceso si el proveedor de identidad no está disponible. Cada uno necesitará su propio método independiente para iniciar sesión. La configuración aún no está disponible, por lo que el inicio de sesión obligatorio sigue desactivado.',
+  recoveryIntro: 'Configura dos contactos de recuperación y completa una práctica antes de exigir el inicio de sesión único.',
   overview: 'Conexiones', settings: 'Configuración de acceso de la organización',
 };

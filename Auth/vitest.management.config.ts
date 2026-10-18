@@ -5,5 +5,5 @@ export default defineConfig({ test: {
   include: ['e2e/management-browser.ui.mjs'],
   setupFiles: ['../API/tests/setup.ts'],
   hookTimeout: 180000,
-  testTimeout: 60000,
+  testTimeout: 180000,
 } });

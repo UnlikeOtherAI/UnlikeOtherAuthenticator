@@ -222,6 +222,7 @@ export function PopupProvider(props: {
     if (typeof window === 'undefined') return;
     const bridgeParams: Array<[string, string | null]> = [
       ['login_token', parsed.loginToken],
+      ['enterprise_link_intent', parsed.enterpriseLinkIntent ?? null],
       ['twofa_token', parsed.twoFaToken],
       ['twofa_setup_token', parsed.twoFaSetupToken],
       ['invite_token', parsed.inviteToken],
@@ -235,6 +236,7 @@ export function PopupProvider(props: {
     for (const [param] of present) url.searchParams.delete(param);
     window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
   }, [
+    parsed.enterpriseLinkIntent,
     parsed.inviteEmail,
     parsed.inviteName,
     parsed.inviteToken,
@@ -292,6 +294,7 @@ export function PopupProvider(props: {
       handoffTarget,
       teamHint: parsed.teamHint,
       managementOrgId: parsed.managementOrgId,
+      enterpriseLinkIntent: parsed.enterpriseLinkIntent,
       selectAccount: parsed.selectAccount,
       view,
       setView,
@@ -343,6 +346,7 @@ export function PopupProvider(props: {
     handoffTarget,
     parsed.teamHint,
     parsed.managementOrgId,
+    parsed.enterpriseLinkIntent,
     parsed.selectAccount,
     view,
     setView,
