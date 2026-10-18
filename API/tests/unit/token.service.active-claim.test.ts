@@ -22,12 +22,14 @@ describe('exchangeAuthorizationCodeForTokens active claim (unit)', () => {
 
   function makePrisma() {
     return {
+      enterpriseProductReadiness: { findUnique: vi.fn().mockResolvedValue(null) },
+      orgSsoPolicy: { findUnique: vi.fn().mockResolvedValue(null) },
       $queryRaw: vi.fn().mockResolvedValue([{ id: 'user-active' }]),
       authorizationCode: {
         findUnique: vi.fn(),
         updateMany: vi.fn(),
       },
-      refreshToken: {
+      refreshToken: { findUnique: vi.fn().mockResolvedValue({ assuranceId: null }),
         create: vi.fn(),
       },
       user: {
