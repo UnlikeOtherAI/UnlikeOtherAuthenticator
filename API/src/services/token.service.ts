@@ -129,10 +129,14 @@ export async function issueTokenPairForUser(
   });
   if (!user) throw new AppError('INTERNAL', 500, 'MISSING_USER');
 
-  const { assuranceId, assuranceConnectionId, assuranceRef, assuranceExpiresAt, globalAccountControl } =
+  const { assuranceId, assuranceConnectionId, assuranceRef, assuranceExpiresAt, assuranceOrgId, assuranceTeamId, globalAccountControl } =
     await resolveTokenFamilyAssurance({ prisma, userId: params.userId, domain: params.config.domain,
       refreshToken: params.refreshToken, sharedSecret, credentialEpoch: user.tokenVersion,
       authenticationEvidenceId: params.authenticationEvidenceId });
+  if (assuranceId && ((assuranceOrgId ?? null) !== (params.active?.orgId ?? assuranceOrgId ?? null) ||
+    (assuranceTeamId ?? null) !== (params.active?.teamId ?? null))) {
+    throw new AppError('UNAUTHORIZED', 401, 'INVALID_SESSION_ASSURANCE');
+  }
   const nowSeconds = Math.floor(Date.now() / 1000);
   const expiresInSeconds = Math.floor(Math.min(accessTokenExpiresInSeconds(ttl), assuranceExpiresAt === undefined ? Infinity :
     Math.floor(Date.parse(assuranceExpiresAt) / 1000) - nowSeconds));
@@ -150,12 +154,13 @@ export async function issueTokenPairForUser(
     clientId: params.clientId,
     sharedSecret,
   });
-  const activeOrgContext = params.active
+  const boundOrgId = params.active?.orgId ?? assuranceOrgId;
+  const activeOrgContext = boundOrgId
     ? await getActiveClientOrgContext(
         {
           userId: params.userId,
           domain: params.config.domain,
-          orgId: params.active.orgId,
+          orgId: boundOrgId,
           assuranceId,
           groupsEnabled: params.config.org_features?.groups_enabled,
         },
@@ -180,7 +185,7 @@ export async function issueTokenPairForUser(
 
   const org =
     activeOrgContext ??
-    (params.config.org_features?.enabled
+    (params.config.org_features?.enabled && !assuranceId
       ? await getUserOrgContext(
           {
             userId: params.userId,

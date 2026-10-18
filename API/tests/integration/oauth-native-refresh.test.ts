@@ -136,6 +136,13 @@ describe.skipIf(!process.env.DATABASE_URL)('public OAuth refresh tokens for nati
     const first = initial.json();
     expect(first).toMatchObject({ token_type: 'Bearer', refresh_token_expires_in: 30 * 24 * 60 * 60 });
     expect(first.refresh_token).toEqual(expect.any(String));
+    const initialClaims = decodeJwt(first.access_token);
+    expect(initialClaims.assurance_version).toBe(1); expect(initialClaims.assurance_id).toEqual(expect.any(String));
+    expect(initialClaims.authentication_evidence_id).toBeUndefined();
+    const source = await handle.prisma.sessionAssurance.findUniqueOrThrow({ where: { id: initialClaims.assurance_id as string } });
+    expect(source).toMatchObject({ method: 'independent', amr: ['email_password'], mfaSource: 'none', clientDomain: domain });
+    expect(source.authenticatedAt).not.toBeNull();
+    expect((await row(first.refresh_token))?.encryptedAssuranceReference).toBeNull();
     expect(await row(first.refresh_token)).toMatchObject({
       userId, domain, clientId: nativeClient, configUrl: PUBLIC_OAUTH_REFRESH_CONFIG_URL,
       credentialEpoch: 0, oauthScope: scopes, resource: null, twoFaCompleted: false,
@@ -147,12 +154,37 @@ describe.skipIf(!process.env.DATABASE_URL)('public OAuth refresh tokens for nati
     const body = rotated.json();
     expect(body).toMatchObject({ token_type: 'Bearer', expires_in: 30 * 60, scope: scopes, refresh_token_expires_in: 30 * 24 * 60 * 60 });
     expect(body.refresh_token).not.toBe(first.refresh_token);
+    expect(decodeJwt(body.access_token).assurance_id).toBe(source.id);
+    const after = await handle.prisma.sessionAssurance.findUniqueOrThrow({ where: { id: source.id } });
+    expect(after.authenticatedAt).toEqual(source.authenticatedAt); expect(after.observedAt).toEqual(source.observedAt);
     expect(decodeJwt(body.access_token)).toMatchObject({
       sub: userId, aud: issuer, client_id: nativeClient, domain, scope: scopes, tv: 0, role: 'user', token_use: 'public_oauth',
     });
     const me = await app.inject({ url: '/oauth/me', headers: { authorization: `Bearer ${body.access_token}` } });
     expect(me.statusCode, me.body).toBe(200);
     expect(me.json().sub).toBe(userId);
+    await handle.prisma.sessionAssurance.update({ where: { id: source.id }, data: { revokedAt: new Date() } });
+    expect((await refresh(nativeClient, body.refresh_token)).statusCode).toBe(401);
+    expect((await app.inject({ url: '/oauth/me', headers: { authorization: `Bearer ${body.access_token}` } })).statusCode).toBe(401);
+  });
+
+  it('binds access-only public grants to the consumed original evidence and caps their lifetime', async () => {
+    const email = 'dynamic-proof@example.com'; const userId = await createUser(email);
+    const query = new URLSearchParams({ client_id: plainClient, redirect_uri: redirect, scope: scopes,
+      code_challenge: challenge, code_challenge_method: 'S256' });
+    const login = await app.inject({ method: 'POST', url: `/oauth/login?${query}`, payload: { email, password: 'NativePassword1!' } });
+    expect(login.statusCode, login.body).toBe(200);
+    const pending = await handle.prisma.authorizationCode.findFirstOrThrow({ where: { userId, oauthClientId: plainClient } });
+    expect(pending.authenticationEvidenceId).toEqual(expect.any(String));
+    const evidenceId = pending.authenticationEvidenceId!;
+    const response = await exchange(plainClient, new URL(login.json().redirect_to).searchParams.get('code')!);
+    expect(response.statusCode, response.body).toBe(200); const body = response.json();
+    expect(body.refresh_token).toBeUndefined(); expect(body.expires_in).toBeLessThanOrEqual(900);
+    expect(decodeJwt(body.access_token)).toMatchObject({ assurance_version: 1, authentication_evidence_id: evidenceId });
+    expect((await handle.prisma.authenticationEvidence.findUniqueOrThrow({ where: { id: evidenceId } })).consumedAt).not.toBeNull();
+    expect((await app.inject({ url: '/oauth/me', headers: { authorization: `Bearer ${body.access_token}` } })).statusCode).toBe(200);
+    await handle.prisma.authenticationEvidence.update({ where: { id: evidenceId }, data: { revokedAt: new Date() } });
+    expect((await app.inject({ url: '/oauth/me', headers: { authorization: `Bearer ${body.access_token}` } })).statusCode).toBe(401);
   });
 
   it('returns the live successor inside the replay grace and revokes the family on later reuse', async () => {
@@ -268,4 +300,23 @@ describe.skipIf(!process.env.DATABASE_URL)('public OAuth refresh tokens for nati
     // Re-enabling bumps the revision, so earlier registrations and their families stay dead.
     expect((await refresh(nativeClient, first.refresh_token)).statusCode).toBe(401);
   });
+  it('requires reauthentication of legacy grants at the server floor without upgrading them on refresh', async () => {
+    const currentClient = await register({ app_id: 'com.unlikeotherai.kelpie' });
+    const email = 'floor-one@example.com'; const userId = await createUser(email);
+    const legacy = await signIn(userId, currentClient);
+    await handle.prisma.enterpriseProductReadiness.create({ data: { clientDomain: domain, minimumAssuranceVersion: 1 } });
+    expect((await refresh(currentClient, legacy.refresh_token)).statusCode).toBe(401);
+    expect((await app.inject({ url: '/oauth/me', headers: { authorization: `Bearer ${legacy.access_token}` } })).statusCode).toBe(401);
+    expect(await handle.prisma.sessionAssurance.count({ where: { userId } })).toBe(0);
+    const query = new URLSearchParams({ client_id: currentClient, redirect_uri: redirect, scope: scopes,
+      code_challenge: challenge, code_challenge_method: 'S256' });
+    const login = await app.inject({ method: 'POST', url: `/oauth/login?${query}`, payload: { email, password: 'NativePassword1!' } });
+    expect(login.statusCode, login.body).toBe(200);
+    const authenticated = await exchange(currentClient, new URL(login.json().redirect_to).searchParams.get('code')!);
+    expect(authenticated.statusCode, authenticated.body).toBe(200);
+    expect(decodeJwt(authenticated.json().access_token).assurance_id).toEqual(expect.any(String));
+    expect((await refresh(currentClient, authenticated.json().refresh_token)).statusCode).toBe(200);
+    await expect(handle.prisma.enterpriseProductReadiness.update({ where: { clientDomain: domain }, data: { minimumAssuranceVersion: 0 } })).rejects.toThrow();
+  });
+
 });

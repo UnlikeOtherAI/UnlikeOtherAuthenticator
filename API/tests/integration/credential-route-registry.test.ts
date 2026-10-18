@@ -1,5 +1,7 @@
-import { randomUUID } from 'node:crypto';
-import { SignJWT } from 'jose';
+import { issueTokenPairForUser } from '../../src/services/token.service.js';
+import { sealEnterpriseSecret } from '../../src/services/enterprise-secret.service.js';
+import { randomBytes, randomUUID } from 'node:crypto';
+import { SignJWT, decodeJwt } from 'jose';
 import { ACCESS_TOKEN_AUDIENCE } from '../../src/config/constants.js';
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -78,7 +80,40 @@ describe('live credential surface authority boundaries with PostgreSQL', () => {
       .setProtectedHeader({ alg: 'HS256' }).setIssuer(process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service')
       .setAudience(ACCESS_TOKEN_AUDIENCE).setSubject(f.user.id).setExpirationTime('1m').sign(new TextEncoder().encode(sharedSecret));
     await expect(verifyAccessToken(token, { prisma: db, sharedSecret })).resolves.toMatchObject({ userId: f.user.id });
+    for (const contradictory of [{ auth_method: 'sso' }, { assurance_version: 2 },
+      { assurance_connection_id: 'foreign' }, { authentication_evidence_id: f.id }]) {
+      const changed = await new SignJWT({ ...decodeJwt(token), ...contradictory })
+        .setProtectedHeader({ alg: 'HS256' }).sign(new TextEncoder().encode(sharedSecret));
+      await expect(verifyAccessToken(changed, { prisma: db, sharedSecret })).rejects.toThrow();
+    }
     await expect(verifyAccessToken(token, { prisma: db, sharedSecret, requirement: 'enterprise_org_access' })).rejects.toThrow('SSO_TEAM_REAUTH_REQUIRED');
+  });
+  it('signs globally bound proof without an ambient org snapshot and refuses scope substitution', async () => {
+    const f = await fixture(); const org = await organisation(f); const familyId = randomUUID();
+    const refresh = await issueRefreshToken({ userId: f.user.id, domain: f.domain, clientId: 'registry',
+      configUrl: f.configUrl, familyId, credentialEpoch: 0 }, { prisma: db, sharedSecret });
+    const issued = await db.$transaction(tx => issueSessionAssurance({ familyId, userId: f.user.id,
+      clientDomain: f.domain, credentialEpoch: 0, method: 'independent', policyGeneration: 0,
+      observedAt: new Date(), authenticatedAt: new Date(), amr: ['email_password'], mfaSource: 'none',
+      expiresAt: new Date(Date.now() + 60000) }, tx));
+    const saved = [process.env.ENTERPRISE_SSO_CUSTODY_PROVIDER, process.env.ENTERPRISE_SSO_KEYRING];
+    process.env.ENTERPRISE_SSO_CUSTODY_PROVIDER = 'local';
+    process.env.ENTERPRISE_SSO_KEYRING = JSON.stringify({ current: 'registry', keys: { registry: randomBytes(32).toString('base64') } });
+    try {
+      await db.refreshToken.updateMany({ where: { familyId }, data: { assuranceId: issued.assurance.id,
+        encryptedAssuranceReference: await sealEnterpriseSecret(issued.reference, `assurance:${issued.assurance.id}`) } });
+      const input = { config: f.config, configUrl: f.configUrl, userId: f.user.id, clientId: 'registry',
+        refreshToken: refresh.refreshToken, refreshTokenExpiresInSeconds: 600 };
+      const result = await issueTokenPairForUser(input, { prisma: db, adminPrisma: db, sharedSecret });
+      expect(decodeJwt(result.accessToken).org).toBeUndefined();
+      await expect(verifyAccessToken(result.accessToken, { prisma: db, sharedSecret })).resolves.toMatchObject({ userId: f.user.id });
+      await expect(issueTokenPairForUser({ ...input, active: { orgId: org.id, teamId: 'foreign' } },
+        { prisma: db, adminPrisma: db, sharedSecret })).rejects.toThrow('INVALID_SESSION_ASSURANCE');
+    } finally {
+      for (const [index, key] of ['ENTERPRISE_SSO_CUSTODY_PROVIDER', 'ENTERPRISE_SSO_KEYRING'].entries()) {
+        if (saved[index] === undefined) Reflect.deleteProperty(process.env, key); else process.env[key] = saved[index];
+      }
+    }
   });
   it('rechecks an actual signed chooser and factor token against revoked original evidence', async () => {
     const f = await fixture();
@@ -122,6 +157,8 @@ describe('live credential surface authority boundaries with PostgreSQL', () => {
     await db.externalIdentity.create({ data: { userId: f.user.id, clientDomain: f.domain, orgId: org.id,
       connectionId: connection.id, issuer: 'https://issuer.example.com', tenant: 'tenant', subject: randomUUID(), identityScope: 'global', linkedVia: 'independent_session' } });
     await expect(authorizeCredentialSurface('public_access', f.input, db)).rejects.toThrow('INDEPENDENT_REAUTH_REQUIRED');
+    await expect(authorizeCredentialSurface('login_chooser', { ...f.input, authenticationEvidenceId: undefined }, db))
+      .rejects.toThrow('INDEPENDENT_REAUTH_REQUIRED');
     await db.authenticationEvidence.update({ where: { id: f.id }, data: { mfaCompletedAt: new Date() } });
     await expect(authorizeCredentialSurface('public_access', f.input, db)).resolves.toMatchObject({ authenticatedAt: null });
   });

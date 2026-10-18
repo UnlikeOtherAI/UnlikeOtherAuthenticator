@@ -61,6 +61,8 @@ export type TeamRosterMember = {
   /** Canonical roster role; `teamRole` remains for existing consumers. */
   role: string;
   teamRole: string;
+  /** Current active membership in this exact organisation; null after withdrawal. */
+  orgRole: string | null;
   status: MembershipStatus;
   createdAt: Date;
   updatedAt: Date;
@@ -117,6 +119,7 @@ function toTeamRosterMember(
   },
   domain: string,
   includeEmail: boolean,
+  orgRole: string | null,
 ): TeamRosterMember {
   const avatarImageUrl = memberAvatarImageUrl(domain, row.user.id);
   return {
@@ -132,6 +135,7 @@ function toTeamRosterMember(
     },
     role: row.teamRole,
     teamRole: row.teamRole,
+    orgRole,
     status: row.status,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -251,6 +255,9 @@ export async function listTeamMembers(
   const hasMore = rows.length > limit;
   const pageRows = rows.slice(0, limit);
   const displayRows = direction === 'backward' ? [...pageRows].reverse() : pageRows;
+  const memberships = await prisma.orgMember.findMany({ where: { orgId: org.id, status: 'ACTIVE',
+    userId: { in: displayRows.map((row) => row.userId) } }, select: { userId: true, role: true } });
+  const orgRoles = new Map(memberships.map((row) => [row.userId, row.role]));
   const meta = rosterPaginationMeta({
     direction,
     rows: displayRows,
@@ -262,7 +269,7 @@ export async function listTeamMembers(
 
   return {
     data: displayRows.map((row) =>
-      toTeamRosterMember(row, org.domain, permissions.viewMemberEmail),
+      toTeamRosterMember(row, org.domain, permissions.viewMemberEmail, orgRoles.get(row.userId) ?? null),
     ),
     total,
     meta,

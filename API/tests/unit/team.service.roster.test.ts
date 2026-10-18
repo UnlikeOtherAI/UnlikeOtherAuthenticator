@@ -45,6 +45,7 @@ describe('Team roster contract', () => {
       },
     ]);
     prisma.teamMember.count.mockResolvedValue(1);
+    prisma.orgMember.findMany.mockResolvedValue([{ userId: 'u-person', role: 'admin' }]);
 
     const result = await listTeamMembers(
       {
@@ -60,13 +61,15 @@ describe('Team roster contract', () => {
 
     expect(result).toMatchObject({
       total: 1,
-      data: [{ subject: 'u-person', role: 'member', teamRole: 'member', status: 'DEACTIVATED' }],
+      data: [{ subject: 'u-person', role: 'member', teamRole: 'member', orgRole: 'admin', status: 'DEACTIVATED' }],
       permissions: { addMember: false, viewMemberEmail: false },
     });
     expect(result.data[0].identity).toEqual({
       displayName: 'Person',
       avatarImageUrl: expect.any(String),
     });
+    expect(prisma.orgMember.findMany).toHaveBeenCalledWith({ where: { orgId: org.id, status: 'ACTIVE',
+      userId: { in: ['u-person'] } }, select: { userId: true, role: true } });
     expect(prisma.teamMember.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({ teamId: 'team-1', status: 'DEACTIVATED' }),

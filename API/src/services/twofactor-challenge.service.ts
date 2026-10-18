@@ -1,3 +1,4 @@
+import { credentialArtifactSource } from './credential-artifact.service.js';
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { authorizeCredentialSurfaceWhenAvailable } from './credential-route-registry.service.js';
 import { SignJWT, jwtVerify, type JWTPayload } from 'jose';
@@ -93,6 +94,7 @@ export async function signTwoFaChallenge(params: {
       domain: params.domain,
       auth_method: params.authMethod,
       authentication_evidence_id: params.authenticationEvidenceId,
+      assurance_version: params.authenticationEvidenceId ? 1 : undefined,
       management_intent_id: params.managementIntentId,
       remember_me: params.rememberMe ?? false,
       request_access: params.requestAccess ?? false,
@@ -141,6 +143,7 @@ export async function verifyTwoFaChallenge(params: {
     throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
   }
 
+  const artifact = credentialArtifactSource(payload, 'evidence');
   const challenge: TwoFaChallenge = {
     userId: parsed.sub,
     credentialEpoch: parsed.credential_epoch,
@@ -163,6 +166,6 @@ export async function verifyTwoFaChallenge(params: {
   await authorizeCredentialSurfaceWhenAvailable(challenge.managementIntentId ? 'management_factor' : 'factor_challenge', { userId: challenge.userId,
     clientDomain: challenge.domain, credentialEpoch: challenge.credentialEpoch,
     authenticationEvidenceId: challenge.authenticationEvidenceId, method: challenge.authMethod,
-    orgId: challenge.orgId, teamId: challenge.teamId }, params.prisma);
+    orgId: challenge.orgId, teamId: challenge.teamId, artifact }, params.prisma);
   return challenge;
 }

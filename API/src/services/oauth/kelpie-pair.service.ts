@@ -1,3 +1,5 @@
+import { credentialArtifactSource, type CredentialArtifactSource } from '../credential-artifact.service.js';
+import { publicCredentialSource, type PublicCredentialSource } from './credential-source.service.js';
 import { createLocalJWKSet, jwtVerify } from 'jose';
 import type { PrismaClient } from '@prisma/client';
 import { getPublicBaseUrl } from '../../config/env.js';
@@ -16,12 +18,13 @@ const audience = (challenge: string) => `urn:unlikeotherai:kelpie:pair:${challen
 export async function issueKelpiePairingTicket(params: Binding & { authorization?: string }, db: PrismaClient) {
   const account = await verifyPublicAccountToken(params.authorization, KELPIE_CONNECT_SCOPE);
   return db.$transaction(async (tx) => {
-    await authorizeKelpieAccount(account, tx);
+    await authorizeKelpieAccount(account, tx, KELPIE_CONNECT_SCOPE, 'kelpie_pair');
     const issuedAt = Math.floor(Date.now() / 1000);
     const expiresAt = Math.min(account.expiresAt, issuedAt + KELPIE_TICKET_TTL_SECONDS);
     if (expiresAt <= issuedAt) rejectKelpieConnection();
     const pairingTicket = await signKelpiePairingTicket({ subject: account.userId, clientId: account.clientId,
       appId: KELPIE_APP_ID, resource: audience(params.challenge), issuer: getPublicBaseUrl(),
+      assuranceId: account.assuranceId, authenticationEvidenceId: account.authenticationEvidenceId,
       credentialEpoch: account.credentialEpoch, twoFaCompleted: account.twoFaCompleted, issuedAt, expiresAt,
       challenge: params.challenge, pairingClientId: params.clientId });
     return { pairing_ticket: pairingTicket, token_type: 'Bearer', expires_in: expiresAt - issuedAt };
@@ -35,7 +38,7 @@ export async function validateKelpiePairingTicket(params: Binding & {
   // A stranger's invalid proof must never erase the receiver's healthy session.
   const receiver = await verifyPublicAccountToken(params.authorization, 'profile');
   const keys = createLocalJWKSet(await getAccessTokenPublicJwks());
-  let proof: { clientId: string; credentialEpoch: number; expiresAt: number; twoFaCompleted: boolean } | undefined;
+  let proof: PublicCredentialSource & { artifact: CredentialArtifactSource; clientId: string; credentialEpoch: number; expiresAt: number; twoFaCompleted: boolean } | undefined;
   try {
     const payload = (await jwtVerify(params.ticket, keys, {
       issuer: getPublicBaseUrl(), audience: audience(params.challenge), algorithms: ['RS256'], typ: 'at+jwt',
@@ -50,21 +53,21 @@ export async function validateKelpiePairingTicket(params: Binding & {
         typeof payload.twofa !== 'boolean' || typeof payload.iat !== 'number' || typeof payload.exp !== 'number' ||
         !Number.isSafeInteger(payload.iat) || !Number.isSafeInteger(payload.exp) || payload.iat > Date.now() / 1000 ||
         payload.exp <= payload.iat || payload.exp - payload.iat > KELPIE_TICKET_TTL_SECONDS) throw new Error('proof');
-    proof = { clientId: payload.client_id, credentialEpoch: payload.tv,
+    proof = { ...publicCredentialSource(payload), artifact: credentialArtifactSource(payload, 'public'), clientId: payload.client_id, credentialEpoch: payload.tv,
       expiresAt: payload.exp, twoFaCompleted: payload.twofa };
   } catch {
     proof = undefined;
   }
   return db.$transaction(async (tx) => {
-    await authorizeKelpieAccount(receiver, tx, 'profile');
+    await authorizeKelpieAccount(receiver, tx, 'profile', 'kelpie_pair');
     if (!proof) return { active: false };
     try {
       const client = await getOAuthClient(proof.clientId, tx);
       if (!client) rejectKelpieConnection();
       const config = buildMcpClientConfig(client.redirectUris, client.nativeApp);
-      await authorizeKelpieAccount({ userId: receiver.userId, clientId: proof.clientId,
+      await authorizeKelpieAccount({ ...proof, userId: receiver.userId, clientId: proof.clientId,
         credentialEpoch: proof.credentialEpoch, expiresAt: proof.expiresAt, twoFaCompleted: proof.twoFaCompleted,
-        domain: config.domain, config }, tx);
+        domain: config.domain, config }, tx, KELPIE_CONNECT_SCOPE, 'kelpie_pair');
       return { active: true, expires_at: Math.min(proof.expiresAt, receiver.expiresAt) * 1000 };
     } catch (error) {
       if (error instanceof AppError && error.statusCode < 500) return { active: false };

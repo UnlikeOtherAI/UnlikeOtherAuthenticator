@@ -25,7 +25,7 @@ function deny(): never { throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION
 export async function recordIndependentAuthentication(input: { userId: string; credentialEpoch: number;
   method: string; verifiedEvent: VerifiedAuthenticationEvent; config: ClientConfig; configUrl: string; redirectUrl: string; codeChallenge?: string;
 }, db: EvidenceDb = getAdminPrisma()): Promise<string> {
-  if (input.method === 'sso' || input.method === 'sso_recovery') deny();
+  if (['sso', 'sso_recovery', 'recovery'].includes(input.method)) deny();
   // Corporate mailbox access cannot become independent proof for a managed identity.
   if (['email_code', 'email_registration', 'email_link', 'login_link', 'verify_email', 'verify_email_set_password']
     .includes(input.method)) await assertMailboxCredentialAdmission(input.userId, db);

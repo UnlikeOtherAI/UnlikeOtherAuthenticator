@@ -20,7 +20,7 @@ export function makePrismaMock(): PrismaClient {
     },
     orgMember: {
       findFirst: vi.fn(),
-      findMany: vi.fn(),
+      findMany: vi.fn().mockResolvedValue([]),
       count: vi.fn(),
     },
     team: {

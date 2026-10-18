@@ -1,3 +1,4 @@
+import { registerOrganisationManagementFactor } from './organisation-management-factor.js';
 import { EnterprisePolicyPatch, updateEnterprisePolicy } from '../../services/org-sso-policy-management.service.js';
 import { registerOrganisationAccessStart } from './organisation-access-start.js';
 import { registerOrganisationAccessScim } from './organisation-access-scim.js';
@@ -37,6 +38,7 @@ const csrf = (request: FastifyRequest): string | undefined => {
 
 export function registerOrganisationAccessRoutes(app: FastifyInstance): void {
   registerOrganisationAccessStart(app);
+  registerOrganisationManagementFactor(app);
   const limiter = createRateLimiter({ keyBuilder: (request) => `enterprise-management:${request.ip}`, limit: 30, windowMs: 60000 });
   app.get(base, async (request, reply) => {
     const config = validateConfigFields(decodeJwt(readAdminConfigJwt()));

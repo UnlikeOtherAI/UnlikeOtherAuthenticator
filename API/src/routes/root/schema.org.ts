@@ -284,7 +284,7 @@ export const orgTeamMemberEndpoints: EndpointSchema[] = [
       'cursor?': 'opaque signed keyset cursor from meta.nextCursor or meta.prevCursor',
     },
     response: {
-      data: 'array — { id, teamId, subject, userId (legacy alias), role, teamRole, status, identity { displayName, avatarImageUrl, email? }, avatarImageUrl, createdAt, updatedAt }',
+      data: 'array — { id, teamId, subject, userId (legacy alias), role, teamRole, orgRole (active exact-org membership role, null after withdrawal), status, identity { displayName, avatarImageUrl, email? }, avatarImageUrl, createdAt, updatedAt }',
       total: 'number — count for the selected status filter',
       meta: 'object — { hasMore, nextCursor, prevCursor }',
       next_cursor: 'string | null — compatibility alias for meta.nextCursor',
