@@ -343,3 +343,38 @@ retains the source method, connection, authentication time (including an unknown
 time), observed time and factor provenance. Its family and grant cannot outlive
 the source proof; source revocation invalidates the child. A product requiring
 assurance refuses a pre-assurance family before a debug grant is created.
+
+
+### Metadata and credential rotation
+
+Owner `POST /auth/organisation-access/sso/connections/:id/metadata/parse {xml}`
+parses at most 256 KiB of pasted or locally uploaded IdP metadata. It returns
+`{ok,configuration:{entity_id,sso_url,certificates}}` without saving configuration
+or fetching remote URLs. Only one entity, one IdP descriptor and one unambiguous
+HTTPS Redirect endpoint are accepted. External entities, ambiguous issuers and
+invalid or weak signing certificates are refused. Tenant and subject mappings
+remain explicit owner configuration.
+
+`POST /credentials/rotate {revision,secret}` replaces an OIDC secret;
+`{revision,certificates:[PEM]}` replaces SAML IdP trust with up to three overlapping
+RSA certificates. The stable connection, issuer, tenant, client ID and subject
+mapping do not change. A durable activation marker prevents a later test or
+suspension from reopening identity configuration. RSA signing keys are bounded
+to 2048–8192 bits and certificates must be suitable for current use.
+
+SAML SP keys are generated and sealed by UOA. `POST /sp-key/prepare {revision}`
+publishes the next signing and encryption certificates beside the current ones.
+After an owner test, `/sp-key/activate` switches the active key while retaining
+the previous decryption key. Test again, then `/sp-key/retire` removes overlap.
+At most two context-bound key pairs are accepted for at most 14 days. The
+maintained [node-saml metadata contract](https://github.com/node-saml/node-saml#service-provider-metadata)
+publishes signing certificates; UOA also publishes both encryption certificates
+and bounds full-signature-verified decryption attempts during overlap.
+Request-cache removal is committed after those attempts, including failure.
+
+These actions return the redacted connection with `sp_key_state` (`current`,
+`prepared`, `overlap`) and `key_overlap_expires_at`. Private keys and client
+secrets never appear in responses or audit data. Every credential change advances
+the connection revision and invalidation generation, invalidates previous proof,
+and requires a successful owner test before new product sign-ins resume.
+

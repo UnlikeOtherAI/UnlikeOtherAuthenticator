@@ -5204,6 +5204,10 @@ model OrgSsoPolicy {
 }
 
 model OrgSsoConnection {
+  activatedAt DateTime? @map("activated_at")
+  encryptedNextSecret String? @map("encrypted_next_secret")
+  encryptedPreviousSecret String? @map("encrypted_previous_secret")
+  keyOverlapExpiresAt DateTime? @map("key_overlap_expires_at")
   id String @id @default(cuid())
   clientDomain String @map("client_domain")
   orgId String @map("org_id")
