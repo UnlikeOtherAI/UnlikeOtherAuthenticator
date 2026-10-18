@@ -5632,3 +5632,23 @@ model OrgSsoRelyingIntent {
   @@index([expiresAt])
   @@map("org_sso_relying_intents")
 }
+
+model OrgSsoManagementFactorChallenge {
+  id String @id @default(cuid())
+  tokenHash String @unique @map("token_hash")
+  browserHash String @map("browser_hash")
+  clientDomain String @map("client_domain")
+  orgId String @map("org_id")
+  userId String? @map("user_id")
+  credentialEpoch Int? @map("credential_epoch")
+  factorHash String? @map("factor_hash")
+  configUrl String @map("config_url")
+  configFingerprint String @map("config_fingerprint")
+  context Json
+  attempts Int @default(0)
+  expiresAt DateTime @map("expires_at")
+  consumedAt DateTime? @map("consumed_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@index([expiresAt])
+  @@map("org_sso_management_factor_challenges")
+}
