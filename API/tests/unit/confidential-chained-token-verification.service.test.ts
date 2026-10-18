@@ -1,8 +1,11 @@
+import type { PrismaClient } from '@prisma/client';
 import { exportJWK, generateKeyPair, SignJWT, type JWK, type KeyLike } from 'jose';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { verifyChainedSubjectAccessToken } from '../../src/services/confidential-chained-token-exchange.service.js';
 import { resetAccessTokenKeyCache } from '../../src/services/oauth/access-token.service.js';
+
+const prisma = { enterpriseProductReadiness: { findUnique: vi.fn().mockResolvedValue(null) } } as unknown as PrismaClient;
 
 const issuer = 'https://authentication.unlikeotherai.com';
 const sourceDomain = 'api.nessie.works';
@@ -124,7 +127,7 @@ describe('chained UOA access-token verification', () => {
         callerAudience,
         issuer,
       },
-      { now: () => now },
+      { now: () => now, prisma },
     );
 
     expect(subject).toMatchObject({
@@ -151,7 +154,7 @@ describe('chained UOA access-token verification', () => {
       await expect(
         verifyChainedSubjectAccessToken(
           { subjectToken: token, callerAudience, issuer },
-          { now: () => now },
+          { now: () => now, prisma },
         ),
       ).rejects.toThrow('INVALID_SUBJECT_TOKEN');
     }
@@ -180,7 +183,7 @@ describe('chained UOA access-token verification', () => {
       await expect(
         verifyChainedSubjectAccessToken(
           { subjectToken: token, callerAudience, issuer },
-          { now: () => now },
+          { now: () => now, prisma },
         ),
       ).rejects.toThrow('INVALID_SUBJECT_TOKEN');
     }
@@ -192,7 +195,7 @@ describe('chained UOA access-token verification', () => {
       await expect(
         verifyChainedSubjectAccessToken(
           { subjectToken: token, callerAudience, issuer },
-          { now: () => now },
+          { now: () => now, prisma },
         ),
       ).rejects.toThrow('INVALID_SUBJECT_TOKEN');
     }
@@ -203,7 +206,7 @@ describe('chained UOA access-token verification', () => {
     await expect(
       verifyChainedSubjectAccessToken(
         { subjectToken: token, callerAudience, issuer },
-        { now: () => now },
+        { now: () => now, prisma },
       ),
     ).resolves.toMatchObject({
       act: { sub: 'api.origin.example', product: 'origin' },
@@ -245,7 +248,7 @@ describe('chained UOA access-token verification', () => {
     await expect(
       verifyChainedSubjectAccessToken(
         { subjectToken: token, callerAudience, issuer },
-        { now: () => now },
+        { now: () => now, prisma },
       ),
     ).rejects.toThrow('INVALID_SUBJECT_TOKEN');
   });

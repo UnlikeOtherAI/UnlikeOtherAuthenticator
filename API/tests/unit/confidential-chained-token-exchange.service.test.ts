@@ -114,6 +114,8 @@ function prismaMock(options?: {
   tokenVersion?: number;
 }): PrismaClient {
   return {
+    enterpriseProductReadiness: { findUnique: vi.fn().mockResolvedValue(null) },
+    orgSsoPolicy: { findUnique: vi.fn().mockResolvedValue(null) },
     $queryRaw: vi.fn().mockResolvedValue([]),
     clientDomain: {
       findUnique: vi.fn().mockResolvedValue({ domain: callerDomain, status: 'active' }),

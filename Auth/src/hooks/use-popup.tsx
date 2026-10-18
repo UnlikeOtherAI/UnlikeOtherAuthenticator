@@ -42,6 +42,7 @@ export type TeamChoice = {
   orgName?: string;
   /** Gap-fix B (design §11.4): lets a `team_hint` deep-link match by slug as well as by id. */
   slug?: string;
+  can_manage_sso?: boolean;
 };
 
 /**
@@ -74,6 +75,7 @@ export type SessionChoices = {
   pending_invites: InviteChoice[];
   can_create_org: boolean;
   creatable_orgs: CreatableOrgChoice[];
+  manageable_orgs?: CreatableOrgChoice[];
 };
 
 /** True for a native deep-link target (custom scheme, not http/https). */
@@ -289,6 +291,7 @@ export function PopupProvider(props: {
       signingToken: parsed.signingToken,
       handoffTarget,
       teamHint: parsed.teamHint,
+      managementOrgId: parsed.managementOrgId,
       selectAccount: parsed.selectAccount,
       view,
       setView,
@@ -339,6 +342,7 @@ export function PopupProvider(props: {
     parsed.signingToken,
     handoffTarget,
     parsed.teamHint,
+    parsed.managementOrgId,
     parsed.selectAccount,
     view,
     setView,
