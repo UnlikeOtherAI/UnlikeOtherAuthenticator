@@ -337,3 +337,9 @@ transient class per tick. It preserves live account-link children of expired
 protocol flows and source evidence still referenced by authorization artifacts.
 Stable identity links, provisioning tombstones and erasure hashes are excluded
 from transient pruning. Recovery action evidence is retained for 90 days.
+
+Debug sign-in derives a child assurance from its live source family. The child
+retains the source method, connection, authentication time (including an unknown
+time), observed time and factor provenance. Its family and grant cannot outlive
+the source proof; source revocation invalidates the child. A product requiring
+assurance refuses a pre-assurance family before a debug grant is created.
