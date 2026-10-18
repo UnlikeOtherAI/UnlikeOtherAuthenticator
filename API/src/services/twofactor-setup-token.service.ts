@@ -1,3 +1,4 @@
+import type { Prisma, PrismaClient } from '@prisma/client';
 import { authorizeCredentialSurfaceWhenAvailable } from './credential-route-registry.service.js';
 import { SignJWT, jwtVerify, type JWTPayload } from 'jose';
 import { z } from 'zod';
@@ -111,6 +112,7 @@ export async function signTwoFaSetupToken(params: {
 }
 
 export async function verifyTwoFaSetupToken(params: {
+  prisma?: PrismaClient | Prisma.TransactionClient;
   token: string;
   sharedSecret: string;
   audience: string;
@@ -162,7 +164,7 @@ export async function verifyTwoFaSetupToken(params: {
     await authorizeCredentialSurfaceWhenAvailable('factor_enrollment', { userId: token.userId,
       clientDomain: token.domain, credentialEpoch: token.credentialEpoch,
       authenticationEvidenceId: token.authenticationEvidenceId, method: token.authMethod,
-      orgId: token.orgId, teamId: token.teamId });
+      orgId: token.orgId, teamId: token.teamId }, params.prisma);
   }
   return token;
 }
