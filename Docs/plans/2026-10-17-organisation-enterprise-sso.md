@@ -1182,9 +1182,10 @@ Implementation has progressed beyond this document-only revision. Current wire c
 
 Local code evidence in §3 establishes the starting implementation, not vendor
 compatibility or production state. The original source reports Fable's review;
-this revision did not rerun that tool. No provider sandbox, conformance suite,
-browser journey, database migration or production flow was run for this
-documentation update.
+the initial documentation-only revision did not rerun that tool or execute a
+provider sandbox, conformance suite, browser journey, database migration or
+production flow. Subsequent implementation verification is recorded in the
+integration guide linked above.
 
 Protocol corrections were checked against the linked primary OIDC, OAuth issuer,
 SAML, SCIM, Microsoft and Google documents on 2026-10-17. Recheck actual provider
@@ -1200,9 +1201,10 @@ repeat them as established facts to justify launch.
 
 ## 14. Documentation amendments required with implementation
 
-This plan records the needed amendments; it does not pretend the files below
-were changed by this documentation-only commit. Preserve historical text where
-UOA rules require additions, and label superseded instructions explicitly.
+This table records the amendment inventory established before implementation.
+Use the current integration guide and affected source documents for their
+implemented contracts and remaining release gates. Preserve historical text
+where UOA rules require additions, and label superseded instructions explicitly.
 
 | Existing document/contract | Required amendment |
 |---|---|

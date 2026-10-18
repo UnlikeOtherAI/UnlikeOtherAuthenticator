@@ -443,4 +443,11 @@ The updated Auth client and SSR production build passes. All 167 Auth component 
 
 Nessie's consumer proves exact readiness-key acknowledgement against the actual UOA endpoint: an incorrect key and acknowledgement replay are refused. Its original-source executor withdrawal and saved-authority database gates pass without copied organisation or team memberships. These checks establish their named contracts, not complete customer readiness.
 
+Nessie's focused runtime verification now passes 56 SSO cases and 21 disclosure
+cases with no skipped database cases. The disclosure fixture retains separate
+original grants for one person, rejects a legacy grant with no original, and
+requires an explicit new share after revocation; a healthy later login alone
+cannot revive it. Combined consumer builds and the cross-application sign-in
+journey remain in progress.
+
 `LIVE_IDENTITY_FLOW_REQUIRED` remains the explicit integration hold. Remove it only after the consuming application's canonical authority cutover, original-source admission and revocation consumers, strict acknowledgement/reconciliation, minimum assurance floor and integrated browser sign-in journeys pass together. Customer IdP interoperability and production activation are separate evidence; neither is asserted by these local checks.
