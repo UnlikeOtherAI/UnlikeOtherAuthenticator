@@ -467,8 +467,31 @@ The journey follows the actual UOA tile into Nessie's login screen, then its
 authorize and session routes through the real UOA callback and signed HTTPS
 test IdP. It checks wrong PKCE, code replay, canonical identity with no copied
 membership/profile rows, actual cookie-based refresh and rotation, reviewed
-cleanup of existing copies, and removal at the next authenticated read. Public
+cleanup of existing copies, the ordinary Channels route with cleared pending
+PKCE state, and removal at the next authenticated read. Public
 HTTP transport is confined to the two test applications; ordinary product
 service-access billing is a separate 204 fixture. This is an explicit local
 evaluation, excluded from ordinary unit tests and CI. Its presence alone does
 not satisfy the integration hold.
+
+
+### Producer-first deployment order
+
+Deploy UOA's migrations and configured enterprise signing/encryption custody first.
+An authenticated platform operator then prepares the exact consuming product with
+`PUT /internal/admin/enterprise/products/:domain`: set
+`minimum_assurance_version: 1`, the fixed HTTPS login/config URLs, and explicit
+`null` for both revision attestations until their checks have actually completed.
+Verify that ordinary independent sign-in issues the scoped version-one proof
+before deploying a consumer that requires it. This preparation enables proof
+issuance; it does not allow customer SSO activation or enforcement.
+
+Next deploy the strict consumer, perform its reviewed canonical-authority cleanup
+and native compatibility/holder checks, and verify receiver, pull reconciliation
+and use-time admission. Record the actual reviewed migration and consumer
+revisions and complete the receiver's signed capability acknowledgement. Only
+then enable each custom product/organisation arrangement in UOA. Connection
+activation still requires its tested configuration; enforcement also requires
+the independent recovery setup and drill. A missing producer preparation blocks
+the Nessie rollout: do not substitute an unproven credential or pre-attest an
+incomplete migration.

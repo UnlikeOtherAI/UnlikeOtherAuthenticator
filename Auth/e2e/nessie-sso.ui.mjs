@@ -231,8 +231,13 @@ it('enters through the actual Nessie login and UOA tile, redeems PKCE once and e
     });
     expect(exchange.statusCode, exchange.body).toBe(200);
     const originalUserId = exchange.json().data.me.user.id;
-    await page.waitForURL(url => url.origin === productOrigin && url.pathname !== '/login');
-    await page.screenshot({ path: `${output}/${width}-signed-in.png` });
+    await page.waitForURL(url => url.origin === productOrigin && url.pathname === '/channels', { timeout: 30000 }).catch(async error => {
+      await page.screenshot({ path: `${output}/${width}-handoff-failed.png` });
+      const current = new URL(page.url());
+      throw new Error(`Browser handoff stopped at ${current.origin}${current.pathname}: ${stages.join(', ')}; ${(await page.locator('body').innerText()).slice(0, 1000)}`, { cause: error });
+    });
+    await page.waitForFunction(() => Boolean(globalThis.localStorage.getItem('nessie.admin.token'))
+      && !globalThis.sessionStorage.getItem('nessie.pendingExternalAuth'));
     const cookiesBefore = (await context.cookies(`${productOrigin}/api/auth/refresh`)).filter(cookie => cookie.httpOnly).map(cookie => cookie.value);
     expect(cookiesBefore.length > 0).toBe(true);
     const refreshed = await page.evaluate(async slot => {
@@ -275,6 +280,7 @@ it('enters through the actual Nessie login and UOA tile, redeems PKCE once and e
     }
     const replay = await nessie.app.inject({ method: 'POST', url: '/api/auth/session', payload: loginBody });
     expect(replay.statusCode).toBe(401);
+    await page.screenshot({ path: `${output}/${width}-signed-in.png`, animations: 'disabled' });
     await context.close();
     if (width === 1280) {
       await removeOrganisationMember({ domain, orgId: org.id, userId: member.id, config,

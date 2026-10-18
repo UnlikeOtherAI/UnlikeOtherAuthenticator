@@ -14,8 +14,8 @@ import { lockAndWithdrawConnectionMemberships } from '../../../services/membersh
 export function registerAdminEnterpriseRevocationRoutes(app: FastifyInstance): void {
   app.put('/internal/admin/enterprise/products/:domain', { preHandler: requireAdminSuperuser }, async (request, reply) => {
     const { domain } = z.object({ domain: z.string().min(1).max(256) }).parse(request.params);
-    const input = z.object({ minimum_assurance_version: z.literal(1), authority_migration_revision: z.string().min(1).max(200),
-      revocation_consumers_revision: z.string().min(1).max(200), login_entry_url: z.string().url().max(2048),
+    const input = z.object({ minimum_assurance_version: z.literal(1), authority_migration_revision: z.string().min(1).max(200).nullable(),
+      revocation_consumers_revision: z.string().min(1).max(200).nullable(), login_entry_url: z.string().url().max(2048),
       config_url: z.string().url().max(2048) }).strict().parse(request.body);
     for (const value of [input.login_entry_url, input.config_url]) {
       const url = new URL(value);

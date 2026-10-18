@@ -1126,6 +1126,20 @@ and result artifacts with exact revisions and configuration.
 
 ## 11. Rollout, migration and operations
 
+Deploy the UOA producer first: apply its schema and configure enterprise signing
+and encryption custody. Before a strict Nessie consumer is deployed, a platform
+operator prepares its exact client with assurance floor 1 and fixed login/config
+URLs. Both migration and revocation revision attestations must be explicit null
+until their checks have actually completed. Verify independent sign-in now
+issues the scoped version-one proof. Preparation does not permit customer SSO
+activation or enforcement. Deploy and verify the consumer, complete reviewed
+canonical cleanup and native compatibility/holder checks, then record the actual
+attested revisions and strict receiver acknowledgement. Only then enable custom
+product/org arrangements and tested connections in UOA. Missing producer
+preparation blocks strict consumer rollout; it never authorises fallback or a
+false migration attestation. See [the implemented operator contract](../Auth/enterprise-sso.md#producer-first-deployment-order).
+
+
 Keep enterprise activation off until §9 gates pass. Prepare additive schema and
 API capabilities first; deploy the consumers and verify the signed product
 configuration they actually serve. UOA is deployed separately from Nessie;
