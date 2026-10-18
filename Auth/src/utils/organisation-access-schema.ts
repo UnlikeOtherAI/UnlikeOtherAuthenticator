@@ -3,6 +3,7 @@ export type Connection = {
   status: string; revision: number; configuration: Record<string, unknown>;
   secret_configured: boolean; tested_revision: number | null;
   callback_url?: string; sp_entity_id?: string; acs_url?: string; metadata_url?: string;
+  sp_key_state?: 'current' | 'prepared' | 'overlap'; key_overlap_expires_at?: string | null;
   last_test?: { status: 'passed' | 'failed'; code: string | null; at: string } | null;
 };
 export type EmailDomain = {
@@ -12,8 +13,8 @@ export type EmailDomain = {
 };
 export type AccessSettings = {
   org: { id: string; name: string }; client_domain: string; csrf_token: string;
-  connections: Connection[]; domains: EmailDomain[];
-  policy: { revision: number; enforcement: string; session_max_age_seconds: number; reauth_mode: string };
+  connections: Connection[]; domains: EmailDomain[]; teams: { id: string; name: string }[];
+  policy: { revision: number; enforcement: string; session_max_age_seconds: number; reauth_mode: string; jit_enabled: boolean; default_team_id: string | null; allow_unverified_contractors: boolean; discovery_enabled: boolean; invalid_group_mappings?: number; group_mappings: { connection_id: string; external_group_id: string; team_id: string; team_role: 'member' | 'admin' }[] };
   readiness: { activation_allowed: boolean; enforcement_allowed: boolean; blockers: string[] };
   presets: { id: string; protocols: string[] }[]; scim: { enabled: boolean };
 };
@@ -71,6 +72,8 @@ function connection(value: unknown): Connection {
   for (const key of ['callback_url', 'acs_url', 'metadata_url'] as const) {
     if (raw[key] !== undefined) result[key] = ownUrl(raw[key]);
   }
+  if (raw.sp_key_state !== undefined) result.sp_key_state = choice(raw.sp_key_state, ['current', 'prepared', 'overlap'] as const);
+  if (raw.key_overlap_expires_at !== undefined) result.key_overlap_expires_at = raw.key_overlap_expires_at === null ? null : timestamp(raw.key_overlap_expires_at);
   if (raw.sp_entity_id !== undefined) result.sp_entity_id = string(raw.sp_entity_id);
   if (raw.last_test !== undefined && raw.last_test !== null) {
     const test = object(raw.last_test);
@@ -82,7 +85,7 @@ function connection(value: unknown): Connection {
 function domain(value: unknown): EmailDomain {
   const raw = object(value);
   const result: EmailDomain = { id: string(raw.id), email_domain: string(raw.email_domain),
-    status: choice(raw.status, ['PENDING', 'VERIFIED', 'EXPIRED', 'REVOKED', 'SUSPENDED']) };
+    status: choice(raw.status, ['PENDING', 'VERIFIED', 'EXPIRED', 'LAPSED', 'REVOKED', 'SUSPENDED']) };
   if (raw.challenge !== undefined) {
     const proof = object(raw.challenge);
     result.challenge = { name: string(proof.name), value: string(proof.value), expires_at: timestamp(proof.expires_at) };
@@ -95,11 +98,18 @@ export function decodeSettings(value: unknown): AccessSettings {
   const readiness = object(raw.readiness); const scim = object(raw.scim);
   return {
     org: { id: string(org.id), name: string(org.name) }, client_domain: string(raw.client_domain),
+    teams: list(raw.teams).map((value) => { const team = object(value); return { id: string(team.id), name: string(team.name) }; }),
     csrf_token: string(raw.csrf_token), connections: list(raw.connections).map(connection),
     domains: list(raw.domains).map(domain), policy: { revision: integer(policy.revision),
       enforcement: choice(policy.enforcement, ['off', 'required_for_verified_domains', 'required_for_all_members']),
       session_max_age_seconds: integer(policy.session_max_age_seconds, 1),
-      reauth_mode: choice(policy.reauth_mode, ['detect_only', 'force']) },
+      reauth_mode: choice(policy.reauth_mode, ['detect_only', 'force']),
+      jit_enabled: bool(policy.jit_enabled), default_team_id: policy.default_team_id === null ? null : string(policy.default_team_id),
+      allow_unverified_contractors: bool(policy.allow_unverified_contractors), discovery_enabled: bool(policy.discovery_enabled),
+      ...(policy.invalid_group_mappings === undefined ? {} : { invalid_group_mappings: integer(policy.invalid_group_mappings) }),
+      group_mappings: list(policy.group_mappings).map((value) => { const mapping = object(value); return {
+        connection_id: string(mapping.connection_id), external_group_id: string(mapping.external_group_id), team_id: string(mapping.team_id),
+        team_role: choice(mapping.team_role, ['member', 'admin'] as const) }; }) },
     readiness: { activation_allowed: bool(readiness.activation_allowed),
       enforcement_allowed: bool(readiness.enforcement_allowed), blockers: list(readiness.blockers).map(string) },
     presets: list(raw.presets).map((value) => {

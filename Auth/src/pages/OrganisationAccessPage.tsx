@@ -1,4 +1,8 @@
 import { useEffect, useState } from 'react';
+import { AccessPolicy } from '../components/organisation/AccessPolicy.js';
+import { useEnterpriseTranslation } from '../i18n/enterprise-actions.js';
+import { record, text } from '../utils/enterprise-response.js';
+import { AccessRecovery } from '../components/organisation/AccessRecovery.js';
 import { AccessDomains } from '../components/organisation/AccessDomains.js';
 import { ConnectionForm, providerNames, type ConnectionDraft } from '../components/organisation/ConnectionForm.js';
 import { ConnectionReview } from '../components/organisation/ConnectionReview.js';
@@ -11,10 +15,10 @@ import { useTheme } from '../hooks/use-theme.js';
 import { AccessError, accessMutation, loadOrganisationAccess, openOrganisationAccess,
   type AccessSettings } from '../utils/organisation-access.js';
 
-type View = 'overview' | 'choose' | 'connect' | 'review' | 'domains' | 'recovery';
+type View = 'overview' | 'choose' | 'connect' | 'review' | 'domains' | 'recovery' | 'policy';
 export function OrganisationAccessPage() {
   const { classNames } = useTheme();
-  const t = useAccessTranslation();
+  const t = useAccessTranslation(); const enterpriseT = useEnterpriseTranslation();
   const [settings, setSettings] = useState<AccessSettings | null>(null);
   const [error, setError] = useState<number | null>(null);
   const [saveError, setSaveError] = useState(false);
@@ -123,6 +127,7 @@ export function OrganisationAccessPage() {
               </div><Button variant="secondary" onClick={() => navigate('choose')}>{t('newConnection')}</Button>
             </>}
             <nav aria-label={t('settings')} className="flex flex-col items-start gap-2 border-t border-[var(--uoa-color-border)] pt-5">
+              <Button variant="secondary" onClick={() => navigate('policy')}>{enterpriseT('accessPolicy')}</Button>
               <Button variant="secondary" onClick={() => navigate('domains')}>{t('domains')}</Button>
               <Button variant="secondary" onClick={() => navigate('recovery')}>{t('recoveryTitle')}</Button>
             </nav>
@@ -134,15 +139,21 @@ export function OrganisationAccessPage() {
             </Button>)}</div>
           </section>}
           {view === 'connect' && <ConnectionForm key={connectionId ?? selection.preset} {...selection}
+            parseMetadata={async (xml) => {
+              if (!connectionId) throw new Error('A saved draft is required');
+              const result = await accessMutation(settings, 'POST', `/connections/${encodeURIComponent(connectionId)}/metadata/parse`, { xml });
+              const value = record(result.configuration);
+              if (!Array.isArray(value.certificates) || value.certificates.length < 1 || value.certificates.length > 3) throw new Error('Invalid metadata response');
+              return { entity_id: text(value.entity_id), sso_url: text(value.sso_url), certificate: value.certificates.map(text).join('\n') };
+            }}
             existing={connection} busy={busy} onSave={save} onBack={() => navigate(connection ? 'review' : 'choose')} />}
           {view === 'review' && connection && <ConnectionReview settings={settings} connection={connection} busy={busy}
             onRecovery={() => navigate('recovery')}
             onError={() => setSaveError(true)} mutate={mutate}
             onEdit={() => { setSelection({ preset: connection.preset, protocol: connection.protocol }); navigate('connect'); }} />}
           {view === 'domains' && <AccessDomains settings={settings} busy={busy} mutate={mutate} />}
-          {view === 'recovery' && <section className="space-y-4"><h2 className="text-xl font-semibold">{t('recoveryTitle')}</h2>
-            <p role="status">{t('recoveryIntro')}</p>
-          </section>}
+          {view === 'policy' && <AccessPolicy settings={settings} onConnect={() => navigate('choose')} onSaved={async () => { setSettings(await loadOrganisationAccess()); }} />}
+          {view === 'recovery' && <AccessRecovery settings={settings} />}
         </>}
       </div></Card>
     </main>

@@ -57,6 +57,7 @@ export type PopupQueryParams = {
   teamHint: string | null;
   /** Exact organisation management intent. It grants no authority. */
   managementOrgId?: string | null;
+  enterpriseLinkIntent?: string | null;
   /**
    * `prompt=select_account` from the relying party: the person is adding another account, so the
    * social provider must show its account chooser instead of silently reusing the browser's
@@ -166,6 +167,7 @@ export function parsePopupQueryParams(search: string): PopupQueryParams {
     loginToken: loginToken && loginToken.trim() ? loginToken : null,
     teamHint: teamHint && teamHint.trim() ? teamHint : null,
     managementOrgId: managementOrgId && managementOrgId.trim() && managementOrgId.length <= 100 ? managementOrgId : null,
+    enterpriseLinkIntent: params.get('flow') === 'enterprise_link' && (params.get('enterprise_link_intent')?.length ?? 0) <= 100 ? params.get('enterprise_link_intent') : null,
     selectAccount,
   };
 }

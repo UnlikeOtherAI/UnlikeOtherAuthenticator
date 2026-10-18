@@ -3,6 +3,7 @@ import { AccessStatusForm } from '../components/form/AccessStatusForm.js';
 import React from 'react';
 import { NativeAppConsent } from '../components/form/NativeAppConsent.js';
 
+import { EnterpriseLinkForm } from '../components/form/EnterpriseLinkForm.js';
 import { LoginForm } from '../components/form/LoginForm.js';
 import { SocialButtons } from '../components/form/SocialButtons.js';
 import { useAccessTranslation } from '../hooks/use-access-translation.js';
@@ -15,9 +16,11 @@ export function LoginPage(): React.JSX.Element {
   const { classNames } = useTheme();
   const { t } = useTranslation();
   const accessT = useAccessTranslation();
-  const { config, notice, clientId, managementOrgId } = usePopup();
+  const { config, notice, clientId, managementOrgId, enterpriseLinkIntent } = usePopup();
   const accessStatusEnabled = useAccessStatusEnabled();
   const showEmailPassword = isEmailPasswordEnabled(config);
+
+  if (enterpriseLinkIntent) return <EnterpriseLinkForm intent={enterpriseLinkIntent} />;
 
   return (
     <div>
