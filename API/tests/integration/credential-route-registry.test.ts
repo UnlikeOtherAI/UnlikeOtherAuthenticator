@@ -97,6 +97,17 @@ describe('live credential surface authority boundaries with PostgreSQL', () => {
     await expect(verifyTwoFaChallenge({ token: challenge, sharedSecret, audience })).rejects.toThrow();
     await expect(verifyTwoFaSetupToken({ token: setup, sharedSecret, audience })).rejects.toThrow();
   });
+  it('uses the caller transaction for continuation proof and keeps management independent of org enforcement', async () => {
+    const f = await fixture(); const org = await organisation(f, 'required_for_all_members');
+    const challenge = await signTwoFaChallenge({ userId: f.user.id, credentialEpoch: 0, authMethod: 'email_password',
+      authenticationEvidenceId: f.id, managementIntentId: 'signed-management-intent', orgId: org.id,
+      domain: f.domain, configUrl: f.configUrl, redirectUrl: f.redirectUrl, sharedSecret, audience });
+    stores.db = null;
+    try {
+      await expect(db.$transaction(prisma => verifyTwoFaChallenge({ token: challenge, sharedSecret, audience, prisma })))
+        .resolves.toMatchObject({ managementIntentId: 'signed-management-intent', authenticationEvidenceId: f.id });
+    } finally { stores.db = db; }
+  });
   it('refuses missing proof at floor one without rebasing or minting new evidence', async () => {
     const f = await fixture(); await db.enterpriseProductReadiness.create({ data: { clientDomain: f.domain, minimumAssuranceVersion: 1 } });
     const count = await db.authenticationEvidence.count({ where: { userId: f.user.id } });

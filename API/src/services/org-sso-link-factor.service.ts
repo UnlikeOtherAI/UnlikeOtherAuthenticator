@@ -46,7 +46,7 @@ export async function startEnterpriseAccountLink(input: LinkInput & { loginToken
     await lockEnterpriseOutbox(tx);
     await lockProductTeamPolicyShared(tx);
     const { context } = await requireEnterpriseLink(input, tx);
-    const session = await verifyLoginSession({ token: input.loginToken, config: input.config, configUrl: input.configUrl,
+    const session = await verifyLoginSession({ prisma: tx, token: input.loginToken, config: input.config, configUrl: input.configUrl,
       sharedSecret: requireEnv('SHARED_SECRET').SHARED_SECRET, audience: LOGIN_SESSION_AUDIENCE });
     if (!session.authenticationEvidenceId || session.redirectUrl !== context.redirect_url ||
       session.codeChallenge !== context.code_challenge || session.state !== context.state) denied();
