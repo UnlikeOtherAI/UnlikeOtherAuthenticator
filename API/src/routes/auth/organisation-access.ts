@@ -1,5 +1,8 @@
 import { EnterprisePolicyPatch, updateEnterprisePolicy } from '../../services/org-sso-policy-management.service.js';
 import { registerOrganisationAccessStart } from './organisation-access-start.js';
+import { registerOrganisationAccessScim } from './organisation-access-scim.js';
+import { lockProductTeamPolicyShared } from '../../services/product-team-policy-lock.service.js';
+import { lockAndWithdrawConnectionMemberships } from '../../services/membership-provenance.service.js';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { decodeJwt } from 'jose';
@@ -56,9 +59,11 @@ export function registerOrganisationAccessRoutes(app: FastifyInstance): void {
     session: Awaited<ReturnType<typeof managementSession>>, tx: Prisma.TransactionClient,
   ) => Promise<T>) => getAdminPrisma().$transaction(async (tx) => {
     await lockEnterpriseOutbox(tx);
+    await lockProductTeamPolicyShared(tx);
     const session = await managementSession(request.cookies[MANAGEMENT_COOKIE], csrf(request), true, tx);
     return run(session, tx);
-  });
+  }, { timeout: 30000 });
+  registerOrganisationAccessScim(app, mutation, limiter);
   app.post(`${base}/sso/connections`, { preHandler: [requireSameOriginBrowserRequest, limiter] }, async (request, reply) => {
     const body = Connection.parse(request.body);
     return reply.header('Cache-Control', 'no-store').send(await mutation(request,
@@ -90,7 +95,12 @@ export function registerOrganisationAccessRoutes(app: FastifyInstance): void {
           throw new AppError('FORBIDDEN', 403, 'SSO_ACTIVATION_NOT_READY');
         }
       }
-      await tx.orgSsoConnection.update({ where: { id }, data: { status: body.status, generation: { increment: 1 } } });
+      await tx.orgSsoConnection.update({ where: { id }, data: { status: body.status, generation: { increment: 1 },
+        ...(body.status === 'active' ? {} : { scimEnabled: false, scimRevision: { increment: 1 } }) } });
+      if (body.status !== 'active') {
+        await tx.scimConnectionToken.updateMany({ where: { connectionId: id, revokedAt: null }, data: { revokedAt: new Date() } });
+        await lockAndWithdrawConnectionMemberships(id, tx);
+      }
       await revokeEnterpriseScope({ scope: 'connection', clientDomain: session.clientDomain, orgId: session.orgId,
         connectionId: id, revision: row.generation + 1 }, tx);
       return { ok: true };

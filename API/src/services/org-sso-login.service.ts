@@ -45,6 +45,7 @@ export async function finishEnterpriseLogin(connectionId: string, flowId: string
     const admitted = await admitEnterpriseIdentity({ ...current, identity, config, context }, tx);
     if (admitted.kind === 'link_required') {
       const link = await tx.orgSsoLinkIntent.create({ data: { connectionId, clientDomain: current.connection.clientDomain,
+        candidateUserIds: admitted.candidateUserIds,
         orgId: current.connection.orgId, revision: flow.revision, generation: current.connection.generation,
         flowId, browserHash: flow.browserHash,
         // Encrypt even temporary provider claims; this value is never returned to the browser.

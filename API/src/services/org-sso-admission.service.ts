@@ -9,6 +9,7 @@ import { replaceManagedMemberships, type ManagedMembershipGrant } from './member
 import type { EnterpriseAuthorizationContext } from './enterprise-authorization-context.service.js';
 import { lockAndAssertAuthenticationEpoch } from './authentication-epoch.service.js';
 import { lockTeamMembershipRows } from './team-scope.service.js';
+import { assertEnterpriseIdentityNotErased, assertEnterpriseProvisioningActive } from './enterprise-identity-status.service.js';
 
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
 function denied(code: string): never { throw new AppError('FORBIDDEN', 403, code); }
@@ -19,6 +20,7 @@ export async function admitEnterpriseIdentity(input: { connection: OrgSsoConnect
 }, tx: Prisma.TransactionClient) {
   const { connection, identity, policy } = input;
   const tuple = { connectionId: connection.id, issuer: identity.issuer, tenant: identity.tenant, subject: identity.subject };
+  await assertEnterpriseIdentityNotErased(tuple, tx);
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`enterprise-subject:${JSON.stringify(tuple)}`},0))`;
   let external = await tx.externalIdentity.findUnique({ where: { connectionId_issuer_tenant_subject: tuple } });
   if (external && (external.status !== 'ACTIVE' || external.orgId !== connection.orgId ||
@@ -29,8 +31,8 @@ export async function admitEnterpriseIdentity(input: { connection: OrgSsoConnect
     if (!identity.email || !identity.emailVerified) denied('SSO_VERIFIED_EMAIL_REQUIRED');
     // An email match only asks the person to prove their existing account. It
     // never chooses that account, transfers membership, or mutates its profile.
-    const existing = await tx.user.findFirst({ where: { email: identity.email }, select: { id: true } });
-    if (existing) return { kind: 'link_required' as const };
+    const existing = await tx.user.findMany({ where: { email: identity.email }, select: { id: true }, take: 100 });
+    if (existing.length) return { kind: 'link_required' as const, candidateUserIds: existing.map((row) => row.id) };
     const domain = identity.email.split('@')[1]?.toLowerCase();
     const claim = domain ? await tx.organisationEmailDomain.findFirst({ where: {
       clientDomain: connection.clientDomain, orgId: connection.orgId, emailDomain: domain,
@@ -40,12 +42,14 @@ export async function admitEnterpriseIdentity(input: { connection: OrgSsoConnect
     if (!claim || !policy.jitEnabled || !policy.defaultTeamId) denied('SSO_JIT_NOT_ALLOWED');
     const canonical = buildUserIdentity({ userScope: input.config.user_scope, email: identity.email, domain: connection.clientDomain });
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`enterprise-user-key:${canonical.userKey}`},0))`;
-    if (await tx.user.findUnique({ where: { userKey: canonical.userKey }, select: { id: true } })) return { kind: 'link_required' as const };
+    const raced = await tx.user.findUnique({ where: { userKey: canonical.userKey }, select: { id: true } });
+    if (raced) return { kind: 'link_required' as const, candidateUserIds: [raced.id] };
     user = await tx.user.create({ data: canonical });
     external = await tx.externalIdentity.create({ data: { ...tuple, userId: user.id, clientDomain: connection.clientDomain,
       orgId: connection.orgId, identityScope: input.config.user_scope, linkedVia: 'verified_domain_jit', domainClaimId: claim.id } });
   }
   if (!external || !user) denied('SSO_IDENTITY_UNAVAILABLE');
+  await assertEnterpriseProvisioningActive(connection.id, external.id, user.id, tx);
   await lockAndAssertAuthenticationEpoch({ userId: user.id, domain: connection.clientDomain,
     credentialEpoch: user.tokenVersion }, { prisma: tx });
   await lockTeamMembershipRows({ userId: user.id, orgId: connection.orgId }, { prisma: tx });

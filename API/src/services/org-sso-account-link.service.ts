@@ -11,6 +11,7 @@ import { requireAuthenticationEvidence } from './authentication-evidence.service
 import { admitEnterpriseIdentity } from './org-sso-admission.service.js';
 import { finalizeEnterpriseAdmission } from './org-sso-login-finalize.service.js';
 import { lockAndAssertAuthenticationEpoch } from './authentication-epoch.service.js';
+import { assertEnterpriseIdentityNotErased } from './enterprise-identity-status.service.js';
 
 function denied(): never { throw new AppError('UNAUTHORIZED', 401, 'SSO_ACCOUNT_LINK_PROOF_REQUIRED'); }
 const Identity = z.object({ issuer: z.string().min(1).max(2000), tenant: z.string().min(1).max(256),
@@ -60,6 +61,7 @@ tx: Prisma.TransactionClient) {
   } }) : null;
   if (!member && (!policy.jitEnabled || !policy.defaultTeamId || !claim)) denied();
   const tuple = { connectionId: connection.id, issuer: identity.issuer, tenant: identity.tenant, subject: identity.subject };
+  await assertEnterpriseIdentityNotErased(tuple, tx);
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`enterprise-subject:${JSON.stringify(tuple)}`},0))`;
   const existing = await tx.externalIdentity.findUnique({ where: { connectionId_issuer_tenant_subject: tuple } });
   if (existing && (existing.userId !== input.userId || existing.status !== 'ACTIVE' || existing.identityScope !== input.config.user_scope)) denied();
