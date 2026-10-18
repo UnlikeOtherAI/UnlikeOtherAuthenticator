@@ -1,3 +1,4 @@
+import { credentialArtifactSource } from '../credential-artifact.service.js';
 import { authorizeCredentialSurface } from '../credential-route-registry.service.js';
 import { publicCredentialSource } from './credential-source.service.js';
 import { createLocalJWKSet, jwtVerify } from 'jose';
@@ -29,7 +30,7 @@ export async function verifyPublicAccountToken(authorization: string | undefined
     if (payload.domain !== config.domain) throw new Error('domain');
     validatePublicScopes(payload.scope, client.scopes);
     if (!payload.scope.split(' ').includes(scope)) throw new AppError('FORBIDDEN', 403, 'INSUFFICIENT_SCOPE');
-    return { ...publicCredentialSource(payload), userId: payload.sub, domain: config.domain, credentialEpoch: payload.tv,
+    return { ...publicCredentialSource(payload), artifact: credentialArtifactSource(payload, 'public'), userId: payload.sub, domain: config.domain, credentialEpoch: payload.tv,
       expiresAt: payload.exp, twoFaCompleted: payload.twofa === true, config, clientId: payload.client_id };
   } catch (error) {
     if (error instanceof AppError && error.statusCode === 403) throw error;
@@ -47,7 +48,7 @@ export async function authorizePublicAccount(
   if (account.expiresAt <= Date.now() / 1000) throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
   await authorizeCredentialSurface(surface, { userId: account.userId, clientDomain: account.domain,
     credentialEpoch: account.credentialEpoch, assuranceId: account.assuranceId,
-    authenticationEvidenceId: account.authenticationEvidenceId, allowConsumedEvidence: true }, prisma);
+    authenticationEvidenceId: account.authenticationEvidenceId, allowConsumedEvidence: true, artifact: account.artifact }, prisma);
   const user = await prisma.user.findUnique({ where: { lifecycleStatus: 'ACTIVE', id: account.userId }, select: { twoFaEnabled: true } });
   const policy = await resolveTwoFaPolicy({ config: account.config, userId: account.userId }, { prisma });
   if (!user || !isTwoFaAuthenticationSufficient({ policy, twoFaEnabled: user.twoFaEnabled, twoFaCompleted: account.twoFaCompleted })) {

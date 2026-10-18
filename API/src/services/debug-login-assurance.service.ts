@@ -1,3 +1,4 @@
+import { authorizeCredentialSurface } from './credential-route-registry.service.js';
 import type { PrismaClient, RefreshToken, SessionAssurance } from '@prisma/client';
 import { issueSessionAssurance, requireProductAssurance } from './session-assurance.service.js';
 import { sealEnterpriseSecret } from './enterprise-secret.service.js';
@@ -5,6 +6,9 @@ import { sealEnterpriseSecret } from './enterprise-secret.service.js';
 /** Debug access is a child of the issuing session, never a new primary sign-in. */
 export async function debugLoginSourceAssurance(source: RefreshToken, db: PrismaClient) {
   const user = await db.user.findUnique({ where: { id: source.userId }, select: { tokenVersion: true } });
+  await authorizeCredentialSurface('debug_source', { assuranceId: source.assuranceId ?? undefined,
+    userId: source.userId, clientDomain: source.domain, credentialEpoch: user?.tokenVersion ?? -1,
+    orgId: source.orgId, teamId: source.teamId }, db);
   return requireProductAssurance({ id: source.assuranceId ?? undefined, userId: source.userId,
     clientDomain: source.domain, credentialEpoch: user?.tokenVersion ?? -1,
     orgId: source.orgId, teamId: source.teamId }, db);

@@ -1,3 +1,5 @@
+import { authorizeCredentialSurface } from './credential-route-registry.service.js';
+import { credentialArtifactSource } from './credential-artifact.service.js';
 import type { PrismaClient } from '@prisma/client';
 import { getAdminPrisma } from '../db/prisma.js';
 import { runInTransaction } from '../db/tenant-context.js';
@@ -46,6 +48,10 @@ export async function validateSessionBroker(params: { token: string; targetConfi
       if (isAuthenticationEpochMismatchError(error)) throw forbidden();
       throw error;
     }
+    const sourceProof = await authorizeCredentialSurface('broker_source', { userId: subject.sub,
+      clientDomain: SESSION_BROKER_SOURCE, credentialEpoch: subject.tv, assuranceId: subject.assurance_id,
+      orgId: subject.active.orgId, teamId: subject.active.teamId,
+      artifact: credentialArtifactSource(subject, 'session') }, tx);
     const [user, role, targetRole, org, targetOrg] = await Promise.all([
       tx.user.findUnique({ where: { id: subject.sub }, select: { id: true } }),
       tx.domainRole.findUnique({ where: { domain_userId: { domain: SESSION_BROKER_SOURCE, userId: subject.sub } },
@@ -64,7 +70,7 @@ export async function validateSessionBroker(params: { token: string; targetConfi
       assertNotBannedAtLogin({ userId: subject.sub, domain: targetDomain }, { prisma: tx }),
     ]);
     if (subject.exp <= (deps.now?.() ?? Math.floor(Date.now() / 1000))) throw forbidden();
-    return { sub: subject.sub, expires_at: new Date(subject.exp * 1000).toISOString(),
+    return { sub: subject.sub, expires_at: new Date(Math.min(subject.exp * 1000, sourceProof?.expiresAt.getTime() ?? Infinity)).toISOString(),
       active: { orgId: subject.active.orgId, teamId: subject.active.teamId } };
   });
 }

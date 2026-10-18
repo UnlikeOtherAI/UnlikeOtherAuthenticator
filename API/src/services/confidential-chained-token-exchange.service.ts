@@ -3,8 +3,9 @@ import type { PrismaClient } from '@prisma/client';
 import { createLocalJWKSet, decodeProtectedHeader, jwtVerify } from 'jose';
 import { z } from 'zod';
 
-import { getEnv, getPublicBaseUrl } from '../config/env.js';
-import { requireProductAssurance } from './session-assurance.service.js';
+import { getPublicBaseUrl } from '../config/env.js';
+import { credentialArtifactSource } from './credential-artifact.service.js';
+import { authorizeCredentialSurface, authorizeCredentialSurfaceWhenAvailable } from './credential-route-registry.service.js';
 import { getAdminPrisma } from '../db/prisma.js';
 import { runInTransaction } from '../db/tenant-context.js';
 import { createKeyedRateLimiter } from '../middleware/rate-limiter.js';
@@ -212,9 +213,10 @@ export async function verifyChainedSubjectAccessToken(
       ...claims,
       ...(act === undefined ? {} : { act: parseActorChain(act) }),
     };
-    if (getEnv().DATABASE_URL) await requireProductAssurance({ id: parsed.assurance_id,
+    const artifact = credentialArtifactSource(parsed, 'session');
+    await authorizeCredentialSurfaceWhenAvailable('chained_subject', { assuranceId: parsed.assurance_id, artifact, method: artifact.method,
       userId: parsed.sub, credentialEpoch: parsed.tv, clientDomain: originalIdentityDomain(verified),
-      orgId: parsed.active.orgId, teamId: parsed.active.teamId }, deps.prisma ?? getAdminPrisma());
+      orgId: parsed.active.orgId, teamId: parsed.active.teamId }, deps.prisma);
     return verified;
   } catch (error) {
     if (error instanceof AppError && error.statusCode === 503) throw error;
@@ -319,6 +321,10 @@ async function exchangeConfidentialChainedAccessTokenInsidePolicyLock(
     if (isAuthenticationEpochMismatchError(error)) throw subjectForbidden();
     throw error;
   }
+  const sourceProof = await authorizeCredentialSurface('chained_delegation', { userId: subject.sub,
+    clientDomain: identityDomain, credentialEpoch, assuranceId: subject.assurance_id,
+    orgId: subject.active.orgId, teamId: subject.active.teamId,
+    artifact: credentialArtifactSource(subject, 'session') }, prisma);
   const [user, domainRole, currentOrg] = await Promise.all([
     prisma.user.findUnique({
       where: { lifecycleStatus: 'ACTIVE', id: subject.sub },
@@ -359,7 +365,8 @@ async function exchangeConfidentialChainedAccessTokenInsidePolicyLock(
   if (!org.teams.includes(subject.active.teamId)) throw subjectForbidden();
 
   const now = deps.now?.() ?? Math.floor(Date.now() / 1000);
-  const expiresInSeconds = Math.min(CONFIDENTIAL_ACCESS_TOKEN_TTL_SECONDS, subject.exp - now);
+  const expiresInSeconds = Math.min(CONFIDENTIAL_ACCESS_TOKEN_TTL_SECONDS, subject.exp - now,
+    sourceProof ? Math.floor(sourceProof.expiresAt.getTime() / 1000) - now : Number.POSITIVE_INFINITY);
   if (expiresInSeconds <= 0) throw invalidSubjectToken();
 
   const actor: ConfidentialActorChain = {

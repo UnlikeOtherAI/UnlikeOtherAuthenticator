@@ -205,7 +205,7 @@ export async function signConfidentialAccessToken(
   const { privateKey, kid } = await load();
   const payload: Record<string, unknown> = {
     tv: claims.credentialEpoch,
-    ...(claims.assuranceId ? { assurance_id: claims.assuranceId } : {}),
+    ...(claims.assuranceId ? { assurance_id: claims.assuranceId, assurance_version: 1 } : {}),
     email: claims.email,
     source_domain: claims.sourceDomain,
     azp: claims.sourceDomain,

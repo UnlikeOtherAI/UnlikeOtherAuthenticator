@@ -1,3 +1,4 @@
+import { assertCredentialArtifactProof, type CredentialArtifactSource } from './credential-artifact.service.js';
 import { assertIndependentSourceStillAdmitted } from './credential-admission.service.js';
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { getEnv } from '../config/env.js';
@@ -11,10 +12,12 @@ import { assertOrgAccessPolicy } from './org-sso-policy.service.js';
 export const credentialRouteRegistry = {
   configured_access: { authority: 'global', source: 'session' },
   organisation_access: { authority: 'org', source: 'session' },
-  confidential_subject: { authority: 'org', source: 'session' },
+  confidential_subject: { authority: 'context', source: 'session' },
   chained_subject: { authority: 'org', source: 'session' },
+  chained_delegation: { authority: 'global', source: 'session' },
+  scoped_action: { authority: 'org', source: 'session' },
   billing_actor: { authority: 'org', source: 'session' },
-  broker_source: { authority: 'org', source: 'session' },
+  broker_source: { authority: 'global', source: 'session' },
   configured_authorization: { authority: 'continuation', source: 'evidence' },
   public_authorization: { authority: 'global', source: 'evidence' },
   login_chooser: { authority: 'continuation', source: 'evidence' },
@@ -34,7 +37,7 @@ type Db = PrismaClient | Prisma.TransactionClient;
 export type CredentialAuthorityInput = {
   userId: string; clientDomain: string; credentialEpoch: number; orgId?: string | null; teamId?: string | null;
   assuranceId?: string; assuranceReference?: string; authenticationEvidenceId?: string; method?: string;
-  allowConsumedEvidence?: boolean;
+  allowConsumedEvidence?: boolean; artifact?: CredentialArtifactSource;
 };
 function denied(): never { throw new AppError('FORBIDDEN', 403, 'INDEPENDENT_REAUTH_REQUIRED'); }
 
@@ -44,7 +47,8 @@ export async function authorizeCredentialSurface(surface: CredentialSurface, inp
   const familySource = Boolean(input.assuranceId || input.assuranceReference);
   if ((familySource && input.authenticationEvidenceId) || (familySource && rule.source === 'evidence') ||
     (input.authenticationEvidenceId && rule.source === 'session')) denied();
-  let source: { provenance: string; expiresAt: Date; orgId: string | null; teamId: string | null } | null = null;
+  let source: { id: string; method: string; provenance: string; expiresAt: Date; orgId: string | null; teamId: string | null;
+    connectionId: string | null; amr: string[] } | null = null;
   if (input.authenticationEvidenceId) {
     const proof = await requireAuthenticationEvidence({ id: input.authenticationEvidenceId, userId: input.userId,
       clientDomain: input.clientDomain, credentialEpoch: input.credentialEpoch, allowConsumed: input.allowConsumedEvidence }, db);
@@ -59,12 +63,13 @@ export async function authorizeCredentialSurface(surface: CredentialSurface, inp
   if (!source && ['sso', 'sso_recovery', 'recovery'].includes(input.method ?? '')) denied();
   if (!source && input.method) await assertIndependentSourceStillAdmitted({ userId: input.userId,
     methods: [input.method], personalFactorCompleted: false }, db);
-  if (source && rule.authority === 'global' && source.provenance !== 'independent') denied();
+  if (input.artifact) assertCredentialArtifactProof(input.artifact, source);
+  if (source && (rule.authority === 'global' || (rule.authority === 'context' && !input.orgId)) && source.provenance !== 'independent') denied();
   if (source && source.provenance !== 'independent' && ((input.orgId && source.orgId !== input.orgId) ||
     (input.teamId && source.teamId && source.teamId !== input.teamId))) denied();
   if (rule.authority === 'org' && !input.orgId) denied();
   if (input.orgId && rule.authority !== 'global') await assertOrgAccessPolicy({ userId: input.userId,
-    domain: input.clientDomain, orgId: input.orgId, assuranceId: input.assuranceId,
+    domain: input.clientDomain, orgId: input.orgId, assuranceId: input.assuranceId ?? (input.assuranceReference ? source?.id : undefined),
     authenticationEvidenceId: input.authenticationEvidenceId }, db);
   return source;
 }

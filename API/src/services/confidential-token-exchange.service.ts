@@ -1,10 +1,12 @@
+import { credentialArtifactSource } from './credential-artifact.service.js';
+import { authorizeCredentialSurfaceWhenAvailable } from './credential-route-registry.service.js';
 import { requireIdentityEmail } from './entity-lifecycle.service.js';
 import type { PrismaClient } from '@prisma/client';
 import { decodeJwt, decodeProtectedHeader, jwtVerify } from 'jose';
 import { z } from 'zod';
 
-import { getEnv, getPublicBaseUrl } from '../config/env.js';
-import { requireProductAssurance, validateSessionAssurance } from './session-assurance.service.js';
+import { getPublicBaseUrl } from '../config/env.js';
+import { validateSessionAssurance } from './session-assurance.service.js';
 import { getAdminPrisma } from '../db/prisma.js';
 import { runInTransaction } from '../db/tenant-context.js';
 import { createKeyedRateLimiter } from '../middleware/rate-limiter.js';
@@ -154,10 +156,12 @@ export async function verifyConfidentialSubjectToken(
       throw invalidSubjectToken();
     }
 
-    const assurance = getEnv().DATABASE_URL ? await requireProductAssurance({
-      reference: assertion.assurance_ref, userId: assertion.sub, credentialEpoch: assertion.tv,
+    const artifact = credentialArtifactSource(assertion, 'reference');
+    const assurance = await authorizeCredentialSurfaceWhenAvailable('confidential_subject', {
+      artifact, method: artifact.method,
+      assuranceReference: assertion.assurance_ref, userId: assertion.sub, credentialEpoch: assertion.tv,
       clientDomain: sourceDomain, orgId: assertion.active?.orgId, teamId: assertion.active?.teamId,
-    }, deps.prisma ?? getAdminPrisma()) : null;
+    }, deps.prisma);
     return { ...assertion, verifiedAssuranceId: assurance?.id };
   } catch (error) {
     if (error instanceof PartnerJwksUnavailableError) throw error;
