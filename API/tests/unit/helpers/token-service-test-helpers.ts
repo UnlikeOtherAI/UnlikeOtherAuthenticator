@@ -1,3 +1,4 @@
+import type { PrismaClient } from '@prisma/client';
 import { createHash, createHmac } from 'node:crypto';
 
 import { afterEach, beforeEach, vi } from 'vitest';
@@ -69,4 +70,24 @@ export function useTokenServiceTestEnv(): void {
     vi.restoreAllMocks();
     vi.clearAllMocks();
   });
+}
+
+/** Explicit pre-assurance client fixture: only an actually created family can be resolved. */
+export function createLegacyTokenCodeStore(): PrismaClient {
+  const create = vi.fn<(args: { data: Record<string, unknown> }) => Promise<{ id: string }>>();
+  const refreshToken = { create, findUnique: vi.fn(async ({ where }: { where: { tokenHash: string } }) => {
+    const data = create.mock.calls.at(-1)?.[0].data;
+    return data?.tokenHash === where.tokenHash ? { ...data, assuranceId: null, encryptedAssuranceReference: null } : null;
+  }) };
+  return {
+    organisation: { findUnique: vi.fn().mockResolvedValue({ lifecycleStatus: 'ACTIVE' }) },
+    $queryRaw: vi.fn().mockResolvedValue([]),
+    authorizationCode: { findUnique: vi.fn(), updateMany: vi.fn() },
+    enterpriseProductReadiness: { findUnique: vi.fn().mockResolvedValue({ minimumAssuranceVersion: 0 }) },
+    refreshToken, user: { findUnique: vi.fn() }, domainRole: { findUnique: vi.fn() },
+    orgSsoPolicy: { findUnique: vi.fn().mockResolvedValue(null) },
+    orgMember: { findFirst: vi.fn(), findMany: vi.fn() }, teamMember: { findMany: vi.fn() },
+    teamInvite: { findMany: vi.fn() }, groupMember: { findMany: vi.fn() },
+    clientDomain: { findUnique: vi.fn().mockResolvedValue(null) }, billingAppKey: { findMany: vi.fn().mockResolvedValue([]) },
+  } as unknown as PrismaClient;
 }

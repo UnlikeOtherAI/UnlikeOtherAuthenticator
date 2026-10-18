@@ -1,3 +1,4 @@
+import { recordIndependentAuthentication } from '../authentication-evidence.service.js';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { getEnv, getPublicBaseUrl } from '../../config/env.js';
 import { AppError } from '../../utils/errors.js';
@@ -58,7 +59,12 @@ export async function handlePublicGoogleCallback(request: FastifyRequest, reply:
     await lockAndAssertAuthenticationEpoch({ userId: result.userId, domain: config.domain, credentialEpoch: result.credentialEpoch }, { prisma: tx });
     await assertNotBannedAtLogin({ userId: result.userId, domain: config.domain, ip: request.ip }, { prisma: tx });
     await assertEmailDomainAllowedForLogin({ userId: result.userId, domain: config.domain }, { prisma: tx });
-    await tx.nativeOAuthFlow.update({ where: { id: state }, data: { userId: result.userId, credentialEpoch: result.credentialEpoch } });
+    const authenticationEvidenceId = await recordIndependentAuthentication({ userId: result.userId,
+      credentialEpoch: result.credentialEpoch, method: 'google', verifiedEvent: { kind: 'provider', authenticatedAt: null },
+      config: current.config, configUrl: 'urn:uoa:mcp', redirectUrl: signed.context.redirect_uri,
+      codeChallenge: signed.context.code_challenge }, tx);
+    await tx.nativeOAuthFlow.update({ where: { id: state }, data: { userId: result.userId,
+      credentialEpoch: result.credentialEpoch, authenticationEvidenceId } });
   });
   bindPublicCompletion(request, reply, state);
   // Render a document before the next request: a cross-site redirect chain would
@@ -91,12 +97,13 @@ export async function completePublicSocial(request: FastifyRequest, body: { flow
     await assertNotBannedAtLogin({ userId: ticket.userId, domain: config.domain, ip: request.ip }, { prisma: tx });
     await assertEmailDomainAllowedForLogin({ userId: ticket.userId, domain: config.domain }, { prisma: tx });
     const factor = await completePublicSecondFactor({ ...ticket, twoFaEnabled: user.twoFaEnabled, config,
-      code: body.code, setupToken: body.setup_token }, asPrismaClient(tx));
+      authenticationEvidenceId: ticket.authenticationEvidenceId ?? undefined, authMethod: 'google', code: body.code, setupToken: body.setup_token }, asPrismaClient(tx));
     if (factor.response) return factor.response;
     const consumed = await tx.nativeOAuthFlow.updateMany({ where: { id: ticket.id, usedAt: null, expiresAt: { gt: new Date() } }, data: { usedAt: new Date() } });
     if (consumed.count !== 1) throw new AppError('UNAUTHORIZED', 401);
     const q = ticket.context;
     const gate = await finalizePublicOAuthAuthorizationWithSignatures({ userId: ticket.userId,
+      authenticationEvidenceId: ticket.authenticationEvidenceId ?? undefined,
       credentialEpoch: ticket.credentialEpoch, domain: config.domain, oauthClientId: client.clientId,
       redirectUrl: q.redirect_uri, codeChallenge: q.code_challenge, scope: q.scope, state: q.state,
       resource: q.resource, rememberMe: false, authMethod: 'google', twoFaCompleted: factor.completed === true,

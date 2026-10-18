@@ -53,6 +53,9 @@ describe('bounded enterprise lifecycle maintenance with real PostgreSQL', () => 
   });
   it('bounds expired replay cleanup and preserves a live account-link child of an expired protocol flow', async () => {
     await db.orgSsoReplay.createMany({ data: Array.from({ length: 201 }, (_, index) => ({ key: `expired-${index}`, value: 'opaque', expiresAt: new Date(0) })) });
+    await db.nativeOAuthFlow.createMany({ data: Array.from({ length: 201 }, (_, index) => ({
+      id: `expired-native-${index}`, browserHash: 'hash', context: {}, expiresAt: new Date(0) })) });
+    await db.nativeOAuthFlow.create({ data: { id: 'live-native', browserHash: 'hash', context: {}, expiresAt: new Date(Date.now() + 60000) } });
     const flow = `flow-${suffix}`;
     await db.orgSsoFlow.create({ data: { id: flow, connectionId: connection, revision: 1, browserHash: 'hash', nonce: 'nonce',
       encryptedVerifier: 'sealed', mode: 'login', context: {}, expiresAt: new Date(0) } });
@@ -60,6 +63,8 @@ describe('bounded enterprise lifecycle maintenance with real PostgreSQL', () => 
       orgId: org, flowId: flow, browserHash: 'hash', identity: {}, context: {}, expiresAt: new Date(Date.now() + 60000) } });
     await pruneEnterpriseTransients(db);
     expect(await db.orgSsoReplay.count()).toBe(1);
+    expect(await db.nativeOAuthFlow.count()).toBe(2);
+    expect(await db.nativeOAuthFlow.findUnique({ where: { id: 'live-native' } })).not.toBeNull();
     expect(await db.orgSsoFlow.findUnique({ where: { id: flow } })).not.toBeNull();
     await db.orgSsoLinkIntent.updateMany({ data: { expiresAt: new Date(0) } });
     await pruneEnterpriseTransients(db);

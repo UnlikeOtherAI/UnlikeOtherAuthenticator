@@ -1,3 +1,5 @@
+import { authorizeCredentialSurface } from '../credential-route-registry.service.js';
+import { publicCredentialTtl } from './credential-source.service.js';
 import { requireIdentityEmail } from '../entity-lifecycle.service.js';
 // Public-client token exchange for the MCP profile (brief §22.14): redeem an
 // authorization code (PKCE, no client secret) for a resource-bound RS256 access
@@ -89,10 +91,25 @@ export async function exchangeOAuthCodeForAccessToken(
     prisma: prisma as Parameters<typeof isPlatformSuperuser>[0]['prisma'],
   });
 
+  const evidence = await authorizeCredentialSurface('public_authorization', { userId: consumed.userId,
+    clientDomain: params.domain, credentialEpoch: consumed.credentialEpoch,
+    authenticationEvidenceId: consumed.authenticationEvidenceId }, prisma);
+  const refresh = isNativeRefreshClient(client) ? await issueNativeRefreshToken({ userId: consumed.userId,
+    clientId: params.clientId, domain: params.domain, credentialEpoch: consumed.credentialEpoch,
+    authenticationEvidenceId: consumed.authenticationEvidenceId, twoFaCompleted: consumed.twoFaCompleted,
+    scope: consumed.scope, resource: consumed.resource }, prisma) : undefined;
+  if (!refresh && consumed.authenticationEvidenceId) {
+    const used = await prisma.authenticationEvidence.updateMany({ where: { id: consumed.authenticationEvidenceId,
+      consumedAt: null, revokedAt: null }, data: { consumedAt: new Date() } });
+    if (used.count !== 1) throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_EVIDENCE_REQUIRED');
+  }
   const issuer = getPublicBaseUrl();
-  const ttlSeconds = accessTokenTtlSeconds();
+  const ttlSeconds = publicCredentialTtl(accessTokenTtlSeconds(), refresh?.assuranceExpiresAt
+    ? new Date(refresh.assuranceExpiresAt) : evidence?.expiresAt);
   const accessToken = await signMcpAccessToken({
     subject: consumed.userId,
+    assuranceId: refresh?.assuranceId,
+    authenticationEvidenceId: refresh?.assuranceId ? undefined : consumed.authenticationEvidenceId,
     credentialEpoch: consumed.credentialEpoch,
     twoFaCompleted: consumed.twoFaCompleted,
     email: requireIdentityEmail(user.email),
@@ -106,21 +123,7 @@ export async function exchangeOAuthCodeForAccessToken(
     scope: consumed.scope ?? undefined,
   });
 
-  if (!isNativeRefreshClient(client)) return { accessToken, expiresInSeconds: ttlSeconds };
-  // consumeOAuthCode holds the user-global and user/domain locks and asserted the code's
-  // credential epoch, so the new family is linearized with every credential revocation.
-  const refresh = await issueNativeRefreshToken(
-    {
-      userId: consumed.userId,
-      clientId: params.clientId,
-      domain: params.domain,
-      credentialEpoch: consumed.credentialEpoch,
-      twoFaCompleted: consumed.twoFaCompleted,
-      scope: consumed.scope,
-      resource: consumed.resource,
-    },
-    prisma,
-  );
+  if (!refresh) return { accessToken, expiresInSeconds: ttlSeconds };
   return {
     accessToken,
     expiresInSeconds: ttlSeconds,

@@ -733,6 +733,7 @@ model NativeOAuthFlow {
   browserHash String @map("browser_hash")
   context Json
   userId String? @map("user_id")
+  authenticationEvidenceId String? @map("authentication_evidence_id")
   credentialEpoch Int? @map("credential_epoch")
   callbackUsedAt DateTime? @map("callback_used_at")
   usedAt DateTime? @map("used_at")

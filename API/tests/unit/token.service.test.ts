@@ -1,11 +1,11 @@
-import type { PrismaClient } from '@prisma/client';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { createClientId } from '../../src/utils/hash.js';
 import { exchangeAuthorizationCodeForTokens } from '../../src/services/token.service.js';
 import { verifyAccessToken } from '../../src/services/access-token.service.js';
 import {
   hashAuthorizationCode,
+  createLegacyTokenCodeStore,
   makeConfig,
   TEST_CODE_CHALLENGE,
   TEST_CODE_VERIFIER,
@@ -34,44 +34,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
     const configUrl = 'https://client.example.com/auth-config';
     const redirectUrl = 'https://client.example.com/oauth/callback';
 
-    const prisma = {
-      organisation: { findUnique: vi.fn().mockResolvedValue({ lifecycleStatus: 'ACTIVE' }) },
-      $queryRaw: vi.fn().mockResolvedValue([]),
-      authorizationCode: {
-        findUnique: vi.fn(),
-        updateMany: vi.fn(),
-      },
-      enterpriseProductReadiness: { findUnique: vi.fn().mockResolvedValue(null) },
-      refreshToken: {
-        create: vi.fn(),
-      },
-      user: {
-        findUnique: vi.fn(),
-      },
-      domainRole: {
-        findUnique: vi.fn(),
-      },
-      orgSsoPolicy: { findUnique: vi.fn().mockResolvedValue(null) },
-    orgMember: {
-        findFirst: vi.fn(),
-        findMany: vi.fn(),
-      },
-      teamMember: {
-        findMany: vi.fn(),
-      },
-      teamInvite: {
-        findMany: vi.fn(),
-      },
-      groupMember: {
-        findMany: vi.fn(),
-      },
-      clientDomain: {
-        findUnique: vi.fn(),
-      },
-      billingAppKey: {
-        findMany: vi.fn(),
-      },
-    } as unknown as PrismaClient;
+    const prisma = createLegacyTokenCodeStore();
 
     prisma.authorizationCode.findUnique.mockResolvedValue({
       id: 'auth-code-1',
@@ -159,36 +122,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
     const configUrl = 'https://client.example.com/auth-config';
     const redirectUrl = 'https://client.example.com/oauth/callback';
 
-    const prisma = {
-      organisation: { findUnique: vi.fn().mockResolvedValue({ lifecycleStatus: 'ACTIVE' }) },
-      $queryRaw: vi.fn().mockResolvedValue([]),
-      authorizationCode: {
-        findUnique: vi.fn(),
-        updateMany: vi.fn(),
-      },
-      enterpriseProductReadiness: { findUnique: vi.fn().mockResolvedValue(null) },
-      refreshToken: {
-        create: vi.fn(),
-      },
-      user: {
-        findUnique: vi.fn(),
-      },
-      domainRole: {
-        findUnique: vi.fn(),
-      },
-      orgSsoPolicy: { findUnique: vi.fn().mockResolvedValue(null) },
-    orgMember: {
-        findFirst: vi.fn(),
-      },
-      teamMember: {
-        findMany: vi.fn(),
-      },
-      groupMember: {
-        findMany: vi.fn(),
-      },
-      clientDomain: { findUnique: vi.fn().mockResolvedValue(null) },
-      billingAppKey: { findMany: vi.fn().mockResolvedValue([]) },
-    } as unknown as PrismaClient;
+    const prisma = createLegacyTokenCodeStore();
 
     prisma.authorizationCode.findUnique.mockResolvedValue({
       id: 'auth-code-2',
@@ -255,44 +189,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
     const configUrl = 'https://client.example.com/auth-config';
     const redirectUrl = 'https://client.example.com/oauth/callback';
 
-    const prisma = {
-      organisation: { findUnique: vi.fn().mockResolvedValue({ lifecycleStatus: 'ACTIVE' }) },
-      $queryRaw: vi.fn().mockResolvedValue([]),
-      authorizationCode: {
-        findUnique: vi.fn(),
-        updateMany: vi.fn(),
-      },
-      enterpriseProductReadiness: { findUnique: vi.fn().mockResolvedValue(null) },
-      refreshToken: {
-        create: vi.fn(),
-      },
-      user: {
-        findUnique: vi.fn(),
-      },
-      domainRole: {
-        findUnique: vi.fn(),
-      },
-      orgSsoPolicy: { findUnique: vi.fn().mockResolvedValue(null) },
-    orgMember: {
-        findFirst: vi.fn(),
-        findMany: vi.fn(),
-      },
-      teamMember: {
-        findMany: vi.fn(),
-      },
-      teamInvite: {
-        findMany: vi.fn(),
-      },
-      groupMember: {
-        findMany: vi.fn(),
-      },
-      clientDomain: {
-        findUnique: vi.fn(),
-      },
-      billingAppKey: {
-        findMany: vi.fn(),
-      },
-    } as unknown as PrismaClient;
+    const prisma = createLegacyTokenCodeStore();
 
     prisma.authorizationCode.findUnique.mockResolvedValue({
       id: 'auth-code-3',
@@ -360,36 +257,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
     const configUrl = 'https://client.example.com/auth-config';
     const redirectUrl = 'https://client.example.com/oauth/callback';
 
-    const prisma = {
-      organisation: { findUnique: vi.fn().mockResolvedValue({ lifecycleStatus: 'ACTIVE' }) },
-      $queryRaw: vi.fn().mockResolvedValue([]),
-      authorizationCode: {
-        findUnique: vi.fn(),
-        updateMany: vi.fn(),
-      },
-      enterpriseProductReadiness: { findUnique: vi.fn().mockResolvedValue(null) },
-      refreshToken: {
-        create: vi.fn(),
-      },
-      user: {
-        findUnique: vi.fn(),
-      },
-      domainRole: {
-        findUnique: vi.fn(),
-      },
-      orgSsoPolicy: { findUnique: vi.fn().mockResolvedValue(null) },
-    orgMember: {
-        findFirst: vi.fn(),
-      },
-      teamMember: {
-        findMany: vi.fn(),
-      },
-      groupMember: {
-        findMany: vi.fn(),
-      },
-      clientDomain: { findUnique: vi.fn().mockResolvedValue(null) },
-      billingAppKey: { findMany: vi.fn().mockResolvedValue([]) },
-    } as unknown as PrismaClient;
+    const prisma = createLegacyTokenCodeStore();
 
     prisma.authorizationCode.findUnique.mockResolvedValue({
       id: 'auth-code-pkce',
@@ -455,19 +323,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
     const configUrl = 'https://client.example.com/auth-config';
     const redirectUrl = 'https://client.example.com/oauth/callback';
 
-    const prisma = {
-      organisation: { findUnique: vi.fn().mockResolvedValue({ lifecycleStatus: 'ACTIVE' }) },
-      $queryRaw: vi.fn().mockResolvedValue([]),
-      authorizationCode: { findUnique: vi.fn(), updateMany: vi.fn() },
-      enterpriseProductReadiness: { findUnique: vi.fn().mockResolvedValue(null) },
-      refreshToken: { create: vi.fn() },
-      user: { findUnique: vi.fn() },
-      domainRole: { findUnique: vi.fn() },
-      orgSsoPolicy: { findUnique: vi.fn().mockResolvedValue(null) },
-    orgMember: { findFirst: vi.fn() },
-      teamMember: { findMany: vi.fn() },
-      groupMember: { findMany: vi.fn() },
-    } as unknown as PrismaClient;
+    const prisma = createLegacyTokenCodeStore();
 
     prisma.authorizationCode.findUnique.mockResolvedValue({
       id: 'auth-code-no-pkce',

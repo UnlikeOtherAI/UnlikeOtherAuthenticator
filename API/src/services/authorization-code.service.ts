@@ -1,3 +1,4 @@
+import { authorizeCredentialSurface } from './credential-route-registry.service.js';
 import { requireAuthenticationEvidence } from './authentication-evidence.service.js';
 import { assertOrgAccessPolicy } from './org-sso-policy.service.js';
 import { createHmac, randomBytes } from 'node:crypto';
@@ -143,6 +144,9 @@ export async function issueAuthorizationCode(
       },
     );
 
+    await authorizeCredentialSurface('configured_authorization', { userId: params.userId, clientDomain: params.domain,
+      credentialEpoch: params.credentialEpoch, authenticationEvidenceId: params.authenticationEvidenceId,
+      orgId: params.orgId, teamId: params.teamId }, tx);
     if (params.orgId) await assertOrgAccessPolicy({ userId: params.userId, domain: params.domain,
       orgId: params.orgId, authenticationEvidenceId: params.authenticationEvidenceId }, tx);
     if (params.authenticationEvidenceId) {
