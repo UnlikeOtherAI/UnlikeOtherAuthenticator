@@ -1,9 +1,12 @@
 import { useAccessStatusEnabled } from '../utils/access-status.js';
 import { AccessStatusForm } from '../components/form/AccessStatusForm.js';
-import React from 'react';
+import React, {useState} from 'react';
 import { NativeAppConsent } from '../components/form/NativeAppConsent.js';
 
 import { EnterpriseLinkForm } from '../components/form/EnterpriseLinkForm.js';
+import { ManagementPersonalFactorForm } from '../components/form/ManagementPersonalFactorForm.js';
+import { Button } from '../components/ui/Button.js';
+import { useEnterpriseTranslation } from '../i18n/enterprise-actions.js';
 import { LoginForm } from '../components/form/LoginForm.js';
 import { SocialButtons } from '../components/form/SocialButtons.js';
 import { useAccessTranslation } from '../hooks/use-access-translation.js';
@@ -19,8 +22,12 @@ export function LoginPage(): React.JSX.Element {
   const { config, notice, clientId, managementOrgId, enterpriseLinkIntent } = usePopup();
   const accessStatusEnabled = useAccessStatusEnabled();
   const showEmailPassword = isEmailPasswordEnabled(config);
+  const [personalFactor,setPersonalFactor]=useState(false);
+  const enterpriseT=useEnterpriseTranslation();
 
   if (enterpriseLinkIntent) return <EnterpriseLinkForm intent={enterpriseLinkIntent} />;
+  if (managementOrgId&&personalFactor) return <ManagementPersonalFactorForm orgId={managementOrgId}
+    onBack={()=>setPersonalFactor(false)}/>;
 
   return (
     <div>
@@ -39,6 +46,8 @@ export function LoginPage(): React.JSX.Element {
       ) : null}
       {clientId ? <div className="my-6"><SocialButtons showDivider={false} /></div> : null}
       {showEmailPassword ? <LoginForm /> : null}
+      {managementOrgId ? <div className="mt-4"><Button variant="secondary" onClick={()=>setPersonalFactor(true)}>
+        {enterpriseT('factor')}</Button></div> : null}
       {!clientId ? <div className="mt-6">
         <SocialButtons showDivider={showEmailPassword} />
       </div> : null}
