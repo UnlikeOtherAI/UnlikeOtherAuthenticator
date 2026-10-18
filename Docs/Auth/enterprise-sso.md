@@ -276,3 +276,6 @@ only the stable inactive SCIM resource ID and an append-only hash of the upstrea
 connection/issuer/tenant/subject tuple. Subsequent admission refuses that tuple.
 It never deletes lifecycle jobs or receipts. RETAIN preserves the canonical
 deleted person and suspends their stable external links.
+Both seams run inside the existing lifecycle sweep after the canonical person
+becomes terminal and before any hard delete. ERASE also scrubs enterprise links
+when protected financial evidence requires a terminal canonical stub to remain.

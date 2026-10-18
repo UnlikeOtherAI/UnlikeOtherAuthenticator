@@ -681,6 +681,10 @@ with a narrowly scoped UOA recovery capability. The user delegated the recovery
 choice; its reachable implementation must pass a recovery drill before
 enforcement. Do not create fake
 owner memberships. Backup codes remain prohibited under current UOA rules.
+The real canonical owner may be one of the two explicitly designated custodians;
+designation is separate from ownership. The second custodian must be another
+active canonical member with their own existing independent factor. This requires
+two people rather than a third administrator solely for recovery.
 
 Recovery must be independent of the failing IdP: tested password plus enrolled
 TOTP or another explicitly approved independent UOA factor flow; no email-only
