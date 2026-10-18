@@ -1,6 +1,7 @@
+import { authorizeCredentialSurface } from './credential-route-registry.service.js';
 import { requireIdentityEmail } from './entity-lifecycle.service.js';
 import { randomInt, randomUUID, timingSafeEqual } from 'node:crypto';
-import type { PrismaClient } from '@prisma/client';
+import type { Prisma, PrismaClient } from '@prisma/client';
 import { getEnv } from '../config/env.js';
 import { AppError } from '../utils/errors.js';
 import { hashEmailToken } from '../utils/verification-token.js';
@@ -43,6 +44,18 @@ async function requireFactor(context: Context, prisma: Pick<PrismaClient, 'user'
   return user.twoFaEnabled;
 }
 
+function actionScope(context: Context) {
+  return { actionAssuranceId: context.claims.assuranceId ?? null,
+    actionOrgId: context.claims.active?.orgId ?? context.claims.org?.org_id ?? null,
+    actionTeamId: context.claims.active?.teamId ?? null };
+}
+async function requireActionSource(context: Context, db: Prisma.TransactionClient) {
+  const scope = actionScope(context);
+  await authorizeCredentialSurface(scope.actionOrgId ? 'scoped_action' : 'global_action', {
+    userId: context.claims.userId, credentialEpoch: context.claims.tokenVersion, clientDomain: context.config.domain,
+    assuranceId: scope.actionAssuranceId ?? undefined, orgId: scope.actionOrgId, teamId: scope.actionTeamId }, db);
+}
+
 /** A product session identifies the recipient; only a new code proves this action. */
 export async function startActionVerification(
   input: Context & { description: string }, deps: Deps,
@@ -53,6 +66,7 @@ export async function startActionVerification(
     await lockAndAssertAuthenticationEpoch({
       userId: input.claims.userId, domain: input.config.domain, credentialEpoch: input.claims.tokenVersion,
     }, { prisma: tx });
+    await requireActionSource(input, tx);
     const now = deps.now?.() ?? new Date();
     const user = await tx.user.findUnique({ where: { lifecycleStatus: 'ACTIVE', id: input.claims.userId } });
     if (!user || !user.email || !user.userKey) throw failed();
@@ -70,7 +84,7 @@ export async function startActionVerification(
     await tx.verificationToken.create({ data: {
       id, type: 'ACTION_VERIFICATION', email: requireIdentityEmail(user.email), userKey: user.userKey,
       userId: user.id, tokenVersion: user.tokenVersion, domain: input.config.domain,
-      configUrl: input.configUrl, actionDigest: input.actionDigest,
+      configUrl: input.configUrl, actionDigest: input.actionDigest, ...actionScope(input),
       tokenHash: codeHash(id, code), expiresAt,
     } });
     return { email: requireIdentityEmail(user.email), expiresAt, twoFactorRequired };
@@ -90,12 +104,15 @@ export async function verifyActionVerification(
       userId: input.claims.userId, domain: input.config.domain, credentialEpoch: input.claims.tokenVersion,
     }, { prisma: tx });
     const twoFactorRequired = await requireFactor(input, tx);
+    await requireActionSource(input, tx);
     const now = deps.now?.() ?? new Date();
     const token = await tx.verificationToken.findUnique({ where: { id: input.challengeId } });
     if (!token || token.type !== 'ACTION_VERIFICATION' || token.usedAt || token.expiresAt <= now
       || token.attemptCount >= MAX_ATTEMPTS || token.userId !== input.claims.userId
       || token.tokenVersion !== input.claims.tokenVersion || token.domain !== input.config.domain
-      || token.actionDigest !== input.actionDigest) return false;
+      || token.actionDigest !== input.actionDigest || token.configUrl !== input.configUrl
+      || token.actionAssuranceId !== actionScope(input).actionAssuranceId
+      || token.actionOrgId !== actionScope(input).actionOrgId || token.actionTeamId !== actionScope(input).actionTeamId) return false;
     // Return false instead of throwing so a failed attempt is committed, not rolled back.
     await tx.verificationToken.update({ where: { id: token.id }, data: { attemptCount: { increment: 1 } } });
     if (!timingSafeEqual(Buffer.from(token.tokenHash), Buffer.from(codeHash(token.id, input.code)))) return false;

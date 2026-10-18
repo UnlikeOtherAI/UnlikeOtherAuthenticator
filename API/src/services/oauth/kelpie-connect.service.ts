@@ -1,3 +1,4 @@
+import { credentialArtifactSource } from '../credential-artifact.service.js';
 import { publicCredentialSource } from './credential-source.service.js';
 import { createLocalJWKSet, jwtVerify } from 'jose';
 import type { Prisma, PrismaClient } from '@prisma/client';
@@ -90,7 +91,7 @@ export async function validateKelpieConnectionTicket(params: {
     const client = await getOAuthClient(clientId, tx);
     if (!client) rejectKelpieConnection();
     const config = buildMcpClientConfig(client.redirectUris, client.nativeApp);
-    await authorizeKelpieAccount({ ...publicCredentialSource(payload), userId: sub, clientId, credentialEpoch, expiresAt,
+    await authorizeKelpieAccount({ ...publicCredentialSource(payload), artifact: credentialArtifactSource(payload, 'public'), userId: sub, clientId, credentialEpoch, expiresAt,
       twoFaCompleted: twofa, domain: config.domain, config }, tx);
     // Re-resolve the backend under the same policy lock; rotation/disable cannot race validation.
     await verifyDomainAuthToken({ domain: params.domain, token: params.domainCredential }, { prisma: tx as unknown as PrismaClient });

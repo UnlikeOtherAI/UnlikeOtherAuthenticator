@@ -5,7 +5,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { verifyChainedSubjectAccessToken } from '../../src/services/confidential-chained-token-exchange.service.js';
 import { resetAccessTokenKeyCache } from '../../src/services/oauth/access-token.service.js';
 
-const prisma = { enterpriseProductReadiness: { findUnique: vi.fn().mockResolvedValue(null) } } as unknown as PrismaClient;
+const prisma = { enterpriseProductReadiness: { findUnique: vi.fn().mockResolvedValue(null) },
+  orgSsoPolicy: { findUnique: vi.fn().mockResolvedValue(null) } } as unknown as PrismaClient;
 
 const issuer = 'https://authentication.unlikeotherai.com';
 const sourceDomain = 'api.nessie.works';

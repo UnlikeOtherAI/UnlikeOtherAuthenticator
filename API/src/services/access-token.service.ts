@@ -1,3 +1,4 @@
+import { credentialArtifactSource } from './credential-artifact.service.js';
 import type { PrismaClient } from '@prisma/client';
 import { decodeProtectedHeader, jwtVerify } from 'jose';
 import { z } from 'zod';
@@ -162,6 +163,7 @@ export async function verifyAccessToken(
   // already-issued access tokens. Only a missing user or version mismatch is
   // an authentication failure; unexpected DB failures must remain observable
   // as 5xx so clients do not erase otherwise-valid sessions during outages.
+  const artifact = credentialArtifactSource(parsed, 'session');
   const credentialEpoch = parsed.tv ?? 0;
   if (prisma) {
     const current = await prisma.user.findUnique({
@@ -184,7 +186,7 @@ export async function verifyAccessToken(
   if (getEnv().DATABASE_URL) {
     await authorizeCredentialSurface((deps?.requirement ?? 'global_account_control') === 'global_account_control'
       ? 'configured_access' : 'organisation_access', { assuranceId: parsed.assurance_id, userId,
-      clientDomain: parsed.domain, credentialEpoch, orgId: parsed.active?.orgId ?? parsed.org?.org_id,
+      clientDomain: parsed.domain, credentialEpoch, artifact, method: artifact.method, orgId: parsed.active?.orgId ?? parsed.org?.org_id,
       teamId: parsed.active?.teamId }, prisma as PrismaClient);
   } else if (parsed.assurance_id) {
     throw new AppError('SERVICE_UNAVAILABLE', 503, 'ASSURANCE_STORE_REQUIRED');

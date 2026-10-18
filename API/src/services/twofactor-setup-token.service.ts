@@ -1,3 +1,4 @@
+import { credentialArtifactSource } from './credential-artifact.service.js';
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { authorizeCredentialSurfaceWhenAvailable } from './credential-route-registry.service.js';
 import { SignJWT, jwtVerify, type JWTPayload } from 'jose';
@@ -89,6 +90,7 @@ export async function signTwoFaSetupToken(params: {
       domain: params.domain,
       auth_method: params.authMethod,
       authentication_evidence_id: params.authenticationEvidenceId,
+      assurance_version: params.authenticationEvidenceId ? 1 : undefined,
       management_intent_id: params.managementIntentId,
       redirect_url: params.redirectUrl,
       state: params.state,
@@ -138,6 +140,7 @@ export async function verifyTwoFaSetupToken(params: {
     throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
   }
 
+  const artifact = credentialArtifactSource(payload, 'evidence');
   const token: TwoFaSetupToken = {
     userId: parsed.sub,
     credentialEpoch: parsed.credential_epoch,
@@ -164,7 +167,7 @@ export async function verifyTwoFaSetupToken(params: {
     await authorizeCredentialSurfaceWhenAvailable('factor_enrollment', { userId: token.userId,
       clientDomain: token.domain, credentialEpoch: token.credentialEpoch,
       authenticationEvidenceId: token.authenticationEvidenceId, method: token.authMethod,
-      orgId: token.orgId, teamId: token.teamId }, params.prisma);
+      orgId: token.orgId, teamId: token.teamId, artifact }, params.prisma);
   }
   return token;
 }

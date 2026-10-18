@@ -1,3 +1,4 @@
+import { credentialArtifactSource } from './credential-artifact.service.js';
 import { authorizeCredentialSurfaceWhenAvailable } from './credential-route-registry.service.js';
 import { fingerprintClientConfig } from './client-config-fingerprint.service.js';
 export { fingerprintClientConfig } from './client-config-fingerprint.service.js';
@@ -127,6 +128,7 @@ export async function signLoginSession(
       credential_epoch: params.credentialEpoch,
       auth_method: params.authMethod,
       authentication_evidence_id: authenticationEvidenceId,
+      assurance_version: authenticationEvidenceId ? 1 : undefined,
       typ: LOGIN_SESSION_TYP,
       config_url: params.configUrl,
       config_fingerprint: fingerprintClientConfig(params.config),
@@ -192,9 +194,10 @@ export async function verifyLoginSession(params: {
     rejectLoginSession();
   }
 
+  const artifact = credentialArtifactSource(payload, 'evidence');
   await authorizeCredentialSurfaceWhenAvailable('login_chooser', { userId: parsed.sub,
     clientDomain: parsed.domain, credentialEpoch: parsed.credential_epoch,
-    authenticationEvidenceId: parsed.authentication_evidence_id, method: parsed.auth_method }, params.prisma);
+    authenticationEvidenceId: parsed.authentication_evidence_id, method: parsed.auth_method, artifact }, params.prisma);
 
   return {
     userId: parsed.sub,

@@ -27,7 +27,7 @@ export async function signAccessToken(params: {
   relyingPartyToken: boolean;
 }): Promise<string> {
   const payload = {
-    ...(params.assuranceId ? { assurance_id: params.assuranceId } : {}),
+    ...(params.assuranceId ? { assurance_id: params.assuranceId, assurance_version: 1 } : {}),
     ...(params.assuranceConnectionId ? { assurance_connection_id: params.assuranceConnectionId } : {}),
     ...(!params.relyingPartyToken ? { jti: randomUUID() } : {}),
     email: params.email,

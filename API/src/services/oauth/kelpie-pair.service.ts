@@ -1,3 +1,4 @@
+import { credentialArtifactSource, type CredentialArtifactSource } from '../credential-artifact.service.js';
 import { publicCredentialSource, type PublicCredentialSource } from './credential-source.service.js';
 import { createLocalJWKSet, jwtVerify } from 'jose';
 import type { PrismaClient } from '@prisma/client';
@@ -37,7 +38,7 @@ export async function validateKelpiePairingTicket(params: Binding & {
   // A stranger's invalid proof must never erase the receiver's healthy session.
   const receiver = await verifyPublicAccountToken(params.authorization, 'profile');
   const keys = createLocalJWKSet(await getAccessTokenPublicJwks());
-  let proof: PublicCredentialSource & { clientId: string; credentialEpoch: number; expiresAt: number; twoFaCompleted: boolean } | undefined;
+  let proof: PublicCredentialSource & { artifact: CredentialArtifactSource; clientId: string; credentialEpoch: number; expiresAt: number; twoFaCompleted: boolean } | undefined;
   try {
     const payload = (await jwtVerify(params.ticket, keys, {
       issuer: getPublicBaseUrl(), audience: audience(params.challenge), algorithms: ['RS256'], typ: 'at+jwt',
@@ -52,7 +53,7 @@ export async function validateKelpiePairingTicket(params: Binding & {
         typeof payload.twofa !== 'boolean' || typeof payload.iat !== 'number' || typeof payload.exp !== 'number' ||
         !Number.isSafeInteger(payload.iat) || !Number.isSafeInteger(payload.exp) || payload.iat > Date.now() / 1000 ||
         payload.exp <= payload.iat || payload.exp - payload.iat > KELPIE_TICKET_TTL_SECONDS) throw new Error('proof');
-    proof = { ...publicCredentialSource(payload), clientId: payload.client_id, credentialEpoch: payload.tv,
+    proof = { ...publicCredentialSource(payload), artifact: credentialArtifactSource(payload, 'public'), clientId: payload.client_id, credentialEpoch: payload.tv,
       expiresAt: payload.exp, twoFaCompleted: payload.twofa };
   } catch {
     proof = undefined;
