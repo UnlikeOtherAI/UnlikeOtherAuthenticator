@@ -1,3 +1,4 @@
+import { enterpriseAccountLinkContext } from '../../src/services/org-sso-account-link.service.js';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -85,6 +86,14 @@ describe('existing personal factor account linking with real PostgreSQL', () => 
     return { linkIntentId: link.id, browser, config, configUrl: context.config_url };
   }
 
+  it('shows only the canonical destination to the original intent browser', async () => {
+    const input = await pendingLink('context-subject');
+    const result = await enterpriseAccountLinkContext(input);
+    expect(result).toEqual({ ok: true, org: { id: orgId, name: 'Link test' }, client_domain: domain });
+    await expect(enterpriseAccountLinkContext({ ...input, browser: 'foreign-browser' })).rejects.toThrow();
+    await expect(enterpriseAccountLinkContext({ ...input, configUrl: 'https://foreign.example.com/config' })).rejects.toThrow();
+    expect(await db.orgSsoLinkIntent.findUnique({ where: { id: input.linkIntentId } })).toMatchObject({ consumedAt: null });
+  });
   it('gives unknown hints the same opaque response and durably bounds wrong guesses', async () => {
     const input = await pendingLink('wrong-proof');
     const unknown = await startLinkPersonalFactor({ ...input, email: 'absent@example.com' });

@@ -1,3 +1,4 @@
+import { getAdminPrisma } from '../db/prisma.js';
 import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { AppError } from '../utils/errors.js';
@@ -31,6 +32,16 @@ export async function requireEnterpriseLink(input: { linkIntentId: string; brows
   if (current.connection.revision !== link.revision || current.connection.generation !== link.generation ||
     current.policy.generation !== context.policy_generation || current.connection.orgId !== link.orgId) denied();
   return { link, context, ...current };
+}
+
+/** Reveal only the live destination after validating its original browser-bound intent. */
+export async function enterpriseAccountLinkContext(input: Parameters<typeof requireEnterpriseLink>[0]) {
+  return getAdminPrisma().$transaction(async tx => {
+    const { link } = await requireEnterpriseLink(input, tx);
+    const org = await tx.organisation.findUnique({ where: { id: link.orgId }, select: { id: true, name: true } });
+    if (!org) denied();
+    return { ok: true, org, client_domain: link.clientDomain };
+  });
 }
 
 /** Called only with a fresh existing UOA credential/factor proof, never an email match. */

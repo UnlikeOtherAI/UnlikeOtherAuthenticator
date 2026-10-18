@@ -1,3 +1,4 @@
+import { authorizeCredentialSurface } from './credential-route-registry.service.js';
 import { createHmac } from 'node:crypto';
 
 import { Prisma, type PrismaClient, type SigningContinuation } from '@prisma/client';
@@ -92,6 +93,7 @@ function sameOrigin(left: SigningContinuation, right: SigningContinuation): bool
     left.orgId === right.orgId &&
     left.teamId === right.teamId &&
     left.authMethod === right.authMethod &&
+    left.authenticationEvidenceId === right.authenticationEvidenceId &&
     left.twoFaCompleted === right.twoFaCompleted &&
     left.tokenVersion === right.tokenVersion &&
     left.expiresAt.getTime() === right.expiresAt.getTime()
@@ -127,6 +129,10 @@ export async function lockAndRequireSigningContinuationForDecision(
   const current = await requireActiveSigningContinuation({ signingToken, lock: true }, deps);
   if (!sameOrigin(preview, current)) return rejectContinuation();
   requireCredentialEpoch(current);
+  await authorizeCredentialSurface(current.authProfile === 'PUBLIC_OAUTH' ? 'public_authorization' : 'signature_continuation', {
+    userId: current.userId, clientDomain: current.domain, credentialEpoch,
+    authenticationEvidenceId: current.authenticationEvidenceId ?? undefined, method: current.authMethod,
+    orgId: current.orgId, teamId: current.teamId }, deps.prisma);
   return current;
 }
 

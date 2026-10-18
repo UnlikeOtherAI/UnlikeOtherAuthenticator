@@ -1,3 +1,4 @@
+import { enterpriseAccountLinkContext } from '../../services/org-sso-account-link.service.js';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { configVerifier } from '../../middleware/config-verifier.js';
@@ -15,6 +16,13 @@ export function registerEnterpriseAccountLinkRoutes(app: FastifyInstance): void 
     return `enterprise-link-hint:${hashAssuranceReference(value.success ? value.data.email.trim().toLowerCase() : 'invalid')}`;
   }, limit: 6, windowMs: 60000 });
   const preHandler = [requireSameOriginBrowserRequest, rate, configVerifier];
+  app.post('/auth/enterprise-link/context', { preHandler }, async (request, reply) => {
+    const body = z.object({ link_intent_id: Intent }).strict().parse(request.body);
+    if (!request.config || !request.configUrl) throw new AppError('BAD_REQUEST', 400, 'MISSING_CONFIG');
+    return reply.header('Cache-Control', 'no-store').send(await enterpriseAccountLinkContext({
+      linkIntentId: body.link_intent_id, browser: request.cookies.uoa_sso_link,
+      config: request.config, configUrl: request.configUrl }));
+  });
   app.post('/auth/enterprise-link/start', { preHandler }, async (request, reply) => {
     const body = z.object({ link_intent_id: Intent, login_token: z.string().min(1).max(4096) }).strict().parse(request.body);
     if (!request.config || !request.configUrl) throw new AppError('BAD_REQUEST', 400, 'MISSING_CONFIG');
