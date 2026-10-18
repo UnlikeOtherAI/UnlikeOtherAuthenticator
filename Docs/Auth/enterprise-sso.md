@@ -199,7 +199,7 @@ proof; it never selects or mutates that existing person. New JIT identities need
 an active verified domain claim and explicit JIT/default-team policy. They have
 no password and their evidence remains scoped SSO evidence with the original
 nullable upstream authentication time and bounded session deadline. Existing
-account-link completion is still under implementation; activation remains gated.
+accounts complete a separate independent proof before linking. Activation remains gated until recovery and provisioning readiness is complete.
 
 Manual, SSO and SCIM membership contributions are separate sources. Replacing
 one source does not overwrite another. Ordinary manual deactivation/removal
@@ -208,3 +208,33 @@ writes cannot silently become manual grants. Database constraints reject owner
 mapping and foreign-organisation team references. A scoped SSO chooser exposes
 only its exact organisation and cannot accept invitations, create teams or
 present owner-management authority from that organisation's IdP evidence.
+
+### Existing account link proof
+
+A pending link redirects to `/auth?flow=enterprise_link` with
+`enterprise_link_intent` and the original relying-product state, redirect and
+PKCE challenge. An HttpOnly Strict `uoa_sso_link` cookie binds the original
+browser. The intent identifier grants no authority by itself. The normal
+password endpoint accepts that hint and always returns a chooser proof rather
+than silently completing a one-team product login. The client submits
+`POST /auth/enterprise-link/start {link_intent_id,login_token}` with its verified
+configuration. A fresh existing password is sufficient only when that person
+has no enrolled personal MFA; enrolled MFA must still be completed.
+
+For a person with only an existing personal authenticator, submit
+`POST /auth/enterprise-link/personal-factor {link_intent_id,email}`. Both known
+and unknown hints return `{ok:true,personal_factor_required:true,challenge,
+expires_at}` with a random opaque challenge. No canonical subject or epoch is
+returned. Submit the existing authenticator code to
+`POST /auth/enterprise-link/personal-factor/verify
+{link_intent_id,challenge,code}`. Challenges expire within five minutes, remain
+bound to the browser and exact link, and permit six guesses. Incorrect guesses
+commit their count; exhausted, unknown and unsuitable accounts receive the
+same generic refusal. New factor enrollment cannot prove a link.
+
+A successful proof consumes the intent and independent proof together with the
+stable identity link and normal SSO continuation. It returns
+`{ok:true,redirect_to}`. The final product evidence remains SSO-scoped and keeps
+the original upstream authentication time, including unknown time. A separate
+verified personal factor marker may satisfy UOA MFA; upstream AMR never becomes
+that marker. SSO and recovery sources cannot enter global TOTP enrollment.

@@ -35,6 +35,7 @@ const LoginQuerySchema = z
   .object({
     config_url: z.string().min(1).max(2048),
     management_org_id: z.string().min(1).max(100).optional(),
+    enterprise_link_intent: z.string().min(1).max(100).optional(),
     redirect_url: z.string().min(1).max(2048).optional(),
     code_challenge: z.string().min(1).max(256).optional(),
     code_challenge_method: z.string().min(1).max(32).optional(),
@@ -53,7 +54,7 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
     },
     async (request, reply) => {
       const { email, password, remember_me } = LoginBodySchema.parse(request.body);
-      const { redirect_url, code_challenge, code_challenge_method, request_access, state, management_org_id } =
+      const { redirect_url, code_challenge, code_challenge_method, request_access, state, management_org_id, enterprise_link_intent } =
         LoginQuerySchema.parse(request.query);
       const pkce = parseRequiredPkceChallenge({
         codeChallenge: code_challenge,
@@ -93,7 +94,7 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
         const requestAccess = parseRequestAccessFlag(request_access);
 
         let selectedTeam: AutoSelectedTeam | null = null;
-        if (management_org_id || config.login_flow?.team_selection === 'auto') {
+        if (management_org_id || enterprise_link_intent || config.login_flow?.team_selection === 'auto') {
           const choices = await buildSessionChoices(
             { userId, config },
             {
@@ -103,7 +104,7 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
             },
           );
           selectedTeam = resolveAutoSelectedTeam(choices);
-          if (management_org_id || shouldPresentTeamChooser(choices, selectedTeam)) {
+          if (management_org_id || enterprise_link_intent || shouldPresentTeamChooser(choices, selectedTeam)) {
             const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
             const loginToken = await signLoginSession({
               userId,
