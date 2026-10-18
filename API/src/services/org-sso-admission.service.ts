@@ -4,7 +4,7 @@ import { AppError } from '../utils/errors.js';
 import type { ClientConfig } from './config.service.js';
 import type { VerifiedEnterpriseIdentity } from './org-sso-oidc.service.js';
 import { buildUserIdentity } from './user-scope.service.js';
-import { GroupMapping } from './org-sso-policy-management.service.js';
+import { connectionGroupMappings } from './enterprise-group-mapping.service.js';
 import { replaceManagedMemberships, type ManagedMembershipGrant } from './membership-provenance.service.js';
 import type { EnterpriseAuthorizationContext } from './enterprise-authorization-context.service.js';
 import { lockAndAssertAuthenticationEpoch } from './authentication-epoch.service.js';
@@ -58,7 +58,7 @@ export async function admitEnterpriseIdentity(input: { connection: OrgSsoConnect
   if (!priorMembership && !policy.jitEnabled) denied('SSO_JIT_NOT_ALLOWED');
   const grants: ManagedMembershipGrant[] = [{ teamId: null, role: 'member', resourceId: 'identity' }];
   if (policy.jitEnabled && policy.defaultTeamId) grants.push({ teamId: policy.defaultTeamId, role: 'member', resourceId: 'default' });
-  const mappings = GroupMapping.array().max(100).parse(policy.groupMappings);
+  const mappings = connectionGroupMappings(policy.groupMappings, connection.id);
   const groups = new Set(identity.groups);
   for (const mapping of mappings) if (groups.has(mapping.external_group_id)) grants.push({
     teamId: mapping.team_id, role: mapping.team_role, resourceId: mapping.external_group_id,

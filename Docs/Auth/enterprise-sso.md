@@ -418,3 +418,6 @@ Previously issued mailbox or legacy social evidence and session families are rec
 
 
 `POST /auth/enterprise-link/context` uses the same signed consuming config and same-origin browser requirement as link completion. Body `{link_intent_id}` plus the original HttpOnly link cookie returns `{ok:true,org:{id,name},client_domain}` from the live canonical destination. It neither consumes the link nor exposes an account/profile hint. Expired, foreign-browser, changed-configuration and unavailable-connection intents fail before disclosing context.
+
+
+Group mappings require `{connection_id,external_group_id,team_id,team_role}`. The owner policy write validates every provider and team against the exact organisation and consuming client. Both signed-login and SCIM reconciliation select only mappings for their authenticated source connection: an identical upstream group identifier on another provider grants nothing. Unscoped historical mapping objects fail validation rather than being assigned to an arbitrary provider. Owner GET returns only valid exact-scope mappings and `policy.invalid_group_mappings`, allowing a repair save without decoding invalid historical JSON. Saving the repaired list withdraws old sources, reconciles scoped SCIM sources and emits revocation in the same transaction.
