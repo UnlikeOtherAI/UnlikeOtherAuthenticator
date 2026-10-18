@@ -1,3 +1,4 @@
+import { authorizeCredentialSurface } from '../credential-route-registry.service.js';
 import { createHash } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
 import { getAuthServiceIdentifier, requireEnv } from '../../config/env.js';
@@ -13,9 +14,11 @@ import { enrollTwoFactorForUser } from '../twofactor-enroll.service.js';
 /** Password is reverified under the credential lock on every step. Setup is bound
  * to the entire validated authorization request, so it cannot be retargeted. */
 export async function completePublicSecondFactor(input: {
-  userId: string; credentialEpoch: number; twoFaEnabled: boolean;
+  userId: string; credentialEpoch: number; twoFaEnabled: boolean; authenticationEvidenceId?: string; authMethod?: string;
   config: ClientConfig; context: Record<string, unknown>; code?: string; setupToken?: string;
 }, prisma: PrismaClient) {
+  await authorizeCredentialSurface('public_authorization', { userId: input.userId, clientDomain: input.config.domain,
+    credentialEpoch: input.credentialEpoch, authenticationEvidenceId: input.authenticationEvidenceId, method: input.authMethod }, prisma);
   const policy = await resolveTwoFaPolicy({ config: input.config, userId: input.userId }, { prisma });
   if (policy === 'OFF') return { completed: false };
   if (input.twoFaEnabled) {
@@ -28,11 +31,14 @@ export async function completePublicSecondFactor(input: {
     .update(JSON.stringify(Object.entries(input.context).sort(([a], [b]) => a.localeCompare(b))))
     .digest('hex');
   if (!input.setupToken || !input.code) {
-    const setup = await startTwoFactorSetup({ ...input, configUrl }, { prisma });
+    const setup = await startTwoFactorSetup({ ...input, configUrl, finalize: {
+      authMethod: input.authMethod ?? 'email_password', authenticationEvidenceId: input.authenticationEvidenceId, rememberMe: false, requestAccess: false,
+      redirectUrl: String(input.context.redirect_uri ?? ''), codeChallenge: String(input.context.code_challenge ?? ''),
+      codeChallengeMethod: 'S256' } }, { prisma });
     return { response: { ok: true, twofa_enroll_required: true, ...setup } };
   }
   const sharedSecret = requireEnv('SHARED_SECRET').SHARED_SECRET;
-  const setup = await verifyTwoFaSetupToken({
+  const setup = await verifyTwoFaSetupToken({ prisma: prisma,
     token: input.setupToken, sharedSecret, audience: getAuthServiceIdentifier(),
   });
   if (setup.userId !== input.userId || setup.credentialEpoch !== input.credentialEpoch ||

@@ -73,7 +73,17 @@ describe('POST /oauth/login signature gate', () => {
     const app = Fastify();
     app.decorateRequest('adminDb', null);
     app.addHook('onRequest', async (request) => {
-      request.adminDb = { $transaction: async (callback: (tx: unknown) => Promise<unknown>) => callback({}) } as never;
+      let evidence: Record<string, unknown>;
+      const tx = { enterpriseProductReadiness: { findUnique: async () => ({ minimumAssuranceVersion: 0 }) },
+        user: { findUnique: async () => ({ lifecycleStatus: 'ACTIVE', tokenVersion: 0 }) },
+        authenticationEvidence: {
+          create: async ({ data }: { data: Record<string, unknown> }) => {
+            evidence = { ...data, id: 'auth-evidence-1', parentId: null, revokedAt: null, consumedAt: null,
+              mfaCompletedAt: null, connectionId: null, orgId: null, teamId: null };
+            return evidence;
+          }, findUnique: async () => evidence,
+        } };
+      request.adminDb = { $transaction: async (callback: (tx: unknown) => Promise<unknown>) => callback(tx) } as never;
     });
     registerOAuthLoginRoute(app);
     await app.ready();
@@ -99,6 +109,7 @@ describe('POST /oauth/login signature gate', () => {
     expect(finalizePublicOAuthAuthorizationWithSignaturesMock).toHaveBeenCalledWith(
       {
         userId: 'user-1',
+        authenticationEvidenceId: 'auth-evidence-1',
         domain: 'client.example.com',
         oauthClientId: 'public-client',
         redirectUrl: 'https://client.example.com/callback',

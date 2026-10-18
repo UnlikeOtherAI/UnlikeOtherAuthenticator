@@ -1,3 +1,4 @@
+import { authorizeCredentialSurface } from '../credential-route-registry.service.js';
 // Authorization-code issue/consume for the public-client / MCP profile (brief
 // §22.14). Distinct from token.service's config-JWT path: these codes are keyed on
 // the registered oauth_client_id (+ resource), carry config_url = null, and are
@@ -63,6 +64,13 @@ export async function issueOAuthCode(
     },
     { prisma },
   );
+  const source = await authorizeCredentialSurface('public_authorization', { userId: input.userId,
+    clientDomain: input.domain, credentialEpoch: input.credentialEpoch, authenticationEvidenceId: input.authenticationEvidenceId }, prisma);
+  if (input.authenticationEvidenceId) {
+    const proof = await prisma.authenticationEvidence.findUniqueOrThrow({ where: { id: input.authenticationEvidenceId } });
+    if (input.twoFaCompleted && !proof.mfaCompletedAt) throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_EVIDENCE_REQUIRED');
+    await prisma.authenticationEvidence.update({ where: { id: proof.id }, data: { signatureCompletedAt: new Date() } });
+  }
   for (let attempt = 0; attempt < 3; attempt++) {
     const code = generateCode();
     try {
@@ -83,7 +91,7 @@ export async function issueOAuthCode(
           tokenVersion: input.credentialEpoch,
           twoFaCompleted: input.twoFaCompleted ?? false,
           authenticationEvidenceId: input.authenticationEvidenceId,
-          expiresAt: new Date(now.getTime() + AUTHORIZATION_CODE_TTL_MS),
+          expiresAt: new Date(Math.min(now.getTime() + AUTHORIZATION_CODE_TTL_MS, source?.expiresAt.getTime() ?? Infinity)),
         },
         select: { id: true },
       });
@@ -97,6 +105,7 @@ export async function issueOAuthCode(
 }
 
 export interface ConsumeOAuthCodeResult {
+  authenticationEvidenceId?: string;
   credentialEpoch: number;
   twoFaCompleted: boolean;
   domain: string;
@@ -127,6 +136,7 @@ export async function consumeOAuthCode(
       rememberMe: true,
       tokenVersion: true,
       twoFaCompleted: true,
+      authenticationEvidenceId: true,
       expiresAt: true,
       usedAt: true,
     },
@@ -172,6 +182,8 @@ export async function consumeOAuthCode(
     throw error;
   }
 
+  await authorizeCredentialSurface('public_authorization', { userId: code.userId, clientDomain: code.domain,
+    credentialEpoch, authenticationEvidenceId: code.authenticationEvidenceId ?? undefined }, prisma);
   now = new Date(Math.max(now.getTime(), Date.now()));
   // One-time use: atomic compare-and-set guards against code replay / races.
   const updated = await prisma.authorizationCode.updateMany({
@@ -183,6 +195,7 @@ export async function consumeOAuthCode(
   return {
     userId: code.userId,
     domain: code.domain,
+    authenticationEvidenceId: code.authenticationEvidenceId ?? undefined,
     credentialEpoch,
     twoFaCompleted: code.twoFaCompleted === true,
     resource: code.resource,

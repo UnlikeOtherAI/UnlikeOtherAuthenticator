@@ -1,3 +1,4 @@
+import { assertIndependentSourceStillAdmitted } from './credential-admission.service.js';
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { getEnv } from '../config/env.js';
 import { getAdminPrisma } from '../db/prisma.js';
@@ -56,6 +57,8 @@ export async function authorizeCredentialSurface(surface: CredentialSurface, inp
     if (proof) source = { ...proof, provenance: proof.method };
   }
   if (!source && ['sso', 'sso_recovery', 'recovery'].includes(input.method ?? '')) denied();
+  if (!source && input.method) await assertIndependentSourceStillAdmitted({ userId: input.userId,
+    methods: [input.method], personalFactorCompleted: false }, db);
   if (source && rule.authority === 'global' && source.provenance !== 'independent') denied();
   if (source && source.provenance !== 'independent' && ((input.orgId && source.orgId !== input.orgId) ||
     (input.teamId && source.teamId && source.teamId !== input.teamId))) denied();

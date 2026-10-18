@@ -122,6 +122,8 @@ describe('live credential surface authority boundaries with PostgreSQL', () => {
     await db.externalIdentity.create({ data: { userId: f.user.id, clientDomain: f.domain, orgId: org.id,
       connectionId: connection.id, issuer: 'https://issuer.example.com', tenant: 'tenant', subject: randomUUID(), identityScope: 'global', linkedVia: 'independent_session' } });
     await expect(authorizeCredentialSurface('public_access', f.input, db)).rejects.toThrow('INDEPENDENT_REAUTH_REQUIRED');
+    await expect(authorizeCredentialSurface('login_chooser', { ...f.input, authenticationEvidenceId: undefined }, db))
+      .rejects.toThrow('INDEPENDENT_REAUTH_REQUIRED');
     await db.authenticationEvidence.update({ where: { id: f.id }, data: { mfaCompletedAt: new Date() } });
     await expect(authorizeCredentialSurface('public_access', f.input, db)).resolves.toMatchObject({ authenticatedAt: null });
   });
