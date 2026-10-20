@@ -4,6 +4,9 @@ import type { ClientConfig } from '../../src/services/config.service.js';
 import { verifyTwoFaChallenge } from '../../src/services/twofactor-challenge.service.js';
 import { testUiTheme } from '../helpers/test-config.js';
 
+// The team row's updatedAt versions the public avatar URL (Docs/Auth/avatars.md §11.4).
+const TEAM_UPDATED_AT = new Date('2026-10-01T00:00:00.000Z');
+
 let currentConfig: ClientConfig | null = null;
 
 const verifyLoginCodeMock = vi.fn();
@@ -204,7 +207,7 @@ describe('POST /auth/verify-code', () => {
       teamMembers: [],
     });
     prismaMock.teamMember.findMany.mockResolvedValue([
-      { teamId: 'team-1', teamRole: 'member', team: { name: 'Design', orgId: 'org-1' } },
+      { teamId: 'team-1', teamRole: 'member', team: { name: 'Design', orgId: 'org-1', updatedAt: TEAM_UPDATED_AT } },
     ]);
     prismaMock.teamInvite.findMany.mockResolvedValue([]);
 
@@ -220,7 +223,7 @@ describe('POST /auth/verify-code', () => {
         name: 'Design',
         role: 'member',
         // Docs/Auth/avatars.md §11.4 — public avatar form, the only one this popup can fetch.
-        avatarImageUrl: '/teams/team-1/avatar',
+        avatarImageUrl: '/teams/team-1/avatar?v=muorpc00',
         orgName: null,
       },
     ]);

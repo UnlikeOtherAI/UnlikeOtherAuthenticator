@@ -29,7 +29,9 @@ import { AvatarImageQueryFields, sendAvatar } from './shared.js';
  */
 
 const ParamsSchema = z.object({ teamId: z.string().min(1).max(64) }).strict();
-const QuerySchema = z.object({ ...AvatarImageQueryFields }).strict();
+// `v` is the version the directory URLs carry (Docs/Auth/avatars.md §11.4). It only makes an
+// updated image a new URL for the browser cache; nothing reads it, so any value is the same image.
+const QuerySchema = z.object({ ...AvatarImageQueryFields, v: z.string().max(64).optional() }).strict();
 
 // The only unauthenticated image endpoint, so it carries its own budget: generous enough for a
 // chooser rendering a full team list on every login, tight enough that it is not a free

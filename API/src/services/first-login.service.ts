@@ -319,6 +319,11 @@ type TeamChooserPrisma = {
   teamInvite: Pick<PrismaClient['teamInvite'], 'findMany'>;
 };
 
+// `updatedAt` versions the public avatar URL (Docs/Auth/avatars.md §11.4).
+const CHOOSER_TEAM_SELECT = {
+  name: true, slug: true, orgId: true, iconUrl: true, updatedAt: true, org: { select: { name: true } },
+} as const;
+
 /**
  * Phase 3b (design §4.3): the post-verification team chooser payload. Only ever built AFTER
  * identity verification (a successful /auth/verify-code or a valid login_token) — never before, so
@@ -378,7 +383,7 @@ export async function buildSessionChoices(
       select: {
         teamId: true,
         teamRole: true,
-        team: { select: { name: true, slug: true, orgId: true, iconUrl: true, org: { select: { name: true } } } },
+        team: { select: CHOOSER_TEAM_SELECT },
       },
     }),
     prisma.teamInvite.findMany({
@@ -431,7 +436,7 @@ export async function buildSessionChoices(
       select: {
         teamId: true,
         teamRole: true,
-        team: { select: { name: true, slug: true, orgId: true, iconUrl: true, org: { select: { name: true } } } },
+        team: { select: CHOOSER_TEAM_SELECT },
       },
     });
   }
@@ -449,7 +454,7 @@ export async function buildSessionChoices(
     name: row.team.name,
     role: row.teamRole,
     iconUrl: row.team.iconUrl,
-    avatarImageUrl: publicTeamAvatarImageUrl({ baseUrl: avatarBaseUrl, teamId: row.teamId }),
+    avatarImageUrl: publicTeamAvatarImageUrl({ baseUrl: avatarBaseUrl, teamId: row.teamId, updatedAt: row.team.updatedAt }),
     orgName: row.team.org?.name ?? null,
     slug: row.team.slug,
   }));

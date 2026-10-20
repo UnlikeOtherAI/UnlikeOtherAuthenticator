@@ -17,7 +17,13 @@ import { pickAvatarStyle } from '../../src/utils/avatar-svg.js';
  * by `avatar.service.test.ts` through the user path.
  */
 
-type StoredTeam = { id: string; orgId: string; iconUrl: string | null; domain: string };
+type StoredTeam = {
+  id: string;
+  orgId: string;
+  iconUrl: string | null;
+  domain: string;
+  updatedAt?: Date;
+};
 type StoredAvatar = {
   teamId: string;
   contentType: string;
@@ -46,11 +52,16 @@ type TeamWhere = { where: { id: string; org?: { domain: string } } };
 type TeamIdWhere = { where: { teamId: string } };
 type AvatarWrite = { contentType: string; data: Uint8Array; sizeBytes: number };
 type UpsertArgs = TeamIdWhere & { create: AvatarWrite; update: AvatarWrite };
+type TeamUpdateArgs = { where: { id: string }; data: { updatedAt: Date } };
 
 /** In-memory stand-in for the two tables the team avatar service touches. */
 function fakePrisma(
   seed: { teams?: StoredTeam[]; avatars?: StoredAvatar[] } = {},
-): { avatars: Map<string, StoredAvatar>; prisma: NonNullable<TeamAvatarDeps['prisma']> } {
+): {
+  avatars: Map<string, StoredAvatar>;
+  teams: Map<string, StoredTeam>;
+  prisma: NonNullable<TeamAvatarDeps['prisma']>;
+} {
   const teams = new Map((seed.teams ?? []).map((team) => [team.id, team]));
   const avatars = new Map((seed.avatars ?? []).map((row) => [row.teamId, row]));
 
@@ -67,6 +78,12 @@ function fakePrisma(
           iconUrl: team.iconUrl,
           org: { domain: team.domain },
         };
+      },
+      update: async (args: TeamUpdateArgs) => {
+        const team = teams.get(args.where.id);
+        if (!team) throw new Error('team not found');
+        team.updatedAt = args.data.updatedAt;
+        return { id: team.id };
       },
     },
     teamAvatar: {
@@ -90,7 +107,7 @@ function fakePrisma(
     },
   };
 
-  return { avatars, prisma: store as unknown as NonNullable<TeamAvatarDeps['prisma']> };
+  return { avatars, teams, prisma: store as unknown as NonNullable<TeamAvatarDeps['prisma']> };
 }
 
 const TEAM: StoredTeam = {
@@ -99,6 +116,7 @@ const TEAM: StoredTeam = {
   iconUrl: null,
   domain: 'client.example.com',
 };
+const TEAM_EDITED_AT = new Date('2026-07-01T00:00:00.000Z');
 
 describe('team avatar resolution precedence', () => {
   it('prefers the uploaded image over the team icon URL', async () => {
@@ -270,6 +288,15 @@ describe('team avatar upload validation', () => {
       uploadTeamAvatar({ teamId: 'nope', data: png() }, { prisma }),
     ).rejects.toMatchObject({ statusCode: 404 });
   });
+
+  it('moves the team row to the upload time, which versions the public URL (§11.4)', async () => {
+    const { prisma, teams } = fakePrisma({ teams: [{ ...TEAM, updatedAt: TEAM_EDITED_AT }] });
+
+    const result = await uploadTeamAvatar({ teamId: 'team_1', data: png() }, { prisma });
+
+    expect(teams.get('team_1')?.updatedAt).toEqual(result.updatedAt);
+    expect(result.updatedAt).not.toEqual(TEAM_EDITED_AT);
+  });
 });
 
 describe('team avatar delete', () => {
@@ -295,6 +322,22 @@ describe('team avatar delete', () => {
     expect((await resolveTeamAvatar({ teamId: 'team_1' }, { prisma, fetchProvider })).source).toBe(
       'provider',
     );
+  });
+
+  it('moves the team row only when it removed an upload (§11.4)', async () => {
+    const { prisma, teams } = fakePrisma({
+      teams: [{ ...TEAM, updatedAt: TEAM_EDITED_AT }],
+      avatars: [
+        { teamId: 'team_1', contentType: 'image/png', data: png(), sizeBytes: 40, updatedAt: TEAM_EDITED_AT },
+      ],
+    });
+
+    await deleteTeamAvatar({ teamId: 'team_1' }, { prisma });
+    const removedAt = teams.get('team_1')?.updatedAt;
+    await deleteTeamAvatar({ teamId: 'team_1' }, { prisma });
+
+    expect(removedAt?.getTime()).toBeGreaterThan(TEAM_EDITED_AT.getTime());
+    expect(teams.get('team_1')?.updatedAt).toBe(removedAt);
   });
 });
 

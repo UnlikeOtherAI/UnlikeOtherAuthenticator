@@ -13,6 +13,9 @@ import {
   useTokenServiceTestEnv,
 } from './helpers/token-service-test-helpers.js';
 
+// The team row's updatedAt versions the public avatar URL (Docs/Auth/avatars.md §11.4).
+const TEAM_UPDATED_AT = new Date('2026-10-01T00:00:00.000Z');
+
 function deferred(): { promise: Promise<void>; resolve: () => void } {
   let resolve!: () => void;
   const promise = new Promise<void>((done) => {
@@ -98,6 +101,7 @@ describe('required team placement during token exchange', () => {
                   teamRole: 'admin',
                   team: {
                     iconUrl: null,
+                    updatedAt: TEAM_UPDATED_AT,
                     name: "New User's team",
                     orgId: 'org-new',
                     slug: 'new-user-s-team',
@@ -181,12 +185,12 @@ describe('required team placement during token exchange', () => {
           {
             teamId: 'team-a',
             teamRole: 'member',
-            team: { iconUrl: null, name: 'A', orgId: 'org-a', slug: 'a', org: { name: 'org-a' } },
+            team: { iconUrl: null, updatedAt: TEAM_UPDATED_AT, name: 'A', orgId: 'org-a', slug: 'a', org: { name: 'org-a' } },
           },
           {
             teamId: 'team-b',
             teamRole: 'member',
-            team: { iconUrl: null, name: 'B', orgId: 'org-b', slug: 'b', org: { name: 'org-b' } },
+            team: { iconUrl: null, updatedAt: TEAM_UPDATED_AT, name: 'B', orgId: 'org-b', slug: 'b', org: { name: 'org-b' } },
           },
         ]),
       },
@@ -327,6 +331,7 @@ describe('required team placement during token exchange', () => {
         teamRole: string;
         team: {
           iconUrl: null;
+          updatedAt: Date;
           name: string;
           orgId: string;
           slug: string;
@@ -340,6 +345,7 @@ describe('required team placement during token exchange', () => {
                 teamRole: 'admin',
                 team: {
                   iconUrl: null,
+                  updatedAt: TEAM_UPDATED_AT,
                   name: 'Personal team',
                   orgId: team.orgId,
                   slug: 'personal-team',
