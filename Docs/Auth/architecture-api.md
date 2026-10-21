@@ -974,3 +974,16 @@ with an immutable challenge binding and no fabricated human or agent principal.
 Voice call-leg billing uses `routes/billing/voice.ts` and the `billing-voice-*`
 services. Shared identity locks live in `billing-telephone-authority.service.ts`;
 SMS exports preserve existing callers. See [Voice prepaid](../Requirements/voice-pricing-and-prepaid.md).
+
+
+### Database test boundaries
+
+CI builds the workspace before exercising API routes. The DB-less invocation
+excludes `tests/integration/**`; the separate PostgreSQL invocation runs those
+integration files with `DATABASE_URL` set. Required database suites refuse a
+missing database instead of reporting skipped coverage. Isolated-schema
+provisioning hooks use the shared Vitest hook budget.
+
+Authentication route fixtures retain their original evidence and declare their
+product's pre-enrolment policy explicitly. They reset factor state and evidence
+between cases; an omitted mock model is not a legacy-authority fallback.

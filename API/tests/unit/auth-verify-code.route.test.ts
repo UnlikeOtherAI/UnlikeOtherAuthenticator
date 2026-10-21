@@ -65,7 +65,7 @@ const prismaMock = vi.hoisted(() => {
   const mock: Record<string, unknown> = {
     user: { findUnique: vi.fn() },
     orgMember: { findMany: vi.fn() },
-  teamMember: { findMany: vi.fn() },
+    teamMember: { findMany: vi.fn() },
     teamInvite: { findMany: vi.fn() },
     authorizationCode: { create: vi.fn() },
     domainSignatureSettings: { findUnique: vi.fn() },
