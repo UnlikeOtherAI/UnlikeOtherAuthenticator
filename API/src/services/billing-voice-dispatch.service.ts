@@ -25,7 +25,7 @@ export async function voiceRow(tx: Prisma.TransactionClient, body: BillingVoiceR
 export async function readVoiceReservation(input: { request: BillingVoiceReadRequestV1; credential: VerifiedBillingAppKey },
   deps?: { prisma?: PrismaClient }): Promise<BillingVoiceReservationV1> {
   return runBillingSerializableTransaction(deps?.prisma ?? getAdminPrisma(), async tx =>
-    publicVoiceReservation(await voiceRow(tx, input.request, input.credential)), 'BILLING_VOICE_RETRY_EXHAUSTED');
+    publicVoiceReservation(await voiceRow(tx, input.request, input.credential)), 'BILLING_CREDIT_ACCOUNT_RETRY_EXHAUSTED');
 }
 export async function claimVoice(input: { request: BillingVoiceClaimRequestV1; credential: VerifiedBillingAppKey },
   deps: VoiceDependencies): Promise<BillingVoiceReservationV1> {
@@ -34,7 +34,7 @@ export async function claimVoice(input: { request: BillingVoiceClaimRequestV1; c
   if (!observed || observed.serviceId !== input.credential.service.id) throw new AppError('NOT_FOUND', 404);
   const grant = await runBillingSerializableTransaction(prisma, tx => lockVoiceGrant(tx, {
     grantId: observed.grantId, product: input.request.product, credential: input.credential,
-  }), 'BILLING_VOICE_RETRY_EXHAUSTED');
+  }), 'BILLING_CREDIT_ACCOUNT_RETRY_EXHAUSTED');
   await assertVoiceNumber(grant, observed, input.credential, deps);
   if (deps.policy.accountSid !== observed.accountSid || Date.parse(deps.policy.expiresAt) <= Date.now()) {
     throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_VOICE_EVIDENCE_UNAVAILABLE');
@@ -56,7 +56,7 @@ export async function claimVoice(input: { request: BillingVoiceClaimRequestV1; c
       state: 'dispatching', dispatchTokenDigest: createHash('sha256').update(token).digest('hex'), dispatchClaimedAt: new Date(),
     } });
     return publicVoiceReservation(claimed, token);
-  }, 'BILLING_VOICE_RETRY_EXHAUSTED');
+  }, 'BILLING_CREDIT_ACCOUNT_RETRY_EXHAUSTED');
 }
 export async function releaseVoice(input: { request: BillingVoiceReleaseRequestV1; credential: VerifiedBillingAppKey },
   deps?: { prisma?: PrismaClient }): Promise<BillingVoiceReservationV1> {
@@ -75,5 +75,5 @@ export async function releaseVoice(input: { request: BillingVoiceReleaseRequestV
     }
     await releaseBudgetDispatch(tx, row.dispatchId);
     return publicVoiceReservation(await tx.billingVoiceReservation.update({ where: { id: row.id }, data: { state: 'released' } }));
-  }, 'BILLING_VOICE_RETRY_EXHAUSTED');
+  }, 'BILLING_CREDIT_ACCOUNT_RETRY_EXHAUSTED');
 }

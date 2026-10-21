@@ -80,6 +80,10 @@ export async function createVoiceGrant(input: { request: BillingVoiceGrantReques
       }
       return publicVoiceGrant(existing);
     }
+    await tx.$queryRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtextextended(${`voice-number:${input.request.number_id}`}, 0))::text`);
+    const other = await tx.billingVoiceGrant.findFirst({ where: { numberId: input.request.number_id, revokedAt: null,
+      OR: [{ teamId: { not: input.request.team_id } }, { allocationId: { not: input.request.allocation_id } }] } });
+    if (other) throw new AppError('BAD_REQUEST', 409, 'BILLING_VOICE_ALLOCATION_CONFLICT');
     const number = await tx.billingSmsNumberResource.findFirst({ where: {
       id: input.request.number_id, orgId: input.request.organisation_id, serviceId: input.credential.service.id,
       state: 'active', phoneNumberSid: { not: null },

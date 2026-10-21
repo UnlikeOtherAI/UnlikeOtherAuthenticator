@@ -76,3 +76,11 @@ invented zero receipt. Ledger inference and OTP SMS retain separate admission.
 
 Sources: [Voice pricing](https://www.twilio.com/docs/voice/pricing),
 [Call resource](https://www.twilio.com/docs/voice/api/call-resource).
+
+## Verification scope
+
+Focused gates are `billing-voice-provider.test.ts` and
+`integration/billing-voice.persistence.test.ts`, alongside existing SMS dispatch and
+telephone OTP financial regression suites. They use synthetic provider and Stripe
+evidence and a dedicated migrated PostgreSQL database. They do not prove live cutoff,
+provider permissions, ancillary prices or the consuming Nessie deployment.

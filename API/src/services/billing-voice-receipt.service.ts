@@ -62,5 +62,5 @@ export async function settleVoice(input: { request: BillingVoiceReceiptRequestV1
       idempotencyKey: `voice-receipt:${row.accountSid}:${input.request.call_sid}`,
     } });
     return publicVoiceReservation(settled);
-  }, 'BILLING_VOICE_RETRY_EXHAUSTED', { timeoutMs: 30000 });
+  }, 'BILLING_CREDIT_ACCOUNT_RETRY_EXHAUSTED', { timeoutMs: 30000 });
 }

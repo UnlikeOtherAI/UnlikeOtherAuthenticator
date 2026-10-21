@@ -45,7 +45,7 @@ export async function issueVoiceQuote(input: { request: BillingVoiceQuoteRequest
   if (input.credential.purpose !== 'VOICE_RUNTIME') throw new AppError('FORBIDDEN', 403);
   const grant = await runBillingSerializableTransaction(prisma, tx => lockVoiceGrant(tx, {
     grantId: body.grant_id, product: body.product, credential: input.credential,
-  }), 'BILLING_VOICE_RETRY_EXHAUSTED');
+  }), 'BILLING_CREDIT_ACCOUNT_RETRY_EXHAUSTED');
   assertVoiceRoute(grant, body);
   const accountSid = await assertVoiceNumber(grant, body, input.credential, deps);
   const now = deps.now?.() ?? new Date();
@@ -68,7 +68,7 @@ export async function issueVoiceQuote(input: { request: BillingVoiceQuoteRequest
       accountSid, from: body.from, to: body.to, direction: grant.direction, maxDurationSeconds: body.max_duration_seconds,
       rawCostBound: raw, markupBps: policy.markupBps, reservedMicrocredits: held,
       providerEvidence: { ...evidence, observedAt: now.toISOString() }, policyEvidence: policy, expiresAt } });
-  }, 'BILLING_VOICE_RETRY_EXHAUSTED');
+  }, 'BILLING_CREDIT_ACCOUNT_RETRY_EXHAUSTED');
   return { id: quote.id, grant_id: grant.id, from: quote.from, to: quote.to,
     direction: quote.direction as 'inbound' | 'outbound', max_duration_seconds: quote.maxDurationSeconds,
     reserved_credits: smsMicrocredits(held), expires_at: expiresAt.toISOString() };

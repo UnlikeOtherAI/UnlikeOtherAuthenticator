@@ -30,8 +30,17 @@ export async function reserveVoice(input: { request: BillingVoiceReserveRequestV
   if (input.credential.purpose !== 'VOICE_RUNTIME') throw new AppError('FORBIDDEN', 403);
   const grant = await runBillingSerializableTransaction(prisma, tx => lockVoiceGrant(tx, {
     grantId: body.grant_id, product: body.product, credential: input.credential,
-  }), 'BILLING_VOICE_RETRY_EXHAUSTED');
+  }), 'BILLING_CREDIT_ACCOUNT_RETRY_EXHAUSTED');
   assertVoiceRoute(grant, body);
+  const bindingDigest = createHash('sha256').update(JSON.stringify(Object.entries(body).sort(([a], [b]) => a.localeCompare(b)))).digest('hex');
+  const existing = await prisma.billingVoiceReservation.findUnique({ where: { dispatchId: body.dispatch_id } });
+  if (existing) {
+    if (existing.serviceId !== input.credential.service.id || existing.bindingDigest !== bindingDigest) {
+      throw new AppError('BAD_REQUEST', 409, 'BILLING_VOICE_BINDING_CONFLICT');
+    }
+    return publicVoiceReservation(existing);
+  }
+
   if ((grant.direction === 'inbound') !== (body.call_sid !== null) ||
       (grant.purpose === 'human_transfer') !== (body.parent_reservation_id !== null)) {
     throw new AppError('BAD_REQUEST', 400, 'BILLING_VOICE_LEG_BINDING_INVALID');
@@ -45,7 +54,7 @@ export async function reserveVoice(input: { request: BillingVoiceReserveRequestV
   const configured = deps.stripe ? { client: deps.stripe, livemode: deps.stripeLivemode ?? false } : requireStripeBillingEnabled();
   const account = await resolveStripeAccountContext(configured.client, configured.livemode, prisma);
   const credits = await resolveCreditAccount({ account, organisationId: grant.orgId, teamId: grant.teamId }, { prisma });
-  const bindingDigest = createHash('sha256').update(JSON.stringify(Object.entries(body).sort(([a], [b]) => a.localeCompare(b)))).digest('hex');
+
   return runBillingSerializableTransaction(prisma, async tx => {
     await lockVoiceGrant(tx, { grantId: grant.id, product: body.product, credential: input.credential });
     await tx.$queryRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtextextended(${`voice-grant:${grant.id}`}, 0))::text`);
@@ -98,5 +107,5 @@ export async function reserveVoice(input: { request: BillingVoiceReserveRequestV
       callSid: body.call_sid, reservedMicrocredits: quote.reservedMicrocredits, claimExpiresAt: quote.expiresAt,
       billingMonth: month,
     } }));
-  }, 'BILLING_VOICE_RETRY_EXHAUSTED', { timeoutMs: 30000 });
+  }, 'BILLING_CREDIT_ACCOUNT_RETRY_EXHAUSTED', { timeoutMs: 30000 });
 }
