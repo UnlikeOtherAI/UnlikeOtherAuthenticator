@@ -12,7 +12,7 @@ import { isBillingManager } from './billing-stripe-manager.service.js';
 export function publicVoiceGrant(grant: BillingVoiceGrant): BillingVoiceGrantV1 {
   return { direction: grant.direction as BillingVoiceGrantV1['direction'], purpose: grant.purpose as BillingVoiceGrantV1['purpose'],
     max_concurrent_calls: grant.maxConcurrentCalls, destinations: grant.destinations, id: grant.id, number_id: grant.numberId, allocation_id: grant.allocationId,
-    delegate_id: grant.delegateId, max_duration_seconds: grant.maxDurationSeconds, state: grant.revokedAt ? 'revoked' : 'active' };
+    billing_origin: null, delegate_id: grant.delegateId, max_duration_seconds: grant.maxDurationSeconds, state: grant.revokedAt ? 'revoked' : 'active' };
 }
 
 export function grantSubject(grant: BillingVoiceGrant, product: string): BillingSubjectRequest {
@@ -110,7 +110,13 @@ export async function readVoiceGrant(input: { request: BillingVoiceGrantReadRequ
         input.request.product !== input.credential.service.identifier) {
       throw new AppError('NOT_FOUND', 404, 'BILLING_VOICE_GRANT_NOT_FOUND');
     }
-    return publicVoiceGrant(grant);
+    if (grant.revokedAt) return publicVoiceGrant(grant);
+    const live = await lockVoiceGrant(tx, { grantId: grant.id, product: input.request.product, credential: input.credential });
+    return { ...publicVoiceGrant(live), billing_origin: {
+      subject: live.userId, token_version: live.actorTokenVersion,
+      organisation_id: live.orgId, team_id: live.teamId,
+      expires_at: new Date(Date.now() + 60_000).toISOString(),
+    } };
   }, 'BILLING_CREDIT_ACCOUNT_RETRY_EXHAUSTED');
 }
 

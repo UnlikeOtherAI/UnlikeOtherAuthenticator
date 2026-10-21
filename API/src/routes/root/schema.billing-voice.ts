@@ -18,5 +18,5 @@ export const billingVoiceEndpoints: EndpointSchema[] = Object.entries(BILLING_VO
   response: { 200: key.startsWith('grant') ? 'BillingVoiceGrantV1' : key === 'quote' ? 'BillingVoiceQuoteV1' : 'BillingVoiceReservationV1',
     402: 'Insufficient prepaid credits; can_dispatch=false', 409: 'Binding conflict or unproven outcome',
     503: 'Provider pricing/cutoff evidence unavailable; no admission' },
-  notes: 'Strict billing-statement-protocol voice v1 schemas. Connectivity-only USD evidence; live ancillary costs and cutoff proof remain required.',
+  notes: 'Strict billing-statement-protocol voice v1 schemas. Active grant read returns live-checked 60-second billing_origin (subject/token_version/organisation_id/team_id/expires_at); other grant responses return null; never caller authority. Connectivity-only USD evidence; live ancillary costs and cutoff proof remain required.',
 }));

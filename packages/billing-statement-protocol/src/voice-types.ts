@@ -16,10 +16,15 @@ export type BillingVoiceGrantRequestV1 = BillingSubjectRequest & {
   max_concurrent_calls: number; destinations: string[];
 };
 export type BillingVoiceGrantReadRequestV1 = { product: string; grant_id: string };
+/** Billing attribution only; never caller authentication or tool authority. */
+export type BillingVoiceBillingOriginV1 = {
+  subject: string; token_version: number; organisation_id: string; team_id: string; expires_at: string;
+};
 export type BillingVoiceGrantV1 = {
   id: string; number_id: string; allocation_id: string; delegate_id: string;
   direction: VoiceDirection; purpose: VoicePurpose; max_duration_seconds: number;
   max_concurrent_calls: number; destinations: string[]; state: 'active' | 'revoked';
+  billing_origin: BillingVoiceBillingOriginV1 | null;
 };
 export type BillingVoiceQuoteRequestV1 = BillingVoiceGrantReadRequestV1 & {
   delegate_id: string; from: string; to: string; max_duration_seconds: number;

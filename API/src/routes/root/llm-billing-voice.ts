@@ -9,7 +9,13 @@ max_concurrent_calls and destinations. Outbound requires exact permitted E.164 d
 inbound destinations is empty. Grants cannot authorize personal context from caller ID.
 
 All remaining Voice routes require a dedicated VOICE_RUNTIME key. /grants/read and /grants/revoke
-accept product and grant_id. /quotes accepts product, grant_id, delegate_id, from, to and
+accept product and grant_id. Active grant reads include billing_origin with subject, token_version,
+organisation_id, team_id and expires_at (at most 60 seconds). UOA rechecks the original issuer
+epoch, selected-team membership/management and consent key. Failed live authority returns 401/403;
+revoked grants and create/revoke responses have billing_origin=null. Use this tuple only as
+agent billingOrigin to exchange a fresh ai.invoke delegation; it never identifies the caller or
+authorizes personal context/tools. Do not persist it as a profile or use it after expiry.
+/quotes accepts product, grant_id, delegate_id, from, to and
 max_duration_seconds. /reservations additionally takes dispatch_id, request_fingerprint, quote_id,
 conversation_id, leg_id, nullable call_sid and nullable parent_reservation_id. Inbound needs its
 verified provider CallSid before any answering TwiML. Human transfer requires a separately funded

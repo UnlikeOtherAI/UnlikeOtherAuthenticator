@@ -180,3 +180,25 @@ these account-specific receipt and cutoff proofs remain external prerequisites;
 `BILLING_VOICE_ENABLED` must remain false for Nessie Media Streams. Existing API
 request/response shapes are unchanged. New policy tests reject unsupported ancillary
 configuration, sub-minute billing, disabled activation and expired evidence.
+
+## Live payer attribution for agent inference
+
+`POST /billing/v1/voice/grants/read` returns `billing_origin` on an active grant:
+`{subject, token_version, organisation_id, team_id, expires_at}`. The subject and
+epoch are the immutable consenting issuer, and org/team are the exact grant scope.
+UOA rechecks current issuer epoch, active selected-team membership, billing manager
+authority and the original lifecycle consent key. Failed authority returns 401/403.
+The tuple expires within 60 seconds; revoked grants return null, as do create/revoke
+responses. A new read is required for later use. No schema migration is needed.
+
+Nessie may use this tuple only as an independent agent's billingOrigin, followed by
+a fresh ordinary UOA `ai.invoke` delegation exchange. The external caller remains
+a separate principal. Neither the tuple nor a Voice grant grants personal context,
+tools, sign-in or a browser session. This addition does not enable paid telephone
+audio or remove ancillary pricing and provider cutoff gates.
+
+Payer attribution verification on Maxis: protocol build, API typecheck and scoped
+ESLint passed. All ten Voice persistence tests passed against the isolated migrated
+database on port 55452, including issuer epoch change, team removal, original
+consent-key revocation, foreign product refusal and revoked-grant null attribution.
+The database was stopped afterward. No live provider was used.

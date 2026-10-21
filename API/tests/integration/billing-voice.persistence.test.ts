@@ -5,7 +5,7 @@ import { createTestDb } from '../helpers/test-db.js';
 import { smsPaidNumberFixture } from '../helpers/sms-paid-number-fixture.js';
 import { smsAccount, smsCredential, smsIds, smsPhone } from '../helpers/sms-financial-fixture.js';
 import { BillingVoiceProvider, type VoiceReceipt, type VoiceRoute } from '../../src/services/billing-voice-provider.service.js';
-import { createVoiceGrant, revokeVoiceGrant } from '../../src/services/billing-voice-grant.service.js';
+import { createVoiceGrant, readVoiceGrant, revokeVoiceGrant } from '../../src/services/billing-voice-grant.service.js';
 import { issueVoiceQuote } from '../../src/services/billing-voice-quote.service.js';
 import { reserveVoice } from '../../src/services/billing-voice-reservation.service.js';
 import { claimVoice, releaseVoice } from '../../src/services/billing-voice-dispatch.service.js';
@@ -74,6 +74,36 @@ describe.skipIf(!process.env.DATABASE_URL)('prepaid Voice call legs', () => {
   });
   afterAll(async () => { await cleanup?.(); vi.unstubAllEnvs(); });
 
+  it('exposes only a fresh live issuer billing origin and clears it on revoke', async () => {
+    const consent = await grant();
+    expect(consent.billing_origin).toBeNull();
+    const input = { credential, request: { product: 'nessie', grant_id: consent.id } };
+    const before = Date.now();
+    const read = await readVoiceGrant(input, { prisma });
+    expect(read.billing_origin).toMatchObject({ subject: smsIds.user, token_version: 0,
+      organisation_id: smsIds.org, team_id: smsIds.team });
+    expect(Date.parse(read.billing_origin!.expires_at)).toBeGreaterThan(before);
+    expect(Date.parse(read.billing_origin!.expires_at)).toBeLessThanOrEqual(Date.now() + 60_000);
+    expect((await revokeVoiceGrant(input, { prisma })).billing_origin).toBeNull();
+    expect((await readVoiceGrant(input, { prisma })).billing_origin).toBeNull();
+  });
+  it('refuses billing origin after issuer epoch, membership or original key revocation', async () => {
+    const consent = await grant();
+    const input = { credential, request: { product: 'nessie', grant_id: consent.id } };
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: smsIds.user } });
+    await prisma.user.update({ where: { id: user.id }, data: { tokenVersion: user.tokenVersion + 1 } });
+    try { await expect(readVoiceGrant(input, { prisma })).rejects.toMatchObject({ statusCode: 401 }); }
+    finally { await prisma.user.update({ where: { id: user.id }, data: { tokenVersion: user.tokenVersion } }); }
+    const member = await prisma.teamMember.findUniqueOrThrow({ where: { teamId_userId: { teamId: smsIds.team, userId: smsIds.user } } });
+    await prisma.teamMember.delete({ where: { id: member.id } });
+    try { await expect(readVoiceGrant(input, { prisma })).rejects.toMatchObject({ statusCode: 403 }); }
+    finally { await prisma.teamMember.create({ data: member }); }
+    await prisma.billingAppKey.update({ where: { id: fixture.lifecycle.id }, data: { revokedAt: new Date() } });
+    try { await expect(readVoiceGrant(input, { prisma })).rejects.toMatchObject({ statusCode: 403 }); }
+    finally { await prisma.billingAppKey.update({ where: { id: fixture.lifecycle.id }, data: { revokedAt: null } }); }
+    await expect(readVoiceGrant({ ...input, request: { ...input.request, product: 'other' } }, { prisma }))
+      .rejects.toMatchObject({ statusCode: 404 });
+  });
   it('reserves once, claims once, settles one exact debit and preserves source bindings', async () => {
     const value = await reservation();
     expect(value.result.reserved_credits).toBe('25.400000');

@@ -16,7 +16,9 @@ const grant = {
 };
 export const billingVoiceGrantRequestV1JsonSchema = billingSubjectActionBodySchema(
   { ...grant, idempotency_key: id }, [...Object.keys(grant), 'idempotency_key']);
-export const billingVoiceGrantV1JsonSchema = exact({ ...grant, id, state: { enum: ['active', 'revoked'] } });
+export const billingVoiceGrantV1JsonSchema = exact({ ...grant, id, state: { enum: ['active', 'revoked'] },
+  billing_origin: nullable(exact({ subject: id, token_version: { type: 'integer', minimum: 0 },
+    organisation_id: id, team_id: id, expires_at: { type: 'string', format: 'date-time' } })) });
 const grantRead = { product: id, grant_id: id };
 export const billingVoiceGrantReadRequestV1JsonSchema = exact(grantRead);
 const quote = { ...grantRead, delegate_id: id, from: phone, to: phone, max_duration_seconds: seconds };
