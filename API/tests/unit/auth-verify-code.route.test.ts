@@ -1,4 +1,4 @@
-import { legacyCredentialStores } from '../helpers/authentication-fixture.js';
+import { authenticationFixtureDb, legacyCredentialStores } from '../helpers/authentication-fixture.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ClientConfig } from '../../src/services/config.service.js';
@@ -168,6 +168,7 @@ describe('POST /auth/verify-code', () => {
         }
       }
     }
+    Object.assign(prismaMock, { authenticationEvidence: authenticationFixtureDb().authenticationEvidence });
     verifyLoginCodeMock.mockReset();
     recordLoginLogMock.mockReset().mockResolvedValue(undefined);
     assertEmailDomainAllowedForLoginMock.mockReset().mockResolvedValue(undefined);

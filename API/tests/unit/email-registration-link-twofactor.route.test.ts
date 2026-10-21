@@ -1,9 +1,10 @@
-vi.mock('../../src/db/prisma.js', async () => {
-  const { authenticationFixtureDb } = await import('../helpers/authentication-fixture.js');
-  const db = authenticationFixtureDb();
-  return { getPrisma: () => db, getAdminPrisma: () => db,
-    connectPrisma: async () => {}, disconnectPrisma: async () => {} };
-});
+import { authenticationFixtureDb } from '../helpers/authentication-fixture.js';
+
+const routeDb = vi.hoisted(() => ({ current: undefined as ReturnType<typeof authenticationFixtureDb> | undefined }));
+vi.mock('../../src/db/prisma.js', () => ({
+  getPrisma: () => routeDb.current, getAdminPrisma: () => routeDb.current,
+  connectPrisma: async () => {}, disconnectPrisma: async () => {},
+}));
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -117,6 +118,7 @@ async function getLink() {
 
 describe('GET /auth/email/link exact-one team 2FA', () => {
   beforeEach(() => {
+    routeDb.current = authenticationFixtureDb();
     process.env.DATABASE_URL = 'postgres://uoa-auth-route-fixture.invalid/db';
     currentConfig = config();
     process.env.SHARED_SECRET = 'test-shared-secret-with-enough-length';

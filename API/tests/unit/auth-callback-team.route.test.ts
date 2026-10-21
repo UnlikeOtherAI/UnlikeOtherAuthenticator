@@ -1,9 +1,10 @@
-vi.mock('../../src/db/prisma.js', async () => {
-  const { authenticationFixtureDb } = await import('../helpers/authentication-fixture.js');
-  const db = authenticationFixtureDb();
-  return { getPrisma: () => db, getAdminPrisma: () => db,
-    connectPrisma: async () => {}, disconnectPrisma: async () => {} };
-});
+import { authenticationFixtureDb } from '../helpers/authentication-fixture.js';
+
+const routeDb = vi.hoisted(() => ({ current: undefined as ReturnType<typeof authenticationFixtureDb> | undefined }));
+vi.mock('../../src/db/prisma.js', () => ({
+  getPrisma: () => routeDb.current, getAdminPrisma: () => routeDb.current,
+  connectPrisma: async () => {}, disconnectPrisma: async () => {},
+}));
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { JWTPayload } from 'jose';
@@ -146,6 +147,7 @@ async function runCallback() {
 
 describe('GET /auth/callback/:provider team selection', () => {
   beforeEach(() => {
+    routeDb.current = authenticationFixtureDb();
     process.env.DATABASE_URL = 'postgres://uoa-auth-route-fixture.invalid/db';
     process.env.NODE_ENV = 'test';
     process.env.SHARED_SECRET = 'test-shared-secret-with-enough-length';
@@ -231,6 +233,7 @@ describe('GET /auth/callback/:provider team selection', () => {
     expect(location.searchParams.get('code_challenge_method')).toBe('S256');
     expect(signLoginSessionMock).toHaveBeenCalledWith(
       expect.objectContaining({ authMethod: 'google' }),
+      expect.objectContaining({ prisma: expect.anything(), verifiedEvent: expect.anything() }),
     );
     expect(finalizeAuthenticatedUserMock).not.toHaveBeenCalled();
     expect(resolveTwoFaPolicyMock).not.toHaveBeenCalled();
