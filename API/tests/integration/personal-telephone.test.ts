@@ -8,6 +8,7 @@ import { registerTelephoneProfileRoutes } from '../../src/routes/apps/telephone-
 import { createBillingAppKey, verifyBillingAppKey, type VerifiedBillingAppKey } from '../../src/services/billing-app-key.service.js';
 import { LOOKUP_PATH } from '../../src/services/telephone-authority.service.js';
 import { telephoneProfile, type TelephoneAction } from '../../src/services/telephone-profile.service.js';
+import { CALL_PROOF_PATH, telephoneCallProof } from '../../src/services/telephone-call-proof.service.js';
 import { teamTelephoneNumbers } from '../../src/services/telephone-directory.service.js';
 import { lookupTelephone } from '../../src/services/telephone-lookup.service.js';
 import { createTestDb } from '../helpers/test-db.js';
@@ -48,6 +49,7 @@ describe.skipIf(!process.env.DATABASE_URL)('personal telephone authority', () =>
     credential = await verifyBillingAppKey(appKey, { prisma: db.prisma });
   });
   beforeEach(async () => {
+    await db.prisma.telephoneCallChallenge.deleteMany();
     await db.prisma.telephoneLookup.deleteMany();
     await db.prisma.telephoneChallenge.deleteMany();
     await db.prisma.userTelephone.deleteMany();
@@ -86,6 +88,85 @@ describe.skipIf(!process.env.DATABASE_URL)('personal telephone authority', () =>
   async function lookup(value = number, callId = randomUUID(), extra: Record<string, unknown> = {}) {
     return lookupTelephone({ credential, serviceToken: await serviceToken(value, callId, extra), number: value }, { prisma: db.prisma });
   }
+
+  async function proofToken(action: 'start' | 'verify', callId: string, value = number) {
+    return new SignJWT({ purpose: 'telephone-call-proof', product: 'nessie', organisation_id: orgId, team_id: teamId,
+      call_id: callId, number_digest: createHash('sha256').update(value).digest('hex') })
+      .setProtectedHeader({ alg: 'RS256', kid: credential.actorKeyId, typ: 'uoa-telephone-call-proof+jwt' })
+      .setIssuer(credential.actorIssuer).setAudience(`${publicBase}${CALL_PROOF_PATH}/${action}`)
+      .setJti(randomUUID()).setIssuedAt().setExpirationTime('60s').sign(privateKey);
+  }
+  async function proof(action: 'start' | 'verify', callId: string, challengeId?: string, code = '654321') {
+    return telephoneCallProof({ credential, action, serviceToken: await proofToken(action, callId), number, challengeId, code },
+      { prisma: db.prisma, generateCode: () => '654321' });
+  }
+  async function beginProof(callId = randomUUID()) {
+    await lookup(number, callId);
+    const result = await proof('start', callId);
+    if (!('challengeId' in result)) throw new Error('missing proof challenge');
+    return { ...result, callId };
+  }
+
+  it('consumes a call proof once under concurrent verification and never creates a login', async () => {
+    await verify();
+    const challenge = await beginProof();
+    const results = await Promise.all([proof('verify', challenge.callId, challenge.challengeId),
+      proof('verify', challenge.callId, challenge.challengeId)]);
+    expect(results.filter(result => result.status === 'verified')).toHaveLength(1);
+    expect(results.filter(result => result.status === 'used')).toHaveLength(1);
+    expect(results.find(result => result.status === 'verified')).toMatchObject({ authentication: 'telephone_sms',
+      subject: userId, tokenVersion: 0, organisationId: orgId, teamId, callId: challenge.callId });
+    expect(await db.prisma.refreshToken.count()).toBe(0);
+  });
+
+  it('distinguishes call-proof no-match, pending and ambiguous without a subject', async () => {
+    const call = randomUUID();
+    await lookup(number, call);
+    expect(await proof('start', call)).toEqual({ status: 'no_match', authentication: 'none' });
+    await profile('set', { number });
+    expect(await proof('start', call)).toEqual({ status: 'pending', authentication: 'none' });
+    await verify();
+    const other = await db.prisma.user.create({ data: { email: 'proof-other@example.test', userKey: 'proof-other@example.test' } });
+    await db.prisma.orgMember.create({ data: { userId: other.id, orgId, role: 'member' } });
+    await db.prisma.teamMember.create({ data: { userId: other.id, teamId, teamRole: 'member' } });
+    await db.prisma.userTelephone.create({ data: { userId: other.id, pendingNumber: number } });
+    expect(await proof('start', call)).toEqual({ status: 'ambiguous', authentication: 'none' });
+  });
+
+  it('persists wrong call-code attempts and refuses cross-call, expiry and revoked epochs', async () => {
+    await verify();
+    const challenge = await beginProof();
+    const otherCall = randomUUID();
+    await lookup(number, otherCall);
+    await expect(proof('verify', otherCall, challenge.challengeId)).rejects.toMatchObject({ statusCode: 403 });
+    for (let attempt = 0; attempt < 5; attempt++) {
+      expect(await proof('verify', challenge.callId, challenge.challengeId, '000000')).toEqual({ status: 'invalid', authentication: 'none' });
+    }
+    expect(await proof('verify', challenge.callId, challenge.challengeId)).toEqual({ status: 'invalid', authentication: 'none' });
+    expect((await db.prisma.telephoneCallChallenge.findUniqueOrThrow({ where: { id: challenge.challengeId } })).attempts).toBe(5);
+    const second = await beginProof();
+    await db.prisma.telephoneCallChallenge.update({ where: { id: second.challengeId }, data: { expiresAt: new Date(0) } });
+    expect(await proof('verify', second.callId, second.challengeId)).toEqual({ status: 'expired', authentication: 'none' });
+    const third = await beginProof();
+    await db.prisma.user.update({ where: { id: userId }, data: { tokenVersion: 1 } });
+    expect(await proof('verify', third.callId, third.challengeId)).toEqual({ status: 'invalid', authentication: 'none' });
+  });
+
+  it('limits call-proof issuance per call and person and rejects replayed start assertions', async () => {
+    await verify();
+    const call = randomUUID();
+    await lookup(number, call);
+    const token = await proofToken('start', call);
+    const input = { credential, action: 'start' as const, serviceToken: token, number };
+    await telephoneCallProof(input, { prisma: db.prisma });
+    await expect(telephoneCallProof(input, { prisma: db.prisma })).rejects.toMatchObject({ statusCode: 403 });
+    await proof('start', call);
+    await proof('start', call);
+    await expect(proof('start', call)).rejects.toMatchObject({ statusCode: 429 });
+    await beginProof();
+    await beginProof();
+    await expect(beginProof()).rejects.toMatchObject({ statusCode: 429 });
+  });
 
   it('retains verified private routing during replacement and resets visibility on verification', async () => {
     expect(await lookup()).toEqual({ match: null, authentication: 'none' });

@@ -33,6 +33,35 @@ for pending/ambiguous. Unknown is null; pending/ambiguous must not enter an
 outside Clients conversation. Verified is only a routing candidate. Spoofable
 caller ID and historical SMS verification NEVER authorize private context,
 tools or a signed-in session: Nessie must obtain separate per-call proof.
+For a verified routing candidate, use POST /apps/v1/nessie/phone-profile/call-proof/start
+with {number}. Service assertion uses purpose=telephone-call-proof and
+ typ=uoa-telephone-call-proof+jwt with the same strict routing claims and exact
+endpoint aud. A prior lookup must bind this key/call/number/team. Start returns
+{status:"challenge",challengeId,expiresAt,delivery:{number,code}} or
+{status:"pending"|"ambiguous"|"no_match",authentication:"none"}. Strip delivery
+from public responses/logs. Codes last five minutes; five guesses; three starts
+per call and five per person/destination in 15 minutes. Start assertion replay refuses.
+
+Before sending code, POST call-proof/reserve with {number,challengeId,dispatch_id,
+request_fingerprint,number_id,allocation_id,account_sid,from,max_segments} and a
+fresh exact-reserve call-proof assertion. Segments must be 1–3. UOA checks the
+challenge, active funded selected-team standing hold, paid acquired sender and
+same-country destination; it quotes and reserves prepaid credits. Response is
+BillingSmsReservationV1. Existing SMS_RUNTIME reservation/claim/receipt/release
+protocol completes delivery; never send without the one-use claim token. One
+challenge allows one immutable dispatch. Insufficient credit is HTTP 402 with
+code BILLING_SMS_INSUFFICIENT_CREDITS and can_dispatch:false.
+
+Collect six DTMF digits and POST call-proof/verify with {number,challengeId,code}
+and a fresh exact-verify service assertion. Success returns {status:"verified",
+authentication:"telephone_sms",subject,tokenVersion,organisationId,teamId,callId,
+verifiedAt,expiresAt}; expires five minutes after verification. It is neither an
+OAuth token nor a browser login. Keep only on that call and check live UOA
+membership/epoch before private tools. Consumed challenges return used; refusals
+return {status:"invalid"|"expired"|"used"|"pending"|"ambiguous"|"no_match",
+authentication:"none"}, no subject. Lookup no_match remains an external caller,
+not a member. No code or proof may become a reusable session.
+
 All reads are private/no-store, with no positive cache. Machine-readable bodies
 and responses are listed at /api. These are machine-only endpoints; Nessie's
 personal profile owns the phone form and SMS code-entry doorway.

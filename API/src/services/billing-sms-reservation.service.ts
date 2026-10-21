@@ -1,3 +1,4 @@
+import { lockTelephoneSmsAuthority } from './telephone-sms-authority.service.js';
 import { Prisma, type BillingSmsReservation } from '@prisma/client';
 import type { BillingSmsReserveRequestV1, BillingSmsReservationV1 } from '@unlikeotherai/billing-statement-protocol';
 import { getAdminPrisma } from '../db/prisma.js';
@@ -27,6 +28,13 @@ export function publicSmsReservation(row: BillingSmsReservation, token: string |
 export async function lockSmsDispatchAuthority(tx: Prisma.TransactionClient, row: BillingSmsReservation,
   credential: VerifiedBillingAppKey): Promise<void> {
   if (row.serviceId !== credential.service.id) throw new AppError('NOT_FOUND', 404);
+  if (row.telephoneCallChallengeId) {
+    await lockTelephoneSmsAuthority(tx, row.telephoneCallChallengeId, credential, {
+      number_id: row.numberId, allocation_id: row.allocationId, account_sid: row.accountSid, from: row.from,
+      to: row.to, max_segments: row.maxSegments,
+    });
+    return;
+  }
   if (row.grantId) {
     const grant = await lockSmsGrant(tx, { grantId: row.grantId, product: credential.service.identifier, credential });
     if (grant.numberId !== row.numberId || grant.allocationId !== row.allocationId ||
@@ -66,6 +74,22 @@ export async function reserveSms(input: { request: BillingSmsReserveRequestV1; a
     actor = await verifySmsActor({ subject: body, actorToken: input.actorToken ?? '', credential: input.credential,
       endpoint: '/billing/v1/sms/reservations' });
   }
+  return reserveAuthorizedSms(input, deps, { actor, authorize: async tx => {
+    if (delegated && body.grant_id !== null) await lockSmsGrant(tx, { grantId: body.grant_id, product: body.product, credential: input.credential });
+    else await lockSmsSubject(tx, { subject: body, actor, credential: input.credential });
+  } });
+}
+
+/** Internal admission seam shared by actor/grant and UOA-issued telephone challenge authority. */
+export async function reserveAuthorizedSms(input: { request: BillingSmsReserveRequestV1;
+  credential: VerifiedBillingAppKey }, deps: SmsNumberDependencies, authority: {
+  actor: Pick<BillingActor, 'tv' | 'exp'>;
+  telephoneCallChallengeId?: string;
+  authorize: (tx: Prisma.TransactionClient) => Promise<unknown>;
+}): Promise<BillingSmsReservationV1> {
+  const prisma = deps.prisma ?? getAdminPrisma();
+  const body = input.request;
+  const actor = authority.actor;
   const paid = await readSmsNumber({ product: body.product, resource_id: body.number_id, credential: input.credential }, deps);
   if (paid.organisation_id !== body.organisation_id || paid.phone_number !== body.from || !paid.acquisition_authorized) {
     throw new AppError('BAD_REQUEST', 409, 'BILLING_SMS_PAYMENT_NOT_ACTIVE');
@@ -80,8 +104,7 @@ export async function reserveSms(input: { request: BillingSmsReserveRequestV1; a
   const account = await resolveStripeAccountContext(stripe, deps.stripeLivemode ?? configured?.livemode ?? false, prisma);
   const credits = await resolveCreditAccount({ account, organisationId: body.organisation_id, teamId: body.team_id }, { prisma });
   return runBillingSerializableTransaction(prisma, async (tx) => {
-    if (delegated && body.grant_id !== null) await lockSmsGrant(tx, { grantId: body.grant_id, product: body.product, credential: input.credential });
-    else await lockSmsSubject(tx, { subject: body, actor, credential: input.credential });
+    await authority.authorize(tx);
     await tx.$queryRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtextextended(${body.number_id}, 0))::text`);
     await tx.$queryRaw(Prisma.sql`SELECT id FROM billing_sms_number_resources WHERE id = ${body.number_id} FOR SHARE`);
     await tx.$queryRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtextextended(${body.dispatch_id}, 0))::text`);
@@ -93,10 +116,15 @@ export async function reserveSms(input: { request: BillingSmsReserveRequestV1; a
       if (prior.requestFingerprint !== body.request_fingerprint || prior.serviceId !== input.credential.service.id ||
           prior.orgId !== body.organisation_id || prior.teamId !== body.team_id || prior.userId !== body.user_id ||
           prior.numberId !== body.number_id || prior.allocationId !== body.allocation_id ||
-          prior.quoteId !== body.quote_id || prior.grantId !== body.grant_id || prior.delegateId !== body.delegate_id ||
+          (prior.telephoneCallChallengeId ?? null) !== (authority.telephoneCallChallengeId ?? null) ||
+          (!authority.telephoneCallChallengeId && prior.quoteId !== body.quote_id) || prior.grantId !== body.grant_id || prior.delegateId !== body.delegate_id ||
           prior.accountSid !== body.account_sid || prior.from !== body.from || prior.to !== body.to ||
           prior.maxSegments !== body.max_segments) throw new AppError('BAD_REQUEST', 409, 'BILLING_SMS_DISPATCH_BINDING_CONFLICT');
       return publicSmsReservation(prior);
+    }
+    if (authority.telephoneCallChallengeId && await tx.billingSmsReservation.findUnique({
+      where: { telephoneCallChallengeId: authority.telephoneCallChallengeId } })) {
+      throw new AppError('BAD_REQUEST', 409, 'BILLING_SMS_DISPATCH_BINDING_CONFLICT');
     }
     const number = await tx.billingSmsNumberResource.findFirst({ where: { id: body.number_id,
       serviceId: input.credential.service.id, orgId: body.organisation_id, state: 'active',
@@ -126,6 +154,7 @@ export async function reserveSms(input: { request: BillingSmsReserveRequestV1; a
       serviceId: input.credential.service.id, appKeyId: input.credential.id, orgId: body.organisation_id,
       teamId: body.team_id, userId: body.user_id, actorTokenVersion: actor.tv,
       actorExpiresAt: new Date(actor.exp * 1000), numberId: body.number_id, allocationId: body.allocation_id,
+      telephoneCallChallengeId: authority.telephoneCallChallengeId ?? null,
       quoteId: body.quote_id, grantId: body.grant_id, delegateId: body.delegate_id,
       accountSid: body.account_sid, from: body.from, to: body.to, maxSegments: body.max_segments,
       reservedMicrocredits: held, billingMonth: month,

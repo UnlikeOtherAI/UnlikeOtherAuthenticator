@@ -486,6 +486,7 @@ model User {
   settings               UserSetting[]
   telephone              UserTelephone?
   telephoneChallenges    TelephoneChallenge[]
+  telephoneCallChallenges TelephoneCallChallenge[]
 
   @@index([email])
   @@index([domain])
@@ -5009,6 +5010,7 @@ model BillingSmsReservation {
   numberId             String   @map("number_id") @db.VarChar(160)
   allocationId         String   @map("allocation_id") @db.VarChar(160)
   quoteId              String   @map("quote_id")
+  telephoneCallChallengeId String? @unique @map("telephone_call_challenge_id")
   grantId              String?  @map("grant_id")
   delegateId           String?  @map("delegate_id") @db.VarChar(160)
   accountSid           String   @map("account_sid") @db.Char(34)
@@ -5219,4 +5221,30 @@ model TelephoneLookup {
   @@id([appKeyId, callId])
   @@index([appKeyId, createdAt])
   @@map("telephone_lookups")
+}
+
+/// One-call SMS possession proof; never a login or browser session.
+model TelephoneCallChallenge {
+  id String @id @default(uuid())
+  userId String @map("user_id")
+  appKeyId String @map("app_key_id")
+  assertionJti String @map("assertion_jti")
+  callId String @map("call_id")
+  organisationId String @map("organisation_id")
+  teamId String @map("team_id")
+  tokenVersion Int @map("token_version")
+  number String @db.VarChar(16)
+  numberVerifiedAt DateTime @map("number_verified_at")
+  codeHash String @map("code_hash")
+  attempts Int @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+  expiresAt DateTime @map("expires_at")
+  usedAt DateTime? @map("used_at")
+  verifiedAt DateTime? @map("verified_at")
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([appKeyId, assertionJti])
+  @@index([appKeyId, callId, createdAt])
+  @@index([userId, createdAt])
+  @@index([number, createdAt])
+  @@map("telephone_call_challenges")
 }

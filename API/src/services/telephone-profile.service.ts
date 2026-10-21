@@ -41,6 +41,7 @@ export async function telephoneProfile(input: TelephoneAuth & { action: Telephon
     }
     if (input.action === 'set') {
       const number = TelephoneNumber.parse(input.data.number);
+      await telephoneLock(tx, telephoneDigest(number));
       await tx.telephoneChallenge.updateMany({ where: { userId, usedAt: null }, data: { usedAt: now } });
       await tx.userTelephone.upsert({ where: { userId },
         create: { userId, pendingNumber: number }, update: { pendingNumber: number } });
@@ -49,6 +50,7 @@ export async function telephoneProfile(input: TelephoneAuth & { action: Telephon
       const token = await tx.telephoneChallenge.findUnique({ where: { id: input.data.challengeId ?? '' } });
       if (!token || token.userId !== userId || token.appKeyId !== input.credential.id || token.tokenVersion !== actor.tv
         || token.usedAt || token.expiresAt <= now || token.attempts >= 5) return null;
+      await telephoneLock(tx, telephoneDigest(token.number));
       const profile = await tx.userTelephone.findUnique({ where: { userId } });
       if (profile?.pendingNumber !== token.number) return null;
       await tx.telephoneChallenge.update({ where: { id: token.id }, data: { attempts: { increment: 1 } } });

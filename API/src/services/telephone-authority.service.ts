@@ -59,23 +59,28 @@ export async function telephoneLock(tx: PrismaClient, key: string): Promise<void
 }
 
 const LookupAssertion = z.object({
-  iss: z.string(), aud: z.string(), purpose: z.literal('telephone-routing'), product: z.literal('nessie'),
+  iss: z.string(), aud: z.string(), purpose: z.enum(['telephone-routing', 'telephone-call-proof']), product: z.literal('nessie'),
   organisation_id: z.string().min(1).max(256), team_id: z.string().min(1).max(256),
   call_id: z.string().min(1).max(128), number_digest: z.string().regex(/^[a-f0-9]{64}$/),
   jti: z.string().min(1).max(128), iat: z.number().int(), exp: z.number().int(),
 }).strict();
 /** No human subject, epoch or authentication result: this is a backend routing request. */
-export async function verifyTelephoneLookupAssertion(credential: VerifiedBillingAppKey, token: string) {
+export async function verifyTelephoneServiceAssertion(credential: VerifiedBillingAppKey, token: string,
+  endpoint: string, purpose: 'telephone-routing' | 'telephone-call-proof') {
   assertTelephoneProduct(credential);
   try {
     const header = decodeProtectedHeader(token);
-    if (header.alg !== 'RS256' || header.kid !== credential.actorKeyId || header.typ !== 'uoa-telephone-routing+jwt') throw telephoneDenied();
+    if (header.alg !== 'RS256' || header.kid !== credential.actorKeyId || header.typ !== `uoa-${purpose}+jwt`) throw telephoneDenied();
     const { payload } = await jwtVerify(token, await importClientJwkKey(jwkToPublic(credential.actorPublicJwk)), {
-      algorithms: ['RS256'], issuer: credential.actorIssuer, audience: `${getPublicBaseUrl()}${LOOKUP_PATH}`,
+      algorithms: ['RS256'], issuer: credential.actorIssuer, audience: `${getPublicBaseUrl()}${endpoint}`,
     });
     const result = LookupAssertion.parse(payload);
     const now = Math.floor(Date.now() / 1000);
+    if (result.purpose !== purpose) throw telephoneDenied();
     if (result.exp <= result.iat || result.exp - result.iat > 60 || result.iat > now + 5) throw telephoneDenied();
     return result;
   } catch { throw telephoneDenied(); }
 }
+
+export const verifyTelephoneLookupAssertion = (credential: VerifiedBillingAppKey, token: string) =>
+  verifyTelephoneServiceAssertion(credential, token, LOOKUP_PATH, 'telephone-routing');

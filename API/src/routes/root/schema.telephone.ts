@@ -1,9 +1,11 @@
+import { telephoneCallProofEndpoints } from './schema.telephone-call-proof.js';
 import type { EndpointSchema } from './schema.js';
 const base = '/apps/v1/nessie/phone-profile/';
 const subject = { product: 'nessie', organisation_id: 'exact organisation', team_id: 'exact active team', user_id: 'signed-in subject' };
 const auth = 'Nessie customer_lifecycle X-UOA-App-Key + exact-endpoint RS256 X-UOA-Actor; live identity/epoch/membership checks';
 const profile = { phone: 'null | {number:string|null,pendingNumber:string|null,verifiedAt:ISO|null,visibility:private|team}' };
 export const telephoneEndpoints: EndpointSchema[] = [
+  ...telephoneCallProofEndpoints,
   { method: 'POST', path: base + 'set', auth, description: 'Record a pending number without sending a code; preserve existing verified number and invalidate challenges.',
     body: { ...subject, number: 'canonical E.164' }, response: profile },
   { method: 'POST', path: base + 'read', auth, description: 'Read only the acting person’s UOA telephone profile.', body: subject, response: profile },

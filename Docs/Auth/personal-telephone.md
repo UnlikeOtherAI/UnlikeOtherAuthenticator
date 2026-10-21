@@ -66,3 +66,31 @@ On Windows Maxis, revision `4a5cd4b9` passed the nine telephone integration case
 The isolated cluster needed `max_locks_per_transaction=256` for schema teardown; the initial default hit PostgreSQL's lock-table limit after all assertions passed. Running start, tests and stop in one SSH session avoids Windows terminating the test server between commands. No application workaround was added for either test-host condition.
 
 Self-review checked the shared product-policy and user-epoch lock order, committed failed attempts, retained verified values during pending replacement, exact endpoint audiences, strict service claims without a user principal, fresh membership reads on retries, and tenant-role denial even with table SELECT grants. Shared-number claims intentionally return ambiguous rather than selecting an owner. UOA owns the data; the Nessie profile and SMS relay still need integration, and real SMS delivery and live-call proof remain unverified.
+
+## Live-call SMS possession proof
+
+After a `verified` lookup, Nessie may request `POST /apps/v1/nessie/phone-profile/call-proof/start` with `{number}`. It uses the lifecycle app key and `X-UOA-Service-Assertion` with the strict routing claims, but `purpose: "telephone-call-proof"`, `typ: "uoa-telephone-call-proof+jwt"`, and the exact start URL as audience. A prior lookup must bind the same key, call, number, organisation and team. There is no human subject assertion.
+
+Success returns `{status:"challenge",challengeId,expiresAt,delivery:{number,code}}`. Pending, ambiguous and unknown candidates return `{status:"pending"|"ambiguous"|"no_match",authentication:"none"}` with no subject or delivery. An unknown routing result remains an external caller, never an inferred member. Codes expire in five minutes and permit five guesses; issuance is capped at three per call and five per person and destination per 15 minutes. A fresh start invalidates the previous code for that call. Replaying the same start assertion is refused rather than issuing another code.
+
+Before SMS dispatch, Nessie calls `POST .../call-proof/reserve` with a fresh assertion whose audience is that exact URL. Body:
+
+```
+{number, challengeId, dispatch_id, request_fingerprint,
+ number_id, allocation_id, account_sid, from, max_segments}
+```
+
+The fingerprint is lowercase SHA-256 hex; identifiers are bounded to 160 characters; `max_segments` is 1–3. UOA checks the destination against the issued challenge and requires the exact team's active, non-retired, positive funded standing hold for that sender/allocation. It checks the service/organisation's paid acquired number and account, and requires sender and destination countries to match. UOA has no independent team-allocation inventory; the funded standing hold is its existing authoritative allocation binding. The inbound hold is not spent for this SMS: a separate outbound quote, budget admission and prepaid wallet reservation are required.
+
+The response is the existing `BillingSmsReservationV1`: `{dispatch_id,reservation_id,state,dispatch_token,reserved_credits,consumed_credits,message_sid}`. Initially `state` is `reserved`, `dispatch_token` is null, and no SMS may yet be sent. The existing SMS_RUNTIME `/billing/v1/sms/reservations/claim` returns a one-use dispatch token after rechecking the current challenge, original lifecycle key, allocation and provider number. Existing receipt/release endpoints retain settlement and uncertain-outcome behavior. One challenge permits one immutable dispatch; exact reserve retries reuse it. Changed destination, sender, allocation, segment bound, fingerprint or dispatch id is refused. Insufficient funds return HTTP 402 `{code:"BILLING_SMS_INSUFFICIENT_CREDITS",reason:"insufficient_prepaid_credits",can_dispatch:false}`. No unpaid send fallback is permitted.
+
+Nessie sends only the issued OTP through that admitted dispatch, strips `delivery` from any public response, and collects six DTMF digits. `POST .../call-proof/verify` accepts `{number,challengeId,code}` with a fresh exact-verify assertion. It checks the original challenge key/call/team/number, current user epoch, current membership and the same verified telephone version. Successful consumption returns:
+
+```
+{status:"verified",authentication:"telephone_sms",subject,tokenVersion,
+ organisationId,teamId,callId,verifiedAt,expiresAt}
+```
+
+This result expires five minutes after verification. It is not an OAuth token, login, refresh credential or browser session. Nessie may retain it only on that call and must check current UOA membership/epoch before private tool execution. Verification is serialized: concurrent correct submissions produce one proof; subsequent submissions return `{status:"used",authentication:"none"}`. Other refusal statuses are `invalid`, `expired`, `pending`, `ambiguous` and `no_match`; none carries a subject. Invalid service assertions/bindings return 403, malformed HTTP bodies 400 and rate limits 429.
+
+Call challenges retain keyed code digests and bounded audit metadata for one day and are erased with the user's identity. Telephone enrollment itself remains contact proof: historical verification and caller ID never confer call authority. Nessie still owns Twilio signature validation, call routing, prepaid SMS delivery, DTMF collection and call teardown.

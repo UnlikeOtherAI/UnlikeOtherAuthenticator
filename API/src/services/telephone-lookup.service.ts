@@ -1,3 +1,4 @@
+import { resolveTelephoneMatch } from './telephone-match.service.js';
 import { createHash } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
 import { getAdminPrisma } from '../db/prisma.js';
@@ -27,16 +28,10 @@ export async function lookupTelephone(input: {
       createdAt: { gt: new Date(now.getTime() - 60_000) } } }) >= 120) {
       throw new AppError('RATE_LIMITED', 429, 'RATE_LIMITED');
     }
-    const phones = await tx.userTelephone.findMany({ where: { OR: [{ number }, { pendingNumber: number }],
-      user: { lifecycleStatus: 'ACTIVE', orgMembers: { some: { orgId: assertion.organisation_id, status: 'ACTIVE',
-        org: { lifecycleStatus: 'ACTIVE' } } }, teamMembers: { some: { teamId: assertion.team_id, status: 'ACTIVE',
-        team: { orgId: assertion.organisation_id, lifecycleStatus: 'ACTIVE' } } } } },
-      select: { userId: true, number: true, verifiedAt: true }, take: 2 });
-    const phone = phones[0];
-    const match = phones.length > 1 ? { state: 'ambiguous' as const }
-      : !phone ? null : phone.number === number && phone.verifiedAt
-        ? { state: 'verified' as const, subject: phone.userId, verifiedAt: phone.verifiedAt.toISOString() }
-        : { state: 'pending' as const };
+    const candidate = await resolveTelephoneMatch(tx, assertion, number);
+    const match = candidate.state === 'no_match' ? null : candidate.state === 'verified'
+      ? { state: candidate.state, subject: candidate.subject, verifiedAt: candidate.verifiedAt.toISOString() }
+      : { state: candidate.state };
     await tx.telephoneLookup.upsert({ where,
       create: { ...where.appKeyId_callId, requestHash: binding, matched: Boolean(match) },
       update: { matched: Boolean(match) } });

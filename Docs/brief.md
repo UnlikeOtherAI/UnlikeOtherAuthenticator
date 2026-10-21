@@ -3224,3 +3224,7 @@ still permits internal owner routing. A distinct call-bound service assertion
 looks up only exact ACTIVE team members, with pending/ambiguous states exposing
 no subject. Caller ID alone never supplies signed-in authority. The complete
 contract is [Personal telephones](Auth/personal-telephone.md).
+
+### 2026-10-21: selected-team telephone display and call possession proof
+
+The existing team roster exposes opted-in verified telephone numbers only between live members of that exact team. UOA also owns short-lived, one-use, call-bound SMS challenges and a prepaid SMS delivery admission path tied to the issued challenge and active funded sender allocation. No login/session is minted. Contract and integration responsibilities: [personal telephone](Auth/personal-telephone.md).

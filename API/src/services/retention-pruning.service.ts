@@ -4,6 +4,7 @@ import { getEnv } from '../config/env.js';
 import { getAdminPrisma } from '../db/prisma.js';
 
 type RetentionPrisma = {
+  telephoneCallChallenge: Pick<PrismaClient['telephoneCallChallenge'], 'deleteMany'>;
   telephoneChallenge: Pick<PrismaClient['telephoneChallenge'], 'deleteMany'>;
   telephoneLookup: Pick<PrismaClient['telephoneLookup'], 'deleteMany'>;
   debugLoginGrant: Pick<PrismaClient['debugLoginGrant'], 'deleteMany'>;
@@ -23,6 +24,7 @@ type RetentionPruneDeps = {
 };
 
 export type RetentionPruneResult = {
+  telephoneCallChallengesDeleted: number;
   telephoneChallengesDeleted: number;
   telephoneLookupsDeleted: number;
   debugLoginGrantsDeleted: number;
@@ -41,6 +43,7 @@ function subtractDays(date: Date, days: number): Date {
 
 function emptyResult(): RetentionPruneResult {
   return {
+    telephoneCallChallengesDeleted: 0,
     telephoneChallengesDeleted: 0,
     telephoneLookupsDeleted: 0,
     debugLoginGrantsDeleted: 0,
@@ -66,6 +69,7 @@ export async function pruneExpiredSecurityData(
   const loginLogCutoff = subtractDays(now, env.LOG_RETENTION_DAYS);
 
   const [
+    telephoneCallChallenges,
     telephoneChallenges,
     telephoneLookups,
     debugLoginGrants,
@@ -77,6 +81,7 @@ export async function pruneExpiredSecurityData(
     loginLogs,
     handshakeErrorLogs,
   ] = await Promise.all([
+    prisma.telephoneCallChallenge.deleteMany({ where: { createdAt: { lt: subtractDays(now, 1) } } }),
     prisma.telephoneChallenge.deleteMany({ where: { createdAt: { lt: subtractDays(now, 1) } } }),
     prisma.telephoneLookup.deleteMany({ where: { createdAt: { lt: subtractDays(now, 30) } } }),
     prisma.debugLoginGrant.deleteMany({ where: { expiresAt: { lt: now } } }),
@@ -104,6 +109,7 @@ export async function pruneExpiredSecurityData(
   ]);
 
   return {
+    telephoneCallChallengesDeleted: telephoneCallChallenges.count,
     telephoneChallengesDeleted: telephoneChallenges.count,
     telephoneLookupsDeleted: telephoneLookups.count,
     debugLoginGrantsDeleted: debugLoginGrants.count,
