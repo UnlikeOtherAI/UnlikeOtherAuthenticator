@@ -106,3 +106,18 @@ Voice runtime keys are issued through the existing system-admin app-key API. The
 existing product App keys tab reads and revokes them; the issuance form remains
 limited to its existing purposes. This tranche adds no customer grant-management UI.
 A focused headless browser fixture covers the Voice key row and revocation wording.
+
+### Completed isolated verification (21 October 2026)
+
+On Maxis Windows, the dedicated PostgreSQL database on port 55452 passed all eight
+Voice financial cases, four provider cases, seventeen personal-telephone cases,
+six existing SMS dispatch cases and four existing telephone proof-SMS cases.
+API and Admin typechecks passed, as did ESLint over changed TypeScript files.
+The desktop and mobile headless Edge journey passed for API-issued Voice key
+inspection and revocation. Both screenshots were reviewed. Database and browser
+servers were stopped after verification. No live Twilio or paid account was changed.
+
+Self-review covered endpoint-purpose separation, live grant authority, selected-team
+binding, immutable dispatch/receipt evidence, shared wallet holds, late settlement,
+private-number routing and call-scoped lower assurance. Deployment remains gated by
+the provider pricing, ancillary-charge and process-loss cutoff evidence above.
