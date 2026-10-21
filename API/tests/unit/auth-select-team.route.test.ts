@@ -1,3 +1,4 @@
+import { legacyCredentialStores } from '../helpers/authentication-fixture.js';
 vi.mock('../../src/services/authentication-evidence.service.js', () => ({
   recordIndependentAuthentication: vi.fn().mockResolvedValue('test-evidence'),
   finalizeAuthenticationEvidence: vi.fn(),
@@ -160,6 +161,7 @@ async function mintLoginToken(userId: string, domain = 'client.example.com'): Pr
 
 describe('POST /auth/select-team', () => {
   beforeEach(() => {
+    Object.assign(prismaMock, legacyCredentialStores());
     currentConfig = baseConfig();
     process.env.SHARED_SECRET = SHARED_SECRET;
     process.env.AUTH_SERVICE_IDENTIFIER = 'uoa-auth-service';

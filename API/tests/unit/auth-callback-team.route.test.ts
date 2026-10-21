@@ -1,3 +1,10 @@
+vi.mock('../../src/db/prisma.js', async () => {
+  const { authenticationFixtureDb } = await import('../helpers/authentication-fixture.js');
+  const db = authenticationFixtureDb();
+  return { getPrisma: () => db, getAdminPrisma: () => db,
+    connectPrisma: async () => {}, disconnectPrisma: async () => {} };
+});
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { JWTPayload } from 'jose';
 
@@ -139,13 +146,14 @@ async function runCallback() {
 
 describe('GET /auth/callback/:provider team selection', () => {
   beforeEach(() => {
+    process.env.DATABASE_URL = 'postgres://uoa-auth-route-fixture.invalid/db';
     process.env.NODE_ENV = 'test';
     process.env.SHARED_SECRET = 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER = 'uoa-auth-service';
     process.env.CONFIG_JWKS_URL = 'https://auth.example.com/.well-known/jwks.json';
     process.env.GOOGLE_CLIENT_ID = 'google-client-id';
     process.env.GOOGLE_CLIENT_SECRET = 'google-client-secret';
-    delete process.env.DATABASE_URL;
+    process.env.DATABASE_URL = 'postgres://uoa-auth-route-fixture.invalid/db';
 
     readConfigJwtFromTrustedSourceMock.mockReset().mockResolvedValue('config-jwt');
     verifyConfigJwtSignatureMock.mockReset().mockResolvedValue({} as JWTPayload);
@@ -188,6 +196,7 @@ describe('GET /auth/callback/:provider team selection', () => {
   });
 
   afterEach(() => {
+    Reflect.deleteProperty(process.env, 'DATABASE_URL');
     vi.restoreAllMocks();
   });
 

@@ -1,3 +1,4 @@
+import { legacyCredentialStores } from '../helpers/authentication-fixture.js';
 import fastify from 'fastify';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -147,6 +148,7 @@ async function postCreateTeam(body: Record<string, unknown>) {
 
 describe('POST /auth/create-team', () => {
   beforeEach(() => {
+    Object.assign(prismaMock, legacyCredentialStores());
     currentConfig = baseConfig();
     process.env.SHARED_SECRET = SHARED_SECRET;
     process.env.DATABASE_URL = 'postgres://uoa-create-team-tests.invalid/db';

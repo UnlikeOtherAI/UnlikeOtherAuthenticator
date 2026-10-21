@@ -84,7 +84,7 @@ describe('opaque assurance and lineage', () => {
     expect(store.domainRole.create).toHaveBeenCalledWith({ data: { domain: 'product.example.com', userId: 'enterprise-user', role: 'USER' } });
   });
   const proof = { id: 'a1', userId: 'u1', clientDomain: 'product.example.com', credentialEpoch: 2,
-    orgId: null, teamId: null, familyId: 'family1', parentId: null, method: 'independent',
+    orgId: null, teamId: null, familyId: 'family1', parentId: null, method: 'independent', amr: ['password'],
     observedAt: new Date(now.getTime() - 10000), expiresAt: new Date(now.getTime() + 60000), revokedAt: null } as SessionAssurance;
   const binding = { reference: 'random-reference', userId: 'u1', clientDomain: 'product.example.com', credentialEpoch: 2 };
   function db(row: SessionAssurance = proof): AssuranceDb {

@@ -1,3 +1,10 @@
+vi.mock('../../src/db/prisma.js', async () => {
+  const { authenticationFixtureDb } = await import('../helpers/authentication-fixture.js');
+  const db = authenticationFixtureDb();
+  return { getPrisma: () => db, getAdminPrisma: () => db,
+    connectPrisma: async () => {}, disconnectPrisma: async () => {} };
+});
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ClientConfig } from '../../src/services/config.service.js';
@@ -149,6 +156,7 @@ vi.mock('../../src/services/signature-continuation.service.js', async () => {
 
 describe('2FA gated by config `2fa_enabled`', () => {
   beforeEach(() => {
+    process.env.DATABASE_URL = 'postgres://uoa-auth-route-fixture.invalid/db';
     currentConfig = {
       domain: 'client.example.com',
       redirect_urls: ['https://client.example.com/oauth/callback'],
@@ -192,6 +200,7 @@ describe('2FA gated by config `2fa_enabled`', () => {
   });
 
   afterEach(() => {
+    Reflect.deleteProperty(process.env, 'DATABASE_URL');
     vi.useRealTimers();
     vi.restoreAllMocks();
   });

@@ -1,3 +1,10 @@
+vi.mock('../../src/db/prisma.js', async () => {
+  const { authenticationFixtureDb } = await import('../helpers/authentication-fixture.js');
+  const db = authenticationFixtureDb();
+  return { getPrisma: () => db, getAdminPrisma: () => db,
+    connectPrisma: async () => {}, disconnectPrisma: async () => {} };
+});
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LOGIN_SESSION_AUDIENCE } from '../../src/config/constants.js';
@@ -143,6 +150,7 @@ function baseConfig(overrides?: Partial<ClientConfig>): ClientConfig {
 
 describe('GET /auth/email/link', () => {
   beforeEach(() => {
+    process.env.DATABASE_URL = 'postgres://uoa-auth-route-fixture.invalid/db';
     currentConfig = baseConfig();
     validateRegistrationEmailLandingTokenMock.mockReset();
     renderAuthEntrypointHtmlMock.mockReset();
@@ -158,6 +166,7 @@ describe('GET /auth/email/link', () => {
   });
 
   afterEach(() => {
+    Reflect.deleteProperty(process.env, 'DATABASE_URL');
     vi.restoreAllMocks();
   });
 
@@ -444,6 +453,7 @@ describe('GET /auth/email/link', () => {
 
 describe('GET /auth/email/link — team chooser wiring (gap-fix B Task 1, design §4.3)', () => {
   beforeEach(() => {
+    process.env.DATABASE_URL = 'postgres://uoa-auth-route-fixture.invalid/db';
     currentConfig = baseConfig();
     validateRegistrationEmailLandingTokenMock.mockReset().mockResolvedValue('LOGIN_LINK');
     renderAuthEntrypointHtmlMock.mockReset().mockResolvedValue('<html>login</html>');
@@ -462,6 +472,7 @@ describe('GET /auth/email/link — team chooser wiring (gap-fix B Task 1, design
   });
 
   afterEach(() => {
+    Reflect.deleteProperty(process.env, 'DATABASE_URL');
     vi.restoreAllMocks();
   });
 

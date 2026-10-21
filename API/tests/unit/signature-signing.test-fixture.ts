@@ -1,3 +1,4 @@
+import { legacyCredentialStores } from '../helpers/authentication-fixture.js';
 import { expect, vi } from 'vitest';
 
 import { parseEnv } from '../../src/config/env.js';
@@ -115,6 +116,7 @@ export function fakePrisma(params?: { existing?: ReturnType<typeof signatureRow>
   let continuationRow = continuation();
   let transactionDepth = 0;
   const prisma = {
+    ...legacyCredentialStores(),
     $executeRaw: vi.fn().mockResolvedValue(1),
     $queryRaw: vi.fn().mockResolvedValue([]),
     $transaction: vi.fn(),
