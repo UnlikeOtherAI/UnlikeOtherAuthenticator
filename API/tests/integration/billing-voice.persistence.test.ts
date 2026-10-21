@@ -63,6 +63,11 @@ describe.skipIf(!process.env.DATABASE_URL)('prepaid Voice call legs', () => {
     vi.stubEnv('UOA_SMS_MONTHLY_FEE_EUR', '7.25'); vi.stubEnv('UOA_SMS_MESSAGE_MARKUP_BPS', '2700');
     const db = (await createTestDb())!; prisma = db.prisma; cleanup = db.cleanup;
     fixture = await smsPaidNumberFixture(prisma);
+    await prisma.$transaction(async tx => {
+      // Isolated synthetic opening wallet, before any Voice activity; no real funding mutation.
+      await tx.$executeRawUnsafe('SET LOCAL session_replication_role = replica');
+      await tx.$executeRaw(Prisma.sql`UPDATE billing_credit_accounts SET balance_microcredits=100000000000 WHERE id=${smsIds.credit}`);
+    });
     await prisma.billingAppKey.create({ data: { id: credential.id, serviceId: smsIds.service, purpose: 'VOICE_RUNTIME',
       name: 'Synthetic Voice', keyPrefix: credential.id, secretDigest: credential.id, actorIssuer: credential.actorIssuer,
       actorAudience: credential.actorAudience, actorKeyId: 'synthetic', actorPublicJwk: {} } });
@@ -122,6 +127,25 @@ describe.skipIf(!process.env.DATABASE_URL)('prepaid Voice call legs', () => {
     await expect(prisma.billingVoiceReservation.create({ data: { ...row, id: randomUUID(), dispatchId: randomUUID(),
       legId: randomUUID(), reservedMicrocredits: 100_000_000n } })).rejects.toThrow(/insufficient|binding/);
     await expect(prisma.$executeRaw(Prisma.sql`UPDATE billing_credit_accounts SET balance_microcredits=0 WHERE id=${smsIds.credit}`)).rejects.toThrow();
+  });
+  it('funds a permitted transfer separately and verifies the provider parent leg', async () => {
+    const parent = await reservation('inbound'); await claim(parent.body.dispatch_id);
+    const consent = await grant('outbound', 'human_transfer');
+    const route = { product: 'nessie', grant_id: consent.id, delegate_id: consent.delegate_id,
+      from: smsPhone, to: destination, max_duration_seconds: 120 };
+    const quote = await issueVoiceQuote({ credential, request: route }, deps());
+    const body = { ...route, dispatch_id: randomUUID(), request_fingerprint: fingerprint, quote_id: quote.id,
+      conversation_id: parent.body.conversation_id, leg_id: randomUUID(), call_sid: null,
+      parent_reservation_id: parent.result.reservation_id };
+    await expect(reserveVoice({ credential, request: { ...body, parent_reservation_id: null } }, deps())).rejects.toThrow();
+    const child = await reserveVoice({ credential, request: body }, deps()); await claim(body.dispatch_id);
+    const sid = `CA${'3'.repeat(32)}`;
+    receipts.set(sid, { terminal: true, amount: '0.01', currency: 'USD', seconds: 60,
+      parentCallSid: null, startedAt: new Date() });
+    await expect(settleVoice({ credential, request: { ...claimBody(body.dispatch_id), call_sid: sid } }, deps())).rejects.toThrow();
+    receipts.set(sid, { ...receipts.get(sid)!, parentCallSid: parent.body.call_sid });
+    expect((await settleVoice({ credential, request: { ...claimBody(body.dispatch_id), call_sid: sid } }, deps())).state).toBe('settled');
+    expect(child.reservation_id).not.toBe(parent.result.reservation_id);
   });
   it('admits only funded concurrent calls against the same canonical wallet', async () => {
     priceAmount = '10';

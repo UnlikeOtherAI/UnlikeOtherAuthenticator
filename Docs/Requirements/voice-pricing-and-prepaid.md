@@ -96,3 +96,8 @@ that the existing customer-action intent guard compared UTC timestamp columns to
 session-local timestamptz values. `20261021154000_voice_timestamp_authority` makes
 that comparison explicitly UTC and gives new Voice evidence UTC defaults. Existing
 customer-action authority checks remain intact.
+
+Financial fixtures use an explicitly synthetic opening wallet large enough to keep
+independent unsettled call cases. The race case then attempts four holds whose sum
+exceeds that wallet, proving only three admissions succeed. Transfer tests verify
+separate child funding and exact provider parent-call evidence.
