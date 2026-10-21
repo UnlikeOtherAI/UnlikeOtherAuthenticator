@@ -16,6 +16,7 @@ import { AppError } from '../utils/errors.js';
  */
 export const BILLING_ACTOR_ENDPOINTS = [
   '/apps/v1/nessie/phone-profile/read',
+  '/apps/v1/nessie/phone-profile/set',
   '/apps/v1/nessie/phone-profile/start',
   '/apps/v1/nessie/phone-profile/verify',
   '/apps/v1/nessie/phone-profile/remove',

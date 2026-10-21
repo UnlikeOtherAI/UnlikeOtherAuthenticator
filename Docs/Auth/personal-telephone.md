@@ -4,19 +4,22 @@ UOA owns the number, pending claim, verification time and colleague visibility. 
 
 ## Enrollment
 
-POST `/apps/v1/nessie/phone-profile/{read,start,verify,remove,visibility}` requires the Nessie `customer_lifecycle` `X-UOA-App-Key` and `X-UOA-Actor`. The registered RS256 actor has the exact endpoint URL as audience, signed-in `sub`/`tv`, `product: nessie`, exact organisation/team, issuer, key id, `jti`, `iat`, and at most 60 seconds lifetime. Legacy billing audiences are rejected. Active user, organisation and team membership and the current epoch/key are checked in the transaction.
+POST `/apps/v1/nessie/phone-profile/{read,set,start,verify,remove,visibility}` requires the Nessie `customer_lifecycle` `X-UOA-App-Key` and `X-UOA-Actor`. The registered RS256 actor has the exact endpoint URL as audience, signed-in `sub`/`tv`, `product: nessie`, exact organisation/team, issuer, key id, `jti`, `iat`, and at most 60 seconds lifetime. Legacy billing audiences are rejected. Active user, organisation and team membership and the current epoch/key are checked in the transaction.
 
 Every body includes `product: "nessie"`, `organisation_id`, `team_id`, `user_id`. Additional fields:
 
 | Action | Fields | Response |
 | --- | --- | --- |
 | read | none | `{phone}` |
+| set | `number` | `{phone}` |
 | start | `number` | `{challengeId,expiresAt,delivery:{number,code}}` |
 | verify | UUID `challengeId`, six-digit string `code` | `{phone}` |
 | remove | none | `{phone:null}` |
 | visibility | `visibility: "private" | "team"` | `{phone}` |
 
 `phone` is null or `{number,pendingNumber,verifiedAt,visibility}`. Numbers and verification time may be null; times are ISO strings. Numbers must be canonical E.164 (`+` and 7–15 digits, no leading zero). Responses are private/no-store. Unknown body fields are rejected.
+
+`set` records a pending claim without SMS, preserves the existing verified number and invalidates outstanding challenges. It works before Nessie has a same-region SMS sender. `start` records its supplied pending number and issues a code when Nessie can deliver it.
 
 The six-digit code in `delivery` is a backend delivery instruction. Nessie must send it through its approved SMS path and remove the entire `delivery` object from browser responses and logs. It must not persist profile copies. UOA stores only a keyed digest of the challenge code. Five starts per person and destination in 15 minutes and five guesses per challenge are allowed. Challenges expire in five minutes, bind the issuing app key and authentication epoch, and are invalidated by a new start or removal. Failed guesses commit their attempt count. A new start preserves the verified number and records the new pending claim. Successful verification replaces the number, clears the pending claim and defaults visibility to private.
 

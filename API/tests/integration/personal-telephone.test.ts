@@ -103,6 +103,16 @@ describe.skipIf(!process.env.DATABASE_URL)('personal telephone authority', () =>
     expect(await profile('read')).toEqual({ phone: null });
   });
 
+  it('stores an unverified claim without any challenge or sender', async () => {
+    await profile('set', { number });
+    expect(await profile('read')).toMatchObject({ phone: { number: null, pendingNumber: number, visibility: 'private' } });
+    expect(await db.prisma.telephoneChallenge.count()).toBe(0);
+    expect(await lookup()).toEqual({ match: { state: 'pending' }, authentication: 'none' });
+    await verify();
+    await profile('set', { number: nextNumber });
+    expect(await profile('read')).toMatchObject({ phone: { number, pendingNumber: nextNumber } });
+  });
+
   it('commits five failed attempts and refuses correct code afterwards', async () => {
     const challenge = await start();
     for (let attempt = 0; attempt < 5; attempt++) {

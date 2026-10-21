@@ -9,6 +9,7 @@ import { TelephoneNumber, TelephoneVisibility, LOOKUP_PATH, telephoneDenied } fr
 
 const bodies = {
   read: BillingSubjectRequestSchema,
+  set: BillingSubjectRequestSchema.extend({ number: TelephoneNumber }).strict(),
   start: BillingSubjectRequestSchema.extend({ number: TelephoneNumber }).strict(),
   verify: BillingSubjectRequestSchema.extend({ challengeId: z.string().uuid(), code: z.string().regex(/^\d{6}$/) }).strict(),
   remove: BillingSubjectRequestSchema,
@@ -18,7 +19,7 @@ const limit = createRateLimiter({ limit: 240, windowMs: 60_000,
   keyBuilder: request => `telephone:${request.billingAppKey?.id}` });
 
 export function registerTelephoneProfileRoutes(app: FastifyInstance): void {
-  for (const action of ['read', 'start', 'verify', 'remove', 'visibility'] as const) {
+  for (const action of ['read', 'set', 'start', 'verify', 'remove', 'visibility'] as const) {
     app.post(`/apps/v1/nessie/phone-profile/${action}`, {
       bodyLimit: 4096, preHandler: [requireBillingLifecycleAppKey, limit],
     }, async (request, reply) => {

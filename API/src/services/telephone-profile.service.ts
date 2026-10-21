@@ -8,7 +8,7 @@ import {
   telephoneLock, verifyTelephoneActor, lockTelephoneSubject,
 } from './telephone-authority.service.js';
 
-export type TelephoneAction = 'read' | 'start' | 'verify' | 'remove' | 'visibility';
+export type TelephoneAction = 'read' | 'set' | 'start' | 'verify' | 'remove' | 'visibility';
 type Data = { number?: string; challengeId?: string; code?: string; visibility?: 'private' | 'team' };
 
 /** All operations act only for the authenticated assertion subject. */
@@ -38,6 +38,12 @@ export async function telephoneProfile(input: TelephoneAuth & { action: Telephon
         create: { userId, pendingNumber: number }, update: { pendingNumber: number } });
       // This response is a delivery instruction for Nessie's trusted backend, never its browser.
       return { challengeId: id, expiresAt: expiresAt.toISOString(), delivery: { number, code } };
+    }
+    if (input.action === 'set') {
+      const number = TelephoneNumber.parse(input.data.number);
+      await tx.telephoneChallenge.updateMany({ where: { userId, usedAt: null }, data: { usedAt: now } });
+      await tx.userTelephone.upsert({ where: { userId },
+        create: { userId, pendingNumber: number }, update: { pendingNumber: number } });
     }
     if (input.action === 'verify') {
       const token = await tx.telephoneChallenge.findUnique({ where: { id: input.data.challengeId ?? '' } });

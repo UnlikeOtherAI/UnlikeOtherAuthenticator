@@ -1,15 +1,16 @@
 export const llmTelephoneMarkdown = `
 ## UOA personal telephone profile for Nessie
-Use POST /apps/v1/nessie/phone-profile/{read,start,verify,remove,visibility} with
+Use POST /apps/v1/nessie/phone-profile/{read,set,start,verify,remove,visibility} with
 Nessie's customer_lifecycle X-UOA-App-Key and fresh exact-endpoint X-UOA-Actor.
 Body includes product:"nessie", organisation_id, team_id, user_id; only the actor's
-own profile is accessible. Start adds number in canonical E.164 and returns
+own profile is accessible. Set adds number and stores pendingNumber without SMS,
+preserving the verified number and invalidating outstanding challenges. Start adds number in canonical E.164 and returns
 {challengeId,expiresAt,delivery:{number,code}}. UOA stores a keyed code digest;
 Nessie sends the SMS and MUST strip delivery before replying to the browser.
 Never log that response. Verify adds challengeId/code. Codes last five minutes,
 allow five guesses, bind the original user/epoch/app key and are invalidated by
 resend/removal. Issuance is capped at five per person and number per 15 minutes.
-An old verified number survives until replacement verifies. Read/verify/visibility
+An old verified number survives until replacement verifies. Read/set/verify/visibility
 return {phone:{number,pendingNumber,verifiedAt,visibility}|null}. Visibility is
 private by default and on replacement; it controls colleague display only.
 
