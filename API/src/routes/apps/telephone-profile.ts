@@ -29,7 +29,12 @@ export function registerTelephoneProfileRoutes(app: FastifyInstance): void {
       return telephoneProfile({ action, credential: request.billingAppKey,
         actorToken: readBillingActorHeader(request.headers['x-uoa-actor']),
         request: { product: body.product, organisationId: body.organisation_id, teamId: body.team_id, userId: body.user_id },
-        data: body,
+        data: {
+          number: 'number' in body ? body.number as string : undefined,
+          challengeId: 'challengeId' in body ? body.challengeId as string : undefined,
+          code: 'code' in body ? body.code as string : undefined,
+          visibility: 'visibility' in body ? TelephoneVisibility.parse(body.visibility) : undefined,
+        },
       });
     });
   }
