@@ -484,6 +484,8 @@ model User {
   agreementSignatures    AgreementSignature[]
   avatar                 UserAvatar?
   settings               UserSetting[]
+  telephone              UserTelephone?
+  telephoneChallenges    TelephoneChallenge[]
 
   @@index([email])
   @@index([domain])
@@ -5174,4 +5176,47 @@ model BillingSmsPolicyAlert {
 
   @@index([resolvedAt, openedAt])
   @@map("billing_sms_policy_alerts")
+}
+
+
+/// Contact proof only. Never an authentication factor or caller-ID authorization.
+model UserTelephone {
+  userId String @id @map("user_id")
+  number String? @db.VarChar(16)
+  pendingNumber String? @map("pending_number") @db.VarChar(16)
+  visibility String @default("private")
+  verifiedAt DateTime? @map("verified_at")
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([number])
+  @@index([pendingNumber])
+  @@map("user_telephones")
+}
+
+model TelephoneChallenge {
+  id String @id @default(uuid())
+  userId String @map("user_id")
+  appKeyId String @map("app_key_id")
+  tokenVersion Int @map("token_version")
+  number String @db.VarChar(16)
+  codeHash String @map("code_hash")
+  attempts Int @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+  expiresAt DateTime @map("expires_at")
+  usedAt DateTime? @map("used_at")
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, createdAt])
+  @@index([number, createdAt])
+  @@map("telephone_challenges")
+}
+
+/// Content-free routing lookup audit and call binding; never a login receipt.
+model TelephoneLookup {
+  appKeyId String @map("app_key_id")
+  callId String @map("call_id")
+  requestHash String @map("request_hash")
+  matched Boolean
+  createdAt DateTime @default(now()) @map("created_at")
+  @@id([appKeyId, callId])
+  @@index([appKeyId, createdAt])
+  @@map("telephone_lookups")
 }

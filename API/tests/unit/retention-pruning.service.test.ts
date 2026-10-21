@@ -27,6 +27,8 @@ describe('retention-pruning.service', () => {
     const now = new Date('2026-04-20T12:00:00.000Z');
     const calls: Record<string, unknown> = {};
     const prisma = {
+      telephoneChallenge: { deleteMany: async (args: unknown) => { calls.telephoneChallenge = args; return { count: 9 }; } },
+      telephoneLookup: { deleteMany: async (args: unknown) => { calls.telephoneLookup = args; return { count: 10 }; } },
       debugLoginGrant: { deleteMany: async (args: unknown) => { calls.debugLoginGrant = args; return { count: 8 }; } },
       refreshToken: {
         deleteMany: async (args: unknown) => {
@@ -100,7 +102,11 @@ describe('retention-pruning.service', () => {
       where: { createdAt: { lt: new Date('2026-01-20T12:00:00.000Z') } },
     });
     expect(calls.debugLoginGrant).toMatchObject({ where: { expiresAt: { lt: now } } });
+    expect(calls.telephoneChallenge).toMatchObject({ where: { createdAt: { lt: new Date('2026-04-19T12:00:00.000Z') } } });
+    expect(calls.telephoneLookup).toMatchObject({ where: { createdAt: { lt: new Date('2026-03-21T12:00:00.000Z') } } });
     expect(result).toEqual({
+      telephoneChallengesDeleted: 9,
+      telephoneLookupsDeleted: 10,
       debugLoginGrantsDeleted: 8,
       authorizationCodesDeleted: 2,
       confidentialAssertionUsesDeleted: 6,

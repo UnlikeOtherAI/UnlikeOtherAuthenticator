@@ -3213,3 +3213,14 @@ and retry with backoff and fresh assertions. Invalid signatures, missing keys,
 expired assertions, unsafe destinations and current credential-epoch or
 membership refusals remain fail-closed. No local identity fallback, cached
 negative authorization or automatic authority restoration is introduced.
+
+
+## 2026-10-21 Personal telephone contact proof
+
+UOA owns personal verified and pending telephone numbers. Nessie owns the profile
+form and delivers UOA-issued six-digit challenges through its trusted SMS backend.
+This is contact verification, never a login factor. Private display visibility
+still permits internal owner routing. A distinct call-bound service assertion
+looks up only exact ACTIVE team members, with pending/ambiguous states exposing
+no subject. Caller ID alone never supplies signed-in authority. The complete
+contract is [Personal telephones](Auth/personal-telephone.md).

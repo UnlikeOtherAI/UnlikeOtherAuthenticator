@@ -4,6 +4,8 @@ import { getEnv } from '../config/env.js';
 import { getAdminPrisma } from '../db/prisma.js';
 
 type RetentionPrisma = {
+  telephoneChallenge: Pick<PrismaClient['telephoneChallenge'], 'deleteMany'>;
+  telephoneLookup: Pick<PrismaClient['telephoneLookup'], 'deleteMany'>;
   debugLoginGrant: Pick<PrismaClient['debugLoginGrant'], 'deleteMany'>;
   authorizationCode: Pick<PrismaClient['authorizationCode'], 'deleteMany'>;
   confidentialAssertionUse: Pick<PrismaClient['confidentialAssertionUse'], 'deleteMany'>;
@@ -21,6 +23,8 @@ type RetentionPruneDeps = {
 };
 
 export type RetentionPruneResult = {
+  telephoneChallengesDeleted: number;
+  telephoneLookupsDeleted: number;
   debugLoginGrantsDeleted: number;
   authorizationCodesDeleted: number;
   confidentialAssertionUsesDeleted: number;
@@ -37,6 +41,8 @@ function subtractDays(date: Date, days: number): Date {
 
 function emptyResult(): RetentionPruneResult {
   return {
+    telephoneChallengesDeleted: 0,
+    telephoneLookupsDeleted: 0,
     debugLoginGrantsDeleted: 0,
     authorizationCodesDeleted: 0,
     confidentialAssertionUsesDeleted: 0,
@@ -60,6 +66,8 @@ export async function pruneExpiredSecurityData(
   const loginLogCutoff = subtractDays(now, env.LOG_RETENTION_DAYS);
 
   const [
+    telephoneChallenges,
+    telephoneLookups,
     debugLoginGrants,
     refreshTokens,
     authorizationCodes,
@@ -69,6 +77,8 @@ export async function pruneExpiredSecurityData(
     loginLogs,
     handshakeErrorLogs,
   ] = await Promise.all([
+    prisma.telephoneChallenge.deleteMany({ where: { createdAt: { lt: subtractDays(now, 1) } } }),
+    prisma.telephoneLookup.deleteMany({ where: { createdAt: { lt: subtractDays(now, 30) } } }),
     prisma.debugLoginGrant.deleteMany({ where: { expiresAt: { lt: now } } }),
     prisma.refreshToken.deleteMany({
       where: { expiresAt: { lt: tokenCutoff } },
@@ -94,6 +104,8 @@ export async function pruneExpiredSecurityData(
   ]);
 
   return {
+    telephoneChallengesDeleted: telephoneChallenges.count,
+    telephoneLookupsDeleted: telephoneLookups.count,
     debugLoginGrantsDeleted: debugLoginGrants.count,
     authorizationCodesDeleted: authorizationCodes.count,
     confidentialAssertionUsesDeleted: confidentialAssertionUses.count,
