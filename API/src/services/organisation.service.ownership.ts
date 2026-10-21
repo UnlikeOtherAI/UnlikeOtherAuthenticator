@@ -144,7 +144,7 @@ export async function transferOrganisationOwnership(
     metadata: demoted
       ? { newOwnerId, previousOwnerId: outgoingOwnerId, previousOwnerRole: outgoingOwnerRole }
       : { newOwnerId, previousOwnerId: outgoingOwnerId },
-  });
+  }, { prisma });
 
   return toOrganisationRecord(organisation);
 }

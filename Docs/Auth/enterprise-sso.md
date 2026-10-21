@@ -552,3 +552,9 @@ organisation-bound credentials keep the exact organisation check. Billing actor
 and chained-resource verification use the same explicitly supplied database
 authority as the surrounding service, including isolated schema tests. A missing
 proof store remains an availability failure.
+
+Ownership-transfer audits use the mutation's supplied database client, including
+production RLS transactions. Refresh/lifecycle race tests bind their credential
+to the organisation they exercise; separate coverage preserves unrelated global
+and sibling-organisation sessions. `/org/me` returns canonical self identity even
+when the caller has no organisation membership.
