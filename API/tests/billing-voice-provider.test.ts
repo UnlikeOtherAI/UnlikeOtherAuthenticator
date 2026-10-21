@@ -58,14 +58,17 @@ describe('Voice activation policy', () => {
     expect(voicePolicySchema.safeParse({ ...stream, streamDisclosureVersion: '' }).success).toBe(false);
     expect(voicePolicySchema.safeParse({ ...stream, streamPricePerMinute: '0' }).success).toBe(false);
   });
-  it('requires explicit enablement and unexpired evidence even with complete policy', () => {
+  it('requires explicit enablement but does not lapse a standing policy by date', () => {
     try {
       vi.stubEnv('BILLING_VOICE_POLICY_JSON', JSON.stringify(policy));
       vi.stubEnv('BILLING_VOICE_ENABLED', 'false');
       expect(() => configuredVoicePolicy()).toThrow('BILLING_VOICE_EVIDENCE_UNAVAILABLE');
       vi.stubEnv('BILLING_VOICE_ENABLED', 'true');
       vi.stubEnv('BILLING_VOICE_POLICY_JSON', JSON.stringify({ ...policy, expiresAt: '2000-01-01T00:00:00.000Z' }));
-      expect(() => configuredVoicePolicy()).toThrow('BILLING_VOICE_EVIDENCE_UNAVAILABLE');
+      expect(configuredVoicePolicy().accountSid).toBe(accountSid);
+      const standing = Object.fromEntries(Object.entries(policy).filter(([key]) => key !== 'expiresAt'));
+      vi.stubEnv('BILLING_VOICE_POLICY_JSON', JSON.stringify(standing));
+      expect(configuredVoicePolicy().accountSid).toBe(accountSid);
     } finally { vi.unstubAllEnvs(); }
   });
 });

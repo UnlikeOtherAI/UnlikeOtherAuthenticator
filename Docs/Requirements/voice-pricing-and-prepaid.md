@@ -48,12 +48,17 @@ Late receipts retain original team/payer even after grant revocation or number r
 ## Required operator evidence before enabling
 
 `BILLING_VOICE_ENABLED=true` and `BILLING_VOICE_POLICY_JSON` are deployment-owned.
-The strict JSON requires version, accountSid, region (us1/ie1), expiresAt, markupBps,
+The strict JSON requires version, accountSid, region (us1/ie1), markupBps,
 billingIncrementSeconds, minimumBilledSeconds, maxDurationSeconds,
 pricingEvidenceDigest, cutoffEvidenceDigest, featureProfile=connectivity_only and
 ancillaryCharges=none. There are no commercial defaults. Evidence hashes refer to
 operator-reviewed evidence retained outside source control; they are not an attestation
 from a customer. Never populate these fields merely to bypass an unavailable gate.
+The policy remains active until an operator disables or replaces it. An older
+`expiresAt` field is accepted but ignored, so a fixed calendar date cannot stop
+an already paid telephone number. Quotes still expire after 60 seconds, read
+the current Twilio connectivity price and freeze the accepted tariff for settlement.
+The operator updates the policy when rates, stream terms or cutoff evidence change.
 
 The adapter currently accepts USD only and conservatively selects the maximum
 exact-destination price across all reported origin groups. It verifies owned voice

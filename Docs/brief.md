@@ -3237,6 +3237,9 @@ callers and separately bounded outbound/transfer legs without inventing caller i
 The machine-only contract and unfulfilled live pricing/cutoff prerequisites are in
 [Voice prepaid](Requirements/voice-pricing-and-prepaid.md). Connectivity-only USD
 support does not authorize charged ancillary features or Ledger inference.
+Once enabled with reviewed pricing and cutoff evidence, the standing policy has
+no calendar expiry. Short-lived call quotes and claims still expire independently;
+an operator disables or replaces the policy when its evidence changes.
 
 ### 2026-10-21 Registered caller-ID policy
 

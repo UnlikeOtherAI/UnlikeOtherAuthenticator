@@ -36,7 +36,7 @@ export async function claimVoice(input: { request: BillingVoiceClaimRequestV1; c
     grantId: observed.grantId, product: input.request.product, credential: input.credential,
   }), 'BILLING_CREDIT_ACCOUNT_RETRY_EXHAUSTED');
   await assertVoiceNumber(grant, observed, input.credential, deps);
-  if (deps.policy.accountSid !== observed.accountSid || Date.parse(deps.policy.expiresAt) <= Date.now()) {
+  if (deps.policy.accountSid !== observed.accountSid) {
     throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_VOICE_EVIDENCE_UNAVAILABLE');
   }
   return runBillingSerializableTransaction(prisma, async tx => {
