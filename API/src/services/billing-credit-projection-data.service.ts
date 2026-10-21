@@ -114,7 +114,7 @@ export async function loadBillingCreditProjectionData(
     billingReservedMicrocredits(prisma, params.creditAccountId),
     prisma.billingCreditEntry.findMany({
       where: { creditAccountId: params.creditAccountId,
-        OR: [{ kind: { notIn: [BillingCreditEntryKind.PREPAID_USAGE, BillingCreditEntryKind.SMS_PREPAID_USAGE] } },
+        OR: [{ kind: { notIn: [BillingCreditEntryKind.PREPAID_USAGE, BillingCreditEntryKind.SMS_PREPAID_USAGE, BillingCreditEntryKind.VOICE_PREPAID_USAGE] } },
           { prepaidReservation: { teamId: params.teamId } },
           { smsReservation: { teamId: params.teamId } },
           { smsInboundReceipt: { teamId: params.teamId } }] },

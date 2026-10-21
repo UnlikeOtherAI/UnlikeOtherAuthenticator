@@ -3228,3 +3228,12 @@ contract is [Personal telephones](Auth/personal-telephone.md).
 ### 2026-10-21: selected-team telephone display and call possession proof
 
 The existing team roster exposes opted-in verified telephone numbers only between live members of that exact team. UOA also owns short-lived, one-use, call-bound SMS challenges and a prepaid SMS delivery admission path tied to the issued challenge and active funded sender allocation. No login/session is minted. Contract and integration responsibilities: [personal telephone](Auth/personal-telephone.md).
+
+### 2026-10-21 Prepaid telephone call legs
+
+UOA owns fixed-duration Voice admission and actual provider settlement through the
+canonical prepaid wallet. Exact selected-team manager grants fund inbound external
+callers and separately bounded outbound/transfer legs without inventing caller identity.
+The machine-only contract and unfulfilled live pricing/cutoff prerequisites are in
+[Voice prepaid](Requirements/voice-pricing-and-prepaid.md). Connectivity-only USD
+support does not authorize charged ancillary features or Ledger inference.

@@ -1,3 +1,4 @@
+import { billingVoiceEndpoints } from './schema.billing-voice.js';
 import type { EndpointSchema } from './schema.js';
 import { billingLedgerRuntimeKeyEndpoints } from './schema.billing-ledger-runtime-keys.js';
 import { billingContractInvoiceEndpoints } from './schema.billing-contract-invoices.js';
@@ -21,6 +22,7 @@ const tariffBody = {
 
 export const billingEndpoints: EndpointSchema[] = [
   ...billingSmsEndpoints,
+  ...billingVoiceEndpoints,
   ...billingLedgerRuntimeKeyEndpoints(adminAuth),
   {
     method: 'POST', path: '/billing/v1/ledger/reservations/:dispatchId/exception',

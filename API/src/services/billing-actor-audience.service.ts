@@ -22,6 +22,7 @@ export const BILLING_ACTOR_ENDPOINTS = [
   '/apps/v1/nessie/phone-profile/remove',
   '/apps/v1/nessie/phone-profile/visibility',
   '/apps/v1/deeptest/nessie-inference-access',
+  '/billing/v1/voice/grants',
   '/billing/v1/sms/quotes',
   '/billing/v1/sms/quotes/verify',
   '/billing/v1/sms/reservations',
@@ -98,6 +99,7 @@ export function assertBillingActorAudience(params: {
     params.presented === params.legacyAudience &&
     params.endpoint !== '/apps/v1/deeptest/nessie-inference-access' &&
     !params.endpoint.startsWith('/apps/v1/nessie/phone-profile/') &&
+    !params.endpoint.startsWith('/billing/v1/voice/') &&
     !params.endpoint.startsWith('/billing/v1/sms/') &&
     getBillingActorAudienceMode() === 'warn' &&
     // A legacy audience is only ever a transitional stand-in for a real endpoint
