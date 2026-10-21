@@ -3228,3 +3228,31 @@ contract is [Personal telephones](Auth/personal-telephone.md).
 ### 2026-10-21: selected-team telephone display and call possession proof
 
 The existing team roster exposes opted-in verified telephone numbers only between live members of that exact team. UOA also owns short-lived, one-use, call-bound SMS challenges and a prepaid SMS delivery admission path tied to the issued challenge and active funded sender allocation. No login/session is minted. Contract and integration responsibilities: [personal telephone](Auth/personal-telephone.md).
+
+### 2026-10-21 Prepaid telephone call legs
+
+UOA owns fixed-duration Voice admission and actual provider settlement through the
+canonical prepaid wallet. Exact selected-team manager grants fund inbound external
+callers and separately bounded outbound/transfer legs without inventing caller identity.
+The machine-only contract and unfulfilled live pricing/cutoff prerequisites are in
+[Voice prepaid](Requirements/voice-pricing-and-prepaid.md). Connectivity-only USD
+support does not authorize charged ancillary features or Ledger inference.
+
+### 2026-10-21 Registered caller-ID policy
+
+The approved telephone UX admits a uniquely matched verified personal number to
+ordinary PA/specialist context without repeating an SMS code on every call. UOA
+reports this as `registered_caller_id`, explicitly without current-call possession
+proof. The exact call binding, live membership checks, expiry and residual spoofing
+risk are documented in [personal telephones](Auth/personal-telephone.md). Sensitive
+actions retain stronger-authentication policy; no signed-in browser session is issued.
+
+### Verified telephone senders and personal routing owners (2026-10-21)
+
+Nessie may ask UOA, through a service-only signed MessageSid-bound request, whether
+an SMS sender is a verified active member of the exact selected team. Private
+telephone visibility does not prevent routing. Pending, ambiguous and unknown
+senders fail closed; this eligibility does not grant private-context or signed-in
+authority. Call and SMS admission may additionally attest current membership of a
+signed, already-known personal routing owner. The contract and retention controls
+are in [personal telephone](Auth/personal-telephone.md).

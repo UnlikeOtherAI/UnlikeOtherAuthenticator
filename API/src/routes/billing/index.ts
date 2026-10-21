@@ -1,3 +1,4 @@
+import { registerVoiceRoutes } from './voice.js';
 import type { FastifyInstance } from 'fastify';
 
 import { registerBillingCancellationRoutes } from './cancellation.js';
@@ -28,6 +29,7 @@ import { registerSmsReservationRoutes } from './sms-reservations.js';
 import { registerSmsInboundRoutes } from './sms-inbound.js';
 
 export function registerBillingRoutes(app: FastifyInstance): void {
+  registerVoiceRoutes(app);
   registerSmsQuoteRoutes(app);
   registerSmsNumberRoutes(app);
   registerSmsGrantRoutes(app);

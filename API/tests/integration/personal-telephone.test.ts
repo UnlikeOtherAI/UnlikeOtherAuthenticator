@@ -1,3 +1,6 @@
+import { admitTelephoneSms } from '../../src/services/telephone-sms-admission.service.js';
+import { SMS_ADMISSION_PATH } from '../../src/services/telephone-authority.service.js';
+import { admitTelephoneCall, CALL_ADMISSION_PATH } from '../../src/services/telephone-call-admission.service.js';
 import { createHash, randomUUID } from 'node:crypto';
 import Fastify from 'fastify';
 import { exportJWK, generateKeyPair, SignJWT } from 'jose';
@@ -49,6 +52,7 @@ describe.skipIf(!process.env.DATABASE_URL)('personal telephone authority', () =>
     credential = await verifyBillingAppKey(appKey, { prisma: db.prisma });
   });
   beforeEach(async () => {
+    await db.prisma.telephoneSmsAdmission.deleteMany();
     await db.prisma.telephoneCallChallenge.deleteMany();
     await db.prisma.telephoneLookup.deleteMany();
     await db.prisma.telephoneChallenge.deleteMany();
@@ -78,11 +82,11 @@ describe.skipIf(!process.env.DATABASE_URL)('personal telephone authority', () =>
     const challenge = await start(value);
     return profile('verify', { challengeId: challenge.challengeId, code: '123456' });
   }
-  async function serviceToken(value = number, callId = randomUUID(), extra: Record<string, unknown> = {}) {
+  async function serviceToken(value = number, callId = randomUUID(), extra: Record<string, unknown> = {}, endpoint = LOOKUP_PATH) {
     return new SignJWT({ purpose: 'telephone-routing', product: 'nessie', organisation_id: orgId, team_id: teamId,
       call_id: callId, number_digest: createHash('sha256').update(value).digest('hex'), ...extra })
       .setProtectedHeader({ alg: 'RS256', kid: credential.actorKeyId, typ: 'uoa-telephone-routing+jwt' })
-      .setIssuer(credential.actorIssuer).setAudience(`${publicBase}${LOOKUP_PATH}`)
+      .setIssuer(credential.actorIssuer).setAudience(`${publicBase}${endpoint}`)
       .setJti(randomUUID()).setIssuedAt().setExpirationTime('60s').sign(privateKey);
   }
   async function lookup(value = number, callId = randomUUID(), extra: Record<string, unknown> = {}) {
@@ -311,4 +315,119 @@ describe.skipIf(!process.env.DATABASE_URL)('personal telephone authority', () =>
       expect(lookupResult.statusCode).toBe(403);
     } finally { await app.close(); }
   });
+  async function admit(value = number, callId = randomUUID()) {
+    return admitTelephoneCall({ credential, number: value,
+      serviceToken: await serviceToken(value, callId, {}, CALL_ADMISSION_PATH) }, { prisma: db.prisma });
+  }
+  it('admits a verified private number without another code under explicit lower assurance', async () => {
+    await verify(); const callId = randomUUID(); await lookup(number, callId);
+    const before = await db.prisma.telephoneCallChallenge.count();
+    const first = await admit(number, callId);
+    expect(first).toMatchObject({ status: 'admitted', authentication: 'registered_caller_id',
+      assurance: 'registered_caller_id', possession_verified_this_call: false,
+      subject: userId, tokenVersion: 0, organisationId: orgId, teamId, callId });
+    expect(first).not.toHaveProperty('visibility');
+    expect(await db.prisma.telephoneCallChallenge.count()).toBe(before);
+    expect(await admit(number, callId)).toMatchObject({ status: 'admitted', subject: userId });
+    await db.prisma.user.update({ where: { id: userId }, data: { tokenVersion: 1 } });
+    expect(await admit(number, callId)).toEqual({ status: 'invalid', authentication: 'none' });
+  });
+  it('requires exact prior lookup, audience and current membership for call admission', async () => {
+    await verify(); const callId = randomUUID();
+    await expect(admit(number, callId)).rejects.toMatchObject({ statusCode: 403 });
+    await lookup(number, callId);
+    await expect(admitTelephoneCall({ credential, number, serviceToken: await serviceToken(number, callId) },
+      { prisma: db.prisma })).rejects.toMatchObject({ statusCode: 403 });
+    await admit(number, callId);
+    await db.prisma.teamMember.update({ where: { teamId_userId: { teamId, userId } }, data: { status: 'DEACTIVATED' } });
+    expect(await admit(number, callId)).toEqual({ status: 'no_match', authentication: 'none' });
+  });
+  it('returns no subject for pending and unknown callers and refuses a verified-number version change', async () => {
+    const pendingCall = randomUUID(); await profile('set', { number }); await lookup(number, pendingCall);
+    expect(await admit(number, pendingCall)).toEqual({ status: 'pending', authentication: 'none' });
+    const unknownCall = randomUUID(); await lookup(nextNumber, unknownCall);
+    expect(await admit(nextNumber, unknownCall)).toEqual({ status: 'no_match', authentication: 'none' });
+    await verify(); const callId = randomUUID(); await lookup(number, callId); await admit(number, callId);
+    await db.prisma.userTelephone.update({ where: { userId }, data: { verifiedAt: new Date(Date.now() + 1000) } });
+    expect(await admit(number, callId)).toEqual({ status: 'invalid', authentication: 'none' });
+    await expect(db.prisma.telephoneLookup.update({ where: { appKeyId_callId: { appKeyId: credential.id, callId } },
+      data: { admittedTokenVersion: 10 } })).rejects.toThrow(/cannot rebind/);
+  });
+
+  const smsSid = () => `SM${randomUUID().replaceAll('-', '')}`;
+  async function smsToken(messageSid: string, value = number, extra: Record<string, unknown> = {}, endpoint = SMS_ADMISSION_PATH) {
+    return new SignJWT({ purpose: 'telephone-sms-routing', product: 'nessie', organisation_id: orgId, team_id: teamId,
+      message_sid: messageSid, account_sid: `AC${'a'.repeat(32)}`, number_digest: createHash('sha256').update(value).digest('hex'), ...extra })
+      .setProtectedHeader({ alg: 'RS256', kid: credential.actorKeyId, typ: 'uoa-telephone-sms-routing+jwt' })
+      .setIssuer(credential.actorIssuer).setAudience(`${publicBase}${endpoint}`)
+      .setJti(randomUUID()).setIssuedAt().setExpirationTime('60s').sign(privateKey);
+  }
+  async function sms(messageSid = smsSid(), value = number, extra: Record<string, unknown> = {}) {
+    return admitTelephoneSms({ credential, number: value, serviceToken: await smsToken(messageSid, value, extra) }, { prisma: db.prisma });
+  }
+  it('admits private verified SMS senders only as exact-message routing eligibility, with fresh membership', async () => {
+    await verify(); const sid = smsSid();
+    const first = await sms(sid);
+    expect(first).toMatchObject({ status: 'admitted', authentication: 'none', eligibility: 'verified_team_number',
+      subject: userId, organisationId: orgId, teamId, messageSid: sid });
+    expect(first).not.toHaveProperty('visibility');
+    for (const retry of await Promise.all([sms(sid), sms(sid)])) expect(retry).toMatchObject({ status: 'admitted', subject: userId });
+    await db.prisma.$executeRawUnsafe(`GRANT USAGE ON SCHEMA "${db.schema}" TO uoa_app`);
+    await db.prisma.$executeRawUnsafe(`GRANT SELECT ON "${db.schema}".telephone_sms_admissions TO uoa_app`);
+    expect(await db.prisma.$transaction(async tx => {
+      await tx.$executeRawUnsafe('SET LOCAL ROLE uoa_app'); return tx.telephoneSmsAdmission.findMany();
+    })).toEqual([]);
+    expect(await db.prisma.telephoneSmsAdmission.count()).toBe(1);
+    await db.prisma.teamMember.update({ where: { teamId_userId: { teamId, userId } }, data: { status: 'DEACTIVATED' } });
+    expect(await sms(sid)).toEqual({ status: 'no_match', authentication: 'none' });
+  });
+  it('refuses pending, ambiguous, unknown and other-team SMS without a subject', async () => {
+    const sid = smsSid(); await profile('set', { number });
+    expect(await sms(sid)).toEqual({ status: 'pending', authentication: 'none' });
+    await verify(); expect(await sms(sid)).toEqual({ status: 'pending', authentication: 'none' });
+    expect(await sms(smsSid(), nextNumber)).toEqual({ status: 'no_match', authentication: 'none' });
+    expect(await sms(smsSid(), number, { team_id: randomUUID() })).toEqual({ status: 'no_match', authentication: 'none' });
+    const other = await db.prisma.user.create({ data: { email: 'sms-other@example.test', userKey: 'sms-other@example.test' } });
+    await db.prisma.orgMember.create({ data: { userId: other.id, orgId } });
+    await db.prisma.teamMember.create({ data: { userId: other.id, teamId } });
+    await db.prisma.userTelephone.create({ data: { userId: other.id, number, verifiedAt: new Date() } });
+    expect(await sms()).toEqual({ status: 'ambiguous', authentication: 'none' });
+  });
+  it('binds account, team, number, epoch and verified version and rejects assertion authority confusion', async () => {
+    await verify(); const sid = smsSid(); await sms(sid);
+    await expect(sms(sid, nextNumber)).rejects.toMatchObject({ statusCode: 403 });
+    await expect(sms(sid, number, { account_sid: `AC${'b'.repeat(32)}` })).rejects.toMatchObject({ statusCode: 403 });
+    await expect(sms(smsSid(), number, { sub: userId })).rejects.toMatchObject({ statusCode: 403 });
+    await expect(admitTelephoneSms({ credential, number, serviceToken: await smsToken(smsSid(), number, {}, LOOKUP_PATH) },
+      { prisma: db.prisma })).rejects.toMatchObject({ statusCode: 403 });
+    await db.prisma.user.update({ where: { id: userId }, data: { tokenVersion: 1 } });
+    expect(await sms(sid)).toEqual({ status: 'invalid', authentication: 'none' });
+    await expect(db.prisma.telephoneSmsAdmission.updateMany({ data: { subjectId: 'changed' } })).rejects.toThrow();
+  });
+  it('attests the selected personal owner for calls and SMS, including guests, and refuses revoked owners', async () => {
+    const owner = { owner_subject: userId }; const call = randomUUID(); const sid = smsSid();
+    expect(await sms(smsSid(), nextNumber, { owner_subject: randomUUID() })).toEqual({ status: 'owner_inactive', authentication: 'none' });
+    await lookup(nextNumber, call, owner);
+    const callRequest = async (extra = owner) => admitTelephoneCall({ credential, number: nextNumber,
+      serviceToken: await serviceToken(nextNumber, call, extra, CALL_ADMISSION_PATH) }, { prisma: db.prisma });
+    expect(await callRequest()).toEqual({ status: 'no_match', authentication: 'none', ownerActive: true });
+    expect(await sms(sid, nextNumber, owner)).toEqual({ status: 'no_match', authentication: 'none', ownerActive: true });
+    await expect(callRequest({ owner_subject: randomUUID() })).rejects.toMatchObject({ statusCode: 403 });
+    await expect(sms(sid, nextNumber, { owner_subject: randomUUID() })).rejects.toMatchObject({ statusCode: 403 });
+    await db.prisma.teamMember.update({ where: { teamId_userId: { teamId, userId } }, data: { status: 'DEACTIVATED' } });
+    expect(await callRequest()).toEqual({ status: 'owner_inactive', authentication: 'none' });
+    expect(await sms(sid, nextNumber, owner)).toEqual({ status: 'owner_inactive', authentication: 'none' });
+  });
+  it('persists new-message rate limits and rejects actor headers at the HTTP doorway', async () => {
+    await db.prisma.telephoneSmsAdmission.createMany({ data: Array.from({ length: 120 }, () => ({
+      appKeyId: credential.id, messageSid: smsSid(), requestHash: 'fixture', status: 'no_match' })) });
+    await expect(sms()).rejects.toMatchObject({ statusCode: 429 });
+    const app = Fastify(); registerErrorHandler(app); registerTelephoneProfileRoutes(app);
+    try {
+      const response = await app.inject({ method: 'POST', url: SMS_ADMISSION_PATH, payload: { number }, headers: {
+        'x-uoa-app-key': appKey, 'x-uoa-service-assertion': await smsToken(smsSid()), 'x-uoa-actor': await actor('read') } });
+      expect(response.statusCode).toBe(403); expect(response.headers['cache-control']).toBe('private, no-store');
+    } finally { await app.close(); }
+  });
+
 });

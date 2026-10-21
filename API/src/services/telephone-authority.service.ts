@@ -61,12 +61,13 @@ export async function telephoneLock(tx: PrismaClient, key: string): Promise<void
 const LookupAssertion = z.object({
   iss: z.string(), aud: z.string(), purpose: z.enum(['telephone-routing', 'telephone-call-proof']), product: z.literal('nessie'),
   organisation_id: z.string().min(1).max(256), team_id: z.string().min(1).max(256),
+  owner_subject: z.string().min(1).max(256).optional(),
   call_id: z.string().min(1).max(128), number_digest: z.string().regex(/^[a-f0-9]{64}$/),
   jti: z.string().min(1).max(128), iat: z.number().int(), exp: z.number().int(),
 }).strict();
 /** No human subject, epoch or authentication result: this is a backend routing request. */
-export async function verifyTelephoneServiceAssertion(credential: VerifiedBillingAppKey, token: string,
-  endpoint: string, purpose: 'telephone-routing' | 'telephone-call-proof') {
+async function verifyServiceAssertion<T extends { purpose: string; iat: number; exp: number }>(
+  credential: VerifiedBillingAppKey, token: string, endpoint: string, purpose: string, schema: z.ZodType<T>) {
   assertTelephoneProduct(credential);
   try {
     const header = decodeProtectedHeader(token);
@@ -74,7 +75,7 @@ export async function verifyTelephoneServiceAssertion(credential: VerifiedBillin
     const { payload } = await jwtVerify(token, await importClientJwkKey(jwkToPublic(credential.actorPublicJwk)), {
       algorithms: ['RS256'], issuer: credential.actorIssuer, audience: `${getPublicBaseUrl()}${endpoint}`,
     });
-    const result = LookupAssertion.parse(payload);
+    const result = schema.parse(payload);
     const now = Math.floor(Date.now() / 1000);
     if (result.purpose !== purpose) throw telephoneDenied();
     if (result.exp <= result.iat || result.exp - result.iat > 60 || result.iat > now + 5) throw telephoneDenied();
@@ -84,3 +85,30 @@ export async function verifyTelephoneServiceAssertion(credential: VerifiedBillin
 
 export const verifyTelephoneLookupAssertion = (credential: VerifiedBillingAppKey, token: string) =>
   verifyTelephoneServiceAssertion(credential, token, LOOKUP_PATH, 'telephone-routing');
+
+export const verifyTelephoneServiceAssertion = (credential: VerifiedBillingAppKey, token: string,
+  endpoint: string, purpose: 'telephone-routing' | 'telephone-call-proof') =>
+  verifyServiceAssertion(credential, token, endpoint, purpose, LookupAssertion);
+
+export const SMS_ADMISSION_PATH = '/apps/v1/nessie/phone-profile/sms-admission';
+const SmsAssertion = LookupAssertion.omit({ call_id: true, purpose: true }).extend({
+  purpose: z.literal('telephone-sms-routing'), account_sid: z.string().regex(/^AC[a-fA-F0-9]{32}$/),
+  message_sid: z.string().regex(/^SM[a-fA-F0-9]{32}$/),
+}).strict();
+export const verifyTelephoneSmsAssertion = (credential: VerifiedBillingAppKey, token: string) =>
+  verifyServiceAssertion(credential, token, SMS_ADMISSION_PATH, 'telephone-sms-routing', SmsAssertion);
+
+export function telephoneRoutingBinding(scope: { organisation_id: string; team_id: string; owner_subject?: string }, number: string) {
+  return telephoneDigest(JSON.stringify([scope.organisation_id, scope.team_id, number,
+    ...(scope.owner_subject === undefined ? [] : [scope.owner_subject])]));
+}
+
+/** Attests membership of an already-known routing owner, without returning their profile or authority. */
+export async function telephoneOwnerActive(tx: PrismaClient,
+  scope: { organisation_id: string; team_id: string; owner_subject?: string }): Promise<boolean> {
+  if (scope.owner_subject === undefined) return true;
+  return Boolean(await tx.user.findFirst({ where: { id: scope.owner_subject, lifecycleStatus: 'ACTIVE',
+    orgMembers: { some: { orgId: scope.organisation_id, status: 'ACTIVE', org: { lifecycleStatus: 'ACTIVE' } } },
+    teamMembers: { some: { teamId: scope.team_id, status: 'ACTIVE',
+      team: { orgId: scope.organisation_id, lifecycleStatus: 'ACTIVE' } } } }, select: { id: true } }));
+}

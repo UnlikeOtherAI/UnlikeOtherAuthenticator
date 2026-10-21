@@ -57,6 +57,8 @@ export function registerRootRoute(app: FastifyInstance): void {
       api: '/api',
       personal_telephone: { profile: '/apps/v1/nessie/phone-profile/read', lookup: '/apps/v1/nessie/phone-profile/lookup',
         call_proof: '/apps/v1/nessie/phone-profile/call-proof/start',
+        sms_admission: '/apps/v1/nessie/phone-profile/sms-admission',
+        personal_owner_membership: 'optional owner_subject in service assertion; exact-team ownerActive or owner_inactive',
         prepaid_delivery: '/apps/v1/nessie/phone-profile/call-proof/reserve', caller_id_authentication: false },
       native_apps: { admin: '/admin/apps', registration: '/oauth/register', public_identifier: 'app_id', client_secret_required: false },
       deeptest_nessie_inference: { check: '/apps/v1/deeptest/nessie-inference-access',

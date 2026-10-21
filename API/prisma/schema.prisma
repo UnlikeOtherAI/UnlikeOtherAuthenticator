@@ -244,6 +244,7 @@ enum BillingAppKeyPurpose {
   ENTITLEMENT
   CUSTOMER_LIFECYCLE
   SMS_RUNTIME
+  VOICE_RUNTIME
 }
 
 enum BillingAdjustmentKind {
@@ -306,6 +307,7 @@ enum BillingCreditEntryKind {
   ADJUSTMENT
   PREPAID_USAGE
   SMS_PREPAID_USAGE
+  VOICE_PREPAID_USAGE
 }
 
 enum BillingCreditPaymentAdjustmentKind {
@@ -3610,6 +3612,7 @@ model BillingCreditEntry {
   appKeyId                 String?                     @map("app_key_id")
   ledgerRuntimeKeyId       String?                     @map("ledger_runtime_key_id")
   prepaidReservationId     String?                     @unique @map("prepaid_reservation_id")
+  voiceReservationId       String? @unique @map("voice_reservation_id")
   smsReservationId         String?                     @unique @map("sms_reservation_id")
   smsInboundReceiptId      String?                     @unique @map("sms_inbound_receipt_id")
   attributedUserId         String?                     @map("attributed_user_id")
@@ -5213,6 +5216,10 @@ model TelephoneChallenge {
 
 /// Content-free routing lookup audit and call binding; never a login receipt.
 model TelephoneLookup {
+  admittedSubjectId String? @map("admitted_subject_id")
+  admittedTokenVersion Int? @map("admitted_token_version")
+  admittedNumberVerifiedAt DateTime? @map("admitted_number_verified_at")
+  admittedAt DateTime? @map("admitted_at")
   appKeyId String @map("app_key_id")
   callId String @map("call_id")
   requestHash String @map("request_hash")
@@ -5247,4 +5254,135 @@ model TelephoneCallChallenge {
   @@index([userId, createdAt])
   @@index([number, createdAt])
   @@map("telephone_call_challenges")
+}
+
+model BillingVoiceGrant {
+  id String @id @db.VarChar(160)
+  serviceId String @map("service_id")
+  appKeyId String @map("app_key_id")
+  orgId String @map("org_id")
+  teamId String @map("team_id")
+  userId String @map("user_id")
+  actorTokenVersion Int @map("actor_token_version")
+  numberId String @map("number_id") @db.VarChar(160)
+  allocationId String @map("allocation_id") @db.VarChar(160)
+  delegateId String @map("delegate_id") @db.VarChar(160)
+  direction String @db.VarChar(10)
+  purpose String @db.VarChar(20)
+  maxDurationSeconds Int @map("max_duration_seconds")
+  maxConcurrentCalls Int @map("max_concurrent_calls")
+  destinations String[]
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@index([serviceId, orgId, teamId])
+  @@map("billing_voice_grants")
+}
+
+model BillingVoiceQuote {
+  streamEnabled Boolean @default(false) @map("stream_enabled")
+  id String @id @default(cuid())
+  serviceId String @map("service_id")
+  grantId String @map("grant_id")
+  accountSid String @map("account_sid") @db.Char(34)
+  from String @db.VarChar(16)
+  to String @db.VarChar(16)
+  direction String @db.VarChar(10)
+  maxDurationSeconds Int @map("max_duration_seconds")
+  rawCostBound Decimal @map("raw_cost_bound") @db.Decimal(38,18)
+  markupBps Int @map("markup_bps")
+  reservedMicrocredits BigInt @map("reserved_microcredits")
+  providerEvidence Json @map("provider_evidence")
+  policyEvidence Json @map("policy_evidence")
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@index([serviceId, grantId, expiresAt])
+  @@map("billing_voice_quotes")
+}
+
+model BillingVoiceReservation {
+  id String @id @default(cuid())
+  dispatchId String @unique @map("dispatch_id") @db.VarChar(160)
+  requestFingerprint String @map("request_fingerprint") @db.Char(64)
+  bindingDigest String @map("binding_digest") @db.Char(64)
+  serviceId String @map("service_id")
+  appKeyId String @map("app_key_id")
+  orgId String @map("org_id")
+  teamId String @map("team_id")
+  userId String @map("user_id")
+  creditAccountId String @map("credit_account_id")
+  grantId String @map("grant_id")
+  quoteId String @map("quote_id")
+  numberId String @map("number_id") @db.VarChar(160)
+  allocationId String @map("allocation_id") @db.VarChar(160)
+  accountSid String @map("account_sid") @db.Char(34)
+  from String @db.VarChar(16)
+  to String @db.VarChar(16)
+  direction String @db.VarChar(10)
+  conversationId String @map("conversation_id") @db.VarChar(160)
+  legId String @map("leg_id") @db.VarChar(160)
+  parentReservationId String? @map("parent_reservation_id")
+  maxDurationSeconds Int @map("max_duration_seconds")
+  callSid String? @map("call_sid") @db.Char(34)
+  reservedMicrocredits BigInt @map("reserved_microcredits")
+  debitedMicrocredits BigInt? @map("debited_microcredits")
+  actualAmount Decimal? @map("actual_amount") @db.Decimal(38,18)
+  actualDurationSeconds Int? @map("actual_duration_seconds")
+  dispatchTokenDigest String? @map("dispatch_token_digest") @db.Char(64)
+  dispatchClaimedAt DateTime? @map("dispatch_claimed_at")
+  claimExpiresAt DateTime @map("claim_expires_at")
+  state String @default("reserved") @db.VarChar(32)
+  billingMonth String @map("billing_month") @db.Char(7)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  @@unique([accountSid, callSid])
+  @@unique([serviceId, conversationId, legId])
+  @@index([creditAccountId, state])
+  @@index([grantId, state])
+  @@index([orgId, teamId, billingMonth])
+  @@map("billing_voice_reservations")
+}
+
+model BillingVoiceStream {
+  id String @id @default(cuid())
+  reservationId String @unique @map("reservation_id")
+  serviceId String @map("service_id")
+  accountSid String @map("account_sid") @db.Char(34)
+  callSid String @map("call_sid") @db.Char(34)
+  streamSid String @map("stream_sid") @db.Char(34)
+  startedAt DateTime @map("started_at")
+  stoppedAt DateTime? @map("stopped_at")
+  billedMinutes Int? @map("billed_minutes")
+  fixedAmount Decimal? @map("fixed_amount") @db.Decimal(38,18)
+  createdAt DateTime @default(now()) @map("created_at")
+  @@unique([accountSid, streamSid])
+  @@index([serviceId, accountSid, startedAt])
+  @@map("billing_voice_streams")
+}
+
+model BillingVoiceStreamInvoice {
+  id String @id
+  serviceId String @map("service_id")
+  accountSid String @map("account_sid") @db.Char(34)
+  billingMonth String @map("billing_month") @db.Char(7)
+  amount Decimal @db.Decimal(38,18)
+  reference String @db.VarChar(160)
+  createdAt DateTime @default(now()) @map("created_at")
+  @@index([serviceId, accountSid, billingMonth, createdAt])
+  @@map("billing_voice_stream_invoices")
+}
+
+/// Immutable service-only SMS routing decision, not private-context or login authority.
+model TelephoneSmsAdmission {
+  appKeyId String @map("app_key_id")
+  messageSid String @map("message_sid")
+  requestHash String @map("request_hash")
+  status String
+  subjectId String? @map("subject_id")
+  tokenVersion Int? @map("token_version")
+  numberVerifiedAt DateTime? @map("number_verified_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@id([appKeyId, messageSid])
+  @@index([appKeyId, createdAt])
+  @@index([subjectId])
+  @@map("telephone_sms_admissions")
 }

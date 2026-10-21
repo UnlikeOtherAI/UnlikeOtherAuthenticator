@@ -1,3 +1,5 @@
+import { admitTelephoneSms } from '../../services/telephone-sms-admission.service.js';
+import { admitTelephoneCall, CALL_ADMISSION_PATH } from '../../services/telephone-call-admission.service.js';
 import { AppError } from '../../utils/errors.js';
 import { reserveTelephoneSms } from '../../services/telephone-sms-reservation.service.js';
 import { configuredSmsProvider } from '../../services/billing-sms-runtime.service.js';
@@ -9,7 +11,7 @@ import { BillingSubjectRequestSchema, readBillingActorHeader } from '../billing/
 import { CALL_PROOF_PATH, telephoneCallProof } from '../../services/telephone-call-proof.service.js';
 import { telephoneProfile } from '../../services/telephone-profile.service.js';
 import { lookupTelephone } from '../../services/telephone-lookup.service.js';
-import { TelephoneNumber, TelephoneVisibility, LOOKUP_PATH, telephoneDenied } from '../../services/telephone-authority.service.js';
+import { TelephoneNumber, TelephoneVisibility, LOOKUP_PATH, SMS_ADMISSION_PATH, telephoneDenied } from '../../services/telephone-authority.service.js';
 
 const bodies = {
   read: BillingSubjectRequestSchema,
@@ -23,6 +25,20 @@ const limit = createRateLimiter({ limit: 240, windowMs: 60_000,
   keyBuilder: request => `telephone:${request.billingAppKey?.id}` });
 
 export function registerTelephoneProfileRoutes(app: FastifyInstance): void {
+  app.post(SMS_ADMISSION_PATH, { bodyLimit: 1024, preHandler: [requireBillingLifecycleAppKey, limit] }, async (request, reply) => {
+    reply.header('Cache-Control', 'private, no-store');
+    if (!request.billingAppKey || request.headers['x-uoa-actor'] !== undefined) throw telephoneDenied();
+    const body = z.object({ number: TelephoneNumber }).strict().parse(request.body);
+    return admitTelephoneSms({ credential: request.billingAppKey, number: body.number,
+      serviceToken: readBillingActorHeader(request.headers['x-uoa-service-assertion']) });
+  });
+  app.post(CALL_ADMISSION_PATH, { bodyLimit: 1024, preHandler: [requireBillingLifecycleAppKey, limit] }, async (request, reply) => {
+    reply.header('Cache-Control', 'private, no-store');
+    if (!request.billingAppKey || request.headers['x-uoa-actor'] !== undefined) throw telephoneDenied();
+    const body = z.object({ number: TelephoneNumber }).strict().parse(request.body);
+    return admitTelephoneCall({ credential: request.billingAppKey, number: body.number,
+      serviceToken: readBillingActorHeader(request.headers['x-uoa-service-assertion']) });
+  });
   app.post(`${CALL_PROOF_PATH}/reserve`, { bodyLimit: 2048,
     preHandler: [requireBillingLifecycleAppKey, limit] }, async (request, reply) => {
     reply.header('Cache-Control', 'private, no-store');

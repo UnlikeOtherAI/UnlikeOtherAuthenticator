@@ -329,7 +329,9 @@ export function BillingServicePanel({
                     onClick={() =>
                       confirm(
                         `Revoke ${key.name}?`,
-                        key.purpose === 'sms_runtime'
+                        key.purpose === 'voice_runtime'
+                          ? 'This deployment loses Voice call admission and settlement access immediately. This cannot be undone.'
+                          : key.purpose === 'sms_runtime'
                           ? 'This deployment loses SMS dispatch and provider recovery access immediately. This cannot be undone.'
                           : key.purpose === 'entitlement'
                           ? 'This deployment loses effective-tariff access immediately. This cannot be undone.'

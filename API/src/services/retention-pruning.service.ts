@@ -6,6 +6,7 @@ import { getAdminPrisma } from '../db/prisma.js';
 type RetentionPrisma = {
   telephoneCallChallenge: Pick<PrismaClient['telephoneCallChallenge'], 'deleteMany'>;
   telephoneChallenge: Pick<PrismaClient['telephoneChallenge'], 'deleteMany'>;
+  telephoneSmsAdmission: Pick<PrismaClient['telephoneSmsAdmission'], 'deleteMany'>;
   telephoneLookup: Pick<PrismaClient['telephoneLookup'], 'deleteMany'>;
   debugLoginGrant: Pick<PrismaClient['debugLoginGrant'], 'deleteMany'>;
   authorizationCode: Pick<PrismaClient['authorizationCode'], 'deleteMany'>;
@@ -26,6 +27,7 @@ type RetentionPruneDeps = {
 export type RetentionPruneResult = {
   telephoneCallChallengesDeleted: number;
   telephoneChallengesDeleted: number;
+  telephoneSmsAdmissionsDeleted: number;
   telephoneLookupsDeleted: number;
   debugLoginGrantsDeleted: number;
   authorizationCodesDeleted: number;
@@ -45,6 +47,7 @@ function emptyResult(): RetentionPruneResult {
   return {
     telephoneCallChallengesDeleted: 0,
     telephoneChallengesDeleted: 0,
+    telephoneSmsAdmissionsDeleted: 0,
     telephoneLookupsDeleted: 0,
     debugLoginGrantsDeleted: 0,
     authorizationCodesDeleted: 0,
@@ -71,6 +74,7 @@ export async function pruneExpiredSecurityData(
   const [
     telephoneCallChallenges,
     telephoneChallenges,
+    telephoneSmsAdmissions,
     telephoneLookups,
     debugLoginGrants,
     refreshTokens,
@@ -83,6 +87,7 @@ export async function pruneExpiredSecurityData(
   ] = await Promise.all([
     prisma.telephoneCallChallenge.deleteMany({ where: { createdAt: { lt: subtractDays(now, 1) } } }),
     prisma.telephoneChallenge.deleteMany({ where: { createdAt: { lt: subtractDays(now, 1) } } }),
+    prisma.telephoneSmsAdmission.deleteMany({ where: { createdAt: { lt: subtractDays(now, 30) } } }),
     prisma.telephoneLookup.deleteMany({ where: { createdAt: { lt: subtractDays(now, 30) } } }),
     prisma.debugLoginGrant.deleteMany({ where: { expiresAt: { lt: now } } }),
     prisma.refreshToken.deleteMany({
@@ -111,6 +116,7 @@ export async function pruneExpiredSecurityData(
   return {
     telephoneCallChallengesDeleted: telephoneCallChallenges.count,
     telephoneChallengesDeleted: telephoneChallenges.count,
+    telephoneSmsAdmissionsDeleted: telephoneSmsAdmissions.count,
     telephoneLookupsDeleted: telephoneLookups.count,
     debugLoginGrantsDeleted: debugLoginGrants.count,
     authorizationCodesDeleted: authorizationCodes.count,

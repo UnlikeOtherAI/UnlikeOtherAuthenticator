@@ -959,3 +959,7 @@ and `telephone-sms-reservation.service.ts`. The roster reads only opted-in verif
 live same-team colleagues. Call proof has separate service assertions and consumes a code once;
 its SMS admission reuses `reserveAuthorizedSms` and the existing machine dispatch protocol,
 with an immutable challenge binding and no fabricated human or agent principal.
+
+Voice call-leg billing uses `routes/billing/voice.ts` and the `billing-voice-*`
+services. Shared identity locks live in `billing-telephone-authority.service.ts`;
+SMS exports preserve existing callers. See [Voice prepaid](../Requirements/voice-pricing-and-prepaid.md).

@@ -29,9 +29,9 @@ function commonEntry(
     service: entry.service
       ? { id: entry.service.id, identifier: entry.service.identifier, name: entry.service.name }
       : null,
-    kind: (entry.kind === BillingCreditEntryKind.PREPAID_USAGE || entry.kind === BillingCreditEntryKind.SMS_PREPAID_USAGE
+    kind: (entry.kind === BillingCreditEntryKind.PREPAID_USAGE || entry.kind === BillingCreditEntryKind.SMS_PREPAID_USAGE || entry.kind === BillingCreditEntryKind.VOICE_PREPAID_USAGE
       ? 'usage_settlement' : entry.kind.toLowerCase()) as Exclude<
-        Lowercase<BillingCreditEntryKind>, 'prepaid_usage' | 'sms_prepaid_usage'>,
+        Lowercase<BillingCreditEntryKind>, 'prepaid_usage' | 'sms_prepaid_usage' | 'voice_prepaid_usage'>,
     direction:
       entry.direction === BillingCreditEntryDirection.CREDIT
         ? ('credit' as const)

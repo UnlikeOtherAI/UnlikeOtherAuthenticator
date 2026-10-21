@@ -66,3 +66,50 @@ All reads are private/no-store, with no positive cache. Machine-readable bodies
 and responses are listed at /api. These are machine-only endpoints; Nessie's
 personal profile owns the phone form and SMS code-entry doorway.
 `;
+
+export const llmTelephoneAdmissionMarkdown = `
+## Registered caller-ID admission
+POST /apps/v1/nessie/phone-profile/call-admission with {number} uses the same service
+assertion shape as lookup, but the exact new endpoint audience. Require prior lookup
+for that call/team/number. Success returns status=admitted,
+authentication=registered_caller_id, assurance=registered_caller_id,
+possession_verified_this_call=false, subject, tokenVersion, organisationId, teamId,
+callId, issuedAt and expiresAt (five minutes). Refresh requires live identity,
+membership and verified-number checks; the first subject/epoch/number version cannot
+change within a call. Pending, ambiguous, no_match and invalid return authentication=none
+without subject. This is an explicit lower-assurance product policy for ordinary PA
+conversation/context without another OTP, not a current possession proof or login.
+Do not upgrade it to telephone_sms. Sensitive actions require stronger policy/proof.
+Caller-ID spoofing remains possible. UOA issues no browser or refresh session here.
+`;
+
+export const llmTelephoneSmsMarkdown = `
+## Verified team SMS sender eligibility
+POST /apps/v1/nessie/phone-profile/sms-admission with {number} and the Nessie
+CUSTOMER_LIFECYCLE app key, X-UOA-Service-Assertion (no X-UOA-Actor).
+RS256 header typ=uoa-telephone-sms-routing+jwt, registered kid; strict claims:
+iss, exact endpoint aud, purpose=telephone-sms-routing, product=nessie,
+organisation_id, team_id, account_sid (AC…), message_sid (SM…), number_digest
+(lowercase SHA256 canonical E.164), jti, iat, exp<=iat+60; optional owner_subject.
+Nessie must verify the Twilio webhook before minting this service assertion.
+UOA does not independently verify Twilio's signature or accept message content.
+
+Success: {status:admitted,authentication:none,eligibility:verified_team_number,
+subject,tokenVersion,organisationId,teamId,accountSid,messageSid,issuedAt,expiresAt}.
+Validity ends within 60 seconds and no later than the request assertion. This is
+routing eligibility only; neither signed-in authority nor permission to private
+context/tools. Private verified numbers qualify. Unknown, pending, ambiguous or
+invalid senders return {status,authentication:none}, without subject or visibility.
+An originally refused message cannot acquire a person after later verification.
+Exact retries recheck live identity, epoch, telephone version and team membership;
+changed account/team/number/owner binding refuses. Rate limit: 120 new messages per
+minute per key, plus the shared request limiter. Nessie deduplicates message delivery.
+
+Optional owner_subject is also accepted on call lookup/admission assertions.
+Include the same owner on lookup and later call assertions. Both call and SMS
+admission independently attest that already-known owner is currently an active
+user and member of the exact org/team: ownerActive:true, or status:owner_inactive
+without subject. Owner eligibility does not impersonate the owner or authorize
+private context; Nessie still applies its personal-number and caller policies.
+Bindings expire from audit retention after 30 days and are erased with the subject.
+`;

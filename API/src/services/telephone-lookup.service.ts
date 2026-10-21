@@ -1,3 +1,4 @@
+import { telephoneRoutingBinding } from './telephone-authority.service.js';
 import { resolveTelephoneMatch } from './telephone-match.service.js';
 import { createHash } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
@@ -5,7 +6,7 @@ import { getAdminPrisma } from '../db/prisma.js';
 import { runInTransaction } from '../db/tenant-context.js';
 import { AppError } from '../utils/errors.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
-import { TelephoneNumber, lockTelephoneKey, telephoneDenied, telephoneDigest,
+import { TelephoneNumber, lockTelephoneKey, telephoneDenied,
   telephoneLock, verifyTelephoneLookupAssertion } from './telephone-authority.service.js';
 
 export async function lookupTelephone(input: {
@@ -20,7 +21,7 @@ export async function lookupTelephone(input: {
     await telephoneLock(tx, `lookup:${input.credential.id}`);
     const now = new Date();
     if (assertion.exp <= Math.floor(now.getTime() / 1000)) throw telephoneDenied();
-    const binding = telephoneDigest(JSON.stringify([assertion.organisation_id, assertion.team_id, number]));
+    const binding = telephoneRoutingBinding(assertion, number);
     const where = { appKeyId_callId: { appKeyId: input.credential.id, callId: assertion.call_id } };
     const prior = await tx.telephoneLookup.findUnique({ where });
     if (prior && prior.requestHash !== binding) throw telephoneDenied();
