@@ -4,8 +4,8 @@ import { AppError } from '../utils/errors.js';
 export const voicePolicySchema = z.object({
   version: z.string().min(1).max(80), accountSid: z.string().regex(/^AC[\da-fA-F]{32}$/),
   region: z.enum(['us1', 'ie1']), expiresAt: z.string().datetime(),
-  markupBps: z.number().int().min(0).max(100000), billingIncrementSeconds: z.number().int().min(1).max(3600),
-  minimumBilledSeconds: z.number().int().min(0).max(3600), maxDurationSeconds: z.number().int().min(1).max(14400),
+  markupBps: z.number().int().min(0).max(100000), billingIncrementSeconds: z.literal(60),
+  minimumBilledSeconds: z.literal(60), maxDurationSeconds: z.number().int().min(1).max(14400),
   pricingEvidenceDigest: z.string().regex(/^[a-f0-9]{64}$/),
   cutoffEvidenceDigest: z.string().regex(/^[a-f0-9]{64}$/),
   // This tranche can settle connectivity only. Enabling ancillary billed features requires a new receipt contract.

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { BillingVoiceProvider } from '../src/services/billing-voice-provider.service.js';
-import { configuredVoicePolicy } from '../src/services/billing-voice-policy.service.js';
+import { configuredVoicePolicy, voicePolicySchema } from '../src/services/billing-voice-policy.service.js';
 const accountSid = `AC${'a'.repeat(32)}`;
 const config = { accountSid, apiKeySid: `SK${'b'.repeat(32)}`, apiKeySecret: 'synthetic-only' };
 const route = { accountSid, from: '+420777000001', to: '+420777000002', direction: 'outbound' as const };
@@ -34,5 +34,30 @@ describe('Voice provider evidence', () => {
     vi.stubEnv('BILLING_VOICE_ENABLED', 'true'); vi.stubEnv('BILLING_VOICE_POLICY_JSON', '{}');
     expect(() => configuredVoicePolicy()).toThrow('BILLING_VOICE_EVIDENCE_UNAVAILABLE');
     vi.unstubAllEnvs();
+  });
+});
+
+
+describe('Voice activation policy', () => {
+  const policy = { version: 'fixture', accountSid, region: 'us1', expiresAt: '2099-01-01T00:00:00.000Z',
+    markupBps: 2700, billingIncrementSeconds: 60, minimumBilledSeconds: 60, maxDurationSeconds: 600,
+    pricingEvidenceDigest: 'a'.repeat(64), cutoffEvidenceDigest: 'b'.repeat(64),
+    featureProfile: 'connectivity_only', ancillaryCharges: 'none' };
+  it.each([
+    { billingIncrementSeconds: 1 }, { minimumBilledSeconds: 0 },
+    { featureProfile: 'media_streams' }, { ancillaryCharges: 'included' },
+    { streamPricePerMinute: '0.0044' },
+  ])('refuses unsupported billing or feature configuration %j', change => {
+    expect(voicePolicySchema.safeParse({ ...policy, ...change }).success).toBe(false);
+  });
+  it('requires explicit enablement and unexpired evidence even with complete policy', () => {
+    try {
+      vi.stubEnv('BILLING_VOICE_POLICY_JSON', JSON.stringify(policy));
+      vi.stubEnv('BILLING_VOICE_ENABLED', 'false');
+      expect(() => configuredVoicePolicy()).toThrow('BILLING_VOICE_EVIDENCE_UNAVAILABLE');
+      vi.stubEnv('BILLING_VOICE_ENABLED', 'true');
+      vi.stubEnv('BILLING_VOICE_POLICY_JSON', JSON.stringify({ ...policy, expiresAt: '2000-01-01T00:00:00.000Z' }));
+      expect(() => configuredVoicePolicy()).toThrow('BILLING_VOICE_EVIDENCE_UNAVAILABLE');
+    } finally { vi.unstubAllEnvs(); }
   });
 });

@@ -121,3 +121,62 @@ Self-review covered endpoint-purpose separation, live grant authority, selected-
 binding, immutable dispatch/receipt evidence, shared wallet holds, late settlement,
 private-number routing and call-scoped lower assurance. Deployment remains gated by
 the provider pricing, ancillary-charge and process-loss cutoff evidence above.
+
+## Provider activation audit, 21 October 2026
+
+The public [Voice pricing table](https://www.twilio.com/en-us/voice/pricing/us?content_language=English)
+lists Media Streams at USD 0.0044/minute, basic TTS free, premium TTS by character
+and speech Gather by use. These are public list prices, not verified negotiated
+prices for the installed account. Pin a supported basic `man`/`woman` voice and
+language explicitly for free prompts; do not rely on the account TTS default.
+DTMF-only Gather must not enable speech recognition. Free prompts cannot remove
+the Media Streams charge from an AI conversation.
+
+[Twilio rounding](https://help.twilio.com/articles/223132307-How-do-you-round-minutes-for-billing-)
+applies whole-minute rounding independently to call legs and Media Streams. The
+current connectivity policy now requires 60-second increments and a 60-second
+minimum. A one-second increment could under-reserve even a correctly priced route.
+
+### Remaining receipt prerequisite
+
+The [Call resource](https://www.twilio.com/docs/voice/api/call-resource) price excludes
+ancillary features. The documented [Streams resource](https://www.twilio.com/docs/voice/api/stream-resource)
+does not establish an independently readable final stream charge. The documented
+[Usage Records](https://www.twilio.com/docs/usage/api/usage-record) aggregate by
+account, category and date; their totals cannot attribute concurrent calls to teams.
+No exact stream-charge endpoint was established by this audit. This is a provider
+contract gap, not a claim that Twilio cannot supply the evidence.
+
+Before implementing ancillary settlement, obtain an account-specific supported
+receipt/export contract that binds the charge or billable units to AccountSid,
+CallSid and StreamSid, with currency, finalized state, rounding and correction
+semantics. Verify bidirectional IE1 coverage. Persist that evidence independently
+and settle the sum of connectivity and ancillary liability once. A signed stream
+start/stop callback supplies operational evidence, not a provider price receipt.
+Do not charge a full-call rounded estimate as actual streamed usage. Do not spread
+account totals between customers, substitute a zero, or silently absorb a paid
+feature under the current prepaid contract.
+
+### Remaining cutoff prerequisite
+
+REST Call create/update documents `timeLimit`; `<Dial timeLimit>` terminates its
+called leg. These are provider-side controls, so they are the candidates for
+surviving Nessie process loss. [Connect](https://www.twilio.com/docs/voice/twiml/connect)
+has action/method attributes and no documented duration attribute. A timer in the
+WebSocket process or a Hangup after a still-running Connect is not an independent
+cutoff. Do not add an unsupported `timeLimit` to Connect or Stream.
+
+The exact-account proof must cover: outbound creation with its funded limit;
+inbound acceptance of the limit before any answering TwiML; transfer with separate
+child and parent limits; process loss immediately after dispatch; and delayed or
+missing callbacks. Record provider acceptance, CallSids, start/end timestamps,
+actual durations and finalized charges. Determine whether inbound REST update is
+accepted while the incoming webhook is pending and whether updates measure total
+or remaining duration. Reject before answer when a safe bound cannot be installed.
+A successful unit mock or documented parameter alone does not establish this race.
+
+No live provider writes or calls were authorized for this tranche. Consequently
+these account-specific receipt and cutoff proofs remain external prerequisites;
+`BILLING_VOICE_ENABLED` must remain false for Nessie Media Streams. Existing API
+request/response shapes are unchanged. New policy tests reject unsupported ancillary
+configuration, sub-minute billing, disabled activation and expired evidence.
