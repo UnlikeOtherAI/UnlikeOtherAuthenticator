@@ -15,6 +15,12 @@ import { AppError } from '../utils/errors.js';
  * against its route registration in the endpoint-audience tests.
  */
 export const BILLING_ACTOR_ENDPOINTS = [
+  '/apps/v1/nessie/phone-profile/read',
+  '/apps/v1/nessie/phone-profile/set',
+  '/apps/v1/nessie/phone-profile/start',
+  '/apps/v1/nessie/phone-profile/verify',
+  '/apps/v1/nessie/phone-profile/remove',
+  '/apps/v1/nessie/phone-profile/visibility',
   '/apps/v1/deeptest/nessie-inference-access',
   '/billing/v1/sms/quotes',
   '/billing/v1/sms/quotes/verify',
@@ -91,6 +97,7 @@ export function assertBillingActorAudience(params: {
   if (
     params.presented === params.legacyAudience &&
     params.endpoint !== '/apps/v1/deeptest/nessie-inference-access' &&
+    !params.endpoint.startsWith('/apps/v1/nessie/phone-profile/') &&
     !params.endpoint.startsWith('/billing/v1/sms/') &&
     getBillingActorAudienceMode() === 'warn' &&
     // A legacy audience is only ever a transitional stand-in for a real endpoint

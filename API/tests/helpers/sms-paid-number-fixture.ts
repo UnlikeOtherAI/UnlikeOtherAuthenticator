@@ -128,7 +128,14 @@ export async function smsPaidNumberFixture(prisma: PrismaClient) {
       .setSubject(smsIds.user).setAudience(`${getPublicBaseUrl()}${endpoint}`).setIssuedAt(issued)
       .setExpirationTime(issued + 60).setJti(`sms-${endpoint}-${randomUUID()}`).sign(pair.privateKey);
   }
-  return { lifecycle, entitlement, monthly, outbound, stripe, provider, actor, cash, remote, invoice,
+  async function serviceAssertion(endpoint: string, payload: Record<string, unknown>) {
+    return new SignJWT({ ...payload, purpose: 'telephone-call-proof', product: 'nessie',
+      organisation_id: smsIds.org, team_id: smsIds.team })
+      .setProtectedHeader({ alg: 'RS256', kid: 'synthetic', typ: 'uoa-telephone-call-proof+jwt' })
+      .setIssuer(lifecycle.actorIssuer).setAudience(`${getPublicBaseUrl()}${endpoint}`)
+      .setIssuedAt().setExpirationTime('60s').setJti(randomUUID()).sign(pair.privateKey);
+  }
+  return { serviceAssertion, lifecycle, entitlement, monthly, outbound, stripe, provider, actor, cash, remote, invoice,
     setReceipt(value: string | null, at = new Date()) { amount = value; created = at; },
     setOwned(value: boolean) { owned = value; } };
 }

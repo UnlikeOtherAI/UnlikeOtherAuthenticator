@@ -1,3 +1,4 @@
+import { llmTelephoneMarkdown } from './llm-telephone.js';
 import type { FastifyInstance } from 'fastify';
 import { llmSmsOperatorsMarkdown } from './llm-sms-operators.js';
 import { llmNativeAppsMarkdown } from './llm-native-apps.js';
@@ -21,7 +22,8 @@ function renderLlmMarkdown(): string {
   // llmIntegrationMarkdown owns both confidential subject profiles: one-time
   // source assertions and reusable, audience-bound chained access tokens. llmRostersMarkdown
   // owns the exact-team invitation management and role-write contracts.
-  return `## DeepTest Nessie executor inference permission
+  return `${llmTelephoneMarkdown}
+## DeepTest Nessie executor inference permission
 Platform superusers set the default-deny User.deeptestNessieInferenceAllowed property in User detail > Security or PATCH /internal/admin/users/:userId/deeptest-nessie-inference with {allowed:boolean}. DeepTest calls POST /apps/v1/deeptest/nessie-inference-access with {product:"deeptest",organisation_id,team_id,user_id}, its own customer_lifecycle X-UOA-App-Key and fresh RS256 X-UOA-Actor. The actor requires exact endpoint audience (no legacy fallback), exact subject/org/team and current nonnegative safe-integer tv. UOA rechecks active identity, memberships and key/service, returning only {allowed:boolean}, private/no-store. Check before every dispatch; errors deny and positive caching is forbidden. This grant does not authorize source access, external material transfer or live testing.
 ${llmJobGrantsMarkdown}\n## Entity access and deletion (2026-10-03)
 Lifecycle ACTIVE/DISABLED/DELETING/DELETED is distinct from membership. Parent disable denies descendant access without changing child state; no superuser bypass. Offline products must introspect or bound JWT expiry to honor revocation. See /api lifecycle and endpoint schemas. Admin templates have scoped plain customer text and revision snapshots; internal notes never reach account-status proof. Access-status diagnostics are disabled by default: the auth-server environment must explicitly set AUTH_ACCESS_STATUS_ENABLED=true to show Check access status and enable all four website/native start/verify endpoints. False or unset returns 404 before configuration/client lookup, mail, challenge or proof work, including previously issued proof redemption. DEBUG_ENABLED, signed product config, URL parameters and browser storage cannot enable it. When enabled, POST /auth/lifecycle-status/start and verify use signed config_url, mailbox code and enrolled TOTP solely to read authorized reasons, never to log in. Native clients use /oauth/lifecycle-status/start and verify with registered client_id and exact redirect_uri; current app revision binds the proof.

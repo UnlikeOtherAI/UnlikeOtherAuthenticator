@@ -282,7 +282,7 @@ export const orgTeamMemberEndpoints: EndpointSchema[] = [
       'cursor?': 'opaque signed keyset cursor from meta.nextCursor or meta.prevCursor',
     },
     response: {
-      data: 'array — { id, teamId, subject, userId (legacy alias), role, teamRole, status, identity { displayName, avatarImageUrl, email? }, avatarImageUrl, createdAt, updatedAt }',
+      data: 'array — { id, teamId, subject, userId (legacy alias), role, teamRole, status, identity { displayName, avatarImageUrl, email?, telephoneNumber? }, avatarImageUrl, createdAt, updatedAt }; telephoneNumber requires verified team visibility and live caller/subject membership in this exact team',
       total: 'number — count for the selected status filter',
       meta: 'object — { hasMore, nextCursor, prevCursor }',
       next_cursor: 'string | null — compatibility alias for meta.nextCursor',
