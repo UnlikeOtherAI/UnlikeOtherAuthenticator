@@ -45,7 +45,7 @@ export class BillingVoiceProvider {
     if (!/^\+[1-9]\d{6,14}$/.test(number)) throw unavailable();
     const source = `/v2/Voice/Numbers/${encodeURIComponent(number)}`;
     const raw = await this.read(source, true);
-    const parsed = z.object({ number: z.literal(number), price_unit: z.string(),
+    const parsed = z.object({ destination_number: z.literal(number), price_unit: z.string(),
       outbound_call_prices: z.array(price).optional(), inbound_call_price: price.nullable().optional() }).safeParse(raw);
     if (!parsed.success || parsed.data.price_unit.toUpperCase() !== 'USD') throw unavailable();
     // Conservative maximum over ALL offered origins; never accept a cheap caller-selected origin.

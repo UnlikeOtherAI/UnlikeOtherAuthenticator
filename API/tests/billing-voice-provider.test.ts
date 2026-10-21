@@ -9,11 +9,13 @@ function provider(body: unknown) {
 }
 describe('Voice provider evidence', () => {
   it('uses the conservative maximum exact-number origin rate and refuses missing currency evidence', async () => {
-    const body = { number: route.to, price_unit: 'USD', outbound_call_prices: [{ current_price: '0.01' }, { current_price: '0.13' }] };
+    const body = { destination_number: route.to, origination_number: null, price_unit: 'USD',
+      outbound_call_prices: [{ current_price: '0.01' }, { current_price: '0.13' }] };
     expect((await provider(body).price(route)).amount).toBe('0.13');
     await expect(provider({ ...body, price_unit: 'EUR' }).price(route)).rejects.toThrow();
     await expect(provider({ ...body, outbound_call_prices: [{ current_price: null }] }).price(route)).rejects.toThrow();
-    await expect(provider({ ...body, number: route.from }).price(route)).rejects.toThrow();
+    await expect(provider({ ...body, destination_number: route.from }).price(route)).rejects.toThrow();
+    await expect(provider({ ...body, destination_number: undefined, number: route.to }).price(route)).rejects.toThrow();
   });
   it('validates the exact voice-capable owned number', async () => {
     const sid = `PN${'c'.repeat(32)}`;

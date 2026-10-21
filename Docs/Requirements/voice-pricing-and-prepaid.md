@@ -60,6 +60,12 @@ an already paid telephone number. Quotes still expire after 60 seconds, read
 the current Twilio connectivity price and freeze the accepted tariff for settlement.
 The operator updates the policy when rates, stream terms or cutoff evidence change.
 
+The live Twilio exact-number pricing response uses `destination_number` for the
+queried number. The provider adapter validates that field against the requested
+destination before accepting its offered rates; `number` is not part of that
+response. This was checked against the UK number pricing endpoint on 21 October
+2026. The tariff and process-loss cutoff proofs below still gate activation.
+
 The adapter currently accepts USD only and conservatively selects the maximum
 exact-destination price across all reported origin groups. It verifies owned voice
 capability and exact account/from/to/direction/parent CallSid. Runtime and regional
