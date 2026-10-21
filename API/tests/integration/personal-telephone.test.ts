@@ -109,8 +109,11 @@ describe.skipIf(!process.env.DATABASE_URL)('personal telephone authority', () =>
     expect(await db.prisma.telephoneChallenge.count()).toBe(0);
     expect(await lookup()).toEqual({ match: { state: 'pending' }, authentication: 'none' });
     await verify();
+    await profile('visibility', { visibility: 'team' });
+    const challenge = await start();
     await profile('set', { number: nextNumber });
-    expect(await profile('read')).toMatchObject({ phone: { number, pendingNumber: nextNumber } });
+    expect(await profile('read')).toMatchObject({ phone: { number, pendingNumber: nextNumber, visibility: 'team' } });
+    await expect(profile('verify', { challengeId: challenge.challengeId, code: '123456' })).rejects.toMatchObject({ statusCode: 403 });
   });
 
   it('commits five failed attempts and refuses correct code afterwards', async () => {
@@ -169,6 +172,17 @@ describe.skipIf(!process.env.DATABASE_URL)('personal telephone authority', () =>
     await expect(lookup(nextNumber, call)).rejects.toMatchObject({ statusCode: 403 });
     await db.prisma.user.update({ where: { id: userId }, data: { tokenVersion: 1 } });
     await expect(profile('read')).rejects.toMatchObject({ statusCode: 401 });
+  });
+
+  it('denies tenant-role access even when table grants are present', async () => {
+    await verify();
+    await db.prisma.$executeRawUnsafe(`GRANT USAGE ON SCHEMA "${db.schema}" TO uoa_app`);
+    await db.prisma.$executeRawUnsafe(`GRANT SELECT ON "${db.schema}".user_telephones TO uoa_app`);
+    const rows = await db.prisma.$transaction(async tx => {
+      await tx.$executeRawUnsafe('SET LOCAL ROLE uoa_app');
+      return tx.userTelephone.findMany();
+    });
+    expect(rows).toEqual([]);
   });
 
   it('requires separate headers and emits private HTTP responses', async () => {
