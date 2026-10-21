@@ -64,7 +64,9 @@ The adapter currently accepts USD only and conservatively selects the maximum
 exact-destination price across all reported origin groups. It verifies owned voice
 capability and exact account/from/to/direction/parent CallSid. Runtime and regional
 Twilio credentials reuse the existing SMS account configuration; separate VOICE_RUNTIME
-UOA credentials are required. Price evidence cannot establish destination permission.
+UOA credentials are required. A superuser issues a Voice runtime key in Admin Billing's
+Nessie product app keys; leave expiry blank and install its one-time secret in Nessie's
+backend. Price evidence cannot establish destination permission.
 
 Twilio Call price covers connectivity only. Say/Gather choices, recording, AMD,
 Media Streams and any other enabled feature need a complete charge inventory before
