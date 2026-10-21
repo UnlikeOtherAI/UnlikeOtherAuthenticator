@@ -267,6 +267,12 @@ describe.skipIf(!process.env.DATABASE_URL)('personal telephone authority', () =>
     expect((await read()).size).toBe(0);
     await profile('visibility', { visibility: 'team' });
     expect((await read()).get(userId)).toBe(number);
+    const colleague = await db.prisma.user.create({ data: { email: 'directory@example.test', userKey: 'directory@example.test' } });
+    await db.prisma.orgMember.create({ data: { userId: colleague.id, orgId, role: 'member' } });
+    await db.prisma.teamMember.create({ data: { userId: colleague.id, teamId, teamRole: 'member' } });
+    expect((await read(colleague.id)).get(userId)).toBe(number);
+    await db.prisma.teamMember.update({ where: { teamId_userId: { teamId, userId: colleague.id } }, data: { status: 'REMOVED' } });
+    expect((await read(colleague.id)).size).toBe(0);
     await profile('set', { number: nextNumber });
     expect((await read()).get(userId)).toBe(number);
     expect((await read(randomUUID())).size).toBe(0);

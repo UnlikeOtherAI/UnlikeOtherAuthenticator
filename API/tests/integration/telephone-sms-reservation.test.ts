@@ -13,6 +13,7 @@ let prisma: PrismaClient;
 let cleanup: () => Promise<void>;
 let fixture: Awaited<ReturnType<typeof smsPaidNumberFixture>>;
 let holdId: string;
+let allocationId = 'telephone-team';
 const number = '+420777000002';
 const fingerprint = 'a'.repeat(64);
 const verifiedAt = new Date();
@@ -24,7 +25,7 @@ async function delivery() {
     organisationId: smsIds.org, teamId: smsIds.team, tokenVersion: 0, number, numberVerifiedAt: verifiedAt,
     codeHash: 'fixture-digest-never-delivered', expiresAt: new Date(Date.now() + 300_000) } });
   return { challenge, body: { number, challengeId: challenge.id, dispatch_id: randomUUID(), request_fingerprint: fingerprint,
-    number_id: smsIds.number, allocation_id: 'telephone-team', account_sid: smsAccount, from: smsPhone, max_segments: 1 } };
+    number_id: smsIds.number, allocation_id: allocationId, account_sid: smsAccount, from: smsPhone, max_segments: 1 } };
 }
 async function reserve(value: Awaited<ReturnType<typeof delivery>>, patch = {}) {
   return reserveTelephoneSms({ credential: fixture.lifecycle, request: { ...value.body, ...patch },
@@ -43,7 +44,7 @@ describe.skipIf(!process.env.DATABASE_URL)('telephone proof prepaid SMS admissio
     prisma = db.prisma; cleanup = db.cleanup;
     fixture = await smsPaidNumberFixture(prisma);
     await prisma.userTelephone.create({ data: { userId: smsIds.user, number, verifiedAt } });
-    holdId = (await smsStanding(prisma, 'telephone-team', 1_000_000n)).id;
+    holdId = (await smsStanding(prisma, allocationId, 1_000_000n)).id;
   });
   afterAll(async () => { await cleanup?.(); vi.unstubAllEnvs(); });
 
@@ -71,7 +72,8 @@ describe.skipIf(!process.env.DATABASE_URL)('telephone proof prepaid SMS admissio
     expect(await prisma.billingSmsReservation.findUnique({ where: { dispatchId: value.body.dispatch_id } })).toBeNull();
     await prisma.billingSmsStandingHold.update({ where: { id: holdId }, data: { state: 'retired', retiredAt: new Date() } });
     await expect(reserve(value)).rejects.toMatchObject({ statusCode: 403 });
-    await prisma.billingSmsStandingHold.update({ where: { id: holdId }, data: { state: 'active', retiredAt: null } });
+    allocationId = 'telephone-team-replacement';
+    holdId = (await smsStanding(prisma, allocationId, 1_000_000n)).id;
   });
 
   it('rolls back unfunded admission without a reservation or budget hold', async () => {
