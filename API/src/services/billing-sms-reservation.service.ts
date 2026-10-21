@@ -84,6 +84,7 @@ export async function reserveSms(input: { request: BillingSmsReserveRequestV1; a
 export async function reserveAuthorizedSms(input: { request: BillingSmsReserveRequestV1;
   credential: VerifiedBillingAppKey }, deps: SmsNumberDependencies, authority: {
   actor: Pick<BillingActor, 'tv' | 'exp'>;
+  actorExpiresAt?: Date;
   telephoneCallChallengeId?: string;
   authorize: (tx: Prisma.TransactionClient) => Promise<unknown>;
 }): Promise<BillingSmsReservationV1> {
@@ -153,7 +154,7 @@ export async function reserveAuthorizedSms(input: { request: BillingSmsReserveRe
       dispatchId: body.dispatch_id, requestFingerprint: body.request_fingerprint, creditAccountId: credits.id,
       serviceId: input.credential.service.id, appKeyId: input.credential.id, orgId: body.organisation_id,
       teamId: body.team_id, userId: body.user_id, actorTokenVersion: actor.tv,
-      actorExpiresAt: new Date(actor.exp * 1000), numberId: body.number_id, allocationId: body.allocation_id,
+      actorExpiresAt: authority.actorExpiresAt ?? new Date(actor.exp * 1000), numberId: body.number_id, allocationId: body.allocation_id,
       telephoneCallChallengeId: authority.telephoneCallChallengeId ?? null,
       quoteId: body.quote_id, grantId: body.grant_id, delegateId: body.delegate_id,
       accountSid: body.account_sid, from: body.from, to: body.to, maxSegments: body.max_segments,

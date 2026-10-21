@@ -46,5 +46,6 @@ export async function reserveTelephoneSms(input: {
     allocation_id: body.allocation_id, account_sid: body.account_sid, from: body.from, to: number,
     quote_id: quoteId, max_segments: body.max_segments, grant_id: null, delegate_id: null,
   } }, { ...deps, prisma }, { telephoneCallChallengeId: body.challengeId, authorize,
+    actorExpiresAt: admitted.challenge.expiresAt,
     actor: { tv: admitted.challenge.tokenVersion, exp: admitted.challenge.expiresAt.getTime() / 1000 } });
 }

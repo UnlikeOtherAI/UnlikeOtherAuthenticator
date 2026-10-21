@@ -51,6 +51,8 @@ describe.skipIf(!process.env.DATABASE_URL)('telephone proof prepaid SMS admissio
   it('binds the challenge to one prepaid dispatch and uses ordinary claim/receipt settlement', async () => {
     const value = await delivery();
     const first = await reserve(value);
+    expect((await prisma.billingSmsReservation.findUniqueOrThrow({ where: { id: first.reservation_id } })).actorExpiresAt)
+      .toEqual(value.challenge.expiresAt);
     expect(first).toMatchObject({ dispatch_id: value.body.dispatch_id, state: 'reserved', dispatch_token: null });
     expect(await reserve(value)).toEqual(first);
     await expect(prisma.billingSmsReservation.update({ where: { id: first.reservation_id },
