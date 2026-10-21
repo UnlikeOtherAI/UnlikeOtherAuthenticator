@@ -31,7 +31,7 @@ describe('metadata import and scoped credential rollover with real PostgreSQL', 
     await db.orgMember.create({ data: { userId: owner, orgId: org, role: 'owner' } });
     samlId = (await transaction((tx) => saveEnterpriseConnection(session, { preset: 'other_saml', protocol: 'saml',
       display_name: 'SAML', configuration: {} }, undefined, tx))).connection.id;
-  }, 120000);
+  });
   afterAll(async () => {
     stores.db = null; await db?.$disconnect(); await handle?.cleanup();
     if (priorProvider === undefined) delete process.env.ENTERPRISE_SSO_CUSTODY_PROVIDER; else process.env.ENTERPRISE_SSO_CUSTODY_PROVIDER = priorProvider;

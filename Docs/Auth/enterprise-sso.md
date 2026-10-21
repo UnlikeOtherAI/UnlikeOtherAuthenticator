@@ -529,3 +529,19 @@ Withdrawing a product attestation blocks new SCIM token issuance as well as
 initial enablement. Existing credentials also require the product attestations.
 Receiver-key rotation alone preserves authenticated provisioning so that it can
 still deprovision people while the replacement receiver is acknowledged.
+
+
+### Merge verification - 21 October 2026
+
+Maxis passes the workspace production build and all-package lint. The focused
+enterprise PostgreSQL gate passes 68 cases without skips, including original
+credential lineage, consumer readiness, provisioning, recovery, rotation and
+ordinary-authority withdrawal. The DB-less API run passes 2,635 cases; its sole
+remaining failure identified five provisioning hooks overriding the shared hook
+budget. Those hooks now use the configured budget and the dedicated gate is
+rerun before merge. Three unrelated opt-in cases remain skipped.
+
+Matching owner-chooser Before/After screenshots at 390 and 1280 pixels are in
+`Docs/evidence/pr-117-ui`; the local capture uses the actual base/final sources
+and fixture directory responses. Required CI, producer deployment and exact
+product preparation remain separate release gates.

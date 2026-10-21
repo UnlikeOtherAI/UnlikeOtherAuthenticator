@@ -43,7 +43,7 @@ describe('SCIM reconciliation and erasure with real PostgreSQL', () => {
       ...tuple, identityScope: 'global', linkedVia: 'independent_proof' } });
     externalIdentityId = identity.id;
     bearer = `Bearer ${(await db.$transaction((tx) => issueScimToken(connectionId, tx))).token}`;
-  }, 120000);
+  });
   afterAll(async () => { stores.db = null; await app?.$disconnect(); await db?.$disconnect(); await handle?.cleanup(); });
 
   it('rejects foreign provider mappings and exposes old unscoped mappings only as repair metadata', async () => {

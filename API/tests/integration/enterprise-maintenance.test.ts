@@ -34,7 +34,7 @@ describe('bounded enterprise lifecycle maintenance with real PostgreSQL', () => 
     await db.$transaction(async (tx) => { await lockEnterpriseOutbox(tx); await replaceManagedMemberships({ userId: user,
       orgId: org, clientDomain: domain, connectionId: connection, sourceKind: 'sso', sourceId: identity,
       grants: [{ teamId: null, role: 'member', resourceId: 'identity' }, { teamId: team, role: 'member', resourceId: 'default' }] }, tx); });
-  }, 120000);
+  });
   afterAll(async () => { stores.db = null; await db?.$disconnect(); await handle?.cleanup(); });
   it('fails proof use when DNS freshness expires even before the scheduler runs, then atomically lapses its sources', async () => {
     await expect(assertEnterpriseProvisioningActive(connection, identity, user, db)).rejects.toThrow();

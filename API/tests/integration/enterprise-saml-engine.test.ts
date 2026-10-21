@@ -46,7 +46,7 @@ describe('real signed and encrypted enterprise SAML engine', () => {
         entity_id: issuer, sso_url: 'https://idp.example.com/sso', certificates: [idp.publicCertificate],
         tenant: { attribute: 'tenant', value: 'exact-tenant' }, email_attribute: 'email', trusted_origins: ['https://idp.example.com'],
       } } });
-  }, 120000);
+  });
   afterAll(async () => {
     stores.db = null; await db?.$disconnect(); await handle?.cleanup();
     if (priorProvider === undefined) delete process.env.ENTERPRISE_SSO_CUSTODY_PROVIDER; else process.env.ENTERPRISE_SSO_CUSTODY_PROVIDER = priorProvider;

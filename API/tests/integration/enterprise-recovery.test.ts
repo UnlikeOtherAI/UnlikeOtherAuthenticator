@@ -41,7 +41,7 @@ describe('narrow independently authenticated recovery with real PostgreSQL', () 
         configuration: {}, displayName: 'Connection', status: 'active' } });
     }
     await db.orgMember.create({ data: { orgId: org, userId: contact, role: 'member' } });
-  }, 120000);
+  });
   afterAll(async () => { vi.useRealTimers(); stores.db = null; await db?.$disconnect(); await handle?.cleanup(); });
 
   it('requires two distinct existing-factor members, permits the canonical owner, and grants no owner role', async () => {
