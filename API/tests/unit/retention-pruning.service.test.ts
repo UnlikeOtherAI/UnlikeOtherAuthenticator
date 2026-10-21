@@ -29,6 +29,7 @@ describe('retention-pruning.service', () => {
     const prisma = {
       telephoneCallChallenge: { deleteMany: async (args: unknown) => { calls.telephoneCallChallenge = args; return { count: 11 }; } },
     telephoneChallenge: { deleteMany: async (args: unknown) => { calls.telephoneChallenge = args; return { count: 9 }; } },
+      telephoneSmsAdmission: { deleteMany: async (args: unknown) => { calls.telephoneSmsAdmission = args; return { count: 12 }; } },
       telephoneLookup: { deleteMany: async (args: unknown) => { calls.telephoneLookup = args; return { count: 10 }; } },
       debugLoginGrant: { deleteMany: async (args: unknown) => { calls.debugLoginGrant = args; return { count: 8 }; } },
       refreshToken: {
@@ -104,10 +105,12 @@ describe('retention-pruning.service', () => {
     });
     expect(calls.debugLoginGrant).toMatchObject({ where: { expiresAt: { lt: now } } });
     expect(calls.telephoneChallenge).toMatchObject({ where: { createdAt: { lt: new Date('2026-04-19T12:00:00.000Z') } } });
+    expect(calls.telephoneSmsAdmission).toMatchObject({ where: { createdAt: { lt: new Date('2026-03-21T12:00:00.000Z') } } });
     expect(calls.telephoneLookup).toMatchObject({ where: { createdAt: { lt: new Date('2026-03-21T12:00:00.000Z') } } });
     expect(result).toEqual({
       telephoneCallChallengesDeleted: 11,
       telephoneChallengesDeleted: 9,
+      telephoneSmsAdmissionsDeleted: 12,
       telephoneLookupsDeleted: 10,
       debugLoginGrantsDeleted: 8,
       authorizationCodesDeleted: 2,

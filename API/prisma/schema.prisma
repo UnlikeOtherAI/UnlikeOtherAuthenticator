@@ -5370,3 +5370,19 @@ model BillingVoiceStreamInvoice {
   @@index([serviceId, accountSid, billingMonth, createdAt])
   @@map("billing_voice_stream_invoices")
 }
+
+/// Immutable service-only SMS routing decision, not private-context or login authority.
+model TelephoneSmsAdmission {
+  appKeyId String @map("app_key_id")
+  messageSid String @map("message_sid")
+  requestHash String @map("request_hash")
+  status String
+  subjectId String? @map("subject_id")
+  tokenVersion Int? @map("token_version")
+  numberVerifiedAt DateTime? @map("number_verified_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@id([appKeyId, messageSid])
+  @@index([appKeyId, createdAt])
+  @@index([subjectId])
+  @@map("telephone_sms_admissions")
+}

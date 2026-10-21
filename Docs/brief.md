@@ -3246,3 +3246,13 @@ reports this as `registered_caller_id`, explicitly without current-call possessi
 proof. The exact call binding, live membership checks, expiry and residual spoofing
 risk are documented in [personal telephones](Auth/personal-telephone.md). Sensitive
 actions retain stronger-authentication policy; no signed-in browser session is issued.
+
+### Verified telephone senders and personal routing owners (2026-10-21)
+
+Nessie may ask UOA, through a service-only signed MessageSid-bound request, whether
+an SMS sender is a verified active member of the exact selected team. Private
+telephone visibility does not prevent routing. Pending, ambiguous and unknown
+senders fail closed; this eligibility does not grant private-context or signed-in
+authority. Call and SMS admission may additionally attest current membership of a
+signed, already-known personal routing owner. The contract and retention controls
+are in [personal telephone](Auth/personal-telephone.md).

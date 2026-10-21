@@ -128,3 +128,68 @@ Nessie must preserve the assurance on every context/tool decision and require st
 proof for sensitive actions. This endpoint does not mint login, OAuth or refresh tokens,
 does not claim telephone_sms, and does not grant billing authority. The optional
 call-proof endpoint remains available where stronger possession proof is needed.
+
+## Verified SMS sender admission
+
+The machine-only `POST /apps/v1/nessie/phone-profile/sms-admission` accepts `{number}`
+with Nessie's CUSTOMER_LIFECYCLE app key and `X-UOA-Service-Assertion`. It rejects
+`X-UOA-Actor`. Nessie's signed inbound SMS handler is the product doorway.
+
+The assertion has RS256, registered `kid`, `typ: uoa-telephone-sms-routing+jwt`,
+and strict claims `iss`, exact endpoint `aud`, `purpose: telephone-sms-routing`,
+`product: nessie`, `organisation_id`, `team_id`, `account_sid`, `message_sid`,
+`number_digest`, `jti`, `iat`, `exp`. `owner_subject` is optional. Lifetime is at
+most 60 seconds; the number digest is lowercase SHA-256 of canonical E.164.
+AccountSid is AC plus 32 hex characters; MessageSid is SM plus 32 hex characters.
+Nessie verifies Twilio's signature before issuing this assertion and derives the
+team from its own destination-number assignment. UOA authenticates the service's
+attestation, not Twilio directly. No message body is sent to UOA.
+
+A unique, verified, active same-team member returns:
+
+```
+{status:"admitted",authentication:"none",eligibility:"verified_team_number",
+ subject,tokenVersion,organisationId,teamId,accountSid,messageSid,issuedAt,expiresAt}
+```
+
+The expiry is within 60 seconds and never later than the assertion. Private
+profiles qualify; visibility is never returned. This is sender routing eligibility,
+not signed-in identity, current possession proof, private-context access or tool
+permission. Nessie retains its personal-owner and context policies. Pending,
+ambiguous, unknown and changed identity/version results return only `status`
+(`pending`, `ambiguous`, `no_match`, `invalid`) and `authentication: none`.
+
+`telephone_sms_admissions` stores an immutable keyed account/team/number/owner
+binding per app key and MessageSid, decision and admitted subject/epoch/telephone
+version. It stores neither phone numbers, message content nor profiles. Initial
+refusals cannot become admissions after later enrollment. Exact admitted retries
+recheck current membership, epoch and verification; changed bindings fail closed.
+Nessie still deduplicates delivery by MessageSid. New-message admission is capped
+at 120 per minute per app key, plus the shared 240 requests/minute limiter.
+The table denies the tenant role, retains audit data for 30 days, and erases
+subject-bound rows during identity deletion. No backfill is performed.
+
+### Personal routing owner membership
+
+Call lookup/admission and SMS admission assertions accept optional `owner_subject`.
+For calls, include the same owner in the preceding lookup and later call assertions;
+the keyed call binding prevents changing it. Existing assertions without an owner
+retain their existing behavior. Both admissions check the selected owner's active
+identity, organisation and exact team membership independently of sender matching.
+They return `ownerActive: true` only when an owner was supplied and is currently
+eligible, including for a nonmatching caller. An inactive/removed/out-of-team owner
+returns `{status:"owner_inactive",authentication:"none"}` with no subject.
+The owner check does not expose a profile or grant the sender the owner's authority.
+
+### SMS admission verification — 2026-10-21
+
+Maxis passed API typecheck, changed-file ESLint, 22 personal-telephone PostgreSQL
+integration tests and the retention unit test. The isolated schema applied the new
+migration. Cases include private eligibility, pending/ambiguous/unknown/other-team
+refusal, concurrent exact retries, account/number/owner binding changes, epoch
+changes, immutable audit rows, tenant-role denial despite SELECT grants, persisted
+rate limits, mixed actor/service-header refusal, and revoked personal owners for
+both calls and SMS. The database was stopped. Tests used synthetic signed service
+assertions; no live Twilio message, provider mutation or production change occurred.
+`ownerActive` is a request-scoped eligibility result; consumers must not cache it
+as durable membership or private-context authority.

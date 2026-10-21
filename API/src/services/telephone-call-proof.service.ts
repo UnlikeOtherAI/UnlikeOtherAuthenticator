@@ -1,3 +1,4 @@
+import { telephoneRoutingBinding } from './telephone-authority.service.js';
 import { createHash, randomInt, randomUUID, timingSafeEqual } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
 import { getAdminPrisma } from '../db/prisma.js';
@@ -25,7 +26,7 @@ export async function telephoneCallProof(input: {
   return runInTransaction(deps.prisma ?? getAdminPrisma(), async tx => {
     await lockTelephoneKey(tx, input.credential);
     if (assertion.exp <= Math.floor(Date.now() / 1000)) throw telephoneDenied();
-    const binding = telephoneDigest(JSON.stringify([assertion.organisation_id, assertion.team_id, number]));
+    const binding = telephoneRoutingBinding(assertion, number);
     const lookup = await tx.telephoneLookup.findUnique({ where: {
       appKeyId_callId: { appKeyId: input.credential.id, callId: assertion.call_id },
     } });
