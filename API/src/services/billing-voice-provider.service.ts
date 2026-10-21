@@ -52,7 +52,10 @@ export class BillingVoiceProvider {
     const rates = route.direction === 'inbound' ? [parsed.data.inbound_call_price]
       : parsed.data.outbound_call_prices;
     if (!rates?.length || rates.some(rate => !rate || rate.current_price === null)) throw unavailable();
-    const amounts = rates.map(rate => new Prisma.Decimal(rate!.current_price!));
+    const amounts = rates.map(rate => {
+      if (!rate || rate.current_price === null) throw unavailable();
+      return new Prisma.Decimal(rate.current_price);
+    });
     return { amount: Prisma.Decimal.max(...amounts).toFixed(), currency: 'USD', source: `https://pricing.twilio.com${source}` };
   }
   public async receipt(route: VoiceRoute, callSid: string): Promise<VoiceReceipt> {

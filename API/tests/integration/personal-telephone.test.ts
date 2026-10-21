@@ -336,7 +336,7 @@ describe.skipIf(!process.env.DATABASE_URL)('personal telephone authority', () =>
     await expect(admitTelephoneCall({ credential, number, serviceToken: await serviceToken(number, callId) },
       { prisma: db.prisma })).rejects.toMatchObject({ statusCode: 403 });
     await admit(number, callId);
-    await db.prisma.teamMember.update({ where: { teamId_userId: { teamId, userId } }, data: { status: 'SUSPENDED' } });
+    await db.prisma.teamMember.update({ where: { teamId_userId: { teamId, userId } }, data: { status: 'DEACTIVATED' } });
     expect(await admit(number, callId)).toEqual({ status: 'no_match', authentication: 'none' });
   });
   it('returns no subject for pending and unknown callers and refuses a verified-number version change', async () => {

@@ -434,7 +434,7 @@ export const billingEndpoints: EndpointSchema[] = [
     auth: adminAuth,
     body: {
       purpose:
-        'entitlement | customer_lifecycle (required); endpoint classes are mutually exclusive',
+        'entitlement | customer_lifecycle | sms_runtime | voice_runtime (required); endpoint classes are mutually exclusive',
       name: 'string (required, max 120)',
       actor_issuer: 'HTTPS origin/URI (required)',
       actor_audience: 'HTTPS UOA effective-tariff endpoint audience (required)',

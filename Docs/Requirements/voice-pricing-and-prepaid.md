@@ -101,3 +101,8 @@ Financial fixtures use an explicitly synthetic opening wallet large enough to ke
 independent unsettled call cases. The race case then attempts four holds whose sum
 exceeds that wallet, proving only three admissions succeed. Transfer tests verify
 separate child funding and exact provider parent-call evidence.
+
+Voice runtime keys are issued through the existing system-admin app-key API. The
+existing product App keys tab reads and revokes them; the issuance form remains
+limited to its existing purposes. This tranche adds no customer grant-management UI.
+A focused headless browser fixture covers the Voice key row and revocation wording.
