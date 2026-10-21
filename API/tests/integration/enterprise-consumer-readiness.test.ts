@@ -47,7 +47,7 @@ describe('actual consumer capability acknowledgment with real PostgreSQL', () =>
     connection = (await db.orgSsoConnection.create({ data: { clientDomain: domain, orgId: org, protocol: 'oidc', preset: 'other_oidc',
       displayName: 'Connection', configuration: {} } })).id;
     registration = await registerRevocationConsumer({ client_domain: domain, key_id: 'key-1', destination: `https://${domain}/revocations` });
-  }, 120000);
+  });
   afterAll(async () => {
     stores.db = null; await db?.$disconnect(); await handle?.cleanup();
     if (priorProvider === undefined) delete process.env.ENTERPRISE_SSO_CUSTODY_PROVIDER; else process.env.ENTERPRISE_SSO_CUSTODY_PROVIDER = priorProvider;
