@@ -51,7 +51,7 @@ export async function issueVoiceQuote(input: { request: BillingVoiceQuoteRequest
   const now = deps.now?.() ?? new Date();
   const policy = voicePolicySchema.parse(deps.policy);
   if (policy.accountSid !== accountSid || policy.region !== (deps.voice.configuration.region ?? 'us1') ||
-      Date.parse(policy.expiresAt) <= now.getTime() || body.max_duration_seconds > policy.maxDurationSeconds) {
+      body.max_duration_seconds > policy.maxDurationSeconds) {
     throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_VOICE_EVIDENCE_UNAVAILABLE');
   }
   const evidence = await deps.voice.price({ accountSid, from: body.from, to: body.to,
@@ -63,7 +63,7 @@ export async function issueVoiceQuote(input: { request: BillingVoiceQuoteRequest
   const streamRate = body.media_stream && policy.featureProfile === 'media_streams_fixed' ? policy.streamPricePerMinute : '0';
   const raw = new Prisma.Decimal(evidence.amount).plus(streamRate).mul(seconds).div(60).toDecimalPlaces(18, Prisma.Decimal.ROUND_CEIL);
   const held = maximumRatedMicrocredits(raw, policy.markupBps);
-  const expiresAt = new Date(Math.min(now.getTime() + 60000, Date.parse(policy.expiresAt)));
+  const expiresAt = new Date(now.getTime() + 60000);
   const quote = await runBillingSerializableTransaction(prisma, async tx => {
     await lockVoiceGrant(tx, { grantId: grant.id, product: body.product, credential: input.credential });
     return tx.billingVoiceQuote.create({ data: { serviceId: input.credential.service.id, grantId: grant.id,

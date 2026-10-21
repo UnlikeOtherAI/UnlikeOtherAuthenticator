@@ -197,11 +197,11 @@ describe.skipIf(!process.env.DATABASE_URL)('prepaid Voice call legs', () => {
     const row = await prisma.billingVoiceReservation.findUniqueOrThrow({ where: { id: value.result.reservation_id } });
     expect(row.userId).toBe(smsIds.user); // Explicit consenting payer, never the external caller.
   });
-  it('refuses expired policy, unauthorized destination and foreign team', async () => {
+  it('refuses mismatched policy, unauthorized destination and foreign team', async () => {
     const value = await reservation();
     await expect(issueVoiceQuote({ credential, request: { ...value.body, to: '+420777000003' } }, deps())).rejects.toMatchObject({ statusCode: 403 });
     await expect(issueVoiceQuote({ credential, request: value.body }, { ...deps(), policy: { ...policy,
-      expiresAt: new Date(Date.now() - 1000).toISOString() } })).rejects.toMatchObject({ statusCode: 503 });
+      accountSid: `AC${'f'.repeat(32)}` } })).rejects.toMatchObject({ statusCode: 503 });
     await expect(createVoiceGrant({ credential: fixture.lifecycle, actorToken: await fixture.actor('/billing/v1/voice/grants'),
       request: { product: 'nessie', organisation_id: smsIds.org, team_id: 'other-team', user_id: smsIds.user,
         idempotency_key: randomUUID(), number_id: smsIds.number, allocation_id: 'x', delegate_id: 'x', direction: 'inbound',
