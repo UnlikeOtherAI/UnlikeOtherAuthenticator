@@ -35,7 +35,7 @@ caller ID and historical SMS verification NEVER authorize private context,
 tools or a signed-in session: Nessie must obtain separate per-call proof.
 For a verified routing candidate, use POST /apps/v1/nessie/phone-profile/call-proof/start
 with {number}. Service assertion uses purpose=telephone-call-proof and
- typ=uoa-telephone-call-proof+jwt with the same strict routing claims and exact
+typ=uoa-telephone-call-proof+jwt with the same strict routing claims and exact
 endpoint aud. A prior lookup must bind this key/call/number/team. Start returns
 {status:"challenge",challengeId,expiresAt,delivery:{number,code}} or
 {status:"pending"|"ambiguous"|"no_match",authentication:"none"}. Strip delivery

@@ -1,6 +1,6 @@
 # Personal telephone profile
 
-UOA owns the number, pending claim, verification time and colleague visibility. Nessie's personal profile is the user-facing home. These UOA endpoints are machine-only: Nessie's signed-in backend reads and changes the owner's profile and delivers SMS. UOA does not call Twilio. Deploy this migration and API before enabling the Nessie relay.
+UOA owns the number, pending claim, verification time and colleague visibility. Nessie's personal profile is the user-facing home. These UOA endpoints are machine-only: Nessie's signed-in backend reads and changes the owner's profile and delivers SMS. UOA does not send SMS; prepaid admission uses the existing Twilio pricing and number-ownership reads. Deploy this migration and API before enabling the Nessie relay.
 
 ## Enrollment
 
@@ -94,3 +94,9 @@ Nessie sends only the issued OTP through that admitted dispatch, strips `deliver
 This result expires five minutes after verification. It is not an OAuth token, login, refresh credential or browser session. Nessie may retain it only on that call and must check current UOA membership/epoch before private tool execution. Verification is serialized: concurrent correct submissions produce one proof; subsequent submissions return `{status:"used",authentication:"none"}`. Other refusal statuses are `invalid`, `expired`, `pending`, `ambiguous` and `no_match`; none carries a subject. Invalid service assertions/bindings return 403, malformed HTTP bodies 400 and rate limits 429.
 
 Call challenges retain keyed code digests and bounded audit metadata for one day and are erased with the user's identity. Telephone enrollment itself remains contact proof: historical verification and caller ID never confer call authority. Nessie still owns Twilio signature validation, call routing, prepaid SMS delivery, DTMF collection and call teardown.
+
+### Call-proof and roster verification — 2026-10-21
+
+Maxis passed 14 personal-telephone integration cases, including concurrent one-use proof, replay refusal, code and issuance limits, private routing, pending/ambiguous outcomes, and sharing between distinct colleagues with live membership checks. The six existing paid-SMS dispatch regression cases and retention test passed. The four new prepaid call-proof SMS cases passed at `d94fb187`, covering an immutable challenge binding, exact retry, one claim token, real database debit/receipt handling with synthetic provider evidence, allocation/sender/destination limits, insufficient-credit rollback, and original-key/expiry checks before claim. API typecheck and changed-file lint passed. The earlier three roster and seven actor-audience tests also passed.
+
+The database guard compares Prisma's UTC timestamp columns with UTC and preserves the exact millisecond expiry; verification ran on Maxis with a non-UTC host timezone. Self-review checked that receipt/release can resolve financial outcomes after challenge expiry, while fresh claim requires live challenge authority. A retired allocation remains retired; test replacement uses a new allocation. No provider credentials, live SMS, live telephone call or production mutation was used. Nessie integration, deployed-provider configuration and real-call proof remain separate acceptance work.

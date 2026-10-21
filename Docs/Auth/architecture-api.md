@@ -951,3 +951,11 @@ results and any private address remain hard destination refusals. No address
 is admitted or network fetch attempted while resolution is unavailable.
 
 Telephone API schema and integration prose live in `routes/root/schema.telephone.ts` and `routes/root/llm-telephone.ts`; see [personal telephones](personal-telephone.md).
+
+
+Personal telephone directory and call proof are implemented in `telephone-directory.service.ts`,
+`telephone-match.service.ts`, `telephone-call-proof.service.ts`, `telephone-sms-authority.service.ts`
+and `telephone-sms-reservation.service.ts`. The roster reads only opted-in verified numbers for
+live same-team colleagues. Call proof has separate service assertions and consumes a code once;
+its SMS admission reuses `reserveAuthorizedSms` and the existing machine dispatch protocol,
+with an immutable challenge binding and no fabricated human or agent principal.
