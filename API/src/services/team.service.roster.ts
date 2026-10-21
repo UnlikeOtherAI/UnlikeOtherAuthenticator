@@ -1,3 +1,4 @@
+import { teamTelephoneNumbers } from './telephone-directory.service.js';
 import type { MembershipStatus } from '@prisma/client';
 
 import type { ClientConfig } from './config.service.js';
@@ -54,6 +55,8 @@ export type TeamRosterMember = {
   identity: {
     displayName: string | null;
     avatarImageUrl: string;
+    /** Verified number opted into sharing with active colleagues in this team. */
+    telephoneNumber?: string;
     /** Team managers alone receive a member's email address. */
     email?: string;
   };
@@ -116,6 +119,7 @@ function toTeamRosterMember(
   },
   domain: string,
   includeEmail: boolean,
+  telephoneNumber?: string,
 ): TeamRosterMember {
   const avatarImageUrl = memberAvatarImageUrl(domain, row.user.id);
   return {
@@ -125,6 +129,7 @@ function toTeamRosterMember(
     subject: row.user.id,
     avatarImageUrl,
     identity: {
+      ...(telephoneNumber ? { telephoneNumber } : {}),
       displayName: row.user.name,
       avatarImageUrl,
       ...(includeEmail && row.user.email ? { email: row.user.email } : {}),
@@ -252,9 +257,11 @@ export async function listTeamMembers(
     secret: env.SHARED_SECRET,
   });
 
+  const telephones = await teamTelephoneNumbers({ orgId: org.id, teamId: team.id, actorUserId,
+    userIds: displayRows.filter(row => row.status === 'ACTIVE').map(row => row.userId) });
   return {
     data: displayRows.map((row) =>
-      toTeamRosterMember(row, org.domain, permissions.viewMemberEmail),
+      toTeamRosterMember(row, org.domain, permissions.viewMemberEmail, telephones.get(row.userId)),
     ),
     total,
     meta,
