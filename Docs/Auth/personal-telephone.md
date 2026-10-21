@@ -58,3 +58,11 @@ All three tables deny the tenant database role and use the existing administrato
 ## Verification
 
 Run the focused `personal-telephone.test.ts` integration suite with an isolated migrated PostgreSQL database, plus retention pruning unit coverage, API lint and typecheck. Fixtures use locally signed assertions and no SMS provider. Live SMS delivery and live telephone proof require the consuming Nessie release and are not established by UOA tests.
+
+### Verification record — 2026-10-21
+
+On Windows Maxis, revision `4a5cd4b9` passed the nine telephone integration cases and retention unit case (10 tests), using an isolated PostgreSQL 17 cluster on localhost port 55451 and a freshly migrated test schema. The seven actor-audience/route-registration tests passed separately. API typecheck passed after building the billing-statement-protocol and slug dependencies; lint passed for changed TypeScript files and the final integration fixture. The test database was stopped afterwards.
+
+The isolated cluster needed `max_locks_per_transaction=256` for schema teardown; the initial default hit PostgreSQL's lock-table limit after all assertions passed. Running start, tests and stop in one SSH session avoids Windows terminating the test server between commands. No application workaround was added for either test-host condition.
+
+Self-review checked the shared product-policy and user-epoch lock order, committed failed attempts, retained verified values during pending replacement, exact endpoint audiences, strict service claims without a user principal, fresh membership reads on retries, and tenant-role denial even with table SELECT grants. Shared-number claims intentionally return ambiguous rather than selecting an owner. UOA owns the data; the Nessie profile and SMS relay still need integration, and real SMS delivery and live-call proof remain unverified.
