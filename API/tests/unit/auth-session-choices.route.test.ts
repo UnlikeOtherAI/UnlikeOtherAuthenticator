@@ -37,6 +37,7 @@ const prismaMock = vi.hoisted(() => ({
   billingAppKey: { findMany: vi.fn() },
   clientDomain: { findUnique: vi.fn() },
   user: { findUnique: vi.fn() },
+  orgMember: { findMany: vi.fn() },
   teamMember: { findMany: vi.fn() },
   teamInvite: { findMany: vi.fn() },
 }));
@@ -130,6 +131,7 @@ describe('POST /auth/session-choices', () => {
         maybeMock.mockReset?.();
       }
     }
+    prismaMock.orgMember.findMany.mockResolvedValue([]);
     prismaMock.$queryRaw.mockReset().mockResolvedValue([]);
     prismaMock.clientDomain.findUnique.mockResolvedValue({ status: 'inactive' });
   });

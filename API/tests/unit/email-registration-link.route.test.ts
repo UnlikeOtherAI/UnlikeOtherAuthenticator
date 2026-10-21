@@ -583,6 +583,7 @@ describe('GET /auth/email/link — team chooser wiring (gap-fix B Task 1, design
     // verification downstream at /auth/session-choices and /auth/select-team.
     expect(signLoginSessionMock).toHaveBeenCalledWith(
       expect.objectContaining({ audience: LOGIN_SESSION_AUDIENCE }),
+      expect.objectContaining({ prisma: expect.anything(), verifiedEvent: { kind: 'local_credential' } }),
     );
   });
 

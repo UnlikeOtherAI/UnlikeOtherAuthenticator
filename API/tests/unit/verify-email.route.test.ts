@@ -216,6 +216,7 @@ describe('POST /auth/verify-email — team chooser wiring (gap-fix B Task 1, des
   });
 
   it('pre-binds the recognized product team before required email-link enrollment', async () => {
+    routeDb.current = authenticationFixtureDb({ twoFaEnabled: false });
     currentConfig = baseConfig({
       '2fa_enabled': true,
       login_flow: { email_code_enabled: false, team_selection: 'off' },
@@ -306,6 +307,7 @@ describe('POST /auth/verify-email — team chooser wiring (gap-fix B Task 1, des
     // auth-service identifier, or the bridge fails verification at /auth/select-team.
     expect(signLoginSessionMock).toHaveBeenCalledWith(
       expect.objectContaining({ audience: LOGIN_SESSION_AUDIENCE }),
+      expect.objectContaining({ prisma: expect.anything(), verifiedEvent: { kind: 'local_credential' } }),
     );
   });
 
@@ -394,6 +396,7 @@ describe('POST /auth/verify-email — team chooser wiring (gap-fix B Task 1, des
   });
 
   it('exact-one auto-skip carries team into required 2FA enrollment', async () => {
+    routeDb.current = authenticationFixtureDb({ twoFaEnabled: false });
     currentConfig = baseConfig({
       '2fa_enabled': true,
       login_flow: { email_code_enabled: false, team_selection: 'auto' },

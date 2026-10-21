@@ -172,6 +172,7 @@ describe('GET /auth/email/link exact-one team 2FA', () => {
   });
 
   it('redirects required enrollment with the exact team in setup finalization', async () => {
+    routeDb.current = authenticationFixtureDb({ twoFaEnabled: false });
     verifyEmailTokenMock.mockResolvedValue({
       userId: 'user-1',
       credentialEpoch: 0,

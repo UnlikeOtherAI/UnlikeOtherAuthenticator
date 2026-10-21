@@ -64,7 +64,8 @@ vi.mock('../../src/services/required-team-placement.service.js', async () => {
 const prismaMock = vi.hoisted(() => {
   const mock: Record<string, unknown> = {
     user: { findUnique: vi.fn() },
-    teamMember: { findMany: vi.fn() },
+    orgMember: { findMany: vi.fn() },
+  teamMember: { findMany: vi.fn() },
     teamInvite: { findMany: vi.fn() },
     authorizationCode: { create: vi.fn() },
     domainSignatureSettings: { findUnique: vi.fn() },
@@ -169,6 +170,7 @@ describe('POST /auth/verify-code', () => {
       }
     }
     Object.assign(prismaMock, { authenticationEvidence: authenticationFixtureDb().authenticationEvidence });
+    prismaMock.orgMember.findMany.mockResolvedValue([]);
     verifyLoginCodeMock.mockReset();
     recordLoginLogMock.mockReset().mockResolvedValue(undefined);
     assertEmailDomainAllowedForLoginMock.mockReset().mockResolvedValue(undefined);

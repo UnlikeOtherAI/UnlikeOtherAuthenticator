@@ -13,7 +13,7 @@ export function legacyCredentialStores() {
 }
 
 /** Durable evidence within one route fixture; actual lineage validation still runs. */
-export function authenticationFixtureDb() {
+export function authenticationFixtureDb(options?: { twoFaEnabled: boolean }) {
   const rows = new Map<string, AuthenticationEvidence>();
   const evidence = {
     create: vi.fn(async ({ data }: { data: Partial<AuthenticationEvidence> }) => {
@@ -36,7 +36,7 @@ export function authenticationFixtureDb() {
     ...legacyCredentialStores(),
     authenticationEvidence: evidence,
     user: { findUnique: vi.fn().mockResolvedValue({ id: 'user-1', email: 'person@example.com',
-      tokenVersion: 0, lifecycleStatus: 'ACTIVE', twoFaEnabled: true }) },
+      tokenVersion: 0, lifecycleStatus: 'ACTIVE', twoFaEnabled: options?.twoFaEnabled ?? true }) },
     $queryRaw: vi.fn().mockResolvedValue([]),
     $executeRaw: vi.fn().mockResolvedValue(0),
     $transaction: async <T>(body: (tx: unknown) => Promise<T>): Promise<T> => body(db),

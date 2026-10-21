@@ -292,6 +292,7 @@ describe('GET /auth/callback/:provider team selection', () => {
   });
 
   it('carries the auto-selected team into required 2FA enrollment', async () => {
+    routeDb.current = authenticationFixtureDb({ twoFaEnabled: false });
     resolveTwoFaPolicyMock.mockResolvedValue('REQUIRED');
     startTwoFactorSetupMock.mockResolvedValue({
       setup_token: 'setup-token',
@@ -365,6 +366,7 @@ describe('GET /auth/callback/:provider team selection', () => {
   });
 
   it('pre-binds the recognized product team before required social enrollment', async () => {
+    routeDb.current = authenticationFixtureDb({ twoFaEnabled: false });
     validateConfigFieldsMock.mockReturnValue(
       baseConfig({
         '2fa_enabled': true,
