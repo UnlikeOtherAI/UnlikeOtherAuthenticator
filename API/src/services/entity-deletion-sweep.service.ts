@@ -37,6 +37,7 @@ export async function eraseOperationalIdentity(tx: PrismaClient, userId: string,
   await tx.nativeOAuthFlow.deleteMany({ where: { userId } });
   await tx.debugLoginGrant.deleteMany({ where: { userId } });
   await tx.authIdentity.deleteMany({ where: { userId } });
+  await tx.telephoneLookup.deleteMany({ where: { admittedSubjectId: userId } });
   await tx.userTelephone.deleteMany({ where: { userId } });
   await tx.telephoneCallChallenge.deleteMany({ where: { userId } });
   await tx.telephoneChallenge.deleteMany({ where: { userId } });

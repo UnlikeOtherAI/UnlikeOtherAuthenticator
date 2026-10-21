@@ -3237,3 +3237,12 @@ callers and separately bounded outbound/transfer legs without inventing caller i
 The machine-only contract and unfulfilled live pricing/cutoff prerequisites are in
 [Voice prepaid](Requirements/voice-pricing-and-prepaid.md). Connectivity-only USD
 support does not authorize charged ancillary features or Ledger inference.
+
+### 2026-10-21 Registered caller-ID policy
+
+The approved telephone UX admits a uniquely matched verified personal number to
+ordinary PA/specialist context without repeating an SMS code on every call. UOA
+reports this as `registered_caller_id`, explicitly without current-call possession
+proof. The exact call binding, live membership checks, expiry and residual spoofing
+risk are documented in [personal telephones](Auth/personal-telephone.md). Sensitive
+actions retain stronger-authentication policy; no signed-in browser session is issued.

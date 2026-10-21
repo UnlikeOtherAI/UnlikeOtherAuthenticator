@@ -5216,6 +5216,10 @@ model TelephoneChallenge {
 
 /// Content-free routing lookup audit and call binding; never a login receipt.
 model TelephoneLookup {
+  admittedSubjectId String? @map("admitted_subject_id")
+  admittedTokenVersion Int? @map("admitted_token_version")
+  admittedNumberVerifiedAt DateTime? @map("admitted_number_verified_at")
+  admittedAt DateTime? @map("admitted_at")
   appKeyId String @map("app_key_id")
   callId String @map("call_id")
   requestHash String @map("request_hash")

@@ -100,3 +100,31 @@ Call challenges retain keyed code digests and bounded audit metadata for one day
 Maxis passed 14 personal-telephone integration cases, including concurrent one-use proof, replay refusal, code and issuance limits, private routing, pending/ambiguous outcomes, and sharing between distinct colleagues with live membership checks. The six existing paid-SMS dispatch regression cases and retention test passed. The four new prepaid call-proof SMS cases passed at `d94fb187`, covering an immutable challenge binding, exact retry, one claim token, real database debit/receipt handling with synthetic provider evidence, allocation/sender/destination limits, insufficient-credit rollback, and original-key/expiry checks before claim. API typecheck and changed-file lint passed. The earlier three roster and seven actor-audience tests also passed.
 
 The database guard compares Prisma's UTC timestamp columns with UTC and preserves the exact millisecond expiry; verification ran on Maxis with a non-UTC host timezone. Self-review checked that receipt/release can resolve financial outcomes after challenge expiry, while fresh claim requires live challenge authority. A retired allocation remains retired; test replacement uses a new allocation. No provider credentials, live SMS, live telephone call or production mutation was used. Nessie integration, deployed-provider configuration and real-call proof remain separate acceptance work.
+
+## Registered caller-ID admission (2026-10-21)
+
+The user-approved no-repeat-code flow uses
+`POST /apps/v1/nessie/phone-profile/call-admission` with `{number}`. Its lifecycle
+key, `X-UOA-Service-Assertion`, RS256 `typ=uoa-telephone-routing+jwt`, purpose,
+org/team/call/number digest claims are the lookup contract, with the exact new
+endpoint audience. A prior lookup binding is required. No X-UOA-Actor is accepted.
+
+Success is `{status:'admitted',authentication:'registered_caller_id',
+assurance:'registered_caller_id',possession_verified_this_call:false,subject,
+tokenVersion,organisationId,teamId,callId,issuedAt,expiresAt}`. Validity is five
+minutes. The trusted Nessie backend consumes this TLS response only for that call.
+Renewal rechecks live identity, membership, epoch and verified telephone. The first
+admitted subject, epoch and telephone-verification version are immutable per call.
+Private verified numbers remain eligible; visibility is never returned.
+
+Refusals are `{status:'pending'|'ambiguous'|'no_match'|'invalid',authentication:'none'}`
+without subject. Lookup issuance limits and the existing per-key request limiter apply.
+Admission binding is retained with the lookup audit for 30 days and removed on user erasure.
+
+This deliberately supports ordinary PA/specialist context under a distinct lower
+assurance policy without sending a new code. Historical SMS verification plus a
+Twilio-signed claimed From does not prove current possession: spoofing remains possible.
+Nessie must preserve the assurance on every context/tool decision and require stronger
+proof for sensitive actions. This endpoint does not mint login, OAuth or refresh tokens,
+does not claim telephone_sms, and does not grant billing authority. The optional
+call-proof endpoint remains available where stronger possession proof is needed.

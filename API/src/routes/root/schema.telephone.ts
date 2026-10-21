@@ -6,6 +6,12 @@ const auth = 'Nessie customer_lifecycle X-UOA-App-Key + exact-endpoint RS256 X-U
 const profile = { phone: 'null | {number:string|null,pendingNumber:string|null,verifiedAt:ISO|null,visibility:private|team}' };
 export const telephoneEndpoints: EndpointSchema[] = [
   ...telephoneCallProofEndpoints,
+  { method: 'POST', path: base + 'call-admission',
+    auth: 'Nessie CUSTOMER_LIFECYCLE key + exact-endpoint uoa-telephone-routing+jwt X-UOA-Service-Assertion; no human actor',
+    description: 'Explicit lower-assurance registered-caller-ID admission for the exact call; no fresh possession proof.',
+    body: { number: 'canonical E.164; prior exact call/team/number lookup required' },
+    response: { 200: '{status:admitted,authentication:registered_caller_id,assurance:registered_caller_id,possession_verified_this_call:false,subject,tokenVersion,organisationId,teamId,callId,issuedAt,expiresAt} or {status:pending|ambiguous|no_match|invalid,authentication:none}' },
+    notes: 'Five-minute validity; renew only after live checks. First subject/epoch/verified-number version remains bound to call. No profile visibility, browser token or login session. Does not prevent caller-ID spoofing.' },
   { method: 'POST', path: base + 'set', auth, description: 'Record a pending number without sending a code; preserve existing verified number and invalidate challenges.',
     body: { ...subject, number: 'canonical E.164' }, response: profile },
   { method: 'POST', path: base + 'read', auth, description: 'Read only the acting person’s UOA telephone profile.', body: subject, response: profile },

@@ -66,3 +66,19 @@ All reads are private/no-store, with no positive cache. Machine-readable bodies
 and responses are listed at /api. These are machine-only endpoints; Nessie's
 personal profile owns the phone form and SMS code-entry doorway.
 `;
+
+export const llmTelephoneAdmissionMarkdown = `
+## Registered caller-ID admission
+POST /apps/v1/nessie/phone-profile/call-admission with {number} uses the same service
+assertion shape as lookup, but the exact new endpoint audience. Require prior lookup
+for that call/team/number. Success returns status=admitted,
+authentication=registered_caller_id, assurance=registered_caller_id,
+possession_verified_this_call=false, subject, tokenVersion, organisationId, teamId,
+callId, issuedAt and expiresAt (five minutes). Refresh requires live identity,
+membership and verified-number checks; the first subject/epoch/number version cannot
+change within a call. Pending, ambiguous, no_match and invalid return authentication=none
+without subject. This is an explicit lower-assurance product policy for ordinary PA
+conversation/context without another OTP, not a current possession proof or login.
+Do not upgrade it to telephone_sms. Sensitive actions require stronger policy/proof.
+Caller-ID spoofing remains possible. UOA issues no browser or refresh session here.
+`;

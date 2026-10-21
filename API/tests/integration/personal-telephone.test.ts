@@ -1,3 +1,4 @@
+import { admitTelephoneCall, CALL_ADMISSION_PATH } from '../../src/services/telephone-call-admission.service.js';
 import { createHash, randomUUID } from 'node:crypto';
 import Fastify from 'fastify';
 import { exportJWK, generateKeyPair, SignJWT } from 'jose';
@@ -78,11 +79,11 @@ describe.skipIf(!process.env.DATABASE_URL)('personal telephone authority', () =>
     const challenge = await start(value);
     return profile('verify', { challengeId: challenge.challengeId, code: '123456' });
   }
-  async function serviceToken(value = number, callId = randomUUID(), extra: Record<string, unknown> = {}) {
+  async function serviceToken(value = number, callId = randomUUID(), extra: Record<string, unknown> = {}, endpoint = LOOKUP_PATH) {
     return new SignJWT({ purpose: 'telephone-routing', product: 'nessie', organisation_id: orgId, team_id: teamId,
       call_id: callId, number_digest: createHash('sha256').update(value).digest('hex'), ...extra })
       .setProtectedHeader({ alg: 'RS256', kid: credential.actorKeyId, typ: 'uoa-telephone-routing+jwt' })
-      .setIssuer(credential.actorIssuer).setAudience(`${publicBase}${LOOKUP_PATH}`)
+      .setIssuer(credential.actorIssuer).setAudience(`${publicBase}${endpoint}`)
       .setJti(randomUUID()).setIssuedAt().setExpirationTime('60s').sign(privateKey);
   }
   async function lookup(value = number, callId = randomUUID(), extra: Record<string, unknown> = {}) {
@@ -311,4 +312,43 @@ describe.skipIf(!process.env.DATABASE_URL)('personal telephone authority', () =>
       expect(lookupResult.statusCode).toBe(403);
     } finally { await app.close(); }
   });
+  async function admit(value = number, callId = randomUUID()) {
+    return admitTelephoneCall({ credential, number: value,
+      serviceToken: await serviceToken(value, callId, {}, CALL_ADMISSION_PATH) }, { prisma: db.prisma });
+  }
+  it('admits a verified private number without another code under explicit lower assurance', async () => {
+    await verify(); const callId = randomUUID(); await lookup(number, callId);
+    const before = await db.prisma.telephoneCallChallenge.count();
+    const first = await admit(number, callId);
+    expect(first).toMatchObject({ status: 'admitted', authentication: 'registered_caller_id',
+      assurance: 'registered_caller_id', possession_verified_this_call: false,
+      subject: userId, tokenVersion: 0, organisationId: orgId, teamId, callId });
+    expect(first).not.toHaveProperty('visibility');
+    expect(await db.prisma.telephoneCallChallenge.count()).toBe(before);
+    expect(await admit(number, callId)).toMatchObject({ status: 'admitted', subject: userId });
+    await db.prisma.user.update({ where: { id: userId }, data: { tokenVersion: 1 } });
+    expect(await admit(number, callId)).toEqual({ status: 'invalid', authentication: 'none' });
+  });
+  it('requires exact prior lookup, audience and current membership for call admission', async () => {
+    await verify(); const callId = randomUUID();
+    await expect(admit(number, callId)).rejects.toMatchObject({ statusCode: 403 });
+    await lookup(number, callId);
+    await expect(admitTelephoneCall({ credential, number, serviceToken: await serviceToken(number, callId) },
+      { prisma: db.prisma })).rejects.toMatchObject({ statusCode: 403 });
+    await admit(number, callId);
+    await db.prisma.teamMember.update({ where: { teamId_userId: { teamId, userId } }, data: { status: 'SUSPENDED' } });
+    expect(await admit(number, callId)).toEqual({ status: 'no_match', authentication: 'none' });
+  });
+  it('returns no subject for pending and unknown callers and refuses a verified-number version change', async () => {
+    const pendingCall = randomUUID(); await profile('set', { number }); await lookup(number, pendingCall);
+    expect(await admit(number, pendingCall)).toEqual({ status: 'pending', authentication: 'none' });
+    const unknownCall = randomUUID(); await lookup(nextNumber, unknownCall);
+    expect(await admit(nextNumber, unknownCall)).toEqual({ status: 'no_match', authentication: 'none' });
+    await verify(); const callId = randomUUID(); await lookup(number, callId); await admit(number, callId);
+    await db.prisma.userTelephone.update({ where: { userId }, data: { verifiedAt: new Date(Date.now() + 1000) } });
+    expect(await admit(number, callId)).toEqual({ status: 'invalid', authentication: 'none' });
+    await expect(db.prisma.telephoneLookup.update({ where: { appKeyId_callId: { appKeyId: credential.id, callId } },
+      data: { admittedTokenVersion: 10 } })).rejects.toThrow(/cannot rebind/);
+  });
+
 });
