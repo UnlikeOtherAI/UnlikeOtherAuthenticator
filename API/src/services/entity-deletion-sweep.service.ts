@@ -38,6 +38,11 @@ export async function eraseOperationalIdentity(tx: PrismaClient, userId: string,
   await tx.nativeOAuthFlow.deleteMany({ where: { userId } });
   await tx.debugLoginGrant.deleteMany({ where: { userId } });
   await tx.authIdentity.deleteMany({ where: { userId } });
+  await tx.telephoneSmsAdmission.deleteMany({ where: { subjectId: userId } });
+  await tx.telephoneLookup.deleteMany({ where: { admittedSubjectId: userId } });
+  await tx.userTelephone.deleteMany({ where: { userId } });
+  await tx.telephoneCallChallenge.deleteMany({ where: { userId } });
+  await tx.telephoneChallenge.deleteMany({ where: { userId } });
   await tx.userAvatar.deleteMany({ where: { userId } });
   await tx.userSetting.deleteMany({ where: { userId } });
   await tx.billingServiceAccess.deleteMany({ where: { userId } });

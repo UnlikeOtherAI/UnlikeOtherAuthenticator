@@ -263,3 +263,11 @@ domain credentials, delegation tokens or another product's runtime key. Lists co
 metadata only; UOA cannot retrieve the plaintext later. If issuance response is lost,
 inspect the list and revoke an unused key before issuing a replacement. Production
 provisioning and installation remain deliberate operator actions.
+
+### Voice prepaid admission
+
+Deploy the additive Voice enum and financial migrations before the API. The runtime
+remains disabled unless the explicit evidence policy in
+[Voice prepaid](Requirements/voice-pricing-and-prepaid.md) is configured. No values or
+provider resources are seeded. Provision VOICE_RUNTIME only for the consuming backend.
+Receipt/release recovery remains available when new Voice admission is disabled.

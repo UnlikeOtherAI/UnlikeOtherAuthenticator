@@ -82,3 +82,7 @@ export function requireBillingSmsRuntimeAppKey(
 ): Promise<void> {
   return requireBillingAppKeyPurpose(request, reply, BillingAppKeyPurpose.SMS_RUNTIME);
 }
+
+export function requireBillingVoiceRuntimeAppKey(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  return requireBillingAppKeyPurpose(request, reply, BillingAppKeyPurpose.VOICE_RUNTIME);
+}

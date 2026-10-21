@@ -111,6 +111,7 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
         llm-signatures.ts     — /llm content: optional signature operator workflow and security constraints
         llm-avatars.ts        — /llm content: user and team avatar precedence, endpoints, styles, and caching
       /apps
+        telephone-profile.ts — Self telephone profile and separate call-bound service lookup routes
         startup.ts          — GET /apps/startup (combined startup payload; config JWT auth)
         index.ts            — Route registration for /apps
       /auth
@@ -215,6 +216,9 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
         reset.ts            — POST /2fa/reset
         index.ts            — Route registration for /2fa
     /services
+      telephone-authority.service.ts — Exact Nessie actor/service assertion and live scope checks
+      telephone-profile.service.ts — UOA-owned telephone challenge and self profile lifecycle
+      telephone-lookup.service.ts — Call-bound exact-team routing hints, never authentication
       access-request-flow.service.ts        — Orchestration for access-request flow
       access-request.service.ts             — Access-request orchestration API
       access-request.service.admin.ts       — Access-request admin operations
@@ -956,3 +960,17 @@ The shared SSRF resolver preserves `EAI_AGAIN` as
 failure to the existing partner outage. Definitive DNS failures, empty/invalid
 results and any private address remain hard destination refusals. No address
 is admitted or network fetch attempted while resolution is unavailable.
+
+Telephone API schema and integration prose live in `routes/root/schema.telephone.ts` and `routes/root/llm-telephone.ts`; see [personal telephones](personal-telephone.md).
+
+
+Personal telephone directory and call proof are implemented in `telephone-directory.service.ts`,
+`telephone-match.service.ts`, `telephone-call-proof.service.ts`, `telephone-sms-authority.service.ts`
+and `telephone-sms-reservation.service.ts`. The roster reads only opted-in verified numbers for
+live same-team colleagues. Call proof has separate service assertions and consumes a code once;
+its SMS admission reuses `reserveAuthorizedSms` and the existing machine dispatch protocol,
+with an immutable challenge binding and no fabricated human or agent principal.
+
+Voice call-leg billing uses `routes/billing/voice.ts` and the `billing-voice-*`
+services. Shared identity locks live in `billing-telephone-authority.service.ts`;
+SMS exports preserve existing callers. See [Voice prepaid](../Requirements/voice-pricing-and-prepaid.md).

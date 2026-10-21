@@ -133,6 +133,7 @@ export async function buildSidebarTeams(
           name: true,
           slug: true,
           iconUrl: true,
+          updatedAt: true,
           org: { select: { name: true, slug: true } },
         },
       },
@@ -156,6 +157,7 @@ export async function buildSidebarTeams(
               name: true,
               slug: true,
               iconUrl: true,
+              updatedAt: true,
               org: { select: { name: true, slug: true } },
             },
           },
@@ -201,6 +203,7 @@ export async function buildSidebarTeams(
     avatarImageUrl: publicTeamAvatarImageUrl({
       baseUrl: avatarBaseUrl,
       teamId: membership.teamId,
+      updatedAt: membership.team.updatedAt,
     }),
     role: membership.teamRole,
     lastLoginAt: lastLoginByTeam.get(membership.teamId) ?? null,

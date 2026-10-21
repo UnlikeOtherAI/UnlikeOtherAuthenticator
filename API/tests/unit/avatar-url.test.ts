@@ -6,6 +6,7 @@ import {
   avatarImageBaseUrl,
   domainAvatarImageUrl,
   domainTeamAvatarImageUrl,
+  publicTeamAvatarImageUrl,
 } from '../../src/utils/avatar-url.js';
 
 // Docs/Auth/avatars.md §9: every identity payload carries a URL that resolves to an image and is
@@ -120,5 +121,19 @@ describe('avatar image URL builders', () => {
     // HOST:PORT origin.
     Reflect.deleteProperty(process.env, 'PUBLIC_BASE_URL');
     expect(avatarImageBaseUrl()).toBe('');
+  });
+
+  it('versions the public team URL by the team row updatedAt (§11.4)', () => {
+    const updatedAt = new Date('2026-10-01T00:00:00.000Z');
+    expect(
+      publicTeamAvatarImageUrl({ baseUrl: 'https://auth.example.com/', teamId: 'team 1', updatedAt }),
+    ).toBe('https://auth.example.com/teams/team%201/avatar?v=muorpc00');
+    expect(
+      publicTeamAvatarImageUrl({
+        baseUrl: null,
+        teamId: 'team_1',
+        updatedAt: new Date(updatedAt.getTime() + 1),
+      }),
+    ).toBe('/teams/team_1/avatar?v=muorpc01');
   });
 });

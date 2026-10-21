@@ -212,7 +212,11 @@ export const avatarEndpoints: EndpointSchema[] = [
     description:
       "Image bytes for a team (team) avatar with no credential at all — the only unauthenticated avatar route, so a browser or native client can render it directly. Responses carry Cross-Origin-Resource-Policy: cross-origin; credentialed avatar routes keep the default same-origin policy. This is what the auth-window team chooser and GET /org/me team directory use. Not an existence oracle: an unknown or deleted team id renders the same deterministic generated SVG a real team with no image gets, so every id answers 200 with an image. Rate-limited per IP (300/hour) plus a global ceiling of 120,000/hour service-wide.",
     auth: 'none (public)',
-    query: IMAGE_QUERY,
+    query: {
+      ...IMAGE_QUERY,
+      'v?':
+        'string, max 64 — the version the chooser and GET /org/me URLs carry (the team row updatedAt, which an upload or removal also moves). Never read, so render the URL exactly as given.',
+    },
     response: IMAGE_RESPONSE,
     notes: `${TEAM_RESOLUTION_NOTE} No config_url is accepted here, so the generated style is always the platform default rather than a domain's avatars.default_style — an anonymous caller must not be able to aim the config fetcher.`,
   },

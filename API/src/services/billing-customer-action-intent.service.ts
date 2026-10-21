@@ -22,6 +22,7 @@ export const BILLING_CUSTOMER_ACTION = {
   CREDIT_AUTO_TOP_UP_RECOVER: 'credit_auto_top_up_recover',
   RECURRING_ADDON_CHECKOUT: 'recurring_addon_checkout',
   RECURRING_ADDON_CANCEL: 'recurring_addon_cancel',
+  VOICE_DISPATCH_GRANT: 'voice_dispatch_grant',
   SMS_DISPATCH_GRANT: 'sms_dispatch_grant',
   SMS_INBOUND_FUND: 'sms_inbound_fund',
   ORG_BILLING_ASSUME: 'org_billing_assume',

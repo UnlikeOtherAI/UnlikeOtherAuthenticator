@@ -243,3 +243,5 @@ export { billingCyclesProtocolV2JsonSchema, billingCyclesListRequestV2JsonSchema
 export type { BillingCycleMoney, BillingCycleState, BillingCycleScope, BillingCyclePeriod, BillingCycleProduct, BillingCycleTotals, BillingCycleSummaryV2, BillingCyclesListRequestV2, BillingCyclesListV2, BillingCycleDetailRequestV2, BillingCycleSeatInterval, BillingCycleSubscriptionLine, BillingCycleUsageLine, BillingCycleCredits, BillingCycleDownloadAction, BillingCycleDocument, BillingCycleAdjustment, BillingCycleDetailV2, BillingCycleDownloadRequestV2 } from './cycle-types.js';
 export { BILLING_CYCLES_PROTOCOL_VERSION, BILLING_CYCLES_SCHEMA_VERSION, BILLING_CYCLES_SCHEMA_PATH, BILLING_CYCLES_EXAMPLE_PATH, BILLING_CYCLES_OPENAPI_PATH, BILLING_CYCLES_LIST_PATH, BILLING_CYCLES_DETAIL_PATH, BILLING_CYCLES_DOWNLOAD_PATH } from './cycle-types.js';
 export { billingSmsProtocolV1JsonSchema, billingSmsV1OpenApiDocument } from './sms-openapi.js';
+export * from './voice-types.js';
+export * from './voice-schema.js';

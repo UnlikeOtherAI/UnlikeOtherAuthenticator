@@ -33,7 +33,7 @@ export const BillingTariffSchema = z.object({
 export const BillingAppKeySchema = z.object({
   id: z.string(),
   service_id: z.string().optional(),
-  purpose: z.enum(['entitlement', 'customer_lifecycle', 'sms_runtime']),
+  purpose: z.enum(['entitlement', 'customer_lifecycle', 'sms_runtime', 'voice_runtime']),
   name: z.string(),
   key_prefix: z.string(),
   actor_issuer: z.string(),
@@ -228,7 +228,7 @@ export const BillingAssignmentFormSchema = z.object({
 
 export const BillingAppKeyFormSchema = z
   .object({
-    purpose: z.enum(['entitlement', 'customer_lifecycle', 'sms_runtime']),
+    purpose: z.enum(['entitlement', 'customer_lifecycle', 'sms_runtime', 'voice_runtime']),
     name: z.string().trim().min(1).max(120),
     actorIssuer: z.string().trim().url(),
     actorAudience: z.string().trim().url(),

@@ -4,6 +4,10 @@ import { getEnv } from '../config/env.js';
 import { getAdminPrisma } from '../db/prisma.js';
 
 type RetentionPrisma = {
+  telephoneCallChallenge: Pick<PrismaClient['telephoneCallChallenge'], 'deleteMany'>;
+  telephoneChallenge: Pick<PrismaClient['telephoneChallenge'], 'deleteMany'>;
+  telephoneSmsAdmission: Pick<PrismaClient['telephoneSmsAdmission'], 'deleteMany'>;
+  telephoneLookup: Pick<PrismaClient['telephoneLookup'], 'deleteMany'>;
   debugLoginGrant: Pick<PrismaClient['debugLoginGrant'], 'deleteMany'>;
   authorizationCode: Pick<PrismaClient['authorizationCode'], 'deleteMany'>;
   confidentialAssertionUse: Pick<PrismaClient['confidentialAssertionUse'], 'deleteMany'>;
@@ -21,6 +25,10 @@ type RetentionPruneDeps = {
 };
 
 export type RetentionPruneResult = {
+  telephoneCallChallengesDeleted: number;
+  telephoneChallengesDeleted: number;
+  telephoneSmsAdmissionsDeleted: number;
+  telephoneLookupsDeleted: number;
   debugLoginGrantsDeleted: number;
   authorizationCodesDeleted: number;
   confidentialAssertionUsesDeleted: number;
@@ -37,6 +45,10 @@ function subtractDays(date: Date, days: number): Date {
 
 function emptyResult(): RetentionPruneResult {
   return {
+    telephoneCallChallengesDeleted: 0,
+    telephoneChallengesDeleted: 0,
+    telephoneSmsAdmissionsDeleted: 0,
+    telephoneLookupsDeleted: 0,
     debugLoginGrantsDeleted: 0,
     authorizationCodesDeleted: 0,
     confidentialAssertionUsesDeleted: 0,
@@ -60,6 +72,10 @@ export async function pruneExpiredSecurityData(
   const loginLogCutoff = subtractDays(now, env.LOG_RETENTION_DAYS);
 
   const [
+    telephoneCallChallenges,
+    telephoneChallenges,
+    telephoneSmsAdmissions,
+    telephoneLookups,
     debugLoginGrants,
     refreshTokens,
     authorizationCodes,
@@ -69,6 +85,10 @@ export async function pruneExpiredSecurityData(
     loginLogs,
     handshakeErrorLogs,
   ] = await Promise.all([
+    prisma.telephoneCallChallenge.deleteMany({ where: { createdAt: { lt: subtractDays(now, 1) } } }),
+    prisma.telephoneChallenge.deleteMany({ where: { createdAt: { lt: subtractDays(now, 1) } } }),
+    prisma.telephoneSmsAdmission.deleteMany({ where: { createdAt: { lt: subtractDays(now, 30) } } }),
+    prisma.telephoneLookup.deleteMany({ where: { createdAt: { lt: subtractDays(now, 30) } } }),
     prisma.debugLoginGrant.deleteMany({ where: { expiresAt: { lt: now } } }),
     prisma.refreshToken.deleteMany({
       where: { expiresAt: { lt: tokenCutoff } },
@@ -94,6 +114,10 @@ export async function pruneExpiredSecurityData(
   ]);
 
   return {
+    telephoneCallChallengesDeleted: telephoneCallChallenges.count,
+    telephoneChallengesDeleted: telephoneChallenges.count,
+    telephoneSmsAdmissionsDeleted: telephoneSmsAdmissions.count,
+    telephoneLookupsDeleted: telephoneLookups.count,
     debugLoginGrantsDeleted: debugLoginGrants.count,
     authorizationCodesDeleted: authorizationCodes.count,
     confidentialAssertionUsesDeleted: confidentialAssertionUses.count,

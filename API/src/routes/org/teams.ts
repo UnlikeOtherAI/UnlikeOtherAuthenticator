@@ -161,6 +161,7 @@ export function registerTeamRoutes(app: FastifyInstance): void {
       ],
     },
     async (request, reply) => {
+      reply.header('Cache-Control', 'private, no-store');
       const { domain, limit, cursor, direction, status, subject_ids: subjectIds } = parseTeamMembersRosterQuery(request);
       const orgId = getOrgIdFromParams(request.params);
       const teamId = getTeamIdFromParams(request.params);

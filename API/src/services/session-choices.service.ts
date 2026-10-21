@@ -191,7 +191,7 @@ export async function buildSessionChoices(
       select: {
         teamId: true,
         teamRole: true,
-        team: { select: { name: true, slug: true, orgId: true, iconUrl: true, org: { select: { name: true, ownerId: true } } } },
+        team: { select: { name: true, slug: true, orgId: true, iconUrl: true, updatedAt: true, org: { select: { name: true, ownerId: true } } } },
       },
     }),
     allowedOrgId ? Promise.resolve([]) : prisma.teamInvite.findMany({
@@ -245,7 +245,7 @@ export async function buildSessionChoices(
       select: {
         teamId: true,
         teamRole: true,
-        team: { select: { name: true, slug: true, orgId: true, iconUrl: true, org: { select: { name: true, ownerId: true } } } },
+        team: { select: { name: true, slug: true, orgId: true, iconUrl: true, updatedAt: true, org: { select: { name: true, ownerId: true } } } },
       },
     });
   }
@@ -263,7 +263,7 @@ export async function buildSessionChoices(
     name: row.team.name,
     role: row.teamRole,
     iconUrl: row.team.iconUrl,
-    avatarImageUrl: publicTeamAvatarImageUrl({ baseUrl: avatarBaseUrl, teamId: row.teamId }),
+    avatarImageUrl: publicTeamAvatarImageUrl({ baseUrl: avatarBaseUrl, teamId: row.teamId, updatedAt: row.team.updatedAt }),
     orgName: row.team.org?.name ?? null,
     slug: row.team.slug,
     ...(!allowedOrgId && row.team.org?.ownerId === params.userId ? { can_manage_sso: true } : {}),

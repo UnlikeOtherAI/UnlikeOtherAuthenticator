@@ -3233,3 +3233,49 @@ and retry with backoff and fresh assertions. Invalid signatures, missing keys,
 expired assertions, unsafe destinations and current credential-epoch or
 membership refusals remain fail-closed. No local identity fallback, cached
 negative authorization or automatic authority restoration is introduced.
+
+
+## 2026-10-21 Personal telephone contact proof
+
+UOA owns personal verified and pending telephone numbers. Nessie owns the profile
+form and delivers UOA-issued six-digit challenges through its trusted SMS backend.
+This is contact verification, never a login factor. Private display visibility
+still permits internal owner routing. A distinct call-bound service assertion
+looks up only exact ACTIVE team members, with pending/ambiguous states exposing
+no subject. Caller ID alone never supplies signed-in authority. The complete
+contract is [Personal telephones](Auth/personal-telephone.md).
+
+### 2026-10-21: selected-team telephone display and call possession proof
+
+The existing team roster exposes opted-in verified telephone numbers only between live members of that exact team. UOA also owns short-lived, one-use, call-bound SMS challenges and a prepaid SMS delivery admission path tied to the issued challenge and active funded sender allocation. No login/session is minted. Contract and integration responsibilities: [personal telephone](Auth/personal-telephone.md).
+
+### 2026-10-21 Prepaid telephone call legs
+
+UOA owns fixed-duration Voice admission and actual provider settlement through the
+canonical prepaid wallet. Exact selected-team manager grants fund inbound external
+callers and separately bounded outbound/transfer legs without inventing caller identity.
+The machine-only contract and unfulfilled live pricing/cutoff prerequisites are in
+[Voice prepaid](Requirements/voice-pricing-and-prepaid.md). Connectivity-only USD
+support does not authorize charged ancillary features or Ledger inference.
+Once enabled with reviewed pricing and cutoff evidence, the standing policy has
+no calendar expiry. Short-lived call quotes and claims still expire independently;
+an operator disables or replaces the policy when its evidence changes.
+
+### 2026-10-21 Registered caller-ID policy
+
+The approved telephone UX admits a uniquely matched verified personal number to
+ordinary PA/specialist context without repeating an SMS code on every call. UOA
+reports this as `registered_caller_id`, explicitly without current-call possession
+proof. The exact call binding, live membership checks, expiry and residual spoofing
+risk are documented in [personal telephones](Auth/personal-telephone.md). Sensitive
+actions retain stronger-authentication policy; no signed-in browser session is issued.
+
+### Verified telephone senders and personal routing owners (2026-10-21)
+
+Nessie may ask UOA, through a service-only signed MessageSid-bound request, whether
+an SMS sender is a verified active member of the exact selected team. Private
+telephone visibility does not prevent routing. Pending, ambiguous and unknown
+senders fail closed; this eligibility does not grant private-context or signed-in
+authority. Call and SMS admission may additionally attest current membership of a
+signed, already-known personal routing owner. The contract and retention controls
+are in [personal telephone](Auth/personal-telephone.md).
