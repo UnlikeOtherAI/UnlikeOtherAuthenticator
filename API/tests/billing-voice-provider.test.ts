@@ -8,13 +8,16 @@ function provider(body: unknown) {
   return new BillingVoiceProvider(config, async () => new Response(JSON.stringify(body), { status: 200 }));
 }
 describe('Voice provider evidence', () => {
-  it('uses the conservative maximum exact-number origin rate and refuses missing currency evidence', async () => {
-    const body = { destination_number: route.to, origination_number: null, price_unit: 'USD',
+  it('uses the exact outbound route and refuses mismatched route or currency evidence', async () => {
+    const body = { destination_number: route.to, origination_number: route.from, price_unit: 'USD',
       outbound_call_prices: [{ current_price: '0.01' }, { current_price: '0.13' }] };
-    expect((await provider(body).price(route)).amount).toBe('0.13');
+    const transport = vi.fn<typeof fetch>(async () => new Response(JSON.stringify(body), { status: 200 }));
+    expect((await new BillingVoiceProvider(config, transport).price(route)).amount).toBe('0.13');
+    expect(transport.mock.calls[0]?.[0]).toContain(`?OriginationNumber=${encodeURIComponent(route.from)}`);
     await expect(provider({ ...body, price_unit: 'EUR' }).price(route)).rejects.toThrow();
     await expect(provider({ ...body, outbound_call_prices: [{ current_price: null }] }).price(route)).rejects.toThrow();
     await expect(provider({ ...body, destination_number: route.from }).price(route)).rejects.toThrow();
+    await expect(provider({ ...body, origination_number: route.to }).price(route)).rejects.toThrow();
     await expect(provider({ ...body, destination_number: undefined, number: route.to }).price(route)).rejects.toThrow();
   });
   it('validates the exact voice-capable owned number', async () => {

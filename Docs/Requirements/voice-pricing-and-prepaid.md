@@ -63,11 +63,13 @@ The operator updates the policy when rates, stream terms or cutoff evidence chan
 The live Twilio exact-number pricing response uses `destination_number` for the
 queried number. The provider adapter validates that field against the requested
 destination before accepting its offered rates; `number` is not part of that
-response. This was checked against the UK number pricing endpoint on 21 October
-2026. The tariff and process-loss cutoff proofs below still gate activation.
+response. This was checked against Twilio's exact UK caller-to-destination
+pricing endpoint on 21 October 2026. The tariff and process-loss cutoff proofs
+below still gate activation.
 
-The adapter currently accepts USD only and conservatively selects the maximum
-exact-destination price across all reported origin groups. It verifies owned voice
+The adapter currently accepts USD only. For outbound calls it asks Twilio for the
+exact owned caller and destination, verifies that Twilio echoed both numbers, and
+selects the maximum price if that route still returns more than one rate. It verifies owned voice
 capability and exact account/from/to/direction/parent CallSid. Runtime and regional
 Twilio credentials reuse the existing SMS account configuration; separate VOICE_RUNTIME
 UOA credentials are required. A superuser issues a Voice runtime key in Admin Billing's
