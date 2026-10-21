@@ -43,12 +43,16 @@ export class BillingVoiceProvider {
     if (route.accountSid !== this.configuration.accountSid) throw unavailable();
     const number = route.to;
     if (!/^\+[1-9]\d{6,14}$/.test(number)) throw unavailable();
-    const source = `/v2/Voice/Numbers/${encodeURIComponent(number)}`;
+    const source = `/v2/Voice/Numbers/${encodeURIComponent(number)}`
+      + (route.direction === 'outbound' ? `?OriginationNumber=${encodeURIComponent(route.from)}` : '');
     const raw = await this.read(source, true);
-    const parsed = z.object({ number: z.literal(number), price_unit: z.string(),
+    const parsed = z.object({ destination_number: z.literal(number),
+      origination_number: z.string().nullable().optional(), price_unit: z.string(),
       outbound_call_prices: z.array(price).optional(), inbound_call_price: price.nullable().optional() }).safeParse(raw);
     if (!parsed.success || parsed.data.price_unit.toUpperCase() !== 'USD') throw unavailable();
-    // Conservative maximum over ALL offered origins; never accept a cheap caller-selected origin.
+    if (route.direction === 'outbound' && parsed.data.origination_number !== route.from) throw unavailable();
+    // The outbound lookup is constrained to the server-owned caller number. Keep the maximum
+    // if Twilio still returns more than one applicable price for that exact route.
     const rates = route.direction === 'inbound' ? [parsed.data.inbound_call_price]
       : parsed.data.outbound_call_prices;
     if (!rates?.length || rates.some(rate => !rate || rate.current_price === null)) throw unavailable();
