@@ -1,3 +1,4 @@
+import type { Prisma, PrismaClient } from '@prisma/client';
 import { decodeProtectedHeader, jwtVerify } from 'jose';
 import { z } from 'zod';
 
@@ -47,7 +48,7 @@ export async function verifyBillingActor(
       userId: string;
     };
   },
-  deps?: { now?: () => number },
+  deps?: { now?: () => number; prisma?: PrismaClient | Prisma.TransactionClient },
 ): Promise<BillingActor> {
   const actor = await verifyBillingActorSignature(params, deps);
 
@@ -75,7 +76,7 @@ export async function verifyBillingActor(
     const artifact = credentialArtifactSource(actor, 'reference');
     await authorizeCredentialSurfaceWhenAvailable('billing_actor', { artifact, method: artifact.method,
       assuranceReference: actor.assurance_ref, clientDomain, userId: actor.sub,
-      credentialEpoch: actor.tv, orgId: actor.organisation_id, teamId: actor.team_id });
+      credentialEpoch: actor.tv, orgId: actor.organisation_id, teamId: actor.team_id }, deps?.prisma);
   }
   return actor;
 }

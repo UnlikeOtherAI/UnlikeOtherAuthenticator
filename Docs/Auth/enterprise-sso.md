@@ -545,3 +545,10 @@ Matching owner-chooser Before/After screenshots at 390 and 1280 pixels are in
 `Docs/evidence/pr-117-ui`; the local capture uses the actual base/final sources
 and fixture directory responses. Required CI, producer deployment and exact
 product preparation remain separate release gates.
+
+The integration gate also exercises ordinary global access before a person has
+selected an organisation. Such a credential uses the global authority check;
+organisation-bound credentials keep the exact organisation check. Billing actor
+and chained-resource verification use the same explicitly supplied database
+authority as the surrounding service, including isolated schema tests. A missing
+proof store remains an availability failure.

@@ -199,7 +199,7 @@ export async function issueJobComputeRenewal(
   const db = deps.prisma ?? getAdminPrisma();
   const key = await verifyLedgerRuntimeKey(params.runtimeSecret, { prisma: db });
   const original = await verifyChainedSubjectAccessToken({ subjectToken: params.delegation,
-    callerAudience: key.ledgerAudience, issuer: getPublicBaseUrl() });
+    callerAudience: key.ledgerAudience, issuer: getPublicBaseUrl() }, { prisma: db });
   if (!Number.isSafeInteger(original.tv) || key.ledgerAudience !== LEDGER_AUDIENCE
     || original.product !== key.service.identifier
     || original.source_domain !== key.sourceDomain

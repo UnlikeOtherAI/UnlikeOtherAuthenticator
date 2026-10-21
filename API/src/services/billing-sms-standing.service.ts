@@ -26,7 +26,7 @@ export async function fundSmsStanding(input: { request: BillingSmsStandingHoldRe
   const body = input.request;
   const added = smsCreditsToMicrocredits(body.reserve_credits);
   const actor = await verifySmsActor({ subject: body, actorToken: input.actorToken, credential: input.credential,
-    endpoint: '/billing/v1/sms/inbound/holds' });
+    endpoint: '/billing/v1/sms/inbound/holds' }, { prisma });
   await authorizeBillingCustomerAction({ credential: input.credential, actor,
     organisationId: body.organisation_id, teamId: body.team_id, userId: body.user_id,
     authorityScope: 'TEAM', operation: BILLING_CUSTOMER_ACTION.SMS_INBOUND_FUND, request: body }, { prisma });

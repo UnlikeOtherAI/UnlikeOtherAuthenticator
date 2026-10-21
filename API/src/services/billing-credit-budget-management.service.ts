@@ -40,7 +40,7 @@ async function authorize(auth: Auth, prisma: PrismaClient,
   }
   const actor = await verifyBillingActor({ token: auth.actorToken,
     credential: auth.credential, endpoint,
-    request: auth.request });
+    request: auth.request }, { prisma });
   const viewer = await resolveBillingFundingViewer({
     userId: auth.request.userId, organisationId: auth.request.organisationId,
     teamId: auth.request.teamId,

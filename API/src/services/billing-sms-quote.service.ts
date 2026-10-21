@@ -68,7 +68,7 @@ export async function createSmsQuote(input: {
 }, deps: SmsQuoteDependencies): Promise<BillingSmsFinalQuoteV1> {
   const prisma = deps.prisma ?? getAdminPrisma();
   const actor = await verifySmsActor({ subject: input.request, actorToken: input.actorToken,
-    credential: input.credential, endpoint: '/billing/v1/sms/quotes' });
+    credential: input.credential, endpoint: '/billing/v1/sms/quotes' }, { prisma });
   return issueSmsQuote({ request: input.request, credential: input.credential,
     authorize: (tx) => lockSmsSubject(tx, { subject: input.request, actor, credential: input.credential }) },
   { ...deps, prisma });
@@ -159,7 +159,7 @@ export async function verifySmsQuote(input: {
 }, deps?: { prisma?: PrismaClient; now?: () => Date }): Promise<BillingSmsFinalQuoteV1> {
   const prisma = deps?.prisma ?? getAdminPrisma();
   const actor = await verifySmsActor({ subject: input.request, actorToken: input.actorToken,
-    credential: input.credential, endpoint: '/billing/v1/sms/quotes/verify' });
+    credential: input.credential, endpoint: '/billing/v1/sms/quotes/verify' }, { prisma });
   return runBillingSerializableTransaction(prisma, async (tx) => {
     await lockSmsSubject(tx, { subject: input.request, actor, credential: input.credential });
     const quote = await tx.billingSmsQuote.findUnique({ where: { id: input.request.quote_id } });

@@ -184,8 +184,9 @@ export async function verifyAccessToken(
   }
 
   if (getEnv().DATABASE_URL) {
-    await authorizeCredentialSurface((deps?.requirement ?? 'global_account_control') === 'global_account_control'
-      ? 'configured_access' : 'organisation_access', { assuranceId: parsed.assurance_id, userId,
+    const orgId = parsed.active?.orgId ?? parsed.org?.org_id;
+    const requiresGlobal = (deps?.requirement ?? 'global_account_control') === 'global_account_control' || !orgId;
+    await authorizeCredentialSurface(requiresGlobal ? 'configured_access' : 'organisation_access', { assuranceId: parsed.assurance_id, userId,
       clientDomain: parsed.domain, credentialEpoch, artifact, method: artifact.method, orgId: parsed.active?.orgId ?? parsed.org?.org_id,
       teamId: parsed.active?.teamId }, prisma as PrismaClient);
   } else if (parsed.assurance_id) {
