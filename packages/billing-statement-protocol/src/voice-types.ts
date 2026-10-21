@@ -1,6 +1,6 @@
 import type { BillingSubjectRequest } from './funding-schema-primitives.js';
 
-export const BILLING_VOICE_PROTOCOL_VERSION = '1.0.0';
+export const BILLING_VOICE_PROTOCOL_VERSION = '2.0.0';
 export const BILLING_VOICE_PATHS = {
   grant: '/billing/v1/voice/grants', grantRead: '/billing/v1/voice/grants/read',
   grantRevoke: '/billing/v1/voice/grants/revoke', quote: '/billing/v1/voice/quotes',

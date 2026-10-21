@@ -283,3 +283,13 @@ provider evidence; a real concurrent two-team telephone call was not performed.
 The database was stopped after the run. Self-review confirmed that invoice reports
 cannot alter customer debits and that connectivity-only quotes cannot accept stream
 evidence. No live policy, provider resource or paid call was changed.
+
+### Consumer contract upgrade
+
+`BILLING_VOICE_PROTOCOL_VERSION` is now `2.0.0`: the new required nullable
+`billing_origin` grant field and `stream_tariff` quote field change strict response
+schemas. The `/billing/v1/voice/*` route namespace is retained. Deploy UOA and its
+consumer protocol together; consumers must not treat missing tariff metadata as
+stream authorization. The fixed-stream routes are additions, but the required
+response fields warrant a major contract version rather than silently retaining
+1.0.0. Historical v1 references above describe the initial connectivity tranche.

@@ -1,7 +1,9 @@
 export const llmBillingVoiceMarkdown = `
 ## Prepaid telephone calls
 
-Voice v1 is machine-only billing infrastructure. Nessie owns number/agent controls and call history.
+Voice contract 2.0.0 uses the existing /billing/v1/voice endpoint namespace and is machine-only billing infrastructure.
+Upgrade the consumer protocol with UOA: grant responses require nullable billing_origin and quote responses
+require nullable stream_tariff. A missing tariff never authorizes streams. Nessie owns number/agent controls and call history.
 Use /billing/v1/voice/grants with a CUSTOMER_LIFECYCLE key and a fresh exact-endpoint X-UOA-Actor
 for explicit selected-team manager consent. Body includes subject, idempotency_key, number_id
 (UOA paid resource), allocation_id, delegate_id, direction, purpose, max_duration_seconds,
