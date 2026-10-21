@@ -1,3 +1,4 @@
+import { credentialArtifactSource } from './credential-artifact.service.js';
 import type { PrismaClient } from '@prisma/client';
 import { decodeProtectedHeader, jwtVerify } from 'jose';
 import { z } from 'zod';
@@ -13,6 +14,8 @@ import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import { verifyUserAccessTokenRs256 } from './user-access-token-key.service.js';
 import { isActiveLifecycle, assertEntityAccess } from './entity-lifecycle.service.js';
+import { type AccountRequirement } from './session-assurance.service.js';
+import { authorizeCredentialSurface } from './credential-route-registry.service.js';
 
 // Both are accepted for the whole transition, and neither can stand in for the
 // other: the branch is chosen by the protected header and each branch pins its
@@ -31,6 +34,7 @@ const AccessTokenClaimsSchema = z
     // Staged rollout: pre-epoch HS256 tokens may omit tv only while the live
     // user epoch remains zero. Every new UOA token includes this claim.
     tv: z.number().int().nonnegative().optional(),
+    assurance_id: z.string().min(1).max(256).optional(),
     org: z
       .object({
         org_id: z.string().trim().min(1),
@@ -65,6 +69,7 @@ export type AccessTokenClaims = {
   domain: string;
   clientId: string;
   role: 'superuser' | 'user';
+  assuranceId?: string;
   org?: {
     org_id: string;
     tenant_slug?: string;
@@ -127,7 +132,7 @@ async function verifySignature(
 
 export async function verifyAccessToken(
   token: string,
-  deps?: { sharedSecret?: string; issuer?: string; prisma?: AccessTokenPrisma },
+  deps?: { sharedSecret?: string; issuer?: string; prisma?: AccessTokenPrisma; requirement?: AccountRequirement },
 ): Promise<AccessTokenClaims> {
   const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
 
@@ -158,6 +163,7 @@ export async function verifyAccessToken(
   // already-issued access tokens. Only a missing user or version mismatch is
   // an authentication failure; unexpected DB failures must remain observable
   // as 5xx so clients do not erase otherwise-valid sessions during outages.
+  const artifact = credentialArtifactSource(parsed, 'session');
   const credentialEpoch = parsed.tv ?? 0;
   if (prisma) {
     const current = await prisma.user.findUnique({
@@ -177,6 +183,16 @@ export async function verifyAccessToken(
     throw new AppError('UNAUTHORIZED', 401, 'INVALID_ACCESS_TOKEN');
   }
 
+  if (getEnv().DATABASE_URL) {
+    const orgId = parsed.active?.orgId ?? parsed.org?.org_id;
+    const requiresGlobal = (deps?.requirement ?? 'global_account_control') === 'global_account_control' || !orgId;
+    await authorizeCredentialSurface(requiresGlobal ? 'configured_access' : 'organisation_access', { assuranceId: parsed.assurance_id, userId,
+      clientDomain: parsed.domain, credentialEpoch, artifact, method: artifact.method, orgId: parsed.active?.orgId ?? parsed.org?.org_id,
+      teamId: parsed.active?.teamId }, prisma as PrismaClient);
+  } else if (parsed.assurance_id) {
+    throw new AppError('SERVICE_UNAVAILABLE', 503, 'ASSURANCE_STORE_REQUIRED');
+  }
+
   return {
     userId,
     tokenVersion: credentialEpoch,
@@ -184,6 +200,7 @@ export async function verifyAccessToken(
     domain: parsed.domain,
     clientId: parsed.client_id,
     role: parsed.role,
+    ...(parsed.assurance_id ? { assuranceId: parsed.assurance_id } : {}),
     ...(parsed.org ? { org: parsed.org } : {}),
     ...(parsed.active ? { active: parsed.active } : {}),
   };

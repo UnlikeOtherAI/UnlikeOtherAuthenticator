@@ -2,6 +2,8 @@ import { Prisma, type PrismaClient, type LifecycleScope } from '@prisma/client';
 import { getAdminAuthDomain } from '../config/env.js';
 import { getAdminPrisma } from '../db/prisma.js';
 import { runInTransaction } from '../db/tenant-context.js';
+import { runEnterpriseAuthorityTransaction } from './enterprise-authority-transaction.service.js';
+import { revokeEnterpriseUser, revokeEnterpriseOrganisation, revokeEnterpriseTeam } from './enterprise-authority-revocation.service.js';
 import { AppError } from '../utils/errors.js';
 import { lockProductTeamPolicyExclusive } from './product-team-policy-lock.service.js';
 import { lockRefreshSessionUser } from './refresh-session-lock.service.js';
@@ -35,6 +37,7 @@ export async function protectLastAdmin(tx: PrismaClient, userId: string): Promis
 
 export async function revokeLifecycleSessions(tx: PrismaClient, scope: LifecycleScope, id: string): Promise<void> {
   if (scope === 'USER') {
+    await revokeEnterpriseUser(tx, id);
     await tx.user.update({ where: { id }, data: { tokenVersion: { increment: 1 } } });
     await tx.refreshToken.updateMany({ where: { userId: id, revokedAt: null }, data: { revokedAt: new Date() } });
     await tx.authorizationCode.deleteMany({ where: { userId: id } });
@@ -47,17 +50,12 @@ export async function revokeLifecycleSessions(tx: PrismaClient, scope: Lifecycle
   for (const userId of [...new Set(memberships.map(m => m.userId))].sort()) {
     await lockRefreshSessionUser(userId, { prisma: tx });
   }
+  if (scope === 'TEAM') await revokeEnterpriseTeam(tx, id);
+  else await revokeEnterpriseOrganisation(tx, id);
   const scopeWhere = scope === 'TEAM' ? { teamId: id } : { orgId: id };
   await tx.refreshToken.updateMany({ where: { ...scopeWhere, revokedAt: null }, data: { revokedAt: new Date() } });
   await tx.authorizationCode.deleteMany({ where: scopeWhere });
-  if (scope === 'ORGANISATION') {
-    const org = await tx.organisation.findUniqueOrThrow({ where: { id }, select: { domain: true } });
-    const userIds = memberships.map(m => m.userId);
-    // Before scoped sessions existed, origin-domain rows were attributable only to this
-    // user's one active organisation in that domain. Retire that legacy authority explicitly.
-    await tx.refreshToken.updateMany({ where: { userId: { in: userIds }, domain: org.domain, orgId: null, revokedAt: null }, data: { revokedAt: new Date() } });
-    await tx.authorizationCode.deleteMany({ where: { userId: { in: userIds }, domain: org.domain, orgId: null } });
-  }
+
 }
 
 export async function getEntityLifecycle(scope: LifecycleScope, id: string) {
@@ -74,7 +72,7 @@ export async function setEntityLifecycle(params: {
   templateId?: string; templateRevision?: number; internalNote?: string; actor: LifecycleActor;
 }) {
   const prisma = getAdminPrisma();
-  await runInTransaction(prisma, async tx => {
+  await runEnterpriseAuthorityTransaction(prisma, async tx => {
     await lockProductTeamPolicyExclusive(tx);
     const actorEmail = await requireLifecycleActor(tx, params.actor);
     const row = await lifecycleTarget(tx, params.scope, params.id);

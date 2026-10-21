@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma, type PrismaClient } from '@prisma/client';
 import type { BillingSubjectRequest } from '@unlikeotherai/billing-statement-protocol';
 import { AppError } from '../utils/errors.js';
 import { lockAndAssertGlobalAuthenticationEpoch } from './authentication-epoch.service.js';
@@ -28,12 +28,12 @@ export function telephoneSubject(input: BillingSubjectRequest) {
 export async function verifyTelephoneActor(input: {
   subject: BillingSubjectRequest; actorToken: string;
   credential: VerifiedBillingAppKey; endpoint: BillingActorEndpoint;
-}): Promise<BillingActor> {
+}, deps?: { prisma?: PrismaClient }): Promise<BillingActor> {
   if (input.subject.product !== input.credential.service.identifier) {
     throw new AppError('FORBIDDEN', 403, 'BILLING_PRODUCT_MISMATCH');
   }
   return verifyBillingActor({ token: input.actorToken, credential: input.credential,
-    endpoint: input.endpoint, request: telephoneSubject(input.subject) });
+    endpoint: input.endpoint, request: telephoneSubject(input.subject) }, deps);
 }
 
 export async function lockTelephoneCredential(tx: Prisma.TransactionClient,

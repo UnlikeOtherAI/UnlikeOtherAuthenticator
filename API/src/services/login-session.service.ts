@@ -1,10 +1,16 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { credentialArtifactSource } from './credential-artifact.service.js';
+import { authorizeCredentialSurfaceWhenAvailable } from './credential-route-registry.service.js';
+import { fingerprintClientConfig } from './client-config-fingerprint.service.js';
+export { fingerprintClientConfig } from './client-config-fingerprint.service.js';
+import { randomUUID } from 'node:crypto';
 
 import { SignJWT, jwtVerify, type JWTPayload } from 'jose';
 import { z } from 'zod';
 
 import { LOGIN_SESSION_TTL_MS } from '../config/constants.js';
 import { AppError } from '../utils/errors.js';
+import type { Prisma, PrismaClient } from '@prisma/client';
+import { recordIndependentAuthentication, type VerifiedAuthenticationEvent } from './authentication-evidence.service.js';
 import type { ClientConfig } from './config.service.js';
 
 const LOGIN_SESSION_ALLOWED_ALGS = ['HS256'] as const;
@@ -16,7 +22,8 @@ const LoginSessionSchema = z
     sub: z.string().min(1),
     domain: z.string().min(1),
     credential_epoch: z.number().int().nonnegative(),
-    auth_method: z.string().trim().min(1).max(32),
+    authentication_evidence_id: z.string().min(1).max(100).optional(),
+  auth_method: z.string().trim().min(1).max(32),
     typ: z.literal(LOGIN_SESSION_TYP),
     config_url: z.string().min(1),
     config_fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
@@ -45,6 +52,7 @@ const LoginSessionSchema = z
 export type LoginSession = {
   userId: string;
   credentialEpoch: number;
+  authenticationEvidenceId?: string;
   authMethod: string;
   domain: string;
   configUrl: string;
@@ -60,6 +68,7 @@ export type LoginSession = {
 };
 
 type LoginContinuation = {
+  authenticationEvidenceId?: string;
   authMethod: string;
   config: ClientConfig;
   configUrl: string;
@@ -75,33 +84,6 @@ function sharedSecretKey(sharedSecret: string): Uint8Array {
   return new TextEncoder().encode(sharedSecret);
 }
 
-function canonicalJson(value: unknown): string | undefined {
-  if (Array.isArray(value)) {
-    return `[${value.map((item) => canonicalJson(item) ?? 'null').join(',')}]`;
-  }
-  if (value !== null && typeof value === 'object') {
-    const record = value as Record<string, unknown>;
-    const entries = Object.keys(record)
-      .sort()
-      .flatMap((key) => {
-        const serialized = canonicalJson(record[key]);
-        return serialized === undefined ? [] : [`${JSON.stringify(key)}:${serialized}`];
-      });
-    return `{${entries.join(',')}}`;
-  }
-  return JSON.stringify(value);
-}
-
-/**
- * Hash the verified, parsed config semantics. JWT envelope fields such as iat,
- * exp, and signature bytes are absent from ClientConfig, while parsed defaults
- * and the database-backed redirect allow-list are included.
- */
-export function fingerprintClientConfig(config: ClientConfig): string {
-  return createHash('sha256')
-    .update(canonicalJson(config) ?? '', 'utf8')
-    .digest('hex');
-}
 
 function rejectLoginSession(): never {
   throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
@@ -122,8 +104,12 @@ export async function signLoginSession(
     ttlMs?: number;
     jti?: string;
   },
+  deps?: { prisma: PrismaClient | Prisma.TransactionClient; verifiedEvent: VerifiedAuthenticationEvent },
 ): Promise<string> {
   const now = params.now ?? new Date();
+  const authenticationEvidenceId = params.authenticationEvidenceId ?? (deps ? await recordIndependentAuthentication({
+    userId: params.userId, credentialEpoch: params.credentialEpoch, method: params.authMethod, verifiedEvent: deps.verifiedEvent,
+    config: params.config, configUrl: params.configUrl, redirectUrl: params.redirectUrl, codeChallenge: params.codeChallenge }, deps.prisma) : undefined);
   const ttlMs = params.ttlMs ?? LOGIN_SESSION_TTL_MS;
   const expSeconds = Math.floor((now.getTime() + ttlMs) / 1000);
   const jti = params.jti ?? randomUUID();
@@ -141,6 +127,8 @@ export async function signLoginSession(
       domain: params.config.domain,
       credential_epoch: params.credentialEpoch,
       auth_method: params.authMethod,
+      authentication_evidence_id: authenticationEvidenceId,
+      assurance_version: authenticationEvidenceId ? 1 : undefined,
       typ: LOGIN_SESSION_TYP,
       config_url: params.configUrl,
       config_fingerprint: fingerprintClientConfig(params.config),
@@ -170,6 +158,7 @@ export async function signLoginSession(
  * and must be used at finalization.
  */
 export async function verifyLoginSession(params: {
+  prisma?: PrismaClient | Prisma.TransactionClient;
   token: string;
   config: ClientConfig;
   configUrl: string;
@@ -205,10 +194,16 @@ export async function verifyLoginSession(params: {
     rejectLoginSession();
   }
 
+  const artifact = credentialArtifactSource(payload, 'evidence');
+  await authorizeCredentialSurfaceWhenAvailable('login_chooser', { userId: parsed.sub,
+    clientDomain: parsed.domain, credentialEpoch: parsed.credential_epoch,
+    authenticationEvidenceId: parsed.authentication_evidence_id, method: parsed.auth_method, artifact }, params.prisma);
+
   return {
     userId: parsed.sub,
     credentialEpoch: parsed.credential_epoch,
     authMethod: parsed.auth_method,
+    authenticationEvidenceId: parsed.authentication_evidence_id,
     domain: parsed.domain,
     configUrl: parsed.config_url,
     configFingerprint: parsed.config_fingerprint,

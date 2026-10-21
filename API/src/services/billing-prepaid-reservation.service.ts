@@ -99,7 +99,7 @@ export async function reservePrepaidDispatch(
     subjectToken: params.delegation,
     callerAudience: key.ledgerAudience,
     issuer: getPublicBaseUrl(),
-  });
+  }, { prisma });
   if (actor.product !== input.product || actor.source_domain !== key.sourceDomain ||
     !actor.scope.split(' ').includes('ai.invoke') ||
     actor.sub !== input.userId || actor.active.orgId !== input.organisationId ||

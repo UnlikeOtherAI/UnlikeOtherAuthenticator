@@ -121,7 +121,7 @@ export async function beginSmsNumber(input: { request: BillingSmsNumberBeginRequ
   const prisma = deps.prisma ?? getAdminPrisma();
   const subject = smsSubject(input.request);
   const actor = await verifySmsActor({ subject: input.request, actorToken: input.actorToken,
-    credential: input.credential, endpoint: '/billing/v1/sms/numbers/begin' });
+    credential: input.credential, endpoint: '/billing/v1/sms/numbers/begin' }, { prisma });
   const viewer = await resolveBillingFundingViewer(subject, { prisma });
   assertCanManageRecurringAddonScope(viewer, 'ORGANISATION');
   const existing = await prisma.billingSmsNumberResource.findUnique({ where: { id: input.request.resource_id } });

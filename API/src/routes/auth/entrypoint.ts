@@ -8,6 +8,8 @@ import {
   sendAuthHtml,
 } from '../../services/auth-ui.service.js';
 import { configFetchRateLimiter } from './rate-limit-keys.js';
+import { startEnterpriseLogin } from '../../services/org-sso-entry.service.js';
+import { z } from 'zod';
 
 // Gap-fix B Task 2 (design §11.4): `team_hint` is a client-side chooser preselect ONLY — it never
 // grants anything server-side (select-team's ACTIVE-membership + domain check remains the sole
@@ -47,6 +49,15 @@ export function registerAuthEntrypointRoute(app: FastifyInstance): void {
     async (request, reply) => {
       if (!request.config || !request.configUrl) {
         throw new AppError('BAD_REQUEST', 400, 'MISSING_CONFIG');
+      }
+
+      const query = z.object({ sso_intent: z.string().regex(/^[A-Za-z0-9_-]{43}$/).optional() }).passthrough().parse(request.query);
+      if (query.sso_intent) {
+        const started = await startEnterpriseLogin({ relyingIntent: query.sso_intent, config: request.config,
+          configUrl: request.configUrl, query: request.query });
+        reply.setCookie(`uoa_sso_${started.flowId}`, started.browser, { path: '/sso', httpOnly: true,
+          secure: started.cookieSecure, sameSite: started.cookieSecure ? 'none' : 'lax', expires: started.expiresAt });
+        return reply.header('Cache-Control', 'no-store').redirect(started.target);
       }
 
       const requestUrl = sanitizeTeamHintInUrl(request.raw.url ?? '');

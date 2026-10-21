@@ -108,6 +108,10 @@ describe.skipIf(!process.env.DATABASE_URL)('Kelpie connection authority', () => 
     expect(result.headers['cache-control']).toBe('no-store');
     expect(result.json()).toMatchObject({ token_type: 'Bearer', expires_in: 120, gateway_url: resource.replace('https:', 'wss:') });
     const claims = decodeJwt(result.json().connection_ticket);
+    const sourceId = decodeJwt(grant.access_token).assurance_id as string;
+    expect(sourceId).toEqual(expect.any(String));
+    expect(claims).toMatchObject({ assurance_version: 1, assurance_id: sourceId });
+    expect(decodeJwt(refreshed.json().access_token).assurance_id).toBe(sourceId);
     expect(claims).toMatchObject({ iss: issuer, sub: userId, aud: resource, token_use: 'kelpie_connect',
       scope: 'kelpie.connect', app_id: appId, client_id: clientId, tv: 0, twofa: false });
     for (const field of ['email', 'name', 'avatar', 'domain', 'org', 'active', 'role']) expect(claims).not.toHaveProperty(field);
@@ -115,6 +119,13 @@ describe.skipIf(!process.env.DATABASE_URL)('Kelpie connection authority', () => 
     expect(live.statusCode, live.body).toBe(200);
     expect(live.json()).toEqual({ active: true, iss: issuer, sub: userId, aud: resource, client_id: clientId,
       app_id: appId, exp: claims.exp, jti: claims.jti });
+    const paired = await pairIssue(refreshed.json().access_token);
+    expect(paired.statusCode, paired.body).toBe(200);
+    expect(decodeJwt(paired.json().pairing_ticket)).toMatchObject({ assurance_version: 1, assurance_id: sourceId });
+    await handle.prisma.sessionAssurance.update({ where: { id: sourceId }, data: { revokedAt: new Date() } });
+    expect((await validate(result.json().connection_ticket)).statusCode).toBe(401);
+    const deniedPair = await pairValidate(paired.json().pairing_ticket);
+    expect(deniedPair.statusCode).toBe(200); expect(deniedPair.json()).toEqual({ active: false });
     const revoked = await app.inject({ method: 'POST', url: '/oauth/revoke', payload: {
       client_id: clientId, token: refreshed.json().refresh_token,
     } });

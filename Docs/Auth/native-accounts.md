@@ -125,3 +125,15 @@ are unchanged and never receive one.
 - **Client storage.** Store only the refresh token and client id in the OS encrypted secret
   store; never the access token, profile or avatar. A `400`/`401` from refresh means the session
   ended: clear it and sign in again. Network errors, `408`, `429` and `5xx` are transient: keep it.
+
+
+## Authentication provenance
+
+Public/native sign-in remains independent UOA authentication on its dedicated logical domain. It cannot turn organisation SSO or recovery proof into personal settings, factor enrollment or a Kelpie account. Actual password verification creates evidence with the original authentication time; social callbacks preserve unknown provider time as null. The same evidence survives enrolled TOTP, setup, signatures, PKCE code issue and one-use code consumption.
+
+New native families derive one immutable independent session-assurance record, preserving source AMR and original times through refresh/replay. Their RS256 access tokens carry `assurance_version:1` and `assurance_id`; the internal record has no exported bearer reference and requires no enterprise custody key for the first-party public profile. New access-only dynamic grants instead carry `authentication_evidence_id`, consume that evidence once and cap access-token expiry to its remaining lifetime (at most fifteen minutes). These proof identifiers are useful only inside a valid purpose-bound signed artifact.
+
+UOA account reads/writes, native refresh and Kelpie ticket issue/validation recheck the live original proof under the caller's transaction. Known revoked, expired, foreign-domain or scoped proof never falls back to legacy authentication. Missing historical proof is accepted only while the server-owned minimum for that logical domain is zero; raising the minimum to one requires reauthentication of older grants. Version-one artifacts missing their source are always rejected. Kelpie tickets retain the same identifier and lifetime bound, including pairing's non-signout refusal for an invalid stranger proof.
+
+
+Expired browser OAuth transactions are removed by the bounded enterprise transient-maintenance sweep (at most 200 per pass), rather than an unbounded delete on the next sign-in. Managed-account mailbox/social admission also applies to historical signed continuations advertising those methods even when their original proof is absent below the legacy floor.

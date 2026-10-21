@@ -8,6 +8,17 @@ For the full product spec, see [brief.md](./brief.md). For tech stack, see [tech
 
 ## Guiding Principles
 
+Enterprise access uses `routes/auth/organisation-access.ts` for the scoped owner
+cookie/CSRF surface, `routes/auth/enterprise-sso.ts` for fixed protocol routes,
+`routes/org/enterprise-sso.ts` for product status/continuation/live assurance,
+`routes/domain/revocations.ts` for the ordered feed and `routes/scim.ts` for
+connection-only provisioning. `session-assurance.service.ts` owns live lineage;
+`org-sso-policy.service.ts` owns the direct-context choke point. The
+`org-sso-{configuration,management,flow,oidc,saml,revocation}.service.ts`,
+`org-email-domain.service.ts`, `enterprise-{http,secret,scim}.service.ts` files
+keep protocol, state, network and custody responsibilities separate. Exact
+contracts and rollout blockers are in [enterprise SSO](enterprise-sso.md).
+
 Kelpie account connectivity uses `routes/oauth/kelpie-connect.ts` and
 `services/oauth/kelpie-connect.service.ts`. Same-account LAN admission adds
 `routes/oauth/kelpie-pair.ts` and `services/oauth/kelpie-pair.service.ts`, reusing
@@ -963,3 +974,16 @@ with an immutable challenge binding and no fabricated human or agent principal.
 Voice call-leg billing uses `routes/billing/voice.ts` and the `billing-voice-*`
 services. Shared identity locks live in `billing-telephone-authority.service.ts`;
 SMS exports preserve existing callers. See [Voice prepaid](../Requirements/voice-pricing-and-prepaid.md).
+
+
+### Database test boundaries
+
+CI builds the workspace before exercising API routes. The DB-less invocation
+excludes `tests/integration/**`; the separate PostgreSQL invocation runs those
+integration files with `DATABASE_URL` set. Required database suites refuse a
+missing database instead of reporting skipped coverage. Isolated-schema
+provisioning hooks use the shared Vitest hook budget.
+
+Authentication route fixtures retain their original evidence and declare their
+product's pre-enrolment policy explicitly. They reset factor state and evidence
+between cases; an omitted mock model is not a legacy-authority fallback.

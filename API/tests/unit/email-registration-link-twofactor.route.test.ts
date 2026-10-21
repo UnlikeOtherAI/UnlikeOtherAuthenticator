@@ -1,3 +1,11 @@
+import { authenticationFixtureDb } from '../helpers/authentication-fixture.js';
+
+const routeDb = vi.hoisted(() => ({ current: undefined as ReturnType<typeof authenticationFixtureDb> | undefined }));
+vi.mock('../../src/db/prisma.js', () => ({
+  getPrisma: () => routeDb.current, getAdminPrisma: () => routeDb.current,
+  connectPrisma: async () => {}, disconnectPrisma: async () => {},
+}));
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ClientConfig } from '../../src/services/config.service.js';
@@ -110,6 +118,8 @@ async function getLink() {
 
 describe('GET /auth/email/link exact-one team 2FA', () => {
   beforeEach(() => {
+    routeDb.current = authenticationFixtureDb();
+    process.env.DATABASE_URL = 'postgres://uoa-auth-route-fixture.invalid/db';
     currentConfig = config();
     process.env.SHARED_SECRET = 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER = 'uoa-auth-service';
@@ -140,6 +150,7 @@ describe('GET /auth/email/link exact-one team 2FA', () => {
   });
 
   afterEach(() => {
+    Reflect.deleteProperty(process.env, 'DATABASE_URL');
     vi.restoreAllMocks();
   });
 
@@ -161,6 +172,7 @@ describe('GET /auth/email/link exact-one team 2FA', () => {
   });
 
   it('redirects required enrollment with the exact team in setup finalization', async () => {
+    routeDb.current = authenticationFixtureDb({ twoFaEnabled: false });
     verifyEmailTokenMock.mockResolvedValue({
       userId: 'user-1',
       credentialEpoch: 0,

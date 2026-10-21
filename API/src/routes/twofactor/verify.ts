@@ -34,18 +34,20 @@ export function registerTwoFactorVerifyRoute(app: FastifyInstance): void {
       const configUrl = request.configUrl;
       if (!config || !configUrl) throw new AppError('BAD_REQUEST', 400, 'MISSING_CONFIG');
 
-      // If the client didn't enable 2FA, treat this as a generic auth failure.
-      if (!config['2fa_enabled']) {
-        throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
-      }
-
       const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
 
-      const challenge = await verifyTwoFaChallenge({
+      const challenge = await verifyTwoFaChallenge({ prisma: request.adminDb,
         token: twofa_token,
         sharedSecret: SHARED_SECRET,
         audience: getAuthServiceIdentifier(),
       });
+
+      // Personal management authentication is required by UOA itself. Only a
+      // verified purpose-bound challenge can bypass the product's ordinary gate;
+      // finalization still checks the live management intent and owner evidence.
+      if (!config['2fa_enabled'] && !challenge.managementIntentId) {
+        throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
+      }
 
       // Bind the challenge token to this config URL and domain.
       if (challenge.configUrl !== configUrl) {
@@ -65,7 +67,7 @@ export function registerTwoFactorVerifyRoute(app: FastifyInstance): void {
           },
           { prisma },
         );
-        const lockedChallenge = await verifyTwoFaChallenge({
+        const lockedChallenge = await verifyTwoFaChallenge({ prisma: prisma,
           token: twofa_token,
           sharedSecret: SHARED_SECRET,
           audience: getAuthServiceIdentifier(),
@@ -91,6 +93,8 @@ export function registerTwoFactorVerifyRoute(app: FastifyInstance): void {
             requestAccess: lockedChallenge.requestAccess,
             state: lockedChallenge.state,
             authMethod: lockedChallenge.authMethod,
+            authenticationEvidenceId: lockedChallenge.authenticationEvidenceId,
+            managementIntentId: lockedChallenge.managementIntentId,
             twoFaCompleted: true,
             codeChallenge: lockedChallenge.codeChallenge,
             codeChallengeMethod: lockedChallenge.codeChallengeMethod,
@@ -105,6 +109,8 @@ export function registerTwoFactorVerifyRoute(app: FastifyInstance): void {
           decision,
           userId: lockedChallenge.userId,
           authMethod: lockedChallenge.authMethod,
+            authenticationEvidenceId: lockedChallenge.authenticationEvidenceId,
+            managementIntentId: lockedChallenge.managementIntentId,
         };
       });
 

@@ -161,7 +161,10 @@ describe.skipIf(!hasDatabase)('user-facing /org/me org context', () => {
 
     expect(meRes.statusCode).toBe(200);
     const meBody = meRes.json() as { ok: true; org?: OrgMeRecord };
-    expect(meBody).toEqual({ ok: true, system_admin: false });
+    expect(meBody).toEqual({ ok: true, system_admin: false, self_identity: {
+      subject: user.id, display_name: null, email: 'me-anon@example.com',
+      avatar_image_url: expect.any(String),
+    } });
 
     await app.close();
   });

@@ -34,7 +34,7 @@ export async function authorizeBillingCycle(
     credential: params.credential,
     endpoint: params.endpoint,
     request: params.request,
-  });
+  }, { prisma: deps?.prisma });
   const viewer = await resolveBillingFundingViewer({
     userId: params.request.userId,
     organisationId: params.request.organisationId,

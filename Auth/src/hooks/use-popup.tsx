@@ -42,6 +42,7 @@ export type TeamChoice = {
   orgName?: string;
   /** Gap-fix B (design §11.4): lets a `team_hint` deep-link match by slug as well as by id. */
   slug?: string;
+  can_manage_sso?: boolean;
 };
 
 /**
@@ -74,6 +75,7 @@ export type SessionChoices = {
   pending_invites: InviteChoice[];
   can_create_org: boolean;
   creatable_orgs: CreatableOrgChoice[];
+  manageable_orgs?: CreatableOrgChoice[];
 };
 
 /** True for a native deep-link target (custom scheme, not http/https). */
@@ -220,6 +222,7 @@ export function PopupProvider(props: {
     if (typeof window === 'undefined') return;
     const bridgeParams: Array<[string, string | null]> = [
       ['login_token', parsed.loginToken],
+      ['enterprise_link_intent', parsed.enterpriseLinkIntent ?? null],
       ['twofa_token', parsed.twoFaToken],
       ['twofa_setup_token', parsed.twoFaSetupToken],
       ['invite_token', parsed.inviteToken],
@@ -233,6 +236,7 @@ export function PopupProvider(props: {
     for (const [param] of present) url.searchParams.delete(param);
     window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
   }, [
+    parsed.enterpriseLinkIntent,
     parsed.inviteEmail,
     parsed.inviteName,
     parsed.inviteToken,
@@ -289,6 +293,8 @@ export function PopupProvider(props: {
       signingToken: parsed.signingToken,
       handoffTarget,
       teamHint: parsed.teamHint,
+      managementOrgId: parsed.managementOrgId,
+      enterpriseLinkIntent: parsed.enterpriseLinkIntent,
       selectAccount: parsed.selectAccount,
       view,
       setView,
@@ -339,6 +345,8 @@ export function PopupProvider(props: {
     parsed.signingToken,
     handoffTarget,
     parsed.teamHint,
+    parsed.managementOrgId,
+    parsed.enterpriseLinkIntent,
     parsed.selectAccount,
     view,
     setView,

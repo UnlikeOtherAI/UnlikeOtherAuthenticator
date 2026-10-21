@@ -51,6 +51,10 @@ function continuation(overrides: Record<string, unknown> = {}) {
 function fakePrisma(existing: ReturnType<typeof continuation> | null = null) {
   let row = existing;
   const prisma = {
+    enterpriseProductReadiness: { findUnique: vi.fn().mockResolvedValue({ minimumAssuranceVersion: 0 }) },
+    orgSsoPolicy: { findUnique: vi.fn().mockResolvedValue(null) },
+    oAuthClient: { findUnique: vi.fn().mockResolvedValue({ clientId: 'oauth-client-1', nativeAppId: null,
+      redirectUris: ['https://client.example.com/callback'], scopes: ['openid', 'profile', 'email'] }) },
     $executeRaw: vi.fn().mockResolvedValue(1),
     $queryRaw: vi.fn().mockResolvedValue([]),
     $transaction: vi.fn(),
@@ -100,6 +104,7 @@ const configInput = {
 
 describe('signature authorization gate', () => {
   beforeEach(() => {
+    vi.stubEnv('MCP_OAUTH_DOMAIN', 'client.example.com');
     vi.mocked(evaluateSignaturePolicy).mockReset();
   });
 
@@ -230,6 +235,7 @@ describe('signature authorization gate', () => {
 
 describe('signing continuation completion', () => {
   beforeEach(() => {
+    vi.stubEnv('MCP_OAUTH_DOMAIN', 'client.example.com');
     vi.mocked(evaluateSignaturePolicy).mockReset();
   });
 

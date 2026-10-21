@@ -27,10 +27,10 @@ source mapping, epoch, source domain role and active team. The response is
 Selkie reads canonical profiles separately and stores only a sealed capability/reference.
 Each broker-backed request revalidates; the local opaque handle expires no later than
 the capability and clients rebroker automatically. This path grants no refresh family
-or debug code. Browser debug redemption still issues an independent UOA refresh family.
+or debug code. Browser debug redemption inherits its original UOA assurance and never upgrades its provenance.
 
 Source logout prevents further renewal. An already issued delegated capability remains
-valid for at most five minutes, subject to current epoch, membership and mapping checks.
+valid for at most five minutes, subject to current epoch, original assurance, membership and mapping checks.
 Register the new scope through the operator API; no mapping is created by deployment.
 
 Selkie admission always requires its current domain role and canonical UOA ban policy.
@@ -46,3 +46,5 @@ Database outages fail closed and remain retryable errors, rather than proven rev
 
 This delegated capability asserts no MFA completion. Privileged operations keep their
 existing UOA action-verification requirement independently of enrollment.
+
+Cross-consumer broker admission requires independent original proof. Enterprise and recovery sources must obtain fresh exact-target authority rather than become independent through the broker. The returned expiry cannot exceed the original proof deadline.

@@ -1,3 +1,5 @@
+import { credentialArtifactSource } from '../credential-artifact.service.js';
+import { publicCredentialSource } from './credential-source.service.js';
 import { createLocalJWKSet, jwtVerify } from 'jose';
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { getPublicBaseUrl } from '../../config/env.js';
@@ -19,10 +21,11 @@ type Account = Awaited<ReturnType<typeof verifyPublicAccountToken>>;
 
 export async function authorizeKelpieAccount(
   account: Account, tx: Prisma.TransactionClient, requiredScope = KELPIE_CONNECT_SCOPE,
+  surface: 'kelpie_connect' | 'kelpie_pair' = 'kelpie_connect',
 ): Promise<void> {
   try {
     // Pins app revision and credential epoch against every security-policy writer.
-    await authorizePublicAccount(account, tx);
+    await authorizePublicAccount(account, tx, surface);
     const client = await getOAuthClient(account.clientId, tx);
     if (client?.nativeApp?.identifier !== KELPIE_APP_ID ||
         !client.scopes.includes(requiredScope) ||
@@ -53,6 +56,7 @@ export async function issueKelpieConnectionTicket(params: {
     if (expiresAt <= issuedAt) rejectKelpieConnection();
     const ticket = await signKelpieConnectionTicket({ subject: account.userId, clientId: account.clientId,
       appId: KELPIE_APP_ID, resource, issuer: getPublicBaseUrl(), credentialEpoch: account.credentialEpoch,
+      assuranceId: account.assuranceId, authenticationEvidenceId: account.authenticationEvidenceId,
       twoFaCompleted: account.twoFaCompleted, issuedAt, expiresAt });
     const gateway = new URL(resource); gateway.protocol = 'wss:';
     return { connection_ticket: ticket, token_type: 'Bearer', expires_in: expiresAt - issuedAt, gateway_url: gateway.toString() };
@@ -87,7 +91,7 @@ export async function validateKelpieConnectionTicket(params: {
     const client = await getOAuthClient(clientId, tx);
     if (!client) rejectKelpieConnection();
     const config = buildMcpClientConfig(client.redirectUris, client.nativeApp);
-    await authorizeKelpieAccount({ userId: sub, clientId, credentialEpoch, expiresAt,
+    await authorizeKelpieAccount({ ...publicCredentialSource(payload), artifact: credentialArtifactSource(payload, 'public'), userId: sub, clientId, credentialEpoch, expiresAt,
       twoFaCompleted: twofa, domain: config.domain, config }, tx);
     // Re-resolve the backend under the same policy lock; rotation/disable cannot race validation.
     await verifyDomainAuthToken({ domain: params.domain, token: params.domainCredential }, { prisma: tx as unknown as PrismaClient });

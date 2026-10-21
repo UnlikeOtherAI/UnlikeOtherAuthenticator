@@ -1,3 +1,11 @@
+import { authenticationFixtureDb } from '../helpers/authentication-fixture.js';
+
+const routeDb = vi.hoisted(() => ({ current: undefined as ReturnType<typeof authenticationFixtureDb> | undefined }));
+vi.mock('../../src/db/prisma.js', () => ({
+  getPrisma: () => routeDb.current, getAdminPrisma: () => routeDb.current,
+  connectPrisma: async () => {}, disconnectPrisma: async () => {},
+}));
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LOGIN_SESSION_AUDIENCE } from '../../src/config/constants.js';
@@ -143,6 +151,8 @@ function baseConfig(overrides?: Partial<ClientConfig>): ClientConfig {
 
 describe('GET /auth/email/link', () => {
   beforeEach(() => {
+    routeDb.current = authenticationFixtureDb();
+    process.env.DATABASE_URL = 'postgres://uoa-auth-route-fixture.invalid/db';
     currentConfig = baseConfig();
     validateRegistrationEmailLandingTokenMock.mockReset();
     renderAuthEntrypointHtmlMock.mockReset();
@@ -158,6 +168,7 @@ describe('GET /auth/email/link', () => {
   });
 
   afterEach(() => {
+    Reflect.deleteProperty(process.env, 'DATABASE_URL');
     vi.restoreAllMocks();
   });
 
@@ -444,6 +455,8 @@ describe('GET /auth/email/link', () => {
 
 describe('GET /auth/email/link — team chooser wiring (gap-fix B Task 1, design §4.3)', () => {
   beforeEach(() => {
+    routeDb.current = authenticationFixtureDb();
+    process.env.DATABASE_URL = 'postgres://uoa-auth-route-fixture.invalid/db';
     currentConfig = baseConfig();
     validateRegistrationEmailLandingTokenMock.mockReset().mockResolvedValue('LOGIN_LINK');
     renderAuthEntrypointHtmlMock.mockReset().mockResolvedValue('<html>login</html>');
@@ -462,6 +475,7 @@ describe('GET /auth/email/link — team chooser wiring (gap-fix B Task 1, design
   });
 
   afterEach(() => {
+    Reflect.deleteProperty(process.env, 'DATABASE_URL');
     vi.restoreAllMocks();
   });
 
@@ -569,6 +583,7 @@ describe('GET /auth/email/link — team chooser wiring (gap-fix B Task 1, design
     // verification downstream at /auth/session-choices and /auth/select-team.
     expect(signLoginSessionMock).toHaveBeenCalledWith(
       expect.objectContaining({ audience: LOGIN_SESSION_AUDIENCE }),
+      expect.objectContaining({ prisma: expect.anything(), verifiedEvent: { kind: 'local_credential' } }),
     );
   });
 

@@ -1,4 +1,5 @@
 import { requireIdentityEmail } from './entity-lifecycle.service.js';
+import { assertIndependentChooserMutation } from './authentication-evidence.service.js';
 import type { PrismaClient } from '@prisma/client';
 
 import { getAuthServiceIdentifier, getEnv, requireEnv } from '../config/env.js';
@@ -20,6 +21,8 @@ export type TwoFactorSetupResult = {
 };
 
 type FinalizeContext = {
+  managementIntentId?: string;
+    authenticationEvidenceId?: string;
   authMethod: string;
   redirectUrl: string;
   state?: string;
@@ -87,6 +90,12 @@ export async function startTwoFactorSetup(
   }
 
   const prisma = prismaClient(deps);
+  if (params.finalize?.authMethod === 'sso' || params.finalize?.authMethod === 'sso_recovery') {
+    throw new AppError('FORBIDDEN', 403, 'INDEPENDENT_REAUTH_REQUIRED');
+  }
+  if (params.finalize?.authenticationEvidenceId) await assertIndependentChooserMutation({
+    authenticationEvidenceId: params.finalize.authenticationEvidenceId, userId: params.userId,
+    credentialEpoch: params.credentialEpoch, domain: params.config.domain }, prisma as PrismaClient);
   const user = await prisma.user.findUnique({
     where: { lifecycleStatus: 'ACTIVE', id: params.userId },
     select: { email: true, twoFaEnabled: true, tokenVersion: true },
@@ -109,6 +118,8 @@ export async function startTwoFactorSetup(
     configUrl: params.configUrl,
     domain: params.config.domain,
     authMethod: params.finalize?.authMethod,
+    authenticationEvidenceId: params.finalize?.authenticationEvidenceId,
+    managementIntentId: params.finalize?.managementIntentId,
     redirectUrl: params.finalize?.redirectUrl,
     state: params.finalize?.state,
     rememberMe: params.finalize?.rememberMe,

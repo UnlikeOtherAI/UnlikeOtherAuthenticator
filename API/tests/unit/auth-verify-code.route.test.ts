@@ -1,3 +1,4 @@
+import { authenticationFixtureDb, legacyCredentialStores } from '../helpers/authentication-fixture.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ClientConfig } from '../../src/services/config.service.js';
@@ -63,6 +64,7 @@ vi.mock('../../src/services/required-team-placement.service.js', async () => {
 const prismaMock = vi.hoisted(() => {
   const mock: Record<string, unknown> = {
     user: { findUnique: vi.fn() },
+    orgMember: { findMany: vi.fn() },
     teamMember: { findMany: vi.fn() },
     teamInvite: { findMany: vi.fn() },
     authorizationCode: { create: vi.fn() },
@@ -152,6 +154,7 @@ async function postVerifyCode(body: Record<string, unknown>) {
 
 describe('POST /auth/verify-code', () => {
   beforeEach(() => {
+    Object.assign(prismaMock, legacyCredentialStores());
     currentConfig = baseConfig();
     process.env.SHARED_SECRET = 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER = 'uoa-auth-service';
@@ -166,6 +169,8 @@ describe('POST /auth/verify-code', () => {
         }
       }
     }
+    Object.assign(prismaMock, { authenticationEvidence: authenticationFixtureDb().authenticationEvidence });
+    prismaMock.orgMember.findMany.mockResolvedValue([]);
     verifyLoginCodeMock.mockReset();
     recordLoginLogMock.mockReset().mockResolvedValue(undefined);
     assertEmailDomainAllowedForLoginMock.mockReset().mockResolvedValue(undefined);

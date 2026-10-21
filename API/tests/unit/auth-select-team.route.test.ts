@@ -1,3 +1,9 @@
+import { legacyCredentialStores } from '../helpers/authentication-fixture.js';
+vi.mock('../../src/services/authentication-evidence.service.js', () => ({
+  recordIndependentAuthentication: vi.fn().mockResolvedValue('test-evidence'),
+  finalizeAuthenticationEvidence: vi.fn(),
+  assertIndependentChooserMutation: vi.fn(),
+}));
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ClientConfig } from '../../src/services/config.service.js';
 import { signLoginSession } from '../../src/services/login-session.service.js';
@@ -42,6 +48,7 @@ vi.mock('../../src/services/ban-policy.service.js', () => ({
 }));
 
 const prismaMock = vi.hoisted(() => ({
+  orgSsoPolicy: { findUnique: vi.fn().mockResolvedValue(null) },
   $executeRaw: vi.fn(),
   $queryRaw: vi.fn(),
   domainSignatureSettings: { findUnique: vi.fn() },
@@ -56,7 +63,7 @@ const prismaMock = vi.hoisted(() => ({
   teamInvite: { findUnique: vi.fn(), update: vi.fn(), findMany: vi.fn() },
   teamInviteLink: { findUnique: vi.fn(), updateMany: vi.fn() },
   user: { findUnique: vi.fn(), update: vi.fn() },
-  orgMember: { findFirst: vi.fn(), count: vi.fn(), create: vi.fn() },
+  orgMember: { findMany: vi.fn().mockResolvedValue([]), findFirst: vi.fn(), count: vi.fn(), create: vi.fn() },
   loginSessionUse: { create: vi.fn() },
   authorizationCode: { create: vi.fn() },
   billingAppKey: { findMany: vi.fn() },
@@ -154,6 +161,7 @@ async function mintLoginToken(userId: string, domain = 'client.example.com'): Pr
 
 describe('POST /auth/select-team', () => {
   beforeEach(() => {
+    Object.assign(prismaMock, legacyCredentialStores());
     currentConfig = baseConfig();
     process.env.SHARED_SECRET = SHARED_SECRET;
     process.env.AUTH_SERVICE_IDENTIFIER = 'uoa-auth-service';
@@ -171,6 +179,7 @@ describe('POST /auth/select-team', () => {
     recordLoginLogMock.mockReset().mockResolvedValue(undefined);
     assertEmailDomainAllowedForLoginMock.mockReset().mockResolvedValue(undefined);
     assertNotBannedAtLoginMock.mockReset().mockResolvedValue(undefined);
+    prismaMock.orgMember.findMany.mockResolvedValue([]);
     prismaMock.authorizationCode.create.mockResolvedValue({ id: 'code-row-1' });
     prismaMock.loginSessionUse.create.mockResolvedValue({ id: 'session-use-1' });
     prismaMock.$executeRaw.mockResolvedValue(1);

@@ -1,3 +1,5 @@
+import { finishManagementIntent } from './org-sso-management-intent.service.js';
+import { finalizeAuthenticationEvidence } from './authentication-evidence.service.js';
 import type { PrismaClient } from '@prisma/client';
 
 import type { ClientConfig } from './config.service.js';
@@ -60,7 +62,9 @@ export async function finalizeAuthenticatedUser(
     state?: string;
     rememberMe: boolean;
     requestAccess: boolean;
-    authMethod: string;
+    managementIntentId?: string;
+    authenticationEvidenceId?: string;
+  authMethod: string;
     twoFaCompleted: boolean;
     codeChallenge?: string;
     codeChallengeMethod?: 'S256';
@@ -72,6 +76,7 @@ export async function finalizeAuthenticatedUser(
   },
   deps?: FinalizeDeps,
 ): Promise<
+  | { status: 'management'; redirectTo: string }
   | { status: 'granted'; redirectTo: string; code: string }
   | { status: 'signing_required'; redirectTo: string; signingToken: string }
   | { status: 'requested'; redirectTo: string }
@@ -101,6 +106,16 @@ export async function finalizeAuthenticatedUser(
     },
     { prisma: deps.prisma ?? getAdminPrisma() },
   );
+
+  await finalizeAuthenticationEvidence({ id: params.authenticationEvidenceId, userId: params.userId,
+    credentialEpoch: params.credentialEpoch, config: params.config, configUrl: params.configUrl,
+    redirectUrl: params.redirectUrl, codeChallenge: params.codeChallenge, twoFaCompleted: params.twoFaCompleted },
+    deps.prisma ?? getAdminPrisma());
+
+  if (params.managementIntentId) return finishManagementIntent({ id: params.managementIntentId,
+    userId: params.userId, credentialEpoch: params.credentialEpoch, clientDomain: params.config.domain,
+    authenticationEvidenceId: params.authenticationEvidenceId, twoFaCompleted: params.twoFaCompleted },
+    deps.prisma ?? getAdminPrisma());
 
   // Allowed-login-email-domain restrictions (client domain / org / team). SUPERUSER bypasses.
   // Team selection injects its BYPASSRLS transaction so just-accepted membership is visible.
@@ -178,6 +193,7 @@ export async function finalizeAuthenticatedUser(
       orgId: params.orgId,
       teamId: params.teamId,
       authMethod: params.authMethod,
+      authenticationEvidenceId: params.authenticationEvidenceId,
       twoFaCompleted: params.twoFaCompleted,
       credentialEpoch: params.credentialEpoch,
     },

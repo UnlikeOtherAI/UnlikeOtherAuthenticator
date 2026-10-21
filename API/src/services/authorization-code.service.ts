@@ -1,3 +1,6 @@
+import { authorizeCredentialSurface } from './credential-route-registry.service.js';
+import { requireAuthenticationEvidence } from './authentication-evidence.service.js';
+import { assertOrgAccessPolicy } from './org-sso-policy.service.js';
 import { createHmac, randomBytes } from 'node:crypto';
 
 import type { PrismaClient } from '@prisma/client';
@@ -88,7 +91,8 @@ export async function issueAuthorizationCode(
     codeChallenge?: string;
     codeChallengeMethod?: 'S256';
     rememberMe?: boolean;
-    twoFaCompleted: boolean;
+    authenticationEvidenceId?: string;
+  twoFaCompleted: boolean;
     credentialEpoch: number;
     // Team scope resolved by explicit selection, auto-selection, or the
     // server-owned recognized-product placement performed before 2FA.
@@ -140,6 +144,21 @@ export async function issueAuthorizationCode(
       },
     );
 
+    await authorizeCredentialSurface('configured_authorization', { userId: params.userId, clientDomain: params.domain,
+      credentialEpoch: params.credentialEpoch, authenticationEvidenceId: params.authenticationEvidenceId,
+      orgId: params.orgId, teamId: params.teamId }, tx);
+    if (params.orgId) await assertOrgAccessPolicy({ userId: params.userId, domain: params.domain,
+      orgId: params.orgId, authenticationEvidenceId: params.authenticationEvidenceId }, tx);
+    if (params.authenticationEvidenceId) {
+      const evidence = await requireAuthenticationEvidence({ id: params.authenticationEvidenceId, userId: params.userId,
+        credentialEpoch: params.credentialEpoch, clientDomain: params.domain }, tx);
+      if (evidence.provenance !== 'independent' && (!params.orgId || evidence.orgId !== params.orgId ||
+        (evidence.teamId && evidence.teamId !== params.teamId))) {
+        throw new AppError('FORBIDDEN', 403, 'SSO_TEAM_REAUTH_REQUIRED');
+      }
+      if (params.twoFaCompleted && !evidence.mfaCompletedAt) throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_EVIDENCE_REQUIRED');
+      await tx.authenticationEvidence.update({ where: { id: evidence.id }, data: { signatureCompletedAt: new Date() } });
+    }
     const now = deps?.now ? deps.now() : new Date();
     for (let attempt = 0; attempt < 3; attempt++) {
       const code = generateAuthorizationCode();
@@ -158,6 +177,7 @@ export async function issueAuthorizationCode(
             codeChallengeMethod: params.codeChallengeMethod,
             rememberMe: params.rememberMe ?? false,
             twoFaCompleted: params.twoFaCompleted,
+            authenticationEvidenceId: params.authenticationEvidenceId,
             tokenVersion: params.credentialEpoch,
             orgId: params.orgId ?? null,
             teamId: params.teamId ?? null,
@@ -194,6 +214,7 @@ export async function consumeAuthorizationCode(params: {
 }): Promise<{
   userId: string;
   rememberMe: boolean;
+  authenticationEvidenceId?: string;
   twoFaCompleted: boolean;
   orgId: string | null;
   teamId: string | null;
@@ -211,6 +232,7 @@ export async function consumeAuthorizationCode(params: {
       codeChallengeMethod: true,
       rememberMe: true,
       twoFaCompleted: true,
+      authenticationEvidenceId: true,
       tokenVersion: true,
       expiresAt: true,
       usedAt: true,
@@ -327,6 +349,7 @@ export async function consumeAuthorizationCode(params: {
     userId: row.userId,
     rememberMe: row.rememberMe,
     twoFaCompleted: row.twoFaCompleted,
+    authenticationEvidenceId: row.authenticationEvidenceId ?? undefined,
     orgId: row.orgId ?? null,
     teamId: row.teamId ?? null,
   };

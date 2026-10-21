@@ -1,3 +1,4 @@
+import type { Prisma, PrismaClient } from '@prisma/client';
 import { decodeProtectedHeader, jwtVerify } from 'jose';
 import { z } from 'zod';
 
@@ -9,6 +10,8 @@ import {
   type BillingActorEndpoint,
 } from './billing-actor-audience.service.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
+import { credentialArtifactSource } from './credential-artifact.service.js';
+import { authorizeCredentialSurfaceWhenAvailable } from './credential-route-registry.service.js';
 
 export const BILLING_ACTOR_MAX_TTL_SECONDS = 60;
 export const BILLING_ACTOR_CLOCK_TOLERANCE_SECONDS = 5;
@@ -22,6 +25,7 @@ const BillingActorSchema = z
     organisation_id: z.string().trim().min(1).max(256),
     team_id: z.string().trim().min(1).max(256),
     tv: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+    assurance_ref: z.string().min(32).max(256).optional(),
     jti: z.string().trim().min(1).max(256),
     iat: z.number().int().positive(),
     exp: z.number().int().positive(),
@@ -44,7 +48,7 @@ export async function verifyBillingActor(
       userId: string;
     };
   },
-  deps?: { now?: () => number },
+  deps?: { now?: () => number; prisma?: PrismaClient | Prisma.TransactionClient },
 ): Promise<BillingActor> {
   const actor = await verifyBillingActorSignature(params, deps);
 
@@ -62,6 +66,17 @@ export async function verifyBillingActor(
       product: actor.product,
       appKeyId: params.credential.id,
     });
+  }
+  {
+    const issuer = new URL(params.credential.actorIssuer);
+    if (issuer.protocol !== 'https:' || issuer.username || issuer.password || issuer.search || issuer.hash) {
+      throw new AppError('FORBIDDEN', 403, 'INVALID_BILLING_ACTOR');
+    }
+    const clientDomain = issuer.hostname + (issuer.pathname === '/' ? '' : issuer.pathname);
+    const artifact = credentialArtifactSource(actor, 'reference');
+    await authorizeCredentialSurfaceWhenAvailable('billing_actor', { artifact, method: artifact.method,
+      assuranceReference: actor.assurance_ref, clientDomain, userId: actor.sub,
+      credentialEpoch: actor.tv, orgId: actor.organisation_id, teamId: actor.team_id }, deps?.prisma);
   }
   return actor;
 }

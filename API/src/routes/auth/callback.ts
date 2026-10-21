@@ -275,7 +275,7 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
         let autoSelectedTeam: AutoSelectedTeam | null = acceptedInvite
           ? { orgId: acceptedInvite.orgId, teamId: acceptedInvite.teamId }
           : null;
-        if (!acceptedInvite && config.login_flow?.team_selection === 'auto') {
+        if (!acceptedInvite && (socialState.management_org_id || config.login_flow?.team_selection === 'auto')) {
           const choices = await buildSessionChoices(
             { userId, config },
             {
@@ -300,7 +300,7 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
               codeChallengeMethod: socialState.code_challenge_method,
               sharedSecret: SHARED_SECRET,
               audience: LOGIN_SESSION_AUDIENCE,
-            });
+            }, { prisma: prisma, verifiedEvent: { kind: 'provider', authenticatedAt: null } });
             return { kind: 'team_chooser' as const, loginToken };
           }
         }
@@ -323,6 +323,8 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
             rememberMe,
             state: socialState.state,
             requestAccess: socialState.request_access === true,
+            primaryJustVerified: true,
+            verifiedPrimaryEvent: { kind: 'provider', authenticatedAt: null },
             authMethod: provider,
             codeChallenge: socialState.code_challenge,
             codeChallengeMethod: socialState.code_challenge_method,
@@ -415,7 +417,8 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
           u.searchParams.set('code_challenge_method', socialState.code_challenge_method);
         }
         u.searchParams.set('login_token', outcome.loginToken);
-        u.searchParams.set('flow', 'team_chooser');
+        u.searchParams.set('flow', socialState.management_org_id ? 'organisation_management' : 'team_chooser');
+        if (socialState.management_org_id) u.searchParams.set('management_org_id', socialState.management_org_id);
         if (socialState.request_access === true) {
           u.searchParams.set('request_access', 'true');
         }

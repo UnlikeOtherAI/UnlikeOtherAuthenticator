@@ -146,7 +146,9 @@ describe.skipIf(!hasDatabase)('refresh session serialization and reuse revocatio
     return { ownerId: owner.id, userId: user.id, orgId: org.id, teamId: team.id };
   }
 
-  async function issueLegacy(userId: string, label = randomUUID()): Promise<LegacyRefresh> {
+  async function issueSession(
+    userId: string, label = randomUUID(), scope?: Pick<Team, 'orgId' | 'teamId'>,
+  ): Promise<LegacyRefresh> {
     const clientId = createClientId(domain, sharedSecret);
     const configUrl = `https://${domain}/auth-config/${label}`;
     const token = await issueRefreshToken(
@@ -155,8 +157,8 @@ describe.skipIf(!hasDatabase)('refresh session serialization and reuse revocatio
         domain,
         clientId,
         configUrl,
-        orgId: null,
-        teamId: null,
+        orgId: scope?.orgId ?? null,
+        teamId: scope?.teamId ?? null,
         twoFaCompleted: false,
       },
       { prisma: handle.prisma, refreshTokenTtlSeconds: 3600, sharedSecret },
@@ -221,9 +223,9 @@ describe.skipIf(!hasDatabase)('refresh session serialization and reuse revocatio
     expect(rows.every((row) => row.revokedAt !== null)).toBe(true);
   }
 
-  it('refresh-first lets deactivation revoke the legacy replacement permanently', async () => {
+  it('refresh-first lets deactivation revoke the exact-org replacement permanently', async () => {
     const team = await seedTeam();
-    const original = await issueLegacy(team.userId);
+    const original = await issueSession(team.userId, randomUUID(), team);
     const locked = deferred();
     const release = deferred();
     const rotation = refreshLegacy(original, {
@@ -254,9 +256,9 @@ describe.skipIf(!hasDatabase)('refresh session serialization and reuse revocatio
     ).rejects.toMatchObject({ statusCode: 401 });
   });
 
-  it('removal-first blocks legacy rotation and re-add cannot revive the family', async () => {
+  it('removal-first blocks exact-org rotation and re-add cannot revive the family', async () => {
     const team = await seedTeam();
-    const original = await issueLegacy(team.userId);
+    const original = await issueSession(team.userId, randomUUID(), team);
     const statusWritten = deferred();
     const release = deferred();
     const removal = removeOrganisationMember(
@@ -295,7 +297,7 @@ describe.skipIf(!hasDatabase)('refresh session serialization and reuse revocatio
 
   it('commits family revocation before rejecting reuse and keeps the replacement dead', async () => {
     const team = await seedTeam();
-    const original = await issueLegacy(team.userId);
+    const original = await issueSession(team.userId);
     const rotated = await refreshLegacy(original);
     const current = withRefreshValue(original, rotated.refreshToken);
     await backdateBeyondReplayGrace(team.userId);
@@ -311,7 +313,7 @@ describe.skipIf(!hasDatabase)('refresh session serialization and reuse revocatio
 
   it('current rotation first is followed by reuse revoking its new replacement', async () => {
     const team = await seedTeam();
-    const original = await issueLegacy(team.userId);
+    const original = await issueSession(team.userId);
     const firstRotation = await refreshLegacy(original);
     const current = withRefreshValue(original, firstRotation.refreshToken);
     await backdateBeyondReplayGrace(team.userId);
@@ -339,7 +341,7 @@ describe.skipIf(!hasDatabase)('refresh session serialization and reuse revocatio
 
   it('reuse first revokes the current token before its waiting rotation can replace it', async () => {
     const team = await seedTeam();
-    const original = await issueLegacy(team.userId);
+    const original = await issueSession(team.userId);
     const firstRotation = await refreshLegacy(original);
     const current = withRefreshValue(original, firstRotation.refreshToken);
     await backdateBeyondReplayGrace(team.userId);

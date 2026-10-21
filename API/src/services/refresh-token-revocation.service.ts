@@ -1,14 +1,18 @@
 import type { PrismaClient } from '@prisma/client';
 
+import { revokeEnterpriseScope } from './org-sso-revocation.service.js';
+import { revokeEnterpriseUser, revokeEnterpriseOrganisation, revokeEnterpriseTeam } from './enterprise-authority-revocation.service.js';
 import { getAdminPrisma } from '../db/prisma.js';
-import { runInTransaction } from '../db/tenant-context.js';
+import { runEnterpriseAuthorityTransaction } from './enterprise-authority-transaction.service.js';
 import {
   lockRefreshSessionUser,
   lockRefreshSessionUserDomain,
 } from './refresh-session-lock.service.js';
 
 type UserVersionPrisma = Pick<PrismaClient, 'user'>;
-type RefreshRevocationPrisma = Pick<PrismaClient, '$queryRaw' | 'refreshToken' | 'user'> &
+type RefreshRevocationPrisma = Pick<PrismaClient,
+  '$queryRaw' | '$executeRaw' | 'refreshToken' | 'user' | 'domainRole' | 'orgMember' |
+  'organisation' | 'team' | 'sessionAssurance' | 'orgRevocationEvent'> &
   Partial<Pick<PrismaClient, '$transaction'>>;
 
 function adminRevocationPrisma(
@@ -37,12 +41,13 @@ export async function revokeRefreshTokensForUserDomain(
 ): Promise<{ revokedCount: number }> {
   const prisma = adminRevocationPrisma(deps?.prisma);
   const now = deps?.now ? deps.now() : new Date();
-  return runInTransaction(prisma as PrismaClient, async (tx) => {
+  return runEnterpriseAuthorityTransaction(prisma as PrismaClient, async (tx) => {
     await lockRefreshSessionUserDomain({ userId, domain }, { prisma: tx });
     const result = await tx.refreshToken.updateMany({
       where: { userId, domain, revokedAt: null },
       data: { revokedAt: now },
     });
+    await revokeEnterpriseScope({ clientDomain: domain, scope: 'user', userId, revision: 1 }, tx);
     return { revokedCount: result.count };
   });
 }
@@ -55,12 +60,13 @@ export async function revokeRefreshTokenFamiliesForUserOrganisation(
 ): Promise<{ revokedCount: number }> {
   const prisma = adminRevocationPrisma(deps?.prisma);
   const now = deps?.now ? deps.now() : new Date();
-  return runInTransaction(prisma as PrismaClient, async (tx) => {
+  return runEnterpriseAuthorityTransaction(prisma as PrismaClient, async (tx) => {
     await lockRefreshSessionUser(userId, { prisma: tx });
     const result = await tx.refreshToken.updateMany({
       where: { userId, orgId, revokedAt: null },
       data: { revokedAt: now },
     });
+    await revokeEnterpriseOrganisation(tx, orgId, userId);
     return { revokedCount: result.count };
   });
 }
@@ -73,12 +79,13 @@ export async function revokeRefreshTokenFamiliesForUserTeam(
 ): Promise<{ revokedCount: number }> {
   const prisma = adminRevocationPrisma(deps?.prisma);
   const now = deps?.now ? deps.now() : new Date();
-  return runInTransaction(prisma as PrismaClient, async (tx) => {
+  return runEnterpriseAuthorityTransaction(prisma as PrismaClient, async (tx) => {
     await lockRefreshSessionUser(userId, { prisma: tx });
     const result = await tx.refreshToken.updateMany({
       where: { userId, teamId, revokedAt: null },
       data: { revokedAt: now },
     });
+    await revokeEnterpriseTeam(tx, teamId, userId);
     return { revokedCount: result.count };
   });
 }
@@ -99,9 +106,10 @@ export async function revokeAllRefreshTokensForUser(
 ): Promise<void> {
   const prisma = adminRevocationPrisma(deps?.prisma);
   const now = deps?.now ? deps.now() : new Date();
-  await runInTransaction(prisma as PrismaClient, async (tx) => {
+  await runEnterpriseAuthorityTransaction(prisma as PrismaClient, async (tx) => {
     await lockRefreshSessionUser(userId, { prisma: tx });
     await deps?.afterUserLock?.();
+    await revokeEnterpriseUser(tx, userId);
     await tx.refreshToken.updateMany({
       where: { userId, revokedAt: null },
       data: { revokedAt: now },

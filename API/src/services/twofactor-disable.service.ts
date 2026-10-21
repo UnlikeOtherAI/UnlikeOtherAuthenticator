@@ -2,7 +2,7 @@ import type { PrismaClient } from '@prisma/client';
 
 import { getEnv } from '../config/env.js';
 import { getAdminPrisma } from '../db/prisma.js';
-import { runInTransaction } from '../db/tenant-context.js';
+import { runEnterpriseAuthorityTransaction } from './enterprise-authority-transaction.service.js';
 import { AppError } from '../utils/errors.js';
 import { lockAndAssertAuthenticationEpoch } from './authentication-epoch.service.js';
 import type { ClientConfig } from './config.service.js';
@@ -72,7 +72,7 @@ export async function disableTwoFactorForUser(
   }
 
   const prisma = adminPrisma(deps);
-  await runInTransaction(prisma, async (tx) => {
+  await runEnterpriseAuthorityTransaction(prisma, async (tx) => {
     // Serialize the effective policy re-read with every domain/organisation
     // policy writer. This lock must precede the user/session hierarchy.
     await lockProductTeamPolicyShared(tx);
@@ -116,7 +116,7 @@ export async function resetTwoFactorForUser(
   }
 
   const prisma = adminPrisma(deps);
-  await runInTransaction(prisma, async (tx) => {
+  await runEnterpriseAuthorityTransaction(prisma, async (tx) => {
     await deps?.beforeRefreshSessionLock?.();
     await lockRefreshSessionUser(params.userId, { prisma: tx });
     await deps?.afterRefreshSessionLock?.();

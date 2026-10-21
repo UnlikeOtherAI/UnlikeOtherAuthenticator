@@ -1,3 +1,4 @@
+import { legacyCredentialStores } from '../helpers/authentication-fixture.js';
 import { createHash } from 'node:crypto';
 
 import type { Prisma } from '@prisma/client';
@@ -21,6 +22,7 @@ describe('public OAuth code scope binding', () => {
 
   it('stores the authorize-time scope on the one-time code', async () => {
     const prisma = {
+      ...legacyCredentialStores(),
       oAuthClient: { findUnique: vi.fn().mockResolvedValue({ clientId: 'client-1', redirectUris: ['https://tool.example/callback'], scopes: ['openid', 'profile'] }) },
       authorizationCode: { create: vi.fn().mockResolvedValue({ id: 'code-1' }) },
     } as unknown as Prisma.TransactionClient;
@@ -47,6 +49,7 @@ describe('public OAuth code scope binding', () => {
   it('returns only the scope bound to the redeemed code', async () => {
     const now = new Date('2026-07-15T20:00:00.000Z');
     const prisma = {
+      ...legacyCredentialStores(),
       authorizationCode: {
         findUnique: vi.fn().mockResolvedValue({
           id: 'code-1',

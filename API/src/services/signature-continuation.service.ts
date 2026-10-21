@@ -1,3 +1,7 @@
+import { finalizeAuthenticationEvidence } from './authentication-evidence.service.js';
+import { authorizeCredentialSurface } from './credential-route-registry.service.js';
+import { buildMcpClientConfig } from './oauth/config.service.js';
+import { getOAuthClient } from './oauth/client.service.js';
 import { randomBytes } from 'node:crypto';
 
 import type { Prisma, PrismaClient } from '@prisma/client';
@@ -57,6 +61,7 @@ type ConfigGateInput = {
   requestAccess: boolean;
   orgId?: string;
   teamId?: string;
+  authenticationEvidenceId?: string;
   authMethod: string;
   twoFaCompleted: boolean;
   credentialEpoch: number;
@@ -72,6 +77,7 @@ export type PublicOAuthGateInput = {
   scope?: string;
   codeChallenge: string;
   rememberMe: boolean;
+  authenticationEvidenceId?: string;
   authMethod: string;
   twoFaCompleted: boolean;
   credentialEpoch: number;
@@ -157,6 +163,10 @@ async function createContinuation(
   const token = newSigningToken();
   const configInput = profile === 'CONFIG_JWT' ? (params as ConfigGateInput) : null;
   const publicInput = profile === 'PUBLIC_OAUTH' ? (params as PublicOAuthGateInput) : null;
+  const source = await authorizeCredentialSurface(profile === 'PUBLIC_OAUTH' ? 'public_authorization' : 'signature_continuation', {
+    userId: params.userId, clientDomain: params.domain, credentialEpoch: params.credentialEpoch,
+    authenticationEvidenceId: params.authenticationEvidenceId, method: params.authMethod,
+    orgId: configInput?.orgId, teamId: configInput?.teamId }, tx);
   await tx.signingContinuation.create({
     data: {
       tokenHash: hashSigningContinuationToken(token, sharedSecret(deps)),
@@ -177,10 +187,11 @@ async function createContinuation(
       orgId: configInput?.orgId ?? null,
       teamId: configInput?.teamId ?? null,
       authMethod: params.authMethod,
+      authenticationEvidenceId: params.authenticationEvidenceId,
       twoFaCompleted: params.twoFaCompleted,
       tokenVersion: params.credentialEpoch,
       policyRevision,
-      expiresAt: new Date(now.getTime() + env.SIGNATURE_CONTINUATION_TTL_MINUTES * 60_000),
+      expiresAt: new Date(Math.min(now.getTime() + env.SIGNATURE_CONTINUATION_TTL_MINUTES * 60_000, source?.expiresAt.getTime() ?? Infinity)),
       createdAt: now,
     },
   });
@@ -227,6 +238,7 @@ export async function finalizeConfigAuthorizationWithSignatures(
           ...pkce,
           domain,
           twoFaCompleted: input.twoFaCompleted,
+          authenticationEvidenceId: input.authenticationEvidenceId,
           credentialEpoch: input.credentialEpoch,
         },
         {
@@ -283,6 +295,14 @@ export async function finalizePublicOAuthAuthorizationWithSignatures(
         afterAuthenticationEpochLock: deps?.afterAuthenticationEpochLock,
       },
     );
+    const client = await getOAuthClient(input.oauthClientId, tx);
+    if (!client) throw new AppError('UNAUTHORIZED', 401, 'INVALID_CLIENT');
+    const config = buildMcpClientConfig(client.redirectUris, client.nativeApp);
+    await authorizeCredentialSurface('public_authorization', { userId: input.userId, clientDomain: domain,
+      credentialEpoch: input.credentialEpoch, authenticationEvidenceId: input.authenticationEvidenceId, method: input.authMethod }, tx);
+    await finalizeAuthenticationEvidence({ id: input.authenticationEvidenceId, userId: input.userId,
+      credentialEpoch: input.credentialEpoch, config, configUrl: 'urn:uoa:mcp', redirectUrl: input.redirectUrl,
+      codeChallenge: input.codeChallenge, twoFaCompleted: input.twoFaCompleted }, tx);
     const policy = await evaluateSignaturePolicy(
       { domain, userId: input.userId, now: currentTime(deps) },
       { prisma: tx },
@@ -300,6 +320,7 @@ export async function finalizePublicOAuthAuthorizationWithSignatures(
         rememberMe: input.rememberMe,
         credentialEpoch: input.credentialEpoch,
         twoFaCompleted: input.twoFaCompleted,
+          authenticationEvidenceId: input.authenticationEvidenceId,
       };
       const issued = await (deps?.issuePublicCode ?? issueOAuthCode)(
         issueInput,
@@ -382,6 +403,7 @@ export async function completeSigningContinuation(
           codeChallengeMethod: 'S256',
           rememberMe: continuation.rememberMe,
           twoFaCompleted: continuation.twoFaCompleted,
+          authenticationEvidenceId: continuation.authenticationEvidenceId ?? undefined,
           credentialEpoch: continuation.tokenVersion ?? rejectContinuation(),
           orgId: continuation.orgId ?? undefined,
           teamId: continuation.teamId ?? undefined,
@@ -419,6 +441,7 @@ export async function completeSigningContinuation(
         rememberMe: continuation.rememberMe,
         credentialEpoch: publicInput.credentialEpoch,
         twoFaCompleted: continuation.twoFaCompleted,
+          authenticationEvidenceId: continuation.authenticationEvidenceId ?? undefined,
       },
       tx as unknown as Prisma.TransactionClient,
       consumedAt,
@@ -441,6 +464,7 @@ function continuationToPublicInput(continuation: {
   oauthScope: string | null;
   codeChallenge: string;
   rememberMe: boolean;
+  authenticationEvidenceId?: string | null;
   authMethod: string;
   twoFaCompleted: boolean;
   tokenVersion: number | null;
@@ -459,6 +483,7 @@ function continuationToPublicInput(continuation: {
     codeChallenge: continuation.codeChallenge,
     rememberMe: continuation.rememberMe,
     authMethod: continuation.authMethod,
+    authenticationEvidenceId: continuation.authenticationEvidenceId ?? undefined,
     twoFaCompleted: continuation.twoFaCompleted,
     credentialEpoch: continuation.tokenVersion,
   };

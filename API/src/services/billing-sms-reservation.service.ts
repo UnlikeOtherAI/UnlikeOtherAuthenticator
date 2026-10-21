@@ -72,7 +72,7 @@ export async function reserveSms(input: { request: BillingSmsReserveRequestV1; a
     actor = { tv: grant.actorTokenVersion, exp: 0 };
   } else {
     actor = await verifySmsActor({ subject: body, actorToken: input.actorToken ?? '', credential: input.credential,
-      endpoint: '/billing/v1/sms/reservations' });
+      endpoint: '/billing/v1/sms/reservations' }, { prisma });
   }
   return reserveAuthorizedSms(input, deps, { actor, authorize: async tx => {
     if (delegated && body.grant_id !== null) await lockSmsGrant(tx, { grantId: body.grant_id, product: body.product, credential: input.credential });

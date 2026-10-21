@@ -1,3 +1,6 @@
+import { credentialArtifactSource } from './credential-artifact.service.js';
+import type { Prisma, PrismaClient } from '@prisma/client';
+import { authorizeCredentialSurfaceWhenAvailable } from './credential-route-registry.service.js';
 import { SignJWT, jwtVerify, type JWTPayload } from 'jose';
 import { z } from 'zod';
 
@@ -13,6 +16,8 @@ const TwoFaSetupSchema = z.object({
   encrypted_secret: z.string().min(1),
   config_url: z.string().min(1),
   domain: z.string().min(1),
+  management_intent_id: z.string().min(1).max(100).optional(),
+  authentication_evidence_id: z.string().min(1).max(100).optional(),
   auth_method: z.string().min(1).optional(),
   redirect_url: z.string().min(1).optional(),
   // Relying-party opaque `state`, bound here so a bridge hop cannot swap the
@@ -34,6 +39,8 @@ export type TwoFaSetupToken = {
   encryptedSecret: string;
   configUrl: string;
   domain: string;
+  managementIntentId?: string;
+  authenticationEvidenceId?: string;
   authMethod?: string;
   redirectUrl?: string;
   state?: string;
@@ -55,6 +62,8 @@ export async function signTwoFaSetupToken(params: {
   encryptedSecret: string;
   configUrl: string;
   domain: string;
+  managementIntentId?: string;
+  authenticationEvidenceId?: string;
   authMethod?: string;
   redirectUrl?: string;
   state?: string;
@@ -80,6 +89,9 @@ export async function signTwoFaSetupToken(params: {
       config_url: params.configUrl,
       domain: params.domain,
       auth_method: params.authMethod,
+      authentication_evidence_id: params.authenticationEvidenceId,
+      assurance_version: params.authenticationEvidenceId ? 1 : undefined,
+      management_intent_id: params.managementIntentId,
       redirect_url: params.redirectUrl,
       state: params.state,
       remember_me: params.rememberMe ?? false,
@@ -102,6 +114,7 @@ export async function signTwoFaSetupToken(params: {
 }
 
 export async function verifyTwoFaSetupToken(params: {
+  prisma?: PrismaClient | Prisma.TransactionClient;
   token: string;
   sharedSecret: string;
   audience: string;
@@ -127,6 +140,7 @@ export async function verifyTwoFaSetupToken(params: {
     throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
   }
 
+  const artifact = credentialArtifactSource(payload, 'evidence');
   const token: TwoFaSetupToken = {
     userId: parsed.sub,
     credentialEpoch: parsed.credential_epoch,
@@ -136,6 +150,8 @@ export async function verifyTwoFaSetupToken(params: {
     rememberMe: parsed.remember_me ?? false,
     requestAccess: parsed.request_access ?? false,
   };
+  if (parsed.management_intent_id) token.managementIntentId = parsed.management_intent_id;
+  if (parsed.authentication_evidence_id) token.authenticationEvidenceId = parsed.authentication_evidence_id;
   if (parsed.auth_method) token.authMethod = parsed.auth_method;
   if (parsed.redirect_url) token.redirectUrl = parsed.redirect_url;
   if (parsed.state) token.state = parsed.state;
@@ -145,5 +161,13 @@ export async function verifyTwoFaSetupToken(params: {
   }
   if (parsed.org_id) token.orgId = parsed.org_id;
   if (parsed.team_id) token.teamId = parsed.team_id;
+  // Personal settings setup is separately authorized by its global access token at every use.
+  // Login-bound setup carries a primary method/evidence and must retain that authority.
+  if (token.authMethod || token.authenticationEvidenceId || token.managementIntentId) {
+    await authorizeCredentialSurfaceWhenAvailable('factor_enrollment', { userId: token.userId,
+      clientDomain: token.domain, credentialEpoch: token.credentialEpoch,
+      authenticationEvidenceId: token.authenticationEvidenceId, method: token.authMethod,
+      orgId: token.orgId, teamId: token.teamId, artifact }, params.prisma);
+  }
   return token;
 }

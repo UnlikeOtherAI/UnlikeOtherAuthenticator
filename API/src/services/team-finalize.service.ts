@@ -1,4 +1,6 @@
+import { recordIndependentAuthentication, requireAuthenticationEvidence, type VerifiedAuthenticationEvent } from './authentication-evidence.service.js';
 import type { PrismaClient } from '@prisma/client';
+import { AppError } from '../utils/errors.js';
 
 import { getAuthServiceIdentifier, requireEnv } from '../config/env.js';
 import { getAdminPrisma } from '../db/prisma.js';
@@ -48,7 +50,11 @@ export async function finalizeWithTwoFaPolicy(
     state?: string;
     rememberMe: boolean;
     requestAccess: boolean;
-    authMethod: string;
+    primaryJustVerified?: boolean;
+    verifiedPrimaryEvent?: VerifiedAuthenticationEvent;
+    managementIntentId?: string;
+    authenticationEvidenceId?: string;
+  authMethod: string;
     codeChallenge?: string;
     codeChallengeMethod?: 'S256';
     ip?: string | null;
@@ -84,9 +90,15 @@ export async function finalizeWithTwoFaPolicy(
     });
   }
 
+  if (!params.authenticationEvidenceId && params.primaryJustVerified) {
+    if (!params.verifiedPrimaryEvent) throw new Error('verified authentication event required');
+    params = { ...params, authenticationEvidenceId: await recordIndependentAuthentication({ userId: params.userId,
+      credentialEpoch: params.credentialEpoch, method: params.authMethod, verifiedEvent: params.verifiedPrimaryEvent, config: params.config,
+      configUrl: params.configUrl, redirectUrl: params.redirectUrl, codeChallenge: params.codeChallenge }, deps?.prisma) };
+  }
   const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
   const audience = getAuthServiceIdentifier();
-  if ((params.orgId === undefined) !== (params.teamId === undefined)) {
+  if (!params.managementIntentId && (params.orgId === undefined) !== (params.teamId === undefined)) {
     throw new Error('team scope requires both orgId and teamId');
   }
   const team =
@@ -108,7 +120,12 @@ export async function finalizeWithTwoFaPolicy(
   );
 
   const twoFaEnabled = deps?.currentTwoFaEnabled ?? params.twoFaEnabled;
-  if (twoFaPolicy !== 'OFF' && twoFaEnabled) {
+  const evidence = params.authMethod === 'sso' && params.authenticationEvidenceId ? await requireAuthenticationEvidence({
+    id: params.authenticationEvidenceId, userId: params.userId, credentialEpoch: params.credentialEpoch,
+    clientDomain: params.config.domain }, deps?.prisma ?? getAdminPrisma()) : null;
+  const personalFactorCompleted = evidence?.provenance === 'sso' && Boolean(evidence.mfaCompletedAt &&
+    evidence.mfaCompletedAt.getTime() + 600000 > Date.now());
+  if ((twoFaPolicy !== 'OFF' || params.managementIntentId) && twoFaEnabled && !personalFactorCompleted) {
     const twofa_token = await signTwoFaChallenge({
       userId: params.userId,
       credentialEpoch: params.credentialEpoch,
@@ -117,6 +134,8 @@ export async function finalizeWithTwoFaPolicy(
       redirectUrl: params.redirectUrl,
       state: params.state,
       authMethod: params.authMethod,
+      authenticationEvidenceId: params.authenticationEvidenceId,
+      managementIntentId: params.managementIntentId,
       rememberMe: params.rememberMe,
       requestAccess: params.requestAccess,
       codeChallenge: params.codeChallenge,
@@ -128,7 +147,10 @@ export async function finalizeWithTwoFaPolicy(
     return { kind: 'twofa', twofa_token };
   }
 
-  if (twoFaPolicy === 'REQUIRED') {
+  if (twoFaPolicy === 'REQUIRED' && !personalFactorCompleted) {
+    if (evidence?.provenance === 'sso') {
+      throw new AppError('FORBIDDEN', 403, 'INDEPENDENT_REAUTH_REQUIRED');
+    }
     const setup = await startTwoFactorSetup(
       {
         userId: params.userId,
@@ -137,6 +159,8 @@ export async function finalizeWithTwoFaPolicy(
         configUrl: params.configUrl,
         finalize: {
           authMethod: params.authMethod,
+      authenticationEvidenceId: params.authenticationEvidenceId,
+      managementIntentId: params.managementIntentId,
           redirectUrl: params.redirectUrl,
           state: params.state,
           rememberMe: params.rememberMe,
@@ -162,7 +186,9 @@ export async function finalizeWithTwoFaPolicy(
       rememberMe: params.rememberMe,
       requestAccess: params.requestAccess,
       authMethod: params.authMethod,
-      twoFaCompleted: false,
+      authenticationEvidenceId: params.authenticationEvidenceId,
+      managementIntentId: params.managementIntentId,
+      twoFaCompleted: personalFactorCompleted,
       codeChallenge: params.codeChallenge,
       codeChallengeMethod: params.codeChallengeMethod,
       ip: params.ip,

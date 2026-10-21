@@ -1,7 +1,9 @@
+import { runInTransaction } from '../db/tenant-context.js';
+import { revokeEnterpriseTeam } from './enterprise-authority-revocation.service.js';
 import type { ClientConfig } from './config.service.js';
 import { getEnv } from '../config/env.js';
 import { getAdminPrisma, getPrisma } from '../db/prisma.js';
-import { runInTransaction } from '../db/tenant-context.js';
+import { runEnterpriseAuthorityTransaction } from './enterprise-authority-transaction.service.js';
 import { AppError } from '../utils/errors.js';
 import { auditOrg, type OrgActorProvenance } from './organisation.service.base.js';
 import { revokeRefreshTokenFamiliesForUserTeam } from './refresh-token-revocation.service.js';
@@ -193,7 +195,7 @@ export async function changeTeamMemberRole(
     throw new AppError('BAD_REQUEST', 400);
   }
 
-  const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgServicePrisma);
+  const prisma = deps?.prisma ?? (getAdminPrisma() as unknown as OrgServicePrisma);
   const org = await resolveAndAuthorizeTeamOrg(prisma, {
     orgId: params.orgId,
     actorUserId,
@@ -216,33 +218,20 @@ export async function changeTeamMemberRole(
     throw new AppError('NOT_FOUND', 404);
   }
 
-  // A non-ACTIVE (DEACTIVATED/REMOVED) team member has no role to change.
-  const member = await prisma.teamMember.findFirst({
-    where: {
-      teamId: team.id,
-      userId,
-      status: 'ACTIVE',
-    },
-    // `teamRole` is read for the audit row's `previousTeamRole`, mirroring
-    // `changeOrganisationMemberRole`'s `previousRole`.
-    select: { id: true, teamRole: true },
-  });
-  if (!member) {
-    throw new AppError('NOT_FOUND', 404);
-  }
-
-  const previousTeamRole = member.teamRole;
-  const updated = await prisma.teamMember.update({
-    where: { id: member.id },
-    data: { teamRole },
-    select: {
-      id: true,
-      teamId: true,
-      userId: true,
-      teamRole: true,
-      createdAt: true,
-      updatedAt: true,
-    },
+  const { updated, previousTeamRole } = await runEnterpriseAuthorityTransaction(prisma, async (tx) => {
+    await lockRefreshSessionUser(userId, { prisma: tx });
+    await lockTeamMembershipRows({ userId, orgId: org.id }, { prisma: tx });
+    await requireTeamCapability(tx, 'members.manage', {
+      orgId: org.id, teamId: team.id, actorUserId, config: params.config,
+    });
+    const member = await tx.teamMember.findFirst({ where: {
+      teamId: team.id, userId, status: 'ACTIVE',
+    }, select: { id: true, teamRole: true } });
+    if (!member) throw new AppError('NOT_FOUND', 404);
+    const updated = await tx.teamMember.update({ where: { id: member.id }, data: { teamRole },
+      select: { id: true, teamId: true, userId: true, teamRole: true, createdAt: true, updatedAt: true } });
+    if (member.teamRole !== teamRole) await revokeEnterpriseTeam(tx, team.id, userId);
+    return { updated, previousTeamRole: member.teamRole };
   });
 
   await auditOrg({
@@ -314,7 +303,7 @@ export async function removeTeamMember(
     throw new AppError('NOT_FOUND', 404);
   }
 
-  const removedMember = await runInTransaction(prisma, async (tx) => {
+  const removedMember = await runEnterpriseAuthorityTransaction(prisma, async (tx) => {
     await lockRefreshSessionUser(userId, { prisma: tx });
     await lockTeamMembershipRows(
       { userId, orgId: org.id },

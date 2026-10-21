@@ -6,6 +6,27 @@
 
 ## Outcome
 
+### Enterprise SSO implementation amendment (2026-10-18)
+
+The new-account corporate-rule mechanism in this proposal remains proposed;
+the existing signed-config mapping is a separate mechanism. The implemented
+enterprise SSO contract is documented in [enterprise SSO](../Auth/enterprise-sso.md).
+It uses exact consuming-client/organisation policies and provider-stable identity,
+with independent proof before linking an existing global account. It does not
+turn this proposal's email rule into existing-account admission.
+
+The September migration permits multiple active organisations per user within
+one origin domain. Historical uniqueness assumptions below must not be used to
+move, flatten or copy organisations or memberships. Enterprise domain claims
+are scoped to the consuming client and exact existing organisation; cross-origin
+management requires that product's explicit `all_active_memberships` policy.
+
+Decision 7 remains in force: optional pre-authentication domain routing is
+deferred, and no discovery control is exposed. Provider start URLs hand off to
+the relying product's existing PKCE/state flow.
+
+### Proposed corporate-rule outcome
+
 A corporate organisation owner proves control of `example.com` in UOA, then
 chooses one or more of that organisation's teams (the workspaces a user sees in
 the authenticator). A person who creates a **new** UOA account with a verified

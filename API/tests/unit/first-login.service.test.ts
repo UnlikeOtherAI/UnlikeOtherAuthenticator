@@ -256,6 +256,7 @@ describe('first-login.service', () => {
 describe('buildSessionChoices', () => {
   it('returns empty choices when the user cannot be found', async () => {
     const prisma = {
+      orgMember: { findMany: vi.fn(async () => []) },
       user: { findUnique: vi.fn(async () => null) },
       teamMember: { findMany: vi.fn() },
       teamInvite: { findMany: vi.fn() },
@@ -277,6 +278,7 @@ describe('buildSessionChoices', () => {
 
   it('only queries ACTIVE team memberships — DEACTIVATED/REMOVED never surface', async () => {
     const prisma = {
+      orgMember: { findMany: vi.fn(async () => []) },
       user: { findUnique: vi.fn(async () => ({ email: 'jane@acme.com' })) },
       teamMember: {
         findMany: vi.fn(async () => [
@@ -340,7 +342,7 @@ describe('buildSessionChoices', () => {
             orgId: true,
             iconUrl: true,
             updatedAt: true,
-            org: { select: { name: true } },
+            org: { select: { name: true, ownerId: true } },
           },
         },
       },
@@ -349,6 +351,7 @@ describe('buildSessionChoices', () => {
 
   it('maps pending invites, naming the organisation and resolving the inviter', async () => {
     const prisma = {
+      orgMember: { findMany: vi.fn(async () => []) },
       user: {
         findUnique: vi.fn(async () => ({ email: 'jane@acme.com' })),
         // The inviter of a member-initiated invitation is recorded as a user id alone.
@@ -431,11 +434,13 @@ describe('buildSessionChoices', () => {
 
   it('reaches an all-memberships product’s other organisations for invitations too', async () => {
     const prisma = {
+      orgMember: { findMany: vi.fn(async () => []) },
       user: { findUnique: vi.fn(async () => ({ email: 'jane@acme.com' })), findMany: vi.fn() },
       teamMember: { findMany: vi.fn(async () => []) },
       teamInvite: { findMany: vi.fn(async () => []) },
     };
     const crossProductPrisma = {
+      orgMember: { findMany: vi.fn(async () => []) },
       user: { findUnique: vi.fn(), findMany: vi.fn() },
       teamMember: { findMany: vi.fn(async () => []) },
       teamInvite: { findMany: vi.fn(async () => []) },
@@ -463,11 +468,13 @@ describe('buildSessionChoices', () => {
 
   it('lists all exact ACTIVE memberships for one centrally bound product', async () => {
     const prisma = {
+      orgMember: { findMany: vi.fn(async () => []) },
       user: { findUnique: vi.fn(async () => ({ email: 'jane@acme.com' })) },
       teamMember: { findMany: vi.fn(async () => []) },
       teamInvite: { findMany: vi.fn(async () => []) },
     };
     const crossProductPrisma = {
+      orgMember: { findMany: vi.fn(async () => []) },
       user: { findUnique: vi.fn() },
       teamMember: {
         findMany: vi.fn(async () => [
@@ -536,7 +543,7 @@ describe('buildSessionChoices', () => {
             orgId: true,
             iconUrl: true,
             updatedAt: true,
-            org: { select: { name: true } },
+            org: { select: { name: true, ownerId: true } },
           },
         },
       },

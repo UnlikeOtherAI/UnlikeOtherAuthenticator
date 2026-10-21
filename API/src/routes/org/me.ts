@@ -19,6 +19,7 @@ import {
 import { resolveProductTeamPolicy } from '../../services/product-team-policy.service.js';
 import { AppError } from '../../utils/errors.js';
 import { configVerifier } from '../../middleware/config-verifier.js';
+import { memberAvatarImageUrl } from '../../services/organisation.service.base.js';
 import { assertVerifiedDomainMatchesQuery, normalizeDomain } from './domain-context.js';
 
 const QuerySchema = z
@@ -84,6 +85,7 @@ export function registerOrgMeRoute(app: FastifyInstance): void {
             userId: claims.userId,
             domain: normalizedDomain,
             config,
+            assuranceId: claims.assuranceId,
             ...(claims.org?.org_id ? { orgId: claims.org.org_id } : {}),
           },
           { prisma },
@@ -100,6 +102,7 @@ export function registerOrgMeRoute(app: FastifyInstance): void {
               userId: claims.userId,
               domain: normalizedDomain,
               orgId: selectedOrgId,
+              assuranceId: claims.assuranceId,
               groupsEnabled: config.org_features?.groups_enabled,
             },
             { prisma },
@@ -136,9 +139,16 @@ export function registerOrgMeRoute(app: FastifyInstance): void {
         return { ...context, team_directory: teamDirectory, pending_invites: pendingInvites };
       }, { userEpochLock: 'shared' });
 
-      const response: { ok: true; system_admin: boolean; org?: typeof org } = {
+      const self = await request.adminDb.user.findUniqueOrThrow({ where: { id: claims.userId },
+        select: { id: true, name: true, email: true, lifecycleStatus: true } });
+      if (self.lifecycleStatus !== 'ACTIVE') throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
+      const response: { ok: true; system_admin: boolean; org?: typeof org; self_identity: {
+        subject: string; display_name: string | null; email: string | null; avatar_image_url: string;
+      } } = {
         ok: true,
         system_admin: systemAdmin,
+        self_identity: { subject: self.id, display_name: self.name, email: self.email,
+          avatar_image_url: memberAvatarImageUrl(normalizedDomain, self.id) },
       };
       if (org) response.org = org;
 

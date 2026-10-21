@@ -601,6 +601,9 @@ model VerificationToken {
   usedAt       DateTime?             @map("used_at")
   attemptCount Int                   @default(0) @map("attempt_count")
   actionDigest String?               @map("action_digest")
+  actionAssuranceId String? @map("action_assurance_id")
+  actionOrgId String? @map("action_org_id")
+  actionTeamId String? @map("action_team_id")
   createdAt    DateTime              @default(now()) @map("created_at")
 
   // Snapshot of User.tokenVersion when an existing-user capability is issued.
@@ -657,6 +660,8 @@ model AuthorizationCode {
   @@index([expiresAt])
   @@index([createdAt])
   @@map("authorization_codes")
+  authenticationEvidenceId String? @map("authentication_evidence_id")
+
 }
 
 // One-time use ledger for confidential subject assertions. The source-provided
@@ -736,6 +741,7 @@ model NativeOAuthFlow {
   browserHash String @map("browser_hash")
   context Json
   userId String? @map("user_id")
+  authenticationEvidenceId String? @map("authentication_evidence_id")
   credentialEpoch Int? @map("credential_epoch")
   callbackUsedAt DateTime? @map("callback_used_at")
   usedAt DateTime? @map("used_at")
@@ -745,6 +751,8 @@ model NativeOAuthFlow {
 }
 
 model RefreshToken {
+  assuranceId String? @map("assurance_id")
+  encryptedAssuranceReference String? @map("encrypted_assurance_reference")
   id                String    @id @default(cuid())
   tokenHash         String    @unique @map("token_hash")
   familyId          String    @map("family_id")
@@ -1024,6 +1032,8 @@ model SigningContinuation {
   @@index([userId, domain])
   @@index([expiresAt])
   @@map("signing_continuations")
+  authenticationEvidenceId String? @map("authentication_evidence_id")
+
 }
 
 model SignatureClaimIntent {
@@ -1518,6 +1528,7 @@ model Team {
 
   @@unique([orgId, name])
   @@unique([orgId, slug])
+  @@unique([id, orgId])
   @@index([orgId])
   @@index([groupId])
   @@map("teams")
@@ -5183,6 +5194,474 @@ model BillingSmsPolicyAlert {
   @@map("billing_sms_policy_alerts")
 }
 
+model OrgSsoPolicy {
+  recoveryRevision Int @default(1) @map("recovery_revision")
+  arrangementEnabled Boolean @default(false) @map("arrangement_enabled")
+  clientDomain String @map("client_domain")
+  orgId String @map("org_id")
+  revision Int @default(1)
+  generation Int @default(1)
+  enforcement String @default("off")
+  sessionMaxAgeSeconds Int @default(28800) @map("session_max_age_seconds")
+  reauthMode String @default("detect_only") @map("reauth_mode")
+  allowUnverifiedContractors Boolean @default(false) @map("allow_unverified_contractors")
+  groupMappings Json @default("[]") @map("group_mappings")
+  jitEnabled Boolean @default(false) @map("jit_enabled")
+  defaultTeamId String? @map("default_team_id")
+  discoveryEnabled Boolean @default(false) @map("discovery_enabled")
+  connections OrgSsoConnection[]
+  @@id([clientDomain, orgId])
+  @@map("org_sso_policies")
+}
+
+model OrgSsoConnection {
+  activatedAt DateTime? @map("activated_at")
+  encryptedNextSecret String? @map("encrypted_next_secret")
+  encryptedPreviousSecret String? @map("encrypted_previous_secret")
+  keyOverlapExpiresAt DateTime? @map("key_overlap_expires_at")
+  id String @id @default(cuid())
+  clientDomain String @map("client_domain")
+  orgId String @map("org_id")
+  preset String
+  protocol String
+  displayName String @map("display_name")
+  status String @default("draft")
+  revision Int @default(1)
+  generation Int @default(1)
+  scimEnabled Boolean @default(false) @map("scim_enabled")
+  scimRevision Int @default(1) @map("scim_revision")
+  configuration Json
+  encryptedSecret String? @map("encrypted_secret")
+  publicSigningCertificates String[] @default([]) @map("public_signing_certificates")
+  testedRevision Int? @map("tested_revision")
+  lastTestCode String? @map("last_test_code")
+  lastTestAt DateTime? @map("last_test_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  policy OrgSsoPolicy @relation(fields:[clientDomain,orgId],references:[clientDomain,orgId],onDelete:Restrict)
+  identities ExternalIdentity[]
+  scimResources ScimResourceLink[]
+  scimTokens ScimConnectionToken[]
+  @@unique([id,clientDomain,orgId])
+  @@map("org_sso_connections")
+}
+
+model OrganisationEmailDomain {
+  lastVerifiedAt DateTime? @map("last_verified_at")
+  id String @id @default(cuid())
+  clientDomain String @map("client_domain")
+  orgId String @map("org_id")
+  emailDomain String @map("email_domain")
+  status String @default("PENDING")
+  challengeHash String @map("challenge_hash")
+  challengeExpiresAt DateTime @map("challenge_expires_at")
+  verifiedAt DateTime? @map("verified_at")
+  checkedAt DateTime? @map("checked_at")
+  failures Int @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+  @@index([clientDomain,emailDomain,status])
+  @@map("organisation_email_domains")
+}
+
+model ExternalIdentity {
+  id String @id @default(cuid())
+  userId String @map("user_id")
+  connectionId String @map("connection_id")
+  clientDomain String @map("client_domain")
+  orgId String @map("org_id")
+  issuer String
+  tenant String
+  subject String
+  identityScope String @map("identity_scope")
+  status String @default("ACTIVE")
+  linkedVia String @map("linked_via")
+  proofAssuranceId String? @map("proof_assurance_id")
+  proofAuthenticationEvidenceId String? @map("proof_authentication_evidence_id")
+  domainClaimId String? @map("domain_claim_id")
+  lastAuthenticatedAt DateTime? @map("last_authenticated_at")
+  connection OrgSsoConnection @relation(fields:[connectionId,clientDomain,orgId],references:[id,clientDomain,orgId],onDelete:Restrict)
+  @@unique([connectionId,issuer,tenant,subject])
+  @@map("external_identities")
+}
+
+model OrgSsoPersonalFactorChallenge {
+  id String @id @default(cuid())
+  tokenHash String @unique @map("token_hash")
+  linkIntentId String @map("link_intent_id")
+  browserHash String @map("browser_hash")
+  userId String? @map("user_id")
+  credentialEpoch Int? @map("credential_epoch")
+  authenticationEvidenceId String? @map("authentication_evidence_id")
+  attempts Int @default(0)
+  expiresAt DateTime @map("expires_at")
+  consumedAt DateTime? @map("consumed_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@index([expiresAt])
+  @@map("org_sso_personal_factor_challenges")
+}
+
+model SessionAssurance {
+  id String @id @default(cuid())
+  referenceHash String @unique @map("reference_hash")
+  userId String @map("user_id")
+  credentialEpoch Int @map("credential_epoch")
+  clientDomain String @map("client_domain")
+  orgId String? @map("org_id")
+  teamId String? @map("team_id")
+  familyId String @map("family_id")
+  parentId String? @map("parent_id")
+  connectionId String? @map("connection_id")
+  connectionRevision Int? @map("connection_revision")
+  connectionGeneration Int? @map("connection_generation")
+  externalIdentityId String? @map("external_identity_id")
+  method String
+  observedAt DateTime @map("observed_at")
+  authenticatedAt DateTime? @map("authenticated_at")
+  mfaSource String @map("mfa_source")
+  amr String[]
+  acr String?
+  policyGeneration Int @default(0) @map("policy_generation")
+  expiresAt DateTime @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  @@index([familyId])
+  @@index([clientDomain,orgId,userId])
+  @@map("session_assurances")
+}
+
+model OrgSsoManagementSession {
+  id String @id @default(cuid())
+  tokenHash String @unique @map("token_hash")
+  browserHash String? @map("browser_hash")
+  csrfHash String? @map("csrf_hash")
+  userId String @map("user_id")
+  credentialEpoch Int @map("credential_epoch")
+  assuranceId String? @map("assurance_id")
+  authenticationEvidenceId String? @map("authentication_evidence_id")
+  initiatingBrowserHash String? @map("initiating_browser_hash")
+  clientDomain String @map("client_domain")
+  orgId String @map("org_id")
+  authenticatedAt DateTime @map("authenticated_at")
+  expiresAt DateTime @map("expires_at")
+  exchangedAt DateTime? @map("exchanged_at")
+  revokedAt DateTime? @map("revoked_at")
+  @@index([expiresAt])
+  @@map("org_sso_management_sessions")
+}
+
+model OrgSsoFlow {
+  id String @id
+  connectionId String @map("connection_id")
+  revision Int
+  browserHash String @map("browser_hash")
+  nonce String
+  encryptedVerifier String @map("encrypted_verifier")
+  mode String
+  managementSessionId String? @map("management_session_id")
+  context Json
+  expiresAt DateTime @map("expires_at")
+  consumedAt DateTime? @map("consumed_at")
+  @@index([expiresAt])
+  @@map("org_sso_flows")
+}
+
+model OrgSsoReplay {
+  key String @id
+  value String
+  expiresAt DateTime @map("expires_at")
+  @@index([expiresAt])
+  @@map("org_sso_replays")
+}
+
+model OrgSsoGrant {
+  id String @id @default(cuid())
+  userId String @map("user_id")
+  orgId String @map("org_id")
+  teamId String? @map("team_id")
+  connectionId String @map("connection_id")
+  source String
+  resourceId String @map("resource_id")
+  role String @default("member")
+  revokedAt DateTime? @map("revoked_at")
+  @@unique([connectionId,resourceId,userId,orgId])
+  @@map("org_sso_grants")
+}
+
+model ScimResourceLink {
+  id String @id @default(cuid())
+  connectionId String @map("connection_id")
+  clientDomain String @map("client_domain")
+  orgId String @map("org_id")
+  resourceType String @map("resource_type")
+  externalId String? @map("external_id")
+  subjectBinding String? @map("subject_binding")
+  userId String? @map("user_id")
+  attributes Json
+  active Boolean @default(true)
+  deletedAt DateTime? @map("deleted_at")
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  connection OrgSsoConnection @relation(fields:[connectionId,clientDomain,orgId],references:[id,clientDomain,orgId],onDelete:Restrict)
+  @@unique([connectionId,resourceType,externalId])
+  @@unique([connectionId,resourceType,subjectBinding])
+  @@map("scim_resource_links")
+}
+
+model ExternalIdentityTombstone {
+  id String @id @default(cuid())
+  connectionId String @map("connection_id")
+  clientDomain String @map("client_domain")
+  orgId String @map("org_id")
+  tupleHash String @unique @map("tuple_hash")
+  reason String
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("external_identity_tombstones")
+}
+
+model EnterpriseRecoveryContact {
+  id String @id @default(cuid())
+  clientDomain String @map("client_domain")
+  orgId String @map("org_id")
+  userId String @map("user_id")
+  policyRevision Int @map("policy_revision")
+  credentialEpoch Int @map("credential_epoch")
+  factorHash String @map("factor_hash")
+  handleHash String @unique @map("handle_hash")
+  confirmedAt DateTime? @map("confirmed_at")
+  lastDrillAt DateTime? @map("last_drill_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@index([clientDomain,orgId])
+  @@map("enterprise_recovery_contacts")
+}
+
+model EnterpriseRecoveryChallenge {
+  id String @id @default(cuid())
+  contactId String @map("contact_id")
+  tokenHash String @unique @map("token_hash")
+  browserHash String @map("browser_hash")
+  purpose String
+  attempts Int @default(0)
+  expiresAt DateTime @map("expires_at")
+  consumedAt DateTime? @map("consumed_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@index([expiresAt])
+  @@map("enterprise_recovery_challenges")
+}
+
+model EnterpriseRecoveryAction {
+  provenance String @default("sso_recovery")
+  globalAccountControl Boolean @default(false) @map("global_account_control")
+  id String @id @default(cuid())
+  contactId String @map("contact_id")
+  clientDomain String @map("client_domain")
+  orgId String @map("org_id")
+  userId String @map("user_id")
+  credentialEpoch Int @map("credential_epoch")
+  purpose String
+  authenticatedAt DateTime @map("authenticated_at")
+  browserHash String @map("browser_hash")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@index([createdAt])
+  @@map("enterprise_recovery_actions")
+}
+
+model ScimConnectionToken {
+  id String @id @default(cuid())
+  tokenHash String @unique @map("token_hash")
+  connectionId String @map("connection_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  expiresAt DateTime @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  connection OrgSsoConnection @relation(fields:[connectionId],references:[id],onDelete:Restrict)
+  @@map("scim_connection_tokens")
+}
+
+model OrgRevocationEvent {
+  sequence BigInt @id @default(autoincrement())
+  id String @unique @default(cuid())
+  clientDomain String @map("client_domain")
+  scope String
+  orgId String? @map("org_id")
+  teamId String? @map("team_id")
+  userId String? @map("user_id")
+  connectionId String? @map("connection_id")
+  revision Int
+  occurredAt DateTime @default(now()) @map("occurred_at")
+  @@index([clientDomain,sequence])
+  @@map("org_revocation_events")
+}
+
+model OrgRevocationConsumer {
+  capabilityVersion Int @default(0) @map("capability_version")
+  clientDomain String @id @map("client_domain")
+  destination String
+  keyId String @map("key_id")
+  encryptedSecret String @map("encrypted_secret")
+  deliveredSequence BigInt @default(0) @map("delivered_sequence")
+  enabled Boolean @default(false)
+  readyChallengeHash String? @map("ready_challenge_hash")
+  readyChallengeExpiresAt DateTime? @map("ready_challenge_expires_at")
+  acknowledgedAt DateTime? @map("acknowledged_at")
+  nextAttemptAt DateTime @default(now()) @map("next_attempt_at")
+  failureCount Int @default(0) @map("failure_count")
+  retentionSequence BigInt @default(0) @map("retention_sequence")
+  @@map("org_revocation_consumers")
+}
+
+model OrgRevocationDelivery {
+  clientDomain String @map("client_domain")
+  eventId String @map("event_id")
+  keyId String @map("key_id")
+  deliveredAt DateTime @default(now()) @map("delivered_at")
+  @@id([clientDomain,eventId])
+  @@map("org_revocation_deliveries")
+}
+
+model EnterpriseProductReadiness {
+  loginEntryUrl String? @map("login_entry_url")
+  configUrl String? @map("config_url")
+  clientDomain String @id @map("client_domain")
+  minimumAssuranceVersion Int @default(0) @map("minimum_assurance_version")
+  authorityMigrationRevision String? @map("authority_migration_revision")
+  revocationConsumersRevision String? @map("revocation_consumers_revision")
+  recoveryDesignRevision String? @map("recovery_design_revision")
+  retentionSequence BigInt @default(0) @map("retention_sequence")
+  @@map("enterprise_product_readiness")
+}
+
+// Durable authentication evidence predates and does not depend on a product refresh family.
+model AuthenticationEvidence {
+  id String @id @default(cuid())
+  parentId String? @map("parent_id")
+  referenceHash String @unique @map("reference_hash") @db.Char(64)
+  userId String @map("user_id")
+  credentialEpoch Int @map("credential_epoch")
+  clientDomain String @map("client_domain")
+  method String @db.VarChar(32)
+  provenance String @db.VarChar(32)
+  amr String[] @default([])
+  acr String?
+  authenticatedAt DateTime? @map("authenticated_at")
+  observedAt DateTime @map("observed_at")
+  connectionId String? @map("connection_id")
+  externalIdentityId String? @map("external_identity_id")
+  policyGeneration Int? @map("policy_generation")
+  sessionDeadline DateTime? @map("session_deadline")
+  connectionRevision Int? @map("connection_revision")
+  connectionGeneration Int? @map("connection_generation")
+  orgId String? @map("org_id")
+  teamId String? @map("team_id")
+  purpose String @db.VarChar(32)
+  actionBinding String @map("action_binding")
+  browserHash String? @map("browser_hash") @db.Char(64)
+  mfaCompletedAt DateTime? @map("mfa_completed_at")
+  signatureCompletedAt DateTime? @map("signature_completed_at")
+  expiresAt DateTime @map("expires_at")
+  consumedAt DateTime? @map("consumed_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@index([userId, expiresAt])
+  @@index([expiresAt])
+  @@map("authentication_evidence")
+}
+
+model OrgSsoManagementIntent {
+  id String @id @default(cuid())
+  userId String @map("user_id")
+  credentialEpoch Int @map("credential_epoch")
+  clientDomain String @map("client_domain")
+  orgId String @map("org_id")
+  authenticationEvidenceId String @map("authentication_evidence_id")
+  browserHash String @map("browser_hash") @db.Char(64)
+  expiresAt DateTime @map("expires_at")
+  consumedAt DateTime? @map("consumed_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@index([expiresAt])
+  @@map("org_sso_management_intents")
+}
+
+model MembershipContribution {
+  id String @id @default(cuid())
+  userId String @map("user_id")
+  orgId String @map("org_id")
+  teamId String? @map("team_id")
+  scopeKey String @map("scope_key")
+  sourceKind String @map("source_kind")
+  sourceId String @map("source_id")
+  clientDomain String? @map("client_domain")
+  connectionId String? @map("connection_id")
+  resourceIds String[] @default([]) @map("resource_ids")
+  role String
+  active Boolean @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  @@unique([orgId,userId,scopeKey,sourceKind,sourceId])
+  @@index([connectionId,userId,active])
+  @@map("membership_contributions")
+}
+model MembershipSuppression {
+  id String @id @default(cuid())
+  userId String @map("user_id")
+  orgId String @map("org_id")
+  scopeKey String @map("scope_key")
+  reason String
+  createdAt DateTime @default(now()) @map("created_at")
+  @@unique([orgId,userId,scopeKey])
+  @@map("membership_suppressions")
+}
+model OrgSsoLinkIntent {
+  candidateUserIds String[] @default([]) @map("candidate_user_ids")
+  id String @id @default(cuid())
+  connectionId String @map("connection_id")
+  revision Int
+  generation Int
+  clientDomain String @map("client_domain")
+  orgId String @map("org_id")
+  flowId String @unique @map("flow_id")
+  browserHash String @map("browser_hash")
+  identity Json
+  context Json
+  expiresAt DateTime @map("expires_at")
+  consumedAt DateTime? @map("consumed_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@index([expiresAt])
+  @@map("org_sso_link_intents")
+}
+
+model OrgSsoRelyingIntent {
+  id String @id @default(cuid())
+  tokenHash String @unique @map("token_hash")
+  clientDomain String @map("client_domain")
+  connectionId String @map("connection_id")
+  revision Int
+  generation Int
+  expiresAt DateTime @map("expires_at")
+  consumedAt DateTime? @map("consumed_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@index([expiresAt])
+  @@map("org_sso_relying_intents")
+}
+
+model OrgSsoManagementFactorChallenge {
+  id String @id @default(cuid())
+  tokenHash String @unique @map("token_hash")
+  browserHash String @map("browser_hash")
+  clientDomain String @map("client_domain")
+  orgId String @map("org_id")
+  userId String? @map("user_id")
+  credentialEpoch Int? @map("credential_epoch")
+  factorHash String? @map("factor_hash")
+  configUrl String @map("config_url")
+  configFingerprint String @map("config_fingerprint")
+  context Json
+  attempts Int @default(0)
+  expiresAt DateTime @map("expires_at")
+  consumedAt DateTime? @map("consumed_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@index([expiresAt])
+  @@map("org_sso_management_factor_challenges")
+}
 
 /// Contact proof only. Never an authentication factor or caller-ID authorization.
 model UserTelephone {

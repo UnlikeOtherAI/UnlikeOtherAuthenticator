@@ -1,5 +1,6 @@
 import { teamTelephoneNumbers } from './telephone-directory.service.js';
 import type { MembershipStatus } from '@prisma/client';
+import { createHash } from 'node:crypto';
 
 import type { ClientConfig } from './config.service.js';
 import { AppError } from '../utils/errors.js';
@@ -63,6 +64,8 @@ export type TeamRosterMember = {
   /** Canonical roster role; `teamRole` remains for existing consumers. */
   role: string;
   teamRole: string;
+  /** Current active membership in this exact organisation; null after withdrawal. */
+  orgRole: string | null;
   status: MembershipStatus;
   createdAt: Date;
   updatedAt: Date;
@@ -119,6 +122,7 @@ function toTeamRosterMember(
   },
   domain: string,
   includeEmail: boolean,
+  orgRole: string | null,
   telephoneNumber?: string,
 ): TeamRosterMember {
   const avatarImageUrl = memberAvatarImageUrl(domain, row.user.id);
@@ -136,6 +140,7 @@ function toTeamRosterMember(
     },
     role: row.teamRole,
     teamRole: row.teamRole,
+    orgRole,
     status: row.status,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -206,6 +211,7 @@ export async function listTeamMembers(
     cursor?: string;
     direction?: RosterDirection;
     status?: MembershipStatus | 'all';
+    subjectIds?: string[];
   },
   deps?: OrgServiceDeps,
 ): Promise<TeamRosterPage> {
@@ -230,24 +236,33 @@ export async function listTeamMembers(
   const limit = toListLimit(params.limit);
   const direction = params.direction ?? 'forward';
   const status = params.status ?? 'ACTIVE';
-  const binding = `team:${team.id}:status:${status}`;
+  if (params.subjectIds && (params.subjectIds.length > 100 || params.subjectIds.some((id) => !id || id.length > 256))) {
+    throw new AppError('BAD_REQUEST', 400, 'ROSTER_SUBJECT_FILTER_INVALID');
+  }
+  const subjectIds = params.subjectIds ? [...new Set(params.subjectIds)].sort() : undefined;
+  const subjectBinding = subjectIds ? `:subjects:${createHash('sha256').update(JSON.stringify(subjectIds)).digest('hex')}` : '';
+  const binding = `team:${team.id}:status:${status}${subjectBinding}`;
   const cursor = params.cursor
     ? decodeRosterCursor(params.cursor, env.SHARED_SECRET, binding)
     : undefined;
   const statusWhere = status === 'all' ? {} : { status };
+  const subjectWhere = subjectIds ? { userId: { in: subjectIds } } : {};
   const [rows, total] = await Promise.all([
     prisma.teamMember.findMany({
-      where: { teamId: team.id, ...statusWhere, ...rosterKeysetWhere(cursor, direction) },
+      where: { teamId: team.id, ...statusWhere, ...subjectWhere, ...rosterKeysetWhere(cursor, direction) },
       orderBy: rosterOrder(direction),
       take: limit + 1,
       select: TEAM_ROSTER_SELECT,
     }),
-    prisma.teamMember.count({ where: { teamId: team.id, ...statusWhere } }),
+    prisma.teamMember.count({ where: { teamId: team.id, ...statusWhere, ...subjectWhere } }),
   ]);
 
   const hasMore = rows.length > limit;
   const pageRows = rows.slice(0, limit);
   const displayRows = direction === 'backward' ? [...pageRows].reverse() : pageRows;
+  const memberships = await prisma.orgMember.findMany({ where: { orgId: org.id, status: 'ACTIVE',
+    userId: { in: displayRows.map((row) => row.userId) } }, select: { userId: true, role: true } });
+  const orgRoles = new Map(memberships.map((row) => [row.userId, row.role]));
   const meta = rosterPaginationMeta({
     direction,
     rows: displayRows,
@@ -261,7 +276,8 @@ export async function listTeamMembers(
     userIds: displayRows.filter(row => row.status === 'ACTIVE').map(row => row.userId) });
   return {
     data: displayRows.map((row) =>
-      toTeamRosterMember(row, org.domain, permissions.viewMemberEmail, telephones.get(row.userId)),
+      toTeamRosterMember(row, org.domain, permissions.viewMemberEmail,
+        orgRoles.get(row.userId) ?? null, telephones.get(row.userId)),
     ),
     total,
     meta,

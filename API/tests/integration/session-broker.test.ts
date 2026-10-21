@@ -1,3 +1,5 @@
+import { issueRefreshToken } from '../../src/services/refresh-token.service.js';
+import { issueSessionAssurance } from '../../src/services/session-assurance.service.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { exportJWK, generateKeyPair } from 'jose';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -30,6 +32,7 @@ describe.skipIf(!process.env.DATABASE_URL)('durable Selkie broker validation', (
     resetAccessTokenKeyCache(); await db?.cleanup();
   });
   beforeEach(async () => {
+    await db.prisma.sessionAssurance.deleteMany(); await db.prisma.refreshToken.deleteMany();
     await db.prisma.ban.deleteMany(); await db.prisma.teamMember.deleteMany(); await db.prisma.orgMember.deleteMany();
     await db.prisma.team.deleteMany(); await db.prisma.organisation.deleteMany();
     await db.prisma.domainRole.deleteMany(); await db.prisma.user.deleteMany();
@@ -63,6 +66,19 @@ describe.skipIf(!process.env.DATABASE_URL)('durable Selkie broker validation', (
     expect(Object.keys(result).sort()).toEqual(['active', 'expires_at', 'sub']);
     expect(result.sub).toBe(userId); expect(result.active).toEqual({ orgId, teamId });
     expect(Date.parse(result.expires_at) - Date.now()).toBeLessThanOrEqual(300_000);
+  });
+  it('rechecks original proof revocation and caps broker expiry at its source deadline', async () => {
+    const familyId = randomUUID();
+    await issueRefreshToken({ userId, domain: source, clientId: 'broker', configUrl: `https://${source}/config`,
+      familyId, credentialEpoch: 0, orgId, teamId }, { prisma: db.prisma });
+    const issued = await db.prisma.$transaction(tx => issueSessionAssurance({ familyId, userId, clientDomain: source,
+      orgId, teamId, credentialEpoch: 0, method: 'independent', policyGeneration: 0,
+      authenticatedAt: new Date(), observedAt: new Date(), amr: ['email_password'], mfaSource: 'none',
+      expiresAt: new Date(Date.now() + 60000) }, tx));
+    const value = await token({ assuranceId: issued.assurance.id });
+    expect(Date.parse((await validate(value)).expires_at)).toBeLessThanOrEqual(issued.assurance.expiresAt.getTime());
+    await db.prisma.sessionAssurance.update({ where: { id: issued.assurance.id }, data: { revokedAt: new Date() } });
+    await expect(validate(value)).rejects.toThrow();
   });
   it('rejects a wrong confidential target, audience, source, scope, actor chain and tampered signature', async () => {
     await expect(validate(await token(), 'other.example')).rejects.toThrow();
@@ -106,6 +122,7 @@ describe.skipIf(!process.env.DATABASE_URL)('durable Selkie broker validation', (
     const value = await token();
     await db.prisma.ban.create({ data: { domain: 'api.selkie.live', type: 'USER', value: userId } });
     await expect(validate(value, 'api.selkie.live', false)).rejects.toThrow();
+    await db.prisma.sessionAssurance.deleteMany(); await db.prisma.refreshToken.deleteMany();
     await db.prisma.ban.deleteMany();
     const user = await db.prisma.user.findUniqueOrThrow({ where: { id: userId } });
     await db.prisma.ban.create({ data: { domain: 'api.selkie.live', type: 'EMAIL', value: user.email } });

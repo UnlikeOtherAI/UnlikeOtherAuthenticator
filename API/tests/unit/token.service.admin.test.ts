@@ -67,12 +67,14 @@ describe('admin-domain token issuance', () => {
     const redirectUrl = 'https://admin.example.com/oauth/callback';
 
     const prisma = {
+      enterpriseProductReadiness: { findUnique: vi.fn().mockResolvedValue(null) },
+      orgSsoPolicy: { findUnique: vi.fn().mockResolvedValue(null) },
       $queryRaw: vi.fn().mockResolvedValue([]),
       authorizationCode: {
         findUnique: vi.fn(),
         updateMany: vi.fn(),
       },
-      refreshToken: {
+      refreshToken: { findUnique: vi.fn().mockResolvedValue({ assuranceId: null }),
         create: vi.fn(),
       },
       user: {
@@ -154,9 +156,11 @@ describe('admin-domain token issuance', () => {
     const clientId = createClientId(config.domain, sharedSecret);
 
     const prisma = {
+      enterpriseProductReadiness: { findUnique: vi.fn().mockResolvedValue(null) },
+      orgSsoPolicy: { findUnique: vi.fn().mockResolvedValue(null) },
       $queryRaw: vi.fn().mockResolvedValue([]),
       authorizationCode: { findUnique: vi.fn(), updateMany: vi.fn() },
-      refreshToken: { create: vi.fn() },
+      refreshToken: { findUnique: vi.fn().mockResolvedValue({ assuranceId: null }), create: vi.fn() },
       user: { findUnique: vi.fn() },
       domainRole: { findUnique: vi.fn() },
       clientDomain: { findUnique: vi.fn().mockResolvedValue(null) },

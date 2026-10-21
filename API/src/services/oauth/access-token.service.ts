@@ -9,6 +9,7 @@ import { type JWK, type KeyLike, SignJWT, importJWK } from 'jose';
 
 import { getEnv } from '../../config/env.js';
 import { AppError } from '../../utils/errors.js';
+import type { PublicCredentialSource } from './credential-source.service.js';
 import type { OrgContext } from '../org-context.service.js';
 
 const ALG = 'RS256';
@@ -63,7 +64,7 @@ export async function getAccessTokenPublicJwks(): Promise<{ keys: JWK[] }> {
 }
 
 /** A connection capability has its own token class and contains no account profile. */
-type KelpieTicketClaims = {
+type KelpieTicketClaims = PublicCredentialSource & {
   subject: string; clientId: string; appId: string; resource: string; issuer: string;
   credentialEpoch: number; twoFaCompleted: boolean; issuedAt: number; expiresAt: number;
 };
@@ -84,14 +85,15 @@ async function signKelpieTicket(claims: KelpieTicketClaims, binding: Record<stri
   const { privateKey, kid } = await load();
   return new SignJWT({ ...binding, scope: 'kelpie.connect',
     client_id: claims.clientId, app_id: claims.appId, tv: claims.credentialEpoch,
-    twofa: claims.twoFaCompleted })
+    twofa: claims.twoFaCompleted, assurance_id: claims.assuranceId, authentication_evidence_id: claims.authenticationEvidenceId,
+    assurance_version: claims.assuranceId || claims.authenticationEvidenceId ? 1 : undefined })
     .setProtectedHeader({ alg: ALG, kid, typ: 'at+jwt' })
     .setIssuer(claims.issuer).setAudience(claims.resource).setSubject(claims.subject)
     .setJti(randomUUID()).setIssuedAt(claims.issuedAt).setExpirationTime(claims.expiresAt)
     .sign(privateKey);
 }
 
-export interface McpAccessTokenClaims {
+export interface McpAccessTokenClaims extends PublicCredentialSource {
   credentialEpoch: number;
   twoFaCompleted?: boolean;
   subject: string;
@@ -115,6 +117,8 @@ export async function signMcpAccessToken(claims: McpAccessTokenClaims): Promise<
     domain: claims.domain,
     client_id: claims.clientId,
     token_use: 'public_oauth',
+    assurance_id: claims.assuranceId, authentication_evidence_id: claims.authenticationEvidenceId,
+    assurance_version: claims.assuranceId || claims.authenticationEvidenceId ? 1 : undefined,
     tv: claims.credentialEpoch,
     twofa: claims.twoFaCompleted === true,
     role: claims.role,
@@ -158,6 +162,7 @@ export type ConfidentialActorChain = {
 };
 
 export type ConfidentialAccessTokenClaims = {
+  assuranceId?: string;
   subject: string;
   credentialEpoch: number;
   email: string;
@@ -200,6 +205,7 @@ export async function signConfidentialAccessToken(
   const { privateKey, kid } = await load();
   const payload: Record<string, unknown> = {
     tv: claims.credentialEpoch,
+    ...(claims.assuranceId ? { assurance_id: claims.assuranceId, assurance_version: 1 } : {}),
     email: claims.email,
     source_domain: claims.sourceDomain,
     azp: claims.sourceDomain,

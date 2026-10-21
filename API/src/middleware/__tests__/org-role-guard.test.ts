@@ -432,7 +432,7 @@ describe('requireOrgRole — domain-pairing backend mode', () => {
     });
     // The joined value went to the verifier as one opaque credential — it was
     // never split, and it never selected backend mode.
-    expect(verifyAccessTokenMock).toHaveBeenCalledWith('aaa.bbb.ccc, ddd.eee.fff');
+    expect(verifyAccessTokenMock).toHaveBeenCalledWith('aaa.bbb.ccc, ddd.eee.fff', { requirement: 'enterprise_org_access' });
     expect(request.orgBackendCaller).toBeUndefined();
   });
 

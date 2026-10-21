@@ -59,7 +59,7 @@ export async function createVoiceGrant(input: { request: BillingVoiceGrantReques
     throw new AppError('BAD_REQUEST', 400, 'BILLING_VOICE_GRANT_INVALID');
   }
   const actor = await verifySmsActor({ subject: input.request, actorToken: input.actorToken,
-    credential: input.credential, endpoint: '/billing/v1/voice/grants' });
+    credential: input.credential, endpoint: '/billing/v1/voice/grants' }, { prisma });
   await authorizeBillingCustomerAction({ credential: input.credential, actor,
     organisationId: input.request.organisation_id, teamId: input.request.team_id, userId: input.request.user_id,
     authorityScope: 'TEAM', operation: BILLING_CUSTOMER_ACTION.VOICE_DISPATCH_GRANT, request: input.request }, { prisma });

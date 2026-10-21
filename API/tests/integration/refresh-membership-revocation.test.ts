@@ -285,7 +285,7 @@ describe.skipIf(!hasDatabase)('team refresh-family revocation', () => {
     expect(result).toBe('pending');
   }
 
-  it('deactivation revokes exact-org families across every product plus legacy same-domain state', async () => {
+  it('deactivation revokes exact-org families across issuing products without attributing unscoped sessions', async () => {
     const team = await seedTeam();
     const productTokens = await Promise.all(
       productDomains.map((domain) =>
@@ -313,11 +313,14 @@ describe.skipIf(!hasDatabase)('team refresh-family revocation', () => {
     );
     const revoked = await handle.prisma.refreshToken.findMany({
       where: {
-        id: { in: [...productTokens.map((token) => token.refreshTokenId), legacy.refreshTokenId] },
+        id: { in: productTokens.map((token) => token.refreshTokenId) },
       },
       select: { revokedAt: true },
     });
     expect(revoked.every((row) => row.revokedAt !== null)).toBe(true);
+    expect((await handle.prisma.refreshToken.findUniqueOrThrow({
+      where: { id: legacy.refreshTokenId }, select: { revokedAt: true },
+    })).revokedAt).toBeNull();
     expect(
       await handle.prisma.refreshToken.findUniqueOrThrow({
         where: { id: unrelated.refreshTokenId },

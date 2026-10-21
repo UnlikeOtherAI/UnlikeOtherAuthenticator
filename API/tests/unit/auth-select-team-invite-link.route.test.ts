@@ -1,3 +1,4 @@
+import { legacyCredentialStores } from '../helpers/authentication-fixture.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ClientConfig } from '../../src/services/config.service.js';
@@ -155,6 +156,7 @@ async function mintLoginToken(userId: string): Promise<string> {
 
 describe('POST /auth/select-team invite-link redemption', () => {
   beforeEach(() => {
+    Object.assign(prismaMock, legacyCredentialStores());
     currentConfig = baseConfig();
     process.env.SHARED_SECRET = SHARED_SECRET;
     process.env.AUTH_SERVICE_IDENTIFIER = 'uoa-auth-service';

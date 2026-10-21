@@ -1,3 +1,4 @@
+import { recordIndependentAuthentication } from '../../services/authentication-evidence.service.js';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
@@ -84,8 +85,11 @@ export function registerOAuthLoginRoute(app: FastifyInstance): void {
           { prisma },
         );
 
+        const authenticationEvidenceId = await recordIndependentAuthentication({ userId, credentialEpoch, method: 'email_password',
+          verifiedEvent: { kind: 'local_credential' }, config, configUrl: 'urn:uoa:mcp',
+          redirectUrl: q.redirect_uri, codeChallenge: q.code_challenge }, prisma);
         const factor = await completePublicSecondFactor({
-          userId, credentialEpoch, twoFaEnabled, config, context: q,
+          userId, credentialEpoch, twoFaEnabled, config, context: q, authenticationEvidenceId, authMethod: 'email_password',
           code, setupToken: setup_token,
         }, prisma);
         if (factor.response) return { kind: 'factor' as const, response: factor.response };
@@ -99,6 +103,7 @@ export function registerOAuthLoginRoute(app: FastifyInstance): void {
           kind: 'ready' as const,
           input: {
             userId,
+            authenticationEvidenceId,
             domain: config.domain,
             oauthClientId: client.clientId,
             redirectUrl,

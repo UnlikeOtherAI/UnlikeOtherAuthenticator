@@ -15,7 +15,6 @@ export async function startPublicSocialFlow(context: PublicContext, reply: Fasti
   const browser = randomBytes(32).toString('base64url');
   const now = new Date();
   await getAdminPrisma().$transaction(async (tx) => {
-    await tx.nativeOAuthFlow.deleteMany({ where: { expiresAt: { lt: now } } });
     await tx.nativeOAuthFlow.create({ data: { id, browserHash: hash(browser), context, expiresAt: new Date(now.getTime() + duration) } });
   });
   reply.setCookie(cookieName(id), browser, { ...options, sameSite: 'lax', maxAge: duration / 1000 });

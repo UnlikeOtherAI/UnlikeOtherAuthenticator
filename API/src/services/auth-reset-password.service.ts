@@ -1,3 +1,4 @@
+import { assertMailboxCredentialAdmission } from './credential-admission.service.js';
 import { randomBytes } from 'node:crypto';
 
 import type { Prisma, PrismaClient } from '@prisma/client';
@@ -7,7 +8,7 @@ import type { ClientConfig } from './config.service.js';
 import { EMAIL_TOKEN_TTL_MS } from '../config/constants.js';
 import { getEnv, requireEnv } from '../config/env.js';
 import { getPrisma } from '../db/prisma.js';
-import { runInTransaction } from '../db/tenant-context.js';
+import { runEnterpriseAuthorityTransaction } from './enterprise-authority-transaction.service.js';
 import { AppError } from '../utils/errors.js';
 import { generateEmailToken, hashEmailToken } from '../utils/verification-token.js';
 import { extractEmailTheme } from './email-theme.service.js';
@@ -233,7 +234,7 @@ export async function resetPasswordWithToken(
   const tokenHash = (deps?.hashEmailToken ?? hashEmailToken)(params.token, sharedSecret);
   const passwordHash = await (deps?.hashPassword ?? hashPassword)(params.password);
 
-  const result = await runInTransaction(prisma as unknown as PrismaClient, async (tx) => {
+  const result = await runEnterpriseAuthorityTransaction(prisma as unknown as PrismaClient, async (tx) => {
     const tokenRow = await tx.verificationToken.findUnique({
       where: { tokenHash },
       select: {
@@ -268,6 +269,7 @@ export async function resetPasswordWithToken(
       now: decisionNow,
     });
 
+    await assertMailboxCredentialAdmission(epoch.userId, tx);
     await tx.user.update({
       where: { id: epoch.userId },
       data: { passwordHash },

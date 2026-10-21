@@ -1,3 +1,11 @@
+import { authenticationFixtureDb } from '../helpers/authentication-fixture.js';
+
+const routeDb = vi.hoisted(() => ({ current: undefined as ReturnType<typeof authenticationFixtureDb> | undefined }));
+vi.mock('../../src/db/prisma.js', () => ({
+  getPrisma: () => routeDb.current, getAdminPrisma: () => routeDb.current,
+  connectPrisma: async () => {}, disconnectPrisma: async () => {},
+}));
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LOGIN_SESSION_AUDIENCE } from '../../src/config/constants.js';
@@ -117,6 +125,8 @@ function baseConfig(overrides?: Partial<ClientConfig>): ClientConfig {
 
 describe('POST /auth/verify-email — team chooser wiring (gap-fix B Task 1, design §4.3)', () => {
   beforeEach(() => {
+    routeDb.current = authenticationFixtureDb();
+    process.env.DATABASE_URL = 'postgres://uoa-auth-route-fixture.invalid/db';
     currentConfig = baseConfig();
     validateVerifyEmailTokenMock.mockReset().mockResolvedValue('VERIFY_EMAIL_SET_PASSWORD');
     verifyEmailTokenMock.mockReset().mockResolvedValue({
@@ -138,6 +148,7 @@ describe('POST /auth/verify-email — team chooser wiring (gap-fix B Task 1, des
   });
 
   afterEach(() => {
+    Reflect.deleteProperty(process.env, 'DATABASE_URL');
     vi.restoreAllMocks();
   });
 
@@ -205,6 +216,7 @@ describe('POST /auth/verify-email — team chooser wiring (gap-fix B Task 1, des
   });
 
   it('pre-binds the recognized product team before required email-link enrollment', async () => {
+    routeDb.current = authenticationFixtureDb({ twoFaEnabled: false });
     currentConfig = baseConfig({
       '2fa_enabled': true,
       login_flow: { email_code_enabled: false, team_selection: 'off' },
@@ -295,6 +307,7 @@ describe('POST /auth/verify-email — team chooser wiring (gap-fix B Task 1, des
     // auth-service identifier, or the bridge fails verification at /auth/select-team.
     expect(signLoginSessionMock).toHaveBeenCalledWith(
       expect.objectContaining({ audience: LOGIN_SESSION_AUDIENCE }),
+      expect.objectContaining({ prisma: expect.anything(), verifiedEvent: { kind: 'local_credential' } }),
     );
   });
 
@@ -383,6 +396,7 @@ describe('POST /auth/verify-email — team chooser wiring (gap-fix B Task 1, des
   });
 
   it('exact-one auto-skip carries team into required 2FA enrollment', async () => {
+    routeDb.current = authenticationFixtureDb({ twoFaEnabled: false });
     currentConfig = baseConfig({
       '2fa_enabled': true,
       login_flow: { email_code_enabled: false, team_selection: 'auto' },

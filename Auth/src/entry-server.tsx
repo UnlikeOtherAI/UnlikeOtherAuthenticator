@@ -24,6 +24,7 @@ export async function render(_params: {
       configUrl={_params.configUrl}
       accessStatusEnabled={_params.accessStatusEnabled}
       initialSearch={initialSearch}
+      pathname={_params.url?.split('?')[0]}
     />,
   );
 }

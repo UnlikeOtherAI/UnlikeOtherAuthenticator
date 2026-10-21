@@ -40,6 +40,8 @@ describe('required team placement during token exchange', () => {
     } as ClientConfig;
     let placed = false;
     const prisma = {
+      enterpriseProductReadiness: { findUnique: vi.fn().mockResolvedValue(null) },
+      orgSsoPolicy: { findUnique: vi.fn().mockResolvedValue(null) },
       $queryRaw: vi.fn().mockResolvedValue([{ id: 'user-new' }]),
       authorizationCode: {
         findUnique: vi.fn().mockResolvedValue({
@@ -78,7 +80,7 @@ describe('required team placement during token exchange', () => {
         ),
         findMany: vi.fn(async () => (placed ? [{ orgId: 'org-new', role: 'owner' }] : [])),
       },
-      refreshToken: { create: vi.fn().mockResolvedValue({ id: 'refresh-new' }) },
+      refreshToken: { findUnique: vi.fn().mockResolvedValue({ assuranceId: null }), create: vi.fn().mockResolvedValue({ id: 'refresh-new' }) },
       team: {
         findUnique: vi.fn().mockResolvedValue({ lifecycleStatus: 'ACTIVE', orgId: 'org-new' }),
         findFirst: vi.fn().mockResolvedValue(null),
@@ -166,6 +168,8 @@ describe('required team placement during token exchange', () => {
     } as ClientConfig;
     const createOrganisation = vi.fn();
     const prisma = {
+      enterpriseProductReadiness: { findUnique: vi.fn().mockResolvedValue(null) },
+      orgSsoPolicy: { findUnique: vi.fn().mockResolvedValue(null) },
       $queryRaw: vi.fn().mockResolvedValue([{ id: 'user-member' }]),
       organisation: {
         findUnique: vi.fn().mockResolvedValue({ lifecycleStatus: 'ACTIVE' }), create: createOrganisation },
@@ -174,6 +178,7 @@ describe('required team placement during token exchange', () => {
       user: { findUnique: vi.fn().mockResolvedValue({ email: 'member@example.com' }) },
     } as unknown as PrismaClient;
     const teamPrisma = {
+      orgMember: { findMany: vi.fn().mockResolvedValue([]) },
       billingAppKey: {
         findMany: vi
           .fn()
@@ -216,6 +221,8 @@ describe('required team placement during token exchange', () => {
     const createOrganisation = vi.fn();
     const createTeam = vi.fn();
     const prisma = {
+      enterpriseProductReadiness: { findUnique: vi.fn().mockResolvedValue(null) },
+      orgSsoPolicy: { findUnique: vi.fn().mockResolvedValue(null) },
       $queryRaw: vi.fn().mockResolvedValue([{ id: 'user-tombstone' }]),
       billingAppKey: { findMany: vi.fn() },
       clientDomain: { findUnique: vi.fn().mockResolvedValue({ status: 'inactive' }) },
@@ -258,6 +265,8 @@ describe('required team placement during token exchange', () => {
 
   it('preserves a legacy off-flow as unscoped when an active team already satisfies placement', async () => {
     const prisma = {
+      enterpriseProductReadiness: { findUnique: vi.fn().mockResolvedValue(null) },
+      orgSsoPolicy: { findUnique: vi.fn().mockResolvedValue(null) },
       $queryRaw: vi.fn().mockResolvedValue([]),
       billingAppKey: { findMany: vi.fn().mockResolvedValue([]) },
       clientDomain: { findUnique: vi.fn().mockResolvedValue({ status: 'active' }) },
@@ -356,6 +365,8 @@ describe('required team placement during token exchange', () => {
           : [];
 
       return {
+        enterpriseProductReadiness: { findUnique: vi.fn().mockResolvedValue(null) },
+        orgSsoPolicy: { findUnique: vi.fn().mockResolvedValue(null) },
         $queryRaw: vi.fn(async () => {
           if (lockOwner === id) return [{ id: 'user-race' }];
           if (lockOwner === null) {
@@ -395,6 +406,7 @@ describe('required team placement during token exchange', () => {
           }),
         },
         orgMember: {
+          findMany: vi.fn().mockResolvedValue([]),
           create: vi.fn().mockResolvedValue({ id: 'org-member-race' }),
           findFirst: vi.fn(
             async (args: { where: { org?: { domain?: string }; orgId?: string } }) => {

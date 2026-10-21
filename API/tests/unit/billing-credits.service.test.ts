@@ -56,8 +56,6 @@ function creditsData() {
     unresolvedTopUpCheckouts: [],
     unresolvedSetupCheckouts: [],
     autoTopUpChargedMinor: 0n,
-    prepaidReservations: [],
-    activeReservedMicrocredits: 0n,
   };
 }
 
