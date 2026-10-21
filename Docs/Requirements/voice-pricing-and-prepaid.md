@@ -90,3 +90,9 @@ unit cases. Database setup identified a missing runtime-key purpose constraint;
 the additive `20261021153000_voice_runtime_key` migration extends that constraint
 without weakening lifecycle-key return-origin requirements. Financial integration
 verification continues after that correction.
+
+The dedicated database uses Europe/London to expose timezone assumptions. It found
+that the existing customer-action intent guard compared UTC timestamp columns to
+session-local timestamptz values. `20261021154000_voice_timestamp_authority` makes
+that comparison explicitly UTC and gives new Voice evidence UTC defaults. Existing
+customer-action authority checks remain intact.
