@@ -50,6 +50,14 @@ describe('Voice activation policy', () => {
   ])('refuses unsupported billing or feature configuration %j', change => {
     expect(voicePolicySchema.safeParse({ ...policy, ...change }).success).toBe(false);
   });
+  it('accepts only the explicit fixed stream policy with disclosure and existing cutoff evidence', () => {
+    const stream = { ...policy, featureProfile: 'media_streams_fixed', ancillaryCharges: 'fixed_rate',
+      streamPricePerMinute: '0.0044', streamDisclosureVersion: 'v1', streamBillingBasis: 'nessie_duration_rounded_minute' };
+    expect(voicePolicySchema.safeParse(stream).success).toBe(true);
+    expect(voicePolicySchema.safeParse({ ...stream, cutoffEvidenceDigest: '' }).success).toBe(false);
+    expect(voicePolicySchema.safeParse({ ...stream, streamDisclosureVersion: '' }).success).toBe(false);
+    expect(voicePolicySchema.safeParse({ ...stream, streamPricePerMinute: '0' }).success).toBe(false);
+  });
   it('requires explicit enablement and unexpired evidence even with complete policy', () => {
     try {
       vi.stubEnv('BILLING_VOICE_POLICY_JSON', JSON.stringify(policy));

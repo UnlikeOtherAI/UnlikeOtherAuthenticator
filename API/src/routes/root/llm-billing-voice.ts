@@ -28,9 +28,30 @@ outcomes retain funds. Inbound CallSid reservations resolve through receipts, in
 Every reservation response contains reservation_id, dispatch_id, state, dispatch_token,
 reserved_credits, consumed_credits, call_sid, max_duration_seconds and claim_expires_at.
 
+For an explicitly configured fixed Media Streams tariff, quote/reserve add media_stream=true.
+Quote returns stream_tariff with USD price_per_minute, customer_price_per_minute (including frozen
+markup), rounding_seconds=60, max_streams=1, disclosure_version and basis=nessie_duration_rounded_minute.
+Show that fixed charge separately from connectivity and model usage. Reserve must echo
+stream_disclosure_version after disclosure. No stream is authorized by a connectivity-only quote.
+
+POST /billing/v1/voice/reservations/stream takes product, dispatch_id, request_fingerprint, call_sid,
+stream_sid, event=start|stop, started_at and stopped_at (null for start). Persist start before stop;
+retry exact evidence after timeout. Nessie must validate Twilio signatures/bindings and durably queue
+both events. This is trusted Nessie duration evidence, not a Twilio price receipt. Missing stop or
+start after claim keeps funds uncertain; overbounds retain reconciliation. /receipt fetches Call.price
+and adds the frozen fixed stream charge for each started rounded minute (minimum one).
+
+POST /billing/v1/voice/stream-reconciliation is an operator machine surface, never a member billing
+surface. Body: product, account_sid, billing_month, invoice=null or {id,amount_usd,reference}.
+It stores immutable operator-reported account Media Streams invoice totals; use a fresh id for a
+correction. Returns fixed_stream_amount_usd, pending_streams, invoice_amount_usd, invoice_reference,
+difference_usd and status. Shared multi-product accounts are refused. Differences are operational
+reconciliation and never alter customer fixed-rate debits or distribute charges across teams.
+
 Quote/reserve/claim are disabled without operator-owned complete pricing and failure-safe cutoff
-evidence. This version settles USD connectivity only; do not enable billed Say/Gather, recording,
-AMD or other ancillary features without an additional evidence/receipt contract. Model usage and
+evidence. Connectivity-only policies still refuse streams. A fixed stream policy additionally requires explicit
+rate/disclosure configuration and existing cutoff proof; billed Say/Gather, recording, AMD and other
+ancillary features remain unsupported. Model usage and
 OTP SMS have separate prepaid admission. Receipts/releases remain available after Voice admission
 is disabled. No live calls, payments or provider resources are created by UOA.
 `;

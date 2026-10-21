@@ -70,8 +70,12 @@ export async function reserveVoice(input: { request: BillingVoiceReserveRequestV
     const quote = await tx.billingVoiceQuote.findUnique({ where: { id: body.quote_id } });
     if (!quote || quote.serviceId !== input.credential.service.id || quote.grantId !== grant.id ||
         quote.from !== body.from || quote.to !== body.to || quote.accountSid !== accountSid ||
-        quote.direction !== grant.direction || quote.maxDurationSeconds !== body.max_duration_seconds || quote.expiresAt <= now) {
+        quote.direction !== grant.direction || quote.streamEnabled !== (body.media_stream ?? false) || quote.maxDurationSeconds !== body.max_duration_seconds || quote.expiresAt <= now) {
       throw new AppError('BAD_REQUEST', 409, 'BILLING_VOICE_QUOTE_INVALID');
+    }
+    const frozenPolicy = quote.policyEvidence as Record<string, unknown>;
+    if (quote.streamEnabled && body.stream_disclosure_version !== frozenPolicy.streamDisclosureVersion) {
+      throw new AppError('BAD_REQUEST', 409, 'BILLING_VOICE_STREAM_DISCLOSURE_REQUIRED');
     }
     const number = await tx.billingSmsNumberResource.findFirst({ where: { id: grant.numberId, state: 'active',
       accountSid, serviceId: input.credential.service.id, orgId: grant.orgId } });

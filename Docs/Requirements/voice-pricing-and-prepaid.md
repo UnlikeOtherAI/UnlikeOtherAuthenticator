@@ -202,3 +202,84 @@ ESLint passed. All ten Voice persistence tests passed against the isolated migra
 database on port 55452, including issuer epoch change, team removal, original
 consent-key revocation, foreign product refusal and revoked-grant null attribution.
 The database was stopped afterward. No live provider was used.
+
+## Approved fixed-rate Media Streams tariff
+
+The customer-approved fixed tariff supersedes the earlier requirement for a
+provider-priced stream receipt **only for Media Streams**. UOA bills a disclosed
+fixed USD rate from trusted Nessie-reported duration and separately reconciles the
+provider invoice. It does not claim the fixed charge equals Twilio's actual cost.
+Connectivity still uses independently fetched `Call.price`. Other ancillary
+features remain unsupported; live admission remains disabled until validated
+policy and provider-enforced cutoff evidence are installed.
+
+Policy `featureProfile=media_streams_fixed`, `ancillaryCharges=fixed_rate` requires
+`streamPricePerMinute`, `streamDisclosureVersion` and
+`streamBillingBasis=nessie_duration_rounded_minute`, in addition to all existing
+account, region, expiry, pricing and cutoff evidence fields. Currency is USD.
+No new environment switch enables this implicitly. Existing connectivity-only
+policies refuse a quote requesting a stream.
+
+Quote and reserve optionally accept `media_stream=true`. The quote returns nullable
+`stream_tariff`: `currency`, `price_per_minute`, `customer_price_per_minute`,
+`rounding_seconds:60`, `max_streams:1`, `disclosure_version`, and
+`basis:nessie_duration_rounded_minute`. The customer rate includes the frozen markup;
+quote/hold calculation uses the base rate plus that same markup exactly once.
+Nessie must display the customer per-minute rate, per-started-minute rounding and
+minimum one minute separately from telephone connectivity and model inference.
+Reserve echoes `stream_disclosure_version`; a missing/mismatched version refuses.
+A connectivity-only transfer can omit the stream even under a stream-enabled policy.
+
+The prepaid bound includes maximum rounded connectivity and maximum rounded stream
+duration. There is one StreamSid per reservation; reconnecting with another stream
+requires a separately funded call. Quotes and consent-version bindings are immutable.
+
+`POST /billing/v1/voice/reservations/stream` uses the existing VOICE_RUNTIME key and
+accepts `{product,dispatch_id,request_fingerprint,call_sid,stream_sid,event,started_at,
+stopped_at}`. Event is `start` or `stop`; stop is null for start. Timestamps are UTC
+ISO values from Nessie's observed stream lifecycle. Nessie must verify Twilio's
+signature/account/call/stream bindings, retain a durable outbox, and persist start
+before stop. UOA independently fetches the CallSid to verify its route before
+recording evidence. Account/StreamSid and reservation ownership are unique. Exact
+retries are idempotent; changed bindings or stopped timestamps are conflicts.
+Evidence is immutable except filling the initially absent stop once.
+
+Settlement waits for both finalized connectivity and stream stop. Duration is
+rounded up to seconds, then whole minutes, minimum one minute once started. Missing
+start/stop after dispatch retains the full hold as uncertain; a late durable stop
+and ordinary receipt retry recover it. A stream above the funded maximum, a call
+above that maximum, or combined cost above the hold remains in reconciliation with
+no debit. A one-second comparison tolerance accommodates provider whole-second
+call duration versus millisecond stream observations; it never widens the funded
+maximum. No timer-derived stop or zero-price substitute is accepted.
+
+### Separate account invoice reconciliation
+
+`POST /billing/v1/voice/stream-reconciliation` is deliberately machine-only
+operator infrastructure. It accepts `product,account_sid,billing_month` and nullable
+`invoice:{id,amount_usd,reference}`. The authenticated product may report the
+account's Media Streams invoice line total, not its entire telephone invoice.
+Evidence is explicitly `operator_reported`; UOA does not label it provider-verified.
+New IDs append corrections; reusing an ID with different values refuses.
+
+The response exposes base fixed stream amounts, pending call count, invoice total,
+reference, difference and status (`awaiting_invoice`, `pending_calls`, `matched`,
+`difference`). It aggregates across that product's teams for operator reconciliation
+only; member billing remains selected-team scoped. Known multi-product accounts
+are refused. The operator must confirm the invoice covers only the product's
+stream traffic; untracked provider traffic can cause a difference. Attribution uses
+the stream-start UTC month; cross-month calls may differ from the provider invoice
+and require review. Differences never change customer debits or allocate an account
+bill among teams. Existing wallet statements remain the source for customer charges.
+
+Fixed-stream verification on Maxis: Prisma generation, protocol build, API
+typecheck and scoped ESLint passed. Twelve Voice persistence tests and eleven
+provider/policy tests passed (23 total) against the isolated migrated database on
+port 55452. Coverage includes concurrent exact starts, changed/reused stream
+receipts, immutable stop amounts, missing start/stop holds, over-duration retention,
+disclosure-version refusal, one debit, separate invoice differences, existing
+selected-team refusal and concurrent prepaid wallet admission. These use synthetic
+provider evidence; a real concurrent two-team telephone call was not performed.
+The database was stopped after the run. Self-review confirmed that invoice reports
+cannot alter customer debits and that connectivity-only quotes cannot accept stream
+evidence. No live policy, provider resource or paid call was changed.

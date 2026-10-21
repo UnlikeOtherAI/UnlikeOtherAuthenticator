@@ -22,14 +22,19 @@ export const billingVoiceGrantV1JsonSchema = exact({ ...grant, id, state: { enum
 const grantRead = { product: id, grant_id: id };
 export const billingVoiceGrantReadRequestV1JsonSchema = exact(grantRead);
 const quote = { ...grantRead, delegate_id: id, from: phone, to: phone, max_duration_seconds: seconds };
-export const billingVoiceQuoteRequestV1JsonSchema = exact(quote);
+export const billingVoiceQuoteRequestV1JsonSchema = { ...exact(quote), properties: { ...quote, media_stream: { type: 'boolean' } } };
+const streamTariff = exact({ currency: { const: 'USD' }, price_per_minute: decimal,
+  customer_price_per_minute: decimal, rounding_seconds: { const: 60 }, max_streams: { const: 1 },
+  disclosure_version: id, basis: { const: 'nessie_duration_rounded_minute' } });
 export const billingVoiceQuoteV1JsonSchema = exact({ id, grant_id: id, from: phone, to: phone,
   direction: grant.direction, max_duration_seconds: seconds, reserved_credits: decimal,
-  expires_at: { type: 'string', format: 'date-time' } });
+  expires_at: { type: 'string', format: 'date-time' }, stream_tariff: nullable(streamTariff) });
 const read = { product: id, dispatch_id: id };
 const claim = { ...read, request_fingerprint: { type: 'string', pattern: '^[a-f0-9]{64}$' } };
-export const billingVoiceReserveRequestV1JsonSchema = exact({ ...quote, ...claim, quote_id: id,
+const reserveSchema = exact({ ...quote, ...claim, quote_id: id,
   conversation_id: id, leg_id: id, call_sid: nullable(call), parent_reservation_id: nullable(id) });
+export const billingVoiceReserveRequestV1JsonSchema = { ...reserveSchema,
+  properties: { ...reserveSchema.properties, media_stream: { type: 'boolean' }, stream_disclosure_version: id } };
 export const billingVoiceReadRequestV1JsonSchema = exact(read);
 export const billingVoiceClaimRequestV1JsonSchema = exact(claim);
 export const billingVoiceReceiptRequestV1JsonSchema = exact({ ...claim, call_sid: call });
@@ -39,3 +44,16 @@ export const billingVoiceReservationV1JsonSchema = exact({ reservation_id: id, d
   state: { enum: ['reserved', 'dispatching', 'uncertain', 'settled', 'released', 'reconciliation'] },
   dispatch_token: nullable(id), reserved_credits: decimal, consumed_credits: nullable(decimal),
   call_sid: nullable(call), max_duration_seconds: seconds, claim_expires_at: { type: 'string', format: 'date-time' } });
+
+export const billingVoiceStreamRequestV1JsonSchema = exact({ ...claim, call_sid: call,
+  stream_sid: { type: 'string', pattern: '^MZ[a-fA-F0-9]{32}$' }, event: { enum: ['start', 'stop'] },
+  started_at: { type: 'string', format: 'date-time' }, stopped_at: nullable({ type: 'string', format: 'date-time' }) });
+export const billingVoiceStreamReconciliationRequestV1JsonSchema = exact({ product: id,
+  account_sid: { type: 'string', pattern: '^AC[a-fA-F0-9]{32}$' },
+  billing_month: { type: 'string', pattern: '^20[0-9]{2}-(0[1-9]|1[0-2])$' },
+  invoice: nullable(exact({ id, amount_usd: decimal, reference: id })) });
+export const billingVoiceStreamReconciliationV1JsonSchema = exact({ account_sid: id, billing_month: id,
+  fixed_stream_amount_usd: decimal, pending_streams: { type: 'integer', minimum: 0 },
+  invoice_amount_usd: nullable(decimal), invoice_reference: nullable(id),
+  difference_usd: nullable({ type: 'string', pattern: '^-?[0-9]+(?:\\.[0-9]+)?$' }),
+  status: { enum: ['awaiting_invoice', 'pending_calls', 'matched', 'difference'] }, invoice_source: { const: 'operator_reported' } });

@@ -27,19 +27,25 @@ export async function settleVoice(input: { request: BillingVoiceReceiptRequestV1
         (receipt.startedAt && row.dispatchClaimedAt && receipt.startedAt.getTime() < row.dispatchClaimedAt.getTime() - 1000)) {
       throw new AppError('BAD_REQUEST', 409, 'BILLING_VOICE_RECEIPT_CONFLICT');
     }
+    const quote = await tx.billingVoiceQuote.findUniqueOrThrow({ where: { id: row.quoteId } });
+    const stream = quote.streamEnabled ? await tx.billingVoiceStream.findUnique({ where: { reservationId: row.id } }) : null;
+    const missingStream = quote.streamEnabled && row.dispatchClaimedAt && !stream?.stoppedAt;
+    const streamAmount = stream?.fixedAmount ?? new Prisma.Decimal(0);
+    const total = receipt.amount === null ? null : new Prisma.Decimal(receipt.amount).plus(streamAmount);
     if (row.state === 'settled') {
-      if (receipt.amount === null || !row.actualAmount?.eq(receipt.amount) || receipt.currency !== 'USD' ||
+      if (receipt.amount === null || !total || !row.actualAmount?.eq(total) || receipt.currency !== 'USD' ||
           receipt.seconds !== row.actualDurationSeconds) throw new AppError('BAD_REQUEST', 409, 'BILLING_VOICE_RECEIPT_CHANGED');
       return publicVoiceReservation(row);
     }
-    if (!receipt.terminal || receipt.amount === null || receipt.currency === null || receipt.seconds === null) {
+    if (!receipt.terminal || receipt.amount === null || receipt.currency === null || receipt.seconds === null || missingStream) {
       return publicVoiceReservation(await tx.billingVoiceReservation.update({ where: { id: row.id }, data: {
         callSid: input.request.call_sid, state: receipt.terminal ? 'uncertain' : row.state,
       } }));
     }
-    const quote = await tx.billingVoiceQuote.findUniqueOrThrow({ where: { id: row.quoteId } });
-    const actual = new Prisma.Decimal(receipt.amount);
-    if (receipt.currency !== 'USD' || receipt.seconds > row.maxDurationSeconds || actual.greaterThan(quote.rawCostBound) ||
+    const actual = new Prisma.Decimal(receipt.amount).plus(streamAmount);
+    const streamSeconds = stream?.stoppedAt ? Math.ceil((stream.stoppedAt.getTime() - stream.startedAt.getTime()) / 1000) : 0;
+    if (receipt.currency !== 'USD' || receipt.seconds > row.maxDurationSeconds || streamSeconds > row.maxDurationSeconds ||
+        streamSeconds > receipt.seconds + 1 || actual.greaterThan(quote.rawCostBound) ||
         (!row.dispatchClaimedAt && actual.greaterThan(0))) {
       return publicVoiceReservation(await tx.billingVoiceReservation.update({ where: { id: row.id }, data: {
         callSid: input.request.call_sid, state: 'reconciliation', actualAmount: actual, actualDurationSeconds: receipt.seconds,
@@ -58,7 +64,7 @@ export async function settleVoice(input: { request: BillingVoiceReceiptRequestV1
       creditAccountId: row.creditAccountId, serviceId: row.serviceId, appKeyId: input.credential.id,
       attributedUserId: row.userId, kind: 'VOICE_PREPAID_USAGE', direction: 'DEBIT',
       amountMicrocredits: debit, balanceAfterMicrocredits: balance - debit, currency: 'USD', occurredAt: row.createdAt,
-      sourceType: 'voice_provider_receipt', sourceId: row.id, voiceReservationId: row.id,
+      sourceType: quote.streamEnabled ? 'voice_fixed_stream_receipt' : 'voice_provider_receipt', sourceId: row.id, voiceReservationId: row.id,
       idempotencyKey: `voice-receipt:${row.accountSid}:${input.request.call_sid}`,
     } });
     return publicVoiceReservation(settled);

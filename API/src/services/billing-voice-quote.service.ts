@@ -59,17 +59,24 @@ export async function issueVoiceQuote(input: { request: BillingVoiceQuoteRequest
   const seconds = Math.max(policy.minimumBilledSeconds,
     Math.ceil(body.max_duration_seconds / policy.billingIncrementSeconds) * policy.billingIncrementSeconds);
   // Round upward at the stored decimal precision so division cannot reduce the authorized bound.
-  const raw = new Prisma.Decimal(evidence.amount).mul(seconds).div(60).toDecimalPlaces(18, Prisma.Decimal.ROUND_CEIL);
+  if (body.media_stream && policy.featureProfile !== 'media_streams_fixed') throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_VOICE_STREAM_UNAVAILABLE');
+  const streamRate = body.media_stream && policy.featureProfile === 'media_streams_fixed' ? policy.streamPricePerMinute : '0';
+  const raw = new Prisma.Decimal(evidence.amount).plus(streamRate).mul(seconds).div(60).toDecimalPlaces(18, Prisma.Decimal.ROUND_CEIL);
   const held = maximumRatedMicrocredits(raw, policy.markupBps);
   const expiresAt = new Date(Math.min(now.getTime() + 60000, Date.parse(policy.expiresAt)));
   const quote = await runBillingSerializableTransaction(prisma, async tx => {
     await lockVoiceGrant(tx, { grantId: grant.id, product: body.product, credential: input.credential });
     return tx.billingVoiceQuote.create({ data: { serviceId: input.credential.service.id, grantId: grant.id,
       accountSid, from: body.from, to: body.to, direction: grant.direction, maxDurationSeconds: body.max_duration_seconds,
-      rawCostBound: raw, markupBps: policy.markupBps, reservedMicrocredits: held,
+      streamEnabled: body.media_stream ?? false, rawCostBound: raw, markupBps: policy.markupBps, reservedMicrocredits: held,
       providerEvidence: { ...evidence, observedAt: now.toISOString() }, policyEvidence: policy, expiresAt } });
   }, 'BILLING_CREDIT_ACCOUNT_RETRY_EXHAUSTED');
   return { id: quote.id, grant_id: grant.id, from: quote.from, to: quote.to,
     direction: quote.direction as 'inbound' | 'outbound', max_duration_seconds: quote.maxDurationSeconds,
-    reserved_credits: smsMicrocredits(held), expires_at: expiresAt.toISOString() };
+    reserved_credits: smsMicrocredits(held), expires_at: expiresAt.toISOString(),
+    stream_tariff: body.media_stream && policy.featureProfile === 'media_streams_fixed' ? { currency: 'USD',
+      price_per_minute: policy.streamPricePerMinute,
+      customer_price_per_minute: new Prisma.Decimal(streamRate).mul(10000 + policy.markupBps).div(10000).toString(),
+      rounding_seconds: 60, max_streams: 1, disclosure_version: policy.streamDisclosureVersion,
+      basis: policy.streamBillingBasis } : null };
 }

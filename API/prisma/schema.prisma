@@ -5279,6 +5279,7 @@ model BillingVoiceGrant {
 }
 
 model BillingVoiceQuote {
+  streamEnabled Boolean @default(false) @map("stream_enabled")
   id String @id @default(cuid())
   serviceId String @map("service_id")
   grantId String @map("grant_id")
@@ -5339,4 +5340,33 @@ model BillingVoiceReservation {
   @@index([grantId, state])
   @@index([orgId, teamId, billingMonth])
   @@map("billing_voice_reservations")
+}
+
+model BillingVoiceStream {
+  id String @id @default(cuid())
+  reservationId String @unique @map("reservation_id")
+  serviceId String @map("service_id")
+  accountSid String @map("account_sid") @db.Char(34)
+  callSid String @map("call_sid") @db.Char(34)
+  streamSid String @map("stream_sid") @db.Char(34)
+  startedAt DateTime @map("started_at")
+  stoppedAt DateTime? @map("stopped_at")
+  billedMinutes Int? @map("billed_minutes")
+  fixedAmount Decimal? @map("fixed_amount") @db.Decimal(38,18)
+  createdAt DateTime @default(now()) @map("created_at")
+  @@unique([accountSid, streamSid])
+  @@index([serviceId, accountSid, startedAt])
+  @@map("billing_voice_streams")
+}
+
+model BillingVoiceStreamInvoice {
+  id String @id
+  serviceId String @map("service_id")
+  accountSid String @map("account_sid") @db.Char(34)
+  billingMonth String @map("billing_month") @db.Char(7)
+  amount Decimal @db.Decimal(38,18)
+  reference String @db.VarChar(160)
+  createdAt DateTime @default(now()) @map("created_at")
+  @@index([serviceId, accountSid, billingMonth, createdAt])
+  @@map("billing_voice_stream_invoices")
 }

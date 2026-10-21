@@ -9,6 +9,8 @@ import { createVoiceGrant, readVoiceGrant, revokeVoiceGrant } from '../../src/se
 import { issueVoiceQuote } from '../../src/services/billing-voice-quote.service.js';
 import { reserveVoice } from '../../src/services/billing-voice-reservation.service.js';
 import { claimVoice, releaseVoice } from '../../src/services/billing-voice-dispatch.service.js';
+import { recordVoiceStream } from '../../src/services/billing-voice-stream.service.js';
+import { reconcileVoiceStreams } from '../../src/services/billing-voice-stream-reconciliation.service.js';
 import { settleVoice } from '../../src/services/billing-voice-receipt.service.js';
 
 let prisma: PrismaClient;
@@ -38,17 +40,20 @@ async function grant(direction: 'inbound' | 'outbound' = 'outbound', purpose: 'a
       idempotency_key: randomUUID(), number_id: smsIds.number, allocation_id: 'voice-allocation', delegate_id: 'nessie-agent',
       direction, purpose, max_duration_seconds: 120, max_concurrent_calls: 10, destinations: direction === 'inbound' ? [] : [destination] } }, { prisma });
 }
-async function reservation(direction: 'inbound' | 'outbound' = 'outbound') {
+const streamPolicy = { ...policy, featureProfile: 'media_streams_fixed' as const, ancillaryCharges: 'fixed_rate' as const,
+  streamPricePerMinute: '0.0044', streamDisclosureVersion: 'stream-fixed-v1', streamBillingBasis: 'nessie_duration_rounded_minute' as const };
+async function reservation(direction: 'inbound' | 'outbound' = 'outbound', streams = false) {
+  const settings = streams ? { ...deps(), policy: streamPolicy } : deps();
   const consent = await grant(direction);
   const quoteBody = { product: 'nessie', grant_id: consent.id, delegate_id: consent.delegate_id,
     from: direction === 'inbound' ? destination : smsPhone, to: direction === 'inbound' ? smsPhone : destination,
-    max_duration_seconds: 120 };
-  const quote = await issueVoiceQuote({ credential, request: quoteBody }, deps());
-  const body = { ...quoteBody, dispatch_id: randomUUID(), request_fingerprint: fingerprint, quote_id: quote.id,
+    max_duration_seconds: 120, media_stream: streams };
+  const quote = await issueVoiceQuote({ credential, request: quoteBody }, settings);
+  const body = { ...quoteBody, ...(streams ? { stream_disclosure_version: streamPolicy.streamDisclosureVersion } : {}), dispatch_id: randomUUID(), request_fingerprint: fingerprint, quote_id: quote.id,
     conversation_id: randomUUID(), leg_id: randomUUID(), call_sid: direction === 'inbound' ? `CA${randomUUID().replaceAll('-', '')}` : null,
     parent_reservation_id: null };
-  const result = await reserveVoice({ credential, request: body }, deps());
-  return { consent, body, result };
+  const result = await reserveVoice({ credential, request: body }, settings);
+  return { consent, body, result, quote, settings };
 }
 const claimBody = (dispatch: string) => ({ product: 'nessie', dispatch_id: dispatch, request_fingerprint: fingerprint });
 const claim = (dispatch: string) => claimVoice({ credential, request: claimBody(dispatch) }, deps());
@@ -103,6 +108,57 @@ describe.skipIf(!process.env.DATABASE_URL)('prepaid Voice call legs', () => {
     finally { await prisma.billingAppKey.update({ where: { id: fixture.lifecycle.id }, data: { revokedAt: null } }); }
     await expect(readVoiceGrant({ ...input, request: { ...input.request, product: 'other' } }, { prisma }))
       .rejects.toMatchObject({ statusCode: 404 });
+  });
+  it('holds the disclosed stream maximum and bills exact rounded duration only once', async () => {
+    const value = await reservation('outbound', true);
+    expect(value.result.reserved_credits).toBe('36.576000');
+    await expect(reserveVoice({ credential, request: { ...value.body, dispatch_id: randomUUID(),
+      leg_id: randomUUID(), stream_disclosure_version: 'wrong-version' } }, value.settings))
+      .rejects.toMatchObject({ statusCode: 409, message: 'BILLING_VOICE_STREAM_DISCLOSURE_REQUIRED' });
+    expect(value.quote.stream_tariff).toMatchObject({ price_per_minute: '0.0044', customer_price_per_minute: '0.005588',
+      rounding_seconds: 60, max_streams: 1, disclosure_version: 'stream-fixed-v1' });
+    await claimVoice({ credential, request: claimBody(value.body.dispatch_id) }, value.settings);
+    const sid = `CA${'4'.repeat(32)}`; const start = new Date(); const stop = new Date(start.getTime() + 61000);
+    const base = { ...claimBody(value.body.dispatch_id), call_sid: sid, stream_sid: `MZ${'4'.repeat(32)}`, started_at: start.toISOString() };
+    const startBody = { ...base, event: 'start' as const, stopped_at: null };
+    await Promise.all([1, 2].map(() => recordVoiceStream({ credential, request: startBody }, { ...deps(), now: () => stop })));
+    expect(await prisma.billingVoiceStream.count({ where: { reservationId: value.result.reservation_id } })).toBe(1);
+    expect((await finish(value.body.dispatch_id, sid, '0.01', 61)).state).toBe('uncertain');
+    const stopBody = { ...base, event: 'stop' as const, stopped_at: stop.toISOString() };
+    await recordVoiceStream({ credential, request: stopBody }, { ...deps(), now: () => stop });
+    const result = await finish(value.body.dispatch_id, sid, '0.01', 61);
+    expect(result).toMatchObject({ state: 'settled', consumed_credits: '23.876000' });
+    expect(await finish(value.body.dispatch_id, sid, '0.01', 61)).toEqual(result);
+    expect(await recordVoiceStream({ credential, request: stopBody }, { ...deps(), now: () => stop })).toEqual(result);
+    await expect(recordVoiceStream({ credential, request: { ...stopBody, stopped_at: new Date(stop.getTime() + 1).toISOString() } },
+      { ...deps(), now: () => stop })).rejects.toMatchObject({ statusCode: 409 });
+    expect(await prisma.billingCreditEntry.count({ where: { voiceReservationId: result.reservation_id } })).toBe(1);
+    expect((await prisma.billingCreditEntry.findFirstOrThrow({ where: { voiceReservationId: result.reservation_id } })).sourceType)
+      .toBe('voice_fixed_stream_receipt');
+    await expect(prisma.billingVoiceStream.update({ where: { reservationId: result.reservation_id }, data: { fixedAmount: '0' } })).rejects.toThrow();
+    const report = { product: 'nessie', account_sid: smsAccount, billing_month: start.toISOString().slice(0, 7),
+      invoice: { id: randomUUID(), amount_usd: '0.009', reference: 'Synthetic stream invoice' } };
+    const comparison = await reconcileVoiceStreams({ credential, request: report }, { prisma });
+    expect(comparison).toMatchObject({ fixed_stream_amount_usd: '0.0088', difference_usd: '-0.0002', invoice_source: 'operator_reported' });
+    expect((await prisma.billingVoiceReservation.findUniqueOrThrow({ where: { id: result.reservation_id } })).debitedMicrocredits).toBe(23876000n);
+    await expect(reconcileVoiceStreams({ credential, request: { ...report, invoice: { ...report.invoice, amount_usd: '1' } } }, { prisma }))
+      .rejects.toMatchObject({ statusCode: 409 });
+  });
+  it('keeps missing-stop and over-duration streams held, rejects reusing another call stream', async () => {
+    const a = await reservation('outbound', true); const b = await reservation('outbound', true);
+    await claimVoice({ credential, request: claimBody(a.body.dispatch_id) }, a.settings);
+    await claimVoice({ credential, request: claimBody(b.body.dispatch_id) }, b.settings);
+    const start = new Date(); const stop = new Date(start.getTime() + 121000);
+    const base = { ...claimBody(a.body.dispatch_id), call_sid: `CA${'5'.repeat(32)}`, stream_sid: `MZ${'5'.repeat(32)}`,
+      started_at: start.toISOString(), event: 'start' as const, stopped_at: null };
+    await recordVoiceStream({ credential, request: base }, { ...deps(), now: () => stop });
+    await expect(recordVoiceStream({ credential, request: { ...base, ...claimBody(b.body.dispatch_id), call_sid: `CA${'6'.repeat(32)}` } },
+      { ...deps(), now: () => stop })).rejects.toMatchObject({ statusCode: 409 });
+    expect((await finish(a.body.dispatch_id, base.call_sid, '0.01', 120)).state).toBe('uncertain');
+    await recordVoiceStream({ credential, request: { ...base, event: 'stop', stopped_at: stop.toISOString() } }, { ...deps(), now: () => stop });
+    expect((await finish(a.body.dispatch_id, base.call_sid, '0.01', 121)).state).toBe('reconciliation');
+    expect(await prisma.billingCreditEntry.count({ where: { voiceReservationId: a.result.reservation_id } })).toBe(0);
+    expect((await finish(b.body.dispatch_id, `CA${'6'.repeat(32)}`, '0.01', 60)).state).toBe('uncertain');
   });
   it('reserves once, claims once, settles one exact debit and preserves source bindings', async () => {
     const value = await reservation();
