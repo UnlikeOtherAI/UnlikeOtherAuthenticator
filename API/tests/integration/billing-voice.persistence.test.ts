@@ -150,7 +150,16 @@ describe.skipIf(!process.env.DATABASE_URL)('prepaid Voice call legs', () => {
   it('admits only funded concurrent calls against the same canonical wallet', async () => {
     priceAmount = '10';
     try {
-      const results = await Promise.allSettled(Array.from({ length: 4 }, () => reservation()));
+      const bodies = [];
+      for (let index = 0; index < 4; index += 1) {
+        const consent = await grant();
+        const route = { product: 'nessie', grant_id: consent.id, delegate_id: consent.delegate_id,
+          from: smsPhone, to: destination, max_duration_seconds: 120 };
+        const quote = await issueVoiceQuote({ credential, request: route }, deps());
+        bodies.push({ ...route, dispatch_id: randomUUID(), request_fingerprint: fingerprint, quote_id: quote.id,
+          conversation_id: randomUUID(), leg_id: randomUUID(), call_sid: null, parent_reservation_id: null });
+      }
+      const results = await Promise.allSettled(bodies.map(request => reserveVoice({ credential, request }, deps())));
       expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(3);
       const denied = results.find(result => result.status === 'rejected');
       expect(denied?.status === 'rejected' ? denied.reason : null).toMatchObject({ statusCode: 402 });
