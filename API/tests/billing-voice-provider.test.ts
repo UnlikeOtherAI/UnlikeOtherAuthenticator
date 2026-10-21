@@ -11,9 +11,13 @@ describe('Voice provider evidence', () => {
   it('uses the exact outbound route and refuses mismatched route or currency evidence', async () => {
     const body = { destination_number: route.to, origination_number: route.from, price_unit: 'USD',
       outbound_call_prices: [{ current_price: '0.01' }, { current_price: '0.13' }] };
-    const transport = vi.fn<typeof fetch>(async () => new Response(JSON.stringify(body), { status: 200 }));
+    let requestedUrl: string | null = null;
+    const transport: typeof fetch = async input => {
+      requestedUrl = String(input);
+      return new Response(JSON.stringify(body), { status: 200 });
+    };
     expect((await new BillingVoiceProvider(config, transport).price(route)).amount).toBe('0.13');
-    expect(transport.mock.calls[0]?.[0]).toContain(`?OriginationNumber=${encodeURIComponent(route.from)}`);
+    expect(requestedUrl).toContain(`?OriginationNumber=${encodeURIComponent(route.from)}`);
     await expect(provider({ ...body, price_unit: 'EUR' }).price(route)).rejects.toThrow();
     await expect(provider({ ...body, outbound_call_prices: [{ current_price: null }] }).price(route)).rejects.toThrow();
     await expect(provider({ ...body, destination_number: route.from }).price(route)).rejects.toThrow();
