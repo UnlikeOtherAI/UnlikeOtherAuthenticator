@@ -84,3 +84,9 @@ Focused gates are `billing-voice-provider.test.ts` and
 telephone OTP financial regression suites. They use synthetic provider and Stripe
 evidence and a dedicated migrated PostgreSQL database. They do not prove live cutoff,
 provider permissions, ancillary prices or the consuming Nessie deployment.
+
+The first isolated verification passed API typecheck and four provider-evidence
+unit cases. Database setup identified a missing runtime-key purpose constraint;
+the additive `20261021153000_voice_runtime_key` migration extends that constraint
+without weakening lifecycle-key return-origin requirements. Financial integration
+verification continues after that correction.

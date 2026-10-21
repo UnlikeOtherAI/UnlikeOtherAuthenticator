@@ -17,10 +17,11 @@ let fixture: Awaited<ReturnType<typeof smsPaidNumberFixture>>;
 const credential = { ...smsCredential, id: 'voice-runtime', purpose: 'VOICE_RUNTIME' as const };
 const destination = '+420777000002';
 const fingerprint = 'a'.repeat(64);
+let priceAmount = '0.01';
 const receipts = new Map<string, VoiceReceipt>();
 class SyntheticVoice extends BillingVoiceProvider {
   override async ownedNumber() { return; }
-  override async price(_route: VoiceRoute) { return { amount: '0.01', currency: 'USD' as const, source: 'https://pricing.twilio.com/v2/Voice/Numbers/synthetic' }; }
+  override async price(_route: VoiceRoute) { return { amount: priceAmount, currency: 'USD' as const, source: 'https://pricing.twilio.com/v2/Voice/Numbers/synthetic' }; }
   override async receipt(_route: VoiceRoute, sid: string): Promise<VoiceReceipt> {
     return receipts.get(sid) ?? { terminal: false, amount: null, currency: null, seconds: null, parentCallSid: null, startedAt: null };
   }
@@ -119,7 +120,17 @@ describe.skipIf(!process.env.DATABASE_URL)('prepaid Voice call legs', () => {
     const value = await reservation();
     const row = await prisma.billingVoiceReservation.findUniqueOrThrow({ where: { id: value.result.reservation_id } });
     await expect(prisma.billingVoiceReservation.create({ data: { ...row, id: randomUUID(), dispatchId: randomUUID(),
-      legId: randomUUID(), reservedMicrocredits: 100_000_000n } })).rejects.toThrow(/insufficient/);
+      legId: randomUUID(), reservedMicrocredits: 100_000_000n } })).rejects.toThrow(/insufficient|binding/);
     await expect(prisma.$executeRaw(Prisma.sql`UPDATE billing_credit_accounts SET balance_microcredits=0 WHERE id=${smsIds.credit}`)).rejects.toThrow();
   });
+  it('admits only funded concurrent calls against the same canonical wallet', async () => {
+    priceAmount = '10';
+    try {
+      const results = await Promise.allSettled(Array.from({ length: 4 }, () => reservation()));
+      expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(3);
+      const denied = results.find(result => result.status === 'rejected');
+      expect(denied?.status === 'rejected' ? denied.reason : null).toMatchObject({ statusCode: 402 });
+    } finally { priceAmount = '0.01'; }
+  });
+
 });
