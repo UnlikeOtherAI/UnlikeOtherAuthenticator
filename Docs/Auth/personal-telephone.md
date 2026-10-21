@@ -23,7 +23,7 @@ Every body includes `product: "nessie"`, `organisation_id`, `team_id`, `user_id`
 
 The six-digit code in `delivery` is a backend delivery instruction. Nessie must send it through its approved SMS path and remove the entire `delivery` object from browser responses and logs. It must not persist profile copies. UOA stores only a keyed digest of the challenge code. Five starts per person and destination in 15 minutes and five guesses per challenge are allowed. Challenges expire in five minutes, bind the issuing app key and authentication epoch, and are invalidated by a new start or removal. Failed guesses commit their attempt count. A new start preserves the verified number and records the new pending claim. Successful verification replaces the number, clears the pending claim and defaults visibility to private.
 
-Visibility controls disclosure to colleagues. It never controls routing to the owner. No colleague-directory endpoint is added by this change; an existing/future consuming directory must obtain permission-scoped data from UOA rather than copying this self response.
+Visibility controls disclosure to colleagues. It never controls routing to the owner. The existing `GET /org/organisations/:orgId/teams/:teamId/members` roster exposes optional `data[].identity.telephoneNumber` only for a verified number with team visibility. Both the viewer and subject must be live members of the exact selected team and organisation. The field is omitted for private/pending numbers, inactive membership, and backend requests without a person. Organisation-manager privileges alone do not grant this disclosure. Nessie reuses the roster identity in its team/person view without persisting a profile copy.
 
 ## Inbound routing
 

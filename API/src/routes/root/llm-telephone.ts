@@ -14,6 +14,12 @@ An old verified number survives until replacement verifies. Read/set/verify/visi
 return {phone:{number,pendingNumber,verifiedAt,visibility}|null}. Visibility is
 private by default and on replacement; it controls colleague display only.
 
+GET /org/organisations/:orgId/teams/:teamId/members adds optional
+data[].identity.telephoneNumber for verified team-visible numbers only. Both
+caller and subject must have live membership in the exact selected team and org.
+Private/pending numbers, inactive members and backend mode without a person omit
+the field. Nessie may render it in the existing team/person view, never persist it.
+
 POST /apps/v1/nessie/phone-profile/lookup takes {number} with the app key and a
 separate X-UOA-Service-Assertion: RS256 typ=uoa-telephone-routing+jwt, registered
 iss/kid, aud=PUBLIC_BASE_URL plus exact lookup path, purpose=telephone-routing,

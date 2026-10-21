@@ -8,6 +8,7 @@ import { registerTelephoneProfileRoutes } from '../../src/routes/apps/telephone-
 import { createBillingAppKey, verifyBillingAppKey, type VerifiedBillingAppKey } from '../../src/services/billing-app-key.service.js';
 import { LOOKUP_PATH } from '../../src/services/telephone-authority.service.js';
 import { telephoneProfile, type TelephoneAction } from '../../src/services/telephone-profile.service.js';
+import { teamTelephoneNumbers } from '../../src/services/telephone-directory.service.js';
 import { lookupTelephone } from '../../src/services/telephone-lookup.service.js';
 import { createTestDb } from '../helpers/test-db.js';
 
@@ -172,6 +173,26 @@ describe.skipIf(!process.env.DATABASE_URL)('personal telephone authority', () =>
     await expect(lookup(nextNumber, call)).rejects.toMatchObject({ statusCode: 403 });
     await db.prisma.user.update({ where: { id: userId }, data: { tokenVersion: 1 } });
     await expect(profile('read')).rejects.toMatchObject({ statusCode: 401 });
+  });
+
+  it('shares only verified team-visible numbers with live same-team colleagues', async () => {
+    const read = (actorUserId: string | undefined = userId, selectedTeam = teamId) => teamTelephoneNumbers({
+      orgId, teamId: selectedTeam, actorUserId, userIds: [userId],
+    }, { prisma: db.prisma });
+    await profile('set', { number });
+    await profile('visibility', { visibility: 'team' });
+    expect((await read()).size).toBe(0);
+    await verify();
+    expect((await read()).size).toBe(0);
+    await profile('visibility', { visibility: 'team' });
+    expect((await read()).get(userId)).toBe(number);
+    await profile('set', { number: nextNumber });
+    expect((await read()).get(userId)).toBe(number);
+    expect((await read(randomUUID())).size).toBe(0);
+    expect((await read(userId, randomUUID())).size).toBe(0);
+    expect((await teamTelephoneNumbers({ orgId, teamId, userIds: [userId] }, { prisma: db.prisma })).size).toBe(0);
+    await db.prisma.teamMember.update({ where: { teamId_userId: { teamId, userId } }, data: { status: 'REMOVED' } });
+    expect((await read()).size).toBe(0);
   });
 
   it('denies tenant-role access even when table grants are present', async () => {
