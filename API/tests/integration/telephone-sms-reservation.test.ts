@@ -53,6 +53,8 @@ describe.skipIf(!process.env.DATABASE_URL)('telephone proof prepaid SMS admissio
     const first = await reserve(value);
     expect(first).toMatchObject({ dispatch_id: value.body.dispatch_id, state: 'reserved', dispatch_token: null });
     expect(await reserve(value)).toEqual(first);
+    await expect(prisma.billingSmsReservation.update({ where: { id: first.reservation_id },
+      data: { telephoneCallChallengeId: null } })).rejects.toThrow('Telephone SMS challenge binding is immutable');
     await expect(reserve(value, { dispatch_id: randomUUID() })).rejects.toMatchObject({ statusCode: 409 });
     await expect(reserve(value, { max_segments: 2 })).rejects.toMatchObject({ statusCode: 409 });
     const claims = await Promise.all([claim(value.body.dispatch_id), claim(value.body.dispatch_id)]);
