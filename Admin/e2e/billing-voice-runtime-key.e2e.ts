@@ -14,7 +14,7 @@ test('operator can inspect and revoke an API-issued Voice runtime key', async ({
       active: true, tariffs: [], assignments: [], app_keys: [key], adjustments: [],
       stripe_catalogs: [], stripe_subscriptions: [], created_at: now, updated_at: now }]),
   }));
-  await page.route('**/internal/admin/billing/services/nessie/app-keys/voice-key/revoke', route => {
+  await page.route('**/internal/admin/billing/services/nessie/app-keys/voice-key', route => {
     key.revoked_at = now;
     return route.fulfill({ contentType: 'application/json', body: JSON.stringify(key) });
   });
