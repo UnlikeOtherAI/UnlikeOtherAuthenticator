@@ -58,7 +58,20 @@ export async function resolveStripeAccountContext(
   livemode: boolean,
   prisma: Pick<PrismaClient, 'billingStripeAccount'> = getAdminPrisma(),
 ): Promise<StripeAccountContext> {
-  const remote = await stripe.accounts.retrieveCurrent();
+  const remote = await stripe.accounts.retrieveCurrent().catch((error: unknown) => {
+    if (
+      error instanceof Stripe.errors.StripeAuthenticationError ||
+      error instanceof Stripe.errors.StripePermissionError ||
+      error instanceof Stripe.errors.StripeConnectionError ||
+      error instanceof Stripe.errors.StripeAPIError ||
+      error instanceof Stripe.errors.StripeRateLimitError
+    ) {
+      // This is UOA's provider dependency, never a refusal of the human actor.
+      // Do not retain Stripe's message/cause: it may contain credential details.
+      throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_PAYMENT_PROVIDER_UNAVAILABLE');
+    }
+    throw error;
+  });
   if (!remote || typeof remote.id !== 'string' || !remote.id.startsWith('acct_')) {
     throw new AppError('INTERNAL', 502, 'STRIPE_ACCOUNT_IDENTITY_INVALID');
   }

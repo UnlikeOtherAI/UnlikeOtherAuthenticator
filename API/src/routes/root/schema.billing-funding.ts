@@ -97,7 +97,7 @@ export const billingFundingEndpoints: EndpointSchema[] = [
       200: 'BillingCreditsV1 exactly matching /schemas/billing-credits-v1.json',
       '401/403': 'Invalid purpose-bound app key, actor, product, membership, or subject',
       '409': 'The Ledger cursor conflicts with an already-pinned exact-team snapshot',
-      '502/503': 'Ledger portfolio evidence or Stripe collection context is unavailable',
+      '502/503': 'Ledger portfolio evidence or Stripe collection context is unavailable; payment-provider account resolution failures return 503 BILLING_PAYMENT_PROVIDER_UNAVAILABLE',
     },
     notes:
       'Settlement is deterministic, serializable, and cursor-idempotent. Available credits stop at zero while UOA retains the full centrally rated service/user liability; only a verified reversal may create debt. Products render the returned model and never rate or reallocate credits locally. With x-uoa-billing-credits-protocol: 2.1.0 the one-time offers are in the organisation billing region currency (USD, EUR or GBP; USD until a region is chosen) and a GBP or EUR offer carries credit_rate; older versions receive the USD offers. With 2.2.0 the automatic reload options are in that currency too, each with threshold_value (compared with the lot-valued balance) and credit_rate; older versions receive the USD options. With 2.3.0 credit_balance.value, the value of each recent entry and region_rate show what credits are worth in the region currency; charges stay in credits.',
