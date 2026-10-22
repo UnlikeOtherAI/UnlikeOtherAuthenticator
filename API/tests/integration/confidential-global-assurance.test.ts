@@ -6,7 +6,7 @@ import { createTestDb } from '../helpers/test-db.js';
 import { createApp } from '../../src/app.js';
 import { disconnectPrisma } from '../../src/db/prisma.js';
 import { seedDomainSecret } from '../helpers/domain-secret.js';
-import { baseClientConfigPayload, signTestConfigJwt, createTestConfigFetchHandler, TEST_SHARED_SECRET, TEST_CONFIG_JWKS_URL } from '../helpers/test-config.js';
+import { baseClientConfigPayload, signTestConfigJwt, createTestConfigFetchHandler, TEST_SHARED_SECRET } from '../helpers/test-config.js';
 import { validateConfigFields } from '../../src/services/config.service.js';
 import { issueSessionAssurance } from '../../src/services/session-assurance.service.js';
 import { resolveOriginalAssurance } from '../../src/services/confidential-assurance-validation.service.js';
@@ -19,11 +19,11 @@ vi.mock('../../src/services/jwks-fetch.service.js', async importOriginal => ({
 
 describe('confidential original global assurance with PostgreSQL', () => {
   let handle: NonNullable<Awaited<ReturnType<typeof createTestDb>>>;
-  const saved = Object.fromEntries(["DATABASE_URL", "DATABASE_ADMIN_URL", "SHARED_SECRET", "CONFIG_JWKS_URL"].map(key => [key, process.env[key]]));
+  const saved = Object.fromEntries(["DATABASE_URL", "DATABASE_ADMIN_URL", "SHARED_SECRET"].map(key => [key, process.env[key]]));
   beforeAll(async () => {
     const created = await createTestDb(); if (!created) throw new Error('Real PostgreSQL DATABASE_URL is required');
     handle = created; process.env.DATABASE_URL = handle.databaseUrl; process.env.DATABASE_ADMIN_URL = handle.databaseUrl;
-    process.env.SHARED_SECRET = TEST_SHARED_SECRET; process.env.CONFIG_JWKS_URL = TEST_CONFIG_JWKS_URL;
+    process.env.SHARED_SECRET = TEST_SHARED_SECRET;
   });
   afterAll(async () => {
     for (const [key, value] of Object.entries(saved)) {
@@ -101,7 +101,7 @@ describe('confidential original global assurance with PostgreSQL', () => {
     vi.stubGlobal('fetch', await createTestConfigFetchHandler({ [configUrl]: config }));
     const app = await createApp();
     let failureCode = "";
-    app.addHook("onError", (_request, _reply, error, done) => { failureCode = error.message; done(); });
+    app.addHook("onError", (request, _reply, error, done) => { failureCode = request.authDebug?.code ?? error.message; done(); });
     await app.ready();
     const url = `/org/assurance/validate?domain=${encodeURIComponent(f.domain)}&config_url=${encodeURIComponent(configUrl)}`;
     const credential = await f.request({ active: scope }, a.reference);
