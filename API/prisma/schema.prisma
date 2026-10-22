@@ -5075,3 +5075,19 @@ model BillingSmsPolicyAlert {
   @@index([resolvedAt, openedAt])
   @@map("billing_sms_policy_alerts")
 }
+
+/// Reference-only transactional delivery obligation; never contains a profile.
+model DirectoryWebhookEvent {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  domain        String
+  orgId         String    @map("org_id")
+  teamId        String    @map("team_id")
+  subject       String
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  deliveredAt   DateTime? @map("delivered_at") @db.Timestamptz
+  leaseUntil    DateTime? @map("lease_until") @db.Timestamptz
+  attempts      Int       @default(0)
+  nextAttemptAt DateTime  @default(now()) @map("next_attempt_at") @db.Timestamptz
+
+  @@map("directory_webhook_events")
+}

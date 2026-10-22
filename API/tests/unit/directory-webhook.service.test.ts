@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createHmac } from 'node:crypto';
-import { deliverDirectoryWebhooks, parseDirectoryWebhookTargets, signDirectoryWebhook } from '../directory-webhook.service.js';
+import { deliverDirectoryWebhooks, parseDirectoryWebhookTargets, signDirectoryWebhook } from '../../src/services/directory-webhook.service.js';
 import type { PrismaClient } from '@prisma/client';
 
 const secret = 'test-only-directory-secret-long-enough';

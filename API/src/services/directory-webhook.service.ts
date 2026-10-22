@@ -36,7 +36,7 @@ export async function deliverDirectoryWebhooks(input: {
   if (!input.targets.length) return 0;
   const prisma = input.prisma ?? getAdminPrisma();
   const rows = await prisma.$queryRaw<EventRow[]>`
-    UPDATE directory_webhook_events SET lease_until = now() + interval '30 seconds', attempts = attempts + 1
+    UPDATE directory_webhook_events SET lease_until = now() + interval '2 minutes', attempts = attempts + 1
     WHERE id IN (SELECT id FROM directory_webhook_events
       WHERE delivered_at IS NULL AND next_attempt_at <= now()
         AND (lease_until IS NULL OR lease_until < now())
