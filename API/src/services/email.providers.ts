@@ -9,6 +9,7 @@ type SesModule = typeof import('@aws-sdk/client-ses');
 export type EmailProviderName = 'disabled' | 'smtp' | 'ses' | 'sendgrid';
 
 export type EmailMessage = {
+  suppressContentLog?: boolean;
   to: string;
   subject: string;
   text: string;
@@ -65,7 +66,7 @@ export function safeEmailLog(env: Env, message: EmailMessage): void {
   // from logs — but it is not anonymity: anyone who learns SHARED_SECRET can recompute hints for
   // candidate addresses and match them, and 12 hex chars is only a correlation key, not a
   // collision-free identifier.
-  if (env.NODE_ENV === 'production') {
+  if (env.NODE_ENV === 'production' || message.suppressContentLog) {
     const toHint = createHmac('sha256', env.SHARED_SECRET)
       .update(message.to, 'utf8')
       .digest('hex')
