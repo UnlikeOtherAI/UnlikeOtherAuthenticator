@@ -67,6 +67,7 @@ export function registerRootRoute(app: FastifyInstance): void {
       native_apps: { admin: '/admin/apps', registration: '/oauth/register', public_identifier: 'app_id', client_secret_required: false },
       enterprise_sso: { version: 1, settings: '/auth/organisation-access',
         entry: '/sso/:connectionId/start', domain_discovery: false,
+        fresh_independent_proof: 'New completed independent authorization issues original confidential proof before minimum-floor enrollment; legacy refresh never fabricates proof. Explicit encrypted custody is required; SSO/recovery activation gates remain.',
         status: '/org/organisations/:orgId/sso/status', assurance: '/org/assurance/validate', assurance_scope: 'exact original organisation/team or null-scope independent proof',
         revocations: '/domain/revocations', activation: 'Fail closed until authority, provenance, consumer and protocol readiness pass; enforcement also requires two independent custodians and a completed recovery drill.' },
       deeptest_nessie_inference: { check: '/apps/v1/deeptest/nessie-inference-access',

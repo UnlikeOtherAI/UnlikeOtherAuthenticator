@@ -2,6 +2,8 @@ import { afterAll, beforeAll, vi } from 'vitest';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
+import { randomBytes } from 'node:crypto';
+
 import { testConfigJwks } from './helpers/test-config.js';
 
 vi.mock('undici', async () => {
@@ -38,6 +40,11 @@ process.env.AUTH_SERVICE_IDENTIFIER =
   process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
 process.env.ADMIN_ACCESS_TOKEN_SECRET =
   process.env.ADMIN_ACCESS_TOKEN_SECRET ?? 'test-admin-token-secret-with-enough-length';
+
+// Fresh confidential authentication now exercises real encrypted proof custody.
+// This isolated test-only key is never a production/default custody fallback.
+process.env.ENTERPRISE_SSO_CUSTODY_PROVIDER ??= 'local';
+process.env.ENTERPRISE_SSO_KEYRING ??= JSON.stringify({ current: 'vitest', keys: { vitest: randomBytes(32).toString('base64') } });
 
 let jwksServer: Server | undefined;
 

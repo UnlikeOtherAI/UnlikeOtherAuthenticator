@@ -574,3 +574,22 @@ deadline remain authoritative. A team still requires its exact organisation.
 This endpoint does not grant global control to organisation evidence, disclose
 proof by public `assurance_id`, or relax another organisation route's resolver.
 Deploy this producer contract before consumers that validate global originals.
+
+### Fresh independent proof before minimum-floor enrollment
+
+A new confidential authorization completed from current independent evidence
+receives its original assurance even when the consuming product has no minimum
+assurance row or remains at version zero. The evidence must still belong to the
+exact person, credential epoch and client, have authorize purpose, and record
+completed final authorization. Issuance consumes it once in the same transaction
+as the new family. Encrypted custody must be explicitly configured; missing or
+unavailable custody fails closed, never falling back to a proof-free response.
+
+The authenticated backend token response carries `assurance_ref` and the original
+absolute `assurance_expires_at`. The browser receives neither, and access/resource
+JWTs never contain the confidential reference. Refresh returns that same original
+proof and deadline. An existing legacy family without original evidence remains
+legacy below the floor and is refused once proof is required; refresh alone
+cannot manufacture or rebind provenance. SSO and recovery retain their distinct
+activation and account-control restrictions. No product floor, attestation or
+customer arrangement is changed by issuance or deployment.

@@ -28,8 +28,9 @@ export async function resolveTokenFamilyAssurance(params: {
   if (!product?.minimumAssuranceVersion && !params.authenticationEvidenceId && !params.internalCredential) return { globalAccountControl: true };
   const evidence = await requireAuthenticationEvidence({ id: params.authenticationEvidenceId, userId: params.userId,
     credentialEpoch: params.credentialEpoch, clientDomain: params.domain }, prisma);
-  if (!product?.minimumAssuranceVersion && evidence.provenance === 'independent' && !params.internalCredential) return { globalAccountControl: true };
-  if (product?.minimumAssuranceVersion !== 1 && !(params.internalCredential && evidence.provenance === 'independent')) throw new AppError('FORBIDDEN', 403, 'SSO_ACTIVATION_NOT_READY');
+  // The floor governs legacy-proof admission, never whether a newly completed
+  // independent authentication receives its genuine original provenance.
+  if (product?.minimumAssuranceVersion !== 1 && evidence.provenance !== 'independent') throw new AppError('FORBIDDEN', 403, 'SSO_ACTIVATION_NOT_READY');
   if ((params.internalCredential && evidence.provenance !== 'independent') || !['independent', 'sso'].includes(evidence.provenance) || evidence.purpose !== 'authorize' || !evidence.signatureCompletedAt ||
     (evidence.provenance === 'sso' && (evidence.orgId !== family.orgId || (evidence.teamId && evidence.teamId !== family.teamId)))) {
     throw new AppError('FORBIDDEN', 403, 'INDEPENDENT_REAUTH_REQUIRED');
