@@ -10,6 +10,7 @@ export const cs = {
   'registration.verifying': 'Ověřování…',
   'registration.expired': 'V této registraci už nelze pokračovat. Vyžádejte si nový e-mail.',
   'registration.restart': 'Vyžádat nový e-mail',
+  'registration.sending': 'Odesílání e-mailu…',
   'auth.accessStatus.open': "Zkontrolovat stav přístupu",
   'auth.accessStatus.description': "Ověřte e-mail a zobrazte důvody omezení účtu a pracovních prostorů. Tímto se nepřihlašujete.",
   'auth.accessStatus.email': "E-mailová adresa",

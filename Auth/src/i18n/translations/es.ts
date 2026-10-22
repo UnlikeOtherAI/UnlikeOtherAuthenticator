@@ -10,6 +10,7 @@ export const es = {
   'registration.verifying': 'Verificando…',
   'registration.expired': 'Esta inscripción ya no puede continuar. Solicita otro correo.',
   'registration.restart': 'Solicitar otro correo',
+  'registration.sending': 'Enviando correo…',
   'auth.accessStatus.open': "Consultar estado de acceso",
   'auth.accessStatus.description': "Verifica tu correo para consultar los motivos de acceso de tu cuenta y espacios. Esto no inicia sesión.",
   'auth.accessStatus.email': "Correo electrónico",

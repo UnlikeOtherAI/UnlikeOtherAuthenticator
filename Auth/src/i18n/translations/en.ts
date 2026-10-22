@@ -8,6 +8,7 @@ export const en = {
   'registration.verifying': 'Verifying…',
   'registration.expired': 'This registration can no longer continue. Request a new email to try again.',
   'registration.restart': 'Request a new email',
+  'registration.sending': 'Sending email…',
   'auth.accessStatus.open': "Check access status",
   'auth.accessStatus.description': "Verify your email to see account and workspace access reasons. This does not sign you in.",
   'auth.accessStatus.email': "Email address",

@@ -31,10 +31,13 @@ async function backend(page: Page) {
   let status = 'pending';
   let socket: WebSocketRoute | undefined;
   let calls = 0;
+  let starts = 0;
   await page.routeWebSocket('**/auth/registration/events?**', ws => { socket = ws; });
   await page.route('**/auth/registration/**', async route => {
     const url = new URL(route.request().url());
     if (url.pathname.endsWith('/start')) {
+      starts++;
+      expect(route.request().postDataJSON()).toEqual({ email: 'person@example.com' });
       expect(url.searchParams.get('state')).toBe('registration-csrf');
       return route.fulfill({ json: { registration_id: id, message: 'We sent instructions to your email' } });
     }
@@ -55,6 +58,7 @@ async function backend(page: Page) {
     },
     setStatus: (next: string) => { status = next; },
     calls: () => calls,
+    starts: () => starts,
   };
 }
 
@@ -84,6 +88,17 @@ test('cross-device verification hint requires the emailed code in the original b
   await expect(page.getByRole('status')).toContainText('Your email is verified');
   await expect(page.getByRole('heading', { name: 'Check your email' })).toBeVisible();
   await expect(page.getByRole('textbox', { name: /Verification code \d \/ 6/ })).toHaveCount(6);
+});
+
+test('requesting another email preserves the address and clears only the old code', async ({ page }) => {
+  await configure(page); const server = await backend(page); await start(page);
+  const fields = page.getByRole('textbox', { name: /Verification code \d \/ 6/ });
+  await fields.nth(0).fill('A');
+  await page.getByRole('button', { name: 'Request a new email' }).click();
+  await expect(fields.nth(0)).toHaveValue('');
+  await expect(page.getByText('person@example.com', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Check your email' })).toBeVisible();
+  expect(server.starts()).toBe(2);
 });
 
 test('same-browser notification advances automatically and a blocked websocket falls back to polling', async ({ page }) => {

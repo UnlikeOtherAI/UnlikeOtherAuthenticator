@@ -16,6 +16,8 @@ export function RegistrationVerificationPage(): React.JSX.Element {
   const { t } = useTranslation();
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [sendError, setSendError] = useState(false);
   const [error, setError] = useState(false);
   const [status, setStatus] = useState<RegistrationState['status']>('pending');
   const busy = useRef(false);
@@ -56,6 +58,16 @@ export function RegistrationVerificationPage(): React.JSX.Element {
     if (!finishing.current) setLoading(false);
   }
 
+  async function resend() {
+    if (!pending || busy.current || finishing.current) return;
+    busy.current = true; setResending(true); setSendError(false);
+    const result = await postJson<{ email: string }, { registration_id: string }>('/auth/registration/start', { email: pending.email }, query);
+    busy.current = false; setResending(false);
+    if (!result.ok || typeof result.data?.registration_id !== 'string') { setSendError(true); return; }
+    setCode(''); setError(false); setStatus('pending');
+    popup.beginRegistration({ id: result.data.registration_id, email: pending.email });
+  }
+
   if (!pending) return <div />;
   const unavailable = status === 'expired' || status === 'complete';
   const [beforeEmail, afterEmail] = t('registration.sent', { email: '{email}' }).split('{email}');
@@ -70,17 +82,18 @@ export function RegistrationVerificationPage(): React.JSX.Element {
       ) : (
         <form className="mt-6 flex flex-col gap-4" aria-busy={loading} onSubmit={event => { event.preventDefault(); void submit(code); }}>
           <RegistrationCodeInput value={code} onChange={value => { setCode(value); setError(false); }}
-            onComplete={value => { void submit(value); }} disabled={loading} label={t('registration.code')}
+            onComplete={value => { void submit(value); }} disabled={loading || resending} label={t('registration.code')}
             errorId={error ? 'registration-error' : undefined} />
           {error ? <p id="registration-error" role="alert" className="text-sm text-[var(--uoa-color-danger)]">{t('registration.error')}</p> : null}
           {loading ? <p role="status" className="text-sm text-[var(--uoa-color-muted)]">{t('registration.verifying')}</p> : null}
           {error ? <Button type="submit" disabled={loading}>{t('codeEntry.submit')}</Button> : null}
         </form>
       )}
-      <button type="button" className="mt-6 text-sm text-[var(--uoa-color-primary)] hover:underline"
-        onClick={() => { popup.beginRegistration(null); popup.setView('register'); }}>
-        {t('registration.restart')}
+      <button type="button" className="mt-6 text-sm text-[var(--uoa-color-primary)] hover:underline disabled:opacity-60"
+        disabled={loading || resending} onClick={() => { void resend(); }}>
+        {resending ? t('registration.sending') : t('registration.restart')}
       </button>
+      {sendError ? <p role="alert" className="mt-3 text-sm text-[var(--uoa-color-danger)]">{t('form.error.generic')}</p> : null}
     </div>
   );
 }
