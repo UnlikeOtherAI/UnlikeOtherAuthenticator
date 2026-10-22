@@ -26,8 +26,9 @@ export function renderRegistrationLinkPage(nonce: string): string {
       if (!response.ok) throw new Error('verification failed');
       token = '';
       document.querySelector('h1').textContent = 'Email verified';
-      result.textContent = 'Your email address is confirmed. Return to the registration screen to continue. This device has not been signed in.';
-      button.hidden = true;
+      document.querySelector('h1').nextElementSibling.textContent = 'Your email address is confirmed.';
+      result.textContent = 'Return to the registration screen to continue. This device has not been signed in.';
+      button.remove();
     } catch {
       result.textContent = 'We could not verify this link. Try again, or request a new email from the registration screen.';
       button.disabled = false;

@@ -113,6 +113,7 @@ test('another-device link displays success without navigation or authentication'
   await page.getByRole('button', { name: 'Verify email address' }).click();
   await expect(page.getByRole('heading', { name: 'Email verified' })).toBeVisible();
   await expect(page.getByRole('status')).toContainText('has not been signed in');
+  await expect(page.getByRole('button', { name: 'Verify email address' })).toHaveCount(0);
   expect(await page.context().cookies()).toHaveLength(0);
   await page.screenshot({ path: info.outputPath('cross-device-success.png'), fullPage: true });
 });
