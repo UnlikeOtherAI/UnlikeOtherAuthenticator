@@ -1,5 +1,7 @@
 import { expect, test, type Page, type WebSocketRoute } from '@playwright/test';
 import { renderRegistrationLinkPage } from '../../API/src/services/registration-link-page.service.js';
+import { buildRegistrationVerificationTemplate } from '../../API/src/services/email.templates.registration.js';
+import { buildVerifyEmailSetPasswordTemplate } from '../../API/src/services/email.templates.js';
 
 const id = '9466e365-206c-49cb-a8d5-aa1342bdd613';
 const search = '?config_url=https%3A%2F%2Fproduct.example%2Fconfig&code_challenge=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ&code_challenge_method=S256&state=registration-csrf';
@@ -128,4 +130,17 @@ test('capture matching base-revision registration state', async ({ page }, info)
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await expect(page.getByText('We sent instructions to your email', { exact: true })).toBeVisible();
   await page.screenshot({ path: info.outputPath('before-registration.png'), fullPage: true });
+});
+
+test('verification email shows the link and a large, spaced alternative code', async ({ page }, info) => {
+  const link = 'https://auth.example.com/auth/registration/link#synthetic-link-secret';
+  // The previous template is unchanged from the base revision.
+  await page.setContent(buildVerifyEmailSetPasswordTemplate({ link }).html);
+  await page.screenshot({ path: info.outputPath('before-email.png'), fullPage: true });
+  await page.setContent(buildRegistrationVerificationTemplate({ link, code: 'AB3K7M' }).html);
+  await expect(page.getByRole('link', { name: 'Verify email address' })).toHaveAttribute('href', link);
+  await expect(page.getByText('AB3K7M', { exact: true })).toHaveCSS('font-size', '32px');
+  await expect(page.getByText('AB3K7M', { exact: true })).toHaveCSS('font-weight', '700');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: info.outputPath('after-email.png'), fullPage: true });
 });
