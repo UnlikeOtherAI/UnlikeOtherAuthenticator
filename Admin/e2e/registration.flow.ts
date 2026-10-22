@@ -98,6 +98,14 @@ test('confirmation in another browser advances the original over websocket witho
   await configure(page); const server = await backend(page);
   await page.clock.install(); // No polling interval runs: advancement must follow the socket hint.
   await start(page);
+  if (process.env.REGISTRATION_BASE_LINK_HTML) {
+    // Auth is unchanged from #123: its old cross-device response kept code entry visible.
+    await server.notify('verified');
+    await expect(page.getByRole('status')).toContainText('Enter the code');
+    await page.screenshot({ path: info.outputPath('before-original-continued.png'), fullPage: true });
+    await server.notify('pending');
+    await expect(page.getByRole('status')).toHaveCount(0);
+  }
   const otherContext = await browser.newContext({ viewport: page.viewportSize() });
   try {
     const otherPage = await otherContext.newPage();
@@ -205,6 +213,11 @@ test('a rejected link shows its error without signing in or redirecting', async 
   await expect(page.getByRole('status')).toContainText('We could not verify');
   await page.screenshot({ path: info.outputPath('link-error.png'), fullPage: true });
   expect(await page.context().cookies()).toHaveLength(0);
+  await page.goto('about:blank');
+  await page.goto('/auth/registration/link');
+  await page.getByRole('button', { name: 'Verify email address' }).click();
+  await expect(page.getByRole('status')).toContainText('This link cannot be used');
+  await page.screenshot({ path: info.outputPath('link-missing-secret.png'), fullPage: true });
 });
 
 test('another-device link displays success without navigation or authentication', async ({ page }, info) => {

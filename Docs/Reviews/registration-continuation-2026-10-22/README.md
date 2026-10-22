@@ -49,6 +49,12 @@ same state and viewport: 1024 × 768 desktop and Pixel 7 mobile emulation.
 | Mobile confirmation | [Before](mobile-before-confirmation.png) | [After](mobile-after-confirmation.png) |
 | Desktop success | [Before](desktop-before-success.png) | [After](desktop-cross-device-success.png) |
 | Mobile success | [Before](mobile-before-success.png) | [After](mobile-cross-device-success.png) |
+| Desktop original browser after cross-device approval | [Before](desktop-before-original-continued.png) | [After](desktop-cross-device-original-continued.png) |
+| Mobile original browser after cross-device approval | [Before](mobile-before-original-continued.png) | [After](mobile-cross-device-original-continued.png) |
+
+The original-browser Before uses the unchanged Auth source from `1d7e3fe1` with
+that revision's `verified` response. It shows the code requirement removed by
+#124. The After uses the new `authorized` response and reaches password setup.
 
 The original screen after confirmation is captured for
 [desktop](desktop-original-continued.png) and [mobile](mobile-original-continued.png).
@@ -72,7 +78,7 @@ Password setup is unchanged and included as the destination after verification.
 | Enter the optional code | `partial-code.png`, `code-verifying.png`, `code-original-continued.png` |
 | Recover from an incorrect code | `invalid-code.png` |
 | Resend or recover from expiry | `resend-loading.png`, `registration-expired.png`, `resend-failed.png` |
-| Link verification in progress or rejected | `link-verifying.png`, `link-error.png` |
+| Link verification in progress, rejected or missing its secret | `link-verifying.png`, `link-error.png`, `link-missing-secret.png` |
 
 Fixtures use synthetic link secrets and `person@example.com`; no real account or
 mailbox appears in the images. The full-page captures use matching light themes,
