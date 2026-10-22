@@ -19,12 +19,14 @@ export function useRegistrationStatus(params: {
     if (!params.id) return;
     let stopped = false;
     let checking = false;
+    let recheck = false;
     let socket: WebSocket | null = null;
     let retry: ReturnType<typeof setTimeout> | undefined;
     let delay = 1000;
     const query = { ...params.query, id: params.id };
     async function check() {
-      if (stopped || checking) return;
+      if (stopped) return;
+      if (checking) { recheck = true; return; }
       checking = true;
       const response = await getJson<RegistrationState>('/auth/registration/status', query);
       checking = false;
@@ -34,6 +36,7 @@ export function useRegistrationStatus(params: {
         stopped = true;
         socket?.close();
       }
+      if (recheck && !stopped) { recheck = false; void check(); }
     }
     function connect() {
       if (stopped || typeof WebSocket === 'undefined') return;
