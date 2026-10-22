@@ -6,7 +6,7 @@ import { requireDomainHashAuthForDomainQuery } from '../../middleware/domain-has
 import { resolveOrgUserClaims } from '../../middleware/org-role-guard.js';
 import { createManagementContinuation } from '../../services/org-sso-management.service.js';
 import { enterpriseReadiness } from '../../services/org-sso-policy.service.js';
-import { validateSessionAssurance } from '../../services/session-assurance.service.js';
+import { resolveOriginalAssurance } from '../../services/confidential-assurance-validation.service.js';
 import { AppError } from '../../utils/errors.js';
 
 export function registerOrgEnterpriseRoutes(app: FastifyInstance): void {
@@ -46,15 +46,9 @@ export function registerOrgEnterpriseRoutes(app: FastifyInstance): void {
     }));
   });
   app.post('/org/assurance/validate', { preHandler }, async (request, reply) => {
-    const body = z.object({ assurance_ref: z.string().min(32).max(256), org_id: z.string().min(1),
-      team_id: z.string().min(1).optional() }).strict().parse(request.body);
-    const claims = await resolveOrgUserClaims(request);
-    const domain = request.config?.domain;
-    if (!domain || claims.org?.org_id !== body.org_id || (body.team_id && claims.active?.teamId !== body.team_id)) {
-      throw new AppError('FORBIDDEN', 403, 'SSO_TEAM_REAUTH_REQUIRED');
-    }
-    const proof = await validateSessionAssurance({ reference: body.assurance_ref, userId: claims.userId,
-      credentialEpoch: claims.tokenVersion, clientDomain: domain, orgId: body.org_id, teamId: body.team_id });
+    const body = z.object({ assurance_ref: z.string().min(32).max(256), org_id: z.string().min(1).optional(),
+      team_id: z.string().min(1).optional() }).strict().refine(value => !value.team_id || Boolean(value.org_id)).parse(request.body);
+    const proof = await resolveOriginalAssurance(request, body);
     return reply.header('Cache-Control', 'no-store').send({ ok: true, active: true,
       assurance_id: proof.id, method: proof.method, expires_at: proof.expiresAt.toISOString(),
       client_domain: proof.clientDomain,
