@@ -56,13 +56,16 @@ export function renderInviteHtml(params: {
   /** Already validated against `config.redirect_urls` — see `resolveInviteContinueUrl`. */
   continueUrl?: string;
   productName?: string;
+  primaryAction?: { id: string; label: string };
 }): string {
   const continueButton = params.continueUrl
     ? `<a href="${escapeInvitePageHtml(params.continueUrl)}" style="display:inline-block;padding:12px 16px;border-radius:12px;background:#111827;color:#ffffff;text-decoration:none;font-weight:600;">Continue to ${escapeInvitePageHtml(params.productName ?? 'the app')}</a>`
     : '';
   const primaryButton = params.acceptUrl
     ? `<a href="${escapeInvitePageHtml(params.acceptUrl)}" style="display:inline-block;padding:12px 16px;border-radius:12px;background:#111827;color:#ffffff;text-decoration:none;font-weight:600;">Accept invitation</a>`
-    : '';
+    : params.primaryAction
+      ? `<button id="${escapeInvitePageHtml(params.primaryAction.id)}" type="button" style="display:inline-block;padding:12px 16px;border:0;border-radius:12px;background:#111827;color:#ffffff;font:inherit;font-weight:600;cursor:pointer;">${escapeInvitePageHtml(params.primaryAction.label)}</button>`
+      : '';
   const declineButton = params.declineUrl
     ? `<a href="${escapeInvitePageHtml(params.declineUrl)}" style="display:inline-block;padding:12px 16px;border-radius:12px;border:1px solid #d1d5db;color:#111827;text-decoration:none;font-weight:600;">Decline</a>`
     : '';

@@ -58,10 +58,11 @@ export function RegistrationVerificationPage(): React.JSX.Element {
 
   if (!pending) return <div />;
   const unavailable = status === 'expired' || status === 'complete';
+  const [beforeEmail, afterEmail] = t('registration.sent', { email: '{email}' }).split('{email}');
   return (
     <div>
       <h1 className={`text-balance ${classNames.title}`}>{t('registration.checkEmail')}</h1>
-      <p className="mt-3 text-sm text-[var(--uoa-color-text)]">{t('registration.sent', { email: pending.email })}</p>
+      <p className="mt-3 text-sm text-[var(--uoa-color-text)]">{beforeEmail}<strong>{pending.email}</strong>{afterEmail}</p>
       <p className="mt-2 text-sm text-[var(--uoa-color-muted)]">{t('registration.instructions')}</p>
       {status === 'verified' ? <p role="status" className="mt-4 text-sm text-[var(--uoa-color-text)]">{t('registration.verifiedElsewhere')}</p> : null}
       {unavailable ? (

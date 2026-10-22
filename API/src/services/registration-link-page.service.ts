@@ -5,8 +5,9 @@ export function renderRegistrationLinkPage(nonce: string): string {
   const html = renderInviteHtml({
     title: 'Confirm your email',
     body: 'Verify your email address, then return to the registration screen where you started.',
+    primaryAction: { id: 'verify', label: 'Verify email address' },
   });
-  const button = '<button id="verify" type="button">Verify email address</button><p id="result" role="status" aria-live="polite"></p>';
+  const result = '<p id="result" role="status" aria-live="polite"></p>';
   const script = `<script nonce="${nonce}">
 (() => {
   let token = location.hash.slice(1);
@@ -34,6 +35,6 @@ export function renderRegistrationLinkPage(nonce: string): string {
   });
 })();
 </script>`;
-  return html.replace('<div style="display:flex;gap:12px;flex-wrap:wrap;"></div>', button)
+  return html.replace('</button>', `</button>${result}`)
     .replace('</body>', `${script}</body>`);
 }
