@@ -141,6 +141,29 @@ describe('fresh confidential independent proof before floor enrollment', () => {
       .toMatchObject({ familyId: fresh.familyId, orgId: target.orgId, teamId: target.id, expiresAt: new Date(authorized.assurance_expires_at!) });
     expect((await f.db.sessionAssurance.findUniqueOrThrow({ where: { id: String(originalClaims.assurance_id) } })).expiresAt.toISOString()).toBe(original.assurance_expires_at);
   });
+  it.each(['membership', 'enterprise', 'epoch', 'custody'] as const)('checks current %s before any proof-bearing switch edge', async reason => {
+    const f = await fixture({ selected: true }); const original = tokenBody.parse((await f.exchange(await f.login())).json());
+    const before = await f.db.refreshToken.findUniqueOrThrow({ where: { tokenHash: hashRefreshToken(original.refresh_token, TEST_SHARED_SECRET) } });
+    const org = await f.db.organisation.create({ data: { domain: f.domain, ownerId: f.user.id, name: 'Target org', slug: randomUUID() } });
+    const team = await f.db.team.create({ data: { orgId: org.id, name: 'Target team', slug: randomUUID() } });
+    await f.db.orgMember.create({ data: { orgId: org.id, userId: f.user.id, role: 'owner' } });
+    if (reason !== 'membership') await f.db.teamMember.create({ data: { teamId: team.id, userId: f.user.id, teamRole: 'admin' } });
+    if (reason === 'enterprise') await f.db.orgSsoPolicy.create({ data: { clientDomain: f.domain, orgId: org.id,
+      arrangementEnabled: true, enforcement: 'required_for_all_members' } });
+    if (reason === 'epoch') await f.db.user.update({ where: { id: f.user.id }, data: { tokenVersion: { increment: 1 } } });
+    const provider = process.env.ENTERPRISE_SSO_CUSTODY_PROVIDER;
+    try {
+      if (reason === 'custody') Reflect.deleteProperty(process.env, 'ENTERPRISE_SSO_CUSTODY_PROVIDER');
+      const response = await f.token({ grant_type: 'urn:unlikeotherai:params:oauth:grant-type:team-switch',
+        refresh_token: original.refresh_token, organization_id: org.id, team_id: team.id });
+      expect(response.statusCode, response.body).toBe(reason === 'epoch' ? 401 : reason === 'custody' ? 503 : 403);
+      if (reason === 'membership' || reason === 'enterprise') expect(response.json())
+        .toMatchObject({ code: reason === 'membership' ? 'TEAM_NOT_AVAILABLE' : 'INTERACTION_REQUIRED' });
+    } finally { if (provider === undefined) Reflect.deleteProperty(process.env, 'ENTERPRISE_SSO_CUSTODY_PROVIDER'); else process.env.ENTERPRISE_SSO_CUSTODY_PROVIDER = provider; }
+    expect(await f.db.refreshToken.findUniqueOrThrow({ where: { id: before.id } })).toEqual(before);
+    expect(await f.db.refreshToken.count({ where: { familyId: before.familyId } })).toBe(1);
+    expect(await f.db.sessionAssurance.count({ where: { userId: f.user.id } })).toBe(1);
+  });
   it('never upgrades a legacy refresh family even after the same person completes a healthy new login', async () => {
     const f = await fixture(); const old = await f.legacy();
     const first = await f.token({ grant_type: 'refresh_token', refresh_token: old.refreshToken });
