@@ -828,8 +828,14 @@ pass is in `Docs/Requirements/sms-deployment.md` §3.
 
 ### Directory webhook deployment
 
-Provision `DIRECTORY_WEBHOOK_TARGETS_JSON` as a Secret Manager value containing
-per-product `{domain,url,secret}` targets. The migration creates the RLS-protected
+Provision the Secret Manager secret `uoa-auth-directory-webhook-targets-json`
+with per-product `{domain,url,secret}` targets, grant runtime access, then set
+GitHub repository variable `UOA_DIRECTORY_WEBHOOKS_CONFIGURED=true` when both
+ends are ready. The workflow binds it as `DIRECTORY_WEBHOOK_TARGETS_JSON` through
+`--set-secrets` on each deploy and enables a minimum of one instance with
+unthrottled CPU for durable background delivery. The flag defaults to `false`;
+unconfigured deployments require no new secret or scaling change. Manual
+bindings are overwritten by the workflow's complete secret list. The migration creates the RLS-protected
 transactional outbox and change triggers. Deploy the exact-subject resolver before
 consumers remove profile copies, configure their matching dedicated secret, and
 verify an actual profile and membership change. See

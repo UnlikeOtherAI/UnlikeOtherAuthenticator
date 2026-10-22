@@ -12,6 +12,19 @@ in Secret Manager; never put production values in source, logs, user settings or
 signed public product configuration. This is server configuration, not a new
 public subscription-management capability.
 
+For the Cloud Run deployment, provision that JSON as the Secret Manager secret
+`uoa-auth-directory-webhook-targets-json` and grant the runtime service account
+access. Only after both ends are ready, set the GitHub repository variable
+`UOA_DIRECTORY_WEBHOOKS_CONFIGURED=true`. The deployment workflow then binds
+`DIRECTORY_WEBHOOK_TARGETS_JSON` through `--set-secrets` on every deploy and keeps
+one instance with CPU available for the background outbox dispatcher. The flag
+defaults to `false`: existing deployments require no new secret and retain their
+current scaling behavior. Setting it back to `false` removes this secret binding
+on the next deploy; events remain pending until delivery is configured again.
+Do not put the target JSON or its signing secrets in GitHub variables or public
+configuration. A manual Cloud Run binding without this workflow flag is removed
+by the next deployment's complete `--set-secrets` list.
+
 For Nessie, use its exact configured `UOA_DOMAIN` and destination
 `https://api.nessie.works/api/auth/uoa/directory-webhook`. Configure the same
 secret as `UOA_DIRECTORY_WEBHOOK_SECRET` on Nessie. Do not reuse a domain bearer,
