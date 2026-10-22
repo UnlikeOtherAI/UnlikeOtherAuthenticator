@@ -17,6 +17,7 @@ import { registerConfigValidateRoute } from './config-validate.js';
 import { registerConfigVerifyRoute } from './config-verify.js';
 import { registerLlmRoute } from './llm.js';
 import { endpoints } from './schema.js';
+import { registrationVerificationDocumentation } from './schema.registration.js';
 // Admin schema includes exact-user activity filters and canonical invitation history states.
 import { readAdminIndexAssetUrls } from '../../services/admin-ui.service.js';
 import { renderRootHoldingPage } from '../../services/root-page.service.js';
@@ -55,6 +56,7 @@ export function registerRootRoute(app: FastifyInstance): void {
       home: '/',
       docs: '/llm',
       api: '/api',
+      registration_verification: registrationVerificationDocumentation,
       personal_telephone: { profile: '/apps/v1/nessie/phone-profile/read', lookup: '/apps/v1/nessie/phone-profile/lookup',
         call_proof: '/apps/v1/nessie/phone-profile/call-proof/start',
         sms_admission: '/apps/v1/nessie/phone-profile/sms-admission',

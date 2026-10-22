@@ -16,3 +16,6 @@ dist-ssr/
 
 # git worktrees (per workflow rules)
 .worktrees/
+
+# Disposable registration verification database and rendered evidence
+.registration-qa/

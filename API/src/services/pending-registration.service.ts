@@ -132,10 +132,11 @@ export async function verifyPendingRegistrationLink(token: string, cookies: Reco
 
 /** The existing completion endpoint remains the single account/session writer. */
 export async function assertPendingRegistrationCompletion(params: RegistrationContext & { token: string; cookies: Record<string, string | undefined> }, prisma: PrismaClient): Promise<void> {
+  if (!params.token.startsWith('registration.')) return;
   const row = await prisma.pendingRegistration.findUnique({ where: {
     completionHash: hashEmailToken(params.token, requireEnv('SHARED_SECRET').SHARED_SECRET),
   } });
-  if (!row) return; // Legacy registrations, invitations and resets retain their own authority.
+  if (!row) refuse();
   assertBrowser(row, params.cookies[registrationCookieName(row.id)] ?? '', params);
   if (!row.browserAuthorizedAt || row.expiresAt.getTime() <= Date.now()) refuse();
 }

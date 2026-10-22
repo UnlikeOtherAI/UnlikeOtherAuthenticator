@@ -26,7 +26,7 @@ export function equalRegistrationDigest(actual: string, expected: string): boole
 }
 
 export function completionToken(id: string, credential: string): string {
-  return registrationDigest('completion', `${id}:${credential}`);
+  return `registration.${registrationDigest('completion', `${id}:${credential}`)}`;
 }
 
 export function registrationCookieName(id: string): string {

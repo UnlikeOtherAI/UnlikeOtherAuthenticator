@@ -2,6 +2,7 @@ import { telephoneEndpoints } from './schema.telephone.js';
 import { lifecycleEndpoints } from './schema.lifecycle.js';
 import { enterpriseSsoEndpoints } from './schema.enterprise-sso.js';
 import { authEndpoints } from './schema.auth.js';
+import { registrationVerificationEndpoints } from './schema.registration.js';
 import { nativeAppEndpoints } from './schema.native-apps.js';
 import { avatarEndpoints } from './schema.avatars.js';
 import { billingEndpoints } from './schema.billing.js';
@@ -39,6 +40,7 @@ const orgContractEndpoints: EndpointSchema[] = withOrgContract([
 ]);
 
 export const endpoints: EndpointSchema[] = [
+  ...registrationVerificationEndpoints,
   ...enterpriseSsoEndpoints,
   ...telephoneEndpoints,
   ...lifecycleEndpoints,

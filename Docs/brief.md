@@ -1,5 +1,19 @@
 # Central OAuth & Auth Service — Full Build Brief
 
+## Browser-bound registration verification (2026-10-22)
+
+The hosted email registration screen offers one verification link and a six-character
+uppercase alphanumeric code. The secret link confirms the mailbox on any device and
+shows an isolated success page without signing that device in. A link confirmed with
+the original registration cookie can advance that exact flow. A cross-device click
+does not authorize the initiating browser: it still needs the emailed code. This
+prevents an attacker-initiated registration from acquiring credentials when the
+mailbox owner clicks. No extra pairing code is sent. Codes work only in the requesting
+browser's registration, expire after 15 minutes, and allow five persisted guesses.
+Authenticated WebSocket hints and polling recheck database state; refresh retains
+only public flow metadata. Existing epoch, scope, TOTP and agreement gates remain.
+The complete contract is published by `/api` and `/llm` under `/auth/registration/*`.
+
 ## Enterprise connection authority (2026-10-17)
 
 Enterprise organisation SSO is configured only in UOA and introduces no Nessie

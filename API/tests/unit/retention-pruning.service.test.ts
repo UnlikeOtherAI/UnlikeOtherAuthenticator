@@ -27,6 +27,7 @@ describe('retention-pruning.service', () => {
     const now = new Date('2026-04-20T12:00:00.000Z');
     const calls: Record<string, unknown> = {};
     const prisma = {
+      pendingRegistration: { deleteMany: async (args: unknown) => { calls.pendingRegistration = args; return { count: 13 }; } },
       telephoneCallChallenge: { deleteMany: async (args: unknown) => { calls.telephoneCallChallenge = args; return { count: 11 }; } },
     telephoneChallenge: { deleteMany: async (args: unknown) => { calls.telephoneChallenge = args; return { count: 9 }; } },
       telephoneSmsAdmission: { deleteMany: async (args: unknown) => { calls.telephoneSmsAdmission = args; return { count: 12 }; } },
@@ -108,6 +109,7 @@ describe('retention-pruning.service', () => {
     expect(calls.telephoneSmsAdmission).toMatchObject({ where: { createdAt: { lt: new Date('2026-03-21T12:00:00.000Z') } } });
     expect(calls.telephoneLookup).toMatchObject({ where: { createdAt: { lt: new Date('2026-03-21T12:00:00.000Z') } } });
     expect(result).toEqual({
+      pendingRegistrationsDeleted: 13,
       telephoneCallChallengesDeleted: 11,
       telephoneChallengesDeleted: 9,
       telephoneSmsAdmissionsDeleted: 12,

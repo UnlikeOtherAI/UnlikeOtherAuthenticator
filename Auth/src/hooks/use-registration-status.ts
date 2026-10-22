@@ -29,6 +29,11 @@ export function useRegistrationStatus(params: {
       const response = await getJson<RegistrationState>('/auth/registration/status', query);
       checking = false;
       if (!stopped && response.ok) callback.current(response.data);
+      else if (!stopped && !response.ok && [400, 401, 403].includes(response.status)) {
+        callback.current({ status: 'expired' });
+        stopped = true;
+        socket?.close();
+      }
     }
     function connect() {
       if (stopped || typeof WebSocket === 'undefined') return;
