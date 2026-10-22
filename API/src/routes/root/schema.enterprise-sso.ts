@@ -62,7 +62,7 @@ export const enterpriseSsoEndpoints: EndpointSchema[] = [
       session_max_age_seconds: '300..86400', reauth_mode: 'detect_only|force', jit_enabled: 'boolean, default false',
       default_team_id: 'active canonical team ID or null', allow_unverified_contractors: 'boolean, default false',
       group_mappings: '[{connection_id,external_group_id,team_id,team_role:member|admin}]' } },
-  { method: 'PUT', path: '/internal/admin/enterprise/products/:domain', description: 'Machine-only operator prepares the assurance floor and fixed RP entry before consumer rollout; activation requires subsequent audited compatibility',
+  { method: 'PUT', path: '/internal/admin/enterprise/products/:domain', description: 'Machine-only operator prepares the assurance floor and fixed RP entry as a separately reviewed legacy cutover; fresh independent proof needs no floor. Activation requires subsequent audited compatibility',
     auth: 'Independent platform operator', body: { minimum_assurance_version: '1', authority_migration_revision: 'audited revision or explicit null during preparation',
       revocation_consumers_revision: 'audited receiver plus pull/reconcile revision, or explicit null during preparation', login_entry_url: 'fixed HTTPS login initializer, no query', config_url: 'exact registered signed config URL' } },
   { method: 'GET', path: '/domain/revocations', description: 'Authenticated exact-product ordered revocation feed, no roster/profile payload',
