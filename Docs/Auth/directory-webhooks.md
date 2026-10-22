@@ -44,25 +44,25 @@ the exact domain and mapping, and deduplicate the stable event id. Retries retai
 the event id and occurrence time but use a fresh delivery timestamp/signature.
 Any 2xx response acknowledges delivery. Failures retain the pending event.
 
-The precise read is
-`POST /org/organisations/:orgId/teams/:teamId/people/resolve` with
-`{ "subjects": ["stable-subject"] }`, at most100 subjects. It uses the existing
-domain/config verification and signed user assertion. A user-mode caller must
-currently belong to the exact selected team; missing subjects are omitted, and
-historical membership rows retain lifecycle status. The response is
-`{data: TeamRosterMember[]}` with current name/avatar, subject, team role,
-organisation role and status. Only team managers and the person themself receive
-an email address. A product must omit a removed/inactive person from selectors;
-historical authors may render the current profile from its retained reference.
+The precise read reuses the current
+`GET /org/organisations/:orgId/teams/:teamId/members` API with
+`subject_ids=<comma-separated stable subjects>&status=all&limit=100`. A request
+contains at most100 subjects. It retains the existing original-assurance actor
+proof, verified config, current exact-team authorization and field privacy.
+Missing subjects are omitted; historical membership rows retain lifecycle status.
+The caller never substitutes a full roster read for this selected-subject read.
+Only the provider's current manager permissions authorize disclosure of email.
+The signed-in person's own canonical profile continues to use `/org/me`.
 
-Deploy this migration/resolver before a product removes its stored SSO profile
-columns. Deploy and configure both ends, then verify an actual UOA rename and
+Deploy this outbox and configure notification delivery alongside the existing
+reviewed UOA authority rollout. Profile/hierarchy cleanup uses that rollout’s
+read-only inventory and reviewed apply; this webhook change never bypasses it. Deploy and configure both ends, then verify an actual UOA rename and
 membership addition/removal against eligible open product views. Unit and
 synthetic signed-webhook tests establish the protocol behavior; they do not prove
 production registration or cross-device delivery.
 
 `GET /org/organisations/:orgId/teams/:teamId/people/:userId/avatar` uses the same
-exact-team authorization and renders the target's current picture without
+existing selected-subject authorization and renders the target's current picture without
 requiring a domain-role row on the product. This covers newly added people who
 have never signed into that product. Products relay these authenticated bytes;
 browsers do not receive a domain credential.

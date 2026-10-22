@@ -391,4 +391,3 @@ export async function findTeamMemberCandidates(
     permissions: { addMember: true, searchMemberCandidates: true },
   };
 }
-
