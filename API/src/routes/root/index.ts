@@ -1,3 +1,4 @@
+// Exact selected-team profile resolution is published in schema.ts and /llm.
 import { lifecycleDocumentation } from './schema.lifecycle.js';
 import { readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';

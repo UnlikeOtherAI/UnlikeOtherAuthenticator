@@ -368,3 +368,32 @@ export async function findTeamMemberCandidates(
     permissions: { addMember: true, searchMemberCandidates: true },
   };
 }
+
+/** Resolve only requested subjects, under the ordinary team roster authority. */
+export async function resolveTeamPeople(
+  params: Parameters<typeof listTeamMembers>[0] & { subjects: string[] },
+  deps?: OrgServiceDeps,
+): Promise<Array<TeamRosterMember & { orgRole?: string }>> {
+  const env = deps?.env ?? getEnv();
+  assertDatabaseEnabled(env);
+  if (!params.subjects.length || params.subjects.length > 100) throw new AppError('BAD_REQUEST', 400);
+  const actorUserId = resolveOrgActor(params);
+  const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgServicePrisma);
+  const { org, team } = await resolveTeamRosterAccess(prisma, { ...params, actorUserId });
+  const permissions = await teamRosterPermissions(prisma, { ...params, actorUserId });
+  if (actorUserId && !await prisma.teamMember.findFirst({
+    where: { teamId: team.id, userId: actorUserId, status: 'ACTIVE',
+      user: { lifecycleStatus: 'ACTIVE' }, team: { lifecycleStatus: 'ACTIVE' } }, select: { id: true },
+  })) throw new AppError('FORBIDDEN', 403);
+  const rows = await prisma.teamMember.findMany({
+    where: { teamId: team.id, userId: { in: [...new Set(params.subjects)] } },
+    select: TEAM_ROSTER_SELECT,
+  });
+  const orgMembers = await prisma.orgMember.findMany({
+    where: { orgId: org.id, userId: { in: rows.map((row) => row.userId) } },
+    select: { userId: true, role: true },
+  });
+  const roles = new Map(orgMembers.map((member) => [member.userId, member.role]));
+  return rows.map((row) => ({ ...toTeamRosterMember(row, org.domain, permissions.viewMemberEmail || row.userId === actorUserId),
+    orgRole: roles.get(row.userId) }));
+}

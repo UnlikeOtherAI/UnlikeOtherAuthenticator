@@ -1,4 +1,6 @@
 import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
+import { resolveTeamPeople } from '../../services/team.service.roster.js';
 
 import { asPrismaClient } from '../../db/tenant-context.js';
 import { configVerifier } from '../../middleware/config-verifier.js';
@@ -41,6 +43,22 @@ import {
 } from './team-route.shared.js';
 
 export function registerTeamRoutes(app: FastifyInstance): void {
+  app.post('/org/organisations/:orgId/teams/:teamId/people/resolve', {
+    preValidation: [requireDomainHashAuthForDomainQuery(), configVerifier,
+      parseDomainContextHook, requireOrgFeatures, requireOrgRole()],
+  }, async (request, reply) => {
+    const { domain } = parseDomainContext(request);
+    const orgId = getOrgIdFromParams(request.params);
+    const teamId = getTeamIdFromParams(request.params);
+    const { subjects } = z.object({ subjects: z.array(z.string().min(1).max(200)).min(1).max(100) })
+      .strict().parse(request.body);
+    setTenantContextFromRequest(request, { orgId, userId: tenantUserId(request) });
+    const data = await request.withTenantTx((tx) => resolveTeamPeople({
+      orgId, teamId, domain, subjects, ...orgCaller(request), config: requireVerifiedConfig(request),
+    }, { prisma: asPrismaClient(tx) }));
+    return reply.send({ data });
+  });
+
   app.get(
     '/org/organisations/:orgId/teams',
     {

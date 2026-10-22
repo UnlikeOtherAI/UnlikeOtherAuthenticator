@@ -923,3 +923,9 @@ and passes it to Auth SSR. Product configuration cannot supply this setting.
 SMS number payment implementation: services/billing-sms-number.service.ts owns immutable monthly acceptance and verified Checkout projection; services/billing-sms-number-lifecycle.service.ts owns acquired-number attachment and fenced release/cancellation. routes/billing/sms-numbers.ts is the thin public registration.
 
 SMS prepaid runtime: services/billing-sms-{reservation,dispatch,receipt,grant,standing,inbound}.service.ts own admission, physical dispatch fencing and actual usage settlement; routes/billing/sms-{reservations,grants,inbound}.ts register the public contracts. Exact money arithmetic lives in billing-sms-money.service.ts. All share the canonical wallet and budget services.
+
+Directory notifications use `services/directory-webhook.service.ts` and the
+`directory_webhook_events` outbox. Database triggers own atomic mutation
+admission; an app-owned stoppable worker owns HTTPS delivery. The existing team
+roster service and route own exact subject resolution. See
+[directory webhooks](directory-webhooks.md).

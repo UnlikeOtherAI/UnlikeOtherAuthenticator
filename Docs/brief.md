@@ -3185,3 +3185,12 @@ through UOA independently; no duplicate identity, organisation or membership sto
 is permitted. Existing native refresh grants never widen: adding the scope requires
 one fresh registration/sign-in with explicit hosted consent. Operator provisioning,
 wire contract and verification are authoritative in [Kelpie account connectivity](Auth/kelpie-connect.md).
+
+## Product directory notifications (2026-10-22)
+
+UOA emits reference-only, domain-scoped directory webhooks for profile/avatar
+and membership changes, with a durable transactional outbox and dedicated
+per-product HMAC secrets. Products resolve only the affected exact subjects
+through the selected-team authenticated API and keep no durable profile mirror.
+The contract, deployment order and verification limits are in
+[Directory change webhooks](Auth/directory-webhooks.md).

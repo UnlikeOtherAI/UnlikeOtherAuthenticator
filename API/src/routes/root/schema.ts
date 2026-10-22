@@ -37,6 +37,12 @@ const orgContractEndpoints: EndpointSchema[] = withOrgContract([
 ]);
 
 export const endpoints: EndpointSchema[] = [
+  { method: 'POST', path: '/org/organisations/:orgId/teams/:teamId/people/resolve',
+    description: 'Resolve up to100 exact UOA subjects visible in the selected team; no collection read',
+    auth: 'domain hash + verified config; optional signed user assertion selects current user authority',
+    query: { domain: 'registered product domain', config_url: 'verified product config URL' },
+    body: { subjects: '1–100 stable UOA subject ids' },
+    response: { data: 'TeamRosterMember[] with orgRole; absent subjects omitted, email only for team managers' } },
   ...lifecycleEndpoints,
   { method: 'POST', path: '/auth/debug-login/issue', description: 'Mint a 30-minute single-use login code from a current source refresh family',
     auth: 'verified config and domain bearer plus source refresh credential', query: { config_url: 'signed product config URL' },

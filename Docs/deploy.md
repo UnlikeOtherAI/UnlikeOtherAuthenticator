@@ -781,3 +781,12 @@ the direction; per message, twice the USD 0.001 failed-message fee; valid for
 automatically. Rows accepted before that column existed, and manual evidence,
 need a person, who accepts the country once with Add country. How to verify a
 pass is in `Docs/Requirements/sms-deployment.md` §3.
+
+### Directory webhook deployment
+
+Provision `DIRECTORY_WEBHOOK_TARGETS_JSON` as a Secret Manager value containing
+per-product `{domain,url,secret}` targets. The migration creates the RLS-protected
+transactional outbox and change triggers. Deploy the exact-subject resolver before
+consumers remove profile copies, configure their matching dedicated secret, and
+verify an actual profile and membership change. See
+[the wire contract and rollout order](Auth/directory-webhooks.md).
