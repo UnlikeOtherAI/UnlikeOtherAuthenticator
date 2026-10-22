@@ -87,7 +87,7 @@ test('confirmation in another browser advances the original over websocket witho
   await configure(page); const server = await backend(page);
   await page.clock.install(); // No polling interval runs: advancement must follow the socket hint.
   await start(page);
-  const otherContext = await browser.newContext({ viewport: page.viewportSize()! });
+  const otherContext = await browser.newContext({ viewport: page.viewportSize() });
   try {
     const otherPage = await otherContext.newPage();
     await otherPage.route('**/auth/registration/link', async route => {
