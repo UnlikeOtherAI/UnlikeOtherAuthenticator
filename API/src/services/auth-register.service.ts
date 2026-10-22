@@ -44,7 +44,20 @@ type RegisterDeps = {
   prisma?: RegisterPrisma;
 };
 
-type RegistrationInstructionResult = { status: 'sent' } | { status: 'existing_user' };
+/**
+ * What happened to the email behind the generic response, for the sign-up funnel only
+ * (Docs/Auth/signup-funnel-metrics.md). Never returned to the caller of the public endpoint.
+ */
+export type RegistrationDelivery =
+  | 'verification_sent'
+  | 'verification_failed'
+  | 'login_link_sent'
+  | 'login_link_failed'
+  | 'blocked';
+
+type RegistrationInstructionResult =
+  | { status: 'sent'; delivery?: RegistrationDelivery }
+  | { status: 'existing_user' };
 
 /**
  * Brief 11: equalize CPU/IO between the user-exists and user-missing/blocked branches
@@ -163,7 +176,7 @@ export async function requestRegistrationInstructions(
   );
   if (banned) {
     await (deps?.consumeAccountFlowTimingBudget ?? consumeAccountFlowTimingBudget)();
-    return { status: 'sent' };
+    return { status: 'sent', delivery: 'blocked' };
   }
 
   const prisma = deps?.prisma ?? getPrisma();
@@ -190,7 +203,7 @@ export async function requestRegistrationInstructions(
   ) {
     // Don't leak "registration blocked" vs "registration in progress" via timing.
     await (deps?.consumeAccountFlowTimingBudget ?? consumeAccountFlowTimingBudget)();
-    return { status: 'sent' };
+    return { status: 'sent', delivery: 'blocked' };
   }
 
   const token = deps?.generateEmailToken ? deps.generateEmailToken() : generateEmailToken();
@@ -238,8 +251,12 @@ export async function requestRegistrationInstructions(
       codeChallenge: params.codeChallenge,
       codeChallengeMethod: params.codeChallengeMethod,
     });
-    await (deps?.sendAccountExistsEmail ?? sendAccountExistsEmail)({ to: email, link, theme });
-    return { status: 'sent' };
+    const delivered = await (deps?.sendAccountExistsEmail ?? sendAccountExistsEmail)({
+      to: email,
+      link,
+      theme,
+    });
+    return { status: 'sent', delivery: delivered === false ? 'login_link_failed' : 'login_link_sent' };
   }
 
   const link = buildRegistrationEmailLandingLink({
@@ -252,19 +269,10 @@ export async function requestRegistrationInstructions(
     codeChallenge: params.codeChallenge,
     codeChallengeMethod: params.codeChallengeMethod,
   });
-  if (type === 'VERIFY_EMAIL') {
-    await (deps?.sendVerifyEmailEmail ?? sendVerifyEmailEmail)({
-      to: email,
-      link,
-      theme,
-    });
-    return { status: 'sent' };
-  }
-
-  await (deps?.sendVerifyEmailSetPasswordEmail ?? sendVerifyEmailSetPasswordEmail)({
-    to: email,
-    link,
-    theme,
-  });
-  return { status: 'sent' };
+  const send =
+    type === 'VERIFY_EMAIL'
+      ? (deps?.sendVerifyEmailEmail ?? sendVerifyEmailEmail)
+      : (deps?.sendVerifyEmailSetPasswordEmail ?? sendVerifyEmailSetPasswordEmail);
+  const delivered = await send({ to: email, link, theme });
+  return { status: 'sent', delivery: delivered === false ? 'verification_failed' : 'verification_sent' };
 }

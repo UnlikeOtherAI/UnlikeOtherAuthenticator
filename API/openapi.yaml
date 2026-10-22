@@ -9389,6 +9389,105 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /internal/admin/auth-funnel:
+    get:
+      tags: [Internal Admin]
+      summary: Sign-up and sign-in funnel counts (admin view)
+      description: >-
+        Event counts per funnel step and outcome for a UTC day range, optionally for one client
+        domain. Aggregates only; no email, IP, user id or token is stored. See
+        Docs/Auth/signup-funnel-metrics.md.
+      operationId: adminGetAuthFunnel
+      security:
+        - adminBearer: []
+      parameters:
+        - name: from
+          in: query
+          required: false
+          description: First UTC day (YYYY-MM-DD), inclusive. Defaults to 29 days before `to`.
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: false
+          description: Last UTC day (YYYY-MM-DD), inclusive. Defaults to today. At most 366 days.
+          schema:
+            type: string
+            format: date
+        - name: domain
+          in: query
+          required: false
+          description: Narrow totals and days to one client domain.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Funnel totals in step order plus per-day counts.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [from, to, domain, domains, totals, days]
+                properties:
+                  from:
+                    type: string
+                    format: date
+                  to:
+                    type: string
+                    format: date
+                  domain:
+                    type: string
+                    nullable: true
+                  domains:
+                    type: array
+                    items:
+                      type: string
+                  totals:
+                    type: array
+                    items:
+                      type: object
+                      required: [step, outcome, count]
+                      properties:
+                        step:
+                          type: string
+                        outcome:
+                          type: string
+                        count:
+                          type: integer
+                  days:
+                    type: array
+                    items:
+                      type: object
+                      required: [day, step, outcome, count]
+                      properties:
+                        day:
+                          type: string
+                          format: date
+                        step:
+                          type: string
+                        outcome:
+                          type: string
+                        count:
+                          type: integer
+        '400':
+          description: Malformed day, reversed range, or a range longer than 366 days.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Not a superuser or wrong admin domain.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /internal/admin/settings:
     get:
       tags: [Internal Admin]

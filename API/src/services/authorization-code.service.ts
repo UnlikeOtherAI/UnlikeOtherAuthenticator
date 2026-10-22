@@ -46,6 +46,16 @@ function parseRedirectUrl(value: string): URL {
   return u;
 }
 
+/**
+ * The opaque INVALID_AUTH_CODE rejection, carrying the server-side reason so the token route can
+ * count it in the sign-up funnel. The public response is unchanged: the reason never leaves UOA.
+ */
+export class AuthorizationCodeRejectedError extends AppError {
+  public constructor(public readonly reason: string) {
+    super('UNAUTHORIZED', 401, 'INVALID_AUTH_CODE');
+  }
+}
+
 export function selectRedirectUrl(params: {
   allowedRedirectUrls: string[];
   requestedRedirectUrl?: string;
@@ -255,7 +265,7 @@ export async function consumeAuthorizationCode(params: {
       // Logger not initialised (e.g. in unit tests) — diagnostics are best-effort
       // and must never change the opaque rejection behaviour below.
     }
-    throw new AppError('UNAUTHORIZED', 401, 'INVALID_AUTH_CODE');
+    throw new AuthorizationCodeRejectedError(reason);
   };
 
   if (!row) return rejectAuthCode('code_not_found');

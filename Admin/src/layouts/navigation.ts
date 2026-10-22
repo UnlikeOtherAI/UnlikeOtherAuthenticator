@@ -25,6 +25,7 @@ export const navSections: NavSection[] = [
   { label: 'Activity', items: [
     { label: 'Login activity', path: '/logs', icon: 'logs' },
     { label: 'Connection errors', path: '/connection-errors', icon: 'alert' },
+    { label: 'Sign-up funnel', path: '/signup-funnel', icon: 'logs' },
   ] },
 ];
 export function navLabelForPath(pathname: string) {

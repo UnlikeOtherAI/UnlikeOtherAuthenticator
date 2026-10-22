@@ -3,6 +3,7 @@ import type { PrismaClient } from '@prisma/client';
 
 import { getEnv } from '../config/env.js';
 import { getPrisma } from '../db/prisma.js';
+import { recordAuthFunnelStep, type AuthFunnelWritePrisma } from './auth-funnel.service.js';
 import {
   mapAuthMethodToProvider,
   recordAuthIdentity,
@@ -21,8 +22,9 @@ type LoginLogDeps = {
 };
 
 type RecordLoginLogDeps = Omit<LoginLogDeps, 'prisma'> & {
-  // The BYPASSRLS admin client, or a transaction on it: the auth identity is written through it too.
-  prisma?: LoginLogPrisma & AuthIdentityPrisma;
+  // The BYPASSRLS admin client, or a transaction on it: the auth identity and the sign-up funnel
+  // counter are written through it too.
+  prisma?: LoginLogPrisma & AuthIdentityPrisma & AuthFunnelWritePrisma;
 };
 
 export type LoginLogRecord = {
@@ -95,6 +97,13 @@ export async function recordLoginLog(
     },
     select: { id: true },
   });
+
+  // Every completed sign-in writes exactly one login log, whatever the method, so this is the
+  // funnel's single "returned to the product" point (Docs/Auth/signup-funnel-metrics.md).
+  await recordAuthFunnelStep(
+    { domain: params.domain, step: 'sign_in_completed', outcome: params.authMethod },
+    { env, now: () => now, ...(deps?.prisma ? { prisma: deps.prisma } : {}) },
+  );
 
   // Record the auth identity for this login (design §4.2). Best-effort, on the BYPASSRLS admin
   // client (the table is locked down for uoa_app). providerSubject is the email here; social phases

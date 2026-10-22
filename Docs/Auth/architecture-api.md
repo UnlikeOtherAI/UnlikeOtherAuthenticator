@@ -100,6 +100,7 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
         schema.internal-admin-apps.ts — /api schema slice: internal admin app/settings/search endpoints
         schema.internal-admin-signatures.ts — /api schema slice: signature settings and agreement lifecycle endpoints
         schema.internal-admin-superusers.ts — /api schema slice: ADMIN_AUTH_DOMAIN superuser management endpoints
+        schema.internal-admin-auth-funnel.ts — /api schema slice: GET /internal/admin/auth-funnel
         schema.platform.ts  — /api schema slice: root, health, app, email, and domain endpoints
         schema.signatures.ts       — /api schema slice: signing session, signer, domain-status, and public verification endpoints
         schema.internal-admin.ts — /api schema slice: internal admin endpoints
@@ -187,6 +188,7 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
           domain-signature-operations.ts — Signature evidence search, audited receipt access, and revocation
           domain-signatures.ts      — Per-domain signature settings, agreement/version lifecycle, and source downloads
           apps.ts                   — App registration for feature flags
+          auth-funnel.ts            — GET /internal/admin/auth-funnel (sign-up funnel summary)
           superusers.ts             — Super-user grant/revoke for ADMIN_AUTH_DOMAIN
           users.ts                  — User admin write operations (2FA reset)
           teams.ts                  — GET/PUT/DELETE /internal/admin/teams/:teamId/avatar (audited mutations)
@@ -232,6 +234,7 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       audit-log.service.ts                  — Audit-log writes
       auth-debug-page.service.ts            — HTML rendering for /domain/debug
       auth-domain-mapping.service.ts        — Auth-flow domain mapping
+      auth-funnel.service.ts                — Best-effort daily sign-up/sign-in funnel counters and the admin summary
       auth-login.service.ts                 — Login logic
       auth-register.service.ts              — Registration logic
       auth-registration-email-link.service.ts — Registration email link generation

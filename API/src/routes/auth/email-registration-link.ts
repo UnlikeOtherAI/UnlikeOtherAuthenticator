@@ -38,6 +38,7 @@ import { finalizeWithTwoFaPolicy } from '../../services/team-finalize.service.js
 import { lockAndAssertAuthenticationEpoch } from '../../services/authentication-epoch.service.js';
 import { lockProductTeamPolicyShared } from '../../services/product-team-policy-lock.service.js';
 import { tokenConsumeRateLimiter } from './rate-limit-keys.js';
+import { recordAuthFunnelStep } from '../../services/auth-funnel.service.js';
 import {
   buildAuthUrl,
   buildInviteRegistrationAuthUrl,
@@ -64,6 +65,19 @@ function redirectNoStore(reply: FastifyReply, url: string): void {
   reply.header('Cache-Control', 'no-store');
   reply.header('Pragma', 'no-cache');
   reply.redirect(url, 302);
+}
+
+const LINK_OPENED_OUTCOMES = {
+  LOGIN_LINK: 'valid_login_link',
+  VERIFY_EMAIL: 'valid_verify_email',
+  VERIFY_EMAIL_SET_PASSWORD: 'valid_set_password',
+} as const;
+
+function linkTokenErrorOutcome(err: unknown): 'expired' | 'already_used' | 'invalid' {
+  const message = isAppError(err) ? err.message : '';
+  if (message === 'TOKEN_EXPIRED' || message === 'INVITE_EXPIRED') return 'expired';
+  if (message === 'TOKEN_ALREADY_USED') return 'already_used';
+  return 'invalid';
 }
 
 function isEmailLinkTokenError(err: unknown): boolean {
@@ -94,6 +108,11 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
       if (!config || !configUrl) {
         throw new AppError('BAD_REQUEST', 400, 'MISSING_CONFIG');
       }
+      const recordLinkOpened = (outcome: string) =>
+        recordAuthFunnelStep(
+          { domain: config.domain, step: 'email_link_opened', outcome },
+          { prisma: request.adminDb },
+        );
 
       let pkce: PkceChallenge | undefined;
       try {
@@ -106,6 +125,7 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
           throw err;
         }
         request.log.info({ err }, 'email link had an invalid PKCE challenge; rendering login');
+        await recordLinkOpened('invalid_pkce');
         const html = await renderAuthEntrypointHtml({
           config,
           configUrl,
@@ -135,6 +155,7 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
         if (!isEmailLinkTokenError(err)) {
           throw err;
         }
+        await recordLinkOpened(linkTokenErrorOutcome(err));
 
         if (
           isAppError(err) &&
@@ -159,6 +180,8 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
         sendAuthHtml(reply, html);
         return;
       }
+
+      await recordLinkOpened(LINK_OPENED_OUTCOMES[type]);
 
       if (!pkce) {
         // An emailed invitation has no code verifier, so it can never end in an

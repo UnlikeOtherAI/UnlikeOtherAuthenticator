@@ -8,6 +8,7 @@ import {
   sendAuthHtml,
 } from '../../services/auth-ui.service.js';
 import { configFetchRateLimiter } from './rate-limit-keys.js';
+import { recordAuthFunnelStep } from '../../services/auth-funnel.service.js';
 import { startEnterpriseLogin } from '../../services/org-sso-entry.service.js';
 import { z } from 'zod';
 
@@ -16,6 +17,25 @@ import { z } from 'zod';
 // authority). Bound to a conservative id/slug-safe charset; anything else is silently dropped
 // before the querystring reaches the SPA bootstrap rather than rejecting the whole request.
 const TEAM_HINT_PATTERN = /^[A-Za-z0-9_-]{1,256}$/;
+
+// UOA re-renders this window mid-flow (2FA, team chooser, invite and email-link continuations). Only
+// a render without any of these is a product starting a flow, which is what the funnel counts.
+const CONTINUATION_QUERY_KEYS = [
+  'email_token',
+  'flow',
+  'handoff_target',
+  'invite_token',
+  'login_token',
+  'request_access_status',
+  'signing_token',
+  'twofa_setup_token',
+  'twofa_token',
+] as const;
+
+export function isFlowStartQuery(query: unknown): boolean {
+  if (!query || typeof query !== 'object') return true;
+  return CONTINUATION_QUERY_KEYS.every((key) => !(key in query));
+}
 
 /**
  * Strips an invalid `team_hint` from the raw request URL before it becomes the SPA's initial
@@ -67,6 +87,12 @@ export function registerAuthEntrypointRoute(app: FastifyInstance): void {
         requestUrl,
         cspNonce: reply.cspNonce?.script,
       });
+      if (isFlowStartQuery(request.query)) {
+        await recordAuthFunnelStep(
+          { domain: request.config.domain, step: 'flow_started', outcome: 'shown' },
+          { prisma: request.adminDb },
+        );
+      }
       sendAuthHtml(reply, html);
     },
   );

@@ -5,7 +5,8 @@ import { LOGIN_SESSION_AUDIENCE } from '../../config/constants.js';
 import { requireEnv } from '../../config/env.js';
 import { runInTransaction } from '../../db/tenant-context.js';
 import { configVerifier } from '../../middleware/config-verifier.js';
-import { AppError } from '../../utils/errors.js';
+import { AppError, isAppError } from '../../utils/errors.js';
+import { recordAuthFunnelStep } from '../../services/auth-funnel.service.js';
 import {
   validateVerifyEmailToken,
   verifyEmailToken,
@@ -27,6 +28,16 @@ import { finalizeWithTwoFaPolicy } from '../../services/team-finalize.service.js
 import { lockProductTeamPolicyShared } from '../../services/product-team-policy-lock.service.js';
 import { parsePkceChallenge } from '../../utils/pkce.js';
 import { tokenConsumeRateLimiter } from './rate-limit-keys.js';
+
+function setPasswordFailureOutcome(err: unknown): string {
+  const message = isAppError(err) ? err.message : '';
+  if (message === 'PASSWORD_POLICY_VIOLATION' || message === 'MISSING_PASSWORD') {
+    return 'password_rejected';
+  }
+  if (message === 'TOKEN_EXPIRED') return 'expired';
+  if (message === 'TOKEN_ALREADY_USED' || message === 'USER_ALREADY_HAS_PASSWORD') return 'already_used';
+  return 'failed';
+}
 
 const BodySchema = z
   .object({
@@ -82,21 +93,27 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
         );
       }
 
-      const tokenType = await validateVerifyEmailToken(
-        {
-          token,
-          config,
-          configUrl,
-        },
-        { prisma: request.adminDb },
-      );
+      const recordSetPassword = (outcome: string) =>
+        recordAuthFunnelStep(
+          { domain: config.domain, step: 'set_password', outcome },
+          { prisma: request.adminDb },
+        );
 
-      if (tokenType === 'VERIFY_EMAIL_SET_PASSWORD' && !password) {
-        throw new AppError('BAD_REQUEST', 400, 'MISSING_PASSWORD');
-      }
+      const verified = await (async () => {
+        const tokenType = await validateVerifyEmailToken(
+          {
+            token,
+            config,
+            configUrl,
+          },
+          { prisma: request.adminDb },
+        );
 
-      const { userId, credentialEpoch, type, twoFaEnabled, acceptedInvite } =
-        await verifyEmailToken(
+        if (tokenType === 'VERIFY_EMAIL_SET_PASSWORD' && !password) {
+          throw new AppError('BAD_REQUEST', 400, 'MISSING_PASSWORD');
+        }
+
+        return verifyEmailToken(
           {
             token,
             password,
@@ -106,6 +123,12 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
           },
           { prisma: request.adminDb },
         );
+      })().catch(async (err: unknown) => {
+        await recordSetPassword(setPasswordFailureOutcome(err));
+        throw err;
+      });
+      await recordSetPassword('succeeded');
+      const { userId, credentialEpoch, type, twoFaEnabled, acceptedInvite } = verified;
 
       if (!pkce) {
         if (!acceptedInvite) {
