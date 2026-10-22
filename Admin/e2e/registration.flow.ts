@@ -223,14 +223,32 @@ test('a rejected link shows its error without signing in or redirecting', async 
 test('another-device link displays success without navigation or authentication', async ({ page }, info) => {
   if (process.env.REGISTRATION_BASE_LINK_HTML) {
     const beforeHtml = readFileSync(process.env.REGISTRATION_BASE_LINK_HTML, 'utf8');
-    await page.route('**/auth/registration/link', route => route.request().method() === 'POST'
-      ? route.fulfill({ json: { status: 'verified' } })
-      : route.fulfill({ contentType: 'text/html', body: beforeHtml }));
+    let rejectBefore = true;
+    let releaseBefore = () => {};
+    const beforeResponse = new Promise<void>(resolve => { releaseBefore = resolve; });
+    await page.route('**/auth/registration/link', async route => {
+      if (route.request().method() !== 'POST') return route.fulfill({ contentType: 'text/html', body: beforeHtml });
+      await beforeResponse;
+      return rejectBefore ? route.fulfill({ status: 400, json: { error: 'Request failed' } })
+        : route.fulfill({ json: { status: 'verified' } });
+    });
     await page.goto('/auth/registration/link#synthetic-link-secret');
     await page.screenshot({ path: info.outputPath('before-confirmation.png'), fullPage: true });
     await page.getByRole('button', { name: 'Verify email address' }).click();
+    await expect(page.getByRole('status')).toHaveText('Verifying…');
+    await page.screenshot({ path: info.outputPath('before-link-verifying.png'), fullPage: true });
+    releaseBefore();
+    await expect(page.getByRole('status')).toContainText('We could not verify');
+    await page.screenshot({ path: info.outputPath('before-link-error.png'), fullPage: true });
+    rejectBefore = false;
+    await page.getByRole('button', { name: 'Verify email address' }).click();
     await expect(page.getByRole('heading', { name: 'Email verified' })).toBeVisible();
     await page.screenshot({ path: info.outputPath('before-success.png'), fullPage: true });
+    await page.goto('about:blank');
+    await page.goto('/auth/registration/link');
+    await page.getByRole('button', { name: 'Verify email address' }).click();
+    await expect(page.getByRole('status')).toContainText('This link cannot be used');
+    await page.screenshot({ path: info.outputPath('before-link-missing-secret.png'), fullPage: true });
     await page.unroute('**/auth/registration/link');
     await page.goto('about:blank'); // Force a new document instead of a fragment-only navigation.
   }

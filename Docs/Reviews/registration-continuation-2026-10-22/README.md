@@ -51,6 +51,12 @@ same state and viewport: 1024 × 768 desktop and Pixel 7 mobile emulation.
 | Mobile success | [Before](mobile-before-success.png) | [After](mobile-cross-device-success.png) |
 | Desktop original browser after cross-device approval | [Before](desktop-before-original-continued.png) | [After](desktop-cross-device-original-continued.png) |
 | Mobile original browser after cross-device approval | [Before](mobile-before-original-continued.png) | [After](mobile-cross-device-original-continued.png) |
+| Desktop link verifying | [Before](desktop-before-link-verifying.png) | [After](desktop-link-verifying.png) |
+| Mobile link verifying | [Before](mobile-before-link-verifying.png) | [After](mobile-link-verifying.png) |
+| Desktop link rejected | [Before](desktop-before-link-error.png) | [After](desktop-link-error.png) |
+| Mobile link rejected | [Before](mobile-before-link-error.png) | [After](mobile-link-error.png) |
+| Desktop link missing secret | [Before](desktop-before-link-missing-secret.png) | [After](desktop-link-missing-secret.png) |
+| Mobile link missing secret | [Before](mobile-before-link-missing-secret.png) | [After](mobile-link-missing-secret.png) |
 
 The original-browser Before uses the unchanged Auth source from `1d7e3fe1` with
 that revision's `verified` response. It shows the code requirement removed by
