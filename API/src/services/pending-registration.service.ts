@@ -87,7 +87,7 @@ export async function pendingRegistrationState(params: RegistrationContext & { i
 }
 
 async function lockRegistration(prisma: PrismaClient, id: string) {
-  await prisma.$queryRaw`SELECT pg_advisory_xact_lock(hashtext('pending-registration'), hashtext(${id}))`;
+  await prisma.$queryRaw`SELECT pg_advisory_xact_lock(hashtext('pending-registration'), hashtext(${id}))::text AS "lockResult"`;
   return prisma.pendingRegistration.findUnique({ where: { id } });
 }
 
