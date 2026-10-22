@@ -41,6 +41,9 @@ export async function resolveOriginalAssurance(request: FastifyRequest, body: As
   if (claims.domain !== domain || !claims.assuranceId || (body.org_id
     ? claims.org?.org_id !== body.org_id || (body.team_id && claims.active?.teamId !== body.team_id)
     : Boolean(claims.org || claims.active))) invalid();
+  const role = await request.adminDb.domainRole.findUnique({ where: { domain_userId: {
+    domain, userId: claims.userId } }, select: { role: true } });
+  if (!role) invalid();
   const proof = await validateSessionAssurance({ reference: body.assurance_ref, userId: claims.userId,
     credentialEpoch: claims.tokenVersion, clientDomain: domain, orgId: body.org_id, teamId: body.team_id,
     ...(!body.org_id ? { requirement: 'global_account_control' as const } : {}) }, request.adminDb);
