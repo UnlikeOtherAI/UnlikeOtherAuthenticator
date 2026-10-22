@@ -60,3 +60,9 @@ columns. Deploy and configure both ends, then verify an actual UOA rename and
 membership addition/removal against eligible open product views. Unit and
 synthetic signed-webhook tests establish the protocol behavior; they do not prove
 production registration or cross-device delivery.
+
+`GET /org/organisations/:orgId/teams/:teamId/people/:userId/avatar` uses the same
+exact-team authorization and renders the target's current picture without
+requiring a domain-role row on the product. This covers newly added people who
+have never signed into that product. Products relay these authenticated bytes;
+browsers do not receive a domain credential.

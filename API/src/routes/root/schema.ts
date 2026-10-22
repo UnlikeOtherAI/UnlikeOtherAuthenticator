@@ -37,6 +37,11 @@ const orgContractEndpoints: EndpointSchema[] = withOrgContract([
 ]);
 
 export const endpoints: EndpointSchema[] = [
+  { method: 'GET', path: '/org/organisations/:orgId/teams/:teamId/people/:userId/avatar',
+    description: 'Render one authorized exact-team person avatar, including people new to the product',
+    auth: 'domain hash + verified config and current signed actor assertion',
+    query: { domain: 'registered product domain', config_url: 'verified product config URL' },
+    response: { image: 'PNG, JPEG, WebP or generated SVG; private conditional cache' } },
   { method: 'POST', path: '/org/organisations/:orgId/teams/:teamId/people/resolve',
     description: 'Resolve up to100 exact UOA subjects visible in the selected team; no collection read',
     auth: 'domain hash + verified config; optional signed user assertion selects current user authority',
