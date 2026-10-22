@@ -124,6 +124,7 @@ Authenticated shell (`AdminSessionGuard` → `AdminUiProvider` → `AdminLayout`
 - `/superusers` — admin-domain super-user management (`SuperUsersPage`)
 - `/logs` — login logs and audit surfaces (`LogsPage`)
 - `/connection-errors` — connection-error inspection (`ConnectionErrorsPage`)
+- `/signup-funnel` — sign-up/sign-in funnel per service and UTC day range (`SignupFunnelPage`); aggregate counts only, read from `GET /internal/admin/auth-funnel` through `services/auth-funnel-service.ts` and `schemas/auth-funnel.ts`. See `Docs/Auth/signup-funnel-metrics.md`.
 - `/feature-flags` — feature-flag apps listing (`FeatureFlagsPage`)
 - `/feature-flags/:appId` — feature-flag detail for an app (`FeatureFlagDetailPage`)
 - `/feature-flags/:appId/groups/:groupId` — audience-group detail under a feature flag (`FeatureAudienceGroupPage`)

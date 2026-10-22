@@ -3293,3 +3293,16 @@ senders fail closed; this eligibility does not grant private-context or signed-i
 authority. Call and SMS admission may additionally attest current membership of a
 signed, already-known personal routing owner. The contract and retention controls
 are in [personal telephone](Auth/personal-telephone.md).
+
+## 2026-10-22 Sign-up funnel metrics
+
+UOA counts the steps of sign-up and sign-in per client domain and UTC day so the
+owner can see where people sent by a product stop (window opened, form submitted,
+registration email sent or failed, email link valid/expired/used, password set,
+social sign-in started, returned with a code, code redeemed by the product).
+Only aggregate counts are stored: never an email, IP, user id, token or flow id.
+Recording is best-effort, happens outside authentication transactions and never
+changes a public response; the internal reason behind an opaque
+`INVALID_AUTH_CODE` is counted but not disclosed. Platform superusers read it in
+Admin → Activity → Sign-up funnel or `GET /internal/admin/auth-funnel`. See
+[signup funnel metrics](Auth/signup-funnel-metrics.md).

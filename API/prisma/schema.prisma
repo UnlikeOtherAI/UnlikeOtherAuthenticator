@@ -885,6 +885,20 @@ model HandshakeErrorLog {
   @@map("handshake_error_logs")
 }
 
+/// Daily per-client counts of sign-up and sign-in funnel steps
+/// (Docs/Auth/signup-funnel-metrics.md). Counts only: never an email, IP, user id or token.
+model AuthFunnelDailyCount {
+  day     DateTime @db.Date
+  domain  String
+  step    String
+  outcome String
+  count   Int      @default(0)
+
+  @@id([day, domain, step, outcome])
+  @@index([domain, day])
+  @@map("auth_funnel_daily_counts")
+}
+
 model ClientDomain {
   id                  String      @id @default(cuid())
   domain              String      @unique

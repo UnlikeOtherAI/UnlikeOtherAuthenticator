@@ -119,7 +119,7 @@ describe.skipIf(!hasDatabase)('existing-user registration LOGIN_LINK', () => {
         },
       },
     );
-    expect(result).toEqual({ status: 'sent' });
+    expect(result).toEqual({ status: 'sent', delivery: 'login_link_sent' });
     expect(capturedLink).toContain('/auth/email/link');
     return capturedLink;
   }

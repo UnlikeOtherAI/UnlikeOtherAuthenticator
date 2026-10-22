@@ -10,6 +10,7 @@ import { configDebugEndpoints } from './schema.config-debug.js';
 import { integrationsEndpoints } from './schema.integrations.js';
 import { internalAdminEndpoints } from './schema.internal-admin.js';
 import { internalAdminSmsEndpoints } from './schema.internal-admin-sms.js';
+import { internalAdminAuthFunnelEndpoints } from './schema.internal-admin-auth-funnel.js';
 import { oauthAccountEndpoints } from './schema.oauth-account.js';
 import { oauthEndpoints } from './schema.oauth.js';
 import { withOrgContract } from './schema.org-contract.js';
@@ -66,6 +67,7 @@ export const endpoints: EndpointSchema[] = [
   ...integrationsEndpoints,
   ...internalAdminEndpoints,
   ...internalAdminSmsEndpoints,
+  ...internalAdminAuthFunnelEndpoints,
   ...oauthEndpoints,
   ...oauthAccountEndpoints,
   ...signatureEndpoints,
