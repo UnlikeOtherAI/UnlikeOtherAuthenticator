@@ -106,6 +106,8 @@ describe.skipIf(!hasDatabase)('sign-up funnel metrics', () => {
 
     let code = '';
     const app = await createApp();
+    let failure = '';
+    app.addHook('onError', (_request, _reply, error, done) => { failure = error.message; done(); });
     await app.ready();
     try {
       // 1. The product opens the auth window; a mid-flow re-render is not a new flow.
@@ -154,7 +156,8 @@ describe.skipIf(!hasDatabase)('sign-up funnel metrics', () => {
           headers: { authorization: `Bearer ${clientHash}` },
           payload: { code, redirect_url: redirectUrl, code_verifier: codeVerifier },
         });
-      expect((await exchange()).statusCode).toBe(200);
+      const issued = await exchange();
+      expect(issued.statusCode, `${issued.body} ${failure}`).toBe(200);
       const replay = await exchange();
       expect(replay.statusCode).toBe(401);
       expect(replay.body).not.toContain('already_used');
