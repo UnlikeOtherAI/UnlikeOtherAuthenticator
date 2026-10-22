@@ -24,6 +24,7 @@ describe('customer model price estimates', () => {
 
   it('never rounds a positive small estimate to zero', () => {
     expect(modelDisplayPrice(entry({ ...card, input_price: 0.00000000001 }), standard).input).toBe('0.000001');
+    expect(modelDisplayPrice(entry({ ...card, input_price: 1e-25 }), standard).input).toBe('0.000001');
   });
 
   it.each([

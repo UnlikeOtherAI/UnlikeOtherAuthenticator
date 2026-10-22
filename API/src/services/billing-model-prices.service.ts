@@ -27,7 +27,8 @@ export function modelDisplayPrice(entry: BillingModelPricesRequest['models'][num
   const credits = (value: number | string | null | undefined): string | null => {
     if (value == null) return null;
     if (tariff.mode === BillingTariffMode.FREE) return '0';
-    return billingCreditAmount(maximumRatedMicrocredits(new Prisma.Decimal(value), tariff.markupBps)).credits;
+    const raw = new Prisma.Decimal(value).toDecimalPlaces(18, Prisma.Decimal.ROUND_UP);
+    return billingCreditAmount(maximumRatedMicrocredits(raw, tariff.markupBps)).credits;
   };
   const dimensions = (card.pricing_dimensions ?? []).map((item) => ({
     label: item.label, direction: item.direction, unit: item.usageUnit,
