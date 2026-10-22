@@ -1,5 +1,10 @@
 # Registration verification checks — 22 October 2026
 
+The code-after-link behavior recorded below was superseded by the
+[cross-device continuation clarification](../registration-continuation-2026-10-22/README.md).
+The original screen now advances after explicit confirmation on any device,
+without requiring the code. This earlier validation record is retained as history.
+
 The hosted registration screen now offers one email link and a six-character
 uppercase code. The code belongs to the requesting browser's pending flow.
 The link confirms the mailbox on any device without signing that device in.
