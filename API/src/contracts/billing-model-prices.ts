@@ -47,6 +47,7 @@ export const BillingModelPriceSchema = z.object({
 export const BillingModelPricesResponseSchema = z.object({
   product: identifier, organisation_id: identifier, team_id: identifier, user_id: identifier,
   currency: z.literal('credits'), basis: z.literal('per_million_tokens'), advisory: z.literal(true),
+  payment_collection_enabled: z.boolean(),
   issued_at: z.string().datetime(), expires_at: z.string().datetime(),
   models: z.array(BillingModelPriceSchema).max(100),
 }).strict();

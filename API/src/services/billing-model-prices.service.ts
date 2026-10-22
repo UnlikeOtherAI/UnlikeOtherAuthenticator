@@ -61,6 +61,7 @@ export async function getModelDisplayPrices(input: {
   return { product: request.product, organisation_id: request.organisation_id,
     team_id: request.team_id, user_id: request.user_id, currency: 'credits' as const,
     basis: 'per_million_tokens' as const, advisory: true as const,
+    payment_collection_enabled: payload.tariff.payment_collection_enabled,
     issued_at: payload.issued_at, expires_at: payload.expires_at,
     models: request.models.map((entry) => modelDisplayPrice(entry, tariff)) };
 }
