@@ -212,7 +212,7 @@ describe.skipIf(!hasDatabase)('POST /auth/token with org context from org flow',
     });
     expect(loginResponse.statusCode).toBe(200);
     const chooserBody = loginResponse.json() as { login_token: string };
-    const selection = await app.inject({ method: 'POST', url: `/auth/select-team?config_url=${encodeURIComponent(configUrl)}`,
+    const selection = await app.inject({ method: 'POST', url: `/auth/select-team?config_url=${encodeURIComponent(configUrl)}&code_challenge=${pkceChallenge(pkceVerifier)}&code_challenge_method=S256`,
       payload: { login_token: chooserBody.login_token, teamId: defaultTeam!.id } });
     expect(selection.statusCode, selection.body).toBe(200);
     const loginBody = selection.json() as { ok: boolean; code: string };

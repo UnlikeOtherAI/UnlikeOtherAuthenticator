@@ -71,7 +71,7 @@ describe('fresh confidential independent proof before floor enrollment', () => {
       expect(response.json()).not.toHaveProperty('assurance_ref');
       if (targetTeamId) {
         const chooser = z.object({ login_token: z.string() }).parse(response.json());
-        response = await app.inject({ method: 'POST', url: `/auth/select-team?config_url=${encodeURIComponent(configUrl)}`,
+        response = await app.inject({ method: 'POST', url: `/auth/select-team?${query}`,
           remoteAddress, payload: { login_token: chooser.login_token, teamId: targetTeamId } });
         expect(response.statusCode, response.body).toBe(200);
         expect(response.json()).not.toHaveProperty('assurance_ref');
