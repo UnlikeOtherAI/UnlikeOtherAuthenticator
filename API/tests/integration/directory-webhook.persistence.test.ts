@@ -13,9 +13,9 @@ describe.skipIf(!enabled)('transactional directory change production', () => {
     const prisma = db.prisma;
     const suffix = randomUUID();
     const user = await prisma.user.create({ data: { email: `${suffix}@example.test`, userKey: `${suffix}@example.test`, name: 'Before' } });
-    const org = await prisma.organisation.create({ data: { domain: `${suffix}.example.test`, name: 'Organization', slug: suffix } });
+    const org = await prisma.organisation.create({ data: { domain: `${suffix}.example.test`, name: 'Organization', slug: suffix, ownerId: user.id } });
     const team = await prisma.team.create({ data: { orgId: org.id, name: 'Team', slug: 'team' } });
-    await prisma.orgMember.create({ data: { orgId: org.id, userId: user.id } });
+    await prisma.orgMember.create({ data: { orgId: org.id, userId: user.id, role: 'owner' } });
     await prisma.teamMember.create({ data: { teamId: team.id, userId: user.id } });
     const events = () => prisma.directoryWebhookEvent.findMany({ where: { orgId: org.id, teamId: team.id, subject: user.id } });
     expect(await events()).toHaveLength(1);
