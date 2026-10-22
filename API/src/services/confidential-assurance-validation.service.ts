@@ -8,7 +8,7 @@ import { verifyConfidentialSubjectToken } from './confidential-token-exchange.se
 import { validateSessionAssurance } from './session-assurance.service.js';
 
 export type AssuranceValidationInput = { assurance_ref: string; org_id?: string; team_id?: string };
-const invalid = (): never => { throw new AppError('UNAUTHORIZED', 401, 'INVALID_SESSION_ASSURANCE'); };
+function invalid(): never { throw new AppError('UNAUTHORIZED', 401, 'INVALID_SESSION_ASSURANCE'); }
 
 /** Only this endpoint admits null-scope confidential originals. Organisation role
  * resolution elsewhere still requires its exact active organisation/team. */
