@@ -30,6 +30,7 @@ export const BILLING_ACTOR_ENDPOINTS = [
   '/billing/v1/sms/numbers/status',
   '/billing/v1/sms/inbound/holds',
   '/billing/v1/sms/grants',
+  '/billing/v1/model-prices',
   '/billing/v1/effective-tariff',
   '/billing/v1/service-access/confirm',
   '/billing/v1/customer-statement',

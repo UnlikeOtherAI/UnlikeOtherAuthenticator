@@ -1823,3 +1823,25 @@ AI usage, their top-ups, plans and Ledger settlement stay in USD for every
 organisation; the region affects SMS only. An organisation in the UK or Europe
 therefore holds a USD AI balance beside its GBP or EUR SMS balance.
 
+
+## Model price estimates (2026-10-22)
+
+`POST /billing/v1/model-prices` is a customer_lifecycle, exact-actor read model for
+model selection. The product backend supplies at most 100 fresh Ledger cards;
+its browser supplies identifiers only. UOA resolves the canonical current monthly
+tariff, including contract precedence, and applies the existing USD liability
+rater and 1,000 credits/USD conversion. Rates round upward to one microcredit
+per million tokens. FREE is zero; collection mode does not change rated cost.
+Monthly subscription currency does not change USD usage rating. Non-USD prices
+remain unavailable until an independently supported usage FX contract exists.
+
+Base, cached-input and provider-labelled conditional token rates are retained.
+Peak/off-peak fields are shown only when Ledger supplies them; labels, context,
+region, endpoint, tier, receipt requirements and evidence expiry remain attached.
+No schedule is inferred. Unknown units, invalid cards and provider-resolved or
+subscription pricing are never represented as free. This advisory, five-minute
+response cannot authorize spend, reserve credits, freeze a tariff or settle
+usage. Settlement continues to verify independent immutable Ledger evidence.
+The caller's current exact product/org/team/user binding appears in the response.
+The user doorway is the consuming product's model-selection catalogue; UOA adds
+no separate customer screen. Private tariff terms and costs stay server-side.

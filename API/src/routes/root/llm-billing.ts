@@ -35,6 +35,20 @@ never adds tax to the already charged amount or fabricates a legal invoice.
 Tariffs live in UOA. Ledger and product backends consume signed, content-free effective
 tariff snapshots; they do not maintain independent tariff truth.
 
+### Model price estimates
+
+Products may POST backend-loaded Ledger catalogue cards to \`/billing/v1/model-prices\`
+with a customer_lifecycle app key and exact endpoint-audience actor. UOA resolves
+current exact-subject monthly terms and returns customer credits per million input,
+output and cached input tokens, including labelled conditional dimensions.
+Responses bind product, organisation, team and user and expire in five minutes.
+They grant no spending authority. Products accept only model identifiers from their
+browser and load the cards from Ledger themselves; no browser-supplied cost is trusted.
+USD fixed token cards use the existing microcredit rating quantum; other currencies,
+meters, dynamic pricing and missing rates remain explicitly unavailable. UOA returns
+no provider cost, markup or tariff identifiers. Independent Ledger evidence still owns
+actual settlement; these rates neither reserve funds nor freeze future charges.
+
 ### Commercial semantics
 
 - UOA resolves immutable monthly terms by team assignment, organisation assignment,
