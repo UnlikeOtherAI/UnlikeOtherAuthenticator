@@ -65,7 +65,7 @@ describe('browser-bound pending registration', () => {
   }
   function link(flow: Flow, cookie = '') {
     return app.inject({ method: 'POST', url: '/auth/registration/link',
-      payload: { token: new URL(flow.message.link).hash.slice(1) }, headers: { cookie, origin } });
+      payload: { token: new URL(flow.message.link).hash.slice(1) }, headers: { cookie, origin, 'x-forwarded-for': `198.51.100.${sequence}` } });
   }
   function code(flow: Flow, value = flow.message.code, cookie = flow.cookie) {
     return app.inject({ method: 'POST', url: `/auth/registration/code?${query}`,
@@ -143,13 +143,12 @@ describe('browser-bound pending registration', () => {
   it('sends secret-free websocket hints and rechecks already-verified state at subscription', async () => {
     const flow = await start();
     await link(flow);
+    let resolveMessage!: (value: string) => void;
+    const messagePromise = new Promise<string>(resolve => { resolveMessage = resolve; });
     const socket = await app.injectWS(`/auth/registration/events?${query}&id=${flow.id}`, {
       headers: { cookie: flow.cookie, origin },
-    });
-    const message = await new Promise<string>((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error('Missing verification event')), 5000);
-      socket.on('message', value => { clearTimeout(timer); resolve(String(value)); });
-    });
+    }, { onInit: client => { client.on('message', value => resolveMessage(String(value))); } });
+    const message = await messagePromise;
     expect(JSON.parse(message)).toEqual({ type: 'registration.email_verified', status: 'verified' });
     socket.close();
   });
@@ -171,7 +170,7 @@ describe('browser-bound pending registration', () => {
     const flow = await start();
     const proof = (await code(flow)).json().token;
     const complete = () => app.inject({ method: 'POST', url: `/auth/verify-email?${query}`,
-      payload: { token: proof, password: 'a-strong-password-123' }, headers: { cookie: flow.cookie, origin } });
+      payload: { token: proof, password: 'a-strong-password-123' }, headers: { cookie: flow.cookie, origin, 'x-forwarded-for': `198.51.100.${sequence}` } });
     const outcomes = await Promise.all([complete(), complete()]);
     const successes = outcomes.filter(result => result.statusCode === 200);
     expect(successes, outcomes.map(result => result.body).join('\n')).toHaveLength(1);
