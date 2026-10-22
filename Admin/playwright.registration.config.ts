@@ -9,10 +9,10 @@ export default defineConfig({
     { name: 'mobile', use: { ...devices['Pixel 7'] } },
   ],
   webServer: [
-    { command: 'pnpm --filter @uoa/auth exec vite --host 127.0.0.1 --port 5275 --strictPort',
+    { command: 'pnpm --filter @uoa/auth exec vite preview --host 127.0.0.1 --port 5275 --strictPort',
       url: 'http://127.0.0.1:5275', reuseExistingServer: false },
     ...(process.env.REGISTRATION_BASE_CHECKOUT ? [{
-      command: 'pnpm --filter @uoa/auth exec vite --host 127.0.0.1 --port 5276 --strictPort',
+      command: 'pnpm --filter @uoa/auth exec vite preview --host 127.0.0.1 --port 5276 --strictPort',
       cwd: process.env.REGISTRATION_BASE_CHECKOUT,
       url: 'http://127.0.0.1:5276', reuseExistingServer: false,
     }] : []),
