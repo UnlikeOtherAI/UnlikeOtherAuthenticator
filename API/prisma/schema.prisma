@@ -623,6 +623,27 @@ model VerificationToken {
   @@map("verification_tokens")
 }
 
+// Browser ownership and mailbox proof are independent. A cross-device link never
+// grants browserAuthorizedAt; only the emailed code or a same-browser link can.
+model PendingRegistration {
+  id                    String    @id
+  domain                String
+  credentialHash        String    @map("credential_hash")
+  linkHash              String    @unique @map("link_hash")
+  codeHash              String    @map("code_hash")
+  completionHash        String    @unique @map("completion_hash")
+  contextHash           String    @map("context_hash")
+  attempts              Int       @default(0)
+  emailVerifiedAt       DateTime? @map("email_verified_at")
+  browserAuthorizedAt   DateTime? @map("browser_authorized_at")
+  linkUsedAt            DateTime? @map("link_used_at")
+  expiresAt             DateTime  @map("expires_at")
+  createdAt             DateTime  @default(now()) @map("created_at")
+
+  @@index([expiresAt])
+  @@map("pending_registrations")
+}
+
 model AuthorizationCode {
   id                  String    @id @default(cuid())
   codeHash            String    @unique @map("code_hash")

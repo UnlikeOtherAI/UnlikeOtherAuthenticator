@@ -4,6 +4,7 @@ import { getEnv } from '../config/env.js';
 import { getAdminPrisma } from '../db/prisma.js';
 
 type RetentionPrisma = {
+  pendingRegistration: Pick<PrismaClient['pendingRegistration'], 'deleteMany'>;
   telephoneCallChallenge: Pick<PrismaClient['telephoneCallChallenge'], 'deleteMany'>;
   telephoneChallenge: Pick<PrismaClient['telephoneChallenge'], 'deleteMany'>;
   telephoneSmsAdmission: Pick<PrismaClient['telephoneSmsAdmission'], 'deleteMany'>;
@@ -25,6 +26,7 @@ type RetentionPruneDeps = {
 };
 
 export type RetentionPruneResult = {
+  pendingRegistrationsDeleted: number;
   telephoneCallChallengesDeleted: number;
   telephoneChallengesDeleted: number;
   telephoneSmsAdmissionsDeleted: number;
@@ -45,6 +47,7 @@ function subtractDays(date: Date, days: number): Date {
 
 function emptyResult(): RetentionPruneResult {
   return {
+    pendingRegistrationsDeleted: 0,
     telephoneCallChallengesDeleted: 0,
     telephoneChallengesDeleted: 0,
     telephoneSmsAdmissionsDeleted: 0,
@@ -72,6 +75,7 @@ export async function pruneExpiredSecurityData(
   const loginLogCutoff = subtractDays(now, env.LOG_RETENTION_DAYS);
 
   const [
+    pendingRegistrations,
     telephoneCallChallenges,
     telephoneChallenges,
     telephoneSmsAdmissions,
@@ -85,6 +89,7 @@ export async function pruneExpiredSecurityData(
     loginLogs,
     handshakeErrorLogs,
   ] = await Promise.all([
+    prisma.pendingRegistration.deleteMany({ where: { expiresAt: { lt: now } } }),
     prisma.telephoneCallChallenge.deleteMany({ where: { createdAt: { lt: subtractDays(now, 1) } } }),
     prisma.telephoneChallenge.deleteMany({ where: { createdAt: { lt: subtractDays(now, 1) } } }),
     prisma.telephoneSmsAdmission.deleteMany({ where: { createdAt: { lt: subtractDays(now, 30) } } }),
@@ -114,6 +119,7 @@ export async function pruneExpiredSecurityData(
   ]);
 
   return {
+    pendingRegistrationsDeleted: pendingRegistrations.count,
     telephoneCallChallengesDeleted: telephoneCallChallenges.count,
     telephoneChallengesDeleted: telephoneChallenges.count,
     telephoneSmsAdmissionsDeleted: telephoneSmsAdmissions.count,

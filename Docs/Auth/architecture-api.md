@@ -8,6 +8,15 @@ For the full product spec, see [brief.md](./brief.md). For tech stack, see [tech
 
 ## Guiding Principles
 
+Browser registration uses `routes/auth/registration.ts`, `registration-context.ts`
+and `registration-websocket.ts`; `pending-registration.service.ts` owns the durable
+mailbox/browser state and immutable OAuth binding, `registration-credentials.ts`
+the scoped cryptographic helpers, and `registration-events.service.ts` non-secret
+local hints. Connected replicas recheck the database every five seconds. The isolated
+`registration-link-page.service.ts` removes fragment secrets before confirmation.
+`email.templates.registration.ts`, `root/schema.registration.ts` and
+`root/llm-registration.ts` publish the shared email and API contracts.
+
 Enterprise access uses `routes/auth/organisation-access.ts` for the scoped owner
 cookie/CSRF surface, `routes/auth/enterprise-sso.ts` for fixed protocol routes,
 `routes/org/enterprise-sso.ts` for product status/continuation/live assurance,

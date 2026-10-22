@@ -13,6 +13,7 @@ import {
   buildVerifyEmailSetPasswordTemplate,
 } from './email.templates.js';
 import { buildLoginCodeTemplate } from './email.templates.login-code.js';
+import { buildRegistrationVerificationTemplate } from './email.templates.registration.js';
 import { buildActionVerificationTemplate } from './email.templates.action-verification.js';
 import {
   createEmailProvider,
@@ -31,6 +32,17 @@ export {
 } from './email.providers.js';
 
 let cachedProvider: EmailProvider | undefined;
+
+export async function sendRegistrationVerificationEmail(params: {
+  to: string; link: string; code: string; theme?: Partial<EmailTheme>;
+}): Promise<boolean> {
+  const env = getEnv();
+  return dispatchEmail({
+    to: params.to, from: env.EMAIL_FROM, replyTo: env.EMAIL_REPLY_TO,
+    ...buildRegistrationVerificationTemplate(params),
+    suppressContentLog: true,
+  });
+}
 
 export async function sendActionVerificationEmail(params: {
   to: string; code: string; domain: string; description: string; theme?: Partial<EmailTheme>;

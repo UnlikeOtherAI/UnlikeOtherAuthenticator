@@ -6,6 +6,7 @@ import { llmSmsOperatorsMarkdown } from './llm-sms-operators.js';
 import { llmNativeAppsMarkdown } from './llm-native-apps.js';
 // Native app integration includes direct connectivity and same-account local pairing proofs.
 import { llmWebsiteServicesMarkdown } from './llm-website-services.js';
+import { llmRegistrationMarkdown } from './llm-registration.js';
 
 import { llmAvatarsMarkdown } from './llm-avatars.js';
 import { llmBillingMarkdown } from './llm-billing.js';
@@ -40,7 +41,7 @@ ${llmIntroMarkdown}\n## Admin activity and directory reads\nGET /internal/admin/
 export function registerLlmRoute(app: FastifyInstance): void {
   app.get('/llm', async (_request, reply) => {
     reply.header('Cache-Control', 'no-store');
-    reply.type('text/markdown; charset=utf-8').send(`${renderLlmMarkdown()}\n${llmSmsOperatorsMarkdown}\n` +
+    reply.type('text/markdown; charset=utf-8').send(`${renderLlmMarkdown()}\n${llmSmsOperatorsMarkdown}\n${llmRegistrationMarkdown}\n` +
       'Temporary source-JWKS DNS EAI_AGAIN returns 503 INTEGRATION_JWKS_UNAVAILABLE before identity admission. ' +
       'Retain the product session and retry with backoff; unsafe destinations and invalid assertions remain refused.\n');
   });

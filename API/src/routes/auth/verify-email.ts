@@ -28,6 +28,7 @@ import { finalizeWithTwoFaPolicy } from '../../services/team-finalize.service.js
 import { lockProductTeamPolicyShared } from '../../services/product-team-policy-lock.service.js';
 import { parsePkceChallenge } from '../../utils/pkce.js';
 import { tokenConsumeRateLimiter } from './rate-limit-keys.js';
+import { assertPendingRegistrationCompletion } from '../../services/pending-registration.service.js';
 
 function setPasswordFailureOutcome(err: unknown): string {
   const message = isAppError(err) ? err.message : '';
@@ -84,6 +85,10 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
         codeChallenge: code_challenge,
         codeChallengeMethod: code_challenge_method,
       });
+      await assertPendingRegistrationCompletion({
+        token, cookies: request.cookies, config, configUrl, redirectUrl: redirect_url,
+        state, requestAccess: parseRequestAccessFlag(request_access), ...pkce,
+      }, request.adminDb);
       if (!pkce) {
         // Only a live invitation may create an account outside an OAuth initiation. Standard
         // registration links still require PKCE before their token can be consumed.
@@ -128,7 +133,8 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
         throw err;
       });
       const { userId, credentialEpoch, type, twoFaEnabled, acceptedInvite } = verified;
-      // Only a set-password token creates an account here; the form never sends the other types.
+      // Only set-password tokens create password accounts. Browser-authorized
+      // registration can also continue an existing-account or passwordless proof.
       await recordSetPassword(
         type === 'VERIFY_EMAIL_SET_PASSWORD' ? 'succeeded' : `succeeded_${type.toLowerCase()}`,
       );

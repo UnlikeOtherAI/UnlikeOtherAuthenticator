@@ -14,6 +14,13 @@ Written 2026-08-06 from the running systems, not from memory: workflow definitio
 
 ## The two halves
 
+Registration verification requires the additive `20261022120000_pending_registrations`
+migration and the API/Auth release together. No consuming-product config flag or
+native release is required for the hosted registration screen. Cloud Run must forward
+WebSocket upgrades; clients retain polling when upgrades or connections fail. Database
+state and original HttpOnly registration cookies remain authoritative across replicas.
+No production credentials or operator records are provisioned by this change.
+
 **UOA (this repo) runs on Google Cloud.** Cloud Run service `uoa-auth`, fronted by
 `authentication.unlikeotherai.com`, with Cloud SQL `gen-lang-client-0561071620:europe-west1:uoa-auth-db`.
 Pushing to `main` triggers [`deploy-main.yml`](../.github/workflows/deploy-main.yml), which builds,

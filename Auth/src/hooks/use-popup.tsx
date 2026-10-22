@@ -2,12 +2,14 @@ import React, { createContext, useContext, useEffect, useMemo, useState, useCall
 
 import type { TranslationKey } from '../i18n/translations/en.js';
 import { parsePopupQueryParams, type PopupQueryParams } from './popup-query-params.js';
+import { readPendingRegistration, registrationStorageKey, savePendingRegistration, type PendingRegistration } from '../utils/pending-registration.js';
 
 export { parsePopupQueryParams, type PopupQueryParams } from './popup-query-params.js';
 
 export type AuthView =
   | 'login'
   | 'register'
+  | 'registration-verification'
   | 'reset-password'
   | 'set-password'
   | 'invite-registration'
@@ -96,6 +98,9 @@ export type PopupContextValue = PopupQueryParams & {
   view: AuthView;
   /** Navigate between auth views. */
   setView: (view: AuthView) => void;
+  pendingRegistration: PendingRegistration | null;
+  beginRegistration: (value: PendingRegistration | null) => void;
+  setRegistrationProof: (token: string, type: string) => void;
   startTwoFactorVerify: (token: string) => void;
   startTwoFactorSetup: (setup: TwoFactorSetupState) => void;
   twoFactorSetup: TwoFactorSetupState | null;
@@ -187,6 +192,9 @@ export function PopupProvider(props: {
   });
 
   const parsed = useMemo(() => parsePopupQueryParams(search), [search]);
+  const storageKey = registrationStorageKey(props.configUrl, search);
+  const [pendingRegistration, setPendingRegistration] = useState<PendingRegistration | null>(null);
+  const [registrationProof, setRegistrationProofState] = useState<{ token: string; type: string } | null>(null);
   const [view, setViewState] = useState<AuthView>(() => props.initialView ?? deriveInitialView(parsed));
   const [twoFaToken, setTwoFaToken] = useState<string | null>(() => parsed.twoFaToken);
   const [twoFactorSetup, setTwoFactorSetup] = useState<TwoFactorSetupState | null>(() =>
@@ -206,6 +214,23 @@ export function PopupProvider(props: {
     () => props.initialSessionChoices ?? null,
   );
   const [notice, setNotice] = useState<TranslationKey | null>(null);
+
+  useEffect(() => {
+    if (deriveInitialView(parsed) !== 'login') return;
+    const pending = readPendingRegistration(storageKey);
+    if (pending) { setPendingRegistration(pending); setViewState('registration-verification'); }
+  }, [parsed, storageKey]);
+
+  const beginRegistration = useCallback((value: PendingRegistration | null) => {
+    savePendingRegistration(storageKey, value);
+    setPendingRegistration(value);
+    setRegistrationProofState(null);
+    if (value) setViewState('registration-verification');
+  }, [storageKey]);
+  const setRegistrationProof = useCallback((token: string, type: string) => {
+    setRegistrationProofState({ token, type });
+    setViewState('set-password');
+  }, []);
 
   useEffect(() => {
     if (!parsed.signingToken || typeof window === 'undefined') return;
@@ -278,8 +303,8 @@ export function PopupProvider(props: {
       twoFaSetupToken: parsed.twoFaSetupToken,
       requestAccess: parsed.requestAccess,
       requestAccessStatus: parsed.requestAccessStatus,
-      emailToken: parsed.emailToken,
-      emailTokenType: parsed.emailTokenType,
+      emailToken: registrationProof?.token ?? parsed.emailToken,
+      emailTokenType: registrationProof?.type as PopupQueryParams['emailTokenType'] ?? parsed.emailTokenType,
       inviteToken: parsed.inviteToken,
       inviteEmail: parsed.inviteEmail,
       inviteName: parsed.inviteName,
@@ -298,6 +323,9 @@ export function PopupProvider(props: {
       selectAccount: parsed.selectAccount,
       view,
       setView,
+      pendingRegistration,
+      beginRegistration,
+      setRegistrationProof,
       startTwoFactorVerify,
       startTwoFactorSetup,
       twoFactorSetup,
@@ -350,6 +378,10 @@ export function PopupProvider(props: {
     parsed.selectAccount,
     view,
     setView,
+    pendingRegistration,
+    beginRegistration,
+    setRegistrationProof,
+    registrationProof,
     startTwoFactorVerify,
     startTwoFactorSetup,
     twoFactorSetup,

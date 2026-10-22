@@ -3,11 +3,13 @@ import { randomBytes } from 'node:crypto';
 import cookie from '@fastify/cookie';
 import helmet from '@fastify/helmet';
 import multipart from '@fastify/multipart';
+import websocket from '@fastify/websocket';
 import rawBody from 'fastify-raw-body';
 import fastify, { type FastifyInstance } from 'fastify';
 
 import {
   getEnv,
+  getPublicBaseUrl,
   isBillingAssertionJwksEnabled,
   isTariffSnapshotJwksEnabled,
   requireEnv,
@@ -205,7 +207,7 @@ export async function createApp(): Promise<FastifyInstance> {
       directives: {
         defaultSrc: ["'self'"],
         baseUri: ["'none'"],
-        connectSrc: ["'self'", 'https:'],
+        connectSrc: ["'self'", 'https:', new URL(getPublicBaseUrl()).origin.replace(/^http/, 'ws')],
         fontSrc: ["'self'", 'https:', 'data:'],
         formAction: ["'self'"],
         frameSrc: ["'self'", 'blob:'],
@@ -331,6 +333,7 @@ export async function createApp(): Promise<FastifyInstance> {
   // SHARED_SECRET so the cookie is tamper-evident without introducing a new secret.
   const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
   await app.register(cookie, { secret: SHARED_SECRET });
+  await app.register(websocket, { options: { maxPayload: 1024, perMessageDeflate: false } });
   await app.register(multipart, {
     limits: {
       fieldNameSize: 100,
