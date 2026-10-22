@@ -26,6 +26,7 @@ jobs:
       STRIPE_BILLING_ENABLED: ${{ vars.STRIPE_BILLING_ENABLED || 'false' }}
       UOA_STRIPE_BILLING_CONFIGURED: ${{ vars.UOA_STRIPE_BILLING_CONFIGURED || 'false' }}
       UOA_SMS_CONFIGURED: ${{ vars.UOA_SMS_CONFIGURED || 'false' }}
+      UOA_DIRECTORY_WEBHOOKS_CONFIGURED: ${{ vars.UOA_DIRECTORY_WEBHOOKS_CONFIGURED || 'false' }}
       UOA_ENTERPRISE_SSO_CONFIGURED: ${{ vars.UOA_ENTERPRISE_SSO_CONFIGURED || 'false' }}
       ENTERPRISE_SSO_KMS_KEY: ${{ vars.ENTERPRISE_SSO_KMS_KEY }}
       BILLING_SMS_ENABLED: ${{ vars.BILLING_SMS_ENABLED || 'false' }}
@@ -200,6 +201,13 @@ jobs:
             *) echo "UOA_ENTERPRISE_SSO_CONFIGURED must be exactly true or false"; exit 1 ;;
           esac
 
+      - name: Validate directory webhook deployment configuration
+        run: |
+          case "$UOA_DIRECTORY_WEBHOOKS_CONFIGURED" in
+            true|false) ;;
+            *) echo "UOA_DIRECTORY_WEBHOOKS_CONFIGURED must be exactly true or false"; exit 1 ;;
+          esac
+
       - name: Deploy to Cloud Run
         id: deploy
         # Secrets MUST come from GCP Secret Manager via --set-secrets, not the
@@ -235,6 +243,12 @@ jobs:
           scaling_args=(--min-instances 0 --cpu-throttling)
           if [[ "$UOA_ENTERPRISE_SSO_CONFIGURED" == "true" ]]; then
             env_vars="$env_vars,ENTERPRISE_SSO_CUSTODY_PROVIDER=gcp_kms,ENTERPRISE_SSO_KMS_KEY=$ENTERPRISE_SSO_KMS_KEY"
+            scaling_args=(--min-instances 1 --no-cpu-throttling)
+          fi
+
+          if [[ "$UOA_DIRECTORY_WEBHOOKS_CONFIGURED" == "true" ]]; then
+            secret_vars="$secret_vars,DIRECTORY_WEBHOOK_TARGETS_JSON=uoa-auth-directory-webhook-targets-json:latest"
+            # The durable outbox dispatcher must run without an incoming request.
             scaling_args=(--min-instances 1 --no-cpu-throttling)
           fi
 

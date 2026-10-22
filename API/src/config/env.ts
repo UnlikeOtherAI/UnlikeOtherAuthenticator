@@ -64,6 +64,7 @@ const EnvSchema = z
     CONFIG_JWKS_URL: z.string().url().optional(),
     // Public JWKS JSON served from /.well-known/jwks.json. Must contain public keys only.
     CONFIG_JWKS_JSON: z.string().min(1).optional(),
+    DIRECTORY_WEBHOOK_TARGETS_JSON: z.string().optional(),
     DATABASE_URL: z.string().min(1).optional(),
     // BYPASSRLS role used for pre-context and admin DB paths (domain-hash auth, admin routes,
     // auto-onboarding, claim flow, retention pruning, etc.). Defaults to DATABASE_URL when unset,

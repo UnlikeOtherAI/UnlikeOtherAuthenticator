@@ -1005,3 +1005,9 @@ provisioning hooks use the shared Vitest hook budget.
 Authentication route fixtures retain their original evidence and declare their
 product's pre-enrolment policy explicitly. They reset factor state and evidence
 between cases; an omitted mock model is not a legacy-authority fallback.
+
+Directory notifications use `services/directory-webhook.service.ts` and the
+`directory_webhook_events` outbox. Database triggers admit ID-only events with the
+source transaction; a stoppable app-owned worker delivers them. Consumers use
+the existing selected-subject members API and original-assurance proof. See
+[directory webhooks](directory-webhooks.md).

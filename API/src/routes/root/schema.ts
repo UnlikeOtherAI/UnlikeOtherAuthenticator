@@ -41,6 +41,11 @@ const orgContractEndpoints: EndpointSchema[] = withOrgContract([
 ]);
 
 export const endpoints: EndpointSchema[] = [
+  { method: 'GET', path: '/org/organisations/:orgId/teams/:teamId/people/:userId/avatar',
+    description: 'Render one authorized exact-team person avatar, including people new to the product',
+    auth: 'domain hash + verified config and current signed actor assertion',
+    query: { domain: 'registered product domain', config_url: 'verified product config URL' },
+    response: { image: 'PNG, JPEG, WebP or generated SVG; private conditional cache' } },
   ...registrationVerificationEndpoints,
   ...enterpriseSsoEndpoints,
   ...telephoneEndpoints,

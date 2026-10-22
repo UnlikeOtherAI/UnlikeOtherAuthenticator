@@ -1,3 +1,4 @@
+// Directory webhook consumption and exact-team avatar reads are documented in /llm and schema.ts.
 import { lifecycleDocumentation } from './schema.lifecycle.js';
 import { readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';

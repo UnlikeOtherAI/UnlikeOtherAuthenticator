@@ -1,3 +1,4 @@
+import { startDirectoryWebhookDelivery } from './services/directory-webhook.service.js';
 import { randomBytes } from 'node:crypto';
 
 import cookie from '@fastify/cookie';
@@ -305,6 +306,8 @@ export async function createApp(): Promise<FastifyInstance> {
       app.addHook('onClose', async () => {
         creditSettlementScheduler.stop();
       });
+      const directoryWebhooks = startDirectoryWebhookDelivery({ log: app.log });
+      app.addHook('onClose', async () => { await directoryWebhooks.stop(); });
       const seatTransitionScheduler = startSeatTransitionScheduler({ log: app.log });
       app.addHook('onClose', async () => {
         seatTransitionScheduler.stop();

@@ -3321,3 +3321,11 @@ changes a public response; the internal reason behind an opaque
 `INVALID_AUTH_CODE` is counted but not disclosed. Platform superusers read it in
 Admin → Activity → Sign-up funnel or `GET /internal/admin/auth-funnel`. See
 [signup funnel metrics](Auth/signup-funnel-metrics.md).
+
+## Product directory notifications (2026-10-22)
+
+UOA emits reference-only directory webhooks for profile/avatar and membership
+changes, with durable transactional admission and dedicated product HMAC secrets.
+Products resolve exact subjects through the existing selected-team members API
+and retain its original-assurance and reviewed identity-cleanup contract. See
+[Directory change webhooks](Auth/directory-webhooks.md).
