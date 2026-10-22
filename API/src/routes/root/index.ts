@@ -68,6 +68,7 @@ export function registerRootRoute(app: FastifyInstance): void {
       enterprise_sso: { version: 1, settings: '/auth/organisation-access',
         entry: '/sso/:connectionId/start', domain_discovery: false,
         fresh_independent_proof: 'New completed independent authorization issues original confidential proof before minimum-floor enrollment; legacy refresh never fabricates proof. Explicit encrypted custody is required; SSO/recovery activation gates remain.',
+        proof_bound_team_switch: 'Validate original source and current target policy, then return non-consuming 403 INTERACTION_REQUIRED before rotation. Normal target-bound authorization creates a separate exact-target family/proof; original holders and deadlines remain unchanged.',
         status: '/org/organisations/:orgId/sso/status', assurance: '/org/assurance/validate', assurance_scope: 'exact original organisation/team or null-scope independent proof',
         revocations: '/domain/revocations', activation: 'Fail closed until authority, provenance, consumer and protocol readiness pass; enforcement also requires two independent custodians and a completed recovery drill.' },
       deeptest_nessie_inference: { check: '/apps/v1/deeptest/nessie-inference-access',

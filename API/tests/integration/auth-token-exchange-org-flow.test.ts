@@ -12,6 +12,7 @@ import {
   signAccessToken,
 } from '../helpers/org-user-endpoints-helper.js';
 import { verifyIssuedAccessToken } from '../helpers/access-token.js';
+import { baseClientConfigPayload, signTestConfigJwt, createTestConfigFetchHandler } from '../helpers/test-config.js';
 
 type OrgClaim = {
   org_id: string;
@@ -197,6 +198,10 @@ describe.skipIf(!hasDatabase)('POST /auth/token with org context from org flow',
     });
     expect(addTeamMemberResponse.statusCode).toBe(200);
 
+    const selectedConfig = await signTestConfigJwt(baseClientConfigPayload({
+      org_features: { enabled: true, allow_user_create_org: true }, login_flow: { team_selection: 'auto' },
+    }));
+    vi.stubGlobal('fetch', await createTestConfigFetchHandler(selectedConfig));
     const loginResponse = await app.inject({
       method: 'POST',
       url: `/auth/login?config_url=${encodeURIComponent(configUrl)}&code_challenge=${pkceChallenge(pkceVerifier)}&code_challenge_method=S256`,
@@ -206,7 +211,11 @@ describe.skipIf(!hasDatabase)('POST /auth/token with org context from org flow',
       },
     });
     expect(loginResponse.statusCode).toBe(200);
-    const loginBody = loginResponse.json() as { ok: boolean; code: string };
+    const chooserBody = loginResponse.json() as { login_token: string };
+    const selection = await app.inject({ method: 'POST', url: `/auth/select-team?config_url=${encodeURIComponent(configUrl)}`,
+      payload: { login_token: chooserBody.login_token, teamId: defaultTeam!.id } });
+    expect(selection.statusCode, selection.body).toBe(200);
+    const loginBody = selection.json() as { ok: boolean; code: string };
     expect(loginBody.ok).toBe(true);
     expect(typeof loginBody.code).toBe('string');
 

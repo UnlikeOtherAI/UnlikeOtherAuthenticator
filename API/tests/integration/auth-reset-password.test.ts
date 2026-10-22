@@ -95,6 +95,7 @@ describe.skipIf(!hasDatabase)('Password reset flow', () => {
     if (!handle) return;
     await handle.prisma.verificationToken.deleteMany();
     await handle.prisma.domainRole.deleteMany();
+    await handle.prisma.sessionAssurance.deleteMany();
     await handle.prisma.user.deleteMany();
   });
 

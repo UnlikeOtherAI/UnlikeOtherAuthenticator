@@ -62,13 +62,20 @@ describe('fresh confidential independent proof before floor enrollment', () => {
     const token = (payload: object, auth = domainHash) => app.inject({ method: 'POST',
       url: `/auth/token?config_url=${encodeURIComponent(configUrl)}`, remoteAddress,
       headers: { authorization: `Bearer ${auth}` }, payload });
-    const login = async () => {
+    const login = async (targetTeamId?: string) => {
       const query = new URLSearchParams({ config_url: configUrl, redirect_url: redirectUrl,
         code_challenge: challenge, code_challenge_method: 'S256' });
-      const response = await app.inject({ method: 'POST', url: `/auth/login?${query}`, remoteAddress,
+      let response = await app.inject({ method: 'POST', url: `/auth/login?${query}`, remoteAddress,
         payload: { email: user.email, password } });
       expect(response.statusCode, response.body).toBe(200);
       expect(response.json()).not.toHaveProperty('assurance_ref');
+      if (targetTeamId) {
+        const chooser = z.object({ login_token: z.string() }).parse(response.json());
+        response = await app.inject({ method: 'POST', url: `/auth/select-team?config_url=${encodeURIComponent(configUrl)}`,
+          remoteAddress, payload: { login_token: chooser.login_token, teamId: targetTeamId } });
+        expect(response.statusCode, response.body).toBe(200);
+        expect(response.json()).not.toHaveProperty('assurance_ref');
+      }
       return z.object({ code: z.string() }).parse(response.json()).code;
     };
     const exchange = (code: string, codeVerifier = verifier) => token({ code, redirect_url: redirectUrl, code_verifier: codeVerifier });
@@ -108,6 +115,31 @@ describe('fresh confidential independent proof before floor enrollment', () => {
     const issued = tokenBody.parse(response.json()); const claims = await verifyIssuedAccessToken(issued.access_token);
     expect(claims.active).toMatchObject(f.scope ?? {});
     expect(await f.db.sessionAssurance.findUniqueOrThrow({ where: { id: String(claims.assurance_id) } })).toMatchObject(f.scope ?? {});
+  });
+  it('requires target reauthorization without consuming the exact original proof-bearing family', async () => {
+    const f = await fixture({ selected: true }); const original = tokenBody.parse((await f.exchange(await f.login())).json());
+    const originalClaims = await verifyIssuedAccessToken(original.access_token);
+    const before = await f.db.refreshToken.findUniqueOrThrow({ where: { tokenHash: hashRefreshToken(original.refresh_token, TEST_SHARED_SECRET) } });
+    const target = await f.db.team.create({ data: { orgId: f.scope!.orgId, name: 'Target', slug: randomUUID() } });
+    await f.db.teamMember.create({ data: { userId: f.user.id, teamId: target.id, teamRole: 'admin' } });
+    const switchBody = { grant_type: 'urn:unlikeotherai:params:oauth:grant-type:team-switch',
+      refresh_token: original.refresh_token, organization_id: target.orgId, team_id: target.id };
+    const denied = await f.token(switchBody);
+    expect(denied.statusCode, denied.body).toBe(403); expect(denied.json()).toMatchObject({ code: 'INTERACTION_REQUIRED' });
+    expect(await f.db.refreshToken.findUniqueOrThrow({ where: { id: before.id } })).toEqual(before);
+    expect(await f.db.refreshToken.count({ where: { familyId: before.familyId } })).toBe(1);
+    const sourceRefresh = await f.token({ grant_type: 'refresh_token', refresh_token: original.refresh_token });
+    expect(sourceRefresh.statusCode, sourceRefresh.body).toBe(200);
+    expect(tokenBody.parse(sourceRefresh.json())).toMatchObject({ assurance_ref: original.assurance_ref, assurance_expires_at: original.assurance_expires_at });
+    const next = await f.exchange(await f.login(target.id)); expect(next.statusCode, next.body).toBe(200);
+    const authorized = tokenBody.parse(next.json()); const claims = await verifyIssuedAccessToken(authorized.access_token);
+    expect(claims.active).toMatchObject({ orgId: target.orgId, teamId: target.id });
+    expect(claims.assurance_id).not.toBe(originalClaims.assurance_id); expect(authorized.assurance_ref).not.toBe(original.assurance_ref);
+    const fresh = await f.db.refreshToken.findUniqueOrThrow({ where: { tokenHash: hashRefreshToken(authorized.refresh_token, TEST_SHARED_SECRET) } });
+    expect(fresh.familyId).not.toBe(before.familyId);
+    expect(await f.db.sessionAssurance.findUniqueOrThrow({ where: { id: String(claims.assurance_id) } }))
+      .toMatchObject({ familyId: fresh.familyId, orgId: target.orgId, teamId: target.id, expiresAt: new Date(authorized.assurance_expires_at!) });
+    expect((await f.db.sessionAssurance.findUniqueOrThrow({ where: { id: String(originalClaims.assurance_id) } })).expiresAt.toISOString()).toBe(original.assurance_expires_at);
   });
   it('never upgrades a legacy refresh family even after the same person completes a healthy new login', async () => {
     const f = await fixture(); const old = await f.legacy();

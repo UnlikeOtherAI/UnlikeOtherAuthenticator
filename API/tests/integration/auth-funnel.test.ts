@@ -61,6 +61,7 @@ describe.skipIf(!hasDatabase)('sign-up funnel metrics', () => {
   beforeEach(async () => {
     await handle!.prisma.authFunnelDailyCount.deleteMany();
     await handle!.prisma.refreshToken.deleteMany();
+    await handle!.prisma.sessionAssurance.deleteMany();
     await handle!.prisma.authorizationCode.deleteMany();
     await handle!.prisma.verificationToken.deleteMany();
     await handle!.prisma.loginLog.deleteMany();

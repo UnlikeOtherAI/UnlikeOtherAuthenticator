@@ -50,6 +50,7 @@ describe.skipIf(!hasDatabase)(
         process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
 
       if (!handle) return;
+      await handle.prisma.sessionAssurance.deleteMany();
       await handle.prisma.authorizationCode.deleteMany();
       await handle.prisma.verificationToken.deleteMany();
       await handle.prisma.loginLog.deleteMany();

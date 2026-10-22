@@ -83,6 +83,7 @@ describe.skipIf(!hasDatabase)('POST /auth/token', () => {
 
     if (!handle) return;
     await handle.prisma.refreshToken.deleteMany();
+    await handle.prisma.sessionAssurance.deleteMany();
     await handle.prisma.authorizationCode.deleteMany();
     await handle.prisma.verificationToken.deleteMany();
     await handle.prisma.domainRole.deleteMany();

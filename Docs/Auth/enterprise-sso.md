@@ -593,3 +593,13 @@ legacy below the floor and is refused once proof is required; refresh alone
 cannot manufacture or rebind provenance. SSO and recovery retain their distinct
 activation and account-control restrictions. No product floor, attestation or
 customer arrangement is changed by issuance or deployment.
+
+A proof-bearing refresh family cannot move its original assurance to another
+organisation/team. The team-switch grant validates that original and current
+target policy under its existing locks, then returns the existing non-consuming
+`403 INTERACTION_REQUIRED` before creating a successor. The product retains its
+current session and restarts normal target-bound interactive authorization;
+completion creates a separate exact-target family and proof. No historical
+holder is rebound, no original deadline is extended, and the exact-scope ancestor
+rules remain unchanged. Legacy proof-free families retain the existing switch
+contract below the minimum floor.

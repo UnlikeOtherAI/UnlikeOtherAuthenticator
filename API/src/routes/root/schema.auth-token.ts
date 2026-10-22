@@ -41,7 +41,7 @@ export const authTokenEndpoint: EndpointSchema = {
     'assurance_ref?':
       'Confidential backend custody reference after new completed independent authorization, even without a product minimum; refresh returns the same original proof. Legacy families without original evidence are never upgraded by refresh. SSO retains separate activation gates. Never expose this reference to the browser or put it in resource JWTs.',
     'assurance_expires_at?':
-      'Original absolute proof deadline (ISO8601), capped by the source family and source evidence session deadline; refresh cannot extend it. Missing configured custody fails closed.',
+      'Original absolute proof deadline (ISO8601), capped by the source family and source evidence session deadline; refresh cannot extend it. Missing configured custody fails closed. Proof-bearing team switches return non-consuming 403 INTERACTION_REQUIRED; normal target authorization creates a separate exact-target family/proof.',
     'issued_token_type?':
       '"urn:ietf:params:oauth:token-type:access_token"; confidential token-exchange grant only',
     'scope?':

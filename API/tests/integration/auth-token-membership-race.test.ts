@@ -88,6 +88,7 @@ describe.skipIf(!hasDatabase)('authorization-code and membership lifecycle race'
     await handle.prisma.teamMember.deleteMany();
     await handle.prisma.orgMember.deleteMany();
     await handle.prisma.team.deleteMany();
+    await handle.prisma.sessionAssurance.deleteMany();
     await handle.prisma.organisation.deleteMany();
     await handle.prisma.user.deleteMany();
     await handle.prisma.clientDomain.upsert({

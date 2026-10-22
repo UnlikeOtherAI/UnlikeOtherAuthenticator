@@ -14,6 +14,7 @@ type PrismaCreateUser = (args: {
 
 type OrgTestDbHandle = {
   prisma: {
+    sessionAssurance: { deleteMany: PrismaDeleteMany };
     clientDomainSecret: { deleteMany: PrismaDeleteMany };
     clientDomain: { deleteMany: PrismaDeleteMany };
     verificationToken: { deleteMany: PrismaDeleteMany };
@@ -127,6 +128,7 @@ export async function clearOrgTestDatabase(handle: OrgTestDbHandle): Promise<voi
   // Sequential, children before parents: concurrent deletes race the
   // Restrict FK from organisations.owner_id to users and the client_domains
   // FK from client_domain_secrets.
+  await handle.prisma.sessionAssurance.deleteMany();
   await handle.prisma.verificationToken.deleteMany();
   await handle.prisma.teamInvite.deleteMany();
   await handle.prisma.groupMember.deleteMany();

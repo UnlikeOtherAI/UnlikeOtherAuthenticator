@@ -70,6 +70,7 @@ describe.skipIf(!hasDatabase)('authorization credential-epoch races', () => {
   });
 
   beforeEach(async () => {
+    await handle.prisma.sessionAssurance.deleteMany();
     await handle.prisma.signingContinuation.deleteMany();
     await handle.prisma.authorizationCode.deleteMany();
     await handle.prisma.refreshToken.deleteMany();
