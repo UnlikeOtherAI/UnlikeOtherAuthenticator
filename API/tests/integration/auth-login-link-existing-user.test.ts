@@ -74,6 +74,7 @@ describe.skipIf(!hasDatabase)('existing-user registration LOGIN_LINK', () => {
     await handle.prisma.teamMember.deleteMany();
     await handle.prisma.orgMember.deleteMany();
     await handle.prisma.team.deleteMany();
+    await handle.prisma.sessionAssurance.deleteMany();
     await handle.prisma.organisation.deleteMany();
     await handle.prisma.user.deleteMany();
     await handle.prisma.clientDomain.deleteMany({ where: { domain } });

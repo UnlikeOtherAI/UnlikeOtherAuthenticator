@@ -67,8 +67,8 @@ function prismaDouble() {
     },
     team: {
       findMany: vi.fn().mockResolvedValue([
-        { id: 'team_a', name: 'Research' },
-        { id: 'team_b', name: 'Support' },
+        { id: 'team_a', name: 'Research', lifecycleStatus: 'DISABLED' },
+        { id: 'team_b', name: 'Deleted team team_b', lifecycleStatus: 'DELETED' },
       ]),
     },
     billingService: {
@@ -138,7 +138,7 @@ describe('organisation billing responsibility', () => {
     expect(member.message).not.toContain('Open organisation billing');
   });
 
-  it('rolls every team up from its own pinned snapshot, with totals equal to the sum', async () => {
+  it('includes suspended and retained deleted teams from their pinned snapshots', async () => {
     const prisma = prismaDouble();
     const fetchPortfolio = vi.fn(async (params: { teamId: string }) =>
       portfolio(params.teamId, params.teamId === 'team_a' ? '2' : '3', 'user_1'),
@@ -147,10 +147,20 @@ describe('organisation billing responsibility', () => {
     const scope = await buildOrganisationStatementScope(context, {
       prisma: prisma as never,
       fetchPortfolio: fetchPortfolio as never,
-      listDirectAccess: vi.fn().mockResolvedValue([]) as never,
     });
 
     expect(fetchPortfolio).toHaveBeenCalledTimes(2);
+    expect(prisma.team.findMany).toHaveBeenCalledWith({
+      where: { orgId: context.organisationId },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    });
+    expect(fetchPortfolio.mock.calls.map(([params]) => params)).toEqual([
+      { product: 'deepwater', organisationId: 'org_1', teamId: 'team_a',
+        billingMonth: '2026-07', groupBy: 'user' },
+      { product: 'deepwater', organisationId: 'org_1', teamId: 'team_b',
+        billingMonth: '2026-07', groupBy: 'user' },
+    ]);
     expect(scope.teams.map((team) => team.team_id)).toEqual(['team_a', 'team_b']);
     // Each team is pinned to its own Ledger snapshot; nothing is merged before
     // rating.
@@ -174,5 +184,33 @@ describe('organisation billing responsibility', () => {
     expect(scope.commercial_lines.length).toBe(
       scope.teams.reduce((count, team) => count + team.commercial_lines.length, 0),
     );
+  });
+
+  it('keeps zero-usage teams visible and fails the whole roll-up if any team cannot be collected', async () => {
+    const prisma = prismaDouble();
+    prisma.team.findMany.mockResolvedValue([
+      { id: 'team_a', name: 'Research', lifecycleStatus: 'DISABLED' },
+      { id: 'team_b', name: 'Deleted team team_b', lifecycleStatus: 'DELETED' },
+      { id: 'team_empty', name: 'Unused', lifecycleStatus: 'ACTIVE' },
+    ]);
+    const fetchPortfolio = vi.fn(async ({ teamId }: { teamId: string }) => {
+      const value = portfolio(teamId, teamId === 'team_a' ? '2' : '3', 'user_1');
+      return teamId === 'team_empty' ? { ...value, calls: '0', lines: [] } : value;
+    });
+    const scope = await buildOrganisationStatementScope(context, {
+      prisma: prisma as never, fetchPortfolio: fetchPortfolio as never,
+    });
+    expect(fetchPortfolio).toHaveBeenCalledTimes(3);
+    expect(scope.teams.map((team) => team.team_id)).toEqual(['team_a', 'team_b', 'team_empty']);
+    expect(scope.teams[2]?.commercial_lines.filter((line) => line.kind === 'usage')).toEqual([]);
+    expect(scope.totals[0]?.total_due.amount).toBe('36');
+
+    fetchPortfolio.mockImplementation(async ({ teamId }) => {
+      if (teamId === 'team_b') throw new Error('LEDGER_METERING_PORTFOLIO_REQUEST_FAILED');
+      return portfolio(teamId, '2', 'user_1');
+    });
+    await expect(buildOrganisationStatementScope(context, {
+      prisma: prisma as never, fetchPortfolio: fetchPortfolio as never,
+    })).rejects.toThrow('LEDGER_METERING_PORTFOLIO_REQUEST_FAILED');
   });
 });

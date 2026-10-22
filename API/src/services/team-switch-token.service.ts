@@ -12,6 +12,9 @@ import { exchangeRefreshToken } from './refresh-token.service.js';
 import { runRefreshTokenExchangeTransaction } from './refresh-token-transaction.service.js';
 import { lockTokenIssuanceProductPolicy } from './product-team-policy-lock.service.js';
 import { resolveAccessTokenTtl } from './token-session-ttl.service.js';
+import { hashRefreshToken } from './refresh-token-replay.service.js';
+import { resolveTokenFamilyAssurance } from './token-assurance.service.js';
+import { withSessionAssurance } from './session-assurance.service.js';
 import {
   issueTokenPairForUser,
   type IssuedTokenPair,
@@ -59,6 +62,9 @@ export async function exchangeTeamSwitchForTokens(
       targetTeamError: 'TEAM_NOT_AVAILABLE' as const,
       twoFa: { config: params.config, error: 'INTERACTION_REQUIRED' as const },
     };
+    const rotationPolicy = createRefreshTokenRotationPolicyGuard({
+      ...policyParams, afterTeamLock: deps?.afterActiveTeamLock,
+    });
     const rotated = await exchangeRefreshToken(
       {
         refreshToken: params.refreshToken,
@@ -75,10 +81,37 @@ export async function exchangeTeamSwitchForTokens(
           prisma: tx,
           afterLock: deps?.afterRefreshSessionLock,
         }),
-        beforeRotate: createRefreshTokenRotationPolicyGuard({
-          ...policyParams,
-          afterTeamLock: deps?.afterActiveTeamLock,
-        }),
+        beforeRotate: async row => {
+          // This hook runs after exact opaque-source validation under the family lock.
+          // A bound original cannot be moved onto another scope by refresh rotation.
+          const source = await tx.refreshToken.findUniqueOrThrow({ where: {
+            tokenHash: hashRefreshToken(params.refreshToken, sharedSecret),
+          } });
+          if (!source.assuranceId) return rotationPolicy(row);
+          const user = await tx.user.findUnique({ where: { id: row.userId, lifecycleStatus: 'ACTIVE' },
+            select: { tokenVersion: true } });
+          if (!user) throw new AppError('UNAUTHORIZED', 401, 'INVALID_REFRESH_TOKEN');
+          try {
+            await resolveTokenFamilyAssurance({ prisma: tx, userId: row.userId, domain: row.domain,
+              refreshToken: params.refreshToken, sharedSecret, credentialEpoch: user.tokenVersion });
+          } catch (error) {
+            if (error instanceof AppError && [401, 403].includes(error.statusCode)) {
+              throw new AppError('UNAUTHORIZED', 401, 'INVALID_REFRESH_TOKEN');
+            }
+            throw error;
+          }
+          const proof = await tx.sessionAssurance.findUniqueOrThrow({ where: { id: source.assuranceId } });
+          try { await withSessionAssurance(proof, () => rotationPolicy(row)); }
+          catch (error) {
+            if (error instanceof AppError && error.message === 'SSO_TEAM_REAUTH_REQUIRED') {
+              throw new AppError('FORBIDDEN', 403, 'INTERACTION_REQUIRED');
+            }
+            throw error;
+          }
+          // The existing product recovery path starts normal target-bound authorization.
+          // Refuse before any edge commits, preserving every original holder and deadline.
+          throw new AppError('FORBIDDEN', 403, 'INTERACTION_REQUIRED');
+        },
         beforeReplay: createRefreshTokenRotationPolicyGuard({
           ...policyParams,
           validateSource: false,

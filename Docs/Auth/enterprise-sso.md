@@ -558,3 +558,48 @@ production RLS transactions. Refresh/lifecycle race tests bind their credential
 to the organisation they exercise; separate coverage preserves unrelated global
 and sibling-organisation sessions. `/org/me` returns canonical self identity even
 when the caller has no organisation membership.
+
+
+### Original global confidential validation
+
+`POST /org/assurance/validate` also validates an independent original with no
+organisation or team: omit both `org_id` and `team_id`, and send the same
+confidential `assurance_ref` in the body and fresh product-signed subject
+assertion. The assertion retains the original subject, client and credential
+epoch and must omit `active`. The existing UOA access-token transport remains
+available. Both paths require that credential and reference resolve to the
+same original assurance, even below the legacy compatibility floor. Current
+user lifecycle, credential epoch, domain role, family, ancestry and original
+deadline remain authoritative. A team still requires its exact organisation.
+This endpoint does not grant global control to organisation evidence, disclose
+proof by public `assurance_id`, or relax another organisation route's resolver.
+Deploy this producer contract before consumers that validate global originals.
+
+### Fresh independent proof before minimum-floor enrollment
+
+A new confidential authorization completed from current independent evidence
+receives its original assurance even when the consuming product has no minimum
+assurance row or remains at version zero. The evidence must still belong to the
+exact person, credential epoch and client, have authorize purpose, and record
+completed final authorization. Issuance consumes it once in the same transaction
+as the new family. Encrypted custody must be explicitly configured; missing or
+unavailable custody fails closed, never falling back to a proof-free response.
+
+The authenticated backend token response carries `assurance_ref` and the original
+absolute `assurance_expires_at`. The browser receives neither, and access/resource
+JWTs never contain the confidential reference. Refresh returns that same original
+proof and deadline. An existing legacy family without original evidence remains
+legacy below the floor and is refused once proof is required; refresh alone
+cannot manufacture or rebind provenance. SSO and recovery retain their distinct
+activation and account-control restrictions. No product floor, attestation or
+customer arrangement is changed by issuance or deployment.
+
+A proof-bearing refresh family cannot move its original assurance to another
+organisation/team. The team-switch grant validates that original and current
+target policy under its existing locks, then returns the existing non-consuming
+`403 INTERACTION_REQUIRED` before creating a successor. The product retains its
+current session and restarts normal target-bound interactive authorization;
+completion creates a separate exact-target family and proof. No historical
+holder is rebound, no original deadline is extended, and the exact-scope ancestor
+rules remain unchanged. Legacy proof-free families retain the existing switch
+contract below the minimum floor.

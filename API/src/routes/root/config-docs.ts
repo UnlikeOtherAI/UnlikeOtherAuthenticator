@@ -268,6 +268,7 @@ export const accessTokenDocumentation = {
     'Do NOT fall back to a synthetic tenant when firstLogin.memberships.orgs is empty — branch on firstLogin.capabilities (can_create_org / can_accept_invite). See /llm Phase 4.5.',
     'Keep access_token server-side when possible. If forwarded to UOA-owned endpoints, use the X-UOA-Access-Token header.',
   ],
+  original_assurance: 'New completed independent confidential authorization returns backend-only assurance_ref and assurance_expires_at even below the minimum floor. The access JWT carries only assurance_id/version. Refresh preserves the same original reference and absolute deadline; legacy refresh cannot fabricate provenance. Explicit configured encrypted custody is required; SSO/recovery activation stays gated.',
   response_envelope_casing:
     'The /auth/token response envelope is snake_case (access_token, refresh_token, expires_in, refresh_token_expires_in, token_type). The key firstLogin is camelCase; memberships.orgs[].orgId, memberships.teams[].teamId, memberships.teams[].orgId, and pending_invites[].inviteId/orgId/teamId/teamName are camelCase. pending_invites and capabilities.can_* remain snake_case.',
 };
