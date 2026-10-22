@@ -9,6 +9,7 @@ import { registrationCookieName, REGISTRATION_TTL_MS } from '../../services/regi
 import { renderRegistrationLinkPage } from '../../services/registration-link-page.service.js';
 import { registerRateLimiter, tokenConsumeRateLimiter, verifyCodeRateLimiter } from './rate-limit-keys.js';
 import { registrationContext } from './registration-context.js';
+import { recordAuthFunnelStep } from '../../services/auth-funnel.service.js';
 
 const idSchema = z.string().uuid();
 const codeBody = z.object({ id: idSchema, code: z.string().max(64) }).strict();
@@ -19,7 +20,16 @@ export function registerPendingRegistrationRoutes(app: FastifyInstance): void {
   }, async (request, reply) => {
     const parsed = z.object({ email: z.string().trim().toLowerCase().email() }).strict().safeParse(request.body);
     const context = registrationContext(request);
-    const result = await startPendingRegistration({ ...context, email: parsed.success ? parsed.data.email : null, ip: request.ip }, request.adminDb);
+    await recordAuthFunnelStep({ domain: context.config.domain, step: 'register_submitted', outcome: parsed.success ? 'valid_email' : 'invalid_email' }, { prisma: request.adminDb });
+    let result: Awaited<ReturnType<typeof startPendingRegistration>>;
+    try {
+      result = await startPendingRegistration({ ...context, email: parsed.success ? parsed.data.email : null, ip: request.ip }, request.adminDb);
+    } catch (error) {
+      await recordAuthFunnelStep({ domain: context.config.domain, step: 'registration_email', outcome: 'error' }, { prisma: request.adminDb });
+      throw error;
+    }
+    const delivery = result.status === 'existing_user' ? 'existing_user_inline' : result.delivery;
+    if (delivery) await recordAuthFunnelStep({ domain: context.config.domain, step: 'registration_email', outcome: delivery }, { prisma: request.adminDb });
     reply.header('Cache-Control', 'no-store');
     if (result.status === 'existing_user') return reply.code(409).send({ error: 'Request failed', code: 'EMAIL_ALREADY_REGISTERED' });
     reply.setCookie(registrationCookieName(result.id), result.credential, {

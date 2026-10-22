@@ -7,7 +7,8 @@ import { runInTransaction } from '../db/tenant-context.js';
 import { AppError } from '../utils/errors.js';
 import { hashEmailToken } from '../utils/verification-token.js';
 import { requireEnv } from '../config/env.js';
-import { requestRegistrationInstructions } from './auth-register.service.js';
+import { requestRegistrationInstructions, type RegistrationDelivery } from './auth-register.service.js';
+import { recordAuthFunnelStep } from './auth-funnel.service.js';
 import { fingerprintClientConfig } from './client-config-fingerprint.service.js';
 import type { ClientConfig } from './config.service.js';
 import { readVerificationTokenEpoch } from './verification-token-epoch.service.js';
@@ -52,12 +53,13 @@ export async function startPendingRegistration(params: RegistrationContext & { e
   const expiresAt = new Date(Date.now() + REGISTRATION_TTL_MS);
   const token = completionToken(id, credential);
   await prisma.pendingRegistration.create({ data: {
-    id, credentialHash: registrationDigest('browser', credential),
+    id, domain: params.config.domain, credentialHash: registrationDigest('browser', credential),
     linkHash: registrationDigest('link', linkToken), codeHash: registrationDigest('code', `${id}:${code}`),
     completionHash: hashEmailToken(token, requireEnv('SHARED_SECRET').SHARED_SECRET),
     contextHash: contextHash(params), expiresAt,
   } });
   let status: 'sent' | 'existing_user' = 'sent';
+  let delivery: RegistrationDelivery | undefined;
   if (params.email) {
     const link = new URL('/auth/registration/link', getPublicBaseUrl());
     // Fragment credentials never enter HTTP access logs or referrers. The isolated
@@ -68,8 +70,9 @@ export async function startPendingRegistration(params: RegistrationContext & { e
       browserRegistration: { completionToken: token, code, link: link.toString(), expiresAt },
     }, { prisma });
     status = result.status;
+    if (result.status === 'sent') delivery = result.delivery;
   }
-  return { id, credential, expiresAt, status };
+  return { id, credential, expiresAt, status, delivery };
 }
 
 export async function pendingRegistrationState(params: RegistrationContext & { id: string; credential: string }, prisma: PrismaClient) {
@@ -128,6 +131,8 @@ export async function verifyPendingRegistrationLink(token: string, cookies: Reco
     } });
   });
   publishRegistrationChange(initial.id);
+  await recordAuthFunnelStep({ domain: initial.domain, step: 'email_link_opened', outcome: initial.linkUsedAt
+    ? 'already_used' : 'registration_verified' }, { prisma });
 }
 
 /** The existing completion endpoint remains the single account/session writer. */

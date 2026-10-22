@@ -35,9 +35,9 @@ let cachedProvider: EmailProvider | undefined;
 
 export async function sendRegistrationVerificationEmail(params: {
   to: string; link: string; code: string; theme?: Partial<EmailTheme>;
-}): Promise<void> {
+}): Promise<boolean> {
   const env = getEnv();
-  await dispatchEmail({
+  return dispatchEmail({
     to: params.to, from: env.EMAIL_FROM, replyTo: env.EMAIL_REPLY_TO,
     ...buildRegistrationVerificationTemplate(params),
     suppressContentLog: true,

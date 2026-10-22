@@ -3,6 +3,7 @@ SET statement_timeout = '120s';
 
 CREATE TABLE "pending_registrations" (
   "id" TEXT NOT NULL PRIMARY KEY,
+  "domain" TEXT NOT NULL,
   "credential_hash" TEXT NOT NULL,
   "link_hash" TEXT NOT NULL UNIQUE,
   "code_hash" TEXT NOT NULL,

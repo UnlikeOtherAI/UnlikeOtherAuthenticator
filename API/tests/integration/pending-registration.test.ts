@@ -85,6 +85,12 @@ describe('browser-bound pending registration', () => {
     expect((await status(flow)).json()).toEqual({ status: 'verified' });
     expect(await db.prisma.user.count({ where: { email: flow.email } })).toBe(0);
     expect((await status(flow, '')).statusCode).toBe(400);
+    const counts = await db.prisma.authFunnelDailyCount.findMany({ where: { domain: 'client.example.com' } });
+    expect(counts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ step: 'register_submitted', outcome: 'valid_email', count: 1 }),
+      expect.objectContaining({ step: 'registration_email', outcome: 'verification_sent', count: 1 }),
+      expect.objectContaining({ step: 'email_link_opened', outcome: 'registration_verified', count: 1 }),
+    ]));
   });
   it('a victim clicking an attacker-initiated link does not authorize the attacker browser', async () => {
     const flow = await start();

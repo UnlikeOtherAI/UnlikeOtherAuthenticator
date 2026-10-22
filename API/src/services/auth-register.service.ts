@@ -243,10 +243,12 @@ export async function requestRegistrationInstructions(
   const theme = extractEmailTheme(params.config);
 
   if (params.browserRegistration) {
-    await sendRegistrationVerificationEmail({
+    const delivered = await sendRegistrationVerificationEmail({
       to: email, link: params.browserRegistration.link, code: params.browserRegistration.code, theme,
     });
-    return { status: 'sent' };
+    return { status: 'sent', delivery: existing
+      ? (delivered === false ? 'login_link_failed' : 'login_link_sent')
+      : (delivered === false ? 'verification_failed' : 'verification_sent') };
   }
 
   if (existing) {

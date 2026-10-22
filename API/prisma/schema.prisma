@@ -627,6 +627,7 @@ model VerificationToken {
 // grants browserAuthorizedAt; only the emailed code or a same-browser link can.
 model PendingRegistration {
   id                    String    @id
+  domain                String
   credentialHash        String    @map("credential_hash")
   linkHash              String    @unique @map("link_hash")
   codeHash              String    @map("code_hash")
