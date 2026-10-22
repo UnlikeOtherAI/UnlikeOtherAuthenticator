@@ -6,6 +6,7 @@ import { QueryError } from '../components/ui/QueryError';
 import { DataTable, Td } from '../components/ui/Table';
 import { useAuthFunnelQuery } from '../features/admin/auth-funnel-queries';
 import { buildDailyRows, buildFunnelRows, isReachedOutcome, outcomeLabel } from '../features/admin/auth-funnel-steps';
+import { ApiRequestError } from '../services/api-client';
 import { useListParams } from '../utils/list-params';
 
 function share(count: number, base: number): string {
@@ -15,7 +16,8 @@ function share(count: number, base: number): string {
 export function SignupFunnelPage() {
   const state = useListParams();
   const filters = { from: state.get('from'), to: state.get('to'), domain: state.get('domain') };
-  const { data, isLoading, isError, refetch } = useAuthFunnelQuery(filters);
+  const { data, error, isLoading, isError, refetch } = useAuthFunnelQuery(filters);
+  const badRange = error instanceof ApiRequestError && error.code === 'INVALID_DATE_RANGE';
   const rows = buildFunnelRows(data?.totals ?? []);
   const opened = rows[0]?.reachedCount ?? 0;
   const daily = buildDailyRows(data?.days ?? []);
@@ -30,7 +32,7 @@ export function SignupFunnelPage() {
         {[...new Set([...(data?.domains ?? []), ...(filters.domain ? [filters.domain] : [])])].map((domain) => <option key={domain}>{domain}</option>)}
       </SelectField></FieldShell>
     </div></Card>
-    {isError ? <QueryError retry={refetch} /> : isLoading ? <Card><p role="status" className="p-5">Loading funnel...</p></Card> : <>
+    {isError ? <QueryError retry={refetch} message={badRange ? 'Choose a From day on or before To, at most 366 days apart.' : undefined} /> : isLoading ? <Card><p role="status" className="p-5">Loading funnel...</p></Card> : <>
       <Card className="mb-4">
         <CardHeader><h2 className="font-semibold">Steps</h2></CardHeader>
         <DataTable headers={['Step', 'Reached', 'Of opened', 'Breakdown']}>

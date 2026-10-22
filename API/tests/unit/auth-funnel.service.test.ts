@@ -62,6 +62,17 @@ describe('recordAuthFunnelStep', () => {
     expect(upsert).toHaveBeenCalledTimes(1);
   });
 
+  it('never holds a sign-in step longer than its wait budget when the database stalls', async () => {
+    const upsert = vi.fn(() => new Promise(() => undefined));
+    const started = Date.now();
+    await recordAuthFunnelStep(
+      { domain: 'client.example.com', step: 'flow_started', outcome: 'shown' },
+      { env, now, maxWaitMs: 20, prisma: { authFunnelDailyCount: { upsert } } },
+    );
+    expect(upsert).toHaveBeenCalledTimes(1);
+    expect(Date.now() - started).toBeLessThan(1_000);
+  });
+
   it('records nothing without a database or with a client that lacks the model', async () => {
     const upsert = vi.fn();
     await recordAuthFunnelStep(

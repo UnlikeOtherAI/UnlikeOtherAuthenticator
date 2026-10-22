@@ -34,9 +34,12 @@ const outcomeLabels: Record<string, string> = {
   invalid: 'Invalid or unknown',
   invalid_email: 'Malformed address',
   invalid_pkce: 'Damaged link',
+  invite: 'Team invitation',
+  invite_unavailable: 'Team invitation: unusable',
   login_link: 'Sign-in link',
   login_link_failed: 'Sign-in link: send failed',
   login_link_sent: 'Sign-in link sent (existing account)',
+  missing_pkce: 'Damaged link (no PKCE)',
   password_rejected: 'Password rejected',
   shown: 'Shown',
   succeeded: 'Succeeded',
@@ -51,7 +54,11 @@ const outcomeLabels: Record<string, string> = {
 };
 
 export function outcomeLabel(outcome: string): string {
-  return outcomeLabels[outcome] ?? outcome.replaceAll('_', ' ');
+  const known = outcomeLabels[outcome];
+  if (known) return known;
+  // Code-exchange rejections carry UOA's internal reason, e.g. rejected_pkce_verifier_invalid.
+  if (outcome.startsWith('rejected_')) return `Rejected: ${outcome.slice('rejected_'.length).replaceAll('_', ' ')}`;
+  return outcome.replaceAll('_', ' ');
 }
 
 export function isReachedOutcome(info: FunnelStepInfo, outcome: string): boolean {

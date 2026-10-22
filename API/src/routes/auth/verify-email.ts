@@ -127,8 +127,11 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
         await recordSetPassword(setPasswordFailureOutcome(err));
         throw err;
       });
-      await recordSetPassword('succeeded');
       const { userId, credentialEpoch, type, twoFaEnabled, acceptedInvite } = verified;
+      // Only a set-password token creates an account here; the form never sends the other types.
+      await recordSetPassword(
+        type === 'VERIFY_EMAIL_SET_PASSWORD' ? 'succeeded' : `succeeded_${type.toLowerCase()}`,
+      );
 
       if (!pkce) {
         if (!acceptedInvite) {

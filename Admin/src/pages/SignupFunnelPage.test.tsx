@@ -3,9 +3,10 @@ import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { ApiRequestError } from '../services/api-client';
 import { SignupFunnelPage } from './SignupFunnelPage';
 
-const mocks = vi.hoisted(() => ({ isError: false, refetch: vi.fn(), filters: [] as unknown[] }));
+const mocks = vi.hoisted(() => ({ isError: false, error: null as unknown, refetch: vi.fn(), filters: [] as unknown[] }));
 const summary = {
   from: '2026-10-21',
   to: '2026-10-22',
@@ -28,7 +29,7 @@ const summary = {
 vi.mock('../features/admin/auth-funnel-queries', () => ({
   useAuthFunnelQuery: (filters: unknown) => {
     mocks.filters.push(filters);
-    return { data: mocks.isError ? undefined : summary, isError: mocks.isError, isLoading: false, refetch: mocks.refetch };
+    return { data: mocks.isError ? undefined : summary, error: mocks.error, isError: mocks.isError, isLoading: false, refetch: mocks.refetch };
   },
 }));
 afterEach(cleanup);
@@ -38,7 +39,7 @@ function stepRow(label: string): HTMLElement {
   if (!row) throw new Error(`No step row for ${label}`);
   return row;
 }
-beforeEach(() => { mocks.isError = false; mocks.refetch.mockReset(); mocks.filters = []; });
+beforeEach(() => { mocks.isError = false; mocks.error = null; mocks.refetch.mockReset(); mocks.filters = []; });
 
 it('shows how far visitors got, with failures broken out per step', () => {
   render(<MemoryRouter initialEntries={['/signup-funnel']}><SignupFunnelPage /></MemoryRouter>);
@@ -64,4 +65,11 @@ it('offers a retry instead of an empty funnel when loading fails', async () => {
   expect(screen.queryByText('No sign-in activity was recorded for these filters.')).toBeNull();
   await userEvent.setup().click(screen.getByRole('button', { name: 'Try again' }));
   expect(mocks.refetch).toHaveBeenCalledOnce();
+});
+
+it('explains an impossible period instead of offering a retry that cannot help', () => {
+  mocks.isError = true;
+  mocks.error = new ApiRequestError(400, 'INVALID_DATE_RANGE');
+  render(<MemoryRouter initialEntries={['/signup-funnel?from=2026-10-22&to=2026-10-01']}><SignupFunnelPage /></MemoryRouter>);
+  expect(screen.getByText('Choose a From day on or before To, at most 366 days apart.')).toBeTruthy();
 });

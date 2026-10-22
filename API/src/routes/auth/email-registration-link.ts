@@ -73,9 +73,11 @@ const LINK_OPENED_OUTCOMES = {
   VERIFY_EMAIL_SET_PASSWORD: 'valid_set_password',
 } as const;
 
-function linkTokenErrorOutcome(err: unknown): 'expired' | 'already_used' | 'invalid' {
+function linkTokenErrorOutcome(err: unknown): string {
   const message = isAppError(err) ? err.message : '';
-  if (message === 'TOKEN_EXPIRED' || message === 'INVITE_EXPIRED') return 'expired';
+  // Team invitations share this route; keep them out of the sign-up outcomes.
+  if (message === 'INVITE_EXPIRED' || message === 'INVITE_INVALID') return 'invite_unavailable';
+  if (message === 'TOKEN_EXPIRED') return 'expired';
   if (message === 'TOKEN_ALREADY_USED') return 'already_used';
   return 'invalid';
 }
@@ -108,11 +110,14 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
       if (!config || !configUrl) {
         throw new AppError('BAD_REQUEST', 400, 'MISSING_CONFIG');
       }
-      const recordLinkOpened = (outcome: string) =>
-        recordAuthFunnelStep(
+      // HEAD is what mail scanners send when they pre-check a link; it is not a person opening it.
+      const recordLinkOpened = async (outcome: string) => {
+        if (request.method === 'HEAD') return;
+        await recordAuthFunnelStep(
           { domain: config.domain, step: 'email_link_opened', outcome },
           { prisma: request.adminDb },
         );
+      };
 
       let pkce: PkceChallenge | undefined;
       try {
@@ -181,8 +186,6 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
         return;
       }
 
-      await recordLinkOpened(LINK_OPENED_OUTCOMES[type]);
-
       if (!pkce) {
         // An emailed invitation has no code verifier, so it can never end in an
         // authorization code. Resolve what it should do instead — including for an
@@ -198,6 +201,8 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
             verifyDeps: { prisma: request.adminDb },
           },
         );
+        // Registration emails always carry PKCE, so only an invitation or a damaged link lands here.
+        await recordLinkOpened(continuation.kind === 'none' ? 'missing_pkce' : 'invite');
 
         // F5: an invitation opened from a mailbox ends here, with no product session and no
         // way back into the product unless UOA puts one on the page. Only a `redirect_url`
@@ -272,6 +277,8 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
         sendAuthHtml(reply, html);
         return;
       }
+
+      await recordLinkOpened(LINK_OPENED_OUTCOMES[type]);
 
       // LOGIN_LINK and VERIFY_EMAIL: auto-consume the token and redirect immediately.
       // No password needed — the user is signed in by clicking the link.

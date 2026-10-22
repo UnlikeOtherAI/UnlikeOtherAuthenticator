@@ -35,6 +35,9 @@ export type AuthFunnelStep = (typeof AUTH_FUNNEL_STEPS)[number];
 const OUTCOME_PATTERN = /^[a-z0-9_]{1,64}$/;
 const DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const DAY_MS = 24 * 60 * 60 * 1000;
+// The longest a step waits for its counter write. A busy admin pool must not hold up sign-in;
+// the write still completes in the background.
+const AUTH_FUNNEL_MAX_WAIT_MS = 1_000;
 export const AUTH_FUNNEL_DEFAULT_RANGE_DAYS = 30;
 export const AUTH_FUNNEL_MAX_RANGE_DAYS = 366;
 
@@ -50,6 +53,8 @@ type AuthFunnelDeps = {
   env?: ReturnType<typeof getEnv>;
   now?: () => Date;
 };
+
+type AuthFunnelWriteDeps = AuthFunnelDeps & { prisma?: AuthFunnelWritePrisma; maxWaitMs?: number };
 
 export type AuthFunnelCount = { step: string; outcome: string; count: number };
 
@@ -86,47 +91,59 @@ export function normalizeAuthFunnelOutcome(outcome: string): string {
   return OUTCOME_PATTERN.test(outcome) ? outcome : 'other';
 }
 
+async function writeAuthFunnelStep(
+  params: { domain: string; step: AuthFunnelStep; outcome: string },
+  deps?: AuthFunnelWriteDeps,
+): Promise<void> {
+  const env = deps?.env ?? getEnv();
+  if (!env.DATABASE_URL) return;
+
+  const counts = deps?.prisma
+    ? deps.prisma.authFunnelDailyCount
+    : getAdminPrisma().authFunnelDailyCount;
+  // A caller-supplied client without the model (a narrow test double) records nothing.
+  if (!counts) return;
+
+  const key = {
+    day: startOfUtcDay(deps?.now ? deps.now() : new Date()),
+    domain: params.domain,
+    step: params.step,
+    outcome: normalizeAuthFunnelOutcome(params.outcome),
+  };
+  const write = () =>
+    counts.upsert({
+      where: { day_domain_step_outcome: key },
+      create: { ...key, count: 1 },
+      update: { count: { increment: 1 } },
+    });
+
+  try {
+    await write();
+  } catch (err) {
+    // Two first events of the day can race to create the row; the loser increments it instead.
+    if (!isUniqueViolation(err)) throw err;
+    await write();
+  }
+}
+
 export async function recordAuthFunnelStep(
   params: { domain: string; step: AuthFunnelStep; outcome: string },
-  deps?: AuthFunnelDeps & { prisma?: AuthFunnelWritePrisma },
+  deps?: AuthFunnelWriteDeps,
 ): Promise<void> {
-  try {
-    const env = deps?.env ?? getEnv();
-    if (!env.DATABASE_URL) return;
-
-    const counts = deps?.prisma
-      ? deps.prisma.authFunnelDailyCount
-      : getAdminPrisma().authFunnelDailyCount;
-    // A caller-supplied client without the model (a narrow test double) records nothing.
-    if (!counts) return;
-
-    const key = {
-      day: startOfUtcDay(deps?.now ? deps.now() : new Date()),
-      domain: params.domain,
-      step: params.step,
-      outcome: normalizeAuthFunnelOutcome(params.outcome),
-    };
-    const write = () =>
-      counts.upsert({
-        where: { day_domain_step_outcome: key },
-        create: { ...key, count: 1 },
-        update: { count: { increment: 1 } },
-      });
-
-    try {
-      await write();
-    } catch (err) {
-      // Two first events of the day can race to create the row; the loser increments it instead.
-      if (!isUniqueViolation(err)) throw err;
-      await write();
-    }
-  } catch (err) {
+  const written = writeAuthFunnelStep(params, deps).catch((err: unknown) => {
     try {
       getAppLogger().warn({ err, step: params.step }, 'auth funnel metric write failed');
     } catch {
       // Logger not initialised (unit tests): metrics stay best-effort either way.
     }
-  }
+  });
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const waited = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, deps?.maxWaitMs ?? AUTH_FUNNEL_MAX_WAIT_MS);
+    timer.unref?.();
+  });
+  await Promise.race([written, waited]);
+  clearTimeout(timer);
 }
 
 export function resolveAuthFunnelRange(
@@ -146,7 +163,11 @@ export function resolveAuthFunnelRange(
   return { from, to };
 }
 
-function addCount(map: Map<string, AuthFunnelCount & { day?: string }>, key: string, row: AuthFunnelCount & { day?: string }): void {
+function addCount(
+  map: Map<string, AuthFunnelCount & { day?: string }>,
+  key: string,
+  row: AuthFunnelCount & { day?: string },
+): void {
   const existing = map.get(key);
   if (existing) existing.count += row.count;
   else map.set(key, { ...row });
@@ -158,7 +179,9 @@ function stepOrder(step: string): number {
 }
 
 function compareCounts(a: AuthFunnelCount, b: AuthFunnelCount): number {
-  return stepOrder(a.step) - stepOrder(b.step) || b.count - a.count || a.outcome.localeCompare(b.outcome);
+  return (
+    stepOrder(a.step) - stepOrder(b.step) || b.count - a.count || a.outcome.localeCompare(b.outcome)
+  );
 }
 
 /**
@@ -172,7 +195,14 @@ export async function getAuthFunnelSummary(
   const { from, to } = resolveAuthFunnelRange(params, deps);
   const domain = params.domain ?? null;
   const env = deps?.env ?? getEnv();
-  const empty: AuthFunnelSummary = { from: formatDay(from), to: formatDay(to), domain, domains: [], totals: [], days: [] };
+  const empty: AuthFunnelSummary = {
+    from: formatDay(from),
+    to: formatDay(to),
+    domain,
+    domains: [],
+    totals: [],
+    days: [],
+  };
   if (!env.DATABASE_URL) return empty;
 
   const prisma = deps?.prisma ?? (getAdminPrisma() as unknown as AuthFunnelReadPrisma);
@@ -198,7 +228,12 @@ export async function getAuthFunnelSummary(
     domains: [...domains].sort(),
     totals: [...totals.values()].sort(compareCounts),
     days: [...days.values()]
-      .map((row) => ({ day: row.day ?? '', step: row.step, outcome: row.outcome, count: row.count }))
+      .map((row) => ({
+        day: row.day ?? '',
+        step: row.step,
+        outcome: row.outcome,
+        count: row.count,
+      }))
       .sort((a, b) => a.day.localeCompare(b.day) || compareCounts(a, b)),
   };
 }

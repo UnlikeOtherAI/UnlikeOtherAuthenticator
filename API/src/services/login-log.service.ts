@@ -98,12 +98,15 @@ export async function recordLoginLog(
     select: { id: true },
   });
 
-  // Every completed sign-in writes exactly one login log, whatever the method, so this is the
-  // funnel's single "returned to the product" point (Docs/Auth/signup-funnel-metrics.md).
-  await recordAuthFunnelStep(
-    { domain: params.domain, step: 'sign_in_completed', outcome: params.authMethod },
-    { env, now: () => now, ...(deps?.prisma ? { prisma: deps.prisma } : {}) },
-  );
+  // Completed sign-ins write one login log whatever the method, so this is the funnel's
+  // "returned to the product" point (Docs/Auth/signup-funnel-metrics.md). Never inside a caller's
+  // transaction (a client without $transaction): a failed write there would abort that transaction.
+  if (!deps?.prisma || typeof (deps.prisma as { $transaction?: unknown }).$transaction === 'function') {
+    await recordAuthFunnelStep(
+      { domain: params.domain, step: 'sign_in_completed', outcome: params.authMethod },
+      { env, now: () => now, ...(deps?.prisma ? { prisma: deps.prisma } : {}) },
+    );
+  }
 
   // Record the auth identity for this login (design §4.2). Best-effort, on the BYPASSRLS admin
   // client (the table is locked down for uoa_app). providerSubject is the email here; social phases

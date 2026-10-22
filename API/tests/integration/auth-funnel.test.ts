@@ -119,7 +119,11 @@ describe.skipIf(!hasDatabase)('sign-up funnel metrics', () => {
         expect(res.json()).toEqual({ message: 'We sent instructions to your email' });
       }
 
-      // 4. The emailed link: valid, expired, already used, and unknown.
+      // 4. The emailed link: valid, expired, already used, and unknown. A scanner's HEAD is not a person.
+      expect((await app.inject({ method: 'HEAD', url: `/auth?${flowQuery}` })).statusCode).toBe(200);
+      expect(
+        (await app.inject({ method: 'HEAD', url: `/auth/email/link?${flowQuery}&token=funnel-valid-token` })).statusCode,
+      ).toBe(200);
       for (const token of ['funnel-valid-token', 'funnel-expired-token', 'funnel-used-token', 'funnel-unknown']) {
         const res = await app.inject({ method: 'GET', url: `/auth/email/link?${flowQuery}&token=${token}` });
         expect(res.statusCode).toBe(200);
@@ -241,6 +245,14 @@ describe.skipIf(!hasDatabase)('sign-up funnel metrics', () => {
     try {
       const url = '/internal/admin/auth-funnel?from=2026-10-20&to=2026-10-21&domain=client.example.com';
       expect((await app.inject({ method: 'GET', url })).statusCode).toBe(401);
+
+      const reversed = await app.inject({
+        method: 'GET',
+        url: '/internal/admin/auth-funnel?from=2026-10-21&to=2026-10-20',
+        headers: { authorization: `Bearer ${token}` },
+      });
+      expect(reversed.statusCode).toBe(400);
+      expect(reversed.json()).toMatchObject({ code: 'INVALID_DATE_RANGE' });
 
       const res = await app.inject({ method: 'GET', url, headers: { authorization: `Bearer ${token}` } });
       expect(res.statusCode, res.body).toBe(200);

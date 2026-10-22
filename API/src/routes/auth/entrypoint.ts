@@ -22,12 +22,15 @@ const TEAM_HINT_PATTERN = /^[A-Za-z0-9_-]{1,256}$/;
 // a render without any of these is a product starting a flow, which is what the funnel counts.
 const CONTINUATION_QUERY_KEYS = [
   'email_token',
+  'enterprise_link_intent',
   'flow',
   'handoff_target',
   'invite_token',
   'login_token',
+  'management_org_id',
   'request_access_status',
   'signing_token',
+  'twofa_enroll_required',
   'twofa_setup_token',
   'twofa_token',
 ] as const;
@@ -87,7 +90,7 @@ export function registerAuthEntrypointRoute(app: FastifyInstance): void {
         requestUrl,
         cspNonce: reply.cspNonce?.script,
       });
-      if (isFlowStartQuery(request.query)) {
+      if (request.method !== 'HEAD' && isFlowStartQuery(request.query)) {
         await recordAuthFunnelStep(
           { domain: request.config.domain, step: 'flow_started', outcome: 'shown' },
           { prisma: request.adminDb },
