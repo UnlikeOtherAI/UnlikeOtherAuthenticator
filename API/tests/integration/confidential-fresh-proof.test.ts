@@ -42,7 +42,8 @@ describe('fresh confidential independent proof before floor enrollment', () => {
     const db = handle.prisma; const domain = `fresh-${randomUUID()}.example.com`;
     const configUrl = `https://${domain}/config`; const redirectUrl = `https://${domain}/callback`;
     const domainHash = await seedDomainSecret(db, domain, TEST_SHARED_SECRET);
-    const user = await db.user.create({ data: { email: `${randomUUID()}@example.test`, userKey: randomUUID(), passwordHash } });
+    const email = `${randomUUID()}@example.test`;
+    const user = await db.user.create({ data: { email, userKey: email, passwordHash } });
     await db.domainRole.create({ data: { domain, userId: user.id, role: 'USER' } });
     if (options.floor !== undefined) await db.enterpriseProductReadiness.create({ data: { clientDomain: domain, minimumAssuranceVersion: options.floor } });
     let scope: { orgId: string; teamId: string } | undefined;
@@ -147,7 +148,8 @@ describe('fresh confidential independent proof before floor enrollment', () => {
     const f = await fixture(); const family = await f.legacy();
     const evidence = await f.db.authenticationEvidence.create({ data: { userId: f.user.id, clientDomain: reason === 'foreign' ? 'foreign.example.com' : f.domain,
       credentialEpoch: 0, referenceHash: randomBytes(32).toString('hex'), method: 'email_password', provenance: 'independent',
-      purpose: reason === 'purpose' ? 'management' : 'authorize', actionBinding: 'negative-fixture', observedAt: new Date(), authenticatedAt: new Date(),
+      purpose: reason === 'purpose' ? 'management' : 'authorize', actionBinding: 'negative-fixture',
+      observedAt: new Date(Date.now() - 120_000), authenticatedAt: new Date(Date.now() - 120_000),
       signatureCompletedAt: reason === 'unfinished' ? null : new Date(), consumedAt: reason === 'consumed' ? new Date() : null,
       expiresAt: new Date(Date.now() + (reason === 'expired' ? -60_000 : 60_000)) } });
     await expect(f.db.$transaction(tx => resolveTokenFamilyAssurance({ prisma: asPrismaClient(tx), userId: f.user.id,
