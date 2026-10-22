@@ -19,7 +19,11 @@ user token or signing key. HTTPS redirects are refused.
 
 Database triggers enqueue one event per affected organisation/team/subject when
 a profile, uploaded avatar, organisation membership or team membership changes.
-The event commits with the source mutation, including invitations accepted and
+The audience includes the organisation’s source domain and unambiguous active
+product mappings with direct access evidence for that exact organisation/team,
+so a team reused across products reaches each participating product without
+notifying unrelated domains. The event commits with the source mutation,
+including invitations accepted and
 changes made through Admin or other products. Newly created users become visible
 when their team membership commits. The outbox contains ids and delivery state
 only. App-role callers cannot read it; the administrative delivery worker leases
