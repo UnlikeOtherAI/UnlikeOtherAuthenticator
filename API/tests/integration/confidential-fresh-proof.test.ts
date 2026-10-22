@@ -124,7 +124,7 @@ describe('fresh confidential independent proof before floor enrollment', () => {
     const f = await fixture({ floor: 1 }); const old = await f.legacy();
     const response = await f.token({ grant_type: 'refresh_token', refresh_token: old.refreshToken });
     expect(response.statusCode, response.body).toBe(401);
-    expect(await f.db.refreshToken.findUniqueOrThrow({ where: { id: old.refreshTokenId } })).toMatchObject({ assuranceId: null, revokedAt: null, rotatedAt: null });
+    expect(await f.db.refreshToken.findUniqueOrThrow({ where: { id: old.refreshTokenId } })).toMatchObject({ assuranceId: null, revokedAt: null, replacedByTokenId: null });
     expect(await f.db.sessionAssurance.count({ where: { userId: f.user.id } })).toBe(0);
   });
   it('requires the authentic domain bearer, exact PKCE and one-use code', async () => {
