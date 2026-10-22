@@ -18,6 +18,7 @@ import { registerConfigVerifyRoute } from './config-verify.js';
 import { registerLlmRoute } from './llm.js';
 import { endpoints } from './schema.js';
 import { registrationVerificationDocumentation } from './schema.registration.js';
+// Email-link approval continues only the original cookie-bound registration.
 // Admin schema includes exact-user activity filters and canonical invitation history states.
 import { readAdminIndexAssetUrls } from '../../services/admin-ui.service.js';
 import { renderRootHoldingPage } from '../../services/root-page.service.js';

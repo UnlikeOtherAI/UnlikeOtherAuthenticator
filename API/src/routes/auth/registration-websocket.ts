@@ -28,10 +28,12 @@ export function registerRegistrationWebSocket(app: FastifyInstance): void {
     total += 1;
     subscriptions.set(id, (subscriptions.get(id) ?? 0) + 1);
     let checking = false;
+    let recheck = false;
     let closed = false;
     let lastStatus = '';
     const check = async () => {
-      if (checking || closed) return;
+      if (closed) return;
+      if (checking) { recheck = true; return; }
       checking = true;
       try {
         const state = await pendingRegistrationState(params, request.adminDb);
@@ -44,7 +46,10 @@ export function registerRegistrationWebSocket(app: FastifyInstance): void {
           }
         }
       } catch { socket.close(1011); }
-      finally { checking = false; }
+      finally {
+        checking = false;
+        if (recheck && !closed) { recheck = false; void check(); }
+      }
     };
     const unsubscribe = subscribeRegistrationChanges(id, () => { void check(); });
     // Local notifications are immediate. A bounded database recheck delivers

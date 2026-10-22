@@ -27,13 +27,13 @@ export const registrationVerificationEndpoints: EndpointSchema[] = [
     notes: 'Immediate process-local hints plus a 5-second cross-replica database recheck. Clients recheck status on load/reconnect and poll every 10 seconds if notifications are lost or WSS is blocked. Two subscriptions per registration and 256 per instance maximum.' },
   { method: 'GET', path: '/auth/registration/link', description: 'Isolated email confirmation page, usable on any browser/device. Link secret is in the fragment, removed immediately; GET has no verification effect.',
     auth: 'None; confirmation requires the secret token in POST', response: { html: 'Explicit confirmation, then email-verified success; never an OAuth redirect or login' } },
-  { method: 'POST', path: '/auth/registration/link', description: 'Consume a short-lived secret link to confirm email. Only a matching original browser cookie can additionally authorize that pending flow.',
+  { method: 'POST', path: '/auth/registration/link', description: 'Confirm email from any device and approve continuation of the exact original pending registration.',
     auth: '256-bit email-link token; same-origin POST', body: { token: 'Secret from the emailed URL fragment' }, response: { status: 'verified' },
-    notes: 'Link replay shows idempotent success but never adds browser authority. A link opened elsewhere cannot unlock the initiator browser; that browser must enter the emailed code. No account, OAuth code or session is created here.' },
+    notes: 'The original browser receives a WebSocket hint, rechecks status with its cookie and exact OAuth context, and advances without code entry. The confirming browser receives no credentials, cookie or redirect. Replay cannot transfer approval to another flow. No account, OAuth code or session is created here.' },
 ];
 
 export const registrationVerificationDocumentation = {
   endpoints: registrationVerificationEndpoints,
   completion: 'POST /auth/verify-email consumes an authorized registration. Namespaced registration.* proofs additionally require the original cookie and exact immutable OAuth/config context. Existing epoch, membership, TOTP, agreement and one-use issuance gates remain authoritative.',
-  security: 'Mailbox confirmation and browser authorization are separate. Knowing an address, pending UUID, or starting a registration never grants identity authority. A cross-device link confirms email only; the original browser still needs the emailed code. A same-browser link can advance only its own pending flow.',
+  security: 'Explicit confirmation with the secret email link approves its original pending registration on any device. Only the original HttpOnly cookie and exact OAuth/config binding can retrieve and consume completion proof. The confirmation page explains this approval and never signs the confirming browser in. GET and link previews do not approve anything.',
 };

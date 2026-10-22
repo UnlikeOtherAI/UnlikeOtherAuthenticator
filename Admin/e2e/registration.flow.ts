@@ -1,4 +1,5 @@
 import { expect, test, type Page, type WebSocketRoute } from '@playwright/test';
+import { readFileSync } from 'node:fs';
 import { renderRegistrationLinkPage } from '../../API/src/services/registration-link-page.service.js';
 import { buildRegistrationVerificationTemplate } from '../../API/src/services/email.templates.registration.js';
 import { buildVerifyEmailSetPasswordTemplate } from '../../API/src/services/email.templates.js';
@@ -32,19 +33,26 @@ async function backend(page: Page) {
   let socket: WebSocketRoute | undefined;
   let calls = 0;
   let starts = 0;
+  let codeGate: Promise<void> | undefined;
+  let resendGate: Promise<void> | undefined;
+  let resendFailure = false;
   await page.routeWebSocket('**/auth/registration/events?**', ws => { socket = ws; });
   await page.route('**/auth/registration/**', async route => {
     const url = new URL(route.request().url());
     if (url.pathname.endsWith('/start')) {
       starts++;
+      if (starts > 1 && resendGate) await resendGate;
+      if (starts > 1 && resendFailure) return route.fulfill({ status: 500, json: { error: 'Request failed' } });
       expect(route.request().postDataJSON()).toEqual({ email: 'person@example.com' });
       expect(url.searchParams.get('state')).toBe('registration-csrf');
-      return route.fulfill({ json: { registration_id: id, message: 'We sent instructions to your email' } });
+      return route.fulfill({ headers: { 'set-cookie': `uoa_registration_${id}=synthetic-browser-credential; HttpOnly; SameSite=Lax; Path=/auth` },
+        json: { registration_id: id, message: 'We sent instructions to your email' } });
     }
     if (url.pathname.endsWith('/code')) {
       calls++;
       expect(route.request().postDataJSON().id).toBe(id);
       if (route.request().postDataJSON().code !== 'AB3K7M') return route.fulfill({ status: 400, json: { error: 'Request failed' } });
+      if (codeGate) await codeGate;
       status = 'authorized';
     }
     return route.fulfill({ json: status === 'authorized'
@@ -59,6 +67,9 @@ async function backend(page: Page) {
     setStatus: (next: string) => { status = next; },
     calls: () => calls,
     starts: () => starts,
+    pauseCode: () => { let release = () => {}; codeGate = new Promise<void>(resolve => { release = resolve; }); return release; },
+    pauseResend: () => { let release = () => {}; resendGate = new Promise<void>(resolve => { release = resolve; }); return release; },
+    failResend: () => { resendFailure = true; },
   };
 }
 
@@ -72,6 +83,7 @@ test('registration screen, keyboard entry, failed code and full paste recovery',
   await fields.nth(0).pressSequentially('AAAAAA');
   await expect(page.getByRole('alert')).toContainText('We could not verify');
   await expect(fields.nth(0)).toHaveValue('A');
+  await page.screenshot({ path: info.outputPath('invalid-code.png'), fullPage: true });
   await fields.nth(3).evaluate(element => {
     const data = new DataTransfer(); data.setData('text/plain', 'ab3k7m');
     element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
@@ -82,26 +94,59 @@ test('registration screen, keyboard entry, failed code and full paste recovery',
   await expect(page.getByRole('heading', { name: 'Set your password' })).toBeVisible();
 });
 
-test('cross-device verification hint requires the emailed code in the original browser', async ({ page }) => {
-  await configure(page); const server = await backend(page); await start(page);
-  await server.notify('verified');
-  await expect(page.getByRole('status')).toContainText('Your email is verified');
-  await expect(page.getByRole('heading', { name: 'Check your email' })).toBeVisible();
-  await expect(page.getByRole('textbox', { name: /Verification code \d \/ 6/ })).toHaveCount(6);
+test('confirmation in another browser advances the original over websocket without code entry', async ({ page, browser }, info) => {
+  await configure(page); const server = await backend(page);
+  await page.clock.install(); // No polling interval runs: advancement must follow the socket hint.
+  await start(page);
+  if (process.env.REGISTRATION_BASE_LINK_HTML) {
+    // Auth is unchanged from #123: its old cross-device response kept code entry visible.
+    await server.notify('verified');
+    await expect(page.getByRole('status')).toContainText('Enter the code');
+    await page.screenshot({ path: info.outputPath('before-original-continued.png'), fullPage: true });
+    await server.notify('pending');
+    await expect(page.getByRole('status')).toHaveCount(0);
+  }
+  const otherContext = await browser.newContext({ viewport: page.viewportSize() });
+  try {
+    const otherPage = await otherContext.newPage();
+    await otherPage.route('**/auth/registration/link', async route => {
+      if (route.request().method() === 'POST') {
+        expect(route.request().postDataJSON()).toEqual({ token: 'synthetic-link-secret' });
+        await server.notify('authorized');
+        return route.fulfill({ json: { status: 'verified' } });
+      }
+      return route.fulfill({ contentType: 'text/html', body: renderRegistrationLinkPage('synthetic-nonce') });
+    });
+    await otherPage.goto('http://127.0.0.1:5275/auth/registration/link#synthetic-link-secret');
+    await expect(page.getByRole('heading', { name: 'Check your email' })).toBeVisible();
+    await otherPage.getByRole('button', { name: 'Verify email address' }).click();
+    await expect(page.getByRole('heading', { name: 'Set your password' })).toBeVisible();
+    expect(server.calls()).toBe(0);
+    await expect(otherPage.getByRole('heading', { name: 'Email verified' })).toBeVisible();
+    await expect(otherPage).toHaveURL('http://127.0.0.1:5275/auth/registration/link');
+    expect(await otherContext.cookies()).toHaveLength(0);
+    await page.screenshot({ path: info.outputPath('cross-device-original-continued.png'), fullPage: true });
+    await page.reload();
+    await expect(page.getByRole('heading', { name: 'Set your password' })).toBeVisible();
+  } finally { await otherContext.close(); }
 });
 
-test('requesting another email preserves the address and clears only the old code', async ({ page }) => {
+test('requesting another email preserves the address and clears only the old code', async ({ page }, info) => {
   await configure(page); const server = await backend(page); await start(page);
   const fields = page.getByRole('textbox', { name: /Verification code \d \/ 6/ });
   await fields.nth(0).fill('A');
+  const release = server.pauseResend();
   await page.getByRole('button', { name: 'Request a new email' }).click();
+  await expect(page.getByRole('button', { name: /Sending/ })).toBeVisible();
+  await page.screenshot({ path: info.outputPath('resend-loading.png'), fullPage: true });
+  release();
   await expect(fields.nth(0)).toHaveValue('');
   await expect(page.getByText('person@example.com', { exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Check your email' })).toBeVisible();
   expect(server.starts()).toBe(2);
 });
 
-test('same-browser notification advances automatically and a blocked websocket falls back to polling', async ({ page }) => {
+test('link approval advances automatically when a blocked websocket falls back to polling', async ({ page }) => {
   await configure(page);
   await page.addInitScript(() => { Object.defineProperty(window, 'WebSocket', { value: undefined }); });
   const server = await backend(page);
@@ -112,25 +157,122 @@ test('same-browser notification advances automatically and a blocked websocket f
   await expect(page.getByRole('heading', { name: 'Set your password' })).toBeVisible();
 });
 
-test('same-browser socket hint rechecks authority before advancing', async ({ page }) => {
+test('same-browser link confirmation advances the original registration tab', async ({ page }, info) => {
   await configure(page); const server = await backend(page); await start(page);
-  await server.notify('authorized');
+  const linkPage = await page.context().newPage();
+  await linkPage.route('**/auth/registration/link', async route => {
+    if (route.request().method() === 'POST') {
+      expect(await route.request().headerValue('cookie')).toContain(`uoa_registration_${id}=`);
+      await server.notify('authorized');
+      return route.fulfill({ json: { status: 'verified' } });
+    }
+    return route.fulfill({ contentType: 'text/html', body: renderRegistrationLinkPage('synthetic-nonce') });
+  });
+  await linkPage.goto('http://127.0.0.1:5275/auth/registration/link#synthetic-link-secret');
+  await linkPage.screenshot({ path: info.outputPath('same-browser-confirmation.png'), fullPage: true });
+  await linkPage.getByRole('button', { name: 'Verify email address' }).click();
+  await expect(linkPage.getByRole('heading', { name: 'Email verified' })).toBeVisible();
+  await linkPage.screenshot({ path: info.outputPath('same-browser-success.png'), fullPage: true });
   await expect(page.getByRole('heading', { name: 'Set your password' })).toBeVisible();
+  await page.screenshot({ path: info.outputPath('same-browser-original-continued.png'), fullPage: true });
+  expect(server.calls()).toBe(0);
+  await linkPage.close();
+});
+
+test('code entry shows partial input and verification loading before continuing', async ({ page }, info) => {
+  await configure(page); const server = await backend(page); await start(page);
+  const fields = page.getByRole('textbox', { name: /Verification code \d \/ 6/ });
+  await fields.nth(0).pressSequentially('AB3K7');
+  await page.screenshot({ path: info.outputPath('partial-code.png'), fullPage: true });
+  const release = server.pauseCode();
+  await fields.nth(5).fill('M');
+  await expect(page.getByRole('status')).toContainText('Verifying');
+  await page.screenshot({ path: info.outputPath('code-verifying.png'), fullPage: true });
+  release();
+  await expect(page.getByRole('heading', { name: 'Set your password' })).toBeVisible();
+  await page.screenshot({ path: info.outputPath('code-original-continued.png'), fullPage: true });
+});
+
+test('expiry and resend failure preserve a clear recovery screen', async ({ page }, info) => {
+  await configure(page); const server = await backend(page); await start(page);
+  await server.notify('expired');
+  await expect(page.getByRole('textbox', { name: /Verification code \d \/ 6/ })).toHaveCount(0);
+  await page.screenshot({ path: info.outputPath('registration-expired.png'), fullPage: true });
+  server.failResend();
+  await page.getByRole('button', { name: 'Request a new email' }).click();
+  await expect(page.getByRole('alert')).toBeVisible();
+  await page.screenshot({ path: info.outputPath('resend-failed.png'), fullPage: true });
+});
+
+test('a rejected link shows its error without signing in or redirecting', async ({ page }, info) => {
+  await page.route('**/auth/registration/link', route => route.request().method() === 'POST'
+    ? route.fulfill({ status: 400, json: { error: 'Request failed' } })
+    : route.fulfill({ contentType: 'text/html', body: renderRegistrationLinkPage('synthetic-nonce') }));
+  await page.goto('/auth/registration/link#synthetic-expired-secret');
+  await page.getByRole('button', { name: 'Verify email address' }).click();
+  await expect(page.getByRole('status')).toContainText('We could not verify');
+  await page.screenshot({ path: info.outputPath('link-error.png'), fullPage: true });
+  expect(await page.context().cookies()).toHaveLength(0);
+  await page.goto('about:blank');
+  await page.goto('/auth/registration/link');
+  await page.getByRole('button', { name: 'Verify email address' }).click();
+  await expect(page.getByRole('status')).toContainText('This link cannot be used');
+  await page.screenshot({ path: info.outputPath('link-missing-secret.png'), fullPage: true });
 });
 
 test('another-device link displays success without navigation or authentication', async ({ page }, info) => {
+  if (process.env.REGISTRATION_BASE_LINK_HTML) {
+    const beforeHtml = readFileSync(process.env.REGISTRATION_BASE_LINK_HTML, 'utf8');
+    let rejectBefore = true;
+    let releaseBefore = () => {};
+    const beforeResponse = new Promise<void>(resolve => { releaseBefore = resolve; });
+    await page.route('**/auth/registration/link', async route => {
+      if (route.request().method() !== 'POST') return route.fulfill({ contentType: 'text/html', body: beforeHtml });
+      await beforeResponse;
+      return rejectBefore ? route.fulfill({ status: 400, json: { error: 'Request failed' } })
+        : route.fulfill({ json: { status: 'verified' } });
+    });
+    await page.goto('/auth/registration/link#synthetic-link-secret');
+    await page.screenshot({ path: info.outputPath('before-confirmation.png'), fullPage: true });
+    await page.getByRole('button', { name: 'Verify email address' }).click();
+    await expect(page.getByRole('status')).toHaveText('Verifying…');
+    await page.screenshot({ path: info.outputPath('before-link-verifying.png'), fullPage: true });
+    releaseBefore();
+    await expect(page.getByRole('status')).toContainText('We could not verify');
+    await page.screenshot({ path: info.outputPath('before-link-error.png'), fullPage: true });
+    rejectBefore = false;
+    await page.getByRole('button', { name: 'Verify email address' }).click();
+    await expect(page.getByRole('heading', { name: 'Email verified' })).toBeVisible();
+    await page.screenshot({ path: info.outputPath('before-success.png'), fullPage: true });
+    await page.goto('about:blank');
+    await page.goto('/auth/registration/link');
+    await page.getByRole('button', { name: 'Verify email address' }).click();
+    await expect(page.getByRole('status')).toContainText('This link cannot be used');
+    await page.screenshot({ path: info.outputPath('before-link-missing-secret.png'), fullPage: true });
+    await page.unroute('**/auth/registration/link');
+    await page.goto('about:blank'); // Force a new document instead of a fragment-only navigation.
+  }
+  let release = () => {};
+  const confirmation = new Promise<void>(resolve => { release = resolve; });
   await page.route('**/auth/registration/link', async route => {
     if (route.request().method() === 'POST') {
       expect(route.request().postDataJSON()).toEqual({ token: 'synthetic-link-secret' });
+      await confirmation;
       return route.fulfill({ json: { status: 'verified' } });
     }
     return route.fulfill({ contentType: 'text/html', body: renderRegistrationLinkPage('synthetic-nonce') });
   });
   await page.goto('/auth/registration/link#synthetic-link-secret');
   await expect(page).toHaveURL(/\/auth\/registration\/link$/);
+  await expect(page.getByText(/Only confirm if you requested this registration/)).toBeVisible();
+  await page.screenshot({ path: info.outputPath('after-confirmation.png'), fullPage: true });
   await page.getByRole('button', { name: 'Verify email address' }).click();
+  await expect(page.getByRole('status')).toHaveText('Verifying…');
+  await page.screenshot({ path: info.outputPath('link-verifying.png'), fullPage: true });
+  release();
   await expect(page.getByRole('heading', { name: 'Email verified' })).toBeVisible();
-  await expect(page.getByRole('status')).toContainText('has not been signed in');
+  await expect(page.getByRole('status')).toContainText('will continue automatically');
+  await expect(page.getByRole('status')).toContainText('has not signed you in');
   await expect(page.getByRole('button', { name: 'Verify email address' })).toHaveCount(0);
   expect(await page.context().cookies()).toHaveLength(0);
   await page.screenshot({ path: info.outputPath('cross-device-success.png'), fullPage: true });

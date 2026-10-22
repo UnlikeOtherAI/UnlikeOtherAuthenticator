@@ -75,14 +75,21 @@ describe('browser-bound pending registration', () => {
       payload: { id: flow.id, code: value }, headers: { cookie, origin, 'x-forwarded-for': `192.0.2.${sequence}` } });
   }
 
-  it('confirms on a different device without a session, account or completion credential', async () => {
+  it('notifies and authorizes the original browser when another device confirms, without signing that device in', async () => {
     const flow = await start();
+    let resolveMessage!: (value: string) => void;
+    const messagePromise = new Promise<string>(resolve => { resolveMessage = resolve; });
+    const socket = await app.injectWS(`/auth/registration/events?${query}&id=${flow.id}`, {
+      headers: { cookie: flow.cookie, origin },
+    }, { onInit: client => { client.on('message', value => resolveMessage(String(value))); } });
     const result = await link(flow);
     expect(result.statusCode, result.body).toBe(200);
     expect(result.json()).toEqual({ status: 'verified' });
     expect(result.headers['set-cookie']).toBeUndefined();
     expect(result.headers.location).toBeUndefined();
-    expect((await status(flow)).json()).toEqual({ status: 'verified' });
+    expect(JSON.parse(await messagePromise)).toEqual({ type: 'registration.email_verified', status: 'verified' });
+    socket.close();
+    expect((await status(flow)).json()).toMatchObject({ status: 'authorized', token_type: 'VERIFY_EMAIL_SET_PASSWORD' });
     expect(await db.prisma.user.count({ where: { email: flow.email } })).toBe(0);
     expect((await status(flow, '')).statusCode).toBe(400);
     const counts = await db.prisma.authFunnelDailyCount.findMany({ where: { domain: 'client.example.com' } });
@@ -92,14 +99,15 @@ describe('browser-bound pending registration', () => {
       expect.objectContaining({ step: 'email_link_opened', outcome: 'registration_verified', count: 1 }),
     ]));
   });
-  it('a victim clicking an attacker-initiated link does not authorize the attacker browser', async () => {
+  it('opening an unsolicited link or preview does not approve registration before explicit confirmation', async () => {
     const flow = await start();
-    await link(flow);
+    const landing = await app.inject({ method: 'GET', url: '/auth/registration/link' });
+    expect(landing.body).toContain('Only confirm if you requested this registration');
     expect((await status(flow)).json()).not.toHaveProperty('token');
     expect((await code(flow, 'AAAAAA')).statusCode).toBe(400);
-    expect((await status(flow)).json().status).toBe('verified');
+    expect((await status(flow)).json().status).toBe('pending');
   });
-  it('authorizes only a same-browser link and preserves original PKCE/state', async () => {
+  it('also accepts same-browser confirmation and preserves original PKCE/state', async () => {
     const flow = await start();
     expect((await link(flow, flow.cookie)).statusCode).toBe(200);
     const current = await status(flow);
@@ -112,9 +120,8 @@ describe('browser-bound pending registration', () => {
       payload: { token: current.json().token, password: 'a-strong-password-123' }, headers: { origin } });
     expect(completion.statusCode).toBe(400); // Even a copied proof needs its original cookie.
   });
-  it('accepts the code only in the requesting browser after cross-device link verification', async () => {
+  it('accepts the alternative code only in the requesting browser', async () => {
     const flow = await start();
-    await link(flow);
     expect((await code(flow, flow.message.code, '')).statusCode).toBe(400);
     expect((await code(flow)).json()).toMatchObject({ status: 'authorized' });
     expect((await status(flow)).json()).toMatchObject({ status: 'authorized' }); // refresh recovery
@@ -128,11 +135,17 @@ describe('browser-bound pending registration', () => {
     expect((await status(flow)).json()).toEqual({ status: 'expired' });
     expect((await link(flow)).statusCode).toBe(400);
   });
-  it('does not turn a replayed link into browser authority', async () => {
+  it('never transfers link approval to a different registration or the browser replaying it', async () => {
     const flow = await start();
     await link(flow);
-    await link(flow, flow.cookie);
-    expect((await status(flow)).json()).toEqual({ status: 'verified' });
+    const proof = (await status(flow)).json().token;
+    const unrelated = await start();
+    const replay = await link(flow, unrelated.cookie);
+    expect(replay.json()).toEqual({ status: 'verified' });
+    expect(replay.headers['set-cookie']).toBeUndefined();
+    expect((await status(flow)).json()).toMatchObject({ status: 'authorized', token: proof });
+    expect((await status(unrelated)).json()).toEqual({ status: 'pending' });
+    expect((await status(flow, unrelated.cookie)).statusCode).toBe(400);
   });
   it('converges link and code races on one pending registration', async () => {
     const flow = await start();
@@ -177,7 +190,11 @@ describe('browser-bound pending registration', () => {
   });
   it('creates one account and one authorization code when completion is retried concurrently', async () => {
     const flow = await start();
-    const proof = (await code(flow)).json().token;
+    await link(flow);
+    const proof = (await status(flow)).json().token;
+    const foreignCompletion = await app.inject({ method: 'POST', url: `/auth/verify-email?${query}`,
+      payload: { token: proof, password: 'a-strong-password-123' }, headers: { origin } });
+    expect(foreignCompletion.statusCode).toBe(400);
     const complete = () => app.inject({ method: 'POST', url: `/auth/verify-email?${query}`,
       payload: { token: proof, password: 'a-strong-password-123' }, headers: { cookie: flow.cookie, origin, 'x-forwarded-for': `198.51.100.${sequence}` } });
     const outcomes = await Promise.all([complete(), complete()]);

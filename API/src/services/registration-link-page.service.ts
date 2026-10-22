@@ -4,7 +4,7 @@ import { renderInviteHtml } from './team-invite-page.service.js';
 export function renderRegistrationLinkPage(nonce: string): string {
   const html = renderInviteHtml({
     title: 'Confirm your email',
-    body: 'Verify your email address, then return to the registration screen where you started.',
+    body: 'Confirm to continue registration in the browser where you started. Only confirm if you requested this registration.',
     primaryAction: { id: 'verify', label: 'Verify email address' },
   });
   const result = '<p id="result" role="status" aria-live="polite"></p>';
@@ -27,7 +27,7 @@ export function renderRegistrationLinkPage(nonce: string): string {
       token = '';
       document.querySelector('h1').textContent = 'Email verified';
       document.querySelector('h1').nextElementSibling.textContent = 'Your email address is confirmed.';
-      result.textContent = 'Return to the registration screen to continue. This device has not been signed in.';
+      result.textContent = 'Your original registration screen will continue automatically. This page has not signed you in.';
       button.remove();
     } catch {
       result.textContent = 'We could not verify this link. Try again, or request a new email from the registration screen.';
