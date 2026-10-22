@@ -1,3 +1,4 @@
+import { registerModelPriceRoutes } from './model-prices.js';
 import { registerVoiceRoutes } from './voice.js';
 import type { FastifyInstance } from 'fastify';
 
@@ -29,6 +30,7 @@ import { registerSmsReservationRoutes } from './sms-reservations.js';
 import { registerSmsInboundRoutes } from './sms-inbound.js';
 
 export function registerBillingRoutes(app: FastifyInstance): void {
+  registerModelPriceRoutes(app);
   registerVoiceRoutes(app);
   registerSmsQuoteRoutes(app);
   registerSmsNumberRoutes(app);

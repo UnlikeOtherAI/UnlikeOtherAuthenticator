@@ -21,6 +21,14 @@ const tariffBody = {
 };
 
 export const billingEndpoints: EndpointSchema[] = [
+  { method: 'POST', path: '/billing/v1/model-prices',
+    description: 'Advisory model prices in customer credits per million tokens, rated by the current exact-subject tariff. No spending authority.',
+    auth: 'Product customer_lifecycle app key and exact endpoint-audience X-UOA-Actor with current subject membership',
+    body: { product: 'registered product', organisation_id: 'exact actor organisation', team_id: 'exact actor team',
+      user_id: 'exact actor subject', models: '1–100 {provider, model, pricing: Ledger catalogue price card or null}; backend supplied only' },
+    response: { currency: 'credits', basis: 'per_million_tokens', advisory: 'true', issued_at: 'ISO timestamp',
+      expires_at: 'ISO timestamp', models: 'Exact decimal input/output/cached_input rates, conditional dimensions, or explicit unavailable reason; no private costs/markup' },
+    notes: 'USD token cards only. Non-USD, non-token, dynamic or invalid prices stay unavailable. Real billing independently verifies Ledger receipts.' },
   ...billingSmsEndpoints,
   ...billingVoiceEndpoints,
   ...billingLedgerRuntimeKeyEndpoints(adminAuth),
