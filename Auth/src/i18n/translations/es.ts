@@ -1,6 +1,15 @@
 import type { Translations } from './en.js';
 
 export const es = {
+  'registration.checkEmail': 'Revisa tu correo',
+  'registration.sent': 'Hemos enviado un enlace de verificación y un código de seis caracteres a {email}.',
+  'registration.instructions': 'Abre el enlace en cualquier dispositivo o introduce el código para continuar.',
+  'registration.verifiedElsewhere': 'Tu correo está verificado. Introduce el código del correo para continuar de forma segura en este navegador.',
+  'registration.code': 'Código de verificación',
+  'registration.error': 'No pudimos verificar el código. Revísalo e inténtalo de nuevo o solicita otro correo.',
+  'registration.verifying': 'Verificando…',
+  'registration.expired': 'Esta inscripción ya no puede continuar. Solicita otro correo.',
+  'registration.restart': 'Solicitar otro correo',
   'auth.accessStatus.open': "Consultar estado de acceso",
   'auth.accessStatus.description': "Verifica tu correo para consultar los motivos de acceso de tu cuenta y espacios. Esto no inicia sesión.",
   'auth.accessStatus.email': "Correo electrónico",

@@ -1,4 +1,13 @@
 export const en = {
+  'registration.checkEmail': 'Check your email',
+  'registration.sent': "We've sent a verification link and a six-character code to {email}.",
+  'registration.instructions': 'Open the link on any device, or enter the code below to continue.',
+  'registration.verifiedElsewhere': 'Your email is verified. Enter the code from the email to continue securely in this browser.',
+  'registration.code': 'Verification code',
+  'registration.error': 'We could not verify that code. Check it and try again, or request a new email.',
+  'registration.verifying': 'Verifying…',
+  'registration.expired': 'This registration can no longer continue. Request a new email to try again.',
+  'registration.restart': 'Request a new email',
   'auth.accessStatus.open': "Check access status",
   'auth.accessStatus.description': "Verify your email to see account and workspace access reasons. This does not sign you in.",
   'auth.accessStatus.email': "Email address",

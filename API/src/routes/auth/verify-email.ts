@@ -27,6 +27,7 @@ import { finalizeWithTwoFaPolicy } from '../../services/team-finalize.service.js
 import { lockProductTeamPolicyShared } from '../../services/product-team-policy-lock.service.js';
 import { parsePkceChallenge } from '../../utils/pkce.js';
 import { tokenConsumeRateLimiter } from './rate-limit-keys.js';
+import { assertPendingRegistrationCompletion } from '../../services/pending-registration.service.js';
 
 const BodySchema = z
   .object({
@@ -73,6 +74,10 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
         codeChallenge: code_challenge,
         codeChallengeMethod: code_challenge_method,
       });
+      await assertPendingRegistrationCompletion({
+        token, cookies: request.cookies, config, configUrl, redirectUrl: redirect_url,
+        state, requestAccess: parseRequestAccessFlag(request_access), ...pkce,
+      }, request.adminDb);
       if (!pkce) {
         // Only a live invitation may create an account outside an OAuth initiation. Standard
         // registration links still require PKCE before their token can be consumed.

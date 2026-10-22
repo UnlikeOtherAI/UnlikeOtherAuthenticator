@@ -47,6 +47,7 @@
       "undici": "^6.28.1",
       "vite": "^6.4.4",
       "ws": "^7.5.11",
+      "@fastify/websocket>ws": "^8.18.3",
       "browserslist": ">=4.28.7",
       "@fastify/busboy": "^3.2.1",
       "tinypool@<2.1.2": "2.1.2",
