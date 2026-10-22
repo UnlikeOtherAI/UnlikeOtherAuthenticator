@@ -558,3 +558,19 @@ production RLS transactions. Refresh/lifecycle race tests bind their credential
 to the organisation they exercise; separate coverage preserves unrelated global
 and sibling-organisation sessions. `/org/me` returns canonical self identity even
 when the caller has no organisation membership.
+
+
+### Original global confidential validation
+
+`POST /org/assurance/validate` also validates an independent original with no
+organisation or team: omit both `org_id` and `team_id`, and send the same
+confidential `assurance_ref` in the body and fresh product-signed subject
+assertion. The assertion retains the original subject, client and credential
+epoch and must omit `active`. The existing UOA access-token transport remains
+available. Both paths require that credential and reference resolve to the
+same original assurance, even below the legacy compatibility floor. Current
+user lifecycle, credential epoch, domain role, family, ancestry and original
+deadline remain authoritative. A team still requires its exact organisation.
+This endpoint does not grant global control to organisation evidence, disclose
+proof by public `assurance_id`, or relax another organisation route's resolver.
+Deploy this producer contract before consumers that validate global originals.

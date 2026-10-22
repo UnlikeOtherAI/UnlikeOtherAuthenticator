@@ -66,7 +66,7 @@ export function registerRootRoute(app: FastifyInstance): void {
       native_apps: { admin: '/admin/apps', registration: '/oauth/register', public_identifier: 'app_id', client_secret_required: false },
       enterprise_sso: { version: 1, settings: '/auth/organisation-access',
         entry: '/sso/:connectionId/start', domain_discovery: false,
-        status: '/org/organisations/:orgId/sso/status', assurance: '/org/assurance/validate',
+        status: '/org/organisations/:orgId/sso/status', assurance: '/org/assurance/validate', assurance_scope: 'exact original organisation/team or null-scope independent proof',
         revocations: '/domain/revocations', activation: 'Fail closed until authority, provenance, consumer and protocol readiness pass; enforcement also requires two independent custodians and a completed recovery drill.' },
       deeptest_nessie_inference: { check: '/apps/v1/deeptest/nessie-inference-access',
         admin: '/internal/admin/users/:userId/deeptest-nessie-inference',

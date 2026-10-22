@@ -10,9 +10,9 @@ export const enterpriseSsoEndpoints: EndpointSchema[] = [
   { method: 'POST', path: '/org/organisations/:orgId/sso/management-continuation', description: 'Create a UOA-only fresh reauthentication entry hint; grants no management authority',
     auth: 'Domain bearer, verified config and live canonical organisation owner', body: {},
     response: { ok: 'true', management_url: 'Exact UOA /auth URL with flow=organisation_management and management_org_id hint', expires_at: 'null: entry hint grants no authority' } },
-  { method: 'POST', path: '/org/assurance/validate', description: 'Resolve live exact credential lineage; never converts an epoch into proof',
+  { method: 'POST', path: '/org/assurance/validate', description: 'Resolve original confidential credential lineage at exact org/team or null global scope; missing proof never upgrades a legacy holder',
     auth: 'Domain bearer, verified config and person assertion with assurance_ref', body: {
-      assurance_ref: 'backend custody reference', org_id: 'exact selected org', team_id: 'optional exact selected team' },
+      assurance_ref: 'backend custody reference', org_id: 'optional exact original org; omit only for null-scope independent original', team_id: 'optional exact original team; requires org_id' },
     response: { active: 'true', assurance_id: 'signed opaque record identifier', method: 'independent|sso|recovery',
       expires_at: 'absolute ISO evidence expiry', recheck_by: 'same authoritative deadline, at most thirty minutes', policy_generation: 'integer' } },
   { method: 'POST', path: '/auth/organisation-access/personal-factor', description: 'Challenge an existing personal TOTP for exact owner management using an opaque account hint',
