@@ -22,10 +22,16 @@ On Windows Maxis:
   one-use completion, replay, code attempts and expiry.
 - Three focused unit tests passed, including approval during an in-flight status
   read with the polling clock stopped.
-- Fourteen desktop/Pixel 7 browser checks passed. Two isolated browser contexts
-  confirm the original screen advances without submitting a code or advancing
-  the polling clock, while the confirming context has no cookies or redirect.
+- Fourteen desktop/Pixel 7 browser checks passed before expanding state coverage.
 - API/Admin lint and OpenAPI validation passed; OpenAPI retains existing warnings.
+
+The final expanded browser suite ran locally on Windows Minis because Maxis was
+busy with other workloads. The Auth production build, Admin lint and all twenty
+desktop/Pixel 7 checks passed. Two isolated browser contexts confirm the original
+screen advances without submitting a code or advancing the polling clock, while
+the confirming context has no cookies or redirect. A separate same-browser test
+uses two tabs and checks the original registration cookie is present. Loading,
+error, expiry, resend and code-entry states are captured from the actual bundle.
 
 Browser responses are synthetic; persistence tests use real isolated PostgreSQL
 schemas. Live mail delivery and physical phone/Safari testing were not performed.
@@ -41,8 +47,33 @@ same state and viewport: 1024 × 768 desktop and Pixel 7 mobile emulation.
 | --- | --- | --- |
 | Desktop confirmation | [Before](desktop-before-confirmation.png) | [After](desktop-after-confirmation.png) |
 | Mobile confirmation | [Before](mobile-before-confirmation.png) | [After](mobile-after-confirmation.png) |
+| Desktop success | [Before](desktop-before-success.png) | [After](desktop-cross-device-success.png) |
+| Mobile success | [Before](mobile-before-success.png) | [After](mobile-cross-device-success.png) |
 
 The original screen after confirmation is captured for
 [desktop](desktop-original-continued.png) and [mobile](mobile-original-continued.png).
 The confirming browser's success page is captured for
 [desktop](desktop-cross-device-success.png) and [mobile](mobile-cross-device-success.png).
+
+## Screen and state inventory
+
+Every row below has desktop and mobile screenshots embedded directly in the PR
+description. The email and code-entry UI was introduced in #123 and is unchanged
+by #124. The new code-entry states had no equivalent before #123; its description
+also embeds the original registration and email Before/After pairs. #124's pairs
+above compare its changed confirmation and success copy with #123's deployed HTML.
+Password setup is unchanged and included as the destination after verification.
+
+| Journey | Captures (each has `desktop-` and `mobile-` versions) |
+| --- | --- |
+| Submit email, wait for verification | `after-registration.png`, `after-email.png` |
+| Confirm in the same browser | `same-browser-confirmation.png`, `same-browser-success.png`, `same-browser-original-continued.png` |
+| Confirm on another device | `after-confirmation.png`, `cross-device-success.png`, `cross-device-original-continued.png` |
+| Enter the optional code | `partial-code.png`, `code-verifying.png`, `code-original-continued.png` |
+| Recover from an incorrect code | `invalid-code.png` |
+| Resend or recover from expiry | `resend-loading.png`, `registration-expired.png`, `resend-failed.png` |
+| Link verification in progress or rejected | `link-verifying.png`, `link-error.png` |
+
+Fixtures use synthetic link secrets and `person@example.com`; no real account or
+mailbox appears in the images. The full-page captures use matching light themes,
+1024 × 768 desktop and Pixel 7 mobile emulation (393 × 800 CSS pixels).

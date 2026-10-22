@@ -209,12 +209,24 @@ test('a rejected link shows its error without signing in or redirecting', async 
 
 test('another-device link displays success without navigation or authentication', async ({ page }, info) => {
   if (process.env.REGISTRATION_BASE_LINK_HTML) {
-    await page.setContent(readFileSync(process.env.REGISTRATION_BASE_LINK_HTML, 'utf8'));
+    const beforeHtml = readFileSync(process.env.REGISTRATION_BASE_LINK_HTML, 'utf8');
+    await page.route('**/auth/registration/link', route => route.request().method() === 'POST'
+      ? route.fulfill({ json: { status: 'verified' } })
+      : route.fulfill({ contentType: 'text/html', body: beforeHtml }));
+    await page.goto('/auth/registration/link#synthetic-link-secret');
     await page.screenshot({ path: info.outputPath('before-confirmation.png'), fullPage: true });
+    await page.getByRole('button', { name: 'Verify email address' }).click();
+    await expect(page.getByRole('heading', { name: 'Email verified' })).toBeVisible();
+    await page.screenshot({ path: info.outputPath('before-success.png'), fullPage: true });
+    await page.unroute('**/auth/registration/link');
+    await page.goto('about:blank'); // Force a new document instead of a fragment-only navigation.
   }
+  let release = () => {};
+  const confirmation = new Promise<void>(resolve => { release = resolve; });
   await page.route('**/auth/registration/link', async route => {
     if (route.request().method() === 'POST') {
       expect(route.request().postDataJSON()).toEqual({ token: 'synthetic-link-secret' });
+      await confirmation;
       return route.fulfill({ json: { status: 'verified' } });
     }
     return route.fulfill({ contentType: 'text/html', body: renderRegistrationLinkPage('synthetic-nonce') });
@@ -224,6 +236,9 @@ test('another-device link displays success without navigation or authentication'
   await expect(page.getByText(/Only confirm if you requested this registration/)).toBeVisible();
   await page.screenshot({ path: info.outputPath('after-confirmation.png'), fullPage: true });
   await page.getByRole('button', { name: 'Verify email address' }).click();
+  await expect(page.getByRole('status')).toHaveText('Verifying…');
+  await page.screenshot({ path: info.outputPath('link-verifying.png'), fullPage: true });
+  release();
   await expect(page.getByRole('heading', { name: 'Email verified' })).toBeVisible();
   await expect(page.getByRole('status')).toContainText('will continue automatically');
   await expect(page.getByRole('status')).toContainText('has not signed you in');
