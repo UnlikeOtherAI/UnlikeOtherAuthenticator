@@ -114,20 +114,19 @@ export async function verifyPendingRegistrationCode(params: RegistrationContext 
   publishRegistrationChange(params.id);
 }
 
-export async function verifyPendingRegistrationLink(token: string, cookies: Record<string, string | undefined>, prisma: PrismaClient): Promise<void> {
+export async function verifyPendingRegistrationLink(token: string, prisma: PrismaClient): Promise<void> {
   const initial = await prisma.pendingRegistration.findUnique({ where: { linkHash: registrationDigest('link', token) } });
   if (!initial) refuse();
   await runInTransaction(prisma, async tx => {
     const row = await lockRegistration(tx, initial.id);
     const now = new Date();
     if (!row || row.expiresAt <= now || row.attempts >= REGISTRATION_MAX_ATTEMPTS) refuse();
-    // Replay can display success, but cannot authorize a different browser later.
+    // Approval belongs to the link's original pending flow. Replays cannot
+    // transfer it to the browser opening the link or to another registration.
     if (row.linkUsedAt) return;
-    const credential = cookies[registrationCookieName(row.id)];
-    const sameBrowser = credential && equalRegistrationDigest(registrationDigest('browser', credential), row.credentialHash);
     await tx.pendingRegistration.update({ where: { id: row.id }, data: {
       emailVerifiedAt: row.emailVerifiedAt ?? now, linkUsedAt: now,
-      ...(sameBrowser ? { browserAuthorizedAt: now } : {}),
+      browserAuthorizedAt: now,
     } });
   });
   publishRegistrationChange(initial.id);

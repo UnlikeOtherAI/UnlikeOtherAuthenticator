@@ -8,6 +8,12 @@ For the full product spec, see [brief.md](./brief.md). For tech stack, see [tech
 
 ## Guiding Principles
 
+Registration link approval is independent of the confirming browser's cookies.
+It atomically verifies and authorizes only the link's original pending flow, then
+publishes a WebSocket hint. Reading or consuming completion proof still requires
+the initiating browser's cookie and exact OAuth/config context. The confirmation
+response contains no login credentials or redirect; GET never approves a flow.
+
 Browser registration uses `routes/auth/registration.ts`, `registration-context.ts`
 and `registration-websocket.ts`; `pending-registration.service.ts` owns the durable
 mailbox/browser state and immutable OAuth binding, `registration-credentials.ts`

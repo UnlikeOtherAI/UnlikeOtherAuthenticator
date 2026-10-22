@@ -19,11 +19,13 @@ holds the 256-bit link secret, so the secret never reaches access logs or
 referrers. The page removes the fragment before its explicit confirmation POST.
 POST /auth/registration/link with {token} confirms email and returns only
 {status:"verified"}; no account, OAuth code or login session is created there.
-The link works on any device. Only a matching original browser cookie may also
-authorize that pending flow. After a cross-device click the original browser
-must still enter the emailed code: an attacker starting a flow with a victim's
-email cannot gain access when the victim clicks. Replaying a consumed link never
-grants additional browser authority. No second pairing code is introduced.
+Confirmation on any device approves continuation of that exact original pending
+registration. The original screen receives a WebSocket hint, rechecks status with
+its own cookie and exact OAuth context, and advances without entering a code.
+The confirming browser gets no completion proof, login cookie or redirect.
+The page explicitly says to confirm only a registration the user requested;
+GET and email previews never approve it. Replaying a consumed link cannot transfer
+approval to another browser or registration. The code remains an alternative.
 
 GET /auth/registration/status and authenticated WSS /auth/registration/events
 require the original cookie plus exact signed config and OAuth context; WSS

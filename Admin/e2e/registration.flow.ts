@@ -1,4 +1,5 @@
 import { expect, test, type Page, type WebSocketRoute } from '@playwright/test';
+import { readFileSync } from 'node:fs';
 import { renderRegistrationLinkPage } from '../../API/src/services/registration-link-page.service.js';
 import { buildRegistrationVerificationTemplate } from '../../API/src/services/email.templates.registration.js';
 import { buildVerifyEmailSetPasswordTemplate } from '../../API/src/services/email.templates.js';
@@ -82,12 +83,33 @@ test('registration screen, keyboard entry, failed code and full paste recovery',
   await expect(page.getByRole('heading', { name: 'Set your password' })).toBeVisible();
 });
 
-test('cross-device verification hint requires the emailed code in the original browser', async ({ page }) => {
-  await configure(page); const server = await backend(page); await start(page);
-  await server.notify('verified');
-  await expect(page.getByRole('status')).toContainText('Your email is verified');
-  await expect(page.getByRole('heading', { name: 'Check your email' })).toBeVisible();
-  await expect(page.getByRole('textbox', { name: /Verification code \d \/ 6/ })).toHaveCount(6);
+test('confirmation in another browser advances the original over websocket without code entry', async ({ page, browser }, info) => {
+  await configure(page); const server = await backend(page);
+  await page.clock.install(); // No polling interval runs: advancement must follow the socket hint.
+  await start(page);
+  const otherContext = await browser.newContext({ viewport: page.viewportSize()! });
+  try {
+    const otherPage = await otherContext.newPage();
+    await otherPage.route('**/auth/registration/link', async route => {
+      if (route.request().method() === 'POST') {
+        expect(route.request().postDataJSON()).toEqual({ token: 'synthetic-link-secret' });
+        await server.notify('authorized');
+        return route.fulfill({ json: { status: 'verified' } });
+      }
+      return route.fulfill({ contentType: 'text/html', body: renderRegistrationLinkPage('synthetic-nonce') });
+    });
+    await otherPage.goto('http://127.0.0.1:5275/auth/registration/link#synthetic-link-secret');
+    await expect(page.getByRole('heading', { name: 'Check your email' })).toBeVisible();
+    await otherPage.getByRole('button', { name: 'Verify email address' }).click();
+    await expect(page.getByRole('heading', { name: 'Set your password' })).toBeVisible();
+    expect(server.calls()).toBe(0);
+    await expect(otherPage.getByRole('heading', { name: 'Email verified' })).toBeVisible();
+    await expect(otherPage).toHaveURL('http://127.0.0.1:5275/auth/registration/link');
+    expect(await otherContext.cookies()).toHaveLength(0);
+    await page.screenshot({ path: info.outputPath('cross-device-original-continued.png'), fullPage: true });
+    await page.reload();
+    await expect(page.getByRole('heading', { name: 'Set your password' })).toBeVisible();
+  } finally { await otherContext.close(); }
 });
 
 test('requesting another email preserves the address and clears only the old code', async ({ page }) => {
@@ -101,7 +123,7 @@ test('requesting another email preserves the address and clears only the old cod
   expect(server.starts()).toBe(2);
 });
 
-test('same-browser notification advances automatically and a blocked websocket falls back to polling', async ({ page }) => {
+test('link approval advances automatically when a blocked websocket falls back to polling', async ({ page }) => {
   await configure(page);
   await page.addInitScript(() => { Object.defineProperty(window, 'WebSocket', { value: undefined }); });
   const server = await backend(page);
@@ -119,6 +141,10 @@ test('same-browser socket hint rechecks authority before advancing', async ({ pa
 });
 
 test('another-device link displays success without navigation or authentication', async ({ page }, info) => {
+  if (process.env.REGISTRATION_BASE_LINK_HTML) {
+    await page.setContent(readFileSync(process.env.REGISTRATION_BASE_LINK_HTML, 'utf8'));
+    await page.screenshot({ path: info.outputPath('before-confirmation.png'), fullPage: true });
+  }
   await page.route('**/auth/registration/link', async route => {
     if (route.request().method() === 'POST') {
       expect(route.request().postDataJSON()).toEqual({ token: 'synthetic-link-secret' });
@@ -128,9 +154,12 @@ test('another-device link displays success without navigation or authentication'
   });
   await page.goto('/auth/registration/link#synthetic-link-secret');
   await expect(page).toHaveURL(/\/auth\/registration\/link$/);
+  await expect(page.getByText(/Only confirm if you requested this registration/)).toBeVisible();
+  await page.screenshot({ path: info.outputPath('after-confirmation.png'), fullPage: true });
   await page.getByRole('button', { name: 'Verify email address' }).click();
   await expect(page.getByRole('heading', { name: 'Email verified' })).toBeVisible();
-  await expect(page.getByRole('status')).toContainText('has not been signed in');
+  await expect(page.getByRole('status')).toContainText('will continue automatically');
+  await expect(page.getByRole('status')).toContainText('has not signed you in');
   await expect(page.getByRole('button', { name: 'Verify email address' })).toHaveCount(0);
   expect(await page.context().cookies()).toHaveLength(0);
   await page.screenshot({ path: info.outputPath('cross-device-success.png'), fullPage: true });

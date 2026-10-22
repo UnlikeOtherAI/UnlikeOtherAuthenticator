@@ -7,6 +7,7 @@ import { llmNativeAppsMarkdown } from './llm-native-apps.js';
 // Native app integration includes direct connectivity and same-account local pairing proofs.
 import { llmWebsiteServicesMarkdown } from './llm-website-services.js';
 import { llmRegistrationMarkdown } from './llm-registration.js';
+// Cross-device confirmation advances the original flow without code entry.
 
 import { llmAvatarsMarkdown } from './llm-avatars.js';
 import { llmBillingMarkdown } from './llm-billing.js';

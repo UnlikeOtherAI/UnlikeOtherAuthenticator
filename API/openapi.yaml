@@ -2594,7 +2594,7 @@ paths:
       tags: [Auth]
       operationId: confirmRegistrationLink
       summary: Confirm mailbox possession without authenticating another device
-      description: Consumes a short-lived 256-bit link secret. Only the original browser cookie can additionally authorize its pending flow. Cross-device confirmation never authorizes the initiator browser; it still needs the emailed code. Replay can display success but never adds browser authority. No account, OAuth code or session is created here. Same-origin POST required.
+      description: Explicit confirmation consumes a short-lived 256-bit link secret and approves the exact original pending flow on any device. The original browser receives a WebSocket hint, rechecks status using its HttpOnly cookie and original OAuth context, and advances without code entry. The confirming browser receives no credentials, cookies or redirect. Replay cannot transfer approval to another registration. No account, OAuth code or session is created here. Same-origin POST required.
       requestBody:
         required: true
         content:
