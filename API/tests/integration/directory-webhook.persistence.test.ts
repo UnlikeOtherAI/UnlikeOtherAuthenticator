@@ -29,11 +29,17 @@ describe.skipIf(!enabled)('transactional directory change production', () => {
     // Unrelated credential bookkeeping does not send another directory event.
     await prisma.user.update({ where: { id: user.id }, data: { tokenVersion: { increment: 1 } } });
     expect(await events()).toHaveLength(2);
-    await prisma.teamMember.update({ where: { teamId_userId: { teamId: team.id, userId: user.id } }, data: { status: 'REMOVED' } });
+    await prisma.userAvatar.create({ data: { userId: user.id, contentType: 'image/png',
+      data: Buffer.from('private-avatar-bytes'), sizeBytes: 20 } });
     expect(await events()).toHaveLength(3);
+    await prisma.userAvatar.delete({ where: { userId: user.id } });
+    expect(await events()).toHaveLength(4);
+    await prisma.teamMember.update({ where: { teamId_userId: { teamId: team.id, userId: user.id } }, data: { status: 'REMOVED' } });
+    expect(await events()).toHaveLength(5);
     const serialized = JSON.stringify(await events());
     expect(serialized).not.toContain('Before');
     expect(serialized).not.toContain('After');
     expect(serialized).not.toContain(user.email);
+    expect(serialized).not.toContain('private-avatar-bytes');
   });
 });
