@@ -387,13 +387,15 @@ export async function resolveTeamPeople(
   })) throw new AppError('FORBIDDEN', 403);
   const rows = await prisma.teamMember.findMany({
     where: { teamId: team.id, userId: { in: [...new Set(params.subjects)] } },
-    select: TEAM_ROSTER_SELECT,
+    select: { ...TEAM_ROSTER_SELECT, user: { select: { ...TEAM_ROSTER_SELECT.user.select, lifecycleStatus: true } } },
   });
   const orgMembers = await prisma.orgMember.findMany({
     where: { orgId: org.id, userId: { in: rows.map((row) => row.userId) } },
-    select: { userId: true, role: true },
+    select: { userId: true, role: true, status: true },
   });
-  const roles = new Map(orgMembers.map((member) => [member.userId, member.role]));
+  const members = new Map(orgMembers.map((member) => [member.userId, member]));
   return rows.map((row) => ({ ...toTeamRosterMember(row, org.domain, permissions.viewMemberEmail || row.userId === actorUserId),
-    orgRole: roles.get(row.userId) }));
+    orgRole: members.get(row.userId)?.role,
+    status: row.user.lifecycleStatus !== 'ACTIVE' || members.get(row.userId)?.status !== 'ACTIVE'
+      ? 'REMOVED' as const : row.status }));
 }

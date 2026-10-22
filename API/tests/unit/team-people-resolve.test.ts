@@ -6,14 +6,14 @@ const org = { id: 'org-1', domain: 'acme.example.com', name: 'Acme', slug: 'acme
   ownerId: 'u-owner', createdAt: now, updatedAt: now };
 const row = (userId: string) => ({ id: `tm-${userId}`, teamId: 'team-1', userId,
   teamRole: 'member', status: 'ACTIVE', createdAt: now, updatedAt: now,
-  user: { id: userId, name: 'Current name', email: `${userId}@example.com` } });
+  user: { id: userId, lifecycleStatus: 'ACTIVE', name: 'Current name', email: `${userId}@example.com` } });
 const input = () => ({ orgId: org.id, teamId: 'team-1', domain: org.domain,
   actorUserId: 'u-member', config: makeConfig(), subjects: ['u-person'] });
 const setup = () => {
   const prisma = makePrismaMock();
   prisma.organisation.findFirst.mockResolvedValue(org);
   prisma.orgMember.findFirst.mockResolvedValue({ id: 'om', orgId: org.id, userId: 'u-member', role: 'member' });
-  prisma.orgMember.findMany.mockResolvedValue([{ userId: 'u-person', role: 'member' }]);
+  prisma.orgMember.findMany.mockResolvedValue([{ userId: 'u-person', role: 'member', status: 'ACTIVE' }]);
   prisma.team.findFirst.mockResolvedValue({ id: 'team-1' });
   prisma.teamMember.findFirst.mockResolvedValue({ teamRole: 'member' });
   prisma.teamMember.findMany.mockResolvedValue([row('u-person')]);
