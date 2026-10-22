@@ -14,6 +14,31 @@ Written 2026-08-06 from the running systems, not from memory: workflow definitio
 
 ## The two halves
 
+### 2026-10-22 operational verification
+
+Enterprise custody now has the dedicated symmetric KMS key
+`projects/gen-lang-client-0561071620/locations/europe-west1/keyRings/uoa-enterprise-sso/cryptoKeys/wrapping`,
+with 90-day rotation and key-scoped encrypt/decrypt permission for the Cloud Run
+runtime service account. Both deployment variables described in `Docs/deploy.md`
+are configured. Cloud Run job `uoa-enterprise-custody-audit-vkq2f`, using the
+deployed application image and runtime identity, passed a real seal/open round
+trip and refused a different authenticated context at 20:05 UTC. This verifies
+custody, not product preparation, a key-rotation drill or customer activation.
+
+The billing incident at 19:49 UTC was Stripe `api_key_expired` during configured
+account resolution. The configured key is **test mode**. Its Secret Manager
+binding is `uoa-auth-stripe-secret-key:latest`; no live key is required or used.
+The API maps provider account authentication, permission, connection, rate-limit
+and upstream failures to `503 BILLING_PAYMENT_PROVIDER_UNAVAILABLE`. Consumers
+retain sessions and do not substitute a zero balance or admit paid work. Actual
+sandbox Checkout remains unverified until a valid sandbox credential is supplied;
+this does not prevent independent deployment or verification work.
+
+SalesNerd note: the historical inventory below predates the UOA credit catalog
+addition in PR #108 and SalesNerd's integration in PR #107. The 22 October runtime
+still lacked its dedicated lifecycle app key and billing actor signing key;
+source support alone does not establish commercial enrollment or live credits.
+
 Registration verification requires the additive `20261022120000_pending_registrations`
 migration and the API/Auth release together. No consuming-product config flag or
 native release is required for the hosted registration screen. Cloud Run must forward
