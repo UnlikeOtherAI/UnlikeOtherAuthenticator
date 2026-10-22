@@ -97,9 +97,12 @@ describe('confidential original global assurance with PostgreSQL', () => {
     const a = await f.original(scope); const b = await f.original(scope);
     const configUrl = `https://${f.domain}/config`;
     const config = await signTestConfigJwt(baseClientConfigPayload({ domain: f.domain,
-      jwks_url: `https://${f.domain}/.well-known/jwks.json`, org_features: { enabled: true } }));
+      jwks_url: `https://${f.domain}/.well-known/jwks.json`, redirect_urls: [`https://${f.domain}/callback`], org_features: { enabled: true } }));
     vi.stubGlobal('fetch', await createTestConfigFetchHandler({ [configUrl]: config }));
-    const app = await createApp(); await app.ready();
+    const app = await createApp();
+    let failureCode = "";
+    app.addHook("onError", (_request, _reply, error, done) => { failureCode = error.message; done(); });
+    await app.ready();
     const url = `/org/assurance/validate?domain=${encodeURIComponent(f.domain)}&config_url=${encodeURIComponent(configUrl)}`;
     const credential = await f.request({ active: scope }, a.reference);
     const assertion = credential.headers['x-uoa-subject-assertion'];
@@ -108,7 +111,7 @@ describe('confidential original global assurance with PostgreSQL', () => {
     try {
       const match = await app.inject({ method: 'POST', url, headers,
         payload: { assurance_ref: a.reference, org_id: org.id, team_id: team.id } });
-      expect(match.statusCode, match.body).toBe(200);
+      expect(match.statusCode, `${match.body} ${failureCode}`).toBe(200);
       expect(match.json()).toMatchObject({ active: true, assurance_id: a.assurance.id });
       const swapped = await app.inject({ method: 'POST', url, headers,
         payload: { assurance_ref: b.reference, org_id: org.id, team_id: team.id } });
