@@ -9,6 +9,7 @@ import fastify, { type FastifyInstance } from 'fastify';
 
 import {
   getEnv,
+  getPublicBaseUrl,
   isBillingAssertionJwksEnabled,
   isTariffSnapshotJwksEnabled,
   requireEnv,
@@ -206,7 +207,7 @@ export async function createApp(): Promise<FastifyInstance> {
       directives: {
         defaultSrc: ["'self'"],
         baseUri: ["'none'"],
-        connectSrc: ["'self'", 'https:'],
+        connectSrc: ["'self'", 'https:', new URL(getPublicBaseUrl()).origin.replace(/^http/, 'ws')],
         fontSrc: ["'self'", 'https:', 'data:'],
         formAction: ["'self'"],
         frameSrc: ["'self'", 'blob:'],
