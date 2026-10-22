@@ -38,6 +38,7 @@ import { finalizeWithTwoFaPolicy } from '../../services/team-finalize.service.js
 import { lockAndAssertAuthenticationEpoch } from '../../services/authentication-epoch.service.js';
 import { lockProductTeamPolicyShared } from '../../services/product-team-policy-lock.service.js';
 import { tokenConsumeRateLimiter } from './rate-limit-keys.js';
+import { recordAuthFunnelStep } from '../../services/auth-funnel.service.js';
 import {
   buildAuthUrl,
   buildInviteRegistrationAuthUrl,
@@ -64,6 +65,21 @@ function redirectNoStore(reply: FastifyReply, url: string): void {
   reply.header('Cache-Control', 'no-store');
   reply.header('Pragma', 'no-cache');
   reply.redirect(url, 302);
+}
+
+const LINK_OPENED_OUTCOMES = {
+  LOGIN_LINK: 'valid_login_link',
+  VERIFY_EMAIL: 'valid_verify_email',
+  VERIFY_EMAIL_SET_PASSWORD: 'valid_set_password',
+} as const;
+
+function linkTokenErrorOutcome(err: unknown): string {
+  const message = isAppError(err) ? err.message : '';
+  // Team invitations share this route; keep them out of the sign-up outcomes.
+  if (message === 'INVITE_EXPIRED' || message === 'INVITE_INVALID') return 'invite_unavailable';
+  if (message === 'TOKEN_EXPIRED') return 'expired';
+  if (message === 'TOKEN_ALREADY_USED') return 'already_used';
+  return 'invalid';
 }
 
 function isEmailLinkTokenError(err: unknown): boolean {
@@ -94,6 +110,14 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
       if (!config || !configUrl) {
         throw new AppError('BAD_REQUEST', 400, 'MISSING_CONFIG');
       }
+      // HEAD is what mail scanners send when they pre-check a link; it is not a person opening it.
+      const recordLinkOpened = async (outcome: string) => {
+        if (request.method === 'HEAD') return;
+        await recordAuthFunnelStep(
+          { domain: config.domain, step: 'email_link_opened', outcome },
+          { prisma: request.adminDb },
+        );
+      };
 
       let pkce: PkceChallenge | undefined;
       try {
@@ -106,6 +130,7 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
           throw err;
         }
         request.log.info({ err }, 'email link had an invalid PKCE challenge; rendering login');
+        await recordLinkOpened('invalid_pkce');
         const html = await renderAuthEntrypointHtml({
           config,
           configUrl,
@@ -135,6 +160,7 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
         if (!isEmailLinkTokenError(err)) {
           throw err;
         }
+        await recordLinkOpened(linkTokenErrorOutcome(err));
 
         if (
           isAppError(err) &&
@@ -175,6 +201,8 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
             verifyDeps: { prisma: request.adminDb },
           },
         );
+        // Registration emails always carry PKCE, so only an invitation or a damaged link lands here.
+        await recordLinkOpened(continuation.kind === 'none' ? 'missing_pkce' : 'invite');
 
         // F5: an invitation opened from a mailbox ends here, with no product session and no
         // way back into the product unless UOA puts one on the page. Only a `redirect_url`
@@ -249,6 +277,8 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
         sendAuthHtml(reply, html);
         return;
       }
+
+      await recordLinkOpened(LINK_OPENED_OUTCOMES[type]);
 
       // LOGIN_LINK and VERIFY_EMAIL: auto-consume the token and redirect immediately.
       // No password needed — the user is signed in by clicking the link.

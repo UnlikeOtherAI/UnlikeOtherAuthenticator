@@ -6,6 +6,7 @@ import { requireEnv } from '../../config/env.js';
 import { configVerifier } from '../../middleware/config-verifier.js';
 import { runWithRequestAdminTransaction } from '../../plugins/tenant-context.plugin.js';
 import { loginWithEmailPassword } from '../../services/auth-login.service.js';
+import { recordAuthFunnelStep } from '../../services/auth-funnel.service.js';
 import { lockAndAssertAuthenticationEpoch } from '../../services/authentication-epoch.service.js';
 import { parseRequestAccessFlag } from '../../services/access-request-flow.service.js';
 import {
@@ -71,6 +72,12 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
       if (!configUrl) {
         throw new Error('missing request.configUrl');
       }
+
+      const recordLoginSubmitted = (outcome: 'succeeded' | 'failed') =>
+        recordAuthFunnelStep(
+          { domain: config.domain, step: 'login_submitted', outcome },
+          { prisma: request.adminDb },
+        );
 
       // The shared policy fence and its BYPASSRLS policy re-read must use the
       // same transaction as challenge/setup/code issuance.
@@ -162,7 +169,12 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
 
         if (finalized.kind !== 'granted') return finalized;
         return { ...finalized, userId };
+      }).catch(async (err: unknown) => {
+        // Recorded after the transaction rolled back, never inside it.
+        await recordLoginSubmitted('failed');
+        throw err;
       });
+      await recordLoginSubmitted('succeeded');
 
       if (outcome.kind === 'twofa') {
         reply

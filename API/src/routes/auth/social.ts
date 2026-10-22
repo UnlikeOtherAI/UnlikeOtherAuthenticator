@@ -16,6 +16,7 @@ import {
   setSocialStateCookie,
 } from '../../services/social/social-state-cookie.js';
 import { getTeamInviteLandingData } from '../../services/team-invite.service.js';
+import { recordAuthFunnelStep } from '../../services/auth-funnel.service.js';
 import type { SocialProviderKey } from '../../services/social/provider.base.js';
 import { parseRequestAccessFlag } from '../../services/access-request-flow.service.js';
 import { selectRedirectUrl } from '../../services/authorization-code.service.js';
@@ -107,6 +108,10 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
       if (!pkce && !invite) {
         throw new AppError('BAD_REQUEST', 400, 'INVALID_PKCE_CHALLENGE');
       }
+      await recordAuthFunnelStep(
+        { domain: config.domain, step: 'social_started', outcome: provider },
+        { prisma: request.adminDb },
+      );
 
       const env = getEnv();
 

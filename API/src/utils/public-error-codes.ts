@@ -95,4 +95,7 @@ export const PRODUCTION_PUBLIC_ERROR_CODES = new Set([
   // A GBP or EUR credit top-up while the purchase rate cannot be read: the product says purchases
   // in that currency are briefly unavailable. It names no rate, source or account detail.
   'BILLING_CREDIT_FX_RATE_UNAVAILABLE',
+  // A superuser's sign-up funnel period is malformed, reversed or too long: Admin asks for a valid
+  // range. Only the superuser-only /internal/admin/auth-funnel route throws it.
+  'INVALID_DATE_RANGE',
 ]);

@@ -25,6 +25,8 @@ import {
   confidentialTokenExchangeDomainRateLimiter,
   tokenExchangePreAuthRateLimiter,
 } from './rate-limit-keys.js';
+import { recordAuthFunnelStep } from '../../services/auth-funnel.service.js';
+import { AuthorizationCodeRejectedError } from '../../services/authorization-code.service.js';
 
 const AuthorizationCodeGrantSchema = z
   .object({
@@ -215,6 +217,11 @@ export function registerAuthTokenExchangeRoute(app: FastifyInstance): void {
           { prisma: request.adminDb, adminPrisma: request.adminDb },
         );
       } else {
+        const recordCodeExchange = (outcome: string) =>
+          recordAuthFunnelStep(
+            { domain: config.domain, step: 'code_exchange', outcome },
+            { prisma: request.adminDb },
+          );
         tokenPair = await exchangeAuthorizationCodeForTokens(
           {
             code: body.code,
@@ -226,7 +233,13 @@ export function registerAuthTokenExchangeRoute(app: FastifyInstance): void {
             authenticatedClientDomainId: request.domainAuthClientDomainId,
           },
           { prisma: request.adminDb, adminPrisma: request.adminDb },
-        );
+        ).catch(async (err: unknown) => {
+          await recordCodeExchange(
+            err instanceof AuthorizationCodeRejectedError ? `rejected_${err.reason}` : 'failed',
+          );
+          throw err;
+        });
+        await recordCodeExchange('succeeded');
       }
 
       // Keep response OAuth-ish without being overly strict about fields.
