@@ -21,6 +21,7 @@ describe('browser-bound pending registration', () => {
   let app: Awaited<ReturnType<typeof createApp>>;
   const originalDb = process.env.DATABASE_URL;
   const originalAdminDb = process.env.DATABASE_ADMIN_URL;
+  const originalPublicBaseUrl = process.env.PUBLIC_BASE_URL;
   const query = new URLSearchParams({ config_url: 'https://client.example.com/auth-config',
     code_challenge: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ', code_challenge_method: 'S256', state: 'csrf-registered-flow' });
   const origin = 'http://127.0.0.1:38571';
@@ -40,7 +41,9 @@ describe('browser-bound pending registration', () => {
   beforeEach(() => { mailbox.messages.length = 0; });
   afterAll(async () => {
     await app?.close(); await disconnectPrisma();
-    process.env.DATABASE_URL = originalDb; process.env.DATABASE_ADMIN_URL = originalAdminDb;
+    if (originalDb === undefined) delete process.env.DATABASE_URL; else process.env.DATABASE_URL = originalDb;
+    if (originalAdminDb === undefined) delete process.env.DATABASE_ADMIN_URL; else process.env.DATABASE_ADMIN_URL = originalAdminDb;
+    if (originalPublicBaseUrl === undefined) delete process.env.PUBLIC_BASE_URL; else process.env.PUBLIC_BASE_URL = originalPublicBaseUrl;
     vi.unstubAllGlobals();
     if (db) await db.cleanup();
   });

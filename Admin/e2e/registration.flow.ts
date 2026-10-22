@@ -50,7 +50,8 @@ async function backend(page: Page) {
   return {
     notify: async (next: string) => {
       status = next; await expect.poll(() => Boolean(socket)).toBe(true);
-      socket!.send(JSON.stringify({ type: 'registration.email_verified', status: 'verified' }));
+      if (!socket) throw new Error('Registration socket was not established');
+      socket.send(JSON.stringify({ type: 'registration.email_verified', status: 'verified' }));
     },
     setStatus: (next: string) => { status = next; },
     calls: () => calls,
