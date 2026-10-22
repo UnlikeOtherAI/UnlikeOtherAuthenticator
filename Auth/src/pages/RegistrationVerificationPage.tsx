@@ -29,7 +29,7 @@ export function RegistrationVerificationPage(): React.JSX.Element {
 
   async function receive(next: RegistrationState) {
     setStatus(next.status);
-    if (next.status !== 'authorized' || !next.token || finishing.current) return;
+    if (next.status !== 'authorized' || !next.token || finishing.current || busy.current) return;
     finishing.current = true;
     if (next.token_type === 'VERIFY_EMAIL_SET_PASSWORD') {
       popup.setRegistrationProof(next.token, next.token_type);

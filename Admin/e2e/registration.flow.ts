@@ -151,7 +151,8 @@ test('capture matching base-revision registration state', async ({ page }, info)
 test('verification email shows the link and a large, spaced alternative code', async ({ page }, info) => {
   const link = 'https://auth.example.com/auth/registration/link#synthetic-link-secret';
   // The previous template is unchanged from the base revision.
-  await page.setContent(buildVerifyEmailSetPasswordTemplate({ link }).html);
+  const previousLink = 'https://auth.example.com/auth/email/link?token=synthetic-link-secret&config_url=https%3A%2F%2Fproduct.example%2Fconfig';
+  await page.setContent(buildVerifyEmailSetPasswordTemplate({ link: previousLink }).html);
   await page.screenshot({ path: info.outputPath('before-email.png'), fullPage: true });
   await page.setContent(buildRegistrationVerificationTemplate({ link, code: 'AB3K7M' }).html);
   await expect(page.getByRole('link', { name: 'Verify email address' })).toHaveAttribute('href', link);
