@@ -19,7 +19,10 @@ import type {
   CreditPaymentBinding,
   PreparedCreditFundingWebhook,
 } from './billing-credit-funding-webhook.types.js';
-import { exactMinor, requireUsd } from './billing-credit-funding-webhook-validation.service.js';
+import {
+  exactMinor,
+  requireCreditCurrency,
+} from './billing-credit-funding-webhook-validation.service.js';
 
 function methodSummary(method: Stripe.PaymentMethod): Prisma.InputJsonValue {
   if (!method.card) return { type: method.type };
@@ -95,7 +98,7 @@ async function validatePaymentBinding(
       !checkout.stripeCheckoutSessionId ||
       checkout.customer.stripeCustomerId !== customerId ||
       checkout.paymentAmountMinor !== exactMinor(intent.amount) ||
-      checkout.currency !== requireUsd(intent.currency)
+      checkout.currency !== requireCreditCurrency(intent.currency)
     ) {
       throw new AppError('INTERNAL', 502, 'STRIPE_CREDIT_TOP_UP_BINDING_INVALID');
     }
@@ -147,7 +150,7 @@ async function validatePaymentBinding(
     attempt.paymentAmountMinor !== exactMinor(intent.amount) ||
     (attempt.stripePaymentIntentId && attempt.stripePaymentIntentId !== intent.id) ||
     paymentMethodId !== attempt.consentRevision.stripePaymentMethodId ||
-    requireUsd(intent.currency) !== 'USD'
+    requireCreditCurrency(intent.currency) !== attempt.currency
   ) {
     throw new AppError('INTERNAL', 502, 'STRIPE_CREDIT_AUTO_TOP_UP_BINDING_INVALID');
   }
@@ -272,7 +275,7 @@ async function preparePaymentIntent(
       stripeChargeId: chargeId,
       stripePaymentMethodId: paymentMethodId,
       amountMinor: exactMinor(succeeded ? intent.amount_received : intent.amount),
-      currency: requireUsd(intent.currency),
+      currency: requireCreditCurrency(intent.currency),
       stripeCreatedAt: occurredAt,
     },
   };

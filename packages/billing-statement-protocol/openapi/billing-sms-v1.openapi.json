@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "UOA mobile-number and prepaid SMS",
-    "version": "1.0.0"
+    "version": "1.1.0"
   },
   "components": {
     "securitySchemes": {
@@ -164,7 +164,11 @@
                       "maxLength": 80
                     },
                     "currency": {
-                      "const": "USD"
+                      "enum": [
+                        "USD",
+                        "EUR",
+                        "GBP"
+                      ]
                     },
                     "expires_at": {
                       "type": "string",
@@ -418,7 +422,11 @@
                       "maxLength": 80
                     },
                     "currency": {
-                      "const": "USD"
+                      "enum": [
+                        "USD",
+                        "EUR",
+                        "GBP"
+                      ]
                     },
                     "expires_at": {
                       "type": "string",
@@ -1444,7 +1452,11 @@
                           "maxLength": 80
                         },
                         "currency": {
-                          "const": "USD"
+                          "enum": [
+                            "USD",
+                            "EUR",
+                            "GBP"
+                          ]
                         },
                         "expires_at": {
                           "type": "string",
@@ -1698,7 +1710,11 @@
                           "maxLength": 80
                         },
                         "currency": {
-                          "const": "USD"
+                          "enum": [
+                            "USD",
+                            "EUR",
+                            "GBP"
+                          ]
                         },
                         "expires_at": {
                           "type": "string",
@@ -1933,7 +1949,11 @@
                           "maxLength": 80
                         },
                         "currency": {
-                          "const": "USD"
+                          "enum": [
+                            "USD",
+                            "EUR",
+                            "GBP"
+                          ]
                         },
                         "expires_at": {
                           "type": "string",
@@ -2203,7 +2223,11 @@
                           "maxLength": 80
                         },
                         "currency": {
-                          "const": "USD"
+                          "enum": [
+                            "USD",
+                            "EUR",
+                            "GBP"
+                          ]
                         },
                         "expires_at": {
                           "type": "string",
@@ -2447,7 +2471,11 @@
                               "maxLength": 80
                             },
                             "currency": {
-                              "const": "USD"
+                              "enum": [
+                                "USD",
+                                "EUR",
+                                "GBP"
+                              ]
                             },
                             "expires_at": {
                               "type": "string",
@@ -3504,7 +3532,11 @@
                       "maxLength": 80
                     },
                     "currency": {
-                      "const": "USD"
+                      "enum": [
+                        "USD",
+                        "EUR",
+                        "GBP"
+                      ]
                     },
                     "expires_at": {
                       "type": "string",

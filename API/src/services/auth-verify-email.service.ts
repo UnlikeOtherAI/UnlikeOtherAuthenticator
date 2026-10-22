@@ -1,10 +1,12 @@
+import { runInTransaction } from '../db/tenant-context.js';
+import { assertMailboxCredentialAdmission } from './credential-admission.service.js';
 import { requireIdentityEmail } from './entity-lifecycle.service.js';
 import type { Prisma, PrismaClient } from '@prisma/client';
 import type { ClientConfig } from './config.service.js';
 
 import { getEnv, requireEnv } from '../config/env.js';
 import { getPrisma } from '../db/prisma.js';
-import { runInTransaction } from '../db/tenant-context.js';
+import { runEnterpriseAuthorityTransaction } from './enterprise-authority-transaction.service.js';
 import { getAppLogger } from '../utils/app-logger.js';
 import { AppError } from '../utils/errors.js';
 import { hashEmailToken } from '../utils/verification-token.js';
@@ -178,7 +180,8 @@ export async function verifyEmailToken(
   const hashPasswordFn = deps?.hashPassword ?? hashPassword;
 
   // Token consumption + user creation/update must be atomic to enforce one-time use.
-  const consumed = await runInTransaction(prisma, async (tx) => {
+  const run = params.password === undefined ? runInTransaction : runEnterpriseAuthorityTransaction;
+  const consumed = await run(prisma, async (tx) => {
     await lockProductTeamPolicyShared(tx);
     const tokenRow = await tx.verificationToken.findUnique({
       where: { tokenHash },
@@ -268,6 +271,7 @@ export async function verifyEmailToken(
       }
 
       if (existingUser) {
+        await assertMailboxCredentialAdmission(existingUser.id, tx);
         const updated = await tx.user.updateMany({
           where: {
             id: existingUser.id,

@@ -5,10 +5,13 @@ import type Stripe from 'stripe';
 
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
 import type { CreditCollectionContext } from './billing-credit-account.service.js';
-import type { BillingCreditProjectionData } from './billing-credit-projection-data.service.js';
+import {
+  creditPurchasePolicy,
+  type BillingCreditProjectionData,
+} from './billing-credit-projection-data.service.js';
 import { assertCreditCatalogPrice } from './billing-credit-funding-context.service.js';
 import { assertCreditFundingMetadata } from './billing-credit-funding-binding.service.js';
-import { exactMinor, requireUsd } from './billing-credit-funding-webhook-validation.service.js';
+import { exactMinor, requireCreditCurrency } from './billing-credit-funding-webhook-validation.service.js';
 import { pinnedBillingReturnUrls } from './billing-return-url-policy.service.js';
 import { assertStripeObjectLivemode } from './billing-stripe-client.service.js';
 import { stripeExternalId } from './billing-stripe-webhook-utils.service.js';
@@ -61,6 +64,11 @@ function catalogForOffer(
   );
 }
 
+/** Reload options of the USD policy and, once a region is chosen, of its currency's. */
+function reloadOptions(data: BillingCreditProjectionData) {
+  return [...(data.policy?.autoTopUpOptions ?? []), ...(data.regionPolicy?.autoTopUpOptions ?? [])];
+}
+
 function digest(value: string): string {
   return createHash('sha256').update(value).digest('hex');
 }
@@ -81,7 +89,7 @@ async function pendingTopUpState(
   ) {
     return { resumableTopUpOfferId: null, expired: false };
   }
-  const offer = data.policy?.topUpOffers.find((candidate) => candidate.id === checkout.offerId);
+  const offer = creditPurchasePolicy(data)?.topUpOffers.find((candidate) => candidate.id === checkout.offerId);
   const catalog = offer && catalogForOffer(data, offer);
   let returns;
   try {
@@ -99,8 +107,9 @@ async function pendingTopUpState(
     checkout.serviceId !== credential.service.id ||
     checkout.appKeyId !== credential.id ||
     checkout.paymentAmountMinor !== offer.paymentAmountMinor ||
-    checkout.creditsReceivedMicrocredits !== offer.creditsReceivedMicrocredits ||
-    checkout.currency !== 'USD' ||
+    checkout.currency !== data.purchaseCurrency ||
+    // A GBP or EUR checkout fixed its own credits at the rate it was created at.
+    (checkout.currency === 'USD' && checkout.creditsReceivedMicrocredits !== offer.creditsReceivedMicrocredits) ||
     checkout.successUrlDigest !== digest(returns.checkoutSuccess) ||
     checkout.cancelUrlDigest !== digest(returns.checkoutCancel)
   ) {
@@ -148,7 +157,9 @@ async function executableCatalogs(
 ): Promise<Set<string>> {
   const catalogs = new Set<string>();
   const candidates = new Map<string, BillingCreditProjectionData['catalogs'][number]>();
-  for (const offer of data.policy?.topUpOffers ?? []) {
+  // One-time offers in the purchase currency, and the refill offers of the USD and region reload options.
+  const refills = reloadOptions(data).map((option) => option.refillOffer);
+  for (const offer of [...(creditPurchasePolicy(data)?.topUpOffers ?? []), ...refills]) {
     const catalog = catalogForOffer(data, offer);
     if (catalog) candidates.set(catalog.id, catalog);
   }
@@ -259,7 +270,7 @@ async function currentRecoveryReady(
       stripeExternalId(intent.customer) === data.creditAccount.customer.stripeCustomerId &&
       stripeExternalId(intent.payment_method) === attempt.consentRevision.stripePaymentMethodId &&
       exactMinor(intent.amount) === attempt.paymentAmountMinor &&
-      requireUsd(intent.currency) === 'USD';
+      requireCreditCurrency(intent.currency) === attempt.currency;
     if (!exact) return false;
     if (intent.status === 'requires_action') {
       return (
@@ -299,7 +310,7 @@ export async function resolveBillingCreditActionReadiness(params: {
   } catch {
     returnUrlsReady = false;
   }
-  const catalogs = data.policy
+  const catalogs = data.policy || creditPurchasePolicy(data)
     ? await executableCatalogs(stripe, collection, data)
     : new Set<string>();
   const pendingTopUp = data.unresolvedTopUpCheckouts.length
@@ -311,7 +322,7 @@ export async function resolveBillingCreditActionReadiness(params: {
     data,
     params.now ?? new Date(),
   );
-  const selected = data.policy?.autoTopUpOptions.find(
+  const selected = reloadOptions(data).find(
     (option) => option.id === data.creditAccount.autoTopUpOptionId,
   );
   const selectedCatalog = selected ? catalogForOffer(data, selected.refillOffer) : undefined;

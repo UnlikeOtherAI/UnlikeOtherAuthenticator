@@ -6,8 +6,9 @@ import {
   stripeSecretKeyLivemode,
 } from '../services/billing-stripe-client.service.js';
 import { provisionStripeCommercialCatalog } from '../services/billing-stripe-catalog-provisioning.service.js';
-import { AppError, isAppError } from '../utils/errors.js';
+import { AppError } from '../utils/errors.js';
 import { parseStripeCatalogCliArgs } from './stripe-catalog-provisioning-args.js';
+import { provisioningErrorReport } from './stripe-catalog-provisioning-report.js';
 import { resolveStripeCatalogDatabaseUrl } from './stripe-catalog-provisioning-runtime.js';
 
 function usage(): string {
@@ -18,11 +19,6 @@ function usage(): string {
 
 The apply confirmation must use the exact account and mode selected above.
 The command reads STRIPE_SECRET_KEY and DATABASE_ADMIN_URL (or DATABASE_URL).`;
-}
-
-function safeErrorCode(error: unknown): string {
-  if (isAppError(error) && /^[A-Z0-9_]+$/.test(error.message)) return error.message;
-  return 'STRIPE_CATALOG_PROVISIONING_FAILED';
 }
 
 async function main(): Promise<void> {
@@ -64,6 +60,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((error: unknown) => {
-  process.stderr.write(`${JSON.stringify({ error: safeErrorCode(error) })}\n`);
+  process.stderr.write(`${JSON.stringify(provisioningErrorReport(error))}\n`);
   process.exitCode = 1;
 });

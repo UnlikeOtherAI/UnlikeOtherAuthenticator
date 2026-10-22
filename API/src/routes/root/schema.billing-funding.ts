@@ -100,7 +100,7 @@ export const billingFundingEndpoints: EndpointSchema[] = [
       '502/503': 'Ledger portfolio evidence or Stripe collection context is unavailable',
     },
     notes:
-      'Settlement is deterministic, serializable, and cursor-idempotent. Available credits stop at zero while UOA retains the full centrally rated service/user liability; only a verified reversal may create debt. Products render the returned model and never rate or reallocate credits locally.',
+      'Settlement is deterministic, serializable, and cursor-idempotent. Available credits stop at zero while UOA retains the full centrally rated service/user liability; only a verified reversal may create debt. Products render the returned model and never rate or reallocate credits locally. With x-uoa-billing-credits-protocol: 2.1.0 the one-time offers are in the organisation billing region currency (USD, EUR or GBP; USD until a region is chosen) and a GBP or EUR offer carries credit_rate; older versions receive the USD offers. With 2.2.0 the automatic reload options are in that currency too, each with threshold_value (compared with the lot-valued balance) and credit_rate; older versions receive the USD options. With 2.3.0 credit_balance.value, the value of each recent entry and region_rate show what credits are worth in the region currency; charges stay in credits.',
   },
   {
     method: 'POST',
@@ -150,10 +150,10 @@ export const billingFundingEndpoints: EndpointSchema[] = [
       200: '{ redirect_url } for legacy clients; negotiated presentation adds the opaque purchase_id',
       '401/403': 'Invalid app key, actor, exact-team manager, or subject',
       409: 'Offer/catalog unavailable or another exact-team Checkout is pending',
-      '502/503': 'Stripe binding invalid or reconciliation pending',
+      '502/503': 'Stripe binding invalid, reconciliation pending, or 503 BILLING_CREDIT_FX_RATE_UNAVAILABLE for a GBP or EUR offer while its purchase rate cannot be read',
     },
     notes:
-      'The body is frozen: callers cannot supply an amount, price, currency, quantity, customer, metadata, or return URL. UOA persists immutable intent before Stripe and uses server-derived idempotency.',
+      'The body is frozen: callers cannot supply an amount, price, currency, quantity, customer, metadata, or return URL. UOA persists immutable intent before Stripe and uses server-derived idempotency. A USD offer, or one in the organisation billing region currency, is accepted; a GBP or EUR checkout fixes its credits at the live rate read as it is created (BILLING_CREDIT_FX_RATE_SOURCE, default Stripe) and stores the rate as evidence.',
   },
   {
     method: 'POST',
@@ -289,11 +289,26 @@ export const billingFundingEndpoints: EndpointSchema[] = [
     auth: lifecycleAuth,
     body: fundingSubject,
     response: {
-      200: '{ organisation_id, active, assumed_at, released_at, can_manage }',
+      200: '{ organisation_id, active, assumed_at, released_at, can_manage, billing_region: { region, currency, suggested_region, suggested_currency, suggested_from?, can_set } }',
       '401/403': 'Invalid lifecycle credential, actor, membership, or subject',
     },
     notes:
-      'Absent or inactive means each team pays for itself, which is the default everywhere.',
+      'Absent or inactive means each team pays for itself, which is the default everywhere. With x-uoa-billing-region-protocol: 1.1.0 the billing_region block (and the region set response) adds suggested_from: billing_country when the suggestion came from the invoice-profile billing country, null when no country is known and US is the default.',
+  },
+  {
+    method: 'POST',
+    path: '/billing/v1/organisation-billing/region',
+    description:
+      'Choose the organisation billing region once: UK (GBP), US (USD) or EUROPE (EUR). It sets the currency of SMS prices, the SMS balance and number subscriptions.',
+    auth: lifecycleAuth,
+    body: { ...fundingSubject, region: 'UK | US | EUROPE' },
+    response: {
+      200: '{ region, currency, suggested_region, suggested_currency, suggested_from? (region protocol 1.1.0), can_set }',
+      '401/403': 'Invalid lifecycle credential, actor, membership, or BILLING_ORG_MANAGER_REQUIRED',
+      409: 'BILLING_REGION_IMMUTABLE: a different region was already chosen',
+    },
+    notes:
+      'Set once, never changed; the database refuses updates. Repeating the same region is a no-op. AI usage stays USD for every region. Until chosen, SMS quotes, number purchases and SMS top-ups answer 409 BILLING_REGION_REQUIRED.',
   },
   {
     method: 'POST',

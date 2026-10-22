@@ -1,8 +1,6 @@
 import { resolveAvatar } from '../../services/avatar.service.js';
 import { sendAvatar } from '../avatar/shared.js';
 import type { FastifyInstance } from 'fastify';
-import { z } from 'zod';
-import { resolveTeamPeople } from '../../services/team.service.roster.js';
 
 import { asPrismaClient } from '../../db/tenant-context.js';
 import { configVerifier } from '../../middleware/config-verifier.js';
@@ -54,29 +52,14 @@ export function registerTeamRoutes(app: FastifyInstance): void {
     const teamId = getTeamIdFromParams(request.params);
     const userId = getMemberUserIdFromParams(request.params);
     setTenantContextFromRequest(request, { orgId, userId: tenantUserId(request) });
-    const people = await request.withTenantTx((tx) => resolveTeamPeople({
-      orgId, teamId, domain, subjects: [userId], ...orgCaller(request),
+    const people = await request.withTenantTx((tx) => listTeamMembers({
+      orgId, teamId, domain, subjectIds: [userId], status: 'all', limit: 100, ...orgCaller(request),
       config: requireVerifiedConfig(request),
     }, { prisma: asPrismaClient(tx) }));
-    if (!people.some((person) => person.subject === userId)) throw new AppError('NOT_FOUND', 404);
+    if (!people.data.some((person) => person.subject === userId)) throw new AppError('NOT_FOUND', 404);
     return sendAvatar(request, reply, await resolveAvatar({ userId }));
   });
 
-  app.post('/org/organisations/:orgId/teams/:teamId/people/resolve', {
-    preValidation: [requireDomainHashAuthForDomainQuery(), configVerifier,
-      parseDomainContextHook, requireOrgFeatures, requireOrgRole()],
-  }, async (request, reply) => {
-    const { domain } = parseDomainContext(request);
-    const orgId = getOrgIdFromParams(request.params);
-    const teamId = getTeamIdFromParams(request.params);
-    const { subjects } = z.object({ subjects: z.array(z.string().min(1).max(200)).min(1).max(100) })
-      .strict().parse(request.body);
-    setTenantContextFromRequest(request, { orgId, userId: tenantUserId(request) });
-    const data = await request.withTenantTx((tx) => resolveTeamPeople({
-      orgId, teamId, domain, subjects, ...orgCaller(request), config: requireVerifiedConfig(request),
-    }, { prisma: asPrismaClient(tx) }));
-    return reply.send({ data });
-  });
 
   app.get(
     '/org/organisations/:orgId/teams',
@@ -198,7 +181,8 @@ export function registerTeamRoutes(app: FastifyInstance): void {
       ],
     },
     async (request, reply) => {
-      const { domain, limit, cursor, direction, status } = parseTeamMembersRosterQuery(request);
+      reply.header('Cache-Control', 'private, no-store');
+      const { domain, limit, cursor, direction, status, subject_ids: subjectIds } = parseTeamMembersRosterQuery(request);
       const orgId = getOrgIdFromParams(request.params);
       const teamId = getTeamIdFromParams(request.params);
       const config = requireVerifiedConfig(request);
@@ -216,6 +200,7 @@ export function registerTeamRoutes(app: FastifyInstance): void {
             cursor,
             direction,
             status,
+            subjectIds,
           },
           { prisma: asPrismaClient(tx) },
         ),
@@ -390,7 +375,7 @@ export function registerTeamRoutes(app: FastifyInstance): void {
       const { teamRole } = ChangeTeamMemberRoleBodySchema.parse(request.body ?? {});
 
       setTenantContextFromRequest(request, { orgId, userId: tenantUserId(request) });
-      const member = await request.withTenantTx((tx) =>
+      const member = await runWithOrgAdminEffectTransaction(request, (tx) =>
         changeTeamMemberRole(
           {
             orgId,

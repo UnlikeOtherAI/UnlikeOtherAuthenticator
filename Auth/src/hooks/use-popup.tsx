@@ -2,12 +2,14 @@ import React, { createContext, useContext, useEffect, useMemo, useState, useCall
 
 import type { TranslationKey } from '../i18n/translations/en.js';
 import { parsePopupQueryParams, type PopupQueryParams } from './popup-query-params.js';
+import { readPendingRegistration, registrationStorageKey, savePendingRegistration, type PendingRegistration } from '../utils/pending-registration.js';
 
 export { parsePopupQueryParams, type PopupQueryParams } from './popup-query-params.js';
 
 export type AuthView =
   | 'login'
   | 'register'
+  | 'registration-verification'
   | 'reset-password'
   | 'set-password'
   | 'invite-registration'
@@ -42,6 +44,7 @@ export type TeamChoice = {
   orgName?: string;
   /** Gap-fix B (design §11.4): lets a `team_hint` deep-link match by slug as well as by id. */
   slug?: string;
+  can_manage_sso?: boolean;
 };
 
 /**
@@ -74,6 +77,7 @@ export type SessionChoices = {
   pending_invites: InviteChoice[];
   can_create_org: boolean;
   creatable_orgs: CreatableOrgChoice[];
+  manageable_orgs?: CreatableOrgChoice[];
 };
 
 /** True for a native deep-link target (custom scheme, not http/https). */
@@ -94,6 +98,9 @@ export type PopupContextValue = PopupQueryParams & {
   view: AuthView;
   /** Navigate between auth views. */
   setView: (view: AuthView) => void;
+  pendingRegistration: PendingRegistration | null;
+  beginRegistration: (value: PendingRegistration | null) => void;
+  setRegistrationProof: (token: string, type: string) => void;
   startTwoFactorVerify: (token: string) => void;
   startTwoFactorSetup: (setup: TwoFactorSetupState) => void;
   twoFactorSetup: TwoFactorSetupState | null;
@@ -185,6 +192,9 @@ export function PopupProvider(props: {
   });
 
   const parsed = useMemo(() => parsePopupQueryParams(search), [search]);
+  const storageKey = registrationStorageKey(props.configUrl, search);
+  const [pendingRegistration, setPendingRegistration] = useState<PendingRegistration | null>(null);
+  const [registrationProof, setRegistrationProofState] = useState<{ token: string; type: string } | null>(null);
   const [view, setViewState] = useState<AuthView>(() => props.initialView ?? deriveInitialView(parsed));
   const [twoFaToken, setTwoFaToken] = useState<string | null>(() => parsed.twoFaToken);
   const [twoFactorSetup, setTwoFactorSetup] = useState<TwoFactorSetupState | null>(() =>
@@ -206,6 +216,23 @@ export function PopupProvider(props: {
   const [notice, setNotice] = useState<TranslationKey | null>(null);
 
   useEffect(() => {
+    if (deriveInitialView(parsed) !== 'login') return;
+    const pending = readPendingRegistration(storageKey);
+    if (pending) { setPendingRegistration(pending); setViewState('registration-verification'); }
+  }, [parsed, storageKey]);
+
+  const beginRegistration = useCallback((value: PendingRegistration | null) => {
+    savePendingRegistration(storageKey, value);
+    setPendingRegistration(value);
+    setRegistrationProofState(null);
+    if (value) setViewState('registration-verification');
+  }, [storageKey]);
+  const setRegistrationProof = useCallback((token: string, type: string) => {
+    setRegistrationProofState({ token, type });
+    setViewState('set-password');
+  }, []);
+
+  useEffect(() => {
     if (!parsed.signingToken || typeof window === 'undefined') return;
     const url = new URL(window.location.href);
     if (url.searchParams.get('signing_token') !== parsed.signingToken) return;
@@ -220,6 +247,7 @@ export function PopupProvider(props: {
     if (typeof window === 'undefined') return;
     const bridgeParams: Array<[string, string | null]> = [
       ['login_token', parsed.loginToken],
+      ['enterprise_link_intent', parsed.enterpriseLinkIntent ?? null],
       ['twofa_token', parsed.twoFaToken],
       ['twofa_setup_token', parsed.twoFaSetupToken],
       ['invite_token', parsed.inviteToken],
@@ -233,6 +261,7 @@ export function PopupProvider(props: {
     for (const [param] of present) url.searchParams.delete(param);
     window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
   }, [
+    parsed.enterpriseLinkIntent,
     parsed.inviteEmail,
     parsed.inviteName,
     parsed.inviteToken,
@@ -274,8 +303,8 @@ export function PopupProvider(props: {
       twoFaSetupToken: parsed.twoFaSetupToken,
       requestAccess: parsed.requestAccess,
       requestAccessStatus: parsed.requestAccessStatus,
-      emailToken: parsed.emailToken,
-      emailTokenType: parsed.emailTokenType,
+      emailToken: registrationProof?.token ?? parsed.emailToken,
+      emailTokenType: registrationProof?.type as PopupQueryParams['emailTokenType'] ?? parsed.emailTokenType,
       inviteToken: parsed.inviteToken,
       inviteEmail: parsed.inviteEmail,
       inviteName: parsed.inviteName,
@@ -289,9 +318,14 @@ export function PopupProvider(props: {
       signingToken: parsed.signingToken,
       handoffTarget,
       teamHint: parsed.teamHint,
+      managementOrgId: parsed.managementOrgId,
+      enterpriseLinkIntent: parsed.enterpriseLinkIntent,
       selectAccount: parsed.selectAccount,
       view,
       setView,
+      pendingRegistration,
+      beginRegistration,
+      setRegistrationProof,
       startTwoFactorVerify,
       startTwoFactorSetup,
       twoFactorSetup,
@@ -339,9 +373,15 @@ export function PopupProvider(props: {
     parsed.signingToken,
     handoffTarget,
     parsed.teamHint,
+    parsed.managementOrgId,
+    parsed.enterpriseLinkIntent,
     parsed.selectAccount,
     view,
     setView,
+    pendingRegistration,
+    beginRegistration,
+    setRegistrationProof,
+    registrationProof,
     startTwoFactorVerify,
     startTwoFactorSetup,
     twoFactorSetup,

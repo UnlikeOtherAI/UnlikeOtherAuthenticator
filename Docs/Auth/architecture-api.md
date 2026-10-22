@@ -8,6 +8,32 @@ For the full product spec, see [brief.md](./brief.md). For tech stack, see [tech
 
 ## Guiding Principles
 
+Registration link approval is independent of the confirming browser's cookies.
+It atomically verifies and authorizes only the link's original pending flow, then
+publishes a WebSocket hint. Reading or consuming completion proof still requires
+the initiating browser's cookie and exact OAuth/config context. The confirmation
+response contains no login credentials or redirect; GET never approves a flow.
+
+Browser registration uses `routes/auth/registration.ts`, `registration-context.ts`
+and `registration-websocket.ts`; `pending-registration.service.ts` owns the durable
+mailbox/browser state and immutable OAuth binding, `registration-credentials.ts`
+the scoped cryptographic helpers, and `registration-events.service.ts` non-secret
+local hints. Connected replicas recheck the database every five seconds. The isolated
+`registration-link-page.service.ts` removes fragment secrets before confirmation.
+`email.templates.registration.ts`, `root/schema.registration.ts` and
+`root/llm-registration.ts` publish the shared email and API contracts.
+
+Enterprise access uses `routes/auth/organisation-access.ts` for the scoped owner
+cookie/CSRF surface, `routes/auth/enterprise-sso.ts` for fixed protocol routes,
+`routes/org/enterprise-sso.ts` for product status/continuation/live assurance,
+`routes/domain/revocations.ts` for the ordered feed and `routes/scim.ts` for
+connection-only provisioning. `session-assurance.service.ts` owns live lineage;
+`org-sso-policy.service.ts` owns the direct-context choke point. The
+`org-sso-{configuration,management,flow,oidc,saml,revocation}.service.ts`,
+`org-email-domain.service.ts`, `enterprise-{http,secret,scim}.service.ts` files
+keep protocol, state, network and custody responsibilities separate. Exact
+contracts and rollout blockers are in [enterprise SSO](enterprise-sso.md).
+
 Kelpie account connectivity uses `routes/oauth/kelpie-connect.ts` and
 `services/oauth/kelpie-connect.service.ts`. Same-account LAN admission adds
 `routes/oauth/kelpie-pair.ts` and `services/oauth/kelpie-pair.service.ts`, reusing
@@ -89,6 +115,7 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
         schema.internal-admin-apps.ts — /api schema slice: internal admin app/settings/search endpoints
         schema.internal-admin-signatures.ts — /api schema slice: signature settings and agreement lifecycle endpoints
         schema.internal-admin-superusers.ts — /api schema slice: ADMIN_AUTH_DOMAIN superuser management endpoints
+        schema.internal-admin-auth-funnel.ts — /api schema slice: GET /internal/admin/auth-funnel
         schema.platform.ts  — /api schema slice: root, health, app, email, and domain endpoints
         schema.signatures.ts       — /api schema slice: signing session, signer, domain-status, and public verification endpoints
         schema.internal-admin.ts — /api schema slice: internal admin endpoints
@@ -100,6 +127,7 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
         llm-signatures.ts     — /llm content: optional signature operator workflow and security constraints
         llm-avatars.ts        — /llm content: user and team avatar precedence, endpoints, styles, and caching
       /apps
+        telephone-profile.ts — Self telephone profile and separate call-bound service lookup routes
         startup.ts          — GET /apps/startup (combined startup payload; config JWT auth)
         index.ts            — Route registration for /apps
       /auth
@@ -175,6 +203,7 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
           domain-signature-operations.ts — Signature evidence search, audited receipt access, and revocation
           domain-signatures.ts      — Per-domain signature settings, agreement/version lifecycle, and source downloads
           apps.ts                   — App registration for feature flags
+          auth-funnel.ts            — GET /internal/admin/auth-funnel (sign-up funnel summary)
           superusers.ts             — Super-user grant/revoke for ADMIN_AUTH_DOMAIN
           users.ts                  — User admin write operations (2FA reset)
           teams.ts                  — GET/PUT/DELETE /internal/admin/teams/:teamId/avatar (audited mutations)
@@ -204,6 +233,9 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
         reset.ts            — POST /2fa/reset
         index.ts            — Route registration for /2fa
     /services
+      telephone-authority.service.ts — Exact Nessie actor/service assertion and live scope checks
+      telephone-profile.service.ts — UOA-owned telephone challenge and self profile lifecycle
+      telephone-lookup.service.ts — Call-bound exact-team routing hints, never authentication
       access-request-flow.service.ts        — Orchestration for access-request flow
       access-request.service.ts             — Access-request orchestration API
       access-request.service.admin.ts       — Access-request admin operations
@@ -217,6 +249,7 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       audit-log.service.ts                  — Audit-log writes
       auth-debug-page.service.ts            — HTML rendering for /domain/debug
       auth-domain-mapping.service.ts        — Auth-flow domain mapping
+      auth-funnel.service.ts                — Best-effort daily sign-up/sign-in funnel counters and the admin summary
       auth-login.service.ts                 — Login logic
       auth-register.service.ts              — Registration logic
       auth-registration-email-link.service.ts — Registration email link generation
@@ -924,8 +957,57 @@ SMS number payment implementation: services/billing-sms-number.service.ts owns i
 
 SMS prepaid runtime: services/billing-sms-{reservation,dispatch,receipt,grant,standing,inbound}.service.ts own admission, physical dispatch fencing and actual usage settlement; routes/billing/sms-{reservations,grants,inbound}.ts register the public contracts. Exact money arithmetic lives in billing-sms-money.service.ts. All share the canonical wallet and budget services.
 
+
+### Subject verification dependency failures
+
+`jwks-fetch.service.ts` owns `PartnerJwksUnavailableError` (HTTP 503,
+`INTEGRATION_JWKS_UNAVAILABLE`) for network/timeout failures, transient DNS
+`EAI_AGAIN` and partner HTTP
+408/429/5xx. The confidential subject verifier preserves this typed outage
+instead of converting it into invalid credentials. The org guard propagates
+it through the existing generic error handler; the production body contains
+only the fixed safe code. No identity/membership check is bypassed and no
+authority is admitted during the outage. Invalid signatures, missing keys,
+expired assertions and unsafe destinations retain their existing refusals.
+The source verification contract appears in `/api` and `/llm`. Focused tests
+exercise the actual fetch/verifier/HTTP org-guard path and recovery without
+a negative authority cache.
+
+The shared SSRF resolver preserves `EAI_AGAIN` as
+`PublicDestinationUnavailableError`; the JWKS fetcher maps that typed temporary
+failure to the existing partner outage. Definitive DNS failures, empty/invalid
+results and any private address remain hard destination refusals. No address
+is admitted or network fetch attempted while resolution is unavailable.
+
+Telephone API schema and integration prose live in `routes/root/schema.telephone.ts` and `routes/root/llm-telephone.ts`; see [personal telephones](personal-telephone.md).
+
+
+Personal telephone directory and call proof are implemented in `telephone-directory.service.ts`,
+`telephone-match.service.ts`, `telephone-call-proof.service.ts`, `telephone-sms-authority.service.ts`
+and `telephone-sms-reservation.service.ts`. The roster reads only opted-in verified numbers for
+live same-team colleagues. Call proof has separate service assertions and consumes a code once;
+its SMS admission reuses `reserveAuthorizedSms` and the existing machine dispatch protocol,
+with an immutable challenge binding and no fabricated human or agent principal.
+
+Voice call-leg billing uses `routes/billing/voice.ts` and the `billing-voice-*`
+services. Shared identity locks live in `billing-telephone-authority.service.ts`;
+SMS exports preserve existing callers. See [Voice prepaid](../Requirements/voice-pricing-and-prepaid.md).
+
+
+### Database test boundaries
+
+CI builds the workspace before exercising API routes. The DB-less invocation
+excludes `tests/integration/**`; the separate PostgreSQL invocation runs those
+integration files with `DATABASE_URL` set. Required database suites refuse a
+missing database instead of reporting skipped coverage. Isolated-schema
+provisioning hooks use the shared Vitest hook budget.
+
+Authentication route fixtures retain their original evidence and declare their
+product's pre-enrolment policy explicitly. They reset factor state and evidence
+between cases; an omitted mock model is not a legacy-authority fallback.
+
 Directory notifications use `services/directory-webhook.service.ts` and the
-`directory_webhook_events` outbox. Database triggers own atomic mutation
-admission; an app-owned stoppable worker owns HTTPS delivery. The existing team
-roster service and route own exact subject resolution. See
+`directory_webhook_events` outbox. Database triggers admit ID-only events with the
+source transaction; a stoppable app-owned worker delivers them. Consumers use
+the existing selected-subject members API and original-assurance proof. See
 [directory webhooks](directory-webhooks.md).

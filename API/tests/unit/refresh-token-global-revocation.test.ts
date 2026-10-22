@@ -1,3 +1,4 @@
+import { enterpriseAuthorityStores } from '../helpers/enterprise-authority-stores.js';
 import type { PrismaClient } from '@prisma/client';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -8,11 +9,14 @@ describe('global refresh revocation', () => {
   it('commits lock, all-token revocation, and tokenVersion in one transaction', async () => {
     const events: string[] = [];
     const tx = {
+      ...enterpriseAuthorityStores(),
+      $executeRaw: vi.fn(async () => { events.push('outbox-lock'); return 0; }),
       $queryRaw: vi.fn(async () => {
         events.push('user-lock');
         return [{ lockResult: '' }];
       }),
       refreshToken: {
+        findMany: vi.fn().mockResolvedValue([]),
         updateMany: vi.fn(async () => {
           events.push('refresh-revoke');
           return { count: 3 };
@@ -37,6 +41,7 @@ describe('global refresh revocation', () => {
 
     expect(events).toEqual([
       'begin',
+      'outbox-lock',
       'user-lock',
       'refresh-revoke',
       'token-version',

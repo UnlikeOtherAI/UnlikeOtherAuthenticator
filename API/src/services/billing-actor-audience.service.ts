@@ -15,6 +15,14 @@ import { AppError } from '../utils/errors.js';
  * against its route registration in the endpoint-audience tests.
  */
 export const BILLING_ACTOR_ENDPOINTS = [
+  '/apps/v1/nessie/phone-profile/read',
+  '/apps/v1/nessie/phone-profile/set',
+  '/apps/v1/nessie/phone-profile/start',
+  '/apps/v1/nessie/phone-profile/verify',
+  '/apps/v1/nessie/phone-profile/remove',
+  '/apps/v1/nessie/phone-profile/visibility',
+  '/apps/v1/deeptest/nessie-inference-access',
+  '/billing/v1/voice/grants',
   '/billing/v1/sms/quotes',
   '/billing/v1/sms/quotes/verify',
   '/billing/v1/sms/reservations',
@@ -54,6 +62,7 @@ export const BILLING_ACTOR_ENDPOINTS = [
   '/billing/v1/organisation-billing',
   '/billing/v1/organisation-billing/assume',
   '/billing/v1/organisation-billing/release',
+  '/billing/v1/organisation-billing/region',
 ] as const;
 
 export type BillingActorEndpoint = (typeof BILLING_ACTOR_ENDPOINTS)[number];
@@ -88,6 +97,9 @@ export function assertBillingActorAudience(params: {
   if (params.presented === billingActorAudience(params.endpoint)) return 'endpoint';
   if (
     params.presented === params.legacyAudience &&
+    params.endpoint !== '/apps/v1/deeptest/nessie-inference-access' &&
+    !params.endpoint.startsWith('/apps/v1/nessie/phone-profile/') &&
+    !params.endpoint.startsWith('/billing/v1/voice/') &&
     !params.endpoint.startsWith('/billing/v1/sms/') &&
     getBillingActorAudienceMode() === 'warn' &&
     // A legacy audience is only ever a transitional stand-in for a real endpoint

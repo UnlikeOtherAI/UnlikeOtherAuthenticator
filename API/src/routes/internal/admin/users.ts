@@ -12,6 +12,7 @@ import {
 } from '../../../services/avatar.service.js';
 import { resetAdminUserTwoFactor } from '../../../services/internal-admin.service.js';
 import { AppError } from '../../../utils/errors.js';
+import { setDeepTestNessieInferenceAccess } from '../../../services/deeptest-nessie-inference-access.service.js';
 import { addAdminUserToTeam } from '../../../services/internal-admin-team-members.service.js';
 import {
   AVATAR_UPLOAD_BODY_LIMIT,
@@ -51,6 +52,16 @@ function requireActorEmail(request: { adminAccessTokenClaims?: { email: string }
 }
 
 export function registerInternalAdminUserRoutes(app: FastifyInstance): void {
+  app.patch('/internal/admin/users/:userId/deeptest-nessie-inference',
+    adminRoute(uploadResponseSchema), async (request, reply) => {
+      reply.header('Cache-Control', 'private, no-store');
+      const { userId } = UserParamsSchema.parse(request.params);
+      const { allowed } = z.object({ allowed: z.boolean() }).strict().parse(request.body);
+      const claims = request.adminAccessTokenClaims;
+      if (!claims) throw new AppError('UNAUTHORIZED', 401);
+      return setDeepTestNessieInferenceAccess({ userId, allowed,
+        actor: { userId: claims.userId, tokenVersion: claims.tokenVersion } });
+    });
   app.post(
     '/internal/admin/users/:userId/teams',
     adminRoute(uploadResponseSchema),

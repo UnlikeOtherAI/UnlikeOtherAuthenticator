@@ -8,6 +8,7 @@ import {
   addCatalogAction,
   type CatalogDb,
   type CatalogProvisioningAction,
+  differingFields,
   localCatalogDrift,
   sameCatalogStrings,
 } from './billing-stripe-catalog-provisioning-local.shared.js';
@@ -17,22 +18,36 @@ import {
   PROVISIONED_BILLING_SERVICE_IDENTIFIERS,
 } from './billing-stripe-catalog-provisioning-spec.js';
 
+import { retireUncoveredServiceCredits } from './billing-stripe-catalog-provisioning-retire.service.js';
+
 export type { CatalogProvisioningAction } from './billing-stripe-catalog-provisioning-local.shared.js';
 
-async function requireServices(db: CatalogDb) {
+/**
+ * The active services to provision. An active service the catalog does not
+ * cover (a product that sells no shared credits through it) is left alone, and
+ * a covered product not yet registered is skipped until it is; both are named
+ * in the plan so a later run can be compared.
+ */
+async function requireServices(db: CatalogDb, actions: CatalogProvisioningAction[]) {
   const services = await db.billingService.findMany({
     where: { active: true },
     select: { id: true, identifier: true, name: true, active: true },
   });
-  if (
-    !sameCatalogStrings(
-      services.map((service) => service.identifier),
-      PROVISIONED_BILLING_SERVICE_IDENTIFIERS,
-    )
-  ) {
-    localCatalogDrift();
+  const covered = new Set<string>(PROVISIONED_BILLING_SERVICE_IDENTIFIERS);
+  const uncovered = services.filter((service) => !covered.has(service.identifier));
+  for (const service of uncovered) {
+    addCatalogAction(actions, 'billing_service_not_covered', service.identifier, false, 'skipped', service.id);
   }
-  return new Map(services.map((service) => [service.identifier, service]));
+  for (const identifier of PROVISIONED_BILLING_SERVICE_IDENTIFIERS) {
+    if (!services.some((service) => service.identifier === identifier)) {
+      addCatalogAction(actions, 'billing_service_not_registered', identifier, false, 'skipped');
+    }
+  }
+  return {
+    covered: new Map(services.filter((service) => covered.has(service.identifier))
+      .map((service) => [service.identifier, service])),
+    uncovered,
+  };
 }
 
 async function requireDeepWaterApp(db: CatalogDb) {
@@ -40,7 +55,10 @@ async function requireDeepWaterApp(db: CatalogDb) {
     where: { identifier: DEEPWATER_PRIVACY_SPEC.appIdentifier, active: true },
     select: { id: true, identifier: true, featureFlagsEnabled: true },
   });
-  if (apps.length !== 1 || !apps[0]?.featureFlagsEnabled) localCatalogDrift();
+  if (apps.length !== 1 || !apps[0]?.featureFlagsEnabled) {
+    localCatalogDrift('deepwater_app', { app_ids: apps.map((app) => app.id),
+      feature_flags_enabled: apps[0]?.featureFlagsEnabled ?? null });
+  }
   return apps[0];
 }
 
@@ -57,12 +75,9 @@ async function ensureFeatureFlag(params: {
     },
   });
   if (existing) {
-    if (
-      existing.defaultState ||
-      existing.description !== DEEPWATER_PRIVACY_SPEC.featureFlagDescription
-    ) {
-      localCatalogDrift();
-    }
+    const fields = differingFields(existing, { defaultState: false,
+      description: DEEPWATER_PRIVACY_SPEC.featureFlagDescription });
+    if (fields.length > 0) localCatalogDrift('deepwater_feature_flag', { app_id: params.appId, fields });
     addCatalogAction(params.actions, 'feature_flag', key, false);
     return;
   }
@@ -121,20 +136,15 @@ async function ensureRecurringAddon(params: {
   });
   let offer = offers.find((candidate) => candidate.version === DEEPWATER_PRIVACY_SPEC.version);
   if (offer) {
-    if (
-      !offer.active ||
-      offer.deactivatedAt !== null ||
-      offer.name !== DEEPWATER_PRIVACY_SPEC.name ||
-      offer.description !== DEEPWATER_PRIVACY_SPEC.description ||
-      !sameCatalogStrings(offer.benefits, DEEPWATER_PRIVACY_SPEC.benefits) ||
-      offer.monthlyAmountMinor !== DEEPWATER_PRIVACY_SPEC.monthlyAmountMinor ||
-      offer.currency !== DEEPWATER_PRIVACY_SPEC.currency
-    ) {
-      localCatalogDrift();
-    }
+    const fields = differingFields(offer, { active: true, deactivatedAt: null, name: DEEPWATER_PRIVACY_SPEC.name,
+      description: DEEPWATER_PRIVACY_SPEC.description, monthlyAmountMinor: DEEPWATER_PRIVACY_SPEC.monthlyAmountMinor,
+      currency: DEEPWATER_PRIVACY_SPEC.currency });
+    if (!sameCatalogStrings(offer.benefits, DEEPWATER_PRIVACY_SPEC.benefits)) fields.push('benefits');
+    if (fields.length > 0) localCatalogDrift('recurring_addon_offer_terms', { offer_id: offer.id, fields });
     addCatalogAction(params.actions, 'recurring_addon_offer', 'deepwater/privacy/v1', false);
   } else {
-    if (offers.some((candidate) => candidate.active)) localCatalogDrift();
+    const other = offers.find((candidate) => candidate.active);
+    if (other) localCatalogDrift('recurring_addon_offer_other_version_active', { offer_id: other.id, version: other.version });
     if (params.write) {
       offer = await params.db.billingRecurringAddonOffer.create({
         data: {
@@ -172,11 +182,11 @@ async function ensureRecurringAddon(params: {
       policy.entitlementScope === BillingRecurringAddonEntitlementScope.TEAM,
   );
   if (expectedPolicy) {
-    if (!expectedPolicy.active || expectedPolicy.serviceId !== params.deepwater.id) {
-      localCatalogDrift();
-    }
-    if (policies.some((policy) => policy.active && policy.id !== expectedPolicy.id)) {
-      localCatalogDrift();
+    const fields = differingFields(expectedPolicy, { active: true, serviceId: params.deepwater.id });
+    if (fields.length > 0) localCatalogDrift('recurring_addon_policy_terms', { policy_id: expectedPolicy.id, fields });
+    const others = policies.filter((policy) => policy.active && policy.id !== expectedPolicy.id);
+    if (others.length > 0) {
+      localCatalogDrift('recurring_addon_policy_other_active', { policy_ids: others.map((policy) => policy.id) });
     }
     addCatalogAction(
       params.actions,
@@ -185,7 +195,10 @@ async function ensureRecurringAddon(params: {
       false,
     );
   } else {
-    if (policies.some((policy) => policy.active)) localCatalogDrift();
+    const active = policies.filter((policy) => policy.active);
+    if (active.length > 0) {
+      localCatalogDrift('recurring_addon_policy_other_active', { policy_ids: active.map((policy) => policy.id) });
+    }
     if (params.write) {
       await params.db.billingRecurringAddonFeaturePolicy.create({
         data: {
@@ -214,17 +227,12 @@ async function ensureRecurringAddon(params: {
   });
   const row = catalogs.find((catalog) => catalog.offerId === offer.id);
   if (row) {
-    if (
-      row.serviceId !== params.deepwater.id ||
-      row.currency !== DEEPWATER_PRIVACY_SPEC.currency ||
-      row.monthlyAmountMinor !== DEEPWATER_PRIVACY_SPEC.monthlyAmountMinor ||
-      row.stripeLookupKey !== params.remote.stripeLookupKey ||
-      (row.stripeProductId === null) !== (row.stripePriceId === null) ||
-      (row.stripeProductId !== null && row.stripeProductId !== params.remote.stripeProductId) ||
-      (row.stripePriceId !== null && row.stripePriceId !== params.remote.stripePriceId)
-    ) {
-      localCatalogDrift();
-    }
+    const fields = differingFields(row, { serviceId: params.deepwater.id, currency: DEEPWATER_PRIVACY_SPEC.currency,
+      monthlyAmountMinor: DEEPWATER_PRIVACY_SPEC.monthlyAmountMinor, stripeLookupKey: params.remote.stripeLookupKey });
+    if ((row.stripeProductId === null) !== (row.stripePriceId === null)) fields.push('partialStripeBinding');
+    if (row.stripeProductId !== null && row.stripeProductId !== params.remote.stripeProductId) fields.push('stripeProductId');
+    if (row.stripePriceId !== null && row.stripePriceId !== params.remote.stripePriceId) fields.push('stripePriceId');
+    if (fields.length > 0) localCatalogDrift('recurring_addon_catalog_terms', { catalog_id: row.id, fields });
     const incomplete = row.stripeProductId === null && row.stripePriceId === null;
     if (incomplete && params.write) {
       await params.db.billingRecurringAddonCatalog.update({
@@ -238,16 +246,9 @@ async function ensureRecurringAddon(params: {
     addCatalogAction(params.actions, 'recurring_addon_catalog', 'deepwater/privacy/v1', incomplete);
     return;
   }
-  if (
-    catalogs.some(
-      (catalog) =>
-        catalog.stripeLookupKey === params.remote.stripeLookupKey ||
-        catalog.stripeProductId === params.remote.stripeProductId ||
-        catalog.stripePriceId === params.remote.stripePriceId,
-    )
-  ) {
-    localCatalogDrift();
-  }
+  const holder = catalogs.find((catalog) => catalog.stripeLookupKey === params.remote.stripeLookupKey ||
+    catalog.stripeProductId === params.remote.stripeProductId || catalog.stripePriceId === params.remote.stripePriceId);
+  if (holder) localCatalogDrift('recurring_addon_price_bound_elsewhere', { holder_catalog_id: holder.id });
   if (params.write) {
     await params.db.billingRecurringAddonCatalog.create({
       data: {
@@ -271,7 +272,7 @@ export async function reconcileLocalStripeCommercialCatalog(params: {
   write: boolean;
 }): Promise<CatalogProvisioningAction[]> {
   const actions: CatalogProvisioningAction[] = [];
-  const services = await requireServices(params.db);
+  const { covered: services, uncovered } = await requireServices(params.db, actions);
   const app = await requireDeepWaterApp(params.db);
   await ensureFeatureFlag({ db: params.db, appId: app.id, write: params.write, actions });
   const account = await ensureStripeAccount({ ...params, actions });
@@ -280,13 +281,15 @@ export async function reconcileLocalStripeCommercialCatalog(params: {
     accountId: account?.id ?? null,
     actions,
   });
-  for (const identifier of PROVISIONED_BILLING_SERVICE_IDENTIFIERS) {
-    const service = services.get(identifier);
-    if (!service) localCatalogDrift();
+  for (const service of services.values()) {
     await ensureProvisionedServiceCredits({ db: params.db, service, write: params.write, actions });
   }
+  const now = new Date();
+  for (const service of uncovered) {
+    await retireUncoveredServiceCredits({ db: params.db, service, write: params.write, now, actions });
+  }
   const deepwater = services.get(DEEPWATER_PRIVACY_SPEC.serviceIdentifier);
-  if (!deepwater) localCatalogDrift();
+  if (!deepwater) localCatalogDrift('deepwater_service_missing', { service: DEEPWATER_PRIVACY_SPEC.serviceIdentifier });
   await ensureRecurringAddon({
     db: params.db,
     deepwater,

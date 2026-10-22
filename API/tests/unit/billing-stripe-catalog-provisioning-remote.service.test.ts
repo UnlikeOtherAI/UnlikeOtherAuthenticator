@@ -38,7 +38,7 @@ function prices() {
       active: true,
       livemode: false,
       lookup_key: spec.stripeLookupKey,
-      currency: 'usd',
+      currency: spec.currency.toLowerCase(),
       type: 'one_time',
       recurring: null,
       unit_amount: Number(spec.paymentAmountMinor),
@@ -70,7 +70,9 @@ function stripe(remotePrices = prices()) {
   return {
     accounts: { retrieveCurrent: vi.fn().mockResolvedValue({ id: accountId }) },
     prices: {
-      list: vi.fn().mockResolvedValue({ data: remotePrices, has_more: false }),
+      // Stripe answers only the lookup keys asked for, at most ten per request.
+      list: vi.fn(({ lookup_keys }: { lookup_keys: string[] }) => Promise.resolve({
+        data: remotePrices.filter((price) => lookup_keys.includes(price.lookup_key)), has_more: false })),
     },
     products: {
       retrieve: vi.fn((id: string) => Promise.resolve(products.get(id))),
@@ -86,7 +88,7 @@ describe('Stripe commercial catalog remote validation', () => {
       expectedLivemode: false,
     });
 
-    expect(result.creditPrices).toHaveLength(4);
+    expect(result.creditPrices).toHaveLength(15);
     expect(new Set(result.creditPrices.map((price) => price.stripeProductId))).toEqual(
       new Set([creditProduct.id]),
     );
@@ -95,6 +97,34 @@ describe('Stripe commercial catalog remote validation', () => {
       stripeProductId: addonProduct.id,
       stripePriceId: 'price_privacy',
     });
+  });
+
+  it('asks Stripe for at most ten lookup keys at a time and covers every Price', async () => {
+    const client = stripe();
+    await validateStripeCommercialCatalog({
+      stripe: client as never,
+      expectedStripeAccountId: accountId,
+      expectedLivemode: false,
+    });
+
+    const asked = client.prices.list.mock.calls.map(([params]) => params.lookup_keys);
+    expect(asked.every((keys) => keys.length <= 10)).toBe(true);
+    expect(asked.flat().sort()).toEqual([...CREDIT_TOP_UP_SPECS.map((spec) => spec.stripeLookupKey),
+      DEEPWATER_PRIVACY_SPEC.stripeLookupKey].sort());
+  });
+
+  it('fails closed when a live-rate Price is in another currency or names a credit count', async () => {
+    for (const drift of [{ currency: 'usd' }, { metadata: { credits: '11600', uoa_kind: 'team_credit_top_up' } }]) {
+      const remotePrices = prices().map((price) =>
+        price.lookup_key === 'uoa_credits_eur_10_v1' ? { ...price, ...drift } : price);
+      await expect(
+        validateStripeCommercialCatalog({
+          stripe: stripe(remotePrices) as never,
+          expectedStripeAccountId: accountId,
+          expectedLivemode: false,
+        }),
+      ).rejects.toThrow('STRIPE_COMMERCIAL_CATALOG_DRIFT');
+    }
   });
 
   it('fails closed when the authenticated Stripe account differs', async () => {

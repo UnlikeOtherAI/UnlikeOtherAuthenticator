@@ -7,6 +7,11 @@ import { billingLocale, billingLocaleText, billingPluralCopy } from './billing-c
 export type BillingCreditCopy = Readonly<{
   conversionDescription: string;
   balanceLabel: string;
+  /** Credits protocol 2.3.0: the balance's value in the region currency. */
+  balanceValueLeft: string;
+  balanceValueOwed: string;
+  /** Credits protocol 2.3.0: the rate behind region-currency estimates of credit prices. */
+  regionRate: string;
   balanceDescription: string;
   organisationBalanceDescription: string;
   pendingSettlementDescription: string;
@@ -17,7 +22,8 @@ export type BillingCreditCopy = Readonly<{
   teamName: string;
   teamMember: string;
   creditUnit: BillingCopyPluralForms;
-  creditOfferNames: Readonly<Record<'credits_usd_10' | 'credits_usd_25' | 'credits_usd_50' | 'credits_usd_100', string>>;
+  creditOfferNames: Readonly<Record<
+    'credits_usd_10' | 'credits_usd_25' | 'credits_usd_50' | 'credits_usd_100' | 'credits_usd_1000', string>>;
   oneTimeOfferDescription: string;
   smallestOfferHint: string;
 }>;
@@ -27,6 +33,9 @@ export const BILLING_CREDIT_COPY = {
     conversionDescription:
       '1 000 kreditů vždy odpovídá 1,00 USD. Spotřebu a zůstatek evidujeme s přesností na miliontinu kreditu.',
     balanceLabel: 'Zbývající kredity',
+    balanceValueLeft: 'Zbývá {value}',
+    balanceValueOwed: 'Dlužíte {value}',
+    regionRate: '1 {currency} ≈ {credits}',
     balanceDescription: 'Tento zůstatek sdílí celý tým napříč připojenými službami.',
     organisationBalanceDescription: "Tento zůstatek sdílí týmy organizace napříč připojenými službami.",
     pendingSettlementDescription: "Potvrzený zůstatek je dostupný. Nedávnou spotřebu ještě zpracováváme a potvrzený součet ji zatím nezahrnuje.",
@@ -38,7 +47,7 @@ export const BILLING_CREDIT_COPY = {
     teamName: 'Tým',
     teamMember: 'Člen týmu',
     creditUnit: { one: 'kredit', few: 'kredity', other: 'kreditů' },
-    creditOfferNames: { credits_usd_10: 'Malé dobití kreditů', credits_usd_25: 'Střední dobití kreditů', credits_usd_50: 'Velké dobití kreditů', credits_usd_100: 'Největší dobití kreditů' },
+    creditOfferNames: { credits_usd_10: 'Malé dobití kreditů', credits_usd_25: 'Střední dobití kreditů', credits_usd_50: 'Velké dobití kreditů', credits_usd_100: 'Největší dobití kreditů', credits_usd_1000: 'Velkoobjemové dobití kreditů' },
     oneTimeOfferDescription: 'Jednorázové dobití. Nezapíná automatické dobíjení.',
     smallestOfferHint: 'Začněte nejmenším dostupným dobitím.',
   },
@@ -46,6 +55,9 @@ export const BILLING_CREDIT_COPY = {
     conversionDescription:
       '1,000 credits always equal US$1.00. Usage and balances retain microcredit precision.',
     balanceLabel: 'Remaining credits',
+    balanceValueLeft: '{value} left',
+    balanceValueOwed: '{value} owed',
+    regionRate: '1 {currency} ≈ {credits}',
     balanceDescription: 'Your team shares this balance across connected services.',
     organisationBalanceDescription: "This balance is shared across the organisation’s teams and connected services.",
     pendingSettlementDescription: "Your confirmed credit balance is available. Recent usage is still being reconciled and is not included in the confirmed usage total yet.",
@@ -57,7 +69,7 @@ export const BILLING_CREDIT_COPY = {
     teamName: 'Team',
     teamMember: 'Team member',
     creditUnit: { one: 'credit', other: 'credits' },
-    creditOfferNames: { credits_usd_10: 'Small credit top-up', credits_usd_25: 'Medium credit top-up', credits_usd_50: 'Large credit top-up', credits_usd_100: 'Extra-large credit top-up' },
+    creditOfferNames: { credits_usd_10: 'Small credit top-up', credits_usd_25: 'Medium credit top-up', credits_usd_50: 'Large credit top-up', credits_usd_100: 'Extra-large credit top-up', credits_usd_1000: 'Bulk credit top-up' },
     oneTimeOfferDescription: 'One-time purchase. This does not enable automatic top-up.',
     smallestOfferHint: 'Start with the smallest available top-up.',
   },
@@ -65,6 +77,9 @@ export const BILLING_CREDIT_COPY = {
     conversionDescription:
       '1,000 credits always equal US$1.00. Usage and balances retain microcredit precision.',
     balanceLabel: 'Remaining credits',
+    balanceValueLeft: '{value} left',
+    balanceValueOwed: '{value} owed',
+    regionRate: '1 {currency} ≈ {credits}',
     balanceDescription: 'Your team shares this balance across connected services.',
     organisationBalanceDescription: "This balance is shared across the organisation’s teams and connected services.",
     pendingSettlementDescription: "Your confirmed credit balance is available. Recent usage is still being reconciled and is not included in the confirmed usage total yet.",
@@ -76,7 +91,7 @@ export const BILLING_CREDIT_COPY = {
     teamName: 'Team',
     teamMember: 'Team member',
     creditUnit: { one: 'credit', other: 'credits' },
-    creditOfferNames: { credits_usd_10: 'Small credit top-up', credits_usd_25: 'Medium credit top-up', credits_usd_50: 'Large credit top-up', credits_usd_100: 'Extra-large credit top-up' },
+    creditOfferNames: { credits_usd_10: 'Small credit top-up', credits_usd_25: 'Medium credit top-up', credits_usd_50: 'Large credit top-up', credits_usd_100: 'Extra-large credit top-up', credits_usd_1000: 'Bulk credit top-up' },
     oneTimeOfferDescription: 'One-time purchase. This does not enable automatic top-up.',
     smallestOfferHint: 'Start with the smallest available top-up.',
   },
@@ -84,6 +99,9 @@ export const BILLING_CREDIT_COPY = {
     conversionDescription:
       '1.000 Credits entsprechen immer 1,00 US$. Nutzung und Guthaben werden auf ein Millionstel Credit genau erfasst.',
     balanceLabel: 'Verbleibende Credits',
+    balanceValueLeft: 'Noch {value} verfügbar',
+    balanceValueOwed: 'Offen: {value}',
+    regionRate: '1 {currency} ≈ {credits}',
     balanceDescription: 'Ihr Team nutzt dieses Guthaben gemeinsam über verbundene Dienste hinweg.',
     organisationBalanceDescription: "Dieses Guthaben wird von den Teams der Organisation über verbundene Dienste hinweg geteilt.",
     pendingSettlementDescription: "Ihr bestätigtes Guthaben ist verfügbar. Neuere Nutzung wird noch abgeglichen und ist noch nicht in der bestätigten Summe enthalten.",
@@ -95,7 +113,7 @@ export const BILLING_CREDIT_COPY = {
     teamName: 'Team',
     teamMember: 'Teammitglied',
     creditUnit: { one: 'Credit', other: 'Credits' },
-    creditOfferNames: { credits_usd_10: 'Kleine Credit-Aufladung', credits_usd_25: 'Mittlere Credit-Aufladung', credits_usd_50: 'Große Credit-Aufladung', credits_usd_100: 'Sehr große Credit-Aufladung' },
+    creditOfferNames: { credits_usd_10: 'Kleine Credit-Aufladung', credits_usd_25: 'Mittlere Credit-Aufladung', credits_usd_50: 'Große Credit-Aufladung', credits_usd_100: 'Sehr große Credit-Aufladung', credits_usd_1000: 'Credit-Großpaket' },
     oneTimeOfferDescription: 'Einmaliger Kauf. Dadurch wird die automatische Aufladung nicht aktiviert.',
     smallestOfferHint: 'Beginnen Sie mit der kleinsten verfügbaren Aufladung.',
   },
@@ -103,6 +121,9 @@ export const BILLING_CREDIT_COPY = {
     conversionDescription:
       '1.000 créditos equivalen siempre a 1,00 US$. El uso y el saldo conservan una precisión de una millonésima de crédito.',
     balanceLabel: 'Créditos restantes',
+    balanceValueLeft: 'Quedan {value}',
+    balanceValueOwed: 'Debes {value}',
+    regionRate: '1 {currency} ≈ {credits}',
     balanceDescription: 'El equipo comparte este saldo entre los servicios conectados.',
     organisationBalanceDescription: "Los equipos de la organización comparten este saldo entre los servicios conectados.",
     pendingSettlementDescription: "El saldo confirmado está disponible. El uso reciente aún se está conciliando y todavía no está incluido en el total confirmado.",
@@ -114,7 +135,7 @@ export const BILLING_CREDIT_COPY = {
     teamName: 'Equipo',
     teamMember: 'Miembro del equipo',
     creditUnit: { one: 'crédito', other: 'créditos' },
-    creditOfferNames: { credits_usd_10: 'Recarga pequeña de créditos', credits_usd_25: 'Recarga mediana de créditos', credits_usd_50: 'Recarga grande de créditos', credits_usd_100: 'Recarga extragrande de créditos' },
+    creditOfferNames: { credits_usd_10: 'Recarga pequeña de créditos', credits_usd_25: 'Recarga mediana de créditos', credits_usd_50: 'Recarga grande de créditos', credits_usd_100: 'Recarga extragrande de créditos', credits_usd_1000: 'Recarga de créditos por volumen' },
     oneTimeOfferDescription: 'Compra única. Esto no activa la recarga automática.',
     smallestOfferHint: 'Empieza con la recarga más pequeña disponible.',
   },
@@ -122,6 +143,9 @@ export const BILLING_CREDIT_COPY = {
     conversionDescription:
       '1 000 crédits correspondent toujours à 1,00 $US. L’utilisation et le solde sont calculés au millionième de crédit près.',
     balanceLabel: 'Crédits restants',
+    balanceValueLeft: 'Il reste {value}',
+    balanceValueOwed: 'Vous devez {value}',
+    regionRate: '1 {currency} ≈ {credits}',
     balanceDescription: 'Votre équipe partage ce solde entre les services connectés.',
     organisationBalanceDescription: "Les équipes de l’organisation partagent ce solde entre les services connectés.",
     pendingSettlementDescription: "Votre solde confirmé est disponible. L’utilisation récente est en cours de rapprochement et n’est pas encore incluse dans le total confirmé.",
@@ -133,7 +157,7 @@ export const BILLING_CREDIT_COPY = {
     teamName: 'Équipe',
     teamMember: 'Membre de l’équipe',
     creditUnit: { one: 'crédit', other: 'crédits' },
-    creditOfferNames: { credits_usd_10: 'Petite recharge de crédits', credits_usd_25: 'Recharge moyenne de crédits', credits_usd_50: 'Grande recharge de crédits', credits_usd_100: 'Très grande recharge de crédits' },
+    creditOfferNames: { credits_usd_10: 'Petite recharge de crédits', credits_usd_25: 'Recharge moyenne de crédits', credits_usd_50: 'Grande recharge de crédits', credits_usd_100: 'Très grande recharge de crédits', credits_usd_1000: 'Recharge de crédits en volume' },
     oneTimeOfferDescription: 'Achat ponctuel. Cela n’active pas la recharge automatique.',
     smallestOfferHint: 'Commencez par la plus petite recharge disponible.',
   },
@@ -141,6 +165,9 @@ export const BILLING_CREDIT_COPY = {
     conversionDescription:
       '1.000 crediti equivalgono sempre a 1,00 USD. Utilizzo e saldo mantengono una precisione al milionesimo di credito.',
     balanceLabel: 'Crediti rimanenti',
+    balanceValueLeft: 'Restano {value}',
+    balanceValueOwed: 'Devi {value}',
+    regionRate: '1 {currency} ≈ {credits}',
     balanceDescription: 'Il team condivide questo saldo tra i servizi collegati.',
     organisationBalanceDescription: "I team dell’organizzazione condividono questo saldo tra i servizi collegati.",
     pendingSettlementDescription: "Il saldo confermato è disponibile. L’utilizzo recente è ancora in fase di riconciliazione e non è incluso nel totale confermato.",
@@ -152,7 +179,7 @@ export const BILLING_CREDIT_COPY = {
     teamName: 'Team',
     teamMember: 'Membro del team',
     creditUnit: { one: 'credito', other: 'crediti' },
-    creditOfferNames: { credits_usd_10: 'Ricarica piccola di crediti', credits_usd_25: 'Ricarica media di crediti', credits_usd_50: 'Ricarica grande di crediti', credits_usd_100: 'Ricarica extra grande di crediti' },
+    creditOfferNames: { credits_usd_10: 'Ricarica piccola di crediti', credits_usd_25: 'Ricarica media di crediti', credits_usd_50: 'Ricarica grande di crediti', credits_usd_100: 'Ricarica extra grande di crediti', credits_usd_1000: 'Ricarica di crediti in volume' },
     oneTimeOfferDescription: 'Acquisto singolo. Questo non attiva la ricarica automatica.',
     smallestOfferHint: 'Inizia dalla ricarica disponibile più piccola.',
   },
@@ -168,8 +195,10 @@ export function billingPendingCreditsLabel(count: number, locale?: BillingCustom
 
 export function billingBuiltInCreditOfferCopy(key: string, locale?: BillingCustomerLocale) {
   const copy = billingCreditCopy(locale);
-  if (!Object.prototype.hasOwnProperty.call(copy.creditOfferNames, key)) return null;
-  const offerKey = key as keyof BillingCreditCopy['creditOfferNames'];
+  // A GBP or EUR offer shares its USD tier's name: credits_eur_25 is named as credits_usd_25.
+  const tier = key.replace(/^credits_(eur|gbp)_/, 'credits_usd_');
+  if (!Object.prototype.hasOwnProperty.call(copy.creditOfferNames, tier)) return null;
+  const offerKey = tier as keyof BillingCreditCopy['creditOfferNames'];
   return { name: copy.creditOfferNames[offerKey], description: copy.oneTimeOfferDescription };
 }
 

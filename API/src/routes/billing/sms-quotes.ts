@@ -20,7 +20,7 @@ export function registerSmsQuoteRoutes(app: FastifyInstance, deps?: { provider?:
     if (!credential) throw new AppError('UNAUTHORIZED', 401);
     const result = await createSmsQuote({ request: request.body, credential,
       actorToken: readBillingActorHeader(request.headers['x-uoa-actor']) },
-    { provider: deps?.provider ?? configuredSmsProvider() });
+    { provider: deps?.provider ?? configuredSmsProvider(), log: request.log });
     reply.header('Cache-Control', 'private, no-store');
     return result;
   });

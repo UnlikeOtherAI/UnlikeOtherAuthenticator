@@ -1,3 +1,6 @@
+import { authorizeCredentialSurface } from '../credential-route-registry.service.js';
+import { resolveTokenFamilyAssurance } from '../token-assurance.service.js';
+import { publicCredentialTtl } from './credential-source.service.js';
 import { requireIdentityEmail } from '../entity-lifecycle.service.js';
 // Rotating refresh tokens for registered native-app clients of the public OAuth profile
 // (brief §22.14, Docs/Auth/native-accounts.md). This reuses the confidential refresh-token
@@ -7,7 +10,7 @@ import { requireIdentityEmail } from '../entity-lifecycle.service.js';
 // receive a refresh token.
 import type { Prisma, PrismaClient } from '@prisma/client';
 
-import { getEnv, getPublicBaseUrl } from '../../config/env.js';
+import { getEnv, getPublicBaseUrl, requireEnv } from '../../config/env.js';
 import { AppError, isAppError } from '../../utils/errors.js';
 import { lockProductTeamPolicyShared } from '../product-team-policy-lock.service.js';
 import type { RefreshTokenContext } from '../refresh-token-replay.service.js';
@@ -61,12 +64,13 @@ export async function issueNativeRefreshToken(
     clientId: string;
     domain: string;
     credentialEpoch: number;
+    authenticationEvidenceId?: string;
     twoFaCompleted: boolean;
     scope: string | null;
     resource: string | null;
   },
   prisma: Prisma.TransactionClient,
-): Promise<{ refreshToken: string; expiresInSeconds: number }> {
+): Promise<{ refreshToken: string; expiresInSeconds: number; assuranceId?: string; assuranceExpiresAt?: string }> {
   const issued = await issueRefreshToken(
     {
       userId: params.userId,
@@ -78,7 +82,17 @@ export async function issueNativeRefreshToken(
     },
     { prisma: prisma as unknown as PrismaClient },
   );
-  return { refreshToken: issued.refreshToken, expiresInSeconds: issued.expiresInSeconds };
+  if (!params.authenticationEvidenceId) {
+    await authorizeCredentialSurface('native_refresh', { userId: params.userId, clientDomain: params.domain,
+      credentialEpoch: params.credentialEpoch }, prisma);
+    return { refreshToken: issued.refreshToken, expiresInSeconds: issued.expiresInSeconds };
+  }
+  const proof = await resolveTokenFamilyAssurance({ prisma: prisma as PrismaClient, userId: params.userId,
+    domain: params.domain, refreshToken: issued.refreshToken, credentialEpoch: params.credentialEpoch,
+    authenticationEvidenceId: params.authenticationEvidenceId, sharedSecret: requireEnv('SHARED_SECRET').SHARED_SECRET,
+    internalCredential: true });
+  return { refreshToken: issued.refreshToken, expiresInSeconds: issued.expiresInSeconds,
+    assuranceId: proof.assuranceId, assuranceExpiresAt: proof.assuranceExpiresAt };
 }
 
 export interface NativeRefreshResult {
@@ -136,9 +150,12 @@ async function rotateNativeRefreshToken(
   if (rotated.resource !== null) validateRequestedResource(rotated.resource);
 
   const issuer = getPublicBaseUrl();
-  const ttlSeconds = accessTokenExpiresInSeconds(getEnv().ACCESS_TOKEN_TTL);
+  const source = await authorizeCredentialSurface('native_refresh', { userId: rotated.userId,
+    clientDomain: config.domain, credentialEpoch, assuranceId: rotated.assuranceId ?? undefined }, tx);
+  const ttlSeconds = publicCredentialTtl(accessTokenExpiresInSeconds(getEnv().ACCESS_TOKEN_TTL), source?.expiresAt);
   const accessToken = await signMcpAccessToken({
     subject: rotated.userId,
+    assuranceId: rotated.assuranceId ?? undefined,
     credentialEpoch,
     twoFaCompleted: rotated.twoFaCompleted,
     email: requireIdentityEmail(user.email),

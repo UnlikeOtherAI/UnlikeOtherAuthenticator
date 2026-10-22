@@ -278,7 +278,7 @@ describe('public billing consumer action protocol', () => {
 
 describe('public BillingCreditsV1 consumer protocol', () => {
   it('names the opt-in reconciliation status revision', () => {
-    expect(BILLING_CREDITS_PROTOCOL_VERSION).toBe('2.0.0');
+    expect(BILLING_CREDITS_PROTOCOL_VERSION).toBe('2.3.0');
   });
 
   it('validates shared team credits, system adjustments, and fixed conversion', () => {

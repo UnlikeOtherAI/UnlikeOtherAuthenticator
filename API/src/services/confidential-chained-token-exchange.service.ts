@@ -4,6 +4,8 @@ import { createLocalJWKSet, decodeProtectedHeader, jwtVerify } from 'jose';
 import { z } from 'zod';
 
 import { getPublicBaseUrl } from '../config/env.js';
+import { credentialArtifactSource } from './credential-artifact.service.js';
+import { authorizeCredentialSurface, authorizeCredentialSurfaceWhenAvailable } from './credential-route-registry.service.js';
 import { getAdminPrisma } from '../db/prisma.js';
 import { runInTransaction } from '../db/tenant-context.js';
 import { createKeyedRateLimiter } from '../middleware/rate-limiter.js';
@@ -75,6 +77,7 @@ const ChainedSubjectAccessTokenSchema = z
     aud: z.string().trim().min(1),
     sub: z.string().trim().min(1).max(256),
     tv: z.number().int().nonnegative(),
+    assurance_id: z.string().min(1).max(256).optional(),
     email: z.string().trim().email(),
     source_domain: z.string().trim().min(1),
     azp: z.string().trim().min(1),
@@ -154,7 +157,7 @@ export async function verifyChainedSubjectAccessToken(
     callerAudience: string;
     issuer: string;
   },
-  deps: Pick<ChainedExchangeDeps, 'getAccessTokenJwks' | 'now'> = {},
+  deps: Pick<ChainedExchangeDeps, 'getAccessTokenJwks' | 'now' | 'prisma'> = {},
 ): Promise<VerifiedChainedSubjectAccessToken> {
   const now = deps.now?.() ?? Math.floor(Date.now() / 1000);
   try {
@@ -206,11 +209,17 @@ export async function verifyChainedSubjectAccessToken(
     }
 
     const { act, ...claims } = parsed;
-    return {
+    const verified = {
       ...claims,
       ...(act === undefined ? {} : { act: parseActorChain(act) }),
     };
-  } catch {
+    const artifact = credentialArtifactSource(parsed, 'session');
+    await authorizeCredentialSurfaceWhenAvailable('chained_subject', { assuranceId: parsed.assurance_id, artifact, method: artifact.method,
+      userId: parsed.sub, credentialEpoch: parsed.tv, clientDomain: originalIdentityDomain(verified),
+      orgId: parsed.active.orgId, teamId: parsed.active.teamId }, deps.prisma);
+    return verified;
+  } catch (error) {
+    if (error instanceof AppError && error.statusCode === 503) throw error;
     throw invalidSubjectToken();
   }
 }
@@ -312,6 +321,10 @@ async function exchangeConfidentialChainedAccessTokenInsidePolicyLock(
     if (isAuthenticationEpochMismatchError(error)) throw subjectForbidden();
     throw error;
   }
+  const sourceProof = await authorizeCredentialSurface('chained_delegation', { userId: subject.sub,
+    clientDomain: identityDomain, credentialEpoch, assuranceId: subject.assurance_id,
+    orgId: subject.active.orgId, teamId: subject.active.teamId,
+    artifact: credentialArtifactSource(subject, 'session') }, prisma);
   const [user, domainRole, currentOrg] = await Promise.all([
     prisma.user.findUnique({
       where: { lifecycleStatus: 'ACTIVE', id: subject.sub },
@@ -331,6 +344,7 @@ async function exchangeConfidentialChainedAccessTokenInsidePolicyLock(
         userId: subject.sub,
         domain: identityDomain,
         orgId: subject.active.orgId,
+        assuranceId: subject.assurance_id,
         groupsEnabled: false,
       },
       { crossProductPrisma: prisma, policyPrisma: prisma, prisma },
@@ -351,7 +365,8 @@ async function exchangeConfidentialChainedAccessTokenInsidePolicyLock(
   if (!org.teams.includes(subject.active.teamId)) throw subjectForbidden();
 
   const now = deps.now?.() ?? Math.floor(Date.now() / 1000);
-  const expiresInSeconds = Math.min(CONFIDENTIAL_ACCESS_TOKEN_TTL_SECONDS, subject.exp - now);
+  const expiresInSeconds = Math.min(CONFIDENTIAL_ACCESS_TOKEN_TTL_SECONDS, subject.exp - now,
+    sourceProof ? Math.floor(sourceProof.expiresAt.getTime() / 1000) - now : Number.POSITIVE_INFINITY);
   if (expiresInSeconds <= 0) throw invalidSubjectToken();
 
   const actor: ConfidentialActorChain = {
@@ -360,6 +375,7 @@ async function exchangeConfidentialChainedAccessTokenInsidePolicyLock(
     ...(subject.act ? { act: subject.act } : {}),
   };
   const accessToken = await (deps.signAccessToken ?? signConfidentialAccessToken)({
+    assuranceId: subject.assurance_id,
     subject: subject.sub,
     credentialEpoch,
     email: requireIdentityEmail(user.email),

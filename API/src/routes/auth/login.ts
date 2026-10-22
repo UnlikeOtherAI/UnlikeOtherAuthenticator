@@ -6,6 +6,7 @@ import { requireEnv } from '../../config/env.js';
 import { configVerifier } from '../../middleware/config-verifier.js';
 import { runWithRequestAdminTransaction } from '../../plugins/tenant-context.plugin.js';
 import { loginWithEmailPassword } from '../../services/auth-login.service.js';
+import { recordAuthFunnelStep } from '../../services/auth-funnel.service.js';
 import { lockAndAssertAuthenticationEpoch } from '../../services/authentication-epoch.service.js';
 import { parseRequestAccessFlag } from '../../services/access-request-flow.service.js';
 import {
@@ -34,6 +35,8 @@ const LoginBodySchema = z
 const LoginQuerySchema = z
   .object({
     config_url: z.string().min(1).max(2048),
+    management_org_id: z.string().min(1).max(100).optional(),
+    enterprise_link_intent: z.string().min(1).max(100).optional(),
     redirect_url: z.string().min(1).max(2048).optional(),
     code_challenge: z.string().min(1).max(256).optional(),
     code_challenge_method: z.string().min(1).max(32).optional(),
@@ -52,7 +55,7 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
     },
     async (request, reply) => {
       const { email, password, remember_me } = LoginBodySchema.parse(request.body);
-      const { redirect_url, code_challenge, code_challenge_method, request_access, state } =
+      const { redirect_url, code_challenge, code_challenge_method, request_access, state, management_org_id, enterprise_link_intent } =
         LoginQuerySchema.parse(request.query);
       const pkce = parseRequiredPkceChallenge({
         codeChallenge: code_challenge,
@@ -69,6 +72,12 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
       if (!configUrl) {
         throw new Error('missing request.configUrl');
       }
+
+      const recordLoginSubmitted = (outcome: 'succeeded' | 'failed') =>
+        recordAuthFunnelStep(
+          { domain: config.domain, step: 'login_submitted', outcome },
+          { prisma: request.adminDb },
+        );
 
       // The shared policy fence and its BYPASSRLS policy re-read must use the
       // same transaction as challenge/setup/code issuance.
@@ -92,7 +101,7 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
         const requestAccess = parseRequestAccessFlag(request_access);
 
         let selectedTeam: AutoSelectedTeam | null = null;
-        if (config.login_flow?.team_selection === 'auto') {
+        if (management_org_id || enterprise_link_intent || config.login_flow?.team_selection === 'auto') {
           const choices = await buildSessionChoices(
             { userId, config },
             {
@@ -102,7 +111,7 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
             },
           );
           selectedTeam = resolveAutoSelectedTeam(choices);
-          if (shouldPresentTeamChooser(choices, selectedTeam)) {
+          if (management_org_id || enterprise_link_intent || shouldPresentTeamChooser(choices, selectedTeam)) {
             const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
             const loginToken = await signLoginSession({
               userId,
@@ -119,7 +128,7 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
               sharedSecret: SHARED_SECRET,
               // Must match the audience verify-code/select-team/session-choices verify against.
               audience: LOGIN_SESSION_AUDIENCE,
-            });
+            }, { prisma: prisma, verifiedEvent: { kind: 'local_credential' } });
             return { kind: 'team_chooser' as const, loginToken, choices };
           }
         }
@@ -140,6 +149,8 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
             state,
             rememberMe,
             requestAccess,
+            primaryJustVerified: true,
+            verifiedPrimaryEvent: { kind: 'local_credential' },
             authMethod: 'email_password',
             codeChallenge: pkce.codeChallenge,
             codeChallengeMethod: pkce.codeChallengeMethod,
@@ -158,7 +169,12 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
 
         if (finalized.kind !== 'granted') return finalized;
         return { ...finalized, userId };
+      }).catch(async (err: unknown) => {
+        // Recorded after the transaction rolled back, never inside it.
+        await recordLoginSubmitted('failed');
+        throw err;
       });
+      await recordLoginSubmitted('succeeded');
 
       if (outcome.kind === 'twofa') {
         reply

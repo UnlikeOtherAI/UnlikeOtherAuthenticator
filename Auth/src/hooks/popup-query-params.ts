@@ -55,6 +55,9 @@ export type PopupQueryParams = {
    * server-side ACTIVE-membership + domain check remains the sole authority.
    */
   teamHint: string | null;
+  /** Exact organisation management intent. It grants no authority. */
+  managementOrgId?: string | null;
+  enterpriseLinkIntent?: string | null;
   /**
    * `prompt=select_account` from the relying party: the person is adding another account, so the
    * social provider must show its account chooser instead of silently reusing the browser's
@@ -127,6 +130,7 @@ export function parsePopupQueryParams(search: string): PopupQueryParams {
   // (unlike `login_token`, it isn't scoped to another marker param) — validity/membership is
   // re-checked against the verified user's own chooser payload before it can select anything.
   const teamHint = params.get('team_hint');
+  const managementOrgId = params.get('management_org_id');
   const inviteAccepted = params.get('flow') === 'invite_accepted';
   // Only the one OIDC prompt value UOA forwards is recognised; any other value is ignored rather
   // than passed on, so the provider never sees a prompt the relying party did not mean.
@@ -162,6 +166,8 @@ export function parsePopupQueryParams(search: string): PopupQueryParams {
     handoffTarget: handoffTarget && handoffTarget.trim() ? handoffTarget : null,
     loginToken: loginToken && loginToken.trim() ? loginToken : null,
     teamHint: teamHint && teamHint.trim() ? teamHint : null,
+    managementOrgId: managementOrgId && managementOrgId.trim() && managementOrgId.length <= 100 ? managementOrgId : null,
+    enterpriseLinkIntent: params.get('flow') === 'enterprise_link' && (params.get('enterprise_link_intent')?.length ?? 0) <= 100 ? params.get('enterprise_link_intent') : null,
     selectAccount,
   };
 }

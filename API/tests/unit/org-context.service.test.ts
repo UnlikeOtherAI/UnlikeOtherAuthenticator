@@ -24,6 +24,7 @@ function makeConfig(overrides?: Partial<ClientConfig['org_features']>): ClientCo
 
 function makePrismaMock() {
   const prisma = {
+    orgSsoPolicy: { findUnique: vi.fn().mockResolvedValue(null) },
     orgMember: {
       findFirst: vi.fn(),
     },

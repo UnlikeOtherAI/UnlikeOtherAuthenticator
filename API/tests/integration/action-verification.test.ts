@@ -3,6 +3,8 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { startActionVerification, verifyActionVerification } from '../../src/services/action-verification.service.js';
 import { validateConfigFields } from '../../src/services/config.service.js';
 import { baseClientConfigPayload } from '../helpers/test-config.js';
+import { issueSessionAssurance } from '../../src/services/session-assurance.service.js';
+import { issueRefreshToken } from '../../src/services/refresh-token.service.js';
 import { createTestDb } from '../helpers/test-db.js';
 
 describe.skipIf(!process.env.DATABASE_URL)('action-bound fresh verification', () => {
@@ -54,6 +56,31 @@ describe.skipIf(!process.env.DATABASE_URL)('action-bound fresh verification', ()
       .rejects.toThrow();
     await expect(verifyActionVerification(input, { ...f.deps, now: () => new Date(Date.now() + 6 * 60_000) }))
       .rejects.toThrow();
+  });
+
+  it('binds the signed config and original family proof, and rechecks revocation', async () => {
+    const f = await fixture();
+    await expect(verifyActionVerification({ ...f.context, challengeId: f.challenge.challengeId, code: '123456',
+      configUrl: 'https://foreign.example/config' }, f.deps)).rejects.toThrow();
+    await handle.prisma.clientDomain.create({ data: { domain: f.context.config.domain, label: 'Action', status: 'active' } });
+    const proof = async () => {
+      const familyId = randomUUID();
+      await issueRefreshToken({ userId: f.user.id, domain: f.context.config.domain, clientId: 'action',
+        configUrl: f.context.configUrl, familyId, credentialEpoch: 0 }, { prisma: handle.prisma });
+      return handle.prisma.$transaction(tx => issueSessionAssurance({ familyId, userId: f.user.id,
+        clientDomain: f.context.config.domain, credentialEpoch: 0, method: 'independent', policyGeneration: 1,
+        observedAt: new Date(), authenticatedAt: new Date(), amr: ['email_password'], mfaSource: 'none',
+        expiresAt: new Date(Date.now() + 60000) }, tx));
+    };
+    const original = await proof(); const other = await proof();
+    const context = { ...f.context, claims: { ...f.context.claims, assuranceId: original.assurance.id } };
+    const challenge = await startActionVerification({ ...context, description: 'Approve exact action' }, f.deps);
+    const input = { ...context, challengeId: challenge.challengeId, code: '123456' };
+    await expect(verifyActionVerification({ ...input, claims: { ...input.claims, assuranceId: other.assurance.id } }, f.deps))
+      .rejects.toThrow('ACTION_VERIFICATION_FAILED');
+    await handle.prisma.sessionAssurance.update({ where: { id: original.assurance.id }, data: { revokedAt: new Date() } });
+    await expect(verifyActionVerification(input, f.deps)).rejects.toThrow();
+    expect((await handle.prisma.verificationToken.findUnique({ where: { id: challenge.challengeId } }))?.usedAt).toBeNull();
   });
 
   it('invalidates the prior code when a new one is sent', async () => {

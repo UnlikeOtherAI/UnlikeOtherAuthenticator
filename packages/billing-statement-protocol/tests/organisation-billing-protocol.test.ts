@@ -10,6 +10,8 @@ import {
   billingStatementV1JsonSchema,
   billingStatementV2ConformanceFixture,
   billingStatementV2JsonSchema,
+  billingRegionSetRequestV1JsonSchema,
+  billingRegionViewV1JsonSchema,
 } from '../src/index.js';
 
 describe('organisation billing responsibility (protocol 1.3.0)', () => {
@@ -101,3 +103,28 @@ describe('organisation billing responsibility (protocol 1.3.0)', () => {
     ).toBe(false);
   });
 });
+
+describe('organisation billing region (protocol 5.3.0)', () => {
+  const ajv = new Ajv2020({ strict: true });
+  addFormats(ajv);
+  it('carries a null region until chosen, with a prefill, and only the three regions and currencies', () => {
+    const view = ajv.compile(billingRegionViewV1JsonSchema);
+    expect(view({ region: null, currency: null, suggested_region: 'EUROPE', suggested_currency: 'EUR', can_set: true })).toBe(true);
+    expect(view({ region: 'UK', currency: 'GBP', suggested_region: 'UK', suggested_currency: 'GBP', can_set: false })).toBe(true);
+    expect(view({ region: 'APAC', currency: null, suggested_region: 'US', suggested_currency: 'USD', can_set: true })).toBe(false);
+    expect(view({ region: null, currency: null, suggested_region: 'US', suggested_currency: 'USD' })).toBe(false);
+    // Region protocol 1.1.0: the suggestion source is optional, and only a billing country or null.
+    const unset = { region: null, currency: null, suggested_region: 'US', suggested_currency: 'USD', can_set: true };
+    expect(view({ ...unset, suggested_from: 'billing_country' })).toBe(true);
+    expect(view({ ...unset, suggested_from: null })).toBe(true);
+    expect(view({ ...unset, suggested_from: 'ip_address' })).toBe(false);
+  });
+  it('sets the region with the ordinary subject fields only', () => {
+    const set = ajv.compile(billingRegionSetRequestV1JsonSchema);
+    const body = { product: 'nessie', organisation_id: 'org', team_id: 'team', user_id: 'user', region: 'US' };
+    expect(set(body)).toBe(true);
+    expect(set({ ...body, region: 'EU' })).toBe(false);
+    expect(set({ ...body, currency: 'USD' })).toBe(false);
+  });
+});
+

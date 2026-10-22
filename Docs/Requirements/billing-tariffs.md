@@ -1507,27 +1507,149 @@ write. `--apply` additionally requires the exact confirmation string
 one serializable transaction.
 
 The remote Stripe objects must already exist. UOA validates their account,
-mode, active state, lookup key, Product binding, exact metadata, USD amount,
+mode, active state, lookup key, Product binding, exact metadata, currency and amount,
 one-time/recurring type, and monthly licensed recurrence before opening the
 write transaction. The command never creates, updates, archives, or replaces a
 Stripe Product or Price. It may bind an exact local catalog only when both of
 its Stripe identifiers are still null; a partial or different binding is
 drift. Re-running against the exact state is a no-op.
 
-The version-1 shared-credit Product has four one-time Prices:
+The version-1 shared-credit Product has fifteen one-time Prices:
 
-| Lookup key               | Charge | Credits |
-| ------------------------ | -----: | ------: |
-| `uoa_credits_usd_10_v1`  |  US$10 |  10,000 |
-| `uoa_credits_usd_25_v1`  |  US$25 |  25,000 |
-| `uoa_credits_usd_50_v1`  |  US$50 |  50,000 |
-| `uoa_credits_usd_100_v1` | US$100 | 100,000 |
+| Lookup key                | Charge   | Credits   |
+| ------------------------- | -------: | --------: |
+| `uoa_credits_usd_10_v1`   |    US$10 |    10,000 |
+| `uoa_credits_usd_25_v1`   |    US$25 |    25,000 |
+| `uoa_credits_usd_50_v1`   |    US$50 |    50,000 |
+| `uoa_credits_usd_100_v1`  |   US$100 |   100,000 |
+| `uoa_credits_usd_1000_v1` | US$1,000 | 1,000,000 |
+| `uoa_credits_eur_N_v1`    | EUR N    | live rate |
+| `uoa_credits_gbp_N_v1`    | GBP N    | live rate |
 
-The same offers are projected for the exact active services `nessie`,
-`deepwater`, `deepsignal`, `deeptest`, and `docgen`. Each receives top-up and
-automatic-top-up policy plus the default automatic option: refill 25,000
-credits below 5,000, with a US$100 monthly cap and consent version
-`credits-auto-top-up-v1`.
+N is 10, 25, 50, 100 and 1,000. A USD Price carries `credits` in its metadata; a
+GBP or EUR Price carries `credits_basis=live_fx_rate` instead.
+
+### Credits bought in the region currency
+
+Credits stay one USD-denominated unit (1,000 per USD); balances, charges,
+entries and the credit account are in credits. An organisation whose billing
+region is UK or Europe buys them in GBP or EUR:
+
+- Each currency has its own funding policy and offers. Offers and catalogs in
+  GBP or EUR carry no fixed credit count (`0`), enforced in the database.
+- When the checkout is created UOA reads the rate: by default Stripe's FX Quote
+  with `lock_duration: none` (no fee, no lock) and its `base_rate`. The credits
+  are the payment times that rate, rounded down to whole credits, with no buffer.
+  The checkout stores the currency, the credits, the rate source, the base rate,
+  Stripe's fee-bearing `exchange_rate` and the quote id as evidence; the
+  database requires them for every GBP or EUR checkout and none for USD.
+- A quote cannot be attached to a Checkout Session, so Stripe converts the
+  payment at its own rate minutes later. The difference is exchange swing the
+  usage markup absorbs.
+- The payment webhook grants exactly the stored credits, as a USD credit entry,
+  and the purchase invoice is in the payment currency.
+- `BILLING_CREDIT_FX_RATE_SOURCE=ecb` sells at the accepted ECB snapshot
+  instead. An unavailable source refuses with
+  `503 BILLING_CREDIT_FX_RATE_UNAVAILABLE` and opens one
+  `credit_fx_rate_unavailable` alert, emailed once; UOA never switches source.
+- A consumer on credits protocol 2.1.0 sees the region-currency offers with a
+  `credit_rate`; an older consumer sees the USD offers, which stay purchasable.
+  Without a region the offers are USD.
+- A refund or dispute of a GBP or EUR purchase is in that purchase's currency
+  (any other currency is refused). The money buys back credits at the
+  purchase's own terms (credits granted ÷ amount paid), in whole credits and
+  never more than the purchase granted, and the lot trigger takes them from that
+  purchase's lot first. So refunding what is left of a lot, in its currency,
+  empties it: EUR 22.41 of a EUR 25.00 lot of 29,030 credits with 26,030 left
+  takes back 26,022 credits and leaves 8, worth under a cent. Refunding more
+  than is left takes the rest from other lots, then as debt, as a USD refund
+  does. A USD purchase grants 10,000,000 microcredits a cent, so its refunds are
+  unchanged. The adjustment row keeps the money in its currency; the credit
+  entry stays in the account's USD credits.
+
+### Automatic reload in the region currency
+
+Each currency's policy has one reload option per refill amount (10, 25, 50, 100
+and 1,000): it reloads one offer when the balance falls below a fifth of it,
+with a monthly cap of four reloads. The USD 25 option keeps its original key
+(`default`: below 5,000 credits, USD 100 a month), which also still sets the
+low-credits warning.
+
+- A USD option's threshold is in credits, as before. A GBP or EUR option's is
+  in its currency (`threshold_amount_minor`, with `threshold_microcredits` 0).
+- The claim compares the lots' value in the option currency with it, under the
+  account lock: holds come out of the oldest lots, lots in that currency at
+  their own rate, credits bought in USD at the region's captured rate. The
+  attempt records the value it saw (`observed_value_minor`); the database
+  refuses a GBP or EUR attempt whose value is not below its threshold.
+- The claim then reads the live rate (`BILLING_CREDIT_FX_RATE_SOURCE`), fixes
+  the credits on the attempt with the same rate evidence as a checkout, and the
+  off-session PaymentIntent follows in the same cycle. The reload is its own lot
+  at that rate. No rate means no attempt (`rate_unavailable`).
+- A failed payment moves the account to `NEEDS_REVIEW`: no further attempt is
+  made, the credits view shows one `payment_action_required` item, and only a
+  new card (consent) resumes reloading.
+- Options are offered to a consumer on credits protocol 2.2.0; older consumers
+  keep the USD options.
+
+### Credit lots
+
+Every grant of credits is a lot (`billing_credit_lots`): the purchase currency,
+the amount paid, the USD per unit the credits were granted at (1 for USD) and
+what is left. Lots are written only by the credit entry trigger, in the same
+insert as the entry, under the account row lock that already serializes every
+balance change:
+
+- A top-up, automatic top-up or admin credit opens a lot. Its terms come from
+  the checkout or attempt; an admin credit is a USD lot with nothing paid.
+- Every debit draws lots oldest-first, one `billing_credit_lot_movements` row
+  per lot. A refund or dispute draws the refunded purchase's own lot first.
+- Credits given back (a usage correction or a payment reversal) go first to
+  debt, then to the reversed purchase's own lot, then to the newest lot that
+  gave credits.
+- A debit beyond what the lots hold is debt (a movement without a lot); only a
+  verified payment reversal can create it, and the next grant pays it first.
+- After every entry the lots' remaining credits minus debt must equal the
+  account balance, or the entry is refused. Lot terms and movements are
+  immutable.
+- Holds (prepaid AI reservations, SMS reservations and standing holds) do not
+  move lots. Their settlement debits the lots then; a release changes nothing.
+- The migration backfilled every account: each earlier grant is a rate-1 USD lot
+  (every earlier purchase was USD), consumed oldest-first by what was spent;
+  credits no grant explains open one USD lot, and a negative balance is debt.
+
+The available balance is valued in the organisation's region currency
+(`readCreditBalanceValue`): holds come out of the oldest lots, a lot in the
+region currency is worth what was paid for its remaining credits at its own
+rate, so its value never moves with exchange rates, and credits bought in USD
+are valued at one rate the region row captures when the region is chosen
+(`billing_organisation_regions.usd_per_unit`, Stripe's live rate; 1 for US; a
+region chosen while no rate could be read captures it on its first valuation).
+That is the only change a region row accepts. One debit's value
+(`creditMovementValue`) comes from the lots it drew.
+
+A consumer on credits protocol 2.3.0 sees these values in the credits view
+(`readCreditDisplayValues`); charges stay in credits:
+
+- `credit_balance.value`: the available balance in the region currency, with a
+  label ("€42.18 left", or "€1.20 owed" for debt). Null while credits bought in
+  USD need a region rate that is not captured yet.
+- `recent_entries[].value`, a positive amount: a purchase is worth the lot it
+  opened (what was paid in the region currency, or a USD purchase's credits at
+  the captured rate); any other entry is its draws from (or returns to) its
+  lots, summed. Null for history from before lots.
+- `region_rate`: the rate the next credits used are valued at, so a product can
+  show an estimate beside a price in credits. It is the oldest remaining lot's
+  purchase rate when that lot is in the region currency (`purchase`), otherwise
+  the region's captured rate (`region`); `usd` for a US region or none.
+
+The same offers are projected for the covered services `nessie`, `deepwater`,
+`deeptest`, `salesnerd` and `docgen` that are registered and active. A covered
+one not yet registered is skipped until it is. Another active service (such as
+`deepsignal`) is not provisioned, and the catalog retires what it had given it
+beyond its original USD policy, offers and option. Each receives top-up and
+automatic-top-up policy plus the fifteen reload options above (consent version
+`credits-auto-top-up-v1`).
 
 DeepWater privacy is a separate US$50/month licensed Price with lookup key
 `deepwater_privacy_usd_month_v1`. It is bound to the active,
@@ -1667,3 +1789,37 @@ credits were consumed, provided no positive provider reservation is held. The
 additive 20261005103000 migration corrects the reservation guard's zero-held
 case; active held funds, verified adjustment provenance, immutable ledger
 entries, and the prohibition on unfunded usage debits remain enforced.
+
+## Organisation billing region (2026-10-12)
+
+Every organisation has one top-level billing region: **UK**, **US** or
+**Europe**. The region sets the currency of everything SMS: number prices,
+per-text prices, the SMS prepaid balance and number subscriptions (UK → GBP,
+US → USD, Europe → EUR). It is UOA-owned commercial state
+(`billing_organisation_regions`), chosen **once** by an organisation owner or
+admin and never changed: the database refuses any update with a trigger, and a
+second, different choice answers `409 BILLING_REGION_IMMUTABLE` (repeating the
+same choice changes nothing). Existing organisations are not backfilled; each
+chooses on first use. Until then SMS quotes, number purchases and SMS top-ups
+answer `409 BILLING_REGION_REQUIRED`.
+
+`POST /billing/v1/organisation-billing` returns `billing_region`: `region` and
+`currency` (both `null` until chosen), `suggested_region` and
+`suggested_currency` for prefilling the choice, and `can_set` (true only for an
+owner or admin while no region is chosen). The suggestion comes from the
+organisation's invoice-profile billing country: GB → UK; the EU, the other EEA
+members and Switzerland → Europe; anything else or no known country → US. A
+consumer that sends `x-uoa-billing-region-protocol: 1.1.0` (protocol package
+5.6.0) also gets `suggested_from`: `billing_country` when a billing country
+decided the suggestion (any country, the US included), `null` when no country is
+known and US is the default. Older consumers receive the view without it.
+`POST /billing/v1/organisation-billing/region` takes the subject fields plus
+`region` (`UK`, `US` or `EUROPE`) with the `CUSTOMER_LIFECYCLE` app key and a
+fresh `X-UOA-Actor` signed for that exact endpoint, and returns the same block.
+Products render the block and store nothing.
+
+**Known limitation: AI usage is USD-only, regardless of region.** Credits for
+AI usage, their top-ups, plans and Ledger settlement stay in USD for every
+organisation; the region affects SMS only. An organisation in the UK or Europe
+therefore holds a USD AI balance beside its GBP or EUR SMS balance.
+

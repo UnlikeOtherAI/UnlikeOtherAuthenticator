@@ -39,6 +39,7 @@ function renderChooser(
   fixture: ChooserFixture | null,
   pendingEmail: string | null = 'jo@example.com',
   teamHint?: string,
+  managementOrgId?: string,
 ): string {
   const choices: SessionChoices | null = fixture ? { creatable_orgs: [], ...fixture } : null;
   const search = teamHint
@@ -50,7 +51,7 @@ function renderChooser(
         <PopupProvider
           configUrl=""
           config={TEST_CONFIG}
-          initialSearch={search}
+          initialSearch={search + (managementOrgId ? `&management_org_id=${managementOrgId}` : '')}
           initialView="team-chooser"
           initialPendingEmail={pendingEmail}
           initialLoginToken={choices ? 'bridge.jwt' : null}
@@ -355,5 +356,31 @@ describe('TeamChooserPage SSR rendering', () => {
     });
 
     expect(html).toContain('src="/teams/t1/avatar"');
+  });
+});
+
+
+describe('organisation management destination', () => {
+  it('holds a one-team owner chooser and names the exact management destination', () => {
+    const html = renderChooser({ teams: [{teamId: 't1',orgId: 'o1',name: 'Team',role: 'owner',
+      orgName: 'Acme',can_manage_sso: true}], pending_invites: [],can_create_org: true }, null, 't1', 'o1');
+    expect(html).toContain('Manage single sign-on');
+    expect(html).toContain('Acme');
+    expect(html).not.toContain('Taking you');
+    expect(html).not.toContain('Create a team');
+  });
+  it('supports the canonical owner without a team', () => {
+    const html = renderChooser({teams: [],pending_invites: [],can_create_org: false,
+      manageable_orgs: [{orgId: 'o1',orgName: 'Acme'}]}, null, undefined, 'o1');
+    expect(html).toContain('Acme');
+    expect(html).toContain('Continue');
+  });
+  it('does not infer management from a role label or offer another organisation', () => {
+    const html = renderChooser({teams: [{teamId: 't1',orgId: 'o1',name: 'Team',role: 'owner',
+      orgName: 'Acme'}],pending_invites: [],can_create_org: false,
+      manageable_orgs: [{orgId: 'o2',orgName: 'Other'}]}, null, undefined, 'o1');
+    expect(html).toContain('This account cannot manage');
+    expect(html).toContain('Use another account');
+    expect(html).not.toContain('>Other<');
   });
 });

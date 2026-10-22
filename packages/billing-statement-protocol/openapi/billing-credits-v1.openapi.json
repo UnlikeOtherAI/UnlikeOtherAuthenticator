@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "UOA BillingCreditsV1 consumer API",
-    "version": "2.0.0",
+    "version": "2.3.0",
     "description": "Exact customer-facing shared team credits API. UOA returns display-ready values and capabilities; products never calculate balances, conversion, privacy filtering, or authorization."
   },
   "paths": {
@@ -2006,6 +2006,43 @@
                         }
                       }
                     },
+                    "value": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "amount",
+                            "amount_minor",
+                            "currency",
+                            "display"
+                          ],
+                          "properties": {
+                            "amount": {
+                              "type": "string",
+                              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                            },
+                            "amount_minor": {
+                              "type": "string",
+                              "pattern": "^(0|[1-9][0-9]*)$"
+                            },
+                            "currency": {
+                              "enum": [
+                                "USD",
+                                "EUR",
+                                "GBP"
+                              ]
+                            },
+                            "display": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "attribution": {
                       "oneOf": [
                         {
@@ -2611,6 +2648,43 @@
                         }
                       }
                     },
+                    "value": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "amount",
+                            "amount_minor",
+                            "currency",
+                            "display"
+                          ],
+                          "properties": {
+                            "amount": {
+                              "type": "string",
+                              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                            },
+                            "amount_minor": {
+                              "type": "string",
+                              "pattern": "^(0|[1-9][0-9]*)$"
+                            },
+                            "currency": {
+                              "enum": [
+                                "USD",
+                                "EUR",
+                                "GBP"
+                              ]
+                            },
+                            "display": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "attribution": {
                       "enum": [
                         "viewer",
@@ -2855,6 +2929,48 @@
               },
               "description": {
                 "type": "string"
+              },
+              "value": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "amount",
+                      "amount_minor",
+                      "currency",
+                      "display",
+                      "label"
+                    ],
+                    "properties": {
+                      "amount": {
+                        "type": "string",
+                        "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                      },
+                      "amount_minor": {
+                        "type": "string",
+                        "pattern": "^-?(0|[1-9][0-9]*)$"
+                      },
+                      "currency": {
+                        "enum": [
+                          "USD",
+                          "EUR",
+                          "GBP"
+                        ]
+                      },
+                      "display": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               }
             }
           },
@@ -2894,7 +3010,11 @@
                         "pattern": "^(0|[1-9][0-9]*)$"
                       },
                       "currency": {
-                        "const": "USD"
+                        "enum": [
+                          "USD",
+                          "EUR",
+                          "GBP"
+                        ]
                       },
                       "display": {
                         "type": "string"
@@ -3681,7 +3801,11 @@
                               "pattern": "^[1-9][0-9]*$"
                             },
                             "currency": {
-                              "const": "USD"
+                              "enum": [
+                                "USD",
+                                "EUR",
+                                "GBP"
+                              ]
                             },
                             "display": {
                               "type": "string"
@@ -3724,6 +3848,42 @@
                                   "type": "string"
                                 }
                               }
+                            }
+                          }
+                        },
+                        "credit_rate": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "currency",
+                            "usd_per_unit",
+                            "source",
+                            "as_of",
+                            "display"
+                          ],
+                          "properties": {
+                            "currency": {
+                              "enum": [
+                                "EUR",
+                                "GBP"
+                              ]
+                            },
+                            "usd_per_unit": {
+                              "type": "string",
+                              "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]+)?|0\\.[0-9]*[1-9][0-9]*)$"
+                            },
+                            "source": {
+                              "enum": [
+                                "stripe",
+                                "ecb"
+                              ]
+                            },
+                            "as_of": {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            "display": {
+                              "type": "string"
                             }
                           }
                         },
@@ -3952,6 +4112,36 @@
                       }
                     ]
                   },
+                  "threshold_value": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "amount",
+                      "amount_minor",
+                      "currency",
+                      "display"
+                    ],
+                    "properties": {
+                      "amount": {
+                        "type": "string",
+                        "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]+)?|0\\.[0-9]*[1-9][0-9]*)$"
+                      },
+                      "amount_minor": {
+                        "type": "string",
+                        "pattern": "^[1-9][0-9]*$"
+                      },
+                      "currency": {
+                        "enum": [
+                          "USD",
+                          "EUR",
+                          "GBP"
+                        ]
+                      },
+                      "display": {
+                        "type": "string"
+                      }
+                    }
+                  },
                   "refill_offer_id": {
                     "type": [
                       "string",
@@ -3979,7 +4169,11 @@
                             "pattern": "^[1-9][0-9]*$"
                           },
                           "currency": {
-                            "const": "USD"
+                            "enum": [
+                              "USD",
+                              "EUR",
+                              "GBP"
+                            ]
                           },
                           "display": {
                             "type": "string"
@@ -4010,7 +4204,11 @@
                         "pattern": "^(0|[1-9][0-9]*)$"
                       },
                       "currency": {
-                        "const": "USD"
+                        "enum": [
+                          "USD",
+                          "EUR",
+                          "GBP"
+                        ]
                       },
                       "display": {
                         "type": "string"
@@ -4038,7 +4236,11 @@
                             "pattern": "^(0|[1-9][0-9]*)$"
                           },
                           "currency": {
-                            "const": "USD"
+                            "enum": [
+                              "USD",
+                              "EUR",
+                              "GBP"
+                            ]
                           },
                           "display": {
                             "type": "string"
@@ -4221,6 +4423,36 @@
                             }
                           }
                         },
+                        "threshold_value": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "amount",
+                            "amount_minor",
+                            "currency",
+                            "display"
+                          ],
+                          "properties": {
+                            "amount": {
+                              "type": "string",
+                              "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]+)?|0\\.[0-9]*[1-9][0-9]*)$"
+                            },
+                            "amount_minor": {
+                              "type": "string",
+                              "pattern": "^[1-9][0-9]*$"
+                            },
+                            "currency": {
+                              "enum": [
+                                "USD",
+                                "EUR",
+                                "GBP"
+                              ]
+                            },
+                            "display": {
+                              "type": "string"
+                            }
+                          }
+                        },
                         "refill_offer_id": {
                           "type": "string",
                           "minLength": 1
@@ -4244,7 +4476,11 @@
                               "pattern": "^[1-9][0-9]*$"
                             },
                             "currency": {
-                              "const": "USD"
+                              "enum": [
+                                "USD",
+                                "EUR",
+                                "GBP"
+                              ]
                             },
                             "display": {
                               "type": "string"
@@ -4290,6 +4526,42 @@
                             }
                           }
                         },
+                        "credit_rate": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "currency",
+                            "usd_per_unit",
+                            "source",
+                            "as_of",
+                            "display"
+                          ],
+                          "properties": {
+                            "currency": {
+                              "enum": [
+                                "EUR",
+                                "GBP"
+                              ]
+                            },
+                            "usd_per_unit": {
+                              "type": "string",
+                              "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]+)?|0\\.[0-9]*[1-9][0-9]*)$"
+                            },
+                            "source": {
+                              "enum": [
+                                "stripe",
+                                "ecb"
+                              ]
+                            },
+                            "as_of": {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            "display": {
+                              "type": "string"
+                            }
+                          }
+                        },
                         "monthly_cap": {
                           "type": "object",
                           "additionalProperties": false,
@@ -4309,7 +4581,11 @@
                               "pattern": "^[1-9][0-9]*$"
                             },
                             "currency": {
-                              "const": "USD"
+                              "enum": [
+                                "USD",
+                                "EUR",
+                                "GBP"
+                              ]
                             },
                             "display": {
                               "type": "string"
@@ -4864,6 +5140,43 @@
                         }
                       }
                     },
+                    "value": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "amount",
+                            "amount_minor",
+                            "currency",
+                            "display"
+                          ],
+                          "properties": {
+                            "amount": {
+                              "type": "string",
+                              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                            },
+                            "amount_minor": {
+                              "type": "string",
+                              "pattern": "^(0|[1-9][0-9]*)$"
+                            },
+                            "currency": {
+                              "enum": [
+                                "USD",
+                                "EUR",
+                                "GBP"
+                              ]
+                            },
+                            "display": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "attribution": {
                       "oneOf": [
                         {
@@ -5067,6 +5380,43 @@
                         }
                       }
                     },
+                    "value": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "amount",
+                            "amount_minor",
+                            "currency",
+                            "display"
+                          ],
+                          "properties": {
+                            "amount": {
+                              "type": "string",
+                              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                            },
+                            "amount_minor": {
+                              "type": "string",
+                              "pattern": "^(0|[1-9][0-9]*)$"
+                            },
+                            "currency": {
+                              "enum": [
+                                "USD",
+                                "EUR",
+                                "GBP"
+                              ]
+                            },
+                            "display": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "attribution": {
                       "enum": [
                         "viewer",
@@ -5226,6 +5576,57 @@
                 }
               }
             }
+          },
+          "region_rate": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "currency",
+                  "usd_per_unit",
+                  "credits_per_unit",
+                  "source",
+                  "as_of",
+                  "display"
+                ],
+                "properties": {
+                  "currency": {
+                    "enum": [
+                      "USD",
+                      "EUR",
+                      "GBP"
+                    ]
+                  },
+                  "usd_per_unit": {
+                    "type": "string",
+                    "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]+)?|0\\.[0-9]*[1-9][0-9]*)$"
+                  },
+                  "credits_per_unit": {
+                    "type": "string",
+                    "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]+)?|0\\.[0-9]*[1-9][0-9]*)$"
+                  },
+                  "source": {
+                    "enum": [
+                      "usd",
+                      "purchase",
+                      "region"
+                    ]
+                  },
+                  "as_of": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "display": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         }
       },

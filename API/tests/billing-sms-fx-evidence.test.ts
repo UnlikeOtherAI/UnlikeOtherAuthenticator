@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseSmsFxEvidence, smsFinalUsdQuanta } from '../src/services/billing-sms-fx-evidence.service.js';
+import { parseSmsFxEvidence, smsCostReachesPrice, smsFinalUsdQuanta } from '../src/services/billing-sms-fx-evidence.service.js';
 
 const xml = '<gesmes:Envelope xmlns="http://www.ecb.int/vocabulary/2002-08-01/eurofxref">' +
   '<Cube><Cube time="2026-10-08"><Cube currency="USD" rate="1.1186"/></Cube></Cube></gesmes:Envelope>';
@@ -52,4 +52,26 @@ describe('UOA SMS FX and private rating', () => {
       direction: 'inbound', quantum: 1_000_000_000n })).toBe(1_150_000n);
   });
 
+
+  it('reads GBP from the same dated cube and refuses a detached or duplicated one', () => {
+    const now = new Date('2026-10-08T18:00:00Z');
+    const withGbp = xml.replace('<Cube currency="USD" rate="1.1186"/>',
+      '<Cube currency="USD" rate="1.1186"/><Cube currency="GBP" rate="0.8437"/>');
+    expect(parseSmsFxEvidence(withGbp, now)).toMatchObject({ usdPerEur: '1.1186', gbpPerEur: '0.8437' });
+    expect(parseSmsFxEvidence(xml, now).gbpPerEur).toBeNull();
+    expect(() => parseSmsFxEvidence(withGbp.replace('<Cube currency="GBP" rate="0.8437"/>',
+      '<Cube currency="GBP" rate="0.8437"/><Cube currency="GBP" rate="0.9"/>'), now)).toThrow();
+  });
+
+  it('compares a provider cost with a price across USD, EUR and GBP exactly', () => {
+    const rates = { usdPerEur: '1.1', gbpPerEur: '0.85' };
+    // USD 5.489 is EUR 4.99 exactly: reaching the price counts as below cost.
+    expect(smsCostReachesPrice({ costAmount: '5.489', costCurrency: 'USD', priceAmount: '4.99', priceCurrency: 'EUR', rates })).toBe(true);
+    expect(smsCostReachesPrice({ costAmount: '5.4889', costCurrency: 'USD', priceAmount: '4.99', priceCurrency: 'EUR', rates })).toBe(false);
+    expect(smsCostReachesPrice({ costAmount: '5.00', costCurrency: 'USD', priceAmount: '4.49', priceCurrency: 'GBP', rates })).toBe(false);
+    expect(smsCostReachesPrice({ costAmount: '6.00', costCurrency: 'USD', priceAmount: '4.49', priceCurrency: 'GBP', rates })).toBe(true);
+    expect(smsCostReachesPrice({ costAmount: '5.49', costCurrency: 'USD', priceAmount: '5.49', priceCurrency: 'USD', rates })).toBe(true);
+    expect(() => smsCostReachesPrice({ costAmount: '1', costCurrency: 'USD', priceAmount: '4.49', priceCurrency: 'GBP',
+      rates: { usdPerEur: '1.1', gbpPerEur: null } })).toThrow();
+  });
 });

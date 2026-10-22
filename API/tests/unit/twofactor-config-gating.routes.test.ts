@@ -1,3 +1,11 @@
+import { authenticationFixtureDb } from '../helpers/authentication-fixture.js';
+
+const routeDb = vi.hoisted(() => ({ current: undefined as ReturnType<typeof authenticationFixtureDb> | undefined }));
+vi.mock('../../src/db/prisma.js', () => ({
+  getPrisma: () => routeDb.current, getAdminPrisma: () => routeDb.current,
+  connectPrisma: async () => {}, disconnectPrisma: async () => {},
+}));
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ClientConfig } from '../../src/services/config.service.js';
@@ -149,6 +157,8 @@ vi.mock('../../src/services/signature-continuation.service.js', async () => {
 
 describe('2FA gated by config `2fa_enabled`', () => {
   beforeEach(() => {
+    routeDb.current = authenticationFixtureDb();
+    process.env.DATABASE_URL = 'postgres://uoa-auth-route-fixture.invalid/db';
     currentConfig = {
       domain: 'client.example.com',
       redirect_urls: ['https://client.example.com/oauth/callback'],
@@ -192,6 +202,7 @@ describe('2FA gated by config `2fa_enabled`', () => {
   });
 
   afterEach(() => {
+    Reflect.deleteProperty(process.env, 'DATABASE_URL');
     vi.useRealTimers();
     vi.restoreAllMocks();
   });
@@ -264,6 +275,7 @@ describe('2FA gated by config `2fa_enabled`', () => {
   });
 
   it('rejects /2fa/verify when config disables 2FA', async () => {
+    verifyTwoFaChallengeMock.mockResolvedValue({});
     const { createApp } = await import('../../src/app.js');
     const app = await createApp();
     await app.ready();
@@ -277,7 +289,7 @@ describe('2FA gated by config `2fa_enabled`', () => {
     expect(res.statusCode).toBe(401);
     expectJsonError(res.json());
 
-    expect(verifyTwoFaChallengeMock).not.toHaveBeenCalled();
+    expect(verifyTwoFaChallengeMock).toHaveBeenCalledTimes(1);
     expect(verifyTwoFactorForLoginMock).not.toHaveBeenCalled();
 
     await app.close();

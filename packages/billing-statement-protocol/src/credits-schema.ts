@@ -6,7 +6,7 @@ import {
   billingCreditsTopUpActionJsonSchema,
   nullableBillingCreditsAction,
 } from './credits-action-schema.js';
-import { creditAmountSchema, moneySchema } from './funding-schema-primitives.js';
+import { creditAmountSchema, moneySchema, positiveDecimalPattern } from './funding-schema-primitives.js';
 import { billingControlledByJsonSchema } from './org-billing-schema.js';
 import {
   billingCreditAttentionV1JsonSchema,
@@ -28,8 +28,38 @@ import { BILLING_CREDITS_SCHEMA_PATH, BILLING_CREDITS_SCHEMA_VERSION } from './c
 const signedCredits = creditAmountSchema({ signed: true });
 const positiveCredits = creditAmountSchema({ positive: true });
 const unsignedCredits = creditAmountSchema();
-const usdMoney = moneySchema({ usdOnly: true });
-const positivePaymentMoney = moneySchema({ positive: true, usdOnly: true });
+// A one-time purchase is paid in USD or the billing region's GBP or EUR (protocol 2.1.0).
+const purchaseCurrencies = ['USD', 'EUR', 'GBP'] as const;
+const purchaseMoney = moneySchema({ currencies: purchaseCurrencies });
+const positivePurchaseMoney = moneySchema({ positive: true, currencies: purchaseCurrencies });
+const creditRateSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['currency', 'usd_per_unit', 'source', 'as_of', 'display'],
+  properties: {
+    currency: { enum: ['EUR', 'GBP'] },
+    usd_per_unit: { type: 'string', pattern: positiveDecimalPattern },
+    source: { enum: ['stripe', 'ecb'] },
+    as_of: { type: 'string', format: 'date-time' },
+    display: { type: 'string' },
+  },
+} as const;
+
+// Credits protocol 2.3.0: a value in the region currency (negative for debt) and the rate behind estimates.
+const signedPurchaseMoney = moneySchema({ signed: true, currencies: purchaseCurrencies });
+const regionRateSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['currency', 'usd_per_unit', 'credits_per_unit', 'source', 'as_of', 'display'],
+  properties: {
+    currency: { enum: [...purchaseCurrencies] },
+    usd_per_unit: { type: 'string', pattern: positiveDecimalPattern },
+    credits_per_unit: { type: 'string', pattern: positiveDecimalPattern },
+    source: { enum: ['usd', 'purchase', 'region'] },
+    as_of: { type: 'string', format: 'date-time' },
+    display: { type: 'string', minLength: 1 },
+  },
+} as const;
 
 export const billingCreditsV1JsonSchema = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',
@@ -137,6 +167,16 @@ export const billingCreditsV1JsonSchema = {
         state: { enum: ['available', 'zero', 'debt'] },
         label: { type: 'string', minLength: 1 },
         description: { type: 'string' },
+        value: {
+          oneOf: [
+            {
+              ...signedPurchaseMoney,
+              required: [...signedPurchaseMoney.required, 'label'],
+              properties: { ...signedPurchaseMoney.properties, label: { type: 'string', minLength: 1 } },
+            },
+            { type: 'null' },
+          ],
+        },
       },
     },
     pending_credits: {
@@ -145,7 +185,7 @@ export const billingCreditsV1JsonSchema = {
       required: ['top_up_count', 'payment_amount', 'credits_received', 'label', 'description'],
       properties: {
         top_up_count: { type: 'integer', minimum: 0 },
-        payment_amount: { oneOf: [usdMoney, { type: 'null' }] },
+        payment_amount: { oneOf: [purchaseMoney, { type: 'null' }] },
         credits_received: unsignedCredits,
         label: { type: 'string' },
         description: { type: 'string' },
@@ -201,8 +241,9 @@ export const billingCreditsV1JsonSchema = {
                   key: { type: 'string', minLength: 1 },
                   name: { type: 'string' },
                   description: { type: 'string' },
-                  payment_amount: positivePaymentMoney,
+                  payment_amount: positivePurchaseMoney,
                   credits_received: positiveCredits,
+                  credit_rate: creditRateSchema,
                   available: { type: 'boolean' },
                   unavailable_reason: { type: ['string', 'null'] },
                   action: {
@@ -242,10 +283,12 @@ export const billingCreditsV1JsonSchema = {
             display_status: { type: 'string' },
             description: { type: 'string' },
             threshold: { oneOf: [unsignedCredits, { type: 'null' }] },
+            // Credits protocol 2.2.0: a GBP or EUR reload's threshold in its currency.
+            threshold_value: positivePurchaseMoney,
             refill_offer_id: { type: ['string', 'null'] },
-            monthly_cap: { oneOf: [positivePaymentMoney, { type: 'null' }] },
-            charged_this_month: usdMoney,
-            remaining_monthly_cap: { oneOf: [usdMoney, { type: 'null' }] },
+            monthly_cap: { oneOf: [positivePurchaseMoney, { type: 'null' }] },
+            charged_this_month: purchaseMoney,
+            remaining_monthly_cap: { oneOf: [purchaseMoney, { type: 'null' }] },
             payment_method: {
               oneOf: [
                 billingCreditsManagerPaymentMethodJsonSchema,
@@ -277,10 +320,12 @@ export const billingCreditsV1JsonSchema = {
                   label: { type: 'string' },
                   description: { type: 'string' },
                   threshold: unsignedCredits,
+                  threshold_value: positivePurchaseMoney,
                   refill_offer_id: { type: 'string', minLength: 1 },
-                  refill_payment_amount: positivePaymentMoney,
+                  refill_payment_amount: positivePurchaseMoney,
                   refill_credits_received: positiveCredits,
-                  monthly_cap: positivePaymentMoney,
+                  credit_rate: creditRateSchema,
+                  monthly_cap: positivePurchaseMoney,
                   setup_action: nullableBillingCreditsAction(
                     billingCreditsAutoTopUpSetupActionJsonSchema,
                   ),
@@ -313,5 +358,6 @@ export const billingCreditsV1JsonSchema = {
       type: 'array', maxItems: 5, uniqueItems: true, items: billingCreditAttentionV1JsonSchema,
     },
     funding_request: billingCreditFundingRequestActionV1JsonSchema,
+    region_rate: { oneOf: [regionRateSchema, { type: 'null' }] },
   },
 } as const;

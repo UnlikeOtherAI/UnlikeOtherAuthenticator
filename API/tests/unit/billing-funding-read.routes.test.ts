@@ -175,6 +175,10 @@ describe('shared credits and recurring add-on read routes', () => {
         actorToken: 'signed-actor',
         endpoint: '/billing/v1/credits',
         supportsBillingStatus: false,
+        supportsPurchaseCurrency: false,
+        supportsReloadCurrency: false,
+        supportsRegionValue: false,
+        log: expect.anything(),
         request: {
           product: 'deepwater',
           organisationId: 'org_example',
@@ -193,7 +197,49 @@ describe('shared credits and recurring add-on read routes', () => {
         payload: body,
       });
       expect(creditsService.getBillingCredits).toHaveBeenLastCalledWith(
-        expect.objectContaining({ supportsBillingStatus: true }),
+        expect.objectContaining({ supportsBillingStatus: true, supportsPurchaseCurrency: false }),
+      );
+      await app.inject({
+        method: 'POST',
+        url: '/billing/v1/credits',
+        headers: {
+          'x-uoa-app-key': 'uoa_app_key',
+          'x-uoa-actor': 'signed-actor',
+          'x-uoa-billing-credits-protocol': '2.1.0',
+        },
+        payload: body,
+      });
+      expect(creditsService.getBillingCredits).toHaveBeenLastCalledWith(
+        expect.objectContaining({ supportsBillingStatus: true, supportsPurchaseCurrency: true,
+          supportsReloadCurrency: false, supportsRegionValue: false }),
+      );
+      await app.inject({
+        method: 'POST',
+        url: '/billing/v1/credits',
+        headers: {
+          'x-uoa-app-key': 'uoa_app_key',
+          'x-uoa-actor': 'signed-actor',
+          'x-uoa-billing-credits-protocol': '2.2.0',
+        },
+        payload: body,
+      });
+      expect(creditsService.getBillingCredits).toHaveBeenLastCalledWith(
+        expect.objectContaining({ supportsBillingStatus: true, supportsPurchaseCurrency: true,
+          supportsReloadCurrency: true, supportsRegionValue: false }),
+      );
+      await app.inject({
+        method: 'POST',
+        url: '/billing/v1/credits',
+        headers: {
+          'x-uoa-app-key': 'uoa_app_key',
+          'x-uoa-actor': 'signed-actor',
+          'x-uoa-billing-credits-protocol': '2.3.0',
+        },
+        payload: body,
+      });
+      expect(creditsService.getBillingCredits).toHaveBeenLastCalledWith(
+        expect.objectContaining({ supportsBillingStatus: true, supportsPurchaseCurrency: true,
+          supportsReloadCurrency: true, supportsRegionValue: true }),
       );
     });
   });

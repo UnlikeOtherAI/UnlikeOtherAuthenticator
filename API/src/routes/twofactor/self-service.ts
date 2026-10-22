@@ -94,7 +94,7 @@ export function registerTwoFactorSelfServiceRoutes(app: FastifyInstance): void {
       if (body.setup_token) {
         const setupToken = body.setup_token;
         const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
-        const setup = await verifyTwoFaSetupToken({
+        const setup = await verifyTwoFaSetupToken({ prisma: request.adminDb,
           token: setupToken,
           sharedSecret: SHARED_SECRET,
           audience: getAuthServiceIdentifier(),
@@ -112,7 +112,7 @@ export function registerTwoFactorSelfServiceRoutes(app: FastifyInstance): void {
             },
             { prisma: tx },
           );
-          const lockedSetup = await verifyTwoFaSetupToken({
+          const lockedSetup = await verifyTwoFaSetupToken({ prisma: tx,
             token: setupToken,
             sharedSecret: SHARED_SECRET,
             audience: getAuthServiceIdentifier(),
@@ -181,7 +181,7 @@ export function registerTwoFactorSelfServiceRoutes(app: FastifyInstance): void {
 
       const { setup_token, code } = EnrollBodySchema.parse(request.body);
       const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
-      const setup = await verifyTwoFaSetupToken({
+      const setup = await verifyTwoFaSetupToken({ prisma: request.adminDb,
         token: setup_token,
         sharedSecret: SHARED_SECRET,
         audience: getAuthServiceIdentifier(),
@@ -210,7 +210,7 @@ export function registerTwoFactorSelfServiceRoutes(app: FastifyInstance): void {
           },
           { prisma },
         );
-        const lockedSetup = await verifyTwoFaSetupToken({
+        const lockedSetup = await verifyTwoFaSetupToken({ prisma: prisma,
           token: setup_token,
           sharedSecret: SHARED_SECRET,
           audience: getAuthServiceIdentifier(),
@@ -250,6 +250,8 @@ export function registerTwoFactorSelfServiceRoutes(app: FastifyInstance): void {
             requestAccess: lockedSetup.requestAccess,
             state: lockedSetup.state,
             authMethod: lockedSetup.authMethod ?? 'email_password',
+            authenticationEvidenceId: lockedSetup.authenticationEvidenceId,
+            managementIntentId: lockedSetup.managementIntentId,
             twoFaCompleted: true,
             codeChallenge: lockedSetup.codeChallenge,
             codeChallengeMethod: lockedSetup.codeChallengeMethod,
@@ -264,6 +266,8 @@ export function registerTwoFactorSelfServiceRoutes(app: FastifyInstance): void {
           result,
           userId: lockedSetup.userId,
           authMethod: lockedSetup.authMethod ?? 'email_password',
+            authenticationEvidenceId: lockedSetup.authenticationEvidenceId,
+            managementIntentId: lockedSetup.managementIntentId,
         };
       });
 

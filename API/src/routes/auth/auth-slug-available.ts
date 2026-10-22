@@ -61,7 +61,7 @@ export function registerAuthSlugAvailableRoute(app: FastifyInstance): void {
 
       const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
       // Verified, deliberately not consumed.
-      await verifyLoginSession({
+      await verifyLoginSession({ prisma: request.adminDb,
         token: login_token,
         config,
         configUrl,

@@ -184,6 +184,7 @@ Set via Cloud Run service config:
 | `BILLING_SMS_POLICY_AUTORENEW_ENABLED`      | Plain `true`/`false`, workflow default `false`. Starts the daily SMS policy renewal job (ECB rate within the band; route bounds whose account price did not rise); see `Docs/Requirements/sms-deployment.md` §3 |
 | `BILLING_SMS_POLICY_AUTORENEW_FX_BAND_BPS`  | Plain 1–2,000 basis points, default `500` (±5%): the largest move from the last accepted USD-per-EUR rate that the job accepts. Admin's Refresh and accept uses the same band |
 | `BILLING_SMS_POLICY_AUTORENEW_LOOKAHEAD_DAYS` | Plain 1–20 days, default `7`: how far ahead of expiry the job re-attests route bounds and raises route alerts |
+| `BILLING_CREDIT_FX_RATE_SOURCE`             | Plain `stripe` or `ecb`, workflow default `stripe`. The rate GBP and EUR credit top-ups are sold at: Stripe's live FX Quote base rate (`lock_duration: none`), or the accepted ECB snapshot from Admin › SMS policies. An unavailable source refuses with `BILLING_CREDIT_FX_RATE_UNAVAILABLE` and opens one `credit_fx_rate_unavailable` alert; UOA never switches source itself, so `ecb` is an explicit operator flip |
 | `LEDGER_BILLING_BASE_URL`                   | Plain credential-free HTTPS Ledger origin, canonical production value `https://ledger.unlikeotherai.com`                                                                                                                                                                                                                                                                                                                                                          |
 | `LEDGER_BILLING_APP_KEY`                    | Secret Manager: UOA's own dedicated, product-bound Ledger raw-metering reader app key. Never reuse a Nessie, DeepWater, DeepSignal, DeepTest, user, or webhook credential                                                                                                                                                                                                                                                                                         |
 | `LEDGER_BILLING_APP_KEY_ID`                 | Plain immutable Ledger record ID for that exact UOA app key; copied into the signed assertion's `azp` and verified by Ledger                                                                                                                                                                                                                                                                                                                                      |
@@ -318,7 +319,29 @@ runtime application config:
   requires the configured flag and all Ledger collector identifiers, keeps one
   Cloud Run instance warm, and disables CPU throttling so the recurring
   scheduler and pre-boundary safety timer run. False deploys with zero minimum
-  instances and throttled idle CPU.
+  instances and throttled idle CPU unless enterprise SSO custody is configured.
+
+Enterprise custody has its own deployment configuration, independent of billing:
+
+- `UOA_ENTERPRISE_SSO_CONFIGURED` defaults to `false`. Exact `true` requires
+  `ENTERPRISE_SSO_KMS_KEY` in the form
+  `projects/<project>/locations/<location>/keyRings/<ring>/cryptoKeys/<key>`.
+  The Cloud Run runtime service account needs encrypt/decrypt access to that
+  dedicated symmetric wrapping key; IAM and actual KMS operations must be
+  verified before preparing a product's assurance floor.
+- A configured deployment forwards the key resource and explicitly selects
+  `ENTERPRISE_SSO_CUSTODY_PROVIDER=gcp_kms`. The workflow replaces environment
+  bindings on each deploy, so console-only settings are not durable setup.
+  The wrapping key material stays in KMS. Local keyring custody remains an
+  explicit self-hosted/development configuration outside this Cloud Run workflow.
+- Enterprise configuration keeps one instance warm with idle CPU available for
+  durable revocation delivery and domain continuity checks, even when Stripe
+  collection is off. It neither enables a customer arrangement nor records
+  consumer readiness; those exact product/org operations remain separate.
+
+Unset both deployment variables for a deployment without enterprise custody.
+The workflow refuses a key with a disabled configuration flag and refuses an
+enabled flag without a valid key resource.
 
 Tariff-signing, billing-assertion, and UOA's Ledger collector credentials are
 wired on every deployment because they are required for signed entitlement and
@@ -626,16 +649,32 @@ Prerequisites:
   URL. It intentionally does not load or require unrelated API-server settings
   such as `SHARED_SECRET`, which keeps the documented two-secret operator job
   isolated from the runtime service configuration.
-- The database must contain exactly the active billing services `nessie`,
-  `deepwater`, `deepsignal`, and `deeptest`, and exactly one active,
-  feature-flags-enabled app identified as `deepwater-api`. Unexpected active
-  services or ambiguous app state fail closed.
-- Stripe must already contain one shared-credit Product, its four active
-  one-time USD Prices, and a distinct DeepWater privacy Product with its active
+- The catalog covers the billing services `nessie`, `deepwater`, `deeptest`,
+  `salesnerd` and `docgen`, and needs exactly one active, feature-flags-enabled
+  app identified as `deepwater-api`. Each covered service gets USD, EUR and GBP
+  funding policies, the 15 top-up offers, the USD `default` automatic top-up
+  option, and the 15 shared credit catalogs. A covered service that is not
+  registered yet is skipped (`billing_service_not_registered`); an active
+  service the catalog does not cover, such as `deepsignal`, is listed as
+  `billing_service_not_covered`. Both appear in the plan as `skipped`.
+  Ambiguous app state fails closed.
+- For an uncovered service, the plan retires (deactivates, never deletes) what
+  the catalog gave it beyond its original USD rows: its GBP and EUR funding
+  policies with their offers, and USD offers other than `credits_usd_10`, `_25`,
+  `_50` and `_100`. Each appears as `…_retired` with its id. Its USD funding
+  policy, those four USD offers and its USD reload option stay active and are
+  listed as `…_kept_uncovered` with their ids. Catalogs are shared by every
+  service and are never retired. The result's `outcome` is `changed` when the
+  run creates or retires anything, and `summary` counts `created`, `retired`,
+  `skipped` and `no_op`.
+- Stripe must already contain one shared-credit Product, its fifteen active
+  one-time Prices (USD, EUR and GBP at 10, 25, 50, 100 and 1,000), and a
+  distinct DeepWater privacy Product with its active
   monthly licensed USD Price. Prices are located by lookup key, so Stripe IDs
   are neither copied into source nor supplied on the command line.
 
-The exact Stripe contract is:
+The exact Stripe contract (shared by `nessie`, `deepwater`, `deeptest`,
+`salesnerd` and `docgen`) is:
 
 | Object                    | Lookup/terms                                                      | Exact metadata                                                                                      |
 | ------------------------- | ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
@@ -644,11 +683,16 @@ The exact Stripe contract is:
 | US$25 credit Price        | `uoa_credits_usd_25_v1`, one-time, 25,000 credits                 | `credits=25000`, `uoa_kind=team_credit_top_up`                                                      |
 | US$50 credit Price        | `uoa_credits_usd_50_v1`, one-time, 50,000 credits                 | `credits=50000`, `uoa_kind=team_credit_top_up`                                                      |
 | US$100 credit Price       | `uoa_credits_usd_100_v1`, one-time, 100,000 credits               | `credits=100000`, `uoa_kind=team_credit_top_up`                                                     |
+| US$1,000 credit Price     | `uoa_credits_usd_1000_v1`, one-time, 1,000,000 credits            | `credits=1000000`, `uoa_kind=team_credit_top_up`                                                    |
+| EUR credit Prices         | `uoa_credits_eur_{10,25,50,100,1000}_v1`, one-time, EUR 10–1,000  | `credits_basis=live_fx_rate`, `uoa_kind=team_credit_top_up`                                         |
+| GBP credit Prices         | `uoa_credits_gbp_{10,25,50,100,1000}_v1`, one-time, GBP 10–1,000  | `credits_basis=live_fx_rate`, `uoa_kind=team_credit_top_up`                                         |
 | DeepWater privacy Product | active, distinct from credit Product                              | `contract_version=1`, `uoa_addon_key=privacy`, `uoa_kind=recurring_addon`, `uoa_service=deep-water` |
 | DeepWater privacy Price   | `deepwater_privacy_usd_month_v1`, US$50/month, licensed, no meter | `uoa_addon_key=privacy`, `uoa_kind=recurring_addon`, `uoa_service=deep-water`                       |
 
-Metadata is an exact set: extra, absent, or changed keys are drift. Begin with
-the read-only operation:
+Metadata is an exact set: extra, absent, or changed keys are drift. A refusal
+prints the check that failed and the rows it saw, by id, for example
+`{"error":"BILLING_COMMERCIAL_CATALOG_LOCAL_DRIFT","check":"credit_offer_terms","details":{"offer_id":"…","fields":["name"]}}`;
+it never prints a secret. Begin with the read-only operation:
 
 ```bash
 STRIPE_SECRET_KEY='sk_test_...' DATABASE_ADMIN_URL='postgresql://...' \

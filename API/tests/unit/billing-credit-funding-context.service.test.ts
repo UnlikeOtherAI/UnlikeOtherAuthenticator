@@ -9,6 +9,7 @@ import {
 
 const account = { id: 'account_1', stripeAccountId: 'acct_uoa', livemode: false };
 const catalog = {
+  currency: 'USD',
   stripeLookupKey: 'uoa-credits-20k-v1',
   stripeProductId: 'prod_credits_20k',
   stripePriceId: 'price_credits_20k',

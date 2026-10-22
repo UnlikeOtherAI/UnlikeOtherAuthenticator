@@ -147,6 +147,8 @@ option by rebuilding its subject.
 Credit protocol 2.0.0 callers opt in to UOA's reconciliation status with
 `x-uoa-billing-credits-protocol: 2.0.0`. Older consumers receive the legacy
 shape and a reconciliation hold until they negotiate the status revision.
+Credit protocol 2.1.0 (package 5.5.0) keeps that status and adds top-ups in the
+billing region's currency; see "Credits bought in the region currency" below.
 
 Both credits and recurring add-ons use manager/member discriminated unions.
 Managers can receive exact-user breakdowns, payment-method display data, and
@@ -287,3 +289,108 @@ scoped SMS_RUNTIME credential; lifecycle consent and entitlement keys remain
 separate. Missing resource/grant/dispatch/standing retirement proof is explicitly
 typed and fenced, never inferred from a generic HTTP status. Unknown provider
 outcomes remain held and uncovered incoming charges remain uncollected liability.
+
+## Organisation billing region (5.3.0)
+
+`BillingRegionViewV1` (`billingRegionViewV1JsonSchema`) is the
+`billing_region` block of `POST /billing/v1/organisation-billing` and the
+response of `POST /billing/v1/organisation-billing/region`
+(`BILLING_ORG_REGION_PATH`, body `billingRegionSetRequestV1JsonSchema`: the
+subject fields plus `region`). A region (`UK`, `US`, `EUROPE`) is chosen once by
+an organisation owner or admin and never changes; it sets the SMS currency
+(`GBP`, `USD`, `EUR`). `region` and `currency` are null until chosen;
+`suggested_region` prefills the choice; `can_set` says whether this caller may
+choose now. A different second choice answers `BILLING_REGION_IMMUTABLE`; SMS
+pricing, purchase and top-up answer `BILLING_REGION_REQUIRED` until chosen. AI
+usage stays USD in every region.
+
+### Where the suggestion came from (5.6.0, region protocol 1.1.0)
+
+A consumer that sends `x-uoa-billing-region-protocol: 1.1.0`
+(`BILLING_REGION_PROTOCOL_HEADER`, `BILLING_REGION_PROTOCOL_VERSION`) on either
+endpoint also receives `suggested_from`: `billing_country` when
+`suggested_region` came from the organisation's invoice-profile billing country
+(any country, US included), or `null` when no billing country is known and the
+suggestion is the US default. Render a real country's suggestion as a
+prefill and the default as no preference; never infer either from
+`suggested_region`. Without the header the view keeps its 1.0.0 fields.
+
+## Region-currency quotes (5.4.0, SMS protocol 1.1.0)
+
+`BillingSmsFinalQuoteV1.currency` is `USD`, `EUR` or `GBP`. A monthly
+mobile-number quote is UOA's flat monthly price for the organisation's billing
+region currency (EUR 4.99, GBP 4.49, USD 5.49 at release), the same in every
+country, and its monthly subscription is charged in that currency. Until the
+region is chosen the quote answers `BILLING_REGION_REQUIRED`. Message quotes stay
+USD in 5.4.0. Products render the currency the quote carries and never assume USD.
+
+## Credits bought in the region currency (5.5.0, credits protocol 2.1.0)
+
+Credits stay one USD-denominated unit: 1,000 credits per USD, and every balance,
+charge and entry is in credits. An organisation whose billing region is UK or
+Europe buys them in GBP or EUR. A consumer that sends
+`x-uoa-billing-credits-protocol: 2.1.0` receives the one-time offers in the
+region's currency (USD until a region is chosen); an older consumer keeps seeing
+the USD offers, which stay purchasable.
+
+- `payment_amount` on an offer and on `pending_credits` is `USD`, `EUR` or `GBP`
+  (`BillingCreditPurchaseCurrency`).
+- A GBP or EUR offer carries `credit_rate` (`BillingCreditPurchaseRateV1`): USD
+  per unit, its source (`stripe` by default, `ecb` when the deployment selects
+  it) and a display line. `credits_received` is what today's rate buys; the exact
+  credits are fixed when the checkout is created and granted unchanged when the
+  payment succeeds. The credits equal the payment times Stripe's base rate,
+  rounded down to whole credits, with no buffer and no FX fee taken.
+- When no rate can be read the GBP or EUR offers are left out and the funding
+  description says so; a checkout answers `503 BILLING_CREDIT_FX_RATE_UNAVAILABLE`.
+  UOA never switches rate source on its own.
+- Automatic top-up stays USD in 5.5.0; see 5.7.0.
+
+## Reload in the region currency (5.7.0, credits protocol 2.2.0)
+
+A consumer that sends `x-uoa-billing-credits-protocol: 2.2.0` also receives the
+automatic reload options in the billing region's currency: one per refill
+amount (10, 25, 50, 100 and 1,000), each reloading when the balance is worth
+less than a fifth of its refill, up to four reloads a month. 2.2.0 includes
+everything in 2.1.0 and 2.0.0.
+
+- A GBP or EUR option carries `threshold_value` (its threshold in its
+  currency), `credit_rate`, and `refill_payment_amount` and `monthly_cap` in its
+  currency. `threshold` and `refill_credits_received` are what today's rate
+  makes of them. While no rate can be read those options are left out.
+- `automatic_top_up` carries `threshold_value`, `monthly_cap`,
+  `charged_this_month` and `remaining_monthly_cap` in the consented option's
+  currency.
+- The balance is compared with the threshold as a value: each credit lot at the
+  rate it was bought at, credits bought in USD at the rate the region captured
+  when it was chosen. Each reload reads the live rate as it is claimed, just
+  before its off-session PaymentIntent, and its credits are fixed then.
+- A failed reload pauses automatic top-up (`needs_review`) with one
+  `payment_action_required` attention item until the card is updated; there is
+  no retry.
+
+
+## Credits valued in the region currency (5.8.0, credits protocol 2.3.0)
+
+A consumer that sends `x-uoa-billing-credits-protocol: 2.3.0` also receives
+what credits are worth in the billing region's currency. Charges stay in
+credits; these are display values. 2.3.0 includes everything in 2.2.0.
+
+- `credit_balance.value` is the available balance in the region currency, with
+  a `label` such as "€42.18 left" (or "€1.20 owed" for debt, where the amount is
+  negative). Each credit lot counts at the rate it was bought at, so the value
+  never moves with exchange rates. Credits bought in USD before the region was
+  chosen count at the rate captured when it was chosen. It is null while that
+  rate is needed but not known yet. A US region (or none) sees dollars.
+- Each `recent_entries` item carries `value` as a positive amount; `direction`
+  gives the sign. A purchase is worth what was paid for it (credits bought in
+  USD in a GBP or EUR region, their credits at the captured rate). Any other
+  entry is what it drew from (or gave back to) each lot, summed, so a debit that
+  spans two lots is the sum of its two parts. It is null for history from
+  before lots.
+- `region_rate` {currency, usd_per_unit, credits_per_unit, source, as_of,
+  display} is the rate the next credits used are valued at, for showing an
+  estimate such as "≈ €0.04" beside a price in credits. `source` is `purchase`
+  (the oldest remaining credits' purchase rate), `region` (the captured region
+  rate, for credits bought in USD and for debt) or `usd`. It is null while the
+  rate is not known.

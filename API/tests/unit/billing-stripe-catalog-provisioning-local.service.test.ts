@@ -2,9 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { reconcileLocalStripeCommercialCatalog } from '../../src/services/billing-stripe-catalog-provisioning-local.service.js';
 import {
-  CREDIT_AUTO_TOP_UP_SPEC,
-  CREDIT_FUNDING_POLICY_SPEC,
+  CREDIT_AUTO_TOP_UP_OPTION_SPECS,
+  CREDIT_PURCHASE_CURRENCIES,
   CREDIT_TOP_UP_SPECS,
+  creditFundingPolicySpec,
   DEEPWATER_PRIVACY_SPEC,
   PROVISIONED_BILLING_SERVICE_IDENTIFIERS,
 } from '../../src/services/billing-stripe-catalog-provisioning-spec.js';
@@ -87,22 +88,23 @@ function emptyLocalCatalog(activeServices = services) {
 }
 
 function completeLocalCatalog() {
+  // One policy per service and purchase currency, each with its own currency's offers.
   const policies = new Map(
-    services.map((service) => [
-      service.id,
+    services.flatMap((service) => CREDIT_PURCHASE_CURRENCIES.map((currency) => [
+      `${service.id}:${currency}`,
       {
-        id: `policy_${service.identifier}`,
+        id: `policy_${service.identifier}_${currency}`,
         serviceId: service.id,
-        ...CREDIT_FUNDING_POLICY_SPEC,
+        ...creditFundingPolicySpec(currency),
         active: true,
         deactivatedAt: null,
       },
-    ]),
+    ])),
   );
   const offers = new Map(
     [...policies.values()].map((policy) => [
       policy.id,
-      CREDIT_TOP_UP_SPECS.map((spec) => ({
+      CREDIT_TOP_UP_SPECS.filter((spec) => spec.currency === policy.currency).map((spec) => ({
         id: `offer_${policy.serviceId}_${spec.key}`,
         policyId: policy.id,
         serviceId: policy.serviceId,
@@ -157,7 +159,7 @@ function completeLocalCatalog() {
       create,
     },
     billingCreditFundingPolicy: {
-      findMany: vi.fn(({ where }) => Promise.resolve([policies.get(where.serviceId)])),
+      findMany: vi.fn(({ where }) => Promise.resolve([policies.get(`${where.serviceId}:${where.currency}`)])),
       create,
     },
     billingCreditTopUpCatalog: {
@@ -169,7 +171,7 @@ function completeLocalCatalog() {
             accountId: 'account_1',
             key: spec.catalogKey,
             version: spec.catalogVersion,
-            currency: 'USD',
+            currency: spec.currency,
             paymentAmountMinor: spec.paymentAmountMinor,
             creditsReceivedMicrocredits: spec.creditsReceivedMicrocredits,
             stripeLookupKey: spec.stripeLookupKey,
@@ -186,24 +188,17 @@ function completeLocalCatalog() {
       create,
     },
     billingCreditAutoTopUpOption: {
+      // Every reload option of the policy's currency, each on its own refill offer.
       findMany: vi.fn(({ where }) => {
-        const refill = offers
-          .get(where.policyId)
-          ?.find((offer) => offer.key === CREDIT_AUTO_TOP_UP_SPEC.refillOfferKey);
-        return Promise.resolve([
-          {
-            id: `option_${where.policyId}`,
-            policyId: where.policyId,
-            serviceId: refill?.serviceId,
-            refillOfferId: refill?.id,
-            key: CREDIT_AUTO_TOP_UP_SPEC.key,
-            version: CREDIT_AUTO_TOP_UP_SPEC.version,
-            thresholdMicrocredits: CREDIT_AUTO_TOP_UP_SPEC.thresholdMicrocredits,
-            monthlyChargeCapMinor: CREDIT_AUTO_TOP_UP_SPEC.monthlyChargeCapMinor,
-            active: true,
-            deactivatedAt: null,
-          },
-        ]);
+        const policy = [...policies.values()].find((candidate) => candidate.id === where.policyId);
+        return Promise.resolve(CREDIT_AUTO_TOP_UP_OPTION_SPECS.filter((spec) => spec.currency === policy?.currency)
+          .map((spec) => {
+            const refill = offers.get(where.policyId)?.find((offer) => offer.key === spec.refillOfferKey);
+            return { id: `option_${where.policyId}_${spec.key}`, policyId: where.policyId,
+              serviceId: refill?.serviceId, refillOfferId: refill?.id, key: spec.key, version: spec.version,
+              thresholdMicrocredits: spec.thresholdMicrocredits, thresholdAmountMinor: spec.thresholdAmountMinor,
+              monthlyChargeCapMinor: spec.monthlyChargeCapMinor, active: true, deactivatedAt: null };
+          }));
       }),
       create,
     },
@@ -254,7 +249,9 @@ describe('local Stripe commercial catalog reconciliation', () => {
       write: false,
     });
 
-    expect(actions).toHaveLength(39);
+    // Per service: three currency policies, fifteen offers and fifteen reload options;
+    // then the account, fifteen credit catalogs and the four DeepWater rows.
+    expect(actions).toHaveLength(185);
     expect(actions.every((action) => action.outcome === 'created')).toBe(true);
     expect(actions).toContainEqual({
       resource: 'credit_auto_top_up_option',
@@ -267,6 +264,14 @@ describe('local Stripe commercial catalog reconciliation', () => {
       outcome: 'created',
     });
     expect(actions).toContainEqual({
+      resource: 'credit_top_up_offer',
+      key: 'nessie/credits_gbp_1000/v1',
+      outcome: 'created',
+    });
+    expect(actions.filter((action) => action.resource === 'credit_auto_top_up_option')).toHaveLength(75);
+    expect(actions).toContainEqual({ resource: 'credit_auto_top_up_option', key: 'nessie/refill_gbp_1000/v1',
+      outcome: 'created' });
+    expect(actions).toContainEqual({
       resource: 'recurring_addon_feature_policy',
       key: 'deepwater/privacy/team',
       outcome: 'created',
@@ -275,23 +280,97 @@ describe('local Stripe commercial catalog reconciliation', () => {
     expect(db.billingStripeAccount.create).not.toHaveBeenCalled();
   });
 
-  it('fails closed rather than leaving an unprovisioned active service', async () => {
-    const db = emptyLocalCatalog([
-      ...services,
-      { id: 'service_future', identifier: 'future', name: 'future', active: true },
-    ]);
-
-    await expect(
-      reconcileLocalStripeCommercialCatalog({ db: db as never, catalog, write: false }),
-    ).rejects.toThrow('BILLING_COMMERCIAL_CATALOG_LOCAL_DRIFT');
+  it('covers SalesNerd and not DeepSignal', () => {
+    expect(PROVISIONED_BILLING_SERVICE_IDENTIFIERS).toContain('salesnerd');
+    expect(PROVISIONED_BILLING_SERVICE_IDENTIFIERS).not.toContain('deepsignal');
   });
 
-  it('blocks provisioning until the operator registers DocGen', async () => {
+  it('leaves an active service the catalog does not cover unprovisioned and names it', async () => {
+    const db = emptyLocalCatalog([
+      ...services,
+      { id: 'service_deepsignal', identifier: 'deepsignal', name: 'DeepSignal', active: true },
+    ]);
+
+    const actions = await reconcileLocalStripeCommercialCatalog({ db: db as never, catalog, write: false });
+
+    expect(actions).toContainEqual({ resource: 'billing_service_not_covered', key: 'deepsignal', outcome: 'skipped',
+      id: 'service_deepsignal' });
+    expect(actions.some((action) => action.outcome === 'created' && action.key.startsWith('deepsignal/'))).toBe(false);
+  });
+
+  it('retires what the catalog gave an uncovered service, keeping its original USD rows', async () => {
+    const db = emptyLocalCatalog([
+      ...services,
+      { id: 'service_deepsignal', identifier: 'deepsignal', name: 'DeepSignal', active: true },
+    ]);
+    const signalPolicies = [
+      { id: 'policy_signal_usd', serviceId: 'service_deepsignal', currency: 'USD', version: 1, active: true },
+      { id: 'policy_signal_eur', serviceId: 'service_deepsignal', currency: 'EUR', version: 1, active: true },
+    ];
+    db.billingCreditFundingPolicy.findMany.mockImplementation(async ({ where }) =>
+      where.serviceId === 'service_deepsignal' ? signalPolicies : []);
+    const offer = (policyId: string, key: string) => ({ id: `offer_${key}`, policyId, key, version: 1, active: true });
+    db.billingCreditTopUpOffer.findMany.mockImplementation(async ({ where }) =>
+      where.policyId === 'policy_signal_usd'
+        ? ['credits_usd_10', 'credits_usd_100', 'credits_usd_1000'].map((key) => offer('policy_signal_usd', key))
+        : where.policyId === 'policy_signal_eur' ? [offer('policy_signal_eur', 'credits_eur_10')] : []);
+    db.billingCreditAutoTopUpOption.findMany.mockImplementation(async ({ where }) =>
+      where.policyId === 'policy_signal_usd'
+        ? [{ id: 'option_signal_default', policyId: 'policy_signal_usd', key: 'default', version: 1, active: true }]
+        : []);
+    Object.assign(db.billingCreditTopUpOffer, { update: vi.fn() });
+    Object.assign(db.billingCreditFundingPolicy, { update: vi.fn() });
+    Object.assign(db.billingCreditAutoTopUpOption, { update: vi.fn() });
+
+    const planned = await reconcileLocalStripeCommercialCatalog({ db: db as never, catalog, write: false });
+    const signal = planned.filter((action) => action.key.startsWith('deepsignal/'));
+
+    expect(signal).toEqual([
+      { resource: 'credit_top_up_offer_kept_uncovered', key: 'deepsignal/credits_usd_10/v1', outcome: 'skipped',
+        id: 'offer_credits_usd_10' },
+      { resource: 'credit_top_up_offer_kept_uncovered', key: 'deepsignal/credits_usd_100/v1', outcome: 'skipped',
+        id: 'offer_credits_usd_100' },
+      { resource: 'credit_top_up_offer_retired', key: 'deepsignal/credits_usd_1000/v1', outcome: 'retired',
+        id: 'offer_credits_usd_1000' },
+      { resource: 'credit_auto_top_up_option_kept_uncovered', key: 'deepsignal/default/v1', outcome: 'skipped',
+        id: 'option_signal_default' },
+      { resource: 'credit_funding_policy_kept_uncovered', key: 'deepsignal/USD/v1', outcome: 'skipped',
+        id: 'policy_signal_usd' },
+      { resource: 'credit_top_up_offer_retired', key: 'deepsignal/credits_eur_10/v1', outcome: 'retired',
+        id: 'offer_credits_eur_10' },
+      { resource: 'credit_funding_policy_retired', key: 'deepsignal/EUR/v1', outcome: 'retired',
+        id: 'policy_signal_eur' },
+    ]);
+    expect(db.billingCreditTopUpOffer.update).not.toHaveBeenCalled();
+
+    await reconcileLocalStripeCommercialCatalog({ db: db as never, catalog, write: true });
+    const deactivated = (fn: { mock: { calls: Array<[{ where: { id: string } }]> } }) =>
+      fn.mock.calls.map(([call]) => call.where.id);
+    expect(deactivated(db.billingCreditTopUpOffer.update as never)).toEqual(['offer_credits_usd_1000', 'offer_credits_eur_10']);
+    expect(deactivated(db.billingCreditFundingPolicy.update as never)).toEqual(['policy_signal_eur']);
+    expect(db.billingCreditAutoTopUpOption.update).not.toHaveBeenCalled();
+  });
+
+  it('provisions the registered products and names one not yet registered', async () => {
     const db = emptyLocalCatalog(services.filter((service) => service.identifier !== 'docgen'));
 
-    await expect(
-      reconcileLocalStripeCommercialCatalog({ db: db as never, catalog, write: false }),
-    ).rejects.toThrow('BILLING_COMMERCIAL_CATALOG_LOCAL_DRIFT');
+    const actions = await reconcileLocalStripeCommercialCatalog({ db: db as never, catalog, write: false });
+
+    expect(actions).toContainEqual({ resource: 'billing_service_not_registered', key: 'docgen', outcome: 'skipped' });
+    expect(actions.some((action) => action.key.startsWith('docgen/'))).toBe(false);
+    expect(actions).toContainEqual({ resource: 'credit_funding_policy', key: 'nessie/EUR/v1', outcome: 'created' });
+  });
+
+  it('names the check that found drift and the rows it saw', async () => {
+    const db = emptyLocalCatalog();
+    db.billingCreditFundingPolicy.findMany.mockImplementation(async ({ where }) =>
+      where.serviceId === 'service_nessie' && where.currency === 'USD'
+        ? [{ id: 'policy_retired', serviceId: 'service_nessie', currency: 'USD', version: 1, active: false }]
+        : []);
+
+    await expect(reconcileLocalStripeCommercialCatalog({ db: db as never, catalog, write: false }))
+      .rejects.toMatchObject({ message: 'BILLING_COMMERCIAL_CATALOG_LOCAL_DRIFT', check: 'credit_policy_version_inactive',
+        details: { service: 'nessie', currency: 'USD', policy_id: 'policy_retired' } });
   });
 
   it('is a complete no-op when every immutable row is already exact', async () => {
@@ -302,7 +381,9 @@ describe('local Stripe commercial catalog reconciliation', () => {
       write: true,
     });
 
-    expect(actions).toHaveLength(39);
+    // Per service: three currency policies, fifteen offers and fifteen reload options;
+    // then the account, fifteen credit catalogs and the four DeepWater rows.
+    expect(actions).toHaveLength(185);
     expect(actions.every((action) => action.outcome === 'no-op')).toBe(true);
     expect(db.featureFlagDefinition.create).not.toHaveBeenCalled();
     expect(db.billingCreditTopUpCatalog.update).not.toHaveBeenCalled();

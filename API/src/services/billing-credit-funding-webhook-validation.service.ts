@@ -1,10 +1,12 @@
 import { AppError } from '../utils/errors.js';
 
-export function requireUsd(value: string): 'USD' {
-  if (value.toUpperCase() !== 'USD') {
+/** A currency UOA sells credits in: USD, or a billing region's GBP or EUR. */
+export function requireCreditCurrency(value: string): 'USD' | 'EUR' | 'GBP' {
+  const code = value.toUpperCase();
+  if (code !== 'USD' && code !== 'EUR' && code !== 'GBP') {
     throw new AppError('BAD_REQUEST', 400, 'STRIPE_CREDIT_CURRENCY_INVALID');
   }
-  return 'USD';
+  return code;
 }
 
 export function exactMinor(value: number): bigint {

@@ -29,6 +29,8 @@ export function SetPasswordForm(): React.JSX.Element {
     startTwoFactorSetup,
     setNotice,
     requestAccess,
+    state,
+    beginRegistration,
   } = usePopup();
 
   const [name, setName] = useState('');
@@ -118,6 +120,7 @@ export function SetPasswordForm(): React.JSX.Element {
       query.code_challenge_method = codeChallengeMethod;
     }
     if (requestAccess) query.request_access = true;
+    if (state) query.state = state;
 
     // F6: optional, and only on the registration branch — a password reset is an existing
     // account, whose name is not this form's business. The server stores it only while the
@@ -150,6 +153,7 @@ export function SetPasswordForm(): React.JSX.Element {
       setNotice,
     });
     if (!applied) setError(t('form.setPassword.error'));
+    else beginRegistration(null);
   }
 
   if (success) {

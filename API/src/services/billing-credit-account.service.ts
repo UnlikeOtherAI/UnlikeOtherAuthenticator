@@ -17,7 +17,7 @@ export type CreditCollectionContext = {
   stripeCollectionEnabled: boolean;
   stripe?: Pick<
     Stripe,
-    'checkout' | 'paymentIntents' | 'paymentMethods' | 'prices' | 'products'
+    'checkout' | 'paymentIntents' | 'paymentMethods' | 'prices' | 'products' | 'rawRequest'
   > | null;
 };
 

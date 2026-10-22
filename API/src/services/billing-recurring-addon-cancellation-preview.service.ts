@@ -23,6 +23,7 @@ import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
 import { resolveEffectiveTariffContext } from './billing-entitlement.service.js';
 import { resolveBillingFundingViewer } from './billing-funding-viewer.service.js';
 import {
+  smsNumberCustomerScopeKey,
   assertCanManageRecurringAddonScope,
   recurringAddonSubjectFingerprint,
   type RecurringAddonScope,
@@ -59,9 +60,12 @@ export function scopeForSubscription(
     teamId: subscription.teamId,
     subscribingUserId: subscription.subscribingUserId,
     customerScope: teamCustomer ? BillingAssignmentScope.TEAM : BillingAssignmentScope.ORGANISATION,
+    // SMS numbers bill through their own per-currency Customer.
     customerScopeKey: teamCustomer
       ? `${subscription.orgId}:${subscription.teamId}`
-      : subscription.orgId,
+      : subscription.offer?.resourceKind === 'sms_mobile_number'
+        ? smsNumberCustomerScopeKey(subscription.orgId, subscription.offer.currency)
+        : subscription.orgId,
     customerTeamId: teamCustomer ? subscription.teamId : null,
   };
 }

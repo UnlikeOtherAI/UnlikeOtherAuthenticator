@@ -1,3 +1,11 @@
+import { authenticationFixtureDb } from '../helpers/authentication-fixture.js';
+
+const routeDb = vi.hoisted(() => ({ current: undefined as ReturnType<typeof authenticationFixtureDb> | undefined }));
+vi.mock('../../src/db/prisma.js', () => ({
+  getPrisma: () => routeDb.current, getAdminPrisma: () => routeDb.current,
+  connectPrisma: async () => {}, disconnectPrisma: async () => {},
+}));
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { JWTPayload } from 'jose';
 
@@ -139,13 +147,15 @@ async function runCallback() {
 
 describe('GET /auth/callback/:provider team selection', () => {
   beforeEach(() => {
+    routeDb.current = authenticationFixtureDb();
+    process.env.DATABASE_URL = 'postgres://uoa-auth-route-fixture.invalid/db';
     process.env.NODE_ENV = 'test';
     process.env.SHARED_SECRET = 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER = 'uoa-auth-service';
     process.env.CONFIG_JWKS_URL = 'https://auth.example.com/.well-known/jwks.json';
     process.env.GOOGLE_CLIENT_ID = 'google-client-id';
     process.env.GOOGLE_CLIENT_SECRET = 'google-client-secret';
-    delete process.env.DATABASE_URL;
+    process.env.DATABASE_URL = 'postgres://uoa-auth-route-fixture.invalid/db';
 
     readConfigJwtFromTrustedSourceMock.mockReset().mockResolvedValue('config-jwt');
     verifyConfigJwtSignatureMock.mockReset().mockResolvedValue({} as JWTPayload);
@@ -188,6 +198,7 @@ describe('GET /auth/callback/:provider team selection', () => {
   });
 
   afterEach(() => {
+    Reflect.deleteProperty(process.env, 'DATABASE_URL');
     vi.restoreAllMocks();
   });
 
@@ -222,6 +233,7 @@ describe('GET /auth/callback/:provider team selection', () => {
     expect(location.searchParams.get('code_challenge_method')).toBe('S256');
     expect(signLoginSessionMock).toHaveBeenCalledWith(
       expect.objectContaining({ authMethod: 'google' }),
+      expect.objectContaining({ prisma: expect.anything(), verifiedEvent: expect.anything() }),
     );
     expect(finalizeAuthenticatedUserMock).not.toHaveBeenCalled();
     expect(resolveTwoFaPolicyMock).not.toHaveBeenCalled();
@@ -280,6 +292,7 @@ describe('GET /auth/callback/:provider team selection', () => {
   });
 
   it('carries the auto-selected team into required 2FA enrollment', async () => {
+    routeDb.current = authenticationFixtureDb({ twoFaEnabled: false });
     resolveTwoFaPolicyMock.mockResolvedValue('REQUIRED');
     startTwoFactorSetupMock.mockResolvedValue({
       setup_token: 'setup-token',
@@ -353,6 +366,7 @@ describe('GET /auth/callback/:provider team selection', () => {
   });
 
   it('pre-binds the recognized product team before required social enrollment', async () => {
+    routeDb.current = authenticationFixtureDb({ twoFaEnabled: false });
     validateConfigFieldsMock.mockReturnValue(
       baseConfig({
         '2fa_enabled': true,

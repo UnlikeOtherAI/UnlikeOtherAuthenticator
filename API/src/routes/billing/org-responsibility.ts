@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
+import { z } from 'zod';
 
 import { requireBillingLifecycleAppKey } from '../../middleware/billing-app-auth.js';
 import { BillingOrgResponsibilityBlockedError } from '../../services/billing-org-responsibility-guard.service.js';
@@ -7,6 +8,13 @@ import {
   readOrgBillingResponsibility,
   releaseOrgBillingResponsibility,
 } from '../../services/billing-org-responsibility-lifecycle.service.js';
+import {
+  BILLING_REGION_PROTOCOL_HEADER,
+  BILLING_REGION_PROTOCOL_VERSION,
+} from '../../contracts/billing-statement-v1.js';
+import {
+  BILLING_REGIONS, setOrganisationBillingRegion, type BillingRegion, type BillingRegionViewV1,
+} from '../../services/billing-organisation-region.service.js';
 import { AppError } from '../../utils/errors.js';
 import { BillingSubjectRequestSchema, readBillingActorHeader } from './billing-request.js';
 
@@ -15,6 +23,31 @@ export const BILLING_ORG_RESPONSIBILITY_ASSUME_PATH =
   '/billing/v1/organisation-billing/assume' as const;
 export const BILLING_ORG_RESPONSIBILITY_RELEASE_PATH =
   '/billing/v1/organisation-billing/release' as const;
+export const BILLING_ORG_REGION_PATH = '/billing/v1/organisation-billing/region' as const;
+
+const regionSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['region', 'currency', 'suggested_region', 'suggested_currency', 'can_set'],
+  properties: {
+    region: { type: ['string', 'null'], enum: [...BILLING_REGIONS, null] },
+    currency: { type: ['string', 'null'], enum: ['GBP', 'USD', 'EUR', null] },
+    suggested_region: { type: 'string', enum: BILLING_REGIONS },
+    suggested_currency: { type: 'string', enum: ['GBP', 'USD', 'EUR'] },
+    suggested_from: { type: ['string', 'null'], enum: ['billing_country', null] },
+    can_set: { type: 'boolean' },
+  },
+} as const;
+
+/** `suggested_from` reaches only consumers on region protocol 1.1.0; older ones keep the 1.0.0 view. */
+function negotiatedRegion(request: FastifyRequest, view: BillingRegionViewV1) {
+  if (request.headers[BILLING_REGION_PROTOCOL_HEADER] === BILLING_REGION_PROTOCOL_VERSION) return view;
+  const { suggested_from: _omitted, ...older } = view;
+  return older;
+}
+const RegionRequestSchema = BillingSubjectRequestSchema.extend({
+  region: z.enum(BILLING_REGIONS as [BillingRegion, ...BillingRegion[]]),
+}).strict();
 
 const responseSchema = {
   type: 'object',
@@ -27,6 +60,7 @@ const responseSchema = {
     released_at: { type: ['string', 'null'] },
     deactivated_team_auto_top_ups: { type: 'integer' },
     can_manage: { type: 'boolean' },
+    billing_region: regionSchema,
   },
 } as const;
 
@@ -84,8 +118,10 @@ function blockedBody(error: BillingOrgResponsibilityBlockedError) {
 }
 
 export function registerBillingOrgResponsibilityRoutes(app: FastifyInstance): void {
-  const parse = (request: FastifyRequest) => {
-    const body = BillingSubjectRequestSchema.parse(request.body);
+  const parse = (
+    request: FastifyRequest,
+    body: z.infer<typeof BillingSubjectRequestSchema> = BillingSubjectRequestSchema.parse(request.body),
+  ) => {
     const credential = request.billingAppKey;
     if (!credential) throw new AppError('UNAUTHORIZED', 401);
     return {
@@ -112,7 +148,22 @@ export function registerBillingOrgResponsibilityRoutes(app: FastifyInstance): vo
         endpoint: BILLING_ORG_RESPONSIBILITY_READ_PATH,
       });
       reply.header('Cache-Control', 'private, no-store');
-      return reply.send(state);
+      return reply.send({ ...state, billing_region: negotiatedRegion(request, state.billing_region) });
+    },
+  );
+
+  app.post(
+    BILLING_ORG_REGION_PATH,
+    {
+      preHandler: [requireBillingLifecycleAppKey],
+      schema: { response: { 200: regionSchema } },
+    },
+    async (request, reply) => {
+      const { region, ...subject } = RegionRequestSchema.parse(request.body);
+      const view = await setOrganisationBillingRegion({ ...parse(request, subject), region,
+        endpoint: BILLING_ORG_REGION_PATH });
+      reply.header('Cache-Control', 'private, no-store');
+      return reply.send(negotiatedRegion(request, view));
     },
   );
 

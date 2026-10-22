@@ -13,7 +13,7 @@ const positiveUsdEquivalentPattern =
   '^(?:[1-9][0-9]*(?:\\.[0-9]{1,9})?|0\\.(?=[0-9]{1,9}$)[0-9]*[1-9][0-9]*)$';
 
 export function moneySchema(
-  options: { signed?: boolean; positive?: boolean; usdOnly?: boolean } = {},
+  options: { signed?: boolean; positive?: boolean; usdOnly?: boolean; currencies?: readonly string[] } = {},
 ) {
   const amountPattern = options.signed
     ? signedDecimalPattern
@@ -32,7 +32,11 @@ export function moneySchema(
     properties: {
       amount: { type: 'string', pattern: amountPattern },
       amount_minor: { type: 'string', pattern: minorPattern },
-      currency: options.usdOnly ? { const: 'USD' } : { type: 'string', pattern: '^[A-Z]{3}$' },
+      currency: options.usdOnly
+        ? { const: 'USD' }
+        : options.currencies
+          ? { enum: [...options.currencies] }
+          : { type: 'string', pattern: '^[A-Z]{3}$' },
       display: { type: 'string' },
     },
   } as const;

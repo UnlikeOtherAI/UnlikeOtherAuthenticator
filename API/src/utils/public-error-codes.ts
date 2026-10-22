@@ -4,6 +4,13 @@
 // enumeration oracle. Add a code here only when a caller must branch on it and
 // the code reveals nothing the caller is not already entitled to know.
 export const PRODUCTION_PUBLIC_ERROR_CODES = new Set([
+  // These owner-session outcomes reveal no membership directory or upstream identity.
+  'SSO_MANAGEMENT_REAUTH_REQUIRED',
+  'SSO_MANAGEMENT_ACCESS_WITHDRAWN',
+  'SSO_REVISION_CONFLICT',
+  'SSO_ACTIVATION_NOT_READY',
+  'SSO_RECOVERY_NOT_READY',
+  'SSO_IDENTITY_MIGRATION_REQUIRED',
   'PASSWORD_POLICY_VIOLATION',
   'MISSING_PASSWORD',
   'INVALID_TOKEN',
@@ -66,6 +73,9 @@ export const PRODUCTION_PUBLIC_ERROR_CODES = new Set([
   // queue. Products branch on it to back off and retry after `Retry-After`. Not an oracle: it
   // says nothing about any user, domain or record — only that this instance is busy.
   'PRODUCT_API_BUSY',
+  // Key retrieval was temporarily unavailable, not a rejected user or signature.
+  // Products retry without ending the session; no subject or key details are exposed.
+  'INTEGRATION_JWKS_UNAVAILABLE',
   // Admin › SMS policies › Refresh and accept, reached only by an authenticated platform superuser:
   // the Admin says which manual review to open instead. Not an oracle — the operator already sees
   // the accepted rates these codes compare against.
@@ -74,4 +84,18 @@ export const PRODUCTION_PUBLIC_ERROR_CODES = new Set([
   // Add country, also superuser-only: the account's Pricing API currency is one the bound rule
   // does not document, so the Admin points to manual evidence for that route.
   'BILLING_SMS_ROUTE_RULE_UNSUPPORTED',
+  // An organisation's one-time billing region: REQUIRED tells the product to ask an owner or admin
+  // to choose it before SMS pricing, purchase or top-up; IMMUTABLE that it was already chosen. Both
+  // follow fresh actor authentication and name nothing beyond the caller's own organisation.
+  'BILLING_REGION_REQUIRED',
+  'BILLING_REGION_IMMUTABLE',
+  // A product's monthly SMS number quote for a country whose provider rental reaches the flat
+  // price: the product says numbers there are not offered. It names no cost or margin.
+  'BILLING_SMS_MONTHLY_PRICE_BELOW_COST',
+  // A GBP or EUR credit top-up while the purchase rate cannot be read: the product says purchases
+  // in that currency are briefly unavailable. It names no rate, source or account detail.
+  'BILLING_CREDIT_FX_RATE_UNAVAILABLE',
+  // A superuser's sign-up funnel period is malformed, reversed or too long: Admin asks for a valid
+  // range. Only the superuser-only /internal/admin/auth-funnel route throws it.
+  'INVALID_DATE_RANGE',
 ]);

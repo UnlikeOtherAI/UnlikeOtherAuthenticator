@@ -98,6 +98,7 @@ organisation and the product policy live:
 - \`avatarImageUrl\` — the public, credential-free \`<PUBLIC_BASE_URL>/teams/<teamId>/avatar\` form.
   It is never null and resolves uploaded image → proxied \`iconUrl\` → deterministic generated image,
   so a native or browser client renders this field directly instead of fetching \`iconUrl\` itself.
+  Its \`?v=\` changes whenever the team or its avatar does, so render the URL exactly as given.
 - \`pending_invites[]\` — every actionable invitation addressed to the caller (same eligibility as
   the team chooser: unaccepted/undeclined/unrevoked, not expired, and not still awaiting
   member-invite approval). Its organisation reach is the directory's own: every organisation on

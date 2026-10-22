@@ -26,12 +26,15 @@ jobs:
       STRIPE_BILLING_ENABLED: ${{ vars.STRIPE_BILLING_ENABLED || 'false' }}
       UOA_STRIPE_BILLING_CONFIGURED: ${{ vars.UOA_STRIPE_BILLING_CONFIGURED || 'false' }}
       UOA_SMS_CONFIGURED: ${{ vars.UOA_SMS_CONFIGURED || 'false' }}
+      UOA_ENTERPRISE_SSO_CONFIGURED: ${{ vars.UOA_ENTERPRISE_SSO_CONFIGURED || 'false' }}
+      ENTERPRISE_SSO_KMS_KEY: ${{ vars.ENTERPRISE_SSO_KMS_KEY }}
       BILLING_SMS_ENABLED: ${{ vars.BILLING_SMS_ENABLED || 'false' }}
       BILLING_SMS_TWILIO_REGION: ${{ vars.BILLING_SMS_TWILIO_REGION || 'us1' }}
       UOA_SMS_PRICING_MODE: ${{ vars.UOA_SMS_PRICING_MODE || 'legacy' }}
       BILLING_SMS_POLICY_AUTORENEW_ENABLED: ${{ vars.BILLING_SMS_POLICY_AUTORENEW_ENABLED || 'false' }}
       BILLING_SMS_POLICY_AUTORENEW_FX_BAND_BPS: ${{ vars.BILLING_SMS_POLICY_AUTORENEW_FX_BAND_BPS || '500' }}
       BILLING_SMS_POLICY_AUTORENEW_LOOKAHEAD_DAYS: ${{ vars.BILLING_SMS_POLICY_AUTORENEW_LOOKAHEAD_DAYS || '7' }}
+      BILLING_CREDIT_FX_RATE_SOURCE: ${{ vars.BILLING_CREDIT_FX_RATE_SOURCE || 'stripe' }}
       LEDGER_BILLING_BASE_URL: ${{ vars.LEDGER_BILLING_BASE_URL || 'https://ledger.unlikeotherai.com' }}
       LEDGER_BILLING_APP_KEY_ID: ${{ vars.LEDGER_BILLING_APP_KEY_ID }}
       LEDGER_BILLING_ASSERTION_AUDIENCE: ${{ vars.LEDGER_BILLING_ASSERTION_AUDIENCE || 'https://ledger.unlikeotherai.com' }}
@@ -133,6 +136,10 @@ jobs:
             us1|ie1) ;;
             *) echo "BILLING_SMS_TWILIO_REGION must be us1 or ie1"; exit 1 ;;
           esac
+          case "$BILLING_CREDIT_FX_RATE_SOURCE" in
+            stripe|ecb) ;;
+            *) echo "BILLING_CREDIT_FX_RATE_SOURCE must be stripe or ecb"; exit 1 ;;
+          esac
           case "$UOA_SMS_PRICING_MODE" in
             legacy|provider_markup) ;;
             *) echo "UOA_SMS_PRICING_MODE must be legacy or provider_markup"; exit 1 ;;
@@ -175,6 +182,24 @@ jobs:
             done
           fi
 
+      - name: Validate enterprise SSO deployment configuration
+        run: |
+          case "$UOA_ENTERPRISE_SSO_CONFIGURED" in
+            true)
+              if ! [[ "$ENTERPRISE_SSO_KMS_KEY" =~ ^projects/[a-zA-Z0-9._-]+/locations/[a-zA-Z0-9_-]+/keyRings/[a-zA-Z0-9_-]+/cryptoKeys/[a-zA-Z0-9_-]+$ ]]; then
+                echo "ENTERPRISE_SSO_KMS_KEY must name the configured Cloud KMS wrapping key"
+                exit 1
+              fi
+              ;;
+            false)
+              if [[ -n "$ENTERPRISE_SSO_KMS_KEY" ]]; then
+                echo "A configured enterprise wrapping key requires UOA_ENTERPRISE_SSO_CONFIGURED=true"
+                exit 1
+              fi
+              ;;
+            *) echo "UOA_ENTERPRISE_SSO_CONFIGURED must be exactly true or false"; exit 1 ;;
+          esac
+
       - name: Deploy to Cloud Run
         id: deploy
         # Secrets MUST come from GCP Secret Manager via --set-secrets, not the
@@ -195,6 +220,7 @@ jobs:
           secret_vars="DATABASE_URL=uoa-auth-database-url:latest,SHARED_SECRET=uoa-auth-shared-secret:latest,GOOGLE_CLIENT_ID=uoa-auth-google-client-id:latest,GOOGLE_CLIENT_SECRET=uoa-auth-google-client-secret:latest,SMTP_PASSWORD=uoa-auth-smtp-password:latest,ADMIN_ACCESS_TOKEN_SECRET=uoa-admin-access-token-secret:latest,ADMIN_CONFIG_JWT=uoa-admin-config-jwt:latest,CONFIG_JWKS_JSON=uoa-auth-config-jwks-json:latest,DATABASE_ADMIN_URL=uoa-auth-database-admin-url:latest,MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK=uoa-auth-mcp-oauth-access-token-private-jwk:latest,TARIFF_SNAPSHOT_PRIVATE_JWK=uoa-auth-tariff-snapshot-private-jwk:latest,TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON=uoa-auth-tariff-snapshot-public-jwks-json:latest,UOA_BILLING_ASSERTION_SIGNING_PRIVATE_JWK=uoa-auth-billing-assertion-private-jwk:latest,UOA_BILLING_ASSERTION_PUBLIC_JWKS_JSON=uoa-auth-billing-assertion-public-jwks-json:latest,LEDGER_BILLING_APP_KEY=uoa-auth-ledger-billing-app-key:latest"
           env_vars="$env_vars,BILLING_SMS_ENABLED=$BILLING_SMS_ENABLED,BILLING_SMS_TWILIO_REGION=$BILLING_SMS_TWILIO_REGION,UOA_SMS_PRICING_MODE=$UOA_SMS_PRICING_MODE"
           env_vars="$env_vars,BILLING_SMS_POLICY_AUTORENEW_ENABLED=$BILLING_SMS_POLICY_AUTORENEW_ENABLED,BILLING_SMS_POLICY_AUTORENEW_FX_BAND_BPS=$BILLING_SMS_POLICY_AUTORENEW_FX_BAND_BPS,BILLING_SMS_POLICY_AUTORENEW_LOOKAHEAD_DAYS=$BILLING_SMS_POLICY_AUTORENEW_LOOKAHEAD_DAYS"
+          env_vars="$env_vars,BILLING_CREDIT_FX_RATE_SOURCE=$BILLING_CREDIT_FX_RATE_SOURCE"
           if [[ "$UOA_SMS_CONFIGURED" == "true" ]]; then
             secret_vars="$secret_vars,BILLING_SMS_TWILIO_ACCOUNT_SID=uoa-auth-sms-twilio-account-sid:latest,BILLING_SMS_TWILIO_API_KEY_SID=uoa-auth-sms-twilio-us1-api-key-sid:latest,BILLING_SMS_TWILIO_API_KEY_SECRET=uoa-auth-sms-twilio-us1-api-key-secret:latest,UOA_SMS_COMMERCIAL_POLICY_VERSION=uoa-auth-sms-commercial-policy-version:latest"
             if [[ "$UOA_SMS_PRICING_MODE" == "provider_markup" ]]; then
@@ -207,6 +233,10 @@ jobs:
             fi
           fi
           scaling_args=(--min-instances 0 --cpu-throttling)
+          if [[ "$UOA_ENTERPRISE_SSO_CONFIGURED" == "true" ]]; then
+            env_vars="$env_vars,ENTERPRISE_SSO_CUSTODY_PROVIDER=gcp_kms,ENTERPRISE_SSO_KMS_KEY=$ENTERPRISE_SSO_KMS_KEY"
+            scaling_args=(--min-instances 1 --no-cpu-throttling)
+          fi
 
           if [[ "$UOA_STRIPE_BILLING_CONFIGURED" == "true" ]]; then
             secret_vars="$secret_vars,STRIPE_SECRET_KEY=uoa-auth-stripe-secret-key:latest,STRIPE_WEBHOOK_SECRET=uoa-auth-stripe-webhook-secret:latest"

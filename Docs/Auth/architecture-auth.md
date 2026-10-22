@@ -8,6 +8,20 @@ For the full product spec, see [brief.md](./brief.md). For tech stack, see [tech
 
 ## Guiding Principles
 
+Registration continuation clarification (2026-10-22): the paragraph below records
+the earlier code-after-link behavior and is superseded here. Explicit link
+confirmation on any device authorizes the exact originating flow. Its WebSocket
+hint triggers the existing status read and automatic next-step transition; no
+code is required after link approval. The original cookie and immutable OAuth
+context still gate completion, and the confirming browser only shows success.
+
+`RegistrationVerificationPage` uses the six-field `RegistrationCodeInput` and
+`use-registration-status` for authenticated WSS hints plus authoritative reads and
+polling. `utils/pending-registration.ts` stores only a public ID and display email
+per original OAuth context; the owning credential is an HttpOnly cookie. A cross-device
+link confirms email without authorizing the initiating browser. The emailed code,
+or a link confirmed in the original browser, unlocks the existing password/2FA flow.
+
 - **No code file longer than 500 lines.** If a file approaches this limit, split it.
 - **Keep the codebase reusable and clean.** This is the hard rule. If a component is reusable, it gets its own file. Small helper components that only serve a single parent can live in the same file if it makes sense.
 - **Components are small and focused.** A component does one thing. If it does two things, consider splitting it.
@@ -299,3 +313,13 @@ value). `utils/access-status.tsx` provides it to LoginPage independently of
 product config, query parameters and browser storage. Only auth-server
 `AUTH_ACCESS_STATUS_ENABLED=true` enables the entry and server endpoints.
 The API also refuses previously issued proofs when disabled.
+
+### Organisation access management
+
+The customer owner management continuation renders `OrganisationAccessPage`
+at `/auth/organisation-access`, outside `PopupProvider` while reusing Auth's
+theme, language selector, and controls. Typed cookie/CSRF calls live in
+`utils/organisation-access.ts` and use the shared `utils/api.ts` transport.
+Connection setup, test/readiness review and domain verification compose
+`components/organisation/`. See [the customer journey and local evaluation](organisation-access-ui.md).
+The platform Admin superuser boundary is unchanged.

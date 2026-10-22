@@ -92,3 +92,11 @@ it('omits access-status diagnostics by default for website and native logins', (
 it('shows the optional diagnostic only when server bootstrap enables it', () => {
   expect(renderLogin(undefined, true)).toContain('Check access status');
 });
+
+it('existing account linking offers personal proof without registration or social bypass',()=>{
+  const html=renderLogin('?flow=enterprise_link&enterprise_link_intent=link-one');
+  expect(html).toContain('Connect your existing UOA account');
+  expect(html).toContain('Loading');
+  expect(html).not.toContain('type="password"');
+  expect(html).not.toContain('/auth/social/google');
+});

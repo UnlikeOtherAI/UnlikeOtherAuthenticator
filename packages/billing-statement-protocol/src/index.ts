@@ -49,9 +49,16 @@ export {
   BILLING_CONSUMER_ACTION_SCHEMA_VERSION,
 } from './action-types.js';
 export { billingStatementV1ConformanceFixture } from './conformance-fixture.js';
-export { billingControlledByJsonSchema } from './org-billing-schema.js';
-export { BILLING_ORG_BILLING_MANAGE_ACTION_ID } from './org-billing-types.js';
-export type { BillingControlledByV1 } from './org-billing-types.js';
+export {
+  billingControlledByJsonSchema, billingRegionSetRequestV1JsonSchema, billingRegionViewV1JsonSchema,
+} from './org-billing-schema.js';
+export {
+  BILLING_ORG_BILLING_MANAGE_ACTION_ID, BILLING_ORG_REGION_PATH, BILLING_REGION_PROTOCOL_HEADER,
+  BILLING_REGION_PROTOCOL_VERSION,
+} from './org-billing-types.js';
+export type {
+  BillingControlledByV1, BillingRegionCurrencyV1, BillingRegionV1, BillingRegionViewV1,
+} from './org-billing-types.js';
 export {
   billingStatementV1OpenApiDocument,
   type BillingStatementV1OpenApiDocument,
@@ -164,11 +171,15 @@ export type {
   BillingCreditsAutoTopUpSetupAction,
   BillingCreditsAutoTopUpUpdateAction,
   BillingCreditAmount,
+  BillingCreditPurchaseCurrency,
+  BillingCreditPurchaseRateV1,
+  BillingCreditRegionRateV1,
   BillingCreditsManagerV1,
   BillingCreditsMemberV1,
   BillingCreditsPaymentMoney,
   BillingCreditsTopUpAction,
   BillingCreditsV1,
+  BillingCreditsValueMoney,
 } from './credits-types.js';
 export { billingSubjectRequestJsonSchema } from './funding-schema-primitives.js';
 export type { BillingSubjectRequest } from './funding-schema-primitives.js';
@@ -232,3 +243,5 @@ export { billingCyclesProtocolV2JsonSchema, billingCyclesListRequestV2JsonSchema
 export type { BillingCycleMoney, BillingCycleState, BillingCycleScope, BillingCyclePeriod, BillingCycleProduct, BillingCycleTotals, BillingCycleSummaryV2, BillingCyclesListRequestV2, BillingCyclesListV2, BillingCycleDetailRequestV2, BillingCycleSeatInterval, BillingCycleSubscriptionLine, BillingCycleUsageLine, BillingCycleCredits, BillingCycleDownloadAction, BillingCycleDocument, BillingCycleAdjustment, BillingCycleDetailV2, BillingCycleDownloadRequestV2 } from './cycle-types.js';
 export { BILLING_CYCLES_PROTOCOL_VERSION, BILLING_CYCLES_SCHEMA_VERSION, BILLING_CYCLES_SCHEMA_PATH, BILLING_CYCLES_EXAMPLE_PATH, BILLING_CYCLES_OPENAPI_PATH, BILLING_CYCLES_LIST_PATH, BILLING_CYCLES_DETAIL_PATH, BILLING_CYCLES_DOWNLOAD_PATH } from './cycle-types.js';
 export { billingSmsProtocolV1JsonSchema, billingSmsV1OpenApiDocument } from './sms-openapi.js';
+export * from './voice-types.js';
+export * from './voice-schema.js';

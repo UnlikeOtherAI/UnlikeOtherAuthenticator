@@ -1,9 +1,12 @@
+import { credentialArtifactSource } from './credential-artifact.service.js';
+import { authorizeCredentialSurfaceWhenAvailable } from './credential-route-registry.service.js';
 import { requireIdentityEmail } from './entity-lifecycle.service.js';
 import type { PrismaClient } from '@prisma/client';
 import { decodeJwt, decodeProtectedHeader, jwtVerify } from 'jose';
 import { z } from 'zod';
 
 import { getPublicBaseUrl } from '../config/env.js';
+import { validateSessionAssurance } from './session-assurance.service.js';
 import { getAdminPrisma } from '../db/prisma.js';
 import { runInTransaction } from '../db/tenant-context.js';
 import { createKeyedRateLimiter } from '../middleware/rate-limiter.js';
@@ -11,7 +14,7 @@ import { normalizeDomain } from '../utils/domain.js';
 import { AppError } from '../utils/errors.js';
 import { findJwkByKid, importClientJwkKey, type PublicRsaJwks } from './client-jwk.service.js';
 import type { ClientConfig } from './config.service.js';
-import { fetchPartnerJwks } from './jwks-fetch.service.js';
+import { fetchPartnerJwks, PartnerJwksUnavailableError } from './jwks-fetch.service.js';
 import {
   signConfidentialAccessToken,
   type ConfidentialAccessTokenClaims,
@@ -54,6 +57,7 @@ const SubjectAssertionSchema = z
     aud: z.string().trim().min(1),
     sub: z.string().trim().min(1).max(256),
     tv: z.number().int().nonnegative(),
+    assurance_ref: z.string().min(32).max(256).optional(),
     source_domain: z.string().trim().min(1),
     jti: z.string().trim().min(1).max(256),
     iat: z.number().int().positive(),
@@ -69,7 +73,7 @@ const SubjectAssertionSchema = z
   })
   .passthrough();
 
-export type VerifiedSubjectAssertion = z.infer<typeof SubjectAssertionSchema>;
+export type VerifiedSubjectAssertion = z.infer<typeof SubjectAssertionSchema> & { verifiedAssuranceId?: string };
 
 export interface ConfidentialTokenExchangeResult {
   accessToken: string;
@@ -111,7 +115,7 @@ export async function verifyConfidentialSubjectToken(
     sourceDomain: string;
     audience: string;
   },
-  deps: Pick<ExchangeDeps, 'fetchJwks' | 'now'> = {},
+  deps: Pick<ExchangeDeps, 'fetchJwks' | 'now' | 'prisma'> = {},
 ): Promise<VerifiedSubjectAssertion> {
   const sourceDomain = normalizeDomain(params.sourceDomain);
   if (!sourceDomain) throw invalidSubjectToken();
@@ -152,8 +156,16 @@ export async function verifyConfidentialSubjectToken(
       throw invalidSubjectToken();
     }
 
-    return assertion;
-  } catch {
+    const artifact = credentialArtifactSource(assertion, 'reference');
+    const assurance = await authorizeCredentialSurfaceWhenAvailable('confidential_subject', {
+      artifact, method: artifact.method,
+      assuranceReference: assertion.assurance_ref, userId: assertion.sub, credentialEpoch: assertion.tv,
+      clientDomain: sourceDomain, orgId: assertion.active?.orgId, teamId: assertion.active?.teamId,
+    }, deps.prisma);
+    return { ...assertion, verifiedAssuranceId: assurance?.id };
+  } catch (error) {
+    if (error instanceof PartnerJwksUnavailableError) throw error;
+    if (error instanceof AppError && error.statusCode === 503) throw error;
     throw invalidSubjectToken();
   }
 }
@@ -192,6 +204,13 @@ async function exchangeConfidentialSubjectTokenInsidePolicyLock(
   }
 
   const prisma = deps.prisma ?? getAdminPrisma();
+  const sourceAssurance = assertion.verifiedAssuranceId ? await validateSessionAssurance({
+    id: assertion.verifiedAssuranceId, userId: assertion.sub, credentialEpoch: assertion.tv,
+    clientDomain: sourceDomain, orgId: assertion.active?.orgId, teamId: assertion.active?.teamId,
+  }, prisma) : null;
+  if (delegation.scope === 'session:broker' && sourceAssurance && sourceAssurance.method !== 'independent') {
+    throw new AppError('FORBIDDEN', 403, 'SSO_NARROW_DELEGATION_REQUIRED');
+  }
   // Whether the assertion's team context fits the product is decided by the
   // product's own config and server-owned team policy alone, so these are the
   // product's refusals, never the person's. They run before any subject lookup:
@@ -245,6 +264,7 @@ async function exchangeConfidentialSubjectTokenInsidePolicyLock(
             userId: assertion.sub,
             domain: sourceDomain,
             orgId: assertion.active.orgId,
+            assuranceId: assertion.verifiedAssuranceId,
             groupsEnabled: params.config.org_features?.groups_enabled,
           },
           { crossProductPrisma: prisma, policyPrisma: prisma, prisma },
@@ -277,7 +297,12 @@ async function exchangeConfidentialSubjectTokenInsidePolicyLock(
       ? { org, active: { ...assertion.active, tenantSlug: org.tenant_slug } }
       : {};
 
+  const now = deps.now?.() ?? Math.floor(Date.now() / 1000);
+  const expiresInSeconds = Math.min(CONFIDENTIAL_ACCESS_TOKEN_TTL_SECONDS,
+    sourceAssurance ? Math.floor(sourceAssurance.expiresAt.getTime() / 1000) - now : CONFIDENTIAL_ACCESS_TOKEN_TTL_SECONDS);
+  if (expiresInSeconds <= 0) throw invalidSubjectToken();
   const accessToken = await (deps.signAccessToken ?? signConfidentialAccessToken)({
+    assuranceId: sourceAssurance?.id,
     subject: assertion.sub,
     credentialEpoch,
     email: requireIdentityEmail(user.email),
@@ -285,14 +310,15 @@ async function exchangeConfidentialSubjectTokenInsidePolicyLock(
     product: delegation.product,
     resource: delegation.resource,
     issuer,
-    ttlSeconds: CONFIDENTIAL_ACCESS_TOKEN_TTL_SECONDS,
+    ttlSeconds: expiresInSeconds,
+    expiresAtEpochSeconds: now + expiresInSeconds,
     scope: delegation.scope,
     ...teamClaims,
   });
 
   return {
     accessToken,
-    expiresInSeconds: CONFIDENTIAL_ACCESS_TOKEN_TTL_SECONDS,
+    expiresInSeconds,
     issuedTokenType: ACCESS_TOKEN_ISSUED_TOKEN_TYPE,
     scope: delegation.scope,
   };

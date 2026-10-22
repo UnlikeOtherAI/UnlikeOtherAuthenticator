@@ -7,6 +7,7 @@ import { AppError } from '../utils/errors.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
 import { lockSmsCredential, lockSmsSubject, smsSubject, verifySmsActor } from './billing-sms-authority.service.js';
 import { publicSmsQuote } from './billing-sms-quote.service.js';
+import { requireOrganisationBillingRegion } from './billing-organisation-region.service.js';
 import type { BillingSmsProvider } from './billing-sms-provider.service.js';
 import { runBillingSerializableTransaction } from './billing-serializable-transaction.service.js';
 import { resolveBillingFundingViewer } from './billing-funding-viewer.service.js';
@@ -120,7 +121,7 @@ export async function beginSmsNumber(input: { request: BillingSmsNumberBeginRequ
   const prisma = deps.prisma ?? getAdminPrisma();
   const subject = smsSubject(input.request);
   const actor = await verifySmsActor({ subject: input.request, actorToken: input.actorToken,
-    credential: input.credential, endpoint: '/billing/v1/sms/numbers/begin' });
+    credential: input.credential, endpoint: '/billing/v1/sms/numbers/begin' }, { prisma });
   const viewer = await resolveBillingFundingViewer(subject, { prisma });
   assertCanManageRecurringAddonScope(viewer, 'ORGANISATION');
   const existing = await prisma.billingSmsNumberResource.findUnique({ where: { id: input.request.resource_id } });
@@ -154,9 +155,12 @@ export async function beginSmsNumber(input: { request: BillingSmsNumberBeginRequ
       }
       return prior;
     }
+    // A purchase is billed in the organisation's one region currency, which its monthly quote carries.
+    const region = await requireOrganisationBillingRegion(input.request.organisation_id, tx);
     const quote = await tx.billingSmsQuote.findUnique({ where: { id: input.request.quote_id } });
     if (!quote || quote.serviceId !== input.credential.service.id || quote.orgId !== input.request.organisation_id ||
-        quote.direction !== 'monthly' || quote.destination !== null || quote.finalCurrency !== 'USD' ||
+        quote.finalCurrency !== region.currency ||
+        quote.direction !== 'monthly' || quote.destination !== null || !['EUR', 'GBP', 'USD'].includes(quote.finalCurrency) ||
         quote.expiresAt.getTime() <= (deps.now?.() ?? new Date()).getTime()) {
       throw new AppError('BAD_REQUEST', 409, 'BILLING_SMS_QUOTE_NOT_ACCEPTABLE');
     }
@@ -168,10 +172,10 @@ export async function beginSmsNumber(input: { request: BillingSmsNumberBeginRequ
     const offer = await tx.billingRecurringAddonOffer.create({ data: {
       serviceId: input.credential.service.id, key, version: 1,
       name: `Mobile number ${input.request.phone_number}`, description: 'Monthly mobile phone number service.',
-      monthlyAmountMinor: minor, currency: 'USD', resourceKind: 'sms_mobile_number', resourceId: input.request.resource_id,
+      monthlyAmountMinor: minor, currency: quote.finalCurrency, resourceKind: 'sms_mobile_number', resourceId: input.request.resource_id,
     } });
     await tx.billingRecurringAddonCatalog.create({ data: { accountId: account.id, serviceId: offer.serviceId,
-      offerId: offer.id, currency: 'USD', monthlyAmountMinor: minor, stripeLookupKey: `${key}:1:${account.id}` } });
+      offerId: offer.id, currency: quote.finalCurrency, monthlyAmountMinor: minor, stripeLookupKey: `${key}:1:${account.id}` } });
     return tx.billingSmsNumberResource.create({ data: { id: input.request.resource_id,
       serviceId: input.credential.service.id, appKeyId: input.credential.id, orgId: input.request.organisation_id,
       quoteId: quote.id, phoneNumber: input.request.phone_number, country: quote.country,

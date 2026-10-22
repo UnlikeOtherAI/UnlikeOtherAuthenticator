@@ -8,12 +8,37 @@ import {
   sendAuthHtml,
 } from '../../services/auth-ui.service.js';
 import { configFetchRateLimiter } from './rate-limit-keys.js';
+import { recordAuthFunnelStep } from '../../services/auth-funnel.service.js';
+import { startEnterpriseLogin } from '../../services/org-sso-entry.service.js';
+import { z } from 'zod';
 
 // Gap-fix B Task 2 (design §11.4): `team_hint` is a client-side chooser preselect ONLY — it never
 // grants anything server-side (select-team's ACTIVE-membership + domain check remains the sole
 // authority). Bound to a conservative id/slug-safe charset; anything else is silently dropped
 // before the querystring reaches the SPA bootstrap rather than rejecting the whole request.
 const TEAM_HINT_PATTERN = /^[A-Za-z0-9_-]{1,256}$/;
+
+// UOA re-renders this window mid-flow (2FA, team chooser, invite and email-link continuations). Only
+// a render without any of these is a product starting a flow, which is what the funnel counts.
+const CONTINUATION_QUERY_KEYS = [
+  'email_token',
+  'enterprise_link_intent',
+  'flow',
+  'handoff_target',
+  'invite_token',
+  'login_token',
+  'management_org_id',
+  'request_access_status',
+  'signing_token',
+  'twofa_enroll_required',
+  'twofa_setup_token',
+  'twofa_token',
+] as const;
+
+export function isFlowStartQuery(query: unknown): boolean {
+  if (!query || typeof query !== 'object') return true;
+  return CONTINUATION_QUERY_KEYS.every((key) => !(key in query));
+}
 
 /**
  * Strips an invalid `team_hint` from the raw request URL before it becomes the SPA's initial
@@ -49,6 +74,15 @@ export function registerAuthEntrypointRoute(app: FastifyInstance): void {
         throw new AppError('BAD_REQUEST', 400, 'MISSING_CONFIG');
       }
 
+      const query = z.object({ sso_intent: z.string().regex(/^[A-Za-z0-9_-]{43}$/).optional() }).passthrough().parse(request.query);
+      if (query.sso_intent) {
+        const started = await startEnterpriseLogin({ relyingIntent: query.sso_intent, config: request.config,
+          configUrl: request.configUrl, query: request.query });
+        reply.setCookie(`uoa_sso_${started.flowId}`, started.browser, { path: '/sso', httpOnly: true,
+          secure: started.cookieSecure, sameSite: started.cookieSecure ? 'none' : 'lax', expires: started.expiresAt });
+        return reply.header('Cache-Control', 'no-store').redirect(started.target);
+      }
+
       const requestUrl = sanitizeTeamHintInUrl(request.raw.url ?? '');
       const html = await renderAuthEntrypointHtml({
         config: request.config,
@@ -56,6 +90,12 @@ export function registerAuthEntrypointRoute(app: FastifyInstance): void {
         requestUrl,
         cspNonce: reply.cspNonce?.script,
       });
+      if (request.method !== 'HEAD' && isFlowStartQuery(request.query)) {
+        await recordAuthFunnelStep(
+          { domain: request.config.domain, step: 'flow_started', outcome: 'shown' },
+          { prisma: request.adminDb },
+        );
+      }
       sendAuthHtml(reply, html);
     },
   );

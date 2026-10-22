@@ -1,3 +1,4 @@
+import { resolveTokenFamilyAssurance } from './token-assurance.service.js';
 import { requireIdentityEmail } from './entity-lifecycle.service.js';
 import type { PrismaClient } from '@prisma/client';
 import { signAccessToken } from './token-signing.service.js';
@@ -93,6 +94,8 @@ export type TokenIssuerDeps = TokenDeps & {
 };
 
 export type IssuedTokenPair = {
+  assuranceRef?: string;
+  assuranceExpiresAt?: string;
   accessToken: string;
   expiresInSeconds: number;
   refreshToken: string;
@@ -110,6 +113,7 @@ export async function issueTokenPairForUser(
     userId: string;
     includeFirstLogin?: boolean;
     active?: ActiveTeam | null;
+    authenticationEvidenceId?: string;
   },
   deps?: TokenIssuerDeps,
 ): Promise<IssuedTokenPair> {
@@ -119,22 +123,30 @@ export async function issueTokenPairForUser(
   const ttl = deps?.accessTokenTtl ?? env.ACCESS_TOKEN_TTL;
   const prisma = deps?.prisma ?? getPrisma();
 
-  const domainRole = await ensureDomainRoleForUser({
-    prisma,
-    domain: params.config.domain,
-    userId: params.userId,
-  });
-
   const user = await prisma.user.findUnique({
     where: { lifecycleStatus: 'ACTIVE', id: params.userId },
     select: { email: true, tokenVersion: true },
   });
   if (!user) throw new AppError('INTERNAL', 500, 'MISSING_USER');
 
-  const role =
+  const { assuranceId, assuranceConnectionId, assuranceRef, assuranceExpiresAt, assuranceOrgId, assuranceTeamId, globalAccountControl } =
+    await resolveTokenFamilyAssurance({ prisma, userId: params.userId, domain: params.config.domain,
+      refreshToken: params.refreshToken, sharedSecret, credentialEpoch: user.tokenVersion,
+      authenticationEvidenceId: params.authenticationEvidenceId });
+  if (assuranceId && ((assuranceOrgId ?? null) !== (params.active?.orgId ?? assuranceOrgId ?? null) ||
+    (assuranceTeamId ?? null) !== (params.active?.teamId ?? null))) {
+    throw new AppError('UNAUTHORIZED', 401, 'INVALID_SESSION_ASSURANCE');
+  }
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  const expiresInSeconds = Math.floor(Math.min(accessTokenExpiresInSeconds(ttl), assuranceExpiresAt === undefined ? Infinity :
+    Math.floor(Date.parse(assuranceExpiresAt) / 1000) - nowSeconds));
+  if (!Number.isFinite(expiresInSeconds) || expiresInSeconds <= 0) throw new AppError('UNAUTHORIZED', 401, 'INVALID_SESSION_ASSURANCE');
+  const domainRole = await ensureDomainRoleForUser({ prisma, domain: params.config.domain,
+    userId: params.userId, allowBootstrap: globalAccountControl });
+  const role = globalAccountControl && (
     domainRole.role === 'SUPERUSER' ||
     (await isPlatformSuperuser({ userId: params.userId, prisma: deps?.adminPrisma ?? prisma, env }))
-      ? 'superuser'
+    ) ? 'superuser'
       : 'user';
   const accessTokenContext = resolveAccessTokenContext({
     domain: params.config.domain,
@@ -142,12 +154,14 @@ export async function issueTokenPairForUser(
     clientId: params.clientId,
     sharedSecret,
   });
-  const activeOrgContext = params.active
+  const boundOrgId = params.active?.orgId ?? assuranceOrgId;
+  const activeOrgContext = boundOrgId
     ? await getActiveClientOrgContext(
         {
           userId: params.userId,
           domain: params.config.domain,
-          orgId: params.active.orgId,
+          orgId: boundOrgId,
+          assuranceId,
           groupsEnabled: params.config.org_features?.groups_enabled,
         },
         {
@@ -171,12 +185,13 @@ export async function issueTokenPairForUser(
 
   const org =
     activeOrgContext ??
-    (params.config.org_features?.enabled
+    (params.config.org_features?.enabled && !assuranceId
       ? await getUserOrgContext(
           {
             userId: params.userId,
             domain: params.config.domain,
             config: params.config,
+            assuranceId,
           },
           { env, prisma },
         )
@@ -194,9 +209,11 @@ export async function issueTokenPairForUser(
     role,
     clientId: accessTokenContext.clientId,
     sharedSecret: accessTokenContext.sharedSecret,
-    ttl,
+    ttl: assuranceExpiresAt === undefined ? ttl : nowSeconds + expiresInSeconds,
     issuer,
     tokenVersion: user.tokenVersion,
+    assuranceId,
+    assuranceConnectionId,
     org,
     active,
     relyingPartyToken: accessTokenContext.relyingPartyToken,
@@ -215,10 +232,12 @@ export async function issueTokenPairForUser(
 
   return {
     accessToken,
-    expiresInSeconds: accessTokenExpiresInSeconds(ttl),
+    expiresInSeconds,
     refreshToken: params.refreshToken,
     refreshTokenExpiresInSeconds: params.refreshTokenExpiresInSeconds,
     firstLogin,
+    assuranceRef,
+    assuranceExpiresAt,
   };
 }
 
@@ -256,7 +275,7 @@ export async function exchangeAuthorizationCodeForTokens(
       { prisma: tx, afterLock: deps?.afterProductTeamPolicyLock },
     );
     const now = deps?.now ? deps.now() : new Date();
-    const { userId, rememberMe, twoFaCompleted, orgId, teamId } = await consumeAuthorizationCode({
+    const { userId, rememberMe, twoFaCompleted, orgId, teamId, authenticationEvidenceId } = await consumeAuthorizationCode({
       code: params.code,
       configUrl: params.configUrl,
       domain: params.config.domain,
@@ -319,6 +338,7 @@ export async function exchangeAuthorizationCodeForTokens(
         refreshToken: issuedRefreshToken.refreshToken,
         refreshTokenExpiresInSeconds: issuedRefreshToken.expiresInSeconds,
         includeFirstLogin: true,
+        authenticationEvidenceId,
         active,
       },
       {

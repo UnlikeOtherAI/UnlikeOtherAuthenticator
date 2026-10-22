@@ -37,6 +37,9 @@ const EnvSchema = z
     LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
     // Optional access-status diagnostics; never enabled by client config or DEBUG_ENABLED.
     AUTH_ACCESS_STATUS_ENABLED: z.preprocess(normalizeBoolean, z.boolean().default(false)),
+    ENTERPRISE_SSO_KEYRING: z.string().min(1).optional(),
+    ENTERPRISE_SSO_CUSTODY_PROVIDER: z.enum(['local', 'gcp_kms']).optional(),
+    ENTERPRISE_SSO_KMS_KEY: z.string().min(1).optional(),
     DEBUG_ENABLED: z.preprocess(normalizeBoolean, z.boolean().default(false)),
     // Single global shared secret used for domain hashing and client-domain access tokens.
     SHARED_SECRET: z.string().min(32),
@@ -164,6 +167,8 @@ const EnvSchema = z
     BILLING_SMS_POLICY_AUTORENEW_ENABLED: z.preprocess(normalizeBoolean, z.boolean().default(false)),
     BILLING_SMS_POLICY_AUTORENEW_FX_BAND_BPS: z.coerce.number().int().min(1).max(2000).default(500),
     BILLING_SMS_POLICY_AUTORENEW_LOOKAHEAD_DAYS: z.coerce.number().int().min(1).max(20).default(7),
+    // Rate for GBP/EUR credit purchases: Stripe's live FX quote, or (explicit flip) the accepted ECB snapshot.
+    BILLING_CREDIT_FX_RATE_SOURCE: z.enum(['stripe', 'ecb']).default('stripe'),
     STRIPE_USAGE_EXPORT_INTERVAL_MINUTES: z.coerce.number().int().min(5).max(1440).default(60),
     STRIPE_AUTO_TOP_UP_INTERVAL_MINUTES: z.coerce.number().int().min(1).max(60).default(1),
     STRIPE_PRE_BOUNDARY_SAFETY_LEAD_MINUTES: z.coerce.number().int().min(5).max(1440).default(360),

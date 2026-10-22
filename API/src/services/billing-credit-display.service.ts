@@ -1,6 +1,7 @@
 import type {
   BillingCreditAmount,
   BillingCreditsPaymentMoney,
+  BillingCreditsValueMoney,
   BillingRecurringAddonMoney,
 } from '../contracts/billing-statement-v1.js';
 import type { BillingCustomerLocale } from './billing-copy-locale.js';
@@ -73,17 +74,25 @@ export function billingCreditAmount(microcredits: bigint, locale?: BillingCustom
   };
 }
 
-export function billingCreditsPaymentMoney(amountMinor: bigint, locale?: BillingCustomerLocale): BillingCreditsPaymentMoney {
-  if (amountMinor < 0n) {
-    throw new AppError('INTERNAL', 500, 'BILLING_CREDIT_PAYMENT_INVALID');
-  }
+/** Credits valued in the region currency (credits protocol 2.3.0); a debt balance is negative. */
+export function billingCreditsValueMoney(amountMinor: bigint, currency: BillingCreditsValueMoney['currency'],
+  locale?: BillingCustomerLocale): BillingCreditsValueMoney {
   const amount = scaledDecimal(amountMinor, 2);
   return localizedBillingMoney({
     amount,
     amount_minor: amountMinor.toString(),
-    currency: 'USD' as const,
-    display: usdDisplay(amount),
+    currency,
+    display: currency === 'USD' ? usdDisplay(amount) : `${currency} ${grouped(amount)}`,
   }, locale);
+}
+
+/** A credit purchase amount in the currency it is paid in: USD, or a billing region's GBP or EUR. */
+export function billingCreditsPaymentMoney(amountMinor: bigint, locale?: BillingCustomerLocale,
+  currency: BillingCreditsPaymentMoney['currency'] = 'USD'): BillingCreditsPaymentMoney {
+  if (amountMinor < 0n) {
+    throw new AppError('INTERNAL', 500, 'BILLING_CREDIT_PAYMENT_INVALID');
+  }
+  return billingCreditsValueMoney(amountMinor, currency, locale);
 }
 
 export function billingRecurringAddonMoney(

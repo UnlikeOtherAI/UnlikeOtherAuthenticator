@@ -86,13 +86,14 @@ export function BillingAppKeyDialog({
       <form className="space-y-4" onSubmit={form.handleSubmit(submit)}>
         <FieldShell
           label="Purpose"
-          hint="Choose the deployment capability: tariff reads, customer billing actions, or SMS dispatch and recovery."
+          hint="Choose the deployment capability."
           error={form.formState.errors.purpose?.message}
         >
           <SelectField {...form.register('purpose')} className="w-full">
             <option value="customer_lifecycle">Customer lifecycle</option>
             <option value="entitlement">Entitlement resolver</option>
             <option value="sms_runtime">SMS runtime</option>
+            <option value="voice_runtime">Voice runtime</option>
           </SelectField>
         </FieldShell>
         <FieldShell
@@ -147,7 +148,8 @@ export function BillingAppKeyDialog({
           </FieldShell>
         ) : (
           <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">
-            {purpose === 'sms_runtime' ? 'SMS runtime keys authorize prepaid physical dispatch and provider recovery. They cannot carry redirect origins or create Checkout/top-ups.'
+            {purpose === 'voice_runtime' ? 'Voice runtime keys authorize call quotes, reservations and settlement.'
+              : purpose === 'sms_runtime' ? 'SMS runtime keys authorize prepaid physical dispatch and provider recovery. They cannot carry redirect origins or create Checkout/top-ups.'
               : 'Entitlement keys cannot carry redirect origins and are rejected by every Stripe lifecycle route.'}
           </div>
         )}
@@ -159,9 +161,10 @@ export function BillingAppKeyDialog({
           <TextField {...form.register('expiresAt')} type="date" />
         </FieldShell>
         <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800">
-          This {purpose.replace('_', ' ')} key authenticates only {service.identifier}. Every
-          {purpose === 'sms_runtime' ? 'human reservation needs a fresh actor assertion; machine delegation needs a current explicit grant. Recovery remains bound to the original dispatch.'
-            : 'request still needs a fresh, signed actor assertion binding the user, organisation, team, and product.'}
+          This {purpose.replace('_', ' ')} key authenticates only {service.identifier}.{' '}
+          {purpose === 'voice_runtime' ? 'Every call needs a current grant and prepaid reservation.'
+            : purpose === 'sms_runtime' ? 'Every human reservation needs a fresh actor assertion; machine delegation needs a current explicit grant. Recovery remains bound to the original dispatch.'
+            : 'Every request still needs a fresh, signed actor assertion binding the user, organisation, team, and product.'}
         </div>
         {create.isError ? (
           <p className="text-sm text-red-600">

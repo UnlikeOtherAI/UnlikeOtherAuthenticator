@@ -1,4 +1,4 @@
-// Exact selected-team profile resolution is published in schema.ts and /llm.
+// Directory webhook consumption and exact-team avatar reads are documented in /llm and schema.ts.
 import { lifecycleDocumentation } from './schema.lifecycle.js';
 import { readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
@@ -18,6 +18,8 @@ import { registerConfigValidateRoute } from './config-validate.js';
 import { registerConfigVerifyRoute } from './config-verify.js';
 import { registerLlmRoute } from './llm.js';
 import { endpoints } from './schema.js';
+import { registrationVerificationDocumentation } from './schema.registration.js';
+// Email-link approval continues only the original cookie-bound registration.
 // Admin schema includes exact-user activity filters and canonical invitation history states.
 import { readAdminIndexAssetUrls } from '../../services/admin-ui.service.js';
 import { renderRootHoldingPage } from '../../services/root-page.service.js';
@@ -56,7 +58,20 @@ export function registerRootRoute(app: FastifyInstance): void {
       home: '/',
       docs: '/llm',
       api: '/api',
+      registration_verification: registrationVerificationDocumentation,
+      personal_telephone: { profile: '/apps/v1/nessie/phone-profile/read', lookup: '/apps/v1/nessie/phone-profile/lookup',
+        call_proof: '/apps/v1/nessie/phone-profile/call-proof/start',
+        sms_admission: '/apps/v1/nessie/phone-profile/sms-admission',
+        personal_owner_membership: 'optional owner_subject in service assertion; exact-team ownerActive or owner_inactive',
+        prepaid_delivery: '/apps/v1/nessie/phone-profile/call-proof/reserve', caller_id_authentication: false },
       native_apps: { admin: '/admin/apps', registration: '/oauth/register', public_identifier: 'app_id', client_secret_required: false },
+      enterprise_sso: { version: 1, settings: '/auth/organisation-access',
+        entry: '/sso/:connectionId/start', domain_discovery: false,
+        status: '/org/organisations/:orgId/sso/status', assurance: '/org/assurance/validate',
+        revocations: '/domain/revocations', activation: 'Fail closed until authority, provenance, consumer and protocol readiness pass; enforcement also requires two independent custodians and a completed recovery drill.' },
+      deeptest_nessie_inference: { check: '/apps/v1/deeptest/nessie-inference-access',
+        admin: '/internal/admin/users/:userId/deeptest-nessie-inference',
+        default_allowed: false, positive_cache_allowed: false },
       kelpie_connect: { issue: '/oauth/kelpie/connect', validate: '/oauth/kelpie/connect/validate', scope: 'kelpie.connect', app_id: 'com.unlikeotherai.kelpie', ticket_ttl_seconds: 120, configuration: 'KELPIE_CONNECT_RESOURCE; exact HTTPS /api/kelpie/connect gateway, absent disables' },
       kelpie_pair: { issue: '/oauth/kelpie/pair', validate: '/oauth/kelpie/pair/validate', scope: 'kelpie.connect', receiver_scope: 'profile', ticket_ttl_seconds: 120, same_subject_required: true },
       admin_team_membership: 'POST /internal/admin/users/:userId/teams atomically adds an existing user to the selected organisation/team through the admin superuser boundary; see endpoints for its request and lifecycle rules.',
@@ -95,7 +110,7 @@ export function registerRootRoute(app: FastifyInstance): void {
       product_api_concurrency:
         'Product data APIs — /org/*, /domain/*, /settings/*, /internal/org/*, /avatar/*, /email/* — share a small per-instance concurrency cap so sign-in always keeps database connections. An excess request waits briefly in FIFO order, then answers 503 with Retry-After: 1 and code PRODUCT_API_BUSY (the request had no effect). Retry after the delay with backoff and never fan out one UOA call per end-user request: resolve /org/me and settings once per session and cache them. /auth/* (including /auth/token), /oauth/*, /2fa/*, /integrations/*, /internal/admin/*, /billing/* and discovery are never limited.',
       org_me_subject_assertion:
-        'GET /org/me accepts either a UOA access token or a one-minute product-signed subject assertion and returns freshly resolved org roles, never product capability verdicts.',
+          'GET /org/me accepts either a UOA access token or a one-minute product-signed subject assertion and returns freshly resolved org roles, never product capability verdicts. Temporary source-JWKS DNS EAI_AGAIN returns 503 INTEGRATION_JWKS_UNAVAILABLE before identity admission; retain the session and retry with backoff.',
       team_invitation_management:
         'Team invitation history, detail and resend require current members.manage for the exact target team with a user credential; credential-free backend mode requires explicit opt-in and origin-domain isolation.',
     };

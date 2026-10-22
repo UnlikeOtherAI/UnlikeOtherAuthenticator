@@ -11,7 +11,7 @@ export type BillingCreditEntryCopy = Readonly<{
 export type BillingCreditEntryCopyKey = keyof typeof BillingCreditEntryKind;
 
 type EntryCopyCatalog = Readonly<Record<Exclude<BillingCreditEntryKind,
-  'PREPAID_USAGE' | 'SMS_PREPAID_USAGE'>, BillingCreditEntryCopy>>;
+  'PREPAID_USAGE' | 'SMS_PREPAID_USAGE' | 'VOICE_PREPAID_USAGE'>, BillingCreditEntryCopy>>;
 
 export const BILLING_CREDIT_ENTRY_COPY = {
   cs: {
@@ -98,7 +98,7 @@ export function billingCreditEntryCopy(
   locale?: BillingCustomerLocale,
 ): BillingCreditEntryCopy {
   return billingLocaleText(BILLING_CREDIT_ENTRY_COPY, locale)[
-    kind === BillingCreditEntryKind.PREPAID_USAGE || kind === BillingCreditEntryKind.SMS_PREPAID_USAGE
+    kind === BillingCreditEntryKind.PREPAID_USAGE || kind === BillingCreditEntryKind.SMS_PREPAID_USAGE || kind === BillingCreditEntryKind.VOICE_PREPAID_USAGE
       ? BillingCreditEntryKind.USAGE_SETTLEMENT : kind
   ];
 }

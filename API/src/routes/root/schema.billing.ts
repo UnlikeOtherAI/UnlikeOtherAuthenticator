@@ -1,3 +1,4 @@
+import { billingVoiceEndpoints } from './schema.billing-voice.js';
 import type { EndpointSchema } from './schema.js';
 import { billingLedgerRuntimeKeyEndpoints } from './schema.billing-ledger-runtime-keys.js';
 import { billingContractInvoiceEndpoints } from './schema.billing-contract-invoices.js';
@@ -21,6 +22,7 @@ const tariffBody = {
 
 export const billingEndpoints: EndpointSchema[] = [
   ...billingSmsEndpoints,
+  ...billingVoiceEndpoints,
   ...billingLedgerRuntimeKeyEndpoints(adminAuth),
   {
     method: 'POST', path: '/billing/v1/ledger/reservations/:dispatchId/exception',
@@ -432,7 +434,7 @@ export const billingEndpoints: EndpointSchema[] = [
     auth: adminAuth,
     body: {
       purpose:
-        'entitlement | customer_lifecycle (required); endpoint classes are mutually exclusive',
+        'entitlement | customer_lifecycle | sms_runtime | voice_runtime (required); endpoint classes are mutually exclusive',
       name: 'string (required, max 120)',
       actor_issuer: 'HTTPS origin/URI (required)',
       actor_audience: 'HTTPS UOA effective-tariff endpoint audience (required)',

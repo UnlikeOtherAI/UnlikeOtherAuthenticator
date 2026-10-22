@@ -21,6 +21,7 @@ import { LogsPage } from '../pages/LogsPage';
 import { LoginPage } from '../pages/LoginPage';
 import { OrganisationDetailPage } from '../pages/OrganisationDetailPage';
 import { OrganisationsPage } from '../pages/OrganisationsPage';
+import { SignupFunnelPage } from '../pages/SignupFunnelPage';
 import { SettingsPage, BansPage, DelegationsPage, LifecycleTemplatesPage } from '../pages/SettingsPage';
 import { SuperUsersPage } from '../pages/SuperUsersPage';
 import { TeamDetailPage } from '../pages/TeamDetailPage';
@@ -58,6 +59,7 @@ export function App() {
         <Route path="superusers" element={<SuperUsersPage />} />
         <Route path="logs" element={<LogsPage />} />
         <Route path="connection-errors" element={<ConnectionErrorsPage />} />
+        <Route path="signup-funnel" element={<SignupFunnelPage />} />
         <Route path="feature-flags" element={<FeatureFlagsPage />} />
         <Route path="feature-flags/:appId/groups/:groupId" element={<FeatureAudienceGroupPage />} />
         <Route path="feature-flags/:appId" element={<FeatureFlagDetailPage />} />

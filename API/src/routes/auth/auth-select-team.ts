@@ -1,3 +1,4 @@
+import { assertIndependentChooserMutation } from '../../services/authentication-evidence.service.js';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
@@ -94,7 +95,7 @@ export function registerAuthSelectTeamRoute(app: FastifyInstance): void {
       }
 
       const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
-      const session = await verifyLoginSession({
+      const session = await verifyLoginSession({ prisma: request.adminDb,
         token: login_token,
         config,
         configUrl,
@@ -138,7 +139,7 @@ export function registerAuthSelectTeamRoute(app: FastifyInstance): void {
             },
             { prisma: tx },
           );
-          const lockedSession = await verifyLoginSession({
+          const lockedSession = await verifyLoginSession({ prisma: tx,
             token: login_token,
             config,
             configUrl,
@@ -146,6 +147,7 @@ export function registerAuthSelectTeamRoute(app: FastifyInstance): void {
             audience: LOGIN_SESSION_AUDIENCE,
             now: new Date(),
           });
+          await assertIndependentChooserMutation(lockedSession, tx);
           await declineTeamInviteForUser({
             prisma: tx,
             teamInviteId: inviteId,
@@ -154,7 +156,7 @@ export function registerAuthSelectTeamRoute(app: FastifyInstance): void {
             now: new Date(),
           });
           return buildSessionChoices(
-            { userId: lockedSession.userId, config },
+            { userId: lockedSession.userId, config, authenticationEvidenceId: lockedSession.authenticationEvidenceId },
             { crossProductPrisma: tx, policyPrisma: tx, prisma: tx },
           );
         });
@@ -172,7 +174,7 @@ export function registerAuthSelectTeamRoute(app: FastifyInstance): void {
           },
           { prisma: tx },
         );
-        const lockedSession = await verifyLoginSession({
+        const lockedSession = await verifyLoginSession({ prisma: tx,
           token: login_token,
           config,
           configUrl,
@@ -201,6 +203,7 @@ export function registerAuthSelectTeamRoute(app: FastifyInstance): void {
         let orgId: string | undefined;
         let resolvedTeamId: string | undefined;
 
+        if (inviteLinkToken || inviteId) await assertIndependentChooserMutation(lockedSession, tx);
         if (inviteLinkToken) {
           // Redemption, finalization, and the one-time capability claim share
           // this transaction; a replay loser cannot retain a membership grant.
@@ -267,6 +270,7 @@ export function registerAuthSelectTeamRoute(app: FastifyInstance): void {
             requestAccess: lockedSession.requestAccess,
             state: lockedSession.state,
             authMethod: lockedSession.authMethod,
+            authenticationEvidenceId: lockedSession.authenticationEvidenceId,
             codeChallenge: lockedSession.codeChallenge,
             codeChallengeMethod: lockedSession.codeChallengeMethod,
             ip: request.ip ?? null,
@@ -279,6 +283,7 @@ export function registerAuthSelectTeamRoute(app: FastifyInstance): void {
           finalized,
           userId: lockedSession.userId,
           authMethod: lockedSession.authMethod,
+            authenticationEvidenceId: lockedSession.authenticationEvidenceId,
         };
       });
 

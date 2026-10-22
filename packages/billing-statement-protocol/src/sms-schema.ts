@@ -23,7 +23,7 @@ export const billingSmsVerifyQuoteRequestV1JsonSchema = billingSubjectActionBody
   { ...scope, quote_id: id }, [...Object.keys(scope), 'quote_id'],
 );
 export const billingSmsFinalQuoteV1JsonSchema = exact({
-  id, amount: decimal, currency: { const: 'USD' }, expires_at: { type: 'string', format: 'date-time' },
+  id, amount: decimal, currency: { enum: ['USD', 'EUR', 'GBP'] }, expires_at: { type: 'string', format: 'date-time' },
   rate_basis: { enum: ['monthly_mobile', 'inbound_mobile', 'maximum_mobile_carrier'] },
   scope: exact({ organisation_id: id, ...scope }),
 });

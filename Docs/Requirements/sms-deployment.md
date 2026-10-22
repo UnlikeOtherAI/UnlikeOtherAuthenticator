@@ -93,6 +93,38 @@ sets existing quotes' rental markup to zero, preserving their original fixed-fee
 terms. No existing paid subscription or reservation is repriced by a mode change.
 Only USD and EUR provider pricing is supported; other currencies fail closed.
 
+### Flat monthly number price
+
+A mobile number costs one flat monthly price per currency, the same in every
+country. The organisation's billing region picks the currency (UK → GBP, US →
+USD, Europe → EUR; see `Docs/Requirements/billing-tariffs.md`). Until the region
+is chosen, monthly quotes and number purchases answer `409 BILLING_REGION_REQUIRED`.
+The prices live in **Admin › Billing › SMS policies › Monthly number prices**,
+one value per currency with its own Edit. The migration seeds EUR 4.99, GBP 4.49
+and USD 5.49. Prices are append-only: an edit adds a row, the newest row per
+currency is current, and every monthly quote names the row it used
+(`billing_sms_quotes.monthly_price_id`). The quote amount and currency are that
+price; its rate basis stays `monthly_mobile`. This replaces provider cost plus
+markup for the monthly charge only. Message quotes are unchanged (USD).
+
+The price is never below cost. At quote time the account's Twilio monthly rental
+is converted at the quote's accepted ECB rates (USD per EUR and, since this
+change, GBP per EUR from the same document) and compared exactly; a rental at or
+above the flat price refuses that country's monthly quote in that currency with
+`409 BILLING_SMS_MONTHLY_PRICE_BELOW_COST`, logs it, and opens a
+`monthly_price_below_cost` alert (subject `monthly:<country>:<currency>`) on the
+SMS policies page (email once). A later successful monthly quote for that
+country and currency resolves it. GBP quotes need an accepted snapshot that
+carries GBP; snapshots accepted before this change do not, so GBP waits for the
+next accepted ECB document (the renewal job accepts one daily).
+
+Begin accepts the quote's currency and creates the offer, catalog and Stripe
+monthly price in it. SMS number subscriptions bill through a Stripe Customer of
+their own per organisation and currency (`scope_key = <org>:sms:<currency>`),
+because Stripe allows only one subscription currency per Customer; the
+organisation's other subscriptions keep its plain organisation Customer. The
+customer pays for the first number's checkout on that new Customer.
+
 ### Provider-charge coverage and unsupported charges
 
 | Component | Evidence and collection |

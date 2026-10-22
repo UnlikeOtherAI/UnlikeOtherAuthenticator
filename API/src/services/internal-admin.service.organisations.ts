@@ -1,5 +1,7 @@
-import { getAdminPrisma } from '../db/prisma.js';
 import { runInTransaction } from '../db/tenant-context.js';
+import { revokeEnterpriseOrganisation } from './enterprise-authority-revocation.service.js';
+import { getAdminPrisma } from '../db/prisma.js';
+import { runEnterpriseAuthorityTransaction } from './enterprise-authority-transaction.service.js';
 import {
   normalizeAllowedEmailDomains,
   normalizeAllowedEmails,
@@ -158,7 +160,7 @@ export async function updateAdminOrganisation(
   },
 ) {
   const prisma = getAdminPrisma();
-  await runInTransaction(prisma, async (tx) => {
+  await runEnterpriseAuthorityTransaction(prisma, async (tx) => {
     if (input.twoFaPolicy !== undefined) {
       // Token issuance holds the shared side of this fence through commit. Taking
       // the exclusive side before the policy read makes a switch see either the
@@ -188,6 +190,7 @@ export async function updateAdminOrganisation(
     }
 
     if (input.twoFaPolicy !== undefined && input.twoFaPolicy !== existing.twoFaPolicy) {
+      await revokeEnterpriseOrganisation(tx, orgId);
       if (!input.actorEmail) throw new AppError('INTERNAL', 500, 'MISSING_ADMIN_CLAIMS');
       await writeAuditLog(
         {

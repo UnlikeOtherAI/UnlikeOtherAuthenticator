@@ -5,6 +5,7 @@ import {
   createEmailProvider,
   resetEmailProviderCache,
   sendRawEmail,
+  sendVerifyEmailSetPasswordEmail,
 } from '../../src/services/email.service.js';
 import { setAppLogger } from '../../src/utils/app-logger.js';
 
@@ -380,5 +381,20 @@ describe('sendRawEmail', () => {
         text: 'Text',
       }),
     ).rejects.toThrow('EMAIL_DISPATCH_FAILED');
+  });
+
+  it('reports a swallowed registration email failure to the caller instead of hiding it', async () => {
+    process.env.NODE_ENV = 'test';
+    process.env.SHARED_SECRET = 'test-shared-secret-with-enough-length';
+    process.env.EMAIL_FROM = 'noreply@example.com';
+    process.env.EMAIL_PROVIDER = 'disabled';
+    resetEmailProviderCache();
+    await expect(sendVerifyEmailSetPasswordEmail({ to: 'to@example.com', link: 'https://auth.example.com/x' })).resolves.toBe(true);
+
+    process.env.EMAIL_PROVIDER = 'smtp';
+    Reflect.deleteProperty(process.env, 'SMTP_HOST');
+    resetEmailProviderCache();
+    setAppLogger({ error: vi.fn() } as never);
+    await expect(sendVerifyEmailSetPasswordEmail({ to: 'to@example.com', link: 'https://auth.example.com/x' })).resolves.toBe(false);
   });
 });

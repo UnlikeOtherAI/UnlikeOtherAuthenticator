@@ -1,3 +1,4 @@
+import { legacyCredentialStores } from '../helpers/authentication-fixture.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PrismaClient } from '@prisma/client';
 
@@ -41,7 +42,7 @@ describe('shared post-authentication signature gate', () => {
   });
 
   it('forwards the exact authenticated flow state and returns the signing continuation', async () => {
-    const prisma = {} as PrismaClient;
+    const prisma = legacyCredentialStores() as unknown as PrismaClient;
     finalizeConfigAuthorizationWithSignaturesMock.mockResolvedValue({
       status: 'signing_required',
       signingToken: 'opaque-capability',
@@ -106,7 +107,7 @@ describe('shared post-authentication signature gate', () => {
   });
 
   it('does not create a continuation when an access request is still pending', async () => {
-    const prisma = {} as PrismaClient;
+    const prisma = legacyCredentialStores() as unknown as PrismaClient;
     handlePostAuthenticationAccessRequestMock.mockResolvedValue({ status: 'requested' });
     const { finalizeAuthenticatedUser } =
       await import('../../src/services/access-request-flow.service.js');
@@ -133,7 +134,7 @@ describe('shared post-authentication signature gate', () => {
   });
 
   it('keeps signature team decisions on the authoritative outer transaction', async () => {
-    const outerPrisma = {} as PrismaClient;
+    const outerPrisma = legacyCredentialStores() as unknown as PrismaClient;
     const detachedTeamPrisma = { detached: true } as unknown as PrismaClient;
     finalizeConfigAuthorizationWithSignaturesMock.mockResolvedValue({
       status: 'granted',

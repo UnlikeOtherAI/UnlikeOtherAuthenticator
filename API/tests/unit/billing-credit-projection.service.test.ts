@@ -65,6 +65,9 @@ function projectionData(balanceMicrocredits = 2_000_000_000n): BillingCreditProj
       autoTopUpConsentedBy: { id: 'user_1', name: 'Viewer' },
     },
     policy: null,
+    purchaseCurrency: 'USD',
+    reloadCurrency: 'USD',
+    regionPolicy: null,
     catalogs: [],
     prepaidReservations: [],
     activeReservedMicrocredits: 0n,
@@ -152,7 +155,7 @@ function productionFreshAccountData(): BillingCreditProjectionData {
   data.settlements = [];
   data.allocations = [];
   data.entries = [];
-  const offers = CREDIT_TOP_UP_SPECS.map((spec, index) => ({
+  const offers = CREDIT_TOP_UP_SPECS.filter((spec) => spec.currency === 'USD').map((spec, index) => ({
     id: `offer_${index + 1}`,
     policyId: 'policy_1',
     serviceId: service.id,

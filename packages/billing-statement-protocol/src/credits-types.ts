@@ -7,7 +7,7 @@ export const BILLING_CREDITS_SCHEMA_VERSION = 1 as const;
 // BillingCreditsV1 is shared by UOA and pinned consumer package revisions.
 // Additive fields require an explicit read capability header while older
 // consumers still validate the previous strict schema.
-export const BILLING_CREDITS_PROTOCOL_VERSION = '2.0.0' as const;
+export const BILLING_CREDITS_PROTOCOL_VERSION = '2.3.0' as const;
 export const BILLING_CREDITS_PROTOCOL_HEADER = 'x-uoa-billing-credits-protocol' as const;
 export const BILLING_CREDITS_SCHEMA_PATH = '/schemas/billing-credits-v1.json' as const;
 export const BILLING_CREDITS_EXAMPLE_PATH = '/schemas/billing-credits-v1.example.json' as const;
@@ -29,9 +29,50 @@ export type BillingCreditAmount = {
   usd_equivalent: ExactMoney & { currency: 'USD' };
 };
 
+/** The currencies credits are bought in: USD, or a billing region's GBP or EUR (protocol 2.1.0). */
+export type BillingCreditPurchaseCurrency = 'USD' | 'EUR' | 'GBP';
+
 export type BillingCreditsPaymentMoney = ExactMoney & {
   amount_minor: string;
-  currency: 'USD';
+  currency: BillingCreditPurchaseCurrency;
+};
+
+/**
+ * The live rate a GBP or EUR offer's credits follow (protocol 2.1.0). The
+ * credits shown are what today's rate buys; the exact credits are fixed when
+ * the checkout is created.
+ */
+export type BillingCreditPurchaseRateV1 = {
+  currency: 'EUR' | 'GBP';
+  /** USD per one unit of `currency`. */
+  usd_per_unit: string;
+  source: 'stripe' | 'ecb';
+  as_of: string;
+  display: string;
+};
+
+/** Credits protocol 2.3.0: credits valued in the billing region's currency; negative for debt. */
+export type BillingCreditsValueMoney = ExactMoney & {
+  amount_minor: string;
+  currency: BillingCreditPurchaseCurrency;
+};
+
+/**
+ * Credits protocol 2.3.0: the rate the next credits used are valued at, for
+ * showing a region-currency estimate beside a price in credits. Charges stay in
+ * credits. `purchase` is the rate the oldest remaining credits were bought at;
+ * `region` the rate captured when the region was chosen, which values credits
+ * bought in USD and debt; `usd` a US region or none.
+ */
+export type BillingCreditRegionRateV1 = {
+  currency: BillingCreditPurchaseCurrency;
+  /** USD per one unit of `currency`. */
+  usd_per_unit: string;
+  /** Credits per one unit of `currency`: 1,000 × `usd_per_unit`. */
+  credits_per_unit: string;
+  source: 'usd' | 'purchase' | 'region';
+  as_of: string;
+  display: string;
 };
 
 type BillingCreditsActionBase = {
@@ -118,6 +159,11 @@ type BillingCreditsCommonV1<PendingPayment> = {
     state: 'available' | 'zero' | 'debt';
     label: string;
     description: string;
+    /**
+     * Credits protocol 2.3.0: what the balance is worth in the region currency,
+     * each lot at the rate it was bought at; null when it cannot be valued yet.
+     */
+    value?: (BillingCreditsValueMoney & { label: string }) | null;
   };
   pending_credits: {
     top_up_count: number;
@@ -141,6 +187,8 @@ type BillingCreditsCommonV1<PendingPayment> = {
   controlled_by?: BillingControlledByV1;
   /** Present only for consumers negotiating presentation version 1.5.0. */
   attention?: BillingCreditAttentionV1[];
+  /** Credits protocol 2.3.0; null while the region's rate is not known. */
+  region_rate?: BillingCreditRegionRateV1 | null;
   funding_request?: BillingCreditFundingRequestActionV1;
 };
 
@@ -151,6 +199,8 @@ type BillingCreditsFundingOfferBase = {
   description: string;
   payment_amount: BillingCreditsPaymentMoney;
   credits_received: BillingCreditAmount;
+  /** Present on a GBP or EUR offer, whose credits follow the live rate. */
+  credit_rate?: BillingCreditPurchaseRateV1;
   available: boolean;
   unavailable_reason: string | null;
 };
@@ -167,10 +217,15 @@ type BillingCreditsAutoTopUpOptionBase = {
   selected: boolean;
   label: string;
   description: string;
+  /** Credits; for a GBP or EUR option, what today's rate makes of `threshold_value`. */
   threshold: BillingCreditAmount;
+  /** Credits protocol 2.2.0: a GBP or EUR option's threshold, compared with the lots' value. */
+  threshold_value?: BillingCreditsPaymentMoney;
   refill_offer_id: string;
   refill_payment_amount: BillingCreditsPaymentMoney;
   refill_credits_received: BillingCreditAmount;
+  /** Present on a GBP or EUR option, whose refill credits follow the live rate. */
+  credit_rate?: BillingCreditPurchaseRateV1;
   monthly_cap: BillingCreditsPaymentMoney;
 };
 
@@ -179,6 +234,8 @@ type BillingCreditsAutomaticTopUpBase = {
   display_status: string;
   description: string;
   threshold: BillingCreditAmount | null;
+  /** Credits protocol 2.2.0: the consented GBP or EUR reload's threshold in its currency. */
+  threshold_value?: BillingCreditsPaymentMoney;
   refill_offer_id: string | null;
   monthly_cap: BillingCreditsPaymentMoney | null;
   charged_this_month: BillingCreditsPaymentMoney;
@@ -236,6 +293,12 @@ type BillingCreditsRecentEntryBase = {
   detail: string;
   credits: BillingCreditAmount;
   credit_balance_after: BillingCreditAmount;
+  /**
+   * Credits protocol 2.3.0: the entry's value in the region currency, as a
+   * magnitude: a purchase is worth its lot, any other entry the sum of what it
+   * drew from or gave back to each lot; null for history before lots.
+   */
+  value?: BillingCreditsValueMoney | null;
 };
 
 export type BillingCreditsManagerV1 = BillingCreditsCommonV1<BillingCreditsPaymentMoney> & {

@@ -138,7 +138,7 @@ function normalizeOrgId(value: string): string {
  * See `requireOrgRole` below.
  */
 export async function resolveActingUserClaims(token: string): Promise<AccessTokenClaims> {
-  return await verifyAccessToken(token);
+  return await verifyAccessToken(token, { requirement: 'enterprise_org_access' });
 }
 
 /**
@@ -193,6 +193,7 @@ async function resolveSubjectAssertionClaims(
         userId: assertion.sub,
         domain: sourceDomain,
         orgId: assertion.active.orgId,
+        assuranceId: assertion.verifiedAssuranceId,
         groupsEnabled: request.config?.org_features?.groups_enabled,
       },
       {
@@ -217,6 +218,7 @@ async function resolveSubjectAssertionClaims(
     tokenVersion: identity.tokenVersion,
     email: requireIdentityEmail(user.email),
     domain: sourceDomain,
+    ...(assertion.verifiedAssuranceId ? { assuranceId: assertion.verifiedAssuranceId } : {}),
     // Assertions identify a user and their live team, not an OAuth client.
     // A request may name another team in the same organisation: its service
     // must resolve the actor's current capability for that exact target rather

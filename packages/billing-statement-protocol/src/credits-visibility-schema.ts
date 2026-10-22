@@ -1,8 +1,10 @@
-import { creditAmountSchema } from './funding-schema-primitives.js';
+import { creditAmountSchema, moneySchema } from './funding-schema-primitives.js';
 
 const unsignedCredits = creditAmountSchema();
 const positiveCredits = creditAmountSchema({ positive: true });
 const signedCredits = creditAmountSchema({ signed: true });
+// Credits protocol 2.3.0: an entry's value in the region currency, as a magnitude.
+const entryValue = moneySchema({ currencies: ['USD', 'EUR', 'GBP'] });
 
 const serviceSchema = {
   type: 'object',
@@ -109,6 +111,7 @@ const recentEntryBaseProperties = {
   detail: { type: 'string' },
   credits: positiveCredits,
   credit_balance_after: signedCredits,
+  value: { oneOf: [entryValue, { type: 'null' }] },
 } as const;
 
 const recentEntryRequired = [

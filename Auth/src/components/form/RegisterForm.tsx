@@ -10,15 +10,16 @@ type RegisterRequest = { email: string };
 
 export function RegisterForm(): React.JSX.Element {
   const { t } = useTranslation();
-  const { configUrl, redirectUrl, codeChallenge, codeChallengeMethod, requestAccess, setView } = usePopup();
+  const { configUrl, redirectUrl, codeChallenge, codeChallengeMethod, requestAccess, state, setView, beginRegistration } = usePopup();
   const [email, setEmail] = useState('');
-  const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState(false);
   const [alreadyRegistered, setAlreadyRegistered] = useState(false);
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setLoading(true);
+    setError(false);
 
     const query: Record<string, string | boolean | null> = { config_url: configUrl };
     if (redirectUrl) query.redirect_url = redirectUrl;
@@ -27,17 +28,19 @@ export function RegisterForm(): React.JSX.Element {
       query.code_challenge_method = codeChallengeMethod;
     }
     if (requestAccess) query.request_access = true;
+    if (state) query.state = state;
 
     // Most clients keep the default no-enumeration response. A signed config
     // may opt into EMAIL_ALREADY_REGISTERED for products that prefer inline
     // sign-in guidance over a login-link email.
-    const result = await postJson<RegisterRequest, unknown>('/auth/register', { email }, query);
+    const result = await postJson<RegisterRequest, { registration_id: string }>('/auth/registration/start', { email }, query);
     setLoading(false);
     if (!result.ok && result.code === 'EMAIL_ALREADY_REGISTERED') {
       setAlreadyRegistered(true);
       return;
     }
-    setSubmitted(true);
+    if (!result.ok || typeof result.data?.registration_id !== 'string') { setError(true); return; }
+    beginRegistration({ id: result.data.registration_id, email });
   }
 
   if (alreadyRegistered) {
@@ -70,20 +73,6 @@ export function RegisterForm(): React.JSX.Element {
     );
   }
 
-  if (submitted) {
-    return (
-      <p
-        role="status"
-        className={[
-          'mt-6 rounded-[var(--uoa-radius-card)] border border-[var(--uoa-color-border)]',
-          'bg-[var(--uoa-color-surface)] px-3 py-2 text-sm text-[var(--uoa-color-text)]',
-        ].join(' ')}
-      >
-        {t('message.instructionsSent')}
-      </p>
-    );
-  }
-
   return (
     <form className="mt-6 flex flex-col gap-4" onSubmit={handleSubmit}>
       <Input
@@ -96,6 +85,8 @@ export function RegisterForm(): React.JSX.Element {
         value={email}
         onChange={(e) => setEmail(e.currentTarget.value)}
       />
+
+      {error ? <p role="alert" className="text-sm text-[var(--uoa-color-danger)]">{t('form.error.generic')}</p> : null}
 
       <div className="mt-2">
         <Button variant="primary" type="submit" disabled={loading}>

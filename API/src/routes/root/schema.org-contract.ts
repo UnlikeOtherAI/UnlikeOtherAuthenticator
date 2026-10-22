@@ -24,7 +24,9 @@ const ORG_CONTRACT_NOTE =
   'the active team is caller provenance, not authority for a requested team. UOA verifies it through the ' +
   'product config JWKS and re-resolves the user credential epoch, ACTIVE org membership, and the requested ' +
   'team capability before applying the same user-mode gates. It is not an access token and must never be sent ' +
-  'with X-UOA-Access-Token. ' +
+  'with X-UOA-Access-Token. Temporary product JWKS network, timeout, rate-limit or upstream-server failures ' +
+  'return 503 INTEGRATION_JWKS_UNAVAILABLE; retry with backoff without ending the person’s session. ' +
+  'Invalid signatures, missing keys, expired assertions and unsafe JWKS destinations remain 401 refusals. ' +
   'organisations.domain still owns the slug namespace, backend-mode ownership, and invite email ' +
   'identity. BACKEND MODE: omit ' +
   'X-UOA-Access-Token entirely — the domain ' +

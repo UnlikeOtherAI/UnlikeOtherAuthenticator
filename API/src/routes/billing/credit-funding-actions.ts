@@ -84,6 +84,7 @@ export function registerBillingCreditFundingActionRoutes(app: FastifyInstance): 
         ...context,
         includePurchaseId: presentation.enabled,
         request: { ...context.request, offerId: body.offer_id },
+        log: request.log,
       });
       reply.header('Cache-Control', 'private, no-store');
       return reply.send(result);

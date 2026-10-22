@@ -9,6 +9,9 @@ import {
 import { CLIENT_DOMAIN_TEAM_POLICY } from '../../src/services/product-team-policy.service.js';
 import { testUiTheme } from '../helpers/test-config.js';
 
+// The team row's updatedAt versions the public avatar URL (Docs/Auth/avatars.md §11.4).
+const TEAM_UPDATED_AT = new Date('2026-10-01T00:00:00.000Z');
+
 function makeConfig(overrides?: Partial<ClientConfig>): ClientConfig {
   const { org_features: orgFeaturesOverride, ...rest } = overrides ?? {};
   return {
@@ -253,6 +256,7 @@ describe('first-login.service', () => {
 describe('buildSessionChoices', () => {
   it('returns empty choices when the user cannot be found', async () => {
     const prisma = {
+      orgMember: { findMany: vi.fn(async () => []) },
       user: { findUnique: vi.fn(async () => null) },
       teamMember: { findMany: vi.fn() },
       teamInvite: { findMany: vi.fn() },
@@ -274,6 +278,7 @@ describe('buildSessionChoices', () => {
 
   it('only queries ACTIVE team memberships — DEACTIVATED/REMOVED never surface', async () => {
     const prisma = {
+      orgMember: { findMany: vi.fn(async () => []) },
       user: { findUnique: vi.fn(async () => ({ email: 'jane@acme.com' })) },
       teamMember: {
         findMany: vi.fn(async () => [
@@ -285,6 +290,7 @@ describe('buildSessionChoices', () => {
               slug: 'backend-team',
               orgId: 'org-1',
               iconUrl: 'https://cdn.example.com/a.png',
+              updatedAt: TEAM_UPDATED_AT,
               org: { name: 'Acme' },
             },
           },
@@ -309,7 +315,7 @@ describe('buildSessionChoices', () => {
           // Docs/Auth/avatars.md §11.4: the public, credential-free avatar form the chooser can
           // actually fetch. Always present, and independent of whether iconUrl is set — the route
           // resolves uploaded → proxied iconUrl → generated behind this one URL.
-          avatarImageUrl: '/teams/team-1/avatar',
+          avatarImageUrl: '/teams/team-1/avatar?v=muorpc00',
           orgName: 'Acme',
           slug: 'backend-team',
         },
@@ -330,7 +336,14 @@ describe('buildSessionChoices', () => {
         teamId: true,
         teamRole: true,
         team: {
-          select: { name: true, slug: true, orgId: true, iconUrl: true, org: { select: { name: true } } },
+          select: {
+            name: true,
+            slug: true,
+            orgId: true,
+            iconUrl: true,
+            updatedAt: true,
+            org: { select: { name: true, ownerId: true } },
+          },
         },
       },
     });
@@ -338,6 +351,7 @@ describe('buildSessionChoices', () => {
 
   it('maps pending invites, naming the organisation and resolving the inviter', async () => {
     const prisma = {
+      orgMember: { findMany: vi.fn(async () => []) },
       user: {
         findUnique: vi.fn(async () => ({ email: 'jane@acme.com' })),
         // The inviter of a member-initiated invitation is recorded as a user id alone.
@@ -420,11 +434,13 @@ describe('buildSessionChoices', () => {
 
   it('reaches an all-memberships product’s other organisations for invitations too', async () => {
     const prisma = {
+      orgMember: { findMany: vi.fn(async () => []) },
       user: { findUnique: vi.fn(async () => ({ email: 'jane@acme.com' })), findMany: vi.fn() },
       teamMember: { findMany: vi.fn(async () => []) },
       teamInvite: { findMany: vi.fn(async () => []) },
     };
     const crossProductPrisma = {
+      orgMember: { findMany: vi.fn(async () => []) },
       user: { findUnique: vi.fn(), findMany: vi.fn() },
       teamMember: { findMany: vi.fn(async () => []) },
       teamInvite: { findMany: vi.fn(async () => []) },
@@ -452,11 +468,13 @@ describe('buildSessionChoices', () => {
 
   it('lists all exact ACTIVE memberships for one centrally bound product', async () => {
     const prisma = {
+      orgMember: { findMany: vi.fn(async () => []) },
       user: { findUnique: vi.fn(async () => ({ email: 'jane@acme.com' })) },
       teamMember: { findMany: vi.fn(async () => []) },
       teamInvite: { findMany: vi.fn(async () => []) },
     };
     const crossProductPrisma = {
+      orgMember: { findMany: vi.fn(async () => []) },
       user: { findUnique: vi.fn() },
       teamMember: {
         findMany: vi.fn(async () => [
@@ -468,6 +486,7 @@ describe('buildSessionChoices', () => {
               slug: 'nessie-works',
               orgId: 'org-nessie',
               iconUrl: null,
+              updatedAt: TEAM_UPDATED_AT,
               org: { name: 'Nessie' },
             },
           },
@@ -479,6 +498,7 @@ describe('buildSessionChoices', () => {
               slug: 'second-team',
               orgId: 'org-second',
               iconUrl: null,
+              updatedAt: TEAM_UPDATED_AT,
               org: { name: 'Second Co' },
             },
           },
@@ -517,7 +537,14 @@ describe('buildSessionChoices', () => {
         teamId: true,
         teamRole: true,
         team: {
-          select: { name: true, slug: true, orgId: true, iconUrl: true, org: { select: { name: true } } },
+          select: {
+            name: true,
+            slug: true,
+            orgId: true,
+            iconUrl: true,
+            updatedAt: true,
+            org: { select: { name: true, ownerId: true } },
+          },
         },
       },
     });

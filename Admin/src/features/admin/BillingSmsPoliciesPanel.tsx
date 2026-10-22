@@ -5,6 +5,7 @@ import { billingSmsPolicyService as service } from '../../services/billing-sms-p
 import type { SmsFxPreview, SmsRoutePreview } from '../../schemas/billing-sms-policies';
 import { BillingSmsAddCountry } from './BillingSmsAddCountry';
 import { BillingSmsFxCard } from './BillingSmsFxCard';
+import { BillingSmsMonthlyPriceCard } from './BillingSmsMonthlyPriceCard';
 import { BillingSmsPolicyAlerts, BillingSmsPolicyHistory } from './BillingSmsPolicyHistory';
 import { BillingSmsPolicyReview } from './BillingSmsPolicyReview';
 import { BillingSmsRoutePolicyForm } from './BillingSmsRoutePolicyForm';
@@ -35,6 +36,7 @@ export function BillingSmsPoliciesPanel() {
         anything else here.</p>
     </Card>
     <BillingSmsPolicyAlerts alerts={policies.data?.alerts ?? []} />
+    <BillingSmsMonthlyPriceCard />
     <BillingSmsFxCard onAccepted={reload} onReview={(result) => { acceptFx.reset(); setFx(result); }} />
     <Card className="space-y-4 p-5"><h3 className="font-semibold text-gray-900">Account-specific route fee bounds</h3>
       <p className="text-sm text-gray-500">Add country reads the configured Twilio account's own mobile prices for

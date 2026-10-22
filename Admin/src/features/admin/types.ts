@@ -118,6 +118,7 @@ export type UserSummary = {
   deleted?: boolean;
   domains: string[];
   twofa: boolean;
+  deeptestNessieInferenceAllowed?: boolean;
   lastLogin: string;
   status: EntityStatus;
   method: AuthMethod;

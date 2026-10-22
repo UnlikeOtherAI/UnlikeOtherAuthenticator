@@ -517,3 +517,15 @@ bump.
 `all_active_memberships` may receive teams owned by several domains, so one domain-bound avatar URL
 cannot represent the whole directory; the public endpoint remains non-null and renderable for each
 authorized entry without exposing a domain credential.
+
+**The public form is versioned.** Both payloads append `?v=<version>`, the team row's
+`updatedAt` in base-36 milliseconds. `@updatedAt` moves it for an `iconUrl` edit, and the team
+avatar service moves it on every upload and on a removal that deleted a row, since a change to
+`team_avatars` alone would not. The public route serves a generated image as
+`private, max-age=86400`, so before this a browser that had drawn the generated image kept it for a
+day after an upload, under the one unchanging URL: the products' team switchers showed the old
+picture while the credentialed relays already showed the new one. Any other team edit also moves
+the version, which costs one refetch and nothing else. The version comes from the `teams` row the
+payload already selects, so it adds no read of `team_avatars`. The route accepts `v` (any string up
+to 64 characters) and never reads it, so it reveals nothing to an anonymous caller; only a reader
+already entitled to the team is handed a version.

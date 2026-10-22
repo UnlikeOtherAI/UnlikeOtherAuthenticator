@@ -29,7 +29,6 @@ import type {
   UserSummary,
 } from '../features/admin/types';
 import { createApiClient } from './api-client';
-
 const api = createApiClient();
 
 export type DomainSecretResponse = {
@@ -333,6 +332,8 @@ export const adminService = {
     ),
   getUsers: () => api.get<UserSummary[]>('/internal/admin/users'),
   getUser: (userId: string) => api.get<UserSummary | null>(`/internal/admin/users/${encodeURIComponent(userId)}`),
+  setDeepTestNessieInferenceAccess: (userId: string, allowed: boolean) =>
+    api.patch<{ allowed: boolean }>(`/internal/admin/users/${encodeURIComponent(userId)}/deeptest-nessie-inference`, { allowed }),
   // Image bytes, not JSON: <img src> cannot carry the admin bearer, so avatars are
   // fetched as blobs through the shared client and rendered from an object URL.
   getUserAvatar: (userId: string) =>
@@ -494,7 +495,6 @@ function toKillSwitchBody(input: KillSwitchInput) {
     cache_ttl: input.cacheTtl,
   };
 }
-
 export type AdminServiceData = AdminData;
 export type TeamWithOrg = Team & { orgName: string };
 export type UserLookup = UserSummary | null;

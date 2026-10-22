@@ -15,6 +15,7 @@ import {
   sendLoginLinkEmail,
   sendVerifyEmailEmail,
   sendVerifyEmailSetPasswordEmail,
+  sendRegistrationVerificationEmail,
 } from './email.service.js';
 import { extractEmailDomain } from '../utils/email-domain.js';
 import { generateEmailToken, hashEmailToken } from '../utils/verification-token.js';
@@ -44,7 +45,20 @@ type RegisterDeps = {
   prisma?: RegisterPrisma;
 };
 
-type RegistrationInstructionResult = { status: 'sent' } | { status: 'existing_user' };
+/**
+ * What happened to the email behind the generic response, for the sign-up funnel only
+ * (Docs/Auth/signup-funnel-metrics.md). Never returned to the caller of the public endpoint.
+ */
+export type RegistrationDelivery =
+  | 'verification_sent'
+  | 'verification_failed'
+  | 'login_link_sent'
+  | 'login_link_failed'
+  | 'blocked';
+
+type RegistrationInstructionResult =
+  | { status: 'sent'; delivery?: RegistrationDelivery }
+  | { status: 'existing_user' };
 
 /**
  * Brief 11: equalize CPU/IO between the user-exists and user-missing/blocked branches
@@ -138,6 +152,7 @@ export async function requestRegistrationInstructions(
     codeChallenge?: string;
     codeChallengeMethod?: 'S256';
     ip?: string | null;
+    browserRegistration?: { completionToken: string; link: string; code: string; expiresAt: Date };
   },
   deps?: RegisterDeps,
 ): Promise<RegistrationInstructionResult> {
@@ -163,7 +178,7 @@ export async function requestRegistrationInstructions(
   );
   if (banned) {
     await (deps?.consumeAccountFlowTimingBudget ?? consumeAccountFlowTimingBudget)();
-    return { status: 'sent' };
+    return { status: 'sent', delivery: 'blocked' };
   }
 
   const prisma = deps?.prisma ?? getPrisma();
@@ -190,17 +205,17 @@ export async function requestRegistrationInstructions(
   ) {
     // Don't leak "registration blocked" vs "registration in progress" via timing.
     await (deps?.consumeAccountFlowTimingBudget ?? consumeAccountFlowTimingBudget)();
-    return { status: 'sent' };
+    return { status: 'sent', delivery: 'blocked' };
   }
 
-  const token = deps?.generateEmailToken ? deps.generateEmailToken() : generateEmailToken();
+  const token = params.browserRegistration?.completionToken ?? (deps?.generateEmailToken ? deps.generateEmailToken() : generateEmailToken());
   const sharedSecret = deps?.sharedSecret ?? requireEnv('SHARED_SECRET').SHARED_SECRET;
   const tokenHash = deps?.hashEmailToken
     ? deps.hashEmailToken(token, sharedSecret)
     : hashEmailToken(token, sharedSecret);
 
   const now = deps?.now ? deps.now() : new Date();
-  const expiresAt = new Date(now.getTime() + EMAIL_TOKEN_TTL_MS);
+  const expiresAt = params.browserRegistration?.expiresAt ?? new Date(now.getTime() + EMAIL_TOKEN_TTL_MS);
 
   const type = existing
     ? 'LOGIN_LINK'
@@ -227,6 +242,15 @@ export async function requestRegistrationInstructions(
 
   const theme = extractEmailTheme(params.config);
 
+  if (params.browserRegistration) {
+    const delivered = await sendRegistrationVerificationEmail({
+      to: email, link: params.browserRegistration.link, code: params.browserRegistration.code, theme,
+    });
+    return { status: 'sent', delivery: existing
+      ? (delivered === false ? 'login_link_failed' : 'login_link_sent')
+      : (delivered === false ? 'verification_failed' : 'verification_sent') };
+  }
+
   if (existing) {
     const link = buildRegistrationEmailLandingLink({
       baseUrl,
@@ -238,8 +262,12 @@ export async function requestRegistrationInstructions(
       codeChallenge: params.codeChallenge,
       codeChallengeMethod: params.codeChallengeMethod,
     });
-    await (deps?.sendAccountExistsEmail ?? sendAccountExistsEmail)({ to: email, link, theme });
-    return { status: 'sent' };
+    const delivered = await (deps?.sendAccountExistsEmail ?? sendAccountExistsEmail)({
+      to: email,
+      link,
+      theme,
+    });
+    return { status: 'sent', delivery: delivered === false ? 'login_link_failed' : 'login_link_sent' };
   }
 
   const link = buildRegistrationEmailLandingLink({
@@ -252,19 +280,10 @@ export async function requestRegistrationInstructions(
     codeChallenge: params.codeChallenge,
     codeChallengeMethod: params.codeChallengeMethod,
   });
-  if (type === 'VERIFY_EMAIL') {
-    await (deps?.sendVerifyEmailEmail ?? sendVerifyEmailEmail)({
-      to: email,
-      link,
-      theme,
-    });
-    return { status: 'sent' };
-  }
-
-  await (deps?.sendVerifyEmailSetPasswordEmail ?? sendVerifyEmailSetPasswordEmail)({
-    to: email,
-    link,
-    theme,
-  });
-  return { status: 'sent' };
+  const send =
+    type === 'VERIFY_EMAIL'
+      ? (deps?.sendVerifyEmailEmail ?? sendVerifyEmailEmail)
+      : (deps?.sendVerifyEmailSetPasswordEmail ?? sendVerifyEmailSetPasswordEmail);
+  const delivered = await send({ to: email, link, theme });
+  return { status: 'sent', delivery: delivered === false ? 'verification_failed' : 'verification_sent' };
 }

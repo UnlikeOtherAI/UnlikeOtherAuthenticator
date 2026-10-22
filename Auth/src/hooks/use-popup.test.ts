@@ -112,3 +112,12 @@ describe('parsePopupQueryParams', () => {
     });
   });
 });
+
+
+describe('management destination intent', () => {
+  it('preserves the exact target through initial and social chooser entry', () => {
+    expect(parsePopupQueryParams('?flow=organisation_management&management_org_id=org-a').managementOrgId).toBe('org-a');
+    expect(parsePopupQueryParams('?flow=team_chooser&login_token=bridge&management_org_id=org-a').managementOrgId).toBe('org-a');
+    expect(parsePopupQueryParams('?management_org_id=' + 'x'.repeat(101)).managementOrgId).toBeNull();
+  });
+});

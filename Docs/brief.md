@@ -1,5 +1,54 @@
 # Central OAuth & Auth Service — Full Build Brief
 
+## Cross-device continuation clarification (2026-10-22)
+
+This clarification supersedes the code-after-link requirement in the earlier
+registration section below. Confirming the secret email link on any device
+approves the exact pending registration that sent it. Its original screen receives
+the WebSocket notification, rechecks authoritative state with its original HttpOnly
+cookie and immutable OAuth/config context, and advances without code entry.
+The confirming browser only displays success; it receives no login, completion
+credential or redirect. The six-character code is an alternative to the link.
+The existing confirmation page makes approval of the initiating flow explicit and
+asks users to confirm only registrations they requested. GET and link previews
+have no effect. An explicit approval authorizes that original flow; it cannot
+prove that the mailbox owner personally initiated it. Replay cannot transfer
+approval to another flow. Existing expiry, attempt and completion gates remain.
+
+## Browser-bound registration verification (2026-10-22)
+
+The hosted email registration screen offers one verification link and a six-character
+uppercase alphanumeric code. The secret link confirms the mailbox on any device and
+shows an isolated success page without signing that device in. A link confirmed with
+the original registration cookie can advance that exact flow. A cross-device click
+does not authorize the initiating browser: it still needs the emailed code. This
+prevents an attacker-initiated registration from acquiring credentials when the
+mailbox owner clicks. No extra pairing code is sent. Codes work only in the requesting
+browser's registration, expire after 15 minutes, and allow five persisted guesses.
+Authenticated WebSocket hints and polling recheck database state; refresh retains
+only public flow metadata. Existing epoch, scope, TOTP and agreement gates remain.
+The complete contract is published by `/api` and `/llm` under `/auth/registration/*`.
+
+## Enterprise connection authority (2026-10-17)
+
+Enterprise organisation SSO is configured only in UOA and introduces no Nessie
+billing/plan gate. Its write-only encrypted customer-IdP connection credentials
+are a narrowly separate class from product-client OAuth secrets; the historical
+"no per-client OAuth secrets" rule does not prohibit this class. Existing
+consumer/social account resolution remains a separate migration. Enterprise
+identity keys are exact connection/issuer/tenant/stable-subject tuples, never
+email. Verified email or DNS control cannot link an existing global account,
+change its profile, acquire platform authority or authorize global credentials.
+Independent existing-account proof and explicit confirmation remain required.
+Multiple UOA organisations and authorized cross-origin selection stay supported.
+See [the backend integration guide](Auth/enterprise-sso.md) and the canonical
+[enterprise plan](plans/2026-10-17-organisation-enterprise-sso.md). Live rollout
+requires the complete authority/provenance/revocation gates; enforcement also
+requires two independently authenticated recovery custodians and a successful
+current recovery drill. The product owner delegated this design on 2026-10-18;
+UOA retains one canonical owner and does not introduce backup codes. A chosen
+design is not evidence of a tested drill or customer activation.
+
 ## Same-account Kelpie local pairing (2026-10-11)
 
 Authorized same-subject account connections and LAN CLI/MCP pairing require no
@@ -426,6 +475,20 @@ The default remains strict no-enumeration: existing users receive the same gener
 
 - Optional namespaced per-user settings are stored in a separate table, not on the user
   record — see the 2026-09-25 addendum and [User Settings](./Auth/user-settings.md)
+
+### Operator permission for DeepTest Nessie inference
+
+`User.deeptestNessieInferenceAllowed` defaults to false for all accounts. Only a
+current platform superuser may set it, through User detail → Security or audited
+`PATCH /internal/admin/users/:userId/deeptest-nessie-inference` with `{allowed:boolean}`.
+It is not a self-service setting, organisation flag or role grant. Identity deletion clears it.
+DeepTest checks `POST /apps/v1/deeptest/nessie-inference-access` before every dispatch
+with its own `customer_lifecycle` app key and a fresh exact-endpoint RS256 actor
+containing its exact subject, organisation, team and credential epoch. The response
+is only `{allowed:boolean}`, private/no-store; the live epoch, active identity,
+memberships and key/service are rechecked. Legacy audiences and positive caching
+are forbidden. This permission does not grant source access, inference-material
+consent or active-testing authorization.
 
 ---
 
@@ -3186,11 +3249,83 @@ is permitted. Existing native refresh grants never widen: adding the scope requi
 one fresh registration/sign-in with explicit hosted consent. Operator provisioning,
 wire contract and verification are authoritative in [Kelpie account connectivity](Auth/kelpie-connect.md).
 
+
+## 2026-10-14 Subject verification dependency outages
+
+Product-signed subject verification must distinguish unavailable public keys
+from invalid credentials. Partner JWKS network/timeout failures, transient DNS
+`EAI_AGAIN`, HTTP 408/429
+and upstream 5xx return generic HTTP 503 with the production-safe code
+`INTEGRATION_JWKS_UNAVAILABLE`. No identity, authority or resource token is
+admitted while the keys are unavailable. Products retain their own sessions
+and retry with backoff and fresh assertions. Invalid signatures, missing keys,
+expired assertions, unsafe destinations and current credential-epoch or
+membership refusals remain fail-closed. No local identity fallback, cached
+negative authorization or automatic authority restoration is introduced.
+
+
+## 2026-10-21 Personal telephone contact proof
+
+UOA owns personal verified and pending telephone numbers. Nessie owns the profile
+form and delivers UOA-issued six-digit challenges through its trusted SMS backend.
+This is contact verification, never a login factor. Private display visibility
+still permits internal owner routing. A distinct call-bound service assertion
+looks up only exact ACTIVE team members, with pending/ambiguous states exposing
+no subject. Caller ID alone never supplies signed-in authority. The complete
+contract is [Personal telephones](Auth/personal-telephone.md).
+
+### 2026-10-21: selected-team telephone display and call possession proof
+
+The existing team roster exposes opted-in verified telephone numbers only between live members of that exact team. UOA also owns short-lived, one-use, call-bound SMS challenges and a prepaid SMS delivery admission path tied to the issued challenge and active funded sender allocation. No login/session is minted. Contract and integration responsibilities: [personal telephone](Auth/personal-telephone.md).
+
+### 2026-10-21 Prepaid telephone call legs
+
+UOA owns fixed-duration Voice admission and actual provider settlement through the
+canonical prepaid wallet. Exact selected-team manager grants fund inbound external
+callers and separately bounded outbound/transfer legs without inventing caller identity.
+The machine-only contract and unfulfilled live pricing/cutoff prerequisites are in
+[Voice prepaid](Requirements/voice-pricing-and-prepaid.md). Connectivity-only USD
+support does not authorize charged ancillary features or Ledger inference.
+Once enabled with reviewed pricing and cutoff evidence, the standing policy has
+no calendar expiry. Short-lived call quotes and claims still expire independently;
+an operator disables or replaces the policy when its evidence changes.
+
+### 2026-10-21 Registered caller-ID policy
+
+The approved telephone UX admits a uniquely matched verified personal number to
+ordinary PA/specialist context without repeating an SMS code on every call. UOA
+reports this as `registered_caller_id`, explicitly without current-call possession
+proof. The exact call binding, live membership checks, expiry and residual spoofing
+risk are documented in [personal telephones](Auth/personal-telephone.md). Sensitive
+actions retain stronger-authentication policy; no signed-in browser session is issued.
+
+### Verified telephone senders and personal routing owners (2026-10-21)
+
+Nessie may ask UOA, through a service-only signed MessageSid-bound request, whether
+an SMS sender is a verified active member of the exact selected team. Private
+telephone visibility does not prevent routing. Pending, ambiguous and unknown
+senders fail closed; this eligibility does not grant private-context or signed-in
+authority. Call and SMS admission may additionally attest current membership of a
+signed, already-known personal routing owner. The contract and retention controls
+are in [personal telephone](Auth/personal-telephone.md).
+
+## 2026-10-22 Sign-up funnel metrics
+
+UOA counts the steps of sign-up and sign-in per client domain and UTC day so the
+owner can see where people sent by a product stop (window opened, form submitted,
+registration email sent or failed, email link valid/expired/used, password set,
+social sign-in started, returned with a code, code redeemed by the product).
+Only aggregate counts are stored: never an email, IP, user id, token or flow id.
+Recording is best-effort, happens outside authentication transactions and never
+changes a public response; the internal reason behind an opaque
+`INVALID_AUTH_CODE` is counted but not disclosed. Platform superusers read it in
+Admin → Activity → Sign-up funnel or `GET /internal/admin/auth-funnel`. See
+[signup funnel metrics](Auth/signup-funnel-metrics.md).
+
 ## Product directory notifications (2026-10-22)
 
-UOA emits reference-only, domain-scoped directory webhooks for profile/avatar
-and membership changes, with a durable transactional outbox and dedicated
-per-product HMAC secrets. Products resolve only the affected exact subjects
-through the selected-team authenticated API and keep no durable profile mirror.
-The contract, deployment order and verification limits are in
+UOA emits reference-only directory webhooks for profile/avatar and membership
+changes, with durable transactional admission and dedicated product HMAC secrets.
+Products resolve exact subjects through the existing selected-team members API
+and retain its original-assurance and reviewed identity-cleanup contract. See
 [Directory change webhooks](Auth/directory-webhooks.md).

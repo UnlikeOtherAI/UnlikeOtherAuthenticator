@@ -23,64 +23,106 @@ const request = {
   userId: 'user_1',
 };
 
+function creditsData() {
+  return {
+    creditAccount: {
+      id: 'credit_1',
+      balanceMicrocredits: 3_000_000_000n,
+      autoTopUpState: BillingCreditAutoTopUpState.DISABLED,
+      autoTopUpConsentVersion: null,
+      autoTopUpConsentedAt: null,
+      autoTopUpConsentedBy: null,
+      autoTopUpThresholdMicrocredits: null,
+      autoTopUpRefillOfferId: null,
+      autoTopUpMonthlyChargeCapMinor: null,
+      autoTopUpOptionId: null,
+      autoTopUpConsentRevisionId: null,
+      stripePaymentMethodId: null,
+      paymentMethodSummary: null,
+    },
+    policy: null,
+    purchaseCurrency: 'USD',
+    reloadCurrency: 'USD',
+    regionPolicy: null,
+    catalogs: [],
+    settlements: [],
+    prepaidReservations: [],
+    activeReservedMicrocredits: 0n,
+    allocations: [],
+    entries: [],
+    periodEntries: [],
+    pending: [],
+    unresolvedAttempts: [],
+    unresolvedTopUpCheckouts: [],
+    unresolvedSetupCheckouts: [],
+    autoTopUpChargedMinor: 0n,
+  };
+}
+
+function creditsDeps(data: ReturnType<typeof creditsData>, fetchPortfolio: unknown, settlePortfolio: unknown) {
+  return {
+    now: () => now,
+    resolveEntitlement: vi.fn(),
+    resolveCollection: vi.fn().mockResolvedValue({
+      account: { id: 'account_1', stripeAccountId: 'acct_1', livemode: false },
+      stripeCollectionEnabled: false,
+      stripe: null,
+    }),
+    ensureCreditAccount: vi.fn().mockResolvedValue({ id: 'credit_1' }),
+    resolvePortfolioProduct: vi.fn().mockResolvedValue('deepwater'),
+    fetchPortfolio,
+    settlePortfolio,
+    hasPendingSettlementWatch: vi.fn().mockResolvedValue(false),
+    resolveViewer: vi.fn().mockResolvedValue({
+      userId: request.userId,
+      organisationId: request.organisationId,
+      teamId: request.teamId,
+      billingManager: true,
+    }),
+    loadProjectionData: vi.fn().mockResolvedValue(data),
+    resolveControlledBy: vi.fn().mockResolvedValue(null),
+  } as never;
+}
+
+describe('credits valued in the billing region currency (credits protocol 2.3.0)', () => {
+  it('reads the values for the listed entries only when the consumer negotiated them', async () => {
+    const data = { ...creditsData(), entries: [
+      { id: 'entry_1', occurredAt: now, service, kind: 'USAGE_SETTLEMENT', direction: 'DEBIT',
+        amountMicrocredits: 1_000_000_000n, balanceAfterMicrocredits: 3_000_000_000n, attributedUserId: null },
+      { id: 'entry_zero', occurredAt: now, service, kind: 'USAGE_SETTLEMENT', direction: 'DEBIT',
+        amountMicrocredits: 0n, balanceAfterMicrocredits: 3_000_000_000n, attributedUserId: null },
+    ] } as unknown as ReturnType<typeof creditsData>;
+    const readDisplayValues = vi.fn().mockResolvedValue({
+      currency: 'USD', balance: { currency: 'USD', amount: '3.00', amountMinor: 300n },
+      nextRate: { currency: 'USD', usdPerUnit: '1', source: 'usd', asOf: now },
+      entries: new Map([['entry_1', { currency: 'USD', amount: '1.00', amountMinor: 100n }]]),
+    });
+    const deps = { ...(creditsDeps(data, vi.fn().mockResolvedValue({}), vi.fn()) as object), readDisplayValues } as never;
+
+    const older = await getBillingCredits({ request, actorToken: 'actor', credential, supportsBillingStatus: true }, deps);
+    expect(readDisplayValues).not.toHaveBeenCalled();
+    expect(older).not.toHaveProperty('region_rate');
+
+    const result = await getBillingCredits({ request, actorToken: 'actor', credential, supportsBillingStatus: true,
+      supportsRegionValue: true }, deps);
+    expect(readDisplayValues).toHaveBeenCalledWith(
+      { creditAccountId: 'credit_1', organisationId: 'org_1', entryIds: ['entry_1'] },
+      expect.objectContaining({ stripe: null }),
+    );
+    expect(result).toMatchObject({
+      credit_balance: { value: { amount: '3', amount_minor: '300', currency: 'USD', label: 'US$3.00 left' } },
+      region_rate: { currency: 'USD', usd_per_unit: '1', credits_per_unit: '1000', source: 'usd' },
+      recent_entries: [{ id: 'entry_1', value: { amount: '1', amount_minor: '100', currency: 'USD' } }],
+    });
+  });
+});
+
 describe('shared credit reads while Stripe collection is disabled', () => {
   it('settles and projects Remaining credits while freezing all funding actions', async () => {
     const fetchPortfolio = vi.fn().mockResolvedValue({ snapshot_cursor: 'cursor_1' });
     const settlePortfolio = vi.fn();
-    const data = {
-      creditAccount: {
-        id: 'credit_1',
-        balanceMicrocredits: 3_000_000_000n,
-        autoTopUpState: BillingCreditAutoTopUpState.DISABLED,
-        autoTopUpConsentVersion: null,
-        autoTopUpConsentedAt: null,
-        autoTopUpConsentedBy: null,
-        autoTopUpThresholdMicrocredits: null,
-        autoTopUpRefillOfferId: null,
-        autoTopUpMonthlyChargeCapMinor: null,
-        autoTopUpOptionId: null,
-        autoTopUpConsentRevisionId: null,
-        stripePaymentMethodId: null,
-        paymentMethodSummary: null,
-      },
-      policy: null,
-      catalogs: [],
-      settlements: [],
-      prepaidReservations: [],
-      activeReservedMicrocredits: 0n,
-      allocations: [],
-      entries: [],
-      periodEntries: [],
-      pending: [],
-      unresolvedAttempts: [],
-      unresolvedTopUpCheckouts: [],
-      unresolvedSetupCheckouts: [],
-      autoTopUpChargedMinor: 0n,
-      prepaidReservations: [],
-      activeReservedMicrocredits: 0n,
-    };
-    const deps = {
-      now: () => now,
-      resolveEntitlement: vi.fn(),
-      resolveCollection: vi.fn().mockResolvedValue({
-        account: { id: 'account_1', stripeAccountId: 'acct_1', livemode: false },
-        stripeCollectionEnabled: false,
-        stripe: null,
-      }),
-      ensureCreditAccount: vi.fn().mockResolvedValue({ id: 'credit_1' }),
-      resolvePortfolioProduct: vi.fn().mockResolvedValue('deepwater'),
-      fetchPortfolio,
-      settlePortfolio,
-      hasPendingSettlementWatch: vi.fn().mockResolvedValue(false),
-      resolveViewer: vi.fn().mockResolvedValue({
-        userId: request.userId,
-        organisationId: request.organisationId,
-        teamId: request.teamId,
-        billingManager: true,
-      }),
-      loadProjectionData: vi.fn().mockResolvedValue(data),
-      resolveControlledBy: vi.fn().mockResolvedValue(null),
-    } as never;
+    const data = creditsData();
+    const deps = creditsDeps(data, fetchPortfolio, settlePortfolio);
     const result = await getBillingCredits({ request, actorToken: 'actor', credential }, deps);
 
     expect(fetchPortfolio).toHaveBeenCalled();
@@ -130,6 +172,9 @@ describe('shared credit reads while Stripe collection is disabled', () => {
         paymentMethodSummary: null,
       },
       policy: null,
+      purchaseCurrency: 'USD',
+      reloadCurrency: 'USD',
+      regionPolicy: null,
       catalogs: [],
       settlements: [],
       allocations: [],

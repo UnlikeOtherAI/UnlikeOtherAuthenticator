@@ -58,6 +58,11 @@ tags:
 
 components:
   securitySchemes:
+    registrationBrowser:
+      type: apiKey
+      in: header
+      name: Cookie
+      description: Registration-specific HttpOnly cookie named uoa_registration_<registration_id>, set by registration/start. Managed by the original browser; the public registration ID alone grants no access.
     nativeAccountBearer:
       type: http
       scheme: bearer
@@ -127,6 +132,39 @@ components:
       description: Stripe endpoint signature verified over the exact raw request body with a separate webhook secret.
 
   parameters:
+    registrationChallenge:
+      name: code_challenge
+      in: query
+      required: true
+      description: Original S256 PKCE challenge, immutable for this registration.
+      schema: { type: string, minLength: 43, maxLength: 43 }
+    registrationChallengeMethod:
+      name: code_challenge_method
+      in: query
+      required: true
+      description: Original PKCE method.
+      schema: { type: string, enum: [S256] }
+    registrationRedirect:
+      name: redirect_url
+      in: query
+      description: Original registered callback, if supplied at initiation.
+      schema: { type: string, maxLength: 2048 }
+    registrationState:
+      name: state
+      in: query
+      description: Exact original opaque OAuth state, if supplied at initiation.
+      schema: { type: string, maxLength: 2048 }
+    registrationAccess:
+      name: request_access
+      in: query
+      description: Exact original access-request flag.
+      schema: { type: string, enum: ['true', 'false'] }
+    registrationId:
+      name: id
+      in: query
+      required: true
+      description: Public pending registration identifier; a matching browser cookie is also required.
+      schema: { type: string, format: uuid }
     relyingPartyState:
       name: state
       in: query
@@ -251,6 +289,20 @@ components:
         format: uri
 
   schemas:
+    PendingRegistrationState:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [pending, verified, authorized, complete, expired]
+        token:
+          type: string
+          description: Present only when authorized. Namespaced registration.* proof, bound to the original cookie and immutable OAuth/config context for POST /auth/verify-email.
+        token_type:
+          type: string
+          enum: [LOGIN_LINK, VERIFY_EMAIL, VERIFY_EMAIL_SET_PASSWORD]
+          description: Present only when authorized; selects the existing completion flow.
     ErrorResponse:
       type: object
       properties:
@@ -2401,6 +2453,171 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /auth/registration/start:
+    post:
+      tags: [Auth]
+      operationId: startBrowserRegistration
+      summary: Start browser-bound registration verification
+      description: Creates a 15-minute pending flow and sets an HttpOnly SameSite=Lax cookie (Secure on HTTPS). Sends one neutral email with a secret link and six-character code. Normal responses do not reveal account eligibility or existence; the signed inline_sign_in opt-in retains its explicit 409 response. Same-origin browser request required.
+      parameters:
+        - $ref: '#/components/parameters/configUrl'
+        - $ref: '#/components/parameters/registrationChallenge'
+        - $ref: '#/components/parameters/registrationChallengeMethod'
+        - $ref: '#/components/parameters/registrationRedirect'
+        - $ref: '#/components/parameters/registrationState'
+        - $ref: '#/components/parameters/registrationAccess'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+      responses:
+        '200':
+          description: Generic result for new, existing, blocked or malformed addresses. Cookie and response contain no account-state signal.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message, registration_id, expires_at]
+                properties:
+                  message: { type: string, example: We sent instructions to your email }
+                  registration_id: { type: string, format: uuid }
+                  expires_at: { type: string, format: date-time }
+        '409':
+          description: EMAIL_ALREADY_REGISTERED only for the explicit signed inline_sign_in policy.
+        '429':
+          description: Registration issuance rate exceeded.
+
+  /auth/registration/status:
+    get:
+      tags: [Auth]
+      operationId: getBrowserRegistrationStatus
+      summary: Read current registration state
+      description: Requires the original cookie and exact original signed config/OAuth context. Recheck on load, focus and WebSocket reconnect; poll every 10 seconds when needed. A verified mailbox alone never grants a completion proof.
+      security: [{ registrationBrowser: [] }]
+      parameters:
+        - $ref: '#/components/parameters/configUrl'
+        - $ref: '#/components/parameters/registrationChallenge'
+        - $ref: '#/components/parameters/registrationChallengeMethod'
+        - $ref: '#/components/parameters/registrationRedirect'
+        - $ref: '#/components/parameters/registrationState'
+        - $ref: '#/components/parameters/registrationAccess'
+        - $ref: '#/components/parameters/registrationId'
+      responses:
+        '200':
+          description: Authoritative no-store state.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PendingRegistrationState' }
+        '400':
+          description: Generic invalid registration or browser/context binding.
+
+  /auth/registration/code:
+    post:
+      tags: [Auth]
+      operationId: verifyBrowserRegistrationCode
+      summary: Verify the code in the requesting browser
+      description: Code and link resolve to the same pending flow. Five failed guesses exhaust the code across replicas; failed guesses commit before error. The original cookie and exact OAuth/config context are required. Lowercase is normalized.
+      security: [{ registrationBrowser: [] }]
+      parameters:
+        - $ref: '#/components/parameters/configUrl'
+        - $ref: '#/components/parameters/registrationChallenge'
+        - $ref: '#/components/parameters/registrationChallengeMethod'
+        - $ref: '#/components/parameters/registrationRedirect'
+        - $ref: '#/components/parameters/registrationState'
+        - $ref: '#/components/parameters/registrationAccess'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [id, code]
+              properties:
+                id: { type: string, format: uuid }
+                code:
+                  type: string
+                  description: Six characters from ABCDEFGHJKLMNPQRSTUVWXYZ23456789.
+                  minLength: 6
+                  maxLength: 6
+      responses:
+        '200':
+          description: Current state after code verification; no-store.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PendingRegistrationState' }
+        '400':
+          description: Generic invalid code, expired flow or browser/context binding.
+        '429':
+          description: Code request rate exceeded.
+
+  /auth/registration/events:
+    get:
+      tags: [Auth]
+      operationId: subscribeBrowserRegistrationEvents
+      summary: Subscribe to non-secret registration hints over WebSocket
+      description: Requires the original cookie, exact OAuth/config context and exact canonical Origin before upgrade. Events contain only {type:"registration.email_verified",status:"verified"}. Clients recheck status after each hint. Local publication is immediate; other replicas recheck the database every five seconds. Maximum two subscriptions per registration and 256 per instance. A ten-second client poll covers blocked upgrades or lost hints.
+      security: [{ registrationBrowser: [] }]
+      parameters:
+        - $ref: '#/components/parameters/configUrl'
+        - $ref: '#/components/parameters/registrationChallenge'
+        - $ref: '#/components/parameters/registrationChallengeMethod'
+        - $ref: '#/components/parameters/registrationRedirect'
+        - $ref: '#/components/parameters/registrationState'
+        - $ref: '#/components/parameters/registrationAccess'
+        - $ref: '#/components/parameters/registrationId'
+      responses:
+        '101': { description: Authenticated WebSocket connection; notifications contain no credentials. }
+        '400': { description: Generic invalid registration or binding. }
+        '403': { description: Origin refused. }
+        '429': { description: Subscription capacity exceeded. }
+
+  /auth/registration/link:
+    get:
+      tags: [Auth]
+      operationId: showRegistrationLinkConfirmation
+      summary: Show an isolated email confirmation page on any device
+      description: Secret is carried in the URL fragment, removed immediately and never sent in the GET request. This read has no verification effect. The page has no third-party resources and uses no-referrer plus a restrictive CSP.
+      responses:
+        '200':
+          description: Explicit confirmation page, followed by a clear verification-success view without OAuth redirect or login.
+          content:
+            text/html:
+              schema: { type: string }
+    post:
+      tags: [Auth]
+      operationId: confirmRegistrationLink
+      summary: Confirm mailbox possession without authenticating another device
+      description: Explicit confirmation consumes a short-lived 256-bit link secret and approves the exact original pending flow on any device. The original browser receives a WebSocket hint, rechecks status using its HttpOnly cookie and original OAuth context, and advances without code entry. The confirming browser receives no credentials, cookies or redirect. Replay cannot transfer approval to another registration. No account, OAuth code or session is created here. Same-origin POST required.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [token]
+              properties:
+                token: { type: string, minLength: 43, maxLength: 43 }
+      responses:
+        '200':
+          description: Mailbox confirmed; no cookies, credentials or redirect returned.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, enum: [verified] }
+        '400': { description: Generic invalid or expired link. }
+        '429': { description: Link request rate exceeded. }
+
   /auth/register:
     post:
       tags: [Auth]
@@ -2465,6 +2682,9 @@ paths:
       description: |
         Consumes an email verification token. Optionally sets a password for
         new accounts that haven't set one. Returns an authorization code.
+        Namespaced registration.* proofs additionally require the original registration
+        cookie and exact immutable signed-config/OAuth context. Mailbox confirmation
+        alone cannot authorize password creation or a session in an initiating browser.
         Rate limited: 10/min per IP.
       parameters:
         - $ref: '#/components/parameters/configUrl'
@@ -9383,6 +9603,105 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+        '403':
+          description: Not a superuser or wrong admin domain.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /internal/admin/auth-funnel:
+    get:
+      tags: [Internal Admin]
+      summary: Sign-up and sign-in funnel counts (admin view)
+      description: >-
+        Event counts per funnel step and outcome for a UTC day range, optionally for one client
+        domain. Aggregates only; no email, IP, user id or token is stored. See
+        Docs/Auth/signup-funnel-metrics.md.
+      operationId: adminGetAuthFunnel
+      security:
+        - adminBearer: []
+      parameters:
+        - name: from
+          in: query
+          required: false
+          description: First UTC day (YYYY-MM-DD), inclusive. Defaults to 29 days before `to`.
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: false
+          description: Last UTC day (YYYY-MM-DD), inclusive. Defaults to today. At most 366 days.
+          schema:
+            type: string
+            format: date
+        - name: domain
+          in: query
+          required: false
+          description: Narrow totals and days to one client domain.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Funnel totals in step order plus per-day counts.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [from, to, domain, domains, totals, days]
+                properties:
+                  from:
+                    type: string
+                    format: date
+                  to:
+                    type: string
+                    format: date
+                  domain:
+                    type: string
+                    nullable: true
+                  domains:
+                    type: array
+                    items:
+                      type: string
+                  totals:
+                    type: array
+                    items:
+                      type: object
+                      required: [step, outcome, count]
+                      properties:
+                        step:
+                          type: string
+                        outcome:
+                          type: string
+                        count:
+                          type: integer
+                  days:
+                    type: array
+                    items:
+                      type: object
+                      required: [day, step, outcome, count]
+                      properties:
+                        day:
+                          type: string
+                          format: date
+                        step:
+                          type: string
+                        outcome:
+                          type: string
+                        count:
+                          type: integer
+        '400':
+          description: Malformed day, reversed range, or a range longer than 366 days.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '403':
           description: Not a superuser or wrong admin domain.
           content:

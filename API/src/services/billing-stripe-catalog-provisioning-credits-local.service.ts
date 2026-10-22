@@ -2,18 +2,22 @@ import {
   addCatalogAction,
   type CatalogDb,
   type CatalogProvisioningAction,
+  differingFields,
   localCatalogDrift,
 } from './billing-stripe-catalog-provisioning-local.shared.js';
 import type { ValidatedStripeCommercialCatalog } from './billing-stripe-catalog-provisioning-remote.service.js';
 import {
-  CREDIT_AUTO_TOP_UP_SPEC,
-  CREDIT_FUNDING_POLICY_SPEC,
+  CREDIT_AUTO_TOP_UP_OPTION_SPECS,
+  CREDIT_PURCHASE_CURRENCIES,
   CREDIT_TOP_UP_SPECS,
+  creditFundingPolicySpec,
+  type CreditPurchaseCurrency,
   type CreditTopUpSpec,
 } from './billing-stripe-catalog-provisioning-spec.js';
 
 function assertCreditCatalogTerms(
   row: {
+    id: string;
     key: string;
     version: number;
     currency: string;
@@ -26,18 +30,16 @@ function assertCreditCatalogTerms(
   spec: CreditTopUpSpec,
   remote: ValidatedStripeCommercialCatalog['creditPrices'][number],
 ): void {
-  if (
-    row.key !== spec.catalogKey ||
-    row.version !== spec.catalogVersion ||
-    row.currency !== CREDIT_FUNDING_POLICY_SPEC.currency ||
-    row.paymentAmountMinor !== spec.paymentAmountMinor ||
-    row.creditsReceivedMicrocredits !== spec.creditsReceivedMicrocredits ||
-    row.stripeLookupKey !== spec.stripeLookupKey ||
-    (row.stripeProductId === null) !== (row.stripePriceId === null) ||
-    (row.stripeProductId !== null && row.stripeProductId !== remote.stripeProductId) ||
-    (row.stripePriceId !== null && row.stripePriceId !== remote.stripePriceId)
-  ) {
-    localCatalogDrift();
+  const fields = differingFields(row, {
+    key: spec.catalogKey, version: spec.catalogVersion, currency: spec.currency,
+    paymentAmountMinor: spec.paymentAmountMinor, creditsReceivedMicrocredits: spec.creditsReceivedMicrocredits,
+    stripeLookupKey: spec.stripeLookupKey,
+  });
+  if ((row.stripeProductId === null) !== (row.stripePriceId === null)) fields.push('partialStripeBinding');
+  if (row.stripeProductId !== null && row.stripeProductId !== remote.stripeProductId) fields.push('stripeProductId');
+  if (row.stripePriceId !== null && row.stripePriceId !== remote.stripePriceId) fields.push('stripePriceId');
+  if (fields.length > 0) {
+    localCatalogDrift('credit_catalog_terms', { catalog_id: row.id, catalog_key: spec.catalogKey, fields });
   }
 }
 
@@ -66,7 +68,7 @@ export async function ensureProvisionedCreditCatalogs(params: {
     const remote = params.catalog.creditPrices.find(
       (price) => price.key === spec.catalogKey && price.version === spec.catalogVersion,
     );
-    if (!remote) localCatalogDrift();
+    if (!remote) localCatalogDrift('credit_price_missing', { catalog_key: spec.catalogKey });
     const key = `${spec.catalogKey}/v${spec.catalogVersion}`;
     const row = rows.find(
       (candidate) => candidate.key === spec.catalogKey && candidate.version === spec.catalogVersion,
@@ -86,14 +88,11 @@ export async function ensureProvisionedCreditCatalogs(params: {
       addCatalogAction(params.actions, 'credit_catalog', key, incomplete);
       continue;
     }
-    if (
-      rows.some(
-        (candidate) =>
-          candidate.stripeLookupKey === remote.stripeLookupKey ||
-          candidate.stripePriceId === remote.stripePriceId,
-      )
-    ) {
-      localCatalogDrift();
+    const holder = rows.find((candidate) =>
+      candidate.stripeLookupKey === remote.stripeLookupKey || candidate.stripePriceId === remote.stripePriceId);
+    if (holder) {
+      localCatalogDrift('credit_price_bound_elsewhere', { catalog_key: spec.catalogKey, holder_catalog_id: holder.id,
+        holder_key: holder.key, holder_version: holder.version });
     }
     if (params.write) {
       await params.db.billingCreditTopUpCatalog.create({
@@ -101,7 +100,7 @@ export async function ensureProvisionedCreditCatalogs(params: {
           accountId: params.accountId,
           key: spec.catalogKey,
           version: spec.catalogVersion,
-          currency: CREDIT_FUNDING_POLICY_SPEC.currency,
+          currency: spec.currency,
           paymentAmountMinor: spec.paymentAmountMinor,
           creditsReceivedMicrocredits: spec.creditsReceivedMicrocredits,
           stripeLookupKey: spec.stripeLookupKey,
@@ -117,42 +116,37 @@ export async function ensureProvisionedCreditCatalogs(params: {
 async function ensureCreditPolicy(params: {
   db: CatalogDb;
   service: { id: string; identifier: string };
+  currency: CreditPurchaseCurrency;
   write: boolean;
   actions: CatalogProvisioningAction[];
 }) {
+  const spec = creditFundingPolicySpec(params.currency);
   const rows = await params.db.billingCreditFundingPolicy.findMany({
-    where: { serviceId: params.service.id },
+    where: { serviceId: params.service.id, currency: params.currency },
   });
   const active = rows.filter((row) => row.active);
   const existing = active[0];
-  if (active.length > 1) localCatalogDrift();
-  const key = `${params.service.identifier}/USD/v${CREDIT_FUNDING_POLICY_SPEC.version}`;
+  if (active.length > 1) {
+    localCatalogDrift('credit_policy_multiple_active', { service: params.service.identifier,
+      currency: params.currency, policy_ids: active.map((row) => row.id) });
+  }
+  const key = `${params.service.identifier}/${params.currency}/v${spec.version}`;
   if (existing) {
-    if (
-      existing.version !== CREDIT_FUNDING_POLICY_SPEC.version ||
-      existing.currency !== CREDIT_FUNDING_POLICY_SPEC.currency ||
-      existing.topUpEnabled !== CREDIT_FUNDING_POLICY_SPEC.topUpEnabled ||
-      existing.automaticTopUpEnabled !== CREDIT_FUNDING_POLICY_SPEC.automaticTopUpEnabled ||
-      existing.automaticConsentVersion !== CREDIT_FUNDING_POLICY_SPEC.automaticConsentVersion ||
-      existing.deactivatedAt !== null
-    ) {
-      localCatalogDrift();
+    const fields = differingFields(existing, { ...spec, deactivatedAt: null });
+    if (fields.length > 0) {
+      localCatalogDrift('credit_policy_terms', { service: params.service.identifier, policy_id: existing.id, fields });
     }
     addCatalogAction(params.actions, 'credit_funding_policy', key, false);
     return existing;
   }
-  if (
-    rows.some(
-      (row) =>
-        row.version === CREDIT_FUNDING_POLICY_SPEC.version &&
-        row.currency === CREDIT_FUNDING_POLICY_SPEC.currency,
-    )
-  ) {
-    localCatalogDrift();
+  const inactive = rows.find((row) => row.version === spec.version);
+  if (inactive) {
+    localCatalogDrift('credit_policy_version_inactive', { service: params.service.identifier,
+      currency: params.currency, policy_id: inactive.id });
   }
   const created = params.write
     ? await params.db.billingCreditFundingPolicy.create({
-        data: { serviceId: params.service.id, ...CREDIT_FUNDING_POLICY_SPEC },
+        data: { serviceId: params.service.id, ...spec },
       })
     : null;
   addCatalogAction(params.actions, 'credit_funding_policy', key, true);
@@ -161,6 +155,7 @@ async function ensureCreditPolicy(params: {
 
 function assertOfferTerms(
   offer: {
+    id: string;
     serviceId: string;
     key: string;
     version: number;
@@ -177,33 +172,26 @@ function assertOfferTerms(
   serviceId: string,
   spec: CreditTopUpSpec,
 ): void {
-  if (
-    offer.serviceId !== serviceId ||
-    offer.key !== spec.key ||
-    offer.version !== spec.version ||
-    offer.catalogKey !== spec.catalogKey ||
-    offer.catalogVersion !== spec.catalogVersion ||
-    offer.name !== spec.name ||
-    offer.description !== spec.description ||
-    offer.paymentAmountMinor !== spec.paymentAmountMinor ||
-    offer.creditsReceivedMicrocredits !== spec.creditsReceivedMicrocredits ||
-    !offer.automaticTopUpEligible ||
-    !offer.active ||
-    offer.deactivatedAt !== null
-  ) {
-    localCatalogDrift();
-  }
+  const fields = differingFields(offer, {
+    serviceId, key: spec.key, version: spec.version, catalogKey: spec.catalogKey,
+    catalogVersion: spec.catalogVersion, name: spec.name, description: spec.description,
+    paymentAmountMinor: spec.paymentAmountMinor, creditsReceivedMicrocredits: spec.creditsReceivedMicrocredits,
+    automaticTopUpEligible: true, active: true, deactivatedAt: null,
+  });
+  if (fields.length > 0) localCatalogDrift('credit_offer_terms', { offer_id: offer.id, offer_key: spec.key, fields });
 }
 
 async function ensureCreditOffersAndOption(params: {
   db: CatalogDb;
   service: { id: string; identifier: string };
+  currency: CreditPurchaseCurrency;
   policy: { id: string } | null;
   write: boolean;
   actions: CatalogProvisioningAction[];
 }): Promise<void> {
+  const specs = CREDIT_TOP_UP_SPECS.filter((spec) => spec.currency === params.currency);
   if (!params.policy) {
-    for (const spec of CREDIT_TOP_UP_SPECS) {
+    for (const spec of specs) {
       addCatalogAction(
         params.actions,
         'credit_top_up_offer',
@@ -211,24 +199,22 @@ async function ensureCreditOffersAndOption(params: {
         true,
       );
     }
-    addCatalogAction(
-      params.actions,
-      'credit_auto_top_up_option',
-      `${params.service.identifier}/default/v1`,
-      true,
-    );
+    for (const option of CREDIT_AUTO_TOP_UP_OPTION_SPECS.filter((spec) => spec.currency === params.currency)) {
+      addCatalogAction(params.actions, 'credit_auto_top_up_option',
+        `${params.service.identifier}/${option.key}/v${option.version}`, true);
+    }
     return;
   }
   const offers = await params.db.billingCreditTopUpOffer.findMany({
     where: { policyId: params.policy.id },
   });
-  if (
-    offers.some((offer) => offer.active && !CREDIT_TOP_UP_SPECS.some((s) => s.key === offer.key))
-  ) {
-    localCatalogDrift();
+  const unknown = offers.filter((offer) => offer.active && !specs.some((s) => s.key === offer.key));
+  if (unknown.length > 0) {
+    localCatalogDrift('credit_offer_unknown_active', { service: params.service.identifier,
+      policy_id: params.policy.id, offer_ids: unknown.map((offer) => offer.id) });
   }
   const resolved = new Map<string, { id: string }>();
-  for (const spec of CREDIT_TOP_UP_SPECS) {
+  for (const spec of specs) {
     const key = `${params.service.identifier}/${spec.key}/v${spec.version}`;
     let offer = offers.find(
       (candidate) => candidate.key === spec.key && candidate.version === spec.version,
@@ -237,8 +223,10 @@ async function ensureCreditOffersAndOption(params: {
       assertOfferTerms(offer, params.service.id, spec);
       addCatalogAction(params.actions, 'credit_top_up_offer', key, false);
     } else {
-      if (offers.some((candidate) => candidate.active && candidate.key === spec.key)) {
-        localCatalogDrift();
+      const other = offers.find((candidate) => candidate.active && candidate.key === spec.key);
+      if (other) {
+        localCatalogDrift('credit_offer_other_version_active', { offer_id: other.id, offer_key: spec.key,
+          version: other.version });
       }
       if (params.write) {
         offer = await params.db.billingCreditTopUpOffer.create({
@@ -261,63 +249,66 @@ async function ensureCreditOffersAndOption(params: {
     }
     if (offer) resolved.set(spec.key, offer);
   }
+  await ensureCreditAutoTopUpOptions({ ...params, policy: params.policy, offers: resolved });
+}
 
+async function ensureCreditAutoTopUpOptions(params: {
+  db: CatalogDb;
+  service: { id: string; identifier: string };
+  currency: CreditPurchaseCurrency;
+  policy: { id: string };
+  offers: Map<string, { id: string }>;
+  write: boolean;
+  actions: CatalogProvisioningAction[];
+}): Promise<void> {
+  const specs = CREDIT_AUTO_TOP_UP_OPTION_SPECS.filter((spec) => spec.currency === params.currency);
   const options = await params.db.billingCreditAutoTopUpOption.findMany({
     where: { policyId: params.policy.id },
   });
-  if (options.some((option) => option.active && option.key !== CREDIT_AUTO_TOP_UP_SPEC.key)) {
-    localCatalogDrift();
+  const unknownOptions = options.filter((option) => option.active && !specs.some((spec) => spec.key === option.key));
+  if (unknownOptions.length > 0) {
+    localCatalogDrift('credit_option_unknown_active', { service: params.service.identifier,
+      option_ids: unknownOptions.map((option) => option.id) });
   }
-  const option = options.find(
-    (candidate) =>
-      candidate.key === CREDIT_AUTO_TOP_UP_SPEC.key &&
-      candidate.version === CREDIT_AUTO_TOP_UP_SPEC.version,
-  );
-  const refillOffer = resolved.get(CREDIT_AUTO_TOP_UP_SPEC.refillOfferKey);
-  if (option) {
-    if (
-      !option.active ||
-      option.deactivatedAt !== null ||
-      option.serviceId !== params.service.id ||
-      option.refillOfferId !== refillOffer?.id ||
-      option.thresholdMicrocredits !== CREDIT_AUTO_TOP_UP_SPEC.thresholdMicrocredits ||
-      option.monthlyChargeCapMinor !== CREDIT_AUTO_TOP_UP_SPEC.monthlyChargeCapMinor
-    ) {
-      localCatalogDrift();
+  for (const spec of specs) {
+    const key = `${params.service.identifier}/${spec.key}/v${spec.version}`;
+    const refillOffer = params.offers.get(spec.refillOfferKey);
+    const option = options.find((candidate) => candidate.key === spec.key && candidate.version === spec.version);
+    if (option) {
+      const fields = differingFields(option, {
+        active: true, deactivatedAt: null, serviceId: params.service.id, refillOfferId: refillOffer?.id,
+        thresholdMicrocredits: spec.thresholdMicrocredits, thresholdAmountMinor: spec.thresholdAmountMinor,
+        monthlyChargeCapMinor: spec.monthlyChargeCapMinor,
+      });
+      if (fields.length > 0) localCatalogDrift('credit_option_terms', { option_id: option.id, fields });
+      addCatalogAction(params.actions, 'credit_auto_top_up_option', key, false);
+      continue;
     }
-    addCatalogAction(
-      params.actions,
-      'credit_auto_top_up_option',
-      `${params.service.identifier}/default/v1`,
-      false,
-    );
-    return;
+    const otherOption = options.find((candidate) => candidate.active && candidate.key === spec.key);
+    if (otherOption) {
+      localCatalogDrift('credit_option_other_version_active', { option_id: otherOption.id,
+        version: otherOption.version });
+    }
+    if (params.write) {
+      if (!refillOffer) {
+        localCatalogDrift('credit_option_refill_offer_missing', { service: params.service.identifier,
+          offer_key: spec.refillOfferKey });
+      }
+      await params.db.billingCreditAutoTopUpOption.create({
+        data: {
+          policyId: params.policy.id,
+          serviceId: params.service.id,
+          refillOfferId: refillOffer.id,
+          key: spec.key,
+          version: spec.version,
+          thresholdMicrocredits: spec.thresholdMicrocredits,
+          thresholdAmountMinor: spec.thresholdAmountMinor,
+          monthlyChargeCapMinor: spec.monthlyChargeCapMinor,
+        },
+      });
+    }
+    addCatalogAction(params.actions, 'credit_auto_top_up_option', key, true);
   }
-  if (
-    options.some((candidate) => candidate.active && candidate.key === CREDIT_AUTO_TOP_UP_SPEC.key)
-  ) {
-    localCatalogDrift();
-  }
-  if (params.write) {
-    if (!refillOffer) localCatalogDrift();
-    await params.db.billingCreditAutoTopUpOption.create({
-      data: {
-        policyId: params.policy.id,
-        serviceId: params.service.id,
-        refillOfferId: refillOffer.id,
-        key: CREDIT_AUTO_TOP_UP_SPEC.key,
-        version: CREDIT_AUTO_TOP_UP_SPEC.version,
-        thresholdMicrocredits: CREDIT_AUTO_TOP_UP_SPEC.thresholdMicrocredits,
-        monthlyChargeCapMinor: CREDIT_AUTO_TOP_UP_SPEC.monthlyChargeCapMinor,
-      },
-    });
-  }
-  addCatalogAction(
-    params.actions,
-    'credit_auto_top_up_option',
-    `${params.service.identifier}/default/v1`,
-    true,
-  );
 }
 
 export async function ensureProvisionedServiceCredits(params: {
@@ -326,6 +317,8 @@ export async function ensureProvisionedServiceCredits(params: {
   write: boolean;
   actions: CatalogProvisioningAction[];
 }): Promise<void> {
-  const policy = await ensureCreditPolicy(params);
-  await ensureCreditOffersAndOption({ ...params, policy });
+  for (const currency of CREDIT_PURCHASE_CURRENCIES) {
+    const policy = await ensureCreditPolicy({ ...params, currency });
+    await ensureCreditOffersAndOption({ ...params, currency, policy });
+  }
 }

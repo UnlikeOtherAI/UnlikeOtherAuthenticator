@@ -31,6 +31,7 @@ const FxSchema = z.object({
   policy: z.literal(SMS_FX_POLICY), source: z.literal(SMS_FX_SOURCE),
   source_digest: z.string().regex(/^[a-f0-9]{64}$/), rate_date: z.string().date(),
   observed_at: z.string().datetime(), expires_at: z.string().datetime(), usd_per_eur: Bound,
+  gbp_per_eur: Bound.nullable(),
 }).strict();
 const RouteSchema = SmsRoutePolicyImportSchema.omit({ evidence: true }).extend({
   evidence_digest: z.string().regex(/^[a-f0-9]{64}$/),
@@ -72,7 +73,7 @@ function fxDto(evidence: SmsFxEvidence) {
   return FxSchema.parse({ policy: evidence.policy, source: evidence.source,
     source_digest: evidence.sourceDigest, rate_date: evidence.rateDate.toISOString().slice(0, 10),
     observed_at: evidence.observedAt.toISOString(), expires_at: evidence.expiresAt.toISOString(),
-    usd_per_eur: evidence.usdPerEur });
+    usd_per_eur: evidence.usdPerEur, gbp_per_eur: evidence.gbpPerEur });
 }
 /** The complete-import digest every route acceptance binds, whoever assembled the import. */
 export function smsRouteImportDigest(value: SmsRoutePolicyImport): string {
@@ -102,17 +103,32 @@ async function reviewed(kind: 'fx' | 'route' | 'country', token: string,
 export { Bound as SmsPolicyBound, RouteSchema as SmsRoutePolicyEvidenceSchema, fresh as assertSmsPolicyFresh, preview as signSmsPolicyPreview, reviewed as readSmsPolicyPreview,
   fxDto as smsFxPolicyValue };
 
-/** Append one FX acceptance; an exact retry returns the original without extending freshness. */
+/** The reason recorded when a document is accepted again only to record its GBP rate. */
+export function smsFxReaddGbpReason(rateDate: string, gbpPerEur: string): string {
+  return `Re-accepted the same ECB ${rateDate} document to add GBP ${gbpPerEur}; its earlier acceptance recorded no GBP rate.`;
+}
+
+/**
+ * Append one FX acceptance; an exact retry returns the original without
+ * extending freshness. The same document is accepted once more, as a new
+ * version with the same date-bound validity, only when the stored acceptance
+ * lacks the GBP rate the document carries.
+ */
 export async function insertSmsFxPolicy(tx: Prisma.TransactionClient, value: FxPolicyValue,
   acceptor: SmsPolicyAcceptor, now: Date, acceptanceReason: string) {
-  const existing = await tx.billingSmsFxSnapshot.findUnique({
-    where: { policy_sourceDigest: { policy: value.policy, sourceDigest: value.source_digest } },
+  const existing = await tx.billingSmsFxSnapshot.findMany({
+    where: { policy: value.policy, sourceDigest: value.source_digest }, orderBy: { acceptedAt: 'desc' },
   });
-  if (existing) return existing;
+  const complete = existing.find((row) => row.gbpPerEur !== null);
+  if (complete) return complete;
+  if (existing[0] && value.gbp_per_eur === null) return existing[0];
+  if (existing[0] && value.gbp_per_eur !== null) {
+    acceptanceReason = `${smsFxReaddGbpReason(value.rate_date, value.gbp_per_eur)} ${acceptanceReason}`.slice(0, 500);
+  }
   return tx.billingSmsFxSnapshot.create({ data: {
     policy: value.policy, source: value.source, sourceDigest: value.source_digest,
     rateDate: new Date(`${value.rate_date}T00:00:00.000Z`), observedAt: new Date(value.observed_at),
-    expiresAt: new Date(value.expires_at), usdPerEur: value.usd_per_eur,
+    expiresAt: new Date(value.expires_at), usdPerEur: value.usd_per_eur, gbpPerEur: value.gbp_per_eur,
     ...acceptedBy(acceptor), acceptedAt: now, acceptanceReason,
   } });
 }
@@ -209,7 +225,7 @@ export async function listSmsPolicies() {
 export function serializeSmsFxPolicy(value: Awaited<ReturnType<typeof acceptSmsFxPolicy>>) {
   if (value.policy !== SMS_FX_POLICY || value.source !== SMS_FX_SOURCE) throw invalid('BILLING_SMS_FX_PROVENANCE_INVALID');
   return { ...fxDto({ ...value, policy: SMS_FX_POLICY, source: SMS_FX_SOURCE,
-    usdPerEur: value.usdPerEur.toString() }), id: value.id, accepted_by: acceptedByKind(value.acceptedBy),
+    usdPerEur: value.usdPerEur.toString(), gbpPerEur: value.gbpPerEur?.toString() ?? null }), id: value.id, accepted_by: acceptedByKind(value.acceptedBy),
     accepted_by_user_id: value.acceptedByUserId, accepted_at: value.acceptedAt.toISOString(),
     acceptance_reason: value.acceptanceReason };
 }

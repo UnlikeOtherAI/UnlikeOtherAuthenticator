@@ -4,11 +4,13 @@ import { randomBytes } from 'node:crypto';
 import cookie from '@fastify/cookie';
 import helmet from '@fastify/helmet';
 import multipart from '@fastify/multipart';
+import websocket from '@fastify/websocket';
 import rawBody from 'fastify-raw-body';
 import fastify, { type FastifyInstance } from 'fastify';
 
 import {
   getEnv,
+  getPublicBaseUrl,
   isBillingAssertionJwksEnabled,
   isTariffSnapshotJwksEnabled,
   requireEnv,
@@ -29,6 +31,9 @@ import { preloadBillingAssertionSigningKey } from './services/billing-ledger-col
 import { sweepExpiredClaims } from './services/integration-claim.service.js';
 import { pruneExpiredSecurityData } from './services/retention-pruning.service.js';
 import { setAppLogger } from './utils/app-logger.js';
+import { startEnterpriseRevocationDelivery } from './services/org-sso-delivery.service.js';
+import { pruneEnterpriseRevocations } from './services/org-sso-revocation.service.js';
+import { startEnterpriseMaintenance } from './services/enterprise-maintenance.service.js';
 
 export async function createApp(): Promise<FastifyInstance> {
   const env = getEnv();
@@ -88,6 +93,15 @@ export async function createApp(): Promise<FastifyInstance> {
                 'pairing_ticket',
                 'connection_ticket',
                 'refresh_token',
+                'assurance_ref',
+                'SAMLResponse',
+                'encryptedSecret',
+                'encryptedAssuranceReference',
+                'req.body.assurance_ref',
+                'req.body.SAMLResponse',
+                'req.body.continuation',
+                'req.body.secret',
+                'req.headers["x-uoa-csrf"]',
                 'previous_token',
                 'req.body.token',
                 'req.body.ticket',
@@ -118,6 +132,9 @@ export async function createApp(): Promise<FastifyInstance> {
                 'req.body.password',
                 'req.body.passwordHash',
                 'req.body.code',
+                'req.body.number',
+                'delivery',
+                '*.delivery',
                 'req.body.twoFactorCode',
                 'req.headers["x-uoa-subject-assertion"]',
                 'headers["x-uoa-subject-assertion"]',
@@ -158,8 +175,16 @@ export async function createApp(): Promise<FastifyInstance> {
   app.addContentTypeParser(
     'application/x-www-form-urlencoded',
     { parseAs: 'string' },
-    (_request, _body, done) => {
-      done(null, {});
+    (request, body, done) => {
+      if (request.url.startsWith('/sso/saml/')) {
+        const values = new URLSearchParams(String(body));
+        const parsed: Record<string, string> = {};
+        for (const [key, value] of values) {
+          if (Object.hasOwn(parsed, key)) return done(new Error('duplicate SAML form field'));
+          parsed[key] = value;
+        }
+        done(null, parsed);
+      } else done(null, {});
     },
   );
 
@@ -183,7 +208,7 @@ export async function createApp(): Promise<FastifyInstance> {
       directives: {
         defaultSrc: ["'self'"],
         baseUri: ["'none'"],
-        connectSrc: ["'self'", 'https:'],
+        connectSrc: ["'self'", 'https:', new URL(getPublicBaseUrl()).origin.replace(/^http/, 'ws')],
         fontSrc: ["'self'", 'https:', 'data:'],
         formAction: ["'self'"],
         frameSrc: ["'self'", 'blob:'],
@@ -253,11 +278,17 @@ export async function createApp(): Promise<FastifyInstance> {
 
       void runPrune();
       void runClaimSweep();
+      const enterpriseDelivery = startEnterpriseRevocationDelivery(app.log);
+      app.addHook('onClose', async () => enterpriseDelivery.stop());
+      const enterpriseMaintenance = startEnterpriseMaintenance(app.log);
+      app.addHook('onClose', async () => enterpriseMaintenance.stop());
 
       const intervalMs = 6 * 60 * 60 * 1000;
       const timer = setInterval(() => {
         void runPrune();
         void runClaimSweep();
+        void pruneEnterpriseRevocations().catch(() => app.log.error({ code: 'ENTERPRISE_RETENTION_UNAVAILABLE' },
+          'enterprise retention unavailable'));
       }, intervalMs);
       timer.unref();
 
@@ -305,6 +336,7 @@ export async function createApp(): Promise<FastifyInstance> {
   // SHARED_SECRET so the cookie is tamper-evident without introducing a new secret.
   const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
   await app.register(cookie, { secret: SHARED_SECRET });
+  await app.register(websocket, { options: { maxPayload: 1024, perMessageDeflate: false } });
   await app.register(multipart, {
     limits: {
       fieldNameSize: 100,

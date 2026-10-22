@@ -42,7 +42,7 @@ describe('interpretTeamResponse', () => {
         pending_invites: [INVITE_A],
         can_create_org: true,
         // Absent from the payload → decoded as empty, never undefined.
-        creatable_orgs: [],
+        creatable_orgs: [], manageable_orgs: [],
       },
     });
   });
@@ -109,7 +109,7 @@ describe('toSessionChoices', () => {
       teams: [TEAM_A],
       pending_invites: [INVITE_A],
       can_create_org: true,
-      creatable_orgs: [],
+      creatable_orgs: [], manageable_orgs: [],
     });
   });
 
@@ -137,7 +137,7 @@ describe('pickAutoSkipTeam', () => {
       teams: [TEAM_A],
       pending_invites: [],
       can_create_org: false,
-      creatable_orgs: [],
+      creatable_orgs: [], manageable_orgs: [],
     };
     expect(pickAutoSkipTeam(choices)).toEqual(TEAM_A);
   });
@@ -147,7 +147,7 @@ describe('pickAutoSkipTeam', () => {
       teams: [TEAM_A],
       pending_invites: [INVITE_A],
       can_create_org: false,
-      creatable_orgs: [],
+      creatable_orgs: [], manageable_orgs: [],
     };
     expect(pickAutoSkipTeam(choices)).toBeNull();
   });
@@ -158,7 +158,7 @@ describe('pickAutoSkipTeam', () => {
         teams: [TEAM_A],
         pending_invites: [],
         can_create_org: true,
-        creatable_orgs: [],
+        creatable_orgs: [], manageable_orgs: [],
       }),
     ).toBeNull();
     expect(
@@ -178,7 +178,7 @@ describe('pickAutoSkipTeam', () => {
         teams: [TEAM_A, { ...TEAM_A, teamId: 'team-b' }],
         pending_invites: [],
         can_create_org: false,
-        creatable_orgs: [],
+        creatable_orgs: [], manageable_orgs: [],
       }),
     ).toBeNull();
   });
@@ -190,7 +190,7 @@ describe('pickHintTeam', () => {
     teams: [TEAM_A, TEAM_B],
     pending_invites: [],
     can_create_org: false,
-    creatable_orgs: [],
+    creatable_orgs: [], manageable_orgs: [],
   };
 
   it('matches a team by teamId', () => {
@@ -237,7 +237,7 @@ describe('applyTeamOutcome', () => {
       teams: [TEAM_A],
       pending_invites: [],
       can_create_org: false,
-      creatable_orgs: [],
+      creatable_orgs: [], manageable_orgs: [],
     };
     const applied = applyTeamOutcome(
       { kind: 'chooser', loginToken: 'bridge.jwt', choices },

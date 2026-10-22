@@ -26,6 +26,10 @@ import {
   resolveBillingFundingRequestRecipients,
 } from './billing-credit-funding-request.service.js';
 import { fetchLedgerMeteringPortfolio } from './billing-ledger-collector.service.js';
+import { readOrganisationBillingRegion } from './billing-organisation-region.service.js';
+import { readCreditPurchaseRateWithAlert } from './billing-credit-purchase-rate.service.js';
+import { readCreditDisplayValues } from './billing-credit-lot-value.service.js';
+import type { SmsPolicyAlertLog } from './billing-sms-policy-alert.service.js';
 import type { FetchMeteringPortfolio } from './billing-metering.types.js';
 import { AppError } from '../utils/errors.js';
 
@@ -53,6 +57,9 @@ type Dependencies = {
   resolveFundingRecipients?: typeof resolveBillingFundingRequestRecipients;
   resolveLatestFundingCreditEntryId?: typeof resolveLatestBillingFundingCreditEntryId;
   hasPendingSettlementWatch?: (creditAccountId: string, teamId: string) => Promise<boolean>;
+  readRegion?: typeof readOrganisationBillingRegion;
+  readRate?: typeof readCreditPurchaseRateWithAlert;
+  readDisplayValues?: typeof readCreditDisplayValues;
 };
 
 async function hasPendingSettlementWatch(
@@ -77,6 +84,13 @@ export async function getBillingCredits(
     endpoint: BillingActorEndpoint;
     locale?: BillingCustomerLocale;
     supportsBillingStatus?: boolean;
+    /** Credits protocol 2.1.0: offers may be priced in the billing region's GBP or EUR. */
+    supportsPurchaseCurrency?: boolean;
+    /** Credits protocol 2.2.0: reload options may be in the billing region's GBP or EUR too. */
+    supportsReloadCurrency?: boolean;
+    /** Credits protocol 2.3.0: the balance, entries and price rate valued in the region currency. */
+    supportsRegionValue?: boolean;
+    log?: SmsPolicyAlertLog;
   },
   deps?: Dependencies,
 ) {
@@ -145,6 +159,12 @@ export async function getBillingCredits(
     ].includes(error.message))) throw error;
     settlementPending = true;
   }
+  // A consumer on an older credits protocol keeps seeing the USD offers it can validate.
+  const region = params.supportsPurchaseCurrency || params.supportsReloadCurrency
+    ? await (deps?.readRegion ?? readOrganisationBillingRegion)(params.request.organisationId, prisma)
+    : null;
+  const purchaseCurrency = params.supportsPurchaseCurrency ? region?.currency ?? 'USD' : 'USD';
+  const reloadCurrency = params.supportsReloadCurrency ? region?.currency ?? 'USD' : 'USD';
   settlementPending ||= await (deps?.hasPendingSettlementWatch
     ? deps.hasPendingSettlementWatch(creditAccount.id, params.request.teamId)
     : hasPendingSettlementWatch(creditAccount.id, params.request.teamId, prisma ?? getAdminPrisma()));
@@ -164,6 +184,8 @@ export async function getBillingCredits(
         accountId: collection.account.id,
         storefrontServiceId: params.credential.service.id,
         period,
+        purchaseCurrency,
+        reloadCurrency,
       },
       { prisma },
     ),
@@ -176,9 +198,22 @@ export async function getBillingCredits(
       { prisma },
     ),
   ]);
-  const actionReadiness = await (
-    deps?.resolveActionReadiness ?? resolveBillingCreditActionReadiness
-  )({ collection, credential: params.credential, data });
+  const readRate = deps?.readRate ?? readCreditPurchaseRateWithAlert;
+  const [actionReadiness, purchaseRate, regionValues] = await Promise.all([
+    (deps?.resolveActionReadiness ?? resolveBillingCreditActionReadiness)(
+      { collection, credential: params.credential, data }),
+    // Offers show what today's rate buys; without a rate they are left out, never priced another way.
+    region?.currency === undefined || region.currency === 'USD' || !collection.stripe
+      || !collection.stripeCollectionEnabled ? null
+      : readRate(region.currency, { stripe: collection.stripe, ...(prisma ? { prisma } : {}), now: () => now,
+        ...(params.log ? { log: params.log } : {}) }).catch(() => null),
+    params.supportsRegionValue
+      ? (deps?.readDisplayValues ?? readCreditDisplayValues)({ creditAccountId: data.creditAccount.id,
+        organisationId: params.request.organisationId,
+        entryIds: data.entries.filter((entry) => entry.amountMicrocredits > 0n).map((entry) => entry.id) },
+      { ...(prisma ? { db: prisma } : {}), stripe: collection.stripe ?? null, now: () => now })
+      : undefined,
+  ]);
   const meteredBilling = Boolean(
     params.locale !== undefined &&
       entitlement.payload.tariff.usage_billing_enabled &&
@@ -254,5 +289,7 @@ export async function getBillingCredits(
     attention,
     ...(fundingRequest ? { fundingRequest } : {}),
     settlementPending,
+    purchaseRate,
+    ...(regionValues ? { regionValues } : {}),
   });
 }

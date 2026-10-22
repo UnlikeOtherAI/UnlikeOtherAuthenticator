@@ -1,4 +1,4 @@
-import { BillingCreditEntryDirection, BillingCreditEntryKind } from '@prisma/client';
+import { BillingCreditEntryDirection, BillingCreditEntryKind, Prisma } from '@prisma/client';
 
 import type {
   BillingControlledByV1,
@@ -17,7 +17,11 @@ import {
 import {
   billingCreditAmount,
   billingCreditsPaymentMoney,
+  billingCreditsValueMoney,
 } from './billing-credit-display.service.js';
+import type { CreditDisplayValues, CreditNextRate } from './billing-credit-lot-value.service.js';
+import { formatBillingCopy } from './billing-copy-locale.js';
+import type { CreditPurchaseRate } from './billing-credit-purchase-rate.service.js';
 import { billingLocalizedCreditDisplay } from './billing-credit-copy.catalog.js';
 import {
   buildManagerCreditRecentEntries,
@@ -43,6 +47,38 @@ function sum(values: bigint[]): bigint {
 function creditAmount(value: bigint, locale?: BillingCustomerLocale) {
   const amount = billingCreditAmount(value, locale);
   return { ...amount, display: billingLocalizedCreditDisplay(amount.credits, locale) };
+}
+
+/** Credits protocol 2.3.0: the rate behind a region-currency estimate of a price in credits. */
+function regionRate(rate: CreditNextRate | null, locale?: BillingCustomerLocale) {
+  if (!rate) return null;
+  const creditsPerUnit = new Prisma.Decimal(rate.usdPerUnit).mul(1000);
+  const whole = creditsPerUnit.toDecimalPlaces(0, Prisma.Decimal.ROUND_HALF_UP).toFixed();
+  return {
+    currency: rate.currency,
+    usd_per_unit: rate.usdPerUnit,
+    credits_per_unit: creditsPerUnit.toFixed(),
+    source: rate.source,
+    as_of: rate.asOf.toISOString(),
+    display: formatBillingCopy(billingCreditCopy(locale).regionRate, {
+      currency: rate.currency, credits: billingLocalizedCreditDisplay(whole, locale),
+    }),
+  };
+}
+
+/** Credits protocol 2.3.0: "EUR 42.18 left", or what a debt is owed in the region currency. */
+function balanceValue(values: CreditDisplayValues, locale?: BillingCustomerLocale) {
+  if (!values.balance) return null;
+  const money = billingCreditsValueMoney(values.balance.amountMinor, values.currency, locale);
+  const copy = billingCreditCopy(locale);
+  const owed = values.balance.amountMinor < 0n;
+  return {
+    ...money,
+    label: formatBillingCopy(owed ? copy.balanceValueOwed : copy.balanceValueLeft, {
+      value: owed ? billingCreditsValueMoney(-values.balance.amountMinor, values.currency, locale).display
+        : money.display,
+    }),
+  };
 }
 
 function service(value: { id: string; identifier: string; name: string }) {
@@ -171,6 +207,9 @@ export function buildBillingCreditsProjection(params: {
   attention?: BillingCreditAttentionV1[];
   fundingRequest?: BillingCreditFundingRequestActionV1;
   settlementPending?: boolean;
+  purchaseRate?: CreditPurchaseRate | null;
+  /** Present when the consumer negotiated credits protocol 2.3.0. */
+  regionValues?: CreditDisplayValues;
 }): BillingCreditsV1 {
   const { data, viewer } = params;
   const controlledBy = params.controlledBy ?? null;
@@ -182,7 +221,9 @@ export function buildBillingCreditsProjection(params: {
   // organisation's own credit account.
   const canFund = controlledBy === null ? viewer.billingManager : controlledBy.can_manage;
   const pendingCount = data.pending.length;
-  const pendingPayment = sum(data.pending.map((row) => row.paymentAmountMinor));
+  // The payment shown is what is pending in the purchase currency; credits and count include every row.
+  const pendingPayment = sum(data.pending.filter((row) => row.currency === data.purchaseCurrency)
+    .map((row) => row.paymentAmountMinor));
   const pendingCredits = sum(data.pending.map((row) => row.creditsReceivedMicrocredits));
   const copy = billingCreditCopy(params.locale);
   const creditsAdded = sum(
@@ -247,6 +288,7 @@ export function buildBillingCreditsProjection(params: {
       label: copy.balanceLabel,
       description: data.creditAccount.scope === 'ORGANISATION'
         ? copy.organisationBalanceDescription : copy.balanceDescription,
+      ...(params.regionValues ? { value: balanceValue(params.regionValues, params.locale) } : {}),
     },
     pending_credits: {
       top_up_count: pendingCount,
@@ -256,6 +298,7 @@ export function buildBillingCreditsProjection(params: {
     },
     ...(controlledBy ? { controlled_by: controlledBy } : {}),
     ...(params.attention ? { attention: params.attention } : {}),
+    ...(params.regionValues ? { region_rate: regionRate(params.regionValues.nextRate, params.locale) } : {}),
     ...(params.fundingRequest ? { funding_request: params.fundingRequest } : {}),
     ...(params.settlementPending ? {
       billing_status: {
@@ -277,6 +320,7 @@ export function buildBillingCreditsProjection(params: {
       params.actionReadiness ?? unavailableBillingCreditActions(),
       params.period.endsAt,
       params.locale,
+      params.purchaseRate,
     );
     const funding = actions.funding_policy;
     const automatic = actions.automatic_top_up;
@@ -296,12 +340,12 @@ export function buildBillingCreditsProjection(params: {
       },
       pending_credits: {
         ...common.pending_credits,
-        payment_amount: billingCreditsPaymentMoney(pendingPayment, params.locale),
+        payment_amount: billingCreditsPaymentMoney(pendingPayment, params.locale, data.purchaseCurrency),
       },
       funding_policy: funding,
       automatic_top_up: automatic,
       credit_summary: { ...summary, consumed_breakdown: managerBreakdown(data, params.locale) },
-      recent_entries: buildManagerCreditRecentEntries(data, params.locale),
+      recent_entries: buildManagerCreditRecentEntries(data, params.locale, params.regionValues),
     } satisfies BillingCreditsManagerV1;
   }
   const actions = buildMemberCreditActionsProjection(
@@ -327,6 +371,6 @@ export function buildBillingCreditsProjection(params: {
       ...summary,
       consumed_breakdown: memberBreakdown(data, viewer.userId, params.locale),
     },
-    recent_entries: buildMemberCreditRecentEntries(data, viewer.userId, params.locale),
+    recent_entries: buildMemberCreditRecentEntries(data, viewer.userId, params.locale, params.regionValues),
   } satisfies BillingCreditsMemberV1;
 }

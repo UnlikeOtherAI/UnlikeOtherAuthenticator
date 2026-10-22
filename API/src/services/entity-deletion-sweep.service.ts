@@ -7,6 +7,7 @@ import { lockRefreshSessionUser } from './refresh-session-lock.service.js';
 export { scrubIdentityJson } from './identity-audit-sweep.service.js';
 import { scrubOperationalAudits } from './identity-audit-sweep.service.js';
 import { scrubOperatorAttribution } from './identity-operational-sweep.service.js';
+import { eraseEnterprisePerson, retainEnterprisePerson } from './enterprise-identity-retention.service.js';
 
 export async function eraseOperationalIdentity(tx: PrismaClient, userId: string, mode: IdentityDeletionMode, auditsAlreadyScrubbed = false): Promise<void> {
   await lockRefreshSessionUser(userId, { prisma: tx });
@@ -37,6 +38,11 @@ export async function eraseOperationalIdentity(tx: PrismaClient, userId: string,
   await tx.nativeOAuthFlow.deleteMany({ where: { userId } });
   await tx.debugLoginGrant.deleteMany({ where: { userId } });
   await tx.authIdentity.deleteMany({ where: { userId } });
+  await tx.telephoneSmsAdmission.deleteMany({ where: { subjectId: userId } });
+  await tx.telephoneLookup.deleteMany({ where: { admittedSubjectId: userId } });
+  await tx.userTelephone.deleteMany({ where: { userId } });
+  await tx.telephoneCallChallenge.deleteMany({ where: { userId } });
+  await tx.telephoneChallenge.deleteMany({ where: { userId } });
   await tx.userAvatar.deleteMany({ where: { userId } });
   await tx.userSetting.deleteMany({ where: { userId } });
   await tx.billingServiceAccess.deleteMany({ where: { userId } });
@@ -63,9 +69,12 @@ export async function eraseOperationalIdentity(tx: PrismaClient, userId: string,
   await tx.user.update({ where: { id: userId }, data: {
     lifecycleStatus: 'DELETED', lifecycleChangedAt: new Date(), email: null, userKey: null, name: null,
     passwordHash: null, twoFaEnabled: false, twoFaSecret: null, twoFaLastAcceptedCounter: null,
-    avatarUrl: null, tokenVersion: { increment: 1 }, lifecycleReason: null, lifecycleInternalNote: null,
+    avatarUrl: null, deeptestNessieInferenceAllowed: false,
+    tokenVersion: { increment: 1 }, lifecycleReason: null, lifecycleInternalNote: null,
     lifecycleTemplateId: null, lifecycleTemplateRevision: null,
   } });
+  if (mode === 'ERASE_REFERENCE') await eraseEnterprisePerson(userId, tx);
+  else await retainEnterprisePerson(userId, tx);
   if (mode === 'ERASE_REFERENCE' && protectedRows.length === 0) await tx.user.delete({ where: { id: userId } });
 }
 

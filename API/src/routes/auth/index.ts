@@ -30,6 +30,8 @@ import { registerAuthSocialRoute } from './social.js';
 import { registerAuthCallbackRoute } from './callback.js';
 
 export function registerAuthRoutes(app: FastifyInstance): void {
+  registerPendingRegistrationRoutes(app);
+  registerRegistrationWebSocket(app);
   registerLifecycleStatusRoutes(app);
   registerActionVerificationRoutes(app);
   registerDebugLoginRoutes(app);
@@ -59,3 +61,5 @@ export function registerAuthRoutes(app: FastifyInstance): void {
   registerAuthVerifyCodeRoute(app);
   registerAuthVerifyEmailRoute(app);
 }
+import { registerPendingRegistrationRoutes } from './registration.js';
+import { registerRegistrationWebSocket } from './registration-websocket.js';

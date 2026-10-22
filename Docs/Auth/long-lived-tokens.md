@@ -162,8 +162,9 @@ domain-client authentication remains a generic 401 with no refresh-token code.
 Team-scoped refresh families are terminated when their membership stops being ACTIVE:
 
 - Organisation deactivation or removal revokes every live row for the exact
-  `(user_id, org_id)` across all issuing product domains. The lifecycle transaction also preserves
-  the legacy same-domain revocation contract so older unscoped sessions cannot survive.
+  `(user_id, org_id)` across all issuing product domains. Unscoped global sessions are not
+  attributed to an organisation merely because their issuing domain matches; they remain valid
+  for global account use and cannot bypass current organisation membership checks.
 - Team removal revokes every live row for the exact `(user_id, team_id)` across all issuing product
   domains. Sessions for the user's other teams remain valid.
 - Reactivating or re-adding a membership never clears `revoked_at`; the user must complete a new
@@ -173,8 +174,9 @@ The status tombstone and refresh-row updates run in one fail-closed `uoa_admin` 
 lifecycle takes user-global, user+domain, then canonical organisation/team membership locks. Team
 lifecycle takes user-global before its membership locks. Refresh follows the same hierarchy before
 creating a replacement. This also serializes legacy unscoped rows, which have no org/team IDs
-available to lock. Refresh-first is followed and revoked by the lifecycle writer; lifecycle-first
-is observed by refresh's post-lock re-read and creates no replacement. Lifecycle revocation does
+available to lock. For an exact organisation/team family, refresh-first is followed and revoked
+by the lifecycle writer; lifecycle-first is observed by refresh's post-lock re-read and creates no
+replacement. Unscoped families retain their original global scope. Lifecycle revocation does
 not bump the global token version: already-issued access tokens expire normally, and unrelated
 team/product sessions are not globally invalidated.
 
@@ -203,7 +205,7 @@ The shipped revocation caller audit is:
 | Public native refresh         | `uoa_admin`               | product policy → user-global → user/domain → signature                           | rotate after client/epoch/factor/scope checks, or theft revocation    |
 | `POST /auth/revoke`           | tenant domain transaction | user-global → user/domain                                                        | family revoke + `tokenVersion`                                        |
 | `POST /oauth/revoke`          | `uoa_admin`               | user-global → user/domain                                                        | family revoke + `tokenVersion`                                        |
-| Org deactivate/remove         | `uoa_admin`               | user-global → user/domain → org/team                                             | status + exact-org + legacy-domain revoke                             |
+| Org deactivate/remove         | `uoa_admin`               | user-global → user/domain → org/team                                             | status + exact-org revoke                             |
 | Team-member remove            | `uoa_admin`               | user-global → org/team                                                           | status + exact-team revoke                                            |
 | Password reset                | `uoa_admin`               | user-global                                                                      | password + all-refresh revoke + `tokenVersion`                        |
 | Verify-email password binding | `uoa_admin`               | user-global                                                                      | password/token consume + all-refresh revoke + `tokenVersion`          |

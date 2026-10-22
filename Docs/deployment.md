@@ -14,6 +14,13 @@ Written 2026-08-06 from the running systems, not from memory: workflow definitio
 
 ## The two halves
 
+Registration verification requires the additive `20261022120000_pending_registrations`
+migration and the API/Auth release together. No consuming-product config flag or
+native release is required for the hosted registration screen. Cloud Run must forward
+WebSocket upgrades; clients retain polling when upgrades or connections fail. Database
+state and original HttpOnly registration cookies remain authoritative across replicas.
+No production credentials or operator records are provisioned by this change.
+
 **UOA (this repo) runs on Google Cloud.** Cloud Run service `uoa-auth`, fronted by
 `authentication.unlikeotherai.com`, with Cloud SQL `gen-lang-client-0561071620:europe-west1:uoa-auth-db`.
 Pushing to `main` triggers [`deploy-main.yml`](../.github/workflows/deploy-main.yml), which builds,
@@ -34,6 +41,15 @@ the old config and correctly behaves as though the flag does not exist.
 
 ## Per-product deployment
 
+DeepTest's Nessie executor provider requires the additive
+`20261016150000_deeptest_nessie_inference_access` migration and UOA API/Admin
+release before the consuming DeepTest release. No permission is seeded or granted
+by deployment. In Admin → Users → selected person → Security, a platform superuser
+may enable **Allow Nessie executor inference**. The person still selects an
+available paired computer and consents to the run in DeepTest. Revocation is live
+on the next dispatch; every request uses DeepTest's existing dedicated lifecycle
+key and a fresh exact-endpoint actor. A UOA outage denies this provider.
+
 | Product | Repo | Trigger | Mechanism |
 | --- | --- | --- | --- |
 | UOA | `UnlikeOtherAuthenticator` | push to `main` | GitHub Actions → Cloud Run `uoa-auth` |
@@ -52,11 +68,12 @@ the BuildMe name is `docgen`.
 Before enabling DocGen paid inference or its Billing screen, a UOA superuser
 must register the canonical product identifier `docgen` as an active Billing
 Service through `/internal/admin/billing/services`, with its initial immutable
-tariff, **before** the next Stripe-catalog provisioner invocation. The
-provisioner intentionally fails closed while the service is absent, then
-requires it beside Nessie, DeepWater, DeepSignal, and DeepTest; this does not
-alter runtime billing merely by deploying UOA. It does not create a service,
-tariff, Stripe product, or Price on an operator's behalf.
+tariff, before DocGen sells credits. While the service is absent the
+provisioner skips it and names it (`billing_service_not_registered`), and the
+next run after registration provisions it beside Nessie, DeepWater, DeepTest
+and SalesNerd; this does not alter runtime billing merely by deploying UOA. It
+does not create a service, tariff, Stripe product, or Price on an operator's
+behalf.
 
 After the `buildme.live` client domain is active, create exactly one enabled
 confidential-delegation mapping with `source_domain=buildme.live`,
@@ -253,3 +270,11 @@ domain credentials, delegation tokens or another product's runtime key. Lists co
 metadata only; UOA cannot retrieve the plaintext later. If issuance response is lost,
 inspect the list and revoke an unused key before issuing a replacement. Production
 provisioning and installation remain deliberate operator actions.
+
+### Voice prepaid admission
+
+Deploy the additive Voice enum and financial migrations before the API. The runtime
+remains disabled unless the explicit evidence policy in
+[Voice prepaid](Requirements/voice-pricing-and-prepaid.md) is configured. No values or
+provider resources are seeded. Provision VOICE_RUNTIME only for the consuming backend.
+Receipt/release recovery remains available when new Voice admission is disabled.

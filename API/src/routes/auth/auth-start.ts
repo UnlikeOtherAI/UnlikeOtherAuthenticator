@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { configVerifier } from '../../middleware/config-verifier.js';
 import { parseRequestAccessFlag } from '../../services/access-request-flow.service.js';
 import { requestRegistrationInstructions } from '../../services/auth-register.service.js';
+import { recordAuthFunnelStep } from '../../services/auth-funnel.service.js';
 import { issueLoginCode } from '../../services/login-code.service.js';
 import { parseRequiredPkceChallenge } from '../../utils/pkce.js';
 import { authStartRateLimiter } from './rate-limit-keys.js';
@@ -52,7 +53,19 @@ export function registerAuthStartRoute(app: FastifyInstance): void {
         codeChallengeMethod: code_challenge_method,
       });
 
+      if (request.config) {
+        await recordAuthFunnelStep(
+          {
+            domain: request.config.domain,
+            step: 'email_start_submitted',
+            outcome: email ? 'valid_email' : 'invalid_email',
+          },
+          { prisma: request.adminDb },
+        );
+      }
+
       if (email && request.config && request.configUrl) {
+        const funnelDomain = request.config.domain;
         try {
           const result = await requestRegistrationInstructions(
             {
@@ -67,6 +80,13 @@ export function registerAuthStartRoute(app: FastifyInstance): void {
             },
             { prisma: request.adminDb },
           );
+          const delivery = result.status === 'existing_user' ? 'existing_user_inline' : result.delivery;
+          if (delivery) {
+            await recordAuthFunnelStep(
+              { domain: funnelDomain, step: 'registration_email', outcome: delivery },
+              { prisma: request.adminDb },
+            );
+          }
           if (result.status === 'existing_user') {
             reply.status(409).send({
               error: 'Request failed',
@@ -77,6 +97,10 @@ export function registerAuthStartRoute(app: FastifyInstance): void {
         } catch (err) {
           // Never leak internal failures; always return the generic success response.
           request.log.error({ err }, 'registration instructions failed');
+          await recordAuthFunnelStep(
+            { domain: funnelDomain, step: 'registration_email', outcome: 'error' },
+            { prisma: request.adminDb },
+          );
         }
 
         if (request.config.login_flow?.email_code_enabled) {

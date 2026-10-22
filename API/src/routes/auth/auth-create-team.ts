@@ -1,3 +1,4 @@
+import { assertIndependentChooserMutation } from '../../services/authentication-evidence.service.js';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
@@ -89,7 +90,7 @@ export function registerAuthCreateTeamRoute(app: FastifyInstance): void {
       if (!config || !configUrl) throw new AppError('BAD_REQUEST', 400, 'MISSING_CONFIG');
 
       const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
-      const session = await verifyLoginSession({
+      const session = await verifyLoginSession({ prisma: request.adminDb,
         token: login_token,
         config,
         configUrl,
@@ -130,7 +131,7 @@ export function registerAuthCreateTeamRoute(app: FastifyInstance): void {
           },
           { prisma: tx },
         );
-        const lockedSession = await verifyLoginSession({
+        const lockedSession = await verifyLoginSession({ prisma: tx,
           token: login_token,
           config,
           configUrl,
@@ -154,6 +155,7 @@ export function registerAuthCreateTeamRoute(app: FastifyInstance): void {
         }
         // Serializes concurrent login bridges the same way `/auth/create-organisation` does, so two
         // of them cannot each create a team from the same chooser.
+        await assertIndependentChooserMutation(lockedSession, tx);
         await lockRequiredTeamPlacementUser(lockedSession.userId, { prisma: tx });
 
         // Claim before writing. A later failure rolls the claim and the team back together,
@@ -235,6 +237,7 @@ export function registerAuthCreateTeamRoute(app: FastifyInstance): void {
             requestAccess: lockedSession.requestAccess,
             state: lockedSession.state,
             authMethod: lockedSession.authMethod,
+            authenticationEvidenceId: lockedSession.authenticationEvidenceId,
             codeChallenge: lockedSession.codeChallenge,
             codeChallengeMethod: lockedSession.codeChallengeMethod,
             ip: request.ip ?? null,

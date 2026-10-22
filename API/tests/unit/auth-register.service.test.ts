@@ -295,6 +295,40 @@ describe('requestRegistrationInstructions', () => {
     expect(sendVerifyEmailSetPasswordEmail).not.toHaveBeenCalled();
   });
 
+  it('reports what happened to the email for the sign-up funnel without changing the reply', async () => {
+    const run = async (params: {
+      existing: { id: string; tokenVersion: number } | null;
+      delivered: boolean;
+      config?: Partial<ClientConfig>;
+    }) =>
+      requestRegistrationInstructions(
+        {
+          email: 'person@example.com',
+          config: baseConfig(params.config),
+          configUrl: 'https://client.example.com/auth-config',
+        },
+        {
+          env: testEnv(),
+          prisma: {
+            user: { findUnique: async () => params.existing },
+            verificationToken: { create: async () => ({ id: 't' }) },
+          } as never,
+          sharedSecret: 'pepper',
+          consumeAccountFlowTimingBudget: async () => undefined,
+          isPrincipalBannedForRegistration: async () => false,
+          sendAccountExistsEmail: async () => params.delivered,
+          sendVerifyEmailEmail: async () => params.delivered,
+          sendVerifyEmailSetPasswordEmail: async () => params.delivered,
+        },
+      );
+
+    await expect(run({ existing: null, delivered: true })).resolves.toEqual({ status: 'sent', delivery: 'verification_sent' });
+    await expect(run({ existing: null, delivered: false })).resolves.toEqual({ status: 'sent', delivery: 'verification_failed' });
+    await expect(run({ existing: { id: 'u1', tokenVersion: 0 }, delivered: true })).resolves.toEqual({ status: 'sent', delivery: 'login_link_sent' });
+    await expect(run({ existing: { id: 'u1', tokenVersion: 0 }, delivered: false })).resolves.toEqual({ status: 'sent', delivery: 'login_link_failed' });
+    await expect(run({ existing: null, delivered: true, config: { allow_registration: false } })).resolves.toEqual({ status: 'sent', delivery: 'blocked' });
+  });
+
   it('is a no-op when the database is disabled', async () => {
     const findUnique = vi.fn<PrismaStub['user']['findUnique']>();
     const createToken = vi.fn<PrismaStub['verificationToken']['create']>();
