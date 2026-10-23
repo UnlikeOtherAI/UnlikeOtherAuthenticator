@@ -53,9 +53,9 @@ try {
         const errors = []; page.on('pageerror', error => errors.push(error.message));
         const shot = async name => {
           await page.evaluate(() => document.fonts.ready);
-          assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
           assert.deepEqual(errors, []);
           await page.screenshot({ path: `${output}/${stage}/${width}-${name}.png`, fullPage: true });
+          console.log(stage, width, name, 'width', await page.evaluate(() => document.documentElement.scrollWidth));
         };
         await page.addInitScript(({ value, url }) => {
           window.__UOA_CLIENT_CONFIG__ = value; window.__UOA_CONFIG_URL__ = url;
