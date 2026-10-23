@@ -100,7 +100,7 @@ try {
           if (scenario === 'multiple') {
             await page.getByText('Research', { exact: true }).waitFor();
             assert.equal(await page.getByText('Other Research', { exact: true }).count(), stage === 'before' ? 1 : 0);
-            assert.equal(await page.getByText('Another organization Design', { exact: true }).count(), stage === 'before' ? 1 : 0);
+            assert.equal(await page.getByText(/invited.*Another organization Design/).count(), stage === 'before' ? 1 : 0);
             await shot('02-teams-and-invitations');
             await page.getByRole('button', { name: 'Create team', exact: true }).click();
             await page.getByRole('dialog').waitFor();
