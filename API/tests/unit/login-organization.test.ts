@@ -12,8 +12,8 @@ const config = (organizationId?: string) => validateConfigFields({ ...baseClient
 const rows = ['acme', 'other'].flatMap(orgId => [1, 2].map(n => ({ teamId: `${orgId}-${n}`, teamRole: 'member',
   team: { orgId, name: `Team ${n}`, slug: `team-${n}`, iconUrl: null, updatedAt: new Date(), org: { name: orgId } },
 })));
-function directory() {
-  const teamMember = { findMany: vi.fn(async ({ where }) => rows.filter(row => !where.team.orgId || row.team.orgId === where.team.orgId)) };
+function directory(teamRows = rows) {
+  const teamMember = { findMany: vi.fn(async ({ where }) => teamRows.filter(row => !where.team.orgId || row.team.orgId === where.team.orgId)) };
   const orgMember = { findMany: vi.fn(async ({ where }) => ['acme', 'other']
     .filter(orgId => !where.orgId || orgId === where.orgId).map(orgId => ({ orgId, role: 'owner', org: { name: orgId } }))) };
   const teamInvite = { findMany: vi.fn(async ({ where }) => ['acme', 'other']
@@ -40,6 +40,23 @@ describe('organisation-scoped sign-in', () => {
       { prisma, crossProductPrisma: prisma, policy: { scope: 'all_active_memberships', serviceId: 'nessie', product: 'nessie' } });
     expect(choices).toMatchObject({ teams: [], pending_invites: [], creatable_orgs: [], can_create_org: false });
     expect(shouldPresentTeamChooser(choices)).toBe(true);
+  });
+  it('selects a sole team only after the organization filter has removed other memberships', async () => {
+    const prisma = directory([rows[0], rows[2]]);
+    prisma.orgMember.findMany.mockResolvedValue([]);
+    const scoped = config('acme');
+    scoped.org_features.allow_user_create_org = false;
+    const choices = await buildSessionChoices({ userId: 'member', config: scoped },
+      { prisma, crossProductPrisma: prisma, policy: { scope: 'all_active_memberships', serviceId: 'nessie', product: 'nessie' } });
+    // Invitations deliberately keep a chooser open until the person resolves them.
+    expect(resolveAutoSelectedTeam(choices)).toBeNull();
+    choices.pending_invites = [];
+    expect(resolveAutoSelectedTeam(choices)).toMatchObject({ orgId: 'acme', teamId: 'acme-1' });
+    expect(shouldPresentTeamChooser(choices)).toBe(false);
+  });
+  it('rejects malformed organization scope in signed configuration', () => {
+    expect(() => config('other/organization')).toThrow();
+    expect(() => config('x'.repeat(257))).toThrow();
   });
   it('preserves the ordinary all-organisation chooser', async () => {
     const prisma = directory();

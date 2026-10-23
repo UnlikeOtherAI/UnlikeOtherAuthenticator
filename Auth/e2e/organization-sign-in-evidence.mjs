@@ -37,6 +37,7 @@ function directory(scenario) {
         org: { name: names[orgId] }, invitedByName: 'Jo', invitedByUserId: null })) },
   };
 }
+const widthsBefore = new Map();
 const browser = await chromium.launch({ headless: true, channel: process.env.PLAYWRIGHT_CHANNEL ?? 'msedge' });
 try {
   for (const [stage, origin, build] of [
@@ -55,7 +56,11 @@ try {
           await page.evaluate(() => document.fonts.ready);
           assert.deepEqual(errors, []);
           await page.screenshot({ path: `${output}/${stage}/${width}-${name}.png`, fullPage: true });
-          console.log(stage, width, name, 'width', await page.evaluate(() => document.documentElement.scrollWidth));
+          const renderedWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+          const key = `${width}/${name}`;
+          if (stage === 'before') widthsBefore.set(key, renderedWidth);
+          else assert.ok(renderedWidth <= (widthsBefore.get(key) ?? width), 'no new horizontal overflow');
+          console.log(stage, width, name, 'width', renderedWidth);
         };
         await page.addInitScript(({ value, url }) => {
           window.__UOA_CLIENT_CONFIG__ = value; window.__UOA_CONFIG_URL__ = url;
