@@ -6,7 +6,7 @@ way forward.
 
 | State | Before | After |
 | --- | --- | --- |
-| Expired or used email link | Kept the **Verify email address** button and said "Try again" — a rejected link can never succeed on retry | Says the link has expired or was already used and removes the button. Only a network failure, 429 or 5xx keeps the button and asks to try again |
+| Rejected email link (expired, exhausted or malformed) | Kept the **Verify email address** button and said "Try again" — a rejected link can never succeed on retry | Says the link has expired or is no longer valid and removes the button. Only a network failure, 429 or 5xx keeps the button and asks to try again. Replaying an already-used link is unchanged: the API stays idempotent (200) and the page shows success |
 | Link without its secret | Same message, but the button stayed and did nothing new | Same message, button removed |
 | Confirmation success | The result line sat inside the removed button's row, leaving a large gap under the body text | The page template has an optional status region below the actions; success shows heading, body and the continuation sentence without the gap |
 | Pending registration expired (code screen) | Kept "We've sent a link and code… open the link or enter the code below" above the expiry message; the only way on was a small text link | Shows the expiry message and a primary **Request a new email** button |

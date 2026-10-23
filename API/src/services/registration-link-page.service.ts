@@ -8,8 +8,9 @@ export function renderRegistrationLinkPage(nonce: string): string {
     primaryAction: { id: 'verify', label: 'Verify email address' },
     statusId: 'result',
   });
-  // A rejected link (expired, used or malformed) can never succeed on retry, so only a
-  // transport or server failure keeps the button; every final outcome removes it.
+  // A rejected link (expired, exhausted or malformed) can never succeed on retry, so only a
+  // transport or server failure keeps the button; every final outcome removes it. Replaying
+  // an already-used link stays idempotent: the API answers 200 and the page shows success.
   const script = `<script nonce="${nonce}">
 (() => {
   let token = location.hash.slice(1);
@@ -41,7 +42,7 @@ export function renderRegistrationLinkPage(nonce: string): string {
     } else if (response.status === 429 || response.status >= 500) {
       retry('We could not verify this link right now. Try again in a moment.');
     } else {
-      finish('This link has expired or has already been used. Request a new email from the registration screen.');
+      finish('This link has expired or is no longer valid. Request a new email from the registration screen.');
     }
   });
 })();

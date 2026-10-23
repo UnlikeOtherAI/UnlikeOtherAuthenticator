@@ -218,7 +218,7 @@ test('a rejected link shows its error without signing in or redirecting', async 
   await expect(verify).toBeEnabled();
   postStatus = 400;
   await verify.click();
-  await expect(page.getByRole('status')).toContainText('This link has expired or has already been used');
+  await expect(page.getByRole('status')).toContainText('This link has expired or is no longer valid');
   await expect(page.getByRole('status')).not.toContainText('Try again');
   await expect(verify).toHaveCount(0);
   await page.screenshot({ path: info.outputPath('link-error.png'), fullPage: true });
@@ -289,7 +289,9 @@ test('another-device link displays success without navigation or authentication'
   const bodyBox = await page.getByText('Your email address is confirmed.', { exact: true }).boundingBox();
   const statusBox = await page.getByRole('status').boundingBox();
   if (!bodyBox || !statusBox) throw new Error('Success text is not rendered');
-  expect(statusBox.y - (bodyBox.y + bodyBox.height)).toBeLessThanOrEqual(20);
+  const gap = statusBox.y - (bodyBox.y + bodyBox.height);
+  expect(gap).toBeGreaterThanOrEqual(0);
+  expect(gap).toBeLessThanOrEqual(20);
   expect(await page.context().cookies()).toHaveLength(0);
   await page.screenshot({ path: info.outputPath('cross-device-success.png'), fullPage: true });
 });

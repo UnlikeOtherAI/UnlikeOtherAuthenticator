@@ -79,7 +79,7 @@ export function RegistrationVerificationPage(): React.JSX.Element {
         // The sent-code instructions no longer apply, so a new email is the only way on.
         <>
           <p role="status" className="mt-3 text-sm text-[var(--uoa-color-text)]">{t('registration.expired')}</p>
-          <Button type="button" className="mt-6" disabled={resending} onClick={() => { void resend(); }}>{resendLabel}</Button>
+          <Button type="button" className="mt-6" disabled={loading || resending} onClick={() => { void resend(); }}>{resendLabel}</Button>
         </>
       ) : (
         <>
