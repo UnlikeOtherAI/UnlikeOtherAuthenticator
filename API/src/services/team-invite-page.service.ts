@@ -57,6 +57,8 @@ export function renderInviteHtml(params: {
   continueUrl?: string;
   productName?: string;
   primaryAction?: { id: string; label: string };
+  /** Empty live region below the actions, filled by the page's own script. */
+  statusId?: string;
 }): string {
   const continueButton = params.continueUrl
     ? `<a href="${escapeInvitePageHtml(params.continueUrl)}" style="display:inline-block;padding:12px 16px;border-radius:12px;background:#111827;color:#ffffff;text-decoration:none;font-weight:600;">Continue to ${escapeInvitePageHtml(params.productName ?? 'the app')}</a>`
@@ -68,6 +70,9 @@ export function renderInviteHtml(params: {
       : '';
   const declineButton = params.declineUrl
     ? `<a href="${escapeInvitePageHtml(params.declineUrl)}" style="display:inline-block;padding:12px 16px;border-radius:12px;border:1px solid #d1d5db;color:#111827;text-decoration:none;font-weight:600;">Decline</a>`
+    : '';
+  const status = params.statusId
+    ? `<p id="${escapeInvitePageHtml(params.statusId)}" role="status" aria-live="polite" style="margin:16px 0 0 0;font-size:16px;line-height:1.6;"></p>`
     : '';
 
   return `<!doctype html>
@@ -82,7 +87,7 @@ export function renderInviteHtml(params: {
       <div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:16px;padding:32px;">
         <h1 style="margin:0 0 16px 0;font-size:28px;line-height:1.2;">${escapeInvitePageHtml(params.title)}</h1>
         <p style="margin:0 0 24px 0;font-size:16px;line-height:1.6;">${escapeInvitePageHtml(params.body)}</p>
-        <div style="display:flex;gap:12px;flex-wrap:wrap;">${primaryButton}${continueButton}${declineButton}</div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;">${primaryButton}${continueButton}${declineButton}</div>${status}
       </div>
     </div>
   </body>
