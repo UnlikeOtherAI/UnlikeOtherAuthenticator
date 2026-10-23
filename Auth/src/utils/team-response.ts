@@ -123,7 +123,7 @@ export function toSessionChoices(data: unknown): SessionChoices | null {
   if (!isRecord(data) || !Array.isArray(data.teams)) return null;
   return {
     ...(typeof data.organization_id === 'string' ? { organization_id: data.organization_id } : {}),
-        teams: toTeamChoices(data.teams),
+    teams: toTeamChoices(data.teams),
     pending_invites: toInviteChoices(data.pending_invites),
     can_create_org: Boolean(data.can_create_org),
     creatable_orgs: toCreatableOrgs(data.creatable_orgs),
