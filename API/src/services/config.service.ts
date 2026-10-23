@@ -218,6 +218,8 @@ const ClientConfigSchema = RequiredConfigSchema.extend({
     .object({
       email_code_enabled: z.boolean().default(false),
       team_selection: z.enum(['off', 'auto']).default('off'),
+      // Optional exact organisation for this interactive sign-in, carried in the signed config.
+      organization_id: z.string().regex(/^[A-Za-z0-9_-]{1,256}$/).optional(),
     })
     .optional()
     .default({ email_code_enabled: false, team_selection: 'off' }),

@@ -85,7 +85,7 @@ export async function resolveRequiredAuthorizationTeam(
     }
   }
 
-  if (!placementAllowed) {
+  if (!placementAllowed || params.config.login_flow?.organization_id) {
     throw new AppError('UNAUTHORIZED', 401, 'INVALID_AUTH_CODE');
   }
 

@@ -3329,3 +3329,17 @@ changes, with durable transactional admission and dedicated product HMAC secrets
 Products resolve exact subjects through the existing selected-team members API
 and retain its original-assurance and reviewed identity-cleanup contract. See
 [Directory change webhooks](Auth/directory-webhooks.md).
+
+## Organisation-scoped hosted sign-in (2026-10-23)
+
+A product entered through an organisation address may serve a request-specific signed
+config with `login_flow.organization_id` set to that stable UOA organisation ID.
+UOA limits the hosted chooser's teams, invitations, creation destinations and
+organisation-management destinations to that organisation before automatic selection.
+An empty result stays on the chooser with a return to sign-in; it neither enters
+another organisation nor creates a personal organisation. New-organisation creation
+is unavailable in this flow. Existing membership, product and authentication-evidence
+checks still apply. The config URL and parsed fingerprint bind this choice through
+social, email, verification and code-exchange continuations. Ordinary product login
+omits the field and keeps the full directory. This sign-in choice grants no access
+and does not limit later deliberate workspace-switch grants.

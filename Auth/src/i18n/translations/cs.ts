@@ -90,6 +90,7 @@ export const cs = {
   'codeEntry.resend.sent': 'Poslali jsme nový kód na váš e-mail',
   'codeEntry.error': 'Kód se nepodařilo ověřit. Zkuste to prosím znovu.',
 
+  'teamChooser.noOrganizationTeams': 'V této organizaci nemáte přístup k žádnému týmu.',
   'teamChooser.subtitle': 'Vaše týmy pro {email}',
   'teamChooser.autoSkip': 'Přihlašování…',
   'team.role.owner': 'Vlastník',

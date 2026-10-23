@@ -90,6 +90,7 @@ export const es = {
   'codeEntry.resend.sent': 'Te hemos enviado un código nuevo por correo electrónico',
   'codeEntry.error': 'No se pudo verificar el código. Inténtalo de nuevo.',
 
+  'teamChooser.noOrganizationTeams': 'No tienes acceso a ningún equipo de esta organización.',
   'teamChooser.subtitle': 'Tus equipos para {email}',
   'teamChooser.autoSkip': 'Iniciando sesión…',
   'team.role.owner': 'Propietario',

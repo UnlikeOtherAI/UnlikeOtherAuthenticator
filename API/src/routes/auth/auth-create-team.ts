@@ -1,3 +1,4 @@
+import { assertLoginOrganization } from '../../services/login-organization.service.js';
 import { assertIndependentChooserMutation } from '../../services/authentication-evidence.service.js';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
@@ -88,6 +89,7 @@ export function registerAuthCreateTeamRoute(app: FastifyInstance): void {
       const config = request.config;
       const configUrl = request.configUrl;
       if (!config || !configUrl) throw new AppError('BAD_REQUEST', 400, 'MISSING_CONFIG');
+      assertLoginOrganization(config, org_id);
 
       const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
       const session = await verifyLoginSession({ prisma: request.adminDb,

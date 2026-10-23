@@ -1,3 +1,4 @@
+import { assertLoginOrganization } from './login-organization.service.js';
 import { recordIndependentAuthentication, requireAuthenticationEvidence, type VerifiedAuthenticationEvent } from './authentication-evidence.service.js';
 import type { PrismaClient } from '@prisma/client';
 import { AppError } from '../utils/errors.js';
@@ -63,6 +64,7 @@ export async function finalizeWithTwoFaPolicy(
   },
   deps?: FinalizeWithPolicyDeps,
 ): Promise<TeamFinalizeOutcome> {
+  assertLoginOrganization(params.config, params.orgId);
   if (!deps?.policyLockHeld) {
     const transactionPrisma = deps?.prisma ?? getAdminPrisma();
     return runInTransaction(transactionPrisma, async (tx) => {
