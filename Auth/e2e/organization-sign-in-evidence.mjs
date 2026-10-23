@@ -80,13 +80,17 @@ try {
           code_challenge: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ', code_challenge_method: 'S256' });
         if (scenario === 'multiple') {
           await page.goto(`${origin}/auth?${query}`);
-          await page.getByRole('button', { name: /Google/ }).waitFor();
+          await page.getByRole('link', { name: /Google/ }).waitFor();
+          assert.equal(new URL(await page.getByRole('link', { name: /Google/ }).getAttribute('href'), origin)
+            .searchParams.get('config_url'), configUrl);
           await shot('01-sign-in');
         }
         query.set('flow', 'team_chooser'); query.set('login_token', 'fixture-verified-login');
+        const autoRequest = scenario === 'single' && stage === 'after'
+          ? page.waitForRequest(request => request.url().includes('/auth/select-team')) : null;
         await page.goto(`${origin}/auth?${query}`);
         if (scenario === 'single' && stage === 'after') {
-          await page.waitForRequest(request => request.url().includes('/auth/select-team'));
+          await autoRequest;
           await shot('06-single-team-continuation');
           release(); await page.getByRole('heading', { name: 'Returned to Nessie' }).waitFor();
           assert.equal(selected, 'kilomayo-Research');
@@ -107,7 +111,7 @@ try {
               await page.getByText('You don’t have access to any teams in this organization.').waitFor();
               await shot('04-no-access');
               await page.getByRole('button', { name: 'Back to sign in', exact: true }).click();
-              await page.getByRole('button', { name: /Google/ }).waitFor();
+              await page.getByRole('link', { name: /Google/ }).waitFor();
               await shot('05-no-access-back');
             } else {
               await page.getByText('Other Research', { exact: true }).waitFor();
