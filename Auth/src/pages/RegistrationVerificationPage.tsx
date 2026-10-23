@@ -71,28 +71,35 @@ export function RegistrationVerificationPage(): React.JSX.Element {
   if (!pending) return <div />;
   const unavailable = status === 'expired' || status === 'complete';
   const [beforeEmail, afterEmail] = t('registration.sent', { email: '{email}' }).split('{email}');
+  const resendLabel = resending ? t('registration.sending') : t('registration.restart');
   return (
     <div>
       <h1 className={`text-balance ${classNames.title}`}>{t('registration.checkEmail')}</h1>
-      <p className="mt-3 text-sm text-[var(--uoa-color-text)]">{beforeEmail}<strong>{pending.email}</strong>{afterEmail}</p>
-      <p className="mt-2 text-sm text-[var(--uoa-color-muted)]">{t('registration.instructions')}</p>
-      {status === 'verified' ? <p role="status" className="mt-4 text-sm text-[var(--uoa-color-text)]">{t('registration.verifiedElsewhere')}</p> : null}
       {unavailable ? (
-        <p role="status" className="mt-4 text-sm text-[var(--uoa-color-text)]">{t('registration.expired')}</p>
+        // The sent-code instructions no longer apply, so a new email is the only way on.
+        <>
+          <p role="status" className="mt-3 text-sm text-[var(--uoa-color-text)]">{t('registration.expired')}</p>
+          <Button type="button" className="mt-6" disabled={loading || resending} onClick={() => { void resend(); }}>{resendLabel}</Button>
+        </>
       ) : (
-        <form className="mt-6 flex flex-col gap-4" aria-busy={loading} onSubmit={event => { event.preventDefault(); void submit(code); }}>
-          <RegistrationCodeInput value={code} onChange={value => { setCode(value); setError(false); }}
-            onComplete={value => { void submit(value); }} disabled={loading || resending} label={t('registration.code')}
-            errorId={error ? 'registration-error' : undefined} />
-          {error ? <p id="registration-error" role="alert" className="text-sm text-[var(--uoa-color-danger)]">{t('registration.error')}</p> : null}
-          {loading ? <p role="status" className="text-sm text-[var(--uoa-color-muted)]">{t('registration.verifying')}</p> : null}
-          {error ? <Button type="submit" disabled={loading}>{t('codeEntry.submit')}</Button> : null}
-        </form>
+        <>
+          <p className="mt-3 text-sm text-[var(--uoa-color-text)]">{beforeEmail}<strong>{pending.email}</strong>{afterEmail}</p>
+          <p className="mt-2 text-sm text-[var(--uoa-color-muted)]">{t('registration.instructions')}</p>
+          {status === 'verified' ? <p role="status" className="mt-4 text-sm text-[var(--uoa-color-text)]">{t('registration.verifiedElsewhere')}</p> : null}
+          <form className="mt-6 flex flex-col gap-4" aria-busy={loading} onSubmit={event => { event.preventDefault(); void submit(code); }}>
+            <RegistrationCodeInput value={code} onChange={value => { setCode(value); setError(false); }}
+              onComplete={value => { void submit(value); }} disabled={loading || resending} label={t('registration.code')}
+              errorId={error ? 'registration-error' : undefined} />
+            {error ? <p id="registration-error" role="alert" className="text-sm text-[var(--uoa-color-danger)]">{t('registration.error')}</p> : null}
+            {loading ? <p role="status" className="text-sm text-[var(--uoa-color-muted)]">{t('registration.verifying')}</p> : null}
+            {error ? <Button type="submit" disabled={loading}>{t('codeEntry.submit')}</Button> : null}
+          </form>
+          <button type="button" className="mt-6 text-sm text-[var(--uoa-color-primary)] hover:underline disabled:opacity-60"
+            disabled={loading || resending} onClick={() => { void resend(); }}>
+            {resendLabel}
+          </button>
+        </>
       )}
-      <button type="button" className="mt-6 text-sm text-[var(--uoa-color-primary)] hover:underline disabled:opacity-60"
-        disabled={loading || resending} onClick={() => { void resend(); }}>
-        {resending ? t('registration.sending') : t('registration.restart')}
-      </button>
       {sendError ? <p role="alert" className="mt-3 text-sm text-[var(--uoa-color-danger)]">{t('form.error.generic')}</p> : null}
     </div>
   );

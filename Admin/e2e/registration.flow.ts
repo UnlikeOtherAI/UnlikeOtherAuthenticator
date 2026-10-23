@@ -197,6 +197,8 @@ test('expiry and resend failure preserve a clear recovery screen', async ({ page
   await configure(page); const server = await backend(page); await start(page);
   await server.notify('expired');
   await expect(page.getByRole('textbox', { name: /Verification code \d \/ 6/ })).toHaveCount(0);
+  await expect(page.getByText(/Open the link on any device/)).toHaveCount(0);
+  await expect(page.getByText(/We've sent a verification link/)).toHaveCount(0);
   await page.screenshot({ path: info.outputPath('registration-expired.png'), fullPage: true });
   server.failResend();
   await page.getByRole('button', { name: 'Request a new email' }).click();
@@ -205,18 +207,27 @@ test('expiry and resend failure preserve a clear recovery screen', async ({ page
 });
 
 test('a rejected link shows its error without signing in or redirecting', async ({ page }, info) => {
+  let postStatus = 503;
   await page.route('**/auth/registration/link', route => route.request().method() === 'POST'
-    ? route.fulfill({ status: 400, json: { error: 'Request failed' } })
+    ? route.fulfill({ status: postStatus, json: { error: 'Request failed' } })
     : route.fulfill({ contentType: 'text/html', body: renderRegistrationLinkPage('synthetic-nonce') }));
   await page.goto('/auth/registration/link#synthetic-expired-secret');
-  await page.getByRole('button', { name: 'Verify email address' }).click();
-  await expect(page.getByRole('status')).toContainText('We could not verify');
+  const verify = page.getByRole('button', { name: 'Verify email address' });
+  await verify.click();
+  await expect(page.getByRole('status')).toContainText('Try again in a moment');
+  await expect(verify).toBeEnabled();
+  postStatus = 400;
+  await verify.click();
+  await expect(page.getByRole('status')).toContainText('This link has expired or is no longer valid');
+  await expect(page.getByRole('status')).not.toContainText('Try again');
+  await expect(verify).toHaveCount(0);
   await page.screenshot({ path: info.outputPath('link-error.png'), fullPage: true });
   expect(await page.context().cookies()).toHaveLength(0);
   await page.goto('about:blank');
   await page.goto('/auth/registration/link');
   await page.getByRole('button', { name: 'Verify email address' }).click();
   await expect(page.getByRole('status')).toContainText('This link cannot be used');
+  await expect(page.getByRole('button', { name: 'Verify email address' })).toHaveCount(0);
   await page.screenshot({ path: info.outputPath('link-missing-secret.png'), fullPage: true });
 });
 
@@ -274,6 +285,13 @@ test('another-device link displays success without navigation or authentication'
   await expect(page.getByRole('status')).toContainText('will continue automatically');
   await expect(page.getByRole('status')).toContainText('has not signed you in');
   await expect(page.getByRole('button', { name: 'Verify email address' })).toHaveCount(0);
+  // The confirmation sentence sits directly under the body text, without the removed button's gap.
+  const bodyBox = await page.getByText('Your email address is confirmed.', { exact: true }).boundingBox();
+  const statusBox = await page.getByRole('status').boundingBox();
+  if (!bodyBox || !statusBox) throw new Error('Success text is not rendered');
+  const gap = statusBox.y - (bodyBox.y + bodyBox.height);
+  expect(gap).toBeGreaterThanOrEqual(0);
+  expect(gap).toBeLessThanOrEqual(20);
   expect(await page.context().cookies()).toHaveLength(0);
   await page.screenshot({ path: info.outputPath('cross-device-success.png'), fullPage: true });
 });
