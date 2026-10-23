@@ -1,3 +1,4 @@
+import { assertLoginOrganization } from '../../services/login-organization.service.js';
 import { assertIndependentChooserMutation } from '../../services/authentication-evidence.service.js';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
@@ -148,6 +149,10 @@ export function registerAuthSelectTeamRoute(app: FastifyInstance): void {
             now: new Date(),
           });
           await assertIndependentChooserMutation(lockedSession, tx);
+          if (config.login_flow?.organization_id) {
+            const invite = await tx.teamInvite.findUnique({ where: { id: inviteId }, select: { orgId: true } });
+            assertLoginOrganization(config, invite?.orgId);
+          }
           await declineTeamInviteForUser({
             prisma: tx,
             teamInviteId: inviteId,
@@ -239,6 +244,8 @@ export function registerAuthSelectTeamRoute(app: FastifyInstance): void {
           orgId = team.orgId;
           resolvedTeamId = team.id;
         }
+
+        assertLoginOrganization(config, orgId);
 
         // Every resolved path, including shareable invite-link redemption,
         // must finish with the exact ACTIVE org + team rows locked.

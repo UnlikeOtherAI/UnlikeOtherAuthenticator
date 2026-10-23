@@ -92,6 +92,7 @@ export const en = {
   'codeEntry.error': 'Could not verify the code. Please try again.',
 
   // Phase 3c: team chooser (design §11.2 — copy names the team, not the product).
+  'teamChooser.noOrganizationTeams': 'You don’t have access to any teams in this organization.',
   'teamChooser.subtitle': 'Your teams for {email}',
   'teamChooser.autoSkip': 'Signing you in…',
   'team.role.owner': 'Owner',

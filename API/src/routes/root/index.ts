@@ -58,6 +58,7 @@ export function registerRootRoute(app: FastifyInstance): void {
       home: '/',
       docs: '/llm',
       api: '/api',
+      organization_sign_in: { config: 'login_flow.organization_id', description: 'Optional exact UOA organization for hosted sign-in choices and completion; no membership grant. Omit for all eligible organizations.' },
       registration_verification: registrationVerificationDocumentation,
       personal_telephone: { profile: '/apps/v1/nessie/phone-profile/read', lookup: '/apps/v1/nessie/phone-profile/lookup',
         call_proof: '/apps/v1/nessie/phone-profile/call-proof/start',

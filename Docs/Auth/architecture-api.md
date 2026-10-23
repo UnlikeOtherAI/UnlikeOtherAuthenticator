@@ -1011,3 +1011,7 @@ Directory notifications use `services/directory-webhook.service.ts` and the
 source transaction; a stoppable app-owned worker delivers them. Consumers use
 the existing selected-subject members API and original-assurance proof. See
 [directory webhooks](directory-webhooks.md).
+
+Hosted organisation selection is owned by `login-organization.service.ts` and
+`session-choices.service.ts`; the signed `login_flow.organization_id` narrows only
+interactive entry. See the organisation-scoped sign-in addendum in `Docs/brief.md`.

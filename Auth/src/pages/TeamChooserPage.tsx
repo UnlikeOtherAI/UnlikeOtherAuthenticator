@@ -230,6 +230,15 @@ export function TeamChooserPage(): React.JSX.Element {
 
       {error ? <p className="text-sm text-[var(--uoa-color-danger)]">{error}</p> : null}
 
+      {teamChoices.organization_id && !hasTeams && !hasInvites && !canOpenCreateDialog ? (
+        <div className="flex flex-col gap-3">
+          <p className="text-sm text-[var(--uoa-color-muted)]">{t('teamChooser.noOrganizationTeams')}</p>
+          <Button onClick={() => { setLoginToken(null); setSessionChoices(null); setView('login'); }}>
+            {t('nav.backToLogin')}
+          </Button>
+        </div>
+      ) : null}
+
       {showInlineFirstTeamForm ? (
         <CreateFirstTeamForm loginToken={loginToken} query={query} onOutcome={handleOutcome} />
       ) : null}
