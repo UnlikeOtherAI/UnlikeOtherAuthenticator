@@ -3,6 +3,7 @@ import { checkSlug, type SlugRejection } from '@unlikeotherai/slug';
 
 import { getAdminPrisma } from '../db/prisma.js';
 import { normalizeDomain } from '../utils/domain.js';
+import { isOrganisationSlugTaken } from './organisation-slug-admission.service.js';
 import { resolveProductTeamPolicy, type ProductTeamPolicyPrisma } from './product-team-policy.service.js';
 
 /**
@@ -12,7 +13,7 @@ import { resolveProductTeamPolicy, type ProductTeamPolicyPrisma } from './produc
  * Globally ambiguous labels fail closed in both directions; a caller must not
  * build a URL that would resolve to a different organisation.
  */
-type HostnamePrisma = ProductTeamPolicyPrisma & {
+type HostnamePrisma = ProductTeamPolicyPrisma & Pick<PrismaClient, '$queryRaw'> & {
   organisation: Pick<PrismaClient['organisation'], 'findFirst' | 'findMany'>;
   team: Pick<PrismaClient['team'], 'findFirst'>;
 };
@@ -202,7 +203,7 @@ export type SlugAvailability =
 /**
  * Whether an organisation may take this address on this client domain.
  *
- * Answers within the caller's registered product namespace. It reveals that a
+ * Answers against the global address occupancy guard. It reveals that a
  * label is taken, which is unavoidable — the answer is the point — but says
  * nothing about who holds it.
  */
@@ -214,10 +215,7 @@ export async function checkOrgSlugAvailability(
   if (!result.ok) return { available: false, reason: result.reason };
 
   const prisma = database(deps);
-  const existing = await prisma.organisation.findFirst({
-    where: { ...await namespace(params.domain, prisma), slug: result.slug },
-    select: { id: true },
-  });
+  const existing = await isOrganisationSlugTaken(prisma, result.slug);
 
   return existing ? { available: false, reason: 'taken' } : { available: true, slug: result.slug };
 }

@@ -11,6 +11,7 @@ import {
   ensureOrgName,
 } from './organisation.service.base.js';
 import { deriveUniqueTeamSlug } from './team.service.base.js';
+import { withAutomaticOrganisationSlug } from './organisation-slug-admission.service.js';
 
 type OrgPlacementPrisma = Pick<PrismaClient, '$transaction'> & {
   organisation: Pick<PrismaClient['organisation'], 'findUnique' | 'create' | 'findFirst'>;
@@ -123,13 +124,13 @@ async function autoCreatePersonalOrgForUser(params: {
   try {
     const created = await runInTransaction(params.prisma as unknown as PrismaClient, async (tx) => {
       const txClient = tx as OrgPlacementTx;
-
-      const existing = await txClient.orgMember.findFirst({
-        where: {
-          userId: params.userId,
-          org: { domain: params.domain },
-        },
-        select: { id: true },
+      return withAutomaticOrganisationSlug(txClient, async () => {
+        const existing = await txClient.orgMember.findFirst({
+          where: {
+            userId: params.userId,
+            org: { domain: params.domain },
+          },
+          select: { id: true },
       });
       if (existing) {
         return null;
@@ -179,6 +180,7 @@ async function autoCreatePersonalOrgForUser(params: {
       });
 
       return { orgId: org.id, teamId: team.id };
+      });
     });
 
     if (!created) {

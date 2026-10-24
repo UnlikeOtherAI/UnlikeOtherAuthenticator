@@ -1,3 +1,4 @@
+import { withChosenOrganisationSlug } from './organisation-slug-admission.service.js';
 import { runInTransaction } from '../db/tenant-context.js';
 import { revokeEnterpriseOrganisation } from './enterprise-authority-revocation.service.js';
 import { getAdminPrisma } from '../db/prisma.js';
@@ -107,7 +108,7 @@ export async function createAdminOrganisation(input: {
   });
   if (!owner) throw new AppError('BAD_REQUEST', 400, 'OWNER_NOT_FOUND');
 
-  const created = await runInTransaction(prisma, async (tx) => {
+  const created = await withChosenOrganisationSlug(() => runInTransaction(prisma, async (tx) => {
     const slug = await deriveAvailableOrgSlug({ domain, prisma: tx, name });
     const org = await tx.organisation.create({
       data: {
@@ -142,7 +143,7 @@ export async function createAdminOrganisation(input: {
     }
 
     return { id: org.id, createdAt: org.createdAt };
-  });
+  }));
 
   return {
     ...(await getAdminOrganisation(created.id)),

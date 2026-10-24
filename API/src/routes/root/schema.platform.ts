@@ -107,7 +107,7 @@ export const domainEndpoints: EndpointSchema[] = [
     method: 'GET',
     path: '/domain/slug-available',
     description:
-      'Whether a slug may be taken, for the address field in a create dialog. Answers with a reason rather than a bare boolean.',
+      'Whether a slug may be taken. Organisation address occupancy is global across founding domains; team labels are scoped to their organisation. This advisory check returns a reason; the database enforces concurrent claims.',
     auth: 'domain hash bearer token',
     query: {
       domain: 'string (required)',
