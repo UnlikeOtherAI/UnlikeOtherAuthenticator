@@ -30,7 +30,7 @@ describe('registered product hostname namespace with PostgreSQL', () => {
     const service = await db.billingService.create({ data: { identifier: randomUUID(), name: 'Address test' } });
     const key = await db.billingAppKey.create({ data: {
       serviceId: service.id, purpose: 'CUSTOMER_LIFECYCLE', name: 'Address test',
-      keyPrefix: randomUUID(), secretDigest: createHash('sha256').update(randomUUID()).digest('hex'),
+      keyPrefix: randomUUID().slice(0, 8), secretDigest: createHash('sha256').update(randomUUID()).digest('hex'),
       actorIssuer: `https://${domain}`, actorAudience: 'https://auth.example.com/billing',
       actorKeyId: 'test', actorPublicJwk: {}, checkoutReturnOrigins: [`https://${domain}`],
     } });

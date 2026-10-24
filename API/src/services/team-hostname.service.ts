@@ -35,7 +35,8 @@ async function addressableOrg(domain: string, selector: { id: string } | { slug:
     where: { ...where, id: selector.id }, select: orgSelect,
   }) : null;
   if ('id' in selector && !selected) return null;
-  const slug = 'slug' in selector ? selector.slug : selected!.slug;
+  const slug = 'slug' in selector ? selector.slug : selected?.slug;
+  if (!slug) return null;
   const matches = await prisma.organisation.findMany({
     where: { ...where, slug }, select: orgSelect, take: 2,
   });
