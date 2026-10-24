@@ -47,6 +47,7 @@ import { lockRefreshSessionUserDomain } from '../../services/refresh-session-loc
 import { socialCallbackRateLimiter } from './rate-limit-keys.js';
 import { isPublicSocialState } from '../../services/oauth/social-ticket.service.js';
 import { handlePublicGoogleCallback } from '../../services/oauth/social-login.service.js';
+import { rememberCompletedSocialProvider } from '../../services/social/social-browser-preference.service.js';
 
 const ParamsSchema = z.object({
   provider: z.enum(['google', 'apple', 'facebook', 'github', 'linkedin']),
@@ -417,6 +418,7 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
           u.searchParams.set('code_challenge_method', socialState.code_challenge_method);
         }
         u.searchParams.set('login_token', outcome.loginToken);
+        if (socialState.team_hint) u.searchParams.set('team_hint', socialState.team_hint);
         u.searchParams.set('flow', socialState.management_org_id ? 'organisation_management' : 'team_chooser');
         if (socialState.management_org_id) u.searchParams.set('management_org_id', socialState.management_org_id);
         if (socialState.request_access === true) {
@@ -440,6 +442,8 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
       }
 
       await recordSocialLogin(outcome.userId);
+
+      if (outcome.finalResult.status === 'granted') rememberCompletedSocialProvider(reply, provider);
 
       if (isCustomSchemeUrl(outcome.finalResult.redirectTo)) {
         // Native deep link: hand off via a "signed in" page instead of a 302 to a custom

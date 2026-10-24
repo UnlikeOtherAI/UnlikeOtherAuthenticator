@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { rememberCompletedSocialProvider } from '../../services/social/social-browser-preference.service.js';
 import { z } from 'zod';
 
 import { createRateLimiter } from '../../middleware/rate-limiter.js';
@@ -173,6 +174,7 @@ export function registerSignatureSessionRoutes(app: FastifyInstance): void {
     async (request, reply) => {
       const { signing_token } = SessionBodySchema.parse(request.body);
       const outcome = await completeSigningContinuation(signing_token);
+      if (outcome.status === 'granted') rememberCompletedSocialProvider(reply, outcome.completedAuthMethod);
       noStore(reply);
       return {
         ok: true,

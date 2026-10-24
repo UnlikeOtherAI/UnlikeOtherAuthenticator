@@ -280,7 +280,7 @@ describe('signing continuation completion', () => {
         now: () => NOW,
         issueConfigCode,
       }),
-    ).resolves.toMatchObject({ status: 'granted', code: 'authorization-code' });
+    ).resolves.toMatchObject({ status: 'granted', code: 'authorization-code', completedAuthMethod: 'email_password' });
     expect(prisma.$executeRaw).toHaveBeenCalledTimes(2);
     expect(prisma.signingContinuation.updateMany).toHaveBeenCalledWith({
       where: { id: 'continuation-1', consumedAt: null, expiresAt: { gt: NOW } },

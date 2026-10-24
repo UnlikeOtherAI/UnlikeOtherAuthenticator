@@ -229,6 +229,58 @@ describe.skipIf(!hasDatabase)('social auto-selected team token flow', () => {
       ).toBe(true);
       expect(refreshRows.find((row) => row.id === firstRefreshRow.id)?.revokedAt).not.toBeNull();
       expect(refreshRows.find((row) => row.id !== firstRefreshRow.id)?.revokedAt).toBeNull();
+
+      // The next team entry reuses only a provider preference. It still makes
+      // a new nonce-bound provider roundtrip and creates a new target code.
+      const targetTeam = await handle!.prisma.team.create({ data: {
+        orgId: organisation.id, name: 'Another team', slug: 'another-team',
+      } });
+      await handle!.prisma.teamMember.create({ data: { userId: user.id,
+        teamId: targetTeam.id, teamRole: 'member' } });
+      const callbackCookies = callback.headers['set-cookie'];
+      const preference = (Array.isArray(callbackCookies) ? callbackCookies : [callbackCookies])
+        .find(value => value?.startsWith('uoa_social_preference='))?.split(';')[0];
+      expect(preference).toBeTruthy();
+      const entry = await app.inject({ url: `/auth?config_url=${encodeURIComponent(configUrl)}`
+        + `&redirect_url=${encodeURIComponent(redirectUrl)}&team_hint=${targetTeam.id}`
+        + `&code_challenge=${challenge}&code_challenge_method=S256&state=target-attempt`,
+      headers: { cookie: preference! } });
+      expect(entry.statusCode, entry.body).toBe(302);
+      expect(entry.headers.location).toMatch(/^\/auth\/social\/google\?/);
+      expect(String(entry.headers['set-cookie'])).toContain('Expires=Thu, 01 Jan 1970');
+      const targetStart = await app.inject({ url: String(entry.headers.location) });
+      expect(targetStart.statusCode, targetStart.body).toBe(302);
+      const targetState = new URL(String(targetStart.headers.location)).searchParams.get('state');
+      const targetCookies = targetStart.headers['set-cookie'];
+      const targetNonce = (Array.isArray(targetCookies) ? targetCookies : [targetCookies])
+        .find(value => value?.startsWith('uoa_social_state='))?.split(';')[0];
+      const targetCallback = await app.inject({
+        url: `/auth/callback/google?code=provider-code&state=${encodeURIComponent(targetState!)}`,
+        headers: { cookie: targetNonce! },
+      });
+      expect(targetCallback.statusCode, targetCallback.body).toBe(302);
+      const chooser = new URL(String(targetCallback.headers.location));
+      expect(chooser.searchParams.get('flow')).toBe('team_chooser');
+      expect(chooser.searchParams.get('team_hint')).toBe(targetTeam.id);
+      expect(String(targetCallback.headers['set-cookie'])).not.toContain('uoa_social_preference=');
+      const query = new URLSearchParams({ config_url: configUrl, redirect_url: redirectUrl,
+        code_challenge: challenge, code_challenge_method: 'S256' });
+      const choices = await app.inject({ method: 'POST', url: `/auth/session-choices?${query}`,
+        payload: { login_token: chooser.searchParams.get('login_token') } });
+      expect(choices.statusCode, choices.body).toBe(200);
+      expect(choices.json().teams.map((choice: { teamId: string }) => choice.teamId)).toContain(targetTeam.id);
+      const selection = await app.inject({ method: 'POST', url: `/auth/select-team?${query}`,
+        payload: { login_token: chooser.searchParams.get('login_token'), teamId: targetTeam.id } });
+      expect(selection.statusCode, selection.body).toBe(200);
+      expect(String(selection.headers['set-cookie'])).toContain('uoa_social_preference=');
+      const targetPair = await app.inject({ method: 'POST',
+        url: `/auth/token?config_url=${encodeURIComponent(configUrl)}`, headers: { authorization },
+        payload: { code: selection.json().code, redirect_url: redirectUrl, code_verifier: codeVerifier } });
+      expect(targetPair.statusCode, targetPair.body).toBe(200);
+      expect(await activeClaim(targetPair.json().access_token))
+        .toMatchObject({ orgId: organisation.id, teamId: targetTeam.id });
+      expect(await handle!.prisma.refreshToken.count({ where: { userId: user.id, teamId: team.id,
+        revokedAt: null } })).toBe(1);
     } finally {
       await app.close();
     }
