@@ -201,6 +201,8 @@ vi.mock('./admin-queries', () => ({
 }));
 
 vi.mock('./billing-contract-queries', () => ({
+  useBillingCycleCorrectionsQuery: () => ({ data: [], isError: false, isLoading: false }),
+  usePrepareBillingCycleCorrectionMutation: () => mutation(vi.fn(), vi.fn()),
   useBillingContractsQuery: () => ({
     data: [
       state.contract,
