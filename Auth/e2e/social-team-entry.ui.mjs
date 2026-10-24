@@ -173,6 +173,9 @@ it.each([1280, 390])('opens the exact team and preserves the source family at %i
     await page.goto(entry(target.id, `cancel-${width}`));
     if (stage === 'before') await page.getByRole('link', { name: 'Continue with Google' }).click();
     await cancellation;
+    await page.waitForURL(url => url.origin === origin && url.pathname === '/auth/callback/google'
+      && url.searchParams.has('error'), { waitUntil: 'load' });
+    await shot('03b-provider-cancelled');
     await page.goto(entry(target.id, `retry-${width}`));
     await page.getByRole('link', { name: 'Continue with Google' }).waitFor();
     expect(providerRoundtrips).toBe(3);
