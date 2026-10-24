@@ -59,7 +59,7 @@ afterAll(async () => {
   if (app) await app.close();
   if (db) await db.cleanup();
   vi.unstubAllGlobals();
-  for (const key of Object.keys(process.env)) if (!(key in previousEnv)) delete process.env[key];
+  for (const key of Object.keys(process.env)) if (!(key in previousEnv)) Reflect.deleteProperty(process.env, key);
   Object.assign(process.env, previousEnv);
 });
 
@@ -139,7 +139,8 @@ it.each([1280, 390])('opens the exact team and preserves the source family at %i
     await page.getByRole('heading', { name: 'Verified product callback' }).waitFor();
     expect(results[0].teamId).toBe(source.id);
     const sourceFamilies = await db.prisma.refreshToken.findMany({ where: {
-      userId: user.id, teamId: source.id, revokedAt: null }, select: { id: true, expiresAt: true, assuranceId: true } });
+      userId: user.id, teamId: source.id, revokedAt: null }, orderBy: { id: 'asc' },
+    select: { id: true, orgId: true, teamId: true, revokedAt: true, expiresAt: true, assuranceId: true } });
     await shot('00-source-completed-fixture');
     const started = new Promise(resolve => { selectionStarted = resolve; });
     holdSelection = stage === 'after';
@@ -162,7 +163,9 @@ it.each([1280, 390])('opens the exact team and preserves the source family at %i
     expect(results[1].teamId).toBe(target.id);
     expect(providerRoundtrips).toBe(2);
     expect(await db.prisma.refreshToken.findMany({ where: { id: { in: sourceFamilies.map(row => row.id) } },
-      select: { id: true, expiresAt: true, assuranceId: true } })).toEqual(sourceFamilies);
+      orderBy: { id: 'asc' },
+      select: { id: true, orgId: true, teamId: true, revokedAt: true, expiresAt: true, assuranceId: true } }))
+      .toEqual(sourceFamilies);
     await shot('03-target-completed-fixture');
     cancelNext = true;
     const cancellation = page.waitForResponse(response => new URL(response.url()).pathname === '/auth/callback/google'
