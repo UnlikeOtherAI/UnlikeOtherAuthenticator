@@ -603,3 +603,27 @@ completion creates a separate exact-target family and proof. No historical
 holder is rebound, no original deadline is extended, and the exact-scope ancestor
 rules remain unchanged. Legacy proof-free families retain the existing switch
 contract below the minimum floor.
+
+
+### One-off login code response
+
+`POST /auth/debug-login/redeem` uses the same confidential token-pair response
+as `/auth/token`. A proof-bearing source produces an independent refresh family
+with inherited original authentication evidence. Its HTTP response includes
+`assurance_ref` and the absolute `assurance_expires_at`; these remain backend-only.
+The child retains the original method, selected scope and deadline. Later refresh
+returns that child's same proof and deadline, and revocation of the original
+invalidates the child. Issued codes last at most 1800 seconds and cannot outlive
+the source family or proof. A legacy source never gains manufactured evidence.
+
+The PostgreSQL `debug-login-assurance.test.ts` journey issues and redeems through
+the actual HTTP routes with signed config and domain authentication, validates
+the returned confidential reference, refreshes it, and checks original revocation
+for independent and enterprise SSO sources. Service-only assertions cannot catch
+proof fields lost while serializing the HTTP response. No product config change
+or native binary release is needed for this response correction.
+
+A refresh supplies the rotated family's original assurance id when checking the
+selected organisation's SSO policy, before issuing its response. The policy still
+validates the live original; absence, revocation or a different scope fails closed.
+This is covered by the same HTTP journey under required organisation SSO.

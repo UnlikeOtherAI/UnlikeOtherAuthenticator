@@ -5,7 +5,7 @@ import { AppError } from '../utils/errors.js';
 
 const privateJwkMembers = ['d', 'p', 'q', 'dp', 'dq', 'qi', 'oth'] as const;
 
-const PublicConfigJwkSchema = z.record(z.unknown()).superRefine((key, ctx) => {
+const PublicConfigJwkSchema = z.record(z.string(), z.unknown()).superRefine((key, ctx) => {
   for (const member of privateJwkMembers) {
     if (member in key) {
       ctx.addIssue({

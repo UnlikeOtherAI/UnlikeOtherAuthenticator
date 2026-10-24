@@ -1,6 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
+import type { input } from 'zod';
 
 import { Button } from '../../components/ui/Button';
 import { FieldShell, SelectField, TextField } from '../../components/ui/FormFields';
@@ -76,7 +77,7 @@ export function ConfidentialDelegationFormDialog({ mapping, onClose, open }: Pro
   const [serverError, setServerError] = useState(false);
   const create = useCreateConfidentialDelegationMutation();
   const update = useUpdateConfidentialDelegationMutation();
-  const form = useForm<ConfidentialDelegationFormValues>({
+  const form = useForm<input<typeof ConfidentialDelegationFormSchema>, unknown, ConfidentialDelegationFormValues>({
     resolver: zodResolver(ConfidentialDelegationFormSchema),
     defaultValues: emptyValues,
   });

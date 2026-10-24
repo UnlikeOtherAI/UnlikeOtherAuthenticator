@@ -11,7 +11,9 @@ import {
 
 function makePrisma() {
   return {
-    organisation: { findFirst: vi.fn() },
+    organisation: { findFirst: vi.fn(), findMany: vi.fn() },
+    clientDomain: { findUnique: vi.fn().mockResolvedValue(null) },
+    billingAppKey: { findMany: vi.fn() },
     team: { findFirst: vi.fn() },
   };
 }
@@ -38,7 +40,7 @@ describe('resolveTeamHostname', () => {
     // The team lookup is scoped by the resolved org, never by slug alone — a
     // team slug is unique only within its organisation.
     expect(prisma.team.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { orgId: 'o1', slug: 'design' } }),
+      expect.objectContaining({ where: expect.objectContaining({ orgId: 'o1', slug: 'design' }) }),
     );
   });
 
@@ -158,7 +160,7 @@ describe('slug availability', () => {
     // This scoping is what stops the check being an enumerator of other
     // customers' team names.
     expect(prisma.team.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { orgId: 'o1', slug: 'design' } }),
+      expect.objectContaining({ where: expect.objectContaining({ orgId: 'o1', slug: 'design' }) }),
     );
   });
 
@@ -272,7 +274,7 @@ describe('resolving an address from an id', () => {
     );
   });
 
-  it('gives a team BOTH labels its address needs, in one read', async () => {
+  it('gives a team both labels only when the organisation resolves back to itself', async () => {
     const prisma = makePrisma();
     prisma.team.findFirst.mockResolvedValue({
       id: 't1',
@@ -280,6 +282,7 @@ describe('resolving an address from an id', () => {
       slug: 'design',
       org: { id: 'o1', name: 'Acme', slug: 'acme' },
     });
+    prisma.organisation.findFirst.mockResolvedValue({ id: 'o1', name: 'Acme', slug: 'acme' });
 
     expect(
       await resolveTeamById({ domain: 'api.nessie.works', teamId: 't1' }, { prisma }),
@@ -303,7 +306,8 @@ describe('resolving an address from an id', () => {
     // globally unique, so only the organisation predicate confines it.
     expect(prisma.team.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 't1', org: { domain: 'api.nessie.works' } },
+        where: { id: 't1', lifecycleStatus: 'ACTIVE',
+          org: { domain: 'api.nessie.works', lifecycleStatus: 'ACTIVE' } },
       }),
     );
   });

@@ -1,6 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
+import type { input } from 'zod';
 
 import { Button } from '../ui/Button';
 import { FieldShell, SelectField, TextField } from '../ui/FormFields';
@@ -28,7 +29,7 @@ export function KillSwitchDialog({
   const createMutation = useCreateKillSwitchMutation(appId);
   const updateMutation = useUpdateKillSwitchMutation(appId, killSwitch?.id ?? '');
   const mutation = isEdit ? updateMutation : createMutation;
-  const form = useForm<KillSwitchFormValues>({
+  const form = useForm<input<typeof KillSwitchFormSchema>, unknown, KillSwitchFormValues>({
     resolver: zodResolver(KillSwitchFormSchema),
     defaultValues: defaultValues(killSwitch),
   });

@@ -22,7 +22,7 @@ import {
 
 const VerifyConfigBodySchema = z
   .object({
-    config: z.record(z.unknown()).optional(),
+    config: z.record(z.string(), z.unknown()).optional(),
     config_jwt: z.string().trim().min(1).optional(),
     config_url: z.string().trim().min(1).optional(),
     jwks_url: z.string().trim().url().optional(),
@@ -39,7 +39,7 @@ const VerifyConfigBodySchema = z
 
 const ValidateConfigBodySchema = z
   .object({
-    config: z.record(z.unknown()).optional(),
+    config: z.record(z.string(), z.unknown()).optional(),
     config_jwt: z.string().trim().min(1).optional(),
     config_url: z.string().trim().min(1).optional(),
   })

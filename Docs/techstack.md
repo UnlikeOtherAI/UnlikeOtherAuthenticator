@@ -308,3 +308,11 @@ availability advisories. Scope policy is independent of these dependency updates
 ### CSS dependency maintenance (2026-10-03)
 
 Auth and Admin use Tailwind 4 through `@tailwindcss/postcss` in Vite, retaining their explicit JavaScript configs through `@config`. Utility names and default border/placeholder colors preserve the earlier appearance. This removes Tailwind 3's unpatched `braces` dependency; multipart parsing uses patched `@fastify/busboy` 3.2.1 or later. No audit advisory is suppressed.
+
+## Validation dependency baseline (2026-10-24)
+
+The API and Admin use Zod 4.6.6 or later, including its early collection-size
+checks. Record schemas declare their string key type explicitly. This replaces
+the Zod 3 dependency; no v3 compatibility import is used. Undici is at least
+6.29.1 and the local Admin test DOM is at least Happy DOM 21.0.4. The existing
+high/critical dependency audit remains a release gate.

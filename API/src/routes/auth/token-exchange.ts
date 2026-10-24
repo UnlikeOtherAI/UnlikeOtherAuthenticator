@@ -27,6 +27,7 @@ import {
 } from './rate-limit-keys.js';
 import { recordAuthFunnelStep } from '../../services/auth-funnel.service.js';
 import { AuthorizationCodeRejectedError } from '../../services/authorization-code.service.js';
+import { tokenPairResponse } from './token-response.js';
 
 const AuthorizationCodeGrantSchema = z
   .object({
@@ -242,20 +243,7 @@ export function registerAuthTokenExchangeRoute(app: FastifyInstance): void {
         await recordCodeExchange('succeeded');
       }
 
-      // Keep response OAuth-ish without being overly strict about fields.
-      const responseBody: Record<string, unknown> = {
-        access_token: tokenPair.accessToken,
-        expires_in: tokenPair.expiresInSeconds,
-        refresh_token: tokenPair.refreshToken,
-        refresh_token_expires_in: tokenPair.refreshTokenExpiresInSeconds,
-        token_type: 'Bearer',
-        ...(tokenPair.assuranceRef ? { assurance_ref: tokenPair.assuranceRef,
-          assurance_expires_at: tokenPair.assuranceExpiresAt } : {}),
-      };
-      if (tokenPair.firstLogin) {
-        responseBody.firstLogin = tokenPair.firstLogin;
-      }
-      reply.status(200).send(responseBody);
+      reply.status(200).send(tokenPairResponse(tokenPair));
     },
   );
 }

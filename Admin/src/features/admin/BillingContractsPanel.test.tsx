@@ -201,6 +201,8 @@ vi.mock('./admin-queries', () => ({
 }));
 
 vi.mock('./billing-contract-queries', () => ({
+  useBillingCycleCorrectionsQuery: () => ({ data: [], isError: false, isLoading: false }),
+  usePrepareBillingCycleCorrectionMutation: () => mutation(vi.fn(), vi.fn()),
   useBillingContractsQuery: () => ({
     data: [
       state.contract,
@@ -336,6 +338,7 @@ describe('BillingContractsPanel', () => {
       );
     });
     expect((screen.getByLabelText('Billing month') as HTMLInputElement).value).toBe(closedMonth);
+    await user.type(screen.getByLabelText('Tax legal basis'), 'Test-only tax attestation');
     await user.click(screen.getByRole('button', { name: 'Calculate draft' }));
 
     await waitFor(() =>
@@ -343,6 +346,8 @@ describe('BillingContractsPanel', () => {
         contractId: 'contract-1',
         issuerProfileId: 'issuer-1',
         billingMonth: closedMonth,
+        taxTreatment: 'no_tax_charged', taxRatePercent: '0',
+        taxLegalBasis: 'Test-only tax attestation',
       }),
     );
     const detail = await screen.findByRole('dialog', { name: 'UOA-2026-000001' });
@@ -359,6 +364,7 @@ describe('BillingContractsPanel', () => {
       <BillingContractsPanel services={services} />,
       '/billing?section=contracts&contract=contract-2',
     );
+    await user.type(screen.getByLabelText('Tax legal basis'), 'Test-only tax attestation');
     await user.click(screen.getByRole('button', { name: 'Calculate draft' }));
     await waitFor(() =>
       expect(state.calculate).toHaveBeenCalledWith(

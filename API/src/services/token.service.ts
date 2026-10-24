@@ -428,6 +428,7 @@ export async function exchangeRefreshTokenForTokens(
       const orgContext = await getActiveClientOrgContext(
         {
           userId: rotatedRefreshToken.userId,
+          assuranceId: rotatedRefreshToken.assuranceId ?? undefined,
           domain: params.config.domain,
           orgId: rotatedRefreshToken.orgId,
           groupsEnabled: params.config.org_features?.groups_enabled,

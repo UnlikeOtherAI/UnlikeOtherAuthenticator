@@ -12,7 +12,7 @@ function localKeyring() {
   const raw = getEnv().ENTERPRISE_SSO_KEYRING;
   if (!raw) throw new AppError('SERVICE_UNAVAILABLE', 503, 'SSO_CUSTODY_KEY_REQUIRED');
   try {
-    const parsed = z.object({ current: z.string().min(1), keys: z.record(z.string()) }).strict().parse(JSON.parse(raw));
+    const parsed = z.object({ current: z.string().min(1), keys: z.record(z.string(), z.string()) }).strict().parse(JSON.parse(raw));
     if (!parsed.keys[parsed.current] || Object.values(parsed.keys).some((key) => Buffer.from(key, 'base64').length !== 32)) throw new Error();
     return parsed;
   } catch { throw new AppError('SERVICE_UNAVAILABLE', 503, 'SSO_CUSTODY_KEY_REQUIRED'); }

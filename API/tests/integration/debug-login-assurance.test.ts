@@ -1,13 +1,15 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { decodeJwt } from 'jose';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { createApp } from '../../src/app.js';
 import { createTestDb } from '../helpers/test-db.js';
-import { baseClientConfigPayload } from '../helpers/test-config.js';
+import { baseClientConfigPayload, createTestConfigFetchHandler, signTestConfigJwt } from '../helpers/test-config.js';
 import { validateConfigFields } from '../../src/services/config.service.js';
 import { issueRefreshToken } from '../../src/services/refresh-token.service.js';
-import { issueSessionAssurance } from '../../src/services/session-assurance.service.js';
-import { issueDebugLogin, redeemDebugLogin } from '../../src/services/debug-login.service.js';
+import { issueSessionAssurance, validateSessionAssurance } from '../../src/services/session-assurance.service.js';
+import { issueDebugLogin } from '../../src/services/debug-login.service.js';
 import { verifyAccessToken } from '../../src/services/access-token.service.js';
+import { seedDomainSecret } from '../helpers/domain-secret.js';
 
 describe('debug sign-in preserves original assurance with PostgreSQL', () => {
   let handle: NonNullable<Awaited<ReturnType<typeof createTestDb>>>;
@@ -31,6 +33,7 @@ describe('debug sign-in preserves original assurance with PostgreSQL', () => {
     }
     await handle?.cleanup();
   });
+  afterEach(() => vi.unstubAllGlobals());
 
   async function fixture(method: 'sso' | 'independent', withProof = true) {
     const db = handle.prisma;
@@ -39,7 +42,8 @@ describe('debug sign-in preserves original assurance with PostgreSQL', () => {
     const config = validateConfigFields(baseClientConfigPayload({ domain,
       redirect_urls: [`https://${domain}/callback`], org_features: { enabled: true, user_needs_team: false },
       login_flow: { email_code_enabled: false, team_selection: 'off' } }));
-    const client = await db.clientDomain.create({ data: { domain, label: 'Debug assurance', status: 'active' } });
+    const clientId = await seedDomainSecret(db, domain);
+    const client = await db.clientDomain.findUniqueOrThrow({ where: { domain } });
     await db.enterpriseProductReadiness.create({ data: { clientDomain: domain, minimumAssuranceVersion: 1 } });
     const user = await db.user.create({ data: { email: `${randomUUID()}@example.com`, userKey: randomUUID() } });
     await db.domainRole.create({ data: { domain, userId: user.id, role: 'SUPERUSER' } });
@@ -57,7 +61,7 @@ describe('debug sign-in preserves original assurance with PostgreSQL', () => {
       clientDomain: domain, orgId: org.id, userId: user.id, issuer: 'https://idp.example.com', tenant: 'customer',
       subject: randomUUID(), identityScope: 'product', linkedVia: 'independent_session' } }) : null;
     const familyId = randomUUID();
-    const refresh = await issueRefreshToken({ familyId, userId: user.id, domain, clientId: 'debug-client',
+    const refresh = await issueRefreshToken({ familyId, userId: user.id, domain, clientId,
       configUrl, orgId: org.id, teamId: team.id, twoFaCompleted: false }, { prisma: db });
     const observedAt = new Date(Date.now() - 86_400_000);
     const expiresAt = new Date(Date.now() + 90_000);
@@ -72,30 +76,63 @@ describe('debug sign-in preserves original assurance with PostgreSQL', () => {
       return issued.assurance;
     }) : null;
     return { parent, user, refresh, expiresAt, observedAt,
-      context: { config, configUrl, clientId: 'debug-client', clientDomainId: client.id } };
+      context: { config, configUrl, clientId, clientDomainId: client.id } };
+  }
+
+  async function redeemThroughHttp(source: Awaited<ReturnType<typeof fixture>>) {
+    const { config, configUrl, clientId } = source.context;
+    const signedConfig = await signTestConfigJwt({ ...config });
+    vi.stubGlobal('fetch', vi.fn(await createTestConfigFetchHandler(signedConfig)));
+    const app = await createApp();
+    const request = (path: string, payload: Record<string, string>) => app.inject({
+      method: 'POST', url: `${path}?config_url=${encodeURIComponent(configUrl)}`,
+      headers: { authorization: `Bearer ${clientId}` }, payload,
+    });
+    try {
+      const issued = await request('/auth/debug-login/issue', { refresh_token: source.refresh.refreshToken });
+      expect(issued.statusCode).toBe(200);
+      expect(issued.json().expires_in).toBeLessThanOrEqual(90);
+      const response = await request('/auth/debug-login/redeem', { token: issued.json().token });
+      expect(response.statusCode).toBe(200);
+      expect(response.headers['cache-control']).toBe('no-store');
+      expect(response.headers.pragma).toBe('no-cache');
+      const received = response.json();
+      expect(received.assurance_ref).toEqual(expect.any(String));
+      expect(received.assurance_expires_at).toEqual(expect.any(String));
+      const claims = decodeJwt(received.access_token);
+      const proof = await validateSessionAssurance({ reference: received.assurance_ref,
+        userId: source.user.id, clientDomain: config.domain, credentialEpoch: 0,
+        orgId: source.parent!.orgId, teamId: source.parent!.teamId }, handle.prisma);
+      expect(proof.id).toBe(claims.assurance_id);
+      expect(new Date(received.assurance_expires_at)).toEqual(proof.expiresAt);
+      const refreshed = await request('/auth/token', {
+        grant_type: 'refresh_token', refresh_token: received.refresh_token,
+      });
+      expect(refreshed.statusCode).toBe(200);
+      expect(refreshed.json()).toMatchObject({ assurance_ref: received.assurance_ref,
+        assurance_expires_at: received.assurance_expires_at });
+      return received;
+    } finally { await app.close(); }
   }
 
   it.each(['sso', 'independent'] as const)('keeps %s provenance, unknown authentication time and original expiry', async method => {
     const source = await fixture(method);
-    const deps = { prisma: handle.prisma };
-    const grant = await issueDebugLogin({ ...source.context, refreshToken: source.refresh.refreshToken }, deps);
-    expect(grant.expires_in).toBeLessThanOrEqual(90);
-    const received = await redeemDebugLogin({ ...source.context, token: grant.token }, deps);
-    const claims = decodeJwt(received.accessToken);
+    const received = await redeemThroughHttp(source);
+    const claims = decodeJwt(received.access_token);
     const child = await handle.prisma.sessionAssurance.findUniqueOrThrow({ where: { id: claims.assurance_id as string } });
     expect(child.parentId).toBe(source.parent!.id);
     expect(child.method).toBe(method);
     expect(child.authenticatedAt).toBeNull();
     expect(child.observedAt).toEqual(source.observedAt);
     expect(child.expiresAt.getTime()).toBeLessThanOrEqual(source.expiresAt.getTime());
-    expect(received.refreshTokenExpiresInSeconds).toBeLessThanOrEqual(90);
+    expect(received.refresh_token_expires_in).toBeLessThanOrEqual(90);
     if (method === 'sso') {
       expect(claims.role).toBe('user');
-      await expect(verifyAccessToken(received.accessToken, { prisma: handle.prisma,
+      await expect(verifyAccessToken(received.access_token, { prisma: handle.prisma,
         requirement: 'global_account_control' })).rejects.toThrow('INDEPENDENT_REAUTH_REQUIRED');
     }
     await handle.prisma.sessionAssurance.update({ where: { id: source.parent!.id }, data: { revokedAt: new Date() } });
-    await expect(verifyAccessToken(received.accessToken, { prisma: handle.prisma })).rejects.toThrow('INVALID_SESSION_ASSURANCE');
+    await expect(verifyAccessToken(received.access_token, { prisma: handle.prisma })).rejects.toThrow('INVALID_SESSION_ASSURANCE');
   });
 
   it('refuses pre-assurance families before creating a debug grant', async () => {

@@ -65,7 +65,7 @@ const OrgContextSchema = z
     tenant_slug: z.string().trim().min(1).max(120).optional(),
     org_role: z.string().trim().min(1).max(100),
     teams: z.array(z.string().trim().min(1).max(256)).min(1),
-    team_roles: z.record(z.string().trim().min(1).max(100)),
+    team_roles: z.record(z.string(), z.string().trim().min(1).max(100)),
     groups: z.array(z.string().trim().min(1).max(256)).optional(),
     group_admin: z.array(z.string().trim().min(1).max(256)).optional(),
   })
