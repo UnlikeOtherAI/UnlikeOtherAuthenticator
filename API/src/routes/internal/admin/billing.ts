@@ -82,7 +82,7 @@ const CreateAppKeySchema = z
     name: z.string().trim().min(1).max(120),
     actor_issuer: z.string().trim().url(),
     actor_audience: z.string().trim().url(),
-    actor_public_jwk: z.record(z.unknown()),
+    actor_public_jwk: z.record(z.string(), z.unknown()),
     checkout_return_origins: z.array(z.string().trim().url()).max(10).default([]),
     expires_at: z.string().datetime().nullable().optional(),
   })

@@ -44,7 +44,7 @@ const Quote = z.object({
   lock_duration: z.literal('none'),
   to_currency: z.literal('usd'),
   created: z.number().int(),
-  rates: z.record(z.object({
+  rates: z.record(z.string(), z.object({
     exchange_rate: z.number().positive(),
     rate_details: z.object({ base_rate: z.number().positive() }),
   })),

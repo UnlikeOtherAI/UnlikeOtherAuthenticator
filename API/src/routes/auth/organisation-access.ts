@@ -29,7 +29,7 @@ import { AppError } from '../../utils/errors.js';
 export const MANAGEMENT_COOKIE = 'uoa_org_access';
 const base = '/auth/organisation-access';
 const Connection = z.object({ preset: z.string().min(1).max(40), protocol: z.enum(['oidc', 'saml']),
-  display_name: z.string().trim().min(1).max(100), configuration: z.record(z.unknown()),
+  display_name: z.string().trim().min(1).max(100), configuration: z.record(z.string(), z.unknown()),
   secret: z.string().min(1).max(20000).optional(), revision: z.number().int().positive().optional() }).strict();
 const Params = z.object({ id: z.string().min(1).max(100) });
 const csrf = (request: FastifyRequest): string | undefined => {

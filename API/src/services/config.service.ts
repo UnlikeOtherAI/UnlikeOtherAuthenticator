@@ -106,11 +106,11 @@ const UiThemeSchema = z
         text: z.string().trim().max(100).optional(),
         font_size: CssLengthSchema.optional(),
         color: HexColorSchema.optional(),
-        style: z.record(SafeCssValueSchema).optional(),
+        style: z.record(z.string(), SafeCssValueSchema).optional(),
       })
       .passthrough(),
     // Optional explicit overrides for advanced clients; validated if provided.
-    css_vars: z.record(z.string()).optional(),
+    css_vars: z.record(z.string(), z.string()).optional(),
   })
   .passthrough();
 
