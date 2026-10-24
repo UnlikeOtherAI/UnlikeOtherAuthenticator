@@ -413,6 +413,7 @@ describe('2FA gated by config `2fa_enabled`', () => {
     });
 
     expect(res.statusCode).toBe(200);
+    expect(String(res.headers['set-cookie'])).toContain('uoa_social_preference=');
     expect(finalizeConfigAuthorizationWithSignaturesMock).toHaveBeenCalledWith(
       expect.objectContaining({
         orgId: 'org_1',
@@ -461,6 +462,7 @@ describe('2FA gated by config `2fa_enabled`', () => {
     });
 
     expect(res.statusCode).toBe(200);
+    expect(String(res.headers['set-cookie'])).toContain('uoa_social_preference=');
     expect(finalizeConfigAuthorizationWithSignaturesMock).toHaveBeenCalledWith(
       expect.objectContaining({
         orgId: 'org_1',

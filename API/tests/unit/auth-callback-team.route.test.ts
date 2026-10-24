@@ -210,6 +210,7 @@ describe('GET /auth/callback/:provider team selection', () => {
       nonce: TEST_NONCE,
       code_challenge: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
       code_challenge_method: 'S256',
+      team_hint: 'team-2',
     });
     buildSessionChoicesMock.mockResolvedValue({
       teams: [
@@ -231,6 +232,8 @@ describe('GET /auth/callback/:provider team selection', () => {
       'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
     );
     expect(location.searchParams.get('code_challenge_method')).toBe('S256');
+    expect(location.searchParams.get('team_hint')).toBe('team-2');
+    expect(String(response.headers['set-cookie'])).not.toContain('uoa_social_preference=');
     expect(signLoginSessionMock).toHaveBeenCalledWith(
       expect.objectContaining({ authMethod: 'google' }),
       expect.objectContaining({ prisma: expect.anything(), verifiedEvent: expect.anything() }),
@@ -262,6 +265,7 @@ describe('GET /auth/callback/:provider team selection', () => {
 
     expect(response.statusCode).toBe(302);
     expect(response.headers.location).toBe(`${REDIRECT_URL}?code=abc123`);
+    expect(String(response.headers['set-cookie'])).toContain('uoa_social_preference=');
     expect(signLoginSessionMock).not.toHaveBeenCalled();
     expect(finalizeAuthenticatedUserMock).toHaveBeenCalledWith(
       expect.objectContaining({ orgId: 'org-1', teamId: 'team-1' }),
@@ -282,6 +286,7 @@ describe('GET /auth/callback/:provider team selection', () => {
 
     const token = new URL(response.headers.location as string).searchParams.get('twofa_token');
     expect(token).toBeTruthy();
+    expect(String(response.headers['set-cookie'])).not.toContain('uoa_social_preference=');
     const challenge = await verifyTwoFaChallenge({
       token: token as string,
       sharedSecret: process.env.SHARED_SECRET as string,

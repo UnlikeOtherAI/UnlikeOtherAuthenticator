@@ -126,6 +126,7 @@ export function SocialButtons(props?: { showDivider?: boolean }): React.JSX.Elem
           popup.inviteToken,
           popup.selectAccount,
           popup.managementOrgId ?? null,
+          popup.teamHint,
         );
 
         return (
@@ -150,6 +151,7 @@ function buildSocialUrl(
   inviteToken: string | null,
   selectAccount: boolean,
   managementOrgId: string | null,
+  teamHint: string | null,
 ): string {
   // Auth UI runs inside the authenticator popup, so use relative URLs.
   const params = new URLSearchParams();
@@ -178,6 +180,7 @@ function buildSocialUrl(
   if (selectAccount) {
     params.set('prompt', 'select_account');
   }
+  if (teamHint && /^[A-Za-z0-9_-]{1,256}$/.test(teamHint)) params.set('team_hint', teamHint);
   return `/auth/social/${provider}?${params.toString()}`;
 }
 

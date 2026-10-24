@@ -15,7 +15,7 @@ export const authEndpoints: EndpointSchema[] = [
   {
     method: 'GET',
     path: '/auth',
-    description: 'OAuth entrypoint — renders the auth UI',
+    description: 'OAuth entrypoint — verifies signed configuration, then renders the auth UI or starts a real social-provider roundtrip for an eligible exact-team browser request with a remembered enabled provider. The signed host-only provider preference is consumed before automatic launch; it is not identity or session evidence.',
     query: {
       management_org_id: 'Optional exact organisation hint for UOA fresh owner reauthentication; grants no authority and holds the chooser even for one team',
       state:
@@ -281,6 +281,7 @@ export const authEndpoints: EndpointSchema[] = [
       code_challenge:
         'string (required except a direct team invitation) — exactly 43-char PKCE S256 challenge',
       code_challenge_method: '"S256" (required whenever code_challenge is sent)',
+      team_hint: 'Optional id/slug-safe chooser preselection, at most 256 characters; preserved in signed provider state and returned only to the verified user\'s chooser. Grants no membership or identity authority.',
       request_access: 'string (optional) — auto-grant or create a pending access request',
     },
     body: {

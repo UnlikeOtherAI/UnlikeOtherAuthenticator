@@ -43,6 +43,7 @@ describe('social-state.service', () => {
       requestAccess: true,
       codeChallenge: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
       codeChallengeMethod: 'S256',
+      teamHint: 'team-target',
       nonce: 'csrf-nonce-value',
       sharedSecret: 'test-shared-secret-with-enough-length',
       audience: 'uoa-auth-service',
@@ -63,6 +64,7 @@ describe('social-state.service', () => {
       request_access: true,
       code_challenge: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
       code_challenge_method: 'S256',
+      team_hint: 'team-target',
     });
   });
 

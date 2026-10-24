@@ -38,7 +38,7 @@ export type SignatureContinuationDeps = SigningContinuationCapabilityDeps & {
 };
 
 export type SignatureGateOutcome =
-  | { status: 'granted'; code: string; redirectTo: string }
+  | { status: 'granted'; code: string; redirectTo: string; completedAuthMethod?: string }
   | {
       status: 'signing_required';
       signingToken: string;
@@ -419,6 +419,7 @@ export async function completeSigningContinuation(
       return {
         status: 'granted',
         code: issued.code,
+        completedAuthMethod: continuation.authMethod,
         redirectTo: buildRedirectToUrl({
           redirectUrl: continuation.redirectUrl,
           code: issued.code,

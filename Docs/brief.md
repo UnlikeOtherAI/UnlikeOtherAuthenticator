@@ -3387,3 +3387,23 @@ semantics. Legacy ambiguous reservations are not released by a former claimant.
 No customer-specific rename, merge or deletion is part of this migration.
 Automatic personal-organisation placement retains its existing random suffix
 behavior and retries concurrent claims inside a savepoint.
+
+### Browser team reauthorization clarification (2026-10-24)
+
+An explicit browser `team_hint` entry with S256 may go directly to the previously
+completed social provider when that provider remains enabled by the currently
+verified config. This skips only the provider-choice screen: a real provider
+roundtrip still establishes fresh evidence under the existing browser nonce,
+signature, PKCE, current identity/membership, MFA and signing requirements. The
+source family's original scope, proof and deadline are never changed or borrowed.
+
+The preference is a signed host-only HttpOnly Secure SameSite=Lax cookie containing
+only a provider name. UOA records it only after final successful authorization and
+consumes it before automatic launch. No preference means normal choices;
+cancellation or failure does not automatically restart. Prompts, native clients,
+enterprise intent, management, account linking, invitations and continuations
+always retain their existing choices. Products still enforce expected subject and
+exact target; subject-mismatch retry must request account selection explicitly.
+The team hint is preserved in signed provider state and chooser continuation;
+only an exact team ID or a unique slug in the verified user's current choices can
+auto-select. See `Docs/Auth/enterprise-sso.md` for the focused regression gates.

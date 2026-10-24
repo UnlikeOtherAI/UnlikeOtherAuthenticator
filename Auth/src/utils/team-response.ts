@@ -159,7 +159,10 @@ export function pickAutoSkipTeam(choices: SessionChoices): TeamChoice | null {
 export function pickHintTeam(choices: SessionChoices, teamHint: string | null): TeamChoice | null {
   const hint = teamHint?.trim();
   if (!hint) return null;
-  return choices.teams.find((team) => team.teamId === hint || team.slug === hint) ?? null;
+  const exact = choices.teams.find((team) => team.teamId === hint);
+  if (exact) return exact;
+  const matching = choices.teams.filter((team) => team.slug === hint);
+  return matching.length === 1 ? matching[0] ?? null : null;
 }
 
 /** The subset of `usePopup()` needed to act on a `TeamResponseOutcome`. */
