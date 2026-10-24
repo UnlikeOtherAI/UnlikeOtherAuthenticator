@@ -59,7 +59,7 @@ afterAll(async () => {
   if (app) await app.close();
   if (db) await db.cleanup();
   vi.unstubAllGlobals();
-  for (const key of Object.keys(process.env)) if (!(key in previousEnv)) delete process.env[key];
+  for (const key of Object.keys(process.env)) if (!(key in previousEnv)) Reflect.deleteProperty(process.env, key);
   Object.assign(process.env, previousEnv);
 });
 
