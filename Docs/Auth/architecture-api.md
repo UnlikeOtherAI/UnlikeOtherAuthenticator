@@ -1005,6 +1005,9 @@ provisioning hooks use the shared Vitest hook budget.
 Authentication route fixtures retain their original evidence and declare their
 product's pre-enrolment policy explicitly. They reset factor state and evidence
 between cases; an omitted mock model is not a legacy-authority fallback.
+Bare route fixtures also install the production signed-cookie plugin and signing
+secret when their route issues browser state; a missing plugin must not cause a
+runtime fallback or bypass completed-authorization checks.
 
 Directory notifications use `services/directory-webhook.service.ts` and the
 `directory_webhook_events` outbox. Database triggers admit ID-only events with the
