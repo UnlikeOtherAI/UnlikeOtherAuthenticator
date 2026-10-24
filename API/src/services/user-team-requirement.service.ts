@@ -12,6 +12,7 @@ import {
   normalizeDomain,
 } from './organisation.service.base.js';
 import { deriveUniqueTeamSlug, parseMaxTeamsPerOrg } from './team.service.base.js';
+import { withAutomaticOrganisationSlug } from './organisation-slug-admission.service.js';
 
 type UserTeamRequirementPrisma = PrismaClient;
 type UserTeamRequirementTx = Prisma.TransactionClient;
@@ -226,11 +227,12 @@ export async function ensureUserHasRequiredTeam(
     });
 
     if (!orgMembership) {
-      return createPersonalOrgAndTeam({
+      const activeUser = { ...user, email: user.email };
+      return withAutomaticOrganisationSlug(tx, () => createPersonalOrgAndTeam({
         tx,
         domain,
-        user: { ...user, email: user.email },
-      });
+        user: activeUser,
+      }));
     }
 
     // Lifecycle tombstones are an intentional denial, not an absence to heal

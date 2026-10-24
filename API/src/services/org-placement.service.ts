@@ -11,6 +11,7 @@ import {
   ensureOrgName,
 } from './organisation.service.base.js';
 import { deriveUniqueTeamSlug } from './team.service.base.js';
+import { withAutomaticOrganisationSlug } from './organisation-slug-admission.service.js';
 
 type OrgPlacementPrisma = Pick<PrismaClient, '$transaction'> & {
   organisation: Pick<PrismaClient['organisation'], 'findUnique' | 'create' | 'findFirst'>;
@@ -123,62 +124,63 @@ async function autoCreatePersonalOrgForUser(params: {
   try {
     const created = await runInTransaction(params.prisma as unknown as PrismaClient, async (tx) => {
       const txClient = tx as OrgPlacementTx;
+      return withAutomaticOrganisationSlug(txClient, async () => {
+        const existing = await txClient.orgMember.findFirst({
+          where: {
+            userId: params.userId,
+            org: { domain: params.domain },
+          },
+          select: { id: true },
+        });
+        if (existing) {
+          return null;
+        }
 
-      const existing = await txClient.orgMember.findFirst({
-        where: {
-          userId: params.userId,
-          org: { domain: params.domain },
-        },
-        select: { id: true },
-      });
-      if (existing) {
-        return null;
-      }
+        const slug = await deriveSlugWithValidation(params.domain, txClient, orgName);
 
-      const slug = await deriveSlugWithValidation(params.domain, txClient, orgName);
-
-      const org = await txClient.organisation.create({
-        data: {
-          domain: params.domain,
-          name: orgName,
-          slug,
-          ownerId: params.userId,
-        },
-        select: { id: true },
-      });
-
-      const team = await txClient.team.create({
-        data: {
-          orgId: org.id,
-          // The first team carries the organisation's name, as on every create path.
-          name: orgName,
-          slug: await deriveUniqueTeamSlug({
-            orgId: org.id,
-            prisma: txClient,
+        const org = await txClient.organisation.create({
+          data: {
+            domain: params.domain,
             name: orgName,
-          }),
-          isDefault: true,
-        },
-        select: { id: true },
-      });
+            slug,
+            ownerId: params.userId,
+          },
+          select: { id: true },
+        });
 
-      await txClient.orgMember.create({
-        data: {
-          orgId: org.id,
-          userId: params.userId,
-          role: OWNER_ROLE,
-        },
-      });
+        const team = await txClient.team.create({
+          data: {
+            orgId: org.id,
+            // The first team carries the organisation's name, as on every create path.
+            name: orgName,
+            slug: await deriveUniqueTeamSlug({
+              orgId: org.id,
+              prisma: txClient,
+              name: orgName,
+            }),
+            isDefault: true,
+          },
+          select: { id: true },
+        });
 
-      await txClient.teamMember.create({
-        data: {
-          teamId: team.id,
-          userId: params.userId,
-          teamRole: DEFAULT_TEAM_ROLE,
-        },
-      });
+        await txClient.orgMember.create({
+          data: {
+            orgId: org.id,
+            userId: params.userId,
+            role: OWNER_ROLE,
+          },
+        });
 
-      return { orgId: org.id, teamId: team.id };
+        await txClient.teamMember.create({
+          data: {
+            teamId: team.id,
+            userId: params.userId,
+            teamRole: DEFAULT_TEAM_ROLE,
+          },
+        });
+
+        return { orgId: org.id, teamId: team.id };
+      });
     });
 
     if (!created) {

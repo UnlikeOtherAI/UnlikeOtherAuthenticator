@@ -143,7 +143,7 @@ describe('Organisation service: organisation CRUD', () => {
 
     prisma.orgMember.findFirst.mockResolvedValue(null);
     prisma.user.findUnique.mockResolvedValue({ id: 'u-owner' });
-    prisma.organisation.findFirst.mockResolvedValue({ id: 'other-org' });
+    prisma.$queryRaw.mockResolvedValue([{ taken: true }]);
 
     await expect(
       createOrganisation(
@@ -157,9 +157,10 @@ describe('Organisation service: organisation CRUD', () => {
         { prisma },
       ),
     ).rejects.toMatchObject({ statusCode: 400, message: 'ORG_SLUG_TAKEN' });
-    expect(prisma.organisation.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { domain: 'acme.example.com', slug: 'kilomayo' } }),
+    expect(prisma.$queryRaw).toHaveBeenCalledWith(
+      expect.objectContaining({ values: ['kilomayo'] }),
     );
+    expect(prisma.organisation.findFirst).not.toHaveBeenCalled();
     expect(prisma.organisation.create).not.toHaveBeenCalled();
   });
 
@@ -305,9 +306,7 @@ describe('Organisation service: organisation CRUD', () => {
         ownerId: 'u-owner',
         createdAt: now,
         updatedAt: now,
-      })
-      // The availability probe for the requested slug.
-      .mockResolvedValueOnce(null);
+      });
     prisma.orgMember.findFirst.mockResolvedValue({
       id: 'm-owner',
       orgId: 'org-1',
@@ -353,8 +352,8 @@ describe('Organisation service: organisation CRUD', () => {
         ownerId: 'u-owner',
         createdAt: now,
         updatedAt: now,
-      })
-      .mockResolvedValueOnce({ id: 'other-org' });
+      });
+    prisma.$queryRaw.mockResolvedValue([{ taken: true }]);
     prisma.orgMember.findFirst.mockResolvedValue({
       id: 'm-owner',
       orgId: 'org-1',

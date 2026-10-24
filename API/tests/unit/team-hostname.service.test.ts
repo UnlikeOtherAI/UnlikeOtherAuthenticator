@@ -11,6 +11,7 @@ import {
 
 function makePrisma() {
   return {
+    $queryRaw: vi.fn().mockResolvedValue([{ taken: false }]),
     organisation: { findFirst: vi.fn(), findMany: vi.fn() },
     clientDomain: { findUnique: vi.fn().mockResolvedValue(null) },
     billingAppKey: { findMany: vi.fn() },
@@ -101,18 +102,21 @@ describe('resolveTeamHostname', () => {
 });
 
 describe('slug availability', () => {
-  it('reports a free organisation label as available', async () => {
+  it('checks global organisation occupancy without reading another tenant identity', async () => {
     const prisma = makePrisma();
     prisma.organisation.findFirst.mockResolvedValue(null);
 
     expect(
       await checkOrgSlugAvailability({ domain: 'api.nessie.works', slug: 'acme' }, { prisma }),
     ).toEqual({ available: true, slug: 'acme' });
+    expect(prisma.$queryRaw).toHaveBeenCalledWith(expect.objectContaining({ values: ['acme'] }));
+    expect(prisma.organisation.findFirst).not.toHaveBeenCalled();
+    expect(prisma.clientDomain.findUnique).not.toHaveBeenCalled();
   });
 
-  it('reports a taken organisation label', async () => {
+  it('reports a globally occupied organisation label even for an ordinary client', async () => {
     const prisma = makePrisma();
-    prisma.organisation.findFirst.mockResolvedValue({ id: 'o1' });
+    prisma.$queryRaw.mockResolvedValue([{ taken: true }]);
 
     expect(
       await checkOrgSlugAvailability({ domain: 'api.nessie.works', slug: 'acme' }, { prisma }),
@@ -135,6 +139,7 @@ describe('slug availability', () => {
       await checkOrgSlugAvailability({ domain: 'api.nessie.works', slug: 'api' }, { prisma }),
     ).toEqual({ available: false, reason: 'reserved' });
     // An invalid label never reaches the database.
+    expect(prisma.$queryRaw).not.toHaveBeenCalled();
     expect(prisma.organisation.findFirst).not.toHaveBeenCalled();
   });
 

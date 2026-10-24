@@ -627,3 +627,12 @@ A refresh supplies the rotated family's original assurance id when checking the
 selected organisation's SSO policy, before issuing its response. The policy still
 validates the live original; absence, revocation or a different scope fails closed.
 This is covered by the same HTTP journey under required organisation SSO.
+
+
+Organisation address admission is global across founding domains. A database
+occupancy guard covers every create and deliberate address change, including
+automatic personal organisations, while resolution keeps its registered-product
+policy. Existing ambiguous labels remain unavailable without renaming their
+organisations; future writes cannot introduce another claimant. Disable/reactivate
+retains occupancy, and terminal deletion placeholders are not published addresses.
+See the global organisation-address admission clarification in `Docs/brief.md`.

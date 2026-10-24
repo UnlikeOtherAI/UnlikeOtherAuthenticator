@@ -1,3 +1,4 @@
+import { withChosenOrganisationSlug } from './organisation-slug-admission.service.js';
 import type { ClientConfig } from './config.service.js';
 import { getEnv } from '../config/env.js';
 import { getPrisma } from '../db/prisma.js';
@@ -154,7 +155,7 @@ export async function createOrganisation(
 
   const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgServicePrisma);
 
-  const created = await runInTransaction(prisma, async (tx) => {
+  const created = await withChosenOrganisationSlug(() => runInTransaction(prisma, async (tx) => {
     const userExists = await tx.user.findUnique({
       where: { lifecycleStatus: 'ACTIVE', id: ownerId },
       select: { id: true },
@@ -263,7 +264,7 @@ export async function createOrganisation(
       ...toOrganisationRecord(createdOrg),
       defaultTeam: toTeamRecord(defaultTeam, domain),
     };
-  });
+  }));
 
   await auditOrg({
     orgId: created.id,
@@ -360,7 +361,7 @@ export async function updateOrganisation(
           slug: params.slug,
           existingSlugToIgnore: org.slug,
         });
-  const updated = await prisma.organisation.update({
+  const updated = await withChosenOrganisationSlug(() => prisma.organisation.update({
     where: { id: org.id },
     data: {
       name,
@@ -375,7 +376,7 @@ export async function updateOrganisation(
       ...(params.iconUrl !== undefined ? { iconUrl: normalizeIconUrl(params.iconUrl) } : {}),
     },
     select: ORGANISATION_SELECT,
-  });
+  }));
 
   await auditOrg({
     orgId: org.id,

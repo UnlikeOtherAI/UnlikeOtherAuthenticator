@@ -3362,3 +3362,28 @@ automatic rename, merge, copied organisation or membership grant is performed.
 Slug availability uses the same namespace. Public resolution exposes only the
 existing organisation branding response; membership and exact-session policy
 still govern every team entry.
+
+
+## 2026-10-24 Global organisation-address admission
+
+This supersedes the per-founding-domain admission rule while preserving product
+lookup policies. New organisation addresses and explicit address changes reserve
+one global label in UOA. The database enforces concurrent writes; an availability
+probe is advisory. The database-maintained `organisation_slug_claims` table holds
+occupancy only. `Organisation.slug` remains the sole published routing label; no
+identity, membership or profile is copied. Tenant callers can query only whether
+a label is taken through a narrow definer function and cannot write claims.
+
+Migration seeds all lifecycle states under an organisation write lock. A label
+with one owner is reserved for it. A pre-existing ambiguous label is blocked
+without choosing a winner, renaming an organisation or making either address
+resolve. Ordinary edits to those organisations continue to work.
+
+Disable/reactivate retains occupancy. Terminal deletion retains the previous
+reservation while the organisation row exists and does not claim its internal
+deletion placeholder. Explicit address changes release their previous uniquely
+owned label; physical deletion releases owned claims, preserving previous release
+semantics. Legacy ambiguous reservations are not released by a former claimant.
+No customer-specific rename, merge or deletion is part of this migration.
+Automatic personal-organisation placement retains its existing random suffix
+behavior and retries concurrent claims inside a savepoint.

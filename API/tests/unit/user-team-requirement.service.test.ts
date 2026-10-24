@@ -142,7 +142,9 @@ describe('ensureUserHasRequiredTeam', () => {
 
   it('creates a personal org and default team when the user has no org on the domain', async () => {
     const tx = {
-      $queryRaw: vi.fn().mockResolvedValue([{ id: 'user-1' }]),
+      $queryRaw: vi.fn(async (query: { sql: string }) => query.sql.includes('uoa_organisation_slug_taken')
+        ? [{ taken: false }] : [{ id: 'user-1' }]),
+      $executeRawUnsafe: vi.fn().mockResolvedValue(0),
       orgMember: {
         findFirst: vi.fn().mockResolvedValue(null),
         create: vi.fn().mockResolvedValue({ id: 'org-member-1' }),

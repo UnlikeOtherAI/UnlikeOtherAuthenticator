@@ -10,6 +10,7 @@ describe('personal organisation placement', () => {
     const txOrgMemberCreate = vi.fn(async () => ({ id: 'org-member-1' }));
     const txTeamMemberCreate = vi.fn(async () => ({ id: 'team-member-1' }));
     const txOrgFindFirst = vi.fn(async () => null);
+    const txSlugOccupancy = vi.fn().mockResolvedValue([{ taken: false }]);
     const txTeamFindFirst = vi.fn(async () => null);
 
     const prisma = {
@@ -31,6 +32,8 @@ describe('personal organisation placement', () => {
       },
       $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => {
         return await fn({
+          $queryRaw: txSlugOccupancy,
+          $executeRawUnsafe: vi.fn().mockResolvedValue(0),
           organisation: {
             findFirst: txOrgFindFirst,
             create: txOrgCreate,
@@ -62,6 +65,8 @@ describe('personal organisation placement', () => {
     );
 
     expect(result).toEqual({ status: 'auto_created', orgId: 'org-new', teamId: 'team-new' });
+    expect(txSlugOccupancy).toHaveBeenCalledWith(expect.objectContaining({ values: [expect.any(String)] }));
+    expect(txOrgFindFirst).not.toHaveBeenCalled();
     expect(prisma.user.findUnique).toHaveBeenCalledWith({
       where: { id: 'user-1', lifecycleStatus: 'ACTIVE' },
       select: { name: true },
@@ -157,6 +162,8 @@ describe('personal organisation placement', () => {
       },
       $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => {
         return await fn({
+          $queryRaw: vi.fn().mockResolvedValue([{ taken: false }]),
+          $executeRawUnsafe: vi.fn().mockResolvedValue(0),
           organisation: {
             findFirst: vi.fn(async () => null),
             create: txOrgCreate,

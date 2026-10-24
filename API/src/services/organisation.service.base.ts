@@ -11,6 +11,7 @@ import {
 import { getAppLogger } from '../utils/app-logger.js';
 import { normalizeDomain } from '../utils/domain.js';
 import { AppError } from '../utils/errors.js';
+import { isOrganisationSlugTaken } from './organisation-slug-admission.service.js';
 import {
   checkSlug,
   deriveSlugBase,
@@ -302,7 +303,7 @@ export function toMemberRecord(
  */
 export function deriveSlugWithValidation(
   domain: string,
-  prisma: Pick<OrgServicePrisma, 'organisation'>,
+  prisma: Pick<OrgServicePrisma, '$queryRaw'>,
   name: string,
   existingSlugToIgnore?: string,
 ): Promise<string> {
@@ -317,7 +318,7 @@ export function deriveSlugWithValidation(
  */
 export function deriveAvailableOrgSlug(params: {
   domain: string;
-  prisma: Pick<OrgServicePrisma, 'organisation'>;
+  prisma: Pick<OrgServicePrisma, '$queryRaw'>;
   name: string;
 }): Promise<string> {
   return ensureAvailableOrgSlug({
@@ -330,14 +331,12 @@ export function deriveAvailableOrgSlug(params: {
 /**
  * Validate an explicitly chosen organisation slug and confirm it is free.
  *
- * Uniqueness is per client domain, matching `@@unique([domain, slug])`, because
- * the organisation slug is the tenant's own DNS label under that product's base
- * domain — two organisations on one domain cannot share it the way two teams
- * inside one organisation can.
+ * Organisation labels share the product hostname namespace across founding
+ * domains. The database claim guard makes this advisory probe race-safe.
  */
 export async function ensureAvailableOrgSlug(params: {
   domain: string;
-  prisma: Pick<OrgServicePrisma, 'organisation'>;
+  prisma: Pick<OrgServicePrisma, '$queryRaw'>;
   slug: string;
   existingSlugToIgnore?: string;
   reservedLabels?: Iterable<string>;
@@ -351,11 +350,7 @@ export async function ensureAvailableOrgSlug(params: {
     return result.slug;
   }
 
-  const existing = await params.prisma.organisation.findFirst({
-    where: { domain: params.domain, slug: result.slug },
-    select: { id: true },
-  });
-  if (existing) {
+  if (await isOrganisationSlugTaken(params.prisma, result.slug)) {
     throw new AppError('BAD_REQUEST', 400, 'ORG_SLUG_TAKEN');
   }
 
@@ -363,8 +358,8 @@ export async function ensureAvailableOrgSlug(params: {
 }
 
 export async function resolveUniqueSlugWithCollisionRetries(
-  domain: string,
-  prisma: Pick<OrgServicePrisma, 'organisation'>,
+  _domain: string,
+  prisma: Pick<OrgServicePrisma, '$queryRaw'>,
   base: string,
   existingSlugToIgnore?: string,
   reservedLabels?: Iterable<string>,
@@ -382,10 +377,7 @@ export async function resolveUniqueSlugWithCollisionRetries(
     // creation whose only fault is the company's name.
     const unavailable =
       isReservedLabel(candidate, reservedLabels) ||
-      (await prisma.organisation.findFirst({
-        where: { domain, slug: candidate },
-        select: { id: true },
-      })) !== null;
+      await isOrganisationSlugTaken(prisma, candidate);
     if (!unavailable) return candidate;
 
     candidate = withSlugSuffix(base, randomSlugSuffix());
