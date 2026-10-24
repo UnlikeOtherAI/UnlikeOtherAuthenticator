@@ -662,9 +662,19 @@ Focused gates (run on Maxis with the existing isolated test database):
 ```sh
 pnpm --filter @uoa/api test -- tests/unit/social-browser-preference.test.ts tests/unit/social-state.service.test.ts tests/unit/auth-callback-team.route.test.ts tests/unit/twofactor-config-gating.routes.test.ts tests/unit/signature-session.route.test.ts tests/unit/signature-continuation.service.test.ts tests/integration/auth-social-auto-team-token.test.ts
 pnpm --filter @uoa/auth test -- src/utils/team-response.test.ts
+PLAYWRIGHT_MODULE=<existing-playwright-index.mjs> pnpm --filter @uoa/auth exec vitest run --config vitest.social-entry.config.ts
 ```
 
 The database journey starts with a real successful provider callback, consumes its
 preference on the next team entry, requires a new nonce-bound callback, preserves
 the hint through the chooser, and exchanges a separate target code while keeping
 the original refresh family. The Auth gate covers missing/foreign/ambiguous hints.
+The explicit browser gate runs actual built Auth HTML/React and UOA routes against
+an isolated database, with signed-config and Google HTTP fixtures. It covers
+desktop/mobile first sign-in, subsequent exact-team entry and cancelled-provider
+retry. Set `UOA_SOCIAL_ENTRY_STAGE=before` only in the base checkout; the default
+`after` requires zero manual actions on subsequent team entry. Screenshots and
+non-secret result summaries go to `UOA_SOCIAL_ENTRY_EVIDENCE` (default ignored
+`Auth/e2e/artifacts/social-team-entry`). Completion screenshots are labelled as a
+local callback fixture; they do not claim to show a consuming product's UI or live
+Google. Real provider and product journeys remain a separate integration check.
