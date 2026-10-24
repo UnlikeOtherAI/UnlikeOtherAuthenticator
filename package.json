@@ -33,6 +33,7 @@
   "pnpm": {
     "overrides": {
       "axios": "^1.20.0",
+      "zod": "^4.6.6",
       "brace-expansion": "^5.0.11",
       "@opentelemetry/propagator-jaeger": "^2.9.0",
       "deepmerge-ts@<8.0.0": "^8.0.1",
