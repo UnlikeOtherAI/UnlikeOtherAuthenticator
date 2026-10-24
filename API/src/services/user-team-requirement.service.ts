@@ -227,10 +227,11 @@ export async function ensureUserHasRequiredTeam(
     });
 
     if (!orgMembership) {
+      const activeUser = { ...user, email: user.email };
       return withAutomaticOrganisationSlug(tx, () => createPersonalOrgAndTeam({
         tx,
         domain,
-        user: { ...user, email: user.email },
+        user: activeUser,
       }));
     }
 
