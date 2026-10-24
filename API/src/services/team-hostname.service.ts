@@ -1,46 +1,46 @@
-import type { PrismaClient } from '@prisma/client';
+import type { Prisma, PrismaClient } from '@prisma/client';
 import { checkSlug, type SlugRejection } from '@unlikeotherai/slug';
 
 import { getAdminPrisma } from '../db/prisma.js';
 import { normalizeDomain } from '../utils/domain.js';
+import { resolveProductTeamPolicy, type ProductTeamPolicyPrisma } from './product-team-policy.service.js';
 
 /**
- * Turning a tenant hostname back into ids, and telling a person whether the
- * address they typed is free.
- *
- * A team hostname is `<team.slug>.<organisation.slug>.<product base domain>`
- * (Docs/brief.md, "Team Subdomain Clarification"). The organisation label is
- * the tenant key; the team label is only meaningful once that organisation is
- * known, because team slugs are unique per organisation and nothing else.
- * Resolution therefore always walks left from the organisation, never straight
- * to a team.
- *
- * Every read here is scoped to the calling client domain. A product resolving a
- * hostname may only ever see organisations on its own domain, which is the same
- * boundary `@@unique([domain, slug])` draws.
- *
- * **These reads use the admin client, and the domain predicate is what confines
- * them.** `organisations` and `teams` have FORCE ROW LEVEL SECURITY, and every
- * other route reaches them through `request.withTenantTx(...)`, which sets the
- * tenant context the policies read. A `/domain/*` route has no such context —
- * it is authenticated by the domain hash, with no user and no active
- * organisation — so the tenant-scoped client matches nothing at all here. It
- * does not error: it silently returns no rows, which made every resolve answer
- * 404 and every availability check answer "available", including for slugs that
- * were plainly taken.
- *
- * So the confinement is explicit instead: every query below filters on the
- * caller's own `domain`, and for teams on their organisation's. Anything added
- * to this file must keep that predicate — it is now the only thing standing
- * between a product and another product's tenants.
+ * UOA owns hostname labels and their inverse. A recognized product uses the
+ * same server-owned cross-product namespace as its sign-in chooser. Other
+ * clients retain their original domain namespace. Neither lookup grants access.
+ * Globally ambiguous labels fail closed in both directions; a caller must not
+ * build a URL that would resolve to a different organisation.
  */
-
-type HostnamePrisma = {
-  organisation: Pick<PrismaClient['organisation'], 'findFirst'>;
+type HostnamePrisma = ProductTeamPolicyPrisma & {
+  organisation: Pick<PrismaClient['organisation'], 'findFirst' | 'findMany'>;
   team: Pick<PrismaClient['team'], 'findFirst'>;
 };
-
 type HostnameDeps = { prisma?: HostnamePrisma };
+const database = (deps: HostnameDeps): HostnamePrisma => deps.prisma ?? getAdminPrisma();
+const orgSelect = { id: true, name: true, slug: true, iconUrl: true } as const;
+
+async function namespace(domain: string, prisma: HostnamePrisma) {
+  const policy = await resolveProductTeamPolicy({ domain }, { prisma });
+  return policy.scope === 'all_active_memberships' ? {} : { domain: normalizeDomain(domain) };
+}
+
+async function addressableOrg(domain: string, selector: { id: string } | { slug: string }, prisma: HostnamePrisma) {
+  const scope = await namespace(domain, prisma);
+  if ('domain' in scope) return prisma.organisation.findFirst({
+    where: { ...scope, ...selector }, select: orgSelect,
+  });
+  const where: Prisma.OrganisationWhereInput = { lifecycleStatus: 'ACTIVE' };
+  const selected = 'id' in selector ? await prisma.organisation.findFirst({
+    where: { ...where, id: selector.id }, select: orgSelect,
+  }) : null;
+  if ('id' in selector && !selected) return null;
+  const slug = 'slug' in selector ? selector.slug : selected!.slug;
+  const matches = await prisma.organisation.findMany({
+    where: { ...where, slug }, select: orgSelect, take: 2,
+  });
+  return matches.length === 1 && (!selected || matches[0].id === selected.id) ? matches[0] : null;
+}
 
 export type ResolvedTeamHostname = {
   orgId: string;
@@ -51,26 +51,22 @@ export type ResolvedTeamHostname = {
   teamSlug: string;
 };
 
-/** Resolve `<teamSlug>.<orgSlug>` within one client domain. */
+/** Resolve `<teamSlug>.<orgSlug>` within the registered product namespace. */
 export async function resolveTeamHostname(
   params: { domain: string; orgSlug: string; teamSlug: string },
   deps: HostnameDeps = {},
 ): Promise<ResolvedTeamHostname | null> {
-  const domain = normalizeDomain(params.domain);
   const orgSlug = params.orgSlug.trim().toLowerCase();
   const teamSlug = params.teamSlug.trim().toLowerCase();
   if (!orgSlug || !teamSlug) return null;
 
-  const prisma = deps.prisma ?? (getAdminPrisma() as unknown as HostnamePrisma);
+  const prisma = database(deps);
 
-  const org = await prisma.organisation.findFirst({
-    where: { domain, slug: orgSlug },
-    select: { id: true, name: true, slug: true },
-  });
+  const org = await addressableOrg(params.domain, { slug: orgSlug }, prisma);
   if (!org) return null;
 
   const team = await prisma.team.findFirst({
-    where: { orgId: org.id, slug: teamSlug },
+    where: { orgId: org.id, slug: teamSlug, lifecycleStatus: 'ACTIVE' },
     select: { id: true, name: true, slug: true },
   });
   if (!team) return null;
@@ -111,15 +107,11 @@ export async function resolveOrgHostname(
   params: { domain: string; orgSlug: string },
   deps: HostnameDeps = {},
 ): Promise<ResolvedOrgHostname | null> {
-  const domain = normalizeDomain(params.domain);
   const orgSlug = params.orgSlug.trim().toLowerCase();
   if (!orgSlug) return null;
 
-  const prisma = deps.prisma ?? (getAdminPrisma() as unknown as HostnamePrisma);
-  const org = await prisma.organisation.findFirst({
-    where: { domain, slug: orgSlug },
-    select: { id: true, name: true, slug: true, iconUrl: true },
-  });
+  const prisma = database(deps);
+  const org = await addressableOrg(params.domain, { slug: orgSlug }, prisma);
   if (!org) return null;
 
   return {
@@ -143,14 +135,8 @@ export async function resolveOrgById(
   params: { domain: string; orgId: string },
   deps: HostnameDeps = {},
 ): Promise<ResolvedOrgHostname | null> {
-  const prisma = deps.prisma ?? (getAdminPrisma() as unknown as HostnamePrisma);
-  const org = await prisma.organisation.findFirst({
-    // Scoped to the calling client domain like every other /domain/* read: a
-    // product may only ever ask about organisations on its own domain, even
-    // when it holds an id from somewhere else.
-    where: { id: params.orgId.trim(), domain: normalizeDomain(params.domain) },
-    select: { id: true, name: true, slug: true, iconUrl: true },
-  });
+  const prisma = database(deps);
+  const org = await addressableOrg(params.domain, { id: params.orgId.trim() }, prisma);
   if (!org) return null;
 
   return {
@@ -182,14 +168,11 @@ export async function resolveTeamById(
   params: { domain: string; teamId: string },
   deps: HostnameDeps = {},
 ): Promise<ResolvedTeamById | null> {
-  const prisma = deps.prisma ?? (getAdminPrisma() as unknown as HostnamePrisma);
+  const prisma = database(deps);
+  const scope = await namespace(params.domain, prisma);
   const team = await prisma.team.findFirst({
-    where: {
-      id: params.teamId.trim(),
-      // The organisation predicate is what scopes this to the caller's domain;
-      // a team id alone would otherwise reach across tenants.
-      org: { domain: normalizeDomain(params.domain) },
-    },
+    where: { id: params.teamId.trim(), lifecycleStatus: 'ACTIVE',
+      org: { ...scope, lifecycleStatus: 'ACTIVE' } },
     select: {
       id: true,
       name: true,
@@ -198,6 +181,8 @@ export async function resolveTeamById(
     },
   });
   if (!team?.org) return null;
+  const org = await addressableOrg(params.domain, { id: team.org.id }, prisma);
+  if (!org || org.slug !== team.org.slug) return null;
 
   return {
     teamId: team.id,
@@ -216,7 +201,7 @@ export type SlugAvailability =
 /**
  * Whether an organisation may take this address on this client domain.
  *
- * Deliberately answers only about the caller's own domain. It reveals that a
+ * Answers within the caller's registered product namespace. It reveals that a
  * label is taken, which is unavoidable — the answer is the point — but says
  * nothing about who holds it.
  */
@@ -227,9 +212,9 @@ export async function checkOrgSlugAvailability(
   const result = checkSlug(params.slug, { reserved: params.reservedLabels });
   if (!result.ok) return { available: false, reason: result.reason };
 
-  const prisma = deps.prisma ?? (getAdminPrisma() as unknown as HostnamePrisma);
+  const prisma = database(deps);
   const existing = await prisma.organisation.findFirst({
-    where: { domain: normalizeDomain(params.domain), slug: result.slug },
+    where: { ...await namespace(params.domain, prisma), slug: result.slug },
     select: { id: true },
   });
 
@@ -251,7 +236,7 @@ export async function checkTeamSlugAvailability(
   const result = checkSlug(params.slug, { reserved: params.reservedLabels });
   if (!result.ok) return { available: false, reason: result.reason };
 
-  const prisma = deps.prisma ?? (getAdminPrisma() as unknown as HostnamePrisma);
+  const prisma = database(deps);
   const existing = await prisma.team.findFirst({
     where: { orgId: params.orgId, slug: result.slug },
     select: { id: true },

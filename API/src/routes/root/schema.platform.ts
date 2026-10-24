@@ -48,7 +48,7 @@ export const domainEndpoints: EndpointSchema[] = [
       team_slug: 'string',
     },
     notes:
-      'Domain-hash rather than /org/* deliberately: a product resolves a hostname before anyone has an active team, so there is no session to assert a subject from. Resolution is scoped to the calling client domain. An unknown organisation and a known organisation with an unknown team both answer the generic 404, so a tenant\'s team list is not readable from outside it.',
+      'Domain-hash rather than /org/* deliberately: a product resolves a hostname before anyone has an active team, so there is no session to assert a subject from. Resolution uses the server-owned product team policy: ordinary clients stay domain-scoped; recognized products resolve active organisations across domains. Ambiguous labels return 404 in both forward and id-to-address reads. It grants no membership or session. An unknown organisation and a known organisation with an unknown team both answer the generic 404, so a tenant\'s team list is not readable from outside it.',
   },
   {
     method: 'GET',
@@ -83,7 +83,7 @@ export const domainEndpoints: EndpointSchema[] = [
       org_icon_url: 'string | null',
     },
     notes:
-      'A product stores UOA ids and no slug of its own, because the slug belongs to UOA — so without this a product can route a hostname it was handed but cannot build one. Scoped to the calling client domain like every /domain/* read.',
+      'A product stores UOA ids and no slug of its own, because the slug belongs to UOA — so without this a product can route a hostname it was handed but cannot build one. Uses the same registered product namespace as forward resolution and refuses a label that would resolve to another organisation.',
   },
   {
     method: 'GET',

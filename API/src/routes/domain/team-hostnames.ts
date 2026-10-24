@@ -19,8 +19,9 @@ import {
  * routes: resolving a hostname happens *before* anyone has an active team, so
  * there is no session to assert a subject from. A product asks "which tenant is
  * this host?" while rendering a cold page, then runs its own team-switch grant
- * with the ids it gets back. The answer is scoped to the caller's own client
- * domain, so a product can only ever resolve its own tenants.
+ * with the ids it gets back. The server-owned product policy selects the
+ * namespace: legacy domain isolation or the recognized cross-product directory.
+ * Ambiguous organisation labels have no address in that namespace.
  */
 
 const ResolveQuerySchema = z
