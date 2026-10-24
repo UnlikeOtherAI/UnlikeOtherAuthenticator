@@ -3343,3 +3343,22 @@ checks still apply. The config URL and parsed fingerprint bind this choice throu
 social, email, verification and code-exchange continuations. Ordinary product login
 omits the field and keeps the full directory. This sign-in choice grants no access
 and does not limit later deliberate workspace-switch grants.
+
+
+## Product tenant address clarification (2026-10-24)
+
+For a recognized product, hostname resolution follows the same server-owned
+`all_active_memberships` policy as sign-in choices. An organisation founded under
+another client domain can therefore keep its canonical UOA identity and labels
+when opened in that product. Ordinary clients remain confined to their own
+domain. No signed config or caller query can enable the wider namespace.
+
+Organisation slugs remain unique per founding domain. Where the recognized
+product namespace contains two active organisations with the same slug, both
+forward resolution and id-to-address reads refuse that ambiguous address. They
+never choose the first row or prefer the caller's founding domain. An operator
+resolves a collision through UOA's existing organisation rename controls; no
+automatic rename, merge, copied organisation or membership grant is performed.
+Slug availability uses the same namespace. Public resolution exposes only the
+existing organisation branding response; membership and exact-session policy
+still govern every team entry.

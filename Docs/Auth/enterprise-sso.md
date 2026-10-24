@@ -622,3 +622,8 @@ the returned confidential reference, refreshes it, and checks original revocatio
 for independent and enterprise SSO sources. Service-only assertions cannot catch
 proof fields lost while serializing the HTTP response. No product config change
 or native binary release is needed for this response correction.
+
+A refresh supplies the rotated family's original assurance id when checking the
+selected organisation's SSO policy, before issuing its response. The policy still
+validates the live original; absence, revocation or a different scope fails closed.
+This is covered by the same HTTP journey under required organisation SSO.
