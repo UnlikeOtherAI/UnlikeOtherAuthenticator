@@ -42,7 +42,8 @@ export function makePrismaMock() {
     user: {
       findUnique: vi.fn(),
     },
-    $queryRaw: vi.fn().mockResolvedValue([{ id: 'locked-row' }]),
+    $queryRaw: vi.fn(async (query: { sql: string }) => query.sql.includes('uoa_organisation_slug_taken')
+      ? [{ taken: false }] : [{ id: 'locked-row' }]),
     $transaction: vi.fn(),
   } as unknown as PrismaClient;
 
