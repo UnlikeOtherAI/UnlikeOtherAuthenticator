@@ -10,6 +10,17 @@ function basePayload(): JWTPayload {
 }
 
 describe('validateConfigFields', () => {
+  it('rejects oversized hostname label lists before validating their elements', () => {
+    const readElement = vi.fn(() => 'reserved');
+    const labels = Array<string>(201).fill('reserved');
+    Object.defineProperty(labels, 0, { get: readElement });
+
+    expect(() => validateConfigFields({ ...basePayload(),
+      hostnames: { reserved_labels: labels },
+    })).toThrow();
+    expect(readElement).not.toHaveBeenCalled();
+  });
+
   it('applies defaults for optional fields when missing', () => {
     const cfg = validateConfigFields(basePayload());
 
