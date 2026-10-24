@@ -43,7 +43,8 @@ BEGIN
   RETURNING org_id INTO claimed_owner;
   IF claimed_owner IS DISTINCT FROM NEW.id THEN
     RAISE EXCEPTION 'ORG_SLUG_TAKEN' USING ERRCODE = '23505',
-      CONSTRAINT = 'organisations_slug_admission_key', TABLE = 'organisations', COLUMN = 'slug';
+      CONSTRAINT = 'organisations_slug_admission_key', TABLE = 'organisations', COLUMN = 'slug',
+      DETAIL = format('Key (slug)=(%s) already exists.', NEW.slug);
   END IF;
 
   -- Explicit address changes retain their existing release semantics. A NULL
