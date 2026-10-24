@@ -90,10 +90,10 @@ describe('registered product hostname namespace with PostgreSQL', () => {
 
   it('does not publish inactive organisations or teams in the product namespace', async () => {
     const f = await fixture();
-    await handle.prisma.team.update({ where: { id: f.team.id }, data: { lifecycleStatus: 'DEACTIVATED' } });
+    await handle.prisma.team.update({ where: { id: f.team.id }, data: { lifecycleStatus: 'DISABLED' } });
     expect(await resolveTeamById({ domain: f.domain, teamId: f.team.id }, f.deps)).toBeNull();
     expect(await resolveTeamHostname({ domain: f.domain, orgSlug: f.org.slug, teamSlug: f.team.slug }, f.deps)).toBeNull();
-    await handle.prisma.organisation.update({ where: { id: f.org.id }, data: { lifecycleStatus: 'DEACTIVATED' } });
+    await handle.prisma.organisation.update({ where: { id: f.org.id }, data: { lifecycleStatus: 'DISABLED' } });
     expect(await resolveOrgHostname({ domain: f.domain, orgSlug: f.org.slug }, f.deps)).toBeNull();
     expect(await resolveOrgById({ domain: f.domain, orgId: f.org.id }, f.deps)).toBeNull();
   });
