@@ -109,7 +109,7 @@ describe.skipIf(!hasDatabase)('hostname reads run against real row-level securit
     });
   });
 
-  it('still refuses another client domain, which is now the only boundary', async () => {
+  it('keeps ordinary-domain resolution private while address occupancy is global', async () => {
     const { orgId, teamId } = await seed();
     // The tenant-scoped client is gone, so the domain predicate is what keeps
     // one product out of another's tenants. Prove it holds.
@@ -118,21 +118,21 @@ describe.skipIf(!hasDatabase)('hostname reads run against real row-level securit
     expect(await resolveTeamById({ domain: 'other.example.com', teamId }, { prisma: adminPrisma })).toBeNull();
     expect(
       await checkOrgSlugAvailability({ domain: 'other.example.com', slug: 'acme' }, { prisma: adminPrisma }),
-    ).toEqual({ available: true, slug: 'acme' });
+    ).toEqual({ available: false, reason: 'taken' });
   });
 
-  it('the runtime RLS role sees nothing here — which is the bug that shipped', async () => {
+  it('the runtime RLS role can check global occupancy without seeing another organisation', async () => {
     await seed();
     // `uoa_app` cannot satisfy any branch of organisations_select on a
     // domain-hash route: there is no app.org_id, no app.user_id, and the
     // domain branch additionally requires an org_members row for that user.
-    // It does not error, it returns nothing — so resolution answered 404 and
-    // availability answered "available" for a slug that was taken.
+    // The narrow definer function answers occupancy despite those invisible
+    // rows. It does not broaden the runtime role's organisation reads.
     expect(
       await resolveOrgHostname({ domain: DOMAIN, orgSlug: 'acme' }, { prisma: appPrisma }),
     ).toBeNull();
     expect(
       await checkOrgSlugAvailability({ domain: DOMAIN, slug: 'acme' }, { prisma: appPrisma }),
-    ).toEqual({ available: true, slug: 'acme' });
+    ).toEqual({ available: false, reason: 'taken' });
   });
 });

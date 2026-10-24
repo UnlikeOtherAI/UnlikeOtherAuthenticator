@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../../src/app.js';
 import { createTestDb } from '../helpers/test-db.js';
 import { seedDomainSecret } from '../helpers/domain-secret.js';
+import { withChosenOrganisationSlug } from '../../src/services/organisation-slug-admission.service.js';
 import { checkOrgSlugAvailability, resolveOrgById, resolveOrgHostname,
   resolveTeamById, resolveTeamHostname } from '../../src/services/team-hostname.service.js';
 
@@ -77,15 +78,20 @@ describe('registered product hostname namespace with PostgreSQL', () => {
       .toMatchObject({ orgId: f.org.id });
   });
 
-  it('refuses ambiguous labels for both forward resolution and links built from ids', async () => {
+  it('refuses another domain claiming an existing address without hiding its original owner', async () => {
     const f = await fixture();
-    await handle.prisma.organisation.create({ data: {
+    await expect(withChosenOrganisationSlug(() => handle.prisma.organisation.create({ data: {
       domain: f.domain, ownerId: f.owner.id, name: 'Same label in another domain', slug: f.org.slug,
-    } });
-    expect(await resolveOrgHostname({ domain: f.domain, orgSlug: f.org.slug }, f.deps)).toBeNull();
-    expect(await resolveOrgById({ domain: f.domain, orgId: f.org.id }, f.deps)).toBeNull();
-    expect(await resolveTeamById({ domain: f.domain, teamId: f.team.id }, f.deps)).toBeNull();
-    expect(await resolveTeamHostname({ domain: f.domain, orgSlug: f.org.slug, teamSlug: f.team.slug }, f.deps)).toBeNull();
+    } }))).rejects.toMatchObject({ code: 'BAD_REQUEST', statusCode: 400, message: 'ORG_SLUG_TAKEN' });
+    expect(await handle.prisma.organisation.count({ where: { slug: f.org.slug } })).toBe(1);
+    expect(await resolveOrgHostname({ domain: f.domain, orgSlug: f.org.slug }, f.deps))
+      .toMatchObject({ orgId: f.org.id, orgSlug: f.org.slug });
+    expect(await resolveOrgById({ domain: f.domain, orgId: f.org.id }, f.deps))
+      .toMatchObject({ orgId: f.org.id, orgSlug: f.org.slug });
+    expect(await resolveTeamById({ domain: f.domain, teamId: f.team.id }, f.deps))
+      .toMatchObject({ orgId: f.org.id, teamId: f.team.id });
+    expect(await resolveTeamHostname({ domain: f.domain, orgSlug: f.org.slug, teamSlug: f.team.slug }, f.deps))
+      .toMatchObject({ orgId: f.org.id, teamId: f.team.id });
   });
 
   it('does not publish inactive organisations or teams in the product namespace', async () => {
