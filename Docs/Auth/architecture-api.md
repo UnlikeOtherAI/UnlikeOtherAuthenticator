@@ -1001,6 +1001,9 @@ excludes `tests/integration/**`; the separate PostgreSQL invocation runs those
 integration files with `DATABASE_URL` set. Required database suites refuse a
 missing database instead of reporting skipped coverage. Isolated-schema
 provisioning hooks use the shared Vitest hook budget.
+Create isolated schemas and run migrations in `beforeAll`/`beforeEach`, and clean
+them up in the corresponding hooks. Keeping that work outside `it` preserves the
+ordinary test deadline for the business behavior instead of migration contention.
 
 Authentication route fixtures retain their original evidence and declare their
 product's pre-enrolment policy explicitly. They reset factor state and evidence
