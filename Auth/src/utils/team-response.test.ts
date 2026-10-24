@@ -201,6 +201,13 @@ describe('pickHintTeam', () => {
     expect(pickHintTeam(choices, 'design')).toEqual(TEAM_B);
   });
 
+  it('keeps the chooser for ambiguous slugs and gives exact IDs priority', () => {
+    const otherOrg = { ...TEAM_B, slug: TEAM_A.slug };
+    expect(pickHintTeam({ ...choices, teams: [TEAM_A, otherOrg] }, TEAM_A.slug)).toBeNull();
+    expect(pickHintTeam({ ...choices, teams: [{ ...TEAM_B, slug: TEAM_A.teamId }, TEAM_A] }, TEAM_A.teamId))
+      .toEqual(TEAM_A);
+  });
+
   it('returns null when the hint matches no team in the caller\'s own choices', () => {
     expect(pickHintTeam(choices, 'team-does-not-exist')).toBeNull();
     expect(pickHintTeam(choices, 'some-other-slug')).toBeNull();

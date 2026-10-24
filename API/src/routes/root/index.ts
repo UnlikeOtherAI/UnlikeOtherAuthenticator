@@ -59,6 +59,8 @@ export function registerRootRoute(app: FastifyInstance): void {
       docs: '/llm',
       api: '/api',
       organization_sign_in: { config: 'login_flow.organization_id', description: 'Optional exact UOA organization for hosted sign-in choices and completion; no membership grant. Omit for all eligible organizations.' },
+      browser_team_reauthorization: { entry: '/auth', hint: 'team_hint', preference_cookie: 'uoa_social_preference',
+        description: 'A signed host-only non-authentication provider preference may skip choices for a new S256 browser team entry. It is consumed before the existing real provider flow and renewed only after completed social authorization. No prompt, native, enterprise, invitation, management or continuation request auto-launches. Original proof and refresh admission are unchanged.' },
       registration_verification: registrationVerificationDocumentation,
       personal_telephone: { profile: '/apps/v1/nessie/phone-profile/read', lookup: '/apps/v1/nessie/phone-profile/lookup',
         call_proof: '/apps/v1/nessie/phone-profile/call-proof/start',

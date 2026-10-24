@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { SOCIAL_STATE_TTL_MS } from '../../config/constants.js';
 import { AppError } from '../../utils/errors.js';
 import type { SocialProviderKey } from './provider.base.js';
+import { TEAM_HINT_PATTERN } from './social-browser-preference.service.js';
 
 const SOCIAL_STATE_ALLOWED_ALGS = ['HS256'] as const;
 
@@ -25,6 +26,7 @@ const SocialStateSchema = z.object({
   // CSRF binding: random nonce mirrored in an HttpOnly cookie set on the
   // initiating browser. The callback rejects unless the two match.
   nonce: z.string().min(1),
+  team_hint: z.string().regex(TEAM_HINT_PATTERN).optional(),
 });
 
 export type SocialState = z.infer<typeof SocialStateSchema>;
@@ -48,6 +50,7 @@ export async function signSocialState(params: {
   codeChallenge?: string;
   codeChallengeMethod?: 'S256';
   nonce: string;
+  teamHint?: string;
   sharedSecret: string;
   audience: string;
   baseUrlForIssuer: string;
@@ -70,6 +73,7 @@ export async function signSocialState(params: {
       code_challenge: params.codeChallenge,
       code_challenge_method: params.codeChallengeMethod,
       nonce: params.nonce,
+      team_hint: params.teamHint,
     })
       .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
       .setAudience(params.audience)

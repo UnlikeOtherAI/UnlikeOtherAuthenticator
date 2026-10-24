@@ -11,12 +11,12 @@ import { configFetchRateLimiter } from './rate-limit-keys.js';
 import { recordAuthFunnelStep } from '../../services/auth-funnel.service.js';
 import { startEnterpriseLogin } from '../../services/org-sso-entry.service.js';
 import { z } from 'zod';
+import { consumeSocialPreference, preferredSocialRedirect, TEAM_HINT_PATTERN }
+  from '../../services/social/social-browser-preference.service.js';
 
-// Gap-fix B Task 2 (design §11.4): `team_hint` is a client-side chooser preselect ONLY — it never
-// grants anything server-side (select-team's ACTIVE-membership + domain check remains the sole
-// authority). Bound to a conservative id/slug-safe charset; anything else is silently dropped
-// before the querystring reaches the SPA bootstrap rather than rejecting the whole request.
-const TEAM_HINT_PATTERN = /^[A-Za-z0-9_-]{1,256}$/;
+// `team_hint` selects UI only, never authority. A valid hint may start the remembered provider
+// and preselect a verified chooser choice; select-team's ACTIVE-membership + product policy
+// remain mandatory. Invalid hints are dropped before SPA bootstrap rather than rejecting entry.
 
 // UOA re-renders this window mid-flow (2FA, team chooser, invite and email-link continuations). Only
 // a render without any of these is a product starting a flow, which is what the funnel counts.
@@ -83,6 +83,12 @@ export function registerAuthEntrypointRoute(app: FastifyInstance): void {
         return reply.header('Cache-Control', 'no-store').redirect(started.target);
       }
 
+      const preferred = preferredSocialRedirect({ config: request.config, configUrl: request.configUrl,
+        requestUrl: request.raw.url ?? '', request });
+      if (preferred) {
+        consumeSocialPreference(reply);
+        return reply.header('Cache-Control', 'no-store').header('Pragma', 'no-cache').redirect(preferred);
+      }
       const requestUrl = sanitizeTeamHintInUrl(request.raw.url ?? '');
       const html = await renderAuthEntrypointHtml({
         config: request.config,

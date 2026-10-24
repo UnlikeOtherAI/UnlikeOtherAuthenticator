@@ -2349,8 +2349,20 @@ paths:
       description: |
         Returns the HTML shell for the embedded auth UI. Requires a valid
         `config_url`. Rate limited to 60 requests per minute per IP.
+        A new S256 browser team entry may instead redirect through a previously
+        completed social provider still enabled by the verified configuration.
+        The signed host-only provider-name preference is consumed before launch;
+        real provider verification and all authorization checks remain mandatory.
+        Prompts, native, enterprise, management, invitation and continuation
+        requests do not automatically choose a provider.
       parameters:
         - $ref: '#/components/parameters/configUrl'
+        - name: team_hint
+          in: query
+          description: Exact team ID or unique slug preselection in the verified user's own choices; grants no authority.
+          schema:
+            type: string
+            pattern: '^[A-Za-z0-9_-]{1,256}$'
         - name: redirect_url
           in: query
           schema:
@@ -2375,6 +2387,8 @@ paths:
             text/html:
               schema:
                 type: string
+        '302':
+          description: Continue through the existing verified social-provider flow.
         '400':
           description: Invalid or missing config.
           content:
@@ -3120,6 +3134,12 @@ paths:
         Redirects to the social provider's authorization URL. State is stored
         server-side (session cookie). Rate limited: 60/min per IP.
       parameters:
+        - name: team_hint
+          in: query
+          description: Chooser hint preserved in signed provider state; selection requires the verified user's current ACTIVE membership.
+          schema:
+            type: string
+            pattern: '^[A-Za-z0-9_-]{1,256}$'
         - name: provider
           in: path
           required: true

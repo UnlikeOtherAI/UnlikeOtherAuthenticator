@@ -23,6 +23,7 @@ import { selectRedirectUrl } from '../../services/authorization-code.service.js'
 import { AppError } from '../../utils/errors.js';
 import { parsePkceChallenge } from '../../utils/pkce.js';
 import { configFetchRateLimiter } from './rate-limit-keys.js';
+import { TEAM_HINT_PATTERN } from '../../services/social/social-browser-preference.service.js';
 
 const ParamsSchema = z.object({
   provider: z.enum(['google', 'apple', 'facebook', 'github', 'linkedin']),
@@ -46,6 +47,7 @@ const QuerySchema = z
     // instead of silently reusing the browser's provider session. Only this one value
     // exists; it selects a provider screen and grants nothing. Honoured by Google.
     prompt: z.literal('select_account').optional(),
+    team_hint: z.string().regex(TEAM_HINT_PATTERN).optional(),
   })
   .strict();
 
@@ -84,6 +86,7 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
         invite_token,
         state: relyingPartyState,
         prompt,
+        team_hint,
       } = QuerySchema.parse(request.query);
 
       const config = request.config;
@@ -138,6 +141,7 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
           codeChallengeMethod: pkce?.codeChallengeMethod,
           teamInvite: Boolean(invite),
           nonce,
+          teamHint: team_hint,
           sharedSecret: SHARED_SECRET,
           audience: authServiceIdentifier,
           baseUrlForIssuer: baseUrl,

@@ -636,3 +636,45 @@ policy. Existing ambiguous labels remain unavailable without renaming their
 organisations; future writes cannot introduce another claimant. Disable/reactivate
 retains occupancy, and terminal deletion placeholders are not published addresses.
 See the global organisation-address admission clarification in `Docs/brief.md`.
+
+### Browser team reauthorization
+
+A new browser request with a valid `team_hint` and S256 may skip the provider-choice
+screen using a previously completed social provider that its verified config still
+enables. UOA redirects through the existing `/auth/social/:provider` protocol; it
+does not reuse a product refresh family, rebind original proof, or create a new
+authority grant. Provider verification, browser nonce, PKCE, current membership,
+MFA and signatures still run. A product must validate its expected subject and
+exact target before adopting the result; subject-mismatch retry uses
+`prompt=select_account` so the provider can present account choices.
+
+The signed host-only, HttpOnly, Secure, SameSite=Lax `uoa_social_preference` cookie
+contains only an enabled provider name. It is consumed before automatic launch
+and remembered again only after completed social authorization, including team,
+factor and signature continuations. Cancelled or failed attempts therefore leave
+normal choices on retry. Native, enterprise, management, linking, invitation,
+prompt and continuation requests never auto-launch. `team_hint` travels through
+strict social query validation and signed state to the verified-user chooser;
+an exact team ID takes priority and ambiguous slugs leave the chooser visible.
+
+Focused gates (run on Maxis with the existing isolated test database):
+
+```sh
+pnpm --filter @uoa/api test -- tests/unit/social-browser-preference.test.ts tests/unit/social-state.service.test.ts tests/unit/auth-callback-team.route.test.ts tests/unit/twofactor-config-gating.routes.test.ts tests/unit/signature-session.route.test.ts tests/unit/signature-continuation.service.test.ts tests/integration/auth-social-auto-team-token.test.ts
+pnpm --filter @uoa/auth test -- src/utils/team-response.test.ts
+PLAYWRIGHT_MODULE=<existing-playwright-index.mjs> pnpm --filter @uoa/auth exec vitest run --config vitest.social-entry.config.ts
+```
+
+The database journey starts with a real successful provider callback, consumes its
+preference on the next team entry, requires a new nonce-bound callback, preserves
+the hint through the chooser, and exchanges a separate target code while keeping
+the original refresh family. The Auth gate covers missing/foreign/ambiguous hints.
+The explicit browser gate runs actual built Auth HTML/React and UOA routes against
+an isolated database, with signed-config and Google HTTP fixtures. It covers
+desktop/mobile first sign-in, subsequent exact-team entry and cancelled-provider
+retry. Set `UOA_SOCIAL_ENTRY_STAGE=before` only in the base checkout; the default
+`after` requires zero manual actions on subsequent team entry. Screenshots and
+non-secret result summaries go to `UOA_SOCIAL_ENTRY_EVIDENCE` (default ignored
+`Auth/e2e/artifacts/social-team-entry`). Completion screenshots are labelled as a
+local callback fixture; they do not claim to show a consuming product's UI or live
+Google. Real provider and product journeys remain a separate integration check.

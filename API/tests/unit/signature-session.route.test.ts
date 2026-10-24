@@ -206,6 +206,7 @@ describe('signing capability session routes', () => {
     continuationMocks.completeSigningContinuation.mockResolvedValue({
       status: 'granted',
       code: 'authorization-code',
+      completedAuthMethod: 'apple',
       redirectTo: 'https://client.example.com/callback?code=authorization-code',
     });
     const { createApp } = await import('../../src/app.js');
@@ -222,6 +223,7 @@ describe('signing capability session routes', () => {
         complete: true,
         redirect_to: 'https://client.example.com/callback?code=authorization-code',
       });
+      expect(String(response.headers['set-cookie'])).toContain('uoa_social_preference=');
     } finally {
       await app.close();
     }

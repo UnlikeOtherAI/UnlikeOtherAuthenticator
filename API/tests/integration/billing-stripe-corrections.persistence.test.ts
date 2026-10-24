@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { collectStripeCorrectionInvoice } from '../../src/services/billing-stripe-correction-invoice.service.js';
 import { compensateFinalizedStripeInvoice } from '../../src/services/billing-stripe-invoice-close-resolution.service.js';
@@ -113,11 +113,26 @@ describe.skipIf(!process.env.DATABASE_URL)('durable Stripe usage corrections', (
     expect(fixture.client.invoices.create).toHaveBeenCalledTimes(3);
   });
 
-  it('uses database time despite host clock drift and fences a worker whose lease expires before creation', async () => {
-    const handle = await createTestDb();
-    if (!handle) throw new Error('DATABASE_URL_REQUIRED');
-    try {
-      const local = await correctionFixture(handle.prisma);
+  describe('independent correction scenarios', () => {
+    let isolatedDb: NonNullable<Awaited<ReturnType<typeof createTestDb>>> | undefined;
+    let isolatedFixture: Awaited<ReturnType<typeof correctionFixture>>;
+    // Migrations and schema cleanup use the shared provisioning-hook budget;
+    // the billing operations below retain the ordinary 30-second test deadline.
+    beforeEach(async () => {
+      const handle = await createTestDb();
+      if (!handle) throw new Error('DATABASE_URL_REQUIRED');
+      isolatedDb = handle;
+      isolatedFixture = await correctionFixture(handle.prisma);
+    });
+    afterEach(async () => {
+      const handle = isolatedDb;
+      isolatedDb = undefined;
+      await handle?.cleanup();
+    });
+
+    it('uses database time despite host clock drift and fences a worker whose lease expires before creation', async () => {
+      const handle = isolatedDb!;
+      const local = isolatedFixture;
       const request = { closeId: local.close.id, amountMicroMinor: 130_000_000n,
         cursor: 'bus_correction_1' };
       const clock = vi.spyOn(Date, 'now').mockReturnValue(0);
@@ -134,14 +149,11 @@ describe.skipIf(!process.env.DATABASE_URL)('durable Stripe usage corrections', (
         await collectStripeCorrectionInvoice(request, { prisma: handle.prisma, stripe: local.stripe });
         expect(local.client.invoices.create).toHaveBeenCalledOnce();
       } finally { clock.mockRestore(); }
-    } finally { await handle.cleanup(); }
-  });
+    });
 
-  it('preserves an explicitly inclusive original VAT treatment while settling only net usage', async () => {
-    const handle = await createTestDb();
-    if (!handle) throw new Error('DATABASE_URL_REQUIRED');
-    try {
-      const inclusive = await correctionFixture(handle.prisma);
+    it('preserves an explicitly inclusive original VAT treatment while settling only net usage', async () => {
+      const handle = isolatedDb!;
+      const inclusive = isolatedFixture;
       inclusive.originalLines[0]!.amount = 1200;
       inclusive.originalLines[0]!.taxes[0]!.tax_behavior = 'inclusive';
       inclusive.rate.inclusive = true;
@@ -159,6 +171,6 @@ describe.skipIf(!process.env.DATABASE_URL)('durable Stripe usage corrections', (
       const cash = await handle.prisma.billingStripePaymentInvoice.findFirstOrThrow({ include: { lines: true } });
       expect(cash.lines[0]).toMatchObject({ usageMinor: 130n, taxMinor: 26n, subscriptionMinor: 0n });
       expect((await handle.prisma.billingStripeInvoiceCloseResolution.findFirstOrThrow()).paidAmountMinor).toBe(130n);
-    } finally { await handle.cleanup(); }
+    });
   });
 });

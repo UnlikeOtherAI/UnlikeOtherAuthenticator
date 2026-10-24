@@ -1,3 +1,4 @@
+import { rememberCompletedSocialProvider } from '../../services/social/social-browser-preference.service.js';
 import { assertLoginOrganization } from '../../services/login-organization.service.js';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
@@ -242,6 +243,7 @@ export function registerAuthCreateOrganisationRoute(app: FastifyInstance): void 
         request.log.error({ err }, 'failed to record login log');
       }
 
+      if (outcome.finalized.finalResult.status === 'granted') rememberCompletedSocialProvider(reply, outcome.authMethod);
       reply.status(200).send({
         ok: true,
         code:

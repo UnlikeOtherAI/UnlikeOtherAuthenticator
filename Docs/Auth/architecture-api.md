@@ -1001,10 +1001,16 @@ excludes `tests/integration/**`; the separate PostgreSQL invocation runs those
 integration files with `DATABASE_URL` set. Required database suites refuse a
 missing database instead of reporting skipped coverage. Isolated-schema
 provisioning hooks use the shared Vitest hook budget.
+Create isolated schemas and run migrations in `beforeAll`/`beforeEach`, and clean
+them up in the corresponding hooks. Keeping that work outside `it` preserves the
+ordinary test deadline for the business behavior instead of migration contention.
 
 Authentication route fixtures retain their original evidence and declare their
 product's pre-enrolment policy explicitly. They reset factor state and evidence
 between cases; an omitted mock model is not a legacy-authority fallback.
+Bare route fixtures also install the production signed-cookie plugin and signing
+secret when their route issues browser state; a missing plugin must not cause a
+runtime fallback or bypass completed-authorization checks.
 
 Directory notifications use `services/directory-webhook.service.ts` and the
 `directory_webhook_events` outbox. Database triggers admit ID-only events with the

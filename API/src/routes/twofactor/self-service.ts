@@ -1,3 +1,4 @@
+import { rememberCompletedSocialProvider } from '../../services/social/social-browser-preference.service.js';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { PrismaClient } from '@prisma/client';
 import { z } from 'zod';
@@ -294,6 +295,7 @@ export function registerTwoFactorSelfServiceRoutes(app: FastifyInstance): void {
       }
 
       const finalResult = outcome?.result;
+      if (finalResult?.status === 'granted') rememberCompletedSocialProvider(reply, outcome?.authMethod);
       reply.status(200).send({
         ok: true,
         code: finalResult?.status === 'granted' ? finalResult.code : undefined,
