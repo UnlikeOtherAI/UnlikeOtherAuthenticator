@@ -42,7 +42,9 @@ describe('required team placement during token exchange', () => {
     const prisma = {
       enterpriseProductReadiness: { findUnique: vi.fn().mockResolvedValue(null) },
       orgSsoPolicy: { findUnique: vi.fn().mockResolvedValue(null) },
-      $queryRaw: vi.fn().mockResolvedValue([{ id: 'user-new' }]),
+      $executeRawUnsafe: vi.fn().mockResolvedValue(0),
+      $queryRaw: vi.fn().mockImplementation(async (query: { text: string }) =>
+        query.text.includes('uoa_organisation_slug_taken') ? [{ taken: false }] : [{ id: 'user-new' }]),
       authorizationCode: {
         findUnique: vi.fn().mockResolvedValue({
           id: 'code-row',
@@ -367,7 +369,9 @@ describe('required team placement during token exchange', () => {
       return {
         enterpriseProductReadiness: { findUnique: vi.fn().mockResolvedValue(null) },
         orgSsoPolicy: { findUnique: vi.fn().mockResolvedValue(null) },
-        $queryRaw: vi.fn(async () => {
+        $executeRawUnsafe: vi.fn().mockResolvedValue(0),
+        $queryRaw: vi.fn(async (query: { text: string }) => {
+          if (query.text.includes('uoa_organisation_slug_taken')) return [{ taken: false }];
           if (lockOwner === id) return [{ id: 'user-race' }];
           if (lockOwner === null) {
             lockOwner = id;
