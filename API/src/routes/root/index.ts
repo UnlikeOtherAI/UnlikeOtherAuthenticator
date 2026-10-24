@@ -94,9 +94,10 @@ export function registerRootRoute(app: FastifyInstance): void {
       debug_login: {
         issue: { method: 'POST', path: '/auth/debug-login/issue', auth: 'domain bearer plus source refresh_token',
           body: { refresh_token: 'string', previous_token: 'optional one-use token to invalidate' },
-          response: { token: 'opaque one-use code', expires_in: 1800 } },
+          response: { token: 'opaque one-use code', expires_in: 'positive seconds, at most 1800 and capped by source family and original proof expiry' } },
         redeem: { method: 'POST', path: '/auth/debug-login/redeem', auth: 'domain bearer',
-          body: { token: 'opaque one-use code' }, response: 'Independent access and refresh token pair' },
+          body: { token: 'opaque one-use code' },
+          response: 'Independent access and refresh token pair; proof-bearing sessions include confidential assurance_ref and absolute assurance_expires_at, as on /auth/token'  },
         binding: 'Exact verified config_url, domain, client, source refresh family, credential epoch and selected team. Supported Nessie theme variants of the signed config URL are presentation-only; other query parameters retain their identity. Tokens travel only in POST bodies.',
       },
       admin_debug_login: {

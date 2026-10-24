@@ -6,6 +6,7 @@ import { createRateLimiter } from '../../middleware/rate-limiter.js';
 import { issueDebugLogin, redeemDebugLogin } from '../../services/debug-login.service.js';
 import { AppError } from '../../utils/errors.js';
 import { tokenExchangePreAuthRateLimiter } from './rate-limit-keys.js';
+import { tokenPairResponse } from './token-response.js';
 
 const token = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
 const issue = z.object({ refresh_token: z.string().min(1).max(4096), previous_token: token.optional() }).strict();
@@ -29,9 +30,7 @@ export function registerDebugLoginRoutes(app: FastifyInstance): void {
       }
       const body = redeem.parse(request.body);
       const pair = await redeemDebugLogin({ ...context, token: body.token }, { prisma: request.adminDb });
-      return { access_token: pair.accessToken, expires_in: pair.expiresInSeconds,
-        refresh_token: pair.refreshToken, refresh_token_expires_in: pair.refreshTokenExpiresInSeconds,
-        token_type: 'Bearer' };
+      return tokenPairResponse(pair);
     });
   }
 }
