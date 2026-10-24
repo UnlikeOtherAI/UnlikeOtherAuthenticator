@@ -1,6 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
+import type { input } from 'zod';
 
 import { Button } from '../../components/ui/Button';
 import { FieldShell, SelectField, TextField } from '../../components/ui/FormFields';
@@ -134,7 +135,7 @@ export function AddBillingContractVersionDialog({
   onClose: () => void;
 }) {
   const create = useCreateBillingContractVersionMutation(contract?.id ?? '');
-  const form = useForm<BillingContractVersionFormValues>({
+  const form = useForm<input<typeof BillingContractVersionFormSchema>, unknown, BillingContractVersionFormValues>({
     resolver: zodResolver(BillingContractVersionFormSchema),
     defaultValues: {
       usageMarkupPercent: '30.00',
