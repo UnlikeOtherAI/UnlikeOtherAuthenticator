@@ -17,7 +17,7 @@ overrides:
   js-yaml@>=4.0.0 <4.3.0: 4.3.0
   postcss: ^8.5.18
   protobufjs: ^7.5.6
-  undici: ^6.28.1
+  undici: ^6.29.1
   vite: ^6.4.4
   ws: ^7.5.11
   '@fastify/websocket>ws': ^8.18.3
@@ -148,11 +148,11 @@ importers:
         specifier: ^7.4.18
         version: 7.4.18
       undici:
-        specifier: ^6.28.1
-        version: 6.29.0
+        specifier: ^6.29.1
+        version: 6.29.1
       zod:
-        specifier: ^3.24.1
-        version: 3.25.76
+        specifier: ^4.6.6
+        version: 4.6.7
     devDependencies:
       '@redocly/cli':
         specifier: ^2.40.0
@@ -183,7 +183,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.2.6
-        version: 3.2.6(@types/debug@4.1.13)(@types/node@22.19.17)(happy-dom@20.11.0)(jiti@2.7.0)(jsdom@30.0.1)(lightningcss@1.32.0)(tsx@4.21.0)
+        version: 3.2.6(@types/debug@4.1.13)(@types/node@22.19.17)(happy-dom@21.0.4)(jiti@2.7.0)(jsdom@30.0.1)(lightningcss@1.32.0)(tsx@4.21.0)
       xml-crypto:
         specifier: ^6.4.0
         version: 6.4.0
@@ -212,8 +212,8 @@ importers:
         specifier: ^8.3.0
         version: 8.3.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       zod:
-        specifier: ^3.25.76
-        version: 3.25.76
+        specifier: ^4.6.6
+        version: 4.6.7
     devDependencies:
       '@playwright/test':
         specifier: 1.58.2
@@ -240,8 +240,8 @@ importers:
         specifier: ^10.4.20
         version: 10.5.0(postcss@8.5.23)
       happy-dom:
-        specifier: ^20.11.0
-        version: 20.11.0
+        specifier: ^21.0.4
+        version: 21.0.4
       postcss:
         specifier: ^8.5.18
         version: 8.5.23
@@ -256,7 +256,7 @@ importers:
         version: 6.4.4(@types/node@22.19.17)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)
       vitest:
         specifier: ^3.2.6
-        version: 3.2.6(@types/debug@4.1.13)(@types/node@22.19.17)(happy-dom@20.11.0)(jiti@2.7.0)(jsdom@30.0.1)(lightningcss@1.32.0)(tsx@4.21.0)
+        version: 3.2.6(@types/debug@4.1.13)(@types/node@22.19.17)(happy-dom@21.0.4)(jiti@2.7.0)(jsdom@30.0.1)(lightningcss@1.32.0)(tsx@4.21.0)
 
   Auth:
     dependencies:
@@ -302,7 +302,7 @@ importers:
         version: 6.4.4(@types/node@22.19.17)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)
       vitest:
         specifier: ^3.2.6
-        version: 3.2.6(@types/debug@4.1.13)(@types/node@22.19.17)(happy-dom@20.11.0)(jiti@2.7.0)(jsdom@30.0.1)(lightningcss@1.32.0)(tsx@4.21.0)
+        version: 3.2.6(@types/debug@4.1.13)(@types/node@22.19.17)(happy-dom@21.0.4)(jiti@2.7.0)(jsdom@30.0.1)(lightningcss@1.32.0)(tsx@4.21.0)
 
   packages/billing-statement-protocol:
     devDependencies:
@@ -320,7 +320,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.2.6
-        version: 3.2.6(@types/debug@4.1.13)(@types/node@22.19.17)(happy-dom@20.11.0)(jiti@2.7.0)(jsdom@30.0.1)(lightningcss@1.32.0)(tsx@4.21.0)
+        version: 3.2.6(@types/debug@4.1.13)(@types/node@22.19.17)(happy-dom@21.0.4)(jiti@2.7.0)(jsdom@30.0.1)(lightningcss@1.32.0)(tsx@4.21.0)
 
   packages/slug:
     devDependencies:
@@ -329,7 +329,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.2.6
-        version: 3.2.6(@types/debug@4.1.13)(@types/node@22.19.17)(happy-dom@20.11.0)(jiti@2.7.0)(jsdom@30.0.1)(lightningcss@1.32.0)(tsx@4.21.0)
+        version: 3.2.6(@types/debug@4.1.13)(@types/node@22.19.17)(happy-dom@21.0.4)(jiti@2.7.0)(jsdom@30.0.1)(lightningcss@1.32.0)(tsx@4.21.0)
 
 packages:
 
@@ -2496,8 +2496,8 @@ packages:
     resolution: {integrity: sha512-pCcEwRi+TKpMlxAQObHDQ56KawURgyAf6jtIY046fJ5tIv3zDe/LEIubckAO8fj6JnAxLdmWkUfNyulQ2iKdEw==}
     engines: {node: '>=14.0.0'}
 
-  happy-dom@20.11.0:
-    resolution: {integrity: sha512-XogN4asPd1a56di9prVG6bZxteNcXsZxxKmAvcEfc5Px5Ca2hMyMgk8wvqK2K1V8zXg40j9VANXsDaJYh9DeNA==}
+  happy-dom@21.0.4:
+    resolution: {integrity: sha512-tFm+GaLBgo6o0awHnvHaNoraVo27qJ+2tZEtZ+cIa08hXbeitrxAJajLI05hsUy/2/YTKcUjQYzHe5mCcraLBw==}
     engines: {node: '>=20.0.0'}
 
   has-symbols@1.1.0:
@@ -3342,8 +3342,8 @@ packages:
   undici-types@6.21.0:
     resolution: {integrity: sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==}
 
-  undici@6.29.0:
-    resolution: {integrity: sha512-R+RODBqp6i2pPflGdq+xIOUkl+RNfGgHwoinecKu/JCuf2uO06cOKoDbI2P7Dn6KcswdKwrczbU6IYJ6K8X+wg==}
+  undici@6.29.1:
+    resolution: {integrity: sha512-EvRlUt/QqAEvXdQeRMYUfwOQsfzpDztykrG2owGEE/rBOBoYv9uF39ZzsNDh4lTFHhTr2XOZjKkYgueD12ZmGA==}
     engines: {node: '>=18.17'}
 
   unpipe@1.0.0:
@@ -3606,6 +3606,9 @@ packages:
 
   zod@3.25.76:
     resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
+
+  zod@4.6.7:
+    resolution: {integrity: sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg==}
 
 snapshots:
 
@@ -6147,7 +6150,7 @@ snapshots:
       - encoding
       - supports-color
 
-  happy-dom@20.11.0:
+  happy-dom@21.0.4:
     dependencies:
       '@types/node': 22.19.17
       '@types/whatwg-mimetype': 3.0.2
@@ -6273,7 +6276,7 @@ snapshots:
       saxes: 6.0.0
       symbol-tree: 3.2.4
       tough-cookie: 6.0.2
-      undici: 6.29.0
+      undici: 6.29.1
       w3c-xmlserializer: 5.0.0
       webidl-conversions: 8.0.1
       whatwg-mimetype: 5.0.0
@@ -6920,7 +6923,7 @@ snapshots:
 
   undici-types@6.21.0: {}
 
-  undici@6.29.0: {}
+  undici@6.29.1: {}
 
   unpipe@1.0.0: {}
 
@@ -6974,7 +6977,7 @@ snapshots:
       lightningcss: 1.32.0
       tsx: 4.21.0
 
-  vitest@3.2.6(@types/debug@4.1.13)(@types/node@22.19.17)(happy-dom@20.11.0)(jiti@2.7.0)(jsdom@30.0.1)(lightningcss@1.32.0)(tsx@4.21.0):
+  vitest@3.2.6(@types/debug@4.1.13)(@types/node@22.19.17)(happy-dom@21.0.4)(jiti@2.7.0)(jsdom@30.0.1)(lightningcss@1.32.0)(tsx@4.21.0):
     dependencies:
       '@types/chai': 5.2.3
       '@vitest/expect': 3.2.6
@@ -7002,7 +7005,7 @@ snapshots:
     optionalDependencies:
       '@types/debug': 4.1.13
       '@types/node': 22.19.17
-      happy-dom: 20.11.0
+      happy-dom: 21.0.4
       jsdom: 30.0.1
     transitivePeerDependencies:
       - jiti
@@ -7161,3 +7164,5 @@ snapshots:
       zod: 3.25.76
 
   zod@3.25.76: {}
+
+  zod@4.6.7: {}
