@@ -331,10 +331,8 @@ export function deriveAvailableOrgSlug(params: {
 /**
  * Validate an explicitly chosen organisation slug and confirm it is free.
  *
- * Uniqueness is per client domain, matching `@@unique([domain, slug])`, because
- * the organisation slug is the tenant's own DNS label under that product's base
- * domain — two organisations on one domain cannot share it the way two teams
- * inside one organisation can.
+ * Organisation labels share the product hostname namespace across founding
+ * domains. The database claim guard makes this advisory probe race-safe.
  */
 export async function ensureAvailableOrgSlug(params: {
   domain: string;

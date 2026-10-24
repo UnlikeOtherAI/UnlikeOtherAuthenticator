@@ -27,6 +27,7 @@ describe.skipIf(!process.env.DATABASE_URL)('organisation address admission on po
     // Duplicates exist before installation; no guard is disabled to manufacture them.
     await db.$executeRawUnsafe(`CREATE TABLE organisations (
       id text PRIMARY KEY, domain text NOT NULL, name text NOT NULL,
+      created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(),
       slug varchar(63) NOT NULL, lifecycle_status text NOT NULL DEFAULT 'ACTIVE',
       UNIQUE(domain, slug))`);
     await db.$executeRawUnsafe(`INSERT INTO organisations(id, domain, name, slug, lifecycle_status) VALUES
@@ -69,7 +70,7 @@ describe.skipIf(!process.env.DATABASE_URL)('organisation address admission on po
   it('allows ordinary legacy edits but refuses a third owner of a blocked label', async () => {
     await db.$executeRaw`UPDATE organisations SET name = 'Edited', slug = 'legacy-shared' WHERE id = 'legacy-a'`;
     await expect(db.$executeRaw`INSERT INTO organisations(id, domain, name, slug)
-      VALUES ('attacker', 'other.example', 'Other', 'legacy-shared')`).rejects.toThrow('ORG_SLUG_TAKEN');
+      VALUES ('attacker', 'other.example', 'Other', 'legacy-shared')`).rejects.toMatchObject({ code: 'P2010', meta: { code: '23505' } });
     expect(await db.$queryRaw`SELECT name FROM organisations WHERE id = 'legacy-a'`).toEqual([{ name: 'Edited' }]);
   });
 
@@ -78,7 +79,11 @@ describe.skipIf(!process.env.DATABASE_URL)('organisation address admission on po
     expect(await db.$queryRaw`SELECT org_id FROM organisation_slug_claims WHERE slug = 'legacy-shared'`)
       .toEqual([{ org_id: null }]);
     await expect(db.$executeRaw`UPDATE organisations SET slug = 'legacy-shared' WHERE id = 'unique'`)
-      .rejects.toThrow('ORG_SLUG_TAKEN');
+      .rejects.toMatchObject({ code: 'P2010', meta: { code: '23505' } });
+    await expect(db.organisation.update({ where: { id: 'unique' },
+      data: { slug: 'legacy-shared' }, select: { id: true } })).rejects.toMatchObject({
+      code: 'P2002', meta: { modelName: 'Organisation', target: ['slug'] },
+    });
     expect(await db.$queryRaw`SELECT slug FROM organisations WHERE id = 'unique'`)
       .toEqual([{ slug: 'unique-address' }]);
   });
