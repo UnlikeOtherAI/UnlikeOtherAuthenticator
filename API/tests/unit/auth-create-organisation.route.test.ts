@@ -1,5 +1,6 @@
 import { legacyCredentialStores } from '../helpers/authentication-fixture.js';
 import fastify from 'fastify';
+import cookie from '@fastify/cookie';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ClientConfig } from '../../src/services/config.service.js';
@@ -125,6 +126,7 @@ async function postCreateTeam(body: Record<string, unknown>) {
   const { registerAuthCreateOrganisationRoute } =
     await import('../../src/routes/auth/auth-create-organisation.js');
   const app = fastify();
+  await app.register(cookie, { secret: SHARED_SECRET });
   app.decorateRequest('adminDb', { getter: () => prismaMock as never });
   registerErrorHandler(app);
   registerAuthCreateOrganisationRoute(app);
@@ -195,6 +197,7 @@ describe('POST /auth/create-organisation', () => {
     });
 
     expect(res.statusCode).toBe(200);
+    expect(String(res.headers['set-cookie'])).toContain('uoa_social_preference=google.');
     expect(res.json()).toEqual({
       ok: true,
       code: 'authorization-code',
@@ -234,6 +237,7 @@ describe('POST /auth/create-organisation', () => {
     const res = await postCreateTeam({ login_token: loginToken, name: 'Acme Space' });
 
     expect(res.statusCode).toBe(401);
+    expect(res.headers['set-cookie']).toBeUndefined();
     expect(res.json()).toEqual({ error: 'Request failed' });
     expect(consumeLoginSessionMock).not.toHaveBeenCalled();
     expect(createOrganisationMock).not.toHaveBeenCalled();
