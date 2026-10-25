@@ -38,6 +38,7 @@ import {
   accessTokenExpiresInSeconds,
   resolveAccessTokenTtl,
   resolveRefreshTokenTtlSeconds,
+  resolveRefreshTokenLifetime,
 } from './token-session-ttl.service.js';
 
 type TokenPrisma = PrismaClient;
@@ -309,7 +310,9 @@ export async function exchangeAuthorizationCodeForTokens(
       { config: params.config, userId, orgId: active?.orgId, twoFaCompleted },
       { prisma: tx },
     );
-    const refreshTtlSeconds = resolveRefreshTokenTtlSeconds(params.config, rememberMe);
+    const accessTtl = resolveAccessTokenTtl(params.config, env.ACCESS_TOKEN_TTL);
+    const lifetime = resolveRefreshTokenLifetime(params.config, accessTtl,
+      resolveRefreshTokenTtlSeconds(params.config, rememberMe), deps?.now?.() ?? new Date());
     const issuedRefreshToken = await issueRefreshToken(
       {
         userId,
@@ -321,14 +324,13 @@ export async function exchangeAuthorizationCodeForTokens(
         twoFaCompleted,
       },
       {
-        now: deps?.now,
+        now: () => lifetime.now,
         prisma: tx,
-        refreshTokenTtlSeconds: refreshTtlSeconds,
+        refreshTokenTtlSeconds: lifetime.ttlSeconds,
         sharedSecret,
       },
     );
 
-    const accessTtl = resolveAccessTokenTtl(params.config, env.ACCESS_TOKEN_TTL);
     return issueTokenPairForUser(
       {
         userId,

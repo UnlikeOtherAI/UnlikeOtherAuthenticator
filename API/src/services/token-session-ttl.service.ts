@@ -1,4 +1,6 @@
 import { AppError } from '../utils/errors.js';
+import { getAdminAuthDomain, getEnv } from '../config/env.js';
+import { normalizeDomain } from '../utils/domain.js';
 import type { ClientConfig } from './config.service.js';
 
 export function accessTokenExpiresInSeconds(ttl: string): number {
@@ -18,4 +20,17 @@ export function resolveRefreshTokenTtlSeconds(config: ClientConfig, rememberMe: 
   const session = config.session;
   if (rememberMe) return (session?.long_refresh_token_ttl_days ?? 30) * 24 * 60 * 60;
   return (session?.short_refresh_token_ttl_hours ?? 1) * 60 * 60;
+}
+
+/** Fix the admin family deadline before its immutable authentication proof is issued. */
+export function resolveRefreshTokenLifetime(
+  config: ClientConfig, accessTokenTtl: string, ttlSeconds: number, now: Date,
+): { now: Date; ttlSeconds: number; expiresAt: Date } {
+  if (normalizeDomain(config.domain) === normalizeDomain(getAdminAuthDomain(getEnv()))) {
+    // JWT exp has whole-second precision. Rounding down also keeps inherited
+    // debug sessions within the original source deadline.
+    now = new Date(Math.floor(now.getTime() / 1000) * 1000);
+    ttlSeconds = Math.min(Math.floor(ttlSeconds), accessTokenExpiresInSeconds(accessTokenTtl));
+  }
+  return { now, ttlSeconds, expiresAt: new Date(now.getTime() + ttlSeconds * 1000) };
 }
