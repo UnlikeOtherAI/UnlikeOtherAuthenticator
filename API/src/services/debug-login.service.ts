@@ -14,7 +14,7 @@ import { issueRefreshToken } from './refresh-token.service.js';
 import { issueTokenPairForUser } from './token.service.js';
 import { requiresExactAuthorizationTeam } from './required-team-placement.service.js';
 import { resolveProductTeamPolicy } from './product-team-policy.service.js';
-import { resolveAccessTokenTtl } from './token-session-ttl.service.js';
+import { resolveAccessTokenTtl, resolveRefreshTokenLifetime } from './token-session-ttl.service.js';
 
 const TTL_SECONDS = 1800;
 // Nessie's signed config endpoint serves these presentation variants. Keep this
@@ -128,20 +128,21 @@ export async function redeemDebugLogin(input: Context & { token: string }, deps:
     const remainingSeconds = Math.floor((Math.min(source.expiresAt.getTime(),
       sourceAssurance?.expiresAt.getTime() ?? Infinity) - now.getTime()) / 1000);
     if (remainingSeconds <= 0) throw fail();
+    const accessTokenTtl = resolveAccessTokenTtl(input.config, getEnv().ACCESS_TOKEN_TTL);
+    const lifetime = resolveRefreshTokenLifetime(input.config, accessTokenTtl, remainingSeconds, now);
     const familyId = randomUUID();
     const refresh = await issueRefreshToken({
       familyId, userId: source.userId, domain: source.domain, clientId: source.clientId,
       configUrl: input.configUrl, orgId: source.orgId, teamId: source.teamId,
       twoFaCompleted: source.twoFaCompleted,
-    }, { prisma: tx, now: () => now,
-      refreshTokenTtlSeconds: remainingSeconds });
+    }, { prisma: tx, now: () => lifetime.now,
+      refreshTokenTtlSeconds: lifetime.ttlSeconds });
     await inheritDebugLoginAssurance(sourceAssurance, { familyId,
-      expiresAt: new Date(now.getTime() + remainingSeconds * 1000) }, tx);
+      expiresAt: lifetime.expiresAt }, tx);
     return issueTokenPairForUser({
       config: input.config, configUrl: input.configUrl, clientId: input.clientId, userId: source.userId,
       refreshToken: refresh.refreshToken, refreshTokenExpiresInSeconds: refresh.expiresInSeconds,
       active: source.orgId && source.teamId ? { orgId: source.orgId, teamId: source.teamId } : null,
-    }, { prisma: tx, adminPrisma: tx,
-      accessTokenTtl: resolveAccessTokenTtl(input.config, getEnv().ACCESS_TOKEN_TTL) });
+    }, { prisma: tx, adminPrisma: tx, accessTokenTtl });
   });
 }

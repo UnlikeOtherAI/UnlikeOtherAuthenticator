@@ -106,7 +106,7 @@ export function registerInternalAdminTokenRoute(app: FastifyInstance): void {
       );
       await assertAdminAccessTokenIsSuperuser(tokenPair.accessToken);
 
-      await storeAdminSessionHandle(tokenPair, request.adminDb, reply);
+      storeAdminSessionHandle(tokenPair, reply);
       reply.header('Cache-Control', 'no-store');
       reply.header('Pragma', 'no-cache');
       reply.status(200).send({

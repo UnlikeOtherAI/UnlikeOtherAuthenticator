@@ -338,6 +338,13 @@ and retains the session on transport/server failure. Invalid/expired authority
 can clear local storage; failed sign-in uses local cleanup rather than logout.
 The access-status diagnostic flag remains disabled by default and unrelated.
 
+Admin authorization-code exchange and debug redemption establish the short
+refresh-family deadline before issuing original or inherited authentication
+proof. The deadline uses JWT whole-second precision. Cookie storage must never
+shorten a family after proof issuance: live validation requires the family to
+cover the proof's immutable expiry. Debug descendants retain the source proof's
+ancestry and absolute deadline, including revocation when that source ends.
+
 ### Ledger runtime keys (2026-10-07)
 
 The existing Billing product panel owns `tab=runtime-keys`. Typed metadata uses

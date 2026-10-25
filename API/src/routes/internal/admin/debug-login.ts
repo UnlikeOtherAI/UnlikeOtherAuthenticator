@@ -38,7 +38,7 @@ export function registerInternalAdminDebugLoginRoutes(app: FastifyInstance): voi
     const pair = await redeemDebugLogin({ ...adminDebugContext(), config: request.config, token: body.token }, {
       prisma: request.adminDb, assertAuthority: assertAdminDebugAuthority,
     });
-    await storeAdminSessionHandle(pair, request.adminDb, reply);
+    storeAdminSessionHandle(pair, reply);
     reply.header('Cache-Control', 'no-store').header('Pragma', 'no-cache');
     return { access_token: pair.accessToken, expires_in: pair.expiresInSeconds, token_type: 'Bearer' };
   });

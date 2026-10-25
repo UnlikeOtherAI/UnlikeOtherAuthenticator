@@ -6,7 +6,6 @@ import { getAdminAuthDomain, getEnv } from '../config/env.js';
 import { AppError } from '../utils/errors.js';
 import { normalizeDomain } from '../utils/domain.js';
 import { adminConfigUrl } from './admin-auth-config.service.js';
-import { hashRefreshToken } from './refresh-token-replay.service.js';
 
 const fail = () => new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
 export function adminSessionCookieName(accessToken: string): string {
@@ -48,13 +47,10 @@ export async function assertAdminDebugAuthority(source: RefreshToken, prisma: Pr
   ]);
   if (user?.lifecycleStatus !== 'ACTIVE' || role?.role !== 'SUPERUSER') throw fail();
 }
-export async function storeAdminSessionHandle(pair: {
+export function storeAdminSessionHandle(pair: {
   accessToken: string; refreshToken: string; expiresInSeconds: number;
-}, prisma: PrismaClient, reply: FastifyReply): Promise<void> {
+}, reply: FastifyReply): void {
   const expiresAt = new Date(Number(decodeJwt(pair.accessToken).exp) * 1000);
-  await prisma.refreshToken.updateMany({ where: {
-    tokenHash: hashRefreshToken(pair.refreshToken, getEnv().SHARED_SECRET), expiresAt: { gt: expiresAt },
-  }, data: { expiresAt } });
   reply.setCookie(adminSessionCookieName(pair.accessToken), pair.refreshToken, {
     httpOnly: true, secure: new URL(adminConfigUrl()).protocol === 'https:', sameSite: 'strict',
     path: '/internal/admin', maxAge: Math.max(0, Math.floor((expiresAt.getTime() - Date.now()) / 1000)),

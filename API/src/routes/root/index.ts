@@ -105,6 +105,7 @@ export function registerRootRoute(app: FastifyInstance): void {
         binding: 'Exact verified config_url, domain, client, source refresh family, credential epoch and selected team. Supported Nessie theme variants of the signed config URL are presentation-only; other query parameters retain their identity. Tokens travel only in POST bodies.',
       },
       admin_debug_login: {
+        session_lifetime: 'Admin authorization-code exchange and debug redemption cap the refresh family to the short access lifetime, at JWT second precision, before issuing original or inherited proof. Cookie storage never changes that immutable deadline.',
         issue: { method: 'POST', path: '/internal/admin/debug-login/issue', auth: 'current admin bearer and exact bearer-bound HttpOnly source cookie; same-origin JSON POST',
           query: { config_url: 'exact first-party /internal/admin/config URL' }, body: { previous_token: 'optional previous code' },
           response: { url: 'canonical /admin/login URL', token: 'one-use code', expires_in: 'seconds, capped by source lifetime' } },
