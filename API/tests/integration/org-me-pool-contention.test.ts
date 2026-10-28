@@ -194,17 +194,21 @@ describe('/org/me and confidential exchange with production pool limits', () => 
       } });
   }
 
-  async function waitingUserWriters(): Promise<number> {
+  async function userLockOccupancy(): Promise<{ waitingWriters: number; adminReaders: number; sharedReaders: number }> {
     const identity = JSON.stringify(['uoa:refresh-session:user:v1', subject]);
-    const rows = await db.prisma.$queryRaw<{ waiting: number }[]>(Prisma.sql`
+    const rows = await db.prisma.$queryRaw<{ waitingWriters: number; adminReaders: number; sharedReaders: number }[]>(Prisma.sql`
       WITH target AS (SELECT hashtextextended(${identity}, 0) AS key)
-      SELECT count(*)::int AS waiting FROM pg_locks, target
-       WHERE locktype = 'advisory' AND mode = 'ExclusiveLock' AND NOT granted
-         AND database = (SELECT oid FROM pg_database WHERE datname = current_database())
-         AND classid::bigint = ((target.key >> 32) & 4294967295)
-         AND objid::bigint = (target.key & 4294967295) AND objsubid = 1
+      SELECT count(*) FILTER (WHERE locks.mode = 'ExclusiveLock' AND NOT locks.granted)::int AS "waitingWriters",
+             count(*) FILTER (WHERE locks.mode = 'ShareLock' AND locks.granted)::int AS "sharedReaders",
+             count(*) FILTER (WHERE locks.mode = 'ShareLock' AND locks.granted
+               AND activity.usename = 'uoa_admin')::int AS "adminReaders"
+        FROM pg_locks locks JOIN pg_stat_activity activity ON activity.pid = locks.pid, target
+       WHERE locks.locktype = 'advisory'
+         AND locks.database = (SELECT oid FROM pg_database WHERE datname = current_database())
+         AND locks.classid::bigint = ((target.key >> 32) & 4294967295)
+         AND locks.objid::bigint = (target.key & 4294967295) AND locks.objsubid = 1
     `);
-    return rows[0]?.waiting ?? 0;
+    return rows[0] ?? { waitingWriters: 0, adminReaders: 0, sharedReaders: 0 };
   }
 
   it('uses real RLS roles and completes both paths without contention', async () => {
@@ -226,7 +230,7 @@ describe('/org/me and confidential exchange with production pool limits', () => 
     expect((await exchange(tokenProof)).statusCode).toBe(401);
   });
 
-  it('completes a shared authority read while two exchanges wait on its exact user', async () => {
+  it('completes a shared authority read while two same-user exchanges contend for admin connections', async () => {
     const releaseRead = deferred();
     let readEntered = false;
     let exchangeCount = 0;
@@ -244,10 +248,16 @@ describe('/org/me and confidential exchange with production pool limits', () => 
     const writers: ReturnType<typeof exchange>[] = [];
     try {
       await vi.waitFor(() => expect(readEntered).toBe(true), { timeout: 2_000, interval: 10 });
+      const reader = await userLockOccupancy();
+      expect(reader.sharedReaders).toBe(1);
+      expect([0, 1]).toContain(reader.adminReaders);
+      const availableAdminSlots = 2 - reader.adminReaders;
       writers.push(...tokenProofs.map(exchange));
-      await vi.waitFor(() => expect(exchangeCount).toBe(2), { timeout: 2_000, interval: 10 });
-      // Observe the actual PostgreSQL wait graph, not a sleep or just JS entry.
-      await vi.waitFor(async () => expect(await waitingUserWriters()).toBe(2), { timeout: 1_500, interval: 10 });
+      await vi.waitFor(() => expect(exchangeCount).toBe(availableAdminSlots), { timeout: 2_000, interval: 10 });
+      // Fill every remaining admin slot and observe the real PostgreSQL wait graph.
+      // An authority read owning an admin transaction already occupies one of them.
+      await vi.waitFor(async () => expect((await userLockOccupancy()).waitingWriters)
+        .toBe(availableAdminSlots), { timeout: 1_500, interval: 10 });
       releaseRead.resolve();
       const [readResult, ...writerResults] = await Promise.all([read, ...writers]);
       expect(readResult.statusCode, JSON.stringify(failures)).toBe(200);

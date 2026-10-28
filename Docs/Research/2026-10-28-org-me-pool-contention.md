@@ -20,8 +20,12 @@ The first case verifies that the read and exchange work without contention,
 that a still-valid GET assertion is reusable, and that a token-exchange
 assertion remains one-use. The second pauses the read at its platform-role
 lookup after the shared epoch lock is held. It starts two valid exchanges,
-then checks `pg_locks` for two real exclusive waiters on that exact user key
-before resuming the read. It expects all operations to complete successfully;
+then checks `pg_locks` for real exclusive waiters occupying every remaining
+admin connection on that exact user key before resuming the read. The deployed
+app-pool reader owns no admin slot, so both slots must have verified waiters.
+A reader owning one admin transaction instead leaves one slot for a waiter;
+the second exchange remains queued until a slot is released. The test expects
+all operations to complete successfully;
 the deployed source is expected to fail that assertion with `P2028` if the
 suspected cycle is reproduced. A failed control is a fixture or independent
 failure and does not prove the cycle.
