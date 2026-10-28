@@ -46,7 +46,10 @@ vi.mock('../../src/plugins/tenant-context.plugin.js', () => ({
   runWithRequestAdminTransaction: (...args: unknown[]) => adminReadMock(...args),
 }));
 
-vi.mock('../../src/config/env.js', () => ({ getEnv: () => ({ DATABASE_URL: 'unit-fixture' }) }));
+vi.mock('../../src/config/env.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/config/env.js')>();
+  return { ...actual, getEnv: () => ({ ...actual.getEnv(), DATABASE_URL: 'unit-fixture' }) };
+});
 vi.mock('../../src/services/tenant-effect-authority.service.js', () => ({
   assertTenantEffectAuthority: (...args: unknown[]) => authorityMock(...args),
 }));
