@@ -23,6 +23,11 @@ function testEnv(): Env {
 }
 
 describe('retention-pruning.service', () => {
+  it('reports no device-login deletions when database pruning is disabled', async () => {
+    const result = await pruneExpiredSecurityData({ env: { ...testEnv(), DATABASE_URL: undefined } });
+    expect(result.deviceLoginGrantsDeleted).toBe(0);
+    expect(result.deviceLoginAttemptBucketsDeleted).toBe(0);
+  });
   it('prunes expired token rows and old login logs', async () => {
     const now = new Date('2026-04-20T12:00:00.000Z');
     const calls: Record<string, unknown> = {};
@@ -33,6 +38,8 @@ describe('retention-pruning.service', () => {
       telephoneSmsAdmission: { deleteMany: async (args: unknown) => { calls.telephoneSmsAdmission = args; return { count: 12 }; } },
       telephoneLookup: { deleteMany: async (args: unknown) => { calls.telephoneLookup = args; return { count: 10 }; } },
       debugLoginGrant: { deleteMany: async (args: unknown) => { calls.debugLoginGrant = args; return { count: 8 }; } },
+      deviceLoginGrant: { deleteMany: async (args: unknown) => { calls.deviceLoginGrant = args; return { count: 14 }; } },
+      deviceLoginAttemptBucket: { deleteMany: async (args: unknown) => { calls.deviceLoginAttemptBucket = args; return { count: 15 }; } },
       refreshToken: {
         deleteMany: async (args: unknown) => {
           calls.refreshToken = args;
@@ -104,6 +111,10 @@ describe('retention-pruning.service', () => {
     expect(calls.handshakeErrorLog).toMatchObject({
       where: { createdAt: { lt: new Date('2026-01-20T12:00:00.000Z') } },
     });
+    expect(calls.deviceLoginGrant).toEqual({ where: {
+      expiresAt: { lte: now }, createdAt: { lte: new Date('2026-04-20T11:30:00.000Z') },
+    } });
+    expect(calls.deviceLoginAttemptBucket).toEqual({ where: { resetAt: { lte: now } } });
     expect(calls.debugLoginGrant).toMatchObject({ where: { expiresAt: { lt: now } } });
     expect(calls.telephoneChallenge).toMatchObject({ where: { createdAt: { lt: new Date('2026-04-19T12:00:00.000Z') } } });
     expect(calls.telephoneSmsAdmission).toMatchObject({ where: { createdAt: { lt: new Date('2026-03-21T12:00:00.000Z') } } });
@@ -115,6 +126,8 @@ describe('retention-pruning.service', () => {
       telephoneSmsAdmissionsDeleted: 12,
       telephoneLookupsDeleted: 10,
       debugLoginGrantsDeleted: 8,
+      deviceLoginGrantsDeleted: 14,
+      deviceLoginAttemptBucketsDeleted: 15,
       authorizationCodesDeleted: 2,
       confidentialAssertionUsesDeleted: 6,
       handshakeErrorLogsDeleted: 5,
