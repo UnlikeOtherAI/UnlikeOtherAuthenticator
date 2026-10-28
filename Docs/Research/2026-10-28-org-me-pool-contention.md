@@ -142,7 +142,7 @@ single-worker suite on the assigned Maxis fixture:
 
 ```powershell
 pnpm --filter @uoa/api typecheck
-pnpm --filter @uoa/api exec vitest run tests/integration/org-me-pool-contention.test.ts tests/integration/org-me-cross-org-invites-rls.test.ts tests/integration/org-user-endpoints-me.test.ts tests/unit/org-me.route.test.ts tests/unit/team-directory.service.test.ts src/db/__tests__/pool-checkout-guard.test.ts --maxWorkers=1 --minWorkers=1 --no-file-parallelism
+pnpm --filter @uoa/api exec vitest run tests/integration/org-me-pool-contention.test.ts tests/integration/org-me-cross-org-invites-rls.test.ts tests/integration/org-user-endpoints-me.test.ts tests/unit/org-me.route.test.ts tests/unit/team-directory.service.test.ts src/db/__tests__/pool-checkout-guard.test.ts --maxWorkers=1 --minWorkers=1 --no-file-parallelism --hookTimeout=900000 --testTimeout=30000
 ```
 
 The first candidate run, `candidate-20261028T202351503Z` at source
@@ -174,3 +174,52 @@ evidence remains immutable:
 | `candidate-20261028T202351503Z-manifest.json` | `aa3a049612c01f16405cb30c1d828421a8b968476c6565e896106c8a6c019d85` |
 | `candidate-20261028T202351503Z-vitest.json` | `9d01e70d227f349b662a66873a2487672795c98f638b06cb9404206689882988` |
 | `candidate-20261028T202351503Z-regression.log` | `a471324766db993e595d2f1eec9561e581af4f32a3cf7068b95ea5b0801c460a` |
+
+## Fixture provisioning and worker RPC recovery
+
+The corrected-source retry `candidate-20261028T203649477Z` at `3927e38c`
+passed 32 unit cases but skipped all 15 database-backed cases after three
+`beforeAll` hooks exceeded 180,000 ms. Its report is a setup failure, not a
+behavioral pass. A bounded read-only PostgreSQL snapshot at `20:56:09.893Z`
+found one current migration backend waiting on `IO/DataFileImmediateSync`,
+query/transaction age 121 ms, no blocking PIDs and all locks granted. The
+backend's client port matched the owned migration engine. No earlier remnant
+or lock blocker was observed, and no fixture was cancelled or deleted to
+recover it.
+
+The coordinator approved a bounded runner-only 900,000 ms fixture-hook budget
+while retaining 30,000 ms behavioral cases, default 5,000 ms interactive
+transactions and the production three/two pool regression. No source timeout
+or database setting changed.
+
+That run, `candidate-20261028T212809000Z`, completed all **47 cases successfully,
+zero skipped cases and zero failed suites**. Control, repaired overlap, all
+six denials and both the ACTIVE-Bravo and invitation-only directory states
+passed. It still exited 1 because Vitest caught two unhandled errors:
+`Error: [vitest-worker]: Timeout calling "onTaskUpdate"`. This is not accepted
+as a green gate despite the passing assertions.
+
+Inspection of pinned Vitest 3.2.6 confirms its bundled birpc default timeout is
+60,000 ms (`dist/chunks/index.B521nVV-.js:3,21`). The worker wrapper throws that
+exact error (`rpc.-pEldfrD.js:49`), and fork transport options do not replace
+the deadline. `tests/helpers/test-db.ts` used `execFileSync` for setup,
+migration and cleanup, blocking the worker event loop and its RPC
+acknowledgments during slow CLI work. The fixture helper now awaits an async
+spawn for the same executable, argv, environment and SQL input. Stdout remains
+ignored; the default 1 MiB stderr bound and overflow termination, all six
+startup attempts and their backoff, failure propagation and awaited schema
+cleanup remain in place. The runner's RPC deadline is unchanged, and no
+unhandled error is suppressed. A clean-exit rerun of the same 47 cases is the
+remaining gate.
+
+These setup/reporting runs remain immutable under the same artifact directory:
+
+| File | SHA-256 |
+| --- | --- |
+| `candidate-20261028T203649477Z-manifest.json` | `d5a98754d2f8e82309f3362731cd08838cdb37e8d90b990aee107563f203c05e` |
+| `candidate-20261028T203649477Z-vitest.json` | `b9a78d0a0cda9382ea631cea62c6894d8d18213f7887a43e4655928a38ba5bf2` |
+| `candidate-20261028T203649477Z-regression.log` | `18399c74d9c25214bc340be28abcdd6672de03e8bc9757d661e47c1143abc740` |
+| `candidate-20261028T203649477Z-pg-waits-20261028T205609970Z.json` | `f66443ac0dddc6b0cadfb170bf2231c82f967182ba8454f1ecfe1fd30c61e8ba` |
+| `candidate-20261028T212809000Z-manifest.json` | `0b02d14785635daa81545bf31d7586cb999cea216557ec75bd77aa7dcdab19ef` |
+| `candidate-20261028T212809000Z-vitest.json` | `9c861bfdbcfb9e2a838b0ae463c0a1857047bed956e9a0a9b5b870121eb8dca5` |
+| `candidate-20261028T212809000Z-regression.log` | `23da59b273a945e4c586e49b584cfe33f2039ac7412c11e8a068abf02b9d8055` |
