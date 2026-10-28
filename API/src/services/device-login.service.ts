@@ -193,7 +193,8 @@ export async function cancelDeviceLogin(context: DeviceLoginContext, token: stri
   });
 }
 
-function assertClaim(grant: DeviceLoginGrant | null, context: DeviceLoginContext, verifier: string) {
+function assertClaim(grant: DeviceLoginGrant | null, context: DeviceLoginContext,
+  verifier: string): asserts grant is DeviceLoginGrant {
   if (!grant || !matches(grant, context) || !grant.challenge) throw fail();
   const expected = Buffer.from(grant.challenge);
   const actual = Buffer.from(sha256(verifier));
@@ -207,9 +208,9 @@ export async function claimDeviceStatus(context: DeviceLoginContext, claimId: st
     const grant = await tx.deviceLoginGrant.findUnique({ where: { claimId } });
     assertClaim(grant, context, verifier);
     const now = deps.now?.() ?? new Date();
-    return { status: grant!.usedAt ? 'denied' : grant!.expiresAt <= now ||
-      (!grant!.approvedAt && (!grant!.claimExpiresAt || grant!.claimExpiresAt <= now)) ? 'expired'
-      : grant!.approvedAt ? 'approved' : 'waiting' };
+    return { status: grant.usedAt ? 'denied' : grant.expiresAt <= now ||
+      (!grant.approvedAt && (!grant.claimExpiresAt || grant.claimExpiresAt <= now)) ? 'expired'
+      : grant.approvedAt ? 'approved' : 'waiting' };
   });
 }
 
@@ -219,7 +220,7 @@ export async function completeDeviceLogin(context: DeviceLoginContext, claimId: 
     await assertPolicy(context, tx);
     const grant = await tx.deviceLoginGrant.findUnique({ where: { claimId } });
     assertClaim(grant, context, verifier);
-    const g = grant!;
+    const g = grant;
     await lockAndAssertAuthenticationEpoch({
       userId: g.userId, domain: g.domain, credentialEpoch: g.tokenVersion,
     }, { prisma: tx });

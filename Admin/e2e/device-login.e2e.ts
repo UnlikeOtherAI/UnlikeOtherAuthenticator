@@ -39,7 +39,8 @@ test('numeric sign-in stays off until exact sites are saved and can be disabled 
     await Promise.all(Array.from(document.images, (image) => image.decode().catch(() => undefined)));
   });
   await page.locator('main').evaluate((main) => {
-    const scroller = main.parentElement!;
+    const scroller = main.parentElement;
+    if (!scroller) throw new Error('Missing Admin scroll container');
     scroller.scrollTop = scroller.scrollHeight;
   });
   await page.screenshot({ path: testInfo.outputPath('device-login-after-disabled.png'), fullPage: true });
@@ -57,7 +58,8 @@ test('numeric sign-in stays off until exact sites are saved and can be disabled 
   await expect(sites).toHaveValue(configUrls.join('\n'));
   await expect(save).toBeDisabled();
   await page.locator('main').evaluate((main) => {
-    const scroller = main.parentElement!;
+    const scroller = main.parentElement;
+    if (!scroller) throw new Error('Missing Admin scroll container');
     scroller.scrollTop = scroller.scrollHeight;
   });
   await page.screenshot({ path: testInfo.outputPath('device-login-after-enabled.png'), fullPage: true });
