@@ -3,11 +3,10 @@ import { z } from 'zod';
 
 import { getEnv } from '../../config/env.js';
 import { isPlatformSuperuser } from '../../services/domain-role.service.js';
-import { asPrismaClient } from '../../db/tenant-context.js';
 import { requireDomainHashAuthForDomainQuery } from '../../middleware/domain-hash-auth.js';
 import { requireOrgFeaturesEnabled } from '../../middleware/org-features.js';
 import { resolveOrgUserClaims } from '../../middleware/org-role-guard.js';
-import { setTenantContextFromRequest } from '../../plugins/tenant-context.plugin.js';
+import { runWithRequestAdminTransaction, setTenantContextFromRequest } from '../../plugins/tenant-context.plugin.js';
 import {
   getActiveClientOrgContext,
   getUserOrgContext,
@@ -20,6 +19,8 @@ import { resolveProductTeamPolicy } from '../../services/product-team-policy.ser
 import { AppError } from '../../utils/errors.js';
 import { configVerifier } from '../../middleware/config-verifier.js';
 import { memberAvatarImageUrl } from '../../services/organisation.service.base.js';
+import { validateSessionAssurance } from '../../services/session-assurance.service.js';
+import { assertTenantEffectAuthority } from '../../services/tenant-effect-authority.service.js';
 import { assertVerifiedDomainMatchesQuery, normalizeDomain } from './domain-context.js';
 
 const QuerySchema = z
@@ -54,27 +55,28 @@ export function registerOrgMeRoute(app: FastifyInstance): void {
         throw new AppError('UNAUTHORIZED', 401, 'MISSING_CONFIG');
       }
 
-      // /org/me uses the organisations bootstrap predicate (domain + membership);
-      // app.org_id is deliberately not asserted here — see row-level-security.md §7.
-      //
-      // Read `setTenantContextFromRequest` before relying on that sentence: `orgId: null` only
-      // declines to OVERRIDE, it does not force the GUC empty. The helper coalesces
-      // (`extras.orgId ?? claims.org.org_id ?? null`), so a team-scoped access token still puts
-      // its own organisation into `app.org_id`. Every org_id-keyed policy therefore answers for
-      // that one organisation — which is why `pending_invites` below cannot be read on this
-      // transaction.
       request.accessTokenClaims = claims;
       setTenantContextFromRequest(request, { orgId: null, userId: claims.userId });
 
-      let systemAdmin = false;
-      const org = await request.withTenantTx(async (tx) => {
-        const prisma = asPrismaClient(tx);
-        // The transaction has pinned the current ACTIVE identity and credential epoch.
-        // Platform authority is a live admin-domain role, never the product/token role.
-        // Use the other pool: tenant RLS cannot see ADMIN_AUTH_DOMAIN.
-        systemAdmin = Boolean(getEnv().DATABASE_URL) && await isPlatformSuperuser({
+      // This bootstrap projection spans tenant membership, platform roles, product policy
+      // and the caller's own invitations. Pin authority and every read on ONE admin connection:
+      // an app transaction holding the shared epoch while requesting a second pool can cycle
+      // with admin writers waiting for that epoch. See row-level-security.md §10.15.
+      const { org, self, systemAdmin } = await runWithRequestAdminTransaction(request, async (prisma) => {
+        if (getEnv().DATABASE_URL) {
+          const context = request.tenantContext;
+          if (!context) throw new Error('Organisation authority read requires tenantContext');
+          await assertTenantEffectAuthority(request, context, prisma, prisma, { userEpochLock: 'shared' });
+          // A proof checked before acquiring this connection may have been revoked while queued.
+          if (claims.assuranceId) await validateSessionAssurance({
+            id: claims.assuranceId, userId: claims.userId, credentialEpoch: claims.tokenVersion,
+            clientDomain: normalizedDomain, orgId: claims.active?.orgId ?? claims.org?.org_id,
+            teamId: claims.active?.teamId,
+          }, prisma);
+        }
+        const systemAdmin = Boolean(getEnv().DATABASE_URL) && await isPlatformSuperuser({
           userId: claims.userId,
-          prisma: request.adminDb,
+          prisma,
         });
         // Prefer the org the token is actually scoped to. A user can hold ACTIVE memberships in
         // several organisations, and "the first active membership on this domain" would answer
@@ -105,43 +107,28 @@ export function registerOrgMeRoute(app: FastifyInstance): void {
               assuranceId: claims.assuranceId,
               groupsEnabled: config.org_features?.groups_enabled,
             },
-            { prisma },
+            { prisma, policyPrisma: prisma, crossProductPrisma: prisma },
           );
         }
-        if (!context) return context;
 
-        // Gap-fix A Task 1 (design §11.4 sidebar contract): appended, additive top-level fields —
-        // org_id/org_role/teams/team_roles/groups above are unchanged. Domain-scoped reads share
-        // this tenant transaction; policy-authorized cross-domain reads use their existing guarded
-        // admin-client path.
-        //
-        // `team_directory`, NOT `teams`: the legacy `context.teams` is the array of team IDs from
-        // the JWT `org` claim, and `team_roles` is keyed by those ids. Spreading a richer `teams`
-        // over it silently replaced ids with objects and desynchronised the pair — brief §24
-        // ("the legacy fields return the same structure as the JWT `org` claim") forbids that.
-        const teamPolicy = await resolveProductTeamPolicy({ domain: normalizedDomain });
-        const [teamDirectory, pendingInvites] = await Promise.all([
+        const teamPolicy = context ? await resolveProductTeamPolicy({ domain: normalizedDomain }, { prisma }) : undefined;
+        const [teamDirectory, pendingInvites] = context ? await Promise.all([
           buildSidebarTeams(
             { userId: claims.userId, domain: normalizedDomain },
-            { prisma, policy: teamPolicy },
+            { prisma, crossProductPrisma: prisma, policy: teamPolicy },
           ),
-          // Same policy, and therefore the same organisation reach, as the directory above: an
-          // invitation the hosted chooser offers at sign-in must not vanish once the product
-          // asks for it. The invite read itself runs on the admin client inside the service —
-          // `team_invites` RLS is keyed on `app.org_id`, which here names the token's own
-          // organisation and would hide every sibling organisation's invitation.
           buildSidebarPendingInvites(
             { userId: claims.userId, domain: normalizedDomain },
-            { prisma, policy: teamPolicy },
+            { prisma, invitePrisma: prisma, policy: teamPolicy },
           ),
-        ]);
+        ]) : [[], []];
 
-        return { ...context, team_directory: teamDirectory, pending_invites: pendingInvites };
-      }, { userEpochLock: 'shared' });
-
-      const self = await request.adminDb.user.findUniqueOrThrow({ where: { id: claims.userId },
-        select: { id: true, name: true, email: true, lifecycleStatus: true } });
-      if (self.lifecycleStatus !== 'ACTIVE') throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
+        const self = await prisma.user.findUniqueOrThrow({ where: { id: claims.userId },
+          select: { id: true, name: true, email: true, lifecycleStatus: true } });
+        if (self.lifecycleStatus !== 'ACTIVE') throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
+        return { org: context ? { ...context, team_directory: teamDirectory, pending_invites: pendingInvites } : null,
+          self, systemAdmin };
+      });
       const response: { ok: true; system_admin: boolean; org?: typeof org; self_identity: {
         subject: string; display_name: string | null; email: string | null; avatar_image_url: string;
       } } = {

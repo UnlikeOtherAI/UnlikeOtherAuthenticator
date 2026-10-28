@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
@@ -24,9 +24,45 @@ function withSchemaParam(databaseUrl: string, schema: string): string {
   return u.toString();
 }
 
-function runPrisma(args: string[], env: NodeJS.ProcessEnv, input?: string): void {
-  execFileSync(process.execPath, [createRequire(import.meta.url).resolve('prisma/build/index.js'), ...args], {
-    cwd: apiRootDir(), env, input, stdio: ['pipe', 'ignore', 'pipe'],
+// A synchronous migration blocks Vitest's worker IPC, including its independent
+// 60s onTaskUpdate RPC deadline. Keep the event loop responsive while preserving
+// the CLI's stdin, ignored stdout and execFileSync's default 1MiB stderr cap.
+async function runPrisma(args: string[], env: NodeJS.ProcessEnv, input?: string): Promise<void> {
+  const command = [createRequire(import.meta.url).resolve('prisma/build/index.js'), ...args];
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn(process.execPath, command, {
+      cwd: apiRootDir(), env, stdio: ['pipe', 'ignore', 'pipe'],
+    });
+    const chunks: Buffer[] = [];
+    const maxBuffer = 1024 * 1024;
+    let stderrLength = 0;
+    let stderrOverflow = false;
+    let failure: Error | undefined;
+    child.stderr?.on('data', (chunk: Buffer) => {
+      const remaining = maxBuffer - stderrLength;
+      if (remaining > 0) {
+        const kept = chunk.subarray(0, remaining);
+        chunks.push(kept);
+        stderrLength += kept.length;
+      }
+      if (chunk.length > remaining && !stderrOverflow) {
+        stderrOverflow = true;
+        failure ??= Object.assign(new Error('Prisma fixture stderr exceeded maxBuffer'), { code: 'ENOBUFS' });
+        // Match the prior synchronous runner's default overflow termination.
+        child.kill('SIGTERM');
+      }
+    });
+    child.once('error', (error) => { failure ??= error; });
+    child.stdin?.once('error', (error) => { failure ??= error; });
+    child.once('close', (status, signal) => {
+      const stderr = Buffer.concat(chunks);
+      if (failure || status !== 0) {
+        const error = failure ?? new Error(`Command failed: ${process.execPath} ${command.join(' ')}\n${stderr.toString()}`);
+        reject(Object.assign(error, { status, signal, pid: child.pid, stdout: null, stderr,
+          output: [null, null, stderr] }));
+      } else resolve();
+    });
+    child.stdin?.end(input);
   });
 }
 
@@ -37,11 +73,11 @@ function runPrisma(args: string[], env: NodeJS.ProcessEnv, input?: string): void
  * so retry with backoff instead of failing the whole file on startup
  * contention.
  */
-async function withStartupRetry(run: () => void): Promise<void> {
+async function withStartupRetry(run: () => Promise<void>): Promise<void> {
   const maxAttempts = 6;
   for (let attempt = 1; ; attempt += 1) {
     try {
-      run();
+      await run();
       return;
     } catch (error) {
       if (attempt >= maxAttempts) throw error;
@@ -155,7 +191,7 @@ export async function createTestDb(): Promise<TestDbHandle | null> {
 
   const cleanup = async (): Promise<void> => {
     await prisma.$disconnect();
-    runPrisma(
+    await runPrisma(
       ['db', 'execute', '--stdin', '--schema', 'prisma/schema.prisma'],
       { ...process.env, DATABASE_URL: adminUrl },
       `DROP SCHEMA IF EXISTS "${schema}" CASCADE;`,

@@ -105,12 +105,11 @@ function compareTeamEntries(a: TeamEntry, b: TeamEntry): number {
  * `lastLoginAt` is derived from the caller's own `refresh_tokens` rows (`max(createdAt)` scoped by
  * `userId` + `domain` + `teamId`). `refresh_tokens` is RLS-classified as a *domain*-scoped table
  * (its SELECT policy is `domain = current_setting('app.domain')`), not an org_id-scoped one —
- * unlike `teams`/`team_members`/`org_members`. `/org/me`'s tenant transaction always sets
- * `app.domain` from the verified config domain (it deliberately leaves `app.org_id` empty for the
- * bootstrap predicate — see `row-level-security.md` §7/§11 and `org-context.service.ts`), so the
- * request's ordinary tenant-scoped Prisma client can already read the caller's own refresh-token
- * rows for this domain. No escalation to the BYPASSRLS admin client is needed for this lookup —
- * callers should pass the same tenant-tx client used for `getUserOrgContext`.
+ * unlike `teams`/`team_members`/`org_members`. A tenant transaction with this domain can read
+ * the caller's own refresh-token rows. `/org/me` supplies its one pinned admin
+ * authority transaction for the complete bootstrap projection (RLS §10.15). The explicit
+ * user/domain filters keep login recency product-scoped on either client, and the directory
+ * independently requires ACTIVE org membership plus ACTIVE org/team lifecycle.
  */
 export async function buildSidebarTeams(
   params: { userId: string; domain: string },
@@ -122,7 +121,8 @@ export async function buildSidebarTeams(
     where: {
       userId: params.userId,
       status: 'ACTIVE',
-      team: { org: { domain: params.domain } },
+      team: { lifecycleStatus: 'ACTIVE', org: { domain: params.domain, lifecycleStatus: 'ACTIVE',
+        members: { some: { userId: params.userId, status: 'ACTIVE' } } } },
     },
     select: {
       teamId: true,
@@ -146,7 +146,8 @@ export async function buildSidebarTeams(
         where: {
           userId: params.userId,
           status: 'ACTIVE',
-          team: { org: { members: { some: { userId: params.userId, status: 'ACTIVE' } } } },
+          team: { lifecycleStatus: 'ACTIVE', org: { lifecycleStatus: 'ACTIVE',
+            members: { some: { userId: params.userId, status: 'ACTIVE' } } } },
         },
         select: {
           teamId: true,
@@ -224,7 +225,7 @@ export async function buildSidebarTeams(
  * organisation the token is scoped to, and silently drops every invitation from a sibling
  * organisation: exactly the "the chooser offers it at sign-in, the product never sees it"
  * defect. A user's own pending invitations are not tenant data of the organisation they are
- * signed into, so the read runs on the admin client and is bounded by the two filters that
+ * signed into, so `/org/me` passes its same pinned admin transaction. The read is bounded by the two filters that
  * actually define it — the caller's OWN verified address (resolved from their user row, never
  * from a parameter) and the product's organisation reach.
  *
