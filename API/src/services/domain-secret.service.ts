@@ -217,7 +217,7 @@ export async function updateAdminDomain(
     [...new Set(params.deviceLoginConfigUrls.map((value) => {
       const url = new URL(value);
       if (url.protocol !== 'https:' || url.username || url.password || url.hash || url.search) {
-        throw new AppError('INVALID_REQUEST', 400);
+        throw new AppError('BAD_REQUEST', 400);
       }
       return url.href;
     }))];

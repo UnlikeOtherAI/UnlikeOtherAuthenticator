@@ -102,6 +102,27 @@ describe.skipIf(!process.env.DATABASE_URL)('numeric device login', () => {
     expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1);
     await expect(completeDeviceLogin(context(), claim.claim_id, verifier, deps())).rejects.toThrow();
   });
+  it('lets a rightful receiver replace an expired unapproved claim without changing approval binding', async () => {
+    await enable();
+    const a = await source();
+    const issued = await issueDeviceLogin(context(), a.refresh.refreshToken, undefined, deps());
+    const attacker = await claimDeviceLogin(context(), issued.code, challenge('a'.repeat(43)), deps());
+    const later = { ...deps(), now: () => new Date(Date.now() + 31_000) };
+    const results = await Promise.allSettled([1, 2].map((i) =>
+      claimDeviceLogin(context(), issued.code, challenge(String(i).repeat(43)), later)));
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    const winner = results.find((result) => result.status === 'fulfilled');
+    if (winner?.status !== 'fulfilled') throw new Error('Expected replacement');
+    expect(winner.value.claim_id).not.toBe(attacker.claim_id);
+    await expect(claimDeviceStatus(context(), attacker.claim_id, 'a'.repeat(43), later)).rejects.toThrow();
+    await expect(decideDeviceLogin(context(), a.refresh.refreshToken, issued.grant_id,
+      attacker.claim_id, true, later)).rejects.toThrow();
+    const status = await sourceDeviceStatus(context(), a.refresh.refreshToken, issued.grant_id, later);
+    expect(status.claim_id).toBe(winner.value.claim_id);
+    await decideDeviceLogin(context(), a.refresh.refreshToken, issued.grant_id, winner.value.claim_id, false, later);
+    const rightful = await claimDeviceLogin(context(), issued.code, challenge('z'.repeat(43)), later);
+    expect(rightful.claim_id).not.toBe(winner.value.claim_id);
+  });
   it('honors source family revocation, policy disable and expiry at completion', async () => {
     await enable();
     const a = await source();

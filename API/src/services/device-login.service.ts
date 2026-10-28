@@ -29,7 +29,9 @@ const matches = (row: Pick<DeviceLoginGrant, 'domain' | 'clientId' | 'configUrl'
 const randomCode = () => randomInt(0, 100_000_000).toString().padStart(8, '0');
 
 async function assertPolicy(context: DeviceLoginContext, tx: PrismaClient) {
-  await lockTokenIssuanceProductPolicy(context, { prisma: tx });
+  await lockTokenIssuanceProductPolicy({
+    domain: context.config.domain, clientDomainId: context.clientDomainId,
+  }, { prisma: tx });
   const row = await tx.clientDomain.findUnique({ where: { id: context.clientDomainId },
     select: { deviceLoginConfigUrls: true } });
   if (!row?.deviceLoginConfigUrls.includes(context.configUrl)) throw fail();
@@ -65,14 +67,14 @@ function verifyGrantSource(grant: DeviceLoginGrant, source: RefreshToken, tokenV
   context: DeviceLoginContext, now: Date) {
   if (!matches(grant, context) || grant.sourceFamilyId !== source.familyId || grant.userId !== source.userId
     || grant.tokenVersion !== tokenVersion || grant.orgId !== source.orgId || grant.teamId !== source.teamId
-    || grant.expiresAt <= now || grant.usedAt || grant.deniedAt) throw fail();
+    || grant.expiresAt <= now || grant.usedAt) throw fail();
 }
 
-export async function consumeDeviceClaimBudget(context: DeviceLoginContext, ip: string, deps: Deps) {
+export async function consumeDeviceClaimBudget(context: DeviceLoginContext, requester: string, deps: Deps) {
   const now = deps.now?.() ?? new Date();
   for (const [scope, value, limit] of [
     ['site', context.clientDomainId + ':' + context.configUrl, 60],
-    ['ip', context.clientDomainId + ':' + context.configUrl + ':' + ip, 8],
+    ['ip', context.clientDomainId + ':' + context.configUrl + ':' + requester, 8],
   ] as const) {
     const keyHash = hmac('attempt:' + scope, value);
     await deps.prisma.deviceLoginAttemptBucket.updateMany({
@@ -127,15 +129,19 @@ export async function claimDeviceLogin(context: DeviceLoginContext, code: string
     await assertPolicy(context, tx);
     const now = deps.now?.() ?? new Date();
     const grant = await tx.deviceLoginGrant.findUnique({ where: { codeHash: codeHash(code) } });
-    if (!grant || !matches(grant, context) || grant.expiresAt <= now || grant.usedAt || grant.deniedAt
-      || grant.claimId) throw fail();
+    if (!grant || !matches(grant, context) || grant.expiresAt <= now || grant.usedAt || grant.approvedAt
+      || (grant.claimId && grant.claimExpiresAt && grant.claimExpiresAt > now)) throw fail();
     const claimId = randomBytes(32).toString('base64url');
     const confirmationCode = randomInt(0, 10_000).toString().padStart(4, '0');
-    const won = await tx.deviceLoginGrant.updateMany({ where: { id: grant.id, claimId: null,
-      expiresAt: { gt: now }, usedAt: null, deniedAt: null }, data: { claimId, challenge, confirmationCode } });
+    const claimExpiresAt = new Date(Math.min(grant.expiresAt.getTime(), now.getTime() + 30_000));
+    const won = await tx.deviceLoginGrant.updateMany({ where: { id: grant.id,
+      expiresAt: { gt: now }, usedAt: null, approvedAt: null,
+      OR: [{ claimId: null }, { claimExpiresAt: { lte: now } }] },
+      data: { claimId, challenge, confirmationCode, claimExpiresAt } });
     if (won.count !== 1) throw fail();
     return { claim_id: claimId, confirmation_code: confirmationCode,
-      expires_in: Math.floor((grant.expiresAt.getTime() - now.getTime()) / 1000) };
+      expires_in: Math.floor((grant.expiresAt.getTime() - now.getTime()) / 1000),
+      claim_expires_in: Math.floor((claimExpiresAt.getTime() - now.getTime()) / 1000) };
   });
 }
 
@@ -147,8 +153,9 @@ export async function sourceDeviceStatus(context: DeviceLoginContext, token: str
     if (!grant) throw fail();
     const { source, tokenVersion } = await sourceForToken(context, token, tx, now);
     verifyGrantSource(grant, source, tokenVersion, context, now);
-    return { status: grant.approvedAt ? 'approved' : grant.claimId ? 'claimed' : 'waiting',
-      claim_id: grant.claimId, confirmation_code: grant.confirmationCode,
+    const liveClaim = Boolean(grant.claimId && (grant.approvedAt || (grant.claimExpiresAt && grant.claimExpiresAt > now)));
+    return { status: grant.approvedAt ? 'approved' : liveClaim ? 'claimed' : 'waiting',
+      claim_id: liveClaim ? grant.claimId : null, confirmation_code: liveClaim ? grant.confirmationCode : null,
       expires_in: Math.floor((grant.expiresAt.getTime() - now.getTime()) / 1000) };
   });
 }
@@ -162,10 +169,12 @@ export async function decideDeviceLogin(context: DeviceLoginContext, token: stri
     if (!grant) throw fail();
     const { source, tokenVersion } = await sourceForToken(context, token, tx, now);
     verifyGrantSource(grant, source, tokenVersion, context, now);
-    if (approve && (!claimId || grant.claimId !== claimId || !grant.confirmationCode)) throw fail();
+    if (!claimId || grant.claimId !== claimId || !grant.confirmationCode ||
+      !grant.claimExpiresAt || grant.claimExpiresAt <= now || grant.approvedAt) throw fail();
     const won = await tx.deviceLoginGrant.updateMany({ where: { id: grant.id, usedAt: null,
-      expiresAt: { gt: now }, ...(approve ? { claimId, approvedAt: null, deniedAt: null }
-        : { deniedAt: null }) }, data: approve ? { approvedAt: now } : { deniedAt: now } });
+      expiresAt: { gt: now }, claimId, approvedAt: null, claimExpiresAt: { gt: now } },
+      data: approve ? { approvedAt: now }
+        : { claimId: null, challenge: null, confirmationCode: null, claimExpiresAt: null } });
     if (won.count !== 1) throw fail();
     return { status: approve ? 'approved' : 'denied' };
   });
@@ -198,7 +207,8 @@ export async function claimDeviceStatus(context: DeviceLoginContext, claimId: st
     const grant = await tx.deviceLoginGrant.findUnique({ where: { claimId } });
     assertClaim(grant, context, verifier);
     const now = deps.now?.() ?? new Date();
-    return { status: grant!.usedAt || grant!.deniedAt ? 'denied' : grant!.expiresAt <= now ? 'expired'
+    return { status: grant!.usedAt ? 'denied' : grant!.expiresAt <= now ||
+      (!grant!.approvedAt && (!grant!.claimExpiresAt || grant!.claimExpiresAt <= now)) ? 'expired'
       : grant!.approvedAt ? 'approved' : 'waiting' };
   });
 }
@@ -214,7 +224,7 @@ export async function completeDeviceLogin(context: DeviceLoginContext, claimId: 
       userId: g.userId, domain: g.domain, credentialEpoch: g.tokenVersion,
     }, { prisma: tx });
     const now = deps.now?.() ?? new Date();
-    if (!g.approvedAt || g.deniedAt || g.usedAt || g.expiresAt <= now) throw fail();
+    if (!g.approvedAt || g.usedAt || g.expiresAt <= now) throw fail();
     const source = await tx.refreshToken.findFirst({ where: {
       familyId: g.sourceFamilyId, userId: g.userId, revokedAt: null,
       securityRevokedAt: null, replacedByTokenId: null, expiresAt: { gt: now },
@@ -223,7 +233,7 @@ export async function completeDeviceLogin(context: DeviceLoginContext, claimId: 
     const { assurance, tokenVersion } = await validateSource(context, source, tx, now);
     if (tokenVersion !== g.tokenVersion) throw fail();
     const won = await tx.deviceLoginGrant.updateMany({ where: { id: g.id, usedAt: null,
-      expiresAt: { gt: now }, approvedAt: { not: null }, deniedAt: null }, data: { usedAt: now } });
+      expiresAt: { gt: now }, approvedAt: { not: null } }, data: { usedAt: now } });
     if (won.count !== 1) throw fail();
     const remainingSeconds = Math.floor((Math.min(source.expiresAt.getTime(), assurance.expiresAt.getTime())
       - now.getTime()) / 1000);

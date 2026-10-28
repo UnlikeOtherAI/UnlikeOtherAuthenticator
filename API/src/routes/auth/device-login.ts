@@ -21,7 +21,7 @@ const bodies = {
   claim: z.object({ code, code_challenge: challenge }).strict(),
   'source-status': z.object({ refresh_token: source, grant_id: id }).strict(),
   approve: z.object({ refresh_token: source, grant_id: id, claim_id: id }).strict(),
-  deny: z.object({ refresh_token: source, grant_id: id }).strict(),
+  deny: z.object({ refresh_token: source, grant_id: id, claim_id: id }).strict(),
   cancel: z.object({ refresh_token: source, grant_id: id }).strict(),
   'claim-status': z.object({ claim_id: id, code_verifier: verifier }).strict(),
   complete: z.object({ claim_id: id, code_verifier: verifier }).strict(),
@@ -45,7 +45,11 @@ export function registerDeviceLoginRoutes(app: FastifyInstance): void {
         }
         case 'claim': {
           const body = bodies.claim.parse(request.body);
-          await consumeDeviceClaimBudget(context, request.ip, db);
+          const requester = request.headers['x-uoa-device-requester'];
+          if (typeof requester !== 'string' || !/^[a-f0-9]{64}$/.test(requester)) {
+            throw new AppError('UNAUTHORIZED', 401);
+          }
+          await consumeDeviceClaimBudget(context, requester, db);
           return claimDeviceLogin(context, body.code, body.code_challenge, db);
         }
         case 'source-status': {
@@ -58,7 +62,7 @@ export function registerDeviceLoginRoutes(app: FastifyInstance): void {
         }
         case 'deny': {
           const body = bodies.deny.parse(request.body);
-          return decideDeviceLogin(context, body.refresh_token, body.grant_id, undefined, false, db);
+          return decideDeviceLogin(context, body.refresh_token, body.grant_id, body.claim_id, false, db);
         }
         case 'cancel': {
           const body = bodies.cancel.parse(request.body);

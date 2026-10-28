@@ -1,3 +1,7 @@
+BEGIN;
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '120s';
+
 ALTER TABLE client_domains ADD COLUMN device_login_config_urls text[] NOT NULL DEFAULT ARRAY[]::text[];
 CREATE TABLE device_login_grants (
   id text PRIMARY KEY,
@@ -13,8 +17,8 @@ CREATE TABLE device_login_grants (
   claim_id text UNIQUE,
   challenge text,
   confirmation_code text,
+  claim_expires_at timestamp(3),
   approved_at timestamp(3),
-  denied_at timestamp(3),
   used_at timestamp(3),
   expires_at timestamp(3) NOT NULL,
   created_at timestamp(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -27,3 +31,4 @@ CREATE TABLE device_login_attempt_buckets (
   reset_at timestamp(3) NOT NULL
 );
 CREATE INDEX device_login_attempt_buckets_reset_at_idx ON device_login_attempt_buckets(reset_at);
+COMMIT;
