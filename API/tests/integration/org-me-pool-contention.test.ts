@@ -256,12 +256,17 @@ describe('/org/me and confidential exchange with production pool limits', () => 
       await vi.waitFor(() => expect(exchangeCount).toBe(availableAdminSlots), { timeout: 2_000, interval: 10 });
       // Fill every remaining admin slot and observe the real PostgreSQL wait graph.
       // An authority read owning an admin transaction already occupies one of them.
-      await vi.waitFor(async () => expect((await userLockOccupancy()).waitingWriters)
-        .toBe(availableAdminSlots), { timeout: 1_500, interval: 10 });
+      let contended: Awaited<ReturnType<typeof userLockOccupancy>> | undefined;
+      await vi.waitFor(async () => {
+        const observed = await userLockOccupancy();
+        expect(observed.waitingWriters).toBe(availableAdminSlots);
+        contended = observed;
+      }, { timeout: 1_500, interval: 10 });
       releaseRead.resolve();
       const [readResult, ...writerResults] = await Promise.all([read, ...writers]);
-      expect(readResult.statusCode, JSON.stringify(failures)).toBe(200);
-      expect(writerResults.map((response) => response.statusCode), JSON.stringify(failures)).toEqual([200, 200]);
+      const diagnostic = JSON.stringify({ pausedReader: reader, contended, failures });
+      expect(readResult.statusCode, diagnostic).toBe(200);
+      expect(writerResults.map((response) => response.statusCode), diagnostic).toEqual([200, 200]);
       expect(readResult.json().org.org_id).toBe(orgId);
     } finally {
       releaseRead.resolve();
