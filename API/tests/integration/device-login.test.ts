@@ -156,4 +156,40 @@ describe.skipIf(!process.env.DATABASE_URL)('numeric device login', () => {
     expect(buckets.some(bucket => bucket.count > 8)).toBe(true);
     expect(buckets.every(bucket => !bucket.keyHash.includes('192.0.2.'))).toBe(true);
   });
+  it('keeps pairing authority outside the ordinary tenant database role', async () => {
+    const schema = handle.schema;
+    const tables = ['device_login_grants', 'device_login_attempt_buckets'];
+    for (const table of tables) {
+      const [boundary] = await handle.prisma.$queryRawUnsafe<Array<{
+        relrowsecurity: boolean; relforcerowsecurity: boolean; tenant_can_select: boolean;
+      }>>(`SELECT c.relrowsecurity, c.relforcerowsecurity,
+        has_table_privilege('uoa_app', c.oid, 'SELECT') AS tenant_can_select
+        FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = $1 AND c.relname = $2`, schema, table);
+      expect(boundary).toEqual({
+        relrowsecurity: true, relforcerowsecurity: true, tenant_can_select: false,
+      });
+    }
+    // Grant DML deliberately, as createRlsTestDb does, to prove row security also
+    // denies authority if a future generic grant accidentally reaches these tables.
+    await handle.prisma.$executeRawUnsafe(`GRANT USAGE ON SCHEMA "${schema}" TO uoa_app`);
+    for (const table of tables) {
+      await handle.prisma.$executeRawUnsafe(
+        `GRANT SELECT, INSERT, UPDATE, DELETE ON "${schema}"."${table}" TO uoa_app`,
+      );
+      expect(await handle.prisma.$transaction(async (tx) => {
+        await tx.$executeRawUnsafe('SET LOCAL ROLE uoa_app');
+        const [row] = await tx.$queryRawUnsafe<Array<{ count: bigint }>>(
+          `SELECT count(*) FROM "${schema}"."${table}"`,
+        );
+        return row.count;
+      })).toBe(0n);
+    }
+    await expect(handle.prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe('SET LOCAL ROLE uoa_app');
+      await tx.deviceLoginAttemptBucket.create({ data: {
+        keyHash: 'f'.repeat(64), count: 1, resetAt: new Date(Date.now() + 300_000),
+      } });
+    })).rejects.toThrow();
+  });
 });
