@@ -2,6 +2,7 @@ import fastify from 'fastify';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ClientConfig } from '../../src/services/config.service.js';
+import { AppError } from '../../src/utils/errors.js';
 
 const isPlatformSuperuserMock = vi.hoisted(() => vi.fn());
 const claimsMock = vi.hoisted(() => vi.fn());
@@ -10,6 +11,10 @@ const getUserOrgContextMock = vi.hoisted(() => vi.fn());
 const buildSidebarPendingInvitesMock = vi.hoisted(() => vi.fn());
 const buildSidebarTeamsMock = vi.hoisted(() => vi.fn());
 const resolveProductTeamPolicyMock = vi.hoisted(() => vi.fn());
+const authorityMock = vi.hoisted(() => vi.fn());
+const assuranceMock = vi.hoisted(() => vi.fn());
+const adminReadMock = vi.hoisted(() => vi.fn());
+const transaction = vi.hoisted(() => ({ transaction: true, user: { findUniqueOrThrow: vi.fn() } }));
 
 const config = {
   domain: 'product.example.com',
@@ -35,11 +40,18 @@ vi.mock('../../src/middleware/org-role-guard.js', () => ({
 }));
 
 vi.mock('../../src/plugins/tenant-context.plugin.js', () => ({
-  setTenantContextFromRequest: vi.fn(),
+  setTenantContextFromRequest: (request: { tenantContext?: unknown }) => {
+    request.tenantContext = { domain: config.domain, userId: 'user-1' };
+  },
+  runWithRequestAdminTransaction: (...args: unknown[]) => adminReadMock(...args),
 }));
 
-vi.mock('../../src/db/tenant-context.js', () => ({
-  asPrismaClient: (value: unknown) => value,
+vi.mock('../../src/config/env.js', () => ({ getEnv: () => ({ DATABASE_URL: 'unit-fixture' }) }));
+vi.mock('../../src/services/tenant-effect-authority.service.js', () => ({
+  assertTenantEffectAuthority: (...args: unknown[]) => authorityMock(...args),
+}));
+vi.mock('../../src/services/session-assurance.service.js', () => ({
+  validateSessionAssurance: (...args: unknown[]) => assuranceMock(...args),
 }));
 
 vi.mock('../../src/routes/org/domain-context.js', () => ({
@@ -69,12 +81,12 @@ vi.mock('../../src/services/product-team-policy.service.js', () => ({
 async function getOrgMe() {
   const { registerOrgMeRoute } = await import('../../src/routes/org/me.js');
   const app = fastify();
-  app.decorateRequest('withTenantTx', null);
   app.decorateRequest('adminDb', null);
+  app.decorateRequest('tenantContext', undefined);
   app.addHook('onRequest', async (request) => {
-    request.adminDb = { user: { findUniqueOrThrow: async () => ({ id: 'u1', name: 'Person',
-      email: 'person@example.com', lifecycleStatus: 'ACTIVE' }) } } as never;
-    request.withTenantTx = async (callback) => callback({ transaction: true } as never);
+    request.adminDb = new Proxy({}, { get: () => {
+      throw new Error('A route read escaped the single authority transaction');
+    } }) as never;
   });
   registerOrgMeRoute(app);
   await app.ready();
@@ -99,13 +111,20 @@ describe('GET /org/me cross-product directory', () => {
       buildSidebarPendingInvitesMock,
       buildSidebarTeamsMock,
       resolveProductTeamPolicyMock,
+      authorityMock, assuranceMock, adminReadMock, transaction.user.findUniqueOrThrow,
     ]) {
       mock.mockReset();
     }
 
     isPlatformSuperuserMock.mockResolvedValue(false);
+    authorityMock.mockResolvedValue(undefined);
+    assuranceMock.mockResolvedValue(undefined);
+    adminReadMock.mockImplementation(async (_request, callback) => callback(transaction));
+    transaction.user.findUniqueOrThrow.mockResolvedValue({ id: 'u1', name: 'Person',
+      email: 'person@example.com', lifecycleStatus: 'ACTIVE' });
     claimsMock.mockResolvedValue({
       userId: 'user-1',
+      tokenVersion: 0,
       domain: 'product.example.com',
       active: { orgId: 'org-cross', teamId: 'team-cross' },
     });
@@ -171,7 +190,7 @@ describe('GET /org/me cross-product directory', () => {
         orgId: 'org-cross',
         groupsEnabled: false,
       },
-      { prisma: { transaction: true } },
+      { prisma: transaction, policyPrisma: transaction, crossProductPrisma: transaction },
     );
     expect(buildSidebarTeamsMock).toHaveBeenCalled();
   });
@@ -226,7 +245,7 @@ describe('GET /org/me cross-product directory', () => {
     expect(response.json().org.org_id).toBe('org-token');
     expect(getUserOrgContextMock).toHaveBeenCalledWith(
       expect.objectContaining({ userId: 'user-1', orgId: 'org-token' }),
-      { prisma: { transaction: true } },
+      { prisma: transaction },
     );
     expect(getActiveClientOrgContextMock).not.toHaveBeenCalled();
   });
@@ -242,7 +261,7 @@ describe('GET /org/me cross-product directory', () => {
 
     expect(getActiveClientOrgContextMock).toHaveBeenCalledWith(
       expect.objectContaining({ orgId: 'org-token' }),
-      { prisma: { transaction: true } },
+      { prisma: transaction, policyPrisma: transaction, crossProductPrisma: transaction },
     );
   });
 
@@ -266,5 +285,33 @@ describe('GET /org/me cross-product directory', () => {
     expect(response.json()).toMatchObject({ ok: true, system_admin: false });
     expect(getActiveClientOrgContextMock).toHaveBeenCalled();
     expect(buildSidebarTeamsMock).not.toHaveBeenCalled();
+  });
+
+  it('threads one transaction through the authority, policy, directory, invitation and self reads', async () => {
+    claimsMock.mockResolvedValue({ userId: 'user-1', tokenVersion: 0, domain: config.domain,
+      active: { orgId: 'org-cross', teamId: 'team-cross' }, assuranceId: 'assurance-1' });
+    expect((await getOrgMe()).statusCode).toBe(200);
+    expect(adminReadMock).toHaveBeenCalledTimes(1);
+    expect(authorityMock).toHaveBeenCalledWith(expect.anything(), expect.anything(), transaction,
+      transaction, { userEpochLock: 'shared' });
+    expect(assuranceMock).toHaveBeenCalledWith(expect.objectContaining({ id: 'assurance-1',
+      credentialEpoch: 0, orgId: 'org-cross', teamId: 'team-cross' }), transaction);
+    expect(isPlatformSuperuserMock).toHaveBeenCalledWith({ userId: 'user-1', prisma: transaction });
+    expect(resolveProductTeamPolicyMock).toHaveBeenCalledWith({ domain: config.domain }, { prisma: transaction });
+    expect(buildSidebarTeamsMock).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      prisma: transaction, crossProductPrisma: transaction }));
+    expect(buildSidebarPendingInvitesMock).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      prisma: transaction, invitePrisma: transaction }));
+    expect(transaction.user.findUniqueOrThrow).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['authority', 'assurance'] as const)('fails closed when the pinned %s check rejects', async (check) => {
+    claimsMock.mockResolvedValue({ userId: 'user-1', tokenVersion: 0, domain: config.domain,
+      active: { orgId: 'org-cross', teamId: 'team-cross' }, assuranceId: 'assurance-1' });
+    (check === 'authority' ? authorityMock : assuranceMock).mockRejectedValueOnce(new AppError('UNAUTHORIZED', 401));
+    expect((await getOrgMe()).statusCode).toBe(401);
+    expect(isPlatformSuperuserMock).not.toHaveBeenCalled();
+    expect(buildSidebarTeamsMock).not.toHaveBeenCalled();
+    expect(transaction.user.findUniqueOrThrow).not.toHaveBeenCalled();
   });
 });

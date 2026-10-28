@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 import { ConfidentialDelegationScope, Prisma } from '@prisma/client';
 import { exportJWK, generateKeyPair, SignJWT, type KeyLike } from 'jose';
@@ -21,6 +21,7 @@ import {
 const gates = vi.hoisted(() => ({
   beforePlatformRead: undefined as undefined | (() => Promise<void>),
   beforeExchangeEpoch: undefined as undefined | (() => void),
+  beforeAuthority: undefined as undefined | (() => Promise<void>),
   jwks: { keys: [] as unknown[] },
 }));
 
@@ -43,6 +44,14 @@ vi.mock('../../src/services/authentication-epoch.service.js', async (importOrigi
     async (...args: Parameters<typeof actual.lockAndAssertAuthenticationEpoch>) => {
       gates.beforeExchangeEpoch?.();
       return actual.lockAndAssertAuthenticationEpoch(...args);
+    } };
+});
+vi.mock('../../src/services/tenant-effect-authority.service.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/services/tenant-effect-authority.service.js')>();
+  return { ...actual, assertTenantEffectAuthority:
+    async (...args: Parameters<typeof actual.assertTenantEffectAuthority>) => {
+      await gates.beforeAuthority?.();
+      return actual.assertTenantEffectAuthority(...args);
     } };
 });
 
@@ -77,6 +86,8 @@ describe('/org/me and confidential exchange with production pool limits', () => 
   let orgId: string;
   let teamId: string;
   let assuranceReference: string;
+  let assuranceId: string;
+  let clientDomainId: string;
   const failures: { path: string; code: string }[] = [];
   const saved = Object.fromEntries([
     'DATABASE_URL', 'DATABASE_ADMIN_URL', 'SHARED_SECRET', 'PUBLIC_BASE_URL',
@@ -105,6 +116,7 @@ describe('/org/me and confidential exchange with production pool limits', () => 
 
     domainHash = await seedDomainSecret(db.prisma, DOMAIN, TEST_SHARED_SECRET);
     const client = await db.prisma.clientDomain.findUniqueOrThrow({ where: { domain: DOMAIN } });
+    clientDomainId = client.id;
     await db.prisma.enterpriseProductReadiness.create({ data: { clientDomain: DOMAIN, minimumAssuranceVersion: 1 } });
     await db.prisma.confidentialDelegationMapping.create({ data: {
       clientDomainId: client.id, product: 'nessie', resource: RESOURCE,
@@ -139,6 +151,7 @@ describe('/org/me and confidential exchange with production pool limits', () => 
       mfaSource: 'none', amr: ['pwd'], expiresAt, policyGeneration: 0,
     }, tx));
     assuranceReference = proof.reference;
+    assuranceId = proof.assurance.id;
 
     const config = await signTestConfigJwt(baseClientConfigPayload({
       domain: DOMAIN, jwks_url: `https://${DOMAIN}/.well-known/jwks.json`,
@@ -159,6 +172,7 @@ describe('/org/me and confidential exchange with production pool limits', () => 
   afterAll(async () => {
     gates.beforePlatformRead = undefined;
     gates.beforeExchangeEpoch = undefined;
+    gates.beforeAuthority = undefined;
     if (app) await app.close();
     await disconnectPrisma();
     resetAccessTokenKeyCache();
@@ -228,6 +242,85 @@ describe('/org/me and confidential exchange with production pool limits', () => 
     const tokenProof = await assertion(`${ISSUER}/auth/token`);
     expect((await exchange(tokenProof)).statusCode, JSON.stringify(failures)).toBe(200);
     expect((await exchange(tokenProof)).statusCode).toBe(401);
+  });
+
+  type Authority = 'credential epoch' | 'identity' | 'org membership' | 'team membership' | 'assurance' | 'domain secret';
+  async function changeAuthority(kind: Authority, denied: boolean) {
+    switch (kind) {
+      case 'credential epoch':
+        return db.prisma.user.update({ where: { id: subject }, data: { tokenVersion: denied ? 1 : 0 } });
+      case 'identity':
+        return db.prisma.user.update({ where: { id: subject }, data: { lifecycleStatus: denied ? 'DISABLED' : 'ACTIVE' } });
+      case 'org membership':
+        return db.prisma.orgMember.update({ where: { orgId_userId: { orgId, userId: subject } },
+          data: { status: denied ? 'REMOVED' : 'ACTIVE' } });
+      case 'team membership':
+        return db.prisma.teamMember.update({ where: { teamId_userId: { teamId, userId: subject } },
+          data: { status: denied ? 'REMOVED' : 'ACTIVE' } });
+      case 'assurance':
+        return db.prisma.sessionAssurance.update({ where: { id: assuranceId }, data: { revokedAt: denied ? new Date() : null } });
+      case 'domain secret':
+        return db.prisma.clientDomainSecret.updateMany({ where: { domainId: clientDomainId }, data: { active: !denied } });
+    }
+  }
+
+  it.each<Authority>(['credential epoch', 'identity', 'org membership', 'team membership', 'assurance', 'domain secret'])(
+    'rechecks %s revoked after credential preflight before returning a snapshot', async (kind) => {
+      let entered = false;
+      const release = deferred();
+      gates.beforeAuthority = async () => { entered = true; await release.promise; };
+      const read = readOrgMe(await assertion(ORG_SUBJECT_ASSERTION_AUDIENCE));
+      try {
+        await vi.waitFor(() => expect(entered).toBe(true), { timeout: 2_000, interval: 10 });
+        await changeAuthority(kind, true);
+        release.resolve();
+        expect([401, 403]).toContain((await read).statusCode);
+      } finally {
+        release.resolve();
+        gates.beforeAuthority = undefined;
+        await Promise.allSettled([read]);
+        await changeAuthority(kind, false);
+      }
+    },
+  );
+
+  it('keeps the admin projection inside live memberships, lifecycles and server-owned product policy', async () => {
+    const owner = await db.prisma.user.create({ data: { userKey: randomUUID(), email: `${randomUUID()}@example.test` } });
+    async function directoryTeam(domain: string, member = true, orgActive = true, teamActive = true) {
+      const org = await db.prisma.organisation.create({ data: { domain, name: 'Directory boundary',
+        slug: `boundary-${randomUUID()}`, ownerId: owner.id, lifecycleStatus: orgActive ? 'ACTIVE' : 'DISABLED' } });
+      if (member) await db.prisma.orgMember.create({ data: { orgId: org.id, userId: subject, role: 'member' } });
+      const team = await db.prisma.team.create({ data: { orgId: org.id, name: 'Directory boundary',
+        slug: 'boundary', lifecycleStatus: teamActive ? 'ACTIVE' : 'DISABLED' } });
+      await db.prisma.teamMember.create({ data: { teamId: team.id, userId: subject, teamRole: 'member' } });
+      return team.id;
+    }
+    const local = await directoryTeam(DOMAIN);
+    const excluded = await Promise.all([directoryTeam(DOMAIN, false), directoryTeam(DOMAIN, true, false),
+      directoryTeam(DOMAIN, true, true, false), directoryTeam('other-product.example.com', false)]);
+    const foreign = await directoryTeam('other-product.example.com');
+    const before = await readOrgMe(await assertion(ORG_SUBJECT_ASSERTION_AUDIENCE));
+    expect(before.statusCode).toBe(200);
+    expect(before.json().self_identity.subject).toBe(subject);
+    const beforeIds = before.json().org.team_directory.map((team: { teamId: string }) => team.teamId);
+    expect(beforeIds.sort()).toEqual([teamId, local].sort());
+    const service = await db.prisma.billingService.create({ data: { identifier: `boundary-${randomUUID()}`, name: 'Boundary' } });
+    const key = await db.prisma.billingAppKey.create({ data: { serviceId: service.id, name: 'Boundary',
+      actorIssuer: `https://${DOMAIN}`, actorAudience: `${ISSUER}/billing/v1/effective-tariff`,
+      actorKeyId: randomUUID(), actorPublicJwk: {}, checkoutReturnOrigins: [`https://${DOMAIN}`],
+      keyPrefix: randomUUID().slice(0, 12), secretDigest: createHash('sha256').update(randomUUID()).digest('hex'),
+      purpose: 'CUSTOMER_LIFECYCLE' } });
+    try {
+      const after = await readOrgMe(await assertion(ORG_SUBJECT_ASSERTION_AUDIENCE));
+      expect(after.statusCode).toBe(200);
+      expect(after.json().org.org_id).toBe(orgId);
+      const afterIds = after.json().org.team_directory.map((team: { teamId: string }) => team.teamId);
+      expect(afterIds.sort()).toEqual([teamId, local, foreign].sort());
+      for (const id of excluded) expect(afterIds).not.toContain(id);
+    } finally {
+      await db.prisma.billingAppKey.delete({ where: { id: key.id } });
+      await db.prisma.billingService.delete({ where: { id: service.id } });
+    }
   });
 
   it('completes a shared authority read while two same-user exchanges contend for admin connections', async () => {

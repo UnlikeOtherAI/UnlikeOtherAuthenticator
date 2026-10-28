@@ -111,7 +111,8 @@ export function setTenantContextFromRequest(
 }
 
 /**
- * Run a pre-authentication decision on the BYPASSRLS client. DB-less unit
+ * Run a bootstrap decision on the BYPASSRLS client, including `/org/me`'s
+ * narrowly documented cross-scope authority read (RLS §10.15). DB-less unit
  * tests deliberately receive an inert stand-in, matching `withTenantTx`.
  */
 export function runWithRequestAdminTransaction<T>(
