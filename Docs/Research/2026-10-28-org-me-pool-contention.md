@@ -8,8 +8,9 @@ acquisition or while acquiring the canonical user lock. The source suggests
 a cycle between the app transaction's shared user lock and the two occupied
 admin-pool connections. The production-base PostgreSQL run below reproduces
 that cycle with a passing control. The candidate source repair keeps the
-complete authority projection on one admin transaction; candidate verification
-is pending review and the next coordinator-assigned serial slot.
+complete authority projection on one admin transaction. The reviewed source
+now passes the focused 47-case Maxis gate with exit 0 and no unhandled errors.
+Upstream CI, release and live recovery remain coordinator-owned gates.
 
 `API/tests/integration/org-me-pool-contention.test.ts` exercises the actual
 HTTP routes and PostgreSQL locks with the documented pool sizes: three app
@@ -166,7 +167,7 @@ The overall gate remained red because two fixture assumptions were wrong:
   the original invitation and final directory assertions.
 
 These corrections change no production code or security expectation. Their
-rerun is pending the coordinator's next serial slot. The failed candidate
+subsequent runs and final acceptance are recorded below. The failed candidate
 evidence remains immutable:
 
 | File | SHA-256 |
@@ -209,8 +210,7 @@ spawn for the same executable, argv, environment and SQL input. Stdout remains
 ignored; the default 1 MiB stderr bound and overflow termination, all six
 startup attempts and their backoff, failure propagation and awaited schema
 cleanup remain in place. The runner's RPC deadline is unchanged, and no
-unhandled error is suppressed. A clean-exit rerun of the same 47 cases is the
-remaining gate.
+unhandled error is suppressed. The clean-exit run below validates that correction.
 
 These setup/reporting runs remain immutable under the same artifact directory:
 
@@ -223,3 +223,69 @@ These setup/reporting runs remain immutable under the same artifact directory:
 | `candidate-20261028T212809000Z-manifest.json` | `0b02d14785635daa81545bf31d7586cb999cea216557ec75bd77aa7dcdab19ef` |
 | `candidate-20261028T212809000Z-vitest.json` | `9c861bfdbcfb9e2a838b0ae463c0a1857047bed956e9a0a9b5b870121eb8dca5` |
 | `candidate-20261028T212809000Z-regression.log` | `23da59b273a945e4c586e49b584cfe33f2039ac7412c11e8a068abf02b9d8055` |
+
+## Central fixture outage and recovery
+
+The first async-helper run, `candidate-20261028T214642336Z`, could not reach
+the central fixture: 32 unit cases passed and 15 database cases were skipped
+after Prisma `P1001` setup failures. It had no unhandled RPC errors, but remains
+a failed setup run. A read-only check found no listener at the exact fixture
+endpoint, no original postmaster PID, and readiness exit 2. The existing log
+placed shutdown completion at `21:36:18.674Z`, before this run.
+
+The fixture owner identified Windows commit-limit exhaustion in that log:
+backend exception `0xC000012D`, followed by `CreateFileMapping` error `1455`
+during attempted server reinitialization. The owner restored the same persisted
+cluster without reinitialization, deletion, configuration, role, port or pool
+changes. Independent SSH and SQL at `22:17:30Z`, after the launcher exited,
+confirmed accepting connections, cluster ID `7701694579055700452`, all four
+existing fixture databases and unchanged configuration hashes. Commit headroom
+was 31.68 GiB. The owner's health proof SHA-256 is
+`0f0dae4779d0ad120e6dcb152be1ee075e8f2a6fb70c074b93b3e5de07d394f5`.
+
+| Failed setup file | SHA-256 |
+| --- | --- |
+| `candidate-20261028T214642336Z-manifest.json` | `84e23d1c66e31164ba664700bd25f6e4a7eef6a47d8eab0305344fd72ace1891` |
+| `candidate-20261028T214642336Z-vitest.json` | `bd45f47814d08f3df51dc213029b9124e3f1761c7d0c54dbee6b775fa537a8a1` |
+| `candidate-20261028T214642336Z-regression.log` | `aeb696fed480dafd97a73971c3d2d5849160f105b5e72fe23fcda7f93626ea33` |
+
+## Final focused acceptance
+
+`candidate-20261028T221846349Z` ran the same six-file selection on Maxis at
+source **`2814ee39b139ca58ba688ad5959872007fcbc662`** against the restored
+`uoa_ars_20261028` fixture. It finished with **47 passed, zero failed, zero
+skipped, zero failed suites, zero unhandled errors, Vitest exit 0 and launcher
+exit 0**. The passing cases include:
+
+- Real-role and assertion-replay control, plus the repaired read/exchange overlap.
+- All six post-preflight denials: epoch, identity, org membership, team
+  membership, assurance and domain secret.
+- Live directory membership/lifecycle/product-policy exclusions, a positive
+  selected-Alpha read exposing the caller's legitimate ACTIVE Bravo placement,
+  and the invitation-only read after supported org placement removal.
+- Live platform authority/revocation, tenant invitation reach, and transaction
+  threading/checkout guards.
+
+Focused ESLint on the newly changed `API/tests/helpers/test-db.ts` passed with
+zero warnings. The earlier passing source/route/test lint results remain
+applicable. API typecheck passed at `2ec76e92`; the runner verified unchanged
+compiled inputs before reusing that result, whose log SHA-256 is
+`f432ad24f20f6388562567bc5382356ddf0bb0e86dd66d5bcb7efdc974ee7901`.
+
+The final runner records fixture hooks at 900,000 ms, behavioral cases at
+30,000 ms, unchanged worker RPC at 60,000 ms, unchanged interactive transactions
+at 5,000 ms, and the three/two app/admin pool regression caps. Fixtures use
+awaited async CLI execution with the unchanged 1 MiB stderr bound. Neither
+unhandled errors nor database cases are suppressed.
+
+| Passing file | SHA-256 |
+| --- | --- |
+| `candidate-20261028T221846349Z-manifest.json` | `7f0a0df3648d1e0b8b9765a30f81d52df783966cc228c3595abc7c0000f66542` |
+| `candidate-20261028T221846349Z-vitest.json` | `e0b273d5a3d542a876a0ed7c3a998f226e75b7ff9870f1d5bb56910cabbd10bb` |
+| `candidate-20261028T221846349Z-regression.log` | `99a661b53209f901ba67d6bd74a4fb534a027d87c329fe98b676de9e7d354dbc` |
+| `candidate-20261028T221846349Z-lint.log` | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` |
+
+The worker created no pull request, deployed no revision and made no live
+state change. This focused result establishes the tested source repair and
+its denial boundaries; it is not production recovery or proof about every
+historical authority failure.
