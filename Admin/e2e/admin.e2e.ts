@@ -288,7 +288,9 @@ test('billing product and contract selection, invoice guards and retry preserve 
   await expect(dialog.getByRole('button', { name: 'Record activity', exact: true })).toHaveCount(0);
   expect(fixture.payments).toHaveLength(2);
   expect(fixture.payments[1]).toEqual(fixture.payments[0]);
+  await expect(dialog).toHaveAttribute('aria-busy', 'false');
   await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
   await page.getByRole('link', { name: 'UOA-2026-000001', exact: true }).click();
   await expect(dialog).toBeVisible();
   expect(fixture.errors).toEqual([]);

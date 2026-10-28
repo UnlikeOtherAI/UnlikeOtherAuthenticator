@@ -356,6 +356,9 @@ export async function installFixtures(page: Page) {
     if (path === '/billing/cycle-corrections') return json({ corrections: [] });
     if (path === '/billing/invoices/invoice-credit-note/credit-note')
       return json({ credit_note: creditNote });
+    if (path === '/billing/invoices/invoice-1/credit-note'
+      || path === '/billing/invoices/draft-2/credit-note')
+      return json({ credit_note: null });
     if (path === '/billing/paid-usage-exceptions')
       return json({ exceptions: paidUsageExceptions, has_more: false });
     if (path.endsWith('/invoice-profile'))
