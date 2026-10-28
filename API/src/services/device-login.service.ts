@@ -224,7 +224,7 @@ export async function completeDeviceLogin(context: DeviceLoginContext, claimId: 
     await lockAndAssertAuthenticationEpoch({
       userId: g.userId, domain: g.domain, credentialEpoch: g.tokenVersion,
     }, { prisma: tx });
-    const now = deps.now?.() ?? new Date();
+    let now = deps.now?.() ?? new Date();
     if (!g.approvedAt || g.usedAt || g.expiresAt <= now) throw fail();
     const source = await tx.refreshToken.findFirst({ where: {
       familyId: g.sourceFamilyId, userId: g.userId, revokedAt: null,
@@ -232,7 +232,10 @@ export async function completeDeviceLogin(context: DeviceLoginContext, claimId: 
     } });
     if (!source || source.orgId !== g.orgId || source.teamId !== g.teamId) throw fail();
     const { assurance, tokenVersion } = await validateSource(context, source, tx, now);
-    if (tokenVersion !== g.tokenVersion) throw fail();
+    // Membership and signature-policy locks may have waited past a capability's deadline.
+    now = deps.now?.() ?? new Date();
+    if (tokenVersion !== g.tokenVersion || g.expiresAt <= now || source.expiresAt <= now
+      || assurance.expiresAt <= now) throw fail();
     const won = await tx.deviceLoginGrant.updateMany({ where: { id: g.id, usedAt: null,
       expiresAt: { gt: now }, approvedAt: { not: null } }, data: { usedAt: now } });
     if (won.count !== 1) throw fail();

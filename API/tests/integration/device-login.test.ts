@@ -46,7 +46,7 @@ describe.skipIf(!process.env.DATABASE_URL)('numeric device login', () => {
   });
   const context = () => ({ config, configUrl, clientId: 'device-client', clientDomainId });
   const deps = () => ({ prisma: handle.prisma });
-  async function source() {
+  async function source(assuranceDurationMs = 120_000) {
     const user = await handle.prisma.user.create({ data: {
       email: randomUUID() + '@example.com', userKey: randomUUID(),
     } });
@@ -56,7 +56,7 @@ describe.skipIf(!process.env.DATABASE_URL)('numeric device login', () => {
     const assurance = await issueSessionAssurance({ familyId, userId: user.id, clientDomain: domain,
       credentialEpoch: 0, orgId: null, teamId: null, method: 'independent',
       observedAt: new Date(), authenticatedAt: new Date(), mfaSource: 'none', amr: ['pwd'],
-      expiresAt: new Date(Date.now() + 120_000),
+      expiresAt: new Date(Date.now() + assuranceDurationMs),
     }, handle.prisma);
     await handle.prisma.refreshToken.update({ where: { id: refresh.refreshTokenId },
       data: { assuranceId: assurance.assurance.id } });
@@ -155,6 +155,50 @@ describe.skipIf(!process.env.DATABASE_URL)('numeric device login', () => {
     const buckets = await handle.prisma.deviceLoginAttemptBucket.findMany();
     expect(buckets.some(bucket => bucket.count > 8)).toBe(true);
     expect(buckets.every(bucket => !bucket.keyHash.includes('192.0.2.'))).toBe(true);
+  });
+  it('rechecks the five-minute deadline after waiting for current signature policy', async () => {
+    await enable();
+    const a = await source(600_000);
+    const issued = await issueDeviceLogin(context(), a.refresh.refreshToken, undefined, deps());
+    const verifier = 'q'.repeat(43);
+    const claim = await claimDeviceLogin(context(), issued.code, challenge(verifier), deps());
+    await decideDeviceLogin(context(), a.refresh.refreshToken, issued.grant_id, claim.claim_id, true, deps());
+    const grant = await handle.prisma.deviceLoginGrant.findUniqueOrThrow({ where: { id: issued.grant_id } });
+    await handle.prisma.domainSignatureSettings.upsert({ where: { domain },
+      create: { domain, enabled: false }, update: { enabled: false } });
+    let release = () => {};
+    const released = new Promise<void>((resolve) => { release = resolve; });
+    let announce = (_pid: number) => {};
+    const locked = new Promise<number>((resolve) => { announce = resolve; });
+    const blocker = handle.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT 1 FROM domain_signature_settings WHERE domain = ${domain} FOR UPDATE`;
+      const [connection] = await tx.$queryRaw<Array<{ pid: number }>>`SELECT pg_backend_pid() AS pid`;
+      announce(connection.pid);
+      await released;
+    });
+    const pid = await locked;
+    let now = new Date();
+    const completed = completeDeviceLogin(context(), claim.claim_id, verifier, {
+      ...deps(), now: () => now,
+    }).then(() => true, () => false);
+    try {
+      let waiting = false;
+      for (let attempt = 0; attempt < 50; attempt++) {
+        const [row] = await handle.prisma.$queryRaw<Array<{ count: number }>>`
+          SELECT count(*)::int AS count FROM pg_stat_activity
+          WHERE ${pid}::int = ANY(pg_blocking_pids(pid))`;
+        if (row.count > 0) { waiting = true; break; }
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      expect(waiting).toBe(true);
+      now = new Date(grant.expiresAt.getTime() + 1);
+    } finally {
+      release();
+      await blocker;
+    }
+    expect(await completed).toBe(false);
+    expect((await handle.prisma.deviceLoginGrant.findUniqueOrThrow({ where: { id: grant.id } })).usedAt)
+      .toBeNull();
   });
   it('keeps pairing authority outside the ordinary tenant database role', async () => {
     const schema = handle.schema;
