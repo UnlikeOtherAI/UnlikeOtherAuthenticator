@@ -269,6 +269,13 @@ export async function installFixtures(page: Page) {
         body: '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><rect width="40" height="40" fill="#4f46e5"/></svg>',
       });
     if (path === '/dashboard') return json(data);
+    if (path === '/auth-funnel') return json({
+      from: url.searchParams.get('from') ?? '2026-10-01',
+      to: url.searchParams.get('to') ?? '2026-10-28',
+      domain: url.searchParams.get('domain'),
+      domains: data.domains.map((domain) => domain.name),
+      totals: [], days: [],
+    });
     if (path === '/domains') return json(data.domains);
     if (path.startsWith('/domains/')) {
       if (path.endsWith('/email'))
