@@ -1,0 +1,26 @@
+{
+  "base_revision": "f744cc177c974ad21e81647e9da20163a6dd12e3",
+  "rendered_ui_revision": "f8d1b3f34d0fc00242a638e2d27a36f95e4545b3",
+  "final_code_revision": "d35710ab053a922c2bca15222d97948c98c5ff0f",
+  "page": "/domains/app.acme.com?tab=access",
+  "theme": "light",
+  "scroll_position": "bottom of Admin content container",
+  "desktop": {
+    "viewport": {
+      "width": 1440,
+      "height": 1000
+    },
+    "device_scale_factor": 1
+  },
+  "mobile": {
+    "device": "Pixel 7",
+    "viewport": {
+      "width": 412,
+      "height": 839
+    },
+    "device_scale_factor": 2.625
+  },
+  "fixtures": "Synthetic Acme service; numeric login off by default; enabled config URLs https://app.acme.com/config and https://app.acme.com/other-site/config",
+  "before": "Actual base page has no numeric sign-in control. The same before capture pairs with both new control states.",
+  "after": "Empty allowlist and two saved exact config URLs. Admin/src is unchanged between the rendered UI and final code revisions."
+}
