@@ -31,4 +31,19 @@ CREATE TABLE device_login_attempt_buckets (
   reset_at timestamp(3) NOT NULL
 );
 CREATE INDEX device_login_attempt_buckets_reset_at_idx ON device_login_attempt_buckets(reset_at);
+
+-- These pre-tenant authentication capabilities are accessed only through uoa_admin.
+-- Future-table default grants must not expose them to the ordinary tenant role.
+ALTER TABLE device_login_grants ENABLE ROW LEVEL SECURITY;
+ALTER TABLE device_login_grants FORCE ROW LEVEL SECURITY;
+ALTER TABLE device_login_attempt_buckets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE device_login_attempt_buckets FORCE ROW LEVEL SECURITY;
+DO $$ BEGIN
+  IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'uoa_app') THEN
+    REVOKE ALL ON TABLE device_login_grants, device_login_attempt_buckets FROM uoa_app;
+  END IF;
+  IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'uoa_admin') THEN
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE device_login_grants, device_login_attempt_buckets TO uoa_admin;
+  END IF;
+END $$;
 COMMIT;
