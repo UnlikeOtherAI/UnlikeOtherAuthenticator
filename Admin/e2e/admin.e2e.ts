@@ -253,6 +253,7 @@ test('billing product and contract selection, invoice guards and retry preserve 
   await page.getByRole('link', { name: 'Second contract', exact: true }).click();
   await expect(page.locator('input[name="contractId"]')).toHaveValue('contract-2');
   await page.locator('input[name="billingMonth"]').fill('2026-07');
+  await page.getByRole('textbox', { name: 'Tax legal basis', exact: true }).fill('Synthetic no-tax basis');
   await page.getByRole('button', { name: 'Calculate draft', exact: true }).click();
   await expect(page).toHaveURL(/invoice=draft-2/);
   await expect(page.getByRole('dialog', { name: 'Draft invoice · 2026-07' })).toBeVisible();
@@ -261,7 +262,8 @@ test('billing product and contract selection, invoice guards and retry preserve 
   const dialog = page.getByRole('dialog', { name: 'UOA-2026-000001', exact: true });
   await expect(dialog).toBeVisible();
   expect(fixture.calculations).toEqual([
-    { contract_id: 'contract-2', issuer_profile_id: 'issuer-1', billing_month: '2026-07' },
+    { contract_id: 'contract-2', issuer_profile_id: 'issuer-1', billing_month: '2026-07',
+      tax_treatment: 'no_tax_charged', tax_rate_percent: '0', tax_legal_basis: 'Synthetic no-tax basis' },
   ]);
   await expect(dialog.getByRole('button', { name: 'Issue invoice', exact: true })).toHaveCount(0);
   await expect(dialog.getByRole('button', { name: 'Void invoice', exact: true })).toHaveCount(0);
