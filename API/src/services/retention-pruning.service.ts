@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@prisma/client';
 
 import { getEnv } from '../config/env.js';
+import { DEVICE_LOGIN_ISSUANCE_WINDOW_MS } from '../config/constants.js';
 import { getAdminPrisma } from '../db/prisma.js';
 
 type RetentionPrisma = {
@@ -10,6 +11,8 @@ type RetentionPrisma = {
   telephoneSmsAdmission: Pick<PrismaClient['telephoneSmsAdmission'], 'deleteMany'>;
   telephoneLookup: Pick<PrismaClient['telephoneLookup'], 'deleteMany'>;
   debugLoginGrant: Pick<PrismaClient['debugLoginGrant'], 'deleteMany'>;
+  deviceLoginGrant: Pick<PrismaClient['deviceLoginGrant'], 'deleteMany'>;
+  deviceLoginAttemptBucket: Pick<PrismaClient['deviceLoginAttemptBucket'], 'deleteMany'>;
   authorizationCode: Pick<PrismaClient['authorizationCode'], 'deleteMany'>;
   confidentialAssertionUse: Pick<PrismaClient['confidentialAssertionUse'], 'deleteMany'>;
   handshakeErrorLog: Pick<PrismaClient['handshakeErrorLog'], 'deleteMany'>;
@@ -32,6 +35,8 @@ export type RetentionPruneResult = {
   telephoneSmsAdmissionsDeleted: number;
   telephoneLookupsDeleted: number;
   debugLoginGrantsDeleted: number;
+  deviceLoginGrantsDeleted: number;
+  deviceLoginAttemptBucketsDeleted: number;
   authorizationCodesDeleted: number;
   confidentialAssertionUsesDeleted: number;
   handshakeErrorLogsDeleted: number;
@@ -53,6 +58,8 @@ function emptyResult(): RetentionPruneResult {
     telephoneSmsAdmissionsDeleted: 0,
     telephoneLookupsDeleted: 0,
     debugLoginGrantsDeleted: 0,
+    deviceLoginGrantsDeleted: 0,
+    deviceLoginAttemptBucketsDeleted: 0,
     authorizationCodesDeleted: 0,
     confidentialAssertionUsesDeleted: 0,
     handshakeErrorLogsDeleted: 0,
@@ -81,6 +88,8 @@ export async function pruneExpiredSecurityData(
     telephoneSmsAdmissions,
     telephoneLookups,
     debugLoginGrants,
+    deviceLoginGrants,
+    deviceLoginAttemptBuckets,
     refreshTokens,
     authorizationCodes,
     confidentialAssertionUses,
@@ -95,6 +104,11 @@ export async function pruneExpiredSecurityData(
     prisma.telephoneSmsAdmission.deleteMany({ where: { createdAt: { lt: subtractDays(now, 30) } } }),
     prisma.telephoneLookup.deleteMany({ where: { createdAt: { lt: subtractDays(now, 30) } } }),
     prisma.debugLoginGrant.deleteMany({ where: { expiresAt: { lt: now } } }),
+    prisma.deviceLoginGrant.deleteMany({ where: {
+      expiresAt: { lte: now },
+      createdAt: { lte: new Date(now.getTime() - DEVICE_LOGIN_ISSUANCE_WINDOW_MS) },
+    } }),
+    prisma.deviceLoginAttemptBucket.deleteMany({ where: { resetAt: { lte: now } } }),
     prisma.refreshToken.deleteMany({
       where: { expiresAt: { lt: tokenCutoff } },
     }),
@@ -125,6 +139,8 @@ export async function pruneExpiredSecurityData(
     telephoneSmsAdmissionsDeleted: telephoneSmsAdmissions.count,
     telephoneLookupsDeleted: telephoneLookups.count,
     debugLoginGrantsDeleted: debugLoginGrants.count,
+    deviceLoginGrantsDeleted: deviceLoginGrants.count,
+    deviceLoginAttemptBucketsDeleted: deviceLoginAttemptBuckets.count,
     authorizationCodesDeleted: authorizationCodes.count,
     confidentialAssertionUsesDeleted: confidentialAssertionUses.count,
     handshakeErrorLogsDeleted: handshakeErrorLogs.count,

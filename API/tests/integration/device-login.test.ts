@@ -1,5 +1,5 @@
-import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { createHash, randomBytes, randomInt, randomUUID } from 'node:crypto';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createTestDb } from '../helpers/test-db.js';
 import { baseClientConfigPayload } from '../helpers/test-config.js';
 import { validateConfigFields } from '../../src/services/config.service.js';
@@ -9,6 +9,14 @@ import {
   claimDeviceLogin, claimDeviceStatus, completeDeviceLogin, consumeDeviceClaimBudget,
   decideDeviceLogin, issueDeviceLogin, sourceDeviceStatus,
 } from '../../src/services/device-login.service.js';
+
+import { pruneExpiredSecurityData } from '../../src/services/retention-pruning.service.js';
+import { getEnv } from '../../src/config/env.js';
+
+vi.mock('node:crypto', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:crypto')>();
+  return { ...actual, randomInt: vi.fn(actual.randomInt) };
+});
 
 const secret = 'device-login-test-secret-with-enough-length';
 const domain = 'device-login.example';
@@ -144,6 +152,45 @@ describe.skipIf(!process.env.DATABASE_URL)('numeric device login', () => {
     await expect(completeDeviceLogin(context(), secondClaim.claim_id, verifier, {
       ...deps(), now: () => new Date(Date.now() + 300_001),
     })).rejects.toThrow();
+  });
+  it('keeps the issuance limit after expired codes are pruned', async () => {
+    await enable();
+    const a = await source(600_000);
+    const now = new Date();
+    for (let index = 0; index < 10; index++) {
+      await issueDeviceLogin(context(), a.refresh.refreshToken, undefined, { ...deps(), now: () => now });
+    }
+    const later = new Date(now.getTime() + 6 * 60_000);
+    await pruneExpiredSecurityData({ env: getEnv(), prisma: handle.prisma, now: () => later });
+    expect(await handle.prisma.deviceLoginGrant.count({ where: { userId: a.user.id } })).toBe(10);
+    await expect(issueDeviceLogin(context(), a.refresh.refreshToken, undefined, {
+      ...deps(), now: () => later,
+    })).rejects.toMatchObject({ statusCode: 429 });
+  });
+  it.each([10, 30])('preserves the issuance window when a code collides with a %i-minute-old row', async (age) => {
+    await enable();
+    const a = await source();
+    const issued = await issueDeviceLogin(context(), a.refresh.refreshToken, undefined, deps());
+    const now = new Date();
+    await handle.prisma.deviceLoginGrant.update({ where: { id: issued.grant_id }, data: {
+      expiresAt: new Date(now.getTime() - 1), createdAt: new Date(now.getTime() - age * 60_000),
+    } });
+    vi.mocked(randomInt).mockImplementationOnce(() => Number(issued.code));
+    const replacement = await issueDeviceLogin(context(), a.refresh.refreshToken, undefined, {
+      ...deps(), now: () => now,
+    });
+    expect(replacement.code).toMatch(/^\d{8}$/);
+    expect(replacement.expires_in).toBeGreaterThan(0);
+    expect(replacement.expires_in).toBeLessThanOrEqual(300);
+    const previous = await handle.prisma.deviceLoginGrant.findUnique({ where: { id: issued.grant_id } });
+    if (age < 30) {
+      expect(previous).not.toBeNull();
+      expect(replacement.code).not.toBe(issued.code);
+      expect(await handle.prisma.deviceLoginGrant.count({ where: { userId: a.user.id } })).toBe(2);
+    } else {
+      expect(previous).toBeNull();
+      expect(replacement.code).toBe(issued.code);
+    }
   });
   it('shares fail-closed per-site and per-requester guess budgets in durable rows', async () => {
     await enable();

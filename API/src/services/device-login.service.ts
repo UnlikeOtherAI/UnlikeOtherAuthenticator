@@ -1,6 +1,7 @@
 import { createHash, createHmac, randomBytes, randomInt, randomUUID, timingSafeEqual } from 'node:crypto';
 import type { DeviceLoginGrant, PrismaClient, RefreshToken } from '@prisma/client';
 import { getEnv } from '../config/env.js';
+import { DEVICE_LOGIN_ISSUANCE_WINDOW_MS } from '../config/constants.js';
 import { runInTransaction } from '../db/tenant-context.js';
 import { AppError } from '../utils/errors.js';
 import type { ClientConfig } from './config.service.js';
@@ -94,8 +95,9 @@ export async function issueDeviceLogin(context: DeviceLoginContext, token: strin
     await assertPolicy(context, tx);
     const now = deps.now?.() ?? new Date();
     const { source, assurance, tokenVersion } = await sourceForToken(context, token, tx, now);
+    const issuanceCutoff = new Date(now.getTime() - DEVICE_LOGIN_ISSUANCE_WINDOW_MS);
     const recent = await tx.deviceLoginGrant.count({ where: {
-      userId: source.userId, createdAt: { gt: new Date(now.getTime() - 30 * 60_000) },
+      userId: source.userId, createdAt: { gt: issuanceCutoff },
     } });
     if (recent >= 10) throw new AppError('RATE_LIMITED', 429, 'RATE_LIMITED');
     if (previousGrantId) await tx.deviceLoginGrant.updateMany({ where: {
@@ -109,7 +111,7 @@ export async function issueDeviceLogin(context: DeviceLoginContext, token: strin
       const candidate = randomCode();
       const existing = await tx.deviceLoginGrant.findUnique({ where: { codeHash: codeHash(candidate) } });
       if (!existing) { code = candidate; break; }
-      if (existing.expiresAt <= now) {
+      if (existing.expiresAt <= now && existing.createdAt <= issuanceCutoff) {
         await tx.deviceLoginGrant.delete({ where: { id: existing.id } });
         code = candidate; break;
       }

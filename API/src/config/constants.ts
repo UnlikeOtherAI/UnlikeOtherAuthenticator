@@ -29,6 +29,10 @@ export const ACCESS_TOKEN_AUDIENCE = 'uoa:access-token';
 export const LOGIN_CODE_TTL_MS = 10 * 60 * 1000;
 export const LOGIN_CODE_MAX_ATTEMPTS = 5;
 
+// Device-login grant rows count toward this issuance budget even after the code expires.
+// Pruning and random-code reuse must retain them until the whole window has passed.
+export const DEVICE_LOGIN_ISSUANCE_WINDOW_MS = 30 * 60 * 1000;
+
 // Slack-style login (Phase 3b, design §4.3/§4.4): the `login_token` bridge JWT authorizes ONLY
 // team selection for an already-verified user (same class as `twofa_token`) — never
 // authentication by itself. JWT `aud` claim, mirroring ACCESS_TOKEN_AUDIENCE's fixed-audience shape.

@@ -37,6 +37,7 @@ export async function eraseOperationalIdentity(tx: PrismaClient, userId: string,
   await tx.refreshToken.deleteMany({ where: { userId } });
   await tx.nativeOAuthFlow.deleteMany({ where: { userId } });
   await tx.debugLoginGrant.deleteMany({ where: { userId } });
+  await tx.deviceLoginGrant.deleteMany({ where: { userId } });
   await tx.authIdentity.deleteMany({ where: { userId } });
   await tx.telephoneSmsAdmission.deleteMany({ where: { subjectId: userId } });
   await tx.telephoneLookup.deleteMany({ where: { admittedSubjectId: userId } });
@@ -97,6 +98,7 @@ export async function sweepDeletion(tx: PrismaClient, preview: DeletionPreview, 
   if (eligibility.some(c => !c.eligible)) throw new AppError('BAD_REQUEST', 409, 'DELETION_CANDIDATE_DEPENDENCY_CHANGED');
   await tx.teamMember.deleteMany({ where: teamWhere });
   await tx.debugLoginGrant.deleteMany({ where: teamWhere });
+  await tx.deviceLoginGrant.deleteMany({ where: deleteOrg ? { OR: [teamWhere, { orgId }] } : teamWhere });
   await tx.authorizationCode.deleteMany({ where: teamWhere });
   await tx.refreshToken.deleteMany({ where: teamWhere });
   if (!deleteOrg) {
