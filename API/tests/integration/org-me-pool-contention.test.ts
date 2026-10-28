@@ -288,11 +288,18 @@ describe('/org/me and confidential exchange with production pool limits', () => 
     const owner = await db.prisma.user.create({ data: { userKey: randomUUID(), email: `${randomUUID()}@example.test` } });
     async function directoryTeam(domain: string, member = true, orgActive = true, teamActive = true) {
       const org = await db.prisma.organisation.create({ data: { domain, name: 'Directory boundary',
-        slug: `boundary-${randomUUID()}`, ownerId: owner.id, lifecycleStatus: orgActive ? 'ACTIVE' : 'DISABLED' } });
-      if (member) await db.prisma.orgMember.create({ data: { orgId: org.id, userId: subject, role: 'member' } });
+        slug: `boundary-${randomUUID()}`, ownerId: owner.id } });
+      await db.prisma.orgMember.create({ data: { orgId: org.id, userId: subject, role: 'member' } });
       const team = await db.prisma.team.create({ data: { orgId: org.id, name: 'Directory boundary',
-        slug: 'boundary', lifecycleStatus: teamActive ? 'ACTIVE' : 'DISABLED' } });
+        slug: 'boundary' } });
       await db.prisma.teamMember.create({ data: { teamId: team.id, userId: subject, teamRole: 'member' } });
+      // Lifecycle reference guards forbid assigning members into disabled containers.
+      // Seed a valid membership first, then freeze its container before the read.
+      if (!member) await db.prisma.orgMember.update({ where: {
+        orgId_userId: { orgId: org.id, userId: subject },
+      }, data: { status: 'REMOVED' } });
+      if (!teamActive) await db.prisma.team.update({ where: { id: team.id }, data: { lifecycleStatus: 'DISABLED' } });
+      if (!orgActive) await db.prisma.organisation.update({ where: { id: org.id }, data: { lifecycleStatus: 'DISABLED' } });
       return team.id;
     }
     const local = await directoryTeam(DOMAIN);

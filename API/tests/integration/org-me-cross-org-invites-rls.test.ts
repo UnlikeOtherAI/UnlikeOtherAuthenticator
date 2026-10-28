@@ -227,7 +227,8 @@ describe.skipIf(!hasDatabase)('/org/me cross-organisation pending invites (uoa_a
       },
     });
 
-    // 3. B adds A to Bravo Org and invites A into a further team of it.
+    // 3. B adds A to Bravo Org; the selected Alpha context must not hide A's
+    //    real ACTIVE Bravo placement from the directory.
     const addMember = await app.inject({
       method: 'POST',
       url: orgUrl(`/org/organisations/${bravo.id}/members`),
@@ -235,6 +236,31 @@ describe.skipIf(!hasDatabase)('/org/me cross-organisation pending invites (uoa_a
       payload: { userId: userA.id, role: 'member' },
     });
     expect(addMember.statusCode, addMember.body).toBe(200);
+
+    const aToken = await tokenFor({ userId: userA.id, email: USER_A, org: {
+      orgId: alpha.id, orgRole: 'owner', teams: [alphaGeneral.id],
+      team_roles: { [alphaGeneral.id]: 'owner' },
+    } });
+    const bothPlacements = await app.inject({ method: 'GET', url: orgUrl('/org/me'), headers: headers(aToken) });
+    expect(bothPlacements.statusCode).toBe(200);
+    const bothBody = bothPlacements.json() as MeBody;
+    expect(bothBody.org?.org_id).toBe(alpha.id);
+    expect(bothBody.org?.team_directory.map((entry) => entry.teamId).sort())
+      .toEqual([alphaGeneral.id, bravo.defaultTeam.id].sort());
+
+    // Org admission also joins its default team, and the last-team guard forbids
+    // removing that team alone. Remove the Bravo org placement through the real
+    // lifecycle/revocation route before testing an invitation-only Bravo read.
+    const removePlacement = await app.inject({ method: 'DELETE',
+      url: orgUrl(`/org/organisations/${bravo.id}/members/${userA.id}`),
+      headers: headers(bToken) });
+    expect(removePlacement.statusCode, removePlacement.body).toBe(200);
+    expect(await handle!.prisma.teamMember.count({ where: {
+      userId: userA.id, status: 'ACTIVE', team: { orgId: bravo.id },
+    } })).toBe(0);
+    expect(await handle!.prisma.orgMember.findUnique({ where: {
+      orgId_userId: { orgId: bravo.id, userId: userA.id },
+    }, select: { status: true } })).toEqual({ status: 'REMOVED' });
 
     const bravoThree = await app.inject({
       method: 'POST',
@@ -260,17 +286,6 @@ describe.skipIf(!hasDatabase)('/org/me cross-organisation pending invites (uoa_a
 
     // 4. A asks the product for its context with a token scoped to ALPHA — the exact shape the
     //    production run captured. The invitation lives in Bravo.
-    const aToken = await tokenFor({
-      userId: userA.id,
-      email: USER_A,
-      org: {
-        orgId: alpha.id,
-        orgRole: 'owner',
-        teams: [alphaGeneral.id],
-        team_roles: { [alphaGeneral.id]: 'owner' },
-      },
-    });
-
     const me = await app.inject({
       method: 'GET',
       url: orgUrl('/org/me'),

@@ -138,10 +138,39 @@ authority/assurance failures before returning a projection. The existing
 same-pool checkout guard remains active in real PostgreSQL tests.
 
 After source review, run focused ESLint and API typecheck, then the following
-single-worker suite on the assigned Maxis fixture. Candidate checks have not
-yet run:
+single-worker suite on the assigned Maxis fixture:
 
 ```powershell
 pnpm --filter @uoa/api typecheck
 pnpm --filter @uoa/api exec vitest run tests/integration/org-me-pool-contention.test.ts tests/integration/org-me-cross-org-invites-rls.test.ts tests/integration/org-user-endpoints-me.test.ts tests/unit/org-me.route.test.ts tests/unit/team-directory.service.test.ts src/db/__tests__/pool-checkout-guard.test.ts --maxWorkers=1 --minWorkers=1 --no-file-parallelism
 ```
+
+The first candidate run, `candidate-20261028T202351503Z` at source
+`2ec76e92a7d5776657f063ece74b89f71d65da31`, passed scoped ESLint and API
+typecheck. Its six-file suite completed 45 of 47 cases successfully, with no
+skips. The production-pool control, repaired overlap, all six after-preflight
+denials, live platform authority and transaction/checkout guards passed.
+The overall gate remained red because two fixture assumptions were wrong:
+
+- The new directory fixture assigned memberships after creating an already
+  disabled organisation; the existing SQL lifecycle-reference guard correctly
+  rejected that setup with SQLSTATE `23514`. The fixture now creates valid
+  ACTIVE references first, then disables the container before the read.
+- The existing cross-org invitation case asserted that its caller had no
+  Bravo team, but `addOrganisationMember` automatically joined Bravo's default
+  team. A positive read now proves that ACTIVE same-domain placement is visible
+  despite the selected Alpha context. The last-team guard forbids removing its
+  only Bravo team, so the fixture removes the Bravo organisation placement
+  through the actual local lifecycle/revocation route and verifies the org and
+  teams are tombstoned before testing invitation-only visibility. It retains
+  the original invitation and final directory assertions.
+
+These corrections change no production code or security expectation. Their
+rerun is pending the coordinator's next serial slot. The failed candidate
+evidence remains immutable:
+
+| File | SHA-256 |
+| --- | --- |
+| `candidate-20261028T202351503Z-manifest.json` | `aa3a049612c01f16405cb30c1d828421a8b968476c6565e896106c8a6c019d85` |
+| `candidate-20261028T202351503Z-vitest.json` | `9d01e70d227f349b662a66873a2487672795c98f638b06cb9404206689882988` |
+| `candidate-20261028T202351503Z-regression.log` | `a471324766db993e595d2f1eec9561e581af4f32a3cf7068b95ea5b0801c460a` |
