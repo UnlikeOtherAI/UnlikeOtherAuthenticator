@@ -60,7 +60,8 @@ describe('team-directory service: buildSidebarTeams', () => {
         where: {
           userId: 'user-1',
           status: 'ACTIVE',
-          team: { org: { domain: 'acme.example.com' } },
+          team: { lifecycleStatus: 'ACTIVE', org: { domain: 'acme.example.com', lifecycleStatus: 'ACTIVE',
+            members: { some: { userId: 'user-1', status: 'ACTIVE' } } } },
         },
       }),
     );
@@ -204,7 +205,8 @@ describe('team-directory service: buildSidebarTeams', () => {
         where: expect.objectContaining({
           userId: 'user-1',
           status: 'ACTIVE',
-          team: { org: { members: { some: { userId: 'user-1', status: 'ACTIVE' } } } },
+          team: { lifecycleStatus: 'ACTIVE', org: { lifecycleStatus: 'ACTIVE',
+            members: { some: { userId: 'user-1', status: 'ACTIVE' } } } },
         }),
       }),
     );

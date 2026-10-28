@@ -18,8 +18,9 @@ import { Prisma, type PrismaClient } from '@prisma/client';
  * transaction it opens in AsyncLocalStorage, and flags any connection-checking-out use
  * of the global client (model delegates, `$queryRaw*`, `$executeRaw*`, `$transaction`)
  * while an ACTIVE transaction on the same pool is in the current async context.
- * Cross-pool use — the admin client inside an app-pool tenant transaction — is
- * legitimate and never flagged. Everything else on the client (`$connect`, `$on`,
+ * Cross-pool use is not flagged. Callers must still avoid lock/pool cycles:
+ * `/org/me` keeps its shared epoch and bootstrap reads on one admin transaction.
+ * Everything else on the client (`$connect`, `$on`,
  * `$extends`, internals, symbols) passes through untouched.
  *
  * Under `NODE_ENV=test` a violation throws so the suite catches the regression;
