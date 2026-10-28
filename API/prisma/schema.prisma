@@ -837,6 +837,42 @@ model DebugLoginGrant {
   @@map("debug_login_grants")
 }
 
+// Receiver-bound, browser-approved numeric pairing. The plaintext code and verifier never persist.
+model DeviceLoginGrant {
+  id String @id @default(cuid())
+  codeHash String @unique @map("code_hash")
+  sourceFamilyId String @map("source_family_id")
+  userId String @map("user_id")
+  tokenVersion Int @map("token_version")
+  domain String
+  clientId String @map("client_id")
+  configUrl String @map("config_url")
+  orgId String? @map("org_id")
+  teamId String? @map("team_id")
+  claimId String? @unique @map("claim_id")
+  challenge String? @map("challenge")
+  confirmationCode String? @map("confirmation_code")
+  approvedAt DateTime? @map("approved_at")
+  deniedAt DateTime? @map("denied_at")
+  usedAt DateTime? @map("used_at")
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId, createdAt])
+  @@index([expiresAt])
+  @@map("device_login_grants")
+}
+
+// Shared, durable attempt counter; keys are HMACs of site and requester.
+model DeviceLoginAttemptBucket {
+  keyHash String @id @map("key_hash")
+  count Int
+  resetAt DateTime @map("reset_at")
+
+  @@index([resetAt])
+  @@map("device_login_attempt_buckets")
+}
+
 model LoginLog {
   id         String   @id @default(cuid())
   userId     String?  @map("user_id")
@@ -909,6 +945,7 @@ model ClientDomain {
   allowedEmailDomains String[]    @default([]) @map("allowed_email_domains")
   allowedEmails       String[]    @default([]) @map("allowed_emails")
   allowedRedirectUrls String[]    @default([]) @map("allowed_redirect_urls")
+  deviceLoginConfigUrls String[] @default([]) @map("device_login_config_urls")
   createdAt           DateTime    @default(now()) @map("created_at")
   updatedAt           DateTime    @updatedAt @map("updated_at")
 

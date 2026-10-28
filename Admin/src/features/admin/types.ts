@@ -23,6 +23,7 @@ export type Domain = {
   allowedEmailDomains: string[];
   allowedEmails: string[];
   allowedRedirectUrls: string[];
+  deviceLoginConfigUrls?: string[];
   created: string;
   hash: string;
 };

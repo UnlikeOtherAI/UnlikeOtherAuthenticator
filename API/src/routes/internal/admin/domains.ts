@@ -35,6 +35,7 @@ const DomainUpdateSchema = z
     allowed_email_domains: z.array(z.string()).max(50).optional(),
     allowed_emails: z.array(z.string()).max(200).optional(),
     allowed_redirect_urls: z.array(z.string().trim().min(1).max(2048)).max(50).optional(),
+    device_login_config_urls: z.array(z.string().url().max(2048)).max(20).optional(),
     twoFaPolicy: z.enum(['off', 'optional', 'required']).optional(),
   })
   .strict();
@@ -108,6 +109,7 @@ function toAdminDomain(row: DomainMutationResult['domain']) {
     allowedEmailDomains: row.allowedEmailDomains,
     allowedEmails: row.allowedEmails,
     allowedRedirectUrls: row.allowedRedirectUrls,
+    deviceLoginConfigUrls: row.deviceLoginConfigUrls,
     twoFaPolicy: toPublicTwoFaPolicy(row.twoFaPolicy),
     created: displayDate(row.createdAt),
     hash: activeSecret ? `sha256:${activeSecret.hashPrefix}...` : 'not configured',
@@ -179,6 +181,7 @@ export function registerInternalAdminDomainRoutes(app: FastifyInstance): void {
         allowedEmailDomains: body.allowed_email_domains,
         allowedEmails: body.allowed_emails,
         allowedRedirectUrls: body.allowed_redirect_urls,
+        deviceLoginConfigUrls: body.device_login_config_urls,
         twoFaPolicy:
           body.twoFaPolicy === undefined ? undefined : parseTwoFaPolicyInput(body.twoFaPolicy),
         actorEmail,
@@ -198,6 +201,7 @@ export function registerInternalAdminDomainRoutes(app: FastifyInstance): void {
         allowedEmailDomains: body.allowed_email_domains,
         allowedEmails: body.allowed_emails,
         allowedRedirectUrls: body.allowed_redirect_urls,
+        deviceLoginConfigUrls: body.device_login_config_urls,
         twoFaPolicy:
           body.twoFaPolicy === undefined ? undefined : parseTwoFaPolicyInput(body.twoFaPolicy),
         actorEmail,

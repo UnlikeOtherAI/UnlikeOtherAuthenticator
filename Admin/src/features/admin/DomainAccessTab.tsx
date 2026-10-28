@@ -16,6 +16,7 @@ type AccessForm = {
   allowedEmailDomains: string[];
   allowedEmails: string[];
   allowedRedirectUrls: string[];
+  deviceLoginConfigUrls: string[];
 };
 
 function sameList(a: string[], b: string[]): boolean {
@@ -25,10 +26,12 @@ function sameList(a: string[], b: string[]): boolean {
 export function DomainAccessTab({ domain }: { domain: Domain }) {
   const queryClient = useQueryClient();
   const [form, setForm] = useState<AccessForm>(toForm(domain));
+  const [deviceUrlsText, setDeviceUrlsText] = useState((domain.deviceLoginConfigUrls ?? []).join("\n"));
   const [error, setError] = useState(false);
 
   useEffect(() => {
     setForm(toForm(domain));
+    setDeviceUrlsText((domain.deviceLoginConfigUrls ?? []).join("\n"));
   }, [domain]);
 
   const save = useMutation({
@@ -42,14 +45,16 @@ export function DomainAccessTab({ domain }: { domain: Domain }) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin'] }),
   });
 
+  const deviceLoginConfigUrls = deviceUrlsText.split(/\r?\n/).map((value) => value.trim()).filter(Boolean);
   const dirty =
     !sameList(form.allowedEmailDomains, domain.allowedEmailDomains) ||
     !sameList(form.allowedEmails, domain.allowedEmails) ||
-    !sameList(form.allowedRedirectUrls, domain.allowedRedirectUrls);
+    !sameList(form.allowedRedirectUrls, domain.allowedRedirectUrls) ||
+    !sameList(deviceLoginConfigUrls, domain.deviceLoginConfigUrls ?? []);
 
   function submit() {
     setError(false);
-    save.mutate(form);
+    save.mutate({ ...form, deviceLoginConfigUrls });
   }
 
   return (
@@ -101,6 +106,21 @@ export function DomainAccessTab({ domain }: { domain: Domain }) {
         </div>
       </Card>
 
+      <Card className="p-5">
+        <h3 className="text-sm font-semibold text-gray-900">Numeric device sign-in</h3>
+        <p className="mt-0.5 text-xs text-gray-500">
+          Off when empty. Add each exact HTTPS signed config URL on its own line. A signed-in browser
+          must approve the matching device claim before UOA issues a new session.
+        </p>
+        <label className="mt-4 block text-sm font-medium text-gray-700" htmlFor="device-login-config-urls">
+          Enabled site config URLs
+        </label>
+        <textarea id="device-login-config-urls" rows={3}
+          className="mt-1 w-full rounded border border-gray-300 p-2 font-mono text-sm"
+          value={deviceUrlsText}
+          onChange={(event) => setDeviceUrlsText(event.target.value)} />
+      </Card>
+
       {error ? (
         <p className="text-xs text-red-600">Could not save. Check the domains, emails, and URLs and try again.</p>
       ) : null}
@@ -113,5 +133,6 @@ function toForm(domain: Domain): AccessForm {
     allowedEmailDomains: domain.allowedEmailDomains,
     allowedEmails: domain.allowedEmails,
     allowedRedirectUrls: domain.allowedRedirectUrls,
+    deviceLoginConfigUrls: domain.deviceLoginConfigUrls ?? [],
   };
 }

@@ -2,6 +2,7 @@ import { registerLifecycleStatusRoutes } from './lifecycle-status.js';
 import type { FastifyInstance } from 'fastify';
 import { registerSessionBrokerRoutes } from './session-broker.js';
 import { registerDebugLoginRoutes } from './debug-login.js';
+import { registerDeviceLoginRoutes } from './device-login.js';
 import { registerActionVerificationRoutes } from './action-verification.js';
 
 import { registerAuthEmailResetPasswordRoute } from './email-reset-password.js';
@@ -35,6 +36,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
   registerLifecycleStatusRoutes(app);
   registerActionVerificationRoutes(app);
   registerDebugLoginRoutes(app);
+  registerDeviceLoginRoutes(app);
   registerSessionBrokerRoutes(app);
   registerAuthEntrypointRoute(app);
   registerAuthCallbackRoute(app);

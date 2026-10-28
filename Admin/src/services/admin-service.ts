@@ -230,6 +230,7 @@ export const adminService = {
       status?: 'active' | 'disabled';
       twoFaPolicy?: TwoFaPolicy;
       allowedRedirectUrls?: string[];
+      deviceLoginConfigUrls?: string[];
     } & LoginRestrictionInput,
   ) =>
     api.patch<Domain>(`/internal/admin/domains/${encodeURIComponent(domain)}`, {
@@ -242,6 +243,9 @@ export const adminService = {
       ...(input.allowedEmails !== undefined ? { allowed_emails: input.allowedEmails } : {}),
       ...(input.allowedRedirectUrls !== undefined
         ? { allowed_redirect_urls: input.allowedRedirectUrls }
+        : {}),
+      ...(input.deviceLoginConfigUrls !== undefined
+        ? { device_login_config_urls: input.deviceLoginConfigUrls }
         : {}),
     }),
   rotateDomainSecret: (domain: string, deliveryMode: IntegrationClaimDeliveryMode = 'email') =>

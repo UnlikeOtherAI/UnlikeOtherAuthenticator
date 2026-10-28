@@ -190,6 +190,7 @@ export async function updateAdminDomain(
     allowedEmailDomains?: string[];
     allowedEmails?: string[];
     allowedRedirectUrls?: string[];
+    deviceLoginConfigUrls?: string[];
     twoFaPolicy?: TwoFaPolicyValue;
     actorEmail: string;
   },
@@ -212,6 +213,14 @@ export async function updateAdminDomain(
     params.allowedRedirectUrls === undefined
       ? undefined
       : normalizeAllowedRedirectUrls(params.allowedRedirectUrls);
+  const deviceLoginConfigUrls = params.deviceLoginConfigUrls === undefined ? undefined :
+    [...new Set(params.deviceLoginConfigUrls.map((value) => {
+      const url = new URL(value);
+      if (url.protocol !== 'https:' || url.username || url.password || url.hash || url.search) {
+        throw new AppError('INVALID_REQUEST', 400);
+      }
+      return url.href;
+    }))];
   const twoFaPolicy = params.twoFaPolicy;
 
   return runInTransaction(prisma as unknown as PrismaClient, async (tx) => {
@@ -231,6 +240,7 @@ export async function updateAdminDomain(
         ...(allowedEmailDomains ? { allowedEmailDomains } : {}),
         ...(allowedEmails ? { allowedEmails } : {}),
         ...(allowedRedirectUrls ? { allowedRedirectUrls } : {}),
+        ...(deviceLoginConfigUrls ? { deviceLoginConfigUrls } : {}),
         ...(twoFaPolicy ? { twoFaPolicy } : {}),
       },
       update: {
@@ -239,6 +249,7 @@ export async function updateAdminDomain(
         ...(allowedEmailDomains ? { allowedEmailDomains } : {}),
         ...(allowedEmails ? { allowedEmails } : {}),
         ...(allowedRedirectUrls ? { allowedRedirectUrls } : {}),
+        ...(deviceLoginConfigUrls ? { deviceLoginConfigUrls } : {}),
         ...(twoFaPolicy ? { twoFaPolicy } : {}),
       },
       ...domainWithActiveSecret,
