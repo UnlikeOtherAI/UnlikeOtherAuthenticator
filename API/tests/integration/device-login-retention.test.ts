@@ -38,8 +38,9 @@ describe.skipIf(!process.env.DATABASE_URL)('device-login retention and identity 
       expiresAt: new Date(Date.now() + 300_000), ...data,
     } });
   async function container() {
+    const owner = await user();
     const org = await handle.prisma.organisation.create({ data: {
-      domain, name: 'Device retention', slug: randomUUID(),
+      domain, name: 'Device retention', slug: randomUUID(), ownerId: owner.id,
     } });
     const first = await handle.prisma.team.create({ data: {
       orgId: org.id, name: 'First', slug: randomUUID(), isDefault: true,
@@ -87,7 +88,12 @@ describe.skipIf(!process.env.DATABASE_URL)('device-login retention and identity 
     await grant(person.id, { orgId: org.id, teamId: first.id });
     const sibling = await grant(person.id, { orgId: org.id, teamId: second.id });
     const standalone = await grant(person.id);
+    await handle.prisma.orgMember.create({ data: { orgId: org.id, userId: person.id } });
+    await handle.prisma.teamMember.createMany({ data: [
+      { teamId: first.id, userId: person.id }, { teamId: second.id, userId: person.id },
+    ] });
     const preview = await previewEntityDeletion(handle.prisma, 'TEAM', first.id, 'RETAIN_REFERENCE');
+    await handle.prisma.team.update({ where: { id: first.id }, data: { lifecycleStatus: 'DELETING' } });
     await runInTransaction(handle.prisma, tx => sweepDeletion(tx, preview));
     expect((await handle.prisma.deviceLoginGrant.findMany()).map(row => row.id).sort())
       .toEqual([sibling.id, standalone.id].sort());
@@ -101,6 +107,8 @@ describe.skipIf(!process.env.DATABASE_URL)('device-login retention and identity 
     await grant(person.id, { orgId: org.id });
     const survivor = await grant(person.id);
     const preview = await previewEntityDeletion(handle.prisma, 'ORGANISATION', org.id, 'RETAIN_REFERENCE');
+    await handle.prisma.organisation.update({ where: { id: org.id }, data: { lifecycleStatus: 'DELETING' } });
+    await handle.prisma.team.updateMany({ where: { orgId: org.id }, data: { lifecycleStatus: 'DELETING' } });
     await runInTransaction(handle.prisma, tx => sweepDeletion(tx, preview));
     expect(await handle.prisma.deviceLoginGrant.findMany()).toMatchObject([{ id: survivor.id }]);
     expect(await handle.prisma.organisation.findUnique({ where: { id: org.id } })).toBeNull();
