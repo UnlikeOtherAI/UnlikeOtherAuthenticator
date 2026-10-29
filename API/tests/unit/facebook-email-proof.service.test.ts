@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { PrismaClient } from '@prisma/client';
 
+import { getAuthServiceIdentifier, getEnv, requireEnv } from '../../src/config/env.js';
 import { hashEmailToken } from '../../src/utils/verification-token.js';
 import {
   consumeFacebookEmailProof,
@@ -11,8 +12,7 @@ import { verifySocialState } from '../../src/services/social/social-state.servic
 
 const id = '5dc768ab-0edb-46f6-b6d8-54ef59004166';
 const nonce = 'a'.repeat(43);
-const secret = 'test-shared-secret-with-enough-length';
-const hash = (value: string) => hashEmailToken(value, secret);
+const hash = (value: string) => hashEmailToken(value, requireEnv('SHARED_SECRET').SHARED_SECRET);
 
 function proofStore() {
   const row = {
@@ -81,9 +81,9 @@ describe('Facebook email proof', () => {
     const completed = await verifyFacebookEmailProof({ cookie: { id, nonce }, code: '123456', prisma });
     const state = await verifySocialState({
       stateJwt: completed.stateJwt,
-      sharedSecret: secret,
-      audience: 'uoa-auth-service',
-      issuer: 'http://127.0.0.1:3000/social-state',
+      sharedSecret: requireEnv('SHARED_SECRET').SHARED_SECRET,
+      audience: getAuthServiceIdentifier(),
+      issuer: `${(getEnv().PUBLIC_BASE_URL ?? `http://${getEnv().HOST}:${getEnv().PORT}`).replace(/\/+$/, '')}/social-state`,
     });
     expect(state).toMatchObject({ provider: 'facebook', nonce: completed.nonce });
     await expect(loadVerifiedFacebookProof({ id, stateJwt: `${completed.stateJwt}tampered`, cookie: { id, nonce }, prisma }))
