@@ -27,6 +27,6 @@ export async function assertIndependentSourceStillAdmitted(input: {
 }, db: MailboxAdmissionDb): Promise<void> {
   if (input.personalFactorCompleted) return;
   const mailboxSources = ['email_code', 'email_registration', 'email_link', 'login_link', 'verify_email',
-    'verify_email_set_password', 'google', 'apple', 'facebook', 'github', 'linkedin'];
+    'verify_email_set_password', 'google', 'apple', 'facebook', 'github', 'linkedin', 'x'];
   if (input.methods.some(method => mailboxSources.includes(method))) await assertMailboxCredentialAdmission(input.userId, db);
 }

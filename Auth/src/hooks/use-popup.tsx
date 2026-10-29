@@ -18,6 +18,7 @@ export type AuthView =
   | 'signed-in'
   | 'signatures'
   | 'code-entry'
+  | 'facebook-proof'
   | 'team-chooser';
 
 export type TwoFactorSetupState = {
@@ -139,6 +140,7 @@ function readClientSearch(): string {
 }
 
 function deriveInitialView(parsed: PopupQueryParams): AuthView {
+  if (parsed.facebookProof) return 'facebook-proof';
   if (parsed.signingToken) {
     return 'signatures';
   }
@@ -297,6 +299,7 @@ export function PopupProvider(props: {
     return {
       configUrl: props.configUrl,
       config: props.config,
+      facebookProof: parsed.facebookProof,
       redirectUrl: parsed.redirectUrl,
       codeChallenge: parsed.codeChallenge,
       codeChallengeMethod: parsed.codeChallengeMethod,
@@ -352,6 +355,7 @@ export function PopupProvider(props: {
       },
     };
   }, [
+    parsed.facebookProof,
     parsed.redirectUrl,
     parsed.codeChallenge,
     parsed.codeChallengeMethod,

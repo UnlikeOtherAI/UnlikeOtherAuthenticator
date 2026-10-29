@@ -636,6 +636,8 @@ The following tighten ambiguities in the brief to prevent misinterpretation duri
 
 - Only **provider-verified emails** are accepted from social login providers
 - If a social provider returns an unverified email, the login is **rejected**
+- Facebook is the explicit exception when it supplies an email without a reliable verified-email signal: UOA sends a one-time code to that mailbox, completes the login only after the code is verified in the initiating browser, and binds Facebook's stable subject to the resulting UOA account. Later Facebook logins may use that binding only while the subject and UOA account match; a changed or unbound email requires fresh UOA mailbox proof. Facebook's email claim alone never authorizes an account merge.
+- X sign-in is supported as an opt-in method (`x`) with OAuth 2.0 authorization code and S256 PKCE. UOA accepts only X's `confirmed_email` response. A missing confirmed address is rejected. The provider-visible state is a short nonce bound to signed, one-use browser cookies that retain the UOA state and PKCE verifier.
 - This prevents account takeover via unverified email claims
 - A product adding a **second account** for someone already signed in may send
   `prompt=select_account` on `GET /auth`. The social buttons forward it and Google then shows its

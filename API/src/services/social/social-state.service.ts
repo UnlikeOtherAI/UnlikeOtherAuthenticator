@@ -9,7 +9,7 @@ import { TEAM_HINT_PATTERN } from './social-browser-preference.service.js';
 const SOCIAL_STATE_ALLOWED_ALGS = ['HS256'] as const;
 
 const SocialStateSchema = z.object({
-  provider: z.enum(['google', 'apple', 'facebook', 'github', 'linkedin']),
+  provider: z.enum(['google', 'apple', 'facebook', 'github', 'linkedin', 'x']),
   config_url: z.string().min(1),
   management_org_id: z.string().min(1).max(100).optional(),
   redirect_url: z.string().min(1),

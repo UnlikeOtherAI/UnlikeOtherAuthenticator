@@ -5,6 +5,7 @@ import { getAdminPrisma } from '../db/prisma.js';
 
 type RetentionPrisma = {
   pendingRegistration: Pick<PrismaClient['pendingRegistration'], 'deleteMany'>;
+  facebookEmailProof: Pick<PrismaClient['facebookEmailProof'], 'deleteMany'>;
   telephoneCallChallenge: Pick<PrismaClient['telephoneCallChallenge'], 'deleteMany'>;
   telephoneChallenge: Pick<PrismaClient['telephoneChallenge'], 'deleteMany'>;
   telephoneSmsAdmission: Pick<PrismaClient['telephoneSmsAdmission'], 'deleteMany'>;
@@ -27,6 +28,7 @@ type RetentionPruneDeps = {
 
 export type RetentionPruneResult = {
   pendingRegistrationsDeleted: number;
+  facebookEmailProofsDeleted: number;
   telephoneCallChallengesDeleted: number;
   telephoneChallengesDeleted: number;
   telephoneSmsAdmissionsDeleted: number;
@@ -48,6 +50,7 @@ function subtractDays(date: Date, days: number): Date {
 function emptyResult(): RetentionPruneResult {
   return {
     pendingRegistrationsDeleted: 0,
+    facebookEmailProofsDeleted: 0,
     telephoneCallChallengesDeleted: 0,
     telephoneChallengesDeleted: 0,
     telephoneSmsAdmissionsDeleted: 0,
@@ -76,6 +79,7 @@ export async function pruneExpiredSecurityData(
 
   const [
     pendingRegistrations,
+    facebookEmailProofs,
     telephoneCallChallenges,
     telephoneChallenges,
     telephoneSmsAdmissions,
@@ -90,6 +94,7 @@ export async function pruneExpiredSecurityData(
     handshakeErrorLogs,
   ] = await Promise.all([
     prisma.pendingRegistration.deleteMany({ where: { expiresAt: { lt: now } } }),
+    prisma.facebookEmailProof.deleteMany({ where: { expiresAt: { lt: now } } }),
     prisma.telephoneCallChallenge.deleteMany({ where: { createdAt: { lt: subtractDays(now, 1) } } }),
     prisma.telephoneChallenge.deleteMany({ where: { createdAt: { lt: subtractDays(now, 1) } } }),
     prisma.telephoneSmsAdmission.deleteMany({ where: { createdAt: { lt: subtractDays(now, 30) } } }),
@@ -120,6 +125,7 @@ export async function pruneExpiredSecurityData(
 
   return {
     pendingRegistrationsDeleted: pendingRegistrations.count,
+    facebookEmailProofsDeleted: facebookEmailProofs.count,
     telephoneCallChallengesDeleted: telephoneCallChallenges.count,
     telephoneChallengesDeleted: telephoneChallenges.count,
     telephoneSmsAdmissionsDeleted: telephoneSmsAdmissions.count,

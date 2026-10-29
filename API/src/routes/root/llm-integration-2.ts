@@ -74,7 +74,7 @@ can be retried; \`session-choices\` and invite decline validate but do not consu
    \`"off"\`, legacy clients remain unchanged; recognized products suppress the chooser but resolve
    one exact team (or required first placement) before any 2FA decision and fail closed on
    ambiguous choices.
-5. Social login (\`GET /auth/callback/:provider\`) resolves team immediately after identity,
+5. Social login (\`GET /auth/callback/:provider\`, or Apple's \`POST /auth/callback/apple\` form callback) resolves team immediately after identity,
    before 2FA. With \`team_selection: "auto"\`, 2+ ACTIVE teams, any pending invite, or zero
    teams with \`can_create_org: true\` route to the chooser. Exactly one ACTIVE team and no invite is
    an unambiguous server-side selection: its

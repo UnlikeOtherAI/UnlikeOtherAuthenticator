@@ -2,10 +2,11 @@ import { z } from 'zod';
 
 import { AppError } from '../../utils/errors.js';
 
-export type SocialProviderKey = 'google' | 'apple' | 'facebook' | 'github' | 'linkedin';
+export type SocialProviderKey = 'google' | 'apple' | 'facebook' | 'github' | 'linkedin' | 'x';
 
 export type SocialProfile = {
   provider: SocialProviderKey;
+  providerSubject?: string;
   email: string;
   emailVerified: boolean;
   name: string | null;
@@ -13,7 +14,8 @@ export type SocialProfile = {
 };
 
 const SocialProfileSchema = z.object({
-  provider: z.enum(['google', 'apple', 'facebook', 'github', 'linkedin']),
+  provider: z.enum(['google', 'apple', 'facebook', 'github', 'linkedin', 'x']),
+  providerSubject: z.string().trim().min(1).optional(),
   email: z.string().trim().toLowerCase().email(),
   emailVerified: z.boolean(),
   name: z.string().trim().min(1).nullable(),

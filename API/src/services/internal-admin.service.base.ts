@@ -14,7 +14,7 @@ import { toPublicTwoFaPolicy } from './twofactor-policy.service.js';
 
 export { normalizeDomain };
 
-export type AdminMethod = 'email' | 'google' | 'github' | 'apple' | 'facebook' | 'linkedin' | 'microsoft';
+export type AdminMethod = 'email' | 'google' | 'github' | 'apple' | 'facebook' | 'linkedin' | 'x' | 'microsoft';
 
 export const DEFAULT_LIST_LIMIT = 100;
 export const MAX_LIST_LIMIT = 200;
@@ -78,7 +78,7 @@ export function secretAge(value: Date | null): string | null {
 
 export function method(value: string | null | undefined): AdminMethod {
   const normalized = (value ?? 'email').toLowerCase();
-  return ['email', 'google', 'github', 'apple', 'facebook', 'linkedin', 'microsoft'].includes(normalized)
+  return ['email', 'google', 'github', 'apple', 'facebook', 'linkedin', 'x', 'microsoft'].includes(normalized)
     ? (normalized as AdminMethod)
     : 'email';
 }

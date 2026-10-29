@@ -4,6 +4,7 @@ import { NativeSocialPage } from '../../pages/NativeSocialPage.js';
 import { PopupProvider, usePopup } from '../../hooks/use-popup.js';
 import { AccessRequestedPage } from '../../pages/AccessRequestedPage.js';
 import { CodeEntryPage } from '../../pages/CodeEntryPage.js';
+import { FacebookProofPage } from '../../pages/FacebookProofPage.js';
 import { LoginPage } from '../../pages/LoginPage.js';
 import { InviteAcceptedPage } from '../../pages/InviteAcceptedPage.js';
 import { InviteRegistrationPage } from '../../pages/InviteRegistrationPage.js';
@@ -54,6 +55,8 @@ function PopupContent(): React.JSX.Element {
       return <SigningPage />;
     case 'code-entry':
       return <CodeEntryPage />;
+    case 'facebook-proof':
+      return <FacebookProofPage />;
     case 'team-chooser':
       return <TeamChooserPage />;
     default:

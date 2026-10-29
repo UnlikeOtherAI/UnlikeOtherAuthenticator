@@ -1,4 +1,4 @@
-export type AuthMethod = 'email' | 'google' | 'github' | 'apple' | 'facebook' | 'linkedin' | 'microsoft';
+export type AuthMethod = 'email' | 'google' | 'github' | 'apple' | 'facebook' | 'linkedin' | 'x' | 'microsoft';
 
 export type EntityStatus = 'active' | 'disabled' | 'banned' | 'deleting' | 'deleted';
 

@@ -3145,7 +3145,7 @@ paths:
           required: true
           schema:
             type: string
-            enum: [google, apple, facebook, github, linkedin]
+            enum: [google, apple, facebook, github, linkedin, x]
         - $ref: '#/components/parameters/configUrl'
         - name: redirect_url
           in: query
@@ -3199,7 +3199,7 @@ paths:
           required: true
           schema:
             type: string
-            enum: [google, apple, facebook, github, linkedin]
+            enum: [google, apple, facebook, github, linkedin, x]
         - name: code
           in: query
           schema:
@@ -3224,6 +3224,90 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '401':
           description: Social provider returned an error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags: [Auth]
+      summary: Sign in with Apple form callback
+      operationId: appleSocialAuthCallback
+      description: |
+        Apple posts the authorization result when email/name scopes are requested.
+        The signed browser nonce cookie must match the state; other providers are rejected.
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [apple]
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                code:
+                  type: string
+                state:
+                  type: string
+                error:
+                  type: string
+      responses:
+        '302':
+          description: Redirect after completed authorization.
+        '400':
+          description: Invalid method, callback parameters, or browser state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Social provider returned an error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/facebook-proof/verify:
+    post:
+      tags: [Auth]
+      summary: Complete browser-bound Facebook mailbox proof
+      operationId: verifyFacebookEmailProof
+      description: |
+        Verifies a six-digit UOA email code against the signed proof cookie in the
+        initiating browser. Five wrong attempts or expiry fail generically. A
+        successful response renews one-use social callback state; the callback
+        rechecks the current signed product config before binding the Facebook
+        account to the UOA account.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              additionalProperties: false
+              properties:
+                code:
+                  type: string
+                  pattern: '^\d{6}$'
+      responses:
+        '200':
+          description: Mailbox proved in the initiating browser.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [redirect_url]
+                properties:
+                  redirect_url:
+                    type: string
+                    format: uri
+        '401':
+          description: Generic authentication failure.
           content:
             application/json:
               schema:

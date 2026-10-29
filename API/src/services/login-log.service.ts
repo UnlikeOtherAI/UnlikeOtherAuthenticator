@@ -64,6 +64,7 @@ export async function recordLoginLog(
     email?: string;
     domain: string;
     authMethod: string;
+    providerSubject?: string;
     ip?: string | null;
     userAgent?: string | null;
   },
@@ -109,8 +110,8 @@ export async function recordLoginLog(
   }
 
   // Record the auth identity for this login (design §4.2). Best-effort, on the BYPASSRLS admin
-  // client (the table is locked down for uoa_app). providerSubject is the email here; social phases
-  // refine it to the real OAuth subject via the same (userId, provider) upsert.
+  // client (the table is locked down for uoa_app). Email methods use the email as their subject;
+  // social callbacks pass the provider's stable subject.
   //
   // Write it through the caller's client, never a fresh admin connection: most logins record this
   // inside their admin transaction, and a second admin-pool checkout while that transaction holds
@@ -120,7 +121,7 @@ export async function recordLoginLog(
       {
         userId: params.userId,
         provider: mapAuthMethodToProvider(params.authMethod),
-        providerSubject: email,
+        providerSubject: params.providerSubject ?? email,
         email,
       },
       { env, now: () => now, ...(deps?.prisma ? { prisma: deps.prisma } : {}) },

@@ -28,6 +28,7 @@ import { registerAuthVerifyCodeRoute } from './auth-verify-code.js';
 import { registerAuthVerifyEmailRoute } from './verify-email.js';
 import { registerAuthSocialRoute } from './social.js';
 import { registerAuthCallbackRoute } from './callback.js';
+import { registerFacebookEmailProofRoute } from './facebook-email-proof.js';
 
 export function registerAuthRoutes(app: FastifyInstance): void {
   registerPendingRegistrationRoutes(app);
@@ -38,6 +39,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
   registerSessionBrokerRoutes(app);
   registerAuthEntrypointRoute(app);
   registerAuthCallbackRoute(app);
+  registerFacebookEmailProofRoute(app);
   registerAuthEmailResetPasswordRoute(app);
   registerAuthEmailTwoFaResetRoute(app);
   registerAuthEmailRegistrationLinkRoute(app);

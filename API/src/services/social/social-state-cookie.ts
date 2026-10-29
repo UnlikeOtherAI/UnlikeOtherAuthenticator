@@ -2,12 +2,14 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
 import { SOCIAL_STATE_TTL_MS } from '../../config/constants.js';
+import { AppError } from '../../utils/errors.js';
 
 // Name of the signed, HttpOnly cookie that binds the social OAuth `state` to the
 // browser that initiated the flow. Scoped to /auth so it survives the provider's
 // top-level redirect back to /auth/callback but is not sent to unrelated paths.
 export const SOCIAL_STATE_COOKIE_NAME = 'uoa_social_state';
 export const SOCIAL_INVITE_COOKIE_NAME = 'uoa_social_invite';
+export const X_SOCIAL_CONTEXT_COOKIE_NAME = 'uoa_x_social_context';
 
 const COOKIE_PATH = '/auth';
 
@@ -16,27 +18,27 @@ export function generateSocialStateNonce(): string {
   return randomBytes(32).toString('base64url');
 }
 
-function cookieBaseOptions(): {
+function cookieBaseOptions(provider?: string): {
   httpOnly: true;
   secure: true;
-  sameSite: 'lax';
+  sameSite: 'lax' | 'none';
   path: string;
   signed: true;
 } {
   return {
     httpOnly: true,
-    // SameSite=Lax is required so the cookie survives the provider's top-level
-    // GET redirect back to the callback. Secure keeps it HTTPS-only.
+    // Apple POSTs the callback from another site, so its nonce needs SameSite=None.
+    // All other providers return with top-level GET redirects.
     secure: true,
-    sameSite: 'lax',
+    sameSite: provider === 'apple' ? 'none' : 'lax',
     path: COOKIE_PATH,
     signed: true,
   };
 }
 
-export function setSocialStateCookie(reply: FastifyReply, nonce: string): void {
+export function setSocialStateCookie(reply: FastifyReply, nonce: string, provider?: string): void {
   reply.setCookie(SOCIAL_STATE_COOKIE_NAME, nonce, {
-    ...cookieBaseOptions(),
+    ...cookieBaseOptions(provider),
     maxAge: Math.floor(SOCIAL_STATE_TTL_MS / 1000),
   });
 }
@@ -47,9 +49,9 @@ export function clearSocialStateCookie(reply: FastifyReply): void {
 }
 
 /** Stores an invite capability only in the browser's signed, HttpOnly cookie. */
-export function setSocialInviteCookie(reply: FastifyReply, token: string): void {
+export function setSocialInviteCookie(reply: FastifyReply, token: string, provider?: string): void {
   reply.setCookie(SOCIAL_INVITE_COOKIE_NAME, token, {
-    ...cookieBaseOptions(),
+    ...cookieBaseOptions(provider),
     maxAge: Math.floor(SOCIAL_STATE_TTL_MS / 1000),
   });
 }
@@ -66,6 +68,44 @@ export function readSocialInviteCookie(request: FastifyRequest): string | null {
 
 export function clearSocialInviteCookie(reply: FastifyReply): void {
   reply.clearCookie(SOCIAL_INVITE_COOKIE_NAME, { ...cookieBaseOptions(), maxAge: 0 });
+}
+
+/** X limits provider-visible state to 500 characters, so keep the signed JWT and PKCE verifier in this browser cookie. */
+export function setXSocialContextCookie(
+  reply: FastifyReply,
+  context: { state: string; stateJwt: string; codeVerifier: string },
+): void {
+  const value = JSON.stringify(context);
+  if (Buffer.byteLength(value, 'utf8') > 3500) {
+    throw new AppError('BAD_REQUEST', 400, 'SOCIAL_STATE_TOO_LARGE');
+  }
+  reply.setCookie(X_SOCIAL_CONTEXT_COOKIE_NAME, value, {
+    ...cookieBaseOptions(),
+    maxAge: Math.floor(SOCIAL_STATE_TTL_MS / 1000),
+  });
+}
+
+export function readXSocialContextCookie(request: FastifyRequest): {
+  state: string;
+  stateJwt: string;
+  codeVerifier: string;
+} | null {
+  const raw = request.cookies?.[X_SOCIAL_CONTEXT_COOKIE_NAME];
+  if (typeof raw !== 'string') return null;
+  const unsigned = request.unsignCookie(raw);
+  if (!unsigned.valid || typeof unsigned.value !== 'string') return null;
+  try {
+    const value = JSON.parse(unsigned.value) as Record<string, unknown>;
+    if (typeof value.state !== 'string' || typeof value.stateJwt !== 'string' ||
+        typeof value.codeVerifier !== 'string') return null;
+    return { state: value.state, stateJwt: value.stateJwt, codeVerifier: value.codeVerifier };
+  } catch {
+    return null;
+  }
+}
+
+export function clearXSocialContextCookie(reply: FastifyReply): void {
+  reply.clearCookie(X_SOCIAL_CONTEXT_COOKIE_NAME, { ...cookieBaseOptions(), maxAge: 0 });
 }
 
 function constantTimeEqual(actual: string, expected: string): boolean {

@@ -5,12 +5,14 @@ import { getFacebookProfileFromCode } from './facebook.service.js';
 import { getGitHubProfileFromCode } from './github.service.js';
 import { getGoogleProfileFromCode } from './google.service.js';
 import { getLinkedInProfileFromCode } from './linkedin.service.js';
+import { getXProfileFromCode } from './x.service.js';
 import type { SocialProfile } from './provider.base.js';
 
 export async function getSocialProfileFromCode(
-  provider: 'google' | 'apple' | 'facebook' | 'github' | 'linkedin',
+  provider: 'google' | 'apple' | 'facebook' | 'github' | 'linkedin' | 'x',
   code: string,
   baseUrl: string,
+  xCodeVerifier?: string,
 ): Promise<SocialProfile> {
   const env = getEnv();
 
@@ -81,6 +83,17 @@ export async function getSocialProfileFromCode(
       clientId: env.LINKEDIN_CLIENT_ID,
       clientSecret: env.LINKEDIN_CLIENT_SECRET,
       redirectUri,
+    });
+  } else if (provider === 'x') {
+    if (!env.X_CLIENT_ID || !env.X_CLIENT_SECRET || !xCodeVerifier) {
+      throw new AppError('INTERNAL', 500, 'X_ENV_MISSING');
+    }
+    profile = await getXProfileFromCode({
+      code,
+      clientId: env.X_CLIENT_ID,
+      clientSecret: env.X_CLIENT_SECRET,
+      redirectUri: `${baseUrl}/auth/callback/x`,
+      codeVerifier: xCodeVerifier,
     });
   } else {
     throw new AppError('BAD_REQUEST', 400);

@@ -176,11 +176,11 @@ export async function createApp(): Promise<FastifyInstance> {
     'application/x-www-form-urlencoded',
     { parseAs: 'string' },
     (request, body, done) => {
-      if (request.url.startsWith('/sso/saml/')) {
+      if (request.url.startsWith('/sso/saml/') || request.url.startsWith('/auth/callback/apple')) {
         const values = new URLSearchParams(String(body));
         const parsed: Record<string, string> = {};
         for (const [key, value] of values) {
-          if (Object.hasOwn(parsed, key)) return done(new Error('duplicate SAML form field'));
+          if (Object.hasOwn(parsed, key)) return done(new Error('duplicate form field'));
           parsed[key] = value;
         }
         done(null, parsed);

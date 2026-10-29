@@ -55,11 +55,15 @@ describe('facebook.service', () => {
 
     expect(profile).toEqual({
       provider: 'facebook',
+      providerSubject: 'fb-id',
       email: 'user@example.com',
       emailVerified: false,
       name: 'User Example',
       avatarUrl: 'https://example.com/avatar.png',
     });
+    const profileRequest = fetchMock.mock.calls[1] as unknown as [URL, RequestInit];
+    expect(profileRequest[0].searchParams.has('access_token')).toBe(false);
+    expect(profileRequest[1].headers).toMatchObject({ authorization: 'Bearer access-token' });
   });
 
   it('rejects when Facebook does not provide an email', async () => {

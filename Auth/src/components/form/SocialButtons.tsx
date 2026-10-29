@@ -4,7 +4,7 @@ import { usePopup } from '../../hooks/use-popup.js';
 import { useTheme } from '../../hooks/use-theme.js';
 import { useTranslation } from '../../i18n/use-translation.js';
 
-const SOCIAL_PROVIDERS = ['google', 'apple', 'facebook', 'github', 'linkedin'] as const;
+const SOCIAL_PROVIDERS = ['google', 'apple', 'facebook', 'github', 'linkedin', 'x'] as const;
 
 type SocialProvider = (typeof SOCIAL_PROVIDERS)[number];
 
@@ -14,6 +14,7 @@ const PROVIDER_LABELS: Record<SocialProvider, string> = {
   facebook: 'Facebook',
   github: 'GitHub',
   linkedin: 'LinkedIn',
+  x: 'X',
 };
 
 function GoogleIcon(): React.JSX.Element {
@@ -77,12 +78,21 @@ function LinkedInIcon(): React.JSX.Element {
   );
 }
 
+function XIcon(): React.JSX.Element {
+  return (
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true">
+      <path d="M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.64 7.584H.47l8.6-9.83L0 1.154h7.594l5.243 6.932zM17.61 20.646h2.04L6.486 3.24H4.298z" />
+    </svg>
+  );
+}
+
 const PROVIDER_ICONS: Record<SocialProvider, () => React.JSX.Element> = {
   google: GoogleIcon,
   apple: AppleIcon,
   facebook: FacebookIcon,
   github: GitHubIcon,
   linkedin: LinkedInIcon,
+  x: XIcon,
 };
 
 function readEnabledSocialProviders(config: unknown): SocialProvider[] {
@@ -100,7 +110,9 @@ export function SocialButtons(props?: { showDivider?: boolean }): React.JSX.Elem
   const { t } = useTranslation();
   const showDivider = props?.showDivider ?? true;
 
-  const providers = readEnabledSocialProviders(popup.config);
+  const providers = readEnabledSocialProviders(popup.config).filter(
+    (provider) => !popup.clientId || provider === 'google',
+  );
   if (providers.length === 0) return null;
 
   return (

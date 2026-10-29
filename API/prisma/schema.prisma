@@ -644,6 +644,29 @@ model PendingRegistration {
   @@map("pending_registrations")
 }
 
+// Browser-bound mailbox proof for Facebook, whose basic profile has no verified-email claim.
+// Kept separate from a User so first-time social registration can prove a mailbox before creation.
+model FacebookEmailProof {
+  id              String    @id
+  email           String    @db.Citext
+  providerSubject String    @map("provider_subject")
+  name            String?
+  avatarUrl       String?   @map("avatar_url")
+  stateJson       String    @map("state_json") @db.Text
+  completionStateJwt String? @map("completion_state_jwt") @db.Text
+  inviteToken     String?   @map("invite_token") @db.Text
+  browserHash     String    @map("browser_hash")
+  codeHash        String    @map("code_hash")
+  attempts        Int       @default(0)
+  verifiedAt      DateTime? @map("verified_at")
+  usedAt          DateTime? @map("used_at")
+  expiresAt       DateTime  @map("expires_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  @@index([expiresAt])
+  @@map("facebook_email_proofs")
+}
+
 model AuthorizationCode {
   id                  String    @id @default(cuid())
   codeHash            String    @unique @map("code_hash")

@@ -4,7 +4,7 @@ import type { SocialProviderKey } from './provider.base.js';
 
 export const SOCIAL_PREFERENCE_COOKIE = 'uoa_social_preference';
 export const TEAM_HINT_PATTERN = /^[A-Za-z0-9_-]{1,256}$/;
-const providers: readonly SocialProviderKey[] = ['google', 'apple', 'facebook', 'github', 'linkedin'];
+const providers: readonly SocialProviderKey[] = ['google', 'apple', 'facebook', 'github', 'linkedin', 'x'];
 const cookieOptions = { path: '/auth', httpOnly: true, secure: true, sameSite: 'lax' as const, signed: true };
 const launchParameters = new Set([
   'config_url', 'redirect_url', 'redirect_uri', 'code_challenge', 'code_challenge_method',

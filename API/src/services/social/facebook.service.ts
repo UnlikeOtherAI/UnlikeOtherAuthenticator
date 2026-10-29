@@ -71,11 +71,10 @@ async function exchangeCodeForAccessToken(params: {
 async function fetchFacebookUserInfo(params: { accessToken: string }): Promise<unknown> {
   const u = new URL(FACEBOOK_ME_URL);
   u.searchParams.set('fields', 'id,name,email,picture.type(large)');
-  u.searchParams.set('access_token', params.accessToken);
 
   let res: Response;
   try {
-    res = await fetch(u, { method: 'GET' });
+    res = await fetch(u, { method: 'GET', headers: { authorization: `Bearer ${params.accessToken}` } });
   } catch {
     throw new AppError('UNAUTHORIZED', 401, 'FACEBOOK_USERINFO_FAILED');
   }
@@ -114,6 +113,10 @@ export async function getFacebookProfileFromCode(params: {
   const info = await fetchFacebookUserInfo({ accessToken });
   const obj = (info ?? {}) as Record<string, unknown>;
 
+  const providerSubject = normalizeString(obj.id);
+  if (!providerSubject) {
+    throw new AppError('UNAUTHORIZED', 401, 'FACEBOOK_SUBJECT_MISSING');
+  }
   const email = normalizeString(obj.email);
   if (!email) {
     // Email is the canonical identifier (brief section 2); fail closed if Facebook doesn't provide one.
@@ -122,6 +125,7 @@ export async function getFacebookProfileFromCode(params: {
 
   return validateSocialProfile({
     provider: 'facebook',
+    providerSubject,
     email,
     // Facebook's basic profile does not expose a reliable verified-email signal.
     // Fail closed; the callback route sends generic email verification instructions.
