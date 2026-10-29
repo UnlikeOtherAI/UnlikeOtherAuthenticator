@@ -28,8 +28,9 @@ describe('retention-pruning.service', () => {
     const calls: Record<string, unknown> = {};
     const prisma = {
       pendingRegistration: { deleteMany: async (args: unknown) => { calls.pendingRegistration = args; return { count: 13 }; } },
+      facebookEmailProof: { deleteMany: async (args: unknown) => { calls.facebookEmailProof = args; return { count: 14 }; } },
       telephoneCallChallenge: { deleteMany: async (args: unknown) => { calls.telephoneCallChallenge = args; return { count: 11 }; } },
-    telephoneChallenge: { deleteMany: async (args: unknown) => { calls.telephoneChallenge = args; return { count: 9 }; } },
+      telephoneChallenge: { deleteMany: async (args: unknown) => { calls.telephoneChallenge = args; return { count: 9 }; } },
       telephoneSmsAdmission: { deleteMany: async (args: unknown) => { calls.telephoneSmsAdmission = args; return { count: 12 }; } },
       telephoneLookup: { deleteMany: async (args: unknown) => { calls.telephoneLookup = args; return { count: 10 }; } },
       debugLoginGrant: { deleteMany: async (args: unknown) => { calls.debugLoginGrant = args; return { count: 8 }; } },
@@ -89,6 +90,7 @@ describe('retention-pruning.service', () => {
     expect(calls.authorizationCode).toMatchObject({
       where: { expiresAt: { lt: now } },
     });
+    expect(calls.facebookEmailProof).toMatchObject({ where: { expiresAt: { lt: now } } });
     expect(calls.verificationToken).toMatchObject({
       where: { expiresAt: { lt: now } },
     });
@@ -110,6 +112,7 @@ describe('retention-pruning.service', () => {
     expect(calls.telephoneLookup).toMatchObject({ where: { createdAt: { lt: new Date('2026-03-21T12:00:00.000Z') } } });
     expect(result).toEqual({
       pendingRegistrationsDeleted: 13,
+      facebookEmailProofsDeleted: 14,
       telephoneCallChallengesDeleted: 11,
       telephoneChallengesDeleted: 9,
       telephoneSmsAdmissionsDeleted: 12,

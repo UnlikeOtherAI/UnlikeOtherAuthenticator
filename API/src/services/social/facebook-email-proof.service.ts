@@ -173,7 +173,7 @@ export async function verifyFacebookEmailProof(params: {
 
 export async function loadVerifiedFacebookProof(params: {
   id: string;
-    stateJwt: string;
+  stateJwt: string;
   cookie: FacebookProofCookie | null;
   prisma: ProofPrisma;
 }): Promise<SocialProfile> {

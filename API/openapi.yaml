@@ -3271,6 +3271,48 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /auth/facebook-proof/verify:
+    post:
+      tags: [Auth]
+      summary: Complete browser-bound Facebook mailbox proof
+      operationId: verifyFacebookEmailProof
+      description: |
+        Verifies a six-digit UOA email code against the signed proof cookie in the
+        initiating browser. Five wrong attempts or expiry fail generically. A
+        successful response renews one-use social callback state; the callback
+        rechecks the current signed product config before binding the Facebook
+        account to the UOA account.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              additionalProperties: false
+              properties:
+                code:
+                  type: string
+                  pattern: '^\d{6}$'
+      responses:
+        '200':
+          description: Mailbox proved in the initiating browser.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [redirect_url]
+                properties:
+                  redirect_url:
+                    type: string
+                    format: uri
+        '401':
+          description: Generic authentication failure.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /auth/domain-mapping:
     get:
       tags: [Auth]

@@ -299,6 +299,7 @@ export function PopupProvider(props: {
     return {
       configUrl: props.configUrl,
       config: props.config,
+      facebookProof: parsed.facebookProof,
       redirectUrl: parsed.redirectUrl,
       codeChallenge: parsed.codeChallenge,
       codeChallengeMethod: parsed.codeChallengeMethod,
@@ -354,6 +355,7 @@ export function PopupProvider(props: {
       },
     };
   }, [
+    parsed.facebookProof,
     parsed.redirectUrl,
     parsed.codeChallenge,
     parsed.codeChallengeMethod,

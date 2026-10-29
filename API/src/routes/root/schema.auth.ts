@@ -378,6 +378,14 @@ export const authEndpoints: EndpointSchema[] = [
     },
   },
   {
+    method: 'POST',
+    path: '/auth/facebook-proof/verify',
+    description: 'Verify a one-time UOA email code in the initiating Facebook sign-in browser. Five wrong attempts or expiry fail generically; success renews browser-bound social state for one callback completion.',
+    auth: 'signed HttpOnly Facebook proof cookie and six-digit email code',
+    body: { code: 'six-digit UOA mailbox code' },
+    response: { redirect_url: 'same-origin one-use /auth/callback/facebook continuation URL' },
+  },
+  {
     method: 'GET',
     path: '/auth/domain-mapping',
     description: 'Look up org/team mapping for an email domain',
