@@ -305,7 +305,6 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
               userId,
               credentialEpoch,
               authMethod: provider,
-              providerSubject: profile.providerSubject,
               config,
               configUrl,
               redirectUrl,
@@ -379,6 +378,7 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
               email: profile.email,
               domain: config.domain,
               authMethod: provider,
+              providerSubject: profile.providerSubject,
               ip: request.ip ?? null,
               userAgent:
                 typeof request.headers['user-agent'] === 'string'
