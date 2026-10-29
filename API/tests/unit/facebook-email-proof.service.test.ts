@@ -46,7 +46,7 @@ function proofStore() {
         if (where.id !== row.id || (where.browserHash && where.browserHash !== row.browserHash) ||
             (where.codeHash && where.codeHash !== row.codeHash) ||
             (where.verifiedAt === null && row.verifiedAt) ||
-            (typeof where.verifiedAt === 'object' && !row.verifiedAt) ||
+            (where.verifiedAt !== null && typeof where.verifiedAt === 'object' && !row.verifiedAt) ||
             (where.usedAt === null && row.usedAt) ||
             (where.attempts && row.attempts >= where.attempts.lt) ||
             (where.expiresAt && row.expiresAt <= where.expiresAt.gt)) return { count: 0 };
