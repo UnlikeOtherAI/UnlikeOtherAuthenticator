@@ -343,7 +343,7 @@ export const authEndpoints: EndpointSchema[] = [
     method: 'GET',
     path: '/auth/social/:provider',
     description:
-      'Initiate social OAuth flow (google, facebook, github, linkedin, apple). Sets a signed, HttpOnly `uoa_social_state` cookie (SameSite=None for Apple form_post, Lax for other providers; Path=/auth) that binds the OAuth `state` to the browser; the cookie must be returned to /auth/callback. A direct team invitation may use invite_token without PKCE; its raw capability is retained only in a second signed HttpOnly cookie and never placed in provider-visible state.',
+      'Initiate social OAuth flow (google, facebook, github, linkedin, apple, x). Sets a signed, HttpOnly `uoa_social_state` cookie (SameSite=None for Apple form_post, Lax for other providers; Path=/auth) that binds the OAuth `state` to the browser; the cookie must be returned to /auth/callback. X uses a short provider-visible state and keeps its signed state plus PKCE verifier in a second signed, HttpOnly, one-use cookie. A direct team invitation may use invite_token without PKCE; its raw capability is retained only in a signed HttpOnly cookie and never placed in provider-visible state.',
     query: {
       management_org_id: 'Optional exact organisation hint for UOA fresh owner reauthentication; grants no authority and holds the chooser even for one team',
       state:

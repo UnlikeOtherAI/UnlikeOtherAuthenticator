@@ -11,7 +11,7 @@ export type ConfigValidationGuidance = {
   field?: string;
 };
 
-const socialProviderKeys = ['google', 'facebook', 'github', 'linkedin', 'apple'] as const;
+const socialProviderKeys = ['google', 'facebook', 'github', 'linkedin', 'apple', 'x'] as const;
 const supportedAuthMethods = new Set(['email_password', ...socialProviderKeys]);
 
 export function buildConfigSummary(config: ClientConfig): Record<string, unknown> {

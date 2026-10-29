@@ -636,6 +636,7 @@ The following tighten ambiguities in the brief to prevent misinterpretation duri
 
 - Only **provider-verified emails** are accepted from social login providers
 - If a social provider returns an unverified email, the login is **rejected**
+- X sign-in is supported as an opt-in method (`x`) with OAuth 2.0 authorization code and S256 PKCE. UOA accepts only X's `confirmed_email` response. A missing confirmed address is rejected. The provider-visible state is a short nonce bound to signed, one-use browser cookies that retain the UOA state and PKCE verifier.
 - This prevents account takeover via unverified email claims
 - A product adding a **second account** for someone already signed in may send
   `prompt=select_account` on `GET /auth`. The social buttons forward it and Google then shows its

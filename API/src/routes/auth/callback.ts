@@ -28,6 +28,8 @@ import {
   clearSocialStateCookie,
   readSocialInviteCookie,
   socialStateCookieMatches,
+  readXSocialContextCookie,
+  clearXSocialContextCookie,
 } from '../../services/social/social-state-cookie.js';
 import {
   acceptTeamInviteTokenForSocialLogin,
@@ -50,7 +52,7 @@ import { handlePublicGoogleCallback } from '../../services/oauth/social-login.se
 import { rememberCompletedSocialProvider } from '../../services/social/social-browser-preference.service.js';
 
 const ParamsSchema = z.object({
-  provider: z.enum(['google', 'apple', 'facebook', 'github', 'linkedin']),
+  provider: z.enum(['google', 'apple', 'facebook', 'github', 'linkedin', 'x']),
 });
 
 const QuerySchema = z
@@ -105,6 +107,9 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
         request.method === 'POST' ? request.body : request.query,
       );
 
+      const xContext = provider === 'x' ? readXSocialContextCookie(request) : null;
+      if (provider === 'x') clearXSocialContextCookie(reply);
+
       if (state && isPublicSocialState(state)) return handlePublicGoogleCallback(request, reply, state, code, provider, error);
 
       // Any provider error is a generic auth failure. Don't leak specifics.
@@ -115,13 +120,16 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
       if (!code || !state) {
         throw new AppError('BAD_REQUEST', 400, 'MISSING_SOCIAL_CALLBACK_PARAMS');
       }
+      if (provider === 'x' && (!xContext || xContext.state !== state)) {
+        throw new AppError('BAD_REQUEST', 400, 'INVALID_SOCIAL_STATE');
+      }
 
       const { SHARED_SECRET, CONFIG_JWKS_URL } = requireEnv('SHARED_SECRET', 'CONFIG_JWKS_URL');
       const authServiceIdentifier = getAuthServiceIdentifier();
       const baseUrl = resolvePublicBaseUrl();
 
       const socialState = await verifySocialState({
-        stateJwt: state,
+        stateJwt: xContext?.stateJwt ?? state,
         sharedSecret: SHARED_SECRET,
         audience: authServiceIdentifier,
         issuer: socialStateIssuer(baseUrl),
@@ -176,7 +184,7 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
         requestedRedirectUrl,
       });
 
-      const profile = await getSocialProfileFromCode(provider, code, baseUrl);
+      const profile = await getSocialProfileFromCode(provider, code, baseUrl, xContext?.codeVerifier);
 
       const outcome = await runWithRequestAdminTransaction(request, async (prisma) => {
         await lockProductTeamPolicyShared(prisma);

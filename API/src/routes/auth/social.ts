@@ -8,12 +8,14 @@ import { buildFacebookAuthorizationUrl } from '../../services/social/facebook.se
 import { buildGitHubAuthorizationUrl } from '../../services/social/github.service.js';
 import { buildGoogleAuthorizationUrl } from '../../services/social/google.service.js';
 import { buildLinkedInAuthorizationUrl } from '../../services/social/linkedin.service.js';
+import { buildXAuthorizationUrl, generateXCodeVerifier } from '../../services/social/x.service.js';
 import { assertSocialProviderAllowed } from '../../services/social/index.js';
 import { signSocialState } from '../../services/social/social-state.service.js';
 import {
   generateSocialStateNonce,
   setSocialInviteCookie,
   setSocialStateCookie,
+  setXSocialContextCookie,
 } from '../../services/social/social-state-cookie.js';
 import { getTeamInviteLandingData } from '../../services/team-invite.service.js';
 import { recordAuthFunnelStep } from '../../services/auth-funnel.service.js';
@@ -26,7 +28,7 @@ import { configFetchRateLimiter } from './rate-limit-keys.js';
 import { TEAM_HINT_PATTERN } from '../../services/social/social-browser-preference.service.js';
 
 const ParamsSchema = z.object({
-  provider: z.enum(['google', 'apple', 'facebook', 'github', 'linkedin']),
+  provider: z.enum(['google', 'apple', 'facebook', 'github', 'linkedin', 'x']),
 });
 
 const QuerySchema = z
@@ -246,6 +248,23 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
           state,
         });
         redirectNoStore(reply, url);
+        return;
+      }
+
+      if (provider === 'x') {
+        if (!env.X_CLIENT_ID || !env.X_CLIENT_SECRET) {
+          throw new AppError('INTERNAL', 500, 'X_ENV_MISSING');
+        }
+        const redirectUri = `${baseUrl}/auth/callback/x`;
+        const stateJwt = await signStateForProvider('x');
+        const codeVerifier = generateXCodeVerifier();
+        setXSocialContextCookie(reply, { state: nonce, stateJwt, codeVerifier });
+        redirectNoStore(reply, buildXAuthorizationUrl({
+          clientId: env.X_CLIENT_ID,
+          redirectUri,
+          state: nonce,
+          codeVerifier,
+        }));
         return;
       }
 

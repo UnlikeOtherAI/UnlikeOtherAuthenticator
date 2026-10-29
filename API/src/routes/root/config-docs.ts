@@ -64,7 +64,7 @@ export const configJwtDocumentation = {
     redirect_urls:
       'string[] — non-empty list of callback targets (RFC 8252): an https:// URL on any host, an http:// URL on loopback only (localhost/127.0.0.1/[::1]), or a native custom-scheme deep link (e.g. com.acme.app://callback). Non-loopback http and dangerous schemes (javascript:, data:, …) are rejected. The runtime redirect_url must match an entry byte-for-byte, including scheme, host, port, path, AND query string. No normalization, no prefix matching, no query wildcards. Do NOT append per-request state (?state=…) to the redirect — carry it out-of-band via sessionStorage or a first-party cookie.',
     enabled_auth_methods:
-      'string[] — non-empty list. Supported values are email_password, google, facebook, github, linkedin, apple. Social provider names here are both enabled and allowed.',
+      'string[] — non-empty list. Supported values are email_password, google, facebook, github, linkedin, apple, x. Social provider names here are both enabled and allowed.',
     language_config:
       'string | string[] — either one language code or a non-empty array of language codes.',
     ui_theme: {

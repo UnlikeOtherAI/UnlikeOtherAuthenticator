@@ -2,12 +2,14 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
 import { SOCIAL_STATE_TTL_MS } from '../../config/constants.js';
+import { AppError } from '../../utils/errors.js';
 
 // Name of the signed, HttpOnly cookie that binds the social OAuth `state` to the
 // browser that initiated the flow. Scoped to /auth so it survives the provider's
 // top-level redirect back to /auth/callback but is not sent to unrelated paths.
 export const SOCIAL_STATE_COOKIE_NAME = 'uoa_social_state';
 export const SOCIAL_INVITE_COOKIE_NAME = 'uoa_social_invite';
+export const X_SOCIAL_CONTEXT_COOKIE_NAME = 'uoa_x_social_context';
 
 const COOKIE_PATH = '/auth';
 
@@ -66,6 +68,44 @@ export function readSocialInviteCookie(request: FastifyRequest): string | null {
 
 export function clearSocialInviteCookie(reply: FastifyReply): void {
   reply.clearCookie(SOCIAL_INVITE_COOKIE_NAME, { ...cookieBaseOptions(), maxAge: 0 });
+}
+
+/** X limits provider-visible state to 500 characters, so keep the signed JWT and PKCE verifier in this browser cookie. */
+export function setXSocialContextCookie(
+  reply: FastifyReply,
+  context: { state: string; stateJwt: string; codeVerifier: string },
+): void {
+  const value = JSON.stringify(context);
+  if (Buffer.byteLength(value, 'utf8') > 3500) {
+    throw new AppError('BAD_REQUEST', 400, 'SOCIAL_STATE_TOO_LARGE');
+  }
+  reply.setCookie(X_SOCIAL_CONTEXT_COOKIE_NAME, value, {
+    ...cookieBaseOptions(),
+    maxAge: Math.floor(SOCIAL_STATE_TTL_MS / 1000),
+  });
+}
+
+export function readXSocialContextCookie(request: FastifyRequest): {
+  state: string;
+  stateJwt: string;
+  codeVerifier: string;
+} | null {
+  const raw = request.cookies?.[X_SOCIAL_CONTEXT_COOKIE_NAME];
+  if (typeof raw !== 'string') return null;
+  const unsigned = request.unsignCookie(raw);
+  if (!unsigned.valid || typeof unsigned.value !== 'string') return null;
+  try {
+    const value = JSON.parse(unsigned.value) as Record<string, unknown>;
+    if (typeof value.state !== 'string' || typeof value.stateJwt !== 'string' ||
+        typeof value.codeVerifier !== 'string') return null;
+    return { state: value.state, stateJwt: value.stateJwt, codeVerifier: value.codeVerifier };
+  } catch {
+    return null;
+  }
+}
+
+export function clearXSocialContextCookie(reply: FastifyReply): void {
+  reply.clearCookie(X_SOCIAL_CONTEXT_COOKIE_NAME, { ...cookieBaseOptions(), maxAge: 0 });
 }
 
 function constantTimeEqual(actual: string, expected: string): boolean {

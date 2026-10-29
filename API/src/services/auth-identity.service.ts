@@ -17,7 +17,8 @@ export type AuthIdentityProvider =
   | 'microsoft'
   | 'apple'
   | 'facebook'
-  | 'linkedin';
+  | 'linkedin'
+  | 'x';
 
 const SOCIAL_PROVIDERS = new Set<AuthIdentityProvider>([
   'google',
@@ -26,6 +27,7 @@ const SOCIAL_PROVIDERS = new Set<AuthIdentityProvider>([
   'apple',
   'facebook',
   'linkedin',
+  'x',
 ]);
 
 /**

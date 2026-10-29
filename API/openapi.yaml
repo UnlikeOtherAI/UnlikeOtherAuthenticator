@@ -3145,7 +3145,7 @@ paths:
           required: true
           schema:
             type: string
-            enum: [google, apple, facebook, github, linkedin]
+            enum: [google, apple, facebook, github, linkedin, x]
         - $ref: '#/components/parameters/configUrl'
         - name: redirect_url
           in: query
@@ -3199,7 +3199,7 @@ paths:
           required: true
           schema:
             type: string
-            enum: [google, apple, facebook, github, linkedin]
+            enum: [google, apple, facebook, github, linkedin, x]
         - name: code
           in: query
           schema:
