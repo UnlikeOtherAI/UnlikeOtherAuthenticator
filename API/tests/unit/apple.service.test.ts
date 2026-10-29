@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SignJWT, exportJWK, exportPKCS8, generateKeyPair } from 'jose';
+import type { FastifyReply } from 'fastify';
 
 import { buildAppleAuthorizationUrl, getAppleProfileFromCode } from '../../src/services/social/apple.service.js';
+import { setSocialInviteCookie, setSocialStateCookie } from '../../src/services/social/social-state-cookie.js';
 
 describe('apple.service', () => {
   afterEach(() => {
@@ -25,6 +27,17 @@ describe('apple.service', () => {
     expect(u.searchParams.get('scope')).toContain('email');
     expect(u.searchParams.get('state')).toBe('state.jwt.here');
     expect(u.searchParams.get('response_mode')).toBe('form_post');
+  });
+
+  it('sends Apple state and invitation cookies on the cross-site form callback', () => {
+    const setCookie = vi.fn();
+    const reply = { setCookie } as unknown as FastifyReply;
+    setSocialStateCookie(reply, 'nonce', 'apple');
+    setSocialInviteCookie(reply, 'invite', 'apple');
+    expect(setCookie).toHaveBeenCalledTimes(2);
+    for (const [, , options] of setCookie.mock.calls) {
+      expect(options).toMatchObject({ sameSite: 'none', secure: true, httpOnly: true, path: '/auth' });
+    }
   });
 
   it('exchanges code and returns a verified email profile', async () => {
