@@ -21,10 +21,10 @@ describe('apple.service', () => {
     expect(u.searchParams.get('response_type')).toBe('code');
     expect(u.searchParams.get('client_id')).toBe('com.example.web');
     expect(u.searchParams.get('redirect_uri')).toBe('https://auth.example.com/auth/callback/apple');
-    expect(u.searchParams.get('scope')).toContain('openid');
+    expect(u.searchParams.get('scope')).toContain('name');
     expect(u.searchParams.get('scope')).toContain('email');
     expect(u.searchParams.get('state')).toBe('state.jwt.here');
-    expect(u.searchParams.get('response_mode')).toBe('query');
+    expect(u.searchParams.get('response_mode')).toBe('form_post');
   });
 
   it('exchanges code and returns a verified email profile', async () => {

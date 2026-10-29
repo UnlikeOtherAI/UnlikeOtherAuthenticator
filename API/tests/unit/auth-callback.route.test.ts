@@ -315,6 +315,24 @@ describe('GET /auth/callback/:provider', () => {
     await app.close();
   });
 
+  it('parses Apple form_post and checks the browser-bound state cookie', async () => {
+    const { createApp } = await import('../../src/app.js');
+    const app = await createApp();
+    await app.ready();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/auth/callback/apple',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      payload: 'code=provider-code&state=state-token',
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(verifySocialStateMock).toHaveBeenCalled();
+    expect(loginWithSocialProfileMock).not.toHaveBeenCalled();
+    await app.close();
+  });
+
   it('renders an honest, callback-stage debug page (not a config_url error) on a cookie mismatch', async () => {
     // The rich debug page is gated on DEBUG_ENABLED; enable it for this test only.
     process.env.DEBUG_ENABLED = 'true';

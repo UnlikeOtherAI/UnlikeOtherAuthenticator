@@ -16,27 +16,27 @@ export function generateSocialStateNonce(): string {
   return randomBytes(32).toString('base64url');
 }
 
-function cookieBaseOptions(): {
+function cookieBaseOptions(provider?: string): {
   httpOnly: true;
   secure: true;
-  sameSite: 'lax';
+  sameSite: 'lax' | 'none';
   path: string;
   signed: true;
 } {
   return {
     httpOnly: true,
-    // SameSite=Lax is required so the cookie survives the provider's top-level
-    // GET redirect back to the callback. Secure keeps it HTTPS-only.
+    // Apple POSTs the callback from another site, so its nonce needs SameSite=None.
+    // All other providers return with top-level GET redirects.
     secure: true,
-    sameSite: 'lax',
+    sameSite: provider === 'apple' ? 'none' : 'lax',
     path: COOKIE_PATH,
     signed: true,
   };
 }
 
-export function setSocialStateCookie(reply: FastifyReply, nonce: string): void {
+export function setSocialStateCookie(reply: FastifyReply, nonce: string, provider?: string): void {
   reply.setCookie(SOCIAL_STATE_COOKIE_NAME, nonce, {
-    ...cookieBaseOptions(),
+    ...cookieBaseOptions(provider),
     maxAge: Math.floor(SOCIAL_STATE_TTL_MS / 1000),
   });
 }
@@ -47,9 +47,9 @@ export function clearSocialStateCookie(reply: FastifyReply): void {
 }
 
 /** Stores an invite capability only in the browser's signed, HttpOnly cookie. */
-export function setSocialInviteCookie(reply: FastifyReply, token: string): void {
+export function setSocialInviteCookie(reply: FastifyReply, token: string, provider?: string): void {
   reply.setCookie(SOCIAL_INVITE_COOKIE_NAME, token, {
-    ...cookieBaseOptions(),
+    ...cookieBaseOptions(provider),
     maxAge: Math.floor(SOCIAL_STATE_TTL_MS / 1000),
   });
 }

@@ -137,9 +137,9 @@ export function buildAppleAuthorizationUrl(params: {
   u.searchParams.set('client_id', params.clientId);
   u.searchParams.set('redirect_uri', params.redirectUri);
   // Request only what we need; name is only returned on first consent.
-  u.searchParams.set('scope', 'openid email name');
-  // Keep callback flow consistent with existing GET /auth/callback/:provider route.
-  u.searchParams.set('response_mode', 'query');
+  u.searchParams.set('scope', 'email name');
+  // Apple requires form_post whenever scopes are requested.
+  u.searchParams.set('response_mode', 'form_post');
   u.searchParams.set('state', params.state);
   return u.toString();
 }

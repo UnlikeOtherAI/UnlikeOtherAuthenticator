@@ -343,7 +343,7 @@ export const authEndpoints: EndpointSchema[] = [
     method: 'GET',
     path: '/auth/social/:provider',
     description:
-      'Initiate social OAuth flow (google, facebook, github, linkedin, apple). Sets a signed, HttpOnly `uoa_social_state` cookie (SameSite=Lax, Path=/auth) that binds the OAuth `state` to the browser; the cookie must be returned to /auth/callback. A direct team invitation may use invite_token without PKCE; its raw capability is retained only in a second signed HttpOnly cookie and never placed in provider-visible state.',
+      'Initiate social OAuth flow (google, facebook, github, linkedin, apple). Sets a signed, HttpOnly `uoa_social_state` cookie (SameSite=None for Apple form_post, Lax for other providers; Path=/auth) that binds the OAuth `state` to the browser; the cookie must be returned to /auth/callback. A direct team invitation may use invite_token without PKCE; its raw capability is retained only in a second signed HttpOnly cookie and never placed in provider-visible state.',
     query: {
       management_org_id: 'Optional exact organisation hint for UOA fresh owner reauthentication; grants no authority and holds the chooser even for one team',
       state:
@@ -366,6 +366,16 @@ export const authEndpoints: EndpointSchema[] = [
     path: '/auth/callback/:provider',
     description:
       'OAuth provider callback. Requires the signed `uoa_social_state` cookie set at /auth/social to match the nonce embedded in `state` (login-CSRF protection); the cookie is single-use and cleared on consume. A direct invitation also requires its signed HttpOnly invite-capability cookie and an exact match between its live invitation email and the provider-verified email; it accepts the invite without issuing an OAuth code. With team_selection="auto", team is resolved before 2FA: 2+ ACTIVE teams, any pending invite, or zero teams with can_create_org redirect with a login_token chooser bridge, while exactly one ACTIVE team/no invite is selected server-side and its exact orgId/teamId survives any 2FA challenge or enrollment token into the authorization code and active token claim. team_selection="off" leaves legacy clients unscoped; recognized products suppress the chooser but pre-bind their exact team before 2FA.',
+  },
+  {
+    method: 'POST',
+    path: '/auth/callback/apple',
+    description: 'Apple Sign in callback (application/x-www-form-urlencoded form_post). Requires the signed browser nonce cookie and the same validation as the GET social callback.',
+    body: {
+      code: 'string (required on success)',
+      state: 'string (required)',
+      error: 'string (optional on provider cancellation)',
+    },
   },
   {
     method: 'GET',

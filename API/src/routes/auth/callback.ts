@@ -92,12 +92,18 @@ function redirectNoStore(reply: FastifyReply, url: string): void {
 }
 
 export function registerAuthCallbackRoute(app: FastifyInstance): void {
-  app.get(
-    '/auth/callback/:provider',
-    { preHandler: [socialCallbackRateLimiter] },
-    async (request, reply) => {
+  app.route({
+    method: ['GET', 'POST'],
+    url: '/auth/callback/:provider',
+    preHandler: [socialCallbackRateLimiter],
+    handler: async (request, reply) => {
       const { provider } = ParamsSchema.parse(request.params);
-      const { code, state, error } = QuerySchema.parse(request.query);
+      if (request.method === 'POST' && provider !== 'apple') {
+        throw new AppError('BAD_REQUEST', 400, 'INVALID_SOCIAL_CALLBACK_METHOD');
+      }
+      const { code, state, error } = QuerySchema.parse(
+        request.method === 'POST' ? request.body : request.query,
+      );
 
       if (state && isPublicSocialState(state)) return handlePublicGoogleCallback(request, reply, state, code, provider, error);
 
@@ -458,5 +464,5 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
 
       redirectNoStore(reply, outcome.finalResult.redirectTo);
     },
-  );
+  });
 }

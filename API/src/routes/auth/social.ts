@@ -146,9 +146,9 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
           audience: authServiceIdentifier,
           baseUrlForIssuer: baseUrl,
         });
-        setSocialStateCookie(reply, nonce);
+        setSocialStateCookie(reply, nonce, providerKey);
         if (invite_token) {
-          setSocialInviteCookie(reply, invite_token);
+          setSocialInviteCookie(reply, invite_token, providerKey);
         }
         return state;
       };

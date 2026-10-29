@@ -3228,6 +3228,48 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags: [Auth]
+      summary: Sign in with Apple form callback
+      operationId: appleSocialAuthCallback
+      description: |
+        Apple posts the authorization result when email/name scopes are requested.
+        The signed browser nonce cookie must match the state; other providers are rejected.
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [apple]
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                code:
+                  type: string
+                state:
+                  type: string
+                error:
+                  type: string
+      responses:
+        '302':
+          description: Redirect after completed authorization.
+        '400':
+          description: Invalid method, callback parameters, or browser state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Social provider returned an error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /auth/domain-mapping:
     get:
