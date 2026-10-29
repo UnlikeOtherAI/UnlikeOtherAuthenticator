@@ -6,6 +6,7 @@
  */
 
 export type PopupQueryParams = {
+  facebookProof: boolean;
   nativeSocialComplete?: boolean;
   nativeFlowId?: string;
   redirectUrl: string | null;
@@ -75,6 +76,7 @@ export function parsePopupQueryParams(search: string): PopupQueryParams {
   const s = normalizeSearch(search);
   if (!s) {
     return {
+      facebookProof: false,
       redirectUrl: null,
       codeChallenge: null,
       codeChallengeMethod: null,
@@ -142,6 +144,7 @@ export function parsePopupQueryParams(search: string): PopupQueryParams {
     : null;
 
   return {
+    facebookProof: params.get('flow') === 'facebook_proof',
     redirectUrl: redirectUrl && redirectUrl.trim() ? redirectUrl : null,
     codeChallenge: codeChallenge && codeChallenge.trim() ? codeChallenge : null,
     codeChallengeMethod: codeChallengeMethod === 'S256' ? 'S256' : null,

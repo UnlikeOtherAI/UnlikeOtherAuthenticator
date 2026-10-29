@@ -18,6 +18,7 @@ export type AuthView =
   | 'signed-in'
   | 'signatures'
   | 'code-entry'
+  | 'facebook-proof'
   | 'team-chooser';
 
 export type TwoFactorSetupState = {
@@ -139,6 +140,7 @@ function readClientSearch(): string {
 }
 
 function deriveInitialView(parsed: PopupQueryParams): AuthView {
+  if (parsed.facebookProof) return 'facebook-proof';
   if (parsed.signingToken) {
     return 'signatures';
   }

@@ -50,6 +50,8 @@ import { socialCallbackRateLimiter } from './rate-limit-keys.js';
 import { isPublicSocialState } from '../../services/oauth/social-ticket.service.js';
 import { handlePublicGoogleCallback } from '../../services/oauth/social-login.service.js';
 import { rememberCompletedSocialProvider } from '../../services/social/social-browser-preference.service.js';
+import { bindFacebookIdentity, prepareFacebookProfile } from '../../services/social/facebook-email-proof-callback.service.js';
+import { clearFacebookProofCookie, parseFacebookProofCode, readFacebookProofCookie } from '../../services/social/facebook-email-proof.service.js';
 
 const ParamsSchema = z.object({
   provider: z.enum(['google', 'apple', 'facebook', 'github', 'linkedin', 'x']),
@@ -62,21 +64,6 @@ const QuerySchema = z
     error: z.string().min(1).max(256).optional(),
   })
   .passthrough();
-
-function normalizeBaseUrl(value: string): string {
-  return value.trim().replace(/\/+$/, '');
-}
-
-function resolvePublicBaseUrl(): string {
-  const env = getEnv();
-  return env.PUBLIC_BASE_URL
-    ? normalizeBaseUrl(env.PUBLIC_BASE_URL)
-    : `http://${env.HOST}:${env.PORT}`;
-}
-
-function socialStateIssuer(baseUrl: string): string {
-  return `${normalizeBaseUrl(baseUrl)}/social-state`;
-}
 
 function buildAuthFailedRedirectUrl(redirectUrl: string, state?: string): string {
   const u = new URL(redirectUrl);
@@ -109,6 +96,8 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
 
       const xContext = provider === 'x' ? readXSocialContextCookie(request) : null;
       if (provider === 'x') clearXSocialContextCookie(reply);
+      const facebookProofCookie = provider === 'facebook' ? readFacebookProofCookie(request) : null;
+      if (provider === 'facebook') clearFacebookProofCookie(reply);
 
       if (state && isPublicSocialState(state)) return handlePublicGoogleCallback(request, reply, state, code, provider, error);
 
@@ -126,13 +115,14 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
 
       const { SHARED_SECRET, CONFIG_JWKS_URL } = requireEnv('SHARED_SECRET', 'CONFIG_JWKS_URL');
       const authServiceIdentifier = getAuthServiceIdentifier();
-      const baseUrl = resolvePublicBaseUrl();
+      const env = getEnv();
+      const baseUrl = (env.PUBLIC_BASE_URL ?? `http://${env.HOST}:${env.PORT}`).trim().replace(/\/+$/, '');
 
       const socialState = await verifySocialState({
         stateJwt: xContext?.stateJwt ?? state,
         sharedSecret: SHARED_SECRET,
         audience: authServiceIdentifier,
-        issuer: socialStateIssuer(baseUrl),
+        issuer: `${baseUrl}/social-state`,
       });
 
       // The verified state — not the query string — carries config_url/redirect_url
@@ -184,7 +174,26 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
         requestedRedirectUrl,
       });
 
-      const profile = await getSocialProfileFromCode(provider, code, baseUrl, xContext?.codeVerifier);
+      const facebookProofId = provider === 'facebook' ? parseFacebookProofCode(code) : null;
+      let profile = facebookProofId
+        ? null
+        : await getSocialProfileFromCode(provider, code, baseUrl, xContext?.codeVerifier);
+      if (provider === 'facebook') {
+        const prepared = await prepareFacebookProfile({
+          profile, proofId: facebookProofId, proofCookie: facebookProofCookie,
+          stateJwt: state, state: socialState, inviteToken, config,
+          prisma: request.adminDb, reply,
+        });
+        if (!prepared) {
+          const u = new URL(`${baseUrl}/auth`);
+          u.searchParams.set('config_url', configUrl);
+          u.searchParams.set('flow', 'facebook_proof');
+          redirectNoStore(reply, u.toString());
+          return;
+        }
+        profile = prepared.profile;
+      }
+      if (!profile) throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
 
       const outcome = await runWithRequestAdminTransaction(request, async (prisma) => {
         await lockProductTeamPolicyShared(prisma);
@@ -240,6 +249,9 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
         }
 
         const { userId, twoFaEnabled } = socialLoginResult;
+        if (provider === 'facebook') {
+          await bindFacebookIdentity({ userId, profile, proofId: facebookProofId, prisma });
+        }
         const returnedEpoch = (socialLoginResult as { credentialEpoch?: unknown }).credentialEpoch;
         if (
           returnedEpoch !== undefined &&
