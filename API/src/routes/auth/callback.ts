@@ -305,6 +305,7 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
               userId,
               credentialEpoch,
               authMethod: provider,
+              providerSubject: profile.providerSubject,
               config,
               configUrl,
               redirectUrl,

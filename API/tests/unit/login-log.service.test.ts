@@ -136,6 +136,7 @@ describe('login-log.service', () => {
         email: 'User@Example.com',
         domain: 'client.example.com',
         authMethod: 'google',
+        providerSubject: 'google-subject-123',
       },
       { env: testEnv(), prisma, now: () => now },
     );
@@ -144,6 +145,8 @@ describe('login-log.service', () => {
     expect(upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { userId_provider: { userId: 'u1', provider: 'google' } },
+        create: expect.objectContaining({ providerSubject: 'google-subject-123' }),
+        update: expect.objectContaining({ providerSubject: 'google-subject-123' }),
       }),
     );
   });
