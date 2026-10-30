@@ -81,7 +81,8 @@ describe('exchangeRefreshTokenForTokens signature policy gate (unit)', () => {
         updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
       user: {
-        findUnique: vi.fn().mockResolvedValue({ email: 'user@example.com', tokenVersion: 0 }),
+        findUnique: vi.fn().mockResolvedValue({ lifecycleStatus: 'ACTIVE', accountExpiresAt: null,
+          email: 'user@example.com', tokenVersion: 0 }),
       },
       domainRole: {
         findUnique: vi.fn().mockResolvedValue({

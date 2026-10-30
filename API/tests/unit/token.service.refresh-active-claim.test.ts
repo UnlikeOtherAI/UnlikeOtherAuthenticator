@@ -300,7 +300,8 @@ describe('exchangeRefreshTokenForTokens active-claim re-validation (unit)', () =
         { now: () => now, prisma, sharedSecret: process.env.SHARED_SECRET! },
       ),
     ).rejects.toMatchObject({ statusCode: 401, message: 'INVALID_REFRESH_TOKEN' });
-    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    expect(prisma.user.findUnique).toHaveBeenCalledWith({ where: { id: 'user-1' },
+      select: { lifecycleStatus: true, accountExpiresAt: true } });
   });
 
   it('preserves a legacy unscoped refresh for an off-flow user who already has a team', async () => {
