@@ -43,12 +43,13 @@ export async function requestAccountRenewal(email: string, config: ClientConfig)
     .map(row => row.user.email?.trim().toLowerCase()).filter((value): value is string => Boolean(value)))];
   if (!recipients.length) return { ok: true }; // Pending stays visible in Admin even without email delivery.
   const env = getEnv();
-  if (!env.EMAIL_FROM) return { ok: true }; // No sender is configured; a retry remains eligible.
+  const from = env.EMAIL_FROM;
+  if (!from) return { ok: true }; // No sender is configured; a retry remains eligible.
   const base = env.PUBLIC_BASE_URL?.trim().replace(/\/+$/, '') ?? `http://${env.HOST}:${env.PORT}`;
   const reviewUrl = `${base}/admin/users/${encodeURIComponent(user.id)}?tab=security`;
   const content = `An expired UOA account has requested renewed access: ${user.email ?? identity.email}.\n\nReview the request: ${reviewUrl}\n\nSign in as a platform administrator to approve with a new expiry date or decline.`;
   // A delivery failure leaves notifiedAt empty, so a later request can retry delivery.
-  const outcomes = await Promise.allSettled(recipients.map(to => sendRawEmail({ to, from: env.EMAIL_FROM,
+  const outcomes = await Promise.allSettled(recipients.map(to => sendRawEmail({ to, from,
     subject: 'UOA account renewal request', text: content })));
   if (outcomes.some(outcome => outcome.status === 'fulfilled')) {
     await prisma.accountRenewalRequest.updateMany({ where: { id: request.id, status: 'PENDING' }, data: { notifiedAt: new Date() } });

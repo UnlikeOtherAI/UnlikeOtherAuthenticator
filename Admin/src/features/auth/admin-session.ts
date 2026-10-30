@@ -134,7 +134,7 @@ export function AdminSessionGuard({ children }: PropsWithChildren) {
   }
 
   if (!session.isAuthenticated) {
-    return createElement(Navigate, { to: '/login', replace: true, state: { from: location.pathname } });
+    return createElement(Navigate, { to: '/login', replace: true, state: { from: location.pathname + location.search } });
   }
 
   return createElement(Fragment, null, children);

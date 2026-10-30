@@ -65,6 +65,7 @@ describe('LoginPage SSR', () => {
     expect(html).toContain('type="email"');
     expect(html).toContain('type="password"');
     expect(html).toContain('/auth/social/google');
+    expect(html).toContain('Expired account? Request access');
   });
 
   it('does not autofocus any field, so the soft keyboard stays closed on arrival', () => {
@@ -79,6 +80,7 @@ it('shows native Google sign-in before password fields in a short popup', () => 
   expect(html.indexOf('/oauth/social/google')).toBeGreaterThan(0);
   expect(html.indexOf('/oauth/social/google')).toBeLessThan(html.indexOf('type="email"'));
   expect(html.match(/href="[^"]*oauth\/social\/google/g)).toHaveLength(1);
+  expect(html).not.toContain('Expired account? Request access');
 });
 
 it('omits access-status diagnostics by default for website and native logins', () => {
