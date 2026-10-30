@@ -34,7 +34,7 @@ it('approves a pending request only with a new future date', async () => {
   expect((approve as HTMLButtonElement).disabled).toBe(true);
   const date = new Date(Date.now() + 7 * 86400000);
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-  fireEvent.change(screen.getByLabelText('New expiry date and time'), { target: { value: local } });
+  fireEvent.change(screen.getByLabelText(/^New expiry date and time/), { target: { value: local } });
   expect((approve as HTMLButtonElement).disabled).toBe(false);
   await userEvent.setup().click(approve);
   await waitFor(() => expect(mocks.review).toHaveBeenCalledWith('request-1', 'approve', new Date(local).toISOString()));
