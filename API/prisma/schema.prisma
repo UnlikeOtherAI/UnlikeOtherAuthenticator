@@ -442,6 +442,7 @@ model User {
   twoFaLastAcceptedCounter             Int?                                      @map("2fa_last_accepted_counter")
   avatarUrl                            String?                                   @map("avatar_url")
   tokenVersion                         Int                                       @default(0) @map("token_version")
+  accountExpiresAt                     DateTime?                                 @map("account_expires_at")
   deeptestNessieInferenceAllowed        Boolean                                   @default(false) @map("deeptest_nessie_inference_allowed")
   createdAt                            DateTime                                  @default(now()) @map("created_at")
   billingStripeCheckouts               BillingStripeCheckoutSession[]

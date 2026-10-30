@@ -18,6 +18,7 @@ function makePrisma(params?: {
   activeTeams?: string[];
   targetPolicy?: 'OFF' | 'OPTIONAL' | 'REQUIRED' | null;
   twoFaEnabled?: boolean;
+  accountExpiresAt?: Date | null;
 }) {
   const activeOrgs = new Set(params?.activeOrgs ?? [source.orgId, target.orgId]);
   const activeTeams = new Set(params?.activeTeams ?? [source.teamId, target.teamId]);
@@ -42,7 +43,8 @@ function makePrisma(params?: {
       findUnique: vi.fn().mockResolvedValue({ twoFaPolicy: params?.targetPolicy ?? null }),
     },
     user: {
-      findUnique: vi.fn().mockResolvedValue({ twoFaEnabled: params?.twoFaEnabled ?? false }),
+      findUnique: vi.fn().mockResolvedValue({ lifecycleStatus: 'ACTIVE', twoFaEnabled: params?.twoFaEnabled ?? false,
+        accountExpiresAt: params?.accountExpiresAt ?? null }),
     },
     domainSignatureSettings: {
       findUnique: vi.fn().mockResolvedValue(null),
@@ -64,6 +66,12 @@ function switchGuard(prisma: PrismaClient, validateSource = true) {
 }
 
 describe('refresh-token team-switch policy guard', () => {
+  it('refuses rotation when the account has expired', async () => {
+    const prisma = makePrisma({ accountExpiresAt: new Date(Date.now() - 1000) });
+    await expect(switchGuard(prisma)(row)).rejects.toMatchObject({
+      statusCode: 401, message: 'INVALID_REFRESH_TOKEN',
+    });
+  });
   it('locks both exact memberships before checking 2FA and signature policy', async () => {
     const prisma = makePrisma({ twoFaEnabled: true });
     const afterTeamLock = vi.fn().mockResolvedValue(undefined);

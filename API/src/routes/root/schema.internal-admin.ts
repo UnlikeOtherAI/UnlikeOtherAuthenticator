@@ -5,9 +5,8 @@ import { buildInternalAdminAppEndpoints } from './schema.internal-admin-apps.js'
 import { buildInternalAdminConfidentialDelegationEndpoints } from './schema.internal-admin-delegations.js';
 import { buildInternalAdminSignatureEndpoints } from './schema.internal-admin-signatures.js';
 import { buildInternalAdminSuperuserEndpoints } from './schema.internal-admin-superusers.js';
-
-const adminAuth =
-  'Authorization: Bearer <access_token>; admin tokens must be signed with ADMIN_ACCESS_TOKEN_SECRET, token role must be superuser, domain must match ADMIN_AUTH_DOMAIN, and DB-backed deployments require a SUPERUSER domain_roles row';
+import { adminUserCreationEndpoint } from './schema.internal-admin-user-creation.js';
+const adminAuth = 'Authorization: Bearer <access_token>; admin tokens must be signed with ADMIN_ACCESS_TOKEN_SECRET, token role must be superuser, domain must match ADMIN_AUTH_DOMAIN, and DB-backed deployments require a SUPERUSER domain_roles row';
 const keyedAuth =
   'Superuser JWT (see adminAuth) OR an Admin API key sent as `X-API-Key: <key>` or `Authorization: Bearer uoa_ak_…`. The key is minted once by a superuser in the Admin panel and is scoped to exactly these routes (list apps + write feature flags + write kill switches); it cannot reach any other /internal/admin route or mint/list/revoke keys. When an API-key credential is present it is authoritative — an invalid/expired/revoked key returns 401 and never falls back to the JWT.';
 const listLimit = { limit: 'number (optional, max 200)' };
@@ -401,6 +400,7 @@ export const internalAdminEndpoints: EndpointSchema[] = [
     },
     notes: IDENTITY_AVATAR_URL_NOTE,
   },
+  adminUserCreationEndpoint(adminAuth, authFailures),
   {
     method: 'GET',
     path: '/internal/admin/users/:userId',

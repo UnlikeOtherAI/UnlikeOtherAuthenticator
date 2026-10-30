@@ -28,6 +28,7 @@ export {
   updateAdminTeam,
 } from './internal-admin.service.organisations.js';
 export {
+  createAdminUser,
   getAdminLogs,
   getAdminUser,
   getAdminUsers,

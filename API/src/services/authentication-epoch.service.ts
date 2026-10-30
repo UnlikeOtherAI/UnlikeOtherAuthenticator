@@ -2,7 +2,7 @@ import type { PrismaClient } from '@prisma/client';
 
 import { getEnv } from '../config/env.js';
 import { AppError } from '../utils/errors.js';
-import { isActiveLifecycle } from './entity-lifecycle.service.js';
+import { isActiveUser } from './entity-lifecycle.service.js';
 import {
   lockRefreshSessionUser,
   lockRefreshSessionUserDomain,
@@ -52,9 +52,9 @@ export async function lockAndAssertGlobalAuthenticationEpoch(
 
   const user = await deps.prisma.user.findUnique({
     where: { id: params.userId },
-    select: { tokenVersion: true, twoFaEnabled: true, lifecycleStatus: true },
+    select: { tokenVersion: true, twoFaEnabled: true, lifecycleStatus: true, accountExpiresAt: true },
   });
-  if (!user || !isActiveLifecycle(user.lifecycleStatus) || user.tokenVersion !== params.credentialEpoch) {
+  if (!user || !isActiveUser(user) || user.tokenVersion !== params.credentialEpoch) {
     throw new AuthenticationEpochMismatchError();
   }
   return user;
@@ -93,9 +93,9 @@ export async function lockAndAssertAuthenticationEpoch(
 
   const user = await deps.prisma.user.findUnique({
     where: { id: params.userId },
-    select: { tokenVersion: true, twoFaEnabled: true, lifecycleStatus: true },
+    select: { tokenVersion: true, twoFaEnabled: true, lifecycleStatus: true, accountExpiresAt: true },
   });
-  if (!user || !isActiveLifecycle(user.lifecycleStatus) || user.tokenVersion !== params.credentialEpoch) {
+  if (!user || !isActiveUser(user) || user.tokenVersion !== params.credentialEpoch) {
     throw new AuthenticationEpochMismatchError();
   }
   return user;
@@ -134,9 +134,9 @@ export async function lockAndAssertAuthenticationEpochShared(
 
   const user = await deps.prisma.user.findUnique({
     where: { id: params.userId },
-    select: { tokenVersion: true, twoFaEnabled: true, lifecycleStatus: true },
+    select: { tokenVersion: true, twoFaEnabled: true, lifecycleStatus: true, accountExpiresAt: true },
   });
-  if (!user || !isActiveLifecycle(user.lifecycleStatus) || user.tokenVersion !== params.credentialEpoch) {
+  if (!user || !isActiveUser(user) || user.tokenVersion !== params.credentialEpoch) {
     throw new AuthenticationEpochMismatchError();
   }
   return user;

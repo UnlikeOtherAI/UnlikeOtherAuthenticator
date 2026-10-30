@@ -8,18 +8,21 @@ import { verifyPassword } from './password.service.js';
 import { buildUserIdentity } from './user-scope.service.js';
 import { AppError } from '../utils/errors.js';
 import { lockRefreshSessionUserDomain } from './refresh-session-lock.service.js';
+import { isActiveUser } from './entity-lifecycle.service.js';
 
 type LoginPrisma = {
   $queryRaw: PrismaClient['$queryRaw'];
   user: {
     findUnique: (args: {
       where: { userKey: string; lifecycleStatus: 'ACTIVE' };
-      select: { id: true; passwordHash: true; twoFaEnabled: true; tokenVersion: true };
+      select: { id: true; passwordHash: true; twoFaEnabled: true; tokenVersion: true; lifecycleStatus: true; accountExpiresAt: true };
     }) => Promise<{
       id: string;
       passwordHash: string | null;
       twoFaEnabled: boolean;
       tokenVersion: number;
+      lifecycleStatus?: string;
+      accountExpiresAt?: Date | null;
     } | null>;
   };
 };
@@ -56,7 +59,7 @@ export async function loginWithEmailPassword(
   const prisma = deps?.prisma ?? (getPrisma() as unknown as LoginPrisma);
   const user = await prisma.user.findUnique({
     where: { lifecycleStatus: 'ACTIVE', userKey },
-    select: { id: true, passwordHash: true, twoFaEnabled: true, tokenVersion: true },
+    select: { id: true, passwordHash: true, twoFaEnabled: true, tokenVersion: true, lifecycleStatus: true, accountExpiresAt: true },
   });
 
   const ok = await (deps?.verifyPassword ?? verifyPassword)(
@@ -64,7 +67,7 @@ export async function loginWithEmailPassword(
     user?.passwordHash ?? null,
   );
 
-  if (!ok || !user) {
+  if (!ok || !user || !isActiveUser(user)) {
     // Brief 22.11 + 11: never reveal whether email exists, password was wrong, etc.
     throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
   }
@@ -78,9 +81,9 @@ export async function loginWithEmailPassword(
   );
   const lockedUser = await prisma.user.findUnique({
     where: { lifecycleStatus: 'ACTIVE', userKey },
-    select: { id: true, passwordHash: true, twoFaEnabled: true, tokenVersion: true },
+    select: { id: true, passwordHash: true, twoFaEnabled: true, tokenVersion: true, lifecycleStatus: true, accountExpiresAt: true },
   });
-  if (!lockedUser || lockedUser.id !== user.id) {
+  if (!lockedUser || !isActiveUser(lockedUser) || lockedUser.id !== user.id) {
     throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
   }
   if (

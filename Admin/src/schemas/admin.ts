@@ -8,6 +8,16 @@ export const LoginFormSchema = z.object({
 
 export type LoginFormValues = z.infer<typeof LoginFormSchema>;
 
+export const NewUserFormSchema = z.object({
+  email: z.email('Enter a valid email address.'),
+  password: z.string().min(8, 'Use at least 8 characters.').max(1024),
+  name: z.string().trim().max(200, 'Name is too long.'),
+  accountExpiresAt: z.string().refine((value) => !value || Number.isFinite(new Date(value).getTime()) && new Date(value).getTime() > Date.now(),
+    'Choose a future date and time.'),
+});
+
+export type NewUserFormValues = z.infer<typeof NewUserFormSchema>;
+
 export const DomainFormSchema = z.object({
   domain: z.string().trim().min(3, 'Domain is required.'),
   label: z.string().trim().min(1, 'Friendly name is required.'),

@@ -2,12 +2,15 @@ import { useDirectoryNavigation } from '../features/admin/useDirectoryNavigation
 import { Badge } from '../components/ui/Badge';
 import { useDirectoryParam } from '../features/admin/useDirectoryParam';
 import { useMemo } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router';
 
 import { AutocompleteSelect } from '../components/ui/AutocompleteSelect';
 import { Card } from '../components/ui/Card';
 import { SelectField, TextField } from '../components/ui/FormFields';
 import { PageHeader } from '../components/ui/PageHeader';
+import { Button } from '../components/ui/Button';
+import { NewUserDialog } from '../components/dialogs/NewUserDialog';
 import { MethodBadge, StatusBadge } from '../components/ui/Status';
 import { DataTable, PaginationFooter, Td, usePagination } from '../components/ui/Table';
 import { useDomainsQuery, useUsersQuery } from '../features/admin/admin-queries';
@@ -32,10 +35,11 @@ export function UsersPage() {
     });
   }, [searchQuery, selectedDomain, selectedStatus, users]);
   const { pageItems, pagination } = usePagination(filteredUsers);
+  const [creatingUser, setCreatingUser] = useState(false);
 
   return (
     <>
-      <PageHeader title="Users" description="Search the latest 100 users." />
+      <PageHeader title="Users" description="Search the latest 100 users." actions={<Button icon="plus" variant="primary" onClick={() => setCreatingUser(true)}>New user</Button>} />
       <Card>
         <div className="flex flex-wrap items-end gap-3 border-b border-gray-100 px-4 py-3">
           <label className="block w-64 max-w-full">
@@ -48,6 +52,7 @@ export function UsersPage() {
             <SelectField className="h-9 w-full" value={selectedStatus} onChange={(event) => setSelectedStatus(event.target.value)}>
               <option value="all">All statuses</option>
               <option value="active">Active</option>
+              <option value="expired">Expired</option>
               <option value="banned">Banned</option>
               <option value="disabled">Disabled</option>
             </SelectField>
@@ -97,6 +102,7 @@ export function UsersPage() {
           </>
         )}
       </Card>
+      <NewUserDialog open={creatingUser} onClose={() => setCreatingUser(false)} onCreated={(id) => openRecord(`/users/${id}`)} />
     </>
   );
 }

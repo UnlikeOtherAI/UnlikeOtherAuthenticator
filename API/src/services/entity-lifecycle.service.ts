@@ -7,17 +7,26 @@ export function isActiveLifecycle(status: string | undefined): boolean {
   return status === 'ACTIVE';
 }
 
-export function requireLiveIdentity<T extends { email: string | null; userKey: string | null; lifecycleStatus?: string }>(
+/** Account expiry is checked on every UOA authentication and token decision. */
+export function isActiveUser(
+  user: { lifecycleStatus?: string; accountExpiresAt?: Date | null } | null,
+  now = new Date(),
+): boolean {
+  return Boolean(user && isActiveLifecycle(user.lifecycleStatus) &&
+    (!user.accountExpiresAt || user.accountExpiresAt.getTime() > now.getTime()));
+}
+
+export function requireLiveIdentity<T extends { email: string | null; userKey: string | null; lifecycleStatus?: string; accountExpiresAt?: Date | null }>(
   user: T | null,
 ): T & { email: string; userKey: string } {
-  if (!user || !user.email || !user.userKey || !isActiveLifecycle(user.lifecycleStatus)) {
+  if (!user || !user.email || !user.userKey || !isActiveUser(user)) {
     throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
   }
   return user as T & { email: string; userKey: string };
 }
 
-export function requireLiveEmail<T extends { email: string | null; lifecycleStatus?: string }>(user: T | null): T & { email: string } {
-  if (!user || !user.email || !isActiveLifecycle(user.lifecycleStatus)) {
+export function requireLiveEmail<T extends { email: string | null; lifecycleStatus?: string; accountExpiresAt?: Date | null }>(user: T | null): T & { email: string } {
+  if (!user || !user.email || !isActiveUser(user)) {
     throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
   }
   return user as T & { email: string };
@@ -34,8 +43,8 @@ export async function assertEntityAccess(
   prisma: LifecyclePrisma,
 ): Promise<void> {
   if (params.userId) {
-    const user = await prisma.user.findUnique({ where: { id: params.userId }, select: { lifecycleStatus: true } });
-    if (!user || !isActiveLifecycle(user.lifecycleStatus)) deny();
+    const user = await prisma.user.findUnique({ where: { id: params.userId }, select: { lifecycleStatus: true, accountExpiresAt: true } });
+    if (!isActiveUser(user)) deny();
   }
   let orgId = params.orgId;
   if (params.teamId) {

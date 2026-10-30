@@ -106,6 +106,19 @@ describe('verifyAccessToken', () => {
     });
   });
 
+  it('rejects an otherwise valid JWT after account expiry', async () => {
+    const token = await signAccessToken({
+      sharedSecret: process.env.SHARED_SECRET!,
+      issuer: process.env.AUTH_SERVICE_IDENTIFIER!,
+      subject: 'u1',
+    });
+    const deps = depsWithTokenVersion(0)!;
+    deps.prisma = { user: { findUnique: async () => ({
+      lifecycleStatus: 'ACTIVE', tokenVersion: 0, accountExpiresAt: new Date(Date.now() - 1000),
+    }) } } as typeof deps.prisma;
+    await expect(verifyAccessToken(token, deps)).rejects.toMatchObject({ statusCode: 401 });
+  });
+
   it('accepts a valid JWT with org claim and returns claims including org', async () => {
     const token = await signAccessToken({
       sharedSecret: process.env.SHARED_SECRET!,

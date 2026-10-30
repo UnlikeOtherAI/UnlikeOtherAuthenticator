@@ -89,6 +89,7 @@ export function UserDetailPage() {
       </div>
       <SegmentedTabs value={tab} onChange={setTab} options={[{ label: 'Memberships', value: 'memberships' }, { label: 'Profile', value: 'profile' }, { label: 'Security', value: 'security' }, { label: 'Activity', value: 'activity' }]} />
       {tab === 'security' ? <div className="mb-5"><EntityLifecyclePanel scope="USER" id={user.id} /></div> : null}
+      {tab === 'security' && user.accountExpiresAt ? <Card className="mb-5 p-5 text-sm text-gray-700">Account expires {new Date(user.accountExpiresAt).toLocaleString()}.</Card> : null}
       {tab === 'security' ? <DeepTestNessieInferenceAccess user={user} /> : null}
       {tab === 'security' ? <Card className="p-5">
             <Button

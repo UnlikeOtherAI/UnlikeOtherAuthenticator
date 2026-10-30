@@ -27,6 +27,8 @@ function renderLlmMarkdown(): string {
   // source assertions and reusable, audience-bound chained access tokens. llmRostersMarkdown
   // owns the exact-team invitation management and role-write contracts.
   return `${llmTelephoneMarkdown}
+## Admin-created expiring users
+POST /internal/admin/users accepts email, password, optional name and optional future ISO accountExpiresAt under the admin superuser bearer. It creates one global UOA identity, hashes the password, writes a password-free audit entry and returns a user summary without credentials. Once expiry passes, UOA refuses sign-in, token verification and refresh. Relying products must continue checking UOA to observe expiry in their own sessions.
 ## Admin session lifetime
 Admin authorization-code exchange and debug-login redemption establish the short refresh-family deadline at JWT second precision before issuing original or inherited authentication proof. Cookie storage does not shorten an already-issued proof's family. Debug descendants retain their source proof and cannot outlive it. The browser receives only the short-lived bearer; its source handle stays in the bearer-bound HttpOnly cookie, with no admin refresh endpoint.
 ## Browser team reauthorization

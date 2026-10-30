@@ -13,7 +13,7 @@ import {
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import { verifyUserAccessTokenRs256 } from './user-access-token-key.service.js';
-import { isActiveLifecycle, assertEntityAccess } from './entity-lifecycle.service.js';
+import { isActiveUser, assertEntityAccess } from './entity-lifecycle.service.js';
 import { type AccountRequirement } from './session-assurance.service.js';
 import { authorizeCredentialSurface } from './credential-route-registry.service.js';
 
@@ -168,9 +168,9 @@ export async function verifyAccessToken(
   if (prisma) {
     const current = await prisma.user.findUnique({
       where: { lifecycleStatus: 'ACTIVE', id: userId },
-      select: { tokenVersion: true, lifecycleStatus: true },
+      select: { tokenVersion: true, lifecycleStatus: true, accountExpiresAt: true },
     });
-    if (!current || !isActiveLifecycle(current.lifecycleStatus) || current.tokenVersion !== credentialEpoch) {
+    if (!current || !isActiveUser(current) || current.tokenVersion !== credentialEpoch) {
       throw new AppError('UNAUTHORIZED', 401, 'INVALID_ACCESS_TOKEN');
     }
     const scope = parsed.active ?? (parsed.org ? { orgId: parsed.org.org_id } : undefined);

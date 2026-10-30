@@ -120,6 +120,14 @@ export function useUsersQuery() {
   return useQuery({ queryKey: ['admin', 'users'], queryFn: adminService.getUsers });
 }
 
+export function useCreateUserMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: adminService.createUser,
+    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ['admin'] }); },
+  });
+}
+
 export function useUserQuery(userId: string | null) {
   return useQuery({
     queryKey: ['admin', 'user', userId],

@@ -16,6 +16,9 @@ type PrismaStub = {
       id: string;
       passwordHash: string | null;
       twoFaEnabled: boolean;
+      tokenVersion: number;
+      lifecycleStatus: 'ACTIVE';
+      accountExpiresAt?: Date | null;
     } | null>;
   };
 };
@@ -59,7 +62,7 @@ describe('loginWithEmailPassword', () => {
       user: {
         findUnique: async (args) => {
           expect(args.where.userKey).toBe('user@example.com');
-          return { id: 'u1', passwordHash: 'hash', twoFaEnabled: false };
+          return { id: 'u1', passwordHash: 'hash', twoFaEnabled: false, tokenVersion: 0, lifecycleStatus: 'ACTIVE' };
         },
       },
     };
@@ -82,7 +85,7 @@ describe('loginWithEmailPassword', () => {
       user: {
         findUnique: async (args) => {
           expect(args.where.userKey).toBe('client.example.com|user@example.com');
-          return { id: 'u2', passwordHash: 'hash2', twoFaEnabled: true };
+          return { id: 'u2', passwordHash: 'hash2', twoFaEnabled: true, tokenVersion: 0, lifecycleStatus: 'ACTIVE' };
         },
       },
     };
@@ -107,7 +110,7 @@ describe('loginWithEmailPassword', () => {
   it('throws UNAUTHORIZED for wrong password', async () => {
     const prisma: PrismaStub = {
       user: {
-        findUnique: async () => ({ id: 'u1', passwordHash: 'hash', twoFaEnabled: false }),
+        findUnique: async () => ({ id: 'u1', passwordHash: 'hash', twoFaEnabled: false, tokenVersion: 0, lifecycleStatus: 'ACTIVE' }),
       },
     };
 
@@ -169,5 +172,16 @@ describe('loginWithEmailPassword', () => {
         },
       ),
     ).rejects.toMatchObject({ statusCode: 500 });
+  });
+
+  it('rejects a correct password after the account expiry', async () => {
+    const prisma: PrismaStub = { user: { findUnique: async () => ({
+      id: 'u1', passwordHash: 'hash', twoFaEnabled: false, tokenVersion: 0,
+      lifecycleStatus: 'ACTIVE', accountExpiresAt: new Date(Date.now() - 1000),
+    }) } };
+    await expect(loginWithEmailPassword(
+      { email: 'user@example.com', password: 'correct', config: baseConfig() },
+      { env: testEnv(), prisma, verifyPassword: async () => true },
+    )).rejects.toMatchObject({ statusCode: 401 });
   });
 });

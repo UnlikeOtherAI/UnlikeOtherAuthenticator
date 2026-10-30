@@ -9259,6 +9259,49 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
   /internal/admin/users:
+    post:
+      tags: [Internal Admin]
+      summary: Create a global email/password user with optional expiry
+      operationId: adminCreateUser
+      security:
+        - adminBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  minLength: 8
+                  maxLength: 1024
+                name:
+                  type: string
+                  maxLength: 200
+                accountExpiresAt:
+                  type: string
+                  format: date-time
+                  nullable: true
+      responses:
+        '200':
+          description: Created user summary without the password.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '409':
+          description: Global email identity already exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
     get:
       tags: [Internal Admin]
       summary: List all users (admin view)

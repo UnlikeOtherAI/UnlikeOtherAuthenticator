@@ -1,6 +1,6 @@
 export type AuthMethod = 'email' | 'google' | 'github' | 'apple' | 'facebook' | 'linkedin' | 'x' | 'microsoft';
 
-export type EntityStatus = 'active' | 'disabled' | 'banned' | 'deleting' | 'deleted';
+export type EntityStatus = 'active' | 'expired' | 'disabled' | 'banned' | 'deleting' | 'deleted';
 
 export type UoaRole = 'owner' | 'admin' | 'member';
 
@@ -123,6 +123,7 @@ export type UserSummary = {
   status: EntityStatus;
   method: AuthMethod;
   created: string;
+  accountExpiresAt?: string | null;
   // Additive field: optional while the API ships it.
   avatarSource?: AvatarSource;
 };

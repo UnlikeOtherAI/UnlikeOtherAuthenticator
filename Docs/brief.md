@@ -3419,3 +3419,17 @@ Unknown, disabled, deleting and deleted entities retain the same non-enumerating
 generated image. The founding ClientDomain is integration provenance and does not
 disable an independent team when that product is retired. This supersedes the
 older origin-domain publication gate in the avatar contract.
+
+### Admin-created expiring accounts (2026-10-30)
+
+An authenticated platform superuser may create a global UOA email/password identity
+from Admin Users with an email, password, optional name and optional future account
+expiry. The password follows the normal password policy and Argon2id storage. It is
+never returned or recorded in the audit log. Existing global identities are not
+overwritten. The account starts with no product membership or superuser role;
+ordinary UOA team membership controls grant the access needed for a test.
+
+At the expiry instant, UOA rejects new sign-ins, authorization continuation,
+access-token verification and refresh rotation. The directory displays the expiry
+and marks the identity expired. Relying products that keep independent local
+sessions must continue checking UOA to observe this deadline promptly.

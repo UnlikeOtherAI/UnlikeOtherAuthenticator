@@ -1,4 +1,10 @@
 import { getAdminPrisma } from '../db/prisma.js';
+import { runInTransaction } from '../db/tenant-context.js';
+import { AppError } from '../utils/errors.js';
+import { isActiveUser } from './entity-lifecycle.service.js';
+import { hashPassword } from './password.service.js';
+import { buildUserIdentity } from './user-scope.service.js';
+import { isP2002Error } from './organisation.service.base.js';
 import { adminAvatarImageUrl, avatarImageBaseUrl } from '../utils/avatar-url.js';
 import {
   DEFAULT_LIST_LIMIT,
@@ -89,7 +95,8 @@ export async function getAdminUsers(limit?: number) {
       avatarSource: adminAvatarSource(uploadedAvatarUserIds.has(user.id), user.avatarUrl),
       avatarImageUrl: adminAvatarImageUrl({ baseUrl, userId: user.id }),
       lastLogin: latestLog ? displayTimestamp(latestLog.createdAt) : 'Never',
-      status: user.lifecycleStatus.toLowerCase(),
+      status: user.lifecycleStatus === 'ACTIVE' && !isActiveUser(user) ? 'expired' : user.lifecycleStatus.toLowerCase(),
+      accountExpiresAt: user.accountExpiresAt?.toISOString() ?? null,
       method: method(latestLog?.authMethod),
       created: displayDate(user.createdAt),
     };
@@ -120,10 +127,47 @@ export async function getAdminUser(userId: string) {
     avatarSource: adminAvatarSource(Boolean(uploadedAvatar), user.avatarUrl),
     avatarImageUrl: adminAvatarImageUrl({ baseUrl: avatarImageBaseUrl(), userId: user.id }),
     lastLogin: latestLog ? displayTimestamp(latestLog.createdAt) : 'Never',
-    status: user.lifecycleStatus.toLowerCase(),
+    status: user.lifecycleStatus === 'ACTIVE' && !isActiveUser(user) ? 'expired' : user.lifecycleStatus.toLowerCase(),
+    accountExpiresAt: user.accountExpiresAt?.toISOString() ?? null,
     method: method(latestLog?.authMethod),
     created: displayDate(user.createdAt),
   };
+}
+
+export async function createAdminUser(input: {
+  email: string;
+  password: string;
+  name?: string | null;
+  accountExpiresAt?: string | null;
+  actorEmail: string;
+}) {
+  const identity = buildUserIdentity({ userScope: 'global', email: input.email });
+  const name = input.name?.trim() || null;
+  const expiry = input.accountExpiresAt ? new Date(input.accountExpiresAt) : null;
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identity.email) || name && name.length > 200 ||
+      expiry && (!Number.isFinite(expiry.getTime()) || expiry.getTime() <= Date.now())) {
+    throw new AppError('BAD_REQUEST', 400, 'INVALID_USER_INPUT');
+  }
+  const passwordHash = await hashPassword(input.password);
+  const prisma = getAdminPrisma();
+  try {
+    const created = await runInTransaction(prisma, async (tx) => {
+      const user = await tx.user.create({
+        data: { ...identity, name, passwordHash, accountExpiresAt: expiry },
+        select: { id: true },
+      });
+      await writeAuditLog({
+        actorEmail: input.actorEmail,
+        action: 'user.created',
+        metadata: { userId: user.id, email: identity.email, accountExpiresAt: expiry?.toISOString() ?? null },
+      }, { prisma: tx as unknown as AuditLogPrisma });
+      return user;
+    });
+    return getAdminUser(created.id);
+  } catch (error) {
+    if (isP2002Error(error)) throw new AppError('BAD_REQUEST', 409, 'USER_ALREADY_EXISTS');
+    throw error;
+  }
 }
 
 export async function resetAdminUserTwoFactor(params: {

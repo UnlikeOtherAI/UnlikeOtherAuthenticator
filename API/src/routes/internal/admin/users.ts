@@ -10,7 +10,7 @@ import {
   resolveAvatar,
   uploadAvatar,
 } from '../../../services/avatar.service.js';
-import { resetAdminUserTwoFactor } from '../../../services/internal-admin.service.js';
+import { createAdminUser, resetAdminUserTwoFactor } from '../../../services/internal-admin.service.js';
 import { AppError } from '../../../utils/errors.js';
 import { setDeepTestNessieInferenceAccess } from '../../../services/deeptest-nessie-inference-access.service.js';
 import { addAdminUserToTeam } from '../../../services/internal-admin-team-members.service.js';
@@ -52,6 +52,16 @@ function requireActorEmail(request: { adminAccessTokenClaims?: { email: string }
 }
 
 export function registerInternalAdminUserRoutes(app: FastifyInstance): void {
+  app.post('/internal/admin/users', adminRoute(uploadResponseSchema), async (request, reply) => {
+    const body = z.object({
+      email: z.email(),
+      password: z.string().min(8).max(1024),
+      name: z.string().trim().max(200).optional(),
+      accountExpiresAt: z.iso.datetime({ offset: true }).nullable().optional(),
+    }).strict().parse(request.body);
+    reply.header('Cache-Control', 'private, no-store');
+    return createAdminUser({ ...body, actorEmail: requireActorEmail(request) });
+  });
   app.patch('/internal/admin/users/:userId/deeptest-nessie-inference',
     adminRoute(uploadResponseSchema), async (request, reply) => {
       reply.header('Cache-Control', 'private, no-store');

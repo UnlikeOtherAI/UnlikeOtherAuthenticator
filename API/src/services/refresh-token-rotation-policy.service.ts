@@ -6,6 +6,7 @@ import { lockSignaturePolicyForDecision } from './signature-policy-lock.service.
 import { evaluateSignaturePolicy } from './signature-policy.service.js';
 import { isTwoFaAuthenticationSufficient, resolveTwoFaPolicy } from './twofactor-policy.service.js';
 import { lockAndAssertRefreshTeamScope } from './team-scope.service.js';
+import { isActiveUser } from './entity-lifecycle.service.js';
 
 type RefreshRotationRow = {
   userId: string;
@@ -64,6 +65,11 @@ export function createRefreshTokenRotationPolicyGuard(params: {
         throw error;
       }
     }
+    const account = await params.prisma.user.findUnique({
+      where: { id: userId },
+      select: { lifecycleStatus: true, accountExpiresAt: true },
+    });
+    if (!isActiveUser(account)) throw new AppError('UNAUTHORIZED', 401, 'INVALID_REFRESH_TOKEN');
     await params.afterTeamLock?.();
 
     if (params.twoFa) {

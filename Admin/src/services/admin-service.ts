@@ -331,6 +331,8 @@ export const adminService = {
       `/internal/admin/users/${encodeURIComponent(userId)}/teams`, body,
     ),
   getUsers: () => api.get<UserSummary[]>('/internal/admin/users'),
+  createUser: (input: { email: string; password: string; name?: string; accountExpiresAt?: string | null }) =>
+    api.post<UserSummary>('/internal/admin/users', input),
   getUser: (userId: string) => api.get<UserSummary | null>(`/internal/admin/users/${encodeURIComponent(userId)}`),
   setDeepTestNessieInferenceAccess: (userId: string, allowed: boolean) =>
     api.patch<{ allowed: boolean }>(`/internal/admin/users/${encodeURIComponent(userId)}/deeptest-nessie-inference`, { allowed }),
