@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createMemoryRouter, RouterProvider } from 'react-router';
@@ -10,7 +10,7 @@ import { UsersPage } from './UsersPage';
 import { TeamsPage } from './TeamsPage';
 import { TeamTable } from '../features/admin/TeamTable';
 
-const mocks = vi.hoisted(() => ({ create: vi.fn(), refetch: vi.fn(), isError: false, createError: false }));
+const mocks = vi.hoisted(() => ({ create: vi.fn(), createUser: vi.fn(), refetch: vi.fn(), isError: false, createError: false }));
 const organisation = {
   id: 'org-1', name: 'Acme', slug: 'acme', created: '2026-01-01',
   owner: { id: 'user-1', name: null, email: 'owner@example.com' },
@@ -23,6 +23,7 @@ vi.mock('../features/admin/admin-queries', () => ({
   useOrganisationQuery: () => ({ data: organisation, isLoading: false, isError: false }),
   useCreateOrganisationMutation: () => ({ mutateAsync: mocks.create, isPending: false, isError: mocks.createError }),
   useUsersQuery: () => ({ data: [{ id: 'user-1', name: 'Alex', email: 'alex@example.com', domains: ['example.com'], method: 'email', twofa: true, lastLogin: '2026-10-03', status: 'active' }], isLoading: false }),
+  useCreateUserMutation: () => ({ mutateAsync: mocks.createUser, isPending: false, isError: false }),
   useDomainsQuery: () => ({ data: [{ name: 'example.com', label: 'Example' }] }),
   useUserAvatarQuery: () => ({ data: undefined }),
   useTeamsQuery: () => ({ data: [{ ...organisation.teams[0], orgName: 'Acme' }], isLoading: false }),
@@ -44,7 +45,7 @@ function mount(path = '/organisations') {
 }
 
 afterEach(cleanup);
-beforeEach(() => { mocks.create.mockReset(); mocks.refetch.mockReset(); mocks.isError = false; mocks.createError = false; });
+beforeEach(() => { mocks.create.mockReset(); mocks.createUser.mockReset(); mocks.refetch.mockReset(); mocks.isError = false; mocks.createError = false; });
 
 describe('Directory navigation and truthful controls', () => {
   it('filters organisations and preserves the search when returning from a canonical record', async () => {
@@ -126,6 +127,24 @@ describe('Directory navigation and truthful controls', () => {
     expect(screen.getByText('No teams found.')).toBeTruthy();
     await userEvent.setup().clear(screen.getByRole('searchbox'));
     expect(screen.getByRole('link', { name: 'Engineering' })).toBeTruthy();
+  });
+
+  it('creates a user with an optional expiry and opens the new record', async () => {
+    const user = userEvent.setup();
+    mocks.createUser.mockResolvedValue({ id: 'user-new' });
+    const router = mount('/users');
+    await user.click(screen.getByRole('button', { name: 'New user' }));
+    await user.type(screen.getByLabelText('Email'), 'reviewer@example.com');
+    await user.type(screen.getByLabelText('Name (optional)'), 'Review User');
+    await user.type(screen.getByLabelText('Password'), 'long-test-password');
+    fireEvent.change(screen.getByLabelText('Expires at (optional)'), { target: { value: '2026-12-01T12:00' } });
+    await user.click(screen.getByRole('button', { name: 'Create user' }));
+    await waitFor(() => expect(mocks.createUser).toHaveBeenCalledTimes(1));
+    expect(mocks.createUser).toHaveBeenCalledWith({
+      email: 'reviewer@example.com', name: 'Review User', password: 'long-test-password',
+      accountExpiresAt: new Date('2026-12-01T12:00').toISOString(),
+    });
+    await waitFor(() => expect(router.state.location.pathname).toBe('/users/user-new'));
   });
 
 });
