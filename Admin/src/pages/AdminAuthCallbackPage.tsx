@@ -15,10 +15,13 @@ export function AdminAuthCallbackPage() {
   const navigate = useNavigate();
   const [error, setError] = useState(false);
   const hasStarted = useRef(false);
+  const returnTo = useRef<string | null>(null);
 
   useEffect(() => {
     if (isAuthenticated) {
-      navigate('/dashboard', { replace: true });
+      const destination = returnTo.current ?? readPendingAdminLogin()?.returnTo ?? '/dashboard';
+      clearPendingAdminLogin();
+      navigate(destination, { replace: true });
       return;
     }
     if (hasStarted.current) return;
@@ -28,6 +31,7 @@ export function AdminAuthCallbackPage() {
     const params = new URLSearchParams(location.search);
     const code = params.get('code');
     const pending = readPendingAdminLogin();
+    returnTo.current = pending?.returnTo ?? null;
 
     if (!code || !pending || params.get('error')) {
       clearPendingAdminLogin();

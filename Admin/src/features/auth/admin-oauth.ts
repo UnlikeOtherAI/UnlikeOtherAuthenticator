@@ -72,7 +72,7 @@ export function readPendingAdminLogin(): PendingAdminLogin | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as PendingAdminLogin;
     if (!parsed.codeVerifier || !parsed.configUrl || !parsed.redirectUrl) return null;
-    return parsed;
+    return { ...parsed, returnTo: sanitizeReturnTo(parsed.returnTo ?? '/dashboard') };
   } catch {
     return null;
   }
