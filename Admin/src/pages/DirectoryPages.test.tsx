@@ -136,8 +136,8 @@ describe('Directory navigation and truthful controls', () => {
     await user.click(screen.getByRole('button', { name: 'New user' }));
     await user.type(screen.getByLabelText('Email'), 'reviewer@example.com');
     await user.type(screen.getByLabelText('Name (optional)'), 'Review User');
-    await user.type(screen.getByLabelText('Password'), 'long-test-password');
-    fireEvent.change(screen.getByLabelText('Expires at (optional)'), { target: { value: '2026-12-01T12:00' } });
+    await user.type(screen.getByLabelText(/^Password/), 'long-test-password');
+    fireEvent.change(screen.getByLabelText(/^Expires at/), { target: { value: '2026-12-01T12:00' } });
     await user.click(screen.getByRole('button', { name: 'Create user' }));
     await waitFor(() => expect(mocks.createUser).toHaveBeenCalledTimes(1));
     expect(mocks.createUser).toHaveBeenCalledWith({
