@@ -18,8 +18,6 @@ vi.mock('../../src/config/env.js', () => ({ getAdminAuthDomain: () => 'authentic
 vi.mock('../../src/services/email.service.js', () => ({ sendRawEmail: mocks.email }));
 vi.mock('../../src/services/audit-log.service.js', () => ({ writeAuditLog: mocks.audit }));
 
-const config = { user_scope: 'global', domain: 'fermentea.live' } as never;
-
 describe('expired account renewal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -33,8 +31,8 @@ describe('expired account renewal', () => {
     const { requestAccountRenewal } = await import('../../src/services/account-renewal.service.js');
     mocks.userFind.mockResolvedValueOnce(null).mockResolvedValueOnce({ id: 'user-1', lifecycleStatus: 'ACTIVE',
       accountExpiresAt: new Date(Date.now() + 60000) });
-    await expect(requestAccountRenewal('unknown@example.com', config)).resolves.toEqual({ ok: true });
-    await expect(requestAccountRenewal('current@example.com', config)).resolves.toEqual({ ok: true });
+    await expect(requestAccountRenewal('unknown-user')).resolves.toEqual({ ok: true });
+    await expect(requestAccountRenewal('current-user')).resolves.toEqual({ ok: true });
     expect(mocks.requestUpsert).not.toHaveBeenCalled();
     expect(mocks.email).not.toHaveBeenCalled();
   });
@@ -47,7 +45,7 @@ describe('expired account renewal', () => {
     mocks.requestFind.mockResolvedValue(null);
     mocks.requestUpsert.mockResolvedValue({ id: 'request-1' });
     mocks.roles.mockResolvedValue([{ user: { email: 'admin@example.com', accountExpiresAt: null } }]);
-    await expect(requestAccountRenewal(expired.email, config)).resolves.toEqual({ ok: true });
+    await expect(requestAccountRenewal(expired.id)).resolves.toEqual({ ok: true });
     expect(mocks.requestUpsert).toHaveBeenCalledTimes(1);
     expect(mocks.email).toHaveBeenCalledWith(expect.objectContaining({ to: 'admin@example.com',
       text: expect.stringContaining('/admin/users/user-1?tab=security') }));

@@ -11,6 +11,9 @@ export function AccountRenewalPage(): React.JSX.Element {
   const { classNames } = useTheme();
   const { t } = useTranslation();
   const [email, setEmail] = useState(pendingEmail ?? '');
+  const [challengeId, setChallengeId] = useState<string | null>(null);
+  const [code, setCode] = useState('');
+  const [twoFactorCode, setTwoFactorCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState(false);
@@ -19,11 +22,15 @@ export function AccountRenewalPage(): React.JSX.Element {
     event.preventDefault();
     setBusy(true);
     setError(false);
-    const result = await postJson<{ email: string }, { ok: true }>('/auth/account-renewal/request',
-      { email: email.trim() }, { config_url: configUrl });
+    const result = challengeId
+      ? await postJson('/auth/account-renewal/request', { challengeId, code, ...(twoFactorCode ? { twoFactorCode } : {}) },
+        { config_url: configUrl })
+      : await postJson<{ email: string }, { challengeId: string }>('/auth/account-renewal/start',
+        { email: email.trim() }, { config_url: configUrl });
     setBusy(false);
-    if (result.ok) setSent(true);
-    else setError(true);
+    if (!result.ok) { setError(true); return; }
+    if (challengeId) setSent(true);
+    else setChallengeId((result.data as { challengeId: string }).challengeId);
   }
 
   return <div className="flex flex-col gap-4">
@@ -31,10 +38,18 @@ export function AccountRenewalPage(): React.JSX.Element {
     <p className="text-sm text-[var(--uoa-color-muted)]">{t('auth.renewal.description')}</p>
     {sent ? <p role="status" className="text-sm">{t('auth.renewal.sent')}</p> :
       <form className="flex flex-col gap-4" onSubmit={event => { void submit(event); }}>
-        <Input label={t('form.email.label')} type="email" autoComplete="email" required value={email}
-          onChange={event => setEmail(event.currentTarget.value)} />
+        {!challengeId ? <Input label={t('form.email.label')} type="email" autoComplete="email" required value={email}
+          onChange={event => setEmail(event.currentTarget.value)} /> : <>
+          <p role="status" className="text-sm">{t('auth.renewal.codeSent')}</p>
+          <Input label={t('auth.accessStatus.code')} inputMode="numeric" pattern="[0-9]{6}" maxLength={6}
+            required value={code} onChange={event => setCode(event.currentTarget.value)} />
+          <Input label={t('auth.accessStatus.totp')} inputMode="numeric" pattern="[0-9]{6}" maxLength={6}
+            value={twoFactorCode} onChange={event => setTwoFactorCode(event.currentTarget.value)} />
+        </>}
         {error ? <p role="alert" className="text-sm text-[var(--uoa-color-danger)]">{t('auth.renewal.error')}</p> : null}
-        <Button type="submit" disabled={busy}>{busy ? '…' : t('auth.renewal.submit')}</Button>
+        <Button type="submit" disabled={busy}>{busy ? '…' : t(challengeId ? 'auth.renewal.submit' : 'auth.accessStatus.send')}</Button>
+        {challengeId ? <Button type="button" variant="secondary" onClick={() => { setChallengeId(null); setCode(''); setTwoFactorCode(''); setError(false); }}>
+          {t('auth.accessStatus.restart')}</Button> : null}
       </form>}
     <Button type="button" variant="secondary" onClick={() => setView('login')}>{t('auth.renewal.back')}</Button>
   </div>;

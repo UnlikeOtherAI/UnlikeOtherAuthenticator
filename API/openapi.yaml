@@ -2638,12 +2638,12 @@ paths:
         '400': { description: Generic invalid or expired link. }
         '429': { description: Link request rate exceeded. }
 
-  /auth/account-renewal/request:
+  /auth/account-renewal/start:
     post:
       tags: [Auth]
-      summary: Request renewal of an expired account
-      operationId: requestAccountRenewal
-      description: A signed product configuration is required. The response does not reveal whether an expired account exists. Requests are rate limited and reviewed by platform superusers.
+      summary: Start email verification for an account renewal request
+      operationId: startAccountRenewal
+      description: Sends a neutral six-digit email code. A signed product configuration is required. The response does not reveal account existence.
       parameters:
         - $ref: '#/components/parameters/configUrl'
       requestBody:
@@ -2660,6 +2660,50 @@ paths:
                   format: email
       responses:
         '200':
+          description: Generic accepted response with challenge ID.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, challengeId]
+                properties:
+                  ok:
+                    type: boolean
+                  challengeId:
+                    type: string
+                    format: uuid
+        '400':
+          description: Invalid email or signed configuration.
+        '429':
+          description: Request rate exceeded.
+  /auth/account-renewal/request:
+    post:
+      tags: [Auth]
+      summary: Request renewal after email verification
+      operationId: requestAccountRenewal
+      description: Consumes a one-use mailbox and optional 2FA proof. Creates a pending request only for an expired account and emails platform superusers. The response does not reveal account expiry.
+      parameters:
+        - $ref: '#/components/parameters/configUrl'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [challengeId, code]
+              properties:
+                challengeId:
+                  type: string
+                  format: uuid
+                code:
+                  type: string
+                  pattern: '^\d{6}$'
+                twoFactorCode:
+                  type: string
+                  pattern: '^\d{6}$'
+      responses:
+        '200':
           description: Generic accepted response.
           content:
             application/json:
@@ -2669,8 +2713,8 @@ paths:
                 properties:
                   ok:
                     type: boolean
-        '400':
-          description: Invalid email or signed configuration.
+        '401':
+          description: Invalid or expired proof.
         '429':
           description: Request rate exceeded.
   /auth/register:

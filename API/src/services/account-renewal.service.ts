@@ -1,24 +1,17 @@
-import { createHash } from 'node:crypto';
 import { getAdminAuthDomain, getEnv } from '../config/env.js';
 import { getAdminPrisma } from '../db/prisma.js';
 import { runInTransaction } from '../db/tenant-context.js';
-import { createKeyedRateLimiter } from '../middleware/rate-limiter.js';
 import { AppError } from '../utils/errors.js';
 import { normalizeDomain } from '../utils/domain.js';
-import { buildUserIdentity } from './user-scope.service.js';
 import { sendRawEmail } from './email.service.js';
 import { writeAuditLog, type AuditLogPrisma } from './audit-log.service.js';
-import type { ClientConfig } from './config.service.js';
 
-const perEmailLimit = createKeyedRateLimiter({ limit: 3, windowMs: 60 * 60 * 1000 });
 const HOUR = 60 * 60 * 1000;
 
-/** A generic answer avoids revealing whether an email exists or is expired. */
-export async function requestAccountRenewal(email: string, config: ClientConfig): Promise<{ ok: true }> {
-  const identity = buildUserIdentity({ userScope: config.user_scope, email, domain: config.domain });
-  perEmailLimit(createHash('sha256').update(identity.userKey).digest('hex'));
+/** Only call after consuming a mailbox/2FA proof for this exact subject. */
+export async function requestAccountRenewal(userId: string): Promise<{ ok: true }> {
   const prisma = getAdminPrisma();
-  const user = await prisma.user.findUnique({ where: { userKey: identity.userKey },
+  const user = await prisma.user.findUnique({ where: { id: userId },
     select: { id: true, email: true, lifecycleStatus: true, accountExpiresAt: true } });
   if (!user || user.lifecycleStatus !== 'ACTIVE' || !user.accountExpiresAt || user.accountExpiresAt > new Date()) return { ok: true };
 
@@ -47,7 +40,7 @@ export async function requestAccountRenewal(email: string, config: ClientConfig)
   if (!from) return { ok: true }; // No sender is configured; a retry remains eligible.
   const base = env.PUBLIC_BASE_URL?.trim().replace(/\/+$/, '') ?? `http://${env.HOST}:${env.PORT}`;
   const reviewUrl = `${base}/admin/users/${encodeURIComponent(user.id)}?tab=security`;
-  const content = `An expired UOA account has requested renewed access: ${user.email ?? identity.email}.\n\nReview the request: ${reviewUrl}\n\nSign in as a platform administrator to approve with a new expiry date or decline.`;
+  const content = `An expired UOA account has requested renewed access: ${user.email}.\n\nReview the request: ${reviewUrl}\n\nSign in as a platform administrator to approve with a new expiry date or decline.`;
   // A delivery failure leaves notifiedAt empty, so a later request can retry delivery.
   const outcomes = await Promise.allSettled(recipients.map(to => sendRawEmail({ to, from,
     subject: 'UOA account renewal request', text: content })));

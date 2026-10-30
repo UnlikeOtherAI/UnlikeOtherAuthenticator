@@ -5,10 +5,15 @@ import { authEmailEndpoints } from './schema.auth-email.js';
 import { salesResearchJobGrantEndpoints } from './schema.auth-job-grants.js';
 
 export const authEndpoints: EndpointSchema[] = [
+  { method: 'POST', path: '/auth/account-renewal/start',
+    description: 'Send a neutral mailbox verification code for an account renewal request; response does not reveal account existence',
+    auth: 'verified signed config_url; IP rate limited', query: { config_url: 'signed product configuration URL' },
+    body: { email: 'email address' }, response: { 200: '{ ok: true, challengeId } (non-enumerating)' } },
   { method: 'POST', path: '/auth/account-renewal/request',
-    description: 'Request renewal of an expired account; response is identical for unknown, active and expired accounts',
-    auth: 'verified signed config_url; IP and email rate limited', query: { config_url: 'signed product configuration URL' },
-    body: { email: 'email address' }, response: { 200: '{ ok: true } (non-enumerating)' } },
+    description: 'Consume the mailbox and optional 2FA proof, then request renewal if that account has expired',
+    auth: 'verified signed config_url; one-use code, optional 2FA and IP rate limit', query: { config_url: 'same signed product configuration URL' },
+    body: { challengeId: 'UUID returned by start', code: 'six-digit mailbox code', twoFactorCode: 'six-digit TOTP when enabled' },
+    response: { 200: '{ ok: true } (non-enumerating)', 401: 'invalid or expired proof' } },
   ...salesResearchJobGrantEndpoints,
   ...actionVerificationEndpoints,
   { method: 'POST', path: '/auth/session-broker/validate',
