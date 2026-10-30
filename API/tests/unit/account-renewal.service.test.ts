@@ -69,4 +69,18 @@ describe('expired account renewal', () => {
     expect(mocks.audit).toHaveBeenCalledWith(expect.objectContaining({ action: 'user.account_renewal_approved' }),
       expect.anything());
   });
+
+  it('decline records the reviewer without changing the expired account', async () => {
+    const { reviewAccountRenewal } = await import('../../src/services/account-renewal.service.js');
+    mocks.requestFind.mockResolvedValue({ id: 'request-1', userId: 'user-1', status: 'PENDING',
+      user: { id: 'user-1', email: 'expired@example.com', lifecycleStatus: 'ACTIVE',
+        accountExpiresAt: new Date(Date.now() - 60000) } });
+    await expect(reviewAccountRenewal({ requestId: 'request-1', actorUserId: 'admin-1',
+      actorEmail: 'admin@example.com', decision: 'decline' })).resolves.toEqual({
+      userId: 'user-1', status: 'declined', accountExpiresAt: null,
+    });
+    expect(mocks.userUpdate).not.toHaveBeenCalled();
+    expect(mocks.requestUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({
+      status: 'DECLINED', reviewedByUserId: 'admin-1' }) }));
+  });
 });

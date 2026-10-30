@@ -79,7 +79,7 @@ export async function reviewAccountRenewal(params: {
   return { userId, status: expiry ? 'approved' : 'declined', accountExpiresAt: expiry?.toISOString() ?? null };
 }
 
-export async function setAdminUserExpiry(params: { userId: string; actorEmail: string; accountExpiresAt: string | null }) {
+export async function setAdminUserExpiry(params: { userId: string; actorUserId: string; actorEmail: string; accountExpiresAt: string | null }) {
   const expiry = params.accountExpiresAt ? new Date(params.accountExpiresAt) : null;
   if (expiry && (!Number.isFinite(expiry.getTime()) || expiry <= new Date())) throw new AppError('BAD_REQUEST', 400, 'INVALID_ACCOUNT_EXPIRY');
   const prisma = getAdminPrisma();
@@ -88,7 +88,7 @@ export async function setAdminUserExpiry(params: { userId: string; actorEmail: s
     if (!user || user.lifecycleStatus !== 'ACTIVE') throw new AppError('NOT_FOUND', 404);
     await tx.user.update({ where: { id: user.id }, data: { accountExpiresAt: expiry } });
     await tx.accountRenewalRequest.updateMany({ where: { userId: user.id, status: 'PENDING' }, data: {
-      status: 'APPROVED', reviewedAt: new Date(), approvedUntil: expiry,
+      status: 'APPROVED', reviewedAt: new Date(), reviewedByUserId: params.actorUserId, approvedUntil: expiry,
     } });
     await writeAuditLog({ actorEmail: params.actorEmail, action: 'user.account_expiry_updated',
       metadata: { userId: user.id, accountExpiresAt: expiry?.toISOString() ?? null } },

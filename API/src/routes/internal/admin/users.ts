@@ -67,7 +67,9 @@ export function registerInternalAdminUserRoutes(app: FastifyInstance): void {
     const { userId } = UserParamsSchema.parse(request.params);
     const { accountExpiresAt } = z.object({ accountExpiresAt: z.iso.datetime({ offset: true }).nullable() }).strict().parse(request.body);
     reply.header('Cache-Control', 'private, no-store');
-    return setAdminUserExpiry({ userId, accountExpiresAt, actorEmail: requireActorEmail(request) });
+    const claims = request.adminAccessTokenClaims;
+    if (!claims) throw new AppError('UNAUTHORIZED', 401);
+    return setAdminUserExpiry({ userId, accountExpiresAt, actorEmail: claims.email, actorUserId: claims.userId });
   });
   app.post('/internal/admin/account-renewal-requests/:requestId/review', adminRoute(uploadResponseSchema), async (request, reply) => {
     const { requestId } = z.object({ requestId: z.string().min(1) }).parse(request.params);
