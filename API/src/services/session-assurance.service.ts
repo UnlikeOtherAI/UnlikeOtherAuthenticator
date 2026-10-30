@@ -7,6 +7,7 @@ import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import { runInTransaction } from '../db/tenant-context.js';
 import { assertEnterpriseProvisioningActive } from './enterprise-identity-status.service.js';
+import { isActiveUser } from './entity-lifecycle.service.js';
 
 export type AssuranceDb = Pick<PrismaClient,
   'sessionAssurance' | 'refreshToken' | 'user' | 'orgSsoPolicy' | 'orgSsoConnection' |
@@ -62,12 +63,12 @@ async function validateSessionAssuranceInside(
       (row.authenticatedAt && row.authenticatedAt.getTime() > now.getTime() + 120000)) reject();
     visited.add(row.id);
     const [user, family] = await Promise.all([
-      db.user.findUnique({ where: { id: row.userId }, select: { lifecycleStatus: true, tokenVersion: true } }),
+      db.user.findUnique({ where: { id: row.userId }, select: { lifecycleStatus: true, accountExpiresAt: true, tokenVersion: true } }),
       db.refreshToken.findFirst({ where: { familyId: row.familyId, userId: row.userId,
         domain: row.clientDomain, orgId: row.orgId, teamId: row.teamId,
         revokedAt: null, expiresAt: { gt: now } }, select: { id: true, expiresAt: true } }),
     ]);
-    if (!user || user.lifecycleStatus !== 'ACTIVE' || user.tokenVersion !== row.credentialEpoch ||
+    if (!user || !isActiveUser(user) || user.tokenVersion !== row.credentialEpoch ||
       !family || family.expiresAt < row.expiresAt) reject();
     if (row.orgId) {
       const member = await db.orgMember.findUnique({ where: { orgId_userId: { orgId: row.orgId, userId: row.userId } },

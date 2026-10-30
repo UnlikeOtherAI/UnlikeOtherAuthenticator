@@ -3,6 +3,7 @@ import { BillingAppKeyPurpose, type PrismaClient } from '@prisma/client';
 import { getAdminPrisma } from '../db/prisma.js';
 import { runInTransaction } from '../db/tenant-context.js';
 import { AppError } from '../utils/errors.js';
+import { isActiveUser } from './entity-lifecycle.service.js';
 import { verifyBillingActor } from './billing-actor.service.js';
 import { billingActorAudience } from './billing-actor-audience.service.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
@@ -53,7 +54,7 @@ export async function getDeepTestNessieInferenceAccess(
         select: { id: true },
       }),
       tx.user.findUnique({ where: { id: input.request.userId },
-        select: { tokenVersion: true, lifecycleStatus: true, deeptestNessieInferenceAllowed: true } }),
+        select: { tokenVersion: true, lifecycleStatus: true, accountExpiresAt: true, deeptestNessieInferenceAllowed: true } }),
       tx.orgMember.findFirst({
         where: { userId: input.request.userId, orgId: input.request.organisationId, status: 'ACTIVE',
           org: { lifecycleStatus: 'ACTIVE', teams: { some: {
@@ -63,7 +64,7 @@ export async function getDeepTestNessieInferenceAccess(
         select: { id: true },
       }),
     ]);
-    if (!key || !user || user.lifecycleStatus !== 'ACTIVE' || user.tokenVersion !== actor.tv || !membership) {
+    if (!key || !user || !isActiveUser(user) || user.tokenVersion !== actor.tv || !membership) {
       throw new AppError('FORBIDDEN', 403);
     }
     return { allowed: user.deeptestNessieInferenceAllowed === true };

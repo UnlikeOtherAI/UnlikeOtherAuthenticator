@@ -6,7 +6,7 @@ import type { TenantContext } from '../db/tenant-context.js';
 import { normalizeDomain } from '../utils/domain.js';
 import { AppError } from '../utils/errors.js';
 import { verifyDomainAuthToken } from './domain-secret.service.js';
-import { assertEntityAccess } from './entity-lifecycle.service.js';
+import { assertEntityAccess, isActiveUser } from './entity-lifecycle.service.js';
 import { lockProductTeamPolicyShared } from './product-team-policy-lock.service.js';
 import {
   lockRefreshSessionUser,
@@ -51,8 +51,8 @@ export async function assertTenantEffectAuthority(
   }
   if (claims) {
     const user = await adminDb.user.findUnique({ where: { id: claims.userId },
-      select: { lifecycleStatus: true, tokenVersion: true } });
-    if (!user || user.lifecycleStatus !== 'ACTIVE' || user.tokenVersion !== claims.tokenVersion) deny();
+      select: { lifecycleStatus: true, accountExpiresAt: true, tokenVersion: true } });
+    if (!user || !isActiveUser(user) || user.tokenVersion !== claims.tokenVersion) deny();
     if (request.adminAccessTokenClaims) {
       const domain = normalizeDomain(getAdminAuthDomain());
       if (claims.role !== 'superuser' || normalizeDomain(claims.domain) !== domain) deny();

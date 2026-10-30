@@ -4,6 +4,7 @@ import { randomBytes, createHash } from 'node:crypto';
 import type { PrismaClient, Prisma } from '@prisma/client';
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
+import { isActiveUser } from './entity-lifecycle.service.js';
 import { fingerprintClientConfig } from './client-config-fingerprint.service.js';
 import type { ClientConfig } from './config.service.js';
 
@@ -88,8 +89,8 @@ async function validateAuthenticationEvidence(input: { id?: string; userId: stri
     if (row.teamId && !await db.teamMember.findFirst({ where: { userId: row.userId, teamId: row.teamId, status: 'ACTIVE',
       team: { orgId: row.orgId, lifecycleStatus: 'ACTIVE' } } })) deny();
   }
-  const user = await db.user.findUnique({ where: { id: row.userId }, select: { tokenVersion: true, lifecycleStatus: true } });
-  if (!user || user.lifecycleStatus !== 'ACTIVE' || user.tokenVersion !== row.credentialEpoch) deny();
+  const user = await db.user.findUnique({ where: { id: row.userId }, select: { tokenVersion: true, lifecycleStatus: true, accountExpiresAt: true } });
+  if (!user || !isActiveUser(user) || user.tokenVersion !== row.credentialEpoch) deny();
   return row;
 }
 

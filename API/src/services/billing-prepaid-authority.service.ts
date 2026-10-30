@@ -1,6 +1,7 @@
 import { MembershipStatus, Prisma } from '@prisma/client';
 
 import { AppError } from '../utils/errors.js';
+import { isActiveUser } from './entity-lifecycle.service.js';
 import { isAuthenticationEpochMismatchError, lockAndAssertAuthenticationEpochShared } from
   './authentication-epoch.service.js';
 
@@ -34,7 +35,7 @@ export async function assertActivePrepaidSubject(
     WHERE team_id = ${input.teamId} AND user_id = ${input.userId} FOR SHARE`);
   const [user, orgMember, team] = await Promise.all([
     tx.user.findUnique({ where: { id: input.userId },
-      select: { id: true, lifecycleStatus: true, tokenVersion: true } }),
+      select: { id: true, lifecycleStatus: true, accountExpiresAt: true, tokenVersion: true } }),
     tx.orgMember.findUnique({ where: { orgId_userId: {
       orgId: input.organisationId, userId: input.userId } }, select: { status: true } }),
     tx.team.findFirst({ where: { id: input.teamId, orgId: input.organisationId,
@@ -42,7 +43,7 @@ export async function assertActivePrepaidSubject(
       members: { some: { userId: input.userId, status: MembershipStatus.ACTIVE } } },
     select: { id: true } }),
   ]);
-  if (!user || user.lifecycleStatus !== 'ACTIVE' || user.tokenVersion !== tokenVersion ||
+  if (!user || !isActiveUser(user) || user.tokenVersion !== tokenVersion ||
     orgMember?.status !== MembershipStatus.ACTIVE || !team) {
     throw new AppError('FORBIDDEN', 403, 'PREPAID_SUBJECT_NOT_ENTITLED');
   }
