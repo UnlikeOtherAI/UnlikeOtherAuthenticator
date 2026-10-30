@@ -210,7 +210,7 @@ export const avatarEndpoints: EndpointSchema[] = [
     method: 'GET',
     path: '/teams/:teamId/avatar',
     description:
-      "Image bytes for a team (team) avatar with no credential at all — the only unauthenticated avatar route, so a browser or native client can render it directly. Responses carry Cross-Origin-Resource-Policy: cross-origin; credentialed avatar routes keep the default same-origin policy. This is what the auth-window team chooser and GET /org/me team directory use. Not an existence oracle: an unknown or deleted team id renders the same deterministic generated SVG a real team with no image gets, so every id answers 200 with an image. Rate-limited per IP (300/hour) plus a global ceiling of 120,000/hour service-wide.",
+      "Image bytes for a team (team) avatar with no credential at all — the only unauthenticated avatar route, so a browser or native client can render it directly. Responses carry Cross-Origin-Resource-Policy: cross-origin; credentialed avatar routes keep the default same-origin policy. This is what the auth-window team chooser and GET /org/me team directory use. Not an existence oracle: an unknown or deleted team id renders the same deterministic generated SVG a real team with no image gets, so every id answers 200 with an image. Only ACTIVE teams in ACTIVE organisations publish real logos; the founding product domain does not determine tenant lifecycle. Rate-limited per IP (300/hour) plus a global ceiling of 120,000/hour service-wide.",
     auth: 'none (public)',
     query: {
       ...IMAGE_QUERY,

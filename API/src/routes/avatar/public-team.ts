@@ -70,21 +70,14 @@ export function registerPublicTeamAvatarRoute(app: FastifyInstance): void {
       const { teamId } = ParamsSchema.parse(request.params);
       const query = QuerySchema.parse(request.query);
 
-      // A disabled tenant must stop serving its logo. Org rows have no status of their own, but
-      // the owning ClientDomain does, and it is the lifecycle switch every other surface honours.
-      // Falling back to the generated image rather than 404 keeps the non-oracle property: a
-      // torn-down team looks exactly like one that never set a logo.
+      // Teams and organisations have their own lifecycle. The founding product
+      // domain is provenance, not the tenant's status: a live team remains usable
+      // in other products after that original integration is retired.
       const team = await request.adminDb.team.findFirst({
         where: { id: teamId },
-        select: { org: { select: { domain: true } } },
+        select: { lifecycleStatus: true, org: { select: { lifecycleStatus: true } } },
       });
-      const clientDomain = team
-        ? await request.adminDb.clientDomain.findUnique({
-            where: { domain: team.org.domain },
-            select: { status: true },
-          })
-        : null;
-      if (clientDomain?.status !== 'active') {
+      if (team?.lifecycleStatus !== 'ACTIVE' || team.org.lifecycleStatus !== 'ACTIVE') {
         return sendAvatar(
           request,
           reply,
