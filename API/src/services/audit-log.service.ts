@@ -4,6 +4,9 @@ import { getAdminPrisma } from '../db/prisma.js';
 
 export type AdminAuditAction =
   | 'user.created'
+  | 'user.account_expiry_updated'
+  | 'user.account_renewal_approved'
+  | 'user.account_renewal_declined'
   | 'user.team_added'
   | 'integration.accepted'
   | 'integration.declined'
