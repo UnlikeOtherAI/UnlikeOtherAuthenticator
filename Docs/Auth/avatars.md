@@ -449,9 +449,10 @@ It is deliberately **not an existence oracle**: an unknown or deleted team id re
 deterministic generated SVG a real team with no image gets, so every id answers 200 with an image
 and existence cannot be probed. `X-UOA-Avatar-Source` is omitted here for the same reason — on the
 credentialed routes it is useful metadata, but to an anonymous caller it would disclose whether a
-team uploaded a custom logo and let them watch it change. A team whose owning domain is no
-longer an active `ClientDomain` serves the generated image too: a torn-down tenant stops publishing
-its logo, and still looks like one that never set one. What it does expose, to anyone holding a team id (an unguessable cuid), is
+team uploaded a custom logo and let them watch it change. A team or parent organisation whose `lifecycleStatus` is not `ACTIVE` serves the generated
+image too: a disabled, deleting or deleted tenant stops publishing its logo and looks like one
+that never set one. The founding product domain is provenance, not tenant lifecycle; retiring
+that integration does not hide an active team’s logo in other products. What it does expose, to anyone holding a team id (an unguessable cuid), is
 that team's logo — accepted knowingly as the cost of logos in the chooser. Reads are
 rate-limited 300/hour per IP, the only avatar GET with a budget of its own, and no `config_url` is
 accepted (an anonymous caller must not be able to aim the config fetcher's DNS/HTTPS/JWKS work), so

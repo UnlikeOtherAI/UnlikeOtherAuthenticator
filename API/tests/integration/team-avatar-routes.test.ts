@@ -618,7 +618,7 @@ describe.skipIf(!hasDatabase)('team avatar routes', () => {
       expect(query).toBeTruthy();
     });
 
-    it('stops serving a real logo once the owning domain is no longer active', async () => {
+    it('keeps an active team logo when its founding product domain is retired', async () => {
       const { domainHash, team } = await seedTeam();
 
       const bytes = png(0x3c);
@@ -636,12 +636,12 @@ describe.skipIf(!hasDatabase)('team avatar routes', () => {
         data: { status: 'disabled' },
       });
 
-      // Not a 404 — a torn-down tenant must look like a team that never set a logo, or the
-      // route becomes the existence oracle it is designed not to be.
+      // Retiring a product integration does not disable the independent team.
+      // Other products and the chooser must still render its uploaded logo.
       const after = await app!.inject({ method: 'GET', url: `/teams/${team.id}/avatar` });
       expect(after.statusCode).toBe(200);
-      expect(after.headers['content-type']).toBe('image/svg+xml; charset=utf-8');
-      expect(after.rawPayload.equals(bytes)).toBe(false);
+      expect(after.headers['content-type']).toBe('image/png');
+      expect(after.rawPayload.equals(bytes)).toBe(true);
 
       const unknown = await app!.inject({ method: 'GET', url: `/teams/${team.id}-nope/avatar` });
       expect(unknown.statusCode).toBe(200);

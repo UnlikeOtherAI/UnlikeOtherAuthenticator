@@ -3409,3 +3409,13 @@ exact target; subject-mismatch retry must request account selection explicitly.
 The team hint is preserved in signed provider state and chooser continuation;
 only an exact team ID or a unique slug in the verified user's current choices can
 auto-select. See `Docs/Auth/enterprise-sso.md` for the focused regression gates.
+
+
+### Public team image lifecycle clarification (2026-10-30)
+
+The public team-avatar endpoint follows the current lifecycle of the team and its
+parent organisation. Both must be ACTIVE to publish an uploaded or provider logo.
+Unknown, disabled, deleting and deleted entities retain the same non-enumerating
+generated image. The founding ClientDomain is integration provenance and does not
+disable an independent team when that product is retired. This supersedes the
+older origin-domain publication gate in the avatar contract.
