@@ -57,6 +57,7 @@ export const authEndpoints: EndpointSchema[] = [
     },
     response: {
       ok: 'true',
+      403: 'ACCOUNT_EXPIRED only after verification of the current password; invalid credentials remain generic',
       kind: '"twofa_enroll_required" when mandatory 2FA setup must complete before code grant',
       code: 'authorization code',
       redirect_to: 'full redirect URL with code',
