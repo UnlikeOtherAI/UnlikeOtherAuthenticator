@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { requireAccessStatusEnabled } from '../../middleware/access-status-enabled.js';
 import { createRateLimiter } from '../../middleware/rate-limiter.js';
 import { startLifecycleStatus, verifyLifecycleStatus } from '../../services/lifecycle-status.service.js';
+import { requestAccountRenewal } from '../../services/account-renewal.service.js';
 import { getOAuthClient } from '../../services/oauth/client.service.js';
 import { buildMcpClientConfig } from '../../services/oauth/config.service.js';
 import { AppError } from '../../utils/errors.js';
@@ -18,6 +19,7 @@ async function context(request: FastifyRequest) {
 }
 export function registerOAuthLifecycleStatus(app: FastifyInstance) {
   const options = { onRequest: requireAccessStatusEnabled, preHandler: [requireMcpOAuthPublicProfile, createRateLimiter({ limit: 10, windowMs: 15 * 60_000, keyBuilder: r => `native-lifecycle:${r.ip}` })] };
+  const renewalOptions = { preHandler: [requireMcpOAuthPublicProfile, createRateLimiter({ limit: 10, windowMs: 60 * 60_000, keyBuilder: r => `native-renewal:${r.ip}` })] };
   app.post('/oauth/lifecycle-status/start', options, async request => {
     const body = z.object({ email: z.string().email().max(320) }).strict().parse(request.body);
     return startLifecycleStatus({ ...await context(request), ...body });
@@ -25,5 +27,15 @@ export function registerOAuthLifecycleStatus(app: FastifyInstance) {
   app.post('/oauth/lifecycle-status/verify', options, async request => {
     const body = z.object({ challengeId: z.string().uuid(), code: z.string().regex(/^\d{6}$/), twoFactorCode: z.string().regex(/^\d{6}$/).optional() }).strict().parse(request.body);
     return verifyLifecycleStatus({ ...await context(request), ...body });
+  });
+  app.post('/oauth/account-renewal/start', renewalOptions, async request => {
+    const body = z.object({ email: z.string().email().max(320) }).strict().parse(request.body);
+    return startLifecycleStatus({ ...await context(request), ...body });
+  });
+  app.post('/oauth/account-renewal/request', renewalOptions, async request => {
+    const body = z.object({ challengeId: z.string().uuid(), code: z.string().regex(/^\d{6}$/),
+      twoFactorCode: z.string().regex(/^\d{6}$/).optional() }).strict().parse(request.body);
+    const verified = await verifyLifecycleStatus({ ...await context(request), ...body });
+    return requestAccountRenewal(verified.user.id);
   });
 }

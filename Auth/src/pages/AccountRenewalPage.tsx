@@ -7,7 +7,7 @@ import { useTranslation } from '../i18n/use-translation.js';
 import { postJson } from '../utils/api.js';
 
 export function AccountRenewalPage(): React.JSX.Element {
-  const { configUrl, pendingEmail, setView } = usePopup();
+  const { configUrl, clientId, redirectUrl, pendingEmail, setView } = usePopup();
   const { classNames } = useTheme();
   const { t } = useTranslation();
   const [email, setEmail] = useState(pendingEmail ?? '');
@@ -22,11 +22,12 @@ export function AccountRenewalPage(): React.JSX.Element {
     event.preventDefault();
     setBusy(true);
     setError(false);
+    const path = clientId ? '/oauth/account-renewal' : '/auth/account-renewal';
+    const query = clientId ? { client_id: clientId, redirect_uri: redirectUrl } : { config_url: configUrl };
     const result = challengeId
-      ? await postJson('/auth/account-renewal/request', { challengeId, code, ...(twoFactorCode ? { twoFactorCode } : {}) },
-        { config_url: configUrl })
-      : await postJson<{ email: string }, { challengeId: string }>('/auth/account-renewal/start',
-        { email: email.trim() }, { config_url: configUrl });
+      ? await postJson(`${path}/request`, { challengeId, code, ...(twoFactorCode ? { twoFactorCode } : {}) }, query)
+      : await postJson<{ email: string }, { challengeId: string }>(`${path}/start`,
+        { email: email.trim() }, query);
     setBusy(false);
     if (!result.ok) { setError(true); return; }
     if (challengeId) setSent(true);

@@ -52,7 +52,7 @@ export function LoginPage(): React.JSX.Element {
         <SocialButtons showDivider={showEmailPassword} />
       </div> : null}
       {accessStatusEnabled ? <AccessStatusForm /> : null}
-      {!clientId && !managementOrgId ? <button type="button" className="mt-5 text-sm underline text-[var(--uoa-color-primary)]"
+      {!managementOrgId ? <button type="button" className="mt-5 text-sm underline text-[var(--uoa-color-primary)]"
         onClick={() => setView('account-renewal')}>{t('auth.renewal.open')}</button> : null}
     </div>
   );
