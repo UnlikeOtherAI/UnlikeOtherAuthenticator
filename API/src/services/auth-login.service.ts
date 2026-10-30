@@ -67,7 +67,7 @@ export async function loginWithEmailPassword(
     user?.passwordHash ?? null,
   );
 
-  if (!ok || !user || !isActiveUser(user)) {
+  if (!ok || !user || user.lifecycleStatus !== 'ACTIVE') {
     // Brief 22.11 + 11: never reveal whether email exists, password was wrong, etc.
     throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
   }
@@ -83,7 +83,7 @@ export async function loginWithEmailPassword(
     where: { lifecycleStatus: 'ACTIVE', userKey },
     select: { id: true, passwordHash: true, twoFaEnabled: true, tokenVersion: true, lifecycleStatus: true, accountExpiresAt: true },
   });
-  if (!lockedUser || !isActiveUser(lockedUser) || lockedUser.id !== user.id) {
+  if (!lockedUser || lockedUser.lifecycleStatus !== 'ACTIVE' || lockedUser.id !== user.id) {
     throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
   }
   if (
@@ -92,6 +92,8 @@ export async function loginWithEmailPassword(
   ) {
     throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
   }
+  // Only a successfully verified current password may reveal the expiry state.
+  if (!isActiveUser(lockedUser)) throw new AppError('FORBIDDEN', 403, 'ACCOUNT_EXPIRED');
 
   return {
     userId: lockedUser.id,

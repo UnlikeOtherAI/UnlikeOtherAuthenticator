@@ -124,6 +124,8 @@ export type UserSummary = {
   method: AuthMethod;
   created: string;
   accountExpiresAt?: string | null;
+  accountRenewalRequest?: { id: string; status: 'pending' | 'approved' | 'declined'; requestedAt: string;
+    reviewedAt: string | null; approvedUntil: string | null } | null;
   // Additive field: optional while the API ships it.
   avatarSource?: AvatarSource;
 };

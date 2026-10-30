@@ -11,6 +11,7 @@ import {
   uploadAvatar,
 } from '../../../services/avatar.service.js';
 import { createAdminUser, resetAdminUserTwoFactor } from '../../../services/internal-admin.service.js';
+import { reviewAccountRenewal, setAdminUserExpiry } from '../../../services/account-renewal.service.js';
 import { AppError } from '../../../utils/errors.js';
 import { setDeepTestNessieInferenceAccess } from '../../../services/deeptest-nessie-inference-access.service.js';
 import { addAdminUserToTeam } from '../../../services/internal-admin-team-members.service.js';
@@ -61,6 +62,22 @@ export function registerInternalAdminUserRoutes(app: FastifyInstance): void {
     }).strict().parse(request.body);
     reply.header('Cache-Control', 'private, no-store');
     return createAdminUser({ ...body, actorEmail: requireActorEmail(request) });
+  });
+  app.patch('/internal/admin/users/:userId/expiry', adminRoute(uploadResponseSchema), async (request, reply) => {
+    const { userId } = UserParamsSchema.parse(request.params);
+    const { accountExpiresAt } = z.object({ accountExpiresAt: z.iso.datetime({ offset: true }).nullable() }).strict().parse(request.body);
+    reply.header('Cache-Control', 'private, no-store');
+    return setAdminUserExpiry({ userId, accountExpiresAt, actorEmail: requireActorEmail(request) });
+  });
+  app.post('/internal/admin/account-renewal-requests/:requestId/review', adminRoute(uploadResponseSchema), async (request, reply) => {
+    const { requestId } = z.object({ requestId: z.string().min(1) }).parse(request.params);
+    const { decision, accountExpiresAt } = z.object({
+      decision: z.enum(['approve', 'decline']), accountExpiresAt: z.iso.datetime({ offset: true }).optional(),
+    }).strict().parse(request.body);
+    const claims = request.adminAccessTokenClaims;
+    if (!claims) throw new AppError('UNAUTHORIZED', 401);
+    reply.header('Cache-Control', 'private, no-store');
+    return reviewAccountRenewal({ requestId, decision, accountExpiresAt, actorEmail: claims.email, actorUserId: claims.userId });
   });
   app.patch('/internal/admin/users/:userId/deeptest-nessie-inference',
     adminRoute(uploadResponseSchema), async (request, reply) => {

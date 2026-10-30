@@ -3,6 +3,7 @@ import { NativeSocialPage } from '../../pages/NativeSocialPage.js';
 
 import { PopupProvider, usePopup } from '../../hooks/use-popup.js';
 import { AccessRequestedPage } from '../../pages/AccessRequestedPage.js';
+import { AccountRenewalPage } from '../../pages/AccountRenewalPage.js';
 import { CodeEntryPage } from '../../pages/CodeEntryPage.js';
 import { FacebookProofPage } from '../../pages/FacebookProofPage.js';
 import { LoginPage } from '../../pages/LoginPage.js';
@@ -49,6 +50,8 @@ function PopupContent(): React.JSX.Element {
       return <InviteAcceptedPage />;
     case 'access-requested':
       return <AccessRequestedPage />;
+    case 'account-renewal':
+      return <AccountRenewalPage />;
     case 'signed-in':
       return <SignedInPage />;
     case 'signatures':

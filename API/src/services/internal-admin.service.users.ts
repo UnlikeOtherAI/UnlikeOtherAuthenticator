@@ -110,10 +110,13 @@ export async function getAdminUser(userId: string) {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) return null;
 
-  const [roles, latestLog, uploadedAvatar] = await Promise.all([
+  const [roles, latestLog, uploadedAvatar, renewal] = await Promise.all([
     prisma.domainRole.findMany({ where: { userId }, select: { domain: true } }),
     prisma.loginLog.findFirst({ where: { userId }, orderBy: { createdAt: 'desc' } }),
     prisma.userAvatar.findUnique({ where: { userId }, select: { userId: true } }),
+    prisma.accountRenewalRequest.findUnique({ where: { userId }, select: {
+      id: true, status: true, requestedAt: true, reviewedAt: true, approvedUntil: true,
+    } }),
   ]);
 
   return {
@@ -129,6 +132,9 @@ export async function getAdminUser(userId: string) {
     lastLogin: latestLog ? displayTimestamp(latestLog.createdAt) : 'Never',
     status: user.lifecycleStatus === 'ACTIVE' && !isActiveUser(user) ? 'expired' : user.lifecycleStatus.toLowerCase(),
     accountExpiresAt: user.accountExpiresAt?.toISOString() ?? null,
+    accountRenewalRequest: renewal ? { id: renewal.id, status: renewal.status.toLowerCase(),
+      requestedAt: renewal.requestedAt.toISOString(), reviewedAt: renewal.reviewedAt?.toISOString() ?? null,
+      approvedUntil: renewal.approvedUntil?.toISOString() ?? null } : null,
     method: method(latestLog?.authMethod),
     created: displayDate(user.createdAt),
   };

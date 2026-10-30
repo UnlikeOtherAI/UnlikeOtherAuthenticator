@@ -5,6 +5,10 @@ import { authEmailEndpoints } from './schema.auth-email.js';
 import { salesResearchJobGrantEndpoints } from './schema.auth-job-grants.js';
 
 export const authEndpoints: EndpointSchema[] = [
+  { method: 'POST', path: '/auth/account-renewal/request',
+    description: 'Request renewal of an expired account; response is identical for unknown, active and expired accounts',
+    auth: 'verified signed config_url; IP and email rate limited', query: { config_url: 'signed product configuration URL' },
+    body: { email: 'email address' }, response: { 200: '{ ok: true } (non-enumerating)' } },
   ...salesResearchJobGrantEndpoints,
   ...actionVerificationEndpoints,
   { method: 'POST', path: '/auth/session-broker/validate',

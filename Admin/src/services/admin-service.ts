@@ -333,6 +333,12 @@ export const adminService = {
   getUsers: () => api.get<UserSummary[]>('/internal/admin/users'),
   createUser: (input: { email: string; password: string; name?: string; accountExpiresAt?: string | null }) =>
     api.post<UserSummary>('/internal/admin/users', input),
+  setUserExpiry: (userId: string, accountExpiresAt: string | null) =>
+    api.patch<{ accountExpiresAt: string | null }>(`/internal/admin/users/${encodeURIComponent(userId)}/expiry`, { accountExpiresAt }),
+  reviewAccountRenewal: (requestId: string, decision: 'approve' | 'decline', accountExpiresAt?: string) =>
+    api.post<{ userId: string; status: string; accountExpiresAt: string | null }>(
+      `/internal/admin/account-renewal-requests/${encodeURIComponent(requestId)}/review`,
+      { decision, ...(accountExpiresAt ? { accountExpiresAt } : {}) }),
   getUser: (userId: string) => api.get<UserSummary | null>(`/internal/admin/users/${encodeURIComponent(userId)}`),
   setDeepTestNessieInferenceAccess: (userId: string, allowed: boolean) =>
     api.patch<{ allowed: boolean }>(`/internal/admin/users/${encodeURIComponent(userId)}/deeptest-nessie-inference`, { allowed }),

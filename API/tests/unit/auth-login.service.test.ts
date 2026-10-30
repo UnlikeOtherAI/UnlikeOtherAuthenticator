@@ -182,6 +182,6 @@ describe('loginWithEmailPassword', () => {
     await expect(loginWithEmailPassword(
       { email: 'user@example.com', password: 'correct', config: baseConfig() },
       { env: testEnv(), prisma, verifyPassword: async () => true },
-    )).rejects.toMatchObject({ statusCode: 401 });
+    )).rejects.toMatchObject({ statusCode: 403, message: 'ACCOUNT_EXPIRED' });
   });
 });

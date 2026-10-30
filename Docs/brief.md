@@ -3433,3 +3433,12 @@ At the expiry instant, UOA rejects new sign-ins, authorization continuation,
 access-token verification and refresh rotation. The directory displays the expiry
 and marks the identity expired. Relying products that keep independent local
 sessions must continue checking UOA to observe this deadline promptly.
+
+An expired person may request renewed access from the hosted sign-in screen by
+entering the same account email. The request endpoint verifies the signed product
+config and gives a non-enumerating response, with IP/email rate limits and one
+current request per user. It notifies active UOA platform superusers by email and
+links to that person's Security panel. A superuser can decline or approve with a
+new future expiry, or directly extend/remove an expiry for an account. Decisions
+and direct edits are audited. A correctly verified password may identify the
+account as expired to its owner; invalid credentials remain indistinguishable.

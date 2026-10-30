@@ -19,7 +19,7 @@ export function LoginPage(): React.JSX.Element {
   const { classNames } = useTheme();
   const { t } = useTranslation();
   const accessT = useAccessTranslation();
-  const { config, notice, clientId, managementOrgId, enterpriseLinkIntent } = usePopup();
+  const { config, notice, clientId, managementOrgId, enterpriseLinkIntent, setView } = usePopup();
   const accessStatusEnabled = useAccessStatusEnabled();
   const showEmailPassword = isEmailPasswordEnabled(config);
   const [personalFactor,setPersonalFactor]=useState(false);
@@ -52,6 +52,8 @@ export function LoginPage(): React.JSX.Element {
         <SocialButtons showDivider={showEmailPassword} />
       </div> : null}
       {accessStatusEnabled ? <AccessStatusForm /> : null}
+      {!clientId && !managementOrgId ? <button type="button" className="mt-5 text-sm underline text-[var(--uoa-color-primary)]"
+        onClick={() => setView('account-renewal')}>{t('auth.renewal.open')}</button> : null}
     </div>
   );
 }

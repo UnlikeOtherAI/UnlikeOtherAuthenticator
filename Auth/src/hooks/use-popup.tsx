@@ -15,6 +15,7 @@ export type AuthView =
   | 'invite-registration'
   | 'invite-accepted'
   | 'access-requested'
+  | 'account-renewal'
   | 'signed-in'
   | 'signatures'
   | 'code-entry'

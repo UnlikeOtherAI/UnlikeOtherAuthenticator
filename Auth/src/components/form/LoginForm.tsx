@@ -134,6 +134,12 @@ export function LoginForm(): React.JSX.Element {
     setLoading(false);
 
     if (!result.ok) {
+      if (result.code === 'ACCOUNT_EXPIRED') {
+        setPendingEmail(email);
+        setPassword('');
+        setView('account-renewal');
+        return;
+      }
       setError(t('form.login.error'));
       return;
     }

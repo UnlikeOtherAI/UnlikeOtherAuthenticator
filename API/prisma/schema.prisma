@@ -443,6 +443,7 @@ model User {
   avatarUrl                            String?                                   @map("avatar_url")
   tokenVersion                         Int                                       @default(0) @map("token_version")
   accountExpiresAt                     DateTime?                                 @map("account_expires_at")
+  accountRenewalRequest                 AccountRenewalRequest?
   deeptestNessieInferenceAllowed        Boolean                                   @default(false) @map("deeptest_nessie_inference_allowed")
   createdAt                            DateTime                                  @default(now()) @map("created_at")
   billingStripeCheckouts               BillingStripeCheckoutSession[]
@@ -494,6 +495,27 @@ model User {
   @@index([email])
   @@index([domain])
   @@map("users")
+}
+
+enum AccountRenewalStatus {
+  PENDING
+  APPROVED
+  DECLINED
+}
+
+model AccountRenewalRequest {
+  id               String               @id @default(cuid())
+  userId           String               @unique @map("user_id")
+  status           AccountRenewalStatus @default(PENDING)
+  requestedAt      DateTime             @default(now()) @map("requested_at")
+  notifiedAt       DateTime?            @map("notified_at")
+  reviewedAt       DateTime?            @map("reviewed_at")
+  reviewedByUserId String?              @map("reviewed_by_user_id")
+  approvedUntil    DateTime?            @map("approved_until")
+  user             User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, requestedAt])
+  @@map("account_renewal_requests")
 }
 
 // Domain-scoped, content-free historical lookup authority. Never a login or directory membership.

@@ -5,6 +5,7 @@ const prisma = vi.hoisted(() => ({
   domainRole: { findMany: vi.fn() },
   loginLog: { findMany: vi.fn(), findFirst: vi.fn() },
   userAvatar: { findMany: vi.fn(), findUnique: vi.fn() },
+  accountRenewalRequest: { findUnique: vi.fn() },
 }));
 
 vi.mock('../../src/db/prisma.js', () => ({
@@ -37,6 +38,7 @@ describe('internal admin user summaries', () => {
     prisma.loginLog.findFirst.mockResolvedValue(null);
     prisma.userAvatar.findMany.mockResolvedValue([]);
     prisma.userAvatar.findUnique.mockResolvedValue(null);
+    prisma.accountRenewalRequest.findUnique.mockResolvedValue(null);
   });
 
   afterEach(() => {

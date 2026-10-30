@@ -4,6 +4,8 @@
 // enumeration oracle. Add a code here only when a caller must branch on it and
 // the code reveals nothing the caller is not already entitled to know.
 export const PRODUCTION_PUBLIC_ERROR_CODES = new Set([
+  // Returned only after the current password was verified under the user lock.
+  'ACCOUNT_EXPIRED',
   // These owner-session outcomes reveal no membership directory or upstream identity.
   'SSO_MANAGEMENT_REAUTH_REQUIRED',
   'SSO_MANAGEMENT_ACCESS_WITHDRAWN',

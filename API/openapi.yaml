@@ -2632,6 +2632,37 @@ paths:
         '400': { description: Generic invalid or expired link. }
         '429': { description: Link request rate exceeded. }
 
+  /auth/account-renewal/request:
+    post:
+      tags: [Auth]
+      summary: Request renewal of an expired account
+      operationId: requestAccountRenewal
+      description: A signed product configuration is required. The response does not reveal whether an expired account exists. Requests are rate limited and reviewed by platform superusers.
+      parameters:
+        - $ref: '#/components/parameters/configUrl'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+      responses:
+        '200':
+          description: Generic accepted response.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok:
+                    type: boolean
   /auth/register:
     post:
       tags: [Auth]
@@ -9337,6 +9368,72 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /internal/admin/users/{userId}/expiry:
+    patch:
+      tags: [Internal Admin]
+      summary: Set or remove a user's account expiry
+      operationId: adminSetUserExpiry
+      security:
+        - adminBearer: []
+      parameters:
+        - $ref: '#/components/parameters/userIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [accountExpiresAt]
+              properties:
+                accountExpiresAt:
+                  type: string
+                  format: date-time
+                  nullable: true
+      responses:
+        '200':
+          description: Updated expiry.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+  /internal/admin/account-renewal-requests/{requestId}/review:
+    post:
+      tags: [Internal Admin]
+      summary: Approve or decline an expired-account renewal request
+      operationId: adminReviewAccountRenewal
+      security:
+        - adminBearer: []
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [decision]
+              properties:
+                decision:
+                  type: string
+                  enum: [approve, decline]
+                accountExpiresAt:
+                  type: string
+                  format: date-time
+      responses:
+        '200':
+          description: Reviewed request and resulting expiry.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
   /internal/admin/users/{userId}:
     get:
       tags: [Internal Admin]
