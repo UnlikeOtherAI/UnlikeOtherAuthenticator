@@ -2669,6 +2669,10 @@ paths:
                 properties:
                   ok:
                     type: boolean
+        '400':
+          description: Invalid email or signed configuration.
+        '429':
+          description: Request rate exceeded.
   /auth/register:
     post:
       tags: [Auth]
@@ -9404,6 +9408,10 @@ paths:
               schema:
                 type: object
                 additionalProperties: true
+        '400':
+          description: Expiry must be a future date or null.
+        '401':
+          description: Missing or invalid administrator token.
   /internal/admin/account-renewal-requests/{requestId}/review:
     post:
       tags: [Internal Admin]
@@ -9440,6 +9448,10 @@ paths:
               schema:
                 type: object
                 additionalProperties: true
+        '400':
+          description: Approval requires a future expiry date.
+        '409':
+          description: Request is no longer pending or account is no longer expired.
   /internal/admin/users/{userId}:
     get:
       tags: [Internal Admin]
@@ -9448,7 +9460,8 @@ paths:
       description: |
         Carries `avatarSource` and `avatarImageUrl`
         (`<PUBLIC_BASE_URL>/internal/admin/users/{userId}/avatar`), fetchable with the same
-        admin bearer — see Docs/Auth/avatars.md §9.
+        admin bearer — see Docs/Auth/avatars.md §9. Also carries `accountExpiresAt`
+        and the current `accountRenewalRequest` status and timestamps, when present.
       security:
         - adminBearer: []
       parameters:
