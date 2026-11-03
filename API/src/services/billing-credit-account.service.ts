@@ -86,6 +86,47 @@ export async function resolveCreditCollectionContext(
   return { account, stripeCollectionEnabled: true, stripe: configured.client };
 }
 
+/**
+ * The collection context a read may use.
+ *
+ * The Stripe account identity a read needs is already persisted from the first
+ * time the provider was reached, so a credential that has expired or a provider
+ * that cannot be reached is no reason to refuse to say what the organisation's
+ * own credits are. The read then projects the persisted account with collection
+ * frozen — the same context a deployment with `STRIPE_BILLING_ENABLED` off
+ * produces, so every funding action is already disabled and no payment can be
+ * started from it. Writes keep `resolveCreditCollectionContext` and still fail
+ * closed with `BILLING_PAYMENT_PROVIDER_UNAVAILABLE`.
+ */
+export async function resolveCreditCollectionContextForRead(
+  params: { organisationId: string; teamId: string },
+  deps?: {
+    prisma?: PrismaClient;
+    log?: { error: (details: object, message: string) => void };
+    resolveCollection?: typeof resolveCreditCollectionContext;
+  },
+): Promise<CreditCollectionContext> {
+  const prisma = deps?.prisma ?? getAdminPrisma();
+  try {
+    return await (deps?.resolveCollection ?? resolveCreditCollectionContext)(params, { prisma });
+  } catch (error) {
+    if (!(error instanceof AppError) || error.message !== 'BILLING_PAYMENT_PROVIDER_UNAVAILABLE') {
+      throw error;
+    }
+    // An operator has to see this: the read keeps working, so nothing else shouts.
+    deps?.log?.error(
+      { organisationId: params.organisationId, teamId: params.teamId },
+      'billing read projected with collection frozen: the payment provider could not be resolved',
+    );
+    // Never reached the provider even once: that refusal is the accurate cause,
+    // not a local account the deployment was never going to have.
+    const account = await resolvePersistedCreditAccount(params, prisma).catch(() => {
+      throw error;
+    });
+    return { account, stripeCollectionEnabled: false, stripe: null };
+  }
+}
+
 async function ensureScopedCreditAccount(
   params: {
     account: StripeAccountContext;

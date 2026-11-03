@@ -29,10 +29,28 @@ The billing incident at 19:49 UTC was Stripe `api_key_expired` during configured
 account resolution. The configured key is **test mode**. Its Secret Manager
 binding is `uoa-auth-stripe-secret-key:latest`; no live key is required or used.
 The API maps provider account authentication, permission, connection, rate-limit
-and upstream failures to `503 BILLING_PAYMENT_PROVIDER_UNAVAILABLE`. Consumers
-retain sessions and do not substitute a zero balance or admit paid work. Actual
+and upstream failures to `503 BILLING_PAYMENT_PROVIDER_UNAVAILABLE` for payment
+mutations. Consumers retain sessions and do not substitute a zero balance or
+admit paid work. `POST /billing/v1/credits` is exempt: a provider account it
+cannot resolve is projected as `collection.stripe_collection_enabled: false`
+with every funding action disabled, so an expired key no longer takes a
+product's Credits and billing page — or an organisation's billing-region
+choice — down with it. See `Docs/Auth/billing-provider-availability.md`. Actual
 sandbox Checkout remains unverified until a valid sandbox credential is supplied;
 this does not prevent independent deployment or verification work.
+
+That expired key is still installed and the refusal is still live. Cloud Run
+logs for service `uoa-auth` (project `gen-lang-client-0561071620`) record the
+first `BILLING_PAYMENT_PROVIDER_UNAVAILABLE` at **2026-10-22T20:32:11Z**, 28
+seconds after revision `uoa-auth-00340-vwd` began serving; the last `200` on
+`POST /billing/v1/credits` was **2026-10-19T08:19:37Z**, and every one of the
+last 200 such requests answered `503`. The auto-top-up, prepaid legal invoice
+and usage export schedulers fail the same way roughly every 14 seconds. This is
+estate-wide and has nothing to do with whether an organisation has billing set
+up. **Operator action: install a valid Stripe sandbox secret key as a new
+version of `uoa-auth-stripe-secret-key` and redeploy.** No code change fixes an
+expired credential — the exemption above only stops it taking the reads down
+too.
 
 SalesNerd note: the historical inventory below predates the UOA credit catalog
 addition in PR #108 and SalesNerd's integration in PR #107. The 22 October runtime
