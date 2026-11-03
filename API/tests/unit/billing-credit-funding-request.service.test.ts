@@ -9,6 +9,8 @@ import {
   resolveBillingFundingRequestRecipients,
 } from '../../src/services/billing-credit-funding-request.service.js';
 import { BILLING_CREDIT_ATTENTION_COPY } from '../../src/services/billing-credit-attention-copy.catalog.js';
+import { resolveCreditCollectionContextForRead } from '../../src/services/billing-credit-account.service.js';
+import { AppError } from '../../src/utils/errors.js';
 
 function teamMember(userId: string, options: { orgRole?: string; teamRole?: string; active?: boolean } = {}) {
   return {
@@ -340,6 +342,58 @@ describe('billing credit funding request', () => {
     });
 
     expect(attention.map((event) => event.kind)).toEqual(['low_credits']);
+  });
+
+  it('still asks a manager for credits while the payment provider is unreachable', async () => {
+    // The credits read offers this action with collection frozen, so taking it
+    // up must not meet the provider refusal the read itself survived. Nothing
+    // here moves money: it resolves the same persisted account and notifies.
+    const account = { id: 'stripe-account', stripeAccountId: 'acct_test', livemode: false };
+    const prisma = {
+      billingCreditAccount: { findMany: async () => [{ account }] },
+      billingStripeAccount: { findMany: async () => [account] },
+    } as never;
+    const ensureCreditAccount = vi.fn().mockResolvedValue({ id: 'credit-account-a', scope: 'TEAM' });
+    vi.stubEnv('STRIPE_SECRET_KEY', 'sk_test_funding');
+    vi.stubEnv('STRIPE_WEBHOOK_SECRET', 'whsec_funding');
+    try {
+      const result = await createBillingCreditFundingRequest(
+        {
+          request: { product: 'nessie', organisationId: 'org-a', teamId: 'team-a', userId: 'member-a' },
+          actorToken: 'fresh-actor',
+          credential: { id: 'app-key-a' } as never,
+          endpoint: '/billing/v1/credits/funding-request' as never,
+        },
+        {
+          prisma,
+          resolveEntitlement: vi.fn().mockResolvedValue({
+            payload: { tariff: { usage_billing_enabled: true, payment_collection_enabled: true } },
+          }) as never,
+          resolveViewer: vi.fn().mockResolvedValue({ userId: 'member-a', organisationId: 'org-a',
+            teamId: 'team-a', billingManager: false }) as never,
+          resolveControlledBy: vi.fn().mockResolvedValue(null) as never,
+          resolveRecipients: vi.fn().mockResolvedValue(['manager-a']) as never,
+          resolveCollection: (params: never, deps: never) => resolveCreditCollectionContextForRead(
+            params,
+            { ...(deps as object), resolveCollection: vi.fn().mockRejectedValue(
+              new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_PAYMENT_PROVIDER_UNAVAILABLE')),
+            } as never,
+          ),
+          ensureCreditAccount: ensureCreditAccount as never,
+          now: () => new Date('2026-11-03T10:00:00.000Z'),
+          sharedSecret: 'test-shared-secret',
+        },
+      );
+
+      expect(result).toMatchObject({ schema_version: 1, recipient_user_ids: ['manager-a'] });
+      // The persisted account, resolved without the provider.
+      expect(ensureCreditAccount).toHaveBeenCalledWith(
+        { account, organisationId: 'org-a', teamId: 'team-a' },
+        { prisma: expect.anything() },
+      );
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it('refuses a live request if no current authorized recipient remains', () => {

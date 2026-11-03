@@ -7,7 +7,7 @@ import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
 import {
   resolveCanonicalPortfolioProduct,
   resolveCreditAccount,
-  resolveCreditCollectionContext,
+  resolveCreditCollectionContextForRead,
 } from './billing-credit-account.service.js';
 import {
   currentBillingCreditPeriod,
@@ -45,7 +45,7 @@ type Dependencies = {
   now?: () => Date;
   sharedSecret?: string;
   resolveEntitlement?: typeof resolveEffectiveTariffContext;
-  resolveCollection?: typeof resolveCreditCollectionContext;
+  resolveCollection?: typeof resolveCreditCollectionContextForRead;
   ensureCreditAccount?: typeof resolveCreditAccount;
   resolvePortfolioProduct?: typeof resolveCanonicalPortfolioProduct;
   fetchPortfolio?: FetchMeteringPortfolio;
@@ -106,12 +106,14 @@ export async function getBillingCredits(
   );
   const now = deps?.now?.() ?? new Date();
   const period = currentBillingCreditPeriod(now);
-  const collection = await (deps?.resolveCollection ?? resolveCreditCollectionContext)(
+  // A read never refuses over the payment provider: an expired or unreachable
+  // credential freezes collection, it does not hide the organisation's credits.
+  const collection = await (deps?.resolveCollection ?? resolveCreditCollectionContextForRead)(
     {
       organisationId: params.request.organisationId,
       teamId: params.request.teamId,
     },
-    { prisma },
+    { prisma, ...(params.log ? { log: params.log } : {}) },
   );
   const creditAccount = await (deps?.ensureCreditAccount ?? resolveCreditAccount)(
     {
