@@ -31,11 +31,14 @@ binding is `uoa-auth-stripe-secret-key:latest`; no live key is required or used.
 The API maps provider account authentication, permission, connection, rate-limit
 and upstream failures to `503 BILLING_PAYMENT_PROVIDER_UNAVAILABLE` for payment
 mutations. Consumers retain sessions and do not substitute a zero balance or
-admit paid work. `POST /billing/v1/credits` is exempt: a provider account it
-cannot resolve is projected as `collection.stripe_collection_enabled: false`
-with every funding action disabled, so an expired key no longer takes a
+admit paid work. `POST /billing/v1/credits` is largely exempt: while the
+provider account is already persisted in the configured credential's own
+test/live mode, it is projected as `collection.stripe_collection_enabled: false`
+with every payment action disabled, so an expired key no longer takes a
 product's Credits and billing page — or an organisation's billing-region
-choice — down with it. See `Docs/Auth/billing-provider-availability.md`. Actual
+choice — down with it. The read still answers 503 where no account in that mode
+is on record or the credential names no mode at all. See
+`Docs/Auth/billing-provider-availability.md`. Actual
 sandbox Checkout remains unverified until a valid sandbox credential is supplied;
 this does not prevent independent deployment or verification work.
 

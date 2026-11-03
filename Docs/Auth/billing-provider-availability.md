@@ -14,7 +14,10 @@ That stays exactly as it is for **mutations**: a top-up checkout, an automatic
 reload consent, a subscription change or an SMS purchase refuses rather than
 guess.
 
-**`POST /billing/v1/credits` is exempt.** The read uses
+**`POST /billing/v1/credits` is largely exempt**, and so is
+`POST /billing/v1/credits/funding-request`, because asking a manager for credits
+moves no money and the credits view offers that action while collection is
+frozen. The read uses
 `resolveCreditCollectionContextForRead`, which resolves the provider account as
 before and, only on `BILLING_PAYMENT_PROVIDER_UNAVAILABLE`, falls back to the
 `BillingStripeAccount` row already persisted from the first time the provider
@@ -70,6 +73,15 @@ and from 2026-10-22T20:32 UTC **every** `POST /billing/v1/credits` in the estate
 answered 503 — not just those for organisations with no billing. See
 `Docs/deployment.md`.
 
+## It is an exemption, not a guarantee
+
+The read still answers `503 BILLING_PAYMENT_PROVIDER_UNAVAILABLE` when the two
+constraints above cannot be met: no account on record in the configured mode
+(including a deployment that never reached the provider once), or a
+configuration from which no mode can be read. `/api`, `/llm` and this document
+say so, and the consumer guidance for that case is unchanged — keep the session,
+retry with backoff, and never substitute a zero balance or admit paid work.
+
 ## What this does not change
 
 - Payment mutations keep failing closed, with their existing idempotency and
@@ -83,3 +95,5 @@ answered 503 — not just those for organisations with no billing. See
 - An organisation with no tariff, subscription, credit account, payment method
   or region was always projected correctly; see
   `API/tests/integration/billing-credits-no-billing.persistence.test.ts`.
+- Every payment-bearing action — top-up checkout, automatic reload consent,
+  subscription and SMS purchases — keeps `resolveCreditCollectionContext`.

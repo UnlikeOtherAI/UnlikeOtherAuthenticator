@@ -20,7 +20,7 @@ import type { BillingActorEndpoint } from './billing-actor-audience.service.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
 import {
   resolveCreditAccount,
-  resolveCreditCollectionContext,
+  resolveCreditCollectionContextForRead,
 } from './billing-credit-account.service.js';
 import { resolveEffectiveTariffContext } from './billing-entitlement.service.js';
 import { resolveBillingFundingViewer } from './billing-funding-viewer.service.js';
@@ -300,7 +300,7 @@ type FundingRequestDependencies = {
   resolveEntitlement?: typeof resolveEffectiveTariffContext;
   resolveViewer?: typeof resolveBillingFundingViewer;
   resolveControlledBy?: typeof resolveBillingControlledBy;
-  resolveCollection?: typeof resolveCreditCollectionContext;
+  resolveCollection?: typeof resolveCreditCollectionContextForRead;
   ensureCreditAccount?: typeof resolveCreditAccount;
   resolveRecipients?: typeof resolveBillingFundingRequestRecipients;
 };
@@ -346,7 +346,10 @@ export async function createBillingCreditFundingRequest(
   if (initialControlledBy ? initialControlledBy.can_manage : viewer.billingManager) {
     throw new AppError('FORBIDDEN', 403, 'BILLING_FUNDING_REQUEST_NOT_AVAILABLE');
   }
-  const collection = await (deps?.resolveCollection ?? resolveCreditCollectionContext)(
+  // Asking a manager for credits takes no money, so it resolves the same context
+  // a read does: the credits view offers this action while collection is frozen,
+  // and it has to work when the member takes it up.
+  const collection = await (deps?.resolveCollection ?? resolveCreditCollectionContextForRead)(
     {
       organisationId: params.request.organisationId,
       teamId: params.request.teamId,
