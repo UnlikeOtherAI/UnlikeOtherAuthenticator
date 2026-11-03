@@ -28,8 +28,27 @@ before and, only on `BILLING_PAYMENT_PROVIDER_UNAVAILABLE`, falls back to the
 
 That is byte-identical to the context a deployment with `STRIPE_BILLING_ENABLED`
 off already produces, so no new shape reaches a consumer and no payment can be
-started from it. Any other failure — an ambiguous or unprovisioned account, a
-scope conflict — still propagates unchanged.
+started from it.
+
+Two constraints keep the fallback honest.
+
+**It never crosses provider modes.** Freezing collection does not stop the read
+settling usage against whatever account it resolved, so the fallback matches the
+configured secret key's own test/live mode and considers nothing else. A
+deployment that moved from a live key to a test one does not reach its
+historical live-mode account, and vice versa. Where no account exists in the
+configured mode — including a deployment that never reached the provider once —
+or where no mode can be told from the configuration at all, the provider's
+refusal stands.
+
+**Two rows are not two identities.** A team's own credit account and its
+organisation's legitimately coexist while organisation billing responsibility is,
+or once was, assumed: a team balance is never swept on assume or release. All the
+fallback resolves is one provider identity, so it is the account those rows point
+at that must be unambiguous, not how many rows point at it. Two *distinct*
+identities for one subject remains `409 BILLING_CREDIT_ACCOUNT_AMBIGUOUS`, raised
+as itself — a permanent conflict an operator must resolve is never reported as a
+temporary outage. The same holds for a database failure during the lookup.
 
 The fallback logs at error level once per read, because nothing else shouts when
 a read keeps working.

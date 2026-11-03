@@ -7,6 +7,7 @@ import { AppError } from '../utils/errors.js';
 import {
   requireStripeBillingEnabled,
   resolveStripeAccountContext,
+  stripeSecretKeyLivemode,
   type StripeAccountContext,
 } from './billing-stripe-client.service.js';
 import { runBillingSerializableTransaction } from './billing-serializable-transaction.service.js';
@@ -29,8 +30,16 @@ const CANONICAL_PORTFOLIO_PRODUCTS = [
   'nessie',
 ] as const;
 
+/**
+ * The provider account identity this organisation's credits already live on.
+ *
+ * `livemode`, when known, is the configured secret key's mode: an account
+ * persisted in the other mode is never a candidate, because every caller goes
+ * on to settle usage against whatever this returns. With no configured key
+ * there is no mode to match and every persisted account is a candidate.
+ */
 async function resolvePersistedCreditAccount(
-  params: { organisationId: string; teamId: string },
+  params: { organisationId: string; teamId: string; livemode?: boolean },
   prisma: PrismaClient,
 ): Promise<StripeAccountContext> {
   const scoped = await prisma.billingCreditAccount.findMany({
@@ -41,17 +50,27 @@ async function resolvePersistedCreditAccount(
         { scope: BillingAssignmentScope.ORGANISATION, teamId: null },
       ],
       currency: 'USD',
+      ...(params.livemode === undefined ? {} : { account: { livemode: params.livemode } }),
     },
     orderBy: { updatedAt: 'desc' },
-    take: 2,
+    // Deliberately unlimited, and deliberately not `distinct`. The team's own
+    // account and the organisation's legitimately coexist while organisation
+    // billing responsibility is — or once was — assumed, and a team balance is
+    // never swept on assume or release. All this resolves is one provider
+    // identity, so what must be unambiguous is the account those rows point at,
+    // not how many rows point at it. The OR clause bounds the set to this
+    // team's and this organisation's own rows.
     select: { account: { select: { id: true, stripeAccountId: true, livemode: true } } },
   });
-  if (scoped.length > 1) {
+  const identities = new Map(scoped.map((row) => [row.account.id, row.account]));
+  if (identities.size > 1) {
     throw new AppError('BAD_REQUEST', 409, 'BILLING_CREDIT_ACCOUNT_AMBIGUOUS');
   }
-  if (scoped[0]) return scoped[0].account;
+  const [only] = [...identities.values()];
+  if (only) return only;
 
   const persisted = await prisma.billingStripeAccount.findMany({
+    ...(params.livemode === undefined ? {} : { where: { livemode: params.livemode } }),
     orderBy: { updatedAt: 'desc' },
     take: 2,
     select: { id: true, stripeAccountId: true, livemode: true },
@@ -97,6 +116,14 @@ export async function resolveCreditCollectionContext(
  * produces, so every funding action is already disabled and no payment can be
  * started from it. Writes keep `resolveCreditCollectionContext` and still fail
  * closed with `BILLING_PAYMENT_PROVIDER_UNAVAILABLE`.
+ *
+ * Only an account in the configured key's own mode will do. Freezing collection
+ * does not stop the caller settling usage against whatever this returns, so a
+ * test key must never reach a live-mode account or the reverse; where there is
+ * no such account, or no mode can be told from the configuration at all, the
+ * provider's refusal stands. Every other lookup failure — two distinct
+ * identities for one subject, a database error — is permanent and is raised as
+ * itself rather than dressed up as a temporary outage.
  */
 export async function resolveCreditCollectionContextForRead(
   params: { organisationId: string; teamId: string },
@@ -118,11 +145,34 @@ export async function resolveCreditCollectionContextForRead(
       { organisationId: params.organisationId, teamId: params.teamId },
       'billing read projected with collection frozen: the payment provider could not be resolved',
     );
-    // Never reached the provider even once: that refusal is the accurate cause,
-    // not a local account the deployment was never going to have.
-    const account = await resolvePersistedCreditAccount(params, prisma).catch(() => {
+    // Only an account in the configured key's own mode will do. Without a mode
+    // to match, no persisted account is safe to settle against, so the
+    // provider's refusal stands.
+    let livemode: boolean;
+    try {
+      const secretKey = getEnv().STRIPE_SECRET_KEY;
+      if (!secretKey) throw error;
+      livemode = stripeSecretKeyLivemode(secretKey);
+    } catch {
+      // No key, an unreadable configuration or a key whose mode cannot be told
+      // apart: all three leave nothing safe to settle against.
       throw error;
-    });
+    }
+    const account = await resolvePersistedCreditAccount({ ...params, livemode }, prisma).catch(
+      (lookupFailure: unknown) => {
+        // No account in this mode at all — including a deployment that never
+        // reached the provider once: its refusal is the accurate cause. Every
+        // other lookup failure is permanent and must not be dressed up as a
+        // temporary outage.
+        if (
+          lookupFailure instanceof AppError &&
+          lookupFailure.message === 'BILLING_CREDIT_ACCOUNT_NOT_PROVISIONED'
+        ) {
+          throw error;
+        }
+        throw lookupFailure;
+      },
+    );
     return { account, stripeCollectionEnabled: false, stripe: null };
   }
 }
