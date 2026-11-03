@@ -41,8 +41,7 @@ configured secret key's own test/live mode and considers nothing else. A
 deployment that moved from a live key to a test one does not reach its
 historical live-mode account, and vice versa. Where no account exists in the
 configured mode — including a deployment that never reached the provider once —
-or where no mode can be told from the configuration at all, the provider's
-refusal stands.
+the provider's refusal stands.
 
 **Two rows are not two identities.** A team's own credit account and its
 organisation's legitimately coexist while organisation billing responsibility is,
@@ -75,12 +74,22 @@ answered 503 — not just those for organisations with no billing. See
 
 ## It is an exemption, not a guarantee
 
-The read still answers `503 BILLING_PAYMENT_PROVIDER_UNAVAILABLE` when the two
-constraints above cannot be met: no account on record in the configured mode
-(including a deployment that never reached the provider once), or a
-configuration from which no mode can be read. `/api`, `/llm` and this document
-say so, and the consumer guidance for that case is unchanged — keep the session,
-retry with backoff, and never substitute a zero balance or admit paid work.
+The read still answers `503 BILLING_PAYMENT_PROVIDER_UNAVAILABLE` when the
+constraints above cannot be met: no account on record in the configured mode,
+including a deployment that never reached the provider once. `/api`, `/llm` and
+this document say so, and the consumer guidance for that case is unchanged —
+keep the session, retry with backoff, and never substitute a zero balance or
+admit paid work.
+
+A configuration from which no mode can be read is *not* one of those cases. The
+env schema enforces the same `sk_`/`rk_` test-or-live prefix
+`stripeSecretKeyLivemode` checks, so such a deployment fails validation rather
+than serving a read, and `STRIPE_SECRET_KEY_MODE_UNKNOWN` cannot reach a
+consumer from configuration at all. The fallback still normalises it to
+`BILLING_PAYMENT_PROVIDER_UNAVAILABLE` and refuses without touching the
+database — defence in depth should those two prefix rules ever drift apart,
+since `STRIPE_SECRET_KEY_MODE_UNKNOWN` is not a public error code and a bare
+503 with no code is worse than the documented one.
 
 ## What this does not change
 

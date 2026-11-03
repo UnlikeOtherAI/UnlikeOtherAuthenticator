@@ -37,7 +37,7 @@ test/live mode, it is projected as `collection.stripe_collection_enabled: false`
 with every payment action disabled, so an expired key no longer takes a
 product's Credits and billing page — or an organisation's billing-region
 choice — down with it. The read still answers 503 where no account in that mode
-is on record or the credential names no mode at all. See
+is on record. See
 `Docs/Auth/billing-provider-availability.md`. Actual
 sandbox Checkout remains unverified until a valid sandbox credential is supplied;
 this does not prevent independent deployment or verification work.

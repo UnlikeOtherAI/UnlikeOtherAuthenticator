@@ -11,6 +11,7 @@ import {
   setOrganisationBillingRegion,
 } from '../../src/services/billing-organisation-region.service.js';
 import { AppError } from '../../src/utils/errors.js';
+import { parseEnv } from '../../src/config/env.js';
 import { createTestDb } from '../helpers/test-db.js';
 
 const enabled = Boolean(process.env.DATABASE_URL);
@@ -265,18 +266,38 @@ describe.skipIf(!enabled)('credits for an organisation with no billing set up (P
       }
     });
 
-    it('refuses when the configured key names no mode to match', async () => {
-      const { prisma } = lookups([{ account: test }], [test]);
+    it('rejects a key that names no mode before billing is reached at all', async () => {
+      // `STRIPE_SECRET_KEY_MODE_UNKNOWN` cannot come from configuration: the env
+      // schema enforces the same `sk_`/`rk_` test-or-live prefix
+      // `stripeSecretKeyLivemode` checks, so such a deployment fails validation
+      // rather than serving a read. This pins that gate, so the normalisation
+      // below stays defence in depth against the two prefix rules drifting
+      // apart rather than a path a consumer can reach.
       configureKey('not-a-stripe-key');
+      try {
+        expect(() => parseEnv(process.env)).toThrow(/explicit Stripe test or live mode/);
+      } finally {
+        vi.unstubAllEnvs();
+      }
+    });
+
+    it('answers the refusal its contract names if a mode ever cannot be read', async () => {
+      // Normalised, because a consumer is never given STRIPE_SECRET_KEY_MODE_UNKNOWN
+      // (it is not a public error code) and there would be no mode to look an
+      // account up by, so the database is never touched.
+      const { prisma, seen } = lookups([{ account: test }], [test]);
+      configureKey();
       try {
         await expect(resolveCreditCollectionContextForRead(
           { organisationId: ids.org, teamId: ids.team },
-          { prisma, resolveCollection: providerUnavailable() },
+          { prisma, resolveCollection: vi.fn().mockRejectedValue(
+            new AppError('INTERNAL', 503, 'STRIPE_SECRET_KEY_MODE_UNKNOWN')) },
         )).rejects.toMatchObject({ statusCode: 503,
           message: 'BILLING_PAYMENT_PROVIDER_UNAVAILABLE' });
       } finally {
         vi.unstubAllEnvs();
       }
+      expect(seen).toEqual([]);
     });
 
     it('propagates a genuinely ambiguous account instead of reporting an outage', async () => {

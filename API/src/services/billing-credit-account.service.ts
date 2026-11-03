@@ -105,6 +105,33 @@ export async function resolveCreditCollectionContext(
   return { account, stripeCollectionEnabled: true, stripe: configured.client };
 }
 
+const PROVIDER_UNAVAILABLE = 'BILLING_PAYMENT_PROVIDER_UNAVAILABLE';
+
+/**
+ * The refusal a read may answer with, or null when the failure is its own.
+ *
+ * `mayFallBack` says whether a persisted account could stand in. An unreachable
+ * provider leaves the account identity intact, so it can. A secret key whose
+ * mode cannot be read cannot: there is no mode to match, so no account is a
+ * candidate and the refusal is all there is to return — reported as the
+ * provider being unavailable rather than as a configuration code no consumer is
+ * ever given. A deployment that configured no key at all keeps its own code;
+ * that is a deployment never set up, not a provider gone missing.
+ */
+function readableProviderRefusal(
+  error: unknown,
+): { refusal: AppError; mayFallBack: boolean } | null {
+  if (!(error instanceof AppError)) return null;
+  if (error.message === PROVIDER_UNAVAILABLE) return { refusal: error, mayFallBack: true };
+  if (error.message === 'STRIPE_SECRET_KEY_MODE_UNKNOWN') {
+    return {
+      refusal: new AppError('SERVICE_UNAVAILABLE', 503, PROVIDER_UNAVAILABLE),
+      mayFallBack: false,
+    };
+  }
+  return null;
+}
+
 /**
  * The collection context a read may use.
  *
@@ -136,27 +163,28 @@ export async function resolveCreditCollectionContextForRead(
   const prisma = deps?.prisma ?? getAdminPrisma();
   try {
     return await (deps?.resolveCollection ?? resolveCreditCollectionContext)(params, { prisma });
-  } catch (error) {
-    if (!(error instanceof AppError) || error.message !== 'BILLING_PAYMENT_PROVIDER_UNAVAILABLE') {
-      throw error;
-    }
+  } catch (caught) {
+    const provider = readableProviderRefusal(caught);
+    if (!provider) throw caught;
+    const refusal = provider.refusal;
     // An operator has to see this: the read keeps working, so nothing else shouts.
     deps?.log?.error(
       { organisationId: params.organisationId, teamId: params.teamId },
       'billing read projected with collection frozen: the payment provider could not be resolved',
     );
+    if (!provider.mayFallBack) throw refusal;
     // Only an account in the configured key's own mode will do. Without a mode
     // to match, no persisted account is safe to settle against, so the
     // provider's refusal stands.
     let livemode: boolean;
     try {
       const secretKey = getEnv().STRIPE_SECRET_KEY;
-      if (!secretKey) throw error;
+      if (!secretKey) throw refusal;
       livemode = stripeSecretKeyLivemode(secretKey);
     } catch {
       // No key, an unreadable configuration or a key whose mode cannot be told
       // apart: all three leave nothing safe to settle against.
-      throw error;
+      throw refusal;
     }
     const account = await resolvePersistedCreditAccount({ ...params, livemode }, prisma).catch(
       (lookupFailure: unknown) => {
@@ -168,7 +196,7 @@ export async function resolveCreditCollectionContextForRead(
           lookupFailure instanceof AppError &&
           lookupFailure.message === 'BILLING_CREDIT_ACCOUNT_NOT_PROVISIONED'
         ) {
-          throw error;
+          throw refusal;
         }
         throw lookupFailure;
       },
