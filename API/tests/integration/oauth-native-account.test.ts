@@ -114,18 +114,23 @@ describe.skipIf(!process.env.DATABASE_URL)('native account PKCE and durable favo
       await Promise.all([socket, second].map(client => new Promise<void>((resolve, reject) => {
         client.once('open', resolve); client.once('error', reject);
       })));
+      // Streams coalesce pending reads. Pace writes on both clients when checking
+      // each intermediate delta; one client receiving it does not fence the other.
       await expect.poll(() => frames.length).toBe(1);
+      await expect.poll(() => secondFrames.length).toBe(1);
       expect(frames[0]).toMatchObject({ type: 'settings.snapshot', namespace: 'browser', key: 'bookmarks' });
       const value = Array.from({ length: 100 }, (_, id) => ({ id, title: `Page ${id}`, url: 'https://example.com' }));
       let read = await app.inject({ method: 'GET', url: path, headers: headers() });
       const save = await app.inject({ method: 'PUT', url: path, headers: { ...headers(), 'if-match': read.headers.etag! }, payload: { value } });
       expect(save.statusCode).toBe(200);
       await expect.poll(() => frames.length).toBe(2);
+      await expect.poll(() => secondFrames.length).toBe(2);
       expect(frames[1]).toMatchObject({ type: 'settings.delta', baseVersion: frames[0]!.version, version: save.headers.etag });
       value[50]!.title = 'Renamed';
       read = await app.inject({ method: 'GET', url: path, headers: headers() });
       await app.inject({ method: 'PUT', url: path, headers: { ...headers(), 'if-match': read.headers.etag! }, payload: { value } });
       await expect.poll(() => frames.length).toBe(3);
+      await expect.poll(() => secondFrames.length).toBe(3);
       expect(frames[2]!.operation).toMatchObject({ type: 'splice', index: 50, deleteCount: 1 });
       // A different writer deleting the namespace still fires the database trigger.
       await handle.prisma.userSetting.deleteMany({ where: { userId: userID, namespace: 'browser' } });
