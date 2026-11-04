@@ -36,6 +36,9 @@ const activatedAt = initialPaidAt;
 
 async function seedRenewalSubject(prisma: PrismaClient): Promise<void> {
   await prisma.$transaction(async (tx) => {
+    // Raw SQL binds Dates as timestamptz; fixture columns store UTC timestamps.
+    // Scope this to fixture insertion so application calls retain the host zone.
+    await tx.$executeRawUnsafe("SET LOCAL TIME ZONE 'UTC'");
     await tx.$executeRawUnsafe('SET LOCAL session_replication_role = replica');
     await tx.$executeRaw(Prisma.sql`
       INSERT INTO "users" ("id", "email", "user_key", "name")
