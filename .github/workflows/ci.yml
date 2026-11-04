@@ -97,8 +97,17 @@ jobs:
       - name: Run API tests (DB-less)
         run: pnpm --filter @uoa/api exec vitest run --exclude 'tests/integration/**'
 
-      - name: Run API integration tests (Postgres)
-        run: pnpm --filter @uoa/api exec vitest run tests/integration
+      # Schemas do not isolate PostgreSQL advisory locks. This suite deliberately
+      # holds a shared product-policy lock while filling the admin pool; an
+      # exclusive policy writer from another suite can queue ahead of its readers.
+      - name: Run pool contention integration tests (Postgres)
+        run: pnpm --filter @uoa/api exec vitest run tests/integration/org-me-pool-contention.test.ts
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+          BILLING_FUNDING_DATABASE_TESTS: 'true'
+
+      - name: Run remaining API integration tests (Postgres)
+        run: pnpm --filter @uoa/api exec vitest run tests/integration --exclude 'tests/integration/org-me-pool-contention.test.ts'
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
           BILLING_FUNDING_DATABASE_TESTS: 'true'

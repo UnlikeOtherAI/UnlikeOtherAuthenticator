@@ -367,12 +367,12 @@ function buttonPrimaryClasses(style: ButtonStyle): string {
   return `${base} bg-[var(--uoa-color-primary)] text-[var(--uoa-color-primary-text)] hover:opacity-90`;
 }
 
-function buttonSecondaryClasses(style: ButtonStyle): string {
+function buttonSecondaryClasses(size: 'default' | 'icon' = 'default'): string {
   const base =
-    'inline-flex w-full items-center justify-center gap-2 rounded-[var(--uoa-radius-button)] px-4 py-2.5 font-medium focus:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--uoa-color-primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--uoa-color-bg)] disabled:opacity-60';
+    'inline-flex items-center justify-center gap-2 rounded-[var(--uoa-radius-button)] font-medium focus:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--uoa-color-primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--uoa-color-bg)] disabled:opacity-60';
+  const dimensions = size === 'icon' ? 'aspect-square p-0' : 'w-full px-4 py-2.5';
   // Secondary stays neutral regardless of primary style choice.
-  void style;
-  return `${base} border border-[var(--uoa-color-border)] bg-[var(--uoa-color-surface)] text-[var(--uoa-color-text)] hover:opacity-90`;
+  return `${base} ${dimensions} border border-[var(--uoa-color-border)] bg-[var(--uoa-color-surface)] text-[var(--uoa-color-text)] hover:opacity-90`;
 }
 
 export function buildThemeClassNames(theme: Theme): ThemeClassNames {
@@ -385,7 +385,8 @@ export function buildThemeClassNames(theme: Theme): ThemeClassNames {
     logoWrap: 'mb-6 flex items-center justify-center',
     title: t.title,
     buttonPrimary: buttonPrimaryClasses(theme.button.style),
-    buttonSecondary: buttonSecondaryClasses(theme.button.style),
+    buttonSecondary: buttonSecondaryClasses(),
+    buttonSecondaryIcon: buttonSecondaryClasses('icon'),
   };
 }
 

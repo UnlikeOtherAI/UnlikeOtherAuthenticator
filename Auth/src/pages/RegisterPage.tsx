@@ -24,10 +24,8 @@ export function RegisterPage(): React.JSX.Element {
   return (
     <div>
       <h1 className={`text-balance ${classNames.title}`}>{t('auth.register.title')}</h1>
+      <SocialButtons />
       <RegisterForm />
-      <div className="mt-6">
-        <SocialButtons />
-      </div>
       <div className="mt-4 text-center text-sm">
         <button
           type="button"

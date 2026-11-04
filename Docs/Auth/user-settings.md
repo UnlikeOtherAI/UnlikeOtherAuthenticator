@@ -219,3 +219,13 @@ GET/PUT endpoints described in [native-accounts.md](native-accounts.md). This is
 additional authenticated entry point to the same user-owned store, with conditional
 writes to protect read/modify/write lists. The existing confidential dual-auth routes
 and their authorization requirements are unchanged.
+
+## Live subscriptions (protocol version 1)
+
+Native public OAuth clients may subscribe to any one current-user setting at `GET /oauth/me/settings/:namespace/:key/events` using a WebSocket upgrade and an `Authorization: Bearer …` header with `settings.read`. No query parameters or user selector are accepted. The public-profile feature gate and all existing live subject, client, scope, credential, factor and lifecycle checks apply. This endpoint reads the same authoritative setting rows as `/settings/me` and `/oauth/me/settings`; no identity or settings replicas are introduced.
+
+After PostgreSQL LISTEN is established, the server reads and sends `{type:"settings.snapshot",protocolVersion:1,namespace,key,version,value}`. Subsequent changes send `{type:"settings.delta",protocolVersion:1,namespace,key,baseVersion,version,operation}`. `version` is the existing quoted opaque ETag and supports equality only. `operation` is either `{type:"replace",value}` or `{type:"splice",index,deleteCount,items}` over the root JSON array. A splice is used only when smaller than replacement. Other value types use replacement; deletion is replacement with null.
+
+Clients validate topic, frame version, bounds and exact `baseVersion` before applying atomically. On a gap or malformed frame, disconnect and obtain a fresh snapshot. Duplicate versions can be ignored. Reconnect with exponential backoff and jitter; the server recycles connections after 240–280 seconds. This is current-state convergence, not a durable event log: intermediate updates may coalesce. Conditional HTTP writes remain the mutation interface.
+
+A database trigger emits topic-only NOTIFY hints after committed inserts, value updates and deletions, including namespace deletion by other writers. One lazy dedicated pg connection per active API instance listens across replicas; values never appear in notifications. Reconnect dirties all active topics after LISTEN. A 30-second repair read also revalidates authority and repairs missed hints. Reads run in one serial lane and transactions use the existing admin pool. There are at most 32 admitted streams and 8 per subject per instance; excess admission returns 503 with Retry-After. Slow consumers close and recover from a snapshot. Client application messages are rejected.

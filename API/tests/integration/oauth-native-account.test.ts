@@ -7,6 +7,7 @@ import { hashPassword } from '../../src/services/password.service.js';
 import { signMcpAccessToken, signConfidentialAccessToken, resetAccessTokenKeyCache } from '../../src/services/oauth/access-token.service.js';
 import { encryptTwoFaSecret } from '../../src/utils/twofa-secret.js';
 import { createHmac } from 'node:crypto';
+import { WebSocket } from 'ws';
 
 const issuer = 'https://auth.example.com';
 const domain = 'native.example.com';
@@ -97,6 +98,115 @@ describe.skipIf(!process.env.DATABASE_URL)('native account PKCE and durable favo
     const stale = await app.inject({ method: 'PUT', url: path, headers: { ...headers(), 'if-match': read.headers.etag! }, payload: { value: [] } });
     expect(stale.statusCode).toBe(409);
     expect((await app.inject({ method: 'PUT', url: path, headers: headers(), payload: { value: [] } })).statusCode).toBe(428);
+  });
+
+  it('streams a committed change across app instances, then a delta and deletion', async () => {
+    const replica = await createApp();
+    const address = await replica.listen({ port: 0, host: '127.0.0.1' });
+    // Exercise an actual upgrade: injectWS does not provide the underlying TCP socket.
+    const socket = new WebSocket(address.replace('http:', 'ws:') + path + '/events', { headers: headers() });
+    const second = new WebSocket(address.replace('http:', 'ws:') + path + '/events', { headers: headers() });
+    const frames: Record<string, unknown>[] = [];
+    const secondFrames: Record<string, unknown>[] = [];
+    socket.on('message', data => frames.push(JSON.parse(data.toString())));
+    second.on('message', data => secondFrames.push(JSON.parse(data.toString())));
+    try {
+      await Promise.all([socket, second].map(client => new Promise<void>((resolve, reject) => {
+        client.once('open', resolve); client.once('error', reject);
+      })));
+      // Streams coalesce pending reads. Pace writes on both clients when checking
+      // each intermediate delta; one client receiving it does not fence the other.
+      await expect.poll(() => frames.length).toBe(1);
+      await expect.poll(() => secondFrames.length).toBe(1);
+      expect(frames[0]).toMatchObject({ type: 'settings.snapshot', namespace: 'browser', key: 'bookmarks' });
+      const value = Array.from({ length: 100 }, (_, id) => ({ id, title: `Page ${id}`, url: 'https://example.com' }));
+      let read = await app.inject({ method: 'GET', url: path, headers: headers() });
+      const save = await app.inject({ method: 'PUT', url: path, headers: { ...headers(), 'if-match': read.headers.etag! }, payload: { value } });
+      expect(save.statusCode).toBe(200);
+      await expect.poll(() => frames.length).toBe(2);
+      await expect.poll(() => secondFrames.length).toBe(2);
+      expect(frames[1]).toMatchObject({ type: 'settings.delta', baseVersion: frames[0]!.version, version: save.headers.etag });
+      value[50]!.title = 'Renamed';
+      read = await app.inject({ method: 'GET', url: path, headers: headers() });
+      await app.inject({ method: 'PUT', url: path, headers: { ...headers(), 'if-match': read.headers.etag! }, payload: { value } });
+      await expect.poll(() => frames.length).toBe(3);
+      await expect.poll(() => secondFrames.length).toBe(3);
+      expect(frames[2]!.operation).toMatchObject({ type: 'splice', index: 50, deleteCount: 1 });
+      // A different writer deleting the namespace still fires the database trigger.
+      await handle.prisma.userSetting.deleteMany({ where: { userId: userID, namespace: 'browser' } });
+      await expect.poll(() => frames.length).toBe(4);
+      expect(frames[3]!.operation).toEqual({ type: 'replace', value: null });
+      await expect.poll(() => secondFrames.length).toBe(4);
+      expect(secondFrames).toEqual(frames);
+      const reconnect = new WebSocket(address.replace('http:', 'ws:') + path + '/events', { headers: headers() });
+      try {
+        const snapshot = await new Promise<unknown>((resolve, reject) => {
+          reconnect.once('message', data => resolve(JSON.parse(data.toString())));
+          reconnect.once('error', reject);
+        });
+        expect(snapshot).toMatchObject({ type: 'settings.snapshot', value: null, version: frames[3]!.version });
+        // Sending application messages is unsupported and must close, not mutate.
+        const closed = new Promise<number>(resolve => reconnect.once('close', resolve));
+        reconnect.send(JSON.stringify({ value: ['unauthorised write'] }));
+        expect(await closed).toBe(1008);
+      } finally { reconnect.terminate(); }
+    } finally { socket.terminate(); second.terminate(); await replica.close(); }
+  });
+
+  it('refuses unauthenticated streams and user-selection query parameters', async () => {
+    await expect(app.injectWS(path + '/events')).rejects.toThrow();
+    await expect(app.injectWS(path + '/events?userId=other', { headers: headers() })).rejects.toThrow();
+  });
+
+  it('bounds subscriptions per subject and releases admission after disconnect', async () => {
+    const replica = await createApp();
+    const address = await replica.listen({ port: 0, host: '127.0.0.1' });
+    const url = address.replace('http:', 'ws:') + path + '/events';
+    const sockets: WebSocket[] = [];
+    const connect = async () => {
+      const socket = new WebSocket(url, { headers: headers() });
+      sockets.push(socket);
+      await new Promise<void>((resolve, reject) => {
+        socket.once('message', () => resolve()); socket.once('error', reject);
+      });
+      return socket;
+    };
+    try {
+      await Promise.all(Array.from({ length: 8 }, connect));
+      const denied = new WebSocket(url, { headers: headers() });
+      sockets.push(denied);
+      expect(await new Promise<number>((resolve, reject) => {
+        denied.once('unexpected-response', (_request, response) => { response.resume(); resolve(response.statusCode!); });
+        denied.once('open', () => reject(new Error('Admission exceeded')));
+        denied.once('error', () => {});
+      })).toBe(503);
+      const first = sockets[0]!;
+      await new Promise<void>(resolve => { first.once('close', () => resolve()); first.close(); });
+      await connect();
+      expect((await app.inject({ method: 'GET', url: '/oauth/me', headers: headers() })).statusCode).toBe(200);
+    } finally { sockets.forEach(socket => socket.terminate()); await replica.close(); }
+  });
+
+  it('closes a revoked stream before sending another settings value', async () => {
+    const subject = await handle.prisma.user.create({ data: { email: 'stream-revocation@example.com', userKey: 'stream-revocation@example.com' } });
+    const access = await signMcpAccessToken({ subject: subject.id, email: subject.email, domain, clientId: clientID,
+      credentialEpoch: 0, role: 'user', resource: issuer, issuer, ttlSeconds: 600, scope });
+    const replica = await createApp();
+    const address = await replica.listen({ port: 0, host: '127.0.0.1' });
+    const socket = new WebSocket(address.replace('http:', 'ws:') + path + '/events', { headers: headers(access) });
+    const frames: unknown[] = [];
+    socket.on('message', data => frames.push(JSON.parse(data.toString())));
+    try {
+      await new Promise<void>((resolve, reject) => { socket.once('open', resolve); socket.once('error', reject); });
+      await expect.poll(() => frames.length).toBe(1);
+      const closed = new Promise<number>(resolve => socket.once('close', resolve));
+      await handle.prisma.user.update({ where: { id: subject.id }, data: { tokenVersion: { increment: 1 } } });
+      const value = ['after revocation'];
+      await handle.prisma.userSetting.create({ data: { userId: subject.id, namespace: 'browser', key: 'bookmarks', value,
+        sizeBytes: Buffer.byteLength(JSON.stringify(value)) } });
+      expect(await closed).toBe(1008);
+      expect(frames).toHaveLength(1);
+    } finally { socket.terminate(); await replica.close(); }
   });
 
   it('rejects scope escalation, other token classes, wrong audience, missing epoch and cross-user reads', async () => {

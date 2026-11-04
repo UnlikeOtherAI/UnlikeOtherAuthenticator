@@ -206,7 +206,8 @@ describe('GET /auth', () => {
     expect(res.statusCode).toBe(200);
     expect(res.body).toContain('/auth/social/google?');
     expect(res.body).toContain('Continue with');
-    expect(res.body).toContain('Google</a>');
+    expect(res.body).toContain('title="Continue with Google"');
+    expect(res.body.indexOf('/auth/social/google?')).toBeLessThan(res.body.indexOf('type="email"'));
 
     await app.close();
   });
