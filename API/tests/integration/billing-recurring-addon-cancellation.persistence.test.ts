@@ -1,7 +1,7 @@
 import { Prisma, PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { createTestDb } from '../helpers/test-db.js';
+import { createBillingTimezoneDb } from '../helpers/billing-timezone-db.js';
 
 const databaseTestsEnabled =
   process.env.BILLING_FUNDING_DATABASE_TESTS === 'true' && Boolean(process.env.DATABASE_URL);
@@ -189,7 +189,8 @@ async function insertIntent(prisma: PrismaClient, input: IntentInput): Promise<v
       ${ids.offer}, ${ids.org}, ${ids.team}, ${input.requestedTeam ?? ids.team}, NULL, 'TEAM',
       ${`${ids.org}:${ids.team}`}, ${input.requester}, 'actor-jti-cancellation-test',
       ${input.tokenCharacter.repeat(64)}, ${'f'.repeat(64)}, ${input.idempotencyKey},
-      ${expiresAt}, ${createdAt}, ${createdAt}
+      (${expiresAt}::timestamptz AT TIME ZONE 'UTC'),
+      (${createdAt}::timestamptz AT TIME ZONE 'UTC'), (${createdAt}::timestamptz AT TIME ZONE 'UTC')
     )
   `);
 }
@@ -238,12 +239,13 @@ async function insertSetupCheckout(
   `);
 }
 
-describe.skipIf(!databaseTestsEnabled)('recurring add-on cancellation persistence', () => {
-  let handle: Awaited<ReturnType<typeof createTestDb>>;
+describe.skipIf(!databaseTestsEnabled).each(['UTC', 'Europe/London', 'America/New_York', 'Asia/Kathmandu'])(
+  'recurring add-on cancellation persistence in %s', (zone) => {
+  let handle: Awaited<ReturnType<typeof createBillingTimezoneDb>>;
   let secondPrisma: PrismaClient;
 
   beforeAll(async () => {
-    handle = await createTestDb();
+    handle = await createBillingTimezoneDb(zone);
     if (!handle) throw new Error('DATABASE_URL is required for DB-backed tests');
     await seedCancellationSubject(handle.prisma);
     secondPrisma = new PrismaClient({ datasources: { db: { url: handle.databaseUrl } } });
@@ -440,8 +442,9 @@ describe.skipIf(!databaseTestsEnabled)('recurring add-on cancellation persistenc
           ${ids.offer}, ${ids.org}, ${ids.team}, ${ids.team}, NULL, 'TEAM',
           ${`${ids.org}:${ids.team}`}, ${ids.owner}, 'actor-jti-expired', ${'6'.repeat(64)},
           ${'e'.repeat(64)}, 'cancel-expired-0001', 'AVAILABLE',
-          CURRENT_TIMESTAMP - INTERVAL '1 minute', CURRENT_TIMESTAMP - INTERVAL '2 minutes',
-          CURRENT_TIMESTAMP - INTERVAL '2 minutes'
+          (CURRENT_TIMESTAMP AT TIME ZONE 'UTC') - INTERVAL '1 minute',
+          (CURRENT_TIMESTAMP AT TIME ZONE 'UTC') - INTERVAL '2 minutes',
+          (CURRENT_TIMESTAMP AT TIME ZONE 'UTC') - INTERVAL '2 minutes'
         )
       `);
     });

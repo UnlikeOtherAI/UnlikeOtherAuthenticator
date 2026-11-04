@@ -13,7 +13,7 @@ export async function createBillingTimezoneDb(timeZone: string) {
   try {
     const rows = await prisma.$queryRaw<Array<{ TimeZone: string }>>`SHOW TimeZone`;
     if (rows[0]?.TimeZone !== timeZone) throw new Error('TEST_DATABASE_TIMEZONE_MISMATCH');
-    return { ...db, prisma, cleanup };
+    return { ...db, databaseUrl: url.toString(), prisma, cleanup };
   } catch (error) {
     await cleanup();
     throw error;

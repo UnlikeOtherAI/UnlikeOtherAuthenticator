@@ -25,6 +25,14 @@ retry delays and recovery after an expired watch lease.
 Claimed watches retain their priority order after the database update;
 `UPDATE ... RETURNING` alone does not promise the due queue's order.
 
+Final credit app-key, historical-provenance, automatic-reload disable and
+recurring-add-on cancellation guards interpret their UTC expiry fields in UTC.
+The additive expiry migration scopes the database timezone to those four
+functions and restores the caller's timezone afterward. It neither rewrites
+financial rows nor weakens revocation, scope, consent or transition rules.
+The database evals exercise valid/expired keys, reload disable, cancellation
+and actor expiry after lock contention in UTC, London, New York and Kathmandu.
+
 Nessie's exception evaluation covers standard, custom-price, waived-seat and
 explicitly free usage terms at both organisation and team scope. A zero seat
 amount with prepaid usage still rates provider usage and requires funding;
