@@ -101,8 +101,10 @@ describe.skipIf(!process.env.DATABASE_URL)('native account PKCE and durable favo
 
   it('streams a committed change across app instances, then a delta and deletion', async () => {
     const replica = await createApp();
+    let handshakeError: Error | undefined;
+    replica.addHook('onError', async (_request, _reply, error) => { handshakeError = error; });
     await replica.ready();
-    const socket = await replica.injectWS(path + '/events', { headers: headers() });
+    const socket = await replica.injectWS(path + '/events', { headers: headers() }).catch(error => { throw handshakeError ?? error; });
     const frames: Record<string, unknown>[] = [];
     socket.on('message', data => frames.push(JSON.parse(data.toString())));
     try {
