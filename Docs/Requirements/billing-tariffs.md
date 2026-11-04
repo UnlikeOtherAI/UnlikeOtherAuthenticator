@@ -1,5 +1,12 @@
 # Billing Tariffs and Product Entitlements
 
+Customer Stripe invoice lists select cash by its UTC payment month, independent
+of the database session time zone. Month bounds and pagination cursors normalize
+their timestamp parameters to the UTC representation stored in the cash table.
+A payment at 00:00 UTC on the first belongs to that new month only. The PostgreSQL
+invoice persistence evaluation exercises UTC, London, New York and Kathmandu
+sessions, plus partial payments spanning months and single-row pagination.
+
 ## Status and ownership
 
 UOA is the canonical commercial control plane and customer billing system of
