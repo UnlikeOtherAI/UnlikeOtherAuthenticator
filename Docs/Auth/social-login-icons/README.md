@@ -35,5 +35,9 @@ Verified on Windows Maxis, headless Microsoft Edge through Playwright, 4 Novembe
   passes for every changed source file. Package-wide lint reports the pre-existing
   unused `innerWidth` declaration in `Auth/e2e/organization-sign-in-evidence.mjs`.
 
+The workspace override pins `follow-redirects` to at least 1.16.2, the patch for
+[GHSA-mrwp-f3q8-3g9p](https://github.com/advisories/GHSA-mrwp-f3q8-3g9p).
+The high/critical dependency audit passes with this lockfile.
+
 Screenshots are embedded side by side in the pull request. No browser evaluation
-was added to CI, and no API, database, provider credentials or native app changed.
+was added to CI, and no API source, database, provider credentials or native app changed.
