@@ -105,10 +105,15 @@ describe.skipIf(!process.env.DATABASE_URL)('native account PKCE and durable favo
     const address = await replica.listen({ port: 0, host: '127.0.0.1' });
     // Exercise an actual upgrade: injectWS does not provide the underlying TCP socket.
     const socket = new WebSocket(address.replace('http:', 'ws:') + path + '/events', { headers: headers() });
+    const second = new WebSocket(address.replace('http:', 'ws:') + path + '/events', { headers: headers() });
     const frames: Record<string, unknown>[] = [];
+    const secondFrames: Record<string, unknown>[] = [];
     socket.on('message', data => frames.push(JSON.parse(data.toString())));
+    second.on('message', data => secondFrames.push(JSON.parse(data.toString())));
     try {
-      await new Promise<void>((resolve, reject) => { socket.once('open', resolve); socket.once('error', reject); });
+      await Promise.all([socket, second].map(client => new Promise<void>((resolve, reject) => {
+        client.once('open', resolve); client.once('error', reject);
+      })));
       await expect.poll(() => frames.length).toBe(1);
       expect(frames[0]).toMatchObject({ type: 'settings.snapshot', namespace: 'browser', key: 'bookmarks' });
       const value = Array.from({ length: 100 }, (_, id) => ({ id, title: `Page ${id}`, url: 'https://example.com' }));
@@ -126,7 +131,21 @@ describe.skipIf(!process.env.DATABASE_URL)('native account PKCE and durable favo
       await handle.prisma.userSetting.deleteMany({ where: { userId: userID, namespace: 'browser' } });
       await expect.poll(() => frames.length).toBe(4);
       expect(frames[3]!.operation).toEqual({ type: 'replace', value: null });
-    } finally { socket.terminate(); await replica.close(); }
+      await expect.poll(() => secondFrames.length).toBe(4);
+      expect(secondFrames).toEqual(frames);
+      const reconnect = new WebSocket(address.replace('http:', 'ws:') + path + '/events', { headers: headers() });
+      try {
+        const snapshot = await new Promise<unknown>((resolve, reject) => {
+          reconnect.once('message', data => resolve(JSON.parse(data.toString())));
+          reconnect.once('error', reject);
+        });
+        expect(snapshot).toMatchObject({ type: 'settings.snapshot', value: null, version: frames[3]!.version });
+        // Sending application messages is unsupported and must close, not mutate.
+        const closed = new Promise<number>(resolve => reconnect.once('close', resolve));
+        reconnect.send(JSON.stringify({ value: ['unauthorised write'] }));
+        expect(await closed).toBe(1008);
+      } finally { reconnect.terminate(); }
+    } finally { socket.terminate(); second.terminate(); await replica.close(); }
   });
 
   it('refuses unauthenticated streams and user-selection query parameters', async () => {

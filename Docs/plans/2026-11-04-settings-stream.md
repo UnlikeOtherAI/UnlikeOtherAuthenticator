@@ -8,24 +8,21 @@ only settings authority. No identity/profile copy is introduced in products.
 ## Contract
 
 Add authenticated WebSocket GET `/oauth/me/settings/:namespace/:key/events` for
-public native clients with `settings.read`. Also expose the equivalent
-`/settings/me/:namespace/:key/events?domain=...` for confidential clients through
-the existing domain bearer plus X-UOA-Access-Token guards. Credentials stay in
-headers, never query parameters. These are server-to-client streams; incoming
-application messages close the socket. Arbitrary existing namespaces and keys
-are supported, not only browser/bookmarks.
+public native clients with `settings.read`. Credentials stay in headers; query
+parameters are rejected. Incoming application messages close the socket. Any
+existing namespace/key is supported. Native and confidential writers both
+trigger updates; v1 has no unused confidential reader endpoint.
 
-The initial frame is `{type:"settings.snapshot",namespace,key,version,value}`;
-a missing/deleted key has value null. Thereafter send
-`{type:"settings.delta",namespace,key,baseVersion,version,patch}`. Versions are
-existing quoted canonical SHA-256 ETags. Patch is an RFC6902 add/remove/replace
-subset with JSON Pointer paths. Object changes recurse; array changes use equal
-prefix/suffix to emit a bounded splice as indexed removes/adds. If a patch is
-larger than the replacement or exceeds 256 operations, send a snapshot instead.
-A version mismatch, malformed delta, disconnect, or missed notification is
-recovered by reconnecting for an authoritative snapshot. No durable history is
-needed; the stream sends deltas against its last successfully written frame only.
-Writes retain the existing If-Match whole-value transaction and conflict retry.
+Every frame includes protocolVersion:1, namespace, key and an opaque quoted ETag
+version. An initial settings.snapshot carries value (null for a missing key).
+Subsequent settings.delta frames carry baseVersion and operation: either a
+single root-array splice {type,index,deleteCount,items}, or {type:"replace",value}.
+Use replacement when a splice is larger or the array comparison exceeds its
+bound. Nested objects are replaced whole. Versions are equality tokens.
+
+Malformed deltas, base-version mismatches and reconnects recover through a fresh
+authoritative snapshot. No durable event history is required. Writes retain the
+existing If-Match transaction and conflict retry contract.
 
 ## Cross-replica delivery and resource bounds
 
@@ -43,9 +40,10 @@ Each delivery rechecks the live credential authority and expiry before reading
 and sending. Failures close the socket; no stale authorization cache grants data.
 An initial post-subscription read closes the handshake race. Slow consumers close
 when buffered output exceeds 1 MiB. Payloads are bounded by the existing 256 KiB
-setting limit. A heartbeat and expiry timer close abandoned/expired sessions.
+setting limit. A 30-second repair/authentication check closes expired sessions. Sockets recycle
+after 240–280 seconds, before the Cloud Run request timeout.
 
-The live service currently has maxScale3, minScale1, concurrency80, 300-second
+The pre-implementation deployment inspection found maxScale3, minScale1, concurrency80, 300-second
 request timeout, and unthrottled CPU. Database is db-g1-small; code/docs cap app/
 admin pools at3/2. Budget one extra listener per serving process, allowing revision
 overlap; do not enlarge those pools. Verify actual capacity before rollout and
@@ -66,19 +64,18 @@ No background execution guarantee is claimed on mobile operating systems.
 
 ## Verification
 
-Unit/property fixtures exercise nested objects, JSON Pointer escaping, array
-insert/remove/reorder, null/missing keys, no-op writes, size fallback and delta
-base mismatch. Integration tests cover writer rollback/no notification, namespace
-delete, two API replicas with one database, wrong subject/scope, token expiry and
-live revocation, disconnect/reconnect, slow consumers, and coalesced load. Exercise
-three signed-in client connections through the supported interfaces and check that
-one mutation reaches both others without a manual refresh. Production delivery is
-separate from tests and requires deployment evidence plus live verification.
+Verify root splice/replacement round trips, size fallback, no-op updates and
+strict client version/bounds validation. Exercise two real API listeners sharing
+PostgreSQL, HTTP writes and direct namespace deletion, scope/subject isolation,
+revocation, reconnect snapshots and admission limits. Three signed-in client
+connections must also demonstrate one mutation reaching both other devices.
+Local tests, deployed service checks and signed-in app verification are distinct
+evidence; none substitutes for the others.
 
 ## Cross-provider review
 
-Pending. Existing Codex review has identified database capacity and Cloud Run
-request timeout as required design constraints.
+Claude and Codex reviewed the design before implementation. Database capacity
+and Cloud Run request timeout are explicit constraints.
 
 ### Review decisions
 
@@ -91,7 +88,7 @@ including namespace deletion; no hints contain values. No-op updates emit no hin
 
 For v1 use `operation:{type:"splice",index,deleteCount,items}` for a single root
 array splice, or `operation:{type:"replace",value}` for other JSON/replacement.
-This supersedes RFC6902 above: nested objects are replaced whole, eliminating
+Nested objects are replaced whole, eliminating
 three custom JSON Pointer interpreters. Both clients strictly validate the base
 version, type and bounds with shared fixtures. Versions stay opaque; copying JS
 number/canonical hashing into native code is rejected as unnecessary complexity.
