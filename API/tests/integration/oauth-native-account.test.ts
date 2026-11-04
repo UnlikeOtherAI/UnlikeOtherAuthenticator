@@ -167,7 +167,9 @@ describe.skipIf(!process.env.DATABASE_URL)('native account PKCE and durable favo
       await expect.poll(() => frames.length).toBe(1);
       const closed = new Promise<number>(resolve => socket.once('close', resolve));
       await handle.prisma.user.update({ where: { id: subject.id }, data: { tokenVersion: { increment: 1 } } });
-      await handle.prisma.userSetting.create({ data: { userId: subject.id, namespace: 'browser', key: 'bookmarks', value: ['after revocation'] } });
+      const value = ['after revocation'];
+      await handle.prisma.userSetting.create({ data: { userId: subject.id, namespace: 'browser', key: 'bookmarks', value,
+        sizeBytes: Buffer.byteLength(JSON.stringify(value)) } });
       expect(await closed).toBe(1008);
       expect(frames).toHaveLength(1);
     } finally { socket.terminate(); await replica.close(); }
