@@ -42,6 +42,8 @@ Verified on Windows Maxis, headless Microsoft Edge through Playwright, 4 Novembe
 - Auth typecheck, all 176 existing tests, client build and SSR build pass. ESLint
   passes for every changed source file. Package-wide lint reports the pre-existing
   unused `innerWidth` declaration in `Auth/e2e/organization-sign-in-evidence.mjs`.
+- The API entry-point regression checks the Google link's provider tooltip and
+  placement before email, rather than requiring its label directly inside the anchor.
 
 The workspace override pins `follow-redirects` to at least 1.16.2, the patch for
 [GHSA-mrwp-f3q8-3g9p](https://github.com/advisories/GHSA-mrwp-f3q8-3g9p).
