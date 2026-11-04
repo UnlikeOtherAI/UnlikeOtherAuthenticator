@@ -7,6 +7,7 @@ import { hashPassword } from '../../src/services/password.service.js';
 import { signMcpAccessToken, signConfidentialAccessToken, resetAccessTokenKeyCache } from '../../src/services/oauth/access-token.service.js';
 import { encryptTwoFaSecret } from '../../src/utils/twofa-secret.js';
 import { createHmac } from 'node:crypto';
+import { WebSocket } from 'ws';
 
 const issuer = 'https://auth.example.com';
 const domain = 'native.example.com';
@@ -101,13 +102,13 @@ describe.skipIf(!process.env.DATABASE_URL)('native account PKCE and durable favo
 
   it('streams a committed change across app instances, then a delta and deletion', async () => {
     const replica = await createApp();
-    let handshakeError: Error | undefined;
-    replica.addHook('onError', async (_request, _reply, error) => { handshakeError = error; });
-    await replica.ready();
-    const socket = await replica.injectWS(path + '/events', { headers: headers() }).catch(error => { throw handshakeError ?? error; });
+    const address = await replica.listen({ port: 0, host: '127.0.0.1' });
+    // Exercise an actual upgrade: injectWS does not provide the underlying TCP socket.
+    const socket = new WebSocket(address.replace('http:', 'ws:') + path + '/events', { headers: headers() });
     const frames: Record<string, unknown>[] = [];
     socket.on('message', data => frames.push(JSON.parse(data.toString())));
     try {
+      await new Promise<void>((resolve, reject) => { socket.once('open', resolve); socket.once('error', reject); });
       await expect.poll(() => frames.length).toBe(1);
       expect(frames[0]).toMatchObject({ type: 'settings.snapshot', namespace: 'browser', key: 'bookmarks' });
       const value = Array.from({ length: 100 }, (_, id) => ({ id, title: `Page ${id}`, url: 'https://example.com' }));
