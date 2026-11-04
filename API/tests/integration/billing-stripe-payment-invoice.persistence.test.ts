@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+import type { PrismaClient } from '@prisma/client';
 
 import type Stripe from 'stripe';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -183,9 +184,16 @@ describe.skipIf(!process.env.DATABASE_URL)('regular Stripe payment legal source'
       /provider_cost|markup|raw_units|token_count|stripe_customer_id|payment_intent_id/i);
     await expect(getCustomerInvoiceDetail(context(teamManagerId), `stripe:${row.id}`,
       { prisma: db.prisma })).rejects.toMatchObject({ statusCode: 403 });
-    expect((await listCustomerInvoices(context(), { chargeMonth: '2026-10' },
-      { prisma: db.prisma })).invoices.some((item) => item.invoice_id === `stripe:${row.id}`))
-      .toBe(true);
+    for (const zone of ['UTC', 'Europe/London', 'America/New_York', 'Asia/Kathmandu']) {
+      await db.prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT set_config('TimeZone', ${zone}, true)`;
+        for (const [month, present] of [['2026-09', false], ['2026-10', true]] as const) {
+          const page = await listCustomerInvoices(context(), { chargeMonth: month },
+            { prisma: tx as unknown as PrismaClient });
+          expect(page.invoices.some((item) => item.invoice_id === `stripe:${row.id}`), zone).toBe(present);
+        }
+      });
+    }
     expect(() => projectStripeCustomerInvoiceSummary({ ...row,
       lines: [{ ...row.lines[0]!, serviceIdentifier: 'another-product' }] }, product, serviceId))
       .toThrow('BILLING_CUSTOMER_STRIPE_INVOICE_SOURCE_UNPROVEN');

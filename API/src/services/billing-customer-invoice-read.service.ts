@@ -104,14 +104,20 @@ async function stripePaymentMonthKeys(prisma: PrismaClient, params: {
     (invoice.team_id = ${params.teamId} OR invoice.team_id IS NULL)` : Prisma.sql`
     invoice.team_id = ${params.teamId}`;
   const cursor = params.cursor ? params.cursor.kind === 'stripe' ? Prisma.sql`
-    HAVING MAX(cash.paid_at) < ${new Date(params.cursor.at)} OR
-      (MAX(cash.paid_at) = ${new Date(params.cursor.at)} AND cash.invoice_id < ${params.cursor.id})`
-    : Prisma.sql`HAVING MAX(cash.paid_at) <= ${new Date(params.cursor.at)}` : Prisma.empty;
+    HAVING MAX(cash.paid_at) < (${new Date(params.cursor.at)}::timestamptz AT TIME ZONE 'UTC') OR
+      (MAX(cash.paid_at) = (${new Date(params.cursor.at)}::timestamptz AT TIME ZONE 'UTC')
+        AND cash.invoice_id < ${params.cursor.id})`
+    : Prisma.sql`HAVING MAX(cash.paid_at) <=
+      (${new Date(params.cursor.at)}::timestamptz AT TIME ZONE 'UTC')` : Prisma.empty;
+  // Prisma binds Date as timestamptz, while paid_at stores a UTC timestamp.
+  // Convert the parameters explicitly so session time zones cannot move cash
+  // across a month boundary or make cursor comparisons omit/repeat an invoice.
   return prisma.$queryRaw<Array<{ invoiceId: string; at: Date }>>(Prisma.sql`
     SELECT cash.invoice_id AS "invoiceId", MAX(cash.paid_at) AS "at"
     FROM billing_stripe_payment_invoice_cash_payments cash
     JOIN billing_stripe_payment_invoices invoice ON invoice.id = cash.invoice_id
-    WHERE cash.paid_at >= ${params.start} AND cash.paid_at < ${params.end}
+    WHERE cash.paid_at >= (${params.start}::timestamptz AT TIME ZONE 'UTC')
+      AND cash.paid_at < (${params.end}::timestamptz AT TIME ZONE 'UTC')
       AND invoice.org_id = ${params.orgId} AND ${scope}
       AND EXISTS (SELECT 1 FROM billing_stripe_payment_invoice_lines line
         WHERE line.invoice_id = invoice.id AND line.service_id = ${params.serviceId}
