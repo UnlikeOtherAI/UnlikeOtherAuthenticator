@@ -183,13 +183,13 @@ function validateTariffFields(
       message: 'Free and at-cost tariffs must use 0% markup.',
     });
   }
-  if (value.mode === 'free' &&
-    (minorAmount !== '0' || value.collectionMode !== 'none' ||
-      value.usagePaymentMode !== 'pay_as_you_go')) {
+  const paidSeats = value.monthlyChargeBasis === 'per_seat' && BigInt(minorAmount) > 0n && value.collectionMode !== 'none';
+  if (value.mode === 'free' && (value.usagePaymentMode !== 'pay_as_you_go' ||
+    (!paidSeats && (minorAmount !== '0' || value.collectionMode !== 'none')))) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ['mode'],
-      message: 'Free tariffs must have no subscription fee, prepaid usage, or payment collection.',
+      message: 'Free AI usage requires pay-as-you-go usage at 0% markup. Enable collection only for a paid seat price.',
     });
   }
   if (value.monthlyChargeBasis === 'per_seat' &&

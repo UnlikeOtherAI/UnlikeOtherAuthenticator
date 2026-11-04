@@ -28,6 +28,13 @@ describe('billing tariff operator form', () => {
       .toBe(false);
   });
 
+  it('allows an operator to waive AI usage while charging for each seat', () => {
+    const freeUsage = { ...standard, mode: 'free', markupPercent: '0', usagePaymentMode: 'pay_as_you_go',
+      collectionMode: 'stripe', monthlyAmount: '2.99' };
+    expect(BillingTariffFormSchema.safeParse(freeUsage).success).toBe(true);
+    expect(BillingTariffFormSchema.safeParse({ ...freeUsage, collectionMode: 'none' }).success).toBe(false);
+  });
+
   it('rejects excess money precision and prepaid free terms', () => {
     expect(BillingTariffFormSchema.safeParse({
       ...standard, monthlyAmount: '20.001',
