@@ -153,6 +153,26 @@ describe.skipIf(!process.env.DATABASE_URL)('native account PKCE and durable favo
     await expect(app.injectWS(path + '/events?userId=other', { headers: headers() })).rejects.toThrow();
   });
 
+  it('closes a revoked stream before sending another settings value', async () => {
+    const subject = await handle.prisma.user.create({ data: { email: 'stream-revocation@example.com', userKey: 'stream-revocation@example.com' } });
+    const access = await signMcpAccessToken({ subject: subject.id, email: subject.email, domain, clientId: clientID,
+      credentialEpoch: 0, role: 'user', resource: issuer, issuer, ttlSeconds: 600, scope });
+    const replica = await createApp();
+    const address = await replica.listen({ port: 0, host: '127.0.0.1' });
+    const socket = new WebSocket(address.replace('http:', 'ws:') + path + '/events', { headers: headers(access) });
+    const frames: unknown[] = [];
+    socket.on('message', data => frames.push(JSON.parse(data.toString())));
+    try {
+      await new Promise<void>((resolve, reject) => { socket.once('open', resolve); socket.once('error', reject); });
+      await expect.poll(() => frames.length).toBe(1);
+      const closed = new Promise<number>(resolve => socket.once('close', resolve));
+      await handle.prisma.user.update({ where: { id: subject.id }, data: { tokenVersion: { increment: 1 } } });
+      await handle.prisma.userSetting.create({ data: { userId: subject.id, namespace: 'browser', key: 'bookmarks', value: ['after revocation'] } });
+      expect(await closed).toBe(1008);
+      expect(frames).toHaveLength(1);
+    } finally { socket.terminate(); await replica.close(); }
+  });
+
   it('rejects scope escalation, other token classes, wrong audience, missing epoch and cross-user reads', async () => {
     const claims = { subject: userID, email: credentials.email, domain, clientId: clientID,
       credentialEpoch: 0, role: 'user' as const, resource: issuer, issuer, ttlSeconds: 600, scope };
