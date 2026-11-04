@@ -47,6 +47,14 @@ populate its card pointer or authorize a later credit purchase. Other products
 retain their existing Checkout policy. Recovery reuses an existing Checkout
 without rewriting the terms the customer already started.
 
+The requested purchase matrix exercises 5, 10, 20, 100 and 500 in USD, EUR
+and GBP against real PostgreSQL. It creates fixture offers, selects them
+through UOA, opens each Checkout, rejects a one-minor-unit short payment,
+then delivers the correct payment twice. The balance must change exactly
+once, the invoice source must retain the purchase currency, and existing
+reload consent must stay unchanged. Stripe, actor and FX inputs are fixtures;
+this evaluation neither publishes those offers nor verifies a hosted webhook.
+
 ## Status and ownership
 
 UOA is the canonical commercial control plane and customer billing system of
