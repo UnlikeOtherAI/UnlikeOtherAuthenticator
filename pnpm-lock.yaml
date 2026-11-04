@@ -12,7 +12,7 @@ overrides:
   deepmerge-ts@<8.0.0: ^8.0.1
   fast-uri: ^3.1.6
   fast-xml-builder: ^1.1.7
-  follow-redirects: ^1.16.1
+  follow-redirects: ^1.16.2
   form-data: ^4.0.6
   handlebars: ^4.7.9
   js-yaml@>=4.0.0 <4.3.0: 4.3.0
@@ -21,8 +21,8 @@ overrides:
   undici: ^6.29.1
   vite: ^6.4.4
   ws: ^7.5.11
-  '@fastify/websocket>ws': ^8.18.3
-  '@uoa/api>ws': 8.18.3
+  '@fastify/websocket>ws': ^8.21.0
+  '@uoa/api>ws': 8.21.0
   browserslist: '>=4.28.7'
   '@fastify/busboy': ^3.2.1
   tinypool@<2.1.2: 2.1.2
@@ -193,8 +193,8 @@ importers:
         specifier: ^3.2.6
         version: 3.2.6(@types/debug@4.1.13)(@types/node@22.19.17)(happy-dom@21.0.4)(jiti@2.7.0)(jsdom@30.0.1)(lightningcss@1.32.0)(tsx@4.21.0)
       ws:
-        specifier: 8.18.3
-        version: 8.18.3
+        specifier: 8.21.0
+        version: 8.21.0
       xml-crypto:
         specifier: ^6.4.0
         version: 6.4.0
@@ -2476,8 +2476,8 @@ packages:
   flatted@3.4.2:
     resolution: {integrity: sha512-PjDse7RzhcPkIJwy5t7KPWQSZ9cAbzQXcafsetQoD7sOJRQlGikNbx7yZp2OotDnJyrDcbyRq3Ttb18iYOqkxA==}
 
-  follow-redirects@1.16.1:
-    resolution: {integrity: sha512-FNvFGzoMLWmE6Yj9spb/zjd7yiNCHiAW9/Tg9CXrQ8wuu32HtlJOwWO11OJafl5FfY3DxTdQ0vj42zU1kvv5jg==}
+  follow-redirects@1.16.2:
+    resolution: {integrity: sha512-/kVP2U8z596Ia0gwFrwyIeo74ta5aVmSeU1FfAUMAmcEP5EP7zydmag3SLiN64NaRKef3lxsq7i/g7ltJQDGow==}
     engines: {node: '>=4.0'}
     peerDependencies:
       debug: '*'
@@ -3655,8 +3655,8 @@ packages:
       utf-8-validate:
         optional: true
 
-  ws@8.18.3:
-    resolution: {integrity: sha512-PEIGCY5tSlUt50cqyMXfCzX+oOPqN0vuGqWzbcJ2xvnkzkq46oOpz7dQaTDBdfICb4N14+GARUDw2XV2N4tvzg==}
+  ws@8.21.0:
+    resolution: {integrity: sha512-Vsp28b7DRcimFQvrqu2Wek3z1iYxDCWqHYB8Qsnk/S4RfaCQzPGPyBNuVjJV3cd6UiKtUtp6sNM77gWvzcCH+g==}
     engines: {node: '>=10.0.0'}
     peerDependencies:
       bufferutil: ^4.0.1
@@ -4524,7 +4524,7 @@ snapshots:
     dependencies:
       duplexify: 4.1.3
       fastify-plugin: 6.0.0
-      ws: 8.18.3
+      ws: 8.21.0
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
@@ -5644,7 +5644,7 @@ snapshots:
 
   axios@1.20.0:
     dependencies:
-      follow-redirects: 1.16.1
+      follow-redirects: 1.16.2
       form-data: 4.0.6
       https-proxy-agent: 5.0.1
       proxy-from-env: 2.1.0
@@ -6150,7 +6150,7 @@ snapshots:
 
   flatted@3.4.2: {}
 
-  follow-redirects@1.16.1: {}
+  follow-redirects@1.16.2: {}
 
   form-data@4.0.6:
     dependencies:
@@ -7286,7 +7286,7 @@ snapshots:
 
   ws@7.5.11: {}
 
-  ws@8.18.3: {}
+  ws@8.21.0: {}
 
   xml-crypto@6.4.0:
     dependencies:
