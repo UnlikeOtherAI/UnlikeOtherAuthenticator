@@ -42,4 +42,5 @@ export type ThemeClassNames = {
   title: string;
   buttonPrimary: string;
   buttonSecondary: string;
+  buttonSecondaryIcon: string;
 };

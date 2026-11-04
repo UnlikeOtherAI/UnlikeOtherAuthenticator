@@ -141,7 +141,7 @@ PopupContainer
 
 - **`/ui`** — Primitive building blocks. Button, Card, Input, etc. Styled entirely from theme config via Tailwind classes.
 - **`/form`** — Auth-specific form components. Each form handles its own input state and validation. Forms call the API client, they don't manage auth flow.
-- **`/social`** — Social login button rendering. Reads social provider names from `enabled_auth_methods` to decide what to show.
+- **`/form/SocialButtons.tsx`** — Shared social sign-in controls for login and registration, above the email/password form. Reads provider names from `enabled_auth_methods`. Logo-only, rounded square links wrap at three per row; an incomplete final row is centered. Theme colors, button radius and focus treatment come from the shared secondary-button classes. Translated provider names remain available to assistive technology and in tooltips. OAuth URL construction and the native client's Google-only restriction remain in this component.
 - **`/layout`** — Structural wrappers. AuthLayout applies the theme card, logo, and language selector. PopupContainer manages the popup lifecycle, including forced 2FA setup and 2FA verification branches.
 - **`/twofactor`** — 2FA-specific components. QR code display, setup/enrollment flow, and login verification.
 
