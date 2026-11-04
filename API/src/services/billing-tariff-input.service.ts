@@ -145,12 +145,14 @@ export function normalizeTariffInput(input: TariffInput): NormalizedTariffInput 
   const seatChargeTiming = monthlyChargeBasis === BillingMonthlyChargeBasis.PER_SEAT
     ? toSeatChargeTiming(input.seatChargeTiming) : null;
   const usagePaymentMode = toUsagePaymentMode(input.usagePaymentMode);
+  const paidSeats = monthlyChargeBasis === BillingMonthlyChargeBasis.PER_SEAT &&
+    monthlyAmountMinor > 0n && collectionMode !== BillingCollectionMode.NONE;
   if (
     ((mode === BillingTariffMode.FREE || mode === BillingTariffMode.AT_COST) &&
       markupBps !== 0) ||
     (mode === BillingTariffMode.FREE &&
-      (monthlyAmountMinor !== 0n || collectionMode !== BillingCollectionMode.NONE ||
-        usagePaymentMode !== BillingUsagePaymentMode.PAY_AS_YOU_GO))
+      (usagePaymentMode !== BillingUsagePaymentMode.PAY_AS_YOU_GO ||
+        (!paidSeats && (monthlyAmountMinor !== 0n || collectionMode !== BillingCollectionMode.NONE))))
   ) {
     throw new AppError('BAD_REQUEST', 400, 'INVALID_TARIFF_MODE_VALUES');
   }

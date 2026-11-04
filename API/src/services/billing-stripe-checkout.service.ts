@@ -132,7 +132,7 @@ export async function createStripeCheckoutSession(
   });
   if (
     payload.tariff.collection_mode !== 'stripe' ||
-    payload.tariff.mode === 'free' ||
+    (payload.tariff.mode === 'free' && payload.tariff.monthly_subscription.amount_minor === '0') ||
     !payload.tariff.payment_collection_enabled
   ) {
     throw new AppError('BAD_REQUEST', 409, 'STRIPE_COLLECTION_NOT_ENABLED');
@@ -213,7 +213,7 @@ export async function createStripeCheckoutSession(
   if (
     !details.tariff ||
     details.tariff.collectionMode !== BillingCollectionMode.STRIPE ||
-    details.tariff.mode === BillingTariffMode.FREE ||
+    (details.tariff.mode === BillingTariffMode.FREE && details.tariff.monthlyAmountMinor === 0n) ||
     details.tariff.currency !== payload.tariff.monthly_subscription.currency ||
     details.tariff.monthlyAmountMinor.toString() !==
       payload.tariff.monthly_subscription.amount_minor

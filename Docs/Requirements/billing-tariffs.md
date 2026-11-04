@@ -1673,6 +1673,12 @@ balance change:
   (every earlier purchase was USD), consumed oldest-first by what was spent;
   credits no grant explains open one USD lot, and a negative balance is debt.
 
+For an internal organisation or team, operators can choose **Free AI usage**
+with a positive per-seat price and Stripe or manual collection. Set usage to
+pay as you go and markup to zero. Usage records retain their quantities and
+rate to zero. To waive seats alone, give the automatic seat tariff a zero
+monthly amount and keep the chosen paid usage mode.
+
 For Nessie's one-time storefront, run `billing:provision-stripe-catalog` with
 `--nessie-top-ups` and the existing account, mode and dry-run/apply arguments.
 The operation verifies the bound shared-credit product against Stripe and

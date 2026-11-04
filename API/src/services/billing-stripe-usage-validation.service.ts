@@ -144,7 +144,7 @@ export function assertStripeUsageSubscription(
     !subscription.service.active ||
     subscription.tariff.serviceId !== subscription.serviceId ||
     subscription.tariff.collectionMode !== BillingCollectionMode.STRIPE ||
-    subscription.tariff.mode === BillingTariffMode.FREE ||
+    (subscription.tariff.mode === BillingTariffMode.FREE && subscription.tariff.monthlyAmountMinor === 0n) ||
     !subscription.customer.stripeCustomerId ||
     subscription.account.livemode !== subscription.livemode ||
     subscription.customer.accountId !== subscription.accountId ||

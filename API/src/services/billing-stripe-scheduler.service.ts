@@ -89,7 +89,7 @@ export async function runStripeUsageExportCycle(deps?: {
       service: { active: true },
       tariff: {
         collectionMode: BillingCollectionMode.STRIPE,
-        mode: { not: BillingTariffMode.FREE },
+        OR: [{ mode: { not: BillingTariffMode.FREE } }, { monthlyAmountMinor: { gt: 0n } }],
       },
     },
     select: {
