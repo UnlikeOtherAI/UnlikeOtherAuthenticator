@@ -183,7 +183,7 @@ function openTopUpSession(
 }
 
 describe('UOA credit funding mutation services', () => {
-  it('persists fixed top-up intent before creating exact-price Stripe Checkout', async () => {
+  it.each(['deepwater', 'nessie'])('persists %s top-up intent before exact-price Checkout', async (product) => {
     const state = baseContext();
     const order: string[] = [];
     state.context.authorizeAction = vi.fn(async () => {
@@ -218,7 +218,8 @@ describe('UOA credit funding mutation services', () => {
     });
 
     const result = await createBillingCreditTopUpCheckout(
-      { request: { ...request, offerId: offer.id }, actorToken: 'actor', credential },
+      { request: { ...request, product, offerId: offer.id }, actorToken: 'actor',
+        credential: { ...credential, service: { ...credential.service, identifier: product } } },
       {
         prisma,
         now: () => now,
@@ -252,6 +253,9 @@ describe('UOA credit funding mutation services', () => {
       },
     });
     expect(stripeOptions.idempotencyKey).toBe('uoa:acct_uoa:test:credit:top_up:checkout_topup_1');
+    expect(input.payment_intent_data.setup_future_usage).toBe(product === 'nessie' ? 'off_session' : undefined);
+    expect(state.context.creditAccount.autoTopUpState).toBe(BillingCreditAutoTopUpState.DISABLED);
+    expect(state.context.creditAccount.autoTopUpConsentRevisionId).toBeNull();
     expect(update).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: 'OPEN' }) }),
     );

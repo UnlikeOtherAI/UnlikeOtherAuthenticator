@@ -335,7 +335,13 @@ export async function createBillingCreditTopUpCheckout(
       billing_address_collection: 'required',
       line_items: [{ price: selection.catalog.stripePriceId as string, quantity: 1 }],
       metadata,
-      payment_intent_data: { metadata },
+      payment_intent_data: {
+        metadata,
+        // Checkout discloses card retention. UOA's separate reload consent is
+        // still required before any automatic credit purchase can be attempted.
+        ...(params.credential.service.identifier === 'nessie'
+          ? { setup_future_usage: 'off_session' as const } : {}),
+      },
     },
     {
       idempotencyKey: creditCheckoutIdempotencyKey(context.account, 'top_up', checkout.id),

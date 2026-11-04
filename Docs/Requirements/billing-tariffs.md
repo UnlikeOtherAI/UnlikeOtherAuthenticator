@@ -39,6 +39,14 @@ amount with prepaid usage still rates provider usage and requires funding;
 it is not the `FREE` tariff mode. These evaluations verify tariff decisions
 and rating, not hosted assignment, invitation or collection flows.
 
+New Nessie credit-purchase Checkouts request `setup_future_usage=off_session`.
+Stripe discloses that the payment card will be retained for future payments
+and attaches the successfully paid method to the same scoped Stripe customer.
+This does not create UOA automatic-reload consent, change its generation,
+populate its card pointer or authorize a later credit purchase. Other products
+retain their existing Checkout policy. Recovery reuses an existing Checkout
+without rewriting the terms the customer already started.
+
 ## Status and ownership
 
 UOA is the canonical commercial control plane and customer billing system of
