@@ -153,6 +153,35 @@ describe.skipIf(!process.env.DATABASE_URL)('native account PKCE and durable favo
     await expect(app.injectWS(path + '/events?userId=other', { headers: headers() })).rejects.toThrow();
   });
 
+  it('bounds subscriptions per subject and releases admission after disconnect', async () => {
+    const replica = await createApp();
+    const address = await replica.listen({ port: 0, host: '127.0.0.1' });
+    const url = address.replace('http:', 'ws:') + path + '/events';
+    const sockets: WebSocket[] = [];
+    const connect = async () => {
+      const socket = new WebSocket(url, { headers: headers() });
+      sockets.push(socket);
+      await new Promise<void>((resolve, reject) => {
+        socket.once('message', () => resolve()); socket.once('error', reject);
+      });
+      return socket;
+    };
+    try {
+      await Promise.all(Array.from({ length: 8 }, connect));
+      const denied = new WebSocket(url, { headers: headers() });
+      sockets.push(denied);
+      expect(await new Promise<number>((resolve, reject) => {
+        denied.once('unexpected-response', (_request, response) => { response.resume(); resolve(response.statusCode!); });
+        denied.once('open', () => reject(new Error('Admission exceeded')));
+        denied.once('error', () => {});
+      })).toBe(503);
+      const first = sockets[0]!;
+      await new Promise<void>(resolve => { first.once('close', () => resolve()); first.close(); });
+      await connect();
+      expect((await app.inject({ method: 'GET', url: '/oauth/me', headers: headers() })).statusCode).toBe(200);
+    } finally { sockets.forEach(socket => socket.terminate()); await replica.close(); }
+  });
+
   it('closes a revoked stream before sending another settings value', async () => {
     const subject = await handle.prisma.user.create({ data: { email: 'stream-revocation@example.com', userKey: 'stream-revocation@example.com' } });
     const access = await signMcpAccessToken({ subject: subject.id, email: subject.email, domain, clientId: clientID,

@@ -1,3 +1,6 @@
+SET lock_timeout = '5s';
+SET statement_timeout = '120s';
+
 -- Commit-scoped hints for every settings writer. Values never enter NOTIFY.
 CREATE OR REPLACE FUNCTION notify_user_setting_change() RETURNS trigger
 LANGUAGE plpgsql AS $$
