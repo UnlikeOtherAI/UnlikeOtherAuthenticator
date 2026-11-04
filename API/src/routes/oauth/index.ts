@@ -1,3 +1,4 @@
+import { registerSettingsEvents } from './settings-events.js';
 import { registerOAuthLifecycleStatus } from './lifecycle-status.js';
 import type { FastifyInstance } from 'fastify';
 import { registerNativeAppIcon } from './native-app-icon.js';
@@ -20,6 +21,7 @@ export function registerOAuthRoutes(app: FastifyInstance): void {
   registerNativeAppIcon(app);
   registerPublicSocialRoutes(app);
   registerOAuthAccountRoutes(app);
+  registerSettingsEvents(app);
   registerKelpieConnectRoutes(app);
   registerKelpiePairRoutes(app);
   registerOAuthMetadataRoute(app);

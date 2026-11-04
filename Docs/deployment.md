@@ -303,3 +303,9 @@ remains disabled unless the explicit evidence policy in
 [Voice prepaid](Requirements/voice-pricing-and-prepaid.md) is configured. No values or
 provider resources are seeded. Provision VOICE_RUNTIME only for the consuming backend.
 Receipt/release recovery remains available when new Voice admission is disabled.
+
+### Settings WebSocket capacity
+
+The settings stream adds at most one lazy PostgreSQL LISTEN session per active API instance, outside the Prisma application/admin pools. Account for rolling-deployment overlap. It uses DATABASE_ADMIN_URL (or DATABASE_URL when no admin URL is configured), removes Prisma-only connection parameters and preserves Cloud SQL socket routing. Apply migration `20261104160000_settings_change_notifications` before serving subscriptions. PostgreSQL NOTIFY carries only user ID, namespace and key; consumers always reauthorize and read the row.
+
+The implementation caps subscriptions at 32 per instance and serializes their reads, reserving capacity under the observed Cloud Run concurrency of 80. The observed service timeout is 300 seconds; streams recycle at 240–280 seconds with client jitter. If those deployment limits change, reassess admission and recycling together. Existing HTTP settings operations continue working when subscriptions are unavailable; clients reconnect with bounded backoff and may explicitly refresh. No Redis or extra durable service is required.

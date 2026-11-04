@@ -99,6 +99,38 @@ describe.skipIf(!process.env.DATABASE_URL)('native account PKCE and durable favo
     expect((await app.inject({ method: 'PUT', url: path, headers: headers(), payload: { value: [] } })).statusCode).toBe(428);
   });
 
+  it('streams a committed change across app instances, then a delta and deletion', async () => {
+    const replica = await createApp();
+    await replica.ready();
+    const socket = await replica.injectWS(path + '/events', { headers: headers() });
+    const frames: Record<string, unknown>[] = [];
+    socket.on('message', data => frames.push(JSON.parse(data.toString())));
+    try {
+      await expect.poll(() => frames.length).toBe(1);
+      expect(frames[0]).toMatchObject({ type: 'settings.snapshot', namespace: 'browser', key: 'bookmarks' });
+      const value = Array.from({ length: 100 }, (_, id) => ({ id, title: `Page ${id}`, url: 'https://example.com' }));
+      let read = await app.inject({ method: 'GET', url: path, headers: headers() });
+      const save = await app.inject({ method: 'PUT', url: path, headers: { ...headers(), 'if-match': read.headers.etag! }, payload: { value } });
+      expect(save.statusCode).toBe(200);
+      await expect.poll(() => frames.length).toBe(2);
+      expect(frames[1]).toMatchObject({ type: 'settings.delta', baseVersion: frames[0]!.version, version: save.headers.etag });
+      value[50]!.title = 'Renamed';
+      read = await app.inject({ method: 'GET', url: path, headers: headers() });
+      await app.inject({ method: 'PUT', url: path, headers: { ...headers(), 'if-match': read.headers.etag! }, payload: { value } });
+      await expect.poll(() => frames.length).toBe(3);
+      expect(frames[2]!.operation).toMatchObject({ type: 'splice', index: 50, deleteCount: 1 });
+      // A different writer deleting the namespace still fires the database trigger.
+      await handle.prisma.userSetting.deleteMany({ where: { userId: userID, namespace: 'browser' } });
+      await expect.poll(() => frames.length).toBe(4);
+      expect(frames[3]!.operation).toEqual({ type: 'replace', value: null });
+    } finally { socket.terminate(); await replica.close(); }
+  });
+
+  it('refuses unauthenticated streams and user-selection query parameters', async () => {
+    await expect(app.injectWS(path + '/events')).rejects.toThrow();
+    await expect(app.injectWS(path + '/events?userId=other', { headers: headers() })).rejects.toThrow();
+  });
+
   it('rejects scope escalation, other token classes, wrong audience, missing epoch and cross-user reads', async () => {
     const claims = { subject: userID, email: credentials.email, domain, clientId: clientID,
       credentialEpoch: 0, role: 'user' as const, resource: issuer, issuer, ttlSeconds: 600, scope };

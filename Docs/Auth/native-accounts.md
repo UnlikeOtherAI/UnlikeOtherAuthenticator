@@ -137,3 +137,7 @@ UOA account reads/writes, native refresh and Kelpie ticket issue/validation rech
 
 
 Expired browser OAuth transactions are removed by the bounded enterprise transient-maintenance sweep (at most 200 per pass), rather than an unbounded delete on the next sign-in. Managed-account mailbox/social admission also applies to historical signed continuations advertising those methods even when their original proof is absent below the legacy floor.
+
+### Immediate personal-setting updates
+
+Native accounts with `settings.read` can use `/oauth/me/settings/:namespace/:key/events` for authenticated snapshot/delta WebSocket updates. This is reusable for all opaque personal settings, including Kelpie favourites. It adds no consent scope or product-specific identity store. See [user settings](user-settings.md#live-subscriptions-protocol-version-1) for version fencing, replacement/splice operations, reconnect and limits. A native app should pause its subscription while queued conditional writes complete, then reconnect for a fresh snapshot, or otherwise fence in-flight HTTP responses against newer events.

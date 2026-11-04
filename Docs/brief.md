@@ -3442,3 +3442,7 @@ links to that person's Security panel. A superuser can decline or approve with a
 new future expiry, or directly extend/remove an expiry for an account. Decisions
 and direct edits are audited. A correctly verified password may identify the
 account as expired to its owner; invalid credentials remain indistinguishable.
+
+### Personal settings live updates (2026-11-04)
+
+Authenticated native clients can subscribe to reusable personal-setting snapshot/delta streams. The authoritative UOA settings rows remain the only durable store. Committed changes notify all serving instances through PostgreSQL; clients apply version-fenced root-array edits or replacements and recover by obtaining a fresh snapshot. See `Docs/Auth/user-settings.md` for the protocol and `Docs/deployment.md` for connection limits.
