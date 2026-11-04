@@ -215,6 +215,7 @@ This service is **stateless where possible**, standards-based, and API-first.
 
 - OAuth UI is rendered server-side
 - Fully Tailwind-based
+- Login and registration show enabled social providers above the form as logo-only rounded square buttons, three per row with any incomplete final row centered. Buttons retain translated accessible names and use the client's theme colors and button radius.
 
 ### Customizable
 

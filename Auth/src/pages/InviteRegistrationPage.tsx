@@ -17,6 +17,7 @@ export function InviteRegistrationPage(): React.JSX.Element {
   return (
     <div>
       <h1 className={`text-balance ${classNames.title}`}>{t('auth.invite.title')}</h1>
+      <SocialButtons showDivider={showEmailPassword} />
       <div className="mt-6">
         <Input
           name="email"
@@ -29,9 +30,6 @@ export function InviteRegistrationPage(): React.JSX.Element {
         />
       </div>
       {showEmailPassword ? <InviteRegistrationForm /> : null}
-      <div className="mt-6">
-        <SocialButtons showDivider={showEmailPassword} />
-      </div>
     </div>
   );
 }
