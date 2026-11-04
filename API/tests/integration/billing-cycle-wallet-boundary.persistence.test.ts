@@ -52,8 +52,18 @@ describe.skipIf(!enabled)('funded wallet UTC boundary proof', () => {
   const october = { startsAt: new Date('2026-10-01T00:00:00.000Z'),
     endsAt: new Date('2026-11-01T00:00:00.000Z') };
   async function boundary() {
-    return readCycleWalletBoundary(db.prisma, { orgId, teamId,
-      payer: BillingAssignmentScope.TEAM, ...october });
+    let canonical;
+    for (const zone of ['UTC', 'Europe/London', 'America/New_York', 'Asia/Kathmandu']) {
+      const current = await db.prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT set_config('TimeZone', ${zone}, true)`;
+        return readCycleWalletBoundary(tx, { orgId, teamId,
+          payer: BillingAssignmentScope.TEAM, ...october });
+      });
+      canonical ??= current;
+      expect(current, zone).toEqual(canonical);
+    }
+    if (!canonical) throw new Error('UTC_BOUNDARY_NOT_READ');
+    return canonical;
   }
 
   // This fixture simulates already verified immutable funding entries. Trigger
@@ -75,7 +85,8 @@ describe.skipIf(!enabled)('funded wallet UTC boundary proof', () => {
         VALUES (${randomUUID()}, ${creditAccountId},
           ${direction}::"BillingCreditEntryDirection", 'ADJUSTMENT'::"BillingCreditEntryKind",
           ${amount}, ${next}, 'USD', ${randomUUID()},
-          'credit_admin_adjustment', ${randomUUID()}, ${occurredAt})`);
+          'credit_admin_adjustment', ${randomUUID()},
+          (${occurredAt}::timestamptz AT TIME ZONE 'UTC'))`);
       await tx.billingCreditAccount.update({ where: { id: creditAccountId },
         data: { balanceMicrocredits: next } });
     });
@@ -84,17 +95,22 @@ describe.skipIf(!enabled)('funded wallet UTC boundary proof', () => {
   it('freezes a month by effect time and revises only for late backdated entries', async () => {
     expect(await boundary()).toMatchObject({ status: 'confirmed',
       opening_microcredits: '0', closing_microcredits: '0' });
+    await importedEntry(new Date('2026-09-30T23:59:59.000Z'), 'CREDIT', 100n);
+    await importedEntry(new Date('2026-10-01T00:00:00.000Z'), 'CREDIT', 50n);
+    await importedEntry(new Date('2026-11-01T00:00:00.000Z'), 'CREDIT', 70n);
+    expect(await boundary()).toMatchObject({ status: 'confirmed',
+      opening_microcredits: '100', closing_microcredits: '150', entry_count: '2' });
     await importedEntry(new Date('2026-10-02T00:00:00.000Z'), 'CREDIT', 100n);
     await importedEntry(new Date('2026-10-20T00:00:00.000Z'), 'DEBIT', 10n);
     const first = await boundary();
     expect(first).toMatchObject({ status: 'confirmed',
-      opening_microcredits: '0', closing_microcredits: '90', entry_count: '2' });
+      opening_microcredits: '100', closing_microcredits: '240', entry_count: '4' });
     await importedEntry(new Date('2026-11-15T00:00:00.000Z'), 'CREDIT', 50n);
     expect((await boundary()).fingerprint).toBe(first.fingerprint);
     await importedEntry(new Date('2026-10-31T23:59:59.000Z'), 'DEBIT', 10n);
     const revised = await boundary();
     expect(revised).toMatchObject({ status: 'confirmed',
-      opening_microcredits: '0', closing_microcredits: '80', entry_count: '3' });
+      opening_microcredits: '100', closing_microcredits: '230', entry_count: '5' });
     expect(revised.fingerprint).not.toBe(first.fingerprint);
     expect(await readCycleWalletBoundary(db.prisma, { orgId, teamId,
       payer: BillingAssignmentScope.ORGANISATION, ...october }))

@@ -119,8 +119,9 @@ export async function budgetScopeTotals(tx: Prisma.TransactionClient,
         ON legacy.dispatch_id = s.dispatch_id
       WHERE s.product = ${scope.product} AND s.org_id = ${scope.orgId}
         AND s.scope_type = ${scope.scopeType} AND s.scope_id = ${scope.scopeId}
-        AND s.occurred_at >= ${window.start}
-        ${window.end ? Prisma.sql`AND s.occurred_at < ${window.end}` : Prisma.empty}`);
+        AND s.occurred_at >= (${window.start}::timestamptz AT TIME ZONE 'UTC')
+        ${window.end ? Prisma.sql`AND s.occurred_at <
+          (${window.end}::timestamptz AT TIME ZONE 'UTC')` : Prisma.empty}`);
   return { ...window, spent: rows[0]?.spent ?? 0n, held: rows[0]?.held ?? 0n,
     unknown: rows[0]?.unknown ?? 0n, historicalComplete };
 }

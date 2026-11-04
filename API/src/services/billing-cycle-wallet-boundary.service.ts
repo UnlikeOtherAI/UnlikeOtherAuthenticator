@@ -53,13 +53,14 @@ export async function readCycleWalletBoundary(reader: Reader,
   if (!account) throw new Error('Billing wallet lookup invariant');
   const [row] = await reader.$queryRaw<Array<{ entry_count: bigint;
     all_balance: string; opening_balance: string; closing_balance: string }>>(Prisma.sql`
-    SELECT count(*) FILTER (WHERE occurred_at < ${params.endsAt})::bigint AS entry_count,
+    SELECT count(*) FILTER (WHERE occurred_at <
+      (${params.endsAt}::timestamptz AT TIME ZONE 'UTC'))::bigint AS entry_count,
       coalesce(sum(CASE WHEN direction = 'CREDIT' THEN amount_microcredits::numeric
         ELSE -amount_microcredits::numeric END), 0)::text AS all_balance,
-      coalesce(sum(CASE WHEN occurred_at < ${params.startsAt}
+      coalesce(sum(CASE WHEN occurred_at < (${params.startsAt}::timestamptz AT TIME ZONE 'UTC')
         THEN CASE WHEN direction = 'CREDIT' THEN amount_microcredits::numeric
           ELSE -amount_microcredits::numeric END ELSE 0 END), 0)::text AS opening_balance,
-      coalesce(sum(CASE WHEN occurred_at < ${params.endsAt}
+      coalesce(sum(CASE WHEN occurred_at < (${params.endsAt}::timestamptz AT TIME ZONE 'UTC')
         THEN CASE WHEN direction = 'CREDIT' THEN amount_microcredits::numeric
           ELSE -amount_microcredits::numeric END ELSE 0 END), 0)::text AS closing_balance
     FROM billing_credit_entries WHERE credit_account_id = ${account.id}

@@ -7,6 +7,13 @@ A payment at 00:00 UTC on the first belongs to that new month only. The PostgreS
 invoice persistence evaluation exercises UTC, London, New York and Kathmandu
 sessions, plus partial payments spanning months and single-row pagination.
 
+Wallet opening/closing balances and credit-budget windows use the same explicit
+UTC timestamp boundary. Entries at the start are included; entries exactly at
+the end belong to the next window. Database session timezone must not change
+either the financial statement or how much budget is held. Persistence evals
+cover both offset directions and a fractional-hour timezone. Missing signed
+Ledger history remains a denial even when the local totals are available.
+
 ## Status and ownership
 
 UOA is the canonical commercial control plane and customer billing system of

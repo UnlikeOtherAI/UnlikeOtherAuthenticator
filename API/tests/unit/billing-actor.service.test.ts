@@ -1,4 +1,4 @@
-import { BillingAppKeyPurpose } from '@prisma/client';
+import { BillingAppKeyPurpose, type PrismaClient } from '@prisma/client';
 import { exportJWK, generateKeyPair, SignJWT } from 'jose';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -92,10 +92,32 @@ async function actorToken(
 }
 
 function verify(token: string, endpoint: BillingActorEndpoint = '/billing/v1/effective-tariff') {
-  return verifyBillingActor({ token, credential, endpoint, request }, { now: () => 1_800_000_000 });
+  // Audience/signature cases use a product whose assurance cutover has not
+  // happened. Supply that authority explicitly; never consult a developer DB.
+  const prisma = { enterpriseProductReadiness: { findUnique: async () => null },
+    orgSsoPolicy: { findUnique: async () => null } } as unknown as PrismaClient;
+  return verifyBillingActor({ token, credential, endpoint, request }, { now: () => 1_800_000_000, prisma });
 }
 
 describe('billing actor verification', () => {
+  it('refuses a valid signature when the assurance authority cannot be read', async () => {
+    const prisma = { enterpriseProductReadiness: { findUnique: async () => {
+      throw new Error('fixture authority unavailable');
+    } } } as unknown as PrismaClient;
+    await expect(verifyBillingActor({ token: await actorToken(), credential,
+      endpoint: '/billing/v1/effective-tariff', request }, { now: () => 1_800_000_000, prisma }))
+      .rejects.toMatchObject({ statusCode: 503, message: 'ASSURANCE_AUTHORITY_UNAVAILABLE' });
+  });
+
+  it('applies current organisation SSO policy to an otherwise valid signed actor', async () => {
+    const prisma = { enterpriseProductReadiness: { findUnique: async () => null },
+      orgSsoPolicy: { findUnique: async () => ({ enforcement: 'required_for_all_members' }) },
+    } as unknown as PrismaClient;
+    await expect(verifyBillingActor({ token: await actorToken(), credential,
+      endpoint: '/billing/v1/effective-tariff', request }, { now: () => 1_800_000_000, prisma }))
+      .rejects.toMatchObject({ statusCode: 403, message: 'SSO_TEAM_REAUTH_REQUIRED' });
+  });
+
   it('accepts a short-lived actor bound to the credential and request', async () => {
     const actor = await verify(await actorToken());
     expect(actor).toMatchObject({
