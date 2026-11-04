@@ -70,6 +70,7 @@ export function registerRootRoute(app: FastifyInstance): void {
         sms_admission: '/apps/v1/nessie/phone-profile/sms-admission',
         personal_owner_membership: 'optional owner_subject in service assertion; exact-team ownerActive or owner_inactive',
         prepaid_delivery: '/apps/v1/nessie/phone-profile/call-proof/reserve', caller_id_authentication: false },
+      settings_events: { path: '/oauth/me/settings/:namespace/:key/events', transport: 'WebSocket', scope: 'settings.read', protocol_version: 1, recovery: 'snapshot on reconnect; version-fenced splice or replace deltas' },
       native_apps: { admin: '/admin/apps', registration: '/oauth/register', public_identifier: 'app_id', client_secret_required: false },
       enterprise_sso: { version: 1, settings: '/auth/organisation-access',
         entry: '/sso/:connectionId/start', domain_discovery: false,
