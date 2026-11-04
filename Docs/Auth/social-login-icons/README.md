@@ -1,6 +1,6 @@
 # Social sign-in layout verification
 
-The shared `SocialButtons` component appears above the sign-in and registration forms.
+The shared `SocialButtons` component appears above sign-in, registration and invitation-registration forms.
 It displays 64px square logo links, at most three per row, with each row centered.
 Button colors, radius and keyboard focus styling use the authenticator theme.
 Translated names remain available to screen readers and as hover tooltips.
@@ -13,8 +13,9 @@ authentication or claim to verify a completed provider login.
 
 Only changed screens and relevant remainder-row states are captured: sign-in with
 six providers, sign-in with a single-item or two-item final row, and registration
-with six providers. Registration and Back to sign in were reached through their
-existing buttons.
+with six providers, including invitation registration. Registration and Back to
+sign in were reached through their existing buttons; invitation registration uses
+the invitation-link entry point with a test-only token and email.
 
 Verified on Windows Maxis, headless Microsoft Edge through Playwright, 4 November 2026:
 
@@ -24,6 +25,9 @@ Verified on Windows Maxis, headless Microsoft Edge through Playwright, 4 Novembe
   one-item and two-item remainder rows share the first row's horizontal center.
 - Tab order reaches all six provider links before email. Focus is visible, names
   are accessible, labels are visually hidden, and tooltips name the provider.
+- Invitation registration at desktop and phone widths keeps the invited email
+  read-only, the inviter-provided name editable, and the invitation token on each
+  provider link. Its icon rows appear above the form.
 - Password show/hide, registration/back navigation, provider-link activation and
   browser Back continue to work. Local provider activation uses a test response;
   it does not authenticate a real account.
