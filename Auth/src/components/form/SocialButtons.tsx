@@ -136,7 +136,8 @@ export function SocialButtons(props?: { showDivider?: boolean }): React.JSX.Elem
           );
 
           return (
-            <a key={provider} href={href} className={classNames.buttonSecondaryIcon}
+            <a key={provider} href={href}
+              className={`${classNames.buttonSecondaryIcon} w-[calc((100%_-_1.5rem)/3)] max-w-16 shrink-0`}
               title={`${t('social.continueWith')} ${label}`}>
               <Icon />
               <span className="sr-only">{t('social.continueWith')} {label}</span>

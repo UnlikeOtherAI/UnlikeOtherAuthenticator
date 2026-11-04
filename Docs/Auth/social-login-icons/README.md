@@ -1,13 +1,15 @@
 # Social sign-in layout verification
 
 The shared `SocialButtons` component appears above sign-in, registration and invitation-registration forms.
-It displays 64px square logo links, at most three per row, with each row centered.
+It displays square logo links up to 64px wide, three per row, with each row centered.
+Links shrink together when theme padding leaves less room on a narrow screen.
 Button colors, radius and keyboard focus styling use the authenticator theme.
 Translated names remain available to screen readers and as hover tooltips.
 
 Before screenshots use base revision `49425434153810ba82486e836dc7e979a77f4784`.
 After screenshots use this change's implementation. Both sets use the public Nessie
-theme, English, and matching 1280×1100 or 390×1100 viewports. The local browser
+theme, English, and matching 1280×1100 or 390×1100 viewports. The narrow spacious-theme
+comparison uses a matching 320×900 viewport. The local browser
 bootstrap varies only the enabled-provider count; it does not bypass server
 authentication or claim to verify a completed provider login.
 
@@ -28,6 +30,8 @@ Verified on Windows Maxis, headless Microsoft Edge through Playwright, 4 Novembe
 - Invitation registration at desktop and phone widths keeps the invited email
   read-only, the inviter-provided name editable, and the invitation token on each
   provider link. Its icon rows appear above the form.
+- All three theme densities keep three icons per row at 320px. The spacious
+  theme reduces each icon button to about 53px, preserving square touch targets.
 - Password show/hide, registration/back navigation, provider-link activation and
   browser Back continue to work. Local provider activation uses a test response;
   it does not authenticate a real account.

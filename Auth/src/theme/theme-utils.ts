@@ -370,7 +370,7 @@ function buttonPrimaryClasses(style: ButtonStyle): string {
 function buttonSecondaryClasses(size: 'default' | 'icon' = 'default'): string {
   const base =
     'inline-flex items-center justify-center gap-2 rounded-[var(--uoa-radius-button)] font-medium focus:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--uoa-color-primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--uoa-color-bg)] disabled:opacity-60';
-  const dimensions = size === 'icon' ? 'h-16 w-16 shrink-0 p-0' : 'w-full px-4 py-2.5';
+  const dimensions = size === 'icon' ? 'aspect-square p-0' : 'w-full px-4 py-2.5';
   // Secondary stays neutral regardless of primary style choice.
   return `${base} ${dimensions} border border-[var(--uoa-color-border)] bg-[var(--uoa-color-surface)] text-[var(--uoa-color-text)] hover:opacity-90`;
 }
