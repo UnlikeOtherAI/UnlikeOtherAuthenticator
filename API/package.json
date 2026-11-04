@@ -65,6 +65,7 @@
     "tsx": "^4.19.2",
     "typescript": "^5.7.3",
     "vitest": "^3.2.6",
+    "ws": "8.18.3",
     "xml-crypto": "^6.4.0",
     "xml-encryption": "^3.1.0"
   }
