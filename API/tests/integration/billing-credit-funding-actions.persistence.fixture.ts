@@ -74,7 +74,7 @@ export const optionSelection = {
   },
 };
 
-export async function seedFundingRace(prisma: PrismaClient): Promise<void> {
+export async function seedFundingRace(prisma: PrismaClient, offerKey = 'five-dollar-refill'): Promise<void> {
   await prisma.$transaction(async (tx) => {
     await tx.$executeRawUnsafe('SET LOCAL session_replication_role = replica');
     await tx.user.create({
@@ -167,7 +167,7 @@ export async function seedFundingRace(prisma: PrismaClient): Promise<void> {
         id: ids.offer,
         policyId: ids.policy,
         serviceId: ids.service,
-        key: 'five-dollar-refill',
+        key: offerKey,
         version: 1,
         catalogKey: 'funding-race',
         catalogVersion: 1,

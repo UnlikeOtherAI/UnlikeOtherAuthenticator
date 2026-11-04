@@ -3141,6 +3141,7 @@ model BillingCreditTopUpOffer {
   paymentAmountMinor          BigInt    @map("payment_amount_minor")
   creditsReceivedMicrocredits BigInt    @map("credits_received_microcredits")
   automaticTopUpEligible      Boolean   @default(true) @map("automatic_top_up_eligible")
+  manualPurchaseEnabled       Boolean   @default(true) @map("manual_purchase_enabled")
   active                      Boolean   @default(true)
   deactivatedAt               DateTime? @map("deactivated_at")
   createdByUserId             String?   @map("created_by_user_id")

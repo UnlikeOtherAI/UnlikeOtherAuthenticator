@@ -7,6 +7,7 @@ export type StripeCatalogCliOptions =
   | {
       help: false;
       dryRun: boolean;
+      nessieTopUps?: true;
       stripeAccountId: string;
       livemode: boolean;
     };
@@ -28,6 +29,7 @@ export function parseStripeCatalogCliArgs(args: string[]): StripeCatalogCliOptio
       apply: { type: 'boolean', default: false },
       confirm: { type: 'string' },
       'dry-run': { type: 'boolean', default: false },
+      'nessie-top-ups': { type: 'boolean', default: false },
       help: { type: 'boolean', short: 'h', default: false },
       'stripe-account': { type: 'string' },
       'stripe-mode': { type: 'string' },
@@ -53,6 +55,7 @@ export function parseStripeCatalogCliArgs(args: string[]): StripeCatalogCliOptio
   return {
     help: false,
     dryRun: values['dry-run'],
+    ...(values['nessie-top-ups'] ? { nessieTopUps: true as const } : {}),
     stripeAccountId,
     livemode,
   };

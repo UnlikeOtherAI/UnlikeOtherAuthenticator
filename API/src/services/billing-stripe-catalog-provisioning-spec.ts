@@ -51,7 +51,7 @@ export type CreditTopUpSpec = {
   stripeLookupKey: string;
 };
 
-function creditTopUpSpec(currency: CreditPurchaseCurrency, amount: (typeof TOP_UP_AMOUNTS)[number]): CreditTopUpSpec {
+function creditTopUpSpec(currency: CreditPurchaseCurrency, amount: number): CreditTopUpSpec {
   const code = currency.toLowerCase();
   const base = { key: `credits_${code}_${amount}`, version: 1, catalogKey: `credits_${code}_${amount}`,
     catalogVersion: 1, currency, paymentAmountMinor: BigInt(amount * 100),
@@ -70,6 +70,9 @@ function creditTopUpSpec(currency: CreditPurchaseCurrency, amount: (typeof TOP_U
 
 export const CREDIT_TOP_UP_SPECS = CREDIT_PURCHASE_CURRENCIES.flatMap((currency) =>
   TOP_UP_AMOUNTS.map((amount) => creditTopUpSpec(currency, amount)));
+
+export const NESSIE_MANUAL_TOP_UP_SPECS = CREDIT_PURCHASE_CURRENCIES.flatMap((currency) =>
+  [5, 10, 20, 100, 500].map((amount) => creditTopUpSpec(currency, amount)));
 
 export const CREDIT_AUTO_TOP_UP_SPEC = {
   key: 'default',

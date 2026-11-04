@@ -6,6 +6,7 @@ import {
   stripeSecretKeyLivemode,
 } from '../services/billing-stripe-client.service.js';
 import { provisionStripeCommercialCatalog } from '../services/billing-stripe-catalog-provisioning.service.js';
+import { provisionNessieTopUps } from '../services/billing-nessie-top-up-catalog.service.js';
 import { AppError } from '../utils/errors.js';
 import { parseStripeCatalogCliArgs } from './stripe-catalog-provisioning-args.js';
 import { provisioningErrorReport } from './stripe-catalog-provisioning-report.js';
@@ -17,6 +18,7 @@ function usage(): string {
   pnpm billing:provision-stripe-catalog --apply --stripe-account acct_... --stripe-mode test|live \\
     --confirm 'PROVISION_UOA_STRIPE_CATALOG:acct_...:<test|live>'
 
+Add --nessie-top-ups to publish only Nessie's one-time top-ups against its existing credit product.
 The apply confirmation must use the exact account and mode selected above.
 The command reads STRIPE_SECRET_KEY and DATABASE_ADMIN_URL (or DATABASE_URL).`;
 }
@@ -44,15 +46,11 @@ async function main(): Promise<void> {
     timeout: 20_000,
   });
   try {
-    const result = await provisionStripeCommercialCatalog(
-      {
-        stripe,
-        expectedStripeAccountId: options.stripeAccountId,
-        expectedLivemode: options.livemode,
-        dryRun: options.dryRun,
-      },
-      { prisma },
-    );
+    const params = { stripe, expectedStripeAccountId: options.stripeAccountId,
+      expectedLivemode: options.livemode, dryRun: options.dryRun };
+    const result = options.nessieTopUps
+      ? await provisionNessieTopUps({ ...params, prisma })
+      : await provisionStripeCommercialCatalog(params, { prisma });
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
   } finally {
     await prisma.$disconnect();

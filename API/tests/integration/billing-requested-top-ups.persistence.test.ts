@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createBillingCreditTopUpCheckout } from '../../src/services/billing-credit-top-up.service.js';
 import { applyCreditFundingWebhook } from '../../src/services/billing-credit-funding-webhook.service.js';
 import { createTestDb } from '../helpers/test-db.js';
+import { publishManualOffers } from './billing-nessie-top-ups.fixture.js';
 import { credential, databaseTestsEnabled, fundingActionContext, fundingRaceIds as ids,
   fundingRaceRequest, seedFundingRace, stripeAccount } from './billing-credit-funding-actions.persistence.fixture.js';
 
@@ -26,23 +27,14 @@ describe.skipIf(!databaseTestsEnabled)('requested one-time top-ups and invoice e
   beforeAll(async () => {
     handle = await createTestDb();
     if (!handle) throw new Error('DATABASE_URL required');
-    await seedFundingRace(handle.prisma);
+    await seedFundingRace(handle.prisma, 'credits_usd_25');
+    await db().billingService.update({ where: { id: ids.service }, data: { identifier: 'nessie' } });
     for (const currency of ['EUR', 'GBP']) {
       await db().billingCreditFundingPolicy.create({ data: { id: `policy_${currency}`, currency,
         serviceId: ids.service, version: 1, topUpEnabled: true, automaticTopUpEnabled: false,
         automaticConsentVersion: 'auto-v1' } });
     }
-    for (const { key, currency, amount, credits } of cases) {
-      const terms = { paymentAmountMinor: BigInt(amount * 100),
-        creditsReceivedMicrocredits: currency === 'USD' ? BigInt(credits) * 1_000_000n : 0n };
-      await db().billingCreditTopUpOffer.create({ data: { ...terms, id: `offer_${key}`, key,
-        policyId: currency === 'USD' ? ids.policy : `policy_${currency}`, version: 1,
-        serviceId: ids.service, catalogKey: key, catalogVersion: 1, name: key,
-        description: 'One-time purchase', automaticTopUpEligible: false } });
-      await db().billingCreditTopUpCatalog.create({ data: { ...terms, key, currency, version: 1,
-        accountId: ids.account, stripeLookupKey: key, stripeProductId: 'prod_requested_credits',
-        stripePriceId: `price_${key}` } });
-    }
+    await publishManualOffers(db());
   });
   afterAll(async () => { if (handle) await handle.cleanup(); });
 
@@ -64,14 +56,16 @@ describe.skipIf(!databaseTestsEnabled)('requested one-time top-ups and invoice e
     }));
     Object.assign(context.stripe, { checkout: { sessions: { create } }, prices: { retrieve: async () => ({
       id: `price_${key}`, active: true, livemode: false, type: 'one_time', currency: currency.toLowerCase(),
-      lookup_key: key, unit_amount: minor,
+      lookup_key: `uoa_${key}_v1`, unit_amount: minor,
       metadata: { uoa_kind: 'team_credit_top_up', ...(currency === 'USD' ? { credits: String(credits) }
         : { credits_basis: 'live_fx_rate' }) }, product: { id: 'prod_requested_credits', active: true,
         livemode: false, metadata: { uoa_kind: 'team_credits', credits_per_usd: '1000', contract_version: '1' } },
     }) } });
+    const offer = await db().billingCreditTopUpOffer.findFirstOrThrow({ where: { serviceId: ids.service, key, manualPurchaseEnabled: true } });
     const checkout = await createBillingCreditTopUpCheckout({
-      request: { ...fundingRaceRequest, offerId: `offer_${key}` }, actorToken: 'evaluation',
-      credential: { ...credential, actorIssuer: 'evaluation', actorAudience: 'evaluation',
+      request: { ...fundingRaceRequest, product: 'nessie', offerId: offer.id }, actorToken: 'evaluation',
+      credential: { ...credential, service: { ...credential.service, identifier: 'nessie' },
+        actorIssuer: 'evaluation', actorAudience: 'evaluation',
         actorKeyId: 'evaluation', actorPublicJwk: {} },
       includePurchaseId: true, endpoint: '/billing/v1/credits/top-up-checkout',
     }, { prisma: db(), resolveContext: vi.fn().mockResolvedValue(context), now: () => now,

@@ -49,6 +49,7 @@ function fundingPolicy(
   const live = data.purchaseCurrency !== 'USD';
   const rate = live && purchaseRate?.currency === data.purchaseCurrency ? purchaseRate : null;
   const priced = (policy?.topUpOffers ?? []).flatMap((offer) => {
+    if (offer.manualPurchaseEnabled === false && readiness.resumableTopUpOfferId !== offer.id) return [];
     if (!live) return [{ offer, credits: offer.creditsReceivedMicrocredits }];
     const credits = rate ? creditsForPayment(offer.paymentAmountMinor, rate.baseRate) : 0n;
     return credits > 0n ? [{ offer, credits }] : [];

@@ -248,6 +248,10 @@ export async function createBillingCreditTopUpCheckout(
     }
   }
 
+  // Existing Checkout Sessions can finish at their original price after a storefront change.
+  if (selection.offer.manualPurchaseEnabled === false) {
+    throw new AppError('BAD_REQUEST', 409, 'BILLING_CREDIT_OFFER_UNAVAILABLE');
+  }
   await context.authorizeAction();
   context.customer = await context.ensureCustomer();
   // The rate is read as the checkout is created; the credits it buys are fixed on the row.

@@ -1673,6 +1673,15 @@ balance change:
   (every earlier purchase was USD), consumed oldest-first by what was spent;
   credits no grant explains open one USD lot, and a negative balance is debt.
 
+For Nessie's one-time storefront, run `billing:provision-stripe-catalog` with
+`--nessie-top-ups` and the existing account, mode and dry-run/apply arguments.
+The operation verifies the bound shared-credit product against Stripe and
+publishes amounts of 5, 10, 20, 100 and 500 in USD, EUR and GBP. It needs
+one active top-up policy per currency. The 25, 50 and 1,000 standard offers
+remain available to existing reload agreements and open Checkout Sessions.
+Only a fresh manual purchase uses the new selection. Repeating an apply
+reuses the same lookup keys, Prices and offer versions.
+
 The available balance is valued in the organisation's region currency
 (`readCreditBalanceValue`): holds come out of the oldest lots, a lot in the
 region currency is worth what was paid for its remaining credits at its own
