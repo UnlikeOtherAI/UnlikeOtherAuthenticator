@@ -6,13 +6,15 @@ import { runBillingCycleCloseBatch } from '../../src/services/billing-cycle-clos
 import {
   seedHistoricalBillingCycleWatches, seedRecentBillingCycleWatches,
 } from '../../src/services/billing-cycle-close-seed.service.js';
-import { createTestDb } from '../helpers/test-db.js';
+import { createBillingTimezoneDb } from '../helpers/billing-timezone-db.js';
 
 const enabled = process.env.BILLING_FUNDING_DATABASE_TESTS === 'true' &&
   Boolean(process.env.DATABASE_URL);
-type TestDb = NonNullable<Awaited<ReturnType<typeof createTestDb>>>;
+type TestDb = Awaited<ReturnType<typeof createBillingTimezoneDb>>;
 
-describe.skipIf(!enabled)('durable closed-month cycle watches', () => {
+describe.skipIf(!enabled).each([
+  'UTC', 'Europe/London', 'America/New_York', 'Asia/Kathmandu',
+])('durable closed-month cycle watches in %s', (zone) => {
   let db: TestDb;
   let serviceId: string;
   let orgId: string;
@@ -21,9 +23,7 @@ describe.skipIf(!enabled)('durable closed-month cycle watches', () => {
   const now = new Date('2026-10-04T12:00:00.000Z');
 
   beforeAll(async () => {
-    const created = await createTestDb();
-    if (!created) throw new Error('DATABASE_URL_REQUIRED');
-    db = created;
+    db = await createBillingTimezoneDb(zone);
     const owner = await db.prisma.user.create({ data: {
       email: `${randomUUID()}@example.com`, userKey: `${randomUUID()}@example.com`,
       name: 'Watch Owner',
@@ -56,6 +56,7 @@ describe.skipIf(!enabled)('durable closed-month cycle watches', () => {
     }, orderBy: { billingMonth: 'desc' } });
     expect(recent.map((row) => [row.sourceKind, row.billingMonth, row.priority]))
       .toEqual([['team_discovery', '2026-09', 0], ['team_discovery', '2026-08', 1]]);
+    expect(recent.map((row) => row.nextCheckAt)).toEqual([now, now]);
     const historical = await seedHistoricalBillingCycleWatches('team_discovery',
       { prisma: db.prisma, now });
     expect(historical).toMatchObject({ sources: 1, inserted: 2, wrapped: false });
@@ -80,19 +81,24 @@ describe.skipIf(!enabled)('durable closed-month cycle watches', () => {
   });
 
   it('claims a current period ahead of history and survives concurrent workers', async () => {
-    const discover = vi.fn().mockResolvedValue({ teamIds: [teamId],
+    const startedAt = new Date();
+    const discovery = { teamIds: [teamId],
       snapshot: { id: 'proof', cursor: 'proof', sha256: 'a'.repeat(64),
-        capturedAt: now.toISOString() } });
-    const [first, second] = await Promise.all([
-      runBillingCycleCloseBatch({ prisma: db.prisma, now, discover }),
-      runBillingCycleCloseBatch({ prisma: db.prisma, now, discover }),
-    ]);
+        capturedAt: now.toISOString() } };
+    const workers = [vi.fn().mockResolvedValue(discovery), vi.fn().mockResolvedValue(discovery)];
+    const [first, second] = await Promise.all(workers.map((discover) =>
+      runBillingCycleCloseBatch({ prisma: db.prisma, now, discover })));
     expect(first.checked + second.checked).toBe(4);
     expect(first.held + second.held).toBe(0);
-    expect(discover).toHaveBeenCalledTimes(4);
-    expect(discover.mock.calls[0]?.[0]).toMatchObject({
-      product: identifier, organisationId: orgId, billingMonth: '2026-09',
-    });
+    const calls = workers.flatMap((worker) => worker.mock.calls.map(([request]) => request));
+    expect(calls.map((request) => request.billingMonth).sort())
+      .toEqual(['2026-06', '2026-07', '2026-08', '2026-09']);
+    expect(calls.every((request) => request.product === identifier && request.organisationId === orgId)).toBe(true);
+    // Independent workers may reach the provider in either order. The worker
+    // holding the recent period must process it before its own historical rows.
+    const recentWorker = workers.find((worker) => worker.mock.calls.some(
+      ([request]) => request.billingMonth === '2026-09'));
+    expect(recentWorker?.mock.calls[0]?.[0].billingMonth).toBe('2026-09');
     expect(await db.prisma.billingCycleCloseWatch.count({ where: {
       sourceKind: 'team_usage', serviceId, orgId, teamId,
     } })).toBe(4);
@@ -101,6 +107,12 @@ describe.skipIf(!enabled)('durable closed-month cycle watches', () => {
     } });
     expect(settled.every((row) => row.leaseToken === null &&
       row.lastCheckedAt !== null && row.generation === 1n)).toBe(true);
+    for (const row of settled) {
+      expect(row.lastCheckedAt!.getTime()).toBeGreaterThanOrEqual(startedAt.getTime() - 1000);
+      expect(row.lastCheckedAt!.getTime()).toBeLessThanOrEqual(Date.now());
+      const hours = row.billingMonth >= '2026-08' ? 6 : 168;
+      expect(row.nextCheckAt.getTime() - row.lastCheckedAt!.getTime()).toBe(hours * 3_600_000);
+    }
   });
 
   it('does not publish discovered team work after its lease expires', async () => {

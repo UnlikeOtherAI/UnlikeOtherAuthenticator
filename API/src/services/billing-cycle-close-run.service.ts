@@ -32,17 +32,19 @@ async function claim(prisma: PrismaClient): Promise<Claimed[]> {
         AND (lease_expires_at IS NULL OR lease_expires_at <= now())
       ORDER BY priority, next_check_at, id
       FOR UPDATE SKIP LOCKED LIMIT ${BATCH_SIZE}
+    ), claimed AS (
+      UPDATE billing_cycle_close_watches AS watch
+      SET lease_token = ${token}::uuid,
+        lease_expires_at = now() + interval '3 minutes',
+        generation = generation + 1, attempts = attempts + 1, updated_at = now()
+      FROM due WHERE watch.id = due.id
+      RETURNING watch.id, watch.source_kind AS "sourceKind",
+        watch.source_id AS "sourceId", watch.service_id AS "serviceId",
+        watch.org_id AS "orgId", watch.team_id AS "teamId",
+        watch.billing_month AS "billingMonth", watch.priority, watch.generation, watch.next_check_at,
+        watch.lease_token::text AS "leaseToken", watch.attempts
     )
-    UPDATE billing_cycle_close_watches AS watch
-    SET lease_token = ${token}::uuid,
-      lease_expires_at = now() + interval '3 minutes',
-      generation = generation + 1, attempts = attempts + 1, updated_at = now()
-    FROM due WHERE watch.id = due.id
-    RETURNING watch.id, watch.source_kind AS "sourceKind",
-      watch.source_id AS "sourceId", watch.service_id AS "serviceId",
-      watch.org_id AS "orgId", watch.team_id AS "teamId",
-      watch.billing_month AS "billingMonth", watch.priority, watch.generation,
-      watch.lease_token::text AS "leaseToken", watch.attempts
+    SELECT * FROM claimed ORDER BY priority, next_check_at, id
   `);
 }
 

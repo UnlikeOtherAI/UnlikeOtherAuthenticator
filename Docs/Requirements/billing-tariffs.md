@@ -14,6 +14,17 @@ either the financial statement or how much budget is held. Persistence evals
 cover both offset directions and a fractional-hour timezone. Missing signed
 Ledger history remains a denial even when the local totals are available.
 
+Closed-month discovery compares UTC wall-clock source timestamps without
+promoting them through the session timezone. It must not invent an earlier
+month for an organisation created at midnight. Watch scheduling uses the
+watch table's native `timestamptz` columns. Credit-invoice retry claims instead
+normalize parameters to the invoice table's UTC `timestamp` columns, so the
+subsequent Prisma update matches the exact lease and persists its backoff.
+The database evaluations cover all four timezones, concurrent workers, exact
+retry delays and recovery after an expired watch lease.
+Claimed watches retain their priority order after the database update;
+`UPDATE ... RETURNING` alone does not promise the due queue's order.
+
 ## Status and ownership
 
 UOA is the canonical commercial control plane and customer billing system of

@@ -33,15 +33,15 @@ async function claimDueInvoices(
       SELECT id FROM billing_credit_payment_invoices
       WHERE account_id = ${accountId} AND livemode = ${livemode}
         AND state IN ('PENDING', 'HELD', 'ISSUING')
-        AND next_issue_attempt_at <= ${now}
+        AND next_issue_attempt_at <= (${now}::timestamptz AT TIME ZONE 'UTC')
       ORDER BY next_issue_attempt_at, id
       FOR UPDATE SKIP LOCKED LIMIT 50
     )
     UPDATE billing_credit_payment_invoices AS invoice
     SET issue_attempt_count = invoice.issue_attempt_count + 1,
-        next_issue_attempt_at = ${leaseUntil},
+        next_issue_attempt_at = (${leaseUntil}::timestamptz AT TIME ZONE 'UTC'),
         last_issue_error = NULL,
-        updated_at = ${now}
+        updated_at = (${now}::timestamptz AT TIME ZONE 'UTC')
     FROM due WHERE invoice.id = due.id
     RETURNING invoice.id, invoice.issue_attempt_count AS "attemptCount"
   `);

@@ -30,9 +30,10 @@ export async function seedRecentBillingCycleWatches(
   const older = new Date(Date.UTC(recent.getUTCFullYear(), recent.getUTCMonth() - 1, 1));
   const rows = await prisma.$queryRaw<Array<{ inserted: bigint }>>(Prisma.sql`
     WITH months AS (
-      SELECT ${monthKey(recent)}::char(7) AS month, ${recent}::timestamptz AS starts_at, 0 AS priority
+      SELECT ${monthKey(recent)}::char(7) AS month,
+        (${recent}::timestamptz AT TIME ZONE 'UTC') AS starts_at, 0 AS priority
       UNION ALL
-      SELECT ${monthKey(older)}::char(7), ${older}::timestamptz, 1
+      SELECT ${monthKey(older)}::char(7), (${older}::timestamptz AT TIME ZONE 'UTC'), 1
     ), sources AS (
       SELECT 'stripe'::varchar(24) AS kind, subscription.id AS source_id,
         subscription.service_id, subscription.org_id, subscription.team_id,
@@ -55,9 +56,9 @@ export async function seedRecentBillingCycleWatches(
         NULL::text, GREATEST(org.created_at, LEAST(service.created_at,
           CASE WHEN service.tariff_history_from_month = '9999-12'
             THEN service.created_at ELSE
-              ((service.tariff_history_from_month || '-01')::date::timestamp AT TIME ZONE 'UTC')
+              (service.tariff_history_from_month || '-01')::date::timestamp
           END)),
-        NULL::timestamptz, NULL::char(7)
+        NULL::timestamp, NULL::char(7)
       FROM billing_services AS service CROSS JOIN organisations AS org
     ), inserted AS (
       INSERT INTO billing_cycle_close_watches (
@@ -122,9 +123,9 @@ async function sourcesAfter(prisma: PrismaClient, kind: Kind,
       GREATEST(org.created_at, LEAST(service.created_at,
         CASE WHEN service.tariff_history_from_month = '9999-12'
           THEN service.created_at ELSE
-            ((service.tariff_history_from_month || '-01')::date::timestamp AT TIME ZONE 'UTC')
+            (service.tariff_history_from_month || '-01')::date::timestamp
         END))
-        AS "startsAt", NULL::timestamptz AS "endsAt"
+        AS "startsAt", NULL::timestamp AS "endsAt"
     FROM billing_services AS service CROSS JOIN organisations AS org
     WHERE (service.id || ':' || org.id) COLLATE "C" > ${after} COLLATE "C"
     ORDER BY (service.id || ':' || org.id) COLLATE "C"
