@@ -25,6 +25,12 @@ retry delays and recovery after an expired watch lease.
 Claimed watches retain their priority order after the database update;
 `UPDATE ... RETURNING` alone does not promise the due queue's order.
 
+Nessie's exception evaluation covers standard, custom-price, waived-seat and
+explicitly free usage terms at both organisation and team scope. A zero seat
+amount with prepaid usage still rates provider usage and requires funding;
+it is not the `FREE` tariff mode. These evaluations verify tariff decisions
+and rating, not hosted assignment, invitation or collection flows.
+
 ## Status and ownership
 
 UOA is the canonical commercial control plane and customer billing system of

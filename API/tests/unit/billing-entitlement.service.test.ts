@@ -17,6 +17,8 @@ import {
   customerBillingTariff, getEffectiveTariffSnapshot,
 } from '../../src/services/billing-entitlement.service.js';
 import type { VerifiedBillingAppKey } from '../../src/services/billing-app-key.service.js';
+import { normalizeTariffInput, type TariffInput } from '../../src/services/billing-tariff-input.service.js';
+import { rateProviderCost } from '../../src/services/billing-rating.service.js';
 
 const credential: VerifiedBillingAppKey = {
   id: 'key_1',
@@ -121,6 +123,43 @@ describe('effective billing tariff resolution', () => {
   beforeEach(() => {
     verifyActor.mockClear();
     signSnapshot.mockClear();
+  });
+
+  describe.each(['team', 'organisation'] as const)('Nessie %s commercial exceptions', (scope) => {
+    it.each([
+      { name: 'standard seats and paid AI', mode: 'standard', seatMinor: '399', ai: true },
+      { name: 'unlimited free seats and paid AI', mode: 'custom', seatMinor: '0', ai: true },
+      { name: 'custom seats and paid AI', mode: 'custom', seatMinor: '175', ai: true },
+      { name: 'explicitly free seats and AI', mode: 'free', seatMinor: '0', ai: false },
+    ] as const)('$name', async ({ mode, seatMinor, ai }) => {
+      const input: TariffInput = {
+        key: 'nessie-exception', name: 'Nessie exception', mode,
+        collectionMode: seatMinor === '0' ? 'none' : 'stripe',
+        monthlyAmountMinor: seatMinor, monthlyChargeBasis: 'per_seat',
+        seatPolicy: 'automatic', seatChargeTiming: 'prorated',
+        usagePaymentMode: ai ? 'prepaid' : 'pay_as_you_go',
+        markupBps: ai ? 3000 : 0, currency: 'USD',
+      };
+      const tariff = { ...defaultTariff, ...normalizeTariffInput(input),
+        id: 'tariff_nessie_exception', isDefault: false };
+      const assignment = { id: 'nessie_exception', tariff };
+      const result = await getEffectiveTariffSnapshot({
+        request: { ...request, product: 'nessie' }, actorToken: 'actor',
+        credential: { ...credential, service: { ...credential.service, identifier: 'nessie' } },
+      }, {
+        prisma: fakePrisma(scope === 'team'
+          ? { teamAssignment: assignment } : { orgAssignment: assignment }),
+        verifyActor, signSnapshot,
+      });
+      expect(result.payload.assignment.scope).toBe(scope);
+      expect(result.payload.tariff).toMatchObject({
+        monthly_subscription: { amount_minor: seatMinor, seat_policy: 'automatic' },
+        usage_billing_enabled: ai, usage_payment_mode: input.usagePaymentMode,
+        payment_collection_enabled: seatMinor !== '0', raw_usage_preserved: true,
+      });
+      expect(rateProviderCost('1', 'USD', { mode, markupBps: tariff.markupBps }).total)
+        .toBe(ai ? '1.3' : '0');
+    });
   });
 
   it('prefers a team assignment without exposing private rating terms', async () => {
