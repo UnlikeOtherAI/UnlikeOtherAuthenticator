@@ -30,6 +30,7 @@ async function run() {
   const p = db.prisma;
   const runId = 'nessie-seat-' + randomUUID();
   let clockId: string | undefined; let serviceId: string | undefined;
+  let verified = false;
   try {
     const service = await p.billingService.create({ data: { identifier: 'nessie', name: 'Nessie seat evaluation' } });
     serviceId = service.id;
@@ -154,9 +155,16 @@ async function run() {
       const unavailable = { accounts: stripe.accounts, events: stripe.events, invoices: stripe.invoices,
         subscriptions: { retrieve: stripe.subscriptions.retrieve.bind(stripe.subscriptions),
           update: async () => { throw new Error('Evaluation provider outage'); } } };
-      await runAnniversarySeatCycle({ prisma: p, stripe: unavailable as never, livemode: false });
-      const retry = await p.billingAutomaticSeatChange.findFirstOrThrow({ where: { delta: -1 } });
-      assert.equal(retry.completedAt, null); assert.equal(retry.failureCode, 'PROVIDER_RETRY');
+      const deadline = Date.now() + 30_000;
+      do {
+        await runAnniversarySeatCycle({ prisma: p, stripe: unavailable as never, livemode: false });
+        const retry = await p.billingAutomaticSeatChange.findFirstOrThrow({ where: { delta: -1 } });
+        assert.equal(retry.completedAt, null);
+        if (retry.failureCode === 'PROVIDER_RETRY') break;
+        assert.equal(retry.failureCode, null); assert.ok(Date.now() < deadline, 'Outage attempt was never claimed');
+        await wait(250);
+      } while (Date.now() < deadline);
+      assert.equal((await p.billingAutomaticSeatChange.findFirstOrThrow({ where: { delta: -1 } })).failureCode, 'PROVIDER_RETRY');
       schedulerOffsetMs = 24 * 3600_000;
     }
     const removed = await settle(-1);
@@ -170,8 +178,12 @@ async function run() {
       declinedRenewal: scenario === '--declined-renewal', delayedRemoval: schedulerOffsetMs > 0,
       replayedAcceptance: true, blockedUntilPaid: true, revokedOnRemoval: true,
       noCreditOnRemoval: true, renewalQuantity: 1, databaseCashInvoices: await p.billingStripePaymentInvoice.count() }));
+    verified = true;
   } finally {
-    try {
+    if (!verified) {
+      console.error(JSON.stringify({ step: 'retained_failure', schema: db.schema, clockId, serviceId }));
+      await p.$disconnect();
+    } else try {
       if (clockId) await stripe.testHelpers.testClocks.del(clockId);
       if (serviceId) {
         const catalogs = await p.billingStripeCatalog.findMany({ where: { serviceId }, include: { tariffPrices: true } });
