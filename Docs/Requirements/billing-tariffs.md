@@ -1869,7 +1869,11 @@ Sending an invitation takes no payment. An accepted membership enters an ordered
 
 A classic Stripe quantity change can have a negative line for the previous quantity and a positive replacement line. UOA retains both references and records their net seat charge. When Stripe carries a small charge, the next cash invoice includes it only after UOA verifies the customer balance transactions and original same-subscription invoice lines. AI top-ups issue separate purchase invoices.
 
-The PostgreSQL journey is `API/tests/integration/billing-anniversary-seats.persistence.test.ts`. The proration and balance checks are `billing-anniversary-seat-invoice.test.ts` and `billing-anniversary-balance.test.ts`.
+The PostgreSQL journey is `API/tests/integration/billing-anniversary-seats.persistence.test.ts`. It covers simultaneous joins, row-level permissions, refusal, recovery, removal and rejoin. Operator assignments follow their effective billing month. `billing-nessie-seat-exceptions.persistence.test.ts` exercises six seat/usage combinations at both scopes. The signup assignment takes effect in the current month.
+
+Stripe's Events API keeps the original snapshot version. For credit purchases, UOA also recognises a successful `2025-12-15.clover` PaymentIntent bearing UOA's funding metadata. UOA rereads the PaymentIntent under its pinned API version and verifies the amount, currency, customer and original purchase before recording the credit and its invoice. The original event version remains on the immutable receipt.
+
+The opt-in `API/tests/manual/stripe-seat-checkout.ts` and `stripe-credit-checkout.ts` submit sandbox Checkouts and compare provider outcomes with an isolated PostgreSQL database. The receipt replay evaluations use previously paid test objects. See Stripe's [event version reference](https://docs.stripe.com/api/events/object).
 
 ## Organisation billing region (2026-10-12)
 

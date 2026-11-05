@@ -65,6 +65,7 @@ CREATE INDEX billing_automatic_seat_due_idx ON billing_automatic_seat_changes(ne
 
 CREATE FUNCTION billing_guard_automatic_seat_change() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
+  IF TG_OP='DELETE' THEN RAISE EXCEPTION 'Automatic seat operation evidence is immutable' USING ERRCODE='23514'; END IF;
   IF (OLD.id,OLD.seat_subscription_id,OLD.user_id,OLD.delta,OLD.from_quantity,OLD.to_quantity,OLD.effective_at)
     IS DISTINCT FROM (NEW.id,NEW.seat_subscription_id,NEW.user_id,NEW.delta,NEW.from_quantity,NEW.to_quantity,NEW.effective_at)
     OR (OLD.completed_at IS NOT NULL AND NEW IS DISTINCT FROM OLD) THEN
@@ -73,7 +74,7 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-CREATE TRIGGER billing_automatic_seat_change_immutable BEFORE UPDATE ON billing_automatic_seat_changes
+CREATE TRIGGER billing_automatic_seat_change_immutable BEFORE UPDATE OR DELETE ON billing_automatic_seat_changes
   FOR EACH ROW EXECUTE FUNCTION billing_guard_automatic_seat_change();
 
 -- The membership trigger already serializes all writers to an organisation. Keep additions and
@@ -139,7 +140,7 @@ CREATE TRIGGER billing_anniversary_checkout_removals AFTER INSERT ON billing_sea
 
 ALTER TABLE billing_automatic_seat_changes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE billing_automatic_seat_changes FORCE ROW LEVEL SECURITY;
-REVOKE ALL ON billing_automatic_seat_changes FROM PUBLIC,uoa_app;
+REVOKE ALL ON billing_automatic_seat_changes FROM PUBLIC,uoa_app,uoa_admin;
 REVOKE ALL ON SEQUENCE billing_automatic_seat_changes_id_seq FROM PUBLIC,uoa_app;
 GRANT SELECT,INSERT,UPDATE ON billing_automatic_seat_changes TO uoa_admin;
 GRANT USAGE,SELECT ON SEQUENCE billing_automatic_seat_changes_id_seq TO uoa_admin;

@@ -129,7 +129,23 @@ describe.skipIf(!process.env.DATABASE_URL)('Nessie anniversary seat payments', (
     expect(evidence.every(row => row.completedAt)).toBe(true);
     expect(update.mock.calls.map(call => call[1].proration_behavior)).toEqual(['always_invoice', 'none', 'always_invoice']);
     expect(invoices.size).toBe(2);
+    await expect(p.billingAutomaticSeatChange.delete({ where: { id: evidence[0].id } })).rejects.toThrow('immutable');
     expect(await unpaid(member.id, member.id, org.domain)).toEqual([]);
+    const additional = await Promise.all([user('concurrent-one'), user('concurrent-two')]);
+    await Promise.all(additional.map(async person => {
+      const sent = await p.teamInvite.create({ data: { orgId: org.id, teamId: team.id, email: person.email!, lastSentAt: now } });
+      await p.$transaction(async tx => {
+        await tx.orgMember.create({ data: { orgId: org.id, userId: person.id, role: 'member' } });
+        await tx.teamMember.create({ data: { userId: person.id, teamId: team.id } });
+        await tx.teamInvite.update({ where: { id: sent.id }, data: { acceptedUserId: person.id, acceptedAt: now } });
+      });
+    }));
+    await Promise.all([cycle(), cycle()]);
+    const joined = await p.billingAutomaticSeatChange.findMany({ where: { userId: { in: additional.map(person => person.id) } },
+      orderBy: { id: 'asc' } });
+    expect(joined.map(row => [row.fromQuantity, row.toQuantity])).toEqual([[2, 3], [3, 4]]);
+    expect(joined.every(row => row.completedAt && row.stripeInvoiceId)).toBe(true);
+    expect(new Set(joined.map(row => row.stripeInvoiceId)).size).toBe(2);
     await expect(p.billingAutomaticSeatChange.update({ where: { id: evidence[0].id },
       data: { completedAt: null } })).rejects.toThrow('immutable');
     await expect(p.billingAutomaticSeatChange.update({ where: { id: evidence[0].id },
