@@ -8,11 +8,12 @@ import { validateConfigFields } from '../../src/services/config.service.js';
 import { createOrganisation } from '../../src/services/organisation.service.organisation.js';
 import { removeOrganisationMember } from '../../src/services/organisation.service.members.js';
 import { getActiveUserOrgContext } from '../../src/services/org-context.service.js';
-import { acceptTeamInviteWithinTransaction } from '../../src/services/team-invite.service.js';
+import { acceptTeamInviteWithinTransaction, createTeamInvites } from '../../src/services/team-invite.service.js';
 import { payload as exampleTerms } from '../unit/billing-stripe-checkout.test-fixtures.js';
 import { sandboxCliClient } from './stripe-cli-sandbox.js';
 import { createBillingTariffVersion } from '../../src/services/billing-tariff.service.js';
-import { assignNewNessieOrganisation } from '../../src/services/billing-nessie-onboarding.service.js';
+import { setOrganisationBillingRegion } from '../../src/services/billing-organisation-region.service.js';
+import { creditValueTarget } from '../../src/services/billing-credit-lot-value.service.js';
 import { createStripeCheckoutSession } from '../../src/services/billing-stripe-checkout.service.js';
 import { syncBaseStripeSubscription } from '../../src/services/billing-stripe-subscription-projection.service.js';
 import { runAnniversarySeatCycle } from '../../src/services/billing-anniversary-seat-scheduler.service.js';
@@ -21,6 +22,8 @@ import { prepareStripePaymentInvoice, persistStripePaymentInvoice } from '../../
 const [expected, optIn] = process.argv.slice(2);
 assert.equal(optIn, '--create-test-data');
 const stripe = sandboxCliClient(expected ?? '');
+// This isolated process signs only its own test invitation, never a hosted session.
+process.env.SHARED_SECRET = randomUUID() + randomUUID();
 async function run() {
   const db = await createTestDb(); if (!db) throw new Error('An evaluation database is required');
   const p = db.prisma;
@@ -41,8 +44,22 @@ async function run() {
     const key = await p.billingAppKey.create({ data: { serviceId, name: 'Evaluation', purpose: 'CUSTOMER_LIFECYCLE', keyPrefix: 'uoa_eval',
       secretDigest: 'fixture-only', actorIssuer: 'https://seat.example', actorAudience: 'https://identity.example',
       actorKeyId: 'fixture', actorPublicJwk: {}, checkoutReturnOrigins: ['https://example.com'] } });
-    await p.$transaction(tx => assignNewNessieOrganisation(tx, { serviceId: service.id, orgId: org.id,
-      userId: founder.id, issuer: key.actorIssuer, currency: 'EUR', now: new Date() }));
+    let messages = 0;
+    const issueInvite = () => createTeamInvites({ domain, config, configUrl: 'https://seat.example/config',
+      orgId: org.id, teamId: team.id, invitedBy: { userId: founder.id }, invites: [{ email: 'member@example.test' }] },
+    { prisma: p, inviterPrisma: p, sendTeamInviteEmail: async mail => {
+      assert.equal(mail.to, 'member@example.test'); messages++;
+    } });
+    await assert.rejects(issueInvite, /billing manager must complete the seat payment/i);
+    const region = await setOrganisationBillingRegion({
+      request: { product: 'nessie', organisationId: org.id, teamId: team.id, userId: founder.id },
+      region: 'EUROPE', actorToken: 'evaluation', credential: { ...key, service } as never,
+      endpoint: '/billing/v1/region' as never,
+    }, { prisma: p, resolveTariff: (async () => ({ actor: { jti: runId } })) as never, authorizeAction: async () => {},
+      captureRate: id => creditValueTarget(id, { db: p, stripe }) });
+    assert.equal(region.currency, 'EUR');
+    await assert.rejects(issueInvite, /billing manager must complete the seat payment/i);
+    assert.equal(messages, 0); assert.equal(await p.teamInvite.count(), 0);
     const assignment = await p.billingTariffAssignment.findFirstOrThrow({ where: { orgId: org.id } });
     const account = await p.billingStripeAccount.create({ data: { stripeAccountId: expected, livemode: false } });
     const epoch = Math.floor(Date.now()/1000);
@@ -82,8 +99,10 @@ async function run() {
     for (let tries = 0; (await stripe.testHelpers.testClocks.retrieve(clock.id)).status !== 'ready'; tries++) {
       assert.ok(tries < 90); await wait(1000);
     }
-    const member = await p.user.create({ data: { userKey: 'member', email: 'member@example.test' } });
-    const invitation = await p.teamInvite.create({ data: { orgId: org.id, teamId: team.id, email: 'member@example.test', lastSentAt: new Date() } });
+    const [issued] = (await issueInvite()).results;
+    assert.ok(issued?.status === 'invited'); assert.equal(messages, 1);
+    const invitation = issued.invite;
+    const member = await p.user.create({ data: { userKey: 'member', email: issued.email } });
     assert.equal(await p.billingAutomaticSeatChange.count(), 0);
     const accept = () => p.$transaction(prisma => acceptTeamInviteWithinTransaction({
       teamInviteId: invitation.id, userId: member.id, prisma, config, now: new Date(),
@@ -117,7 +136,8 @@ async function run() {
     assert.equal(current.latest_invoice, added.stripeInvoiceId);
     assert.equal(current.items.data.find(item => item.price.recurring?.usage_type === 'licensed')?.quantity, 1);
     console.log(JSON.stringify({ step: 'verified', founderMinor: 299, additionMinor: charge.toString(), subscription: subscription.id,
-      founderCreatedDefaultTeam: team.isDefault, replayedAcceptance: true, blockedUntilPaid: true, revokedOnRemoval: true,
+      founderCreatedDefaultTeam: team.isDefault, refusedBeforeRegionAndCard: true, invitationsDelivered: messages,
+      replayedAcceptance: true, blockedUntilPaid: true, revokedOnRemoval: true,
       noCreditOnRemoval: true, renewalQuantity: 1, databaseCashInvoices: await p.billingStripePaymentInvoice.count() }));
   } finally {
     try {
