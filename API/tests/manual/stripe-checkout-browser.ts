@@ -12,8 +12,10 @@ export async function paySandboxCheckout(url: string, successUrl: string) {
     await page.goto(url, { waitUntil: 'domcontentloaded' });
     const number = page.locator('#cardNumber');
     const card = page.getByRole('button', { name: 'Pay with card', exact: true });
-    await number.or(card).first().waitFor();
-    if (!await number.isVisible()) await card.click();
+    await number.or(card).first().waitFor({ state: 'attached' });
+    // Stripe's accordion expands its button's pointer area with CSS. Native keyboard
+    // activation works even when the button's own bounding rectangle has zero width.
+    if (!await number.isVisible() && await card.count()) await card.press('Enter');
     await number.fill('4242424242424242');
     await page.locator('#cardExpiry').fill('1235'); await page.locator('#cardCvc').fill('123');
     await page.locator('#billingName').fill('Nessie Sandbox Evaluation');

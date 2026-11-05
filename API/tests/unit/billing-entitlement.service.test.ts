@@ -131,6 +131,8 @@ describe('effective billing tariff resolution', () => {
       { name: 'unlimited free seats and paid AI', mode: 'custom', seatMinor: '0', ai: true },
       { name: 'custom seats and paid AI', mode: 'custom', seatMinor: '175', ai: true },
       { name: 'explicitly free seats and AI', mode: 'free', seatMinor: '0', ai: false },
+      { name: 'standard seat price with waived AI', mode: 'free', seatMinor: '399', ai: false },
+      { name: 'custom seat price with waived AI', mode: 'free', seatMinor: '175', ai: false },
     ] as const)('$name', async ({ mode, seatMinor, ai }) => {
       const input: TariffInput = {
         key: 'nessie-exception', name: 'Nessie exception', mode,

@@ -179,11 +179,21 @@ BEGIN
     target_team:=NEW.team_id; subject:=NEW.user_id;
   END IF;
   IF subject IS NOT NULL AND EXISTS(SELECT 1 FROM organisations WHERE id=target_org AND owner_id=subject) THEN RETURN NEW; END IF;
-  SELECT t.anniversary_seats, a.tariff_id, a.team_id INTO selected
-    FROM billing_tariff_assignments a JOIN billing_tariffs t ON t.id=a.tariff_id
-    JOIN billing_services svc ON svc.id=a.service_id AND svc.identifier='nessie' AND svc.active
-    WHERE a.org_id=target_org AND (a.team_id IS NULL OR a.team_id=target_team)
-    ORDER BY a.team_id NULLS LAST LIMIT 1;
+  -- Operator changes can take effect next month. Use the same effective-month history
+  -- as the Checkout statement, including removal of a team override.
+  WITH effective AS (
+    SELECT DISTINCT ON (e.source) e.source,e.tariff_id
+    FROM billing_tariff_term_events e JOIN billing_services svc ON svc.id=e.service_id
+    WHERE svc.identifier='nessie' AND svc.active
+      AND e.effective_from_month<=to_char(now() AT TIME ZONE 'UTC','YYYY-MM')
+      AND ((e.source='ORGANISATION' AND e.scope_key=target_org)
+        OR (e.source='TEAM' AND e.scope_key=target_org||':'||target_team))
+    ORDER BY e.source,e.effective_from_month DESC,e.sequence DESC
+  )
+  SELECT t.anniversary_seats,t.id AS tariff_id,
+      CASE WHEN e.source='TEAM' THEN target_team ELSE NULL END AS team_id INTO selected
+    FROM effective e JOIN billing_tariffs t ON t.id=e.tariff_id
+    ORDER BY (e.source='TEAM') DESC LIMIT 1;
   IF NOT FOUND THEN
     -- A newly onboarded organisation must also choose its billing region before inviting.
     -- Existing organisations, other products and explicit agreements keep their own terms.
