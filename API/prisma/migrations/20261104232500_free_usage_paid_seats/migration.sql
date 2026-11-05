@@ -1,8 +1,9 @@
 ALTER TABLE billing_tariffs DROP CONSTRAINT billing_tariffs_mode_values_check;
 ALTER TABLE billing_tariffs ADD CONSTRAINT billing_tariffs_mode_values_check CHECK (
-  (mode = 'FREE' AND markup_bps = 0 AND usage_payment_mode = 'PAY_AS_YOU_GO' AND (
+  (mode = 'FREE' AND markup_bps = 0 AND (
     (monthly_amount_minor = 0 AND collection_mode = 'NONE') OR
-    (monthly_charge_basis = 'PER_SEAT' AND monthly_amount_minor > 0 AND collection_mode IN ('STRIPE', 'MANUAL'))
+    (usage_payment_mode = 'PAY_AS_YOU_GO' AND monthly_charge_basis = 'PER_SEAT'
+      AND monthly_amount_minor > 0 AND collection_mode IN ('STRIPE', 'MANUAL'))
   )) OR (mode = 'AT_COST' AND markup_bps = 0) OR mode IN ('STANDARD', 'CUSTOM')
 );
 

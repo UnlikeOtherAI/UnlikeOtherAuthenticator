@@ -47,4 +47,3 @@ async function run() {
   } finally { await p.$disconnect(); }
 }
 run().catch(error => { console.error(error instanceof Error ? error.message : 'Catalog evaluation failed'); process.exitCode = 1; });
-

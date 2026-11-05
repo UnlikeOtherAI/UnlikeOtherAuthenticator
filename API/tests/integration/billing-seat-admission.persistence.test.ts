@@ -204,7 +204,7 @@ describe.skipIf(!enabled)('authoritative seat admission and evidence', () => {
       })).toBe(1);
 
       await prisma.billingFixedSeatCapacityRevision.create({ data: {
-        seatSubscriptionId: 'seat_fixed_org', quantity: 4, effectiveAt: new Date(),
+        seatSubscriptionId: 'seat_fixed_org', quantity: 4, effectiveAt: await observedBillingTime(prisma),
       } });
       let unblockSerializable: () => void = () => undefined;
       let markSerializable: () => void = () => undefined;
@@ -265,7 +265,7 @@ describe.skipIf(!enabled)('authoritative seat admission and evidence', () => {
     })).toBe(0);
 
     await prisma.billingFixedSeatCapacityRevision.create({ data: {
-      seatSubscriptionId: 'seat_fixed_team', quantity: 2, effectiveAt: new Date(),
+      seatSubscriptionId: 'seat_fixed_team', quantity: 2, effectiveAt: await observedBillingTime(prisma),
     } });
     await addUser('seat_person_two');
     await prisma.teamMember.create({ data: {
@@ -342,7 +342,7 @@ describe.skipIf(!enabled)('authoritative seat admission and evidence', () => {
       policy: 'FIXED', scope: 'TEAM', team: emptyTeam.id,
       quantity: 5, timing: 'FULL_MONTH',
     });
-    const now = new Date();
+    const now = await observedBillingTime(prisma);
     const reduced = await changeFixedSeatCapacity({
       subscriptionId: 'seat_fixed_full_month', quantity: 4,
       actor: { userId: ownerId, tokenVersion: 0 },
@@ -373,7 +373,7 @@ describe.skipIf(!enabled)('authoritative seat admission and evidence', () => {
       actor: { userId: ownerId, tokenVersion: 0 },
     }, { prisma })).rejects.toThrow();
     await prisma.user.update({ where: { id: ownerId }, data: { tokenVersion: 0 } });
-    const endedAt = new Date();
+    const endedAt = await observedBillingTime(prisma);
     await prisma.billingSeatSubscription.update({
       where: { id: 'seat_auto_empty' }, data: { endedAt },
     });

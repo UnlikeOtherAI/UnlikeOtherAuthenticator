@@ -6,6 +6,7 @@ import { runBillingCycleCloseBatch } from '../../src/services/billing-cycle-clos
 import {
   seedHistoricalBillingCycleWatches, seedRecentBillingCycleWatches,
 } from '../../src/services/billing-cycle-close-seed.service.js';
+import { observedBillingTime } from '../../src/services/billing-seat-observed-time.service.js';
 import { createBillingTimezoneDb } from '../helpers/billing-timezone-db.js';
 
 const enabled = process.env.BILLING_FUNDING_DATABASE_TESTS === 'true' &&
@@ -81,7 +82,7 @@ describe.skipIf(!enabled).each([
   });
 
   it('claims a current period ahead of history and survives concurrent workers', async () => {
-    const startedAt = new Date();
+    const startedAt = await observedBillingTime(db.prisma);
     const discovery = { teamIds: [teamId],
       snapshot: { id: 'proof', cursor: 'proof', sha256: 'a'.repeat(64),
         capturedAt: now.toISOString() } };
@@ -107,9 +108,10 @@ describe.skipIf(!enabled).each([
     } });
     expect(settled.every((row) => row.leaseToken === null &&
       row.lastCheckedAt !== null && row.generation === 1n)).toBe(true);
+    const finishedAt = await observedBillingTime(db.prisma);
     for (const row of settled) {
-      expect(row.lastCheckedAt!.getTime()).toBeGreaterThanOrEqual(startedAt.getTime() - 1000);
-      expect(row.lastCheckedAt!.getTime()).toBeLessThanOrEqual(Date.now());
+      expect(row.lastCheckedAt!.getTime()).toBeGreaterThanOrEqual(startedAt.getTime());
+      expect(row.lastCheckedAt!.getTime()).toBeLessThanOrEqual(finishedAt.getTime());
       const hours = row.billingMonth >= '2026-08' ? 6 : 168;
       expect(row.nextCheckAt.getTime() - row.lastCheckedAt!.getTime()).toBe(hours * 3_600_000);
     }
