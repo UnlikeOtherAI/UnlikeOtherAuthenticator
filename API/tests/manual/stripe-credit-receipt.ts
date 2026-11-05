@@ -62,8 +62,9 @@ async function run() {
       accountId: account.id, creditAccountId: wallet.id, customerId: customer.id, catalogId: bound.id, serviceId: service.id,
       appKeyId: key.id, offerId: offer.id, actorJti: 'receipt-replay', requestedByUserId: owner.id,
       currency: spec.currency, paymentAmountMinor: spec.paymentAmountMinor, creditsReceivedMicrocredits: spec.creditsReceivedMicrocredits,
-      successUrlDigest: 'a'.repeat(64), cancelUrlDigest: 'b'.repeat(64), leaseExpiresAt: new Date(),
-      stripeCheckoutSessionId: session.id, status: 'OPEN' } });
+      successUrlDigest: 'a'.repeat(64), cancelUrlDigest: 'b'.repeat(64), leaseExpiresAt: new Date() } });
+    await p.billingCreditTopUpCheckout.update({ where: { id: pending.id }, data: { status: 'OPEN',
+      stripeCheckoutSessionId: session.id, expiresAt: new Date(session.expires_at * 1000) } });
     const apply = () => applyTrustedCreditFundingStripeEvent({ event, expectedPaymentIntentId: intent.id, stripe, account, prisma: p });
     assert.deepEqual(await apply(), { applied: true, duplicate: false });
     assert.deepEqual(await apply(), { applied: false, duplicate: true });

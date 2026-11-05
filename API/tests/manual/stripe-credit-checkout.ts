@@ -16,6 +16,8 @@ assert.equal(optIn, '--create-test-data');
 assert.ok(regions.length && regions.every(code => ['USD', 'EUR', 'GBP'].includes(code)));
 const stripe = sandboxCliClient(expected ?? '');
 const trace = 'nessie-credit-' + randomUUID();
+// The in-process FX reader loads the normal app environment. The test signs no customer sessions.
+process.env.SHARED_SECRET ??= randomUUID();
 
 async function catalogBasis() {
   const spec = CREDIT_TOP_UP_SPECS.find(s => s.key === 'credits_usd_10')!;
