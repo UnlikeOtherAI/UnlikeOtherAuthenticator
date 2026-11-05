@@ -93,6 +93,13 @@ describe.skipIf(!process.env.DATABASE_URL)('Nessie anniversary seat payments', (
       return tx.billingAutomaticSeatChange.findMany();
     })).rejects.toThrow();
     expect(await context()).toBeNull();
+    await p.billingService.update({ where: { id: service.id }, data: { active: false } });
+    expect(await unpaid(member.id, member.id, org.domain)).toEqual([{ team_id: null }]);
+    expect(await context()).toBeNull();
+    await p.billingService.update({ where: { id: service.id }, data: { active: true } });
+    await p.billingAppKey.update({ where: { id: appKey.id }, data: { expiresAt: new Date(Date.now() - 1000) } });
+    expect(await unpaid(member.id, member.id, org.domain)).toEqual([{ team_id: null }]);
+    expect(await context()).toBeNull();
     await p.billingAppKey.update({ where: { id: appKey.id }, data: { revokedAt: new Date() } });
     expect(await unpaid(member.id, member.id, org.domain)).toEqual([{ team_id: null }]);
     expect(await context()).toBeNull();
