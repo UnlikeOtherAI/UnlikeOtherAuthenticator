@@ -39,7 +39,10 @@ export async function runAnniversarySeatCycle(deps?: {
     const row = await prisma.billingAutomaticSeatChange.findUniqueOrThrow({ where: { id: claim.id },
       include: { seatSubscription: { include: { stripeSubscription: { include: { customer: true } } } } } });
     const sub = row.seatSubscription.stripeSubscription;
-    if (!row.firstAttemptAt || !sub?.stripeMonthlyItemId || !sub.customer.stripeCustomerId) {
+    const price = await prisma.billingStripeTariffPrice.findUnique({ where: {
+      accountId_tariffId: { accountId: account.id, tariffId: row.seatSubscription.tariffId },
+    }, select: { stripeMonthlyPriceId: true } });
+    if (!row.firstAttemptAt || !sub?.stripeMonthlyItemId || !sub.customer.stripeCustomerId || !price?.stripeMonthlyPriceId) {
       throw new Error('STRIPE_SEAT_SOURCE_UNBOUND');
     }
     const where = { id: row.id, attemptVersion: row.attemptVersion, nextAttemptAt: row.nextAttemptAt, completedAt: null };
@@ -47,7 +50,7 @@ export async function runAnniversarySeatCycle(deps?: {
       const result = await collectAnniversarySeat({ ...row, firstAttemptAt: row.firstAttemptAt,
         account: account.stripeAccountId, livemode: account.livemode, checkoutId: sub.checkoutId,
         subscriptionId: sub.stripeSubscriptionId, customerId: sub.customer.stripeCustomerId,
-        itemId: sub.stripeMonthlyItemId, unitAmount: row.seatSubscription.unitAmountMinor,
+        itemId: sub.stripeMonthlyItemId, priceId: price.stripeMonthlyPriceId, unitAmount: row.seatSubscription.unitAmountMinor,
         currency: row.seatSubscription.currency }, runtime.client, now);
       switch (result.status) {
         case 'complete':

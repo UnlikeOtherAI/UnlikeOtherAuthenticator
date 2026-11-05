@@ -119,7 +119,14 @@ describe.skipIf(!process.env.DATABASE_URL)('Nessie anniversary seat payments', (
     expect(update).toHaveBeenCalledTimes(1);
     expect((await context())?.teams).toContain(team.id);
     const identity = { orgId_userId: { orgId: org.id, userId: member.id } };
+    remote.status = 'past_due';
+    await p.$transaction(tx => syncBaseStripeSubscription(tx, remote as never, acct));
     await p.orgMember.update({ where: identity, data: { status: 'REMOVED' } });
+    await cycle();
+    expect(item.quantity).toBe(1);
+    expect(await context()).toBeNull();
+    remote.status = 'active';
+    await p.$transaction(tx => syncBaseStripeSubscription(tx, remote as never, acct));
     await p.orgMember.update({ where: identity, data: { status: 'ACTIVE' } });
     await cycle(); await cycle();
     const evidence = await p.billingAutomaticSeatChange.findMany({ orderBy: { id: 'asc' } });

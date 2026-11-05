@@ -18,6 +18,7 @@ export type SeatPayment = {
   customerId: string;
   subscriptionId: string;
   itemId: string;
+  priceId: string;
   currency: string;
   unitAmount: bigint;
 };
@@ -35,7 +36,7 @@ function boundItem(subscription: Stripe.Subscription, change: SeatPayment) {
     subscription.metadata.uoa_stripe_account_id !== change.account ||
     subscription.billing_mode?.type !== 'classic') return undefined;
   const item = subscription.items.data.find(candidate => candidate.id === change.itemId);
-  if (!item || item.price.currency !== change.currency.toLowerCase() ||
+  if (!item || item.price.id !== change.priceId || item.price.currency !== change.currency.toLowerCase() ||
     item.price.unit_amount?.toString() !== change.unitAmount.toString() ||
     item.price.recurring?.interval !== 'month' || item.price.recurring.interval_count !== 1 ||
     item.price.recurring.usage_type !== 'licensed') return undefined;
@@ -66,7 +67,8 @@ export async function collectAnniversarySeat(change: SeatPayment, stripe: Provid
   if (change.stripeInvoiceId) {
     return paidInvoice(await stripe.invoices.retrieve(change.stripeInvoiceId), change, subscription);
   }
-  if (subscription.status !== 'active') return { status: 'hold', reason: 'SUBSCRIPTION_PAYMENT_REQUIRED' };
+  const canReduce = change.delta < 0 && ['past_due', 'unpaid'].includes(subscription.status);
+  if (subscription.status !== 'active' && !canReduce) return { status: 'hold', reason: 'SUBSCRIPTION_PAYMENT_REQUIRED' };
 
   if (item.quantity !== change.fromQuantity && item.quantity !== change.toQuantity) {
     return { status: 'hold', reason: 'QUANTITY_MISMATCH' };
