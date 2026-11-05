@@ -19,8 +19,9 @@ import { syncBaseStripeSubscription } from '../../src/services/billing-stripe-su
 import { runAnniversarySeatCycle } from '../../src/services/billing-anniversary-seat-scheduler.service.js';
 import { prepareStripePaymentInvoice, persistStripePaymentInvoice } from '../../src/services/billing-stripe-payment-invoice-source.service.js';
 
-const [expected, optIn] = process.argv.slice(2);
+const [expected, optIn, scenario] = process.argv.slice(2);
 assert.equal(optIn, '--create-test-data');
+assert.ok(scenario === undefined || scenario === '--declined-renewal');
 const stripe = sandboxCliClient(expected ?? '');
 // This isolated process signs only its own test invitation, never a hosted session.
 process.env.SHARED_SECRET = randomUUID() + randomUUID();
@@ -127,16 +128,34 @@ async function run() {
     assert.ok(added.stripeInvoiceId);
     const charge = await record(added.stripeInvoiceId); assert.ok(charge > 0n && charge < 299n);
     assert.ok((await access())?.teams.includes(team.id), 'Payment unlocks the accepted team');
+    if (scenario === '--declined-renewal') {
+      const declined = await stripe.paymentMethods.create({ type: 'card', card: { token: 'tok_chargeCustomerFail' } });
+      await stripe.paymentMethods.attach(declined.id, { customer: customer.id });
+      await stripe.subscriptions.update(subscription.id, { default_payment_method: declined.id });
+      const beforeRenewal = await stripe.subscriptions.retrieve(subscription.id);
+      const seatItem = beforeRenewal.items.data.find(item => item.price.recurring?.usage_type === 'licensed');
+      assert.ok(seatItem);
+      await stripe.testHelpers.testClocks.advance(clock.id, { frozen_time: seatItem.current_period_end + 3600 });
+      for (let tries = 0; (await stripe.testHelpers.testClocks.retrieve(clock.id)).status !== 'ready'; tries++) {
+        assert.ok(tries < 90); await wait(1000);
+      }
+      const overdue = await stripe.subscriptions.retrieve(subscription.id);
+      assert.equal(overdue.status, 'past_due');
+      await p.$transaction(tx => syncBaseStripeSubscription(tx, overdue, account));
+    }
+    const latestBeforeRemoval = (await stripe.subscriptions.retrieve(subscription.id)).latest_invoice;
     assert.deepEqual(await removeOrganisationMember({ domain, config, orgId: org.id,
       actorUserId: founder.id, userId: member.id }, { prisma: p }), { removed: true });
     assert.equal(await access(), null, 'Removal revokes access before Stripe updates the quantity');
     const removed = await settle(-1);
     assert.ok(removed.completedAt); assert.equal(removed.stripeInvoiceId, null);
     const current = await stripe.subscriptions.retrieve(subscription.id);
-    assert.equal(current.latest_invoice, added.stripeInvoiceId);
+    assert.equal(current.latest_invoice, latestBeforeRemoval);
+    assert.equal(current.status, scenario === '--declined-renewal' ? 'past_due' : 'active');
     assert.equal(current.items.data.find(item => item.price.recurring?.usage_type === 'licensed')?.quantity, 1);
     console.log(JSON.stringify({ step: 'verified', founderMinor: 299, additionMinor: charge.toString(), subscription: subscription.id,
       founderCreatedDefaultTeam: team.isDefault, refusedBeforeRegionAndCard: true, invitationsDelivered: messages,
+      declinedRenewal: scenario === '--declined-renewal',
       replayedAcceptance: true, blockedUntilPaid: true, revokedOnRemoval: true,
       noCreditOnRemoval: true, renewalQuantity: 1, databaseCashInvoices: await p.billingStripePaymentInvoice.count() }));
   } finally {
