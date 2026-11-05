@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { createRequire } from 'node:module';
+import { paySandboxCheckout } from './stripe-checkout-browser.js';
 import { setTimeout as wait } from 'node:timers/promises';
 import { randomUUID } from 'node:crypto';
 import { createTestDb } from '../helpers/test-db.js';
@@ -15,27 +15,6 @@ import { prepareStripePaymentInvoice, persistStripePaymentInvoice } from '../../
 const [expected, optIn] = process.argv.slice(2);
 assert.equal(optIn, '--create-test-data');
 const stripe = sandboxCliClient(expected ?? '');
-const requireAdmin = createRequire(new URL('../../../Admin/package.json', import.meta.url));
-const { chromium } = requireAdmin('@playwright/test') as typeof import('@playwright/test');
-
-async function pay(url: string) {
-  assert.equal(new URL(url).hostname, 'checkout.stripe.com');
-  const browser = await chromium.launch({ headless: true, ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}) });
-  try {
-    const page = await browser.newPage({ locale: 'en-GB' }); page.setDefaultTimeout(45000);
-    await page.goto(url, { waitUntil: 'domcontentloaded' });
-    await page.locator('#cardNumber').fill('4242424242424242');
-    await page.locator('#cardExpiry').fill('1235'); await page.locator('#cardCvc').fill('123');
-    await page.locator('#billingName').fill('Nessie Sandbox Evaluation');
-    await page.locator('#billingCountry').selectOption('GB');
-    await page.getByRole('button', { name: 'Enter address manually' }).click();
-    await page.locator('#billingAddressLine1').fill('1 Payment Test Road');
-    await page.locator('#billingLocality').fill('London'); await page.locator('#billingPostalCode').fill('SW1A 1AA');
-    await page.locator('button[type="submit"]').click();
-    await page.waitForURL('https://example.com/?seat-evaluation=success', { timeout: 90000, waitUntil: 'commit' });
-  } finally { await browser.close(); }
-}
-
 async function run() {
   const db = await createTestDb(); if (!db) throw new Error('An evaluation database is required');
   const p = db.prisma;
@@ -78,7 +57,7 @@ async function run() {
       resolveTariff: (async () => ({ actor: { jti: runId }, payload: terms })) as never,
       authorizeAction: (async () => ({ id: runId })) as never });
     console.log(JSON.stringify({ step: 'checkout_created', account: expected, session: checkout.checkout_session_id }));
-    await pay(checkout.checkout_url);
+    await paySandboxCheckout(checkout.checkout_url, request.successUrl);
     const session = await stripe.checkout.sessions.retrieve(checkout.checkout_session_id);
     assert.equal(session.payment_status, 'paid'); assert.equal(session.amount_total, 299);
     assert.equal(typeof session.subscription, 'string');

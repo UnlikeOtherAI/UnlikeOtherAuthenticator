@@ -6,6 +6,9 @@ import { STRIPE_BILLING_API_VERSION } from '../../src/services/billing-stripe-cl
 /** Authenticate each real provider request with the local CLI. Never export its credential. */
 export function sandboxCliClient(expected: string) {
   assert.match(expected, /^acct_[A-Za-z0-9]+$/);
+  const db = new URL(process.env.DATABASE_URL ?? 'https://missing.invalid');
+  assert.ok(['postgresql:', 'postgres:'].includes(db.protocol) && ['localhost', '127.0.0.1', '[::1]'].includes(db.hostname));
+  assert.match(db.pathname, /billing_(?:audit|eval)/);
   const cli = process.env.STRIPE_CLI_PATH ?? 'stripe';
   function command(args: string[]) {
     try { return JSON.parse(execFileSync(cli, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 45000 })); }
@@ -20,7 +23,8 @@ export function sandboxCliClient(expected: string) {
     assert.equal(who.account_id, expected); assert.equal(who.mode, 'test');
     const verb = req.method.toLowerCase();
     assert.ok(['get', 'post', 'delete'].includes(verb));
-    const argv = [verb, url.pathname, '--stripe-version', STRIPE_BILLING_API_VERSION];
+    const version = req.headers.get('stripe-version') ?? STRIPE_BILLING_API_VERSION;
+    const argv = [verb, url.pathname, '--stripe-version', version];
     if (verb === 'delete') argv.push('--confirm');
     const key = req.headers.get('idempotency-key');
     if (verb === 'post' && key) argv.push('--idempotency', key);
