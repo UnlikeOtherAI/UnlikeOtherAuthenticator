@@ -1,3 +1,5 @@
+BEGIN;
+
 -- Keep both Stripe source line references when a positive seat proration nets two quantity lines.
 ALTER TABLE billing_stripe_payment_invoice_lines ADD COLUMN offset_stripe_line_id varchar(255),
   ADD COLUMN carried_from_stripe_invoice_id varchar(255);
@@ -60,6 +62,19 @@ CREATE TABLE billing_automatic_seat_changes (
 );
 CREATE INDEX billing_automatic_seat_changes_seat_subscription_id_id_idx ON billing_automatic_seat_changes(seat_subscription_id,id);
 CREATE INDEX billing_automatic_seat_due_idx ON billing_automatic_seat_changes(next_attempt_at,id) WHERE completed_at IS NULL;
+
+CREATE FUNCTION billing_guard_automatic_seat_change() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF (OLD.id,OLD.seat_subscription_id,OLD.user_id,OLD.delta,OLD.from_quantity,OLD.to_quantity,OLD.effective_at)
+    IS DISTINCT FROM (NEW.id,NEW.seat_subscription_id,NEW.user_id,NEW.delta,NEW.from_quantity,NEW.to_quantity,NEW.effective_at)
+    OR (OLD.completed_at IS NOT NULL AND NEW IS DISTINCT FROM OLD) THEN
+    RAISE EXCEPTION 'Automatic seat operation evidence is immutable' USING ERRCODE='23514';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+CREATE TRIGGER billing_automatic_seat_change_immutable BEFORE UPDATE ON billing_automatic_seat_changes
+  FOR EACH ROW EXECUTE FUNCTION billing_guard_automatic_seat_change();
 
 -- The membership trigger already serializes all writers to an organisation. Keep additions and
 -- removals separate, including a replacement that leaves the same number of people on the roster.
@@ -218,3 +233,5 @@ BEGIN
 END;
 $$;
 GRANT EXECUTE ON FUNCTION billing_pending_product_seats(text,text,text) TO uoa_app,uoa_admin;
+
+COMMIT;

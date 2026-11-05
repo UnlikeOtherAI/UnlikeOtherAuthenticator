@@ -76,6 +76,22 @@ describe.skipIf(!process.env.DATABASE_URL)('Nessie anniversary seat payments', (
       await tx.teamInvite.update({ where: { id: invitation.id }, data: { acceptedAt: new Date(), acceptedUserId: member.id } });
     });
     const context = () => getActiveUserOrgContext({ userId: member.id, orgId: org.id, domain: org.domain }, { prisma: p });
+    // Retain the actual migration's table revocations. Only schema usage is needed by the tenant role.
+    await p.$executeRawUnsafe('GRANT USAGE ON SCHEMA "' + db.schema + '" TO uoa_app');
+    const unpaid = (actor: string, subject: string, domain: string) => p.$transaction(async tx => {
+      await tx.$executeRawUnsafe('SET LOCAL ROLE uoa_app');
+      await tx.$executeRaw`SELECT set_config('app.user_id',${actor},true),
+        set_config('app.domain',${domain},true),set_config('app.org_id',${org.id},true)`;
+      return tx.$queryRaw`SELECT team_id FROM billing_pending_product_seats(${org.id},${subject},${domain})`;
+    });
+    expect(await unpaid(member.id, member.id, org.domain)).toEqual([{ team_id: null }]);
+    expect(await unpaid(founder.id, founder.id, org.domain)).toEqual([]);
+    expect(await unpaid(member.id, founder.id, org.domain)).toEqual([{ team_id: null }]);
+    expect(await unpaid(member.id, member.id, 'another-product.example')).toEqual([]);
+    await expect(p.$transaction(async tx => {
+      await tx.$executeRawUnsafe('SET LOCAL ROLE uoa_app');
+      return tx.billingAutomaticSeatChange.findMany();
+    })).rejects.toThrow();
     expect(await context()).toBeNull();
     let pending = true;
     const invoices = new Map<string, { id: string; status: string; livemode: boolean; currency: string; customer: string;
@@ -113,6 +129,11 @@ describe.skipIf(!process.env.DATABASE_URL)('Nessie anniversary seat payments', (
     expect(evidence.every(row => row.completedAt)).toBe(true);
     expect(update.mock.calls.map(call => call[1].proration_behavior)).toEqual(['always_invoice', 'none', 'always_invoice']);
     expect(invoices.size).toBe(2);
+    expect(await unpaid(member.id, member.id, org.domain)).toEqual([]);
+    await expect(p.billingAutomaticSeatChange.update({ where: { id: evidence[0].id },
+      data: { completedAt: null } })).rejects.toThrow('immutable');
+    await expect(p.billingAutomaticSeatChange.update({ where: { id: evidence[0].id },
+      data: { userId: founder.id } })).rejects.toThrow('immutable');
   });
 });
 

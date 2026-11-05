@@ -67,15 +67,7 @@ export async function collectAnniversarySeat(change: SeatPayment, stripe: Provid
     return paidInvoice(await stripe.invoices.retrieve(change.stripeInvoiceId), change, subscription);
   }
   if (subscription.status !== 'active') return { status: 'hold', reason: 'SUBSCRIPTION_PAYMENT_REQUIRED' };
-  const at = Math.floor(change.effectiveAt.getTime() / 1000);
-  if (change.delta > 0 && (at < item.current_period_start || at >= item.current_period_end)) {
-    return { status: 'hold', reason: 'PRORATION_PERIOD_MISMATCH' };
-  }
-  // A lost response may already have moved the quantity. Only Stripe's idempotent response can
-  // identify the corresponding invoice. Refuse blind recovery outside Stripe's retention window.
-  if (now.getTime() - change.firstAttemptAt.getTime() >= 23 * 3600_000) {
-    return { status: 'hold', reason: 'PAYMENT_RECONCILIATION_REQUIRED' };
-  }
+
   if (item.quantity !== change.fromQuantity && item.quantity !== change.toQuantity) {
     return { status: 'hold', reason: 'QUANTITY_MISMATCH' };
   }
@@ -85,13 +77,23 @@ export async function collectAnniversarySeat(change: SeatPayment, stripe: Provid
     // A matching quantity alone could come from an operator editing Stripe. Recover the event
     // for this exact write before recognising payment or issuing another update.
     for await (const event of stripe.events.list({ type: 'customer.subscription.updated',
-      created: { gte: Math.floor(change.firstAttemptAt.getTime() / 1000) - 60 }, limit: 100 })) {
+      created: { gte: Math.floor(change.firstAttemptAt.getTime() / 1000) - 60,
+        lte: Math.floor(change.firstAttemptAt.getTime() / 1000) + 24 * 3600 }, limit: 100 })) {
       const applied = event.data.object as Stripe.Subscription;
       if (event.request?.idempotency_key !== key || applied.id !== subscription.id) continue;
       if (change.delta < 0) return { status: 'complete', invoice: null };
       const invoice = stripeExternalId(applied.latest_invoice);
       if (invoice) return paidInvoice(await stripe.invoices.retrieve(invoice), change, subscription);
     }
+    return { status: 'hold', reason: 'PAYMENT_RECONCILIATION_REQUIRED' };
+  }
+  // A read can recover a known write across an anniversary. A new write needs both the
+  // original billing period and a key still inside Stripe's idempotency retention window.
+  const at = Math.floor(change.effectiveAt.getTime() / 1000);
+  if (change.delta > 0 && (at < item.current_period_start || at >= item.current_period_end)) {
+    return { status: 'hold', reason: 'PRORATION_PERIOD_MISMATCH' };
+  }
+  if (now.getTime() - change.firstAttemptAt.getTime() >= 23 * 3600_000) {
     return { status: 'hold', reason: 'PAYMENT_RECONCILIATION_REQUIRED' };
   }
   const updated = await stripe.subscriptions.update(subscription.id, {
