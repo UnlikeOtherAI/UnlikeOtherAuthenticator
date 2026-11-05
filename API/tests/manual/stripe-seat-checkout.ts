@@ -50,11 +50,11 @@ async function run() {
     { prisma: p, inviterPrisma: p, sendTeamInviteEmail: async mail => {
       assert.equal(mail.to, 'member@example.test'); messages++;
     } });
-    await assert.rejects(issueInvite, /billing manager must complete the seat payment/i);
+    await assert.rejects(issueInvite, /choose the billing region and complete the seat payment/i);
     const region = await setOrganisationBillingRegion({
       request: { product: 'nessie', organisationId: org.id, teamId: team.id, userId: founder.id },
       region: 'EUROPE', actorToken: 'evaluation', credential: { ...key, service } as never,
-      endpoint: '/billing/v1/region' as never,
+      endpoint: '/billing/v1/organisation-billing/region',
     }, { prisma: p, resolveTariff: (async () => ({ actor: { jti: runId } })) as never, authorizeAction: async () => {},
       captureRate: id => creditValueTarget(id, { db: p, stripe }) });
     assert.equal(region.currency, 'EUR');
