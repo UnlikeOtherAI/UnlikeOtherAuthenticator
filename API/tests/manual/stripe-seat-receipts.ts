@@ -14,7 +14,7 @@ if (!accountId || !/^acct_[a-zA-Z0-9]+$/.test(accountId) || !ids.length || ids.s
 const cli = process.env.STRIPE_CLI_PATH ?? 'stripe';
 function command(args: string[]) {
   try { return JSON.parse(execFileSync(cli, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 35_000 })); }
-  catch { throw new Error('Sandbox CLI read failed'); }
+  catch { throw new Error('Sandbox CLI read failed on ' + args.slice(0, 2).join(' ')); }
 }
 function get(path: string, params: Record<string, unknown> = {}) {
   const who = command(['whoami', '--format', 'json']);
@@ -55,7 +55,7 @@ async function run() {
   if (!db) throw new Error('An isolated evaluation DATABASE_URL is required');
   const p = db.prisma;
   try {
-    const owner = await p.user.create({ data: { userKey: 'eval-seat-owner' } });
+    const owner = await p.user.create({ data: { userKey: 'eval-seat-owner', email: 'receipt-owner@example.test' } });
     const org = await p.organisation.create({ data: { ownerId: owner.id, name: 'Receipt replay', slug: 'receipt', domain: 'receipt.example' } });
     await p.orgMember.create({ data: { orgId: org.id, userId: owner.id, role: 'owner' } });
     const service = await p.billingService.create({ data: { identifier: 'nessie', name: 'Nessie' } });
