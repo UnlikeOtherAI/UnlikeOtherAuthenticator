@@ -1869,7 +1869,7 @@ Sending an invitation takes no payment. An accepted membership enters an ordered
 
 A classic Stripe quantity change can have a negative line for the previous quantity and a positive replacement line. UOA retains both references and records their net seat charge. When Stripe carries a small charge, the next cash invoice includes it only after UOA verifies the customer balance transactions and original same-subscription invoice lines. AI top-ups issue separate purchase invoices.
 
-Seat collection verifies the exact Stripe Price bound to the immutable tariff before changing quantity. A past-due or unpaid renewal still permits a departing member's quantity reduction with proration disabled. The unpaid invoice remains owed and the next renewal uses the reduced quantity. Additions require an active subscription.
+Seat collection verifies the exact Stripe Price bound to the immutable tariff before changing quantity. A past-due or unpaid renewal still permits a departing member's quantity reduction with proration disabled. The unpaid invoice remains owed and the next renewal uses the reduced quantity. Additions require an active subscription. Pending-seat access restrictions survive billing-key expiry, revocation and product deactivation. The retained integration binding identifies the relying product and grants no authorization.
 
 The PostgreSQL journey is `API/tests/integration/billing-anniversary-seats.persistence.test.ts`. It covers simultaneous joins, row-level permissions, refusal, recovery, removal and rejoin. Operator assignments follow their effective billing month. `billing-nessie-seat-exceptions.persistence.test.ts` exercises six seat/usage combinations at both scopes. The signup assignment takes effect in the current month.
 

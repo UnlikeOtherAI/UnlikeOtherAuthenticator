@@ -93,6 +93,12 @@ describe.skipIf(!process.env.DATABASE_URL)('Nessie anniversary seat payments', (
       return tx.billingAutomaticSeatChange.findMany();
     })).rejects.toThrow();
     expect(await context()).toBeNull();
+    await p.billingAppKey.update({ where: { id: appKey.id }, data: { revokedAt: new Date() } });
+    expect(await unpaid(member.id, member.id, org.domain)).toEqual([{ team_id: null }]);
+    expect(await context()).toBeNull();
+    await p.billingAppKey.create({ data: { serviceId: service.id, purpose: appKey.purpose, name: 'Rotated seat key',
+      keyPrefix: 'uoa_test_rotated', secretDigest: 'rotated-scope-test-digest', actorIssuer: appKey.actorIssuer,
+      actorAudience: appKey.actorAudience, actorKeyId: 'rotated', actorPublicJwk: {}, checkoutReturnOrigins: appKey.checkoutReturnOrigins } });
     let pending = true;
     const invoices = new Map<string, { id: string; status: string; livemode: boolean; currency: string; customer: string;
       billing_reason: string; parent: { subscription_details: { subscription: string } } }>();
