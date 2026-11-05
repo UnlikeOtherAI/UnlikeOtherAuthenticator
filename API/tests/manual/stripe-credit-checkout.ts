@@ -114,7 +114,12 @@ async function run() {
           microcredits: purchase.creditsReceivedMicrocredits.toString(), fx: purchase.fxRateSource, savedCard: true, replay: 'duplicate' }));
       }
     }
-  } finally { await db.cleanup(); }
+  } catch (error) {
+    console.error('Retained isolated PostgreSQL schema for recovery: ' + db.schema);
+    await p.$disconnect();
+    throw error;
+  }
+  await db.cleanup();
 }
 run().catch(error => { console.error(error instanceof Error ? error.message : 'Credit purchase evaluation failed'); process.exitCode = 1; });
 
