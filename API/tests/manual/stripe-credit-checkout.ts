@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { setTimeout as wait } from 'node:timers/promises';
 import type Stripe from 'stripe';
+import { PrismaClient } from '@prisma/client';
 import { createTestDb } from '../helpers/test-db.js';
 import { sandboxCliClient } from './stripe-cli-sandbox.js';
 import { paySandboxCheckout } from './stripe-checkout-browser.js';
@@ -12,8 +13,8 @@ import { CREDIT_PRODUCT_METADATA, CREDIT_TOP_UP_SPECS, creditPriceMetadata,
   creditFundingPolicySpec, type CreditPurchaseCurrency } from '../../src/services/billing-stripe-catalog-provisioning-spec.js';
 
 const [expected, optIn, ...regions] = process.argv.slice(2);
-assert.equal(optIn, '--create-test-data');
-assert.ok(regions.length && regions.every(code => ['USD', 'EUR', 'GBP'].includes(code)));
+assert.ok(optIn === '--create-test-data' || optIn === '--resume-test-checkout');
+if (optIn === '--create-test-data') assert.ok(regions.length && regions.every(code => ['USD', 'EUR', 'GBP'].includes(code)));
 const stripe = sandboxCliClient(expected ?? '');
 const trace = 'nessie-credit-' + randomUUID();
 // The in-process FX reader loads the normal app environment. The test signs no customer sessions.
@@ -123,5 +124,38 @@ async function run() {
   }
   await db.cleanup();
 }
-run().catch(error => { console.error(error instanceof Error ? error.message : 'Credit purchase evaluation failed'); process.exitCode = 1; });
+async function resume() {
+  const [schema, id] = regions;
+  assert.match(schema ?? '', /^test_[0-9]+_[a-f0-9]{32}$/); assert.ok(id && regions.length === 2);
+  const url = new URL(process.env.DATABASE_URL!); url.searchParams.set('schema', schema!);
+  const p = new PrismaClient({ datasources: { db: { url: url.toString() } } });
+  try {
+    const row = await p.billingCreditTopUpCheckout.findUniqueOrThrow({ where: { id }, include: { customer: true, account: true } });
+    assert.equal(row.account.stripeAccountId, expected); assert.equal(row.account.livemode, false);
+    assert.ok(row.stripeCheckoutSessionId && row.customer.stripeCustomerId);
+    const customer = await stripe.customers.retrieve(row.customer.stripeCustomerId);
+    assert.ok(!customer.deleted && customer.metadata.verification_run.startsWith('nessie-credit-'));
+    const session = await stripe.checkout.sessions.retrieve(row.stripeCheckoutSessionId);
+    assert.equal(session.client_reference_id, row.id); assert.equal(session.customer, customer.id);
+    if (session.status === 'open') {
+      assert.equal(row.status, 'OPEN'); assert.ok(session.url);
+      await paySandboxCheckout(session.url, 'https://example.com/?uoa_billing=checkout_complete');
+    }
+    const paid = await stripe.checkout.sessions.retrieve(session.id);
+    assert.equal(paid.payment_status, 'paid'); assert.equal(typeof paid.payment_intent, 'string');
+    const event = await originalEvent(paid.payment_intent as string, session.created - 60);
+    const apply = () => applyTrustedCreditFundingStripeEvent({ event, expectedPaymentIntentId: paid.payment_intent as string,
+      stripe, account: row.account, prisma: p });
+    await apply(); assert.deepEqual(await apply(), { duplicate: true, applied: false });
+    const invoice = await p.billingCreditPaymentInvoice.findFirstOrThrow({ where: { topUpCheckoutId: row.id } });
+    assert.equal(invoice.grossAmountMinor, row.paymentAmountMinor);
+    assert.equal(invoice.creditsPurchasedMicrocredits, row.creditsReceivedMicrocredits);
+    assert.equal(await p.billingCreditEntry.count({ where: { sourceType: 'credit_top_up_checkout', sourceId: row.id } }), 1);
+    console.log(JSON.stringify({ step: 'resumed', currency: row.currency, amountMinor: row.paymentAmountMinor.toString(),
+      paymentIntent: paid.payment_intent, event: event.id, invoice: invoice.id, microcredits: row.creditsReceivedMicrocredits.toString() }));
+  } finally { await p.$disconnect(); }
+}
+(optIn === '--create-test-data' ? run() : resume()).catch(error => {
+  console.error(error instanceof Error ? error.message : 'Credit purchase evaluation failed'); process.exitCode = 1;
+});
 
