@@ -135,8 +135,16 @@ describe.skipIf(!process.env.DATABASE_URL)('Nessie anniversary seat payments', (
     remote.status = 'past_due';
     await p.$transaction(tx => syncBaseStripeSubscription(tx, remote as never, acct));
     await p.orgMember.update({ where: identity, data: { status: 'REMOVED' } });
+    update.mockRejectedValueOnce(new Error('Temporary provider outage'));
+    await cycle();
+    const delayed = await p.billingAutomaticSeatChange.findFirstOrThrow({ where: { delta: -1 } });
+    expect(delayed).toMatchObject({ completedAt: null, failureCode: 'PROVIDER_RETRY' });
+    expect(item.quantity).toBe(2);
+    now = new Date(now.getTime() + 24 * 3600_000);
     await cycle();
     expect(item.quantity).toBe(1);
+    expect((await p.billingAutomaticSeatChange.findUniqueOrThrow({ where: { id: delayed.id } })).firstAttemptAt)
+      .toEqual(delayed.firstAttemptAt);
     expect(await context()).toBeNull();
     remote.status = 'active';
     await p.$transaction(tx => syncBaseStripeSubscription(tx, remote as never, acct));
@@ -147,7 +155,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Nessie anniversary seat payments', (
       [1, 1, 2, 'in_1'], [-1, 2, 1, null], [1, 1, 2, 'in_2'],
     ]);
     expect(evidence.every(row => row.completedAt)).toBe(true);
-    expect(update.mock.calls.map(call => call[1].proration_behavior)).toEqual(['always_invoice', 'none', 'always_invoice']);
+    expect(update.mock.calls.map(call => call[1].proration_behavior)).toEqual(['always_invoice', 'none', 'none', 'always_invoice']);
     expect(invoices.size).toBe(2);
     await expect(p.billingAutomaticSeatChange.delete({ where: { id: evidence[0].id } })).rejects.toThrow('immutable');
     expect(await unpaid(member.id, member.id, org.domain)).toEqual([]);

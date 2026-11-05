@@ -113,10 +113,12 @@ async function run() {
     assert.equal(await access(), null, 'An unpaid seat must not grant Nessie access');
     await accept();
     assert.equal(await p.billingAutomaticSeatChange.count(), 1, 'Reopening the invitation must not charge twice');
+    let schedulerOffsetMs = 0;
     async function settle(delta: number) {
       const deadline = Date.now() + 90_000;
       do {
-        await runAnniversarySeatCycle({ prisma: p, stripe, livemode: false });
+        await runAnniversarySeatCycle({ prisma: p, stripe, livemode: false,
+          now: () => new Date(Date.now() + schedulerOffsetMs) });
         const row = await p.billingAutomaticSeatChange.findFirstOrThrow({ where: { delta } });
         assert.equal(row.failureCode, null, 'Seat operation ' + delta + ': ' + row.failureCode);
         if (row.completedAt) return row;
@@ -147,6 +149,16 @@ async function run() {
     assert.deepEqual(await removeOrganisationMember({ domain, config, orgId: org.id,
       actorUserId: founder.id, userId: member.id }, { prisma: p }), { removed: true });
     assert.equal(await access(), null, 'Removal revokes access before Stripe updates the quantity');
+    if (scenario === '--declined-renewal') {
+      // Fail before the provider write, then let the same durable row recover after a simulated day.
+      const unavailable = { accounts: stripe.accounts, events: stripe.events, invoices: stripe.invoices,
+        subscriptions: { retrieve: stripe.subscriptions.retrieve.bind(stripe.subscriptions),
+          update: async () => { throw new Error('Evaluation provider outage'); } } };
+      await runAnniversarySeatCycle({ prisma: p, stripe: unavailable as never, livemode: false });
+      const retry = await p.billingAutomaticSeatChange.findFirstOrThrow({ where: { delta: -1 } });
+      assert.equal(retry.completedAt, null); assert.equal(retry.failureCode, 'PROVIDER_RETRY');
+      schedulerOffsetMs = 24 * 3600_000;
+    }
     const removed = await settle(-1);
     assert.ok(removed.completedAt); assert.equal(removed.stripeInvoiceId, null);
     const current = await stripe.subscriptions.retrieve(subscription.id);
@@ -155,7 +167,7 @@ async function run() {
     assert.equal(current.items.data.find(item => item.price.recurring?.usage_type === 'licensed')?.quantity, 1);
     console.log(JSON.stringify({ step: 'verified', founderMinor: 299, additionMinor: charge.toString(), subscription: subscription.id,
       founderCreatedDefaultTeam: team.isDefault, refusedBeforeRegionAndCard: true, invitationsDelivered: messages,
-      declinedRenewal: scenario === '--declined-renewal',
+      declinedRenewal: scenario === '--declined-renewal', delayedRemoval: schedulerOffsetMs > 0,
       replayedAcceptance: true, blockedUntilPaid: true, revokedOnRemoval: true,
       noCreditOnRemoval: true, renewalQuantity: 1, databaseCashInvoices: await p.billingStripePaymentInvoice.count() }));
   } finally {

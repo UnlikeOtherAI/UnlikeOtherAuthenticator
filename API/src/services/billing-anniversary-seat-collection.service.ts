@@ -89,13 +89,15 @@ export async function collectAnniversarySeat(change: SeatPayment, stripe: Provid
     }
     return { status: 'hold', reason: 'PAYMENT_RECONCILIATION_REQUIRED' };
   }
-  // A read can recover a known write across an anniversary. A new write needs both the
+  // A read can recover a known write across an anniversary. A new charge needs both the
   // original billing period and a key still inside Stripe's idempotency retention window.
+  // An unapplied reduction sets the verified quantity without a charge or credit, so it
+  // can safely retry after that window while the ordered queue still owns the transition.
   const at = Math.floor(change.effectiveAt.getTime() / 1000);
   if (change.delta > 0 && (at < item.current_period_start || at >= item.current_period_end)) {
     return { status: 'hold', reason: 'PRORATION_PERIOD_MISMATCH' };
   }
-  if (now.getTime() - change.firstAttemptAt.getTime() >= 23 * 3600_000) {
+  if (change.delta > 0 && now.getTime() - change.firstAttemptAt.getTime() >= 23 * 3600_000) {
     return { status: 'hold', reason: 'PAYMENT_RECONCILIATION_REQUIRED' };
   }
   const updated = await stripe.subscriptions.update(subscription.id, {

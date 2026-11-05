@@ -68,6 +68,20 @@ it.each(['past_due', 'unpaid'])('reduces renewal seats during %s without crediti
   }, { idempotencyKey: 'uoa:acct_test:test:checkout:seat:21:1' });
 });
 
+it('retries an unapplied removal after a day without enabling another charge', async () => {
+  const removal = pendingChange(-1);
+  const provider = pendingProvider('past_due');
+  const tomorrow = new Date(removal.firstAttemptAt.getTime() + 24 * 3600_000);
+  expect(await collectAnniversarySeat(removal, provider as never, tomorrow))
+    .toEqual({ status: 'complete', invoice: null });
+  expect(provider.subscriptions.update.mock.calls[0][1].proration_behavior).toBe('none');
+  const addition = pendingChange();
+  const active = pendingProvider();
+  expect(await collectAnniversarySeat(addition, active as never, tomorrow))
+    .toEqual({ status: 'hold', reason: 'PAYMENT_RECONCILIATION_REQUIRED' });
+  expect(active.subscriptions.update).not.toHaveBeenCalled();
+});
+
 it.each(['past_due', 'unpaid', 'canceled', 'incomplete', 'incomplete_expired', 'paused', 'trialing'])(
   'refuses additional charges on a %s subscription', async status => {
     const change = pendingChange();
