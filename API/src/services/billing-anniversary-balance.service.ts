@@ -43,4 +43,3 @@ export async function seatBalanceSources(invoice: Stripe.Invoice, subscriptionId
   }
   return unproven();
 }
-

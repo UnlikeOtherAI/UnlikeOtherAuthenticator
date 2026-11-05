@@ -158,4 +158,3 @@ async function resume() {
 (optIn === '--create-test-data' ? run() : resume()).catch(error => {
   console.error(error instanceof Error ? error.message : 'Credit purchase evaluation failed'); process.exitCode = 1;
 });
-

@@ -39,4 +39,3 @@ export function sandboxCliClient(expected: string) {
   // All traffic goes through the CLI transport above. The SDK requires a nonempty constructor value.
   return new Stripe('sandbox-cli-transport', { httpClient, apiVersion: STRIPE_BILLING_API_VERSION, maxNetworkRetries: 0 });
 }
-

@@ -21,4 +21,3 @@ describe('Stripe classic quarter-month EUR proration', () => {
     }
   });
 });
-

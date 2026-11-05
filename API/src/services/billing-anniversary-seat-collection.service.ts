@@ -112,4 +112,3 @@ export async function collectAnniversarySeat(change: SeatPayment, stripe: Provid
   }
   return paidInvoice(updated.latest_invoice, change, updated);
 }
-

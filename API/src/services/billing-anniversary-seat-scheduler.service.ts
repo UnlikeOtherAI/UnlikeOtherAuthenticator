@@ -88,4 +88,3 @@ export function startAnniversarySeatScheduler(params: {
   timer.unref();
   return { stop: () => clearInterval(timer) };
 }
-

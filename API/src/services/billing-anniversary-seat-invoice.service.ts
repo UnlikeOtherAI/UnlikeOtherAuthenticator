@@ -41,4 +41,3 @@ export function netSeatProration(lines: Stripe.InvoiceLineItem[], service: {
     label: service.name + ' additional seat', subscriptionMinor: base, usageMinor: 0n, taxMinor: tax,
     creditMinor: 0n, grossMinor: base + tax, dueMinor: base + tax };
 }
-

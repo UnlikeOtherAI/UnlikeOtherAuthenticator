@@ -23,4 +23,3 @@ describe('Stripe minimum-charge seat carry', () => {
     }
   });
 });
-

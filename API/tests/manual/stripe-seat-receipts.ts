@@ -101,4 +101,3 @@ async function run() {
   } finally { await db.cleanup(); }
 }
 run().catch(error => { console.error(error instanceof Error ? error.message : 'Receipt verification failed'); process.exitCode = 1; });
-

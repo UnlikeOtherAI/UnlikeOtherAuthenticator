@@ -152,4 +152,3 @@ describe.skipIf(!process.env.DATABASE_URL)('Nessie anniversary seat payments', (
       data: { userId: founder.id } })).rejects.toThrow('immutable');
   });
 });
-

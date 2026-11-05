@@ -44,4 +44,3 @@ export async function assignNewNessieOrganisation(tx: Prisma.TransactionClient, 
   await appendTariffTermEvent(tx, { serviceId: input.serviceId, source: 'ORGANISATION', scopeKey: input.orgId,
     effectiveFromMonth: utcBillingMonth(input.now), tariffId: tariff.id, assignmentId: created.id, reason: 'new-organisation-region' });
 }
-

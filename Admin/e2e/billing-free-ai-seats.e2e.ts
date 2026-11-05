@@ -32,4 +32,3 @@ test('a billing operator can waive AI usage and charge a monthly seat price', as
       seat_policy: 'automatic', seat_charge_timing: 'prorated' } });
   expect(fixture.unexpected).toEqual([]);
 });
-

@@ -53,4 +53,3 @@ export async function provisionNessieSeatCatalog(params: {
   }
   return { dryRun: params.dryRun, stripeAccountId: remote.id, livemode: account.livemode, plans };
 }
-
