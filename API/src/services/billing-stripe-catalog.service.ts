@@ -209,6 +209,7 @@ export async function ensureStripeTariffPrice(
       version: number;
       monthlyAmountMinor: bigint;
       monthlyChargeBasis?: BillingMonthlyChargeBasis;
+      anniversarySeats?: boolean;
     };
     catalog: Awaited<ReturnType<typeof ensureStripeCatalog>>;
     account: StripeAccountContext;
@@ -217,7 +218,8 @@ export async function ensureStripeTariffPrice(
   deps?: { prisma?: CatalogPrisma },
 ) {
   const prisma = client(deps);
-  const licensedMonthly = params.tariff.monthlyChargeBasis !== BillingMonthlyChargeBasis.PER_SEAT;
+  const licensedMonthly = params.tariff.anniversarySeats === true ||
+    params.tariff.monthlyChargeBasis !== BillingMonthlyChargeBasis.PER_SEAT;
   let mapping = await prisma.billingStripeTariffPrice.upsert({
     where: {
       accountId_tariffId: {

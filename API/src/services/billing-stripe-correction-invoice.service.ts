@@ -13,7 +13,7 @@ import { compensateFinalizedStripeInvoice }
 import type { StripeInvoiceCashClient } from './billing-stripe-payment-evidence.service.js';
 import { stripeExternalId } from './billing-stripe-webhook-utils.service.js';
 
-type Client = StripeInvoiceCashClient & Pick<Stripe, 'accounts' | 'subscriptions' | 'invoiceItems' | 'taxRates'>;
+type Client = StripeInvoiceCashClient & Pick<Stripe, 'accounts' | 'subscriptions' | 'invoiceItems' | 'taxRates' | 'customers'>;
 
 async function recoverInvoice(stripe: Client, customer: string, key: string, since: Date) {
   let after: string | undefined; let found: Stripe.Invoice | null = null;

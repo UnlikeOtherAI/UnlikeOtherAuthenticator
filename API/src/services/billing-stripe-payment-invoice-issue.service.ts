@@ -10,7 +10,7 @@ import { createBillingInvoicePdfStorage, type BillingInvoicePdfStorage } from '.
 import { prepareStripePaymentInvoice } from './billing-stripe-payment-invoice-source.service.js';
 import { type StripeInvoiceCashClient } from './billing-stripe-payment-evidence.service.js';
 
-type Provider = StripeInvoiceCashClient & Pick<Stripe, 'subscriptions'>;
+type Provider = StripeInvoiceCashClient & Pick<Stripe, 'subscriptions' | 'customers'>;
 
 export async function issueStripePaymentInvoice(id: string, deps: {
   prisma: PrismaClient; stripe: Provider; account: StripeAccountContext;

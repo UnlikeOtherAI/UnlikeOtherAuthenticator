@@ -460,6 +460,7 @@ model User {
   billingCreditAdminAdjustments        BillingCreditAdminAdjustment[]            @relation("CreditAdminAdjustmentCreator")
   billingCreditAutoTopUpDisables       BillingCreditAutoTopUpDisableEvent[]      @relation("CreditAutoTopUpDisabler")
   billingSeatMembershipIntervals       BillingSeatMembershipInterval[]
+  billingAutomaticSeatChanges          BillingAutomaticSeatChange[]
   billingOrgResponsibilitiesAssumed    BillingOrgResponsibility[]                @relation("BillingOrgResponsibilityAssumer")
   billingOrgResponsibilitiesReleased   BillingOrgResponsibility[]                @relation("BillingOrgResponsibilityReleaser")
   recurringAddonCheckouts              BillingRecurringAddonCheckout[]           @relation("RecurringAddonCheckoutRequester")
@@ -1932,6 +1933,7 @@ model BillingTariff {
   monthlyChargeBasis BillingMonthlyChargeBasis @default(FLAT) @map("monthly_charge_basis")
   seatPolicy BillingSeatPolicy? @map("seat_policy")
   seatChargeTiming BillingSeatChargeTiming? @map("seat_charge_timing")
+  anniversarySeats Boolean @default(false) @map("anniversary_seats")
   usagePaymentMode BillingUsagePaymentMode @default(PAY_AS_YOU_GO) @map("usage_payment_mode")
   currency           String                @db.Char(3)
   isDefault          Boolean               @default(false) @map("is_default")
@@ -2372,6 +2374,7 @@ model BillingStripeCheckoutSession {
   scopeKey                String                 @map("scope_key") @db.VarChar(520)
   actorJti                String                 @map("actor_jti") @db.VarChar(256)
   fixedSeatQuantity       Int?                   @map("fixed_seat_quantity")
+  initialSeatMembers      String[]               @default([]) @map("initial_seat_members")
   requestedByUserId       String                 @map("requested_by_user_id")
   successUrlDigest        String                 @map("success_url_digest") @db.Char(64)
   cancelUrlDigest         String                 @map("cancel_url_digest") @db.Char(64)
@@ -2747,6 +2750,7 @@ model BillingSeatSubscription {
   team                Team?                      @relation(fields: [teamId], references: [id], onDelete: Restrict)
   membershipIntervals BillingSeatMembershipInterval[]
   capacityRevisions   BillingFixedSeatCapacityRevision[]
+  seatChanges         BillingAutomaticSeatChange[]
 
   @@index([serviceId, orgId, teamId, activatedAt])
   @@map("billing_seat_subscriptions")
@@ -2768,6 +2772,26 @@ model BillingSeatMembershipInterval {
   @@unique([seatSubscriptionId, userId, startsAt])
   @@index([seatSubscriptionId, startsAt, endsAt])
   @@map("billing_seat_membership_intervals")
+}
+
+model BillingAutomaticSeatChange {
+  id                 BigInt    @id @default(autoincrement())
+  seatSubscriptionId String    @map("seat_subscription_id")
+  userId             String    @map("user_id")
+  delta              Int
+  fromQuantity       Int       @map("from_quantity")
+  toQuantity         Int       @map("to_quantity")
+  effectiveAt        DateTime  @map("effective_at")
+  completedAt        DateTime? @map("completed_at")
+  nextAttemptAt      DateTime  @default(now()) @map("next_attempt_at")
+  stripeInvoiceId    String?   @map("stripe_invoice_id")
+  failureCode        String?   @map("failure_code")
+  firstAttemptAt     DateTime? @map("first_attempt_at")
+  attemptVersion     Int       @default(1) @map("attempt_version")
+  user               User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  seatSubscription   BillingSeatSubscription @relation(fields: [seatSubscriptionId], references: [id], onDelete: Restrict)
+  @@index([seatSubscriptionId, id])
+  @@map("billing_automatic_seat_changes")
 }
 
 model BillingFixedSeatCapacityRevision {
@@ -4906,6 +4930,8 @@ model BillingStripePaymentInvoiceLine {
   id                String @id @default(cuid())
   invoiceId         String @map("invoice_id")
   stripeLineId      String @map("stripe_line_id") @db.VarChar(255)
+  offsetStripeLineId String? @map("offset_stripe_line_id") @db.VarChar(255)
+  carriedFromStripeInvoiceId String? @map("carried_from_stripe_invoice_id") @db.VarChar(255)
   serviceId         String @map("service_id")
   serviceIdentifier String @map("service_identifier") @db.VarChar(100)
   billingMonth      String @map("billing_month") @db.Char(7)

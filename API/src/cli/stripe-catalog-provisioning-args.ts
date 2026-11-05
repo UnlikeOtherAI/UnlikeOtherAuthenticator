@@ -8,6 +8,7 @@ export type StripeCatalogCliOptions =
       help: false;
       dryRun: boolean;
       nessieTopUps?: true;
+      nessieSeats?: true;
       stripeAccountId: string;
       livemode: boolean;
     };
@@ -30,6 +31,7 @@ export function parseStripeCatalogCliArgs(args: string[]): StripeCatalogCliOptio
       confirm: { type: 'string' },
       'dry-run': { type: 'boolean', default: false },
       'nessie-top-ups': { type: 'boolean', default: false },
+      'nessie-seats': { type: 'boolean', default: false },
       help: { type: 'boolean', short: 'h', default: false },
       'stripe-account': { type: 'string' },
       'stripe-mode': { type: 'string' },
@@ -42,7 +44,7 @@ export function parseStripeCatalogCliArgs(args: string[]): StripeCatalogCliOptio
     !stripeAccountId ||
     !/^acct_[A-Za-z0-9]+$/.test(stripeAccountId) ||
     (stripeMode !== 'test' && stripeMode !== 'live') ||
-    values.apply === values['dry-run']
+    (values['nessie-seats'] && values['nessie-top-ups']) || values.apply === values['dry-run']
   ) {
     invalidArgs();
   }
@@ -56,6 +58,7 @@ export function parseStripeCatalogCliArgs(args: string[]): StripeCatalogCliOptio
     help: false,
     dryRun: values['dry-run'],
     ...(values['nessie-top-ups'] ? { nessieTopUps: true as const } : {}),
+    ...(values['nessie-seats'] ? { nessieSeats: true as const } : {}),
     stripeAccountId,
     livemode,
   };

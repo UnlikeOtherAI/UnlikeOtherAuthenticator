@@ -88,6 +88,11 @@ export async function getActiveUserOrgContext(
 
   await assertOrgAccessPolicy({ userId, domain, orgId: orgMembership.orgId, assuranceId: params.assuranceId, authenticationEvidenceId: params.authenticationEvidenceId }, prisma);
 
+  // The function exposes only this person's unpaid seat scopes to this relying party; the
+  // tenant connection has no read privileges on the underlying financial or credential tables.
+  const unpaid = await prisma.$queryRaw<Array<{ team_id: string | null }>>`
+    SELECT team_id FROM billing_pending_product_seats(${orgMembership.orgId},${userId},${domain})`;
+  if (unpaid.some(row => row.team_id === null)) return null;
   const teamMemberships = await prisma.teamMember.findMany({
     where: {
       userId,
@@ -95,6 +100,7 @@ export async function getActiveUserOrgContext(
       team: {
         orgId: orgMembership.orgId,
         lifecycleStatus: 'ACTIVE',
+        ...(unpaid.length ? { id: { notIn: unpaid.flatMap(row => row.team_id ? [row.team_id] : []) } } : {}),
         org: { lifecycleStatus: 'ACTIVE' },
       },
     },

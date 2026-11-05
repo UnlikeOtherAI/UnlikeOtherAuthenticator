@@ -143,7 +143,7 @@ export function assertStripeUsageSubscription(
       !(options?.allowCanceledInvoicePeriod && subscription.status === 'canceled')) ||
     !subscription.service.active ||
     subscription.tariff.serviceId !== subscription.serviceId ||
-    subscription.tariff.collectionMode !== BillingCollectionMode.STRIPE ||
+    subscription.tariff.collectionMode !== BillingCollectionMode.STRIPE || subscription.tariff.anniversarySeats ||
     (subscription.tariff.mode === BillingTariffMode.FREE && subscription.tariff.monthlyAmountMinor === 0n) ||
     !subscription.customer.stripeCustomerId ||
     subscription.account.livemode !== subscription.livemode ||

@@ -93,8 +93,9 @@ export function registerErrorHandler(app: FastifyInstance): void {
 
     // Prisma wraps a trigger's custom SQLSTATE in an unknown-request error.
     // Keep one mapping here so every membership writer returns the same 409.
-    if (error instanceof Error && /\bPZ001\b/.test(error.message)) {
-      const capacityError = new AppError('BAD_REQUEST', 409, 'SEAT_CAPACITY_EXCEEDED');
+    if (error instanceof Error && /\bPZ00[12]\b/.test(error.message)) {
+      const capacityError = new AppError('BAD_REQUEST', 409,
+        /\bPZ002\b/.test(error.message) ? 'SEAT_PAYMENT_REQUIRED' : 'SEAT_CAPACITY_EXCEEDED');
       reply.status(409).send(buildPublicErrorBody({
         request, error: capacityError, statusCode: 409,
       }));

@@ -38,7 +38,7 @@ export async function compensateFinalizedStripeInvoice(
     now?: Date;
     correctionId?: string;
   },
-  deps?: { prisma?: PrismaClient; stripe?: Pick<Stripe, 'accounts' | 'subscriptions'> & StripeInvoiceCashClient },
+  deps?: { prisma?: PrismaClient; stripe?: Pick<Stripe, 'accounts' | 'subscriptions' | 'customers'> & StripeInvoiceCashClient },
 ) {
   const prisma = deps?.prisma ?? getAdminPrisma();
   const stripe = deps?.stripe ?? requireStripeBillingEnabled().client;

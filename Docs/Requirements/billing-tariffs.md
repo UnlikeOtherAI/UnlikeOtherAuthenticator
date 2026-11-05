@@ -1859,6 +1859,18 @@ additive 20261005103000 migration corrects the reservation guard's zero-held
 case; active held funds, verified adjustment provenance, immutable ledger
 entries, and the prohibition on unfunded usage debits remain enforced.
 
+## Nessie signup and automatic seat collection
+
+New Nessie Stripe tariff versions with automatic prorated seats and prepaid or waived AI usage charge the active roster at Checkout. The creator occupies a paid seat. Checkout saves its roster under the organisation lock and starts a monthly subscription on payment. The licensed subscription item renews on that anniversary. The existing UTC-month contracts keep their original terms.
+
+Publish regional versions with `billing:provision-stripe-catalog --nessie-seats`, selecting the expected Stripe account, mode and dry run or confirmed apply. The command preserves the current regional prices and markup. On the first billing-region choice for a new Nessie organisation, UOA assigns the matching published standard tariff unless the organisation already has an explicit arrangement. Publishing a new version does not rewrite an existing organisation's assignment.
+
+Sending an invitation takes no payment. An accepted membership enters an ordered collection queue in the same database transaction as its seat interval. Stripe invoices an increase immediately for the remaining portion of the current period. Removal reduces the renewal quantity without a credit. A rejoin is a separate increase. A pending new seat has no Nessie entitlement until Stripe confirms the payment. The owner can recover a refused card through Billing. Each event records its frozen time, old and new quantity, attempt version and invoice. An uncertain provider result retries with the same key. A quantity changed outside UOA needs payment evidence before recovery.
+
+A classic Stripe quantity change can have a negative line for the previous quantity and a positive replacement line. UOA retains both references and records their net seat charge. When Stripe carries a small charge, the next cash invoice includes it only after UOA verifies the customer balance transactions and original same-subscription invoice lines. AI top-ups issue separate purchase invoices.
+
+The PostgreSQL journey is `API/tests/integration/billing-anniversary-seats.persistence.test.ts`. The proration and balance checks are `billing-anniversary-seat-invoice.test.ts` and `billing-anniversary-balance.test.ts`.
+
 ## Organisation billing region (2026-10-12)
 
 Every organisation has one top-level billing region: **UK**, **US** or

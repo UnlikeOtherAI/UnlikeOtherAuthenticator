@@ -57,6 +57,7 @@ export const PRODUCTION_PUBLIC_ERROR_CODES = new Set([
   // A grant or invitation has already passed its own authorization checks;
   // this only says the purchased shared capacity cannot admit another seat.
   'SEAT_CAPACITY_EXCEEDED',
+  'SEAT_PAYMENT_REQUIRED',
   // Confidential token exchange (`POST /auth/token`, RFC 8693 grant) refusing a subject because of
   // the person's own current state: a moved credential epoch, an unknown user, a lost
   // source-domain role, or a selected organisation/team no longer available to them. The caller

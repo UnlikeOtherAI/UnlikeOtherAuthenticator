@@ -40,7 +40,7 @@ function hasDiscount(value: unknown): boolean {
 
 function exactSubscriptionItems(
   subscription: Stripe.Subscription,
-  expected: { monthlyPriceId: string | null; usagePriceId: string },
+  expected: { monthlyPriceId: string | null; usagePriceId: string; anniversarySeats?: boolean },
 ): { monthlyItem: Stripe.SubscriptionItem | null; usageItem: Stripe.SubscriptionItem } {
   if (hasDiscount(subscription) || subscription.items.data.some((item) => hasDiscount(item))) {
     throw new AppError('INTERNAL', 502, 'STRIPE_SUBSCRIPTION_DISCOUNT_INVALID');
@@ -65,7 +65,9 @@ function exactSubscriptionItems(
     usageItem.price.recurring?.usage_type !== 'metered' ||
     (expected.monthlyPriceId &&
       (!monthlyItem ||
-        monthlyItem.quantity !== 1 ||
+        (expected.anniversarySeats
+          ? !Number.isSafeInteger(monthlyItem.quantity) || (monthlyItem.quantity ?? -1) < 0
+          : monthlyItem.quantity !== 1) ||
         monthlyItem.price.recurring?.usage_type !== 'licensed'))
   ) {
     throw new AppError('INTERNAL', 502, 'STRIPE_SUBSCRIPTION_ITEMS_INVALID');
@@ -159,7 +161,8 @@ export async function syncBaseStripeSubscription(
     throw new AppError('INTERNAL', 502, 'STRIPE_SUBSCRIPTION_BINDING_INVALID');
   }
   const items = exactSubscriptionItems(subscription, {
-    monthlyPriceId: checkout.tariff.monthlyChargeBasis !== BillingMonthlyChargeBasis.PER_SEAT
+    anniversarySeats: checkout.tariff.anniversarySeats,
+    monthlyPriceId: checkout.tariff.anniversarySeats || checkout.tariff.monthlyChargeBasis !== BillingMonthlyChargeBasis.PER_SEAT
       ? price.stripeMonthlyPriceId : null,
     usagePriceId: catalog.stripeUsagePriceId,
   });
@@ -180,6 +183,10 @@ export async function syncBaseStripeSubscription(
       },
     },
   });
+  if (checkout.tariff.anniversarySeats && (subscription.billing_mode?.type !== 'classic' || !items.monthlyItem ||
+    (!existing && (checkout.initialSeatMembers.length < 1 || items.monthlyItem.quantity !== checkout.initialSeatMembers.length)))) {
+    throw new AppError('INTERNAL', 502, 'STRIPE_SEAT_QUANTITY_BINDING_INVALID');
+  }
   if (existing) assertImmutableSubscription(existing, checkout, account);
   const mutable = {
     stripeMonthlyItemId: items.monthlyItem?.id ?? null,

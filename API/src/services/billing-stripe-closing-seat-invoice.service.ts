@@ -78,7 +78,7 @@ export async function collectStripeClosingSeatInvoice(params: {
   const row = await deps.prisma.billingStripeSubscription.findUnique({
     where: { id: params.subscriptionId }, include: { tariff: true, customer: true },
   });
-  if (!row || row.status !== 'canceled' || row.tariff.monthlyChargeBasis !== 'PER_SEAT' ||
+  if (!row || row.status !== 'canceled' || row.tariff.anniversarySeats || row.tariff.monthlyChargeBasis !== 'PER_SEAT' ||
     !row.billableUntil || !row.billableFrom) return null;
   const lastMonth = new Date(row.billableUntil.getTime() - 1).toISOString().slice(0, 7);
   if (lastMonth !== params.billingMonth) return null;

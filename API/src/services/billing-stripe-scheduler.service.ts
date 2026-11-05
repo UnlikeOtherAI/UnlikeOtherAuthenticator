@@ -28,6 +28,7 @@ import {
 import { startStripePaymentInvoiceScheduler, type runStripePaymentInvoiceCycle }
   from './billing-stripe-payment-invoice-scheduler.service.js';
 import { startCreditAutoTopUpScheduler } from './billing-credit-auto-top-up-scheduler.service.js';
+import { startAnniversarySeatScheduler, type runAnniversarySeatCycle } from './billing-anniversary-seat-scheduler.service.js';
 
 
 type StripeSchedulerClient = Pick<Stripe, 'accounts' | 'billing'>;
@@ -89,6 +90,7 @@ export async function runStripeUsageExportCycle(deps?: {
       service: { active: true },
       tariff: {
         collectionMode: BillingCollectionMode.STRIPE,
+        anniversarySeats: false,
         OR: [{ mode: { not: BillingTariffMode.FREE } }, { monthlyAmountMinor: { gt: 0n } }],
       },
     },
@@ -262,11 +264,13 @@ export function startStripeBillingScheduler(params: {
     error: (details: object, message: string) => void;
   };
   runUsageCycle?: typeof runStripeUsageExportCycle;
+  runSeatCycle?: typeof runAnniversarySeatCycle;
   runAutoTopUpCycle?: typeof runCreditAutoTopUpCycle;
   runInvoiceCloseCycle?: typeof runStripeInvoiceCloseCycle;
   runPaymentInvoiceCycle?: typeof runCreditPaymentInvoiceCycle;
   runSubscriptionInvoiceCycle?: typeof runStripePaymentInvoiceCycle;
 }): { stop: () => void } {
+  const seats = startAnniversarySeatScheduler({ log: params.log, ...(params.runSeatCycle ? { runCycle: params.runSeatCycle } : {}) });
   const usage = startStripeUsageExportScheduler({
     log: params.log,
     ...(params.runUsageCycle ? { runCycle: params.runUsageCycle } : {}),
@@ -288,6 +292,7 @@ export function startStripeBillingScheduler(params: {
     ...(params.runSubscriptionInvoiceCycle ? { runCycle: params.runSubscriptionInvoiceCycle } : {}) });
   return {
     stop: () => {
+      seats.stop();
       subscriptionInvoices.stop();
       usage.stop();
       automaticTopUp.stop();

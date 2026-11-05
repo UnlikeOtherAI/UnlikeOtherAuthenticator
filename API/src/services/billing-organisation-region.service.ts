@@ -2,6 +2,7 @@ import { BillingAssignmentScope, type Prisma, type PrismaClient } from '@prisma/
 
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
+import { assignNewNessieOrganisation } from './billing-nessie-onboarding.service.js';
 import type { BillingActorEndpoint } from './billing-actor-audience.service.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
 import {
@@ -118,6 +119,10 @@ export async function setOrganisationBillingRegion(params: {
         await tx.billingOrganisationRegion.create({ data: { orgId: organisationId, region,
           currency: BILLING_REGION_CURRENCY[region], setByUserId: params.request.userId,
           setAt: deps?.now?.() ?? new Date(), ...(region === 'US' ? { usdPerUnit: '1' } : {}) } });
+        if (params.credential.service.identifier === 'nessie') await assignNewNessieOrganisation(tx, {
+          serviceId: params.credential.service.id, issuer: params.credential.actorIssuer, orgId: organisationId,
+          userId: params.request.userId, currency: BILLING_REGION_CURRENCY[region], now: deps?.now?.() ?? new Date(),
+        });
       });
     } catch (error) {
       // A concurrent choice won the primary key; the same choice is fine, another is not.

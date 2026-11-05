@@ -9,7 +9,7 @@ import { type StripeInvoiceCashClient } from './billing-stripe-payment-evidence.
 
 const INTERVAL_MS = 5 * 60_000;
 const LEASE_MS = 15 * 60_000;
-type Provider = StripeInvoiceCashClient & Pick<Stripe, 'accounts' | 'subscriptions'>;
+type Provider = StripeInvoiceCashClient & Pick<Stripe, 'accounts' | 'subscriptions' | 'customers'>;
 
 export async function runStripePaymentInvoiceCycle(deps?: {
   prisma?: PrismaClient; stripe?: Provider; livemode?: boolean; now?: () => Date;
