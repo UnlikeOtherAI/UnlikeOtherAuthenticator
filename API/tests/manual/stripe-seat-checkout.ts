@@ -3,6 +3,12 @@ import { paySandboxCheckout } from './stripe-checkout-browser.js';
 import { setTimeout as wait } from 'node:timers/promises';
 import { randomUUID } from 'node:crypto';
 import { createTestDb } from '../helpers/test-db.js';
+import { baseClientConfigPayload } from '../helpers/test-config.js';
+import { validateConfigFields } from '../../src/services/config.service.js';
+import { createOrganisation } from '../../src/services/organisation.service.organisation.js';
+import { removeOrganisationMember } from '../../src/services/organisation.service.members.js';
+import { getActiveUserOrgContext } from '../../src/services/org-context.service.js';
+import { acceptTeamInviteWithinTransaction } from '../../src/services/team-invite.service.js';
 import { payload as exampleTerms } from '../unit/billing-stripe-checkout.test-fixtures.js';
 import { sandboxCliClient } from './stripe-cli-sandbox.js';
 import { createBillingTariffVersion } from '../../src/services/billing-tariff.service.js';
@@ -27,9 +33,11 @@ async function run() {
       tariff: { key: 'standard-eur', name: 'EUR seats', currency: 'EUR', monthlyAmountMinor: '299', mode: 'standard',
         collectionMode: 'stripe', monthlyChargeBasis: 'per_seat', seatPolicy: 'automatic', seatChargeTiming: 'prorated', usagePaymentMode: 'prepaid' } }, { prisma: p });
     const founder = await p.user.create({ data: { userKey: 'founder', email: 'nessie-billing-eval@example.com' } });
-    const org = await p.organisation.create({ data: { domain: 'seat.example', name: 'Nessie evaluation', slug: 'seat-evaluation', ownerId: founder.id } });
-    const team = await p.team.create({ data: { orgId: org.id, name: 'Team', slug: 'team' } });
-    await p.orgMember.create({ data: { orgId: org.id, userId: founder.id, role: 'owner' } });
+    const domain = 'seat.example';
+    const config = validateConfigFields(baseClientConfigPayload({ domain, org_features: { enabled: true } }));
+    const org = await createOrganisation({ domain, config, name: 'Nessie evaluation', slug: 'seat-evaluation',
+      ownerId: founder.id, actorUserId: founder.id }, { prisma: p, auditPrisma: p });
+    const team = await p.team.findFirstOrThrow({ where: { orgId: org.id, isDefault: true } });
     const key = await p.billingAppKey.create({ data: { serviceId, name: 'Evaluation', purpose: 'CUSTOMER_LIFECYCLE', keyPrefix: 'uoa_eval',
       secretDigest: 'fixture-only', actorIssuer: 'https://seat.example', actorAudience: 'https://identity.example',
       actorKeyId: 'fixture', actorPublicJwk: {}, checkoutReturnOrigins: ['https://example.com'] } });
@@ -77,11 +85,14 @@ async function run() {
     const member = await p.user.create({ data: { userKey: 'member', email: 'member@example.test' } });
     const invitation = await p.teamInvite.create({ data: { orgId: org.id, teamId: team.id, email: 'member@example.test', lastSentAt: new Date() } });
     assert.equal(await p.billingAutomaticSeatChange.count(), 0);
-    await p.$transaction(async tx => {
-      await tx.orgMember.create({ data: { orgId: org.id, userId: member.id, role: 'member' } });
-      await tx.teamMember.create({ data: { userId: member.id, teamId: team.id } });
-      await tx.teamInvite.update({ where: { id: invitation.id }, data: { acceptedUserId: member.id, acceptedAt: new Date() } });
-    });
+    const accept = () => p.$transaction(prisma => acceptTeamInviteWithinTransaction({
+      teamInviteId: invitation.id, userId: member.id, prisma, config, now: new Date(),
+    }));
+    const access = () => getActiveUserOrgContext({ userId: member.id, orgId: org.id, domain }, { prisma: p });
+    assert.deepEqual(await accept(), { orgId: org.id, teamId: team.id });
+    assert.equal(await access(), null, 'An unpaid seat must not grant Nessie access');
+    await accept();
+    assert.equal(await p.billingAutomaticSeatChange.count(), 1, 'Reopening the invitation must not charge twice');
     async function settle(delta: number) {
       const deadline = Date.now() + 90_000;
       do {
@@ -96,14 +107,17 @@ async function run() {
     const added = await settle(1);
     assert.ok(added.stripeInvoiceId);
     const charge = await record(added.stripeInvoiceId); assert.ok(charge > 0n && charge < 299n);
-    const identity = { orgId_userId: { orgId: org.id, userId: member.id } };
-    await p.orgMember.update({ where: identity, data: { status: 'REMOVED' } });
+    assert.ok((await access())?.teams.includes(team.id), 'Payment unlocks the accepted team');
+    assert.deepEqual(await removeOrganisationMember({ domain, config, orgId: org.id,
+      actorUserId: founder.id, userId: member.id }, { prisma: p }), { removed: true });
+    assert.equal(await access(), null, 'Removal revokes access before Stripe updates the quantity');
     const removed = await settle(-1);
     assert.ok(removed.completedAt); assert.equal(removed.stripeInvoiceId, null);
     const current = await stripe.subscriptions.retrieve(subscription.id);
     assert.equal(current.latest_invoice, added.stripeInvoiceId);
     assert.equal(current.items.data.find(item => item.price.recurring?.usage_type === 'licensed')?.quantity, 1);
     console.log(JSON.stringify({ step: 'verified', founderMinor: 299, additionMinor: charge.toString(), subscription: subscription.id,
+      founderCreatedDefaultTeam: team.isDefault, replayedAcceptance: true, blockedUntilPaid: true, revokedOnRemoval: true,
       noCreditOnRemoval: true, renewalQuantity: 1, databaseCashInvoices: await p.billingStripePaymentInvoice.count() }));
   } finally {
     try {
