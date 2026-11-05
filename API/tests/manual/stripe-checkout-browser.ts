@@ -10,7 +10,11 @@ export async function paySandboxCheckout(url: string, successUrl: string) {
   try {
     const page = await browser.newPage({ locale: 'en-GB' }); page.setDefaultTimeout(45000);
     await page.goto(url, { waitUntil: 'domcontentloaded' });
-    await page.locator('#cardNumber').fill('4242424242424242');
+    const number = page.locator('#cardNumber');
+    const card = page.getByRole('button', { name: 'Pay with card', exact: true });
+    await number.or(card).first().waitFor();
+    if (!await number.isVisible()) await card.click();
+    await number.fill('4242424242424242');
     await page.locator('#cardExpiry').fill('1235'); await page.locator('#cardCvc').fill('123');
     await page.locator('#billingName').fill('Nessie Sandbox Evaluation');
     await page.locator('#billingCountry').selectOption('GB');
