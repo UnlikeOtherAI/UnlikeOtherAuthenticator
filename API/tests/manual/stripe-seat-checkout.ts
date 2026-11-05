@@ -103,14 +103,23 @@ async function run() {
       await tx.teamMember.create({ data: { userId: member.id, teamId: team.id } });
       await tx.teamInvite.update({ where: { id: invitation.id }, data: { acceptedUserId: member.id, acceptedAt: new Date() } });
     });
-    const cycle = () => runAnniversarySeatCycle({ prisma: p, stripe, livemode: false });
-    await cycle();
-    const added = await p.billingAutomaticSeatChange.findFirstOrThrow();
-    assert.ok(added.completedAt && added.stripeInvoiceId, 'Seat addition: ' + added.failureCode);
+    async function settle(delta: number) {
+      const deadline = Date.now() + 90_000;
+      do {
+        await runAnniversarySeatCycle({ prisma: p, stripe, livemode: false });
+        const row = await p.billingAutomaticSeatChange.findFirstOrThrow({ where: { delta } });
+        assert.equal(row.failureCode, null, 'Seat operation ' + delta + ': ' + row.failureCode);
+        if (row.completedAt) return row;
+        await wait(1000);
+      } while (Date.now() < deadline);
+      throw new Error('Seat scheduler did not settle operation ' + delta);
+    }
+    const added = await settle(1);
+    assert.ok(added.stripeInvoiceId);
     const charge = await record(added.stripeInvoiceId); assert.ok(charge > 0n && charge < 299n);
     const identity = { orgId_userId: { orgId: org.id, userId: member.id } };
-    await p.orgMember.update({ where: identity, data: { status: 'REMOVED' } }); await cycle();
-    const removed = await p.billingAutomaticSeatChange.findFirstOrThrow({ where: { delta: -1 } });
+    await p.orgMember.update({ where: identity, data: { status: 'REMOVED' } });
+    const removed = await settle(-1);
     assert.ok(removed.completedAt); assert.equal(removed.stripeInvoiceId, null);
     const current = await stripe.subscriptions.retrieve(subscription.id);
     assert.equal(current.latest_invoice, added.stripeInvoiceId);
