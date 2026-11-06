@@ -309,3 +309,15 @@ Receipt/release recovery remains available when new Voice admission is disabled.
 The settings stream adds at most one lazy PostgreSQL LISTEN session per active API instance, outside the Prisma application/admin pools. Account for rolling-deployment overlap. It uses DATABASE_ADMIN_URL (or DATABASE_URL when no admin URL is configured), removes Prisma-only connection parameters and preserves Cloud SQL socket routing. Apply migration `20261104160000_settings_change_notifications` before serving subscriptions. PostgreSQL NOTIFY carries only user ID, namespace and key; consumers always reauthorize and read the row.
 
 The implementation caps subscriptions at 32 per instance and serializes their reads, reserving capacity under the observed Cloud Run concurrency of 80. The observed service timeout is 300 seconds; streams recycle at 240–280 seconds with client jitter. If those deployment limits change, reassess admission and recycling together. Existing HTTP settings operations continue working when subscriptions are unavailable; clients reconnect with bounded backoff and may explicitly refresh. No Redis or extra durable service is required.
+
+### DeepWater failed-attempt continuation
+
+Apply `20261106003000_job_compute_continuation` and deploy UOA before Ledger's
+continuation caller, then deploy Water's automatic recovery worker. Existing
+grants are not rewritten and no new credential or delegation mapping is needed.
+The existing original-product Ledger runtime key and Water recipient lifecycle
+key keep their separate roles. Verify one exact continuation, conflict/replay,
+ancestor revocation and membership loss through the real HTTP contract before
+enabling the Water reconciler. A deployed endpoint or a queued successor is not
+proof that the original research recovered: watch that same Water UUID through
+its full report and inspect the exact Ledger provider receipts.

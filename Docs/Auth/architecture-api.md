@@ -233,6 +233,9 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
         reset.ts            — POST /2fa/reset
         index.ts            — Route registration for /2fa
     /services
+      billing-job-compute-authority.service.ts — Shared current identity, product and membership checks for bounded compute grants
+      billing-job-compute-continuation.service.ts — One successor grant for the same DeepWater logical run and original expiry
+      billing-job-compute-lineage.service.ts — Ordered authority-chain locks and ancestor revocation/expiry checks
       telephone-authority.service.ts — Exact Nessie actor/service assertion and live scope checks
       telephone-profile.service.ts — UOA-owned telephone challenge and self profile lifecycle
       telephone-lookup.service.ts — Call-bound exact-team routing hints, never authentication

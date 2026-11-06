@@ -65,6 +65,7 @@ async function signInboundToken(
     azp?: string;
     credentialEpoch?: number;
     omitCredentialEpoch?: boolean;
+    jobCompute?: unknown;
   } = {},
 ): Promise<{ now: number; token: string }> {
   const now = Math.floor(Date.now() / 1000);
@@ -77,6 +78,7 @@ async function signInboundToken(
     scope: overrides.scope ?? 'ai.invoke',
   };
   if (!overrides.omitCredentialEpoch) payload.tv = overrides.credentialEpoch ?? 0;
+  if (overrides.jobCompute !== undefined) payload.job_compute = overrides.jobCompute;
   if (!overrides.omitOrg) {
     payload.org = Object.prototype.hasOwnProperty.call(overrides, 'org')
       ? overrides.org
@@ -202,6 +204,18 @@ afterAll(() => {
 });
 
 describe('chained confidential exchange', () => {
+  it('cannot strip a job-compute binding into general application authority', async () => {
+    const { now, token } = await signInboundToken({ jobCompute: { grant_id: 'bound-job-grant' } });
+    const signAccessToken = vi.fn();
+    await expect(exchangeConfidentialChainedAccessToken({
+      authenticatedClientDomainId: 'client-domain-deepsignal', subjectToken: token,
+      product: 'deepsignal', resource: ledgerResource, scope: 'ai.invoke', config: config(),
+    }, { prisma: prismaMock(), now: () => now, signAccessToken,
+      resolveDelegation: resolveDelegation(), resolveSourceDelegation: resolveSourceDelegation(),
+      consumeSubjectRateLimit: vi.fn() })).rejects.toMatchObject({ statusCode: 403 });
+    expect(signAccessToken).not.toHaveBeenCalled();
+  });
+
   it('narrows a reusable inbound token, caps expiry, and preserves the upstream actor', async () => {
     const { now, token } = await signInboundToken({ expiresInSeconds: 120 });
     const prisma = prismaMock();

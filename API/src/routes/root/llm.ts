@@ -19,6 +19,7 @@ import { llmIntegrationMarkdown2 } from './llm-integration-2.js';
 import { llmRostersMarkdown } from './llm-integration-rosters.js';
 import { llmIntroMarkdown } from './llm-intro.js';
 import { llmJobGrantsMarkdown } from './llm-job-grants.js';
+import { jobComputeContinuationMarkdown } from './schema.job-compute-continuation.js';
 import { llmSettingsMarkdown } from './llm-settings.js';
 import { llmSignaturesMarkdown } from './llm-signatures.js';
 
@@ -60,7 +61,7 @@ Organisation labels reserve one global namespace across founding domains. Existi
 export function registerLlmRoute(app: FastifyInstance): void {
   app.get('/llm', async (_request, reply) => {
     reply.header('Cache-Control', 'no-store');
-    reply.type('text/markdown; charset=utf-8').send(`${renderLlmMarkdown()}\n${llmSmsOperatorsMarkdown}\n${llmRegistrationMarkdown}\n` +
+    reply.type('text/markdown; charset=utf-8').send(`${renderLlmMarkdown()}\n${llmSmsOperatorsMarkdown}\n${llmRegistrationMarkdown}\n${jobComputeContinuationMarkdown}\n` +
       'Hosted sign-in may narrow its chooser with signed config login_flow.organization_id. Carry the same config URL through code exchange. Teams, invites and creation choices stay within that organization; no eligible team leaves a recoverable empty chooser. Omit the field for all organizations. This grants no membership and does not constrain later workspace-switch grants.\n' +
       'Temporary source-JWKS DNS EAI_AGAIN returns 503 INTEGRATION_JWKS_UNAVAILABLE before identity admission. ' +
       'Retain the product session and retry with backoff; unsafe destinations and invalid assertions remain refused.\n');

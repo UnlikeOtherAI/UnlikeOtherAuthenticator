@@ -1,4 +1,6 @@
-import { BillingAppKeyPurpose, MembershipStatus, Prisma, type PrismaClient } from '@prisma/client';
+import { assertCurrentGrantAuthority, assertRecipientAvailable, assertParentSalesJobGrantActive, RECIPIENT_ORIGIN, RECIPIENT_PRODUCT, LEDGER_AUDIENCE } from './billing-job-compute-authority.service.js';
+import { lockLiveJobComputeLineage } from './billing-job-compute-lineage.service.js';
+import { BillingAppKeyPurpose, Prisma, type PrismaClient } from '@prisma/client';
 import { z } from 'zod';
 
 import { getPublicBaseUrl } from '../config/env.js';
@@ -7,23 +9,18 @@ import { AppError } from '../utils/errors.js';
 import { lockAndAssertAuthenticationEpochShared } from './authentication-epoch.service.js';
 import { verifyBillingAppKey } from './billing-app-key.service.js';
 import { verifyLedgerRuntimeKey } from './billing-ledger-runtime-key.service.js';
-import { resolveConfidentialDelegationForSource } from './confidential-delegation.service.js';
 import { verifyChainedSubjectAccessToken } from './confidential-chained-token-exchange.service.js';
-import { getActiveClientOrgContext } from './org-context.service.js';
 import { signConfidentialAccessToken, type ConfidentialActorChain } from './oauth/access-token.service.js';
 import { lockProductTeamPolicyShared } from './product-team-policy-lock.service.js';
 import {
   deny, hash, HEX, identityMatches, immutableKey, originalIdentityDomain, SECRET, validIdentity,
-  type Grant, type IssueJobComputeRenewalInput, type JobComputeDispatchIdentity,
+  type IssueJobComputeRenewalInput, type JobComputeDispatchIdentity,
   type JobComputeIdentity, type JobComputePurpose,
 } from './billing-job-compute-identity.js';
 export { originalIdentityDomain } from './billing-job-compute-identity.js';
 export type { IssueJobComputeRenewalInput, JobComputeDispatchIdentity,
   JobComputeIdentity, JobComputePurpose } from './billing-job-compute-identity.js';
 
-const RECIPIENT_ORIGIN = 'https://api.deepwater.live';
-const RECIPIENT_PRODUCT = 'deepwater';
-const LEDGER_AUDIENCE = 'https://ledger.unlikeotherai.com';
 const GRANT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const TOKEN_TTL_SECONDS = 120;
 const JobClaim = z.object({
@@ -43,79 +40,6 @@ const SalesParentJobClaim = z.object({
   purpose: z.literal('research_job'),
   authorized_until: z.number().int().positive(),
 }).strict();
-
-async function assertCurrentGrantAuthority(
-  tx: Prisma.TransactionClient,
-  row: Pick<Grant, 'subjectId' | 'tokenVersion' | 'identityDomain' | 'orgId' | 'teamId'
-    | 'originProduct' | 'originSourceDomain' | 'ledgerAudience' | 'originRuntimeKeyId'>,
-) {
-  // Epoch is the first authority lock. Membership revocation takes epoch before
-  // organisation/team rows, so acquiring policy or membership locks first here
-  // would invert the order used by callers which also hold a grant row.
-  await lockAndAssertAuthenticationEpochShared({ userId: row.subjectId,
-    domain: row.identityDomain, credentialEpoch: row.tokenVersion }, { prisma: tx });
-  await lockProductTeamPolicyShared(tx);
-  const activeOriginKey = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
-    SELECT id FROM billing_ledger_runtime_keys
-    WHERE id = ${row.originRuntimeKeyId} AND revoked_at IS NULL FOR SHARE`);
-  if (activeOriginKey.length !== 1) deny();
-  await resolveConfidentialDelegationForSource({ sourceDomain: row.originSourceDomain,
-    product: row.originProduct, resource: row.ledgerAudience, scope: 'ai.invoke' },
-  { prisma: tx as unknown as PrismaClient });
-  await resolveConfidentialDelegationForSource({ sourceDomain: new URL(RECIPIENT_ORIGIN).hostname,
-    product: RECIPIENT_PRODUCT, resource: row.ledgerAudience, scope: 'ai.invoke' },
-  { prisma: tx as unknown as PrismaClient });
-  await tx.$queryRaw(Prisma.sql`SELECT id FROM organisations WHERE id = ${row.orgId} FOR SHARE`);
-  await tx.$queryRaw(Prisma.sql`SELECT id FROM teams WHERE id = ${row.teamId} FOR SHARE`);
-  await tx.$queryRaw(Prisma.sql`SELECT id FROM org_members
-    WHERE org_id = ${row.orgId} AND user_id = ${row.subjectId} FOR SHARE`);
-  await tx.$queryRaw(Prisma.sql`SELECT id FROM team_members
-    WHERE team_id = ${row.teamId} AND user_id = ${row.subjectId} FOR SHARE`);
-  const [user, role, orgMember, team, currentKey] = await Promise.all([
-    tx.user.findUnique({ where: { id: row.subjectId }, select: { email: true, lifecycleStatus: true } }),
-    tx.domainRole.findUnique({ where: { domain_userId: { domain: row.identityDomain,
-      userId: row.subjectId } }, select: { role: true } }),
-    tx.orgMember.findUnique({ where: { orgId_userId: { orgId: row.orgId,
-      userId: row.subjectId } }, select: { status: true } }),
-    tx.team.findFirst({ where: { id: row.teamId, orgId: row.orgId,
-      lifecycleStatus: 'ACTIVE', org: { lifecycleStatus: 'ACTIVE' },
-      members: { some: { userId: row.subjectId, status: MembershipStatus.ACTIVE } } },
-    select: { id: true } }),
-    tx.billingLedgerRuntimeKey.findUnique({ where: { id: row.originRuntimeKeyId },
-      select: { revokedAt: true, ledgerAudience: true, sourceDomain: true,
-        service: { select: { identifier: true, active: true } } } }),
-  ]);
-  if (!user || user.lifecycleStatus !== 'ACTIVE' || !user.email || !role
-    || orgMember?.status !== MembershipStatus.ACTIVE || !team
-    || !currentKey || currentKey.revokedAt || !currentKey.service.active
-    || currentKey.service.identifier !== row.originProduct
-    || currentKey.sourceDomain !== row.originSourceDomain
-    || currentKey.ledgerAudience !== row.ledgerAudience) deny();
-  const org = await getActiveClientOrgContext({ userId: row.subjectId,
-    domain: row.identityDomain, orgId: row.orgId, groupsEnabled: false },
-  { crossProductPrisma: tx as unknown as PrismaClient,
-    policyPrisma: tx as unknown as PrismaClient, prisma: tx as unknown as PrismaClient });
-  if (!org || !org.teams.includes(row.teamId) || !org.team_roles[row.teamId]) deny();
-  return { email: user.email, org: {
-    ...org, teams: [row.teamId], team_roles: { [row.teamId]: org.team_roles[row.teamId] },
-  } };
-}
-
-async function assertRecipientAvailable(tx: Prisma.TransactionClient): Promise<void> {
-  const current = await tx.billingAppKey.findFirst({
-    where: { purpose: BillingAppKeyPurpose.CUSTOMER_LIFECYCLE, revokedAt: null,
-      OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
-      actorIssuer: RECIPIENT_ORIGIN,
-      service: { identifier: RECIPIENT_PRODUCT, active: true } },
-    select: { id: true },
-  });
-  if (!current) deny('JOB_COMPUTE_RECIPIENT_UNAVAILABLE');
-  const locked = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
-    SELECT id FROM billing_app_keys
-    WHERE id = ${current.id} AND revoked_at IS NULL
-      AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP) FOR SHARE`);
-  if (locked.length !== 1) deny('JOB_COMPUTE_RECIPIENT_UNAVAILABLE');
-}
 
 async function assertParentSalesJobGrant(
   tx: Prisma.TransactionClient,
@@ -146,34 +70,13 @@ async function assertParentSalesJobGrant(
   return row;
 }
 
-async function assertParentSalesJobGrantActive(
-  tx: Prisma.TransactionClient,
-  row: Grant,
-  now: Date,
-) {
-  if (!row.parentSalesJobGrantId) return null;
-  await tx.$queryRaw(Prisma.sql`SELECT id FROM sales_research_job_grants
-    WHERE id = ${row.parentSalesJobGrantId}::uuid FOR SHARE`);
-  const parent = await tx.salesResearchJobGrant.findUnique({
-    where: { id: row.parentSalesJobGrantId },
-  });
-  if (!parent || parent.revokedAt || parent.authorizedUntil <= now
-    || parent.subjectId !== row.subjectId || parent.tokenVersion !== row.tokenVersion
-    || parent.sourceDomain !== row.identityDomain || parent.orgId !== row.orgId
-    || parent.teamId !== row.teamId || parent.product !== row.originProduct
-    || parent.sourceDomain !== row.originSourceDomain
-    || parent.resource !== row.ledgerAudience || parent.purpose !== 'research_job') {
-    deny('JOB_COMPUTE_PARENT_AUTHORIZATION_INVALID');
-  }
-  return parent;
-}
-
-async function issueTransaction<T>(db: PrismaClient,
-  action: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+export async function issueTransaction<T>(db: PrismaClient,
+  action: (tx: Prisma.TransactionClient) => Promise<T>,
+  isolationLevel: Prisma.TransactionIsolationLevel = Prisma.TransactionIsolationLevel.Serializable,
+): Promise<T> {
   for (let attempt = 0; attempt < 5; attempt += 1) {
     try {
-      return await db.$transaction(action,
-        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+      return await db.$transaction(action, { isolationLevel });
     } catch (error) {
       const candidate = error as { code?: string; meta?: { code?: string } };
       if (!['P2002', 'P2034'].includes(candidate.code ?? '')
@@ -201,6 +104,7 @@ export async function issueJobComputeRenewal(
   const original = await verifyChainedSubjectAccessToken({ subjectToken: params.delegation,
     callerAudience: key.ledgerAudience, issuer: getPublicBaseUrl() }, { prisma: db });
   if (!Number.isSafeInteger(original.tv) || key.ledgerAudience !== LEDGER_AUDIENCE
+    || original.job_compute !== undefined
     || original.product !== key.service.identifier
     || original.source_domain !== key.sourceDomain
     || original.scope !== 'ai.invoke') deny('JOB_COMPUTE_ORIGIN_MISMATCH');
@@ -276,11 +180,10 @@ export async function recoverJobComputeRenewal(
   return db.$transaction(async (tx) => {
     await lockAndAssertAuthenticationEpochShared({ userId: epochHint.subjectId,
       domain: epochHint.identityDomain, credentialEpoch: epochHint.tokenVersion }, { prisma: tx });
-    await tx.$queryRaw(Prisma.sql`SELECT id FROM billing_job_compute_renewals
-      WHERE issue_key = ${input.issueKey} FOR SHARE`);
-    const row = await tx.billingJobComputeRenewal.findUnique({
+    const candidate = await tx.billingJobComputeRenewal.findUnique({
       where: { issueKey: input.issueKey },
     });
+    const row = candidate ? await lockLiveJobComputeLineage(tx, candidate.id, now) : null;
     if (!row || row.originRuntimeKeyId !== key.id
       || row.originProduct !== key.service.identifier
       || row.originSourceDomain !== key.sourceDomain
@@ -319,8 +222,7 @@ async function recipientGrant(
       AND (expires_at IS NULL OR expires_at > ${now}) FOR SHARE`);
   if (activeRecipient.length !== 1) deny('JOB_COMPUTE_RECIPIENT_MISMATCH');
   if (grantLock === 'share') {
-    await tx.$queryRaw(Prisma.sql`SELECT id FROM billing_job_compute_renewals
-      WHERE id = ${params.grantId} FOR SHARE`);
+    await lockLiveJobComputeLineage(tx, params.grantId, now);
   } else {
     await tx.$queryRaw(Prisma.sql`SELECT id FROM billing_job_compute_renewals
       WHERE id = ${params.grantId} FOR UPDATE`);
@@ -360,9 +262,7 @@ export async function assertLiveJobComputeDispatch(
     || c.purpose !== params.identity.purpose) deny('JOB_COMPUTE_DISPATCH_MISMATCH');
   await lockAndAssertAuthenticationEpochShared({ userId: params.subjectId,
     domain: params.identityDomain, credentialEpoch: params.tokenVersion }, { prisma: tx });
-  await tx.$queryRaw(Prisma.sql`SELECT id FROM billing_job_compute_renewals
-    WHERE id = ${c.grant_id} FOR SHARE`);
-  const row = await tx.billingJobComputeRenewal.findUnique({ where: { id: c.grant_id } });
+  const row = await lockLiveJobComputeLineage(tx, c.grant_id, params.now, 'JOB_COMPUTE_DISPATCH_MISMATCH');
   if (!row || row.revokedAt || row.expiresAt <= params.now
     || !identityMatches(row, params.identity)
     || row.subjectId !== params.subjectId || row.orgId !== params.orgId
