@@ -431,6 +431,9 @@ export async function exchangeConfidentialChainedAccessToken(
     { subjectToken: params.subjectToken, callerAudience, issuer },
     deps,
   );
+  // A job token may be used only by its resource-bound job-compute contract.
+  // Dropping the binding here would turn it into general human AI authority.
+  if (subject.job_compute !== undefined) throw invalidDelegation();
   (deps.consumeSubjectRateLimit ?? consumeChainedSubjectExchange)(`${callerDomain}:${subject.sub}`);
 
   return runInTransaction(prisma, async (tx) => {

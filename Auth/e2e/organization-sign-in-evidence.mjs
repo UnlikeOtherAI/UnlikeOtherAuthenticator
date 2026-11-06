@@ -1,5 +1,5 @@
 // Local headless journey. Run with API's tsx loader; never part of CI.
-/* global window, document, innerWidth */
+/* global window, document */
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';

@@ -7,6 +7,7 @@ import {
   revokeJobComputeRenewalFromOrigin,
 } from '../../services/billing-job-compute-renewal.service.js';
 import { AppError } from '../../utils/errors.js';
+import { continueJobComputeRenewal } from '../../services/billing-job-compute-continuation.service.js';
 
 const Identifier = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/);
 const Identity = z.object({
@@ -41,6 +42,18 @@ function identity(body: z.infer<typeof Identity>) {
 }
 
 export function registerJobComputeRenewalRoutes(app: FastifyInstance): void {
+  app.post('/billing/v1/ledger/job-compute-renewals/:grantId/continue', async (request, reply) => {
+    const body = Issue.parse(request.body);
+    const { grantId } = Params.parse(request.params);
+    const delegation = request.headers['x-uoa-delegation'];
+    if (typeof delegation !== 'string' || !delegation) {
+      throw new AppError('UNAUTHORIZED', 401, 'UOA_DELEGATION_REQUIRED');
+    }
+    const result = await continueJobComputeRenewal({ runtimeSecret: bearer(request), grantId,
+      delegation, input: { ...identity(body), issueKey: body.issue_key, secret: body.secret } });
+    reply.header('Cache-Control', 'no-store');
+    return result;
+  });
   app.post('/billing/v1/ledger/job-compute-renewals', async (request, reply) => {
     const body = Issue.parse(request.body);
     const delegation = request.headers['x-uoa-delegation'];

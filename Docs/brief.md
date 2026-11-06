@@ -3447,3 +3447,21 @@ account as expired to its owner; invalid credentials remain indistinguishable.
 ### Personal settings live updates (2026-11-04)
 
 Authenticated native clients can subscribe to reusable personal-setting snapshot/delta streams. The authoritative UOA settings rows remain the only durable store. Committed changes notify all serving instances through PostgreSQL; clients apply version-fenced root-array edits or replacements and recover by obtaining a fresh snapshot. See `Docs/Auth/user-settings.md` for the protocol and `Docs/deployment.md` for connection limits.
+
+### DeepWater infrastructure recovery (2026-11-06)
+
+A failed DeepWater research attempt may continue automatically as one new,
+separately metered Ledger attempt for the same Water run. Ledger must prove
+that each unfinished paid call was not dispatched and preserve completed work,
+immutable configuration, visibility, ownership and all accounting holds.
+It derives the successor's compute grant through the original product's Ledger
+runtime key and a current delegation renewed from the exact parent job grant.
+No customer session is borrowed or fabricated.
+
+UOA permits one child per parent grant. The child retains the original UOA
+subject, credential epoch, organisation, team, origin invocation and absolute
+expiry; a conflict cannot create a second child. Renewal, dispatch and further
+continuation recheck current authority and every ancestor's expiry/revocation.
+The contract is limited to DeepWater-origin research, never a new logical run,
+another product or a scope turn. A job token cannot mint an unrelated fresh
+grant or lose its resource binding through generic token exchange.

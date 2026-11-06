@@ -18,6 +18,7 @@ import { registerConfigValidateRoute } from './config-validate.js';
 import { registerConfigVerifyRoute } from './config-verify.js';
 import { registerLlmRoute } from './llm.js';
 import { endpoints } from './schema.js';
+import { jobComputeContinuationEndpoint } from './schema.job-compute-continuation.js';
 import { registrationVerificationDocumentation } from './schema.registration.js';
 // Email-link approval continues only the original cookie-bound registration.
 // Admin schema includes exact-user activity filters and canonical invitation history states.
@@ -95,7 +96,7 @@ export function registerRootRoute(app: FastifyInstance): void {
       confidential_token_exchange: confidentialTokenExchangeDocumentation,
       config_validation: configValidationEndpointDocumentation,
       config_verification: configVerificationEndpointDocumentation,
-      endpoints,
+      endpoints: [...endpoints, jobComputeContinuationEndpoint],
       customer_invoices: 'Actual prepaid payment and monthly service charge invoices use the /billing/v1/invoices/* endpoints; their canonical JSON Schema and examples are at /schemas/billing-customer-invoices-v1.json.',
       lifecycle: lifecycleDocumentation,
       tenant_addresses: 'Hostname and id-to-address reads use the server-owned product team policy. Recognized products resolve unique active organisation labels across founding domains; ordinary clients remain domain-scoped. Ambiguous labels have no address. Resolution never grants access.',
