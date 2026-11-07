@@ -5,7 +5,8 @@ import { getEnv } from '../config/env.js';
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 
-let cachedClient: Stripe | undefined;
+const cachedClients = new Map<string, Stripe>();
+const expectedAccounts = new WeakMap<object, { accountId: string; livemode: boolean }>();
 
 export const STRIPE_BILLING_API_VERSION = '2026-06-24.dahlia' as const;
 
@@ -15,6 +16,79 @@ export type StripeAccountContext = {
   livemode: boolean;
 };
 
+export type StripeBillingMode = 'live' | 'sandbox';
+export type StripeRuntime = { client: Stripe; webhookSecret: string; livemode: boolean };
+
+function namedRuntime(mode: StripeBillingMode): StripeRuntime | null {
+  const env = getEnv();
+  const key = mode === 'live' ? env.STRIPE_LIVE_SECRET_KEY : env.STRIPE_SANDBOX_SECRET_KEY;
+  const secret = mode === 'live' ? env.STRIPE_LIVE_WEBHOOK_SECRET : env.STRIPE_SANDBOX_WEBHOOK_SECRET;
+  const accountId = mode === 'live' ? env.STRIPE_LIVE_ACCOUNT_ID : env.STRIPE_SANDBOX_ACCOUNT_ID;
+  if (!key || !secret || !accountId) return null;
+  if (stripeSecretKeyLivemode(key) !== (mode === 'live')) {
+    throw new AppError('INTERNAL', 503, 'STRIPE_OBJECT_MODE_MISMATCH');
+  }
+  return runtime(key, secret, accountId);
+}
+
+function runtime(key: string, webhookSecret: string, expectedAccountId?: string): StripeRuntime {
+  // Expected identity is part of the cache key: never reuse a client under a different binding.
+  const cacheKey = `${key}\0${expectedAccountId ?? ''}`;
+  let client = cachedClients.get(cacheKey);
+  if (!client) {
+    client = new Stripe(key, { apiVersion: STRIPE_BILLING_API_VERSION,
+      maxNetworkRetries: 2, timeout: 20_000 });
+    cachedClients.set(cacheKey, client);
+  }
+  if (expectedAccountId) expectedAccounts.set(client, { accountId: expectedAccountId, livemode: stripeSecretKeyLivemode(key) });
+  return { client, webhookSecret, livemode: stripeSecretKeyLivemode(key) };
+}
+
+/** Captured objects select by BOTH identifiers. Named bindings precede the legacy credential. */
+export function stripeRuntimeForAccount(account: StripeAccountContext): StripeRuntime {
+  const env = getEnv();
+  const mode = account.livemode ? 'live' : 'sandbox';
+  const expectedId = account.livemode ? env.STRIPE_LIVE_ACCOUNT_ID : env.STRIPE_SANDBOX_ACCOUNT_ID;
+  if (expectedId === account.stripeAccountId) {
+    const configured = namedRuntime(mode);
+    if (configured) return configured;
+  }
+  if (env.STRIPE_SECRET_KEY && env.STRIPE_WEBHOOK_SECRET &&
+    stripeSecretKeyLivemode(env.STRIPE_SECRET_KEY) === account.livemode) {
+    return runtime(env.STRIPE_SECRET_KEY, env.STRIPE_WEBHOOK_SECRET, account.stripeAccountId);
+  }
+  throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_STRIPE_ACCOUNT_NOT_CONFIGURED');
+}
+
+/** Signature verification chooses a configured binding before any provider or database work. */
+export function verifyStripeWebhookRuntime(rawBody: Buffer, signature: string):
+  StripeRuntime & { event: Stripe.Event } {
+  const env = getEnv();
+  const candidates = [namedRuntime('live'), namedRuntime('sandbox')];
+  if (env.STRIPE_SECRET_KEY && env.STRIPE_WEBHOOK_SECRET) {
+    const legacyMode = stripeSecretKeyLivemode(env.STRIPE_SECRET_KEY);
+    // Reusing the original endpoint secret explicitly aliases the historical
+    // delivery to that named binding. Use its fresh, account-pinned credential.
+    if (!candidates.some((candidate) => candidate?.livemode === legacyMode &&
+      candidate.webhookSecret === env.STRIPE_WEBHOOK_SECRET)) {
+      candidates.push(runtime(env.STRIPE_SECRET_KEY, env.STRIPE_WEBHOOK_SECRET));
+    }
+  }
+  const matches: Array<StripeRuntime & { event: Stripe.Event }> = [];
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    try {
+      const event = candidate.client.webhooks.constructEvent(rawBody, signature, candidate.webhookSecret);
+      if (event.livemode !== candidate.livemode) continue;
+      matches.push({ ...candidate, event });
+    } catch { /* Another independently configured endpoint secret may match. */ }
+  }
+  if (matches.length !== 1) {
+    throw new AppError('BAD_REQUEST', 400, 'INVALID_STRIPE_WEBHOOK_SIGNATURE');
+  }
+  return matches[0]!;
+}
+
 export function stripeSecretKeyLivemode(secretKey: string): boolean {
   const match = /^(?:sk|rk)_(test|live)_/.exec(secretKey);
   if (!match) {
@@ -23,16 +97,15 @@ export function stripeSecretKeyLivemode(secretKey: string): boolean {
   return match[1] === 'live';
 }
 
-export function requireStripeBillingEnabled(): {
-  client: Stripe;
-  webhookSecret: string;
-  livemode: boolean;
-} {
+export function requireStripeBillingEnabled(selection: StripeBillingMode | StripeAccountContext = 'live'): StripeRuntime {
   const env = getEnv();
   if (!env.STRIPE_BILLING_ENABLED) {
     throw new AppError('INTERNAL', 503, 'STRIPE_BILLING_DISABLED');
   }
-  return requireStripeWebhookConfigured();
+  if (typeof selection !== 'string') return stripeRuntimeForAccount(selection);
+  const configured = namedRuntime(selection);
+  if (!configured) throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_STRIPE_MODE_NOT_CONFIGURED');
+  return configured;
 }
 
 export function requireStripeWebhookConfigured(): {
@@ -44,13 +117,7 @@ export function requireStripeWebhookConfigured(): {
   if (!env.STRIPE_SECRET_KEY || !env.STRIPE_WEBHOOK_SECRET) {
     throw new AppError('INTERNAL', 503, 'STRIPE_WEBHOOK_DISABLED');
   }
-  const livemode = stripeSecretKeyLivemode(env.STRIPE_SECRET_KEY);
-  cachedClient ??= new Stripe(env.STRIPE_SECRET_KEY, {
-    apiVersion: STRIPE_BILLING_API_VERSION,
-    maxNetworkRetries: 2,
-    timeout: 20_000,
-  });
-  return { client: cachedClient, webhookSecret: env.STRIPE_WEBHOOK_SECRET, livemode };
+  return runtime(env.STRIPE_SECRET_KEY, env.STRIPE_WEBHOOK_SECRET);
 }
 
 export async function resolveStripeAccountContext(
@@ -74,6 +141,10 @@ export async function resolveStripeAccountContext(
   });
   if (!remote || typeof remote.id !== 'string' || !remote.id.startsWith('acct_')) {
     throw new AppError('INTERNAL', 502, 'STRIPE_ACCOUNT_IDENTITY_INVALID');
+  }
+  const expected = expectedAccounts.get(stripe);
+  if (expected && (remote.id !== expected.accountId || livemode !== expected.livemode)) {
+    throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_STRIPE_ACCOUNT_MISMATCH');
   }
   return prisma.billingStripeAccount.upsert({
     where: {
@@ -100,5 +171,5 @@ export function assertStripeObjectLivemode(value: unknown, expected: boolean): v
 }
 
 export function resetStripeClientCache(): void {
-  cachedClient = undefined;
+  cachedClients.clear();
 }

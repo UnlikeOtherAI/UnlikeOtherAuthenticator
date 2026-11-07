@@ -6,7 +6,7 @@ import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import {
   assertStripeObjectLivemode,
-  requireStripeWebhookConfigured,
+  verifyStripeWebhookRuntime,
   resolveStripeAccountContext,
   type StripeAccountContext,
 } from './billing-stripe-client.service.js';
@@ -206,7 +206,7 @@ export async function handleStripeWebhook(
     reconcileInvoice?: typeof reconcileStripeCycleInvoiceUsage;
   },
 ): Promise<{ duplicate: boolean }> {
-  const configured = deps?.stripe ? undefined : requireStripeWebhookConfigured();
+  const configured = deps?.stripe ? undefined : verifyStripeWebhookRuntime(params.rawBody, params.signature);
   const stripe = (deps?.stripe ?? configured?.client) as StripeWebhookClient | undefined;
   const webhookSecret = deps?.webhookSecret ?? configured?.webhookSecret;
   if (!stripe || !webhookSecret) {
