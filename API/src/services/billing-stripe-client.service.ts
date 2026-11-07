@@ -83,10 +83,11 @@ export function verifyStripeWebhookRuntime(rawBody: Buffer, signature: string):
       matches.push({ ...candidate, event });
     } catch { /* Another independently configured endpoint secret may match. */ }
   }
-  if (matches.length !== 1) {
+  const matched = matches[0];
+  if (matches.length !== 1 || !matched) {
     throw new AppError('BAD_REQUEST', 400, 'INVALID_STRIPE_WEBHOOK_SIGNATURE');
   }
-  return matches[0]!;
+  return matched;
 }
 
 export function stripeSecretKeyLivemode(secretKey: string): boolean {

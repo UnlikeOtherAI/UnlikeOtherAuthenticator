@@ -1,3 +1,4 @@
+import { BillingContextSchema } from './billing-mode-protocol.js';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
@@ -23,11 +24,13 @@ import type { BillingActorEndpoint } from '../../services/billing-actor-audience
 import type { BillingCustomerLocale } from '../../contracts/billing-statement-v1.js';
 import { readBillingPresentation } from './billing-presentation.js';
 
-const OfferRequestSchema = BillingSubjectRequestSchema.extend({
+const ActionSubjectSchema = BillingSubjectRequestSchema.extend({ billing_context: BillingContextSchema }).strict();
+
+const OfferRequestSchema = ActionSubjectSchema.extend({
   offer_id: z.string().trim().min(1).max(256),
 }).strict();
 
-const OptionRequestSchema = BillingSubjectRequestSchema.extend({
+const OptionRequestSchema = ActionSubjectSchema.extend({
   option_id: z.string().trim().min(1).max(256),
 }).strict();
 
@@ -43,7 +46,7 @@ const HostedRedirectResponseSchema = {
 
 function actionContext(
   request: FastifyRequest,
-  body: z.infer<typeof BillingSubjectRequestSchema>,
+  body: z.infer<typeof ActionSubjectSchema>,
   endpoint: BillingActorEndpoint,
 ): {
   request: CreditFundingActionRequest;
@@ -61,6 +64,7 @@ function actionContext(
     endpoint,
     actorToken: readBillingActorHeader(request.headers['x-uoa-actor']),
     request: {
+      billingContext: body.billing_context,
       product: body.product,
       organisationId: body.organisation_id,
       teamId: body.team_id,
@@ -128,7 +132,7 @@ export function registerBillingCreditFundingActionRoutes(app: FastifyInstance): 
     BILLING_CREDITS_AUTO_TOP_UP_DISABLE_PATH,
     { preHandler: [requireBillingLifecycleAppKey] },
     async (request, reply) => {
-      const body = BillingSubjectRequestSchema.parse(request.body);
+      const body = ActionSubjectSchema.parse(request.body);
       await disableBillingCreditAutoTopUp(
         actionContext(request, body, BILLING_CREDITS_AUTO_TOP_UP_DISABLE_PATH),
       );
@@ -144,7 +148,7 @@ export function registerBillingCreditFundingActionRoutes(app: FastifyInstance): 
       schema: { response: { 200: HostedRedirectResponseSchema } },
     },
     async (request, reply) => {
-      const body = BillingSubjectRequestSchema.parse(request.body);
+      const body = ActionSubjectSchema.parse(request.body);
       const result = await recoverBillingCreditAutoTopUp(
         actionContext(request, body, BILLING_CREDITS_AUTO_TOP_UP_RECOVER_PATH),
       );

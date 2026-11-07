@@ -14,6 +14,8 @@ afterEach(() => {
 
 function database(scoped: unknown[], persisted: unknown[] = []) {
   return {
+    team: { findFirst: vi.fn().mockResolvedValue({ id: subject.teamId }) },
+    billingTeamMode: { findUnique: vi.fn().mockResolvedValue({ sandbox: true, revision: 1 }) },
     billingCreditAccount: { findMany: vi.fn().mockResolvedValue(scoped) },
     billingStripeAccount: { findMany: vi.fn().mockResolvedValue(persisted) },
   } as unknown as PrismaClient;
@@ -25,7 +27,7 @@ describe('credit collection account resolution with Stripe disabled', () => {
     const prisma = database([{ account }], [account, { ...account, id: 'account_other' }]);
 
     await expect(resolveCreditCollectionContext(subject, { prisma })).resolves.toEqual({
-      account,
+      account, modeRevision: 1,
       stripeCollectionEnabled: false,
       stripe: null,
     });
@@ -37,7 +39,7 @@ describe('credit collection account resolution with Stripe disabled', () => {
     const prisma = database([], [account]);
 
     await expect(resolveCreditCollectionContext(subject, { prisma })).resolves.toMatchObject({
-      account,
+      account, modeRevision: 1,
       stripeCollectionEnabled: false,
     });
   });

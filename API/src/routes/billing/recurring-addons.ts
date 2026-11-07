@@ -1,3 +1,4 @@
+import { BillingContextSchema, readBillingModeProtocol } from './billing-mode-protocol.js';
 import { readBillingPresentation } from './billing-presentation.js';
 import type { FastifyInstance } from 'fastify';
 import { Ajv2020 } from 'ajv/dist/2020.js';
@@ -34,9 +35,11 @@ const validateCancellationConfirmation = validator.compile(
 );
 
 const CheckoutRequestSchema = BillingSubjectRequestSchema.extend({
+  billing_context: BillingContextSchema,
   offer_id: z.string().trim().min(1).max(256),
 }).strict();
 const CancellationPreviewRequestSchema = BillingSubjectRequestSchema.extend({
+  billing_context: BillingContextSchema,
   subscription_id: z.string().trim().min(1).max(256),
 }).strict();
 const CancellationConfirmRequestSchema = BillingSubjectRequestSchema.extend({
@@ -68,6 +71,7 @@ export function registerBillingRecurringAddonsRoute(app: FastifyInstance): void 
       if (!credential) throw new AppError('UNAUTHORIZED', 401);
       const presentation = readBillingPresentation(request.headers);
       const addons = await getBillingRecurringAddons({
+        ...(readBillingModeProtocol(request.headers) ? { supportsBillingMode: true } : {}),
         credential,
         ...(presentation.enabled ? { locale: presentation.locale } : {}),
         actorToken: readBillingActorHeader(request.headers['x-uoa-actor']),
@@ -107,6 +111,7 @@ export function registerBillingRecurringAddonsRoute(app: FastifyInstance): void 
           teamId: body.team_id,
           userId: body.user_id,
           offerId: body.offer_id,
+          billingContext: body.billing_context,
         },
       });
       assertContract(validateHostedRedirect, result);
@@ -137,6 +142,7 @@ export function registerBillingRecurringAddonsRoute(app: FastifyInstance): void 
           teamId: body.team_id,
           userId: body.user_id,
           subscriptionId: body.subscription_id,
+          billingContext: body.billing_context,
         },
       });
       assertContract(validateCancellationPreview, result);

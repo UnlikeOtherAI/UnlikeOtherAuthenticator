@@ -4,6 +4,14 @@
 // enumeration oracle. Add a code here only when a caller must branch on it and
 // the code reveals nothing the caller is not already entitled to know.
 export const PRODUCTION_PUBLIC_ERROR_CODES = new Set([
+  // Authenticated billing display bindings require a new deliberate action, never a new login.
+  'BILLING_CONTEXT_REQUIRED',
+  'BILLING_CONTEXT_STALE',
+  'BILLING_CONTEXT_INVALID',
+  'BILLING_TEAM_MODE_CHANGED',
+  'BILLING_TEAM_MODE_BLOCKED',
+  'BILLING_HISTORICAL_WORK_PENDING',
+  'BILLING_ORGANISATION_MODES_MIXED',
   // Returned only after the current password was verified under the user lock.
   'ACCOUNT_EXPIRED',
   // These owner-session outcomes reveal no membership directory or upstream identity.

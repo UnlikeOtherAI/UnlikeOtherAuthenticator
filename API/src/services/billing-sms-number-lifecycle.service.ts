@@ -1,3 +1,4 @@
+import { requireSmsResourceStripe } from './billing-sms-account.service.js';
 import { Prisma } from '@prisma/client';
 import type { BillingSmsNumberAttachRequestV1, BillingSmsNumberEndRequestV1,
   BillingSmsNumberEndResultV1, BillingSmsNumberV1 } from '@unlikeotherai/billing-statement-protocol';
@@ -7,7 +8,7 @@ import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
 import { lockSmsCredential } from './billing-sms-authority.service.js';
 import { readSmsNumber, type SmsNumberDependencies } from './billing-sms-number.service.js';
 import { runBillingSerializableTransaction } from './billing-serializable-transaction.service.js';
-import { requireStripeBillingEnabled, resolveStripeAccountContext,
+import { resolveStripeAccountContext,
   assertStripeObjectLivemode } from './billing-stripe-client.service.js';
 import { recurringAddonSubscriptionInclude, refreshRecurringAddonSubscriptionProjection,
   assertRecurringAddonSubscriptionBinding } from './billing-recurring-addon-subscription.service.js';
@@ -93,7 +94,7 @@ export async function endSmsNumber(input: { request: BillingSmsNumberEndRequestV
   }
   if (!resource.offerId) throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_SMS_OFFER_UNAVAILABLE');
   const configured = deps.stripe ? { client: deps.stripe, livemode: deps.stripeLivemode ?? false }
-    : requireStripeBillingEnabled();
+    : await requireSmsResourceStripe(resource, prisma);
   const stripe = deps.stripe ?? configured.client;
   const account = await resolveStripeAccountContext(stripe, deps.stripeLivemode ?? configured?.livemode ?? false, prisma);
   const subscription = await prisma.billingRecurringAddonSubscription.findFirst({ where: {

@@ -1,3 +1,6 @@
+import { BILLING_MODE_PERIOD_HOLDS } from './billing-mode-period.service.js';
+import { freezeDisplayedBillingActions } from './billing-action-context.service.js';
+import { billingModeRefreshCopy } from './billing-mode-copy.catalog.js';
 import type { PrismaClient } from '@prisma/client';
 import type { BillingCustomerLocale } from '../contracts/billing-statement-v1.js';
 
@@ -84,6 +87,7 @@ export async function getBillingCredits(
     endpoint: BillingActorEndpoint;
     locale?: BillingCustomerLocale;
     supportsBillingStatus?: boolean;
+    supportsBillingMode?: boolean;
     /** Credits protocol 2.1.0: offers may be priced in the billing region's GBP or EUR. */
     supportsPurchaseCurrency?: boolean;
     /** Credits protocol 2.2.0: reload options may be in the billing region's GBP or EUR too. */
@@ -151,6 +155,7 @@ export async function getBillingCredits(
     );
   } catch (error) {
     if (!(error instanceof AppError) || !(error.message.startsWith('LEDGER_') || [
+      ...BILLING_MODE_PERIOD_HOLDS,
       'BILLING_CREDIT_LEGACY_RECONCILIATION_REQUIRED',
       'BILLING_CREDIT_PAYER_TRANSITION_RECONCILIATION_REQUIRED',
       'BILLING_CREDIT_HISTORICAL_PAYER_MISMATCH',
@@ -276,7 +281,7 @@ export async function getBillingCredits(
   if (settlementPending && !params.supportsBillingStatus) {
     throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_CREDITS_PENDING_RECONCILIATION');
   }
-  return buildBillingCreditsProjection({
+  return freezeDisplayedBillingActions(buildBillingCreditsProjection({
     locale: params.locale,
     credential: params.credential,
     collection,
@@ -291,5 +296,6 @@ export async function getBillingCredits(
     settlementPending,
     purchaseRate,
     ...(regionValues ? { regionValues } : {}),
-  });
+  }), { account: collection.account, revision: collection.modeRevision ?? 0, appKeyId: params.credential.id },
+  params.supportsBillingMode === true, billingModeRefreshCopy(params.locale), now);
 }

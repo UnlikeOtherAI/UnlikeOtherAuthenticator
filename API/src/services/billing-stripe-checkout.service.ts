@@ -1,3 +1,5 @@
+import { requireTeamStripeBilling, assertOrganisationBillingMode } from './billing-team-mode.service.js';
+import { assertBillingActionContext } from './billing-action-context.service.js';
 import type { BillingCustomerLocale } from '../contracts/billing-statement-v1.js';
 import { stripeCheckoutLocale } from './billing-stripe-locale.js';
 import { requireIdentityEmail } from './entity-lifecycle.service.js';
@@ -41,13 +43,13 @@ import {
 } from './billing-stripe-checkout-state.service.js';
 import {
   assertStripeObjectLivemode,
-  requireStripeBillingEnabled,
   resolveStripeAccountContext,
 } from './billing-stripe-client.service.js';
 import { isBillingManager } from './billing-stripe-manager.service.js';
 import { normalizeStripeReturnUrl } from './billing-stripe-return-url.service.js';
 
 type CheckoutRequest = {
+  billingContext?: string;
   product: string;
   organisationId: string;
   teamId: string;
@@ -117,13 +119,14 @@ export async function createStripeCheckoutSession(
   const successUrlDigest = digestUrl(successUrl);
   const cancelUrlDigest = digestUrl(cancelUrl);
   const prisma = deps?.prisma ?? getAdminPrisma();
-  const configured = deps?.stripe ? undefined : requireStripeBillingEnabled();
+  const configured = deps?.stripe ? undefined : await requireTeamStripeBilling(params.request, prisma);
   const stripe = deps?.stripe ?? configured?.client;
   if (!stripe) {
     throw new AppError('INTERNAL', 503, 'STRIPE_BILLING_DISABLED');
   }
   const livemode = deps?.stripeLivemode ?? configured?.livemode ?? false;
   const account = await resolveStripeAccountContext(stripe, livemode, prisma);
+  const modeRevision = configured?.selection.revision ?? 0;
   const { actor, payload } = await (deps?.resolveTariff ?? resolveEffectiveTariffContext)({
     request: params.request,
     actorToken: params.actorToken,
@@ -139,6 +142,17 @@ export async function createStripeCheckoutSession(
   }
 
   const selectedScope = billingScope(payload);
+  if (!deps?.stripe || params.request.billingContext !== undefined) {
+    assertBillingActionContext(params.request.billingContext, { account, revision: modeRevision,
+      appKeyId: params.credential.id }, params.endpoint, {
+      product: params.request.product, organisation_id: params.request.organisationId,
+      team_id: params.request.teamId, user_id: params.request.userId,
+      success_url: params.request.successUrl, cancel_url: params.request.cancelUrl,
+    });
+  }
+  if (!deps?.stripe && selectedScope.teamId === null) {
+    await assertOrganisationBillingMode(params.request.organisationId, account.livemode, prisma);
+  }
   const details = await prisma.$transaction(async (tx) => {
     const [user, org, team, orgMember, teamMember, tariff, activeSubscription] = await Promise.all([
       tx.user.findUnique({
@@ -322,6 +336,8 @@ export async function createStripeCheckoutSession(
 
   if (!checkout) {
     const createData = {
+      billingModeTeamId: params.request.teamId,
+      billingModeRevision: modeRevision,
       accountId: account.id,
       appKeyId: params.credential.id,
       checkoutLocale: params.locale ?? null,

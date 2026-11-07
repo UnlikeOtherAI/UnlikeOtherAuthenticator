@@ -1,3 +1,4 @@
+import { BillingContextSchema } from './billing-mode-protocol.js';
 import type { BillingCustomerLocale } from '../../contracts/billing-statement-v1.js';
 import { readBillingPresentation } from './billing-presentation.js';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
@@ -15,6 +16,7 @@ import { BillingSubjectRequestSchema, readBillingActorHeader } from './billing-r
 import type { BillingActorEndpoint } from '../../services/billing-actor-audience.service.js';
 
 const PortalRequestSchema = BillingSubjectRequestSchema.extend({
+  billing_context: BillingContextSchema,
   return_url: z.string().trim().url().max(2048),
 }).strict();
 
@@ -151,7 +153,7 @@ export function registerStripeSubscriptionRoutes(app: FastifyInstance): void {
       const context = requestContext(request, body, '/billing/v1/stripe/portal-session');
       const result = await createStripePortalSession({
         ...context,
-        request: { ...context.request, returnUrl: body.return_url },
+        request: { ...context.request, returnUrl: body.return_url, billingContext: body.billing_context },
       });
       reply.header('Cache-Control', 'private, no-store');
       return reply.status(201).send(result);

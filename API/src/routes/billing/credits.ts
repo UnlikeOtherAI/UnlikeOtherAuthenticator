@@ -1,3 +1,4 @@
+import { readBillingModeProtocol } from './billing-mode-protocol.js';
 import type { FastifyInstance } from 'fastify';
 import { Ajv2020 } from 'ajv/dist/2020.js';
 import * as ajvFormats from 'ajv-formats';
@@ -47,6 +48,7 @@ export function registerBillingCreditsRoute(app: FastifyInstance): void {
         credential,
         actorToken: readBillingActorHeader(request.headers['x-uoa-actor']),
         endpoint: BILLING_CREDITS_READ_PATH,
+        ...(readBillingModeProtocol(request.headers) ? { supportsBillingMode: true } : {}),
         supportsBillingStatus: level >= 0,
         supportsPurchaseCurrency: level >= 1,
         supportsReloadCurrency: level >= 2,

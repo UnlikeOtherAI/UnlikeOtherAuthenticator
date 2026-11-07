@@ -1,3 +1,4 @@
+import { BillingContextSchema } from './billing-mode-protocol.js';
 import { readBillingPresentation } from './billing-presentation.js';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
@@ -9,6 +10,7 @@ import { AppError } from '../../utils/errors.js';
 import { BillingSubjectRequestSchema, readBillingActorHeader } from './billing-request.js';
 
 const CheckoutRequestSchema = BillingSubjectRequestSchema.extend({
+  billing_context: BillingContextSchema,
   success_url: z.string().trim().url().max(2048),
   cancel_url: z.string().trim().url().max(2048),
   fixed_seat_quantity: z.number().int().positive().max(1_000_000).optional(),
@@ -40,6 +42,7 @@ export function registerStripeCheckoutRoute(app: FastifyInstance): void {
       const result = await createStripeCheckoutSession({
         ...(presentation.enabled ? { locale: presentation.locale } : {}),
         request: {
+          billingContext: body.billing_context,
           product: body.product,
           organisationId: body.organisation_id,
           teamId: body.team_id,

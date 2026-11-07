@@ -1,3 +1,5 @@
+import { requireTeamStripeBilling } from './billing-team-mode.service.js';
+import { assertBillingActionContext } from './billing-action-context.service.js';
 import { requireIdentityEmail } from './entity-lifecycle.service.js';
 import {
   BillingAssignmentScope,
@@ -29,7 +31,6 @@ import {
 } from './billing-funding-viewer.service.js';
 import {
   assertStripeObjectLivemode,
-  requireStripeBillingEnabled,
   resolveStripeAccountContext,
   type StripeAccountContext,
 } from './billing-stripe-client.service.js';
@@ -45,6 +46,7 @@ export type CreditFundingActionRequest = {
   organisationId: string;
   teamId: string;
   userId: string;
+  billingContext?: string;
 };
 
 export type CreditFundingStripeClient = Pick<
@@ -53,6 +55,7 @@ export type CreditFundingStripeClient = Pick<
 >;
 
 export type CreditFundingActionContext = {
+  modeRevision?: number;
   actor: BillingActor;
   viewer: BillingFundingViewer;
   account: StripeAccountContext;
@@ -122,7 +125,7 @@ export async function resolveCreditFundingActionContext(
   } else if (!viewer.billingManager) {
     throw new AppError('FORBIDDEN', 403, 'BILLING_MANAGER_REQUIRED');
   }
-  const configured = deps?.stripe ? null : requireStripeBillingEnabled();
+  const configured = deps?.stripe ? null : await requireTeamStripeBilling(params.request, prisma);
   const stripe = deps?.stripe ?? configured?.client;
   if (!stripe) throw new AppError('INTERNAL', 503, 'STRIPE_BILLING_DISABLED');
   const livemode = deps?.stripeLivemode ?? configured?.livemode ?? false;
@@ -131,6 +134,20 @@ export async function resolveCreditFundingActionContext(
     livemode,
     prisma,
   );
+  const modeRevision = configured?.selection.revision ?? 0;
+  if (!deps?.stripe || params.request.billingContext !== undefined) {
+    const displayed: Record<string, unknown> = { product: params.request.product,
+      organisation_id: params.request.organisationId, team_id: params.request.teamId,
+      user_id: params.request.userId };
+    if (params.endpoint === '/billing/v1/credits/top-up-checkout' && 'offerId' in params.request) {
+      displayed.offer_id = params.request.offerId;
+    }
+    if (['/billing/v1/credits/auto-top-up/setup', '/billing/v1/credits/auto-top-up/update'].includes(params.endpoint)
+      && 'optionId' in params.request) displayed.option_id = params.request.optionId;
+    assertBillingActionContext(params.request.billingContext, {
+      account, revision: modeRevision, appKeyId: params.credential.id,
+    }, params.endpoint, displayed);
+  }
   const creditAccount = await (deps?.ensureCreditAccount ?? resolveCreditAccount)(
     {
       account,
@@ -195,6 +212,7 @@ export async function resolveCreditFundingActionContext(
     return customer;
   };
   return {
+    modeRevision,
     actor,
     viewer,
     account,

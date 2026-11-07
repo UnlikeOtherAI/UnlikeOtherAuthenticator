@@ -10,6 +10,7 @@ import type { BillingFundingViewer } from './billing-funding-viewer.service.js';
 import { isBillingManager } from './billing-stripe-manager.service.js';
 
 export type RecurringAddonSubject = {
+  billingContext?: string;
   product: string;
   organisationId: string;
   teamId: string;

@@ -1,3 +1,4 @@
+import { billingModeDatabaseRefusal } from '../utils/billing-mode-errors.js';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { ZodError } from 'zod';
 
@@ -87,7 +88,8 @@ function maybeRenderIntegrationStatusPage(request: FastifyRequest, error: AppErr
 }
 
 export function registerErrorHandler(app: FastifyInstance): void {
-  app.setErrorHandler((error, request, reply) => {
+  app.setErrorHandler((originalError, request, reply) => {
+    const error = billingModeDatabaseRefusal(originalError) ?? originalError;
     // Internal logs can contain specifics; user-facing responses must remain generic.
     request.log.error({ err: error }, 'request failed');
 

@@ -8,21 +8,16 @@ import {
 } from '@prisma/client';
 import type Stripe from 'stripe';
 
-import { getAdminPrisma } from '../db/prisma.js';
+
 import { AppError } from '../utils/errors.js';
 import {
   claimCreditAutoTopUpAttempt,
-  listCreditAutoTopUpCandidateIds,
-  listCreditAutoTopUpWebhookCandidates,
-  type CreditAutoTopUpWebhookCandidate,
+
+
 } from './billing-credit-auto-top-up-attempt.service.js';
-import {
-  recoverCreditAutoTopUpEvents,
-  type CreditAutoTopUpEventRecoveryResult,
-} from './billing-credit-auto-top-up-event-recovery.service.js';
 import type {
   CreditAutoTopUpAccountResult as AccountResult,
-  CreditAutoTopUpCycleResult,
+
   CreditAutoTopUpDispatchResult,
 } from './billing-credit-auto-top-up-runtime.types.js';
 import {
@@ -31,14 +26,12 @@ import {
 } from './billing-credit-funding-binding.service.js';
 import {
   assertStripeObjectLivemode,
-  requireStripeBillingEnabled,
-  resolveStripeAccountContext,
+
   type StripeAccountContext,
 } from './billing-stripe-client.service.js';
 import { stripeExternalId } from './billing-stripe-webhook-utils.service.js';
 
-const AUTO_TOP_UP_BATCH_SIZE = 100;
-const AUTO_TOP_UP_CONCURRENCY = 10;
+
 // The Stripe client permits two retries with a 20-second request timeout. Keep
 // the account lock alive across that full ambiguity-recovery window so another
 // replica cannot start the same durable attempt while the SDK is still retrying.
@@ -47,7 +40,7 @@ const DISPATCH_TRANSACTION_TIMEOUT_MS = 75_000;
 // older ambiguous attempts require evidence rather than another create call.
 const SAFE_IDEMPOTENCY_REPLAY_MS = 23 * 60 * 60 * 1000;
 
-type CreditAutoTopUpStripeClient = Pick<
+export type CreditAutoTopUpStripeClient = Pick<
   Stripe,
   | 'accounts'
   | 'checkout'
@@ -379,121 +372,4 @@ export async function runCreditAutoTopUpAccount(
   }
 }
 
-async function runInBatches(
-  creditAccountIds: string[],
-  execute: (creditAccountId: string) => Promise<AccountResult>,
-): Promise<AccountResult[]> {
-  const results: AccountResult[] = [];
-  for (let offset = 0; offset < creditAccountIds.length; offset += AUTO_TOP_UP_CONCURRENCY) {
-    results.push(
-      ...(await Promise.all(
-        creditAccountIds.slice(offset, offset + AUTO_TOP_UP_CONCURRENCY).map(execute),
-      )),
-    );
-  }
-  return results;
-}
-
-export async function runCreditAutoTopUpCycle(deps?: {
-  prisma?: PrismaClient;
-  stripe?: CreditAutoTopUpStripeClient;
-  stripeLivemode?: boolean;
-  listCandidates?: typeof listCreditAutoTopUpCandidateIds;
-  runAccount?: typeof runCreditAutoTopUpAccount;
-  listWebhookCandidates?: typeof listCreditAutoTopUpWebhookCandidates;
-  recoverEvents?: typeof recoverCreditAutoTopUpEvents;
-  now?: () => Date;
-  batchSize?: number;
-}): Promise<CreditAutoTopUpCycleResult> {
-  const configured = deps?.stripe ? undefined : requireStripeBillingEnabled();
-  const stripe = deps?.stripe ?? configured?.client;
-  if (!stripe) throw new Error('STRIPE_BILLING_DISABLED');
-  const prisma = deps?.prisma ?? getAdminPrisma();
-  const account = await resolveStripeAccountContext(
-    stripe,
-    deps?.stripeLivemode ?? configured?.livemode ?? false,
-    prisma,
-  );
-  const creditAccountIds = await (deps?.listCandidates ?? listCreditAutoTopUpCandidateIds)(
-    { accountId: account.id, limit: deps?.batchSize ?? AUTO_TOP_UP_BATCH_SIZE },
-    { prisma },
-  );
-  const webhookCandidates: CreditAutoTopUpWebhookCandidate[] = await (
-    deps?.listWebhookCandidates ?? listCreditAutoTopUpWebhookCandidates
-  )(
-    {
-      accountId: account.id,
-      creditAccountIds,
-      limit: deps?.batchSize ?? AUTO_TOP_UP_BATCH_SIZE,
-    },
-    { prisma },
-  );
-  const eventRecovery: CreditAutoTopUpEventRecoveryResult = await (
-    deps?.recoverEvents ?? recoverCreditAutoTopUpEvents
-  )({
-    account,
-    now: deps?.now?.() ?? new Date(),
-    candidates: webhookCandidates,
-    stripe,
-    prisma,
-  });
-  const webhookCandidateByCreditAccount = new Map(
-    webhookCandidates.map((candidate) => [candidate.creditAccountId, candidate]),
-  );
-  const results = await runInBatches(creditAccountIds, async (creditAccountId) => {
-    const webhookCandidate = webhookCandidateByCreditAccount.get(creditAccountId);
-    if (webhookCandidate) {
-      const paymentIntentId = webhookCandidate.stripePaymentIntentId;
-      const recoveredPaymentIntentId = eventRecovery.recoveredAttemptPaymentIntents.get(
-        webhookCandidate.attemptId,
-      );
-      if (recoveredPaymentIntentId) {
-        return {
-          creditAccountId,
-          outcome: 'recovered' as const,
-          attemptId: webhookCandidate.attemptId,
-          stripePaymentIntentId: recoveredPaymentIntentId,
-        };
-      }
-      if (!paymentIntentId
-        && eventRecovery.diagnostics.get(webhookCandidate.attemptId) === 'event_not_found') {
-        // Reuse the committed attempt and idempotency key. The dispatch lock
-        // rechecks current consent, state and the safe replay window.
-        return (deps?.runAccount ?? runCreditAutoTopUpAccount)(
-          { account, creditAccountId }, { prisma, stripe },
-        );
-      }
-      return {
-        creditAccountId,
-        outcome: 'awaiting_webhook' as const,
-        attemptId: webhookCandidate.attemptId,
-        stripePaymentIntentId: paymentIntentId,
-        recoveryDiagnostic:
-          eventRecovery.diagnostics.get(webhookCandidate.attemptId) ?? 'event_not_found',
-      };
-    }
-    const result = await (deps?.runAccount ?? runCreditAutoTopUpAccount)(
-      { account, creditAccountId },
-      { prisma, stripe },
-    );
-    if (result.outcome === 'awaiting_webhook' && result.stripePaymentIntentId) {
-      return {
-        ...result,
-        recoveryDiagnostic:
-          eventRecovery.diagnostics.get(result.attemptId) ?? 'event_not_found',
-      };
-    }
-    return result;
-  });
-  return {
-    accountId: account.id,
-    attempted: results.length,
-    submitted: results.filter((result) => result.outcome === 'submitted').length,
-    awaitingWebhook: results.filter((result) => result.outcome === 'awaiting_webhook').length,
-    recovered: results.filter((result) => result.outcome === 'recovered').length,
-    terminal: results.filter((result) => result.outcome === 'terminal').length,
-    skipped: results.filter((result) => result.outcome === 'skipped').length,
-    failed: results.filter((result) => result.outcome === 'failed').length,
-    results,
-  };
-}
+export { runCreditAutoTopUpCycle } from './billing-credit-auto-top-up-cycle.service.js';

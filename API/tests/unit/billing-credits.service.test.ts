@@ -118,6 +118,17 @@ describe('credits valued in the billing region currency (credits protocol 2.3.0)
 });
 
 describe('shared credit reads while Stripe collection is disabled', () => {
+  it.each(['BILLING_MODE_TRANSITION_RECONCILIATION_REQUIRED',
+    'BILLING_MODE_HISTORY_RECONCILIATION_REQUIRED', 'BILLING_MODE_HISTORICAL_ACCOUNT_MISMATCH'])(
+    'keeps the confirmed balance available during %s', async (code) => {
+      const data = creditsData();
+      const settle = vi.fn().mockRejectedValue(new AppError('BAD_REQUEST', 409, code));
+      const result = await getBillingCredits({ request, actorToken: 'actor', credential,
+        supportsBillingStatus: true }, creditsDeps(data, vi.fn().mockResolvedValue({}), settle));
+      expect(result).toMatchObject({ credit_balance: { credits: '3000' },
+        billing_status: { settlement_state: 'pending_reconciliation' } });
+      expect(data.creditAccount.balanceMicrocredits).toBe(3_000_000_000n);
+    });
   it('settles and projects Remaining credits while freezing all funding actions', async () => {
     const fetchPortfolio = vi.fn().mockResolvedValue({ snapshot_cursor: 'cursor_1' });
     const settlePortfolio = vi.fn();

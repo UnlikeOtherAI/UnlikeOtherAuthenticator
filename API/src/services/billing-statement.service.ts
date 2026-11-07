@@ -1,3 +1,4 @@
+import { bindStatementActions } from './billing-statement-mode.service.js';
 import { billingAddonCopy, billingAddonSubscriptionStatus } from './billing-addon-copy.catalog.js';
 import type { BillingCustomerLocale } from './billing-copy-locale.js';
 import { billingStatementCopy } from './billing-statement-copy.catalog.js';
@@ -59,6 +60,7 @@ type StatementContext = {
   actorToken: string;
   credential: VerifiedBillingAppKey;
   endpoint: BillingActorEndpoint;
+  supportsBillingMode?: boolean;
   billingMonth?: string;
   locale?: BillingCustomerLocale;
 };
@@ -369,13 +371,17 @@ async function buildCanonicalBillingStatement(
   // is paying and this caller is not an organisation billing manager, the team
   // statement carries no action at all, so a consumer that predates
   // `controlled_by` renders read-only rather than buttons that would 403.
-  const actions =
+  let actions =
     controlledBy && !controlledBy.can_manage
       ? {
           capabilities: { can_upgrade: false, can_open_portal: false, can_cancel: false },
           actions: [],
         }
       : billingStatementActions(currentSummary, canonicalRequest, context.credential, context.locale);
+  if ((!deps?.resolveSummary || context.supportsBillingMode) && actions.actions.some((action) => action.enabled)) {
+    actions = await bindStatementActions(actions, currentSummary, context.request, context.credential.id,
+      context.supportsBillingMode === true, context.locale, now, prisma);
+  }
   const statement: BillingStatementV1 = {
     schema_version: BILLING_STATEMENT_SCHEMA_VERSION,
     statement_id: `bst_${randomUUID()}`,

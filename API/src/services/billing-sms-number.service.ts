@@ -1,3 +1,6 @@
+import { requireSmsResourceStripe } from './billing-sms-account.service.js';
+import { requireOrganisationStripeBilling, resolveTeamBillingMode } from './billing-team-mode.service.js';
+import { assertBillingActionContext } from './billing-action-context.service.js';
 import { createHash } from 'node:crypto';
 import { Prisma, type PrismaClient, type BillingSmsNumberResource } from '@prisma/client';
 import type Stripe from 'stripe';
@@ -13,7 +16,7 @@ import { runBillingSerializableTransaction } from './billing-serializable-transa
 import { resolveBillingFundingViewer } from './billing-funding-viewer.service.js';
 import { assertCanManageRecurringAddonScope } from './billing-recurring-addon-scope.service.js';
 import { createRecurringAddonCheckout } from './billing-recurring-addon-checkout.service.js';
-import { requireStripeBillingEnabled, resolveStripeAccountContext } from './billing-stripe-client.service.js';
+import { resolveStripeAccountContext } from './billing-stripe-client.service.js';
 import { refreshRecurringAddonSubscriptionProjection,
   recurringAddonSubscriptionInclude } from './billing-recurring-addon-subscription.service.js';
 import { assertRecurringAddonMetadata } from './billing-recurring-addon-stripe-binding.service.js';
@@ -58,7 +61,7 @@ export async function readSmsNumber(input: { product: string; resource_id: strin
   if (!['ended', 'ending', 'refund_required', 'recovery_required'].includes(state)) {
     if (!resource.offerId) throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_SMS_OFFER_UNAVAILABLE');
     const configured = deps.stripe ? { client: deps.stripe, livemode: deps.stripeLivemode ?? false }
-    : requireStripeBillingEnabled();
+    : await requireSmsResourceStripe(resource, prisma);
     const stripe = deps.stripe ?? configured.client;
     const account = await resolveStripeAccountContext(stripe, deps.stripeLivemode ?? configured?.livemode ?? false, prisma);
     const subscription = await prisma.billingRecurringAddonSubscription.findFirst({ where: {
@@ -130,10 +133,15 @@ export async function beginSmsNumber(input: { request: BillingSmsNumberBeginRequ
     await deps.provider.assertAvailableMobile(quote.country, input.request.phone_number);
   }
   const configured = deps.stripe ? { client: deps.stripe, livemode: deps.stripeLivemode ?? false }
-    : requireStripeBillingEnabled();
+    : existing ? await requireSmsResourceStripe(existing, prisma) : await requireOrganisationStripeBilling(subject.organisationId, prisma);
   const stripe = deps.stripe ?? configured.client;
   const livemode = deps.stripeLivemode ?? configured?.livemode ?? false;
   const account = await resolveStripeAccountContext(stripe, livemode, prisma);
+  if (!deps.stripe && !existing) {
+    // SMS protocol 1 has no displayed mode binding: modified teams must refresh through a future negotiated SMS protocol.
+    assertBillingActionContext(undefined, { account, revision: (await resolveTeamBillingMode(subject, prisma)).revision,
+      appKeyId: input.credential.id }, '/billing/v1/sms/numbers/begin', {});
+  }
   const resource = await runBillingSerializableTransaction(prisma, async (tx) => {
     await lockSmsSubject(tx, { subject: input.request, actor, credential: input.credential });
     const manager = await tx.orgMember.findUnique({ where: { orgId_userId: {

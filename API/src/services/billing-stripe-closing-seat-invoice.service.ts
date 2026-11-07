@@ -1,3 +1,4 @@
+import { requireStoredStripeBilling } from './billing-team-mode.service.js';
 import { randomUUID } from 'node:crypto';
 
 import { Prisma, type PrismaClient } from '@prisma/client';
@@ -6,7 +7,7 @@ import type Stripe from 'stripe';
 import { getEnv } from '../config/env.js';
 import { AppError } from '../utils/errors.js';
 import { quoteSubscriptionMonthlyCharge } from './billing-monthly-subscription-quote.service.js';
-import { assertStripeObjectLivemode, requireStripeBillingEnabled, resolveStripeAccountContext }
+import { assertStripeObjectLivemode, resolveStripeAccountContext }
   from './billing-stripe-client.service.js';
 import { collectStripeMonthlyCharge } from './billing-stripe-monthly-charge.service.js';
 import { freezeStripeMonthlyChargeSource } from './billing-stripe-monthly-charge-source.service.js';
@@ -86,7 +87,7 @@ export async function collectStripeClosingSeatInvoice(params: {
   const end = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 1));
   const now = deps.now?.() ?? new Date();
   if (end > now) return null;
-  const configured = deps.stripe ? null : requireStripeBillingEnabled();
+  const configured = deps.stripe ? null : await requireStoredStripeBilling(row.accountId, deps.prisma);
   const stripe = deps.stripe ?? configured?.client;
   if (!stripe) hold('STRIPE_BILLING_DISABLED');
   const account = await resolveStripeAccountContext(stripe,

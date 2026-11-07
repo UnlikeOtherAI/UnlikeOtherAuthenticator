@@ -3,7 +3,8 @@ import type Stripe from 'stripe';
 
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
-import { assertStripeObjectLivemode, requireStripeBillingEnabled } from './billing-stripe-client.service.js';
+import { assertStripeObjectLivemode } from './billing-stripe-client.service.js';
+import { requireStoredStripeBilling } from './billing-team-mode.service.js';
 import { prepareStripePaymentInvoice, persistStripePaymentInvoice }
   from './billing-stripe-payment-invoice-source.service.js';
 import { stripeInvoiceMinor, verifyStripeInvoiceCash, type StripeInvoiceCashClient }
@@ -41,7 +42,9 @@ export async function compensateFinalizedStripeInvoice(
   deps?: { prisma?: PrismaClient; stripe?: Pick<Stripe, 'accounts' | 'subscriptions'> & StripeInvoiceCashClient },
 ) {
   const prisma = deps?.prisma ?? getAdminPrisma();
-  const stripe = deps?.stripe ?? requireStripeBillingEnabled().client;
+  const captured = await prisma.billingStripeInvoiceClose.findUniqueOrThrow({
+    where: { id: params.closeId }, select: { accountId: true } });
+  const stripe = deps?.stripe ?? (await requireStoredStripeBilling(captured.accountId, prisma)).client;
   const now = params.now ?? new Date();
   if (!/^in_[A-Za-z0-9_]+$/.test(params.adjustmentInvoiceId) ||
       Number.isNaN(params.observedAt.getTime()) || params.observedAt > now) {

@@ -1,3 +1,6 @@
+import { loadAddonData } from './billing-recurring-addon-data.service.js';
+import { freezeDisplayedBillingActions } from './billing-action-context.service.js';
+import { billingModeRefreshCopy } from './billing-mode-copy.catalog.js';
 import {
   BillingRecurringAddonEntitlementScope,
   BillingRecurringAddonSubscriptionScope,
@@ -17,7 +20,7 @@ import {
   BILLING_RECURRING_ADDONS_CANCELLATION_PREVIEW_PATH,
   BILLING_RECURRING_ADDONS_CHECKOUT_PATH,
 } from '../contracts/billing-statement-v1.js';
-import { getAdminPrisma } from '../db/prisma.js';
+
 import type { BillingActorEndpoint } from './billing-actor-audience.service.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
 import { resolveCreditCollectionContext } from './billing-credit-account.service.js';
@@ -164,66 +167,6 @@ function selectSubscription(
         return rank || right.updatedAt.getTime() - left.updatedAt.getTime();
       })[0] ?? null
   );
-}
-
-async function loadAddonData(
-  params: {
-    accountId: string;
-    serviceId: string;
-    organisationId: string;
-    teamId: string;
-  },
-  deps?: { prisma?: PrismaClient },
-) {
-  const prisma = deps?.prisma ?? getAdminPrisma();
-  const [offers, subscriptions, checkouts] = await Promise.all([
-    prisma.billingRecurringAddonOffer.findMany({
-      where: { serviceId: params.serviceId, active: true, resourceKind: null },
-      orderBy: [{ key: 'asc' }, { version: 'desc' }],
-      include: {
-        catalogs: { where: { accountId: params.accountId } },
-        featurePolicies: { where: { active: true } },
-      },
-    }),
-    prisma.billingRecurringAddonSubscription.findMany({
-      where: {
-        accountId: params.accountId,
-        serviceId: params.serviceId,
-        orgId: params.organisationId,
-        offer: { resourceKind: null },
-        OR: [
-          {
-            scope: BillingRecurringAddonSubscriptionScope.ORGANISATION,
-            teamId: null,
-            subscribingUserId: null,
-          },
-          {
-            scope: BillingRecurringAddonSubscriptionScope.TEAM,
-            teamId: params.teamId,
-            subscribingUserId: null,
-          },
-          {
-            scope: BillingRecurringAddonSubscriptionScope.SUBSCRIBING_USER,
-            teamId: params.teamId,
-            subscribingUserId: { not: null },
-          },
-        ],
-      },
-      orderBy: { updatedAt: 'desc' },
-    }),
-    prisma.billingRecurringAddonCheckout.findMany({
-      where: {
-        accountId: params.accountId,
-        serviceId: params.serviceId,
-        orgId: params.organisationId,
-        requestedTeamId: params.teamId,
-        offer: { resourceKind: null },
-        status: { in: ['CREATING', 'OPEN', 'NEEDS_REVIEW'] },
-      },
-      orderBy: { updatedAt: 'desc' },
-    }),
-  ]);
-  return { offers, subscriptions, checkouts };
 }
 
 type OfferContext = RecurringAddonSubject & { collectionEnabled: boolean; locale?: BillingCustomerLocale };
@@ -394,6 +337,7 @@ export async function getBillingRecurringAddons(
     credential: VerifiedBillingAppKey;
     endpoint: BillingActorEndpoint;
     locale?: BillingCustomerLocale;
+    supportsBillingMode?: boolean;
   },
   deps?: {
     prisma?: PrismaClient;
@@ -471,7 +415,7 @@ export async function getBillingRecurringAddons(
   };
   if (viewer.billingManager) {
     const offers = offersForManager(data, viewer, offerContext);
-    return {
+    return freezeDisplayedBillingActions({
       ...common,
       viewer: {
         role: 'billing_manager',
@@ -482,7 +426,8 @@ export async function getBillingRecurringAddons(
         can_manage_addons: offers.some((offer) => offer.actions.some((action) => action.enabled)),
       },
       offers,
-    };
+    } as BillingRecurringAddonsV1, { account: collection.account, revision: collection.modeRevision ?? 0,
+      appKeyId: params.credential.id }, params.supportsBillingMode === true, billingModeRefreshCopy(params.locale), now);
   }
   return {
     ...common,

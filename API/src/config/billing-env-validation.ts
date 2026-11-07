@@ -61,7 +61,7 @@ export function addBillingEnvironmentIssues(env: BillingEnvironment, ctx: z.Refi
     const fields = [`STRIPE_${mode}_SECRET_KEY`, `STRIPE_${mode}_WEBHOOK_SECRET`,
       `STRIPE_${mode}_ACCOUNT_ID`] as const;
     if (fields.some((field) => Boolean(env[field])) && fields.some((field) => !env[field])) {
-      ctx.addIssue({ code: 'custom', path: [fields.find((field) => !env[field])!],
+      ctx.addIssue({ code: 'custom', path: [fields.find((field) => !env[field]) ?? fields[0]],
         message: `${fields.join(', ')} must be configured together` });
     }
     const key = env[`STRIPE_${mode}_SECRET_KEY`];

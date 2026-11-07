@@ -1568,6 +1568,7 @@ model FeatureFlagUserOverride {
 }
 
 model Team {
+  billingMode BillingTeamMode?
   id                  String   @id @default(cuid())
   lifecycleStatus     EntityLifecycleStatus @default(ACTIVE) @map("lifecycle_status")
   lifecycleChangedAt  DateTime? @map("lifecycle_changed_at")
@@ -2281,6 +2282,35 @@ model BillingStripeAccount {
   @@map("billing_stripe_accounts")
 }
 
+// Operator-owned billing selection. Absence means LIVE; products cannot write this policy.
+model BillingTeamMode {
+  teamId    String   @id @map("team_id")
+  sandbox   Boolean  @default(false)
+  revision  Int      @default(1)
+  updatedAt DateTime @default(now()) @map("updated_at")
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Restrict)
+
+  @@map("billing_team_modes")
+}
+
+// The earliest installation of live-default selection. Mixed monthly aggregates hold.
+model BillingModeCutover {
+  id          Int      @id @default(1)
+  activatedAt DateTime @default(now()) @map("activated_at") @db.Timestamptz(3)
+  @@map("billing_mode_cutover")
+}
+
+model BillingTeamModeEvent {
+  id          String   @id
+  teamId      String   @map("team_id")
+  revision    Int
+  sandbox     Boolean
+  effectiveAt DateTime @default(now()) @map("effective_at") @db.Timestamptz(3)
+  @@unique([teamId, revision])
+  @@index([teamId, effectiveAt])
+  @@map("billing_team_mode_events")
+}
+
 model BillingStripeCustomer {
   id               String                 @id @default(cuid())
   accountId        String                 @map("account_id")
@@ -2358,6 +2388,8 @@ model BillingStripeTariffPrice {
 }
 
 model BillingStripeCheckoutSession {
+  billingModeTeamId String? @map("billing_mode_team_id")
+  billingModeRevision Int @default(0) @map("billing_mode_revision")
   id                      String                 @id @default(cuid())
   accountId               String                 @map("account_id")
   appKeyId                String                 @map("app_key_id")
@@ -3915,6 +3947,8 @@ model BillingCreditPortfolioSnapshot {
 }
 
 model BillingCreditTopUpCheckout {
+  billingModeTeamId String? @map("billing_mode_team_id")
+  billingModeRevision Int @default(0) @map("billing_mode_revision")
   id                          String                      @id @default(cuid())
   accountId                   String                      @map("account_id")
   creditAccountId             String                      @map("credit_account_id")
@@ -3969,6 +4003,8 @@ model BillingCreditTopUpCheckout {
 }
 
 model BillingCreditSetupCheckout {
+  billingModeTeamId String? @map("billing_mode_team_id")
+  billingModeRevision Int @default(0) @map("billing_mode_revision")
   id                        String                      @id @default(cuid())
   accountId                 String                      @map("account_id")
   creditAccountId           String                      @map("credit_account_id")
@@ -4510,6 +4546,8 @@ model BillingRecurringAddonCatalog {
 }
 
 model BillingRecurringAddonCheckout {
+  billingModeTeamId String? @map("billing_mode_team_id")
+  billingModeRevision Int @default(0) @map("billing_mode_revision")
   id                       String                                 @id @default(cuid())
   accountId                String                                 @map("account_id")
   appKeyId                 String                                 @map("app_key_id")

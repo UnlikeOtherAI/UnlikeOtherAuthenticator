@@ -1,3 +1,4 @@
+import { assertBillingPeriodMode } from './billing-mode-period.service.js';
 import { BillingUsagePaymentMode, Prisma, type PrismaClient } from '@prisma/client';
 
 import { getAdminPrisma } from '../db/prisma.js';
@@ -100,6 +101,8 @@ async function settleInTransaction(
     where: { id: params.creditAccountId },
   });
   if (!account) throw new AppError('NOT_FOUND', 404, 'BILLING_CREDIT_ACCOUNT_MISSING');
+  await assertBillingPeriodMode(tx, { accountId: account.accountId, orgId: account.orgId,
+    teamId: params.portfolio.scope.teamId, month: params.portfolio.scope.month, sourceCreatedAt: account.createdAt });
   await assertUnambiguousCreditPayer(tx, {
     orgId: account.orgId,
     scope: account.scope,

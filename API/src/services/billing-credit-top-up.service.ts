@@ -263,6 +263,8 @@ export async function createBillingCreditTopUpCheckout(
   try {
     checkout = await prisma.billingCreditTopUpCheckout.create({
       data: {
+        billingModeTeamId: params.request.teamId,
+        billingModeRevision: context.modeRevision ?? 0,
         accountId: context.account.id,
         creditAccountId: context.creditAccount.id,
         customerId: context.customer.id,
