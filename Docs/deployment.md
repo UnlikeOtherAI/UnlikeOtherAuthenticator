@@ -1,5 +1,9 @@
 # Deployment across the UOA product estate
 
+For coordinated LIVE-default team billing, see
+[Team billing modes](Billing/team-billing-modes.md): named credentials,
+consumer protocol, webhook routing and the immutable monthly hold.
+
 How every product that uses this SSO actually reaches production, where it runs, and what to check
 when a change is on `main` but not live.
 
