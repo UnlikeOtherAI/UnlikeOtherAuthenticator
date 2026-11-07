@@ -24,6 +24,8 @@ const RawUsageBreakdownSchema = z.object({
   thoughtOutputTokens: IntegerSchema.optional(),
   cacheWrite5mTokens: IntegerSchema.optional(),
   cacheWrite1hTokens: IntegerSchema.optional(),
+  cacheWrite30mTokens: IntegerSchema.optional(),
+  cacheWrite12hTokens: IntegerSchema.optional(),
   inputTextTokens: IntegerSchema.optional(),
   inputImageTokens: IntegerSchema.optional(),
   inputAudioTokens: IntegerSchema.optional(),

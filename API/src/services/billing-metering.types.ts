@@ -22,6 +22,8 @@ export type RawMeteringLine = {
     thoughtOutputTokens?: string;
     cacheWrite5mTokens?: string;
     cacheWrite1hTokens?: string;
+    cacheWrite30mTokens?: string;
+    cacheWrite12hTokens?: string;
     inputTextTokens?: string;
     inputImageTokens?: string;
     inputAudioTokens?: string;
