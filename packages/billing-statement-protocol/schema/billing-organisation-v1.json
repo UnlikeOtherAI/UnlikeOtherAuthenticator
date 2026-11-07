@@ -1,0 +1,3013 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "/schemas/billing-organisation-v1.json",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "product",
+        "organisation_id",
+        "team_id",
+        "user_id"
+      ],
+      "properties": {
+        "product": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "organisation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "team_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "user_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      }
+    },
+    "overview_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "product": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "organisation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "team_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "user_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "billing_month": {
+          "type": "string",
+          "pattern": "^\\d{4}-(0[1-9]|1[0-2])$"
+        }
+      },
+      "required": [
+        "product",
+        "organisation_id",
+        "team_id",
+        "user_id"
+      ]
+    },
+    "capabilities": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "schema_version": {
+              "const": 1
+            },
+            "generated_at": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "subject": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "product",
+                "organisation_id",
+                "team_id",
+                "user_id"
+              ],
+              "properties": {
+                "product": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "organisation_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "team_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "user_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                }
+              }
+            },
+            "capabilities": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "can_view_billing": {
+                  "const": false
+                },
+                "can_manage_billing": {
+                  "const": false
+                }
+              },
+              "required": [
+                "can_view_billing",
+                "can_manage_billing"
+              ]
+            }
+          },
+          "required": [
+            "schema_version",
+            "generated_at",
+            "subject",
+            "capabilities"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "schema_version": {
+              "const": 1
+            },
+            "generated_at": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "subject": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "product",
+                "organisation_id",
+                "team_id",
+                "user_id"
+              ],
+              "properties": {
+                "product": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "organisation_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "team_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "user_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                }
+              }
+            },
+            "capabilities": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "can_view_billing": {
+                  "const": true
+                },
+                "can_manage_billing": {
+                  "const": true
+                }
+              },
+              "required": [
+                "can_view_billing",
+                "can_manage_billing"
+              ]
+            },
+            "financial_scope": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "organisation"
+                },
+                "organisation_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "mode": {
+                  "enum": [
+                    "live",
+                    "sandbox"
+                  ]
+                },
+                "revision": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "epoch": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              },
+              "required": [
+                "kind",
+                "organisation_id",
+                "mode",
+                "revision",
+                "epoch"
+              ]
+            }
+          },
+          "required": [
+            "schema_version",
+            "generated_at",
+            "subject",
+            "capabilities",
+            "financial_scope"
+          ]
+        }
+      ]
+    },
+    "overview": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": 1
+        },
+        "generated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "subject": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "product",
+            "organisation_id",
+            "team_id",
+            "user_id"
+          ],
+          "properties": {
+            "product": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "organisation_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "team_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "user_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          }
+        },
+        "financial_scope": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "organisation"
+            },
+            "organisation_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "mode": {
+              "enum": [
+                "live",
+                "sandbox"
+              ]
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "epoch": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          "required": [
+            "kind",
+            "organisation_id",
+            "mode",
+            "revision",
+            "epoch"
+          ]
+        },
+        "sections": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "accrued_bill": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "state": {
+                      "const": "confirmed"
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "as_of": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "period": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "month",
+                            "starts_at",
+                            "ends_at"
+                          ],
+                          "properties": {
+                            "month": {
+                              "type": "string",
+                              "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"
+                            },
+                            "starts_at": {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            "ends_at": {
+                              "type": "string",
+                              "format": "date-time"
+                            }
+                          }
+                        },
+                        "totals": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "currency",
+                              "subscription",
+                              "usage_charge",
+                              "tax",
+                              "gross_total",
+                              "credits_applied",
+                              "total_due",
+                              "total_paid",
+                              "outstanding"
+                            ],
+                            "properties": {
+                              "currency": {
+                                "type": "string",
+                                "pattern": "^[A-Z]{3}$"
+                              },
+                              "subscription": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "amount",
+                                  "amount_minor",
+                                  "currency",
+                                  "display"
+                                ],
+                                "properties": {
+                                  "amount": {
+                                    "type": "string",
+                                    "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                                  },
+                                  "amount_minor": {
+                                    "type": "string",
+                                    "pattern": "^-?(0|[1-9][0-9]*)$"
+                                  },
+                                  "currency": {
+                                    "type": "string",
+                                    "pattern": "^[A-Z]{3}$"
+                                  },
+                                  "display": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              "usage_charge": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "amount",
+                                  "amount_minor",
+                                  "currency",
+                                  "display"
+                                ],
+                                "properties": {
+                                  "amount": {
+                                    "type": "string",
+                                    "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                                  },
+                                  "amount_minor": {
+                                    "type": "string",
+                                    "pattern": "^-?(0|[1-9][0-9]*)$"
+                                  },
+                                  "currency": {
+                                    "type": "string",
+                                    "pattern": "^[A-Z]{3}$"
+                                  },
+                                  "display": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              "tax": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "amount",
+                                  "amount_minor",
+                                  "currency",
+                                  "display"
+                                ],
+                                "properties": {
+                                  "amount": {
+                                    "type": "string",
+                                    "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                                  },
+                                  "amount_minor": {
+                                    "type": "string",
+                                    "pattern": "^-?(0|[1-9][0-9]*)$"
+                                  },
+                                  "currency": {
+                                    "type": "string",
+                                    "pattern": "^[A-Z]{3}$"
+                                  },
+                                  "display": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              "gross_total": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "amount",
+                                  "amount_minor",
+                                  "currency",
+                                  "display"
+                                ],
+                                "properties": {
+                                  "amount": {
+                                    "type": "string",
+                                    "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                                  },
+                                  "amount_minor": {
+                                    "type": "string",
+                                    "pattern": "^-?(0|[1-9][0-9]*)$"
+                                  },
+                                  "currency": {
+                                    "type": "string",
+                                    "pattern": "^[A-Z]{3}$"
+                                  },
+                                  "display": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              "credits_applied": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "amount",
+                                  "amount_minor",
+                                  "currency",
+                                  "display"
+                                ],
+                                "properties": {
+                                  "amount": {
+                                    "type": "string",
+                                    "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                                  },
+                                  "amount_minor": {
+                                    "type": "string",
+                                    "pattern": "^-?(0|[1-9][0-9]*)$"
+                                  },
+                                  "currency": {
+                                    "type": "string",
+                                    "pattern": "^[A-Z]{3}$"
+                                  },
+                                  "display": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              "total_due": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "amount",
+                                  "amount_minor",
+                                  "currency",
+                                  "display"
+                                ],
+                                "properties": {
+                                  "amount": {
+                                    "type": "string",
+                                    "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                                  },
+                                  "amount_minor": {
+                                    "type": "string",
+                                    "pattern": "^-?(0|[1-9][0-9]*)$"
+                                  },
+                                  "currency": {
+                                    "type": "string",
+                                    "pattern": "^[A-Z]{3}$"
+                                  },
+                                  "display": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              "total_paid": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "amount",
+                                  "amount_minor",
+                                  "currency",
+                                  "display"
+                                ],
+                                "properties": {
+                                  "amount": {
+                                    "type": "string",
+                                    "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                                  },
+                                  "amount_minor": {
+                                    "type": "string",
+                                    "pattern": "^-?(0|[1-9][0-9]*)$"
+                                  },
+                                  "currency": {
+                                    "type": "string",
+                                    "pattern": "^[A-Z]{3}$"
+                                  },
+                                  "display": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              "outstanding": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "amount",
+                                  "amount_minor",
+                                  "currency",
+                                  "display"
+                                ],
+                                "properties": {
+                                  "amount": {
+                                    "type": "string",
+                                    "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                                  },
+                                  "amount_minor": {
+                                    "type": "string",
+                                    "pattern": "^-?(0|[1-9][0-9]*)$"
+                                  },
+                                  "currency": {
+                                    "type": "string",
+                                    "pattern": "^[A-Z]{3}$"
+                                  },
+                                  "display": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              "customer_credit_due": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "amount",
+                                  "amount_minor",
+                                  "currency",
+                                  "display"
+                                ],
+                                "properties": {
+                                  "amount": {
+                                    "type": "string",
+                                    "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                                  },
+                                  "amount_minor": {
+                                    "type": "string",
+                                    "pattern": "^(0|[1-9][0-9]*)$"
+                                  },
+                                  "currency": {
+                                    "type": "string",
+                                    "pattern": "^[A-Z]{3}$"
+                                  },
+                                  "display": {
+                                    "type": "string"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "lines": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 256
+                              },
+                              "product": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 256
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "label": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "kind": {
+                                "enum": [
+                                  "subscription",
+                                  "usage",
+                                  "add_on",
+                                  "adjustment",
+                                  "tax",
+                                  "prepaid_credit"
+                                ]
+                              },
+                              "amount": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "amount",
+                                  "amount_minor",
+                                  "currency",
+                                  "display"
+                                ],
+                                "properties": {
+                                  "amount": {
+                                    "type": "string",
+                                    "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                                  },
+                                  "amount_minor": {
+                                    "type": "string",
+                                    "pattern": "^-?(0|[1-9][0-9]*)$"
+                                  },
+                                  "currency": {
+                                    "type": "string",
+                                    "pattern": "^[A-Z]{3}$"
+                                  },
+                                  "display": {
+                                    "type": "string"
+                                  }
+                                }
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "product",
+                              "label",
+                              "kind",
+                              "amount"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "as_of",
+                        "period",
+                        "totals",
+                        "lines"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "state",
+                    "message",
+                    "data"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "state": {
+                      "enum": [
+                        "pending_reconciliation",
+                        "unavailable"
+                      ]
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "state",
+                    "message",
+                    "code"
+                  ]
+                }
+              ]
+            },
+            "credits": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "state": {
+                      "const": "confirmed"
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "credit_account_id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        },
+                        "confirmed_balance": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "credits",
+                            "display",
+                            "usd_equivalent"
+                          ],
+                          "properties": {
+                            "credits": {
+                              "type": "string",
+                              "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$"
+                            },
+                            "display": {
+                              "type": "string"
+                            },
+                            "usd_equivalent": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": [
+                                "amount",
+                                "currency",
+                                "display"
+                              ],
+                              "properties": {
+                                "amount": {
+                                  "type": "string",
+                                  "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$"
+                                },
+                                "currency": {
+                                  "const": "USD"
+                                },
+                                "display": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "reserved_credits": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "credits",
+                            "display",
+                            "usd_equivalent"
+                          ],
+                          "properties": {
+                            "credits": {
+                              "type": "string",
+                              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$"
+                            },
+                            "display": {
+                              "type": "string"
+                            },
+                            "usd_equivalent": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": [
+                                "amount",
+                                "currency",
+                                "display"
+                              ],
+                              "properties": {
+                                "amount": {
+                                  "type": "string",
+                                  "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$"
+                                },
+                                "currency": {
+                                  "const": "USD"
+                                },
+                                "display": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "spendable_balance": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "credits",
+                            "display",
+                            "usd_equivalent"
+                          ],
+                          "properties": {
+                            "credits": {
+                              "type": "string",
+                              "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$"
+                            },
+                            "display": {
+                              "type": "string"
+                            },
+                            "usd_equivalent": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": [
+                                "amount",
+                                "currency",
+                                "display"
+                              ],
+                              "properties": {
+                                "amount": {
+                                  "type": "string",
+                                  "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$"
+                                },
+                                "currency": {
+                                  "const": "USD"
+                                },
+                                "display": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "as_of": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "billing_status": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "settlement_state": {
+                              "enum": [
+                                "current",
+                                "pending_reconciliation"
+                              ]
+                            },
+                            "message": {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          },
+                          "required": [
+                            "settlement_state",
+                            "message"
+                          ]
+                        },
+                        "region_rate": {
+                          "oneOf": [
+                            {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": [
+                                "currency",
+                                "usd_per_unit",
+                                "credits_per_unit",
+                                "source",
+                                "as_of",
+                                "display"
+                              ],
+                              "properties": {
+                                "currency": {
+                                  "enum": [
+                                    "USD",
+                                    "EUR",
+                                    "GBP"
+                                  ]
+                                },
+                                "usd_per_unit": {
+                                  "type": "string",
+                                  "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]+)?|0\\.[0-9]*[1-9][0-9]*)$"
+                                },
+                                "credits_per_unit": {
+                                  "type": "string",
+                                  "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]+)?|0\\.[0-9]*[1-9][0-9]*)$"
+                                },
+                                "source": {
+                                  "enum": [
+                                    "usd",
+                                    "purchase",
+                                    "region"
+                                  ]
+                                },
+                                "as_of": {
+                                  "type": "string",
+                                  "format": "date-time"
+                                },
+                                "display": {
+                                  "type": "string",
+                                  "minLength": 1
+                                }
+                              }
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "credit_account_id",
+                        "confirmed_balance",
+                        "reserved_credits",
+                        "spendable_balance",
+                        "as_of",
+                        "billing_status"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "state",
+                    "message",
+                    "data"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "state": {
+                      "enum": [
+                        "pending_reconciliation",
+                        "unavailable"
+                      ]
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "state",
+                    "message",
+                    "code"
+                  ]
+                }
+              ]
+            },
+            "funding": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "state": {
+                      "const": "confirmed"
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "capabilities": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "can_top_up",
+                            "can_manage_automatic_top_up"
+                          ],
+                          "properties": {
+                            "can_top_up": {
+                              "type": "boolean"
+                            },
+                            "can_manage_automatic_top_up": {
+                              "type": "boolean"
+                            }
+                          }
+                        },
+                        "conversion": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "credits_per_usd",
+                            "settlement_currency",
+                            "description"
+                          ],
+                          "properties": {
+                            "credits_per_usd": {
+                              "const": "1000"
+                            },
+                            "settlement_currency": {
+                              "const": "USD"
+                            },
+                            "description": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "collection": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "stripe_collection_enabled",
+                            "stripe_mode"
+                          ],
+                          "properties": {
+                            "stripe_collection_enabled": {
+                              "type": "boolean"
+                            },
+                            "stripe_mode": {
+                              "enum": [
+                                "test",
+                                "live",
+                                null
+                              ]
+                            }
+                          }
+                        },
+                        "region_rate": {
+                          "oneOf": [
+                            {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": [
+                                "currency",
+                                "usd_per_unit",
+                                "credits_per_unit",
+                                "source",
+                                "as_of",
+                                "display"
+                              ],
+                              "properties": {
+                                "currency": {
+                                  "enum": [
+                                    "USD",
+                                    "EUR",
+                                    "GBP"
+                                  ]
+                                },
+                                "usd_per_unit": {
+                                  "type": "string",
+                                  "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]+)?|0\\.[0-9]*[1-9][0-9]*)$"
+                                },
+                                "credits_per_unit": {
+                                  "type": "string",
+                                  "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]+)?|0\\.[0-9]*[1-9][0-9]*)$"
+                                },
+                                "source": {
+                                  "enum": [
+                                    "usd",
+                                    "purchase",
+                                    "region"
+                                  ]
+                                },
+                                "as_of": {
+                                  "type": "string",
+                                  "format": "date-time"
+                                },
+                                "display": {
+                                  "type": "string",
+                                  "minLength": 1
+                                }
+                              }
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "funding_policy": {
+                          "allOf": [
+                            {
+                              "oneOf": [
+                                {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "required": [
+                                    "top_up_enabled",
+                                    "automatic_top_up_enabled",
+                                    "title",
+                                    "description",
+                                    "offers"
+                                  ],
+                                  "properties": {
+                                    "top_up_enabled": {
+                                      "type": "boolean"
+                                    },
+                                    "automatic_top_up_enabled": {
+                                      "type": "boolean"
+                                    },
+                                    "title": {
+                                      "type": "string"
+                                    },
+                                    "description": {
+                                      "type": "string"
+                                    },
+                                    "offers": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "additionalProperties": false,
+                                        "required": [
+                                          "id",
+                                          "key",
+                                          "name",
+                                          "description",
+                                          "payment_amount",
+                                          "credits_received",
+                                          "available",
+                                          "unavailable_reason",
+                                          "action"
+                                        ],
+                                        "properties": {
+                                          "id": {
+                                            "type": "string",
+                                            "minLength": 1
+                                          },
+                                          "key": {
+                                            "type": "string",
+                                            "minLength": 1
+                                          },
+                                          "name": {
+                                            "type": "string"
+                                          },
+                                          "description": {
+                                            "type": "string"
+                                          },
+                                          "payment_amount": {
+                                            "type": "object",
+                                            "additionalProperties": false,
+                                            "required": [
+                                              "amount",
+                                              "amount_minor",
+                                              "currency",
+                                              "display"
+                                            ],
+                                            "properties": {
+                                              "amount": {
+                                                "type": "string",
+                                                "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]+)?|0\\.[0-9]*[1-9][0-9]*)$"
+                                              },
+                                              "amount_minor": {
+                                                "type": "string",
+                                                "pattern": "^[1-9][0-9]*$"
+                                              },
+                                              "currency": {
+                                                "enum": [
+                                                  "USD",
+                                                  "EUR",
+                                                  "GBP"
+                                                ]
+                                              },
+                                              "display": {
+                                                "type": "string"
+                                              }
+                                            }
+                                          },
+                                          "credits_received": {
+                                            "type": "object",
+                                            "additionalProperties": false,
+                                            "required": [
+                                              "credits",
+                                              "display",
+                                              "usd_equivalent"
+                                            ],
+                                            "properties": {
+                                              "credits": {
+                                                "type": "string",
+                                                "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]{1,6})?|0\\.(?=[0-9]{1,6}$)[0-9]*[1-9][0-9]*)$"
+                                              },
+                                              "display": {
+                                                "type": "string"
+                                              },
+                                              "usd_equivalent": {
+                                                "type": "object",
+                                                "additionalProperties": false,
+                                                "required": [
+                                                  "amount",
+                                                  "currency",
+                                                  "display"
+                                                ],
+                                                "properties": {
+                                                  "amount": {
+                                                    "type": "string",
+                                                    "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]{1,9})?|0\\.(?=[0-9]{1,9}$)[0-9]*[1-9][0-9]*)$"
+                                                  },
+                                                  "currency": {
+                                                    "const": "USD"
+                                                  },
+                                                  "display": {
+                                                    "type": "string"
+                                                  }
+                                                }
+                                              }
+                                            }
+                                          },
+                                          "credit_rate": {
+                                            "type": "object",
+                                            "additionalProperties": false,
+                                            "required": [
+                                              "currency",
+                                              "usd_per_unit",
+                                              "source",
+                                              "as_of",
+                                              "display"
+                                            ],
+                                            "properties": {
+                                              "currency": {
+                                                "enum": [
+                                                  "EUR",
+                                                  "GBP"
+                                                ]
+                                              },
+                                              "usd_per_unit": {
+                                                "type": "string",
+                                                "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]+)?|0\\.[0-9]*[1-9][0-9]*)$"
+                                              },
+                                              "source": {
+                                                "enum": [
+                                                  "stripe",
+                                                  "ecb"
+                                                ]
+                                              },
+                                              "as_of": {
+                                                "type": "string",
+                                                "format": "date-time"
+                                              },
+                                              "display": {
+                                                "type": "string"
+                                              }
+                                            }
+                                          },
+                                          "available": {
+                                            "type": "boolean"
+                                          },
+                                          "unavailable_reason": {
+                                            "type": [
+                                              "string",
+                                              "null"
+                                            ]
+                                          },
+                                          "action": {
+                                            "oneOf": [
+                                              {
+                                                "type": "object",
+                                                "additionalProperties": false,
+                                                "required": [
+                                                  "id",
+                                                  "kind",
+                                                  "label",
+                                                  "description",
+                                                  "enabled",
+                                                  "disabled_reason",
+                                                  "request"
+                                                ],
+                                                "properties": {
+                                                  "id": {
+                                                    "const": "top_up"
+                                                  },
+                                                  "kind": {
+                                                    "const": "hosted_redirect"
+                                                  },
+                                                  "label": {
+                                                    "type": "string"
+                                                  },
+                                                  "description": {
+                                                    "type": "string"
+                                                  },
+                                                  "enabled": {
+                                                    "type": "boolean"
+                                                  },
+                                                  "disabled_reason": {
+                                                    "type": [
+                                                      "string",
+                                                      "null"
+                                                    ]
+                                                  },
+                                                  "request": {
+                                                    "type": "object",
+                                                    "additionalProperties": false,
+                                                    "required": [
+                                                      "method",
+                                                      "path",
+                                                      "body"
+                                                    ],
+                                                    "properties": {
+                                                      "method": {
+                                                        "const": "POST"
+                                                      },
+                                                      "path": {
+                                                        "const": "/billing/v1/credits/top-up-checkout"
+                                                      },
+                                                      "body": {
+                                                        "type": "object",
+                                                        "additionalProperties": false,
+                                                        "required": [
+                                                          "product",
+                                                          "organisation_id",
+                                                          "team_id",
+                                                          "user_id",
+                                                          "offer_id"
+                                                        ],
+                                                        "properties": {
+                                                          "product": {
+                                                            "type": "string",
+                                                            "minLength": 1,
+                                                            "maxLength": 100
+                                                          },
+                                                          "organisation_id": {
+                                                            "type": "string",
+                                                            "minLength": 1,
+                                                            "maxLength": 256
+                                                          },
+                                                          "team_id": {
+                                                            "type": "string",
+                                                            "minLength": 1,
+                                                            "maxLength": 256
+                                                          },
+                                                          "user_id": {
+                                                            "type": "string",
+                                                            "minLength": 1,
+                                                            "maxLength": 256
+                                                          },
+                                                          "billing_context": {
+                                                            "type": "string",
+                                                            "minLength": 1,
+                                                            "maxLength": 2048
+                                                          },
+                                                          "offer_id": {
+                                                            "type": "string",
+                                                            "minLength": 1,
+                                                            "maxLength": 256
+                                                          }
+                                                        }
+                                                      }
+                                                    }
+                                                  }
+                                                }
+                                              },
+                                              {
+                                                "type": "null"
+                                              }
+                                            ]
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "object"
+                            }
+                          ]
+                        },
+                        "automatic_top_up": {
+                          "allOf": [
+                            {
+                              "oneOf": [
+                                {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "required": [
+                                    "payment_method"
+                                  ],
+                                  "properties": {
+                                    "payment_method": {
+                                      "type": "object",
+                                      "additionalProperties": false,
+                                      "required": [
+                                        "status"
+                                      ],
+                                      "properties": {
+                                        "status": {
+                                          "enum": [
+                                            "missing",
+                                            "ready",
+                                            "requires_action",
+                                            "expired"
+                                          ]
+                                        }
+                                      }
+                                    }
+                                  }
+                                },
+                                {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "required": [
+                                    "state",
+                                    "display_status",
+                                    "description",
+                                    "threshold",
+                                    "refill_offer_id",
+                                    "monthly_cap",
+                                    "charged_this_month",
+                                    "remaining_monthly_cap",
+                                    "payment_method",
+                                    "consent",
+                                    "options",
+                                    "disable_action",
+                                    "recover_action"
+                                  ],
+                                  "properties": {
+                                    "state": {
+                                      "enum": [
+                                        "disabled",
+                                        "active",
+                                        "paused",
+                                        "requires_action",
+                                        "needs_review"
+                                      ]
+                                    },
+                                    "display_status": {
+                                      "type": "string"
+                                    },
+                                    "description": {
+                                      "type": "string"
+                                    },
+                                    "threshold": {
+                                      "oneOf": [
+                                        {
+                                          "type": "object",
+                                          "additionalProperties": false,
+                                          "required": [
+                                            "credits",
+                                            "display",
+                                            "usd_equivalent"
+                                          ],
+                                          "properties": {
+                                            "credits": {
+                                              "type": "string",
+                                              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$"
+                                            },
+                                            "display": {
+                                              "type": "string"
+                                            },
+                                            "usd_equivalent": {
+                                              "type": "object",
+                                              "additionalProperties": false,
+                                              "required": [
+                                                "amount",
+                                                "currency",
+                                                "display"
+                                              ],
+                                              "properties": {
+                                                "amount": {
+                                                  "type": "string",
+                                                  "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$"
+                                                },
+                                                "currency": {
+                                                  "const": "USD"
+                                                },
+                                                "display": {
+                                                  "type": "string"
+                                                }
+                                              }
+                                            }
+                                          }
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ]
+                                    },
+                                    "threshold_value": {
+                                      "type": "object",
+                                      "additionalProperties": false,
+                                      "required": [
+                                        "amount",
+                                        "amount_minor",
+                                        "currency",
+                                        "display"
+                                      ],
+                                      "properties": {
+                                        "amount": {
+                                          "type": "string",
+                                          "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]+)?|0\\.[0-9]*[1-9][0-9]*)$"
+                                        },
+                                        "amount_minor": {
+                                          "type": "string",
+                                          "pattern": "^[1-9][0-9]*$"
+                                        },
+                                        "currency": {
+                                          "enum": [
+                                            "USD",
+                                            "EUR",
+                                            "GBP"
+                                          ]
+                                        },
+                                        "display": {
+                                          "type": "string"
+                                        }
+                                      }
+                                    },
+                                    "refill_offer_id": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "monthly_cap": {
+                                      "oneOf": [
+                                        {
+                                          "type": "object",
+                                          "additionalProperties": false,
+                                          "required": [
+                                            "amount",
+                                            "amount_minor",
+                                            "currency",
+                                            "display"
+                                          ],
+                                          "properties": {
+                                            "amount": {
+                                              "type": "string",
+                                              "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]+)?|0\\.[0-9]*[1-9][0-9]*)$"
+                                            },
+                                            "amount_minor": {
+                                              "type": "string",
+                                              "pattern": "^[1-9][0-9]*$"
+                                            },
+                                            "currency": {
+                                              "enum": [
+                                                "USD",
+                                                "EUR",
+                                                "GBP"
+                                              ]
+                                            },
+                                            "display": {
+                                              "type": "string"
+                                            }
+                                          }
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ]
+                                    },
+                                    "charged_this_month": {
+                                      "type": "object",
+                                      "additionalProperties": false,
+                                      "required": [
+                                        "amount",
+                                        "amount_minor",
+                                        "currency",
+                                        "display"
+                                      ],
+                                      "properties": {
+                                        "amount": {
+                                          "type": "string",
+                                          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                                        },
+                                        "amount_minor": {
+                                          "type": "string",
+                                          "pattern": "^(0|[1-9][0-9]*)$"
+                                        },
+                                        "currency": {
+                                          "enum": [
+                                            "USD",
+                                            "EUR",
+                                            "GBP"
+                                          ]
+                                        },
+                                        "display": {
+                                          "type": "string"
+                                        }
+                                      }
+                                    },
+                                    "remaining_monthly_cap": {
+                                      "oneOf": [
+                                        {
+                                          "type": "object",
+                                          "additionalProperties": false,
+                                          "required": [
+                                            "amount",
+                                            "amount_minor",
+                                            "currency",
+                                            "display"
+                                          ],
+                                          "properties": {
+                                            "amount": {
+                                              "type": "string",
+                                              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                                            },
+                                            "amount_minor": {
+                                              "type": "string",
+                                              "pattern": "^(0|[1-9][0-9]*)$"
+                                            },
+                                            "currency": {
+                                              "enum": [
+                                                "USD",
+                                                "EUR",
+                                                "GBP"
+                                              ]
+                                            },
+                                            "display": {
+                                              "type": "string"
+                                            }
+                                          }
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ]
+                                    },
+                                    "payment_method": {
+                                      "oneOf": [
+                                        {
+                                          "type": "object",
+                                          "additionalProperties": false,
+                                          "required": [
+                                            "status",
+                                            "display"
+                                          ],
+                                          "properties": {
+                                            "status": {
+                                              "enum": [
+                                                "missing",
+                                                "ready",
+                                                "requires_action",
+                                                "expired"
+                                              ]
+                                            },
+                                            "display": {
+                                              "type": "string"
+                                            }
+                                          }
+                                        },
+                                        {
+                                          "type": "object",
+                                          "additionalProperties": false,
+                                          "required": [
+                                            "status"
+                                          ],
+                                          "properties": {
+                                            "status": {
+                                              "enum": [
+                                                "missing",
+                                                "ready",
+                                                "requires_action",
+                                                "expired"
+                                              ]
+                                            }
+                                          }
+                                        }
+                                      ]
+                                    },
+                                    "consent": {
+                                      "oneOf": [
+                                        {
+                                          "type": "object",
+                                          "additionalProperties": false,
+                                          "required": [
+                                            "status",
+                                            "version",
+                                            "consented_at",
+                                            "consented_by",
+                                            "description"
+                                          ],
+                                          "properties": {
+                                            "status": {
+                                              "enum": [
+                                                "missing",
+                                                "current",
+                                                "outdated"
+                                              ]
+                                            },
+                                            "version": {
+                                              "type": [
+                                                "string",
+                                                "null"
+                                              ]
+                                            },
+                                            "consented_at": {
+                                              "anyOf": [
+                                                {
+                                                  "type": "string",
+                                                  "format": "date-time"
+                                                },
+                                                {
+                                                  "type": "null"
+                                                }
+                                              ]
+                                            },
+                                            "consented_by": {
+                                              "oneOf": [
+                                                {
+                                                  "type": "object",
+                                                  "additionalProperties": false,
+                                                  "required": [
+                                                    "display_name"
+                                                  ],
+                                                  "properties": {
+                                                    "display_name": {
+                                                      "type": "string"
+                                                    }
+                                                  }
+                                                },
+                                                {
+                                                  "type": "null"
+                                                }
+                                              ]
+                                            },
+                                            "description": {
+                                              "type": "string"
+                                            }
+                                          }
+                                        }
+                                      ]
+                                    },
+                                    "options": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "additionalProperties": false,
+                                        "required": [
+                                          "selected",
+                                          "label",
+                                          "description",
+                                          "threshold",
+                                          "refill_offer_id",
+                                          "refill_payment_amount",
+                                          "refill_credits_received",
+                                          "monthly_cap",
+                                          "setup_action",
+                                          "update_action"
+                                        ],
+                                        "properties": {
+                                          "selected": {
+                                            "type": "boolean"
+                                          },
+                                          "label": {
+                                            "type": "string"
+                                          },
+                                          "description": {
+                                            "type": "string"
+                                          },
+                                          "threshold": {
+                                            "type": "object",
+                                            "additionalProperties": false,
+                                            "required": [
+                                              "credits",
+                                              "display",
+                                              "usd_equivalent"
+                                            ],
+                                            "properties": {
+                                              "credits": {
+                                                "type": "string",
+                                                "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$"
+                                              },
+                                              "display": {
+                                                "type": "string"
+                                              },
+                                              "usd_equivalent": {
+                                                "type": "object",
+                                                "additionalProperties": false,
+                                                "required": [
+                                                  "amount",
+                                                  "currency",
+                                                  "display"
+                                                ],
+                                                "properties": {
+                                                  "amount": {
+                                                    "type": "string",
+                                                    "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$"
+                                                  },
+                                                  "currency": {
+                                                    "const": "USD"
+                                                  },
+                                                  "display": {
+                                                    "type": "string"
+                                                  }
+                                                }
+                                              }
+                                            }
+                                          },
+                                          "threshold_value": {
+                                            "type": "object",
+                                            "additionalProperties": false,
+                                            "required": [
+                                              "amount",
+                                              "amount_minor",
+                                              "currency",
+                                              "display"
+                                            ],
+                                            "properties": {
+                                              "amount": {
+                                                "type": "string",
+                                                "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]+)?|0\\.[0-9]*[1-9][0-9]*)$"
+                                              },
+                                              "amount_minor": {
+                                                "type": "string",
+                                                "pattern": "^[1-9][0-9]*$"
+                                              },
+                                              "currency": {
+                                                "enum": [
+                                                  "USD",
+                                                  "EUR",
+                                                  "GBP"
+                                                ]
+                                              },
+                                              "display": {
+                                                "type": "string"
+                                              }
+                                            }
+                                          },
+                                          "refill_offer_id": {
+                                            "type": "string",
+                                            "minLength": 1
+                                          },
+                                          "refill_payment_amount": {
+                                            "type": "object",
+                                            "additionalProperties": false,
+                                            "required": [
+                                              "amount",
+                                              "amount_minor",
+                                              "currency",
+                                              "display"
+                                            ],
+                                            "properties": {
+                                              "amount": {
+                                                "type": "string",
+                                                "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]+)?|0\\.[0-9]*[1-9][0-9]*)$"
+                                              },
+                                              "amount_minor": {
+                                                "type": "string",
+                                                "pattern": "^[1-9][0-9]*$"
+                                              },
+                                              "currency": {
+                                                "enum": [
+                                                  "USD",
+                                                  "EUR",
+                                                  "GBP"
+                                                ]
+                                              },
+                                              "display": {
+                                                "type": "string"
+                                              }
+                                            }
+                                          },
+                                          "refill_credits_received": {
+                                            "type": "object",
+                                            "additionalProperties": false,
+                                            "required": [
+                                              "credits",
+                                              "display",
+                                              "usd_equivalent"
+                                            ],
+                                            "properties": {
+                                              "credits": {
+                                                "type": "string",
+                                                "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]{1,6})?|0\\.(?=[0-9]{1,6}$)[0-9]*[1-9][0-9]*)$"
+                                              },
+                                              "display": {
+                                                "type": "string"
+                                              },
+                                              "usd_equivalent": {
+                                                "type": "object",
+                                                "additionalProperties": false,
+                                                "required": [
+                                                  "amount",
+                                                  "currency",
+                                                  "display"
+                                                ],
+                                                "properties": {
+                                                  "amount": {
+                                                    "type": "string",
+                                                    "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]{1,9})?|0\\.(?=[0-9]{1,9}$)[0-9]*[1-9][0-9]*)$"
+                                                  },
+                                                  "currency": {
+                                                    "const": "USD"
+                                                  },
+                                                  "display": {
+                                                    "type": "string"
+                                                  }
+                                                }
+                                              }
+                                            }
+                                          },
+                                          "credit_rate": {
+                                            "type": "object",
+                                            "additionalProperties": false,
+                                            "required": [
+                                              "currency",
+                                              "usd_per_unit",
+                                              "source",
+                                              "as_of",
+                                              "display"
+                                            ],
+                                            "properties": {
+                                              "currency": {
+                                                "enum": [
+                                                  "EUR",
+                                                  "GBP"
+                                                ]
+                                              },
+                                              "usd_per_unit": {
+                                                "type": "string",
+                                                "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]+)?|0\\.[0-9]*[1-9][0-9]*)$"
+                                              },
+                                              "source": {
+                                                "enum": [
+                                                  "stripe",
+                                                  "ecb"
+                                                ]
+                                              },
+                                              "as_of": {
+                                                "type": "string",
+                                                "format": "date-time"
+                                              },
+                                              "display": {
+                                                "type": "string"
+                                              }
+                                            }
+                                          },
+                                          "monthly_cap": {
+                                            "type": "object",
+                                            "additionalProperties": false,
+                                            "required": [
+                                              "amount",
+                                              "amount_minor",
+                                              "currency",
+                                              "display"
+                                            ],
+                                            "properties": {
+                                              "amount": {
+                                                "type": "string",
+                                                "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]+)?|0\\.[0-9]*[1-9][0-9]*)$"
+                                              },
+                                              "amount_minor": {
+                                                "type": "string",
+                                                "pattern": "^[1-9][0-9]*$"
+                                              },
+                                              "currency": {
+                                                "enum": [
+                                                  "USD",
+                                                  "EUR",
+                                                  "GBP"
+                                                ]
+                                              },
+                                              "display": {
+                                                "type": "string"
+                                              }
+                                            }
+                                          },
+                                          "setup_action": {
+                                            "oneOf": [
+                                              {
+                                                "type": "object",
+                                                "additionalProperties": false,
+                                                "required": [
+                                                  "id",
+                                                  "kind",
+                                                  "label",
+                                                  "description",
+                                                  "enabled",
+                                                  "disabled_reason",
+                                                  "request"
+                                                ],
+                                                "properties": {
+                                                  "id": {
+                                                    "const": "auto_top_up_setup"
+                                                  },
+                                                  "kind": {
+                                                    "const": "hosted_redirect"
+                                                  },
+                                                  "label": {
+                                                    "type": "string"
+                                                  },
+                                                  "description": {
+                                                    "type": "string"
+                                                  },
+                                                  "enabled": {
+                                                    "type": "boolean"
+                                                  },
+                                                  "disabled_reason": {
+                                                    "type": [
+                                                      "string",
+                                                      "null"
+                                                    ]
+                                                  },
+                                                  "request": {
+                                                    "type": "object",
+                                                    "additionalProperties": false,
+                                                    "required": [
+                                                      "method",
+                                                      "path",
+                                                      "body"
+                                                    ],
+                                                    "properties": {
+                                                      "method": {
+                                                        "const": "POST"
+                                                      },
+                                                      "path": {
+                                                        "const": "/billing/v1/credits/auto-top-up/setup"
+                                                      },
+                                                      "body": {
+                                                        "type": "object",
+                                                        "additionalProperties": false,
+                                                        "required": [
+                                                          "product",
+                                                          "organisation_id",
+                                                          "team_id",
+                                                          "user_id",
+                                                          "option_id"
+                                                        ],
+                                                        "properties": {
+                                                          "product": {
+                                                            "type": "string",
+                                                            "minLength": 1,
+                                                            "maxLength": 100
+                                                          },
+                                                          "organisation_id": {
+                                                            "type": "string",
+                                                            "minLength": 1,
+                                                            "maxLength": 256
+                                                          },
+                                                          "team_id": {
+                                                            "type": "string",
+                                                            "minLength": 1,
+                                                            "maxLength": 256
+                                                          },
+                                                          "user_id": {
+                                                            "type": "string",
+                                                            "minLength": 1,
+                                                            "maxLength": 256
+                                                          },
+                                                          "billing_context": {
+                                                            "type": "string",
+                                                            "minLength": 1,
+                                                            "maxLength": 2048
+                                                          },
+                                                          "option_id": {
+                                                            "type": "string",
+                                                            "minLength": 1,
+                                                            "maxLength": 256
+                                                          }
+                                                        }
+                                                      }
+                                                    }
+                                                  }
+                                                }
+                                              },
+                                              {
+                                                "type": "null"
+                                              }
+                                            ]
+                                          },
+                                          "update_action": {
+                                            "oneOf": [
+                                              {
+                                                "type": "object",
+                                                "additionalProperties": false,
+                                                "required": [
+                                                  "id",
+                                                  "kind",
+                                                  "label",
+                                                  "description",
+                                                  "enabled",
+                                                  "disabled_reason",
+                                                  "request"
+                                                ],
+                                                "properties": {
+                                                  "id": {
+                                                    "const": "auto_top_up_update"
+                                                  },
+                                                  "kind": {
+                                                    "const": "mutation"
+                                                  },
+                                                  "label": {
+                                                    "type": "string"
+                                                  },
+                                                  "description": {
+                                                    "type": "string"
+                                                  },
+                                                  "enabled": {
+                                                    "type": "boolean"
+                                                  },
+                                                  "disabled_reason": {
+                                                    "type": [
+                                                      "string",
+                                                      "null"
+                                                    ]
+                                                  },
+                                                  "request": {
+                                                    "type": "object",
+                                                    "additionalProperties": false,
+                                                    "required": [
+                                                      "method",
+                                                      "path",
+                                                      "body"
+                                                    ],
+                                                    "properties": {
+                                                      "method": {
+                                                        "const": "POST"
+                                                      },
+                                                      "path": {
+                                                        "const": "/billing/v1/credits/auto-top-up/update"
+                                                      },
+                                                      "body": {
+                                                        "type": "object",
+                                                        "additionalProperties": false,
+                                                        "required": [
+                                                          "product",
+                                                          "organisation_id",
+                                                          "team_id",
+                                                          "user_id",
+                                                          "option_id"
+                                                        ],
+                                                        "properties": {
+                                                          "product": {
+                                                            "type": "string",
+                                                            "minLength": 1,
+                                                            "maxLength": 100
+                                                          },
+                                                          "organisation_id": {
+                                                            "type": "string",
+                                                            "minLength": 1,
+                                                            "maxLength": 256
+                                                          },
+                                                          "team_id": {
+                                                            "type": "string",
+                                                            "minLength": 1,
+                                                            "maxLength": 256
+                                                          },
+                                                          "user_id": {
+                                                            "type": "string",
+                                                            "minLength": 1,
+                                                            "maxLength": 256
+                                                          },
+                                                          "billing_context": {
+                                                            "type": "string",
+                                                            "minLength": 1,
+                                                            "maxLength": 2048
+                                                          },
+                                                          "option_id": {
+                                                            "type": "string",
+                                                            "minLength": 1,
+                                                            "maxLength": 256
+                                                          }
+                                                        }
+                                                      }
+                                                    }
+                                                  }
+                                                }
+                                              },
+                                              {
+                                                "type": "null"
+                                              }
+                                            ]
+                                          }
+                                        }
+                                      }
+                                    },
+                                    "disable_action": {
+                                      "oneOf": [
+                                        {
+                                          "type": "object",
+                                          "additionalProperties": false,
+                                          "required": [
+                                            "id",
+                                            "kind",
+                                            "label",
+                                            "description",
+                                            "enabled",
+                                            "disabled_reason",
+                                            "request"
+                                          ],
+                                          "properties": {
+                                            "id": {
+                                              "const": "auto_top_up_disable"
+                                            },
+                                            "kind": {
+                                              "const": "mutation"
+                                            },
+                                            "label": {
+                                              "type": "string"
+                                            },
+                                            "description": {
+                                              "type": "string"
+                                            },
+                                            "enabled": {
+                                              "type": "boolean"
+                                            },
+                                            "disabled_reason": {
+                                              "type": [
+                                                "string",
+                                                "null"
+                                              ]
+                                            },
+                                            "request": {
+                                              "type": "object",
+                                              "additionalProperties": false,
+                                              "required": [
+                                                "method",
+                                                "path",
+                                                "body"
+                                              ],
+                                              "properties": {
+                                                "method": {
+                                                  "const": "POST"
+                                                },
+                                                "path": {
+                                                  "const": "/billing/v1/credits/auto-top-up/disable"
+                                                },
+                                                "body": {
+                                                  "type": "object",
+                                                  "additionalProperties": false,
+                                                  "required": [
+                                                    "product",
+                                                    "organisation_id",
+                                                    "team_id",
+                                                    "user_id"
+                                                  ],
+                                                  "properties": {
+                                                    "product": {
+                                                      "type": "string",
+                                                      "minLength": 1,
+                                                      "maxLength": 100
+                                                    },
+                                                    "organisation_id": {
+                                                      "type": "string",
+                                                      "minLength": 1,
+                                                      "maxLength": 256
+                                                    },
+                                                    "team_id": {
+                                                      "type": "string",
+                                                      "minLength": 1,
+                                                      "maxLength": 256
+                                                    },
+                                                    "user_id": {
+                                                      "type": "string",
+                                                      "minLength": 1,
+                                                      "maxLength": 256
+                                                    },
+                                                    "billing_context": {
+                                                      "type": "string",
+                                                      "minLength": 1,
+                                                      "maxLength": 2048
+                                                    }
+                                                  }
+                                                }
+                                              }
+                                            }
+                                          }
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ]
+                                    },
+                                    "recover_action": {
+                                      "oneOf": [
+                                        {
+                                          "type": "object",
+                                          "additionalProperties": false,
+                                          "required": [
+                                            "id",
+                                            "kind",
+                                            "label",
+                                            "description",
+                                            "enabled",
+                                            "disabled_reason",
+                                            "request"
+                                          ],
+                                          "properties": {
+                                            "id": {
+                                              "const": "auto_top_up_recover"
+                                            },
+                                            "kind": {
+                                              "const": "hosted_redirect"
+                                            },
+                                            "label": {
+                                              "type": "string"
+                                            },
+                                            "description": {
+                                              "type": "string"
+                                            },
+                                            "enabled": {
+                                              "type": "boolean"
+                                            },
+                                            "disabled_reason": {
+                                              "type": [
+                                                "string",
+                                                "null"
+                                              ]
+                                            },
+                                            "request": {
+                                              "type": "object",
+                                              "additionalProperties": false,
+                                              "required": [
+                                                "method",
+                                                "path",
+                                                "body"
+                                              ],
+                                              "properties": {
+                                                "method": {
+                                                  "const": "POST"
+                                                },
+                                                "path": {
+                                                  "const": "/billing/v1/credits/auto-top-up/recover"
+                                                },
+                                                "body": {
+                                                  "type": "object",
+                                                  "additionalProperties": false,
+                                                  "required": [
+                                                    "product",
+                                                    "organisation_id",
+                                                    "team_id",
+                                                    "user_id"
+                                                  ],
+                                                  "properties": {
+                                                    "product": {
+                                                      "type": "string",
+                                                      "minLength": 1,
+                                                      "maxLength": 100
+                                                    },
+                                                    "organisation_id": {
+                                                      "type": "string",
+                                                      "minLength": 1,
+                                                      "maxLength": 256
+                                                    },
+                                                    "team_id": {
+                                                      "type": "string",
+                                                      "minLength": 1,
+                                                      "maxLength": 256
+                                                    },
+                                                    "user_id": {
+                                                      "type": "string",
+                                                      "minLength": 1,
+                                                      "maxLength": 256
+                                                    },
+                                                    "billing_context": {
+                                                      "type": "string",
+                                                      "minLength": 1,
+                                                      "maxLength": 2048
+                                                    }
+                                                  }
+                                                }
+                                              }
+                                            }
+                                          }
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ]
+                                    }
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "state": {
+                                  "type": "string"
+                                },
+                                "options": {
+                                  "type": "array"
+                                }
+                              },
+                              "required": [
+                                "state",
+                                "options"
+                              ]
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "capabilities",
+                        "conversion",
+                        "collection",
+                        "funding_policy",
+                        "automatic_top_up"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "state",
+                    "message",
+                    "data"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "state": {
+                      "enum": [
+                        "pending_reconciliation",
+                        "unavailable"
+                      ]
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "state",
+                    "message",
+                    "code"
+                  ]
+                }
+              ]
+            },
+            "subscription": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "state": {
+                      "const": "confirmed"
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "plan": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "display_name",
+                            "collection_mode",
+                            "usage_payment_mode",
+                            "monthly_subscription",
+                            "assignment"
+                          ],
+                          "properties": {
+                            "display_name": {
+                              "type": "string"
+                            },
+                            "collection_mode": {
+                              "type": "string",
+                              "enum": [
+                                "stripe",
+                                "manual",
+                                "none"
+                              ]
+                            },
+                            "usage_payment_mode": {
+                              "enum": [
+                                "prepaid",
+                                "pay_as_you_go"
+                              ]
+                            },
+                            "monthly_subscription": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": [
+                                "amount",
+                                "currency",
+                                "display",
+                                "amount_minor",
+                                "charge_basis",
+                                "seat_policy",
+                                "seat_timing",
+                                "amount_role"
+                              ],
+                              "properties": {
+                                "amount": {
+                                  "type": "string",
+                                  "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                                },
+                                "currency": {
+                                  "type": "string",
+                                  "pattern": "^[A-Z]{3}$"
+                                },
+                                "display": {
+                                  "type": "string"
+                                },
+                                "amount_minor": {
+                                  "type": "string",
+                                  "pattern": "^(0|[1-9][0-9]*)$"
+                                },
+                                "charge_basis": {
+                                  "enum": [
+                                    "flat",
+                                    "per_seat"
+                                  ]
+                                },
+                                "seat_policy": {
+                                  "enum": [
+                                    "automatic",
+                                    "fixed",
+                                    null
+                                  ]
+                                },
+                                "seat_timing": {
+                                  "enum": [
+                                    "full_month",
+                                    "prorated",
+                                    null
+                                  ]
+                                },
+                                "amount_role": {
+                                  "enum": [
+                                    "monthly_total",
+                                    "per_seat_unit"
+                                  ]
+                                }
+                              }
+                            },
+                            "assignment": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": [
+                                "scope",
+                                "id"
+                              ],
+                              "properties": {
+                                "scope": {
+                                  "type": "string",
+                                  "enum": [
+                                    "team",
+                                    "organisation",
+                                    "service_default"
+                                  ]
+                                },
+                                "id": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "collection": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "payment_collection_enabled",
+                            "stripe_collection_enabled",
+                            "stripe_mode"
+                          ],
+                          "properties": {
+                            "payment_collection_enabled": {
+                              "type": "boolean"
+                            },
+                            "stripe_collection_enabled": {
+                              "type": "boolean"
+                            },
+                            "stripe_mode": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "enum": [
+                                "test",
+                                "live",
+                                null
+                              ]
+                            }
+                          }
+                        },
+                        "subscription": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "additionalProperties": false,
+                          "required": [
+                            "id",
+                            "status",
+                            "display_status",
+                            "scope",
+                            "cancel_at_period_end",
+                            "current_period_start",
+                            "current_period_end"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "status": {
+                              "type": "string"
+                            },
+                            "display_status": {
+                              "type": "string"
+                            },
+                            "scope": {
+                              "type": "string",
+                              "enum": [
+                                "team",
+                                "organisation"
+                              ]
+                            },
+                            "cancel_at_period_end": {
+                              "type": "boolean"
+                            },
+                            "current_period_start": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "format": "date-time"
+                            },
+                            "current_period_end": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "format": "date-time"
+                            }
+                          }
+                        },
+                        "capabilities": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "can_upgrade",
+                            "can_open_portal",
+                            "can_cancel"
+                          ],
+                          "properties": {
+                            "can_upgrade": {
+                              "type": "boolean"
+                            },
+                            "can_open_portal": {
+                              "type": "boolean"
+                            },
+                            "can_cancel": {
+                              "type": "boolean"
+                            }
+                          }
+                        },
+                        "actions": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "id",
+                              "kind",
+                              "label",
+                              "description",
+                              "enabled",
+                              "disabled_reason",
+                              "request"
+                            ],
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "enum": [
+                                  "upgrade",
+                                  "portal",
+                                  "cancel"
+                                ]
+                              },
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "hosted_redirect",
+                                  "confirmation_dialog"
+                                ]
+                              },
+                              "label": {
+                                "type": "string"
+                              },
+                              "description": {
+                                "type": "string"
+                              },
+                              "enabled": {
+                                "type": "boolean"
+                              },
+                              "disabled_reason": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "request": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "method",
+                                  "path",
+                                  "body"
+                                ],
+                                "properties": {
+                                  "method": {
+                                    "const": "POST"
+                                  },
+                                  "path": {
+                                    "type": "string"
+                                  },
+                                  "body": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                      "type": "string"
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "required": [
+                        "plan",
+                        "collection",
+                        "subscription",
+                        "capabilities",
+                        "actions"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "state",
+                    "message",
+                    "data"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "state": {
+                      "enum": [
+                        "pending_reconciliation",
+                        "unavailable"
+                      ]
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "state",
+                    "message",
+                    "code"
+                  ]
+                }
+              ]
+            },
+            "history": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "state": {
+                      "const": "confirmed"
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "cycles_request": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "method": {
+                              "const": "POST"
+                            },
+                            "path": {
+                              "const": "/billing/v1/cycles/list"
+                            },
+                            "body": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": [
+                                "product",
+                                "organisation_id",
+                                "team_id",
+                                "user_id"
+                              ],
+                              "properties": {
+                                "product": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 100
+                                },
+                                "organisation_id": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 256
+                                },
+                                "team_id": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 256
+                                },
+                                "user_id": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 256
+                                }
+                              }
+                            }
+                          },
+                          "required": [
+                            "method",
+                            "path",
+                            "body"
+                          ]
+                        },
+                        "invoices_request": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "method": {
+                              "const": "POST"
+                            },
+                            "path": {
+                              "const": "/billing/v1/invoices/list"
+                            },
+                            "body": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "product": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 100
+                                },
+                                "organisation_id": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 256
+                                },
+                                "team_id": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 256
+                                },
+                                "user_id": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 256
+                                },
+                                "charge_month": {
+                                  "type": "string",
+                                  "pattern": "^\\d{4}-(0[1-9]|1[0-2])$"
+                                }
+                              },
+                              "required": [
+                                "product",
+                                "organisation_id",
+                                "team_id",
+                                "user_id",
+                                "charge_month"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "method",
+                            "path",
+                            "body"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "cycles_request",
+                        "invoices_request"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "state",
+                    "message",
+                    "data"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "state": {
+                      "enum": [
+                        "pending_reconciliation",
+                        "unavailable"
+                      ]
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "state",
+                    "message",
+                    "code"
+                  ]
+                }
+              ]
+            }
+          },
+          "required": [
+            "accrued_bill",
+            "credits",
+            "funding",
+            "subscription",
+            "history"
+          ]
+        }
+      },
+      "required": [
+        "schema_version",
+        "generated_at",
+        "subject",
+        "financial_scope",
+        "sections"
+      ]
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/capabilities"
+    },
+    {
+      "$ref": "#/$defs/overview"
+    }
+  ]
+}
