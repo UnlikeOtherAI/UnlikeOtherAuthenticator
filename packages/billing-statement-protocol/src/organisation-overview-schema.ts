@@ -3,6 +3,7 @@ import { billingCycleDetailV2JsonSchema } from './cycle-schema.js';
 import { billingSubjectRequestJsonSchema, creditAmountSchema, moneySchema } from './funding-schema-primitives.js';
 import { billingStatementV1JsonSchema } from './schema.js';
 import { BILLING_ORGANISATION_SCHEMA_PATH } from './organisation-overview-types.js';
+import { organisationFinancialSubjectSchema } from './organisation-financial-subject-schema.js';
 
 const object = (properties: Record<string, unknown>, required = Object.keys(properties)) => ({
   type: 'object', additionalProperties: false, properties, required,
@@ -11,7 +12,7 @@ const id = { type: 'string', minLength: 1, maxLength: 256 };
 const text = { type: 'string', minLength: 1 };
 const datetime = { type: 'string', format: 'date-time' };
 const month = { type: 'string', pattern: '^\\d{4}-(0[1-9]|1[0-2])$' };
-const subject = billingSubjectRequestJsonSchema;
+const subject = organisationFinancialSubjectSchema(billingSubjectRequestJsonSchema);
 export const billingOrganisationRequestV1JsonSchema = subject;
 export const billingOrganisationOverviewRequestV1JsonSchema = object({ ...subject.properties,
   billing_month: month }, [...subject.required]);
@@ -37,14 +38,14 @@ export const billingOrganisationCreditBalanceV1JsonSchema = object({ credit_acco
   billing_status: object({ settlement_state: { enum: ['current', 'pending_reconciliation'] }, message: text }),
   region_rate: credits.region_rate }, ['credit_account_id', 'confirmed_balance', 'reserved_credits',
   'spendable_balance', 'as_of', 'billing_status']);
-export const billingOrganisationFundingV1JsonSchema = object({
+export const billingOrganisationFundingV1JsonSchema = organisationFinancialSubjectSchema(object({
   ...pick(credits, ['capabilities', 'conversion', 'collection', 'region_rate']),
   funding_policy: { allOf: [credits.funding_policy, { type: 'object' }] },
   automatic_top_up: { allOf: [credits.automatic_top_up, { type: 'object',
     properties: { state: { type: 'string' }, options: { type: 'array' } }, required: ['state', 'options'] }] },
-}, ['capabilities', 'conversion', 'collection', 'funding_policy', 'automatic_top_up']);
-export const billingOrganisationSubscriptionV1JsonSchema = object(pick(statement,
-  ['plan', 'collection', 'subscription', 'capabilities', 'actions']));
+}, ['capabilities', 'conversion', 'collection', 'funding_policy', 'automatic_top_up']));
+export const billingOrganisationSubscriptionV1JsonSchema = organisationFinancialSubjectSchema(object(pick(statement,
+  ['plan', 'collection', 'subscription', 'capabilities', 'actions'])));
 export const billingOrganisationAccruedBillV1JsonSchema = object({ as_of: datetime,
   period: billingCycleDetailV2JsonSchema.properties.period,
   totals: billingCycleDetailV2JsonSchema.properties.totals,

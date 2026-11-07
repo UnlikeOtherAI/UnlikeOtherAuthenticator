@@ -26,4 +26,17 @@ describe('organisation financial overview', () => {
     expect(validate(denied)).toBe(true);
     expect(validate({ ...denied, financial_scope: _scope })).toBe(false);
   });
+  it('admits an explicit org-only subject and frozen action but no null return URL or context', () => {
+    const changed = JSON.parse(JSON.stringify(overview).replaceAll('"team_id":"team_example"','"team_id":null'));
+    changed.subject.team_id = null;
+    const subscription = changed.sections.subscription.data;
+    for (const action of subscription.actions) action.request.body.team_id = null;
+    changed.sections.history.data.cycles_request.body.team_id = null;
+    changed.sections.history.data.invoices_request.body.team_id = null;
+    expect(validate(changed),JSON.stringify(validate.errors)).toBe(true);
+    const action = subscription.actions[0];
+    if (!action) throw new Error('Fixture action missing');
+    action.request.body.success_url = null;
+    expect(validate(changed)).toBe(false);
+  });
 });

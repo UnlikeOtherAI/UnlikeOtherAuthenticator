@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "UOA organisation financial overview",
-    "version": "1.0.0"
+    "version": "1.1.0"
   },
   "paths": {
     "/billing/v1/organisation/capabilities": {
@@ -40,9 +40,16 @@
                     "maxLength": 256
                   },
                   "team_id": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 256
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 256
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   },
                   "user_id": {
                     "type": "string",
@@ -93,9 +100,16 @@
                               "maxLength": 256
                             },
                             "team_id": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 256
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 256
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
                             },
                             "user_id": {
                               "type": "string",
@@ -160,9 +174,16 @@
                               "maxLength": 256
                             },
                             "team_id": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 256
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 256
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
                             },
                             "user_id": {
                               "type": "string",
@@ -257,7 +278,7 @@
     "/billing/v1/organisation/overview": {
       "post": {
         "operationId": "billingOrganisationOverview",
-        "description": "One organisation/account/mode financial overview. Independent status-tagged sections; no numeric bill while held. Only active organisation owner/admin or selected-team owner/admin.",
+        "description": "One organisation/account/mode financial overview. Independent sections; no numeric bill while held. Current org manager or active team manager in this org. Explicit null team requires org manager and organisation financial actor scope.",
         "security": [
           {
             "billingAppKey": [],
@@ -283,9 +304,16 @@
                     "maxLength": 256
                   },
                   "team_id": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 256
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 256
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   },
                   "user_id": {
                     "type": "string",
@@ -344,9 +372,16 @@
                           "maxLength": 256
                         },
                         "team_id": {
-                          "type": "string",
-                          "minLength": 1,
-                          "maxLength": 256
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 256
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
                         },
                         "user_id": {
                           "type": "string",
@@ -1448,9 +1483,16 @@
                                                                         "maxLength": 256
                                                                       },
                                                                       "team_id": {
-                                                                        "type": "string",
-                                                                        "minLength": 1,
-                                                                        "maxLength": 256
+                                                                        "anyOf": [
+                                                                          {
+                                                                            "type": "string",
+                                                                            "minLength": 1,
+                                                                            "maxLength": 256
+                                                                          },
+                                                                          {
+                                                                            "type": "null"
+                                                                          }
+                                                                        ]
                                                                       },
                                                                       "user_id": {
                                                                         "type": "string",
@@ -2156,9 +2198,16 @@
                                                                         "maxLength": 256
                                                                       },
                                                                       "team_id": {
-                                                                        "type": "string",
-                                                                        "minLength": 1,
-                                                                        "maxLength": 256
+                                                                        "anyOf": [
+                                                                          {
+                                                                            "type": "string",
+                                                                            "minLength": 1,
+                                                                            "maxLength": 256
+                                                                          },
+                                                                          {
+                                                                            "type": "null"
+                                                                          }
+                                                                        ]
                                                                       },
                                                                       "user_id": {
                                                                         "type": "string",
@@ -2259,9 +2308,16 @@
                                                                         "maxLength": 256
                                                                       },
                                                                       "team_id": {
-                                                                        "type": "string",
-                                                                        "minLength": 1,
-                                                                        "maxLength": 256
+                                                                        "anyOf": [
+                                                                          {
+                                                                            "type": "string",
+                                                                            "minLength": 1,
+                                                                            "maxLength": 256
+                                                                          },
+                                                                          {
+                                                                            "type": "null"
+                                                                          }
+                                                                        ]
                                                                       },
                                                                       "user_id": {
                                                                         "type": "string",
@@ -2364,9 +2420,16 @@
                                                                   "maxLength": 256
                                                                 },
                                                                 "team_id": {
-                                                                  "type": "string",
-                                                                  "minLength": 1,
-                                                                  "maxLength": 256
+                                                                  "anyOf": [
+                                                                    {
+                                                                      "type": "string",
+                                                                      "minLength": 1,
+                                                                      "maxLength": 256
+                                                                    },
+                                                                    {
+                                                                      "type": "null"
+                                                                    }
+                                                                  ]
                                                                 },
                                                                 "user_id": {
                                                                   "type": "string",
@@ -2461,9 +2524,16 @@
                                                                   "maxLength": 256
                                                                 },
                                                                 "team_id": {
-                                                                  "type": "string",
-                                                                  "minLength": 1,
-                                                                  "maxLength": 256
+                                                                  "anyOf": [
+                                                                    {
+                                                                      "type": "string",
+                                                                      "minLength": 1,
+                                                                      "maxLength": 256
+                                                                    },
+                                                                    {
+                                                                      "type": "null"
+                                                                    }
+                                                                  ]
                                                                 },
                                                                 "user_id": {
                                                                   "type": "string",
@@ -2841,6 +2911,20 @@
                                                 "type": "object",
                                                 "additionalProperties": {
                                                   "type": "string"
+                                                },
+                                                "properties": {
+                                                  "team_id": {
+                                                    "anyOf": [
+                                                      {
+                                                        "type": "string",
+                                                        "minLength": 1,
+                                                        "maxLength": 256
+                                                      },
+                                                      {
+                                                        "type": "null"
+                                                      }
+                                                    ]
+                                                  }
                                                 }
                                               }
                                             }
@@ -2939,9 +3023,16 @@
                                               "maxLength": 256
                                             },
                                             "team_id": {
-                                              "type": "string",
-                                              "minLength": 1,
-                                              "maxLength": 256
+                                              "anyOf": [
+                                                {
+                                                  "type": "string",
+                                                  "minLength": 1,
+                                                  "maxLength": 256
+                                                },
+                                                {
+                                                  "type": "null"
+                                                }
+                                              ]
                                             },
                                             "user_id": {
                                               "type": "string",
@@ -2982,9 +3073,16 @@
                                               "maxLength": 256
                                             },
                                             "team_id": {
-                                              "type": "string",
-                                              "minLength": 1,
-                                              "maxLength": 256
+                                              "anyOf": [
+                                                {
+                                                  "type": "string",
+                                                  "minLength": 1,
+                                                  "maxLength": 256
+                                                },
+                                                {
+                                                  "type": "null"
+                                                }
+                                              ]
                                             },
                                             "user_id": {
                                               "type": "string",

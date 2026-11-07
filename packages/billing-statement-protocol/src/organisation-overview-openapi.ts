@@ -15,13 +15,13 @@ const post = (operationId: string, description: string, request: unknown, respon
   },
 });
 export const billingOrganisationV1OpenApiDocument = {
-  openapi: '3.1.0', info: { title: 'UOA organisation financial overview', version: '1.0.0' },
+  openapi: '3.1.0', info: { title: 'UOA organisation financial overview', version: '1.1.0' },
   paths: {
     [BILLING_ORGANISATION_CAPABILITIES_PATH]: { post: post('billingOrganisationCapabilities',
       'Current UOA role capability; independent from Stripe, credits and Ledger. Selected team is actor admission context.',
       billingOrganisationRequestV1JsonSchema, billingOrganisationCapabilitiesV1JsonSchema) },
     [BILLING_ORGANISATION_OVERVIEW_PATH]: { post: post('billingOrganisationOverview',
-      'One organisation/account/mode financial overview. Independent status-tagged sections; no numeric bill while held. Only active organisation owner/admin or selected-team owner/admin.',
+      'One organisation/account/mode financial overview. Independent sections; no numeric bill while held. Current org manager or active team manager in this org. Explicit null team requires org manager and organisation financial actor scope.',
       billingOrganisationOverviewRequestV1JsonSchema, billingOrganisationOverviewV1JsonSchema) },
   },
   components: { securitySchemes: {

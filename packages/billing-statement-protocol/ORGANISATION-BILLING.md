@@ -1,4 +1,4 @@
-# Organisation financial overview — protocol 1.0.0 / package 6.0.0
+# Organisation financial overview — protocol 1.1.0 / package 6.1.0
 
 This supersedes per-team customer billing. One UOA organisation owns one financial
 scope, one LIVE/Sandbox policy and independent money/customer bindings in each
@@ -10,11 +10,22 @@ records only; it grants no other-team product content or identity authority.
 body (`product`, `organisation_id`, `team_id`, `user_id`) and exact-endpoint
 `X-UOA-Actor` plus the registered lifecycle `X-UOA-App-Key`. It has no Stripe,
 Ledger, wallet or subscription dependency. UOA rechecks active identity/epoch,
-organisation and selected-team membership. Current organisation owner/admin OR
-selected-team owner/admin receives both capability booleans true and
+organisation membership. With a selected team, its exact ACTIVE membership is
+also required. Current organisation owner/admin OR an active owner/admin of any
+active team in that organisation receives both capability booleans true and
 `financial_scope`. An ordinary active member receives both false with no
 financial scope/data. Inactive, removed, foreign or invalid subjects fail closed.
 Never infer billing authority from ordinary membership or a previous verdict.
+
+An organisation owner/admin without an admitted team uses explicit `team_id: null`
+in the financial request and actor claim, together with actor claim
+`financial_scope: 'organisation'`. UOA rechecks the active organisation role;
+team-manager authority cannot use this branch. No team is invented or selected
+on the actor's behalf. Null is admitted only on organisation financial endpoints,
+their frozen payment/subscription actions and financial history. Ordinary team
+content, entitlement, service-access and token endpoints still require their
+exact non-null admitted team. The displayed token also captures explicit null.
+No other body field, URL or context can be null through this exception.
 
 `POST /billing/v1/organisation/overview` accepts that subject plus optional
 `billing_month` (`YYYY-MM`, current or earlier). It requires the same manager
