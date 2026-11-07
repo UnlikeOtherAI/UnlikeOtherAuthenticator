@@ -1,3 +1,6 @@
+import { redirect, recoverOpenCheckout } from './billing-recurring-addon-checkout-recovery.service.js';
+import { requireTeamStripeBilling, assertOrganisationBillingMode } from './billing-team-mode.service.js';
+import { assertBillingActionContext } from './billing-action-context.service.js';
 import { withLiveTeamBillingEffect } from './team-billing-effect.service.js';
 import type { BillingCustomerLocale } from '../contracts/billing-statement-v1.js';
 import { stripeCheckoutLocale } from './billing-stripe-locale.js';
@@ -10,7 +13,7 @@ import {
   type PrismaClient,
 } from '@prisma/client';
 import { createHash } from 'node:crypto';
-import type Stripe from 'stripe';
+
 
 import type { BillingHostedRedirectResponse } from '../contracts/billing-statement-v1.js';
 import { getAdminPrisma } from '../db/prisma.js';
@@ -41,7 +44,6 @@ import {
 } from './billing-stripe-checkout-state.service.js';
 import {
   assertStripeObjectLivemode,
-  requireStripeBillingEnabled,
   resolveStripeAccountContext,
 } from './billing-stripe-client.service.js';
 import { stripeExternalId } from './billing-stripe-webhook-utils.service.js';
@@ -95,44 +97,6 @@ function assertCheckoutIdentity(
   }
 }
 
-function redirect(session: Stripe.Checkout.Session): BillingHostedRedirectResponse {
-  if (session.status !== 'open' || !session.url || !session.url.startsWith('https://')) {
-    throw new AppError('BAD_REQUEST', 409, 'BILLING_RECURRING_ADDON_CHECKOUT_NOT_OPEN');
-  }
-  return { redirect_url: session.url };
-}
-
-async function recoverOpenCheckout(
-  checkout: BillingRecurringAddonCheckout,
-  expectedCustomerId: string,
-  deps: { prisma: PrismaClient; stripe: StripeCheckoutClient; livemode: boolean },
-): Promise<{ redirect: BillingHostedRedirectResponse | null; reusable: boolean }> {
-  if (!checkout.stripeCheckoutSessionId) return { redirect: null, reusable: true };
-  const session = await deps.stripe.checkout.sessions.retrieve(checkout.stripeCheckoutSessionId);
-  assertStripeObjectLivemode(session, deps.livemode);
-  if (
-    session.id !== checkout.stripeCheckoutSessionId ||
-    session.client_reference_id !== checkout.id ||
-    stripeExternalId(session.customer) !== expectedCustomerId ||
-    session.mode !== 'subscription'
-  ) {
-    throw new AppError('INTERNAL', 503, 'STRIPE_RECURRING_ADDON_CHECKOUT_DRIFT');
-  }
-  if (session.status === 'open') return { redirect: redirect(session), reusable: false };
-  if (session.status === 'complete') {
-    throw new AppError('BAD_REQUEST', 409, 'BILLING_RECURRING_ADDON_WEBHOOK_PENDING');
-  }
-  await deps.prisma.billingRecurringAddonCheckout.update({
-    where: { id: checkout.id },
-    data: {
-      status: BillingRecurringAddonCheckoutStatus.EXPIRED,
-      leaseExpiresAt: new Date(),
-      expiresAt: new Date(session.expires_at * 1000),
-    },
-  });
-  return { redirect: null, reusable: false };
-}
-
 export async function createRecurringAddonCheckout(
   params: {
     request: RecurringAddonSubject & { offerId: string };
@@ -160,11 +124,19 @@ export async function createRecurringAddonCheckout(
     { prisma },
   );
   const viewer = await resolveBillingFundingViewer(params.request, { prisma });
-  const configured = deps?.stripe ? undefined : requireStripeBillingEnabled();
+  const configured = deps?.stripe ? undefined : await requireTeamStripeBilling(params.request, prisma);
   const stripe = deps?.stripe ?? configured?.client;
   if (!stripe) throw new AppError('INTERNAL', 503, 'STRIPE_BILLING_DISABLED');
   const livemode = deps?.stripeLivemode ?? configured?.livemode ?? false;
   const account = await resolveStripeAccountContext(stripe, livemode, prisma);
+  const modeRevision = configured?.selection.revision ?? 0;
+  if (!deps?.stripe || params.request.billingContext !== undefined) {
+    assertBillingActionContext(params.request.billingContext, { account, revision: modeRevision,
+      appKeyId: params.credential.id }, params.endpoint, {
+      product: params.request.product, organisation_id: params.request.organisationId,
+      team_id: params.request.teamId, user_id: params.request.userId, offer_id: params.request.offerId,
+    });
+  }
   const offer = await prisma.billingRecurringAddonOffer.findFirst({
     where: { id: params.request.offerId, serviceId: params.credential.service.id, active: true },
     include: {
@@ -177,6 +149,9 @@ export async function createRecurringAddonCheckout(
     throw new AppError('BAD_REQUEST', 409, 'BILLING_RECURRING_ADDON_UNAVAILABLE');
   }
   const selectedScope = recurringAddonScope(entitlementScope, params.request, offer);
+  if (!deps?.stripe && selectedScope.customerTeamId === null) {
+    await assertOrganisationBillingMode(params.request.organisationId, account.livemode, prisma);
+  }
   assertCanManageRecurringAddonScope(viewer, selectedScope.scope);
   if (offer.resourceKind === 'sms_mobile_number') {
     if (!offer.resourceId) throw new AppError('NOT_FOUND', 404, 'BILLING_SMS_RESOURCE_NOT_FOUND');
@@ -388,6 +363,8 @@ export async function createRecurringAddonCheckout(
         }
         return tx.billingRecurringAddonCheckout.create({
         data: {
+        billingModeTeamId: params.request.teamId,
+        billingModeRevision: modeRevision,
           ...identity,
           checkoutLocale: params.locale ?? null,
           serviceId: offer.serviceId,

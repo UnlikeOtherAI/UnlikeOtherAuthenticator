@@ -1,5 +1,6 @@
 import { BillingCollectionMode, BillingTariffMode, type PrismaClient } from '@prisma/client';
 import type Stripe from 'stripe';
+import { runStoredStripeAccountCycles } from './billing-stripe-account-cycles.service.js';
 
 import { getEnv } from '../config/env.js';
 import { getAdminPrisma } from '../db/prisma.js';
@@ -64,6 +65,22 @@ export async function runStripeUsageExportCycle(deps?: {
   safetyOffsetMinutes?: number;
 }): Promise<StripeUsageCycleResult> {
   const prisma = deps?.prisma ?? getAdminPrisma();
+  if (!deps?.stripe && !getEnv().STRIPE_BILLING_ENABLED) throw new Error('STRIPE_BILLING_DISABLED');
+  if (!deps?.stripe) {
+    const runs = await runStoredStripeAccountCycles(prisma, (runtime) => runStripeUsageExportCycle({
+      ...deps, prisma, stripe: runtime.client, stripeLivemode: runtime.livemode,
+    }));
+    const successful = runs.flatMap((run) => 'result' in run ? [run.result] : []);
+    return { accountId: 'all', attempted: successful.reduce((sum, run) => sum + run.attempted, 0),
+      succeeded: successful.reduce((sum, run) => sum + run.succeeded, 0),
+      failed: successful.reduce((sum, run) => sum + run.failed, 0) + runs.filter((run) => 'error' in run).length,
+      skippedAlignmentPeriods: successful.reduce((sum, run) => sum + run.skippedAlignmentPeriods, 0),
+      preBoundarySafetyPasses: successful.reduce((sum, run) => sum + run.preBoundarySafetyPasses, 0),
+      results: runs.flatMap((run) => 'result' in run ? run.result.results : [{
+        subscriptionId: `account:${run.accountId}`, billingMonth: null,
+        preBoundarySafetyPass: false, error: run.error }]),
+    };
+  }
   const configured = deps?.stripe ? undefined : requireStripeBillingEnabled();
   const stripe = deps?.stripe ?? configured?.client;
   if (!stripe) {

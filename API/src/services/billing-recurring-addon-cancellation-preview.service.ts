@@ -1,3 +1,4 @@
+import { requireStoredStripeBilling } from './billing-team-mode.service.js';
 import {
   BillingAssignmentScope,
   BillingRecurringAddonCancellationIntentState,
@@ -30,7 +31,6 @@ import {
   type RecurringAddonSubject,
 } from './billing-recurring-addon-scope.service.js';
 import {
-  requireStripeBillingEnabled,
   resolveStripeAccountContext,
 } from './billing-stripe-client.service.js';
 import {
@@ -158,7 +158,7 @@ export async function createRecurringAddonCancellationPreview(
   );
   assertCanManageRecurringAddonScope(viewer, subscription.scope);
 
-  const configured = deps?.stripe ? undefined : requireStripeBillingEnabled();
+  const configured = deps?.stripe ? undefined : await requireStoredStripeBilling(subscription.accountId, prisma);
   const stripe = deps?.stripe ?? configured?.client;
   if (!stripe) throw new AppError('INTERNAL', 503, 'STRIPE_BILLING_DISABLED');
   const account = await resolveStripeAccountContext(

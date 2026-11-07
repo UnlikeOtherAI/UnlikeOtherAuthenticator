@@ -15,6 +15,7 @@ const paidAt = new Date('2026-10-12T12:05:00.000Z');
 
 function checkout(id: string, overrides: Partial<Prisma.BillingCreditTopUpCheckoutUncheckedCreateInput> = {}) {
   return {
+    billingModeTeamId: ids.team, billingModeRevision: 1,
     id, accountId: ids.account, creditAccountId: ids.creditAccount, customerId: ids.customer,
     catalogId: eur.catalog, serviceId: ids.service, appKeyId: ids.appKey, offerId: eur.offer,
     actorJti: id, requestedByUserId: ids.user, paymentAmountMinor: 2_500n,

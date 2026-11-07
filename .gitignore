@@ -19,3 +19,6 @@ dist-ssr/
 
 # Disposable registration verification database and rendered evidence
 .registration-qa/
+
+# Disposable local billing-mode PostgreSQL verification
+.billing-mode-qa/

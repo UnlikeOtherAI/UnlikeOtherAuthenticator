@@ -106,6 +106,7 @@ export async function seedFundingRace(prisma: PrismaClient): Promise<void> {
     await tx.team.create({
       data: { id: ids.team, orgId: ids.org, name: 'Funding Race Team', slug: 'funding-race' },
     });
+    await tx.billingTeamMode.create({ data: { teamId: ids.team, sandbox: true, revision: 1 } });
     await tx.teamMember.create({
       data: {
         id: ids.teamMember,
@@ -307,6 +308,7 @@ export async function seedFundingRace(prisma: PrismaClient): Promise<void> {
 export function fundingActionContext(creditAccount: BillingCreditAccount) {
   const customer = { id: ids.customer, stripeCustomerId: 'cus_funding_race' };
   return {
+    modeRevision: 1,
     actor: { jti: 'actor-current-action', tv: 0, exp: 2_000_000_000 },
     viewer: { billingManager: true },
     account: stripeAccount,

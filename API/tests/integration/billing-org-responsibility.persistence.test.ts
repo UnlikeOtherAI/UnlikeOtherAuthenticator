@@ -164,6 +164,12 @@ describe.skipIf(!databaseTestsEnabled)('organisation billing responsibility pers
       { prisma },
     );
 
+    // This fixture simulates an organisation payer already present in July.
+    await prisma.$transaction(async tx => {
+      await tx.$executeRawUnsafe('SET LOCAL session_replication_role = replica');
+      await tx.billingCreditAccount.update({ where: { id: organisationAccount.id },
+        data: { createdAt: new Date('2026-06-01T00:00:00Z') } });
+    });
     await settleCreditPortfolio(
       {
         creditAccountId: organisationAccount.id,

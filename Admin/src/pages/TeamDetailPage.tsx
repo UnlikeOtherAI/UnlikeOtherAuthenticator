@@ -1,3 +1,4 @@
+import { billingTeamModeCopy } from '../features/admin/billing-team-mode-copy';
 import { EntityLifecyclePanel } from '../features/admin/EntityLifecyclePanel';
 import { useDirectoryNavigation } from '../features/admin/useDirectoryNavigation';
 import { useDirectoryParam } from '../features/admin/useDirectoryParam';
@@ -18,13 +19,15 @@ import { adminService } from '../services/admin-service';
 import { useTeamQuery } from '../features/admin/admin-queries';
 import { TeamAvatar } from '../features/admin/TeamAvatar';
 import { TeamAvatarSection } from '../features/admin/TeamAvatarSection';
+import { TeamBillingModePanel } from '../features/admin/TeamBillingModePanel';
 import { UserAvatar } from '../features/admin/UserAvatar';
 
 export function TeamDetailPage() {
+  const modeCopy = billingTeamModeCopy();
   const { orgId, teamId } = useParams();
   const { recordState, openRecord, goBack } = useDirectoryNavigation('/organisations');
   const [rawTab, setTab] = useDirectoryParam('tab', 'members');
-  const tab = ['profile', 'access'].includes(rawTab) ? rawTab : 'members';
+  const tab = ['profile', 'access', 'billing'].includes(rawTab) ? rawTab : 'members';
   const queryClient = useQueryClient();
   const [dialog, setDialog] = useState(false);
   const closeDialog = () => setDialog(false);
@@ -70,7 +73,8 @@ export function TeamDetailPage() {
         }
       />
       <p className="mb-4 text-sm"><Link state={recordState} to={`/organisations/${org.id}`} className="text-indigo-600">{org.name}</Link></p>
-      <SegmentedTabs value={tab} onChange={setTab} options={[{ label: 'Members', value: 'members' }, { label: 'Profile', value: 'profile' }, { label: 'Access', value: 'access' }]} />
+      <SegmentedTabs value={tab} onChange={setTab} options={[{ label: 'Members', value: 'members' }, { label: 'Profile', value: 'profile' }, { label: 'Access', value: 'access' }, { label: modeCopy.tab, value: 'billing' }]} />
+      {tab === 'billing' ? <TeamBillingModePanel key={team.id} organisationId={org.id} teamId={team.id} /> : null}
       {tab === 'profile' ?
       <div className="mb-5">
         <TeamAvatarSection teamId={team.id} teamName={team.name} />

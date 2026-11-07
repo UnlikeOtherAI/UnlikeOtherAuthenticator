@@ -1,5 +1,7 @@
+import { getEnv } from '../config/env.js';
 import { Prisma, type PrismaClient } from '@prisma/client';
 import type Stripe from 'stripe';
+import { runStoredStripeAccountCycles } from './billing-stripe-account-cycles.service.js';
 
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
@@ -14,8 +16,18 @@ type Provider = StripeInvoiceCashClient & Pick<Stripe, 'accounts' | 'subscriptio
 export async function runStripePaymentInvoiceCycle(deps?: {
   prisma?: PrismaClient; stripe?: Provider; livemode?: boolean; now?: () => Date;
   issue?: typeof issueStripePaymentInvoice;
-}) {
+}): Promise<{ checked: number; issued: number; held: number }> {
   const prisma = deps?.prisma ?? getAdminPrisma();
+  if (!deps?.stripe && !getEnv().STRIPE_BILLING_ENABLED) throw new Error('STRIPE_BILLING_DISABLED');
+  if (!deps?.stripe) {
+    const runs = await runStoredStripeAccountCycles(prisma, (runtime) => runStripePaymentInvoiceCycle({
+      ...deps, prisma, stripe: runtime.client, livemode: runtime.livemode,
+    }));
+    return runs.reduce((total, run) => 'result' in run ? {
+      checked: total.checked + run.result.checked, issued: total.issued + run.result.issued,
+      held: total.held + run.result.held,
+    } : { ...total, held: total.held + 1 }, { checked: 0, issued: 0, held: 0 });
+  }
   const runtime = deps?.stripe ? { client: deps.stripe, livemode: deps.livemode } : requireStripeBillingEnabled();
   if (runtime.livemode === undefined) throw new Error('STRIPE_PAYMENT_INVOICE_MODE_REQUIRED');
   const account = await resolveStripeAccountContext(runtime.client, runtime.livemode, prisma);

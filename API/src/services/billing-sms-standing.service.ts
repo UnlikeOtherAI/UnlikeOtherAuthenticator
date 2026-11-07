@@ -1,3 +1,4 @@
+import { requireTeamStripeBilling } from './billing-team-mode.service.js';
 import { Prisma, type BillingSmsStandingHold } from '@prisma/client';
 import type { BillingSmsStandingHoldRequestV1, BillingSmsStandingReadRequestV1,
   BillingSmsStandingHoldV1, BillingSmsStandingRetireResultV1 } from '@unlikeotherai/billing-statement-protocol';
@@ -10,7 +11,7 @@ import { readSmsNumber, type SmsNumberDependencies } from './billing-sms-number.
 import { issueSmsQuote } from './billing-sms-quote.service.js';
 import { runBillingSerializableTransaction } from './billing-serializable-transaction.service.js';
 import { resolveCreditAccount } from './billing-credit-account.service.js';
-import { requireStripeBillingEnabled, resolveStripeAccountContext } from './billing-stripe-client.service.js';
+import { resolveStripeAccountContext } from './billing-stripe-client.service.js';
 import { lockCreditBalance } from './billing-credit-balance-lock.service.js';
 import { billingReservedMicrocredits } from './billing-credit-holds.service.js';
 import { smsCreditsToMicrocredits, smsMicrocredits } from './billing-sms-money.service.js';
@@ -40,7 +41,7 @@ export async function fundSmsStanding(input: { request: BillingSmsStandingHoldRe
     carrier: null, mcc: null, mnc: null,
   }, authorize: (tx) => lockSmsSubject(tx, { subject: body, actor, credential: input.credential }) }, { ...deps, prisma });
   const configured = deps.stripe ? { client: deps.stripe, livemode: deps.stripeLivemode ?? false }
-    : requireStripeBillingEnabled();
+    : await requireTeamStripeBilling({ organisationId: body.organisation_id, teamId: body.team_id }, prisma);
   const stripe = deps.stripe ?? configured.client;
   const account = await resolveStripeAccountContext(stripe, deps.stripeLivemode ?? configured?.livemode ?? false, prisma);
   const credit = await resolveCreditAccount({ account, organisationId: body.organisation_id, teamId: body.team_id }, { prisma });

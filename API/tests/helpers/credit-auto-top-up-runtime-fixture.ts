@@ -56,6 +56,7 @@ export async function seedCreditAccount(
       CURRENT_TIMESTAMP
     )
   `);
+  await tx.billingTeamMode.create({ data: { teamId: row.team, sandbox: true, revision: 1 } });
   await tx.$executeRaw(Prisma.sql`
     INSERT INTO "team_members" (
       "id", "team_id", "user_id", "team_role", "status", "updated_at"
@@ -336,4 +337,3 @@ export async function disableCreditAccountWithAuditEvidence(
     },
   );
 }
-

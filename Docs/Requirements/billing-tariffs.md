@@ -1845,3 +1845,18 @@ usage. Settlement continues to verify independent immutable Ledger evidence.
 The caller's current exact product/org/team/user binding appears in the response.
 The user doorway is the consuming product's model-selection catalogue; UOA adds
 no separate customer screen. Private tariff terms and costs stay server-side.
+
+## Platform-owned team Sandbox selection (2026-11-07)
+
+Teams use LIVE billing unless a platform SUPERUSER explicitly selects Sandbox
+in Admin Teams → selected team → Billing. Regular product members cannot select
+modes. Account/livemode bindings follow every stored object, consent, refund,
+webhook and recovery operation. Organisation money requires uniform team modes.
+A narrowly eligible first explicit Sandbox selection can preserve historical
+main-account TEST money and pending work without financial-row changes; it never
+automatically adopts untouched teams. Installation/change UTC months remain held
+for source-backed reconciliation, including changes exactly at month-start.
+See [Team billing modes](../Billing/team-billing-modes.md) for eligibility,
+original-click protocol 5.9.0, exact credentials/webhook configuration, catalog
+provisioning, unsupported account replacement and the reviewed activation order.
+The webhook API version and exact lifecycle event set above remain authoritative.

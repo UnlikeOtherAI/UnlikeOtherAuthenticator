@@ -1,5 +1,10 @@
 # Deployment
 
+Team billing modes introduce LIVE-default collection and independently bound
+LIVE/TEST credentials. Before merging or activating that rollout, follow
+[the activation and reconciliation runbook](Billing/team-billing-modes.md).
+Legacy-only production configuration must not activate the new billing runtime.
+
 ## Target
 
 - **Platform:** Google Cloud Run

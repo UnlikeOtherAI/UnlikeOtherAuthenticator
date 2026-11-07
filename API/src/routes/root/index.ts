@@ -1,3 +1,4 @@
+// Exact-team Admin mode endpoints and frozen billing_context negotiation are published by schema.billing-modes and /llm.
 // Directory webhook consumption and exact-team avatar reads are documented in /llm and schema.ts.
 import { lifecycleDocumentation } from './schema.lifecycle.js';
 import { readFileSync } from 'node:fs';

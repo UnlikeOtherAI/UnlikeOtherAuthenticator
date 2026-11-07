@@ -109,8 +109,10 @@ describe.skipIf(!process.env.DATABASE_URL)('contract invoice recurring add-on ev
         stripePriceId: 'price_addon_contract_test',
       },
     });
+    await db.prisma.billingTeamMode.create({ data: { teamId: team.id, sandbox: true, revision: 1 } });
     const checkout = await db.prisma.billingRecurringAddonCheckout.create({
       data: {
+        billingModeTeamId: team.id, billingModeRevision: 1,
         accountId: stripeAccount.id,
         appKeyId: appKey.id,
         customerId: customer.id,

@@ -119,14 +119,15 @@ async function seedRenewalSubject(prisma: PrismaClient): Promise<void> {
         'in_addon_initial_test', 5000, 'USD'
       )
     `);
+    await tx.$executeRaw(Prisma.sql`INSERT INTO billing_team_modes(team_id,sandbox,revision) VALUES (${ids.team},true,1)`);
     await tx.$executeRaw(Prisma.sql`
       INSERT INTO "billing_recurring_addon_checkouts" (
-        "id", "account_id", "app_key_id", "customer_id", "catalog_id", "service_id", "offer_id", "offer_key",
+        "id", "billing_mode_team_id", "billing_mode_revision", "account_id", "app_key_id", "customer_id", "catalog_id", "service_id", "offer_id", "offer_key",
         "org_id", "team_id", "requested_team_id", "scope", "scope_key", "actor_jti", "subject_fingerprint",
         "requested_by_user_id", "success_url_digest", "cancel_url_digest", "stripe_checkout_session_id",
         "stripe_subscription_id", "completion_webhook_event_id", "status", "lease_expires_at", "completed_at", "updated_at"
       ) VALUES (
-        ${ids.checkout}, ${ids.account}, ${ids.appKey}, ${ids.customer}, ${ids.catalog}, ${ids.service}, ${ids.offer}, 'privacy',
+        ${ids.checkout}, ${ids.team}, 1, ${ids.account}, ${ids.appKey}, ${ids.customer}, ${ids.catalog}, ${ids.service}, ${ids.offer}, 'privacy',
         ${ids.org}, ${ids.team}, ${ids.team}, 'TEAM', ${`${ids.org}:${ids.team}`}, 'addon-renewal-jti', ${'a'.repeat(64)},
         ${ids.user}, ${'b'.repeat(64)}, ${'c'.repeat(64)}, 'cs_addon_renewal_test', 'sub_addon_renewal_test',
         ${ids.checkoutEvent}, 'COMPLETE', ${initialPaidAt}, ${initialPaidAt}, CURRENT_TIMESTAMP

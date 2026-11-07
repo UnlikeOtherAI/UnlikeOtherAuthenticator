@@ -26,6 +26,7 @@ describe.skipIf(!databaseTestsEnabled)('credit lots (PostgreSQL)', () => {
     const at = tick();
     const usd = currency === 'USD';
     await db().billingCreditTopUpCheckout.create({ data: {
+      billingModeTeamId: ids.team, billingModeRevision: 1,
       id, accountId: ids.account, creditAccountId: ids.creditAccount, customerId: ids.customer,
       catalogId: usd ? ids.catalog : eur.catalog, serviceId: ids.service, appKeyId: ids.appKey,
       offerId: usd ? ids.offer : eur.offer, actorJti: id, requestedByUserId: ids.user,

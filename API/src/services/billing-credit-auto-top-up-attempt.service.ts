@@ -209,6 +209,12 @@ export async function listCreditAutoTopUpCandidateIds(
       FROM "billing_credit_accounts" AS credit
       WHERE credit."account_id" = ${params.accountId}
         AND credit."currency" = 'USD'
+        AND NOT EXISTS (SELECT 1 FROM teams t
+          LEFT JOIN billing_team_modes m ON m.team_id = t.id
+          JOIN billing_stripe_accounts a ON a.id = credit.account_id
+          WHERE t.org_id = credit.org_id AND t.lifecycle_status = 'ACTIVE'
+            AND (credit.team_id IS NULL OR t.id = credit.team_id)
+            AND COALESCE(m.sandbox, false) = a.livemode)
         AND credit."auto_top_up_state" = 'ACTIVE'
         AND credit."auto_top_up_threshold_microcredits" IS NOT NULL
         -- A GBP or EUR threshold is a value the claim computes from the lots.

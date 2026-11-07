@@ -341,11 +341,12 @@ describe('getBillingCreditPurchaseStatus authorization and scope', () => {
     checkoutRow?: unknown;
   } = {}) {
     const stored = params.checkoutRow === undefined ? {
-      ...checkout(), customer: { stripeCustomerId: customerStripeId },
+      ...checkout(), customer: { stripeCustomerId: customerStripeId }, account,
+      creditAccount: { id: 'credit_account_1', accountId: account.id, customerId: 'customer_1', orgId: 'org_1', teamId: 'team_1' },
     } : params.checkoutRow;
     const findFirst = vi.fn().mockImplementation(async ({ where }: { where: Record<string, unknown> }) => {
       if (!stored || !Object.entries(where).every(([key, value]) =>
-        (stored as Record<string, unknown>)[key] === value)) return null;
+        key === 'creditAccount' || (stored as Record<string, unknown>)[key] === value)) return null;
       return stored;
     });
     const prisma = { billingCreditTopUpCheckout: { findFirst } } as unknown as PrismaClient;
@@ -387,13 +388,11 @@ describe('getBillingCreditPurchaseStatus authorization and scope', () => {
     expect(state.findFirst).toHaveBeenCalledWith({
       where: {
         id: purchaseId,
-        accountId: account.id,
-        creditAccountId: 'credit_account_1',
-        customerId: 'customer_1',
+        creditAccount: { orgId: 'org_1', OR: [{ teamId: 'team_1' }, { teamId: null, scope: 'ORGANISATION' }] },
         serviceId: 'service_1',
         appKeyId: 'app_key_1',
       },
-      include: { customer: { select: { stripeCustomerId: true } } },
+      include: { customer: { select: { stripeCustomerId: true } }, creditAccount: true, account: true },
     });
   });
 
@@ -414,14 +413,13 @@ describe('getBillingCreditPurchaseStatus authorization and scope', () => {
       { appKeyId: 'app_other' },
     ];
     for (const row of mismatches) {
-      const state = setup({ checkoutRow: { ...checkout(), customer: { stripeCustomerId: customerStripeId }, ...row } });
+      const state = setup({ checkoutRow: { ...checkout(), customer: { stripeCustomerId: customerStripeId }, account,
+        creditAccount: { id: 'credit_account_1', accountId: account.id, customerId: 'customer_1', orgId: 'org_1', teamId: 'team_1' }, ...row } });
       await expect(getBillingCreditPurchaseStatus({
         request, credential, actorToken: 'actor', endpoint: '/billing/v1/credits/purchase-status',
       }, state.deps)).rejects.toMatchObject({ statusCode: 404 });
       expect(state.findFirst.mock.calls[0]?.[0].where).toMatchObject({
-        accountId: account.id,
-        creditAccountId: 'credit_account_1',
-        customerId: 'customer_1',
+        creditAccount: { orgId: 'org_1', OR: [{ teamId: 'team_1' }, { teamId: null, scope: 'ORGANISATION' }] },
         serviceId: 'service_1',
         appKeyId: 'app_key_1',
       });

@@ -1,3 +1,4 @@
+import { requireTeamStripeBilling } from './billing-team-mode.service.js';
 import { lockTelephoneSmsAuthority } from './telephone-sms-authority.service.js';
 import { Prisma, type BillingSmsReservation } from '@prisma/client';
 import type { BillingSmsReserveRequestV1, BillingSmsReservationV1 } from '@unlikeotherai/billing-statement-protocol';
@@ -11,7 +12,7 @@ import { lockSmsQuote, smsMicrocredits, smsProviderUsd, multiplySmsAmount } from
 import { readSmsNumber, type SmsNumberDependencies } from './billing-sms-number.service.js';
 import { runBillingSerializableTransaction } from './billing-serializable-transaction.service.js';
 import { resolveCreditAccount } from './billing-credit-account.service.js';
-import { requireStripeBillingEnabled, resolveStripeAccountContext } from './billing-stripe-client.service.js';
+import { resolveStripeAccountContext } from './billing-stripe-client.service.js';
 import { billingReservedMicrocredits } from './billing-credit-holds.service.js';
 import { lockCreditBalance } from './billing-credit-balance-lock.service.js';
 import { maximumRatedMicrocredits } from './billing-paid-liability.service.js';
@@ -100,7 +101,7 @@ export async function reserveAuthorizedSms(input: { request: BillingSmsReserveRe
   }
   const destinationCountry = await deps.provider.destinationCountry(body.to);
   const configured = deps.stripe ? { client: deps.stripe, livemode: deps.stripeLivemode ?? false }
-    : requireStripeBillingEnabled();
+    : await requireTeamStripeBilling({ organisationId: body.organisation_id, teamId: body.team_id }, prisma);
   const stripe = deps.stripe ?? configured.client;
   const account = await resolveStripeAccountContext(stripe, deps.stripeLivemode ?? configured?.livemode ?? false, prisma);
   const credits = await resolveCreditAccount({ account, organisationId: body.organisation_id, teamId: body.team_id }, { prisma });

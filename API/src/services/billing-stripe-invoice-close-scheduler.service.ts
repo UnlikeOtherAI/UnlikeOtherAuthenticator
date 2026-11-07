@@ -3,7 +3,8 @@ import type Stripe from 'stripe';
 
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
-import { assertStripeObjectLivemode, requireStripeBillingEnabled } from './billing-stripe-client.service.js';
+import { assertStripeObjectLivemode } from './billing-stripe-client.service.js';
+import { requireStoredStripeBilling } from './billing-team-mode.service.js';
 import { reconcileStripeCycleInvoiceUsage } from './billing-stripe-invoice.service.js';
 import { quoteUnexportedClosedPeriodLiability } from './billing-stripe-invoice-close-quote.service.js';
 import { collectStripeCorrectionInvoice } from './billing-stripe-correction-invoice.service.js';
@@ -63,7 +64,6 @@ export async function runStripeInvoiceCloseCycle(deps?: {
   collectCorrection?: typeof collectStripeCorrectionInvoice;
 }): Promise<{ checked: number; held: number; unbilled: number }> {
   const prisma = deps?.prisma ?? getAdminPrisma();
-  const stripe = deps?.stripe ?? requireStripeBillingEnabled().client;
   const now = deps?.now?.() ?? new Date();
   const rows = await prisma.billingStripeInvoiceClose.findMany({
     where: {
@@ -74,7 +74,6 @@ export async function runStripeInvoiceCloseCycle(deps?: {
     orderBy: [{ nextCheckAt: 'asc' }, { id: 'asc' }],
     take: 50,
   });
-  let currentStripeAccountId: string | undefined;
   let checked = 0;
   let held = 0;
   let unbilled = 0;
@@ -89,8 +88,9 @@ export async function runStripeInvoiceCloseCycle(deps?: {
       const account = await prisma.billingStripeAccount.findUniqueOrThrow({
         where: { id: row.accountId },
       });
-      currentStripeAccountId ??= (await stripe.accounts.retrieveCurrent()).id;
-      if (currentStripeAccountId !== account.stripeAccountId) {
+      const stripe = deps?.stripe ?? (await requireStoredStripeBilling(account.id, prisma)).client;
+      const remoteAccount = await stripe.accounts.retrieveCurrent();
+      if (remoteAccount.id !== account.stripeAccountId) {
         throw new AppError('INTERNAL', 409, 'STRIPE_ACCOUNT_MISMATCH');
       }
       const invoice = await stripe.invoices.retrieve(row.stripeInvoiceId);

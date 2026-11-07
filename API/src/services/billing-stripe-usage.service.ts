@@ -1,3 +1,5 @@
+import { assertBillingPeriodMode } from './billing-mode-period.service.js';
+import { requireStoredStripeBilling } from './billing-team-mode.service.js';
 import { BillingStripeMeterEventState, BillingUsagePaymentMode, Prisma, type PrismaClient } from '@prisma/client';
 import { createHash } from 'node:crypto';
 import type Stripe from 'stripe';
@@ -11,7 +13,6 @@ import { assertPrepaidUsageCovered } from './billing-prepaid-coverage.service.js
 import type { NormalizedMeteringUsage } from './billing-metering.types.js';
 import {
   assertStripeObjectLivemode,
-  requireStripeBillingEnabled,
   resolveStripeAccountContext,
   type StripeAccountContext,
 } from './billing-stripe-client.service.js';
@@ -99,6 +100,12 @@ async function prepareExports(
   stripeCustomerId: string;
 }> {
   return prisma.$transaction(async (tx) => {
+    const source = await tx.billingStripeSubscription.findUnique({ where: { id: params.subscriptionId },
+      select: { accountId: true, orgId: true, teamId: true, createdAt: true } });
+    if (!source) throw new AppError('NOT_FOUND', 404, 'STRIPE_SUBSCRIPTION_NOT_FOUND');
+    // Same order as prepaid settlement, including across different accounts.
+    await assertBillingPeriodMode(tx, { accountId: source.accountId, orgId: source.orgId,
+      teamId: source.teamId, month: params.billingMonth, sourceCreatedAt: source.createdAt });
     const locked = await tx.$queryRaw<Array<{ id: string }>>(
       Prisma.sql`
         SELECT "id"
@@ -423,7 +430,7 @@ export async function exportStripeUsage(
     return { ledgerSnapshotCursor: usage.snapshot.cursor,
       billingMonth: params.billingMonth, exports: [] };
   }
-  const configured = deps?.stripe ? undefined : requireStripeBillingEnabled();
+  const configured = deps?.stripe ? undefined : await requireStoredStripeBilling(subscription.accountId, prisma);
   const stripe = deps?.stripe ?? configured?.client;
   if (!stripe) {
     throw new AppError('INTERNAL', 503, 'STRIPE_BILLING_DISABLED');

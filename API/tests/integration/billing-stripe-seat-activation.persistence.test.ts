@@ -39,6 +39,8 @@ describe.skipIf(!process.env.DATABASE_URL)('Stripe per-seat activation projectio
         kty: 'RSA', kid: 'stripe-seat-key', n: 'AQAB', e: 'AQAB',
       },
     } });
+    const modeTeam = await db.prisma.team.create({ data: { orgId: org.id, name: 'TEST billing team', slug: 'test-billing' } });
+    await db.prisma.billingTeamMode.create({ data: { teamId: modeTeam.id, sandbox: true, revision: 1 } });
     const account = await db.prisma.billingStripeAccount.create({ data: {
       stripeAccountId: 'acct_stripe_seat', livemode: false,
     } });
@@ -57,6 +59,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Stripe per-seat activation projectio
       monthlyAmountMinor: 299n, stripeMonthlyPriceId: null,
     } });
     await db.prisma.billingStripeCheckoutSession.create({ data: {
+      billingModeTeamId: modeTeam.id, billingModeRevision: 1,
       id: 'stripe_seat_checkout', accountId, appKeyId: appKey.id,
       customerId: customer.id, serviceId: service.id, tariffId: tariff.id,
       tariffSource: 'SERVICE_DEFAULT', orgId: org.id, teamId: null,

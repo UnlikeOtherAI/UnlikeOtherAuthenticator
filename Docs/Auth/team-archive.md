@@ -26,7 +26,10 @@ continue their existing live admission and revocation-consumer contracts; an
 offline JWT alone cannot provide immediate revocation.
 
 Billing reconciliation runs at startup and every 30 seconds, independently of
-the new-collection enable flag. It uses the configured Stripe account and mode,
+the new-collection enable flag. Each persisted customer's captured Stripe
+account and livemode select its verified credential, preferring a matching
+named binding over legacy credentials. It does not use the team's current mode
+or the global legacy client. It processes both captured tuples when present,
 and only UOA-owned TEAM customers matching the exact organisation and team.
 Subscriptions cancel immediately with `invoice_now=false, prorate=false`; open
 checkout sessions expire, draft/open invoices stop automatic advancement, and

@@ -6,6 +6,7 @@ import {
 } from '@prisma/client';
 import { createHash } from 'node:crypto';
 import type Stripe from 'stripe';
+import { requireStoredStripeBilling } from './billing-team-mode.service.js';
 
 import type {
   BillingCancellationConfirmationV1,
@@ -30,7 +31,6 @@ import {
 import { BILLING_CANCELLATION_SCHEMA_VERSION } from './billing-cancellation-preview.service.js';
 import {
   assertStripeObjectLivemode,
-  requireStripeBillingEnabled,
   resolveStripeAccountContext,
   type StripeAccountContext,
 } from './billing-stripe-client.service.js';
@@ -420,7 +420,9 @@ export async function confirmBillingCancellation(
     return localizeCancellationConfirmation(claimed.completed, params.locale);
   }
 
-  const configured = deps?.stripe ? undefined : requireStripeBillingEnabled();
+  const captured = claimed.targets[0];
+  if (!captured) throw new AppError('BAD_REQUEST', 409, 'BILLING_CANCELLATION_NOT_AVAILABLE');
+  const configured = deps?.stripe ? undefined : await requireStoredStripeBilling(captured.accountId, prisma);
   const stripe = deps?.stripe ?? configured?.client;
   if (!stripe) throw new AppError('INTERNAL', 503, 'STRIPE_BILLING_DISABLED');
   const account = await (deps?.resolveAccount ?? resolveStripeAccountContext)(

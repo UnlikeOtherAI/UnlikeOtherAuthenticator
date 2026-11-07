@@ -1,3 +1,4 @@
+import type { BillingModeBoundAction } from './billing-mode-types.js';
 export const BILLING_CONSUMER_ACTION_SCHEMA_VERSION = 1 as const;
 export const BILLING_CONSUMER_ACTION_SCHEMA_PATH =
   '/schemas/billing-consumer-actions-v1.json' as const;
@@ -28,7 +29,7 @@ export type BillingHostedRedirectResponse = {
  * `request.body`: publishing the shape lets a product validate what it relays
  * and receives. Other fields must never be composed by the product.
  */
-export type BillingSubjectActionRequest = {
+export type BillingSubjectActionRequest = BillingModeBoundAction & {
   product: string;
   organisation_id: string;
   team_id: string;
@@ -137,6 +138,7 @@ export type BillingCancellationConfirmationV1 = {
 
 export type BillingErrorEnvelope = {
   error: string;
+  code?: string;
 };
 
 export type BillingConsumerActionConformanceFixturesV1 = {

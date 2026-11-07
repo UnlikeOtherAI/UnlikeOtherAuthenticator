@@ -1,3 +1,4 @@
+import { readBillingModeProtocol } from './billing-mode-protocol.js';
 import { readBillingPresentation } from './billing-presentation.js';
 import type { FastifyInstance } from 'fastify';
 import { Ajv2020 } from 'ajv/dist/2020.js';
@@ -107,6 +108,7 @@ export function registerCustomerStatementRoutes(app: FastifyInstance): void {
         ...(presentation.enabled ? { locale: presentation.locale } : {}),
         actorToken: readBillingActorHeader(request.headers['x-uoa-actor']),
         billingMonth: body.billing_month,
+        ...(readBillingModeProtocol(request.headers) ? { supportsBillingMode: true } : {}),
         endpoint: '/billing/v1/customer-statement',
         request: {
           product: body.product,
@@ -139,6 +141,7 @@ export function registerCustomerStatementRoutes(app: FastifyInstance): void {
         ...(presentation.enabled ? { locale: presentation.locale } : {}),
         actorToken: readBillingActorHeader(request.headers['x-uoa-actor']),
         billingMonth: body.billing_month,
+        ...(readBillingModeProtocol(request.headers) ? { supportsBillingMode: true } : {}),
         endpoint: '/billing/v2/customer-statement',
         request: {
           product: body.product,

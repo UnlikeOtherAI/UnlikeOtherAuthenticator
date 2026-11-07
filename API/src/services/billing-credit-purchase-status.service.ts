@@ -6,7 +6,8 @@ import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import type { BillingActorEndpoint } from './billing-actor-audience.service.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
-import { resolveCreditAccount, resolveCreditCollectionContext } from './billing-credit-account.service.js';
+import { getEnv } from '../config/env.js';
+import { requireStoredStripeBilling } from './billing-team-mode.service.js';
 import { assertCreditCheckoutSessionBinding } from './billing-credit-checkout-recovery.service.js';
 import type { CreditFundingActionRequest } from './billing-credit-funding-context.service.js';
 import { assertCreditFundingMetadata } from './billing-credit-funding-binding.service.js';
@@ -107,8 +108,7 @@ type Dependencies = {
   resolveViewer?: typeof resolveBillingFundingViewer;
   resolveResponsibility?: typeof resolveOrgBillingResponsibility;
   isOrganisationManager?: typeof isOrganisationBillingManager;
-  resolveCollection?: typeof resolveCreditCollectionContext;
-  resolveAccount?: typeof resolveCreditAccount;
+  resolveRuntime?: typeof requireStoredStripeBilling;
   readEvidence?: typeof readCreditPurchaseEvidence;
 };
 
@@ -130,22 +130,30 @@ export async function getBillingCreditPurchaseStatus(params: {
     ? await (deps.isOrganisationManager ?? isOrganisationBillingManager)(params.request, { prisma })
     : viewer.billingManager;
   if (!manager) throw new AppError('FORBIDDEN', 403, 'BILLING_MANAGER_REQUIRED');
-  const collection = await (deps.resolveCollection ?? resolveCreditCollectionContext)(params.request, { prisma });
-  const account = await (deps.resolveAccount ?? resolveCreditAccount)({
-    account: collection.account, organisationId: params.request.organisationId, teamId: params.request.teamId,
-  }, { prisma });
   const checkout = await prisma.billingCreditTopUpCheckout.findFirst({
     where: {
-      id: params.request.purchaseId, accountId: collection.account.id,
-      creditAccountId: account.id, customerId: account.customerId,
+      id: params.request.purchaseId,
+      creditAccount: { orgId: params.request.organisationId,
+        OR: [{ teamId: params.request.teamId }, { teamId: null, scope: 'ORGANISATION' }] },
       serviceId: params.credential.service.id, appKeyId: params.credential.id,
     },
-    include: { customer: { select: { stripeCustomerId: true } } },
+    include: { customer: { select: { stripeCustomerId: true } }, creditAccount: true, account: true },
   });
   if (!checkout) throw new AppError('NOT_FOUND', 404, 'BILLING_PURCHASE_NOT_FOUND');
+  if (checkout.creditAccountId !== checkout.creditAccount.id || checkout.accountId !== checkout.account.id ||
+    checkout.accountId !== checkout.creditAccount.accountId ||
+    checkout.customerId !== checkout.creditAccount.customerId) {
+    throw new AppError('NOT_FOUND', 404, 'BILLING_PURCHASE_NOT_FOUND');
+  }
+  if (checkout.creditAccount.teamId === null && !await (
+    deps.isOrganisationManager ?? isOrganisationBillingManager)(params.request, { prisma })) {
+    throw new AppError('FORBIDDEN', 403, 'BILLING_MANAGER_REQUIRED');
+  }
+  const runtime = getEnv().STRIPE_BILLING_ENABLED
+    ? await (deps.resolveRuntime ?? requireStoredStripeBilling)(checkout.accountId, prisma) : null;
   const evidence = await (deps.readEvidence ?? readCreditPurchaseEvidence)({
-    checkout, account: collection.account,
-    customerStripeId: checkout.customer.stripeCustomerId, stripe: collection.stripe ?? null,
+    checkout, account: checkout.account,
+    customerStripeId: checkout.customer.stripeCustomerId, stripe: runtime?.client ?? null,
   });
   const copy = billingCreditPaymentCopy(params.locale)[evidence.state];
   return {

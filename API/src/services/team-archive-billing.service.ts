@@ -1,7 +1,7 @@
 import type { PrismaClient, TeamArchiveOperation } from '@prisma/client';
 import type Stripe from 'stripe';
 import { AppError } from '../utils/errors.js';
-import { assertStripeObjectLivemode, requireStripeWebhookConfigured,
+import { assertStripeObjectLivemode, stripeRuntimeForAccount,
   resolveStripeAccountContext } from './billing-stripe-client.service.js';
 import { observedBillingTime } from './billing-seat-observed-time.service.js';
 
@@ -22,12 +22,14 @@ export async function stopArchivedTeamBilling(operation: TeamArchiveOperation, d
   const now = deps.now?.() ?? await observedBillingTime(deps.prisma);
   const remoteCustomers = customers.filter(customer => customer.stripeCustomerId);
   if (!remoteCustomers.length) return operation.settleAfter <= now;
-  const configured = deps.stripe ? { client: deps.stripe, livemode: deps.livemode ?? false }
-    : requireStripeWebhookConfigured();
-  const stripe = configured.client;
-  const livemode = configured.livemode;
-  const account = await resolveStripeAccountContext(stripe, livemode, deps.prisma);
   for (const customer of remoteCustomers) {
+    // Archive recovery is independent of new-work policy and collection enable.
+    // Each historical TEAM customer retains its own physical account AND mode.
+    const configured = deps.stripe ? { client: deps.stripe, livemode: deps.livemode ?? false }
+      : stripeRuntimeForAccount(customer.account);
+    const stripe = configured.client;
+    const livemode = configured.livemode;
+    const account = await resolveStripeAccountContext(stripe, livemode, deps.prisma);
     if (customer.accountId !== account.id || customer.account.livemode !== livemode ||
       customer.scopeKey !== `${operation.orgId}:${operation.teamId}`) {
       throw new AppError('SERVICE_UNAVAILABLE', 503, 'ARCHIVE_BILLING_ACCOUNT_UNAVAILABLE');

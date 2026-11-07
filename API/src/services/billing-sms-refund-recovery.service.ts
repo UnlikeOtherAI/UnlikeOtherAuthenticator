@@ -1,3 +1,4 @@
+import { requireStoredStripeBilling } from './billing-team-mode.service.js';
 import { createHash } from 'node:crypto';
 import { Prisma, type PrismaClient } from '@prisma/client';
 import type Stripe from 'stripe';
@@ -11,7 +12,7 @@ import type { SmsPolicyActor } from './billing-sms-policy-admin.service.js';
 import { lockRefreshSessionUserDomain } from './refresh-session-lock.service.js';
 import { assertRecurringAddonSubscriptionBinding, recurringAddonSubscriptionInclude } from './billing-recurring-addon-subscription.service.js';
 import { assertRecurringAddonMetadata } from './billing-recurring-addon-stripe-binding.service.js';
-import { assertStripeObjectLivemode, requireStripeBillingEnabled } from './billing-stripe-client.service.js';
+import { assertStripeObjectLivemode } from './billing-stripe-client.service.js';
 import { stripeInvoiceMinor, verifyStripeInvoiceCash } from './billing-stripe-payment-evidence.service.js';
 import { stripeExternalId } from './billing-stripe-webhook-utils.service.js';
 
@@ -33,13 +34,15 @@ function unproven(code = 'BILLING_SMS_REFUND_EVIDENCE_UNPROVEN') {
 export async function verifySmsNumberRefund(id: string, input: Input, actor: SmsPolicyActor,
   deps?: { prisma?: PrismaClient; stripe?: StripeRefundReader; livemode?: boolean }) {
   const value = SmsRefundRecoverySchema.parse(input); const db = deps?.prisma ?? getAdminPrisma();
-  const gate = deps?.stripe ? { client: deps.stripe, livemode: deps.livemode ?? false } : requireStripeBillingEnabled();
-  const stripe = gate.client;
   const resource = await db.billingSmsNumberResource.findUnique({ where: { id } });
   if (!resource?.offerId || !['refund_required', 'ended'].includes(resource.state)) throw unproven('BILLING_SMS_REFUND_RESOURCE_UNAVAILABLE');
   const local = await db.billingRecurringAddonSubscription.findUnique({ where: { id: value.subscription_id },
     include: { ...recurringAddonSubscriptionInclude, account: true } });
-  if (!local || local.serviceId !== resource.serviceId || local.orgId !== resource.orgId ||
+  if (!local) throw unproven();
+  const gate = deps?.stripe ? { client: deps.stripe, livemode: deps.livemode ?? false }
+    : await requireStoredStripeBilling(local.accountId, db);
+  const stripe = gate.client;
+  if (local.serviceId !== resource.serviceId || local.orgId !== resource.orgId ||
     local.offerId !== resource.offerId || local.scope !== 'ORGANISATION' || local.teamId !== null ||
     local.offer.resourceKind !== 'sms_mobile_number' || local.offer.resourceId !== resource.id ||
     !local.initialInvoiceId || !local.initialInvoicePaidAt || !local.activationWebhookEventId ||

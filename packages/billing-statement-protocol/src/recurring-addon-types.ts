@@ -1,3 +1,4 @@
+import type { BillingModeBoundAction } from './billing-mode-types.js';
 import type { ExactMoney } from './types.js';
 import type { BillingSubjectRequest } from './funding-schema-primitives.js';
 
@@ -29,7 +30,7 @@ export type BillingRecurringAddonCheckoutAction = {
   request: {
     method: 'POST';
     path: typeof BILLING_RECURRING_ADDONS_CHECKOUT_PATH;
-    body: BillingSubjectRequest & { offer_id: string };
+    body: BillingModeBoundAction & BillingSubjectRequest & { offer_id: string };
   };
 };
 
@@ -43,7 +44,7 @@ export type BillingRecurringAddonCancelAction = {
   request: {
     method: 'POST';
     path: typeof BILLING_RECURRING_ADDONS_CANCELLATION_PREVIEW_PATH;
-    body: BillingSubjectRequest & { subscription_id: string };
+    body: BillingModeBoundAction & BillingSubjectRequest & { subscription_id: string };
   };
 };
 

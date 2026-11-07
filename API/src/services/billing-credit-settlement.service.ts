@@ -1,3 +1,4 @@
+import { assertBillingPeriodMode } from './billing-mode-period.service.js';
 import { BillingUsagePaymentMode, Prisma, type PrismaClient } from '@prisma/client';
 
 import { getAdminPrisma } from '../db/prisma.js';
@@ -90,6 +91,12 @@ async function settleInTransaction(
     credential: VerifiedBillingAppKey;
   },
 ) {
+  const source = await tx.billingCreditAccount.findUnique({ where: { id: params.creditAccountId },
+    select: { accountId: true, orgId: true, createdAt: true } });
+  if (!source) throw new AppError('NOT_FOUND', 404, 'BILLING_CREDIT_ACCOUNT_MISSING');
+  // Serialize provider-account selection before locking any payer row.
+  await assertBillingPeriodMode(tx, { accountId: source.accountId, orgId: source.orgId,
+    teamId: params.portfolio.scope.teamId, month: params.portfolio.scope.month, sourceCreatedAt: source.createdAt });
   const locked = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
     SELECT "id" FROM "billing_credit_accounts"
     WHERE "id" = ${params.creditAccountId}

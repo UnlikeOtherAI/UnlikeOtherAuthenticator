@@ -1,4 +1,5 @@
 import { billingSubjectActionBodySchema } from './funding-schema-primitives.js';
+import { billingModeContextProperties } from './billing-mode-types.js';
 import {
   BILLING_CREDITS_AUTO_TOP_UP_DISABLE_PATH,
   BILLING_CREDITS_AUTO_TOP_UP_RECOVER_PATH,
@@ -27,10 +28,10 @@ const actionBaseRequired = [
 function actionRequestSchema(path: string, selector: 'offer_id' | 'option_id' | null) {
   const body = selector
     ? billingSubjectActionBodySchema(
-        { [selector]: { type: 'string', minLength: 1, maxLength: 256 } },
+        { ...billingModeContextProperties, [selector]: { type: 'string', minLength: 1, maxLength: 256 } },
         [selector],
       )
-    : billingSubjectActionBodySchema();
+    : billingSubjectActionBodySchema(billingModeContextProperties);
   return {
     type: 'object',
     additionalProperties: false,

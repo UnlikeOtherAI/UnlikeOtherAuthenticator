@@ -1,3 +1,5 @@
+import { assertBillingActionContext } from './billing-action-context.service.js';
+import { requireTeamStripeBilling, requireStoredStripeBilling, resolveTeamBillingMode } from './billing-team-mode.service.js';
 import type { BillingCustomerLocale } from '../contracts/billing-statement-v1.js';
 import { stripeBillingLocale } from './billing-stripe-locale.js';
 import {
@@ -27,7 +29,6 @@ import {
 } from './billing-entitlement.service.js';
 import {
   assertStripeObjectLivemode,
-  requireStripeBillingEnabled,
   resolveStripeAccountContext,
   type StripeAccountContext,
 } from './billing-stripe-client.service.js';
@@ -38,6 +39,7 @@ import { normalizeStripeReturnUrl } from './billing-stripe-return-url.service.js
 import { refreshStripeSubscriptionProjection } from './billing-stripe-webhook.service.js';
 
 export type BillingSubscriptionRequest = {
+  billingContext?: string;
   product: string;
   organisationId: string;
   teamId: string;
@@ -196,7 +198,16 @@ async function lifecycleContext(
     };
   }
 
-  const configured = deps?.stripe ? undefined : requireStripeBillingEnabled();
+  let configured;
+  if (!deps?.stripe) {
+    const known = await prisma.billingStripeSubscription.findMany({
+      where: activeSubscriptionWhere(null, params.credential.service.id, payload), take: 2,
+      select: { accountId: true },
+    });
+    if (known.length > 1) throw new AppError('BAD_REQUEST', 409, 'STRIPE_SUBSCRIPTION_ACCOUNT_AMBIGUOUS');
+    configured = known[0] ? await requireStoredStripeBilling(known[0].accountId, prisma)
+      : await requireTeamStripeBilling(params.request, prisma);
+  }
   const stripe = deps?.stripe ?? configured?.client;
   if (!stripe) throw new AppError('INTERNAL', 503, 'STRIPE_BILLING_DISABLED');
   const livemode = deps?.stripeLivemode ?? configured?.livemode ?? false;
@@ -335,6 +346,14 @@ export async function createStripePortalSession(
     refreshSubscription: false,
   });
   let { account, stripe, subscription } = requireManageableSubscription(context);
+  if (!deps?.stripe || params.request.billingContext !== undefined) {
+    const selection = await resolveTeamBillingMode(params.request, context.prisma);
+    assertBillingActionContext(params.request.billingContext, { account, revision: selection.revision,
+      appKeyId: params.credential.id }, params.endpoint, {
+      product: params.request.product, organisation_id: params.request.organisationId,
+      team_id: params.request.teamId, user_id: params.request.userId, return_url: params.request.returnUrl,
+    });
+  }
   const action = await (deps?.authorizeAction ?? authorizeBillingCustomerAction)(
     {
       credential: params.credential,

@@ -25,6 +25,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Stripe monthly seat charge source', 
   let serviceId: string;
   let tariffId: string;
   let orgId: string;
+  let modeTeamId: string;
 
   beforeAll(async () => {
     const created = await createTestDb();
@@ -38,6 +39,9 @@ describe.skipIf(!process.env.DATABASE_URL)('Stripe monthly seat charge source', 
       slug: `monthly-${randomUUID().slice(0, 8)}`, name: 'Monthly seat customer',
     } });
     orgId = org.id;
+    const team = await db.prisma.team.create({ data: { orgId, name: 'Monthly TEST team', slug: 'monthly-test' } });
+    modeTeamId = team.id;
+    await db.prisma.billingTeamMode.create({ data: { teamId: team.id, sandbox: true, revision: 1 } });
     const service = await db.prisma.billingService.create({ data: {
       identifier: `monthly-${randomUUID()}`, name: 'Monthly service',
     } });
@@ -64,6 +68,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Stripe monthly seat charge source', 
       stripeCustomerId: 'cus_monthly',
     } });
     const checkout = await db.prisma.billingStripeCheckoutSession.create({ data: {
+      billingModeTeamId: modeTeamId, billingModeRevision: 1,
       accountId, appKeyId: appKey.id, customerId: customer.id,
       serviceId, tariffId, tariffSource: 'SERVICE_DEFAULT',
       orgId, teamId: null, scope: 'ORGANISATION', scopeKey: orgId,
@@ -218,6 +223,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Stripe monthly seat charge source', 
     const original = await db.prisma.billingStripeSubscription.findUniqueOrThrow({
       where: { id: subscriptionId }, include: { checkout: true } });
     const checkout = await db.prisma.billingStripeCheckoutSession.create({ data: {
+      billingModeTeamId: modeTeamId, billingModeRevision: 1,
       accountId, appKeyId: original.checkout.appKeyId, customerId: original.customerId,
       serviceId, tariffId, tariffSource: 'SERVICE_DEFAULT', orgId, teamId: null,
       scope: 'ORGANISATION', scopeKey: orgId, actorJti: randomUUID(),

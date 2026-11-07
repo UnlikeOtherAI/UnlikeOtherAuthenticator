@@ -72,6 +72,7 @@ describe.skipIf(!enabled)('actual customer invoice persistence and scope', () =>
     } });
     teamId = team.id;
     otherTeamId = other.id;
+    await db.prisma.billingTeamMode.createMany({ data: [teamId, otherTeamId].map(id => ({ teamId: id, sandbox: true, revision: 1 })) });
     await db.prisma.orgMember.createMany({ data: [
       { orgId, userId: ownerId, role: 'owner' },
       { orgId, userId: managerId, role: 'member' },
@@ -95,8 +96,11 @@ describe.skipIf(!enabled)('actual customer invoice persistence and scope', () =>
       checkoutReturnOrigins: ['https://test.example'],
     } });
     const account = await db.prisma.billingStripeAccount.create({ data: {
-      stripeAccountId: `acct_${randomUUID()}`, livemode: false,
+      stripeAccountId: `acct_${randomUUID().replaceAll('-', '')}`, livemode: false,
     } });
+    vi.stubEnv('STRIPE_SANDBOX_ACCOUNT_ID', account.stripeAccountId);
+    vi.stubEnv('STRIPE_SANDBOX_SECRET_KEY', 'rk_test_invoice_fixture');
+    vi.stubEnv('STRIPE_SANDBOX_WEBHOOK_SECRET', 'whsec_invoice_fixture');
     const customer = await db.prisma.billingStripeCustomer.create({ data: {
       accountId: account.id, orgId, teamId, scope: BillingAssignmentScope.TEAM,
       scopeKey: `${orgId}:${teamId}`, stripeCustomerId: `cus_${randomUUID()}`,
@@ -131,6 +135,7 @@ describe.skipIf(!enabled)('actual customer invoice persistence and scope', () =>
     ].entries()) {
       const payment = await db.prisma.$transaction(async (tx) => {
         const checkout = await tx.billingCreditTopUpCheckout.create({ data: {
+          billingModeTeamId: teamId, billingModeRevision: 1,
         accountId: account.id, creditAccountId: wallet.id, customerId: customer.id,
         catalogId: catalog.id, serviceId, appKeyId: appKey.id, offerId: offer.id,
         actorJti: randomUUID(), requestedByUserId: ownerId,
@@ -277,7 +282,7 @@ describe.skipIf(!enabled)('actual customer invoice persistence and scope', () =>
     } });
   });
 
-  afterAll(async () => { await db?.cleanup(); });
+  afterAll(async () => { await db?.cleanup(); vi.unstubAllEnvs(); });
 
   it('lists every charge in its paid month, including a later-issued PDF and pending document', async () => {
     const viewer = context(ownerId);

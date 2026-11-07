@@ -1,3 +1,4 @@
+import { requireTeamStripeBilling } from './billing-team-mode.service.js';
 import { createHash } from 'node:crypto';
 import { Prisma, type BillingVoiceReservation } from '@prisma/client';
 import type { BillingVoiceReserveRequestV1, BillingVoiceReservationV1 } from '@unlikeotherai/billing-statement-protocol';
@@ -8,7 +9,7 @@ import { assertVoiceNumber, assertVoiceRoute, type VoiceDependencies } from './b
 import { lockVoiceGrant } from './billing-voice-grant.service.js';
 import { runBillingSerializableTransaction } from './billing-serializable-transaction.service.js';
 import { resolveCreditAccount } from './billing-credit-account.service.js';
-import { requireStripeBillingEnabled, resolveStripeAccountContext } from './billing-stripe-client.service.js';
+import { resolveStripeAccountContext } from './billing-stripe-client.service.js';
 import { billingReservedMicrocredits } from './billing-credit-holds.service.js';
 import { lockCreditBalance } from './billing-credit-balance-lock.service.js';
 import { reserveBudgetDispatch } from './billing-credit-budget-dispatch.service.js';
@@ -51,7 +52,7 @@ export async function reserveVoice(input: { request: BillingVoiceReserveRequestV
     // Admission happens before answering, so an already-started/terminal call is not a fresh prepaid call.
     if (inbound.terminal || inbound.startedAt) throw new AppError('BAD_REQUEST', 409, 'BILLING_VOICE_ALREADY_STARTED');
   }
-  const configured = deps.stripe ? { client: deps.stripe, livemode: deps.stripeLivemode ?? false } : requireStripeBillingEnabled();
+  const configured = deps.stripe ? { client: deps.stripe, livemode: deps.stripeLivemode ?? false } : await requireTeamStripeBilling({ organisationId: grant.orgId, teamId: grant.teamId }, prisma);
   const account = await resolveStripeAccountContext(configured.client, configured.livemode, prisma);
   const credits = await resolveCreditAccount({ account, organisationId: grant.orgId, teamId: grant.teamId }, { prisma });
 

@@ -1,3 +1,4 @@
+import { requireTeamStripeBilling, resolveTeamBillingMode, assertOrganisationBillingMode } from './billing-team-mode.service.js';
 import { BillingAssignmentScope, type PrismaClient } from '@prisma/client';
 import type Stripe from 'stripe';
 
@@ -5,7 +6,6 @@ import { getEnv } from '../config/env.js';
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import {
-  requireStripeBillingEnabled,
   resolveStripeAccountContext,
   type StripeAccountContext,
 } from './billing-stripe-client.service.js';
@@ -14,6 +14,7 @@ import { resolveOrgBillingResponsibility } from './billing-org-responsibility.se
 
 export type CreditCollectionContext = {
   account: StripeAccountContext;
+  modeRevision?: number;
   stripeCollectionEnabled: boolean;
   stripe?: Pick<
     Stripe,
@@ -33,8 +34,14 @@ async function resolvePersistedCreditAccount(
   params: { organisationId: string; teamId: string },
   prisma: PrismaClient,
 ): Promise<StripeAccountContext> {
+  const selection = await resolveTeamBillingMode(params, prisma);
+  const env = getEnv();
+  const expectedId = selection.mode === 'live' ? env.STRIPE_LIVE_ACCOUNT_ID : env.STRIPE_SANDBOX_ACCOUNT_ID;
+  const identity = { livemode: selection.mode === 'live',
+    ...(expectedId ? { stripeAccountId: expectedId } : {}) };
   const scoped = await prisma.billingCreditAccount.findMany({
     where: {
+      account: identity,
       orgId: params.organisationId,
       OR: [
         { scope: BillingAssignmentScope.TEAM, teamId: params.teamId },
@@ -52,6 +59,7 @@ async function resolvePersistedCreditAccount(
   if (scoped[0]) return scoped[0].account;
 
   const persisted = await prisma.billingStripeAccount.findMany({
+    where: identity,
     orderBy: { updatedAt: 'desc' },
     take: 2,
     select: { id: true, stripeAccountId: true, livemode: true },
@@ -79,11 +87,13 @@ export async function resolveCreditCollectionContext(
   const prisma = deps?.prisma ?? getAdminPrisma();
   if (!getEnv().STRIPE_BILLING_ENABLED) {
     const account = await resolvePersistedCreditAccount(params, prisma);
-    return { account, stripeCollectionEnabled: false, stripe: null };
+    const selection = await resolveTeamBillingMode(params, prisma);
+    return { account, modeRevision: selection.revision, stripeCollectionEnabled: false, stripe: null };
   }
-  const configured = requireStripeBillingEnabled();
+  const configured = await requireTeamStripeBilling(params, prisma);
   const account = await resolveStripeAccountContext(configured.client, configured.livemode, prisma);
-  return { account, stripeCollectionEnabled: true, stripe: configured.client };
+  return { account, modeRevision: configured.selection.revision,
+    stripeCollectionEnabled: true, stripe: configured.client };
 }
 
 async function ensureScopedCreditAccount(
@@ -204,6 +214,7 @@ export async function resolveCreditAccount(
     { prisma },
   );
   if (responsibility.active) {
+    await assertOrganisationBillingMode(params.organisationId, params.account.livemode, prisma);
     return ensureOrganisationCreditAccount(
       { account: params.account, organisationId: params.organisationId },
       { prisma },

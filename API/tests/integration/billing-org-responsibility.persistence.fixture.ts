@@ -126,12 +126,13 @@ export async function seed(prisma: PrismaClient): Promise<void> {
     await tx.$executeRaw(Prisma.sql`
       INSERT INTO "billing_credit_accounts" (
         "id", "account_id", "customer_id", "org_id", "team_id", "scope", "scope_key",
-        "currency", "balance_microcredits", "updated_at"
+        "currency", "balance_microcredits", "created_at", "updated_at"
       ) VALUES (
         ${ids.teamCreditAccount}, ${ids.account}, ${ids.teamCustomer}, ${ids.org}, ${ids.teamA},
-        'TEAM', ${`${ids.org}:${ids.teamA}`}, 'USD', 500000000, CURRENT_TIMESTAMP
+        'TEAM', ${`${ids.org}:${ids.teamA}`}, 'USD', 500000000, '2026-01-01'::timestamptz, CURRENT_TIMESTAMP
       )
     `);
+    await tx.$executeRaw(Prisma.sql`INSERT INTO billing_team_modes(team_id,sandbox,revision) SELECT id,true,1 FROM teams WHERE org_id = ${ids.org} ON CONFLICT DO NOTHING`);
   });
 }
 

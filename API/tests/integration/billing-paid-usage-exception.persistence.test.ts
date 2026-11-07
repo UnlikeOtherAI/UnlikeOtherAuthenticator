@@ -41,6 +41,7 @@ async function seed() {
     await tx.$executeRaw(Prisma.sql`INSERT INTO teams
       (id, org_id, name, slug, updated_at)
       VALUES (${ids.team}, ${ids.org}, 'Exception', 'exception', CURRENT_TIMESTAMP)`);
+    await tx.$executeRaw(Prisma.sql`INSERT INTO billing_team_modes(team_id,sandbox,revision) VALUES (${ids.team},true,1)`);
     await tx.$executeRaw(Prisma.sql`INSERT INTO domain_roles (domain, user_id, role)
       VALUES ('authentication.unlikeotherai.com', ${ids.user}, 'SUPERUSER')`);
     await tx.$executeRaw(Prisma.sql`INSERT INTO billing_services

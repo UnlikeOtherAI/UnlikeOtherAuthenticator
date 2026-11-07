@@ -1,9 +1,11 @@
+import { getEnv } from '../config/env.js';
 import {
   BillingCreditPaymentInvoiceState,
   Prisma,
   type PrismaClient,
 } from '@prisma/client';
 import type Stripe from 'stripe';
+import { runStoredStripeAccountCycles } from './billing-stripe-account-cycles.service.js';
 
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
@@ -79,8 +81,19 @@ export async function runCreditPaymentInvoiceCycle(deps?: {
   livemode?: boolean;
   issue?: typeof issueCreditPaymentInvoice;
   now?: () => Date;
-}) {
+}): Promise<{ attempted: number; issued: number; held: number; failures: Array<{ id: string; error: string }> }> {
   const prisma = deps?.prisma ?? getAdminPrisma();
+  if (!deps?.stripe && !getEnv().STRIPE_BILLING_ENABLED) throw new Error('STRIPE_BILLING_DISABLED');
+  if (!deps?.stripe) {
+    const runs = await runStoredStripeAccountCycles(prisma, (runtime) => runCreditPaymentInvoiceCycle({
+      ...deps, prisma, stripe: runtime.client, livemode: runtime.livemode,
+    }));
+    return runs.reduce((total, run) => 'result' in run ? {
+      attempted: total.attempted + run.result.attempted, issued: total.issued + run.result.issued,
+      held: total.held + run.result.held, failures: [...total.failures, ...run.result.failures],
+    } : { ...total, held: total.held + 1, failures: [...total.failures, { id: run.accountId, error: run.error }] },
+    { attempted: 0, issued: 0, held: 0, failures: [] as Array<{ id: string; error: string }> });
+  }
   const runtime = deps?.stripe
     ? { client: deps.stripe, livemode: deps.livemode }
     : requireStripeBillingEnabled();

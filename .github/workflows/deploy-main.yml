@@ -25,6 +25,10 @@ jobs:
       IMAGE: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.GCP_ARTIFACT_REGISTRY_REPOSITORY }}/${{ vars.GCP_CLOUD_RUN_SERVICE }}:${{ github.sha }}
       STRIPE_BILLING_ENABLED: ${{ vars.STRIPE_BILLING_ENABLED || 'false' }}
       UOA_STRIPE_BILLING_CONFIGURED: ${{ vars.UOA_STRIPE_BILLING_CONFIGURED || 'false' }}
+      UOA_STRIPE_LIVE_CONFIGURED: ${{ vars.UOA_STRIPE_LIVE_CONFIGURED || 'false' }}
+      UOA_STRIPE_SANDBOX_CONFIGURED: ${{ vars.UOA_STRIPE_SANDBOX_CONFIGURED || 'false' }}
+      STRIPE_LIVE_ACCOUNT_ID: ${{ vars.STRIPE_LIVE_ACCOUNT_ID }}
+      STRIPE_SANDBOX_ACCOUNT_ID: ${{ vars.STRIPE_SANDBOX_ACCOUNT_ID }}
       UOA_SMS_CONFIGURED: ${{ vars.UOA_SMS_CONFIGURED || 'false' }}
       UOA_DIRECTORY_WEBHOOKS_CONFIGURED: ${{ vars.UOA_DIRECTORY_WEBHOOKS_CONFIGURED || 'false' }}
       UOA_ENTERPRISE_SSO_CONFIGURED: ${{ vars.UOA_ENTERPRISE_SSO_CONFIGURED || 'false' }}
@@ -117,11 +121,19 @@ jobs:
               ;;
           esac
 
-          for name in UOA_SMS_CONFIGURED BILLING_SMS_ENABLED BILLING_SMS_POLICY_AUTORENEW_ENABLED; do
+          for name in UOA_STRIPE_LIVE_CONFIGURED UOA_STRIPE_SANDBOX_CONFIGURED UOA_SMS_CONFIGURED BILLING_SMS_ENABLED BILLING_SMS_POLICY_AUTORENEW_ENABLED; do
             case "${!name}" in
               true|false) ;;
               *) echo "$name must be exactly true or false"; exit 1 ;;
             esac
+          done
+          for mode in LIVE SANDBOX; do
+            configured="UOA_STRIPE_${mode}_CONFIGURED"
+            account="STRIPE_${mode}_ACCOUNT_ID"
+            if [[ "${!configured}" == "true" ]] && ! [[ "${!account}" =~ ^acct_[a-zA-Z0-9]+$ ]]; then
+              echo "$account must identify the verified account before binding its secrets"
+              exit 1
+            fi
           done
           if ! [[ "$BILLING_SMS_POLICY_AUTORENEW_FX_BAND_BPS" =~ ^[0-9]+$ ]] \
             || (( BILLING_SMS_POLICY_AUTORENEW_FX_BAND_BPS < 1 || BILLING_SMS_POLICY_AUTORENEW_FX_BAND_BPS > 2000 )); then
@@ -171,6 +183,16 @@ jobs:
           fi
 
           if [[ "$STRIPE_BILLING_ENABLED" == "true" ]]; then
+            if [[ "$UOA_STRIPE_LIVE_CONFIGURED" != "true" || "$UOA_STRIPE_SANDBOX_CONFIGURED" != "true" ]]; then
+              echo "Dual-mode billing requires verified LIVE and SANDBOX config before activation"
+              exit 1
+            fi
+            for name in STRIPE_LIVE_ACCOUNT_ID STRIPE_SANDBOX_ACCOUNT_ID; do
+              if ! [[ "${!name}" =~ ^acct_[a-zA-Z0-9]+$ ]]; then
+                echo "$name must identify the verified account"
+                exit 1
+              fi
+            done
             if [[ "$UOA_STRIPE_BILLING_CONFIGURED" != "true" ]]; then
               echo "Live Stripe collection requires UOA_STRIPE_BILLING_CONFIGURED=true"
               exit 1
@@ -252,6 +274,14 @@ jobs:
             scaling_args=(--min-instances 1 --no-cpu-throttling)
           fi
 
+          if [[ "$UOA_STRIPE_LIVE_CONFIGURED" == "true" ]]; then
+            env_vars="$env_vars,STRIPE_LIVE_ACCOUNT_ID=$STRIPE_LIVE_ACCOUNT_ID"
+            secret_vars="$secret_vars,STRIPE_LIVE_SECRET_KEY=uoa-auth-stripe-live-secret-key:1,STRIPE_LIVE_WEBHOOK_SECRET=uoa-auth-stripe-live-webhook-secret:1"
+          fi
+          if [[ "$UOA_STRIPE_SANDBOX_CONFIGURED" == "true" ]]; then
+            env_vars="$env_vars,STRIPE_SANDBOX_ACCOUNT_ID=$STRIPE_SANDBOX_ACCOUNT_ID"
+            secret_vars="$secret_vars,STRIPE_SANDBOX_SECRET_KEY=uoa-auth-stripe-sandbox-secret-key:1,STRIPE_SANDBOX_WEBHOOK_SECRET=uoa-auth-stripe-sandbox-webhook-secret:1"
+          fi
           if [[ "$UOA_STRIPE_BILLING_CONFIGURED" == "true" ]]; then
             secret_vars="$secret_vars,STRIPE_SECRET_KEY=uoa-auth-stripe-secret-key:latest,STRIPE_WEBHOOK_SECRET=uoa-auth-stripe-webhook-secret:latest"
           fi

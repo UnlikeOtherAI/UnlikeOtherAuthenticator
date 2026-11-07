@@ -8,6 +8,12 @@ type BillingEnvironment = {
   STRIPE_BILLING_ENABLED: boolean;
   STRIPE_SECRET_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;
+  STRIPE_LIVE_SECRET_KEY?: string;
+  STRIPE_LIVE_WEBHOOK_SECRET?: string;
+  STRIPE_LIVE_ACCOUNT_ID?: string;
+  STRIPE_SANDBOX_SECRET_KEY?: string;
+  STRIPE_SANDBOX_WEBHOOK_SECRET?: string;
+  STRIPE_SANDBOX_ACCOUNT_ID?: string;
   STRIPE_USAGE_EXPORT_INTERVAL_MINUTES: number;
   STRIPE_PRE_BOUNDARY_SAFETY_LEAD_MINUTES: number;
   STRIPE_PRE_BOUNDARY_SAFETY_OFFSET_MINUTES: number;
@@ -51,6 +57,19 @@ function addKeyPairIssues(
 }
 
 export function addBillingEnvironmentIssues(env: BillingEnvironment, ctx: z.RefinementCtx): void {
+  for (const mode of ['LIVE', 'SANDBOX'] as const) {
+    const fields = [`STRIPE_${mode}_SECRET_KEY`, `STRIPE_${mode}_WEBHOOK_SECRET`,
+      `STRIPE_${mode}_ACCOUNT_ID`] as const;
+    if (fields.some((field) => Boolean(env[field])) && fields.some((field) => !env[field])) {
+      ctx.addIssue({ code: 'custom', path: [fields.find((field) => !env[field]) ?? fields[0]],
+        message: `${fields.join(', ')} must be configured together` });
+    }
+    const key = env[`STRIPE_${mode}_SECRET_KEY`];
+    if (key && !(mode === 'LIVE' ? /^(?:sk|rk)_live_/ : /^(?:sk|rk)_test_/).test(key)) {
+      ctx.addIssue({ code: 'custom', path: [`STRIPE_${mode}_SECRET_KEY`],
+        message: `Stripe ${mode.toLowerCase()} key has the wrong mode` });
+    }
+  }
   addKeyPairIssues(ctx, {
     privateKey: env.TARIFF_SNAPSHOT_PRIVATE_JWK,
     publicJwks: env.TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON,
@@ -71,7 +90,8 @@ export function addBillingEnvironmentIssues(env: BillingEnvironment, ctx: z.Refi
 
   if (
     env.STRIPE_BILLING_ENABLED &&
-    (!env.STRIPE_SECRET_KEY || !env.STRIPE_WEBHOOK_SECRET)
+    (!env.STRIPE_SECRET_KEY || !env.STRIPE_WEBHOOK_SECRET) &&
+    (!env.STRIPE_LIVE_SECRET_KEY || !env.STRIPE_LIVE_WEBHOOK_SECRET)
   ) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,

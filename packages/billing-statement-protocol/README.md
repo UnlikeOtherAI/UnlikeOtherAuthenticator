@@ -394,3 +394,9 @@ credits; these are display values. 2.3.0 includes everything in 2.2.0.
   (the oldest remaining credits' purchase rate), `region` (the captured region
   rate, for credits bought in USD and for debt) or `usd`. It is null while the
   rate is not known.
+
+## Displayed billing mode bindings (package 5.9.0)
+
+[Billing mode protocol 1.0.0](BILLING-MODE.md) defines read negotiation, the optional
+opaque `billing_context`, original-browser-context forwarding and stale/missing
+refusals. A backend must never replace a clicked action's context during a refresh.
