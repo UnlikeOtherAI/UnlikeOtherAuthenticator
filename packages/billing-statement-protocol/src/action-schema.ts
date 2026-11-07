@@ -1,3 +1,4 @@
+import { billingModeContextProperties } from './billing-mode-types.js';
 import { BILLING_CONSUMER_ACTION_SCHEMA_PATH } from './action-types.js';
 
 const billingCancellationSelectionValues = [
@@ -196,6 +197,7 @@ const hostedReturnUrlSchema = {
 } as const;
 
 const billingSubjectActionRequestProperties = {
+  ...billingModeContextProperties,
   product: { type: 'string', minLength: 1, maxLength: 100 },
   organisation_id: { type: 'string', minLength: 1, maxLength: 256 },
   team_id: { type: 'string', minLength: 1, maxLength: 256 },
@@ -292,6 +294,7 @@ export const billingErrorEnvelopeJsonSchema = {
   required: ['error'],
   properties: {
     error: { type: 'string', minLength: 1 },
+    code: { type: 'string', minLength: 1, maxLength: 100 },
   },
 } as const;
 

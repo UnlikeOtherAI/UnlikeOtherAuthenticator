@@ -2592,6 +2592,11 @@
                                     "minLength": 1,
                                     "maxLength": 256
                                   },
+                                  "billing_context": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 2048
+                                  },
                                   "offer_id": {
                                     "type": "string",
                                     "minLength": 1,
@@ -3288,6 +3293,11 @@
                                     "minLength": 1,
                                     "maxLength": 256
                                   },
+                                  "billing_context": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 2048
+                                  },
                                   "option_id": {
                                     "type": "string",
                                     "minLength": 1,
@@ -3385,6 +3395,11 @@
                                     "type": "string",
                                     "minLength": 1,
                                     "maxLength": 256
+                                  },
+                                  "billing_context": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 2048
                                   },
                                   "option_id": {
                                     "type": "string",
@@ -3485,6 +3500,11 @@
                               "type": "string",
                               "minLength": 1,
                               "maxLength": 256
+                            },
+                            "billing_context": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 2048
                             }
                           }
                         }
@@ -3577,6 +3597,11 @@
                               "type": "string",
                               "minLength": 1,
                               "maxLength": 256
+                            },
+                            "billing_context": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 2048
                             }
                           }
                         }

@@ -1266,6 +1266,11 @@
                                         "minLength": 1,
                                         "maxLength": 256
                                       },
+                                      "billing_context": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 2048
+                                      },
                                       "offer_id": {
                                         "type": "string",
                                         "minLength": 1,
@@ -1356,6 +1361,11 @@
                                         "type": "string",
                                         "minLength": 1,
                                         "maxLength": 256
+                                      },
+                                      "billing_context": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 2048
                                       },
                                       "subscription_id": {
                                         "type": "string",
@@ -2311,6 +2321,11 @@
                                     "minLength": 1,
                                     "maxLength": 256
                                   },
+                                  "billing_context": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 2048
+                                  },
                                   "offer_id": {
                                     "type": "string",
                                     "minLength": 1,
@@ -2401,6 +2416,11 @@
                                     "type": "string",
                                     "minLength": 1,
                                     "maxLength": 256
+                                  },
+                                  "billing_context": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 2048
                                   },
                                   "subscription_id": {
                                     "type": "string",
@@ -2674,6 +2694,11 @@
           "error": {
             "type": "string",
             "minLength": 1
+          },
+          "code": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
           }
         }
       }

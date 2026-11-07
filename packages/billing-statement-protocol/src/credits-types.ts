@@ -1,3 +1,4 @@
+import type { BillingModeBoundAction } from './billing-mode-types.js';
 import type { ExactMoney } from './types.js';
 import type { BillingSubjectRequest } from './funding-schema-primitives.js';
 import type { BillingControlledByV1 } from './org-billing-types.js';
@@ -88,7 +89,7 @@ export type BillingCreditsTopUpAction = BillingCreditsActionBase & {
   request: {
     method: 'POST';
     path: typeof BILLING_CREDITS_TOP_UP_PATH;
-    body: BillingSubjectRequest & { offer_id: string };
+    body: BillingModeBoundAction & BillingSubjectRequest & { offer_id: string };
   };
 };
 
@@ -98,7 +99,7 @@ export type BillingCreditsAutoTopUpSetupAction = BillingCreditsActionBase & {
   request: {
     method: 'POST';
     path: typeof BILLING_CREDITS_AUTO_TOP_UP_SETUP_PATH;
-    body: BillingSubjectRequest & { option_id: string };
+    body: BillingModeBoundAction & BillingSubjectRequest & { option_id: string };
   };
 };
 
@@ -108,7 +109,7 @@ export type BillingCreditsAutoTopUpUpdateAction = BillingCreditsActionBase & {
   request: {
     method: 'POST';
     path: typeof BILLING_CREDITS_AUTO_TOP_UP_UPDATE_PATH;
-    body: BillingSubjectRequest & { option_id: string };
+    body: BillingModeBoundAction & BillingSubjectRequest & { option_id: string };
   };
 };
 
@@ -118,7 +119,7 @@ export type BillingCreditsAutoTopUpDisableAction = BillingCreditsActionBase & {
   request: {
     method: 'POST';
     path: typeof BILLING_CREDITS_AUTO_TOP_UP_DISABLE_PATH;
-    body: BillingSubjectRequest;
+    body: BillingModeBoundAction & BillingSubjectRequest;
   };
 };
 
@@ -128,7 +129,7 @@ export type BillingCreditsAutoTopUpRecoverAction = BillingCreditsActionBase & {
   request: {
     method: 'POST';
     path: typeof BILLING_CREDITS_AUTO_TOP_UP_RECOVER_PATH;
-    body: BillingSubjectRequest;
+    body: BillingModeBoundAction & BillingSubjectRequest;
   };
 };
 

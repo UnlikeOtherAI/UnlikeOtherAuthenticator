@@ -71,6 +71,11 @@
         "cancel_url"
       ],
       "properties": {
+        "billing_context": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
         "product": {
           "type": "string",
           "minLength": 1,
@@ -316,6 +321,11 @@
         "return_url"
       ],
       "properties": {
+        "billing_context": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
         "product": {
           "type": "string",
           "minLength": 1,
@@ -671,6 +681,11 @@
         "error": {
           "type": "string",
           "minLength": 1
+        },
+        "code": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
         }
       }
     }

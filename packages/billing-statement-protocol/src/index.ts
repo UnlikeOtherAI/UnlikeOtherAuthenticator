@@ -1,3 +1,4 @@
+export * from './billing-mode-types.js';
 export { billingConsumerActionV1ConformanceFixtures } from './action-conformance-fixtures.js';
 export * from './presentation-types.js';
 export * from './sms-types.js';

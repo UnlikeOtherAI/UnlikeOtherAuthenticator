@@ -1,6 +1,6 @@
 {
   "name": "@unlikeotherai/billing-statement-protocol",
-  "version": "5.8.0",
+  "version": "5.9.0",
   "description": "Public UOA billing statement and customer-action consumer contracts",
   "license": "MIT",
   "type": "module",
@@ -19,7 +19,8 @@
     "openapi",
     "schema",
     "LICENSE",
-    "README.md"
+    "README.md",
+    "BILLING-MODE.md"
   ],
   "exports": {
     "./schema/billing-sms-v1.json": "./schema/billing-sms-v1.json",

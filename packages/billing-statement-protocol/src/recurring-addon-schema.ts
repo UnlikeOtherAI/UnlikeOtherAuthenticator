@@ -1,3 +1,4 @@
+import { billingModeContextProperties } from './billing-mode-types.js';
 import {
   billingSubjectActionBodySchema,
   moneySchema,
@@ -49,7 +50,7 @@ export const billingRecurringAddonCheckoutActionJsonSchema = {
         method: { const: 'POST' },
         path: { const: BILLING_RECURRING_ADDONS_CHECKOUT_PATH },
         body: billingSubjectActionBodySchema(
-          { offer_id: { type: 'string', minLength: 1, maxLength: 256 } },
+          { ...billingModeContextProperties, offer_id: { type: 'string', minLength: 1, maxLength: 256 } },
           ['offer_id'],
         ),
       },
@@ -73,7 +74,7 @@ export const billingRecurringAddonCancelActionJsonSchema = {
         method: { const: 'POST' },
         path: { const: BILLING_RECURRING_ADDONS_CANCELLATION_PREVIEW_PATH },
         body: billingSubjectActionBodySchema(
-          { subscription_id: { type: 'string', minLength: 1, maxLength: 256 } },
+          { ...billingModeContextProperties, subscription_id: { type: 'string', minLength: 1, maxLength: 256 } },
           ['subscription_id'],
         ),
       },
