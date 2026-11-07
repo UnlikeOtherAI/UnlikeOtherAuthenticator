@@ -105,7 +105,7 @@ export async function beginTeamArchive(params: {
     } });
     await tx.team.update({ where: { id: params.teamId }, data: {
       lifecycleStatus: 'ARCHIVED', lifecycleChangedAt: now,
-      lifecycleReason: 'Team archived. Permanent deletion is on hold.',
+      lifecycleReason: 'Team archived by an organisation owner or admin.',
     } });
     await revokeLifecycleSessions(tx, 'TEAM', params.teamId);
     await tx.billingCreditSetupCheckout.updateMany({ where: {

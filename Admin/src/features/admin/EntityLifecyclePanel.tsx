@@ -39,10 +39,11 @@ function EntityLifecyclePanelBody({ scope, id }: { scope: LifecycleScope; id: st
   }
   if (!lifecycle.data) return <p role={lifecycle.isError ? 'alert' : undefined}> {lifecycle.isError ? 'Could not load lifecycle state.' : 'Loading lifecycle…'}</p>;
   const terminal = ['ARCHIVED', 'DELETING', 'DELETED'].includes(lifecycle.data.status);
+  const archived = lifecycle.data.status === 'ARCHIVED';
   return <Card>
-    <CardHeader><div><h2>Access and deletion</h2><p className="text-sm text-gray-600">{`Status: ${lifecycle.data.status.toLowerCase()}`}</p></div></CardHeader>
+    <CardHeader><div><h2>Access and deletion</h2><p className="text-sm text-gray-600">{`Status: ${archived ? 'Archived' : lifecycle.data.status.toLowerCase()}`}</p></div></CardHeader>
     <div className="space-y-4 p-5">
-      {lifecycle.data.reason ? <p>Customer reason: {lifecycle.data.reason}</p> : null}
+      {lifecycle.data.reason ? <p>{archived ? 'Reason' : 'Customer reason'}: {lifecycle.data.reason}</p> : null}
       {lifecycle.data.internalNote ? <p>Internal note: {lifecycle.data.internalNote}</p> : null}
       {error ? <p role="alert" className="text-sm text-red-700">{error}</p> : null}
       {!terminal ? <>
