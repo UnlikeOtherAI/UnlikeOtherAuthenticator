@@ -10,6 +10,7 @@ import { quoteUnexportedClosedPeriodLiability } from './billing-stripe-invoice-c
 import { collectStripeCorrectionInvoice } from './billing-stripe-correction-invoice.service.js';
 import type { StripeInvoiceCashClient } from './billing-stripe-payment-evidence.service.js';
 import { stripeInvoiceMinor } from './billing-stripe-payment-evidence.service.js';
+import { withUnarchivedSubscriptionEffect } from './team-billing-effect.service.js';
 
 const INTERVAL_MS = 5 * 60_000;
 const LEASE_MS = 10 * 60_000;
@@ -68,6 +69,7 @@ export async function runStripeInvoiceCloseCycle(deps?: {
     where: {
       state: { in: ['HELD', 'READY', 'RELEASED', 'FINALIZED_HOLD', 'FINALIZED_CLEAR', 'COMPENSATED'] },
       nextCheckAt: { lte: now },
+      subscription: { OR: [{ teamId: null }, { team: { lifecycleStatus: { not: 'ARCHIVED' } } }] },
     },
     orderBy: [{ nextCheckAt: 'asc' }, { id: 'asc' }],
     take: 50,
@@ -104,7 +106,8 @@ export async function runStripeInvoiceCloseCycle(deps?: {
             });
             continue;
           }
-          const resumed = await stripe.invoices.update(invoice.id, { auto_advance: true });
+          const resumed = await withUnarchivedSubscriptionEffect(prisma, row.subscriptionId,
+            () => stripe.invoices.update(invoice.id, { auto_advance: true }));
           assertStripeObjectLivemode(resumed, account.livemode);
           if (resumed.id !== invoice.id || resumed.auto_advance !== true) {
             throw new AppError('INTERNAL', 502, 'STRIPE_INVOICE_RESUME_NOT_CONFIRMED');

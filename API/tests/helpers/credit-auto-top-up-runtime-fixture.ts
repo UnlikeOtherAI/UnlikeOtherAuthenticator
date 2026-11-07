@@ -1,12 +1,7 @@
 import { Prisma, type PrismaClient } from '@prisma/client';
 import type Stripe from 'stripe';
-import { afterAll, beforeAll, vi } from 'vitest';
-
+import { vi } from 'vitest';
 import { disableBillingCreditAutoTopUp } from '../../src/services/billing-credit-auto-top-up-consent.service.js';
-
-import { createTestDb } from '../helpers/test-db.js';
-export const databaseTestsEnabled =
-  process.env.BILLING_FUNDING_DATABASE_TESTS === 'true' && Boolean(process.env.DATABASE_URL);
 
 export const ids = {
   user: 'usr_auto_top_up_runtime',
@@ -41,15 +36,10 @@ export function scopedIds(suffix: string) {
 }
 
 export const concurrency = scopedIds('concurrency');
-
 export const recovery = scopedIds('recovery');
-
 export const embeddedError = scopedIds('embedded');
-
 export const aboveThreshold = scopedIds('above');
-
 export const disabled = scopedIds('disabled');
-
 export const pendingDisabled = scopedIds('pending-disabled');
 
 export async function seedCreditAccount(
@@ -346,16 +336,4 @@ export async function disableCreditAccountWithAuditEvidence(
       }) as never,
     },
   );
-}
-
-export let handle: Awaited<ReturnType<typeof createTestDb>>;
-export function setupPersistenceSuite() {
-beforeAll(async () => {
-    handle = await createTestDb();
-    if (!handle) throw new Error('DATABASE_URL is required for DB-backed tests');
-    await seed(handle.prisma);
-  });
-afterAll(async () => {
-    if (handle) await handle.cleanup();
-  });
 }

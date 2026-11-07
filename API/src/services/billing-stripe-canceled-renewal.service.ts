@@ -7,6 +7,7 @@ import { verifyStripePaymentInvoiceLines } from './billing-stripe-payment-lines.
 import { quoteUnexportedClosedPeriodLiability }
   from './billing-stripe-invoice-close-quote.service.js';
 import { stripeExternalId } from './billing-stripe-webhook-utils.service.js';
+import { assertSubscriptionNotArchived, withUnarchivedSubscriptionEffect } from './team-billing-effect.service.js';
 
 /** Cancellation disables automatic collection on existing invoices too.
  * Resume the same verified earned obligation; never create another seat fee. */
@@ -14,6 +15,7 @@ export async function resumeCanceledStripeRenewal(params: {
   sourceId: string; subscriptionId: string;
 }, deps: { prisma: PrismaClient; stripe: Pick<Stripe, 'invoices'>;
   quoteUsage?: typeof quoteUnexportedClosedPeriodLiability }) {
+  await assertSubscriptionNotArchived(deps.prisma, params.subscriptionId);
   const source = await deps.prisma.billingStripeMonthlyCharge.findUniqueOrThrow({
     where: { id: params.sourceId } });
   const subscription = await deps.prisma.billingStripeSubscription.findUniqueOrThrow({
@@ -52,9 +54,9 @@ export async function resumeCanceledStripeRenewal(params: {
   if (proof.currency !== source.currency || proof.amountMicroMinor !== 0n) {
     throw new AppError('INTERNAL', 409, 'STRIPE_CANCELED_RENEWAL_USAGE_UNRESOLVED');
   }
-  const resumed = invoice.status === 'draft' ?
-    await deps.stripe.invoices.finalizeInvoice(invoice.id, { auto_advance: true }) :
-    await deps.stripe.invoices.update(invoice.id, { auto_advance: true });
+  const resumed = await withUnarchivedSubscriptionEffect(deps.prisma, subscription.id, () =>
+    invoice.status === 'draft' ? deps.stripe.invoices.finalizeInvoice(invoice.id, { auto_advance: true }) :
+      deps.stripe.invoices.update(invoice.id, { auto_advance: true }));
   assertStripeObjectLivemode(resumed, subscription.livemode);
   if (resumed.id !== invoice.id || resumed.auto_advance !== true ||
     stripeExternalId(resumed.customer) !== subscription.customer.stripeCustomerId ||

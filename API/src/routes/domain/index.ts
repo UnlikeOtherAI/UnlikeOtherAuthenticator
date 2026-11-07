@@ -1,6 +1,7 @@
 import { registerHistoricalUserRoutes } from './historical-users.js';
 import type { FastifyInstance } from 'fastify';
 import { registerProductDeletionJobs } from './deletion-jobs.js';
+import { registerTeamArchiveReceipts } from './team-archives.js';
 
 import { registerDomainDebugRoute } from './debug.js';
 import { registerDomainLogsRoute } from './logs.js';
@@ -13,6 +14,7 @@ import { registerDomainSignatureRoutes } from './signatures.js';
 export function registerDomainRoutes(app: FastifyInstance): void {
   registerHistoricalUserRoutes(app);
   registerProductDeletionJobs(app);
+  registerTeamArchiveReceipts(app);
   registerDomainDebugRoute(app);
   registerDomainLogsRoute(app);
   registerDomainUsersRoute(app);

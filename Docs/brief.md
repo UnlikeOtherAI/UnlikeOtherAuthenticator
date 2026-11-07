@@ -3465,3 +3465,7 @@ continuation recheck current authority and every ancestor's expiry/revocation.
 The contract is limited to DeepWater-origin research, never a new logical run,
 another product or a scope turn. A job token cannot mint an unrelated fresh
 grant or lose its resource binding through generic token exchange.
+
+## Shared team archive (7 November 2026)
+
+A product may archive a shared UOA team across all connected products while permanent deletion stays held. This is separate from executable erasure, including for the default or last team. UOA owns the lifecycle, billing stop proof and revocation; products store references only. The contract and focused checks are in [Shared team archive](Auth/team-archive.md).

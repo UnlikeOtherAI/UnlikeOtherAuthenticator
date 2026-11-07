@@ -1,10 +1,91 @@
 import { BillingAssignmentScope, BillingCreditAutoTopUpConsentSource } from '@prisma/client';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { runCreditAutoTopUpAccount } from '../../src/services/billing-credit-auto-top-up-runtime.service.js';
+import { createTestDb } from '../helpers/test-db.js';
+import { ids, stripeAccount, concurrency, embeddedError, seed, paymentIntent, disableCreditAccountWithAuditEvidence } from '../helpers/credit-auto-top-up-runtime-fixture.js';
+const databaseTestsEnabled = process.env.BILLING_FUNDING_DATABASE_TESTS === 'true' && Boolean(process.env.DATABASE_URL);
 
-import { expect, it } from 'vitest';
+describe.skipIf(!databaseTestsEnabled)('credit automatic top-up PostgreSQL disable authority', () => {
+  let handle: Awaited<ReturnType<typeof createTestDb>>;
 
-import { ids, concurrency, disableCreditAccountWithAuditEvidence, handle } from './billing-credit-auto-top-up-runtime.suite-fixture.js';
+  beforeAll(async () => {
+    handle = await createTestDb();
+    if (!handle) throw new Error('DATABASE_URL is required for DB-backed tests');
+    await seed(handle.prisma);
+    await runCreditAutoTopUpAccount({ account: stripeAccount, creditAccountId: embeddedError.creditAccount }, { prisma: handle.prisma, stripe: { paymentIntents: { create: async () => { const attempt = await handle!.prisma.billingCreditAutoTopUpAttempt.findFirstOrThrow({ where: { creditAccountId: embeddedError.creditAccount } }); return paymentIntent(attempt.id, 'embedded'); } } } as never });
+  });
 
-export function registerCases3() {
+  afterAll(async () => {
+    if (handle) await handle.cleanup();
+  });
+
+  it('requires current manager authority and allows an audited disable with a rotated key', async () => {
+    const attempt = await handle!.prisma.billingCreditAutoTopUpAttempt.findFirstOrThrow({
+      where: { creditAccountId: embeddedError.creditAccount },
+    });
+    expect(attempt.stripePaymentIntentId).toBe('pi_auto_top_up_embedded');
+
+    await expect(
+      handle!.prisma.billingCreditAccount.update({
+        where: { id: embeddedError.creditAccount },
+        data: { autoTopUpThresholdMicrocredits: 150_000_000n },
+      }),
+    ).rejects.toBeDefined();
+
+    await expect(
+      disableCreditAccountWithAuditEvidence(
+        handle!.prisma,
+        embeddedError.creditAccount,
+        'actor_auto_top_up_non_manager_disable',
+        embeddedError.team,
+        'TEAM',
+        undefined,
+        ids.nonManagerUser,
+      ),
+    ).rejects.toBeDefined();
+    await expect(
+      handle!.prisma.billingCreditAccount.findUniqueOrThrow({
+        where: { id: embeddedError.creditAccount },
+      }),
+    ).resolves.toMatchObject({ autoTopUpState: 'ACTIVE' });
+
+    await disableCreditAccountWithAuditEvidence(
+      handle!.prisma,
+      embeddedError.creditAccount,
+      'actor_auto_top_up_embedded_disable',
+      embeddedError.team,
+      'TEAM',
+      { serviceId: ids.service, appKeyId: ids.rotatedAppKey, product: 'auto-top-up-test' },
+    );
+
+    const [creditAccount, savedAttempt, disableEvent] = await Promise.all([
+      handle!.prisma.billingCreditAccount.findUniqueOrThrow({
+        where: { id: embeddedError.creditAccount },
+      }),
+      handle!.prisma.billingCreditAutoTopUpAttempt.findUniqueOrThrow({ where: { id: attempt.id } }),
+      handle!.prisma.billingCreditAutoTopUpDisableEvent.findUniqueOrThrow({
+        where: {
+          appKeyId_actorJti: {
+            appKeyId: ids.rotatedAppKey,
+            actorJti: 'actor_auto_top_up_embedded_disable',
+          },
+        },
+      }),
+    ]);
+    expect(creditAccount.autoTopUpState).toBe('DISABLED');
+    expect(disableEvent).toMatchObject({
+      serviceId: ids.service,
+      appKeyId: ids.rotatedAppKey,
+      teamId: embeddedError.team,
+      previousConsentRevisionId: attempt.consentRevisionId,
+      previousGeneration: 0,
+    });
+    expect(savedAttempt).toMatchObject({
+      consentRevisionId: attempt.consentRevisionId,
+      stripePaymentIntentId: 'pi_auto_top_up_embedded',
+    });
+  }, 20_000);
+
   it('matches the audited disable to a NULL team for organization-scoped credits', async () => {
     const customerId = 'bsc_auto_top_up_organization';
     const creditAccountId = 'bca_auto_top_up_organization';
@@ -143,4 +224,4 @@ export function registerCases3() {
     });
     expect(attempt).toMatchObject({ status: 'PENDING', consentRevisionId: revisionId });
   }, 20_000);
-}
+});

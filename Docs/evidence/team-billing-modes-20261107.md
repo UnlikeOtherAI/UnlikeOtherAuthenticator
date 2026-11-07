@@ -136,3 +136,48 @@ update, immutable epoch and safe activation order are in
 [Team billing modes](../Billing/team-billing-modes.md). Parent owns all of those
 operations. Until coordinated review is complete, leave the PR unmerged and LIVE
 webhook disabled; do not alter serving revision `uoa-auth-00360-thw`.
+
+## CI race correction and current-main integration
+
+The initial PR CI on `42fb552b3f1ccb869c14ea66d5634e5cbfe4157c` passed
+974 remaining PostgreSQL tests, with one skipped and one failure. The failing
+credit-versus-Stripe race still observed a payer-row wait after both collectors
+had moved to the earlier month fence. The financial assertions did not fail.
+Its failed wait also left provider tasks pending during client teardown.
+
+The corrected scenario observes a real wait on `assert_billing_period_mode`,
+bound to the winning transaction's actual PostgreSQL backend PID through
+`pg_blocking_pids`. It retains both winning orders, stale-offset refusal,
+remaining wallet balance and exact exported quantity/no-duplicate assertions.
+Every task has rejection handling immediately; every exit releases its barriers,
+awaits all task outcomes and only then disconnects clients. A second real-PG
+scenario deliberately fails lock observation and proves the admitted settlement
+and stale export drain without an orphan rejection or extra usage export.
+Both scenarios pass locally.
+
+Main advanced to `81f39d73` with shared-team archival. Integration retains its
+authority and lifecycle/provider fences, archive stop window, consent disabling,
+customer scope and pending reconciliation semantics. The new archive reconciler
+now selects each persisted customer's captured physical account and livemode;
+it cannot use a global legacy client or the team's current default LIVE policy.
+Matching named Sandbox credentials take precedence over an expired legacy TEST
+key, including with collection disabled. The public 5.9.0 package is unchanged.
+
+Focused integration checks passed: 23 PostgreSQL tests across period isolation,
+the original financial race, reload runtime/disable authority and archive
+behavior; the expanded two-scenario race passed separately. Another real-PG
+archive scenario uses current domain/human authority, archives an untouched
+default-LIVE team with historical main TEST customer state, rejects an injected
+LIVE client, then reconciles via the fresh named Sandbox credential. It retains
+both customer rows, leaves the shared organisation LIVE customer untouched and
+certifies only after the original settlement window. Provider calls use synthetic
+local SDK stubs, never production keys or Stripe objects. Four unit cases cover
+captured TEST, both tuples and LIVE-client mismatch; the eight-file unit seam gate
+passed 55 tests. API lint/typecheck/build and OpenAPI validation passed after
+integration. CI must pass again on the integrated immutable head before merge;
+the parent coordination/activation hold remains in force.
+
+The auto-top-up runtime fixture now follows main's shared helper and separated
+disable-authority suite, retaining explicit Sandbox fixture policies. The other
+split suites remain within 500 lines. No billing policy, monetary record or
+production provider configuration was changed by this integration.

@@ -8,7 +8,7 @@ import { createApiClient } from '../../services/api-client';
 
 export type LifecycleScope = 'USER' | 'ORGANISATION' | 'TEAM';
 export type LifecycleTemplate = { id: string; scope: LifecycleScope; title: string; message: string; revision: number; enabled: boolean };
-type Lifecycle = { status: 'ACTIVE' | 'DISABLED' | 'DELETING' | 'DELETED'; reason: string | null; internalNote: string | null; deletionJobId: string | null };
+type Lifecycle = { status: 'ACTIVE' | 'DISABLED' | 'ARCHIVED' | 'DELETING' | 'DELETED'; reason: string | null; internalNote: string | null; deletionJobId: string | null };
 type Preview = { digest: string; confirmation: string; name: string; mode: string; deletesEmptyOrganisation: boolean;
   teamIds: string[]; candidates: { id: string; eligible: boolean; reasons: string[] }[];
   participants: { domain: string }[]; retainedEvidence: { model: string; count: number; reason: string }[]; blockers: string[] };
@@ -38,11 +38,12 @@ function EntityLifecyclePanelBody({ scope, id }: { scope: LifecycleScope; id: st
     finally { setPending(false); }
   }
   if (!lifecycle.data) return <p role={lifecycle.isError ? 'alert' : undefined}> {lifecycle.isError ? 'Could not load lifecycle state.' : 'Loading lifecycle…'}</p>;
-  const terminal = ['DELETING', 'DELETED'].includes(lifecycle.data.status);
+  const terminal = ['ARCHIVED', 'DELETING', 'DELETED'].includes(lifecycle.data.status);
+  const archived = lifecycle.data.status === 'ARCHIVED';
   return <Card>
-    <CardHeader><div><h2>Access and deletion</h2><p className="text-sm text-gray-600">{`Status: ${lifecycle.data.status.toLowerCase()}`}</p></div></CardHeader>
+    <CardHeader><div><h2>Access and deletion</h2><p className="text-sm text-gray-600">{`Status: ${archived ? 'Archived' : lifecycle.data.status.toLowerCase()}`}</p></div></CardHeader>
     <div className="space-y-4 p-5">
-      {lifecycle.data.reason ? <p>Customer reason: {lifecycle.data.reason}</p> : null}
+      {lifecycle.data.reason ? <p>{archived ? 'Reason' : 'Customer reason'}: {lifecycle.data.reason}</p> : null}
       {lifecycle.data.internalNote ? <p>Internal note: {lifecycle.data.internalNote}</p> : null}
       {error ? <p role="alert" className="text-sm text-red-700">{error}</p> : null}
       {!terminal ? <>
@@ -59,7 +60,9 @@ function EntityLifecyclePanelBody({ scope, id }: { scope: LifecycleScope; id: st
         </select></label>
         <p className="text-sm text-gray-600">Deletion removes operational data and credentials. Retained history uses “Deleted user”. Protected financial or signing evidence may require restricted identity references.</p>
         <Button disabled={pending} onClick={() => void act(async () => { setPreview(await api.post<Preview>(`${path}/deletion-preview`, { mode })); setConfirmation(''); setRequestKey(crypto.randomUUID()); })}>Preview deletion</Button>
-      </> : <p>This entity cannot sign in or regain access. Deletion is terminal.</p>}
+      </> : <p>{lifecycle.data.status === 'ARCHIVED'
+        ? 'Permanent deletion is on hold. No data has been erased.'
+        : 'This entity cannot sign in or regain access. Deletion is terminal.'}</p>}
       {preview && !terminal ? <div className="space-y-3 border-t pt-4">
         <p>Delete {preview.name} ({scope.toLowerCase()}) — {id}</p>
         <p>{preview.teamIds.length} teams in scope.{preview.deletesEmptyOrganisation ? ' The last team and its now-empty organisation will both be deleted.' : ''}</p>

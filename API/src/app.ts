@@ -22,6 +22,7 @@ import tenantContextPlugin from './plugins/tenant-context.plugin.js';
 import { registerRoutes } from './routes/index.js';
 import { preloadTariffSnapshotSigningKey } from './services/billing-snapshot.service.js';
 import { startStripeBillingScheduler } from './services/billing-stripe-scheduler.service.js';
+import { startTeamArchiveReconciliation } from './services/team-archive-reconciliation.service.js';
 import { startCreditSettlementScheduler } from './services/billing-credit-settlement-scheduler.service.js';
 import { startSeatTransitionScheduler } from './services/billing-seat-transition-scheduler.service.js';
 import { startManualCycleReconciliationScheduler } from './services/billing-cycle-manual-reconciliation-scheduler.service.js';
@@ -302,6 +303,8 @@ export async function createApp(): Promise<FastifyInstance> {
           stripeBillingScheduler.stop();
         });
       }
+      const teamArchives = startTeamArchiveReconciliation({ log: app.log });
+      app.addHook('onClose', async () => { teamArchives.stop(); });
       const creditSettlementScheduler = startCreditSettlementScheduler({ log: app.log });
       app.addHook('onClose', async () => {
         creditSettlementScheduler.stop();

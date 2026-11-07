@@ -7,6 +7,10 @@ type Counter = { count(args: { where: Record<string, unknown> }): Promise<number
 export async function activeBillingBlockers(tx: PrismaClient, scope: LifecycleScope, id: string) {
   const modelName = scope === 'USER' ? 'User' : scope === 'TEAM' ? 'Team' : 'Organisation';
   const blockers: string[] = [];
+  if (await tx.teamArchiveOperation.count({ where: scope === 'TEAM' ? { teamId: id }
+    : scope === 'ORGANISATION' ? { orgId: id } : { teamId: { in: [] } } })) {
+    blockers.push('Permanent deletion of an archived team is on hold.');
+  }
   for (const model of Prisma.dmmf.datamodel.models.filter(m => m.name.startsWith('Billing') && /Checkout|Subscription|AutoTopUpAttempt|CancellationIntent|OrgResponsibility/.test(m.name))) {
     const keys = model.fields.filter(f => f.kind === 'object' && f.type === modelName).flatMap(f => f.relationFromFields ?? []);
     const state = model.fields.find(f => ['status', 'state', 'active'].includes(f.name));

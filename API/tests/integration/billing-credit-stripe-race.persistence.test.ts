@@ -25,7 +25,7 @@ function deferred() {
   return { promise, release };
 }
 
-function withPayerLockHook(client: PrismaClient, afterAcquired: () => Promise<void>): PrismaClient {
+function withPayerLockHook(client: PrismaClient, afterAcquired: (tx: Prisma.TransactionClient) => Promise<void>): PrismaClient {
   return new Proxy(client, {
     get(target, property, receiver) {
       if (property !== '$transaction') return Reflect.get(target, property, receiver);
@@ -37,7 +37,7 @@ function withPayerLockHook(client: PrismaClient, afterAcquired: () => Promise<vo
               const result = await (transaction.$queryRaw as (...values: unknown[]) => Promise<unknown>)(...args);
               const sql = String((args[0] as { strings?: readonly string[] })?.strings?.join('') ?? '');
               if (sql.includes('billing_credit_accounts') && sql.includes('FOR UPDATE')) {
-                await afterAcquired();
+                await afterAcquired(transaction);
               }
               return result;
             };
@@ -47,17 +47,22 @@ function withPayerLockHook(client: PrismaClient, afterAcquired: () => Promise<vo
   });
 }
 
-async function waitForPayerLockWait(prisma: PrismaClient) {
+async function waitForCollectionLockWait(prisma: PrismaClient, blockingPid: number) {
   for (let attempt = 0; attempt < 100; attempt += 1) {
     const waits = await prisma.$queryRaw<Array<{ count: bigint }>>(Prisma.sql`
       SELECT count(*)::bigint AS count FROM pg_stat_activity
       WHERE pid <> pg_backend_pid() AND wait_event_type = 'Lock'
-        AND query LIKE '%billing_credit_accounts%FOR UPDATE%'
+        AND ${blockingPid} = ANY(pg_blocking_pids(pid))
+        AND query LIKE '%assert_billing_period_mode%'
     `);
     if ((waits[0]?.count ?? 0n) > 0n) return;
     await new Promise((resolve) => setTimeout(resolve, 20));
   }
-  throw new Error('competing transaction never waited on the payer row');
+  throw new Error('competing transaction never waited on the winning collection fence');
+}
+
+async function waitUntil(ready: Promise<void>, task: Promise<unknown>) {
+  await Promise.race([ready, task.then(() => { throw new Error('Billing task completed before its expected lock'); })]);
 }
 
 function portfolio(cursor: string, capturedAt: string, cost: string): NormalizedMeteringPortfolio {
@@ -257,22 +262,31 @@ describe.skipIf(!enabled)('credit and Stripe export payer lock', () => {
   });
   afterAll(async () => { await cleanup?.(); });
 
-  it('serializes both winners without consuming exported usage twice', async () => {
+  async function exerciseRace(prisma: PrismaClient, databaseUrl: string,
+    waitForLock = waitForCollectionLockWait) {
     // The prior $1.30 was already accepted by Stripe. A later top-up must be
     // allocatable only to the next $1.30 of usage.
     await grantCredits(prisma, 'before_credit_wins');
     const settlementClient = new PrismaClient({ datasources: { db: { url: databaseUrl } } });
     const exportClient = new PrismaClient({ datasources: { db: { url: databaseUrl } } });
     await Promise.all([settlementClient.$connect(), exportClient.$connect()]);
+    const releases: Array<() => void> = [];
+    const running: Promise<unknown>[] = [];
+    const signal = () => { const value = deferred(); releases.push(value.release); return value; };
+    const observe = <T>(task: Promise<T>) => {
+      // Attach rejection handling immediately, before any lock/barrier await.
+      void task.catch(() => {}); running.push(task); return task;
+    };
     try {
-      const staleQuoteReady = deferred();
-      const releaseStaleQuote = deferred();
-      const creditLocked = deferred();
-      const releaseCreditLock = deferred();
+      const staleQuoteReady = signal();
+      const releaseStaleQuote = signal();
+      const creditLocked = signal();
+      const releaseCreditLock = signal();
+      let creditPid = 0;
       const stripe = stripeStub();
       const firstUsage = usage('bus_race_credit_wins_123456789',
         '2026-10-04T10:00:00.000Z', '2.6');
-      const exportAttempt = exportStripeUsage({ subscriptionId: ids.subscription, billingMonth: month }, {
+      const exportAttempt = observe(exportStripeUsage({ subscriptionId: ids.subscription, billingMonth: month }, {
         prisma: exportClient, stripe: stripe as never, stripeLivemode: false,
         fetchUsage: async () => firstUsage,
         settleCredits: async () => {
@@ -281,19 +295,20 @@ describe.skipIf(!enabled)('credit and Stripe export payer lock', () => {
           return 0n;
         },
         now: () => new Date('2026-10-04T10:05:00.000Z'),
-      });
-      await staleQuoteReady.promise;
-      const firstSettlement = settleCreditPortfolio({ creditAccountId: ids.credit,
+      }));
+      await waitUntil(staleQuoteReady.promise, exportAttempt);
+      const firstSettlement = observe(settleCreditPortfolio({ creditAccountId: ids.credit,
         portfolio: portfolio('mup_race_credit_wins_123456789',
           '2026-10-04T10:01:00.000Z', '2.6'), credential }, {
-        prisma: withPayerLockHook(settlementClient, async () => {
+        prisma: withPayerLockHook(settlementClient, async (tx) => {
+          creditPid = (await tx.$queryRaw<Array<{ pid: number }>>`SELECT pg_backend_pid() AS pid`)[0]!.pid;
           creditLocked.release();
           await releaseCreditLock.promise;
         }),
-      });
-      await creditLocked.promise;
+      }));
+      await waitUntil(creditLocked.promise, firstSettlement);
       releaseStaleQuote.release();
-      await waitForPayerLockWait(prisma);
+      await waitForLock(prisma, creditPid);
       releaseCreditLock.release();
       await firstSettlement;
       await expect(exportAttempt).rejects.toThrow('BILLING_CREDIT_ALLOCATION_CHANGED_DURING_EXPORT');
@@ -310,25 +325,27 @@ describe.skipIf(!enabled)('credit and Stripe export payer lock', () => {
       // A second funding event follows the first export. Let Stripe reserve
       // the next unexported $1.30 while the credit settlement is waiting.
       await grantCredits(prisma, 'before_stripe_wins');
-      const exportLocked = deferred();
-      const releaseExportLock = deferred();
-      const wrappedExportClient = withPayerLockHook(exportClient, async () => {
+      const exportLocked = signal();
+      const releaseExportLock = signal();
+      let exportPid = 0;
+      const wrappedExportClient = withPayerLockHook(exportClient, async (tx) => {
+        exportPid = (await tx.$queryRaw<Array<{ pid: number }>>`SELECT pg_backend_pid() AS pid`)[0]!.pid;
         exportLocked.release();
         await releaseExportLock.promise;
       });
       const secondUsage = usage('bus_race_stripe_wins_123456789',
         '2026-10-04T10:10:00.000Z', '3.9');
-      const secondExport = exportStripeUsage({ subscriptionId: ids.subscription, billingMonth: month }, {
+      const secondExport = observe(exportStripeUsage({ subscriptionId: ids.subscription, billingMonth: month }, {
         prisma: wrappedExportClient, stripe: stripe as never, stripeLivemode: false,
         fetchUsage: async () => secondUsage,
         settleCredits: async () => 130_000_000n,
         now: () => new Date('2026-10-04T10:15:00.000Z'),
-      });
-      await exportLocked.promise;
-      const secondSettlement = settleCreditPortfolio({ creditAccountId: ids.credit,
+      }));
+      await waitUntil(exportLocked.promise, secondExport);
+      const secondSettlement = observe(settleCreditPortfolio({ creditAccountId: ids.credit,
         portfolio: portfolio('mup_race_stripe_wins_123456789',
-          '2026-10-04T10:11:00.000Z', '3.9'), credential }, { prisma: settlementClient });
-      await waitForPayerLockWait(prisma);
+          '2026-10-04T10:11:00.000Z', '3.9'), credential }, { prisma: settlementClient }));
+      await waitForLock(prisma, exportPid);
       releaseExportLock.release();
       await Promise.all([secondExport, secondSettlement]);
       settlement = await prisma.billingCreditUsageSettlement.findUniqueOrThrow({
@@ -346,7 +363,32 @@ describe.skipIf(!enabled)('credit and Stripe export payer lock', () => {
       expect(latest.stripeMeterEventState).toBe('ACCEPTED');
       expect(stripe.billing.meterEvents.create).toHaveBeenCalledTimes(1);
     } finally {
+      releases.forEach(release => release());
+      await Promise.allSettled(running);
       await Promise.all([settlementClient.$disconnect(), exportClient.$disconnect()]);
     }
+  }
+
+  it('serializes both winners without consuming exported usage twice', async () => {
+    await exerciseRace(prisma, databaseUrl);
   }, 30_000);
+
+  it('releases and awaits both competing tasks when lock observation fails', async () => {
+    const handle = await createTestDb();
+    if (!handle) throw new Error('DATABASE_URL is required');
+    try {
+      await seed(handle.prisma);
+      await expect(exerciseRace(handle.prisma, handle.databaseUrl, async (db, pid) => {
+        await waitForCollectionLockWait(db, pid);
+        throw new Error('Synthetic lock observation failure');
+      })).rejects.toThrow('Synthetic lock observation failure');
+      // Cleanup drained the admitted settlement and stale export before closing
+      // either client. No unhandled provider task or extra exported usage remains.
+      expect((await handle.prisma.billingCreditAccount.findUniqueOrThrow({ where: { id: ids.credit } }))
+        .balanceMicrocredits).toBe(0n);
+      expect(await handle.prisma.billingStripeUsageExport.count()).toBe(1);
+      expect((await handle.prisma.billingCreditUsageSettlement.findFirstOrThrow())
+        .cumulativeCreditsConsumedMicrocredits).toBe(1_300_000_000n);
+    } finally { await handle.cleanup(); }
+  });
 });
