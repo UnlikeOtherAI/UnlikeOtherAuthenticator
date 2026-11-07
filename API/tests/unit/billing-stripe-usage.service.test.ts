@@ -5,6 +5,20 @@ import { capturedAt, stripeAccount, usageFixture as usage } from './billing-stri
 import { setup } from './billing-stripe-usage-export.fixture.js';
 
 describe('Stripe usage rating', () => {
+  it.each(['ACTIVE', 'DISABLED', 'ARCHIVED'] as const)('settles earned usage unless the team is archived (%s)', async status => {
+    const { prisma, stripe, meterCreate } = setup([], 0n, status);
+    const result = exportStripeUsage({ subscriptionId: 'subscription_1', billingMonth: '2026-07' }, {
+      prisma: prisma as never, stripe: stripe as never, settleCredits: vi.fn().mockResolvedValue(0n),
+      fetchUsage: vi.fn().mockResolvedValue(usage()), now: () => capturedAt,
+    });
+    if (status === 'ARCHIVED') {
+      await expect(result).rejects.toThrow('ARCHIVE_BILLING_COLLECTION_HELD');
+      expect(meterCreate).not.toHaveBeenCalled();
+    } else {
+      await expect(result).resolves.toMatchObject({ billingMonth: '2026-07' });
+      expect(meterCreate).toHaveBeenCalledOnce();
+    }
+  });
   it('converts major currency exactly to integer micro-minor units', () => {
     expect(stripeMeterQuantityFromMajorAmount('2.5', 'USD')).toBe(250_000_000n);
     expect(stripeMeterQuantityFromMajorAmount('2.5', 'JPY')).toBe(2_500_000n);

@@ -4,7 +4,7 @@ import type Stripe from 'stripe';
 
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
-import { assertEntityAccess } from './entity-lifecycle.service.js';
+import { assertSubscriptionNotArchived, withUnarchivedSubscriptionEffect } from './team-billing-effect.service.js';
 import { fetchLedgerMeteringUsage } from './billing-ledger-collector.service.js';
 import { settleSubscriptionCreditLiability } from './billing-credit-liability.service.js';
 import { assertPrepaidUsageCovered } from './billing-prepaid-coverage.service.js';
@@ -117,7 +117,7 @@ async function prepareExports(
     if (!subscription) {
       throw new AppError('NOT_FOUND', 404, 'STRIPE_SUBSCRIPTION_NOT_FOUND');
     }
-    await assertEntityAccess({ orgId: subscription.orgId, teamId: subscription.teamId }, tx);
+    await assertSubscriptionNotArchived(tx, subscription.id);
     assertStripeUsageSubscription(subscription, {
       allowCanceledInvoicePeriod: Boolean(params.invoicePeriod),
     });
@@ -331,7 +331,7 @@ async function sendPendingExports(
       throw new AppError('INTERNAL', 409, 'STRIPE_METER_EVENT_DELIVERY_UNCERTAIN');
     }
     const timestamp = stripeUsageMeterTimestamp(row.createdAt, row.billingMonth, params.now);
-    const event = await stripe.billing.meterEvents.create(
+    const event = await withUnarchivedSubscriptionEffect(prisma, row.subscriptionId, () => stripe.billing.meterEvents.create(
       {
         event_name: params.meterEventName,
         payload: {
@@ -342,7 +342,7 @@ async function sendPendingExports(
         timestamp,
       },
       { idempotencyKey: row.stripeMeterEventIdentifier },
-    );
+    ));
     assertStripeObjectLivemode(event, params.account.livemode);
     const accepted = await prisma.billingStripeUsageExport.updateMany({
       where: {

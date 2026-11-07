@@ -24,7 +24,8 @@ type ExportRow = {
   createdAt: Date;
 };
 
-export function setup(existing: ExportRow[] = [], confirmedOffset = 0n) {
+export function setup(existing: ExportRow[] = [], confirmedOffset = 0n,
+  teamStatus: 'ACTIVE' | 'DISABLED' | 'ARCHIVED' = 'ACTIVE') {
   const rows = [...existing];
   const fullSubscription = subscriptionFixture();
   const findSubscription = vi.fn(async (args: { include?: unknown }) =>
@@ -111,13 +112,12 @@ export function setup(existing: ExportRow[] = [], confirmedOffset = 0n) {
   );
   const payerVersionBump = vi.fn().mockResolvedValue({ count: 1 });
   const tx = {
-    team: { findUnique: vi.fn().mockResolvedValue({ orgId: 'org_1', lifecycleStatus: 'ACTIVE' }) },
-    organisation: { findUnique: vi.fn().mockResolvedValue({ lifecycleStatus: 'ACTIVE' }) },
+    team: { findUniqueOrThrow: vi.fn().mockResolvedValue({ orgId: 'org_1', lifecycleStatus: teamStatus }) },
     $queryRaw: vi.fn().mockImplementation(async (query: { strings?: string[] }) =>
       query.strings?.join('').includes('billing_credit_accounts')
         ? [{ id: 'credit_account_1' }]
         : [{ id: fullSubscription.id }]),
-    billingStripeSubscription: { findUnique: findSubscription },
+    billingStripeSubscription: { findUnique: findSubscription, findUniqueOrThrow: findSubscription },
     billingCreditAccount: { updateMany: payerVersionBump },
     billingCreditUsageSettlement: { findMany: vi.fn().mockResolvedValue(
       confirmedOffset ? [{ cumulativeCreditsConsumedMicrocredits: confirmedOffset * 10n }] : [],

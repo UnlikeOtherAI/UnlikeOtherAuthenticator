@@ -127,3 +127,8 @@ describe('credit top-ups in the billing region currency', () => {
     expect(state.sessionsCreate).not.toHaveBeenCalled();
   });
 });
+
+// Pricing is isolated here; the PostgreSQL team-archive suite covers lifecycle fencing.
+vi.mock('../../src/services/team-billing-effect.service.js', () => ({
+  withLiveTeamBillingEffect: async (_db: unknown, _scope: unknown, effect: () => Promise<unknown>) => effect(),
+}));

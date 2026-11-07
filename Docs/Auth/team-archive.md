@@ -40,6 +40,9 @@ Cancellation starts immediately; certification waits for those leases and a
 90-second provider settlement window, measured with the database clock.
 Cancellation-recovery jobs cannot create or resume archived-team collection.
 An ordinary disabled team can still settle its earned liabilities.
+Usage export keeps that same distinction: archived teams cannot reserve or
+dispatch meter events, while disabled teams remain eligible for earned usage.
+Provider dispatch holds the archive fence through the meter request.
 
 The initiating product reads the no-store receipt through
 `GET /domain/team-archives/:id?domain=...` using its registered domain bearer
