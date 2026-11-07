@@ -35,8 +35,8 @@ export const billingOrganisationOverviewV1ConformanceFixture: BillingOrganisatio
       subscription: null, capabilities: statement.capabilities, actions: statement.actions,
     } },
     history: { state: 'confirmed', message: 'Organisation billing history.', data: {
-      cycles_request: { method: 'POST', path: '/billing/v1/cycles/list', body: subject },
-      invoices_request: { method: 'POST', path: '/billing/v1/invoices/list', body: { ...subject, charge_month: '2026-11' } },
+      cycles_request: { method: 'POST', path: '/billing/v1/cycles/list', body: {...subject,financial_scope:'organisation',billing_mode:'live'} },
+      invoices_request: { method: 'POST', path: '/billing/v1/invoices/list', body: { ...subject,financial_scope:'organisation',billing_mode:'live',charge_month: '2026-11' } },
     } },
   },
 };

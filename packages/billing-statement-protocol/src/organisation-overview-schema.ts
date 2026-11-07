@@ -54,10 +54,16 @@ export const billingOrganisationAccruedBillV1JsonSchema = object({ as_of: dateti
     amount: moneySchema({ signed: true }) }) },
 });
 const request = (path: string, body: unknown) => object({ method: { const: 'POST' }, path: { const: path }, body });
+const historySubject=object({...subject.properties,financial_scope:{const:'organisation'},billing_mode:{enum:['live','sandbox']}},
+  [...subject.required,'financial_scope']);
+const historyRequests={
+  cycles_request: request('/billing/v1/cycles/list', historySubject),
+  invoices_request: request('/billing/v1/invoices/list', object({ ...historySubject.properties, charge_month: month },
+    [...historySubject.required,'charge_month'])),
+};
 export const billingOrganisationHistoryV1JsonSchema = object({
-  cycles_request: request('/billing/v1/cycles/list', subject),
-  invoices_request: request('/billing/v1/invoices/list', object({ ...subject.properties, charge_month: month })),
-});
+  ...historyRequests,captured_sources:{type:'array',maxItems:2,items:object({mode:{enum:['live','sandbox']},...historyRequests})},
+},['cycles_request','invoices_request']);
 export const billingOrganisationOverviewV1JsonSchema = object({ ...common,
   financial_scope: billingOrganisationScopeV1JsonSchema,
   sections: object({ accrued_bill: section(billingOrganisationAccruedBillV1JsonSchema),

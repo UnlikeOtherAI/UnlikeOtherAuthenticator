@@ -250,3 +250,5 @@ export * from './organisation-overview-types.js';
 export * from './organisation-overview-schema.js';
 export * from './organisation-overview-fixture.js';
 export * from './organisation-overview-openapi.js';
+export * from './organisation-financial-types.js';
+export * from './organisation-financial-schema.js';

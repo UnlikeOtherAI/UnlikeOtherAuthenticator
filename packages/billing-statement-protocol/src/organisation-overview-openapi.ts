@@ -1,6 +1,8 @@
 import { billingOrganisationCapabilitiesV1JsonSchema, billingOrganisationOverviewV1JsonSchema,
   billingOrganisationRequestV1JsonSchema, billingOrganisationOverviewRequestV1JsonSchema } from './organisation-overview-schema.js';
 import { BILLING_ORGANISATION_CAPABILITIES_PATH, BILLING_ORGANISATION_OVERVIEW_PATH } from './organisation-overview-types.js';
+import { BILLING_ORGANISATION_REGION_PATH } from './organisation-financial-types.js';
+import { billingOrganisationFinancialV1Schemas } from './organisation-financial-schema.js';
 
 const post = (operationId: string, description: string, request: unknown, response: unknown) => ({
   operationId, description, security: [{ billingAppKey: [], billingActor: [] }],
@@ -15,8 +17,11 @@ const post = (operationId: string, description: string, request: unknown, respon
   },
 });
 export const billingOrganisationV1OpenApiDocument = {
-  openapi: '3.1.0', info: { title: 'UOA organisation financial overview', version: '1.1.0' },
+  openapi: '3.1.0', info: { title: 'UOA organisation financial overview', version: '1.2.0' },
   paths: {
+    [BILLING_ORGANISATION_REGION_PATH]:{post:post('billingOrganisationRegion',
+      'Financial-only subject, including explicit null team for an org manager. Read without region; choose once with region. Audited and immutable.',
+      billingOrganisationFinancialV1Schemas.region_request,billingOrganisationFinancialV1Schemas.region_response)},
     [BILLING_ORGANISATION_CAPABILITIES_PATH]: { post: post('billingOrganisationCapabilities',
       'Current UOA role capability; independent from Stripe, credits and Ledger. Selected team is actor admission context.',
       billingOrganisationRequestV1JsonSchema, billingOrganisationCapabilitiesV1JsonSchema) },

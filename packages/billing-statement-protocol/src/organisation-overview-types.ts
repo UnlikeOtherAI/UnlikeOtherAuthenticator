@@ -2,8 +2,9 @@ import type { BillingCreditsManagerV1, BillingCreditAmount } from './credits-typ
 import type { BillingCyclePeriod, BillingCycleTotals } from './cycle-types.js';
 import type { BillingSubjectRequest } from './funding-schema-primitives.js';
 import type { BillingStatementV1, ExactMoney } from './types.js';
+import type { BillingOrganisationHistorySubjectV1 } from './organisation-financial-types.js';
 
-export const BILLING_ORGANISATION_PROTOCOL_VERSION = '1.1.0' as const;
+export const BILLING_ORGANISATION_PROTOCOL_VERSION = '1.2.0' as const;
 export const BILLING_ORGANISATION_CAPABILITIES_PATH = '/billing/v1/organisation/capabilities' as const;
 export const BILLING_ORGANISATION_OVERVIEW_PATH = '/billing/v1/organisation/overview' as const;
 export const BILLING_ORGANISATION_SCHEMA_PATH = '/schemas/billing-organisation-v1.json' as const;
@@ -58,8 +59,11 @@ export type BillingOrganisationAccruedBillV1 = {
     amount: ExactMoney & { amount_minor: string } }>;
 };
 export type BillingOrganisationHistoryV1 = {
-  cycles_request: { method: 'POST'; path: '/billing/v1/cycles/list'; body: BillingOrganisationRequestV1 };
-  invoices_request: { method: 'POST'; path: '/billing/v1/invoices/list'; body: BillingOrganisationRequestV1 & { charge_month: string } };
+  cycles_request: { method: 'POST'; path: '/billing/v1/cycles/list'; body: BillingOrganisationHistorySubjectV1 };
+  invoices_request: { method: 'POST'; path: '/billing/v1/invoices/list'; body: BillingOrganisationHistorySubjectV1 & { charge_month: string } };
+  /** Read-only captured histories are separate; this never changes the organisation mode. */
+  captured_sources?: Array<{mode:'live'|'sandbox';cycles_request:BillingOrganisationHistoryV1['cycles_request'];
+    invoices_request:BillingOrganisationHistoryV1['invoices_request']}>;
 };
 export type BillingOrganisationOverviewV1 = {
   schema_version: 1; generated_at: string; subject: BillingOrganisationRequestV1;

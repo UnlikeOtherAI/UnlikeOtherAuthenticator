@@ -1,4 +1,4 @@
-# Organisation financial overview — protocol 1.1.0 / package 6.1.0
+# Organisation financial overview — protocol 1.2.0 / package 6.2.0
 
 This supersedes per-team customer billing. One UOA organisation owns one financial
 scope, one LIVE/Sandbox policy and independent money/customer bindings in each
@@ -27,6 +27,34 @@ content, entitlement, service-access and token endpoints still require their
 exact non-null admitted team. The displayed token also captures explicit null.
 No other body field, URL or context can be null through this exception.
 
+Use the SAME registered customer-lifecycle app key for every financial read and
+write, including Subscribe, Portal, funding, return verification and cancellation.
+The displayed context captures that app-key identity. A legacy paid key cannot
+replace it at mutation time. A financial actor cannot call SMS, Voice, content,
+service-access, native scope registration or general assurance/token endpoints.
+
+UOA resolves an `assurance_ref` to its original authoritative custody scope. It
+requires the same user, organisation, client and credential epoch, then runs the
+unchanged live assurance family/chain, provisioning, policy and revocation checks
+on that stored scope. A null financial team never rewrites or borrows custody. An
+org-only recovery family can have an original null custody team; a team-bound
+family must still satisfy its own current team admission. No other assurance or
+token endpoint gains a null-team exception.
+
+`POST /billing/v1/organisation/region` accepts the financial subject and optional
+`region` (`UK`, `US`, `EUROPE`). Without it the endpoint reads `BillingRegionViewV1`;
+with it the endpoint makes the existing audited immutable choice. Org-only
+managers can choose their first region. The old `/organisation-billing/region`
+request/schema is unchanged. This region operation is not a payment retry.
+
+`billingOrganisationFinancialV1Schemas` and `BillingOrganisationFinancialTypes`
+have matching keys for the full reachable lifecycle: funding requests and hosted
+responses, purchase-status return verification, Checkout/Portal, cancellation
+preview/confirmation, add-ons, region and financial cycle/invoice history. Empty
+204 mutations have no response DTO. The generated family is
+`schema/billing-organisation-financial-v1.json` (`$defs` by those keys). Use it
+only in the explicit financial realm. Every old 5.9 schema remains unchanged.
+
 `POST /billing/v1/organisation/overview` accepts that subject plus optional
 `billing_month` (`YYYY-MM`, current or earlier). It requires the same manager
 authority; otherwise 403 `BILLING_MANAGER_REQUIRED`. Locale uses the existing
@@ -42,6 +70,17 @@ mode, monotonic revision, immutable epoch) and five independent `sections`:
 - `subscription`: plan, subscription, capabilities and existing frozen actions.
 - `history`: canonical cycle and invoice list requests. Those interfaces now use
   manager-authorized organisation financial scope, with original record bindings.
+
+Financial history bodies carry `financial_scope: 'organisation'` and may name
+`billing_mode: 'live' | 'sandbox'`. This read-only selector resolves only UOA's
+configured named tuple and never changes the organisation's mode for new work.
+Canonical `captured_sources` requests keep LIVE and TEST histories separate;
+consumers never combine their totals. Returned document requests retain that
+selector. Default history requests use the overview's current mode. Selected
+team/product stay actor context; this explicit financial history exception admits
+all organisation financial products/teams, including retained legacy records.
+It grants no other-team product content. Exact record, captured account/mode,
+snapshot, invoice-line, cash and document proofs remain mandatory.
 
 Each section is either `confirmed` with `message` and `data`, or
 `pending_reconciliation` / `unavailable` with `message` and `code`, without

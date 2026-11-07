@@ -2937,12 +2937,6 @@
                             "body": {
                               "type": "object",
                               "additionalProperties": false,
-                              "required": [
-                                "product",
-                                "organisation_id",
-                                "team_id",
-                                "user_id"
-                              ],
                               "properties": {
                                 "product": {
                                   "type": "string",
@@ -2970,8 +2964,24 @@
                                   "type": "string",
                                   "minLength": 1,
                                   "maxLength": 256
+                                },
+                                "financial_scope": {
+                                  "const": "organisation"
+                                },
+                                "billing_mode": {
+                                  "enum": [
+                                    "live",
+                                    "sandbox"
+                                  ]
                                 }
-                              }
+                              },
+                              "required": [
+                                "product",
+                                "organisation_id",
+                                "team_id",
+                                "user_id",
+                                "financial_scope"
+                              ]
                             }
                           },
                           "required": [
@@ -3021,6 +3031,15 @@
                                   "minLength": 1,
                                   "maxLength": 256
                                 },
+                                "financial_scope": {
+                                  "const": "organisation"
+                                },
+                                "billing_mode": {
+                                  "enum": [
+                                    "live",
+                                    "sandbox"
+                                  ]
+                                },
                                 "charge_month": {
                                   "type": "string",
                                   "pattern": "^\\d{4}-(0[1-9]|1[0-2])$"
@@ -3031,6 +3050,7 @@
                                 "organisation_id",
                                 "team_id",
                                 "user_id",
+                                "financial_scope",
                                 "charge_month"
                               ]
                             }
@@ -3040,6 +3060,164 @@
                             "path",
                             "body"
                           ]
+                        },
+                        "captured_sources": {
+                          "type": "array",
+                          "maxItems": 2,
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "mode": {
+                                "enum": [
+                                  "live",
+                                  "sandbox"
+                                ]
+                              },
+                              "cycles_request": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "method": {
+                                    "const": "POST"
+                                  },
+                                  "path": {
+                                    "const": "/billing/v1/cycles/list"
+                                  },
+                                  "body": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "product": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 100
+                                      },
+                                      "organisation_id": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 256
+                                      },
+                                      "team_id": {
+                                        "anyOf": [
+                                          {
+                                            "type": "string",
+                                            "minLength": 1,
+                                            "maxLength": 256
+                                          },
+                                          {
+                                            "type": "null"
+                                          }
+                                        ]
+                                      },
+                                      "user_id": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 256
+                                      },
+                                      "financial_scope": {
+                                        "const": "organisation"
+                                      },
+                                      "billing_mode": {
+                                        "enum": [
+                                          "live",
+                                          "sandbox"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "product",
+                                      "organisation_id",
+                                      "team_id",
+                                      "user_id",
+                                      "financial_scope"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "method",
+                                  "path",
+                                  "body"
+                                ]
+                              },
+                              "invoices_request": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "method": {
+                                    "const": "POST"
+                                  },
+                                  "path": {
+                                    "const": "/billing/v1/invoices/list"
+                                  },
+                                  "body": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "product": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 100
+                                      },
+                                      "organisation_id": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 256
+                                      },
+                                      "team_id": {
+                                        "anyOf": [
+                                          {
+                                            "type": "string",
+                                            "minLength": 1,
+                                            "maxLength": 256
+                                          },
+                                          {
+                                            "type": "null"
+                                          }
+                                        ]
+                                      },
+                                      "user_id": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 256
+                                      },
+                                      "financial_scope": {
+                                        "const": "organisation"
+                                      },
+                                      "billing_mode": {
+                                        "enum": [
+                                          "live",
+                                          "sandbox"
+                                        ]
+                                      },
+                                      "charge_month": {
+                                        "type": "string",
+                                        "pattern": "^\\d{4}-(0[1-9]|1[0-2])$"
+                                      }
+                                    },
+                                    "required": [
+                                      "product",
+                                      "organisation_id",
+                                      "team_id",
+                                      "user_id",
+                                      "financial_scope",
+                                      "charge_month"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "method",
+                                  "path",
+                                  "body"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "mode",
+                              "cycles_request",
+                              "invoices_request"
+                            ]
+                          }
                         }
                       },
                       "required": [

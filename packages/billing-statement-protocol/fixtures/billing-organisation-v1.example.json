@@ -411,7 +411,9 @@
               "product": "deepwater",
               "organisation_id": "org_example",
               "team_id": "team_example",
-              "user_id": "user_example"
+              "user_id": "user_example",
+              "financial_scope": "organisation",
+              "billing_mode": "live"
             }
           },
           "invoices_request": {
@@ -422,6 +424,8 @@
               "organisation_id": "org_example",
               "team_id": "team_example",
               "user_id": "user_example",
+              "financial_scope": "organisation",
+              "billing_mode": "live",
               "charge_month": "2026-11"
             }
           }
