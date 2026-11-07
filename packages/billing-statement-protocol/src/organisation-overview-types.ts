@@ -13,13 +13,13 @@ export const BILLING_ORGANISATION_OPENAPI_PATH = '/schemas/billing-organisation-
 /** Team and product identify the currently admitted actor/perspective, never the financial filter. */
 export type BillingOrganisationRequestV1 = BillingSubjectRequest;
 export type BillingOrganisationOverviewRequestV1 = BillingOrganisationRequestV1 & { billing_month?: string };
-export type BillingOrganisationScopeV1 = {
+export type BillingOrganisationFinancialScopeV1 = {
   kind: 'organisation'; organisation_id: string; mode: 'live' | 'sandbox';
   revision: number; epoch: string;
 };
 export type BillingOrganisationCapabilitiesV1 = {
   schema_version: 1; generated_at: string; subject: BillingSubjectRequest;
-} & ({ capabilities: { can_view_billing: true; can_manage_billing: true }; financial_scope: BillingOrganisationScopeV1 }
+} & ({ capabilities: { can_view_billing: true; can_manage_billing: true }; financial_scope: BillingOrganisationFinancialScopeV1 }
   | { capabilities: { can_view_billing: false; can_manage_billing: false }; financial_scope?: never });
 
 /** No data/numeric total is admitted in an unconfirmed section. Sections fail independently. */
@@ -56,7 +56,7 @@ export type BillingOrganisationHistoryV1 = {
 };
 export type BillingOrganisationOverviewV1 = {
   schema_version: 1; generated_at: string; subject: BillingSubjectRequest;
-  financial_scope: BillingOrganisationScopeV1;
+  financial_scope: BillingOrganisationFinancialScopeV1;
   sections: {
     accrued_bill: BillingOrganisationSectionV1<BillingOrganisationAccruedBillV1>;
     credits: BillingOrganisationSectionV1<BillingOrganisationCreditBalanceV1>;
