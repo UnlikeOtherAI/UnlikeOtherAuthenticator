@@ -47,6 +47,8 @@ describe.skipIf(!process.env.DATABASE_URL)('actual Stripe cash source closes a c
       keyPrefix: `uoa_${suffix.slice(0, 12)}`, secretDigest: 'a'.repeat(64),
       actorIssuer: 'https://app.example.test', actorAudience: 'https://uoa.example.test', actorKeyId: 'cycle',
       actorPublicJwk: { kty: 'RSA', kid: 'cycle', n: 'AQAB', e: 'AQAB' } } });
+    const modeTeam = await db.prisma.team.create({ data: { orgId: org.id, name: 'TEST billing team', slug: 'test-billing' } });
+    await db.prisma.billingTeamMode.create({ data: { teamId: modeTeam.id, sandbox: true, revision: 1 } });
     const account = await db.prisma.billingStripeAccount.create({ data: {
       stripeAccountId: `acct_${suffix}`, livemode: false } });
     accountId = account.id;
@@ -54,6 +56,7 @@ describe.skipIf(!process.env.DATABASE_URL)('actual Stripe cash source closes a c
       accountId, orgId: org.id, teamId: null, scope: 'ORGANISATION', scopeKey: org.id,
       stripeCustomerId: 'cus_monthly' } });
     const checkout = await db.prisma.billingStripeCheckoutSession.create({ data: {
+      billingModeTeamId: modeTeam.id, billingModeRevision: 1,
       accountId, appKeyId: key.id, customerId: customer.id, serviceId, tariffId: tariff.id,
       tariffSource: 'SERVICE_DEFAULT', orgId: org.id, teamId: null, scope: 'ORGANISATION', scopeKey: org.id,
       actorJti: randomUUID(), requestedByUserId: user.id, successUrlDigest: 'a'.repeat(64),

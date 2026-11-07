@@ -1,4 +1,6 @@
 import { createHash } from 'node:crypto';
+import { getEnv } from '../config/env.js';
+import { resolveTeamBillingMode } from './billing-team-mode.service.js';
 
 import {
   BillingAssignmentScope, BillingInvoiceStatus, Prisma, type PrismaClient,
@@ -99,6 +101,7 @@ async function prepaidAdjustments(prisma: PrismaClient, rows: Array<{
 async function stripePaymentMonthKeys(prisma: PrismaClient, params: {
   orgId: string; teamId: string; serviceId: string; product: string;
   orgManager: boolean; start: Date; end: Date; cursor: Cursor | null; limit: number;
+  livemode: boolean; stripeAccountId: string;
 }): Promise<Array<{ invoiceId: string; at: Date }>> {
   const scope = params.orgManager ? Prisma.sql`
     (invoice.team_id = ${params.teamId} OR invoice.team_id IS NULL)` : Prisma.sql`
@@ -111,7 +114,10 @@ async function stripePaymentMonthKeys(prisma: PrismaClient, params: {
     SELECT cash.invoice_id AS "invoiceId", MAX(cash.paid_at) AS "at"
     FROM billing_stripe_payment_invoice_cash_payments cash
     JOIN billing_stripe_payment_invoices invoice ON invoice.id = cash.invoice_id
+    JOIN billing_stripe_accounts account ON account.id = invoice.account_id
     WHERE cash.paid_at >= ${params.start} AND cash.paid_at < ${params.end}
+      AND account.livemode = ${params.livemode}
+      AND account.stripe_account_id = ${params.stripeAccountId}
       AND invoice.org_id = ${params.orgId} AND ${scope}
       AND EXISTS (SELECT 1 FROM billing_stripe_payment_invoice_lines line
         WHERE line.invoice_id = invoice.id AND line.service_id = ${params.serviceId}
@@ -132,6 +138,11 @@ export async function listCustomerInvoices(
 ): Promise<BillingCustomerInvoicesListV1> {
   const prisma = deps?.prisma ?? getAdminPrisma();
   const viewer = await authorizeBillingCycle(context, { prisma });
+  const selection = await resolveTeamBillingMode(context.request, prisma);
+  const env = getEnv();
+  const stripeAccountId = selection.mode === 'live' ? env.STRIPE_LIVE_ACCOUNT_ID : env.STRIPE_SANDBOX_ACCOUNT_ID;
+  if (!stripeAccountId) throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_STRIPE_MODE_NOT_CONFIGURED');
+  const account = { livemode: selection.mode === 'live', stripeAccountId };
   const orgManager = viewer.organisationRole === 'owner' || viewer.organisationRole === 'admin';
   const { start, end } = inMonth(params.chargeMonth);
   const limit = params.limit ?? 20;
@@ -170,6 +181,7 @@ export async function listCustomerInvoices(
   }, include: { lines: true, paymentEvents: true, manualCreditNotes: true },
   orderBy: [{ issuedAt: 'desc' }, { id: 'desc' }], take: limit + 1 }) : [];
   const prepaid = await prisma.billingCreditPaymentInvoice.findMany({ where: {
+    account,
     orgId: context.request.organisationId,
     serviceId: context.credential.service.id,
     paidAt: { gte: start, lt: end },
@@ -191,6 +203,7 @@ export async function listCustomerInvoices(
     orgId: context.request.organisationId, teamId: context.request.teamId,
     serviceId: context.credential.service.id, product: context.request.product,
     orgManager, start, end, cursor, limit,
+    livemode: account.livemode, stripeAccountId,
   });
   const stripe = await prisma.billingStripePaymentInvoice.findMany({ where: {
     id: { in: stripeKeys.map((key) => key.invoiceId) },

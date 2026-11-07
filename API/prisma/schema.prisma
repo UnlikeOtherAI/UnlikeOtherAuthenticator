@@ -1397,6 +1397,7 @@ model Organisation {
   billingInvoiceProfiles            BillingOrganisationInvoiceProfile[]
   billingInvoices                   BillingInvoice[]
   billingOrgResponsibility          BillingOrgResponsibility?
+  billingModePeriodLocks            BillingModePeriodLock[]
   billingSeatSubscriptions          BillingSeatSubscription[]
   customerBillingCycles             BillingCustomerCycle[]
   slugClaims                        OrganisationSlugClaim[]
@@ -2283,7 +2284,17 @@ model BillingStripeAccount {
 }
 
 // Operator-owned billing selection. Absence means LIVE; products cannot write this policy.
+model BillingModePeriodLock {
+  orgId String @map("org_id")
+  billingMonth String @map("billing_month") @db.Char(7)
+  generation BigInt @default(1)
+  org Organisation @relation(fields: [orgId], references: [id], onDelete: Restrict)
+  @@id([orgId, billingMonth])
+  @@map("billing_mode_period_locks")
+}
+
 model BillingTeamMode {
+  adoptedStripeAccountId String? @map("adopted_stripe_account_id")
   teamId    String   @id @map("team_id")
   sandbox   Boolean  @default(false)
   revision  Int      @default(1)
@@ -2301,6 +2312,7 @@ model BillingModeCutover {
 }
 
 model BillingTeamModeEvent {
+  adoptedStripeAccountId String? @map("adopted_stripe_account_id")
   id          String   @id
   teamId      String   @map("team_id")
   revision    Int

@@ -91,6 +91,12 @@ async function settleInTransaction(
     credential: VerifiedBillingAppKey;
   },
 ) {
+  const source = await tx.billingCreditAccount.findUnique({ where: { id: params.creditAccountId },
+    select: { accountId: true, orgId: true, createdAt: true } });
+  if (!source) throw new AppError('NOT_FOUND', 404, 'BILLING_CREDIT_ACCOUNT_MISSING');
+  // Serialize provider-account selection before locking any payer row.
+  await assertBillingPeriodMode(tx, { accountId: source.accountId, orgId: source.orgId,
+    teamId: params.portfolio.scope.teamId, month: params.portfolio.scope.month, sourceCreatedAt: source.createdAt });
   const locked = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
     SELECT "id" FROM "billing_credit_accounts"
     WHERE "id" = ${params.creditAccountId}
@@ -101,8 +107,6 @@ async function settleInTransaction(
     where: { id: params.creditAccountId },
   });
   if (!account) throw new AppError('NOT_FOUND', 404, 'BILLING_CREDIT_ACCOUNT_MISSING');
-  await assertBillingPeriodMode(tx, { accountId: account.accountId, orgId: account.orgId,
-    teamId: params.portfolio.scope.teamId, month: params.portfolio.scope.month, sourceCreatedAt: account.createdAt });
   await assertUnambiguousCreditPayer(tx, {
     orgId: account.orgId,
     scope: account.scope,

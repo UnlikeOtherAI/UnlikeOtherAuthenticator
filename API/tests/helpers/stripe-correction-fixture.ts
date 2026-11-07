@@ -15,6 +15,7 @@ export async function correctionFixture(prisma: PrismaClient) {
   await prisma.billingStripeCustomer.update({ where: { id: ids.teamCustomer },
     data: { stripeCustomerId: 'cus_correction' } });
   const checkout = await prisma.billingStripeCheckoutSession.create({ data: {
+    billingModeTeamId: ids.teamA, billingModeRevision: 1,
     accountId: ids.account, appKeyId: ids.appKey, customerId: ids.teamCustomer,
     serviceId: ids.service, tariffId: tariff.id, tariffSource: 'SERVICE_DEFAULT',
     orgId: ids.org, teamId: ids.teamA, scope: 'TEAM', scopeKey: `${ids.org}:${ids.teamA}`,

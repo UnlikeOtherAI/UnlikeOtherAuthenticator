@@ -16,6 +16,7 @@ test('platform operator reaches team billing from the directory and billing door
   let revision = 0;
   let failNext = true;
   let failRead = false;
+  let adoption = false;
   const blockers: Array<{ code: string; count: number }> = [];
   const writes: unknown[] = [];
   await page.route(`**/internal/admin/billing/organisations/${org.id}/teams/${team.id}/mode`, async (route) => {
@@ -29,7 +30,8 @@ test('platform operator reaches team billing from the directory and billing door
       expect(input).toEqual({ mode: 'sandbox', expected_revision: 0 });
       mode = 'sandbox'; revision = 1;
     }
-    return json({ mode, revision, organisation_id: org.id, team_id: team.id, blockers });
+    return json({ mode, revision, organisation_id: org.id, team_id: team.id, blockers,
+      ...(adoption ? { adopting_sandbox_history: true } : {}) });
   });
   const capture = async (state: string) => {
     if (!proof) return;
@@ -74,6 +76,12 @@ test('platform operator reaches team billing from the directory and billing door
     failRead = false;
     await page.getByRole('button', { name: 'Retry', exact: true }).click();
     await expect(page.getByText('Active subscription (1)', { exact: true })).toBeVisible();
+    blockers.length = 0; adoption = true; mode = 'live'; revision = 0;
+    await page.reload();
+    await expect(page.getByText(/This team has existing sandbox billing history/)).toBeVisible();
+    await expect(page.getByRole('combobox', { name: 'Billing mode', exact: true })).toBeEnabled();
+    await page.getByRole('combobox', { name: 'Billing mode', exact: true }).selectOption('sandbox');
+    await capture('mode-adoption');
     expect(writes).toHaveLength(2);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
   }

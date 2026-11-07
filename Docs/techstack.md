@@ -316,3 +316,15 @@ checks. Record schemas declare their string key type explicitly. This replaces
 the Zod 3 dependency; no v3 compatibility import is used. Undici is at least
 6.29.1 and the local Admin test DOM is at least Happy DOM 21.0.4. The existing
 high/critical dependency audit remains a release gate.
+
+## Team billing mode configuration (2026-11-07)
+
+UOA Admin owns durable per-team Sandbox selection; missing policy is LIVE.
+There is no environment team allowlist. Six secure configuration inputs bind
+independent modes: STRIPE_LIVE_SECRET_KEY, STRIPE_LIVE_WEBHOOK_SECRET,
+STRIPE_LIVE_ACCOUNT_ID, STRIPE_SANDBOX_SECRET_KEY, STRIPE_SANDBOX_WEBHOOK_SECRET
+and STRIPE_SANDBOX_ACCOUNT_ID. Credentials resolve by the captured physical
+account and livemode; new work never falls back to the legacy TEST client.
+The additive database mode guards, immutable monthly epoch, original displayed
+context protocol and coordinated activation requirements are specified in
+[Team billing modes](Billing/team-billing-modes.md).

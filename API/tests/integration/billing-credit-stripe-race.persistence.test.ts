@@ -157,12 +157,14 @@ async function seed(prisma: PrismaClient) {
       VALUES (${ids.account}, 'acct_credit_stripe_race', false, CURRENT_TIMESTAMP)
     `);
   });
+  await prisma.billingTeamMode.create({ data: { teamId: ids.team, sandbox: true, revision: 1 } });
   await prisma.billingStripeCustomer.create({
     data: { id: ids.customer, accountId: ids.account, orgId: ids.org, teamId: ids.team,
       scope: 'TEAM', scopeKey: `${ids.org}:${ids.team}`, stripeCustomerId: 'cus_credit_stripe_race' },
   });
   await prisma.billingCreditAccount.create({
-    data: { id: ids.credit, accountId: ids.account, customerId: ids.customer,
+    data: {
+      createdAt: new Date('2026-01-01T00:00:00Z'), id: ids.credit, accountId: ids.account, customerId: ids.customer,
       orgId: ids.org, teamId: ids.team, scope: 'TEAM', scopeKey: `${ids.org}:${ids.team}`,
       currency, balanceMicrocredits: 0n },
   });
@@ -176,7 +178,8 @@ async function seed(prisma: PrismaClient) {
       monthlyAmountMinor: 0n },
   });
   await prisma.billingStripeCheckoutSession.create({
-    data: { id: ids.checkout, accountId: ids.account, appKeyId: ids.appKey,
+    data: {
+      billingModeTeamId: ids.team, billingModeRevision: 1, id: ids.checkout, accountId: ids.account, appKeyId: ids.appKey,
       customerId: ids.customer, serviceId: ids.service, tariffId: ids.tariff,
       tariffSource: 'SERVICE_DEFAULT', orgId: ids.org, teamId: ids.team,
       scope: 'TEAM', scopeKey: `${ids.org}:${ids.team}`, actorJti: 'race-checkout',
@@ -184,7 +187,8 @@ async function seed(prisma: PrismaClient) {
       cancelUrlDigest: 'b'.repeat(64), leaseExpiresAt: new Date('2026-10-05T00:00:00.000Z') },
   });
   await prisma.billingStripeSubscription.create({
-    data: { id: ids.subscription, accountId: ids.account, checkoutId: ids.checkout,
+    data: {
+      createdAt: new Date('2026-01-01T00:00:00Z'), id: ids.subscription, accountId: ids.account, checkoutId: ids.checkout,
       customerId: ids.customer, serviceId: ids.service, tariffId: ids.tariff,
       tariffSource: 'SERVICE_DEFAULT', orgId: ids.org, teamId: ids.team,
       scope: 'TEAM', scopeKey: `${ids.org}:${ids.team}`,

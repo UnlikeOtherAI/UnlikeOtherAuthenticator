@@ -33,6 +33,7 @@ describe.skipIf(!process.env.DATABASE_URL)('pending Stripe fixed-seat capacity',
       orgId, name: 'Checkout team', slug: 'checkout-team',
     } });
     teamId = team.id;
+    await db.prisma.billingTeamMode.create({ data: { teamId, sandbox: true, revision: 1 } });
     const service = await db.prisma.billingService.create({ data: {
       identifier: 'pending-checkout-seats', name: 'Pending checkout seats',
     } });
@@ -67,6 +68,7 @@ describe.skipIf(!process.env.DATABASE_URL)('pending Stripe fixed-seat capacity',
 
   function checkout(id: string, quantity: number) {
     return {
+      billingModeTeamId: teamId, billingModeRevision: 1,
       id, accountId, appKeyId, customerId, serviceId, tariffId,
       tariffSource: 'SERVICE_DEFAULT' as const, orgId, teamId: null,
       scope: 'ORGANISATION' as const, scopeKey: orgId, actorJti: id,

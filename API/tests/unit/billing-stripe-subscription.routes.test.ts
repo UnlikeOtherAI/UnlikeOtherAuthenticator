@@ -100,6 +100,18 @@ async function withApp(
 }
 
 describe('Stripe customer subscription routes', () => {
+  it.each([undefined, 'original-displayed-binding'])('preserves the original Portal binding without upgrading an unbound click (%s)', async billingContext => {
+    await withApp(async app => {
+      const response = await app.inject({ method: 'POST', url: '/billing/v1/stripe/portal-session',
+        headers: { 'x-uoa-app-key': 'uoa_app_product-key', 'x-uoa-actor': 'signed-actor' },
+        payload: { ...subject, return_url: 'https://app.nessie.works/billing',
+          ...(billingContext ? { billing_context: billingContext } : {}) } });
+      expect(response.statusCode).toBe(201);
+      expect(subscriptionService.createStripePortalSession).toHaveBeenCalledWith(expect.objectContaining({
+        request: expect.objectContaining({ billingContext, returnUrl: 'https://app.nessie.works/billing' }),
+      }));
+    });
+  });
   it('binds the product app key and actor to a no-store subscription summary', async () => {
     await withApp(async (app) => {
       const response = await app.inject({

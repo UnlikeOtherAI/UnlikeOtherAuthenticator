@@ -62,6 +62,7 @@ describe.skipIf(!enabled)('prepaid finalized cycle late receipt', () => {
       slug: `prepaid-${randomUUID().slice(0, 10)}`,
     } });
     ids.team = team.id;
+    await db.prisma.billingTeamMode.create({ data: { teamId: team.id, sandbox: true, revision: 1 } });
     const service = await db.prisma.billingService.create({ data: {
       identifier: `prepaid-cycle-${randomUUID()}`, name: 'Prepaid service',
       tariffHistoryFromMonth: '2026-01',

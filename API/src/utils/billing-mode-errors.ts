@@ -10,6 +10,7 @@ export function billingModeDatabaseRefusal(error: unknown): AppError | null {
   let message: string | undefined;
   if (error instanceof Prisma.PrismaClientKnownRequestError && error.meta?.code === 'P0001') {
     message = typeof error.meta.message === 'string' ? error.meta.message : undefined;
+    message = message?.replace(/^ERROR:\s*/, '').split('\n')[0]?.trim();
   } else if (error instanceof Prisma.PrismaClientUnknownRequestError) {
     message = /PostgresError \{ code: "P0001", message: "([A-Z_]+)"/.exec(error.message)?.[1];
   }

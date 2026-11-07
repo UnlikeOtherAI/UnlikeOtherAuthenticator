@@ -23,6 +23,8 @@ export async function seedSmsFinance(prisma: PrismaClient, createNumber = true):
       VALUES (${id.org},'sms.example.test','SMS','sms',${id.user},CURRENT_TIMESTAMP)`);
     await tx.$executeRaw(Prisma.sql`INSERT INTO teams(id,org_id,name,slug,updated_at)
       VALUES (${id.team},${id.org},'SMS','sms',CURRENT_TIMESTAMP)`);
+    // Explicit sandbox policy for this synthetic TEST wallet.
+    await tx.$executeRaw(Prisma.sql`INSERT INTO billing_team_modes(team_id,sandbox,revision,updated_at) VALUES (${id.team},true,1,CURRENT_TIMESTAMP - INTERVAL '2 minutes')`);
     await tx.$executeRaw(Prisma.sql`INSERT INTO org_members(id,org_id,user_id,domain,role,updated_at)
       VALUES ('sms-org-member',${id.org},${id.user},'sms.example.test','owner',CURRENT_TIMESTAMP)`);
     await tx.$executeRaw(Prisma.sql`INSERT INTO team_members(id,team_id,user_id,team_role,updated_at)

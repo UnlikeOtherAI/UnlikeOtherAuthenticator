@@ -89,6 +89,25 @@ async function withApp(
 const headers = { 'x-uoa-app-key': 'uoa_app_key', 'x-uoa-actor': 'signed-actor' };
 
 describe('billing credit funding action routes', () => {
+  it.each([undefined, 'original-displayed-binding'])('relays the original context through all credit mutations (%s)', async billingContext => {
+    const cases = [
+      ['/billing/v1/credits/top-up-checkout', { offer_id: 'offer_20k' }, topUpService.createBillingCreditTopUpCheckout],
+      ['/billing/v1/credits/auto-top-up/setup', { option_id: 'option_1' }, setupService.createBillingCreditAutoTopUpSetup],
+      ['/billing/v1/credits/auto-top-up/update', { option_id: 'option_1' }, consentService.updateBillingCreditAutoTopUp],
+      ['/billing/v1/credits/auto-top-up/disable', {}, consentService.disableBillingCreditAutoTopUp],
+      ['/billing/v1/credits/auto-top-up/recover', {}, recoveryService.recoverBillingCreditAutoTopUp],
+    ] as const;
+    await withApp(async app => {
+      for (const [url, selector, handler] of cases) {
+        const response = await app.inject({ method: 'POST', url, headers,
+          payload: { ...subject, ...selector, ...(billingContext ? { billing_context: billingContext } : {}) } });
+        expect(response.statusCode).toBeLessThan(300);
+        expect(handler).toHaveBeenCalledWith(expect.objectContaining({
+          request: expect.objectContaining({ ...requestSubject, billingContext }),
+        }));
+      }
+    });
+  });
   it('passes negotiated Czech separately from the unchanged purchase body', async () => {
     topUpService.createBillingCreditTopUpCheckout.mockResolvedValue({
       redirect_url: 'https://checkout.stripe.com/c/pay/top-up', purchase_id: 'purchase_1',

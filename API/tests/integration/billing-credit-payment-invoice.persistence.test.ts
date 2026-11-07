@@ -145,6 +145,7 @@ describe.skipIf(!process.env.DATABASE_URL)('prepaid payment invoice PostgreSQL s
     await seedFundingRace(handle.prisma);
     await handle.prisma.billingCreditTopUpCheckout.create({
       data: {
+      billingModeTeamId: ids.team, billingModeRevision: 1,
         id: manualId,
         accountId: ids.account,
         creditAccountId: ids.creditAccount,
@@ -169,6 +170,7 @@ describe.skipIf(!process.env.DATABASE_URL)('prepaid payment invoice PostgreSQL s
         name: 'Second funding team', slug: `second-${prefix}`,
       },
     });
+    await handle.prisma.billingTeamMode.create({ data: { teamId: second.team, sandbox: true, revision: 1 } });
     await handle.prisma.teamMember.create({
       data: {
         id: `member_invoice_${prefix}`,

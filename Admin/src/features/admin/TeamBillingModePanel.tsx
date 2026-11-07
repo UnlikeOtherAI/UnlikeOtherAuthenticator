@@ -25,6 +25,8 @@ export function TeamBillingModePanel({ organisationId, teamId }: { organisationI
       {query.isError ? <div role="alert" className="text-sm text-red-600">{copy.loadError}{' '}
         <Button onClick={() => void query.refetch()}>{copy.retry}</Button></div> : null}
       {data ? <>
+        {data.adopting_sandbox_history ? <p className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          {copy.adoption}</p> : null}
         <form className="flex flex-wrap items-end gap-3" onSubmit={(event) => {
           event.preventDefault();
           mutation.mutate({ mode: selected, revision: data.revision }, { onSuccess: () => setSelection(null) });

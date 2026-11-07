@@ -2,6 +2,7 @@ const en = {
   tab: 'Billing', doorway: 'Choose a team to manage sandbox billing', defaultMode: 'Teams use live billing by default.',
   title: 'Team billing mode', live: 'Live billing', sandbox: 'Sandbox billing',
   description: 'Teams use live billing unless a platform administrator selects sandbox billing here.',
+  adoption: 'This team has existing sandbox billing history. Selecting sandbox preserves its balance, subscriptions, payment permissions and pending recovery in their original account. Monthly usage for this change month remains pending reconciliation.',
   effect: 'This applies across every product. Existing balances, customers and payment records stay in their original mode; no funds are transferred.',
   label: 'Billing mode', save: 'Save billing mode', saving: 'Saving…', saved: 'Billing mode saved.',
   loading: 'Loading billing mode…', loadError: 'Could not load billing mode.', retry: 'Retry',
@@ -92,11 +93,19 @@ const monthCopy: Record<string, string> = {
   fr: 'Les totaux du mois du changement restent en attente de rapprochement.',
   it: 'I totali del mese della modifica restano in sospeso fino alla riconciliazione.',
 };
+const adoptionCopy: Record<string, string> = {
+  cs: 'Tým má historii testovacího účtování. Volba testovacího režimu zachová zůstatek, předplatná, platební souhlasy a nedokončené obnovy na původním účtu. Spotřeba za měsíc změny čeká na vyúčtování.',
+  de: 'Dieses Team hat eine bisherige Testabrechnung. Die Auswahl des Testmodus erhält Guthaben, Abonnements, Zahlungsvollmachten und ausstehende Wiederherstellungen im ursprünglichen Konto. Die Nutzung des Änderungsmonats wartet auf den Abgleich.',
+  es: 'Este equipo tiene historial de facturación de prueba. Seleccionar el modo de prueba conserva su saldo, suscripciones, permisos de pago y recuperación pendiente en la cuenta original. El uso del mes del cambio queda pendiente de conciliación.',
+  fr: 'Cette équipe possède un historique de facturation de test. Choisir le mode de test conserve le solde, les abonnements, les autorisations de paiement et les reprises en attente sur leur compte d’origine. La consommation du mois du changement reste à rapprocher.',
+  it: 'Questo team ha una cronologia di fatturazione di prova. Selezionando la modalità di prova si conservano saldo, abbonamenti, autorizzazioni di pagamento e recuperi in sospeso nel conto originale. L’utilizzo del mese della modifica resta da riconciliare.',
+};
 export function billingTeamModeCopy(locale = navigator.language): Copy {
   const language = locale.split('-')[0] ?? 'en';
   const labels = blockerTranslations[language];
   const blockers = labels ? Object.fromEntries(Object.keys(en.blockers).map((key, index) =>
     [key, labels[index] ?? en.blockers[key] ?? key])) : en.blockers;
   const copy = { ...en, ...translations[language], blockers };
-  return { ...copy, effect: `${copy.effect} ${monthCopy[language] ?? monthCopy.en}` };
+  return { ...copy, adoption: adoptionCopy[language] ?? en.adoption,
+    effect: `${copy.effect} ${monthCopy[language] ?? monthCopy.en}` };
 }

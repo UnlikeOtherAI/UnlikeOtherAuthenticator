@@ -83,6 +83,14 @@ export async function assertOrganisationBillingMode(
 
 export type BillingModeBlocker = { code: string; count: number };
 
+async function canAdoptSandbox(subject: { organisationId: string; teamId: string },
+  accountId: string | undefined, prisma: Pick<Prisma.TransactionClient, '$queryRaw'>): Promise<boolean> {
+  if (!accountId) return false;
+  const rows = await prisma.$queryRaw<Array<{ available: boolean }>>(Prisma.sql`
+    SELECT billing_team_sandbox_adoption_available(${subject.organisationId}, ${subject.teamId}, ${accountId}) AS available`);
+  return rows[0]?.available === true;
+}
+
 export async function readTeamBillingMode(
   subject: { organisationId: string; teamId: string },
   prisma: PrismaClient = getAdminPrisma(),
@@ -90,8 +98,11 @@ export async function readTeamBillingMode(
   const selection = await resolveTeamBillingMode(subject, prisma);
   const blockers = await prisma.$queryRaw<BillingModeBlocker[]>(Prisma.sql`
     SELECT code, count::integer FROM billing_team_mode_blockers(${subject.organisationId}, ${subject.teamId})`);
+  const adoption = blockers.length > 0 && selection.revision === 0 && await canAdoptSandbox(
+    subject, getEnv().STRIPE_SANDBOX_ACCOUNT_ID, prisma);
   return { team_id: subject.teamId, organisation_id: subject.organisationId,
-    mode: selection.mode, revision: selection.revision, blockers };
+    mode: selection.mode, revision: selection.revision, blockers: adoption ? [] : blockers,
+    ...(adoption ? { adopting_sandbox_history: true as const } : {}) };
 }
 
 export async function setTeamBillingMode(params: {
@@ -108,14 +119,19 @@ export async function setTeamBillingMode(params: {
     if (current.mode === params.mode) return;
     const blockers = await tx.$queryRaw<BillingModeBlocker[]>(Prisma.sql`
       SELECT code, count::integer FROM billing_team_mode_blockers(${params.organisationId}, ${params.teamId})`);
-    if (blockers.length) throw new AppError('BAD_REQUEST', 409, 'BILLING_TEAM_MODE_BLOCKED');
+    const sandboxAccountId = getEnv().STRIPE_SANDBOX_ACCOUNT_ID;
+    const adoption = blockers.length > 0 && current.revision === 0 && params.mode === 'sandbox'
+      && await canAdoptSandbox(params, sandboxAccountId, tx);
+    if (blockers.length && !adoption) throw new AppError('BAD_REQUEST', 409, 'BILLING_TEAM_MODE_BLOCKED');
     await tx.billingTeamMode.upsert({ where: { teamId: params.teamId },
-      create: { teamId: params.teamId, sandbox: params.mode === 'sandbox', revision: 1 },
+      create: { teamId: params.teamId, sandbox: params.mode === 'sandbox', revision: 1,
+        ...(adoption ? { adoptedStripeAccountId: sandboxAccountId } : {}) },
       update: { sandbox: params.mode === 'sandbox', revision: { increment: 1 }, updatedAt: new Date() } });
     await tx.adminAuditLog.create({ data: { actorEmail: params.actor.email,
       action: 'billing.team_mode_changed', metadata: { organisation_id: params.organisationId,
         team_id: params.teamId, previous_mode: current.mode, mode: params.mode,
-        revision: current.revision + 1, actor_user_id: params.actor.userId ?? null } } });
+        revision: current.revision + 1, actor_user_id: params.actor.userId ?? null,
+        ...(adoption ? { adopted_stripe_account_id: sandboxAccountId, preserved_test_history: true } : {}) } } });
   });
   return readTeamBillingMode(params, prisma);
 }

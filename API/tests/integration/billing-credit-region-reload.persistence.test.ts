@@ -47,6 +47,7 @@ async function seed(prisma: PrismaClient) {
         slug: ids.org, ownerId: user } });
       await tx.orgMember.create({ data: { orgId: ids.org, userId: user, role: 'owner', status: 'ACTIVE' } });
       await tx.team.create({ data: { id: ids.team, orgId: ids.org, name: ids.team, slug: ids.team } });
+      await tx.billingTeamMode.create({ data: { teamId: ids.team, sandbox: true, revision: 1 } });
       await tx.teamMember.create({ data: { teamId: ids.team, userId: user, teamRole: 'owner', status: 'ACTIVE' } });
       await tx.billingOrganisationRegion.create({ data: { orgId: ids.org, region: regions[currency].region, currency,
         setByUserId: user, usdPerUnit: regions[currency].rate } });

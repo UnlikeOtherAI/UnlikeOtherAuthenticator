@@ -31,6 +31,23 @@ An operator cannot bypass these blockers by selecting a different product.
 Database capture guards serialize new effects against operator changes, check
 the captured revision and reject competing historical work in another account.
 
+The sole exception is an **explicit first Sandbox selection** for exclusively
+TEST financial history on the configured sandbox account. It can retain a
+positive historical TEST balance, active consent, existing subscription and
+pending TEST recovery without changing any financial row or provider object.
+Eligibility is rechecked by the database trigger under the organisation lock;
+the UI precheck is advisory. Policy, immutable event and audit capture the adopted
+physical account ID. The exception is unavailable after the first policy exists.
+Actual team/organisation-scoped LIVE history, including terminal checkouts and
+canceled subscriptions, another TEST account tuple, active organisation billing
+responsibility, recorded current-month cumulative usage or an active unbound
+SMS/Voice grant/unexpired quote refuses adoption. Global LIVE account/catalog
+existence and an empty dormant customer/wallet do not count as financial history.
+Competing captures and new grants/quotes take the same organisation lock, so
+eligibility cannot race a committed LIVE capture. Old displayed new-work contexts
+become stale. No untouched/default LIVE team is adopted automatically; its
+historical funds and any eventual LIVE migration require an explicit decision.
+
 Organisation-funded accounts and organisation subscriptions require one mode
 across all active teams. Mixed teams cannot spend one shared organisation wallet.
 An active organisation billing responsibility blocks team mode changes; release
@@ -82,10 +99,27 @@ backed cutover plan; the installation timestamp is not proof of later traffic.
 
 Ledger monthly totals have no Stripe account/mode dimension. UOA cannot infer a
 split. Cumulative credit settlement and Stripe usage export hold the entire UTC
-month containing installation, and any month with a mid-month mode change.
+month containing installation, and any month containing a mode change. Both
+intervals include an instant exactly at UTC month-start: `[start, next start)`.
 Periods before installation require the original captured source to predate the
 period end; a new live account cannot acquire an old month. Later full months use
-the mode history at month start and refuse another account/mode.
+the mode history at month start. Mode history proves mode, not the configured
+provider account identity. Before and after cutover, collection refuses another
+account's credit settlement or Stripe export reservation for the same overlapping
+organisation/team/month. An organisation/month advisory transaction lock is
+taken before payer/subscription row locks, serializing competing accounts.
+Each collector also updates a UOA-owned organisation/month lock row. This forces
+an already-started Serializable credit transaction to retry after a winning
+default-isolation export/collector commits; waiting on an advisory lock alone
+would leave its old snapshot intact. These control rows contain no money or
+provider objects and are not an allocation or reconciliation authority.
+
+Replacing `STRIPE_LIVE_ACCOUNT_ID` or `STRIPE_SANDBOX_ACCOUNT_ID` is unsupported
+by this rollout and requires a new reviewed account cutover/history plan. It must
+not be treated as credential rotation or as proof that existing monthly usage
+belongs to the replacement account. Rotating a key within the same verified
+physical account/mode is supported. Captured old objects still require their
+original tuple's credentials; no account replacement fallback is provided.
 
 The hold codes are `BILLING_MODE_TRANSITION_RECONCILIATION_REQUIRED`,
 `BILLING_MODE_HISTORY_RECONCILIATION_REQUIRED` and
@@ -96,6 +130,13 @@ that cannot represent pending status receive the existing reconciliation refusal
 Captured prepaid reservations, exact provider receipts, refunds/revocation,
 corrective webhooks and already captured payment recovery continue independently;
 they do not acquire an ambient LIVE binding.
+
+Customer invoice lists filter prepaid cash and Stripe invoices by the selected
+team's named physical account **and** mode. A missing named account configuration
+refuses the list; mode alone is not an account binding. Known historical invoice
+detail/download IDs continue through their original captured source and current
+scope authorization. Manual invoice scope and legal-document isolation remain
+independent from Stripe mode. Historical invoices are never copied into LIVE.
 
 **Release procedure:** a later complete UTC month resumes automatically if its
 history is uniform and its original source exists within that month. The held
@@ -156,6 +197,17 @@ and metadata include account/mode. This static CLI does not pre-provision them.
 Verify restricted-key Products/Prices/Meters write permissions and review tariff
 terms before the first LIVE checkout. TEST price IDs never substitute for LIVE.
 
+Operator preflight on 7 November 2026 (parent-owned, no DB apply): LIVE canonical
+remote validation passed and proposed 17 DB creates (one account, 15 credit
+catalogs and one privacy catalog), zero retirements, 135 no-ops and nine skips.
+TEST proposed zero creates/retirements, 152 no-ops and nine skips. Uncovered
+DeepSignal/Fermentea and unregistered Docgen remain preserved. The LIVE remote
+credit product is `prod_VaOyNWuxiN0ycJ`, privacy `prod_VaOyTqb1RIfUzM`; these are
+not substitutes for transactional DB binding. Both stored keys passed GBP/EUR
+FX quote preflight with `2025-07-30.preview`, `lock_duration=none`. Readiness
+evidence is operator-owned under `billing-mode-20261107/operations` and does not
+authorize activation or payment writes.
+
 Both named accounts are `acct_1Sn2VfGY1l8e0vu2`; LIVE is livemode=true and sandbox
 is the main account's TEST mode, livemode=false. General sandbox
 `acct_1Sn2VoGer0cNi5R2` is not configured.
@@ -199,7 +251,10 @@ Activation owner (parent/operator), after final code and reconciliation review:
    resource-scoped Secret Manager accessor access. Never print key values.
 2. Update the readiness job from its legacy-TEST-only assumption to check both
    named tuples independently. Review account-specific catalog readiness and
-   existing financial blockers; never copy TEST catalog objects into LIVE.
+   existing financial blockers; apply the reviewed canonical LIVE DB binding
+   plan with the guarded command above, then require a no-op preview. Never copy
+   TEST catalog objects into LIVE. Review historical TEST adoption candidates
+   explicitly; the deployment must not select them automatically.
 3. Deploy the consumer pinned to protocol 5.9.0 with original displayed-context
    forwarding and 400/409 recovery. Test old unbound clicks remain unbound.
 4. Set the four deployment variables above only after approval. Merge/deploy UOA

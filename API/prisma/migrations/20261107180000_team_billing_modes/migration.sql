@@ -5,6 +5,7 @@ SET LOCAL statement_timeout = '120s';
 CREATE TABLE billing_team_modes (
   team_id text PRIMARY KEY REFERENCES teams(id) ON DELETE RESTRICT,
   sandbox boolean NOT NULL DEFAULT false,
+  adopted_stripe_account_id text,
   revision integer NOT NULL DEFAULT 1 CHECK (revision > 0),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
@@ -15,9 +16,17 @@ CREATE POLICY billing_team_modes_deny ON billing_team_modes FOR ALL USING (false
 CREATE TABLE billing_mode_cutover (id integer PRIMARY KEY CHECK (id = 1),
   activated_at timestamptz(3) NOT NULL DEFAULT clock_timestamp());
 INSERT INTO billing_mode_cutover(id) VALUES (1);
+-- A real row write forces a stale Serializable snapshot to retry after waiting
+-- on another collector; an advisory lock alone cannot refresh that snapshot.
+CREATE TABLE billing_mode_period_locks (org_id text NOT NULL REFERENCES organisations(id) ON DELETE RESTRICT,
+  billing_month char(7) NOT NULL, generation bigint NOT NULL DEFAULT 1, PRIMARY KEY(org_id,billing_month));
+ALTER TABLE billing_mode_period_locks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE billing_mode_period_locks FORCE ROW LEVEL SECURITY;
+CREATE POLICY billing_mode_period_locks_deny ON billing_mode_period_locks FOR ALL USING (false) WITH CHECK (false);
 CREATE TABLE billing_team_mode_events (id text PRIMARY KEY,
   team_id text NOT NULL REFERENCES teams(id) ON DELETE RESTRICT,
   revision integer NOT NULL CHECK (revision > 0), sandbox boolean NOT NULL,
+  adopted_stripe_account_id text,
   effective_at timestamptz(3) NOT NULL DEFAULT clock_timestamp(), UNIQUE(team_id, revision));
 CREATE INDEX billing_team_mode_events_time ON billing_team_mode_events(team_id, effective_at);
 ALTER TABLE billing_mode_cutover ENABLE ROW LEVEL SECURITY;
@@ -26,6 +35,9 @@ ALTER TABLE billing_team_mode_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE billing_team_mode_events FORCE ROW LEVEL SECURITY;
 CREATE POLICY billing_mode_cutover_deny ON billing_mode_cutover FOR ALL USING (false) WITH CHECK (false);
 CREATE POLICY billing_team_mode_events_deny ON billing_team_mode_events FOR ALL USING (false) WITH CHECK (false);
+REVOKE ALL ON billing_team_modes, billing_team_mode_events, billing_mode_cutover, billing_mode_period_locks FROM PUBLIC, uoa_app;
+GRANT SELECT, INSERT, UPDATE ON billing_team_modes, billing_mode_period_locks TO uoa_admin;
+GRANT SELECT, INSERT ON billing_team_mode_events, billing_mode_cutover TO uoa_admin;
 CREATE FUNCTION guard_billing_mode_evidence() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN RAISE EXCEPTION 'BILLING_MODE_EVIDENCE_IMMUTABLE'; END; $$;
 CREATE TRIGGER billing_mode_cutover_immutable BEFORE UPDATE OR DELETE ON billing_mode_cutover
@@ -94,11 +106,11 @@ RETURNS TABLE(code text, count bigint) LANGUAGE sql STABLE AS $$
     UNION ALL SELECT 'provider_reservation', count(*) FROM billing_prepaid_reservations
       WHERE org_id = p_org AND team_id = p_team AND status = 'ACTIVE'
     UNION ALL SELECT 'sms_reservation', count(*) FROM billing_sms_reservations
-      WHERE org_id = p_org AND team_id = p_team AND state IN ('reserved', 'dispatched', 'needs_review')
+      WHERE org_id = p_org AND team_id = p_team AND state IN ('reserved', 'dispatching', 'uncertain', 'reconciliation')
     UNION ALL SELECT 'sms_standing_funding', count(*) FROM billing_sms_standing_holds
       WHERE org_id = p_org AND team_id = p_team AND state = 'active'
     UNION ALL SELECT 'voice_reservation', count(*) FROM billing_voice_reservations
-      WHERE org_id = p_org AND team_id = p_team AND state IN ('reserved', 'dispatched', 'needs_review')
+      WHERE org_id = p_org AND team_id = p_team AND state IN ('reserved', 'dispatching', 'uncertain', 'reconciliation')
     UNION ALL SELECT 'funding_authorization', count(*) FROM billing_voice_grants
       WHERE org_id = p_org AND team_id = p_team AND revoked_at IS NULL
     UNION ALL SELECT 'funding_authorization', count(*) FROM billing_sms_dispatch_grants
@@ -111,11 +123,53 @@ RETURNS TABLE(code text, count bigint) LANGUAGE sql STABLE AS $$
     UNION ALL SELECT 'monthly_usage', count(*) FROM billing_paid_usage_liabilities
       WHERE org_id = p_org AND team_id = p_team
         AND billing_month = to_char(current_timestamp AT TIME ZONE 'UTC', 'YYYY-MM')
+    UNION ALL SELECT 'monthly_usage', count(*) FROM billing_credit_portfolio_snapshots
+      WHERE org_id = p_org AND team_id = p_team
+        AND billing_month = to_char(current_timestamp AT TIME ZONE 'UTC', 'YYYY-MM')
     UNION ALL SELECT 'provider_reservation', count(*) FROM billing_ledger_dispatch_decisions d
       WHERE d.org_id = p_org AND d.team_id = p_team AND d.status = 'PAY_AS_YOU_GO'
         AND NOT EXISTS (SELECT 1 FROM billing_ledger_dispatch_releases r WHERE r.dispatch_id = d.dispatch_id)
         AND NOT EXISTS (SELECT 1 FROM billing_paid_usage_liabilities l WHERE l.dispatch_id = d.dispatch_id)
   ) SELECT code, sum(count)::bigint FROM blockers WHERE count > 0 GROUP BY code;
+$$;
+
+-- First explicit sandbox policy may preserve an exclusively TEST legacy wallet.
+-- Global provider/catalog/customer existence is not financial history. The
+-- caller supplies the configured sandbox account ID; the committed policy and
+-- append-only event retain that identity as evidence, never credential contents.
+CREATE FUNCTION billing_team_sandbox_adoption_available(p_org text, p_team text, p_account text)
+RETURNS boolean LANGUAGE sql STABLE AS $$
+  WITH credits AS (
+    SELECT c.id, c.account_id, c.balance_microcredits, c.auto_top_up_consent_revision_id
+    FROM billing_credit_accounts c WHERE c.org_id = p_org AND (c.team_id = p_team OR c.team_id IS NULL)
+  ), credit_history AS (
+    SELECT c.account_id FROM credits c WHERE c.balance_microcredits <> 0
+      OR c.auto_top_up_consent_revision_id IS NOT NULL
+      OR EXISTS (SELECT 1 FROM billing_credit_entries e WHERE e.credit_account_id = c.id)
+      OR EXISTS (SELECT 1 FROM billing_credit_auto_top_up_consent_revisions e WHERE e.credit_account_id = c.id)
+      OR EXISTS (SELECT 1 FROM billing_credit_top_up_checkouts e WHERE e.credit_account_id = c.id)
+      OR EXISTS (SELECT 1 FROM billing_credit_setup_checkouts e WHERE e.credit_account_id = c.id)
+      OR EXISTS (SELECT 1 FROM billing_credit_auto_top_up_attempts e WHERE e.credit_account_id = c.id)
+      OR EXISTS (SELECT 1 FROM billing_prepaid_reservations e WHERE e.credit_account_id = c.id)
+      OR EXISTS (SELECT 1 FROM billing_sms_reservations e WHERE e.credit_account_id = c.id)
+      OR EXISTS (SELECT 1 FROM billing_sms_standing_holds e WHERE e.credit_account_id = c.id)
+      OR EXISTS (SELECT 1 FROM billing_voice_reservations e WHERE e.credit_account_id = c.id)
+      OR EXISTS (SELECT 1 FROM billing_credit_usage_settlements e WHERE e.credit_account_id = c.id)
+      OR EXISTS (SELECT 1 FROM billing_credit_portfolio_snapshots e WHERE e.credit_account_id = c.id)
+  ), history AS (
+    SELECT account_id FROM credit_history
+    UNION SELECT account_id FROM billing_stripe_subscriptions WHERE org_id = p_org AND (team_id = p_team OR team_id IS NULL)
+    UNION SELECT account_id FROM billing_stripe_checkout_sessions WHERE org_id = p_org AND (team_id = p_team OR team_id IS NULL)
+    UNION SELECT account_id FROM billing_recurring_addon_subscriptions WHERE org_id = p_org AND (team_id = p_team OR team_id IS NULL)
+    UNION SELECT account_id FROM billing_recurring_addon_checkouts WHERE org_id = p_org AND (team_id = p_team OR team_id IS NULL)
+  ) SELECT p_account IS NOT NULL AND EXISTS (SELECT 1 FROM history)
+    AND EXISTS (SELECT 1 FROM teams t JOIN organisations o ON o.id = t.org_id
+      WHERE t.id = p_team AND t.org_id = p_org AND t.lifecycle_status = 'ACTIVE' AND o.lifecycle_status = 'ACTIVE')
+    AND NOT EXISTS (SELECT 1 FROM billing_team_modes WHERE team_id = p_team)
+    AND NOT EXISTS (SELECT 1 FROM history h JOIN billing_stripe_accounts a ON a.id = h.account_id
+      WHERE a.livemode OR a.stripe_account_id <> p_account)
+    AND NOT EXISTS (SELECT 1 FROM billing_team_mode_blockers(p_org,p_team)
+      WHERE code IN ('organisation_billing','monthly_usage','funding_authorization'));
 $$;
 
 CREATE FUNCTION guard_billing_team_mode_change() RETURNS trigger LANGUAGE plpgsql AS $$
@@ -127,10 +181,19 @@ BEGIN
   IF TG_OP = 'UPDATE' AND (NEW.team_id <> OLD.team_id OR NEW.revision <> OLD.revision + 1) THEN
     RAISE EXCEPTION 'BILLING_TEAM_MODE_REVISION_INVALID';
   END IF;
+  IF TG_OP = 'UPDATE' AND NEW.adopted_stripe_account_id IS DISTINCT FROM OLD.adopted_stripe_account_id THEN
+    RAISE EXCEPTION 'BILLING_MODE_EVIDENCE_IMMUTABLE';
+  END IF;
   IF TG_OP = 'INSERT' AND NEW.revision <> 1 THEN
     RAISE EXCEPTION 'BILLING_TEAM_MODE_REVISION_INVALID';
   END IF;
-  IF EXISTS (SELECT 1 FROM billing_team_mode_blockers(v_org, NEW.team_id)) THEN
+  IF TG_OP = 'INSERT' AND NEW.adopted_stripe_account_id IS NOT NULL AND
+    (NOT NEW.sandbox OR NOT billing_team_sandbox_adoption_available(v_org,NEW.team_id,NEW.adopted_stripe_account_id)) THEN
+    RAISE EXCEPTION 'BILLING_TEAM_MODE_BLOCKED';
+  END IF;
+  IF EXISTS (SELECT 1 FROM billing_team_mode_blockers(v_org, NEW.team_id)) AND
+    NOT (TG_OP = 'INSERT' AND NEW.sandbox AND NEW.adopted_stripe_account_id IS NOT NULL AND
+      billing_team_sandbox_adoption_available(v_org,NEW.team_id,NEW.adopted_stripe_account_id)) THEN
     RAISE EXCEPTION 'BILLING_TEAM_MODE_BLOCKED';
   END IF;
   RETURN NEW;
@@ -140,8 +203,9 @@ CREATE TRIGGER billing_team_modes_guard BEFORE INSERT OR UPDATE ON billing_team_
   FOR EACH ROW EXECUTE FUNCTION guard_billing_team_mode_change();
 CREATE FUNCTION record_billing_team_mode_event() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
-  INSERT INTO billing_team_mode_events(id, team_id, revision, sandbox)
-    VALUES ('billing-mode:' || NEW.team_id || ':' || NEW.revision, NEW.team_id, NEW.revision, NEW.sandbox);
+  INSERT INTO billing_team_mode_events(id, team_id, revision, sandbox, adopted_stripe_account_id)
+    VALUES ('billing-mode:' || NEW.team_id || ':' || NEW.revision, NEW.team_id, NEW.revision, NEW.sandbox,
+      CASE WHEN TG_OP = 'INSERT' THEN NEW.adopted_stripe_account_id ELSE NULL END);
   RETURN NEW;
 END; $$;
 
@@ -161,6 +225,19 @@ CREATE TRIGGER billing_org_mode_guard BEFORE INSERT OR UPDATE ON billing_org_res
 CREATE TRIGGER billing_team_modes_history AFTER INSERT OR UPDATE ON billing_team_modes
   FOR EACH ROW EXECUTE FUNCTION record_billing_team_mode_event();
 
+-- Unbound grants/quotes must also serialize with the adoption eligibility check.
+CREATE FUNCTION lock_billing_mode_authorization() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  PERFORM id FROM organisations WHERE id = NEW.org_id FOR SHARE;
+  RETURN NEW;
+END; $$;
+CREATE TRIGGER billing_voice_mode_authorization BEFORE INSERT ON billing_voice_grants
+  FOR EACH ROW EXECUTE FUNCTION lock_billing_mode_authorization();
+CREATE TRIGGER billing_sms_mode_authorization BEFORE INSERT ON billing_sms_dispatch_grants
+  FOR EACH ROW EXECUTE FUNCTION lock_billing_mode_authorization();
+CREATE TRIGGER billing_sms_mode_quote BEFORE INSERT ON billing_sms_quotes
+  FOR EACH ROW EXECUTE FUNCTION lock_billing_mode_authorization();
+
 -- A Ledger month has no account/mode dimension. Never replay a cumulative
 -- total into the newly selected account, or guess an allocation at a cutover.
 CREATE FUNCTION assert_billing_period_mode(p_account text, p_org text, p_team text,
@@ -168,15 +245,32 @@ CREATE FUNCTION assert_billing_period_mode(p_account text, p_org text, p_team te
 DECLARE v_start timestamptz; v_end timestamptz; v_cutover timestamptz; v_live boolean;
 BEGIN
   v_start := (p_month || '-01')::date::timestamp AT TIME ZONE 'UTC';
-  v_end := v_start + interval '1 month';
+  v_end := ((p_month || '-01')::date + interval '1 month') AT TIME ZONE 'UTC';
   SELECT activated_at INTO STRICT v_cutover FROM billing_mode_cutover WHERE id = 1;
   SELECT livemode INTO STRICT v_live FROM billing_stripe_accounts WHERE id = p_account;
+  -- All collection paths take this before payer/subscription row locks. It also
+  -- serializes different provider accounts and overlapping organisation scopes.
+  PERFORM pg_advisory_xact_lock(hashtextextended('uoa-billing-month:' || p_org || ':' || p_month, 0));
+  INSERT INTO billing_mode_period_locks(org_id,billing_month) VALUES(p_org,p_month)
+    ON CONFLICT(org_id,billing_month) DO UPDATE SET generation = billing_mode_period_locks.generation + 1;
   PERFORM id FROM organisations WHERE id = p_org FOR SHARE;
-  IF v_cutover > v_start AND v_cutover < v_end OR EXISTS (
+  IF v_cutover >= v_start AND v_cutover < v_end OR EXISTS (
     SELECT 1 FROM billing_team_mode_events e JOIN teams t ON t.id = e.team_id
     WHERE t.org_id = p_org AND (p_team IS NULL OR t.id = p_team)
-      AND e.effective_at > v_start AND e.effective_at < v_end
+      AND e.effective_at >= v_start AND e.effective_at < v_end
   ) THEN RAISE EXCEPTION 'BILLING_MODE_TRANSITION_RECONCILIATION_REQUIRED'; END IF;
+  -- Account identity is independent from mode. Never collect/export the same
+  -- scope/month through a second account, including another LIVE account.
+  IF EXISTS (SELECT 1 FROM billing_credit_usage_settlements u
+    JOIN billing_credit_accounts c ON c.id = u.credit_account_id
+    WHERE c.org_id = p_org AND (p_team IS NULL OR u.team_id IS NULL OR u.team_id = p_team)
+      AND u.billing_month = p_month AND u.account_id <> p_account)
+    OR EXISTS (SELECT 1 FROM billing_stripe_usage_exports e
+      JOIN billing_stripe_subscriptions s ON s.id = e.subscription_id
+      WHERE s.org_id = p_org AND (p_team IS NULL OR s.team_id IS NULL OR s.team_id = p_team)
+        AND e.billing_month = p_month AND e.account_id <> p_account) THEN
+    RAISE EXCEPTION 'BILLING_MODE_HISTORICAL_ACCOUNT_MISMATCH';
+  END IF;
   IF p_source_created IS NULL OR p_source_created >= v_end THEN
     RAISE EXCEPTION 'BILLING_MODE_HISTORY_RECONCILIATION_REQUIRED';
   END IF;
@@ -193,12 +287,6 @@ BEGIN
       WHERE e.account_id = p_account AND e.billing_month = p_month AND s.org_id = p_org
         AND (p_team IS NULL OR s.team_id = p_team)) THEN
       RAISE EXCEPTION 'BILLING_MODE_HISTORY_RECONCILIATION_REQUIRED';
-    END IF;
-    IF EXISTS (SELECT 1 FROM billing_credit_usage_settlements u
-      JOIN billing_credit_accounts c ON c.id = u.credit_account_id
-      WHERE c.org_id = p_org AND (p_team IS NULL OR u.team_id = p_team)
-        AND u.billing_month = p_month AND u.account_id <> p_account) THEN
-      RAISE EXCEPTION 'BILLING_MODE_HISTORICAL_ACCOUNT_MISMATCH';
     END IF;
     RETURN;
   END IF;

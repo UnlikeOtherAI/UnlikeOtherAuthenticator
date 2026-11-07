@@ -11,7 +11,7 @@ describe('team billing mode operator copy', () => {
     'translates the doorway, save/recovery controls and every financial blocker for %s', locale => {
       const copy = billingTeamModeCopy(locale);
       for (const key of ['tab', 'doorway', 'defaultMode', 'title', 'live', 'sandbox', 'effect',
-        'save', 'saved', 'retry', 'loadError', 'saveError', 'blocked'] as const) {
+        'save', 'saved', 'retry', 'loadError', 'saveError', 'blocked', 'adoption'] as const) {
         expect(copy[key]).toBeTruthy();
         expect(copy[key]).not.toBe(english[key]);
       }

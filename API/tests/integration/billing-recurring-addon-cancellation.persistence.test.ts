@@ -162,6 +162,7 @@ async function seedCancellationSubject(prisma: PrismaClient): Promise<void> {
         'active', false, false, CURRENT_TIMESTAMP
       )
     `);
+    await tx.$executeRaw(Prisma.sql`INSERT INTO billing_team_modes(team_id,sandbox,revision) SELECT id,true,1 FROM teams WHERE org_id = ${ids.org} ON CONFLICT DO NOTHING`);
   });
 }
 
@@ -201,12 +202,12 @@ async function insertTopUpCheckout(
 ): Promise<void> {
   await prisma.$executeRaw(Prisma.sql`
     INSERT INTO "billing_credit_top_up_checkouts" (
-      "id", "account_id", "credit_account_id", "customer_id", "catalog_id",
+      "id", "billing_mode_team_id", "billing_mode_revision", "account_id", "credit_account_id", "customer_id", "catalog_id",
       "service_id", "app_key_id", "offer_id", "actor_jti", "requested_by_user_id",
       "payment_amount_minor", "credits_received_microcredits", "currency",
       "success_url_digest", "cancel_url_digest", "lease_expires_at", "updated_at"
     ) VALUES (
-      ${id}, ${ids.account}, ${ids.creditAccount}, ${ids.customer}, ${ids.topUpCatalog},
+      ${id}, ${ids.team}, 1, ${ids.account}, ${ids.creditAccount}, ${ids.customer}, ${ids.topUpCatalog},
       ${ids.service}, ${ids.appKey}, ${ids.topUpOffer}, ${`actor-${id}`}, ${requester},
       5000, 50000000000, 'USD', ${'a'.repeat(64)}, ${'b'.repeat(64)},
       CURRENT_TIMESTAMP + INTERVAL '5 minutes', CURRENT_TIMESTAMP
@@ -221,7 +222,7 @@ async function insertSetupCheckout(
 ): Promise<void> {
   await prisma.$executeRaw(Prisma.sql`
     INSERT INTO "billing_credit_setup_checkouts" (
-      "id", "account_id", "credit_account_id", "customer_id", "service_id",
+      "id", "billing_mode_team_id", "billing_mode_revision", "account_id", "credit_account_id", "customer_id", "service_id",
       "app_key_id", "policy_id", "option_id", "actor_jti", "requested_by_user_id",
       "expected_generation", "expected_consent_revision_id", "consent_version",
       "threshold_microcredits", "refill_offer_id",
@@ -229,7 +230,7 @@ async function insertSetupCheckout(
       "monthly_charge_cap_minor", "success_url_digest", "cancel_url_digest",
       "lease_expires_at", "updated_at"
     ) VALUES (
-      ${id}, ${ids.account}, ${ids.creditAccount}, ${ids.customer}, ${ids.service},
+      ${id}, ${ids.team}, 1, ${ids.account}, ${ids.creditAccount}, ${ids.customer}, ${ids.service},
       ${ids.appKey}, ${ids.fundingPolicy}, ${ids.autoTopUpOption}, ${`actor-${id}`},
       ${requester}, 0, NULL, 'consent-v1', 5000000000, ${ids.topUpOffer}, 50000000000,
       5000, 10000, ${'c'.repeat(64)}, ${'d'.repeat(64)},

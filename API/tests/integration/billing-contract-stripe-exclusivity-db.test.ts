@@ -78,6 +78,8 @@ describe.skipIf(!process.env.DATABASE_URL)('contract and Stripe database exclusi
         actorPublicJwk: { kty: 'RSA', kid: 'contract-race-key', n: 'AQAB', e: 'AQAB' },
       },
     });
+    const modeTeam = await db.prisma.team.create({ data: { orgId: org.id, name: 'TEST billing team', slug: 'test-billing' } });
+    await db.prisma.billingTeamMode.create({ data: { teamId: modeTeam.id, sandbox: true, revision: 1 } });
     const account = await db.prisma.billingStripeAccount.create({
       data: { stripeAccountId: 'acct_contract_stripe_race', livemode: false },
     });
@@ -93,6 +95,7 @@ describe.skipIf(!process.env.DATABASE_URL)('contract and Stripe database exclusi
     });
     const checkout = await db.prisma.billingStripeCheckoutSession.create({
       data: {
+      billingModeTeamId: modeTeam.id, billingModeRevision: 1,
         accountId: account.id,
         appKeyId: appKey.id,
         customerId: customer.id,
@@ -233,6 +236,7 @@ describe.skipIf(!process.env.DATABASE_URL)('contract and Stripe database exclusi
     await expect(
       db.prisma.billingStripeCheckoutSession.create({
         data: {
+      billingModeTeamId: modeTeam.id, billingModeRevision: 1,
           accountId: account.id,
           appKeyId: appKey.id,
           customerId: customer.id,

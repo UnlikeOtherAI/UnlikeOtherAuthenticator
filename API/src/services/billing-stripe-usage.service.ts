@@ -99,6 +99,12 @@ async function prepareExports(
   stripeCustomerId: string;
 }> {
   return prisma.$transaction(async (tx) => {
+    const source = await tx.billingStripeSubscription.findUnique({ where: { id: params.subscriptionId },
+      select: { accountId: true, orgId: true, teamId: true, createdAt: true } });
+    if (!source) throw new AppError('NOT_FOUND', 404, 'STRIPE_SUBSCRIPTION_NOT_FOUND');
+    // Same order as prepaid settlement, including across different accounts.
+    await assertBillingPeriodMode(tx, { accountId: source.accountId, orgId: source.orgId,
+      teamId: source.teamId, month: params.billingMonth, sourceCreatedAt: source.createdAt });
     const locked = await tx.$queryRaw<Array<{ id: string }>>(
       Prisma.sql`
         SELECT "id"
@@ -117,8 +123,6 @@ async function prepareExports(
     if (!subscription) {
       throw new AppError('NOT_FOUND', 404, 'STRIPE_SUBSCRIPTION_NOT_FOUND');
     }
-    await assertBillingPeriodMode(tx, { accountId: subscription.accountId, orgId: subscription.orgId,
-      teamId: subscription.teamId, month: params.billingMonth, sourceCreatedAt: subscription.createdAt });
     assertStripeUsageSubscription(subscription, {
       allowCanceledInvoicePeriod: Boolean(params.invoicePeriod),
     });
