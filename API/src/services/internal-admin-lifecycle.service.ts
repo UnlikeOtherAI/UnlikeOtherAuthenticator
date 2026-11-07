@@ -76,6 +76,7 @@ export async function setEntityLifecycle(params: {
     await lockProductTeamPolicyExclusive(tx);
     const actorEmail = await requireLifecycleActor(tx, params.actor);
     const row = await lifecycleTarget(tx, params.scope, params.id);
+    if (params.scope === 'TEAM' && row.lifecycleStatus === 'ARCHIVED') throw new AppError('BAD_REQUEST', 409, 'TEAM_ARCHIVE_HELD');
     if (row.lifecycleStatus === 'DELETING' || row.lifecycleStatus === 'DELETED') throw new AppError('BAD_REQUEST', 409, 'ENTITY_TERMINAL');
     if (params.status === 'DISABLED' && params.scope === 'USER') await protectLastAdmin(tx, params.id);
     const template = params.templateId ? await tx.lifecycleReasonTemplate.findUnique({ where: { id: params.templateId } }) : null;

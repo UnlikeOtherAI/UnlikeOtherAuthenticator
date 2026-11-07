@@ -6,6 +6,7 @@ import { registerOrganisationMemberRoutes } from './organisation-members.js';
 import { registerGroupRoutes } from './groups.js';
 import { registerTeamAvatarRoutes } from './team-avatar.js';
 import { registerTeamRoutes } from './teams.js';
+import { registerTeamArchiveRoutes } from './team-archives.js';
 import { registerTeamSelfJoinRoute } from './team-self-join.js';
 import { registerAccessRequestRoutes } from './access-requests.js';
 import { registerTeamInvitationRoutes } from './team-invitations.js';
@@ -19,6 +20,7 @@ export function registerOrgRoutes(app: FastifyInstance): void {
   registerOrganisationMemberRoutes(app);
   registerGroupRoutes(app);
   registerTeamRoutes(app);
+  registerTeamArchiveRoutes(app);
   registerTeamAvatarRoutes(app);
   registerTeamSelfJoinRoute(app);
   registerTeamInvitationRoutes(app);

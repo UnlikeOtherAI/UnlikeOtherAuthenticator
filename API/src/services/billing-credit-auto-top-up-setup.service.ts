@@ -1,3 +1,4 @@
+import { withLiveTeamBillingEffect } from './team-billing-effect.service.js';
 import {
   BillingCreditAutoTopUpState,
   BillingCreditCheckoutStatus,
@@ -352,7 +353,7 @@ export async function createBillingCreditAutoTopUpSetup(
     appKeyId: checkout.appKeyId,
     creditAccountId: checkout.creditAccountId,
   });
-  const session = await context.stripe.checkout.sessions.create(
+  const session = await withLiveTeamBillingEffect(prisma, params.request, () => context.stripe.checkout.sessions.create(
     {
       mode: 'setup',
       ...(params.locale ? { locale: stripeBillingLocale(params.locale) } : {}),
@@ -367,7 +368,9 @@ export async function createBillingCreditAutoTopUpSetup(
     {
       idempotencyKey: creditCheckoutIdempotencyKey(context.account, 'setup', checkout.id),
     },
-  );
+  ), () => prisma.billingCreditSetupCheckout.updateMany({ where: {
+    id: checkout.id, stripeCheckoutSessionId: null, status: 'CREATING',
+  }, data: { status: 'ABANDONED' } }));
   assertStripeObjectLivemode(session, context.account.livemode);
   assertCreditFundingMetadata(session.metadata, {
     localType: 'setup',

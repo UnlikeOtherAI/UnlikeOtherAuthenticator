@@ -12,6 +12,7 @@ import { compensateFinalizedStripeInvoice }
   from './billing-stripe-invoice-close-resolution.service.js';
 import type { StripeInvoiceCashClient } from './billing-stripe-payment-evidence.service.js';
 import { stripeExternalId } from './billing-stripe-webhook-utils.service.js';
+import { assertSubscriptionNotArchived, withUnarchivedSubscriptionEffect } from './team-billing-effect.service.js';
 
 type Client = StripeInvoiceCashClient & Pick<Stripe, 'accounts' | 'subscriptions' | 'invoiceItems' | 'taxRates'>;
 
@@ -37,9 +38,10 @@ export async function collectStripeCorrectionInvoice(params: {
   closeId: string; amountMicroMinor: bigint; cursor: string;
 }, deps: { prisma: PrismaClient; stripe: Client }) {
   const { prisma, stripe } = deps;
-  const source = await freezeStripeCorrectionSource(params, prisma, stripe);
   const close = await prisma.billingStripeInvoiceClose.findUniqueOrThrow({
-    where: { id: source.closeId }, include: { subscription: true } });
+    where: { id: params.closeId }, include: { subscription: true } });
+  await assertSubscriptionNotArchived(prisma, close.subscriptionId);
+  const source = await freezeStripeCorrectionSource(params, prisma, stripe);
   const account = await prisma.billingStripeAccount.findUniqueOrThrow({
     where: { id: close.accountId } });
   if ((await stripe.accounts.retrieveCurrent()).id !== account.stripeAccountId ||
@@ -149,7 +151,9 @@ export async function collectStripeCorrectionInvoice(params: {
     await lines(invoice, itemId);
     if (invoice.status === 'draft') {
       await assertLease();
-      invoice = await stripe.invoices.finalizeInvoice(invoice.id, { auto_advance: false });
+      const invoiceId = invoice.id;
+      invoice = await withUnarchivedSubscriptionEffect(prisma, close.subscriptionId,
+        () => stripe.invoices.finalizeInvoice(invoiceId, { auto_advance: false }));
       verifyInvoice(invoice);
       if (invoice.status === 'draft') correctionHold('STRIPE_CORRECTION_FINALIZATION_PENDING');
     }
@@ -160,7 +164,9 @@ export async function collectStripeCorrectionInvoice(params: {
         observedAt: new Date(), correctionId: source.id }, { prisma, stripe });
     } else if (!invoice.auto_advance) {
       await assertLease();
-      const resumed = await stripe.invoices.update(invoice.id, { auto_advance: true });
+      const invoiceId = invoice.id;
+      const resumed = await withUnarchivedSubscriptionEffect(prisma, close.subscriptionId,
+        () => stripe.invoices.update(invoiceId, { auto_advance: true }));
       verifyInvoice(resumed);
       if (!resumed.auto_advance) correctionHold('STRIPE_CORRECTION_COLLECTION_UNCONFIRMED');
     }

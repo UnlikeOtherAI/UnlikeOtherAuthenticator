@@ -7,6 +7,7 @@ import {
 } from '@prisma/client';
 
 import { getAdminPrisma } from '../db/prisma.js';
+import { disabledAutoTopUpState } from './billing-credit-auto-top-up-disabled-state.js';
 import { AppError } from '../utils/errors.js';
 import type { BillingActorEndpoint } from './billing-actor-audience.service.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
@@ -374,23 +375,7 @@ export async function disableBillingCreditAutoTopUp(
       });
       await tx.billingCreditAccount.update({
         where: { id: account.id },
-        data: {
-          autoTopUpGeneration: { increment: 1 },
-          autoTopUpState: BillingCreditAutoTopUpState.DISABLED,
-          autoTopUpPolicyId: null,
-          autoTopUpServiceId: null,
-          autoTopUpAppKeyId: null,
-          autoTopUpConsentRevisionId: null,
-          autoTopUpOptionId: null,
-          autoTopUpThresholdMicrocredits: null,
-          autoTopUpRefillOfferId: null,
-          autoTopUpMonthlyChargeCapMinor: null,
-          autoTopUpConsentVersion: null,
-          autoTopUpConsentedAt: null,
-          autoTopUpConsentedByUserId: null,
-          stripePaymentMethodId: null,
-          paymentMethodSummary: Prisma.DbNull,
-        },
+        data: disabledAutoTopUpState(),
       });
       await tx.orgAuditLog.create({
         data: {

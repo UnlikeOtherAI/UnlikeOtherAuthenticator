@@ -74,6 +74,7 @@ describe('recurring Stripe usage export scheduler', () => {
         currentPeriodStart: { not: null, lte: now },
         currentPeriodEnd: { not: null, gt: now },
         service: { active: true },
+        OR: [{ teamId: null }, { team: { lifecycleStatus: 'ACTIVE' } }],
         tariff: {
           collectionMode: BillingCollectionMode.STRIPE,
           mode: { not: BillingTariffMode.FREE },

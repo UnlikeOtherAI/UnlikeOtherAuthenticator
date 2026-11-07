@@ -4,6 +4,7 @@ import type Stripe from 'stripe';
 
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
+import { assertEntityAccess } from './entity-lifecycle.service.js';
 import { fetchLedgerMeteringUsage } from './billing-ledger-collector.service.js';
 import { settleSubscriptionCreditLiability } from './billing-credit-liability.service.js';
 import { assertPrepaidUsageCovered } from './billing-prepaid-coverage.service.js';
@@ -116,6 +117,7 @@ async function prepareExports(
     if (!subscription) {
       throw new AppError('NOT_FOUND', 404, 'STRIPE_SUBSCRIPTION_NOT_FOUND');
     }
+    await assertEntityAccess({ orgId: subscription.orgId, teamId: subscription.teamId }, tx);
     assertStripeUsageSubscription(subscription, {
       allowCanceledInvoicePeriod: Boolean(params.invoicePeriod),
     });
