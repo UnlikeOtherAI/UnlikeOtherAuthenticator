@@ -12,6 +12,7 @@ import { collectStripeMonthlyCharge } from './billing-stripe-monthly-charge.serv
 import { freezeStripeMonthlyChargeSource } from './billing-stripe-monthly-charge-source.service.js';
 import { stripeExternalId } from './billing-stripe-webhook-utils.service.js';
 import { resumeCanceledStripeRenewal } from './billing-stripe-canceled-renewal.service.js';
+import { assertSubscriptionNotArchived, withUnarchivedSubscriptionEffect } from './team-billing-effect.service.js';
 import type { quoteUnexportedClosedPeriodLiability }
   from './billing-stripe-invoice-close-quote.service.js';
 
@@ -80,6 +81,7 @@ export async function collectStripeClosingSeatInvoice(params: {
   });
   if (!row || row.status !== 'canceled' || row.tariff.monthlyChargeBasis !== 'PER_SEAT' ||
     !row.billableUntil || !row.billableFrom) return null;
+  await assertSubscriptionNotArchived(deps.prisma, row.id);
   const lastMonth = new Date(row.billableUntil.getTime() - 1).toISOString().slice(0, 7);
   if (lastMonth !== params.billingMonth) return null;
   const start = new Date(`${lastMonth}-01T00:00:00.000Z`);
@@ -170,7 +172,9 @@ export async function collectStripeClosingSeatInvoice(params: {
       const accepted = await deps.prisma.billingStripeMonthlyCharge.findUniqueOrThrow({ where: { id: source.id } });
       await verifyClosingDraftLines(stripe, invoice, source, accepted.stripeInvoiceItemId);
       await assertLease();
-      const finalized = await stripe.invoices.finalizeInvoice(invoice.id, { auto_advance: true });
+      const invoiceId = invoice.id;
+      const finalized = await withUnarchivedSubscriptionEffect(deps.prisma, row.id,
+        () => stripe.invoices.finalizeInvoice(invoiceId, { auto_advance: true }));
       verifyClosingInvoice(finalized, source, row.customer.stripeCustomerId, row.livemode);
       if (finalized.id !== invoice.id || finalized.status === 'draft') hold('STRIPE_CLOSING_INVOICE_FINALIZATION_PENDING');
     } else if (source.state !== 'ACCEPTED') hold('STRIPE_CLOSING_INVOICE_ITEM_UNPROVEN');

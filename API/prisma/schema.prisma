@@ -15,8 +15,31 @@ enum UserRole {
 enum EntityLifecycleStatus {
   ACTIVE
   DISABLED
+  ARCHIVED
   DELETING
   DELETED
+}
+
+// An archive is a durable hold, never an executable erasure job. The authority
+// and commercial evidence remain in UOA after every product loses access.
+model TeamArchiveOperation {
+  id                   String   @id @db.Uuid
+  teamId               String   @unique @map("team_id")
+  orgId                String   @map("org_id")
+  sourceClientDomainId String   @map("source_client_domain_id")
+  actorUserId          String   @map("actor_user_id")
+  deletionHeld         Boolean  @default(true) @map("deletion_held")
+  billingStoppedAt     DateTime? @map("billing_stopped_at")
+  settleAfter          DateTime @map("settle_after")
+  leaseOwner           String?  @map("lease_owner") @db.Uuid
+  leaseExpiresAt       DateTime? @map("lease_expires_at")
+  nextAttemptAt        DateTime @default(now()) @map("next_attempt_at")
+  createdAt            DateTime @default(now()) @map("created_at")
+  team                 Team     @relation(fields: [teamId, orgId], references: [id, orgId], onDelete: Restrict)
+
+  @@unique([teamId, orgId])
+  @@index([billingStoppedAt, nextAttemptAt])
+  @@map("team_archive_operations")
 }
 
 model LifecycleReasonTemplate {
@@ -1568,6 +1591,7 @@ model FeatureFlagUserOverride {
 }
 
 model Team {
+  archiveOperation TeamArchiveOperation?
   id                  String   @id @default(cuid())
   lifecycleStatus     EntityLifecycleStatus @default(ACTIVE) @map("lifecycle_status")
   lifecycleChangedAt  DateTime? @map("lifecycle_changed_at")

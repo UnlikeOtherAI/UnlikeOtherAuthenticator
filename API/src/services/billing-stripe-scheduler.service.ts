@@ -87,6 +87,7 @@ export async function runStripeUsageExportCycle(deps?: {
       currentPeriodStart: { not: null, lte: now },
       currentPeriodEnd: { not: null, gt: now },
       service: { active: true },
+      OR: [{ teamId: null }, { team: { lifecycleStatus: { not: 'ARCHIVED' } } }],
       tariff: {
         collectionMode: BillingCollectionMode.STRIPE,
         mode: { not: BillingTariffMode.FREE },

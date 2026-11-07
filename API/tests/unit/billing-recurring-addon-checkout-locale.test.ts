@@ -171,3 +171,8 @@ describe('recurring add-on Checkout language retry', () => {
     );
   });
 });
+
+// Lifecycle/provider fencing is exercised against PostgreSQL in team-archive.test.ts.
+vi.mock('../../src/services/team-billing-effect.service.js', () => ({
+  withLiveTeamBillingEffect: async (_db: unknown, _scope: unknown, effect: () => Promise<unknown>) => effect(),
+}));

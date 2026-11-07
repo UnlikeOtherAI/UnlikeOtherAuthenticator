@@ -2002,6 +2002,68 @@ components:
           type: string
 
 paths:
+  /org/organisations/{orgId}/teams/{teamId}/archive:
+    parameters:
+      - $ref: '#/components/parameters/orgIdPath'
+      - $ref: '#/components/parameters/teamIdPath'
+      - $ref: '#/components/parameters/domainQuery'
+      - $ref: '#/components/parameters/configUrl'
+    post:
+      operationId: archiveSharedTeam
+      tags: [Organizations]
+      summary: Archive a shared team with permanent deletion held
+      description: |
+        Requires a fresh exact-team human credential and live organisation teams.manage capability.
+        Backend-only callers cannot archive. Stops team access across products, including the
+        default or last team, without erasing its organisation, memberships, people or data.
+        Future team billing is reconciled independently; 202 never certifies that billing stopped.
+      security:
+        - domainHashBearer: []
+          accessToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [request_id, deletion_held]
+              properties:
+                request_id: { type: string, format: uuid }
+                deletion_held: { type: boolean, enum: [true] }
+      responses:
+        '202':
+          description: Durable archive receipt; status is STOPPING_BILLING until provider reconciliation succeeds.
+        '401':
+          description: Missing, expired or revoked human or product authority.
+        '403':
+          description: Exact selected team or organisation management capability refused.
+        '409':
+          description: Idempotency key belongs to a different request or the team is already terminal.
+  /domain/team-archives/{id}:
+    parameters:
+      - $ref: '#/components/parameters/domainQuery'
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      operationId: readTeamArchiveReceipt
+      tags: [Organizations]
+      summary: Read an archive receipt after the human session ends
+      description: |
+        Bound to the initiating registered product. Returns only operation and UOA scope references,
+        ARCHIVED or STOPPING_BILLING, access_stopped, billing_stopped, deletion_held=true,
+        permanently_deleted=false and timestamps. It grants no membership, content or mutation access.
+      security:
+        - domainHashBearer: []
+      responses:
+        '200':
+          description: Minimal no-store receipt. Only ARCHIVED certifies that future team billing stopped.
+        '401':
+          description: Missing or revoked registered product credential.
+        '404':
+          description: Operation does not exist or belongs to another product.
   /auth/action-verification/start:
     post:
       operationId: startActionVerification

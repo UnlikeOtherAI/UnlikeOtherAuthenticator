@@ -3,6 +3,15 @@ import type { EndpointSchema } from './schema.js';
 const accessStatusNotes = 'Optional diagnostics: AUTH_ACCESS_STATUS_ENABLED=true on the auth server is required. False/unset returns404 before config/client/mail/proof work, including outstanding proof redemption.';
 
 export const lifecycleEndpoints: EndpointSchema[] = [
+  { method: 'POST', path: '/org/organisations/:orgId/teams/:teamId/archive',
+    auth: 'registered domain bearer, verified config, fresh exact-team human assertion and live org teams.manage capability',
+    query: { domain: 'registered product domain', config_url: 'signed product config URL' },
+    body: { request_id: 'UUID reused for retries', deletion_held: 'true; required' },
+    description: 'Archive this shared UOA team across products, revoke sessions and stop future team billing; never erase data or cascade to the organisation',
+    response: { id: 'request UUID', status: 'STOPPING_BILLING | ARCHIVED', access_stopped: 'true', billing_stopped: 'boolean', deletion_held: 'true', permanently_deleted: 'false' } },
+  { method: 'GET', path: '/domain/team-archives/:id', auth: 'exact initiating registered domain bearer',
+    query: { domain: 'registered product domain' }, description: 'Read only the archive receipt after the initiating human session is revoked; no team data or mutation authority',
+    response: { id: 'request UUID', organisation_id: 'UOA organisation reference', team_id: 'UOA team reference', status: 'STOPPING_BILLING | ARCHIVED', billing_stopped: 'boolean', deletion_held: 'true', permanently_deleted: 'false' } },
   { method: 'POST', path: '/oauth/account-renewal/start', auth: 'registered public client_id and exact redirect_uri; IP rate limited', query: { client_id: 'registered client', redirect_uri: 'exact registered callback' }, body: { email: 'valid email' }, description: 'Send a neutral mailbox code to start an expired-account renewal request' },
   { method: 'POST', path: '/oauth/account-renewal/request', auth: 'one-use mailbox code and enrolled TOTP; current registered app revision', query: { client_id: 'same registered client', redirect_uri: 'same exact callback' }, body: { challengeId: 'UUID', code: '6 digits', twoFactorCode: '6 digits if enrolled' }, description: 'Notify platform administrators about the verified expired account; does not grant a session' },
   { method: 'POST', path: '/oauth/lifecycle-status/start', notes: accessStatusNotes, auth: 'registered public client_id and exact redirect_uri; rate limited', query: { client_id: 'registered client', redirect_uri: 'exact registered callback' }, body: { email: 'valid email' }, description: 'Begin read-only mailbox proof for native/public OAuth account reasons; same neutral delivery behavior as website proof' },
@@ -24,7 +33,8 @@ export const lifecycleEndpoints: EndpointSchema[] = [
 
 export const lifecycleDocumentation = {
   access_status_debug: 'Disabled by default. AUTH_ACCESS_STATUS_ENABLED=true on the auth server enables the login diagnostic and all four website/native proof endpoints. When false or unset, every start/verify returns 404 before config/client lookup, mail or proof work, including outstanding proof redemption. Product config, DEBUG_ENABLED, URL parameters and browser storage cannot enable it.',
-  states: ['ACTIVE', 'DISABLED', 'DELETING', 'DELETED'],
+  states: ['ACTIVE', 'DISABLED', 'ARCHIVED', 'DELETING', 'DELETED'],
+  team_archive: 'ARCHIVED is an all-products access denial with an immutable permanent-deletion hold. It is separate from executable deletion jobs. Completion waits for exact-team future billing to stop; organisation subscriptions and sibling teams remain independent.',
   deleted_identity: '{id,deleted:true,name:"Deleted user"}; PII null/omitted. The boolean derives from lifecycle state.',
   deletion_modes: 'RETAIN_REFERENCE retains a non-authenticating subject; ERASE_REFERENCE erases mutable references. Immutable financial/signing evidence can require a restricted identity stub and is explicitly listed.',
   product_delivery: 'Durable pull/ack, exact ClientDomain identity, exact revision, no arbitrary hooks. Missing registered participant authority or pending product acknowledgement blocks completion.',

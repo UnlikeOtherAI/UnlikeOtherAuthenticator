@@ -1,3 +1,4 @@
+import { withLiveTeamBillingEffect } from './team-billing-effect.service.js';
 import type { BillingCustomerLocale } from '../contracts/billing-statement-v1.js';
 import { stripeCheckoutLocale } from './billing-stripe-locale.js';
 import { requireIdentityEmail } from './entity-lifecycle.service.js';
@@ -431,11 +432,12 @@ export async function createRecurringAddonCheckout(
     }
   }
   const metadata = recurringAddonMetadata(checkout, account);
-  const session = await stripe.checkout.sessions.create(
+  const prepared = { customerId: customer.stripeCustomerId, priceId: catalog.stripePriceId };
+  const session = await withLiveTeamBillingEffect(prisma, params.request, () => stripe.checkout.sessions.create(
     {
       mode: 'subscription',
       ...stripeCheckoutLocale(checkout.checkoutLocale),
-      customer: customer.stripeCustomerId,
+      customer: prepared.customerId,
       client_reference_id: checkout.id,
       success_url: urls.success,
       cancel_url: urls.cancel,
@@ -443,12 +445,14 @@ export async function createRecurringAddonCheckout(
       automatic_tax: { enabled: false },
       tax_id_collection: { enabled: false },
       payment_method_collection: 'always',
-      line_items: [{ price: catalog.stripePriceId, quantity: 1 }],
+      line_items: [{ price: prepared.priceId, quantity: 1 }],
       metadata,
       subscription_data: { metadata },
     },
     { idempotencyKey: checkoutIdempotencyKey(checkout) },
-  );
+  ), () => prisma.billingRecurringAddonCheckout.updateMany({ where: {
+    id: checkout.id, stripeCheckoutSessionId: null, status: 'CREATING',
+  }, data: { status: 'ABANDONED' } }));
   assertStripeObjectLivemode(session, account.livemode);
   assertRecurringAddonMetadata(session.metadata, checkout, account);
   if (

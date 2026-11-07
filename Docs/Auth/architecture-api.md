@@ -1024,3 +1024,7 @@ the existing selected-subject members API and original-assurance proof. See
 Hosted organisation selection is owned by `login-organization.service.ts` and
 `session-choices.service.ts`; the signed `login_flow.organization_id` narrows only
 interactive entry. See the organisation-scoped sign-in addendum in `Docs/brief.md`.
+
+### Held shared-team archive
+
+The archive authority, receipt recovery, provider reconciliation and database holds are defined in [Shared team archive](team-archive.md). These endpoints use UOA as the sole cross-product lifecycle authority and never invoke erasure jobs.

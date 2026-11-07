@@ -1,3 +1,4 @@
+import { withLiveTeamBillingEffect } from './team-billing-effect.service.js';
 import { BillingCreditCheckoutStatus, type PrismaClient } from '@prisma/client';
 import { createHash } from 'node:crypto';
 import type Stripe from 'stripe';
@@ -323,7 +324,7 @@ export async function createBillingCreditTopUpCheckout(
     appKeyId: checkout.appKeyId,
     creditAccountId: checkout.creditAccountId,
   });
-  const session = await context.stripe.checkout.sessions.create(
+  const session = await withLiveTeamBillingEffect(prisma, params.request, () => context.stripe.checkout.sessions.create(
     {
       mode: 'payment',
       ...(params.locale ? { locale: stripeBillingLocale(params.locale) } : {}),
@@ -340,7 +341,9 @@ export async function createBillingCreditTopUpCheckout(
     {
       idempotencyKey: creditCheckoutIdempotencyKey(context.account, 'top_up', checkout.id),
     },
-  );
+  ), () => prisma.billingCreditTopUpCheckout.updateMany({ where: {
+    id: checkout.id, stripeCheckoutSessionId: null, status: 'CREATING',
+  }, data: { status: 'ABANDONED' } }));
   assertStripeObjectLivemode(session, context.account.livemode);
   assertCreditFundingMetadata(session.metadata, {
     localType: 'top_up',

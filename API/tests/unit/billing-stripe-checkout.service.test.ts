@@ -483,3 +483,8 @@ describe('Stripe Checkout authorization, recovery, and account binding', () => {
     expect(state.checkouts).toHaveLength(2);
   });
 });
+
+// Lifecycle/provider fencing is exercised against PostgreSQL in team-archive.test.ts.
+vi.mock('../../src/services/team-billing-effect.service.js', () => ({
+  withLiveTeamBillingEffect: async (_db: unknown, _scope: unknown, effect: () => Promise<unknown>) => effect(),
+}));

@@ -1,3 +1,4 @@
+import { withLiveTeamBillingEffect } from './team-billing-effect.service.js';
 import type { BillingCustomerLocale } from '../contracts/billing-statement-v1.js';
 import { stripeCheckoutLocale } from './billing-stripe-locale.js';
 import { requireIdentityEmail } from './entity-lifecycle.service.js';
@@ -398,11 +399,13 @@ export async function createStripeCheckoutSession(
     throw new AppError('INTERNAL', 500, 'STRIPE_CATALOG_INCOMPLETE');
   }
 
-  const session = await stripe.checkout.sessions.create(
+  const prepared = { customerId: customer.stripeCustomerId,
+    usagePriceId: catalog.stripeUsagePriceId, tariff: details.tariff };
+  const session = await withLiveTeamBillingEffect(prisma, params.request, () => stripe.checkout.sessions.create(
     {
       mode: 'subscription',
       ...stripeCheckoutLocale(checkout.checkoutLocale),
-      customer: customer.stripeCustomerId,
+      customer: prepared.customerId,
       client_reference_id: checkout.id,
       success_url: successUrl,
       cancel_url: cancelUrl,
@@ -410,11 +413,11 @@ export async function createStripeCheckoutSession(
       billing_address_collection: 'required',
       payment_method_collection: 'always',
       line_items: [
-        ...(details.tariff.monthlyChargeBasis !== BillingMonthlyChargeBasis.PER_SEAT &&
+        ...(prepared.tariff.monthlyChargeBasis !== BillingMonthlyChargeBasis.PER_SEAT &&
           tariffPrice.stripeMonthlyPriceId
           ? [{ price: tariffPrice.stripeMonthlyPriceId, quantity: 1 }]
           : []),
-        { price: catalog.stripeUsagePriceId },
+        { price: prepared.usagePriceId },
       ],
       metadata: { uoa_checkout_id: checkout.id },
       subscription_data: {
@@ -423,7 +426,7 @@ export async function createStripeCheckoutSession(
         metadata: {
           uoa_checkout_id: checkout.id,
           uoa_service_id: params.credential.service.id,
-          uoa_tariff_id: details.tariff.id,
+          uoa_tariff_id: prepared.tariff.id,
           uoa_scope_key: selectedScope.scopeKey,
           uoa_stripe_account_id: account.stripeAccountId,
           uoa_stripe_mode: account.livemode ? 'live' : 'test',
@@ -432,7 +435,9 @@ export async function createStripeCheckoutSession(
       },
     },
     { idempotencyKey: checkoutIdempotencyKey(account, checkout.id) },
-  );
+  ), () => prisma.billingStripeCheckoutSession.updateMany({ where: {
+    id: checkout.id, stripeCheckoutSessionId: null, status: 'creating',
+  }, data: { status: 'expired' } }));
   assertStripeObjectLivemode(session, account.livemode);
   if (
     session.client_reference_id !== checkout.id ||
