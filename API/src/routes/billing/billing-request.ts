@@ -10,6 +10,9 @@ export const BillingSubjectRequestSchema = z
     user_id: z.string().trim().min(1).max(256),
   })
   .strict();
+export const BillingFinancialSubjectRequestSchema = BillingSubjectRequestSchema.extend({
+  team_id: z.string().trim().min(1).max(256).nullable(),
+}).strict();
 
 export function readBillingActorHeader(value: string | string[] | undefined): string {
   if (value === undefined || Array.isArray(value) || value.includes(',') || !value.trim()) {

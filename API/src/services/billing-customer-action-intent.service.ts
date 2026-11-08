@@ -62,7 +62,7 @@ function assertBinding(
   expected: {
     credential: VerifiedBillingAppKey;
     organisationId: string;
-    teamId: string;
+    teamId: string | null;
     userId: string;
     authorityScope: BillingAssignmentScope;
     operation: BillingCustomerAction;
@@ -95,7 +95,7 @@ export async function authorizeBillingCustomerAction(
   params: {
     credential: VerifiedBillingAppKey;
     organisationId: string;
-    teamId: string;
+    teamId: string | null;
     userId: string;
     authorityScope: BillingAssignmentScope;
     operation: BillingCustomerAction;

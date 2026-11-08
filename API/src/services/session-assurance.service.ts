@@ -8,10 +8,11 @@ import { AppError } from '../utils/errors.js';
 import { runInTransaction } from '../db/tenant-context.js';
 import { assertEnterpriseProvisioningActive } from './enterprise-identity-status.service.js';
 import { isActiveUser } from './entity-lifecycle.service.js';
+import { activeTeamAuthorityWhere } from './organisation-team-authority.service.js';
 
 export type AssuranceDb = Pick<PrismaClient,
   'sessionAssurance' | 'refreshToken' | 'user' | 'orgSsoPolicy' | 'orgSsoConnection' |
-  'externalIdentity' | 'orgMember' | 'teamMember' | 'enterpriseProductReadiness' | 'scimResourceLink' | 'organisationEmailDomain'>;
+  'externalIdentity' | 'orgMember' | 'teamMember' | 'team' | 'enterpriseProductReadiness' | 'scimResourceLink' | 'organisationEmailDomain'>;
 export type AssuranceBinding = {
   userId: string; clientDomain: string; credentialEpoch: number;
   orgId?: string | null; teamId?: string | null;
@@ -79,9 +80,9 @@ async function validateSessionAssuranceInside(
       if ((policy?.generation ?? 0) !== row.policyGeneration) reject();
     }
     if (row.teamId) {
-      const team = await db.teamMember.findUnique({ where: { teamId_userId: { teamId: row.teamId, userId: row.userId } },
-        select: { status: true, team: { select: { orgId: true, lifecycleStatus: true } } } });
-      if (team?.status !== 'ACTIVE' || team.team.orgId !== row.orgId || team.team.lifecycleStatus !== 'ACTIVE') reject();
+      const team = await db.team.findFirst({where:{id:row.teamId,orgId:row.orgId??undefined,
+        AND:[activeTeamAuthorityWhere(row.userId)]},select:{id:true}});
+      if(!row.orgId||!team)reject();
     }
     if (row.method === 'sso') {
       if (!row.connectionId || !row.externalIdentityId) reject();

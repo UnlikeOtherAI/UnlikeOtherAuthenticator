@@ -1,4 +1,5 @@
 import type { BillingCustomerLocale } from '../../contracts/billing-statement-v1.js';
+import { BillingContextSchema } from './billing-mode-protocol.js';
 import { readBillingPresentation } from './billing-presentation.js';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
@@ -12,7 +13,7 @@ import { confirmBillingCancellation } from '../../services/billing-cancellation-
 import { createBillingCancellationPreview } from '../../services/billing-cancellation-preview.service.js';
 import type { BillingSubscriptionRequest } from '../../services/billing-stripe-subscription.service.js';
 import { AppError } from '../../utils/errors.js';
-import { BillingSubjectRequestSchema, readBillingActorHeader } from './billing-request.js';
+import { BillingFinancialSubjectRequestSchema as BillingSubjectRequestSchema, readBillingActorHeader } from './billing-request.js';
 import type { BillingActorEndpoint } from '../../services/billing-actor-audience.service.js';
 
 const ConfirmCancellationRequestSchema = BillingSubjectRequestSchema.extend({
@@ -62,9 +63,10 @@ export function registerBillingCancellationRoutes(app: FastifyInstance): void {
       },
     },
     async (request, reply) => {
-      const body = BillingSubjectRequestSchema.parse(request.body);
+      const body = BillingSubjectRequestSchema.extend({billing_context:BillingContextSchema}).strict().parse(request.body);
+      const actorContext=context(request,body,'/billing/v1/cancellation/preview');
       const preview = await createBillingCancellationPreview(
-        context(request, body, '/billing/v1/cancellation/preview'),
+        {...actorContext,request:{...actorContext.request,billingContext:body.billing_context}},
       );
       reply.header('Cache-Control', 'private, no-store');
       return reply.status(201).send(preview);

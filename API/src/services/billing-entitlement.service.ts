@@ -1,3 +1,4 @@
+import { activeTeamAuthorityWhere } from './organisation-team-authority.service.js';
 import {
   BillingCollectionMode,
   BillingMonthlyChargeBasis,
@@ -31,7 +32,7 @@ import {
 export const EFFECTIVE_TARIFF_SCHEMA_VERSION = 1 as const;
 export const EFFECTIVE_TARIFF_SNAPSHOT_TTL_SECONDS = 5 * 60;
 
-export type EffectiveTariffPayload = {
+export type EffectiveTariffPayload<TeamId extends string | null = string> = {
   schema_version: typeof EFFECTIVE_TARIFF_SCHEMA_VERSION;
   snapshot_id: string;
   product: {
@@ -44,7 +45,7 @@ export type EffectiveTariffPayload = {
   subject: {
     user_id: string;
     organisation_id: string;
-    team_id: string;
+    team_id: TeamId;
   };
   tariff: {
     id: string;
@@ -126,8 +127,8 @@ export function customerBillingTariff(
   };
 }
 
-function payloadFor(params: {
-  request: EffectiveTariffRequest;
+function payloadFor<TeamId extends string | null>(params: {
+  request: Omit<EffectiveTariffRequest,'teamId'> & {teamId:TeamId};
   credential: VerifiedBillingAppKey;
   tariff: TariffRow;
   assignment: {
@@ -135,7 +136,7 @@ function payloadFor(params: {
     scope: BillingTariffSource;
   };
   nowEpochSeconds: number;
-}): EffectiveTariffPayload {
+}): EffectiveTariffPayload<TeamId> {
   const issuedAt = new Date(params.nowEpochSeconds * 1000);
   const expiresAt = new Date(
     (params.nowEpochSeconds + EFFECTIVE_TARIFF_SNAPSHOT_TTL_SECONDS) * 1000,
@@ -242,12 +243,7 @@ export async function resolveEffectiveTariffContext(
               orgId: request.organisationId,
               lifecycleStatus: 'ACTIVE',
               org: { lifecycleStatus: 'ACTIVE' },
-              members: {
-                some: {
-                  userId: request.userId,
-                  status: MembershipStatus.ACTIVE,
-                },
-              },
+              AND:[activeTeamAuthorityWhere(request.userId)],
             },
             select: { id: true },
           }),
@@ -277,6 +273,9 @@ export async function resolveEffectiveTariffContext(
     organisationId: request.organisationId,
     teamId: request.teamId,
     billingMonth: utcBillingMonth(new Date((deps?.now?.() ?? Math.floor(Date.now() / 1000)) * 1000)),
+    ...(['/billing/v1/stripe/checkout-session', '/billing/v1/stripe/subscription-summary',
+      '/billing/v1/stripe/portal-session', '/billing/v1/organisation/overview'].includes(params.endpoint)
+      ? { financialScope: 'organisation' as const } : {}),
   });
   const tariff = effective.tariff;
 
@@ -300,6 +299,27 @@ export async function resolveEffectiveTariffContext(
     teamId: request.teamId,
   });
   return { actor, payload };
+}
+
+/** Finance admits an explicit org-only actor without inventing a team entitlement. */
+export async function resolveFinancialTariffContext(params: {
+  request: Omit<EffectiveTariffRequest,'teamId'> & {teamId:string|null};
+  actorToken:string;credential:VerifiedBillingAppKey;endpoint:BillingActorEndpoint;
+},deps?: {prisma?:PrismaClient;now?:()=>number;verifyActor?:typeof verifyBillingActor}) {
+  if (params.request.teamId !== null) {
+    return resolveEffectiveTariffContext({...params,request:{...params.request,teamId:params.request.teamId}},deps);
+  }
+  if (normalizeBillingServiceIdentifier(params.request.product)!==params.credential.service.identifier) {
+    throw new AppError('FORBIDDEN',403,'BILLING_PRODUCT_MISMATCH');
+  }
+  const actor = await (deps?.verifyActor ?? verifyBillingActor)({token:params.actorToken,
+    credential:params.credential,endpoint:params.endpoint,request:params.request},{prisma:deps?.prisma});
+  const now=deps?.now?.() ?? Math.floor(Date.now()/1000);
+  const effective=await resolveBillingTariffForMonth(client(deps),{serviceId:params.credential.service.id,
+    organisationId:params.request.organisationId,teamId:null,financialScope:'organisation',
+    billingMonth:utcBillingMonth(new Date(now*1000))});
+  return {actor,payload:payloadFor({request:params.request,credential:params.credential,
+    tariff:effective.tariff,assignment:{id:effective.assignmentId,scope:effective.source},nowEpochSeconds:now})};
 }
 
 export async function getEffectiveTariffSnapshot(

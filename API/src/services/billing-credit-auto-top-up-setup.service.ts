@@ -295,6 +295,7 @@ export async function createBillingCreditAutoTopUpSetup(
       data: {
         billingModeTeamId: params.request.teamId,
         billingModeRevision: context.modeRevision ?? 0,
+        billingScopeEpoch: context.scopeEpoch ? new Date(context.scopeEpoch) : null,
         accountId: context.account.id,
         creditAccountId: context.creditAccount.id,
         customerId: context.customer.id,

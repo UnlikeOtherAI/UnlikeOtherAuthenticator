@@ -24,7 +24,7 @@ import {
   authorizeBillingCustomerAction,
   BILLING_CUSTOMER_ACTION,
 } from './billing-customer-action-intent.service.js';
-import { resolveEffectiveTariffContext } from './billing-entitlement.service.js';
+import { resolveFinancialTariffContext } from './billing-entitlement.service.js';
 import { resolveBillingFundingViewer } from './billing-funding-viewer.service.js';
 import { ensureRecurringAddonStripeCatalog } from './billing-recurring-addon-catalog.service.js';
 import {
@@ -114,7 +114,7 @@ export async function createRecurringAddonCheckout(
   },
 ): Promise<BillingHostedRedirectResponse> {
   const prisma = deps?.prisma ?? getAdminPrisma();
-  const { actor } = await resolveEffectiveTariffContext(
+  const { actor } = await resolveFinancialTariffContext(
     {
       request: params.request,
       actorToken: params.actorToken,
@@ -124,6 +124,7 @@ export async function createRecurringAddonCheckout(
     { prisma },
   );
   const viewer = await resolveBillingFundingViewer(params.request, { prisma });
+  if(!viewer.billingManager)throw new AppError('FORBIDDEN',403,'BILLING_MANAGER_REQUIRED');
   const configured = deps?.stripe ? undefined : await requireTeamStripeBilling(params.request, prisma);
   const stripe = deps?.stripe ?? configured?.client;
   if (!stripe) throw new AppError('INTERNAL', 503, 'STRIPE_BILLING_DISABLED');
@@ -131,7 +132,7 @@ export async function createRecurringAddonCheckout(
   const account = await resolveStripeAccountContext(stripe, livemode, prisma);
   const modeRevision = configured?.selection.revision ?? 0;
   if (!deps?.stripe || params.request.billingContext !== undefined) {
-    assertBillingActionContext(params.request.billingContext, { account, revision: modeRevision,
+    assertBillingActionContext(params.request.billingContext, { account, revision: modeRevision, scopeEpoch: configured?.selection.epoch,
       appKeyId: params.credential.id }, params.endpoint, {
       product: params.request.product, organisation_id: params.request.organisationId,
       team_id: params.request.teamId, user_id: params.request.userId, offer_id: params.request.offerId,
@@ -228,7 +229,7 @@ export async function createRecurringAddonCheckout(
         where: { id: params.request.organisationId },
         select: { id: true, name: true },
       }),
-      tx.team.findFirst({
+      params.request.teamId===null ? Promise.resolve(null) : tx.team.findFirst({
         where: { id: params.request.teamId, orgId: params.request.organisationId },
         select: { id: true, name: true },
       }),
@@ -241,7 +242,7 @@ export async function createRecurringAddonCheckout(
         },
         select: { status: true },
       }),
-      tx.teamMember.findUnique({
+      params.request.teamId===null ? Promise.resolve(null) : tx.teamMember.findUnique({
         where: {
           teamId_userId: { teamId: params.request.teamId, userId: params.request.userId },
         },
@@ -264,9 +265,9 @@ export async function createRecurringAddonCheckout(
   if (
     !details.user ||
     !details.organisation ||
-    !details.team ||
+    (params.request.teamId!==null && !details.team) ||
     details.orgMember?.status !== MembershipStatus.ACTIVE ||
-    details.teamMember?.status !== MembershipStatus.ACTIVE
+    (params.request.teamId!==null && details.teamMember?.status !== MembershipStatus.ACTIVE)
   ) {
     throw new AppError('FORBIDDEN', 403, 'BILLING_SUBJECT_NOT_ENTITLED');
   }
@@ -299,7 +300,7 @@ export async function createRecurringAddonCheckout(
       customer,
       account,
       email: requireIdentityEmail(details.user.email),
-      name: selectedScope.customerTeamId ? details.team.name : details.organisation.name,
+        name: selectedScope.customerTeamId ? details.team?.name ?? details.organisation.name : details.organisation.name,
       orgId: params.request.organisationId,
       teamId: selectedScope.customerTeamId,
       scope: selectedScope.customerScope,
@@ -365,6 +366,7 @@ export async function createRecurringAddonCheckout(
         data: {
         billingModeTeamId: params.request.teamId,
         billingModeRevision: modeRevision,
+      billingScopeEpoch: configured?.selection.epoch ? new Date(configured.selection.epoch) : null,
           ...identity,
           checkoutLocale: params.locale ?? null,
           serviceId: offer.serviceId,

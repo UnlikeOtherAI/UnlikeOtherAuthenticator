@@ -12,7 +12,7 @@ import { assertCreditCheckoutSessionBinding } from './billing-credit-checkout-re
 import type { CreditFundingActionRequest } from './billing-credit-funding-context.service.js';
 import { assertCreditFundingMetadata } from './billing-credit-funding-binding.service.js';
 import { exactMinor, requireCreditCurrency } from './billing-credit-funding-webhook-validation.service.js';
-import { resolveEffectiveTariffContext } from './billing-entitlement.service.js';
+import { resolveFinancialTariffContext } from './billing-entitlement.service.js';
 import { resolveBillingFundingViewer } from './billing-funding-viewer.service.js';
 import { isOrganisationBillingManager, resolveOrgBillingResponsibility } from './billing-org-responsibility.service.js';
 import { billingCreditPaymentCopy } from './billing-payment-copy.catalog.js';
@@ -104,7 +104,7 @@ export async function readCreditPurchaseEvidence(params: {
 
 type Dependencies = {
   prisma?: PrismaClient;
-  resolveEntitlement?: typeof resolveEffectiveTariffContext;
+  resolveEntitlement?: typeof resolveFinancialTariffContext;
   resolveViewer?: typeof resolveBillingFundingViewer;
   resolveResponsibility?: typeof resolveOrgBillingResponsibility;
   isOrganisationManager?: typeof isOrganisationBillingManager;
@@ -121,20 +121,14 @@ export async function getBillingCreditPurchaseStatus(params: {
   presentationEnabled?: boolean;
 }, deps: Dependencies = {}): Promise<BillingCreditPurchaseStatusV1> {
   const prisma = deps.prisma ?? getAdminPrisma();
-  await (deps.resolveEntitlement ?? resolveEffectiveTariffContext)(params, { prisma });
+  await (deps.resolveEntitlement ?? resolveFinancialTariffContext)(params, { prisma });
   const viewer = await (deps.resolveViewer ?? resolveBillingFundingViewer)(params.request, { prisma });
-  const responsibility = await (deps.resolveResponsibility ?? resolveOrgBillingResponsibility)(
-    { organisationId: params.request.organisationId }, { prisma },
-  );
-  const manager = responsibility.active
-    ? await (deps.isOrganisationManager ?? isOrganisationBillingManager)(params.request, { prisma })
-    : viewer.billingManager;
+  const manager = viewer.billingManager;
   if (!manager) throw new AppError('FORBIDDEN', 403, 'BILLING_MANAGER_REQUIRED');
   const checkout = await prisma.billingCreditTopUpCheckout.findFirst({
     where: {
       id: params.request.purchaseId,
-      creditAccount: { orgId: params.request.organisationId,
-        OR: [{ teamId: params.request.teamId }, { teamId: null, scope: 'ORGANISATION' }] },
+      creditAccount: { orgId: params.request.organisationId },
       serviceId: params.credential.service.id, appKeyId: params.credential.id,
     },
     include: { customer: { select: { stripeCustomerId: true } }, creditAccount: true, account: true },

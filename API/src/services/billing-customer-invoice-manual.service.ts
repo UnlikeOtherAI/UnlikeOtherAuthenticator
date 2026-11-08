@@ -1,10 +1,11 @@
+import type { BillingOrganisationFinancialDto as FinancialDto } from '../contracts/billing-statement-v1.js';
 import { BillingInvoiceStatus, type Prisma } from '@prisma/client';
 
 import {
   BILLING_CUSTOMER_INVOICES_DOWNLOAD_PATH,
-  type BillingCustomerInvoiceDetailV1,
-  type BillingCustomerInvoiceSummaryV1,
-  type BillingSubjectRequest,
+  type BillingCustomerInvoiceDetailV1 as PublicBillingCustomerInvoiceDetailV1,
+  type BillingCustomerInvoiceSummaryV1 as PublicBillingCustomerInvoiceSummaryV1,
+  type BillingSubjectRequest as PublicBillingSubjectRequest,
 } from '../contracts/billing-statement-v1.js';
 import { AppError } from '../utils/errors.js';
 import { cycleMoney } from './billing-cycle-quote-projection.service.js';
@@ -126,3 +127,9 @@ export function projectManualCustomerInvoiceDetail(
           document_id: `manual:${invoice.id}` } } },
   };
 }
+
+type BillingCustomerInvoiceDetailV1=FinancialDto<PublicBillingCustomerInvoiceDetailV1>;
+
+type BillingCustomerInvoiceSummaryV1=FinancialDto<PublicBillingCustomerInvoiceSummaryV1>;
+
+type BillingSubjectRequest=FinancialDto<PublicBillingSubjectRequest>;

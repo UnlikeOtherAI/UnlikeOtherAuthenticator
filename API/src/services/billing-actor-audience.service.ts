@@ -34,6 +34,9 @@ export const BILLING_ACTOR_ENDPOINTS = [
   '/billing/v1/effective-tariff',
   '/billing/v1/service-access/confirm',
   '/billing/v1/customer-statement',
+  '/billing/v1/organisation/capabilities',
+  '/billing/v1/organisation/overview',
+  '/billing/v1/organisation/region',
   '/billing/v2/customer-statement',
   '/billing/v1/credits',
   '/billing/v1/credits/funding-request',
@@ -103,6 +106,7 @@ export function assertBillingActorAudience(params: {
     !params.endpoint.startsWith('/billing/v1/voice/') &&
     !params.endpoint.startsWith('/billing/v1/sms/') &&
     params.endpoint !== '/billing/v1/model-prices' &&
+    !params.endpoint.startsWith('/billing/v1/organisation/') &&
     getBillingActorAudienceMode() === 'warn' &&
     // A legacy audience is only ever a transitional stand-in for a real endpoint
     // audience. It must still be one of this deployment's own billing URLs.

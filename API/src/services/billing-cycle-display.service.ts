@@ -1,12 +1,12 @@
-import type { BillingCycleDetailV2 } from '../contracts/billing-statement-v1.js';
+import type { BillingCycleDetailV2, BillingOrganisationFinancialDto } from '../contracts/billing-statement-v1.js';
 import type { BillingCustomerLocale } from './billing-copy-locale.js';
 import { localizedBillingMoney } from './billing-money.service.js';
 import { billingStatementCopy } from './billing-statement-copy.catalog.js';
 
 /** Called only after the stored financial snapshot and bindings are verified. */
-export function localizeBillingCycleDetail(
-  detail: BillingCycleDetailV2, locale?: BillingCustomerLocale,
-): BillingCycleDetailV2 {
+export function localizeBillingCycleDetail<T extends BillingOrganisationFinancialDto<BillingCycleDetailV2>>(
+  detail: T, locale?: BillingCustomerLocale,
+): T {
   if (!locale) return detail;
   const copy = billingStatementCopy(locale);
   const money = <T extends { amount: string; currency: string; display: string }>(value: T) =>

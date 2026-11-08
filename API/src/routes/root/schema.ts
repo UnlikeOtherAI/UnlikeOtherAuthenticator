@@ -1,4 +1,5 @@
 import { billingModeEndpoints } from './schema.billing-modes.js';
+import { organisationBillingEndpoints } from './schema.billing-organisation.js';
 import { telephoneEndpoints } from './schema.telephone.js';
 import { lifecycleEndpoints } from './schema.lifecycle.js';
 import { enterpriseSsoEndpoints } from './schema.enterprise-sso.js';
@@ -42,6 +43,7 @@ const orgContractEndpoints: EndpointSchema[] = withOrgContract([
 ]);
 
 export const endpoints: EndpointSchema[] = [
+  ...organisationBillingEndpoints,
   ...billingModeEndpoints,
   { method: 'GET', path: '/org/organisations/:orgId/teams/:teamId/people/:userId/avatar',
     description: 'Render one authorized exact-team person avatar, including people new to the product',

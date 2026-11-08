@@ -1,5 +1,7 @@
+import { billingSubscriptionProjection } from './billing-subscription-projection.service.js';
+import { requireBillingManager } from './billing-financial-authority.service.js';
 import { bindStatementActions } from './billing-statement-mode.service.js';
-import { billingAddonCopy, billingAddonSubscriptionStatus } from './billing-addon-copy.catalog.js';
+
 import type { BillingCustomerLocale } from './billing-copy-locale.js';
 import { billingStatementCopy } from './billing-statement-copy.catalog.js';
 import { billingSubscriptionCopy } from './billing-subscription-copy.catalog.js';
@@ -56,7 +58,7 @@ import {
 type SubscriptionSummary = Awaited<ReturnType<typeof getStripeSubscriptionSummary>>;
 
 type StatementContext = {
-  request: BillingSubscriptionRequest;
+  request: BillingSubscriptionRequest & {teamId:string};
   actorToken: string;
   credential: VerifiedBillingAppKey;
   endpoint: BillingActorEndpoint;
@@ -68,6 +70,7 @@ type StatementContext = {
 type Dependencies = {
   prisma?: PrismaClient;
   now?: () => Date;
+  requireManager?: typeof requireBillingManager;
   resolveSummary?: (params: StatementContext) => Promise<SubscriptionSummary>;
   fetchMetering?: FetchMeteringUsage;
   fetchPortfolio?: FetchMeteringPortfolio;
@@ -153,23 +156,6 @@ function serviceGraph(
     });
 }
 
-function subscriptionProjection(summary: SubscriptionSummary, locale?: BillingCustomerLocale): BillingStatementV1['subscription'] {
-  const subscription = summary.subscription;
-  if (!subscription) return null;
-  const displayStatus = subscription.cancel_at_period_end
-    ? billingAddonCopy(locale).cancelsAtPeriodEnd
-    : billingAddonSubscriptionStatus(subscription.status, locale);
-  return {
-    id: subscription.id,
-    status: subscription.status,
-    display_status: displayStatus,
-    scope: subscription.scope === 'team' ? 'team' : 'organisation',
-    cancel_at_period_end: subscription.cancel_at_period_end,
-    current_period_start: subscription.current_period_start,
-    current_period_end: subscription.current_period_end,
-  };
-}
-
 async function buildCanonicalBillingStatement(
   context: StatementContext,
   version: 'v1' | 'v2',
@@ -178,6 +164,7 @@ async function buildCanonicalBillingStatement(
   const now = deps?.now?.() ?? new Date();
   const period = monthPeriod(context.billingMonth, now);
   const prisma = deps?.prisma ?? getAdminPrisma();
+  await (deps?.requireManager ?? requireBillingManager)(context.request,prisma);
   const currentSummary = await (
     deps?.resolveSummary ?? ((params) => getStripeSubscriptionSummary(params, { prisma }))
   )(context);
@@ -391,7 +378,7 @@ async function buildCanonicalBillingStatement(
       identifier: context.credential.service.identifier,
       name: context.credential.service.name,
     },
-    subject: summary.subject,
+    subject: {...summary.subject,team_id:context.request.teamId},
     period: {
       key: period.key,
       starts_at: period.starts_at,
@@ -426,7 +413,7 @@ async function buildCanonicalBillingStatement(
       stripe_collection_enabled: summary.stripe_collection_enabled,
       stripe_mode: summary.stripe_mode,
     },
-    subscription: subscriptionProjection(summary, context.locale),
+    subscription: billingSubscriptionProjection(summary, context.locale),
     services: serviceGraph(
       version === 'v2'
         ? (userMetering as NormalizedMeteringPortfolio).lines

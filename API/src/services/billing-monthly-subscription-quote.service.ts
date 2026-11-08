@@ -103,7 +103,7 @@ async function loadFrozenTerms(source: MonthlyChargeSource, prisma: PrismaClient
 }
 
 export async function quoteSubscriptionMonthlyCharge(
-  params: { source: MonthlyChargeSource; billingMonth: string },
+  params: { source: MonthlyChargeSource; billingMonth: string; asOf?: Date },
   deps?: { prisma?: PrismaClient; now?: () => Date },
 ) {
   const prisma = deps?.prisma ?? getAdminPrisma();
@@ -112,7 +112,12 @@ export async function quoteSubscriptionMonthlyCharge(
   }
   const start = new Date(`${params.billingMonth}-01T00:00:00.000Z`);
   const end = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 1));
-  if (end > (deps?.now?.() ?? new Date())) hold('BILLING_MONTH_NOT_CLOSED');
+  const now = deps?.now?.() ?? new Date();
+  if (params.asOf) {
+    if (!Number.isFinite(params.asOf.getTime()) || params.asOf > now || params.asOf <= start || params.asOf > end) {
+      hold('BILLING_ACCRUAL_INSTANT_INVALID');
+    }
+  } else if (end > now) hold('BILLING_MONTH_NOT_CLOSED');
   const terms = await loadFrozenTerms(params.source, prisma);
   if (terms.sourceStatus === 'paused' || terms.sourceStatus === 'unpaid') {
     hold('BILLING_MONTHLY_SOURCE_STATUS_UNRESOLVED');
@@ -191,7 +196,7 @@ export async function quoteSubscriptionMonthlyCharge(
     commercialEffectiveAt: agreement.commercialEffectiveAt,
     commercialEndsAt: agreement.commercialEndsAt, endedAt: agreement.endedAt,
     membershipIntervals: agreement.membershipIntervals,
-    capacityRevisions: agreement.capacityRevisions });
+    capacityRevisions: agreement.capacityRevisions, asOf: params.asOf });
   return { source: terms.source, serviceId: terms.serviceId, tariffId: terms.tariffId,
     organisationId: terms.orgId, teamId: terms.teamId, scope: terms.scope,
     agreementId: agreement.id, billingMonth: params.billingMonth,

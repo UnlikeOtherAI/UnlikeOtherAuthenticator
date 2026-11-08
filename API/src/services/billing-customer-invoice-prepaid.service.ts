@@ -1,3 +1,4 @@
+import type { BillingOrganisationFinancialDto as FinancialDto } from '../contracts/billing-statement-v1.js';
 import type { BillingCustomerLocale } from './billing-copy-locale.js';
 import { billingStatementCopy } from './billing-statement-copy.catalog.js';
 import {
@@ -8,9 +9,9 @@ import {
 
 import {
   BILLING_CUSTOMER_INVOICES_DOWNLOAD_PATH,
-  type BillingCustomerInvoiceDetailV1,
-  type BillingCustomerInvoiceSummaryV1,
-  type BillingSubjectRequest,
+  type BillingCustomerInvoiceDetailV1 as PublicBillingCustomerInvoiceDetailV1,
+  type BillingCustomerInvoiceSummaryV1 as PublicBillingCustomerInvoiceSummaryV1,
+  type BillingSubjectRequest as PublicBillingSubjectRequest,
 } from '../contracts/billing-statement-v1.js';
 import { AppError } from '../utils/errors.js';
 import { decimalCredits } from './billing-cycle-credit-evidence.service.js';
@@ -145,3 +146,9 @@ export function projectPrepaidCustomerInvoiceDetail(
     } : null,
   };
 }
+
+type BillingCustomerInvoiceDetailV1=FinancialDto<PublicBillingCustomerInvoiceDetailV1>;
+
+type BillingCustomerInvoiceSummaryV1=FinancialDto<PublicBillingCustomerInvoiceSummaryV1>;
+
+type BillingSubjectRequest=FinancialDto<PublicBillingSubjectRequest>;

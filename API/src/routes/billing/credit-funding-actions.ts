@@ -19,7 +19,7 @@ import { createBillingCreditAutoTopUpSetup } from '../../services/billing-credit
 import type { CreditFundingActionRequest } from '../../services/billing-credit-funding-context.service.js';
 import { createBillingCreditTopUpCheckout } from '../../services/billing-credit-top-up.service.js';
 import { AppError } from '../../utils/errors.js';
-import { BillingSubjectRequestSchema, readBillingActorHeader } from './billing-request.js';
+import { BillingFinancialSubjectRequestSchema as BillingSubjectRequestSchema, readBillingActorHeader } from './billing-request.js';
 import type { BillingActorEndpoint } from '../../services/billing-actor-audience.service.js';
 import type { BillingCustomerLocale } from '../../contracts/billing-statement-v1.js';
 import { readBillingPresentation } from './billing-presentation.js';

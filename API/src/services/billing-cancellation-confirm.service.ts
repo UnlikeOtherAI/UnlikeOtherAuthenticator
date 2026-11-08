@@ -7,6 +7,7 @@ import {
 import { createHash } from 'node:crypto';
 import type Stripe from 'stripe';
 import { requireStoredStripeBilling } from './billing-team-mode.service.js';
+import { requireBillingManager } from './billing-financial-authority.service.js';
 
 import type {
   BillingCancellationConfirmationV1,
@@ -23,7 +24,7 @@ import {
   authorizeBillingCustomerAction,
   BILLING_CUSTOMER_ACTION,
 } from './billing-customer-action-intent.service.js';
-import { resolveEffectiveTariffContext } from './billing-entitlement.service.js';
+import { resolveFinancialTariffContext } from './billing-entitlement.service.js';
 import {
   loadBillingCancellationState,
   type CancellationSubscription,
@@ -64,7 +65,7 @@ function assertIntentBinding(
     appKeyId: string;
     serviceId: string;
     orgId: string;
-    teamId: string;
+    teamId: string|null;
     requestedByUserId: string;
   },
   params: {
@@ -123,9 +124,8 @@ async function claimCancellation(
     token: string;
     idempotencyKey: string;
     selection: BillingCancellationSelection | null;
-    currentSubscriptionId: string;
     now: Date;
-    authorizeAction: (tx: Prisma.TransactionClient) => Promise<void>;
+    authorizeAction: (tx: Prisma.TransactionClient, current: CancellationSubscription) => Promise<void>;
   },
   prisma: PrismaClient,
   loadState: typeof loadBillingCancellationState,
@@ -204,7 +204,6 @@ async function claimCancellation(
       }
       const current = state.subscriptions.find(
         (subscription) =>
-          subscription.id === params.currentSubscriptionId &&
           subscription.serviceId === params.credential.service.id &&
           intent.directSubscriptionIds.includes(subscription.id),
       );
@@ -228,8 +227,8 @@ async function claimCancellation(
         }
         return target;
       });
+      await params.authorizeAction(tx,current);
       if (intent.state === BillingCancellationIntentState.AVAILABLE) {
-        await params.authorizeAction(tx);
         await tx.billingCancellationIntent.update({
           where: { id: intent.id },
           data: {
@@ -359,8 +358,9 @@ export async function confirmBillingCancellation(
     loadState?: typeof loadBillingCancellationState;
     resolveAccount?: typeof resolveStripeAccountContext;
     syncSubscription?: typeof syncStripeSubscriptionProjection;
-    resolveTariff?: typeof resolveEffectiveTariffContext;
+    resolveTariff?: typeof resolveFinancialTariffContext;
     authorizeAction?: typeof authorizeBillingCustomerAction;
+    requireManager?:typeof requireBillingManager;
     resolveSummary?: (
       params: Pick<
         Parameters<typeof getStripeSubscriptionSummary>[0],
@@ -370,32 +370,22 @@ export async function confirmBillingCancellation(
   },
 ): Promise<BillingCancellationConfirmationV1> {
   const prisma = deps?.prisma ?? getAdminPrisma();
-  const summary = await (
-    deps?.resolveSummary ?? ((context) => getStripeSubscriptionSummary(context, { prisma }))
-  )(params);
-  if (!summary.can_manage || !summary.subscription) {
-    throw new AppError('FORBIDDEN', 403, 'BILLING_CANCELLATION_NOT_AVAILABLE');
-  }
-  const subscription = summary.subscription;
-  const { actor } = await (deps?.resolveTariff ?? resolveEffectiveTariffContext)(params, {
+  const { actor } = await (deps?.resolveTariff ?? resolveFinancialTariffContext)(params, {
     prisma,
   });
+  await (deps?.requireManager??requireBillingManager)(params.request,prisma);
   const claimed = await claimCancellation(
     {
       ...params,
-      currentSubscriptionId: subscription.id,
       now: deps?.now?.() ?? new Date(),
-      authorizeAction: async (tx) => {
+      authorizeAction: async (tx,subscription) => {
         await (deps?.authorizeAction ?? authorizeBillingCustomerAction)(
           {
             credential: params.credential,
             organisationId: params.request.organisationId,
             teamId: params.request.teamId,
             userId: params.request.userId,
-            authorityScope:
-              subscription.scope === 'organisation'
-                ? BillingAssignmentScope.ORGANISATION
-                : BillingAssignmentScope.TEAM,
+            authorityScope: BillingAssignmentScope.ORGANISATION,
             operation: BILLING_CUSTOMER_ACTION.SUBSCRIPTION_CANCEL,
             actor,
             request: {

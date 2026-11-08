@@ -1,29 +1,31 @@
-import { Prisma, type PrismaClient } from '@prisma/client';
+import { type Prisma, type PrismaClient } from '@prisma/client';
 
 import { getAdminPrisma } from '../db/prisma.js';
 import { getEnv } from '../config/env.js';
 import { AppError } from '../utils/errors.js';
-import { lockBillingAdminEffectAuthority, type BillingAdminEffectActor }
+import { resolveOrganisationBillingMode } from './billing-organisation-mode.service.js';
+import { type BillingAdminEffectActor }
   from './billing-admin-effect-authority.service.js';
 import { requireStripeBillingEnabled, type StripeBillingMode }
   from './billing-stripe-client.service.js';
+import { stripeRuntimeForAccount } from './billing-stripe-client.service.js';
 
-type ModeDb = Pick<Prisma.TransactionClient, 'team' | 'billingTeamMode'>;
+type ModeDb = Pick<Prisma.TransactionClient, 'team' | 'organisation' | '$queryRaw'>;
 
 export async function resolveTeamBillingMode(
-  subject: { organisationId: string; teamId: string },
+  subject: { organisationId: string; teamId: string | null },
   prisma: ModeDb = getAdminPrisma(),
-): Promise<{ mode: StripeBillingMode; revision: number }> {
+) {
+  if (subject.teamId===null) return resolveOrganisationBillingMode(subject.organisationId,prisma);
   const team = await prisma.team.findFirst({ where: { id: subject.teamId,
     orgId: subject.organisationId, lifecycleStatus: 'ACTIVE', org: { lifecycleStatus: 'ACTIVE' } },
     select: { id: true } });
   if (!team) throw new AppError('NOT_FOUND', 404, 'BILLING_TEAM_NOT_AVAILABLE');
-  const policy = await prisma.billingTeamMode.findUnique({ where: { teamId: team.id } });
-  return { mode: policy?.sandbox ? 'sandbox' : 'live', revision: policy?.revision ?? 0 };
+  return resolveOrganisationBillingMode(subject.organisationId, prisma);
 }
 
 export async function requireTeamStripeBilling(
-  subject: { organisationId: string; teamId: string },
+  subject: { organisationId: string; teamId: string | null },
   prisma: ModeDb = getAdminPrisma(),
 ) {
   const selection = await resolveTeamBillingMode(subject, prisma);
@@ -36,16 +38,22 @@ export async function requireStoredStripeBilling(accountId: string,
   if (!account) throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_STRIPE_ACCOUNT_NOT_CONFIGURED');
   return requireStripeBillingEnabled(account);
 }
+/** Reads and captured recovery use their credential tuple even while new collection is disabled. */
+export async function storedStripeBillingReader(accountId:string,
+  prisma:Pick<Prisma.TransactionClient,'billingStripeAccount'>=getAdminPrisma()) {
+  const account=await prisma.billingStripeAccount.findUnique({where:{id:accountId}});
+  if(!account)throw new AppError('SERVICE_UNAVAILABLE',503,'BILLING_STRIPE_ACCOUNT_NOT_CONFIGURED');
+  return stripeRuntimeForAccount(account);
+}
 
-export async function resolveBillingDisplayBinding(subject: { organisationId: string; teamId: string },
+export async function resolveBillingDisplayBinding(subject: { organisationId: string; teamId: string | null },
   appKeyId: string, subscriptionId: string | null, prisma: PrismaClient = getAdminPrisma()) {
   const selection = await resolveTeamBillingMode(subject, prisma);
   if (subscriptionId) {
     const subscription = await prisma.billingStripeSubscription.findFirst({ where: {
-      id: subscriptionId, orgId: subject.organisationId,
-      OR: [{ teamId: subject.teamId }, { teamId: null }] }, include: { account: true } });
+      id: subscriptionId, orgId: subject.organisationId }, include: { account: true } });
     if (!subscription) throw new AppError('BAD_REQUEST', 409, 'BILLING_CONTEXT_STALE');
-    return { account: subscription.account, revision: selection.revision, appKeyId };
+    return { account: subscription.account, revision: selection.revision, scopeEpoch: selection.epoch, appKeyId };
   }
   const env = getEnv();
   const expectedId = selection.mode === 'live' ? env.STRIPE_LIVE_ACCOUNT_ID : env.STRIPE_SANDBOX_ACCOUNT_ID;
@@ -53,85 +61,34 @@ export async function resolveBillingDisplayBinding(subject: { organisationId: st
   const account = await prisma.billingStripeAccount.findUnique({ where: {
     stripeAccountId_livemode: { stripeAccountId: expectedId, livemode: selection.mode === 'live' } } });
   if (!account) throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_STRIPE_ACCOUNT_NOT_CONFIGURED');
-  return { account, revision: selection.revision, appKeyId };
+  return { account, revision: selection.revision, scopeEpoch: selection.epoch, appKeyId };
 }
 
 export async function requireOrganisationStripeBilling(organisationId: string,
   prisma: ModeDb = getAdminPrisma()) {
-  const team = await prisma.team.findFirst({ where: { orgId: organisationId,
-    lifecycleStatus: 'ACTIVE' }, select: { id: true } });
-  if (!team) throw new AppError('NOT_FOUND', 404, 'BILLING_TEAM_NOT_AVAILABLE');
-  const selected = await requireTeamStripeBilling({ organisationId, teamId: team.id }, prisma);
-  await assertOrganisationBillingMode(organisationId, selected.livemode, prisma);
-  return selected;
+  const selection=await resolveOrganisationBillingMode(organisationId,prisma);
+  return {...requireStripeBillingEnabled(selection.mode),selection};
 }
 
-/** Organisation money and subscriptions require one mode across all active teams. */
+/** Team admission does not select the organisation's financial mode. */
 export async function assertOrganisationBillingMode(
   organisationId: string, livemode: boolean, prisma: ModeDb = getAdminPrisma(),
 ): Promise<void> {
-  const teams = await prisma.team.findMany({ where: { orgId: organisationId,
-    lifecycleStatus: 'ACTIVE' }, select: { id: true } });
-  if (!teams.length) throw new AppError('BAD_REQUEST', 409, 'BILLING_ORGANISATION_MODE_UNAVAILABLE');
-  const policies = await prisma.billingTeamMode.findMany({ where: {
-    teamId: { in: teams.map((team) => team.id) } }, select: { teamId: true, sandbox: true } });
-  const sandbox = new Set(policies.filter((policy) => policy.sandbox).map((policy) => policy.teamId));
-  if (teams.some((team) => sandbox.has(team.id) === livemode)) {
-    throw new AppError('BAD_REQUEST', 409, 'BILLING_ORGANISATION_MODES_MIXED');
+  const selected = await resolveOrganisationBillingMode(organisationId, prisma);
+  if ((selected.mode === 'live') !== livemode) {
+    throw new AppError('BAD_REQUEST', 409, 'BILLING_ORGANISATION_MODE_CHANGED');
   }
 }
 
-export type BillingModeBlocker = { code: string; count: number };
-
-async function canAdoptSandbox(subject: { organisationId: string; teamId: string },
-  accountId: string | undefined, prisma: Pick<Prisma.TransactionClient, '$queryRaw'>): Promise<boolean> {
-  if (!accountId) return false;
-  const rows = await prisma.$queryRaw<Array<{ available: boolean }>>(Prisma.sql`
-    SELECT billing_team_sandbox_adoption_available(${subject.organisationId}, ${subject.teamId}, ${accountId}) AS available`);
-  return rows[0]?.available === true;
+// Legacy routes remain discoverable, but cannot change retired team policy.
+export async function readTeamBillingMode(subject: { organisationId: string; teamId: string | null },
+  prisma: PrismaClient = getAdminPrisma()) {
+  const selection = await resolveTeamBillingMode(subject,prisma);
+  return {team_id:subject.teamId,organisation_id:subject.organisationId,...selection,
+    controlling_scope:'organisation' as const,blockers:[]};
 }
-
-export async function readTeamBillingMode(
-  subject: { organisationId: string; teamId: string },
-  prisma: PrismaClient = getAdminPrisma(),
-) {
-  const selection = await resolveTeamBillingMode(subject, prisma);
-  const blockers = await prisma.$queryRaw<BillingModeBlocker[]>(Prisma.sql`
-    SELECT code, count::integer FROM billing_team_mode_blockers(${subject.organisationId}, ${subject.teamId})`);
-  const adoption = blockers.length > 0 && selection.revision === 0 && await canAdoptSandbox(
-    subject, getEnv().STRIPE_SANDBOX_ACCOUNT_ID, prisma);
-  return { team_id: subject.teamId, organisation_id: subject.organisationId,
-    mode: selection.mode, revision: selection.revision, blockers: adoption ? [] : blockers,
-    ...(adoption ? { adopting_sandbox_history: true as const } : {}) };
-}
-
-export async function setTeamBillingMode(params: {
-  organisationId: string; teamId: string; mode: StripeBillingMode; expectedRevision: number;
-  actor: BillingAdminEffectActor;
-}, prisma: PrismaClient = getAdminPrisma()) {
-  await prisma.$transaction(async (tx) => {
-    await lockBillingAdminEffectAuthority(tx, params.actor);
-    await tx.$queryRaw(Prisma.sql`SELECT id FROM organisations WHERE id = ${params.organisationId} FOR UPDATE`);
-    const current = await resolveTeamBillingMode(params, tx);
-    if (current.revision !== params.expectedRevision) {
-      throw new AppError('BAD_REQUEST', 409, 'BILLING_TEAM_MODE_CHANGED');
-    }
-    if (current.mode === params.mode) return;
-    const blockers = await tx.$queryRaw<BillingModeBlocker[]>(Prisma.sql`
-      SELECT code, count::integer FROM billing_team_mode_blockers(${params.organisationId}, ${params.teamId})`);
-    const sandboxAccountId = getEnv().STRIPE_SANDBOX_ACCOUNT_ID;
-    const adoption = blockers.length > 0 && current.revision === 0 && params.mode === 'sandbox'
-      && await canAdoptSandbox(params, sandboxAccountId, tx);
-    if (blockers.length && !adoption) throw new AppError('BAD_REQUEST', 409, 'BILLING_TEAM_MODE_BLOCKED');
-    await tx.billingTeamMode.upsert({ where: { teamId: params.teamId },
-      create: { teamId: params.teamId, sandbox: params.mode === 'sandbox', revision: 1,
-        ...(adoption ? { adoptedStripeAccountId: sandboxAccountId } : {}) },
-      update: { sandbox: params.mode === 'sandbox', revision: { increment: 1 }, updatedAt: new Date() } });
-    await tx.adminAuditLog.create({ data: { actorEmail: params.actor.email,
-      action: 'billing.team_mode_changed', metadata: { organisation_id: params.organisationId,
-        team_id: params.teamId, previous_mode: current.mode, mode: params.mode,
-        revision: current.revision + 1, actor_user_id: params.actor.userId ?? null,
-        ...(adoption ? { adopted_stripe_account_id: sandboxAccountId, preserved_test_history: true } : {}) } } });
-  });
-  return readTeamBillingMode(params, prisma);
+export async function setTeamBillingMode(_params: {
+  organisationId:string;teamId:string;mode:StripeBillingMode;expectedRevision:number;actor:BillingAdminEffectActor;
+},_prisma:PrismaClient=getAdminPrisma()):Promise<never> {
+  throw new AppError('BAD_REQUEST',409,'BILLING_ORGANISATION_MODE_REQUIRED');
 }

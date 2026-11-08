@@ -1,5 +1,6 @@
 import type {
   BillingCustomerInvoiceDetailV1, BillingCustomerInvoiceSummaryV1,
+  BillingOrganisationFinancialDto,
 } from '../contracts/billing-statement-v1.js';
 import type { BillingCustomerLocale } from './billing-copy-locale.js';
 import { localizedBillingMoney } from './billing-money.service.js';
@@ -22,9 +23,9 @@ export function localizeCustomerInvoiceSummary<T extends BillingCustomerInvoiceS
     } };
 }
 
-export function localizeCustomerInvoiceDetail(
-  detail: BillingCustomerInvoiceDetailV1, locale?: BillingCustomerLocale,
-): BillingCustomerInvoiceDetailV1 {
+export function localizeCustomerInvoiceDetail<T extends BillingOrganisationFinancialDto<BillingCustomerInvoiceDetailV1>>(
+  detail: T, locale?: BillingCustomerLocale,
+): T {
   if (!locale) return detail;
   return { ...localizeCustomerInvoiceSummary(detail, locale),
     payments: detail.payments.map((payment) => ({ ...payment,

@@ -30,7 +30,7 @@ export function currentBillingCreditPeriod(now: Date): BillingCreditPeriod {
 export async function loadBillingCreditProjectionData(
   params: {
     creditAccountId: string;
-    teamId: string;
+    teamId: string|null;
     accountId: string;
     storefrontServiceId: string;
     period: BillingCreditPeriod;
@@ -99,25 +99,20 @@ export async function loadBillingCreditProjectionData(
     prisma.billingCreditUsageSettlement.findMany({
       where: {
         creditAccountId: params.creditAccountId,
-        teamId: params.teamId,
         billingMonth: params.period.key,
       },
       orderBy: { service: { identifier: 'asc' } },
       include: { service: true },
     }),
     prisma.billingPrepaidReservation.findMany({
-      where: { creditAccountId: params.creditAccountId, teamId: params.teamId,
+      where: { creditAccountId: params.creditAccountId,
         billingMonth: params.period.key },
       include: { tariff: { select: { service: { select: { id: true,
         identifier: true, name: true } } } } },
     }),
     billingReservedMicrocredits(prisma, params.creditAccountId),
     prisma.billingCreditEntry.findMany({
-      where: { creditAccountId: params.creditAccountId,
-        OR: [{ kind: { notIn: [BillingCreditEntryKind.PREPAID_USAGE, BillingCreditEntryKind.SMS_PREPAID_USAGE, BillingCreditEntryKind.VOICE_PREPAID_USAGE] } },
-          { prepaidReservation: { teamId: params.teamId } },
-          { smsReservation: { teamId: params.teamId } },
-          { smsInboundReceipt: { teamId: params.teamId } }] },
+      where: { creditAccountId: params.creditAccountId },
       orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
       take: 20,
       include: {

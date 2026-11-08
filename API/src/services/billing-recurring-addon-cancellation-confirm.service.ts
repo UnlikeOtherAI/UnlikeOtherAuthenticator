@@ -25,7 +25,7 @@ import {
   recurringAddonCancellationDigest,
   scopeForSubscription,
 } from './billing-recurring-addon-cancellation-preview.service.js';
-import { resolveEffectiveTariffContext } from './billing-entitlement.service.js';
+import { resolveFinancialTariffContext } from './billing-entitlement.service.js';
 import { resolveBillingFundingViewer } from './billing-funding-viewer.service.js';
 import {
   assertCanManageRecurringAddonScope,
@@ -93,7 +93,7 @@ function assertIntentBinding(
     appKeyId: string;
     serviceId: string;
     orgId: string;
-    requestedTeamId: string;
+    requestedTeamId: string|null;
     requestedByUserId: string;
     idempotencyKey: string;
     subjectFingerprint: string;
@@ -241,7 +241,7 @@ export async function confirmRecurringAddonCancellation(
   },
 ): Promise<BillingRecurringAddonCancellationConfirmationV1> {
   const prisma = deps?.prisma ?? getAdminPrisma();
-  const { actor } = await resolveEffectiveTariffContext(
+  const { actor } = await resolveFinancialTariffContext(
     {
       request: params.request,
       actorToken: params.actorToken,

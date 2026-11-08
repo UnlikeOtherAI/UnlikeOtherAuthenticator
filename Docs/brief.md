@@ -3469,3 +3469,11 @@ grant or lose its resource binding through generic token exchange.
 ## Shared team archive (7 November 2026)
 
 A product may archive a shared UOA team across all connected products while permanent deletion stays held. This is separate from executable erasure, including for the default or last team. UOA owns the lifecycle, billing stop proof and revocation; products store references only. The contract and focused checks are in [Shared team archive](Auth/team-archive.md).
+
+### Organisation financial authority (7 November 2026 user supersession)
+
+The customer billing scope is one UOA organisation. Its organisation policy selects LIVE by default or Sandbox for the whole organisation, including future teams. A selected team admits an actor; it does not filter the organisation's money. Only an ACTIVE organisation owner/admin or an ACTIVE owner/admin of any ACTIVE team in that organisation, with current ACTIVE organisation membership, may read/manage customer finances. Ordinary members may submit the separate selected-team, nonfinancial Ask for credits request; UOA selects current organisation billing managers as recipients.
+
+Platform SUPERUSER owns the audited organisation mode control in Admin. Customer managers cannot choose billing modes. Existing TEAM financial sources, balances, consents, subscriptions, invoices and captured account/mode bindings stay intact. No automatic adoption, copying, pooling or migration of money occurs. New financial work uses an ORGANISATION payer; captured historical work and recovery keep their original tuple. The immutable organisation cutover and organisation mode events hold every inclusive change month for reconciliation; no forced settlement or inferred split is authorized. Named provider account replacement needs a separately reviewed cutover/history plan; key rotation inside the same account does not.
+
+The explicit organisation financial protocol admits a nullable actor team only on its closed financial endpoint realm. It does not grant team/content access or change standard OAuth, Me or selected-team admission. A no-team browser sign-in requires its own explicit financial-only bootstrap; nullable billing endpoint tests alone do not prove that journey.

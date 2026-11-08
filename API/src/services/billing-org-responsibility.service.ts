@@ -64,13 +64,19 @@ export async function isOrganisationBillingManager(
   const prisma = deps?.prisma ?? getAdminPrisma();
   const membership = await prisma.orgMember.findUnique({
     where: { orgId_userId: { orgId: params.organisationId, userId: params.userId } },
-    select: { role: true, status: true },
+    select: { role: true, status: true,org:{select:{ownerId:true,lifecycleStatus:true}} },
   });
   if (membership?.status !== MembershipStatus.ACTIVE) return false;
-  return isBillingManager({
+  if(membership.org?.lifecycleStatus && membership.org.lifecycleStatus!=='ACTIVE')return false;
+  if(membership.org?.ownerId===params.userId)return true;
+  if (isBillingManager({
     scope: BillingAssignmentScope.ORGANISATION,
     orgRole: membership.role,
-  });
+  })) return true;
+  return Boolean(await prisma.teamMember.findFirst({ where: {
+    userId: params.userId, status: MembershipStatus.ACTIVE, teamRole: { in: ['owner', 'admin'] },
+    team: { orgId: params.organisationId, lifecycleStatus: 'ACTIVE', org: { lifecycleStatus: 'ACTIVE' } },
+  }, select: { id: true } }));
 }
 
 /**

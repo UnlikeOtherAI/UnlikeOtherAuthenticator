@@ -42,17 +42,18 @@ function hold(code: string): never {
 }
 
 function correctPayer(account: { orgId: string; teamId: string | null;
-  scope: BillingAssignmentScope }, scope: PaidReceiptScope,
-  payer: BillingAssignmentScope): boolean {
+  scope: BillingAssignmentScope;accountId?:string }, scope: PaidReceiptScope,
+  payer: BillingAssignmentScope,accountId?:string): boolean {
   return account.orgId === scope.organisationId && account.scope === payer &&
-    account.teamId === (payer === BillingAssignmentScope.TEAM ? scope.teamId : null);
+    account.teamId === (payer === BillingAssignmentScope.TEAM ? scope.teamId : null) &&
+    (accountId===undefined||account.accountId===accountId);
 }
 
 /** Gross customer credit usage is the immutable UOA receipt delta, never a
  * monthly rerating. Funded wallet debit and operator waiver are independent. */
 export async function readVerifiedCycleCreditEvidence(reader: Reader,
   params: { scope: PaidReceiptScope; proof: LedgerPaidReceiptSet;
-    payer: BillingAssignmentScope; tariff: BillingTariff; rawLines: RawMeteringLine[] },
+    payer: BillingAssignmentScope; tariff: BillingTariff; rawLines: RawMeteringLine[];accountId?:string },
 ): Promise<VerifiedCycleCreditEvidence> {
   const { scope, proof, tariff } = params;
   if (proof.scope.billing_product !== scope.product ||
@@ -110,7 +111,7 @@ export async function readVerifiedCycleCreditEvidence(reader: Reader,
   let fundedDebit: bigint | null = null;
   if (tariff.usagePaymentMode === BillingUsagePaymentMode.PREPAID) {
     const reservations = await reader.billingPrepaidReservation.findMany({ where,
-      include: { creditAccount: { select: { orgId: true, teamId: true, scope: true } },
+      include: { creditAccount: { select: { orgId: true, teamId: true, scope: true,accountId:true } },
         creditEntry: { select: { id: true, direction: true, kind: true,
           amountMicrocredits: true } } } });
     const byDispatch = new Map(reservations.map((row) => [row.dispatchId, row]));
@@ -123,7 +124,7 @@ export async function readVerifiedCycleCreditEvidence(reader: Reader,
       if (!row || row.status !== BillingPrepaidReservationStatus.SETTLED ||
         row.rawCostActual === null || row.debitedMicrocredits === null ||
         row.debitedMicrocredits < 0n || row.tariffId !== tariff.id ||
-        !correctPayer(row.creditAccount, scope, params.payer) ||
+        !correctPayer(row.creditAccount, scope, params.payer,params.accountId) ||
         (row.debitedMicrocredits > 0n && (!row.creditEntry ||
           row.creditEntry.direction !== BillingCreditEntryDirection.DEBIT ||
           row.creditEntry.kind !== BillingCreditEntryKind.PREPAID_USAGE ||
@@ -152,14 +153,14 @@ export async function readVerifiedCycleCreditEvidence(reader: Reader,
       serviceId: scope.serviceId, teamId: scope.teamId,
       billingMonth: scope.billingMonth,
       creditAccount: { orgId: scope.organisationId },
-    }, include: { creditAccount: { select: { orgId: true, teamId: true, scope: true } },
+    }, include: { creditAccount: { select: { orgId: true, teamId: true, scope: true,accountId:true } },
       adjustments: { orderBy: { sequence: 'desc' }, take: 1,
         select: { id: true, cumulativeCreditsConsumedMicrocredits: true } } } });
     if (settlements.length > 1) hold('BILLING_CYCLE_PAYG_SETTLEMENT_CONFLICT');
     const row = settlements[0];
     if (row) {
       const adjustment = row.adjustments[0];
-      if (!correctPayer(row.creditAccount, scope, params.payer) ||
+      if (!correctPayer(row.creditAccount, scope, params.payer,params.accountId) ||
         row.tariffId !== tariff.id || row.currency !== 'USD' ||
         row.cumulativeCreditsConsumedMicrocredits < 0n ||
         row.cumulativeCreditsConsumedMicrocredits > matched.ratedMicrocredits - waived ||

@@ -26,7 +26,7 @@ import {
 } from '../../services/billing-customer-invoice-read.service.js';
 import { AppError } from '../../utils/errors.js';
 import { readBillingPresentation } from './billing-presentation.js';
-import { BillingSubjectRequestSchema, readBillingActorHeader } from './billing-request.js';
+import { BillingFinancialSubjectRequestSchema as BillingSubjectRequestSchema, readBillingActorHeader } from './billing-request.js';
 
 const validator = new Ajv2020({ allErrors: true, strict: true });
 ajvFormats.default.default(validator);

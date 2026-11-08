@@ -112,7 +112,7 @@ function statement(
 }
 
 describe('billing cancellation preview', () => {
-  it('pins a same-account related subscription when any active team user has direct access', async () => {
+  it('pins same-account organisation subscriptions independently of metering attribution', async () => {
     const create = vi.fn().mockResolvedValue({});
     const preview = await createBillingCancellationPreview(
       { request, actorToken: 'signed-actor', credential },
@@ -173,12 +173,7 @@ describe('billing cancellation preview', () => {
           direct_user_count: 1,
         },
       ],
-      indirect_services: [
-        {
-          product: 'deepsignal',
-          impact: 'Indirectly used products do not have a separate subscription to cancel.',
-        },
-      ],
+      indirect_services: [],
       confirm_action: {
         path: '/billing/v1/cancellation/confirm',
         selection_required: true,
@@ -192,7 +187,7 @@ describe('billing cancellation preview', () => {
         tokenDigest: createHash('sha256').update(preview.preview_token).digest('hex'),
         directServiceIds: ['service_deepwater', 'service_nessie'],
         directSubscriptionIds: [current.id, related.id],
-        indirectServiceIds: ['deepsignal'],
+        indirectServiceIds: [],
         expiresAt: new Date('2026-07-20T12:05:00.000Z'),
       }),
     });
@@ -200,7 +195,7 @@ describe('billing cancellation preview', () => {
     expect(preview.direct_services.map((service) => service.product)).not.toContain('deeptest');
   });
 
-  it('keeps a same-account subscription indirect when no team user has direct access', async () => {
+  it('allows a manager to cancel an owned subscription even with no current product user', async () => {
     const create = vi.fn().mockResolvedValue({});
     const preview = await createBillingCancellationPreview(
       { request, actorToken: 'signed-actor', credential },
@@ -235,27 +230,20 @@ describe('billing cancellation preview', () => {
       },
     );
 
-    expect(preview.choice_required).toBe(false);
-    expect(preview.choices).toEqual([]);
-    expect(preview.direct_services.map((service) => service.product)).toEqual(['deepwater']);
-    expect(preview.indirect_services).toEqual([
-      {
-        product: 'nessie',
-        name: 'Nessie',
-        display_name: 'Nessie',
-        impact: 'Indirectly used products do not have a separate subscription to cancel.',
-      },
-    ]);
+    expect(preview.choice_required).toBe(true);
+    expect(preview.direct_services.map(service=>service.product)).toEqual(['deepwater','nessie']);
+    expect(preview.direct_services[1]?.direct_user_count).toBe(0);
+    expect(preview.indirect_services).toEqual([]);
     expect(create).toHaveBeenCalledWith({
       data: expect.objectContaining({
-        directServiceIds: ['service_deepwater'],
-        directSubscriptionIds: [current.id],
-        indirectServiceIds: ['nessie'],
+        directServiceIds: ['service_deepwater','service_nessie'],
+        directSubscriptionIds: [current.id,related.id],
+        indirectServiceIds: [],
       }),
     });
   });
 
-  it('treats empty stale or revoked access evidence as indirect', async () => {
+  it('does not reinterpret absent usage evidence as absence of a financial subscription', async () => {
     const preview = await createBillingCancellationPreview(
       { request, actorToken: 'signed-actor', credential },
       {
@@ -295,9 +283,10 @@ describe('billing cancellation preview', () => {
       },
     );
 
-    expect(preview.choice_required).toBe(false);
-    expect(preview.direct_services.map((service) => service.product)).toEqual(['deepwater']);
-    expect(preview.indirect_services.map((service) => service.product)).toEqual(['nessie']);
+    expect(preview.choice_required).toBe(true);
+    expect(preview.direct_services.map(service=>service.product)).toEqual(['deepwater','nessie']);
+    expect(preview.direct_services[1]?.direct_user_count).toBe(0);
+    expect(preview.indirect_services).toEqual([]);
   });
 
   it('defaults to current-service-only when there is no related direct subscription', async () => {

@@ -156,6 +156,7 @@ describe('billing cancellation confirmation', () => {
         subscriptions: { update: stripeUpdate },
       } as never,
       now: () => now,
+      requireManager:vi.fn().mockResolvedValue({billingManager:true}) as never,
       resolveSummary: vi.fn().mockResolvedValue({
         can_manage: true,
         subscription: { id: current.id },
@@ -209,6 +210,7 @@ describe('billing cancellation confirmation', () => {
     expect(intent.result).toEqual(first);
     expect(auditCreate).toHaveBeenCalledOnce();
     expect(dependencies.authorizeAction).toHaveBeenCalledOnce();
+    expect(dependencies.resolveSummary).not.toHaveBeenCalled();
   });
 
   it('requires an explicit choice when the preview pinned related direct services', async () => {
@@ -266,7 +268,8 @@ describe('billing cancellation confirmation', () => {
         {
           prisma: prisma as never,
           now: () => now,
-          resolveSummary: vi.fn().mockResolvedValue({
+          requireManager:vi.fn().mockResolvedValue({billingManager:true}) as never,
+      resolveSummary: vi.fn().mockResolvedValue({
             can_manage: true,
             subscription: { id: current.id },
           }) as never,

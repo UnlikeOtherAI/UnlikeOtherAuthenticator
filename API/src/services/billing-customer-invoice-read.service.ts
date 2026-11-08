@@ -1,3 +1,4 @@
+import type { BillingOrganisationFinancialDto as FinancialDto } from '../contracts/billing-statement-v1.js';
 import { createHash } from 'node:crypto';
 import { getEnv } from '../config/env.js';
 import { resolveTeamBillingMode } from './billing-team-mode.service.js';
@@ -7,8 +8,8 @@ import {
 } from '@prisma/client';
 
 import {
-  type BillingCustomerInvoiceDetailV1, type BillingCustomerInvoiceSummaryV1,
-  type BillingCustomerInvoicesListV1,
+  type BillingCustomerInvoiceDetailV1 as PublicBillingCustomerInvoiceDetailV1, type BillingCustomerInvoiceSummaryV1 as PublicBillingCustomerInvoiceSummaryV1,
+  type BillingCustomerInvoicesListV1 as PublicBillingCustomerInvoicesListV1,
 } from '../contracts/billing-statement-v1.js';
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
@@ -99,7 +100,7 @@ async function prepaidAdjustments(prisma: PrismaClient, rows: Array<{
 }
 
 async function stripePaymentMonthKeys(prisma: PrismaClient, params: {
-  orgId: string; teamId: string; serviceId: string; product: string;
+  orgId: string; teamId: string|null; serviceId: string; product: string;
   orgManager: boolean; start: Date; end: Date; cursor: Cursor | null; limit: number;
   livemode: boolean; stripeAccountId: string;
 }): Promise<Array<{ invoiceId: string; at: Date }>> {
@@ -343,3 +344,9 @@ export async function downloadCustomerInvoice(
   return { bytes, contentType: 'application/pdf',
     filename: `invoice-${after.detail.number?.replace(/[^a-zA-Z0-9._-]/g, '_') ?? 'document'}.pdf` };
 }
+
+type BillingCustomerInvoiceDetailV1=FinancialDto<PublicBillingCustomerInvoiceDetailV1>;
+
+type BillingCustomerInvoiceSummaryV1=FinancialDto<PublicBillingCustomerInvoiceSummaryV1>;
+
+type BillingCustomerInvoicesListV1=FinancialDto<PublicBillingCustomerInvoicesListV1>;

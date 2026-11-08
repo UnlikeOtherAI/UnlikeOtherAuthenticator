@@ -95,6 +95,8 @@ export async function getBillingCredits(
     /** Credits protocol 2.3.0: the balance, entries and price rate valued in the region currency. */
     supportsRegionValue?: boolean;
     log?: SmsPolicyAlertLog;
+    /** Internal overview funding read: no Ledger request or collection side effect. */
+    skipSettlement?: boolean;
   },
   deps?: Dependencies,
 ) {
@@ -108,6 +110,8 @@ export async function getBillingCredits(
     },
     { prisma },
   );
+  const admittedViewer = await (deps?.resolveViewer ?? resolveBillingFundingViewer)(params.request,{prisma});
+  if (!admittedViewer.billingManager) throw new AppError('FORBIDDEN',403,'BILLING_MANAGER_REQUIRED');
   const now = deps?.now?.() ?? new Date();
   const period = currentBillingCreditPeriod(now);
   const collection = await (deps?.resolveCollection ?? resolveCreditCollectionContext)(
@@ -136,8 +140,8 @@ export async function getBillingCredits(
     },
     { prisma },
   );
-  let settlementPending = false;
-  try {
+  let settlementPending = params.skipSettlement === true;
+  if (!params.skipSettlement) try {
     const portfolio = await (deps?.fetchPortfolio ?? fetchLedgerMeteringPortfolio)({
       product: portfolioProduct,
       organisationId: params.request.organisationId,
@@ -174,14 +178,7 @@ export async function getBillingCredits(
     ? deps.hasPendingSettlementWatch(creditAccount.id, params.request.teamId)
     : hasPendingSettlementWatch(creditAccount.id, params.request.teamId, prisma ?? getAdminPrisma()));
   const [viewer, data, controlledBy] = await Promise.all([
-    (deps?.resolveViewer ?? resolveBillingFundingViewer)(
-      {
-        userId: params.request.userId,
-        organisationId: params.request.organisationId,
-        teamId: params.request.teamId,
-      },
-      { prisma },
-    ),
+    Promise.resolve(admittedViewer),
     (deps?.loadProjectionData ?? loadBillingCreditProjectionData)(
       {
         creditAccountId: creditAccount.id,
@@ -296,6 +293,6 @@ export async function getBillingCredits(
     settlementPending,
     purchaseRate,
     ...(regionValues ? { regionValues } : {}),
-  }), { account: collection.account, revision: collection.modeRevision ?? 0, appKeyId: params.credential.id },
+  }), { account: collection.account, revision: collection.modeRevision ?? 0, scopeEpoch: collection.scopeEpoch, appKeyId: params.credential.id },
   params.supportsBillingMode === true, billingModeRefreshCopy(params.locale), now);
 }

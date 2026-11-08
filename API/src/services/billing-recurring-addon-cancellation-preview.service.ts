@@ -1,19 +1,15 @@
+import type { BillingOrganisationFinancialDto as FinancialDto } from '../contracts/billing-statement-v1.js';
 import { requireStoredStripeBilling } from './billing-team-mode.service.js';
-import {
-  BillingAssignmentScope,
-  BillingRecurringAddonCancellationIntentState,
-  BillingRecurringAddonEntitlementScope,
-  BillingRecurringAddonSubscriptionScope,
-  Prisma,
-  type PrismaClient,
-} from '@prisma/client';
+import { resolveTeamBillingMode } from './billing-team-mode.service.js';
+import { assertBillingActionContext } from './billing-action-context.service.js';
+import { BillingRecurringAddonCancellationIntentState, BillingRecurringAddonEntitlementScope, BillingRecurringAddonSubscriptionScope, Prisma, type PrismaClient } from '@prisma/client';
 import { createHash, randomBytes } from 'node:crypto';
 import type Stripe from 'stripe';
 
 import {
   BILLING_RECURRING_ADDONS_CANCELLATION_CONFIRM_PATH,
   BILLING_RECURRING_ADDONS_SCHEMA_VERSION,
-  type BillingRecurringAddonCancellationPreviewV1,
+  type BillingRecurringAddonCancellationPreviewV1 as PublicBillingRecurringAddonCancellationPreviewV1,
 } from '../contracts/billing-statement-v1.js';
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
@@ -21,15 +17,9 @@ import type { BillingCustomerLocale } from './billing-copy-locale.js';
 import { billingAddonCancelTitle, billingAddonCopy, billingAddonSubscriptionStatus } from './billing-addon-copy.catalog.js';
 import type { BillingActorEndpoint } from './billing-actor-audience.service.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
-import { resolveEffectiveTariffContext } from './billing-entitlement.service.js';
+import { resolveFinancialTariffContext } from './billing-entitlement.service.js';
 import { resolveBillingFundingViewer } from './billing-funding-viewer.service.js';
-import {
-  smsNumberCustomerScopeKey,
-  assertCanManageRecurringAddonScope,
-  recurringAddonSubjectFingerprint,
-  type RecurringAddonScope,
-  type RecurringAddonSubject,
-} from './billing-recurring-addon-scope.service.js';
+import { assertCanManageRecurringAddonScope, recurringAddonSubjectFingerprint, type RecurringAddonScope, type RecurringAddonSubject } from './billing-recurring-addon-scope.service.js';
 import {
   resolveStripeAccountContext,
 } from './billing-stripe-client.service.js';
@@ -53,20 +43,14 @@ export function recurringAddonCancellationDigest(value: string): string {
 export function scopeForSubscription(
   subscription: RecurringAddonSubscriptionWithBinding,
 ): RecurringAddonScope {
-  const teamCustomer = subscription.scope !== BillingRecurringAddonSubscriptionScope.ORGANISATION;
   return {
     scope: subscription.scope,
     scopeKey: subscription.scopeKey,
     teamId: subscription.teamId,
     subscribingUserId: subscription.subscribingUserId,
-    customerScope: teamCustomer ? BillingAssignmentScope.TEAM : BillingAssignmentScope.ORGANISATION,
-    // SMS numbers bill through their own per-currency Customer.
-    customerScopeKey: teamCustomer
-      ? `${subscription.orgId}:${subscription.teamId}`
-      : subscription.offer?.resourceKind === 'sms_mobile_number'
-        ? smsNumberCustomerScopeKey(subscription.orgId, subscription.offer.currency)
-        : subscription.orgId,
-    customerTeamId: teamCustomer ? subscription.teamId : null,
+    customerScope: subscription.customer.scope,
+    customerScopeKey: subscription.customer.scopeKey,
+    customerTeamId: subscription.customer.teamId,
   };
 }
 
@@ -108,10 +92,6 @@ export async function loadAuthorizedRecurringAddonSubscription(
       id: params.subscriptionId,
       serviceId: params.credential.service.id,
       orgId: params.request.organisationId,
-      OR: [
-        { scope: BillingRecurringAddonSubscriptionScope.ORGANISATION, teamId: null },
-        { teamId: params.request.teamId },
-      ],
     },
     include: recurringAddonSubscriptionInclude,
   });
@@ -138,7 +118,7 @@ export async function createRecurringAddonCancellationPreview(
   },
 ): Promise<BillingRecurringAddonCancellationPreviewV1> {
   const prisma = deps?.prisma ?? getAdminPrisma();
-  const { actor } = await resolveEffectiveTariffContext(
+  const { actor } = await resolveFinancialTariffContext(
     {
       request: params.request,
       actorToken: params.actorToken,
@@ -148,6 +128,7 @@ export async function createRecurringAddonCancellationPreview(
     { prisma },
   );
   const viewer = await resolveBillingFundingViewer(params.request, { prisma });
+  if(!viewer.billingManager)throw new AppError('FORBIDDEN',403,'BILLING_MANAGER_REQUIRED');
   let subscription = await loadAuthorizedRecurringAddonSubscription(
     {
       request: params.request,
@@ -168,6 +149,13 @@ export async function createRecurringAddonCancellationPreview(
   );
   if (subscription.accountId !== account.id) {
     throw new AppError('INTERNAL', 503, 'STRIPE_RECURRING_ADDON_ACCOUNT_DRIFT');
+  }
+  if(!deps?.stripe||params.request.billingContext!==undefined){
+    const selection=await resolveTeamBillingMode(params.request,prisma);
+    assertBillingActionContext(params.request.billingContext,{account,revision:selection.revision,
+      scopeEpoch:selection.epoch,appKeyId:params.credential.id},params.endpoint,{
+      product:params.request.product,organisation_id:params.request.organisationId,team_id:params.request.teamId,
+      user_id:params.request.userId,subscription_id:params.request.subscriptionId});
   }
   const refreshed = await refreshRecurringAddonSubscriptionProjection(
     { local: subscription, account, now: deps?.now?.() },
@@ -271,3 +259,5 @@ export async function createRecurringAddonCancellationPreview(
     },
   };
 }
+
+type BillingRecurringAddonCancellationPreviewV1=FinancialDto<PublicBillingRecurringAddonCancellationPreviewV1>;

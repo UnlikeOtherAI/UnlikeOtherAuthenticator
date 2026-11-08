@@ -1421,6 +1421,9 @@ model Organisation {
   billingInvoices                   BillingInvoice[]
   billingOrgResponsibility          BillingOrgResponsibility?
   billingModePeriodLocks            BillingModePeriodLock[]
+  billingOrganisationMode           BillingOrganisationMode?
+  billingOrganisationModeEvents     BillingOrganisationModeEvent[]
+  billingOrganisationModeLock       BillingOrganisationModeLock?
   billingSeatSubscriptions          BillingSeatSubscription[]
   customerBillingCycles             BillingCustomerCycle[]
   slugClaims                        OrganisationSlugClaim[]
@@ -2206,7 +2209,7 @@ model BillingCancellationIntent {
   appKeyId                String                         @map("app_key_id")
   serviceId               String                         @map("service_id")
   orgId                   String                         @map("org_id")
-  teamId                  String                         @map("team_id")
+  teamId                  String?                         @map("team_id")
   requestedByUserId       String                         @map("requested_by_user_id")
   directServiceIds        String[]                       @map("direct_service_ids")
   directSubscriptionIds   String[]                       @map("direct_subscription_ids")
@@ -2225,7 +2228,7 @@ model BillingCancellationIntent {
   appKey      BillingAppKey  @relation(fields: [appKeyId], references: [id], onDelete: Restrict)
   service     BillingService @relation(fields: [serviceId], references: [id], onDelete: Restrict)
   org         Organisation   @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  team        Team           @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  team        Team?           @relation(fields: [teamId], references: [id], onDelete: Cascade)
   requestedBy User           @relation(fields: [requestedByUserId], references: [id], onDelete: Restrict)
 
   @@unique([appKeyId, idempotencyKey])
@@ -2243,7 +2246,7 @@ model BillingCustomerActionIntent {
   appKeyId          String                 @map("app_key_id")
   serviceId         String                 @map("service_id")
   orgId             String                 @map("org_id")
-  teamId            String                 @map("team_id")
+  teamId            String?                 @map("team_id")
   requestedByUserId String                 @map("requested_by_user_id")
   authorityScope    BillingAssignmentScope @map("authority_scope")
   operation         String                 @db.VarChar(100)
@@ -2256,7 +2259,7 @@ model BillingCustomerActionIntent {
   appKey      BillingAppKey  @relation(fields: [appKeyId], references: [id], onDelete: Restrict)
   service     BillingService @relation(fields: [serviceId], references: [id], onDelete: Restrict)
   org         Organisation   @relation(fields: [orgId], references: [id], onDelete: Restrict)
-  team        Team           @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  team        Team?           @relation(fields: [teamId], references: [id], onDelete: Restrict)
   requestedBy User           @relation(fields: [requestedByUserId], references: [id], onDelete: Restrict)
 
   @@unique([appKeyId, actorJti, operation], map: "billing_customer_action_intents_actor_action_key")
@@ -2326,6 +2329,43 @@ model BillingTeamMode {
   team      Team     @relation(fields: [teamId], references: [id], onDelete: Restrict)
 
   @@map("billing_team_modes")
+}
+
+// One financial selection covers existing and future teams; absence means LIVE.
+model BillingOrganisationMode {
+  orgId String @id @map("org_id")
+  sandbox Boolean @default(false)
+  revision Int
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(3)
+  org Organisation @relation(fields:[orgId],references:[id],onDelete:Restrict)
+  @@map("billing_organisation_modes")
+}
+model BillingOrganisationModeEvent {
+  orgId String @map("org_id")
+  revision Int
+  sandbox Boolean
+  effectiveAt DateTime @default(now()) @map("effective_at") @db.Timestamptz(3)
+  org Organisation @relation(fields:[orgId],references:[id],onDelete:Restrict)
+  @@id([orgId,revision])
+  @@map("billing_organisation_mode_events")
+}
+model BillingOrganisationModeLock {
+  orgId String @id @map("org_id")
+  generation BigInt @default(1)
+  org Organisation @relation(fields:[orgId],references:[id],onDelete:Restrict)
+  @@map("billing_organisation_mode_locks")
+}
+// Immutable installation audit. Legacy financial records are counted, never rewritten.
+model BillingOrganisationScopeCutover {
+  id Int @id
+  activatedAt DateTime @default(now()) @map("activated_at") @db.Timestamptz(3)
+  migration String
+  legacyTeamWallets BigInt @map("legacy_team_wallets")
+  legacyFundedWallets BigInt @map("legacy_funded_wallets")
+  legacyConsents BigInt @map("legacy_consents")
+  legacyTeamSubscriptions BigInt @map("legacy_team_subscriptions")
+  legacyTeamPolicies BigInt @map("legacy_team_policies")
+  @@map("billing_organisation_scope_cutover")
 }
 
 // The earliest installation of live-default selection. Mixed monthly aggregates hold.
@@ -2426,6 +2466,7 @@ model BillingStripeTariffPrice {
 model BillingStripeCheckoutSession {
   billingModeTeamId String? @map("billing_mode_team_id")
   billingModeRevision Int @default(0) @map("billing_mode_revision")
+  billingScopeEpoch DateTime? @map("billing_scope_epoch") @db.Timestamptz(3)
   id                      String                 @id @default(cuid())
   accountId               String                 @map("account_id")
   appKeyId                String                 @map("app_key_id")
@@ -3985,6 +4026,7 @@ model BillingCreditPortfolioSnapshot {
 model BillingCreditTopUpCheckout {
   billingModeTeamId String? @map("billing_mode_team_id")
   billingModeRevision Int @default(0) @map("billing_mode_revision")
+  billingScopeEpoch DateTime? @map("billing_scope_epoch") @db.Timestamptz(3)
   id                          String                      @id @default(cuid())
   accountId                   String                      @map("account_id")
   creditAccountId             String                      @map("credit_account_id")
@@ -4041,6 +4083,7 @@ model BillingCreditTopUpCheckout {
 model BillingCreditSetupCheckout {
   billingModeTeamId String? @map("billing_mode_team_id")
   billingModeRevision Int @default(0) @map("billing_mode_revision")
+  billingScopeEpoch DateTime? @map("billing_scope_epoch") @db.Timestamptz(3)
   id                        String                      @id @default(cuid())
   accountId                 String                      @map("account_id")
   creditAccountId           String                      @map("credit_account_id")
@@ -4584,6 +4627,7 @@ model BillingRecurringAddonCatalog {
 model BillingRecurringAddonCheckout {
   billingModeTeamId String? @map("billing_mode_team_id")
   billingModeRevision Int @default(0) @map("billing_mode_revision")
+  billingScopeEpoch DateTime? @map("billing_scope_epoch") @db.Timestamptz(3)
   id                       String                                 @id @default(cuid())
   accountId                String                                 @map("account_id")
   appKeyId                 String                                 @map("app_key_id")
@@ -4594,7 +4638,7 @@ model BillingRecurringAddonCheckout {
   offerKey                 String                                 @map("offer_key") @db.VarChar(80)
   orgId                    String                                 @map("org_id")
   teamId                   String?                                @map("team_id")
-  requestedTeamId          String                                 @map("requested_team_id")
+  requestedTeamId          String?                                 @map("requested_team_id")
   subscribingUserId        String?                                @map("subscribing_user_id")
   scope                    BillingRecurringAddonSubscriptionScope
   scopeKey                 String                                 @map("scope_key") @db.VarChar(520)
@@ -4622,7 +4666,7 @@ model BillingRecurringAddonCheckout {
   offer                  BillingRecurringAddonOffer         @relation(fields: [offerId], references: [id], onDelete: Restrict)
   org                    Organisation                       @relation(fields: [orgId], references: [id], onDelete: Restrict)
   team                   Team?                              @relation("RecurringAddonCheckoutScopeTeam", fields: [teamId], references: [id], onDelete: Restrict)
-  requestedTeam          Team                               @relation("RecurringAddonCheckoutRequestTeam", fields: [requestedTeamId], references: [id], onDelete: Restrict)
+  requestedTeam          Team?                               @relation("RecurringAddonCheckoutRequestTeam", fields: [requestedTeamId], references: [id], onDelete: Restrict)
   requestedBy            User                               @relation("RecurringAddonCheckoutRequester", fields: [requestedByUserId], references: [id], onDelete: Restrict)
   subscribingUser        User?                              @relation("RecurringAddonCheckoutSubscriber", fields: [subscribingUserId], references: [id], onDelete: Restrict)
   subscription           BillingRecurringAddonSubscription?
@@ -4705,7 +4749,7 @@ model BillingRecurringAddonCancellationIntent {
   offerId                   String                                       @map("offer_id")
   orgId                     String                                       @map("org_id")
   teamId                    String?                                      @map("team_id")
-  requestedTeamId           String                                       @map("requested_team_id")
+  requestedTeamId           String?                                       @map("requested_team_id")
   subscribingUserId         String?                                      @map("subscribing_user_id")
   scope                     BillingRecurringAddonSubscriptionScope
   scopeKey                  String                                       @map("scope_key") @db.VarChar(520)
@@ -4730,7 +4774,7 @@ model BillingRecurringAddonCancellationIntent {
   offer           BillingRecurringAddonOffer        @relation(fields: [offerId], references: [id], onDelete: Restrict)
   org             Organisation                      @relation(fields: [orgId], references: [id], onDelete: Restrict)
   team            Team?                             @relation("RecurringAddonCancellationScopeTeam", fields: [teamId], references: [id], onDelete: Restrict)
-  requestedTeam   Team                              @relation("RecurringAddonCancellationRequestTeam", fields: [requestedTeamId], references: [id], onDelete: Restrict)
+  requestedTeam   Team?                              @relation("RecurringAddonCancellationRequestTeam", fields: [requestedTeamId], references: [id], onDelete: Restrict)
   subscribingUser User?                             @relation("RecurringAddonCancellationSubscriber", fields: [subscribingUserId], references: [id], onDelete: Restrict)
   requestedBy     User                              @relation("RecurringAddonCancellationRequester", fields: [requestedByUserId], references: [id], onDelete: Restrict)
 

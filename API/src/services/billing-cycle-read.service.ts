@@ -1,3 +1,4 @@
+import type { BillingOrganisationFinancialDto as FinancialDto } from '../contracts/billing-statement-v1.js';
 import { createHash } from 'node:crypto';
 
 import { BillingAssignmentScope, type Prisma, type PrismaClient } from '@prisma/client';
@@ -7,9 +8,9 @@ import * as ajvFormats from 'ajv-formats';
 import {
   BILLING_CYCLES_DOWNLOAD_PATH,
   billingCycleDetailV2JsonSchema,
-  type BillingCycleDetailV2,
-  type BillingCycleSummaryV2,
-  type BillingCyclesListV2,
+  type BillingCycleDetailV2 as PublicBillingCycleDetailV2,
+  type BillingCycleSummaryV2 as PublicBillingCycleSummaryV2,
+  type BillingCyclesListV2 as PublicBillingCyclesListV2,
 } from '../contracts/billing-statement-v1.js';
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
@@ -285,3 +286,9 @@ export async function downloadBillingCycleDocument(
     filename: `billing-${document.cycle.billingMonth}-${document.kind}.${document.format}`,
   };
 }
+
+type BillingCycleDetailV2=FinancialDto<PublicBillingCycleDetailV2>;
+
+type BillingCycleSummaryV2=FinancialDto<PublicBillingCycleSummaryV2>;
+
+type BillingCyclesListV2=FinancialDto<PublicBillingCyclesListV2>;

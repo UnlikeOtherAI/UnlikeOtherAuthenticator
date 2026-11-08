@@ -9,7 +9,10 @@ import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
 import { loadBillingCancellationState } from './billing-cancellation-state.service.js';
-import { getCanonicalBillingStatement } from './billing-statement.service.js';
+import { readOrganisationSubscription } from './billing-organisation-subscription.service.js';
+import { assertBillingActionContext } from './billing-action-context.service.js';
+import { resolveBillingDisplayBinding } from './billing-team-mode.service.js';
+import type { BillingOrganisationSubscriptionV1 } from '../contracts/billing-statement-v1.js';
 import type { BillingSubscriptionRequest } from './billing-stripe-subscription.service.js';
 import type { BillingActorEndpoint } from './billing-actor-audience.service.js';
 import type { BillingCustomerLocale } from './billing-copy-locale.js';
@@ -37,18 +40,22 @@ export async function createBillingCancellationPreview(
   deps?: {
     prisma?: PrismaClient;
     now?: () => Date;
-    getStatement?: typeof getCanonicalBillingStatement;
+    getStatement?: (params: Parameters<typeof readOrganisationSubscription>[0], deps: {prisma:PrismaClient;now:()=>Date}) => Promise<BillingOrganisationSubscriptionV1>;
     loadState?: typeof loadBillingCancellationState;
   },
 ): Promise<BillingCancellationPreviewV1> {
   const prisma = deps?.prisma ?? getAdminPrisma();
   const now = deps?.now?.() ?? new Date();
-  const statement = await (deps?.getStatement ?? getCanonicalBillingStatement)(params, {
-    prisma,
-    now: () => now,
-  });
+  const statement=deps?.getStatement ? await deps.getStatement(params,{prisma,now:()=>now})
+    : await readOrganisationSubscription(params,prisma,params.locale,now);
   if (!statement.capabilities.can_cancel || !statement.subscription) {
     throw new AppError('FORBIDDEN', 403, 'BILLING_CANCELLATION_NOT_AVAILABLE');
+  }
+  if(!deps?.getStatement||params.request.billingContext!==undefined){
+    const binding=await resolveBillingDisplayBinding(params.request,params.credential.id,statement.subscription.id,prisma);
+    assertBillingActionContext(params.request.billingContext,binding,params.endpoint,{
+      product:params.request.product,organisation_id:params.request.organisationId,
+      team_id:params.request.teamId,user_id:params.request.userId},now);
   }
   const state = await (deps?.loadState ?? loadBillingCancellationState)(
     {
@@ -70,16 +77,12 @@ export async function createBillingCancellationPreview(
       .filter((access) => access.userIds.length > 0)
       .map((access) => [access.serviceId, access]),
   );
-  if (!directAccessByService.has(current.serviceId)) {
-    throw new AppError('BAD_REQUEST', 409, 'BILLING_CANCELLATION_STATE_CHANGED');
-  }
   const directSubscriptions = [current];
   const seenServiceIds = new Set([current.serviceId]);
   for (const subscription of state.subscriptions) {
     if (
       subscription.id === current.id ||
       subscription.accountId !== current.accountId ||
-      !directAccessByService.has(subscription.serviceId) ||
       seenServiceIds.has(subscription.serviceId)
     ) {
       continue;
@@ -92,7 +95,7 @@ export async function createBillingCancellationPreview(
   const previewToken = opaqueValue('uoa_cancel');
   const idempotencyKey = opaqueValue('uoa_confirm');
   const expiresAt = new Date(now.getTime() + BILLING_CANCELLATION_PREVIEW_TTL_MS);
-  const indirect = statement.services.filter((service) => service.access === 'indirect');
+  const indirect:Array<{product:string;name:string;display_name:string}>=[];
   const copy = billingSubscriptionCopy(params.locale);
 
   await prisma.billingCancellationIntent.create({

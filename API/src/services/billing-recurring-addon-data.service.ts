@@ -1,4 +1,4 @@
-import { BillingRecurringAddonSubscriptionScope, type PrismaClient } from '@prisma/client';
+import { type PrismaClient } from '@prisma/client';
 import { getAdminPrisma } from '../db/prisma.js';
 
 export async function loadAddonData(
@@ -6,7 +6,7 @@ export async function loadAddonData(
     accountId: string;
     serviceId: string;
     organisationId: string;
-    teamId: string;
+    teamId: string|null;
   },
   deps?: { prisma?: PrismaClient },
 ) {
@@ -26,23 +26,6 @@ export async function loadAddonData(
         serviceId: params.serviceId,
         orgId: params.organisationId,
         offer: { resourceKind: null },
-        OR: [
-          {
-            scope: BillingRecurringAddonSubscriptionScope.ORGANISATION,
-            teamId: null,
-            subscribingUserId: null,
-          },
-          {
-            scope: BillingRecurringAddonSubscriptionScope.TEAM,
-            teamId: params.teamId,
-            subscribingUserId: null,
-          },
-          {
-            scope: BillingRecurringAddonSubscriptionScope.SUBSCRIBING_USER,
-            teamId: params.teamId,
-            subscribingUserId: { not: null },
-          },
-        ],
       },
       orderBy: { updatedAt: 'desc' },
     }),
@@ -51,7 +34,6 @@ export async function loadAddonData(
         accountId: params.accountId,
         serviceId: params.serviceId,
         orgId: params.organisationId,
-        requestedTeamId: params.teamId,
         offer: { resourceKind: null },
         status: { in: ['CREATING', 'OPEN', 'NEEDS_REVIEW'] },
       },

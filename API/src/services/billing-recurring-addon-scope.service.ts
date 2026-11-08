@@ -6,14 +6,14 @@ import {
 import { createHash } from 'node:crypto';
 
 import { AppError } from '../utils/errors.js';
-import type { BillingFundingViewer } from './billing-funding-viewer.service.js';
-import { isBillingManager } from './billing-stripe-manager.service.js';
+import type { OrganisationBillingFundingViewer } from './billing-funding-viewer.service.js';
+
 
 export type RecurringAddonSubject = {
   billingContext?: string;
   product: string;
   organisationId: string;
-  teamId: string;
+  teamId: string|null;
   userId: string;
 };
 
@@ -75,6 +75,7 @@ export function recurringAddonScope(
       customerTeamId: null,
     };
   }
+  if(subject.teamId===null) throw new AppError('BAD_REQUEST',409,'BILLING_ADDON_TEAM_CONTEXT_REQUIRED');
   const customerScopeKey = `${subject.organisationId}:${subject.teamId}`;
   if (entitlementScope === BillingRecurringAddonEntitlementScope.TEAM) {
     return {
@@ -82,9 +83,9 @@ export function recurringAddonScope(
       scopeKey: customerScopeKey,
       teamId: subject.teamId,
       subscribingUserId: null,
-      customerScope: BillingAssignmentScope.TEAM,
-      customerScopeKey,
-      customerTeamId: subject.teamId,
+      customerScope: BillingAssignmentScope.ORGANISATION,
+      customerScopeKey: subject.organisationId,
+      customerTeamId: null,
     };
   }
   return {
@@ -92,28 +93,21 @@ export function recurringAddonScope(
     scopeKey: `${customerScopeKey}:${subject.userId}`,
     teamId: subject.teamId,
     subscribingUserId: subject.userId,
-    customerScope: BillingAssignmentScope.TEAM,
-    customerScopeKey,
-    customerTeamId: subject.teamId,
+    customerScope: BillingAssignmentScope.ORGANISATION,
+    customerScopeKey: subject.organisationId,
+    customerTeamId: null,
   };
 }
 
 export function canManageRecurringAddonScope(
-  viewer: BillingFundingViewer,
-  scope: BillingRecurringAddonSubscriptionScope,
+  viewer: OrganisationBillingFundingViewer,
+  _scope: BillingRecurringAddonSubscriptionScope,
 ): boolean {
-  return isBillingManager({
-    scope:
-      scope === BillingRecurringAddonSubscriptionScope.ORGANISATION
-        ? BillingAssignmentScope.ORGANISATION
-        : BillingAssignmentScope.TEAM,
-    orgRole: viewer.organisationRole,
-    teamRole: viewer.teamRole,
-  });
+  return viewer.billingManager;
 }
 
 export function assertCanManageRecurringAddonScope(
-  viewer: BillingFundingViewer,
+  viewer: OrganisationBillingFundingViewer,
   scope: BillingRecurringAddonSubscriptionScope,
 ): void {
   if (!canManageRecurringAddonScope(viewer, scope)) {
