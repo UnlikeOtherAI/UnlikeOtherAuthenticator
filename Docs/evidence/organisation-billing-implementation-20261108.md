@@ -50,11 +50,24 @@ refused before product delivery/execution and remains visible for reconciliation
 Explicit organisation deletion and bounded resumable erasure checks still pass.
 This proves the service flow, not yet the rendered Admin or Nessie browser flow.
 
+The rendered Admin checkpoint uses the actual base `2694c808` and the local
+implementation against an owned disposable PostgreSQL schema on Maxis. Chromium
+desktop (1440×1000) and Pixel 7 (412×839), light/en-US, pass the global organisation
+doorway, organisation LIVE display, Sandbox save/reload, team doorway, stale edit
+409 followed by refresh, funded-history 409/disabled controls and last-team
+preservation preview. Anonymous reads return 401; a valid non-superuser session
+returns 403; the retired team mode write returns 409. The session was provisioned
+locally: this does not claim production or Google sign-in. Before/After images
+and sanitized flow records are outside worktrees at
+`D:/BuildArtifacts/uoa/organisation-billing-20261108`. The organisation mode tab is
+new; it has no equivalent base screen. No provider calls or payments were made.
+API/Admin builds, focused Admin copy/page tests and changed-source lint pass.
+
 ## Work still required before release
 
 Complete the organisation history branch, remaining accrual sources and their
-account/mode proofs, Admin organisation controls, shared org-admin chooser and
-custody admission, explicit last-team deletion preservation, focused recovery
+account/mode proofs, shared org-admin chooser and
+custody admission, focused recovery
 and race proofs, rendered desktop/phone flows, screenshots and final runbook.
 Manual/add-on/adjustment sources without complete accrual proof currently produce
 an explicit reconciliation state, not a guessed amount. That is not a claim of

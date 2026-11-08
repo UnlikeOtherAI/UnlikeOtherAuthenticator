@@ -169,6 +169,10 @@ describe.skipIf(!process.env.DATABASE_URL)('entity lifecycle on PostgreSQL', () 
       scope:'ORGANISATION',scopeKey:org.id}});
     const wallet=await handle.prisma.billingCreditAccount.create({data:{accountId:account.id,customerId:customer.id,
       orgId:org.id,scope:'ORGANISATION',scopeKey:org.id}});
+    const teamCustomer=await handle.prisma.billingStripeCustomer.create({data:{accountId:account.id,orgId:org.id,
+      teamId:team.id,scope:'TEAM',scopeKey:`${org.id}:${team.id}`}});
+    const teamEvidence=await handle.prisma.billingCreditAccount.create({data:{accountId:account.id,customerId:teamCustomer.id,
+      orgId:org.id,teamId:team.id,scope:'TEAM',scopeKey:teamCustomer.scopeKey}});
     // Synthetic already-funded historical source; the implementation never edits money this way.
     await handle.prisma.$transaction(async tx=>{
       await tx.$executeRawUnsafe('SET LOCAL session_replication_role=replica');
@@ -180,12 +184,15 @@ describe.skipIf(!process.env.DATABASE_URL)('entity lifecycle on PostgreSQL', () 
     const job=await start('TEAM',team.id,admin);await acknowledge(job);await executeEntityDeletion(job.id,admin);
     expect(await handle.prisma.billingCreditAccount.findUnique({where:{id:wallet.id}})).toEqual(before);
     expect(await handle.prisma.billingStripeCustomer.findUnique({where:{id:customer.id}})).toEqual(customer);
+    expect(await handle.prisma.billingCreditAccount.findUnique({where:{id:teamEvidence.id}})).toEqual(teamEvidence);
+    expect(await handle.prisma.team.findUnique({where:{id:team.id}})).toMatchObject({lifecycleStatus:'DELETED',isDefault:false});
     await expect(assertBillingPeriodMode(handle.prisma,period)).rejects.toThrow('BILLING_MODE_TRANSITION_RECONCILIATION_REQUIRED');
     const config=validateConfigFields({...baseClientConfigPayload(),domain,org_features:{enabled:true,
-      allow_user_create_org:true,allow_user_create_team:true}});
+      allow_user_create_org:true,allow_user_create_team:true,max_teams_per_org:1}});
     const recovery=await createTeam({orgId:org.id,domain,actorUserId:owner.id,name:'Recovered workspace',
       config,joinCreator:true},{prisma:handle.prisma as unknown as OrgServicePrisma});
     expect(recovery.orgId).toBe(org.id);
+    expect(recovery.isDefault).toBe(true);
     expect(await handle.prisma.organisation.findUnique({where:{id:org.id}})).toMatchObject({lifecycleStatus:'ACTIVE',ownerId:owner.id});
     expect(await handle.prisma.billingCreditAccount.findUnique({where:{id:wallet.id}})).toEqual(before);
   });

@@ -1,17 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { billingTeamModeCopy } from './billing-team-mode-copy';
+import { billingOrganisationModeCopy } from './billing-organisation-mode-copy';
 
-describe('team billing mode operator copy', () => {
-  const english = billingTeamModeCopy('en-GB');
+describe('organisation billing mode operator copy', () => {
+  const english = billingOrganisationModeCopy('en-GB');
   it('uses the same complete English copy for both supported English locales', () => {
-    expect(billingTeamModeCopy('en-US')).toEqual(english);
+    expect(billingOrganisationModeCopy('en-US')).toEqual(english);
     expect(english.effect).toContain('remain pending until reconciled');
   });
   it.each(['cs-CZ', 'de-DE', 'es-ES', 'fr-FR', 'it-IT'])(
     'translates the doorway, save/recovery controls and every financial blocker for %s', locale => {
-      const copy = billingTeamModeCopy(locale);
+      const copy = billingOrganisationModeCopy(locale);
       for (const key of ['tab', 'doorway', 'defaultMode', 'title', 'live', 'sandbox', 'effect',
-        'save', 'saved', 'retry', 'loadError', 'saveError', 'blocked', 'adoption'] as const) {
+        'save', 'saved', 'retry', 'loadError', 'saveError', 'blocked'] as const) {
         expect(copy[key]).toBeTruthy();
         expect(copy[key]).not.toBe(english[key]);
       }

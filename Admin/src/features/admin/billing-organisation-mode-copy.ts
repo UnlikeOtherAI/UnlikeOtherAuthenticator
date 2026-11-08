@@ -1,13 +1,12 @@
 const en = {
-  tab: 'Billing', doorway: 'Choose a team to manage sandbox billing', defaultMode: 'Teams use live billing by default.',
-  title: 'Team billing mode', live: 'Live billing', sandbox: 'Sandbox billing',
-  description: 'Teams use live billing unless a platform administrator selects sandbox billing here.',
-  adoption: 'This team has existing sandbox billing history. Selecting sandbox preserves its balance, subscriptions, payment permissions and pending recovery in their original account. Monthly usage for this change month remains pending reconciliation.',
+  tab: 'Billing', doorway: "Manage organisation billing", defaultMode: "Organisations use live billing by default.",
+  title: "Organisation billing mode", live: 'Live billing', sandbox: 'Sandbox billing',
+  description: "One setting covers every current and future team in this organisation, across products. Only a platform administrator can change it.",
   effect: 'This applies across every product. Existing balances, customers and payment records stay in their original mode; no funds are transferred.',
   label: 'Billing mode', save: 'Save billing mode', saving: 'Saving…', saved: 'Billing mode saved.',
   loading: 'Loading billing mode…', loadError: 'Could not load billing mode.', retry: 'Retry',
   saveError: 'Could not save billing mode. Review the current state and try again.',
-  blocked: 'Resolve these items before changing mode. Organisation billing must be released first; active subscriptions must end. Pending payments and provider work must finish. Balances are never moved between modes.',
+  blocked: "Resolve these items across the organisation before changing mode. Active subscriptions must end; payments and provider work must finish. Historical balances and consents remain separate and are never moved or adopted automatically.",
   blockers: {
     organisation_billing: 'Organisation billing is active', funded_balance: 'Remaining balance or debt',
     automatic_top_up: 'Automatic top-up is enabled', subscription: 'Active subscription',
@@ -22,41 +21,41 @@ const en = {
 };
 type Copy = typeof en;
 const translations: Record<string, Partial<Omit<Copy, 'blockers'>>> = {
-  cs: { tab: 'Účtování', doorway: 'Vyberte tým pro nastavení testovacího účtování', defaultMode: 'Týmy standardně používají ostré účtování.', title: 'Režim účtování týmu', live: 'Ostré účtování', sandbox: 'Testovací účtování',
-    description: 'Týmy používají ostré účtování, pokud zde správce platformy nezvolí testovací režim.',
+  cs: { tab: 'Účtování', doorway: "Spravovat účtování organizace", defaultMode: "Organizace standardně používají ostré účtování.", title: "Režim účtování organizace", live: 'Ostré účtování', sandbox: 'Testovací účtování',
+    description: "Jedno nastavení platí pro všechny současné i budoucí týmy organizace ve všech produktech. Změnit ho může jen správce platformy.",
     effect: 'Platí pro všechny produkty. Zůstatky, zákazníci a záznamy plateb zůstávají v původním režimu. Prostředky se nepřevádějí.',
     label: 'Režim účtování', save: 'Uložit režim účtování', saving: 'Ukládání…', saved: 'Režim účtování byl uložen.',
     loading: 'Načítání režimu účtování…', loadError: 'Režim účtování se nepodařilo načíst.', retry: 'Zkusit znovu',
     saveError: 'Režim účtování se nepodařilo uložit. Zkontrolujte aktuální stav a zkuste to znovu.',
-    blocked: 'Před změnou vyřešte uvedené položky. Nejprve uvolněte účtování organizace a ukončete aktivní předplatná. Počkejte na dokončení plateb a běžící práce. Zůstatky se mezi režimy nepřevádějí.' },
-  de: { tab: 'Abrechnung', doorway: 'Team für die Sandbox-Abrechnung auswählen', defaultMode: 'Teams nutzen standardmäßig die Live-Abrechnung.', title: 'Abrechnungsmodus des Teams', live: 'Live-Abrechnung', sandbox: 'Sandbox-Abrechnung',
-    description: 'Teams nutzen die Live-Abrechnung, sofern ein Plattformadministrator hier nicht die Sandbox auswählt.',
+    blocked: "Před změnou vyřešte uvedené položky v celé organizaci. Aktivní předplatná musí skončit, platby a běžící práce se dokončit. Historické zůstatky a souhlasy zůstávají oddělené a automaticky se nepřevádějí ani nepřebírají." },
+  de: { tab: 'Abrechnung', doorway: "Organisationsabrechnung verwalten", defaultMode: "Organisationen nutzen standardmäßig die Live-Abrechnung.", title: "Abrechnungsmodus der Organisation", live: 'Live-Abrechnung', sandbox: 'Sandbox-Abrechnung',
+    description: "Eine Einstellung gilt für alle aktuellen und künftigen Teams dieser Organisation in allen Produkten. Nur ein Plattformadministrator kann sie ändern.",
     effect: 'Gilt für alle Produkte. Guthaben, Kunden und Zahlungsbelege bleiben in ihrem ursprünglichen Modus. Es wird kein Guthaben übertragen.',
     label: 'Abrechnungsmodus', save: 'Abrechnungsmodus speichern', saving: 'Wird gespeichert…', saved: 'Abrechnungsmodus gespeichert.',
     loading: 'Abrechnungsmodus wird geladen…', loadError: 'Abrechnungsmodus konnte nicht geladen werden.', retry: 'Erneut versuchen',
     saveError: 'Speichern fehlgeschlagen. Prüfen Sie den aktuellen Status und versuchen Sie es erneut.',
-    blocked: 'Klären Sie diese Punkte vor dem Wechsel. Beenden Sie zuerst die Organisationsabrechnung und aktive Abonnements. Warten Sie auf ausstehende Zahlungen und laufende Vorgänge. Guthaben wird nicht zwischen Modi übertragen.' },
-  es: { tab: 'Facturación', doorway: 'Elegir un equipo para gestionar la facturación de prueba', defaultMode: 'Los equipos usan facturación real de forma predeterminada.', title: 'Modo de facturación del equipo', live: 'Facturación real', sandbox: 'Facturación de prueba',
-    description: 'Los equipos usan facturación real salvo que un administrador de la plataforma seleccione aquí el modo de prueba.',
+    blocked: "Klären Sie diese Punkte in der gesamten Organisation vor dem Wechsel. Aktive Abonnements müssen enden, Zahlungen und laufende Vorgänge abgeschlossen sein. Historische Guthaben und Einwilligungen bleiben getrennt und werden nie automatisch übertragen oder übernommen." },
+  es: { tab: 'Facturación', doorway: "Gestionar la facturación de la organización", defaultMode: "Las organizaciones usan facturación real de forma predeterminada.", title: "Modo de facturación de la organización", live: 'Facturación real', sandbox: 'Facturación de prueba',
+    description: "Una configuración cubre todos los equipos actuales y futuros de esta organización en todos los productos. Solo un administrador de la plataforma puede cambiarla.",
     effect: 'Se aplica a todos los productos. Los saldos, clientes y registros de pago conservan su modo original. No se transfieren fondos.',
     label: 'Modo de facturación', save: 'Guardar modo de facturación', saving: 'Guardando…', saved: 'Modo de facturación guardado.',
     loading: 'Cargando modo de facturación…', loadError: 'No se pudo cargar el modo de facturación.', retry: 'Reintentar',
     saveError: 'No se pudo guardar. Revise el estado actual e inténtelo de nuevo.',
-    blocked: 'Resuelva estos elementos antes de cambiar. Desactive primero la facturación de la organización y finalice las suscripciones activas. Espere a que terminen los pagos y las tareas pendientes. Los saldos no se transfieren entre modos.' },
-  fr: { tab: 'Facturation', doorway: 'Choisir une équipe pour gérer la facturation de test', defaultMode: 'Les équipes utilisent par défaut la facturation réelle.', title: 'Mode de facturation de l’équipe', live: 'Facturation réelle', sandbox: 'Facturation de test',
-    description: 'Les équipes utilisent la facturation réelle, sauf si un administrateur de la plateforme choisit ici le mode de test.',
+    blocked: "Resuelva estos elementos en toda la organización antes de cambiar el modo. Deben terminar las suscripciones activas, los pagos y las tareas pendientes. Los saldos y consentimientos históricos permanecen separados y nunca se transfieren ni se adoptan automáticamente." },
+  fr: { tab: 'Facturation', doorway: "Gérer la facturation de l’organisation", defaultMode: "Les organisations utilisent par défaut la facturation réelle.", title: "Mode de facturation de l’organisation", live: 'Facturation réelle', sandbox: 'Facturation de test',
+    description: "Un réglage couvre toutes les équipes actuelles et futures de cette organisation, dans tous les produits. Seul un administrateur de la plateforme peut le modifier.",
     effect: 'S’applique à tous les produits. Les soldes, clients et justificatifs restent dans leur mode d’origine. Aucun fonds n’est transféré.',
     label: 'Mode de facturation', save: 'Enregistrer le mode', saving: 'Enregistrement…', saved: 'Mode de facturation enregistré.',
     loading: 'Chargement du mode…', loadError: 'Impossible de charger le mode de facturation.', retry: 'Réessayer',
     saveError: 'Échec de l’enregistrement. Vérifiez l’état actuel et réessayez.',
-    blocked: 'Résolvez ces points avant de changer de mode. Désactivez d’abord la facturation de l’organisation et terminez les abonnements actifs. Attendez la fin des paiements et opérations en cours. Les soldes ne sont pas transférés entre les modes.' },
-  it: { tab: 'Fatturazione', doorway: 'Scegli un team per gestire la fatturazione di prova', defaultMode: 'I team usano la fatturazione reale per impostazione predefinita.', title: 'Modalità di fatturazione del team', live: 'Fatturazione reale', sandbox: 'Fatturazione di prova',
-    description: 'I team usano la fatturazione reale, salvo che un amministratore della piattaforma selezioni qui la modalità di prova.',
+    blocked: "Résolvez ces points dans toute l’organisation avant de changer de mode. Les abonnements actifs doivent se terminer, ainsi que les paiements et opérations en cours. Les soldes et consentements historiques restent séparés, sans transfert ni reprise automatique." },
+  it: { tab: 'Fatturazione', doorway: "Gestisci la fatturazione dell’organizzazione", defaultMode: "Le organizzazioni usano la fatturazione reale per impostazione predefinita.", title: "Modalità di fatturazione dell’organizzazione", live: 'Fatturazione reale', sandbox: 'Fatturazione di prova',
+    description: "Una sola impostazione vale per tutti i team attuali e futuri dell’organizzazione, in tutti i prodotti. Solo un amministratore della piattaforma può cambiarla.",
     effect: 'Si applica a tutti i prodotti. Saldi, clienti e registrazioni dei pagamenti restano nella modalità originale. Non vengono trasferiti fondi.',
     label: 'Modalità di fatturazione', save: 'Salva modalità', saving: 'Salvataggio…', saved: 'Modalità salvata.',
     loading: 'Caricamento della modalità…', loadError: 'Impossibile caricare la modalità.', retry: 'Riprova',
     saveError: 'Salvataggio non riuscito. Controlla lo stato attuale e riprova.',
-    blocked: 'Risolvi questi elementi prima di cambiare. Disattiva prima la fatturazione dell’organizzazione e termina gli abbonamenti attivi. Attendi il completamento dei pagamenti e delle operazioni in corso. I saldi non vengono trasferiti tra modalità.' },
+    blocked: "Risolvi questi elementi in tutta l’organizzazione prima di cambiare modalità. Devono terminare abbonamenti attivi, pagamenti e operazioni in corso. Saldi e consensi storici restano separati, senza trasferimenti o adozioni automatiche." },
 };
 const blockerTranslations: Record<string, string[]> = {
   cs: ['Účtování organizace je aktivní', 'Zbývající zůstatek nebo dluh', 'Automatické dobíjení je zapnuté',
@@ -93,19 +92,12 @@ const monthCopy: Record<string, string> = {
   fr: 'Les totaux du mois du changement restent en attente de rapprochement.',
   it: 'I totali del mese della modifica restano in sospeso fino alla riconciliazione.',
 };
-const adoptionCopy: Record<string, string> = {
-  cs: 'Tým má historii testovacího účtování. Volba testovacího režimu zachová zůstatek, předplatná, platební souhlasy a nedokončené obnovy na původním účtu. Spotřeba za měsíc změny čeká na vyúčtování.',
-  de: 'Dieses Team hat eine bisherige Testabrechnung. Die Auswahl des Testmodus erhält Guthaben, Abonnements, Zahlungsvollmachten und ausstehende Wiederherstellungen im ursprünglichen Konto. Die Nutzung des Änderungsmonats wartet auf den Abgleich.',
-  es: 'Este equipo tiene historial de facturación de prueba. Seleccionar el modo de prueba conserva su saldo, suscripciones, permisos de pago y recuperación pendiente en la cuenta original. El uso del mes del cambio queda pendiente de conciliación.',
-  fr: 'Cette équipe possède un historique de facturation de test. Choisir le mode de test conserve le solde, les abonnements, les autorisations de paiement et les reprises en attente sur leur compte d’origine. La consommation du mois du changement reste à rapprocher.',
-  it: 'Questo team ha una cronologia di fatturazione di prova. Selezionando la modalità di prova si conservano saldo, abbonamenti, autorizzazioni di pagamento e recuperi in sospeso nel conto originale. L’utilizzo del mese della modifica resta da riconciliare.',
-};
-export function billingTeamModeCopy(locale = navigator.language): Copy {
+export function billingOrganisationModeCopy(locale = navigator.language): Copy {
   const language = locale.split('-')[0] ?? 'en';
   const labels = blockerTranslations[language];
   const blockers = labels ? Object.fromEntries(Object.keys(en.blockers).map((key, index) =>
     [key, labels[index] ?? en.blockers[key] ?? key])) : en.blockers;
   const copy = { ...en, ...translations[language], blockers };
-  return { ...copy, adoption: adoptionCopy[language] ?? en.adoption,
+  return { ...copy,
     effect: `${copy.effect} ${monthCopy[language] ?? monthCopy.en}` };
 }

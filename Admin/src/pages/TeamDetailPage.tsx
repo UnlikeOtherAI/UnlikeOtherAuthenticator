@@ -1,4 +1,4 @@
-import { billingTeamModeCopy } from '../features/admin/billing-team-mode-copy';
+import { billingOrganisationModeCopy } from '../features/admin/billing-organisation-mode-copy';
 import { EntityLifecyclePanel } from '../features/admin/EntityLifecyclePanel';
 import { useDirectoryNavigation } from '../features/admin/useDirectoryNavigation';
 import { useDirectoryParam } from '../features/admin/useDirectoryParam';
@@ -19,11 +19,10 @@ import { adminService } from '../services/admin-service';
 import { useTeamQuery } from '../features/admin/admin-queries';
 import { TeamAvatar } from '../features/admin/TeamAvatar';
 import { TeamAvatarSection } from '../features/admin/TeamAvatarSection';
-import { TeamBillingModePanel } from '../features/admin/TeamBillingModePanel';
 import { UserAvatar } from '../features/admin/UserAvatar';
 
 export function TeamDetailPage() {
-  const modeCopy = billingTeamModeCopy();
+  const modeCopy = billingOrganisationModeCopy();
   const { orgId, teamId } = useParams();
   const { recordState, openRecord, goBack } = useDirectoryNavigation('/organisations');
   const [rawTab, setTab] = useDirectoryParam('tab', 'members');
@@ -74,7 +73,12 @@ export function TeamDetailPage() {
       />
       <p className="mb-4 text-sm"><Link state={recordState} to={`/organisations/${org.id}`} className="text-indigo-600">{org.name}</Link></p>
       <SegmentedTabs value={tab} onChange={setTab} options={[{ label: 'Members', value: 'members' }, { label: 'Profile', value: 'profile' }, { label: 'Access', value: 'access' }, { label: modeCopy.tab, value: 'billing' }]} />
-      {tab === 'billing' ? <TeamBillingModePanel key={team.id} organisationId={org.id} teamId={team.id} /> : null}
+      {tab === 'billing' ? <Card><div className="space-y-3 p-5">
+        <h2 className="text-sm font-semibold text-gray-900">{modeCopy.title}</h2>
+        <p className="text-sm text-gray-600">{modeCopy.description}</p>
+        <Link state={recordState} className="text-sm text-indigo-600 hover:underline"
+          to={`/organisations/${org.id}?tab=billing`}>{modeCopy.doorway}</Link>
+      </div></Card> : null}
       {tab === 'profile' ?
       <div className="mb-5">
         <TeamAvatarSection teamId={team.id} teamName={team.name} />

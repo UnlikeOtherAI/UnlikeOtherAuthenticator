@@ -1,4 +1,6 @@
 import { EntityLifecyclePanel } from '../features/admin/EntityLifecyclePanel';
+import { OrganisationBillingModePanel } from '../features/admin/OrganisationBillingModePanel';
+import { billingOrganisationModeCopy } from '../features/admin/billing-organisation-mode-copy';
 import { useDirectoryNavigation } from '../features/admin/useDirectoryNavigation';
 import type { ReactNode } from 'react';
 import { useDirectoryParam } from '../features/admin/useDirectoryParam';
@@ -24,9 +26,10 @@ import {
   TwoFactorPolicySelect,
 } from '../features/admin/TwoFactorPolicySelect';
 
-type OrgTab = 'teams' | 'members' | 'invitations' | 'access';
+type OrgTab = 'teams' | 'members' | 'invitations' | 'access' | 'billing';
 
 export function OrganisationDetailPage() {
+  const modeCopy=billingOrganisationModeCopy();
   const { orgId } = useParams();
   const { recordState, openRecord, goBack } = useDirectoryNavigation('/organisations');
   const queryClient = useQueryClient();
@@ -42,7 +45,7 @@ export function OrganisationDetailPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin'] }),
   });
   const [rawTab, setTab] = useDirectoryParam('tab', 'members');
-  const tab: OrgTab = ['teams', 'invitations', 'access'].includes(rawTab) ? rawTab as OrgTab : 'members';
+  const tab: OrgTab = ['teams', 'invitations', 'access','billing'].includes(rawTab) ? rawTab as OrgTab : 'members';
   const { pageItems: teamPageItems, pagination: teamPagination } = usePagination(org?.teams ?? [], 10, { key: 'teamsPage' });
   const { pageItems: memberPageItems, pagination: memberPagination } = usePagination(org?.members ?? [], 10, { key: 'membersPage' });
   const { pageItems: preapprovalPageItems, pagination: preapprovalPagination } = usePagination(org?.preapprovedMembers ?? [], 10, { key: 'invitationsPage' });
@@ -70,7 +73,8 @@ export function OrganisationDetailPage() {
         <MetricCard label="Members" value={String(org.members.length)} />
         <MetricCard label="Teams" value={String(org.teams.length)} />
       </div>
-      <SegmentedTabs<OrgTab> value={tab} onChange={setTab} options={[{ label: 'Members', value: 'members' }, { label: 'Teams', value: 'teams' }, { label: 'Invitations', value: 'invitations' }, { label: 'Access', value: 'access' }]} />
+      <SegmentedTabs<OrgTab> value={tab} onChange={setTab} options={[{ label: 'Members', value: 'members' }, { label: 'Teams', value: 'teams' }, { label: 'Invitations', value: 'invitations' }, { label: 'Access', value: 'access' },{label:modeCopy.tab,value:'billing'}]} />
+      {tab==='billing'?<OrganisationBillingModePanel key={org.id} organisationId={org.id}/>:null}
       {tab === 'access' ? <div className="mb-5"><EntityLifecyclePanel scope="ORGANISATION" id={org.id} /></div> : null}
       {tab === 'access' ? <>
       <div className="mb-5">

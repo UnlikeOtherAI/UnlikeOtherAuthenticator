@@ -3,7 +3,7 @@ import { type Prisma, type PrismaClient } from '@prisma/client';
 import { getAdminPrisma } from '../db/prisma.js';
 import { getEnv } from '../config/env.js';
 import { AppError } from '../utils/errors.js';
-import { resolveOrganisationBillingMode } from './billing-organisation-mode.service.js';
+import { readOrganisationBillingMode,resolveOrganisationBillingMode } from './billing-organisation-mode.service.js';
 import { type BillingAdminEffectActor }
   from './billing-admin-effect-authority.service.js';
 import { requireStripeBillingEnabled, type StripeBillingMode }
@@ -84,8 +84,8 @@ export async function assertOrganisationBillingMode(
 export async function readTeamBillingMode(subject: { organisationId: string; teamId: string | null },
   prisma: PrismaClient = getAdminPrisma()) {
   const selection = await resolveTeamBillingMode(subject,prisma);
-  return {team_id:subject.teamId,organisation_id:subject.organisationId,...selection,
-    controlling_scope:'organisation' as const,blockers:[]};
+  const current=await readOrganisationBillingMode(subject.organisationId,prisma);
+  return {...current,...selection,team_id:subject.teamId,controlling_scope:'organisation' as const};
 }
 export async function setTeamBillingMode(_params: {
   organisationId:string;teamId:string;mode:StripeBillingMode;expectedRevision:number;actor:BillingAdminEffectActor;

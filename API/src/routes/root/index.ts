@@ -1,4 +1,4 @@
-// Organisation billing authority and independent sections are published by schema.billing-organisation and /llm.
+// Organisation settings, independent finances and retired team mutations are published by schema.billing-organisation, schema.billing-modes and /llm.
 // Directory webhook consumption and exact-team avatar reads are documented in /llm and schema.ts.
 import { lifecycleDocumentation } from './schema.lifecycle.js';
 import { readFileSync } from 'node:fs';
