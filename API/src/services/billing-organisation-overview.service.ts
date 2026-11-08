@@ -11,6 +11,7 @@ import { readOrganisationSubscription } from './billing-organisation-subscriptio
 import { readOrganisationAccruedBill } from './billing-organisation-accrual.service.js';
 import { organisationBillingPeriod } from './billing-organisation-period.service.js';
 import { readOrganisationAttention } from './billing-organisation-attention.service.js';
+import { localizeOrganisationAccruedBill } from './billing-financial-display.service.js';
 
 function subject(context:OrganisationBillingContext) {
   return {product:context.request.product,organisation_id:context.request.organisationId,
@@ -63,7 +64,7 @@ export async function organisationBillingOverview(context:OrganisationBillingCon
     return {cycles_request:current.cycles_request,invoices_request:current.invoices_request,captured_sources};
   };
   const [accrued_bill,credits,funding,subscription,historySection,attention]=await Promise.all([
-    section(()=> (deps.bill??readOrganisationAccruedBill)(context,selection,month,now,prisma),input.locale),
+    section(async()=>localizeOrganisationAccruedBill(await (deps.bill??readOrganisationAccruedBill)(context,selection,month,now,prisma),input.locale),input.locale),
     section(()=> (deps.balance??readOrganisationCreditBalance)(context,selection,prisma,input.locale),input.locale),
     section(()=> (deps.funding??readOrganisationFunding)(context,selection,prisma,input.locale,now),input.locale),
     section(()=> (deps.subscription??readOrganisationSubscription)(context,prisma,input.locale,now),input.locale),

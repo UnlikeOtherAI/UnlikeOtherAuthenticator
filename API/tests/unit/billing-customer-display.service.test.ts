@@ -5,8 +5,44 @@ import { billingCycleDetailV2ConformanceFixture,
 import { localizeBillingCycleDetail } from '../../src/services/billing-cycle-display.service.js';
 import { localizeCustomerInvoiceDetail } from '../../src/services/billing-customer-invoice-display.service.js';
 import { exactMoney } from '../../src/services/billing-money.service.js';
+import { billingCreditAmount } from '../../src/services/billing-credit-display.service.js';
+import { billingCreditFundingCopy } from '../../src/services/billing-credit-funding-copy.catalog.js';
+import { billingCreditAutoTopUpCopy } from '../../src/services/billing-credit-auto-top-up-copy.catalog.js';
+import { billingOrganisationCopy } from '../../src/services/billing-organisation-copy.catalog.js';
+import { localizeOrganisationAccruedBill } from '../../src/services/billing-financial-display.service.js';
+import { organisationAccrualTotals } from '../../src/services/billing-organisation-accrual-totals.service.js';
 
 describe('customer read display localization', () => {
+  it('normalizes old display text without changing amounts or the frozen source, including the default locale',()=>{
+    const source=structuredClone(billingCustomerInvoiceDetailV1ConformanceFixture);
+    source.charges[0]!.amount={amount:'-13',amount_minor:'-1300',currency:'USD',display:'US$-13'};
+    source.totals.outstanding={amount:'0.6',amount_minor:'60',currency:'USD',display:'$0.6'};
+    const before=JSON.stringify(source),result=localizeCustomerInvoiceDetail(source);
+    expect(result.charges[0]?.amount).toEqual({...source.charges[0]!.amount,display:'-$13.00'});
+    expect(result.totals.outstanding).toEqual({...source.totals.outstanding,display:'$0.60'});
+    expect(JSON.stringify(source)).toBe(before);
+    expect(billingCreditAmount(123450000000n,'cs').display).toBe('123 450 kreditů');
+    expect(billingCreditAmount(-500000n,'de').display).toBe('-0,5 Credits');
+  });
+  it('authors organisation funding copy and bill displays in all seven locales',()=>{
+    const titles=['Doplnit kredity organizace','Add organisation credits','Add organisation credits','Organisationsguthaben aufladen',
+      'Añadir créditos a la organización','Ajouter des crédits à l’organisation','Aggiungi crediti all’organizzazione'];
+    const locales=['cs','en-US','en-GB','de','es','fr','it'] as const;
+    const bill={as_of:'2028-02-08T00:00:00.000Z',period:{month:'2028-02',starts_at:'2028-02-01T00:00:00.000Z',ends_at:'2028-03-01T00:00:00.000Z'},
+      ...organisationAccrualTotals([{id:'usage',product:'nessie',label:'Nessie',kind:'usage',currency:'USD',amountMinor:1300n},
+        {id:'credit',product:'nessie',label:'Credits',kind:'prepaid_credit',currency:'USD',amountMinor:-1300n}],new Map(),[])};
+    const before=JSON.stringify(bill);
+    for(const [index,locale] of locales.entries()){
+      expect(billingCreditFundingCopy(locale).title).toBe(titles[index]);
+      expect(billingCreditAutoTopUpCopy(locale).disabledDescription).not.toMatch(/team|tým|equipo|équipe/i);
+      expect(billingOrganisationCopy(locale).confirmed).not.toContain('UOA');
+      const result=localizeOrganisationAccruedBill(bill,locale);
+      expect(result.lines[1]?.amount.amount_minor).toBe('-1300');expect(result.totals[0]?.total_due.amount_minor).toBe('0');
+      expect(result.lines[1]?.amount.display).toBe(exactMoney('-13','USD',locale).display);
+      expect(result.totals[0]?.gross_total.display).toBe(exactMoney('13','USD',locale).display);
+    }
+    expect(JSON.stringify(bill)).toBe(before);
+  });
   it('retains microcredit-equivalent precision, large integers and the sign below one', () => {
     expect(exactMoney('0.000000001', 'USD', 'cs')).toMatchObject({
       amount: '0.000000001', display: '0,000000001\u00a0US$',

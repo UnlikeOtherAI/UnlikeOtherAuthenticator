@@ -234,7 +234,7 @@ describe('privacy-safe shared credit projection', () => {
     if (result.viewer.role !== 'billing_manager' || !result.funding_policy) {
       throw new Error('Expected manager funding actions');
     }
-    expect(result.funding_policy.title).toBe('Doplnit týmové kredity');
+    expect(result.funding_policy.title).toBe('Doplnit kredity organizace');
     expect(result.funding_policy.offers[0]).toMatchObject({
       name: 'Malé dobití kreditů',
       description: 'Jednorázové dobití. Nezapíná automatické dobíjení.',
@@ -248,13 +248,13 @@ describe('privacy-safe shared credit projection', () => {
 
   it('keeps source-authored credit actions in each supported billing locale', () => {
     const cases = [
-      ['cs', 'Doplnit týmové kredity', 'Vypnuto', 'Malé dobití kreditů', 'kreditů'],
-      ['en-US', 'Add team credits', 'Off', 'Small credit top-up', 'credits'],
-      ['en-GB', 'Add team credits', 'Off', 'Small credit top-up', 'credits'],
-      ['de', 'Team-Credits aufladen', 'Aus', 'Kleine Credit-Aufladung', 'Credits'],
-      ['es', 'Añadir créditos al equipo', 'Desactivada', 'Recarga pequeña de créditos', 'créditos'],
-      ['fr', 'Ajouter des crédits à l’équipe', 'Désactivée', 'Petite recharge de crédits', 'crédits'],
-      ['it', 'Aggiungi crediti al team', 'Disattivata', 'Ricarica piccola di crediti', 'crediti'],
+      ['cs', 'Doplnit kredity organizace', 'Vypnuto', 'Malé dobití kreditů', 'kreditů'],
+      ['en-US', 'Add organisation credits', 'Off', 'Small credit top-up', 'credits'],
+      ['en-GB', 'Add organisation credits', 'Off', 'Small credit top-up', 'credits'],
+      ['de', 'Organisationsguthaben aufladen', 'Aus', 'Kleine Credit-Aufladung', 'Credits'],
+      ['es', 'Añadir créditos a la organización', 'Desactivada', 'Recarga pequeña de créditos', 'créditos'],
+      ['fr', 'Ajouter des crédits à l’organisation', 'Désactivée', 'Petite recharge de crédits', 'crédits'],
+      ['it', 'Aggiungi crediti all’organizzazione', 'Disattivata', 'Ricarica piccola di crediti', 'crediti'],
     ] as const;
 
     for (const [locale, fundingTitle, autoTopUpStatus, offerName, creditUnit] of cases) {
