@@ -1,3 +1,4 @@
+import { WebSocket } from 'ws';
 import { randomUUID } from 'node:crypto';
 import { decodeJwt, exportJWK, generateKeyPair, SignJWT } from 'jose';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -84,7 +85,7 @@ describe('embedded Kelpie original host authority with PostgreSQL', () => {
     expect((await f.request(token, '/oauth/me')).statusCode).toBe(404);
     const connected = await f.connect(token); expect(connected.statusCode, connected.body).toBe(200);
     const ticket = connected.json().connection_ticket;
-    expect(decodeJwt(ticket)).toMatchObject({ token_use: 'embedded_kelpie_connect', aud: f.resource, assurance_id: f.proof.assurance.id });
+    expect(decodeJwt(ticket)).toMatchObject({ token_use: 'embedded_kelpie_connect', scope: 'kelpie.connect', aud: f.resource, assurance_id: f.proof.assurance.id });
     const validated = await f.validate(ticket); expect(validated.statusCode, validated.body).toBe(200);
     expect(validated.json()).toMatchObject({ active: true, source: 'embedded', sub: f.user.id, app_id: `embedded:${f.domain}` });
     expect((await f.request(ticket)).statusCode).toBe(401);
@@ -119,6 +120,33 @@ describe('embedded Kelpie original host authority with PostgreSQL', () => {
       expect((await f.request(token)).statusCode).toBeGreaterThanOrEqual(400);
       expect((await f.validate(ticket)).statusCode).toBeGreaterThanOrEqual(400);
     });
+
+  it('streams committed host bookmarks and closes on original-proof revocation before another value', async () => {
+    const f = await fixture(); const token = await f.session();
+    const address = await f.app.listen({ port: 0, host: '127.0.0.1' });
+    const url = '/embedded/kelpie/me/settings/browser/bookmarks';
+    const socket = new WebSocket(address.replace('http:', 'ws:') + url + '/events',
+      { headers: { authorization: `Bearer ${token}` } });
+    const frames: Array<Record<string, unknown>> = [];
+    socket.on('message', data => frames.push(JSON.parse(data.toString())));
+    try {
+      await new Promise<void>((resolve, reject) => { socket.once('open', resolve); socket.once('error', reject); });
+      await expect.poll(() => frames.length).toBe(1);
+      expect(frames[0]).toMatchObject({ type: 'settings.snapshot', protocolVersion: 1, value: null });
+      const initial = await f.request(token, url);
+      const saved = await f.app.inject({ method: 'PUT', url,
+        headers: { authorization: `Bearer ${token}`, 'if-match': String(initial.headers.etag) },
+        payload: { value: [{ url: 'https://example.com', name: 'Example' }] } });
+      expect(saved.statusCode).toBe(200);
+      await expect.poll(() => frames.length).toBe(2);
+      expect(frames[1]).toMatchObject({ type: 'settings.delta', baseVersion: frames[0]!.version, version: saved.headers.etag });
+      const closed = new Promise<number>(resolve => socket.once('close', resolve));
+      await f.db.sessionAssurance.update({ where: { id: f.proof.assurance.id }, data: { revokedAt: new Date() } });
+      await f.db.userSetting.deleteMany({ where: { userId: f.user.id, namespace: 'browser' } });
+      expect(await closed).toBe(1008);
+      expect(frames).toHaveLength(2);
+    } finally { socket.terminate(); await f.app.close(); apps.splice(apps.indexOf(f.app), 1); }
+  });
   it('refuses missing proof and scope/epoch substitution before grant issue', async () => {
     const f = await fixture();
     for (const extra of [{ assurance_ref: undefined }, { tv: 1 }, { active: { orgId: f.org.id, teamId: 'foreign' } }]) {

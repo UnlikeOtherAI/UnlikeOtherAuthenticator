@@ -24,12 +24,14 @@ const Claims = z.object({
   tv: z.number().int().nonnegative(), iat: z.number().int().positive(), exp: z.number().int().positive(),
   jti: z.string().min(1).max(256), scope: z.literal(SCOPES),
 });
+const ConnectionClaims = Claims.omit({ scope: true }).extend({ scope: z.literal('kelpie.connect') });
 export type EmbeddedKelpieAccount = z.infer<typeof Claims>;
+type EmbeddedKelpieAuthority = Omit<EmbeddedKelpieAccount, 'scope'>;
 function reject(): never { throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED'); }
 const audience = () => `${getPublicBaseUrl()}/embedded/kelpie`;
 
 /** This grant is the gateway product's existing person session, never a public native registration. */
-export async function authorizeEmbeddedKelpieAccount(account: EmbeddedKelpieAccount, tx: Prisma.TransactionClient) {
+export async function authorizeEmbeddedKelpieAccount(account: EmbeddedKelpieAuthority, tx: Prisma.TransactionClient) {
   const resource = kelpieConnectResource();
   if (account.domain !== new URL(resource).host || account.exp <= Date.now() / 1000) reject();
   await lockTokenIssuanceProductPolicy({ clientDomainId: account.client_domain_id, domain: account.domain }, { prisma: tx });
@@ -83,7 +85,7 @@ export async function verifyEmbeddedKelpieToken(authorization: string | undefine
       algorithms: ['RS256'], typ: 'at+jwt', issuer: getPublicBaseUrl(), audience: audience(),
     });
     if (payload.token_use !== 'embedded_kelpie_account' || payload.aud !== audience()) reject();
-    const account = Claims.parse(payload);
+    const account = ConnectionClaims.parse(payload);
     if (account.exp <= account.iat || account.exp - account.iat > KELPIE_TICKET_TTL_SECONDS ||
       account.iat > Date.now() / 1000 || !SCOPES.split(' ').includes(scope)) reject();
     return { ...account, userId: account.sub };
@@ -99,7 +101,7 @@ export async function issueEmbeddedKelpieConnection(authorization: string | unde
   return db.$transaction(async tx => {
     await authorizeEmbeddedKelpieAccount(account, tx);
     const now = Math.floor(Date.now() / 1000);
-    const ticket = await signEmbeddedKelpieToken({ ...account, jti: randomUUID(), iat: now }, resource, 'embedded_kelpie_connect');
+    const ticket = await signEmbeddedKelpieToken({ ...account, scope: 'kelpie.connect', jti: randomUUID(), iat: now }, resource, 'embedded_kelpie_connect');
     const gateway = new URL(resource); gateway.protocol = 'wss:';
     return { connection_ticket: ticket, token_type: 'Bearer', expires_in: account.exp - now, gateway_url: gateway.toString() };
   });
@@ -107,7 +109,7 @@ export async function issueEmbeddedKelpieConnection(authorization: string | unde
 
 export async function validateEmbeddedKelpieConnection(ticket: string, db: PrismaClient, authorizeGateway: (tx: Prisma.TransactionClient) => Promise<void>) {
   const resource = kelpieConnectResource();
-  let account: EmbeddedKelpieAccount;
+  let account: z.infer<typeof ConnectionClaims>;
   try {
     const { payload } = await jwtVerify(ticket, createLocalJWKSet(await getAccessTokenPublicJwks()), {
       algorithms: ['RS256'], typ: 'at+jwt', issuer: getPublicBaseUrl(), audience: resource,
