@@ -83,6 +83,7 @@ export function registerRootRoute(app: FastifyInstance): void {
       deeptest_nessie_inference: { check: '/apps/v1/deeptest/nessie-inference-access',
         admin: '/internal/admin/users/:userId/deeptest-nessie-inference',
         default_allowed: false, positive_cache_allowed: false },
+      embedded_kelpie: { issue: '/org/me/kelpie/session', account: '/embedded/kelpie/me', validate: '/embedded/kelpie/connect/validate', ttl_seconds: 120, original_proof_required: true },
       kelpie_connect: { issue: '/oauth/kelpie/connect', validate: '/oauth/kelpie/connect/validate', scope: 'kelpie.connect', app_id: 'com.unlikeotherai.kelpie', ticket_ttl_seconds: 120, configuration: 'KELPIE_CONNECT_RESOURCE; exact HTTPS /api/kelpie/connect gateway, absent disables' },
       kelpie_pair: { issue: '/oauth/kelpie/pair', validate: '/oauth/kelpie/pair/validate', scope: 'kelpie.connect', receiver_scope: 'profile', ticket_ttl_seconds: 120, same_subject_required: true },
       admin_team_membership: 'POST /internal/admin/users/:userId/teams atomically adds an existing user to the selected organisation/team through the admin superuser boundary; see endpoints for its request and lifecycle rules.',

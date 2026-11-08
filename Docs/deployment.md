@@ -325,3 +325,7 @@ ancestor revocation and membership loss through the real HTTP contract before
 enabling the Water reconciler. A deployed endpoint or a queued successor is not
 proof that the original research recovered: watch that same Water UUID through
 its full report and inspect the exact Ledger provider receipts.
+
+### Embedded Kelpie consumer rollout
+
+Deploy UOA's original-proof host grant before Nessie's backend and native consumers. No migration, public native registration or new credential is required; existing source-domain, gateway-resource and original-proof custody must be live. The public native profile remains separately gated. See [embedded host sessions](Auth/embedded-kelpie.md); API coverage does not prove an installed native flow.

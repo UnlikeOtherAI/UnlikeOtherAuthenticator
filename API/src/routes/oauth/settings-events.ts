@@ -1,4 +1,7 @@
-import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import type { Prisma } from '@prisma/client';
+import { authorizeEmbeddedKelpieAccount, verifyEmbeddedKelpieToken } from '../../services/oauth/embedded-kelpie.service.js';
+import { kelpieConnectResource } from '../../services/oauth/kelpie-connect-policy.js';
+import type { FastifyInstance, FastifyRequest, FastifyReply, preHandlerHookHandler } from 'fastify';
 import type { WebSocket } from 'ws';
 import { z } from 'zod';
 import { getEnv } from '../../config/env.js';
@@ -14,6 +17,23 @@ import { requireMcpOAuthPublicProfile } from './public-profile-guard.js';
 const paramsSchema = z.object({ namespace: z.string().regex(USER_SETTINGS_NAMESPACE_PATTERN), key: z.string().regex(USER_SETTINGS_KEY_PATTERN) });
 const MAX_SOCKETS = 32; // Live Cloud Run request concurrency is 80; leave capacity for sign-in.
 
+type BoundAccount = { userId: string; authorize: (tx: Prisma.TransactionClient) => Promise<unknown> };
+type Authority = { path: string; preHandler: preHandlerHookHandler[];
+  verify: (authorization: string | undefined) => Promise<BoundAccount> };
+
+const authorities: Authority[] = [
+  { path: '/oauth/me/settings/:namespace/:key/events', preHandler: [requireMcpOAuthPublicProfile],
+    verify: async authorization => {
+      const account = await verifyPublicAccountToken(authorization, 'settings.read');
+      return { userId: account.userId, authorize: tx => authorizePublicAccount(account, tx) };
+    } },
+  { path: '/embedded/kelpie/me/settings/:namespace/:key/events', preHandler: [async () => { kelpieConnectResource(); }],
+    verify: async authorization => {
+      const account = await verifyEmbeddedKelpieToken(authorization, 'settings.read');
+      return { userId: account.userId, authorize: tx => authorizeEmbeddedKelpieAccount(account, tx) };
+    } },
+];
+
 export function registerSettingsEvents(app: FastifyInstance): void {
   const lane = new SettingsStreamQueue();
   const subjects = new Map<string, number>();
@@ -26,7 +46,7 @@ export function registerSettingsEvents(app: FastifyInstance): void {
     const remaining = (subjects.get(userId) ?? 1) - 1;
     if (remaining > 0) subjects.set(userId, remaining); else subjects.delete(userId);
   };
-  const reserve = async (request: FastifyRequest, reply: FastifyReply) => {
+  const reserve = async (request: FastifyRequest, reply: FastifyReply, authority: Authority) => {
     reply.header('Retry-After', '5');
     if (request.headers.upgrade?.toLowerCase() !== 'websocket') throw new AppError('BAD_REQUEST', 400, 'INVALID_REQUEST');
     const params = paramsSchema.parse(request.params);
@@ -34,7 +54,7 @@ export function registerSettingsEvents(app: FastifyInstance): void {
     if (admitted >= MAX_SOCKETS) throw new AppError('SERVICE_UNAVAILABLE', 503, 'SETTINGS_STREAM_BUSY');
     admitted += 1;
     try {
-      const account = await lane.run(() => verifyPublicAccountToken(request.headers.authorization, 'settings.read'));
+      const account = await lane.run(() => authority.verify(request.headers.authorization));
       const count = subjects.get(account.userId) ?? 0;
       if (count >= 8) throw new AppError('SERVICE_UNAVAILABLE', 503, 'SETTINGS_STREAM_BUSY');
       if (request.raw.socket.destroyed) throw new Error('Connection closed');
@@ -46,9 +66,9 @@ export function registerSettingsEvents(app: FastifyInstance): void {
       });
     } catch (error) { admitted -= 1; throw error; }
   };
-  app.get('/oauth/me/settings/:namespace/:key/events', {
+  for (const authority of authorities) app.get(authority.path, {
     websocket: true,
-    preHandler: [requireMcpOAuthPublicProfile, reserve],
+    preHandler: [...authority.preHandler, (request, reply) => reserve(request, reply, authority)],
   }, (socket, request) => {
     const topic = reservations.get(request);
     if (!topic) { socket.close(1011); return; }
@@ -75,10 +95,10 @@ export function registerSettingsEvents(app: FastifyInstance): void {
       void lane.run(async () => {
         if (closed) return;
         // Recheck current client/scopes as well as live subject authority.
-        const account = await verifyPublicAccountToken(request.headers.authorization, 'settings.read');
+        const account = await authority.verify(request.headers.authorization);
         if (account.userId !== topic.userId) throw new Error('Subject changed');
         const value = await request.adminDb.$transaction(async tx => {
-          await authorizePublicAccount(account, tx);
+          await account.authorize(tx);
           const row = await tx.userSetting.findUnique({ where: { userId_namespace_key: topic }, select: { value: true } });
           return row?.value ?? null;
         });

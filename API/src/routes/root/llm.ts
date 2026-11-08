@@ -1,3 +1,4 @@
+import { embeddedKelpieMarkdown } from './llm-embedded-kelpie.js';
 import { llmBillingModesMarkdown } from './llm-billing-modes.js';
 import { llmTelephoneAdmissionMarkdown, llmTelephoneSmsMarkdown } from './llm-telephone.js';
 import { llmBillingVoiceMarkdown } from './llm-billing-voice.js';
@@ -28,7 +29,8 @@ function renderLlmMarkdown(): string {
   // llmIntegrationMarkdown owns both confidential subject profiles: one-time
   // source assertions and reusable, audience-bound chained access tokens. llmRostersMarkdown
   // owns the exact-team invitation management and role-write contracts.
-  return `${llmTelephoneMarkdown}
+  return `${embeddedKelpieMarkdown}
+${llmTelephoneMarkdown}
 ## Admin-created expiring users
 POST /internal/admin/users accepts email, password, optional name and optional future ISO accountExpiresAt under the admin superuser bearer. It creates one global UOA identity, hashes the password, writes a password-free audit entry and returns a user summary without credentials. Once expiry passes, UOA refuses sign-in, token verification and refresh. Relying products must continue checking UOA to observe expiry in their own sessions.
 POST /auth/account-renewal/start?config_url=<signed config> accepts {email}, emails a neutral six-digit code and returns {ok:true,challengeId} without revealing account existence. POST /auth/account-renewal/request with the same config URL accepts {challengeId,code,twoFactorCode?}; it consumes that one-use mailbox/optional 2FA proof, then records one pending request for an expired account and emails active platform superusers a link to Admin Users > Security. The response is {ok:true} even if the verified account is not expired. PATCH /internal/admin/users/:userId/expiry lets a superuser set a future expiry or remove it. POST /internal/admin/account-renewal-requests/:requestId/review accepts {decision:"approve",accountExpiresAt:<future ISO date>} or {decision:"decline"}; approval restores sign-in until the new date. Both admin mutations are audited. A correct password at /auth/login returns ACCOUNT_EXPIRED after expiry; wrong credentials remain generic.
