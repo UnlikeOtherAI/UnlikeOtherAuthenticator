@@ -52,6 +52,9 @@ export async function readOrganisationManualInvoice(context:BillingCycleContext,
   if(match[1]==='manual'){
     const row=await db.billingInvoice.findFirst({where:{id:match[2],orgId,contract:{orgId,billingAccountId:accountId}},include});
     if(!row)missing();if(row.contractVersion.contractId!==row.contractId)missing();
+    if(month && row.issuedAt?.toISOString().slice(0,7)!==month &&
+      !row.paymentEvents.some(event=>event.kind==='PAYMENT' &&
+        event.occurredAt.toISOString().slice(0,7)===month))missing();
     await verifyOrganisationInvoiceServices(db,row.lines);
     // Validate the same legal/cash evidence for list, detail and document reads.
     const summary=projectManualCustomerInvoiceSummary(row,month);

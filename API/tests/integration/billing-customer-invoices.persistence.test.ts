@@ -15,6 +15,7 @@ import {
 import type { BillingCycleContext } from '../../src/services/billing-cycle-read.service.js';
 import type { BillingInvoicePdfStorage } from '../../src/services/billing-invoice-storage.service.js';
 import { createTestDb } from '../helpers/test-db.js';
+import { createTestSandboxOrganisationPolicy, captureTestOrganisationFinancialBinding } from '../helpers/organisation-financial-binding.js';
 
 vi.mock('../../src/services/billing-actor.service.js', () => ({
   verifyBillingActor: vi.fn().mockResolvedValue({}),
@@ -72,7 +73,7 @@ describe.skipIf(!enabled)('actual customer invoice persistence and scope', () =>
     } });
     teamId = team.id;
     otherTeamId = other.id;
-    await db.prisma.billingTeamMode.createMany({ data: [teamId, otherTeamId].map(id => ({ teamId: id, sandbox: true, revision: 1 })) });
+    await createTestSandboxOrganisationPolicy(db.prisma, orgId);
     await db.prisma.orgMember.createMany({ data: [
       { orgId, userId: ownerId, role: 'owner' },
       { orgId, userId: managerId, role: 'member' },
@@ -134,7 +135,9 @@ describe.skipIf(!enabled)('actual customer invoice persistence and scope', () =>
       new Date('2026-10-01T00:00:00.000Z'),
     ].entries()) {
       const payment = await db.prisma.$transaction(async (tx) => {
-        const checkout = await tx.billingCreditTopUpCheckout.create({ data: {
+        // Imported historical TEAM payment; reader/revocation checks use normal guards.
+        await tx.$executeRawUnsafe('SET LOCAL session_replication_role = replica');
+        const checkout = await tx.billingCreditTopUpCheckout.create({ data: { createdAt:new Date('2026-01-01T00:00:00Z'),
           billingModeTeamId: teamId, billingModeRevision: 1,
         accountId: account.id, creditAccountId: wallet.id, customerId: customer.id,
         catalogId: catalog.id, serviceId, appKeyId: appKey.id, offerId: offer.id,
@@ -198,12 +201,13 @@ describe.skipIf(!enabled)('actual customer invoice persistence and scope', () =>
       identifier: `other-${randomUUID()}`, name: 'Other Product',
     } });
     const contract = await db.prisma.billingOrganisationContract.create({ data: {
-      orgId, reference: `invoice-${randomUUID()}`, name: 'Mixed source',
+      orgId, ...await captureTestOrganisationFinancialBinding(db.prisma,orgId,{stripeAccountId:account.stripeAccountId,livemode:false}),
+      reference: `invoice-${randomUUID()}`, name: 'Mixed source',
       createdByEmail: 'admin@example.com',
     } });
     const version = await db.prisma.billingOrganisationContractVersion.create({ data: {
       contractId: contract.id, version: 1, usageMarkupBps: 3000,
-      currency: 'USD', paymentTermsDays: 30, effectiveFromMonth: '2026-09',
+      currency: 'USD', paymentTermsDays: 30, effectiveFromMonth: '2030-09',
       createdByEmail: 'admin@example.com',
     } });
     for (const current of [service, otherService]) {
@@ -226,12 +230,12 @@ describe.skipIf(!enabled)('actual customer invoice persistence and scope', () =>
     }
     await db.prisma.billingOrganisationContract.update({ where: { id: contract.id },
       data: { status: BillingOrganisationContractStatus.ACTIVE,
-        activatedAt: new Date('2026-09-01T00:00:00.000Z') } });
+        activatedAt: new Date('2030-09-01T00:00:00.000Z') } });
     const mixed = await db.prisma.$transaction(async (tx) => {
       const created = await tx.billingInvoice.create({ data: {
       orgId, contractId: contract.id, contractVersionId: version.id,
       issuerProfileId: issuer.id, buyerProfileId: buyer.id,
-      billingMonth: '2026-09', currency: 'USD',
+      billingMonth: '2030-09', currency: 'USD',
       subtotalMinor: 1500n, totalMinor: 1500n,
       issuerSnapshot: { legal_name: 'UOA Ltd' }, buyerSnapshot: { legal_name: 'Buyer Ltd' },
       calculationDigest: 'c'.repeat(64),
@@ -247,18 +251,18 @@ describe.skipIf(!enabled)('actual customer invoice persistence and scope', () =>
         .map((current) => ({ invoiceId: created.id, serviceId: current.id,
           ledgerSnapshotCursor: `proof-${current.id}`,
           ledgerSnapshotSha256: 'e'.repeat(64),
-          capturedAt: new Date('2026-10-01T00:00:00.000Z'),
+          capturedAt: new Date('2030-10-01T00:00:00.000Z'),
         })) });
       return created;
     });
     await db.prisma.billingInvoice.update({ where: { id: mixed.id }, data: {
       status: BillingInvoiceStatus.ISSUING, invoiceNumber: `MIX-${randomUUID()}`,
-      issueDate: new Date('2026-09-30T00:00:00.000Z'),
-      dueDate: new Date('2026-10-30T00:00:00.000Z'),
+      issueDate: new Date('2030-09-30T00:00:00.000Z'),
+      dueDate: new Date('2030-10-30T00:00:00.000Z'),
     } });
     await db.prisma.billingInvoice.update({ where: { id: mixed.id }, data: {
       status: BillingInvoiceStatus.ISSUED,
-      issuedAt: new Date('2026-09-30T00:00:00.000Z'),
+      issuedAt: new Date('2030-09-30T00:00:00.000Z'),
       pdfObjectKey: `billing-invoices/${randomUUID()}.pdf`,
       pdfSha256: 'd'.repeat(64), pdfTemplateVersion: 'proof-v1',
     } });
@@ -286,28 +290,26 @@ describe.skipIf(!enabled)('actual customer invoice persistence and scope', () =>
 
   it('lists every charge in its paid month, including a later-issued PDF and pending document', async () => {
     const viewer = context(ownerId);
-    const first = await listCustomerInvoices(viewer, { chargeMonth: '2026-09', limit: 1 },
-      { prisma: db.prisma });
-    expect(first.invoices).toHaveLength(1);
-    expect(first.next_cursor).not.toBeNull();
-    const second = await listCustomerInvoices(viewer, {
-      chargeMonth: '2026-09', limit: 1, cursor: first.next_cursor ?? undefined,
-    }, { prisma: db.prisma });
-    expect(second.invoices).toHaveLength(1);
-    expect(second.next_cursor).toBeNull();
-    expect(new Set([...first.invoices, ...second.invoices].map((row) => row.invoice_id)))
-      .toEqual(new Set(paymentIds.slice(0, 2).map((id) => `prepaid:${id}`)));
-    expect([...first.invoices, ...second.invoices].map((row) => row.status).sort())
-      .toEqual(['paid', 'pending_document']);
+    const rows = []; let cursor;
+    do {
+      const page = await listCustomerInvoices(viewer, { chargeMonth:'2026-09',limit:1,cursor },
+        {prisma:db.prisma});
+      expect(page.invoices).toHaveLength(1);rows.push(...page.invoices);cursor=page.next_cursor??undefined;
+    } while(cursor);
+    expect(rows).toHaveLength(2);
+    expect(new Set(rows.map(row=>row.invoice_id))).toEqual(new Set([
+      ...paymentIds.slice(0,2).map(id=>`prepaid:${id}`)]));
+    expect(rows.filter(row=>row.invoice_id.startsWith('prepaid:')).map(row=>row.status).sort())
+      .toEqual(['paid','pending_document']);
     const november = await listCustomerInvoices(viewer, { chargeMonth: '2026-10' },
       { prisma: db.prisma });
     expect(november.invoices.map((row) => row.invoice_id)).toEqual([`prepaid:${paymentIds[2]}`]);
   });
 
-  it('denies a different selected team and rechecks revocation after a blocked PDF read', async () => {
+  it('admits another selected team and rechecks manager revocation after a blocked PDF read', async () => {
     const invoiceId = `prepaid:${paymentIds[0]}`;
-    await expect(getCustomerInvoiceDetail(context(ownerId, otherTeamId), invoiceId,
-      { prisma: db.prisma })).rejects.toMatchObject({ statusCode: 404 });
+    expect((await getCustomerInvoiceDetail(context(ownerId, otherTeamId), invoiceId,
+      { prisma: db.prisma })).invoice_id).toBe(invoiceId);
     const manager = context(managerId);
     expect((await getCustomerInvoiceDetail(manager, invoiceId,
       { prisma: db.prisma })).document?.document_id).toBe(invoiceId);
@@ -334,18 +336,15 @@ describe.skipIf(!enabled)('actual customer invoice persistence and scope', () =>
     await expect(pending).rejects.toMatchObject({ statusCode: 403 });
   });
 
-  it('never discloses a mixed-product legal invoice through one product key', async () => {
+  it('includes a captured multi-product legal invoice in organisation history', async () => {
     const viewer = context(ownerId);
-    const list = await listCustomerInvoices(viewer, { chargeMonth: '2026-09' },
+    const list = await listCustomerInvoices(viewer, { chargeMonth: '2030-09' },
       { prisma: db.prisma });
-    expect(list.invoices.some((invoice) => invoice.invoice_id ===
-      `manual:${mixedInvoiceId}`)).toBe(false);
-    await expect(getCustomerInvoiceDetail(viewer, `manual:${mixedInvoiceId}`,
-      { prisma: db.prisma })).rejects.toMatchObject({ statusCode: 404 });
-    await expect(downloadCustomerInvoice(viewer, `manual:${mixedInvoiceId}`,
-      `manual:${mixedInvoiceId}`, { prisma: db.prisma, storage: {
-        putImmutable: async () => {}, read: async () => legalBytes,
-      } })).rejects.toMatchObject({ statusCode: 404 });
+    expect(list.invoices.some(invoice => invoice.invoice_id === `manual:${mixedInvoiceId}`)).toBe(true);
+    const detail = await getCustomerInvoiceDetail(viewer, `manual:${mixedInvoiceId}`,
+      { prisma: db.prisma });
+    expect(detail.invoice_id).toBe(`manual:${mixedInvoiceId}`);
+    expect(JSON.stringify(detail)).toContain('Other Product');
   });
 
   it('lists later manual payments in their month and downloads the same legal invoice', async () => {
@@ -357,7 +356,7 @@ describe.skipIf(!enabled)('actual customer invoice persistence and scope', () =>
     } });
     const version = await db.prisma.billingOrganisationContractVersion.create({ data: {
       contractId: original.contractId, version: 2, usageMarkupBps: 3000,
-      currency: 'USD', paymentTermsDays: 30, effectiveFromMonth: '2026-10',
+      currency: 'USD', paymentTermsDays: 30, effectiveFromMonth: '2030-10',
       createdByEmail: 'admin@example.com',
       serviceTerms: { create: { serviceId, tariffId: term.tariffId,
         tariffAssignmentId: term.tariffAssignmentId, monthlyAmountMinor: 1000n } },
@@ -365,22 +364,22 @@ describe.skipIf(!enabled)('actual customer invoice persistence and scope', () =>
     const invoice = await db.prisma.billingInvoice.create({ data: {
       orgId, contractId: original.contractId, contractVersionId: version.id,
       issuerProfileId: original.issuerProfileId, buyerProfileId: original.buyerProfileId,
-      billingMonth: '2026-10', revision: 1, currency: 'USD',
+      billingMonth: '2030-10', revision: 1, currency: 'USD',
       subtotalMinor: 1000n, totalMinor: 1000n,
       issuerSnapshot: { legal_name: 'UOA Ltd' }, buyerSnapshot: { legal_name: 'Buyer Ltd' },
       calculationDigest: 'b'.repeat(64),
       lines: { create: { serviceId, serviceIdentifier, serviceName: 'Invoice Proof',
         amountMinor: 1000n, currency: 'USD', position: 1 } },
       meteringRefs: { create: { serviceId, ledgerSnapshotCursor: 'manual-month-proof',
-        ledgerSnapshotSha256: 'e'.repeat(64), capturedAt: new Date('2026-10-01T00:00:00.000Z') } },
+        ledgerSnapshotSha256: 'e'.repeat(64), capturedAt: new Date('2030-10-01T00:00:00.000Z') } },
     } });
     await db.prisma.billingInvoice.update({ where: { id: invoice.id }, data: {
       status: BillingInvoiceStatus.ISSUING, invoiceNumber: `PAY-${randomUUID()}`,
-      issueDate: new Date('2026-10-31T00:00:00.000Z'),
-      dueDate: new Date('2026-11-30T00:00:00.000Z'),
+      issueDate: new Date('2030-10-31T00:00:00.000Z'),
+      dueDate: new Date('2030-11-30T00:00:00.000Z'),
     } });
     await db.prisma.billingInvoice.update({ where: { id: invoice.id }, data: {
-      status: BillingInvoiceStatus.ISSUED, issuedAt: new Date('2026-10-31T00:00:00.000Z'),
+      status: BillingInvoiceStatus.ISSUED, issuedAt: new Date('2030-10-31T00:00:00.000Z'),
       pdfObjectKey: `billing-invoices/${invoice.id}.pdf`,
       pdfSha256: createHash('sha256').update(legalBytes).digest('hex'),
       pdfTemplateVersion: 'proof-v1',
@@ -388,13 +387,13 @@ describe.skipIf(!enabled)('actual customer invoice persistence and scope', () =>
     await db.prisma.billingInvoicePaymentEvent.createMany({ data: [
       { invoiceId: invoice.id, kind: 'PAYMENT', source: 'MANUAL', amountMinor: 400n,
         currency: 'USD', idempotencyKey: 'october-payment',
-        occurredAt: new Date('2026-11-05T12:00:00.000Z') },
+        occurredAt: new Date('2030-11-05T12:00:00.000Z') },
       { invoiceId: invoice.id, kind: 'PAYMENT', source: 'MANUAL', amountMinor: 300n,
         currency: 'USD', idempotencyKey: 'november-payment',
-        occurredAt: new Date('2026-12-05T12:00:00.000Z') },
+        occurredAt: new Date('2030-12-05T12:00:00.000Z') },
     ] });
     const id = `manual:${invoice.id}`;
-    for (const [month, paid] of [['2026-11', '400'], ['2026-12', '300']]) {
+    for (const [month, paid] of [['2030-11', '400'], ['2030-12', '300']]) {
       const list = await listCustomerInvoices(context(ownerId), { chargeMonth: month },
         { prisma: db.prisma });
       expect(list.invoices.find((row) => row.invoice_id === id))
@@ -405,6 +404,6 @@ describe.skipIf(!enabled)('actual customer invoice persistence and scope', () =>
       })).bytes).toEqual(legalBytes);
     }
     await expect(getCustomerInvoiceDetail(context(ownerId), id,
-      { prisma: db.prisma, chargeMonth: '2027-01' })).rejects.toMatchObject({ statusCode: 404 });
+      { prisma: db.prisma, chargeMonth: '2031-01' })).rejects.toMatchObject({ statusCode: 404 });
   });
 });

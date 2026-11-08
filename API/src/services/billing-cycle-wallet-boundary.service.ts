@@ -34,14 +34,17 @@ function result(facts: { opening: bigint | null; closing: bigint | null;
  * an earlier frozen boundary. */
 export async function readCycleWalletBoundary(reader: Reader,
   params: { orgId: string; teamId: string | null; payer: BillingAssignmentScope;
+    capturedAccountId: string | null;
     startsAt: Date; endsAt: Date },
 ): Promise<CycleWalletBoundary> {
+  if (!params.capturedAccountId) return result({ opening: null, closing: null,
+    accountId: null, entryCount: null, reason: 'captured_account_unproven' });
   if (params.payer === BillingAssignmentScope.ORGANISATION && params.teamId !== null) {
     return result({ opening: null, closing: null, accountId: null,
       entryCount: null, reason: 'org_pool_team_view' });
   }
   const accounts = await reader.billingCreditAccount.findMany({ where: {
-    orgId: params.orgId, scope: params.payer,
+    orgId: params.orgId, scope: params.payer, accountId: params.capturedAccountId,
     teamId: params.payer === BillingAssignmentScope.TEAM ? params.teamId : null,
     currency: 'USD',
   }, select: { id: true, balanceMicrocredits: true }, take: 2 });

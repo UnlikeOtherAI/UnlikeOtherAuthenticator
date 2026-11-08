@@ -298,3 +298,11 @@ work. Do not remove guards, reset epochs, rewrite pending captures or revert the
 migration to restore an old billing screen. Keep billing held and repair or
 redeploy the compatible consumer/API while preserving authentication and the
 original captured recovery sources.
+
+Cycle wallet boundaries use the account captured by the original subscription,
+manual contract or verified paid dispatch. Another mode's wallet and a same-mode
+replacement account are never substitutes. Usage-only cycles retain their
+verified account in private evidence; an organisation fee's child cycle must
+agree with that captured parent account. Missing or mixed account evidence
+remains pending and cannot be financially finalized. Read recovery does not
+backfill an unbound source from today's configured mode.
