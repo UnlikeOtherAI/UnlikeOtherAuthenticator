@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('../../src/services/billing-entitlement.service.js', () => ({
-  resolveEffectiveTariffContext: mocks.resolveContext,
+  resolveFinancialTariffContext: mocks.resolveContext,
 }));
 vi.mock('../../src/services/billing-funding-viewer.service.js', () => ({
   resolveBillingFundingViewer: mocks.resolveViewer,
@@ -65,6 +65,7 @@ function setup() {
     resourceId: null,
     serviceId: 'service_1',
     key: 'privacy',
+    currency:'USD',monthlyAmountMinor:5000n,
     active: true,
     featurePolicies: [
       { entitlementScope: BillingRecurringAddonEntitlementScope.TEAM, active: true },
@@ -75,8 +76,8 @@ function setup() {
     id: 'customer_1',
     accountId: account.id,
     orgId: 'org_1',
-    teamId: 'team_1',
-    scope: BillingAssignmentScope.TEAM,
+    teamId: null,
+    scope: BillingAssignmentScope.ORGANISATION,scopeKey:'org_1:billing:USD',
     stripeCustomerId: 'cus_1',
   };
   const checkouts: Array<Record<string, unknown>> = [];
@@ -112,7 +113,7 @@ function setup() {
     billingRecurringAddonOffer: { findFirst: vi.fn().mockResolvedValue(offer) },
     billingRecurringAddonSubscription: { findFirst: vi.fn().mockResolvedValue(null) },
     billingRecurringAddonCheckout: checkoutModel,
-    billingStripeCustomer: { upsert: vi.fn().mockResolvedValue(customer) },
+    billingStripeCustomer: { upsert: vi.fn().mockResolvedValue(customer),findUniqueOrThrow:vi.fn().mockResolvedValue(customer) },
     user: { findUnique: vi.fn().mockResolvedValue({ id: 'user_1', email: 'a@example.com' }) },
     organisation: { findUnique: vi.fn().mockResolvedValue({ id: 'org_1', name: 'Org' }) },
     team: { findFirst: vi.fn().mockResolvedValue({ id: 'team_1', name: 'Team' }) },
@@ -130,6 +131,7 @@ function setup() {
   };
   mocks.resolveContext.mockResolvedValue({ actor: { jti: 'actor_1' } });
   mocks.resolveViewer.mockResolvedValue({
+    billingManager:true,
     organisationRole: 'admin',
     teamRole: 'admin',
   });

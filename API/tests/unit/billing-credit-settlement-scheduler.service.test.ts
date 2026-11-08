@@ -17,6 +17,7 @@ describe('durable credit settlement catch-up', () => {
       billingMonth: '2026-09', creditAccount: account, team: { id: 'team_1' },
     };
     const prisma = {
+      $queryRaw:vi.fn().mockResolvedValue([{activatedAt:new Date('2026-11-08T00:00:00Z')}]),
       billingCreditAccount: { findMany: vi.fn().mockResolvedValue([account]) },
       team: { findMany: vi.fn().mockResolvedValue([
         { id: 'team_1', createdAt: new Date('2026-07-01T00:00:00.000Z') },
@@ -78,6 +79,7 @@ describe('durable credit settlement catch-up', () => {
       checkoutReturnOrigins: [], service: { id: 'service_1', identifier: 'deepwater', name: 'DeepWater' },
     };
     const prisma = {
+      $queryRaw:vi.fn().mockResolvedValue([{activatedAt:new Date('2026-11-08T00:00:00Z')}]),
       billingOrgResponsibility: { findUnique: vi.fn().mockResolvedValue(null) },
       billingCreditSettlementWatch: {
         findMany: vi.fn().mockImplementation(async ({ where }: { where: { nextCheckAt: { lte: Date }; billingMonth: { in?: string[]; notIn?: string[] } } }) => {

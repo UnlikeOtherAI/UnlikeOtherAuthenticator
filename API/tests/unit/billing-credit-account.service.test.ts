@@ -1,13 +1,17 @@
 import type { PrismaClient } from '@prisma/client';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { resolveCreditCollectionContext } from '../../src/services/billing-credit-account.service.js';
 
 const subject = { organisationId: 'org_1', teamId: 'team_1' };
 const account = { id: 'account_1', stripeAccountId: 'acct_persisted', livemode: false };
 const originalGate = process.env.STRIPE_BILLING_ENABLED;
+const epoch='2026-11-08T00:00:00.000Z';
+beforeEach(()=>{vi.stubEnv('STRIPE_SANDBOX_ACCOUNT_ID',account.stripeAccountId);
+  vi.stubEnv('STRIPE_SANDBOX_SECRET_KEY','rk_test_synthetic');vi.stubEnv('STRIPE_SANDBOX_WEBHOOK_SECRET','whsec_synthetic');});
 
 afterEach(() => {
+  vi.unstubAllEnvs();
   if (originalGate === undefined) delete process.env.STRIPE_BILLING_ENABLED;
   else process.env.STRIPE_BILLING_ENABLED = originalGate;
 });
@@ -15,26 +19,29 @@ afterEach(() => {
 function database(scoped: unknown[], persisted: unknown[] = []) {
   return {
     team: { findFirst: vi.fn().mockResolvedValue({ id: subject.teamId }) },
-    billingTeamMode: { findUnique: vi.fn().mockResolvedValue({ sandbox: true, revision: 1 }) },
+    organisation:{findFirst:vi.fn().mockResolvedValue({id:subject.organisationId})},
+    $queryRaw:vi.fn().mockResolvedValue([{sandbox:true,revision:1,epoch:new Date(epoch)}]),
     billingCreditAccount: { findMany: vi.fn().mockResolvedValue(scoped) },
     billingStripeAccount: { findMany: vi.fn().mockResolvedValue(persisted) },
   } as unknown as PrismaClient;
 }
 
 describe('credit collection account resolution with Stripe disabled', () => {
-  it('uses the one exact persisted team account without touching global account selection', async () => {
+  it('uses the exact persisted ORG account under the named mode without another account lookup', async () => {
     process.env.STRIPE_BILLING_ENABLED = 'false';
     const prisma = database([{ account }], [account, { ...account, id: 'account_other' }]);
 
     await expect(resolveCreditCollectionContext(subject, { prisma })).resolves.toEqual({
-      account, modeRevision: 1,
+      account, modeRevision: 1,scopeEpoch:epoch,
       stripeCollectionEnabled: false,
       stripe: null,
     });
     expect(prisma.billingStripeAccount.findMany).not.toHaveBeenCalled();
+    expect(prisma.billingCreditAccount.findMany).toHaveBeenCalledWith(expect.objectContaining({where:expect.objectContaining({orgId:subject.organisationId,
+      scope:'ORGANISATION',teamId:null,account:{stripeAccountId:account.stripeAccountId,livemode:false}})}));
   });
 
-  it('uses one unambiguous persisted account when the team account is not provisioned yet', async () => {
+  it('uses the exact named account when the ORG wallet is not provisioned yet', async () => {
     process.env.STRIPE_BILLING_ENABLED = 'false';
     const prisma = database([], [account]);
 

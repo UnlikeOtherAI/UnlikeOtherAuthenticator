@@ -1,5 +1,5 @@
 import { BillingAppKeyPurpose, BillingAssignmentScope, MembershipStatus } from '@prisma/client';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach,beforeEach,describe, expect, it, vi } from 'vitest';
 
 import {
   createStripePortalSession,
@@ -9,7 +9,7 @@ import {
 const now = new Date('2026-07-20T12:00:00.000Z');
 const account = {
   id: 'stripe_account_row',
-  stripeAccountId: 'acct_uoa_test',
+  stripeAccountId: 'acct_SubscriptionTest',
   livemode: false,
 };
 const payload = {
@@ -56,6 +56,9 @@ const request = {
   teamId: 'team_1',
   userId: 'user_1',
 };
+beforeEach(()=>{vi.stubEnv('STRIPE_BILLING_ENABLED','false');vi.stubEnv('STRIPE_SANDBOX_ACCOUNT_ID',account.stripeAccountId);
+  vi.stubEnv('STRIPE_SANDBOX_SECRET_KEY','rk_test_synthetic');vi.stubEnv('STRIPE_SANDBOX_WEBHOOK_SECRET','whsec_synthetic');});
+afterEach(()=>vi.unstubAllEnvs());
 
 function setup(params?: { orgRole?: string; teamRole?: string }) {
   const subscription = {
@@ -68,9 +71,9 @@ function setup(params?: { orgRole?: string; teamRole?: string }) {
     tariffSource: 'TEAM',
     tariffAssignmentId: 'assignment_1',
     orgId: 'org_1',
-    teamId: 'team_1',
-    scope: BillingAssignmentScope.TEAM,
-    scopeKey: 'org_1:team_1',
+    teamId: null,
+    scope: BillingAssignmentScope.ORGANISATION,
+    scopeKey: 'org_1',
     stripeSubscriptionId: 'sub_123',
     stripeMonthlyItemId: 'si_monthly',
     stripeUsageItemId: 'si_usage',
@@ -88,6 +91,10 @@ function setup(params?: { orgRole?: string; teamRole?: string }) {
     },
   };
   const prisma = {
+    user:{findUnique:vi.fn().mockResolvedValue({id:'user_1',name:'Manager'})},
+    team:{findFirst:vi.fn().mockResolvedValue({id:'team_1'})},
+    organisation:{findFirst:vi.fn().mockResolvedValue({id:'org_1',ownerId:'other-owner'})},
+    $queryRaw:vi.fn().mockResolvedValue([{sandbox:true,revision:1,epoch:new Date('2026-05-01T00:00:00Z')}]),
     billingStripeAccount: { upsert: vi.fn().mockResolvedValue(account) },
     billingStripeSubscription: {
       findFirst: vi.fn().mockImplementation(async () => subscription),
@@ -100,6 +107,7 @@ function setup(params?: { orgRole?: string; teamRole?: string }) {
       }),
     },
     teamMember: {
+      findFirst:vi.fn().mockResolvedValue(params?.teamRole==='admin'?{id:'manager-membership'}:null),
       findUnique: vi.fn().mockResolvedValue({
         teamRole: params?.teamRole ?? 'member',
         status: MembershipStatus.ACTIVE,
@@ -150,8 +158,8 @@ function deps(state: ReturnType<typeof setup>) {
 }
 
 describe('Stripe customer subscription lifecycle', () => {
-  it('returns an account-scoped, refreshed summary without Stripe identifiers', async () => {
-    const state = setup();
+  it('returns an account-scoped ORG summary for a current manager without Stripe identifiers', async () => {
+    const state = setup({teamRole:'admin'});
     const result = await getStripeSubscriptionSummary(
       { request, actorToken: 'signed-actor', credential },
       deps(state),
@@ -160,11 +168,11 @@ describe('Stripe customer subscription lifecycle', () => {
     expect(result).toMatchObject({
       stripe_collection_enabled: true,
       stripe_mode: 'test',
-      can_manage: false,
+      can_manage: true,
       subscription: {
         id: 'subscription_row_1',
         status: 'active',
-        scope: 'team',
+        scope: 'organisation',
         billing_phase: 'calendar_month',
       },
     });
@@ -192,8 +200,10 @@ describe('Stripe customer subscription lifecycle', () => {
     );
   });
 
-  it('requires a billing manager before creating a customer portal session', async () => {
+  it('requires a current billing manager before reading financial subscription state or creating Portal', async () => {
     const state = setup();
+    await expect(getStripeSubscriptionSummary({request,actorToken:'signed-actor',credential},deps(state)))
+      .rejects.toThrow('BILLING_MANAGER_REQUIRED');
     await expect(
       createStripePortalSession(
         {
@@ -205,6 +215,7 @@ describe('Stripe customer subscription lifecycle', () => {
       ),
     ).rejects.toThrow('BILLING_MANAGER_REQUIRED');
     expect(state.stripe.billingPortal.sessions.create).not.toHaveBeenCalled();
+    expect(state.stripe.accounts.retrieveCurrent).not.toHaveBeenCalled();
   });
 
   it('returns the last account-scoped projection with an explicit disabled flag', async () => {
