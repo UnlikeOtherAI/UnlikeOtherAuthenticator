@@ -94,7 +94,7 @@ describe('embedded Kelpie original host authority with PostgreSQL', () => {
   });
   it('refuses settings outside browser bookmarks over HTTP and WebSocket', async () => {
     const f = await fixture(); const token = await f.session();
-    await f.db.userSetting.create({ data: { userId: f.user.id, namespace: 'private-product', key: 'private-preference', value: 'owned elsewhere' } });
+    await f.db.userSetting.create({ data: { userId: f.user.id, namespace: 'private-product', key: 'private-preference', value: 'owned elsewhere', sizeBytes: Buffer.byteLength(JSON.stringify('owned elsewhere')) } });
     for (const path of ['private-product/private-preference', 'browser/other-setting']) {
       const url = '/embedded/kelpie/me/settings/' + path;
       const refused = await f.request(token, url);
