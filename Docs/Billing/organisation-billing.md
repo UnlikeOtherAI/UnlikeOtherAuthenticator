@@ -8,8 +8,19 @@ selects the payer, wallet, billing mode or financial history filter.
 
 ## Release state and continuity gate
 
-**Activation is held.** Excluding retained positive TEAM funds from a new zero
-ORG wallet is not a continuity solution. No migration date is promised.
+**Activation is held for the revised authority and coordinated delivery gates.**
+The user has resolved the known legacy TEST spendability decision: **“Keep TEST
+history; start org wallets fresh.”** The source is the coordinator's explicit
+choice at position 5644, confirmed by Go at 5648, and its directed handoff at this
+implementation thread's position 5659 on 8 November 2026.
+
+Retained TEST records and balances remain historical on their original bindings.
+New organisation wallets start at zero; their confirmed balance is not an
+all-history total. No balance is transferred, copied, adopted, deleted or waived.
+Old TEST consents cannot initiate new charging. Captured recovery remains bound
+to its original account/mode. The accepted policy does not authorise a refund,
+new charge or future spending of those retained balances. No migration date is
+promised. New or unclassified LIVE exposure still needs separate review.
 
 The parent measured these production counts at `2026-11-08T03:08:04.070Z`, on
 deployed source `2694c8088a18525f68589d5516074020856d1db9`:
@@ -27,9 +38,12 @@ timeout. Sanitized evidence:
 `D:/BuildArtifacts/nessie/organisation-billing-usability-20261107/org-continuity-count.json`.
 No amounts, customer IDs or provider secrets belong in this report.
 
-The three affected Sandbox organisations need an explicit disposition before
-release. The implementation does not rewrite TEAM wallet scope, create matching
-ORG credits, adopt consents/subscriptions or move provider objects.
+The three measured Sandbox organisations are covered by that accepted
+history-only disposition. The implementation does not rewrite TEAM wallet
+scope, create matching ORG credits, adopt consents/subscriptions or move provider
+objects. The following source-level procedure remains necessary for any later
+requested financial effect, unsupported continuity request or new LIVE exposure;
+it is not a requirement to invent TEST spendability after the user's decision.
 
 1. The operator inventories the original account/mode, wallet/customer, funding
    entries and lots, reservations, liabilities, purchases, refunds and consent
@@ -59,10 +73,24 @@ ORG credits, adopt consents/subscriptions or move provider objects.
    hand-edit the wallet or archive a team merely to clear it.
 5. Re-run exposure, unresolved provider work and actual guard checks immediately
    before activation. Record each reviewed disposition and its real evidence.
-   All required cohorts must have a usable approved continuity outcome; a zero
-   current ORG balance or disabled new TEAM charging does not satisfy this gate.
+   Reconfirm that the retained TEST cohort is covered by the accepted history-only
+   policy and that no unreviewed LIVE or ambiguous source appeared. A zero
+   current ORG balance or disabled new TEAM charging does not prove that all
+   historical value has been accounted for.
 
 ## Ownership and authority
+
+**Latest authority clarification (8 November 2026):** org owners/admins alone
+read or manage organisation finances. A team-only owner/admin receives read-only
+access to their own team's data; this does not grant organisation money,
+other-team data or monetary mutations. The exact user answer to the organisation
+billing-authority question was: “Team only admins should only have read access
+to their teams data” (implementation thread position 5665). This supersedes the
+broader team-manager financial policy below. Its implementation and acceptance
+checks are being revised; the old broad-policy passes are not release evidence
+for this clarified authority. One organisation payer/mode remains mandatory;
+read-only team attribution must not invent a share of the shared wallet or bill.
+
 
 UOA Admin **Organisations → selected organisation → Billing** owns the mode.
 Admin Billing links to that directory; a team's Billing tab links to its owning
@@ -71,7 +99,7 @@ means LIVE, revision 0; the policy covers current and future teams in every
 product. Each actual change appends immutable history and an administrator audit
 under the organisation write fence. There is no environment team allowlist.
 
-Customer finance requires current ACTIVE org membership and either org
+**Superseded broad proposal:** customer finance required current ACTIVE org membership and either org
 owner/admin authority (including the current canonical owner) or owner/admin
 authority in any ACTIVE same-org team. A selected team must be ACTIVE and admit
 the actor through current team membership or org-manager authority. Org managers
@@ -93,7 +121,7 @@ no wallet, metering, FX or provider read. Overview sections independently report
 `confirmed`, `pending_reconciliation` or `unavailable`. Unconfirmed bill sections
 have no data or numeric total. Confirmed credits are actual ledger money and
 holds; they do not assert settled usage. Retained TEAM money is disclosed and
-excluded pending the continuity gate above.
+excluded under the accepted retained-TEST history policy above.
 
 Funding may return a confirmed saved-consent projection with empty offers and
 options when purchase terms cannot be verified. It says those offers are

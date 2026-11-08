@@ -3481,3 +3481,9 @@ The explicit organisation financial protocol admits a nullable actor team only o
 ## Embedded Kelpie host sessions (8 November 2026)
 
 Nessie may embed the complete Kelpie browser and share only its existing UOA session. A short-lived, scoped, profile-free access grant derives from the original independent host proof; UOA remains the profile/settings authority and retains live revocation. No native app impersonation, refresh-token copy, identity replica or new refresh family is permitted. The explicit token classes, API contract, custody and coordinated rollout are defined in [Embedded Kelpie host sessions](Auth/embedded-kelpie.md). Standalone native grants and consent remain unchanged.
+
+### Organisation billing authority clarification (8 November 2026)
+
+The user's later answer supersedes the broader team-manager financial admission above: “Team only admins should only have read access to their teams data.” Only current ACTIVE organisation owners/admins may read/manage organisation money. Team-only owners/admins have read-only access to their own team's data, without organisation-wide balances, other-team data or financial mutations. A team attribution view is not a separate financial payer or an invented share of the organisation bill. Organisation billing and its LIVE/Sandbox setting still have one organisation scope. Ordinary selected-team members retain the separately authorised nonfinancial Ask for credits request.
+
+The user explicitly chose “Keep TEST history; start org wallets fresh.” Preserve retained TEST balances and records on their original bindings as history; new organisation wallets start at zero. This authorises no transfer, compatibility copy, deletion, waiver, new charge or future spending of retained TEST funds. Captured recovery and all account/mode separation remain mandatory. New or ambiguous LIVE exposure requires its own review.
