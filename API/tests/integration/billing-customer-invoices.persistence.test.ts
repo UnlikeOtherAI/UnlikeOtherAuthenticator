@@ -5,7 +5,7 @@ import {
   BillingCreditEntryKind, BillingCreditInvoiceTaxTreatment, BillingCreditPaymentInvoiceSource,
   BillingCreditPaymentInvoiceState, BillingCreditPaymentInvoiceTaxSource,
   BillingCollectionMode, BillingInvoiceStatus, BillingTariffMode,
-  BillingOrganisationContractStatus, MembershipStatus,
+  BillingOrganisationContractStatus,
 } from '@prisma/client';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
@@ -15,6 +15,7 @@ import {
 import type { BillingCycleContext } from '../../src/services/billing-cycle-read.service.js';
 import type { BillingInvoicePdfStorage } from '../../src/services/billing-invoice-storage.service.js';
 import { createTestDb } from '../helpers/test-db.js';
+import { deferred, raceResult } from '../helpers/billing-financial-authority-race.js';
 import { createTestSandboxOrganisationPolicy, captureTestOrganisationFinancialBinding } from '../helpers/organisation-financial-binding.js';
 
 vi.mock('../../src/services/billing-actor.service.js', () => ({
@@ -54,6 +55,7 @@ describe.skipIf(!enabled)('actual customer invoice persistence and scope', () =>
       email: `${randomUUID()}@example.com`, userKey: `${randomUUID()}@example.com`,
       name: 'Owner',
     } });
+    if (!owner.email) throw new Error('OWNER_EMAIL_REQUIRED');
     const manager = await db.prisma.user.create({ data: {
       email: `${randomUUID()}@example.com`, userKey: `${randomUUID()}@example.com`,
       name: 'Team Manager',
@@ -306,11 +308,19 @@ describe.skipIf(!enabled)('actual customer invoice persistence and scope', () =>
     expect(november.invoices.map((row) => row.invoice_id)).toEqual([`prepaid:${paymentIds[2]}`]);
   });
 
-  it('admits another selected team and rechecks manager revocation after a blocked PDF read', async () => {
+  it('admits org managers across selected teams and rechecks org demotion after a blocked PDF read', async () => {
     const invoiceId = `prepaid:${paymentIds[0]}`;
     expect((await getCustomerInvoiceDetail(context(ownerId, otherTeamId), invoiceId,
       { prisma: db.prisma })).invoice_id).toBe(invoiceId);
     const manager = context(managerId);
+    const deniedStorage = { putImmutable: async () => {}, read: vi.fn(async () => legalBytes) };
+    await expect(getCustomerInvoiceDetail(manager, invoiceId, { prisma: db.prisma }))
+      .rejects.toMatchObject({ statusCode: 403, message: 'BILLING_MANAGER_REQUIRED' });
+    await expect(downloadCustomerInvoice(manager, invoiceId, invoiceId,
+      { prisma: db.prisma, storage: deniedStorage }))
+      .rejects.toMatchObject({ statusCode: 403, message: 'BILLING_MANAGER_REQUIRED' });
+    expect(deniedStorage.read).not.toHaveBeenCalled();
+    await db.prisma.orgMember.update({ where: { orgId_userId: { orgId, userId: managerId } }, data: { role: 'admin' } });
     expect((await getCustomerInvoiceDetail(manager, invoiceId,
       { prisma: db.prisma })).document?.document_id).toBe(invoiceId);
     const accessible = await downloadCustomerInvoice(manager, invoiceId, invoiceId,
@@ -319,21 +329,28 @@ describe.skipIf(!enabled)('actual customer invoice persistence and scope', () =>
       } });
     expect(accessible.bytes).toEqual(legalBytes);
     expect(accessible.contentType).toBe('application/pdf');
-    let unblock: ((value: Buffer) => void) | undefined;
-    let begun: (() => void) | undefined;
-    const reading = new Promise<void>((resolve) => { begun = resolve; });
+    const reading = deferred();
+    const bytes = deferred<Buffer>();
     const storage: BillingInvoicePdfStorage = {
       putImmutable: async () => {},
-      read: async () => { begun?.(); return new Promise<Buffer>((resolve) => { unblock = resolve; }); },
+      read: async () => { reading.resolve(); return bytes.promise; },
     };
-    const pending = downloadCustomerInvoice(manager, invoiceId, invoiceId,
-      { prisma: db.prisma, storage });
-    await reading;
-    await db.prisma.teamMember.update({ where: { teamId_userId: {
-      teamId, userId: managerId,
-    } }, data: { status: MembershipStatus.REMOVED } });
-    unblock?.(legalBytes);
-    await expect(pending).rejects.toMatchObject({ statusCode: 403 });
+    const pending = raceResult(downloadCustomerInvoice(manager, invoiceId, invoiceId, { prisma: db.prisma, storage }));
+    void pending.then(outcome => { if (!outcome.ok) reading.reject(outcome.error); });
+    try {
+      await reading.promise;
+      await db.prisma.orgMember.update({ where: { orgId_userId: { orgId, userId: managerId } }, data: { role: 'member' } });
+      bytes.resolve(legalBytes);
+      const outcome = await pending;
+      expect(outcome.ok).toBe(false);
+      if (!outcome.ok) expect(outcome.error).toMatchObject({ statusCode: 403, message: 'BILLING_MANAGER_REQUIRED' });
+      expect(await db.prisma.teamMember.findUnique({ where: { teamId_userId: { teamId, userId: managerId } } }))
+        .toMatchObject({ teamRole: 'admin', status: 'ACTIVE' });
+    } finally {
+      bytes.resolve(legalBytes);
+      await pending;
+      await db.prisma.orgMember.update({ where: { orgId_userId: { orgId, userId: managerId } }, data: { role: 'member' } });
+    }
   });
 
   it('includes a captured multi-product legal invoice in organisation history', async () => {
@@ -398,8 +415,10 @@ describe.skipIf(!enabled)('actual customer invoice persistence and scope', () =>
         { prisma: db.prisma });
       expect(list.invoices.find((row) => row.invoice_id === id))
         .toMatchObject({ payments_in_charge_month: { amount_minor: paid } });
+      expect((await getCustomerInvoiceDetail(context(ownerId), id, { prisma: db.prisma, chargeMonth: month })).invoice_id)
+        .toBe(id);
       expect((await downloadCustomerInvoice(context(ownerId), id, id, {
-        prisma: db.prisma, chargeMonth: month,
+        prisma: db.prisma,
         storage: { putImmutable: async () => {}, read: async () => legalBytes },
       })).bytes).toEqual(legalBytes);
     }

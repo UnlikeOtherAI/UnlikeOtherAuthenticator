@@ -7,7 +7,12 @@ import { db,orgId,ownerId,teamManagerId,accountId,serviceId,product,context } fr
 
 export function registerOrganisationHistoryCases(){
   it('reads captured org financial history across products/teams with account-bound keysets',async()=>{
-    const base=context(teamManagerId),viewer={...base,financialScope:'organisation' as const,billingMode:'sandbox' as const};
+    const base=context(ownerId),viewer={...base,financialScope:'organisation' as const,billingMode:'sandbox' as const};
+    const teamOnly={...viewer,request:{...viewer.request,userId:teamManagerId}};
+    await expect(listBillingCycles(teamOnly,{},{prisma:db.prisma}))
+      .rejects.toMatchObject({statusCode:403,message:'BILLING_MANAGER_REQUIRED'});
+    await expect(listCustomerInvoices(teamOnly,{chargeMonth:'2026-10'},{prisma:db.prisma}))
+      .rejects.toMatchObject({statusCode:403,message:'BILLING_MANAGER_REQUIRED'});
     const account=await db.prisma.billingStripeAccount.findUniqueOrThrow({where:{id:accountId}});
     const customer=await db.prisma.billingStripeCustomer.findFirstOrThrow({where:{orgId,accountId,scope:'ORGANISATION'}});
     const wallet=await db.prisma.billingCreditAccount.create({data:{orgId,accountId,customerId:customer.id,scope:'ORGANISATION',scopeKey:orgId,currency:'USD'}});

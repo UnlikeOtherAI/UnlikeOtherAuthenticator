@@ -27,14 +27,16 @@ export async function createTestSandboxOrganisationPolicy(prisma:PrismaClient,or
 export async function createTestCapturedPaidLiability(prisma:PrismaClient,
   args:{data:Prisma.BillingPaidUsageLiabilityUncheckedCreateInput}) {
   const data=args.data;
+  if(data.paymentMode!=='PREPAID'&&data.paymentMode!=='PAY_AS_YOU_GO')throw new Error('TEST_PAYMENT_MODE_REQUIRED');
+  const paymentMode=data.paymentMode;
   const service=await prisma.billingService.findUniqueOrThrow({where:{id:data.serviceId}});
   return prisma.$transaction(async tx=>{
     await reserveBudgetDispatch(tx,{dispatchId:data.dispatchId,requestFingerprint:'a'.repeat(64),
       startedAt:new Date(`${data.billingMonth}-01T00:00:00Z`),product:service.identifier,serviceId:data.serviceId,
       providerServiceId:data.providerServiceId,orgId:data.orgId,teamId:data.teamId,userId:data.userId,
       billingMonth:data.billingMonth,currency:data.currency,tariffId:data.tariffId,tariffMode:'CUSTOM',
-      markupBps:data.frozenMarkupBps,paymentMode:data.paymentMode,
-      rawCostBound:new Prisma.Decimal(data.rawCostActual),context:null});
+      markupBps:data.frozenMarkupBps,paymentMode,
+      rawCostBound:new Prisma.Decimal(data.rawCostActual.toString()),context:null});
     return tx.billingPaidUsageLiability.create(args);
   });
 }

@@ -398,6 +398,19 @@ Stripe payment. A separate loopback instance using the same fixture can support
 consumer browser/BFF integration; its generated keys and custody references stay
 outside the repository. New collection is disabled and remote HTTPS is blocked.
 
+The historical invoice, cycle, recurring add-on and customer-action persistence
+fixtures also enforce this org-only authority. Their six affected suites passed
+32 distinct PostgreSQL cases on Maxis: 24 cases across five financial suites in
+the serial run and all eight intent cases on the final focused rerun. Team-only
+admins are refused financial lists, detail/PDF reads, checkout/cancellation and
+new intents. Positive reads use current org owners/admins. PDF reads recheck an
+org-role demotion after storage returns while the person's team-admin role stays
+ACTIVE. Intent races observe the exact PostgreSQL blocker chain in both commit
+orders; actor/app-key expiry, membership/key/epoch revocation and insertion
+failure before a gate signal retain their assertions. Every deferred race task
+is released and awaited on failure. No production guard or timeout was weakened.
+These fixture corrections change no runtime, schema, protocol or rendered UI.
+
 ## Provider configuration and deployment boundary
 
 No new credentials, account IDs, Stripe API version, webhook URL, event set or

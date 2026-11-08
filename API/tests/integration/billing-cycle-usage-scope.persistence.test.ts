@@ -176,7 +176,10 @@ describe.skipIf(!enabled)('captured organisation cycle scope',()=>{
       customer_charge: { amount: '3.9' } });
     expect(JSON.stringify(orgDetail)).not.toContain(otherTeamId);
     expect(JSON.stringify(orgDetail)).not.toMatch(/raw_units|usage_unit|calls|tokens/);
-    expect((await getBillingCycleDetail(context(teamManagerId),orgCycle.cycleId,{prisma:db.prisma})).cycle_id).toBe(orgCycle.cycleId);
+    for (const cycle of [orgCycle, ...teamCycles]) {
+      await expect(getBillingCycleDetail(context(teamManagerId), cycle.cycleId, {prisma:db.prisma}))
+        .rejects.toMatchObject({ statusCode: 403, message: 'BILLING_MANAGER_REQUIRED' });
+    }
     expect(teamCycles).toHaveLength(2);
     for (const [index, cycle] of teamCycles.entries()) {
       const row = await db.prisma.billingCustomerCycle.findUniqueOrThrow({
@@ -186,7 +189,7 @@ describe.skipIf(!enabled)('captured organisation cycle scope',()=>{
       const snapshot = row.publicSnapshot as unknown as
         typeof billingCycleDetailV2ConformanceFixture;
       expect(snapshot.subscription_lines).toEqual([]);
-      expect(snapshot.usage_lines[0]?.customer_charge.amount)
+      expect(snapshot.usage_lines[0]?.customer_charge?.amount)
         .toBe(index === 0 ? '1.3' : '2.6');
       if (index === 0) {
         expect((await getBillingCycleDetail(viewer, cycle.cycleId,

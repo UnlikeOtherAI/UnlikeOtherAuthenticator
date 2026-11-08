@@ -133,11 +133,13 @@ describe.skipIf(!databaseTestsEnabled)('recurring add-on scope authorization', (
     if (handle) await handle.cleanup();
   });
 
-  it('admits current team managers for org billing and refuses their demoted member successor', async () => {
+  it('requires org authority for add-on checkout and cancellation even for a current team admin', async () => {
     if (!handle) throw new Error('db handle missing');
 
-    await handle.prisma.$queryRaw(Prisma.sql`SELECT billing_assert_org_financial_actor(${ids.org},${ids.team},${ids.teamAdmin})::text`);
-    await handle.prisma.teamMember.update({where:{id:'tm_scope_team_admin'},data:{teamRole:'member'}});
+    await handle.prisma.$queryRaw(Prisma.sql`SELECT billing_assert_org_financial_actor(${ids.org},${ids.team},${ids.orgOwner})::text`);
+    await expect(handle.prisma.$queryRaw(Prisma.sql`
+      SELECT billing_assert_org_financial_actor(${ids.org},${ids.team},${ids.teamAdmin})::text`))
+      .rejects.toThrow('BILLING_MANAGER_REQUIRED');
     await expect(
       handle.prisma.$executeRaw(Prisma.sql`
         INSERT INTO "billing_recurring_addon_checkouts" (
@@ -172,5 +174,30 @@ describe.skipIf(!databaseTestsEnabled)('recurring add-on scope authorization', (
         )
       `),
     ).rejects.toThrow('BILLING_MANAGER_REQUIRED');
+  });
+
+  it('admits a current org admin then refuses new cancellation intents after org-role demotion', async () => {
+    const db = handle!.prisma;
+    const orgMember = { orgId_userId: { orgId: ids.org, userId: ids.teamAdmin } };
+    const cancellation = (suffix: string) => db.billingRecurringAddonCancellationIntent.create({ data: {
+      accountId: ids.account, appKeyId: ids.appKey, subscriptionId: ids.subscription,
+      serviceId: ids.service, offerId: ids.offer, orgId: ids.org, teamId: null,
+      requestedTeamId: ids.team, scope: 'ORGANISATION', scopeKey: ids.org,
+      requestedByUserId: ids.teamAdmin, actorJti: `org-admin-${suffix}`, tokenDigest: suffix.repeat(64),
+      subjectFingerprint: 'f'.repeat(64), idempotencyKey: `org-admin-cancel-${suffix}`,
+      expiresAt: new Date(Date.now() + 300_000),
+    } });
+    await db.orgMember.update({ where: orgMember, data: { role: 'admin' } });
+    try {
+      await db.$queryRaw(Prisma.sql`SELECT billing_assert_org_financial_actor(${ids.org},${ids.team},${ids.teamAdmin})::text`);
+      expect((await cancellation('a')).requestedByUserId).toBe(ids.teamAdmin);
+      await db.orgMember.update({ where: orgMember, data: { role: 'member' } });
+      await expect(cancellation('b')).rejects.toThrow('BILLING_MANAGER_REQUIRED');
+      expect(await db.billingRecurringAddonCancellationIntent.count({ where: { actorJti: 'org-admin-b' } })).toBe(0);
+      expect(await db.teamMember.findUnique({ where: { id: 'tm_scope_team_admin' } }))
+        .toMatchObject({ teamRole: 'admin', status: 'ACTIVE' });
+    } finally {
+      await db.orgMember.update({ where: orgMember, data: { role: 'member' } });
+    }
   });
 });

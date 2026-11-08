@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { BillingAssignmentScope } from '@prisma/client';
+import { BillingAssignmentScope, Prisma } from '@prisma/client';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 
@@ -19,7 +19,7 @@ describe.skipIf(!enabled)('captured organisation cycle scope',()=>{
   let f:Awaited<ReturnType<typeof seedCycleScopeFixture>>;
   beforeAll(async()=>{f=await seedCycleScopeFixture();});
   afterAll(async()=>{await f?.db.cleanup();vi.unstubAllEnvs();});
-  it('retains both scopes in one month and admits current team managers to organisation money', async () => {
+  it('retains both scopes for org managers and refuses team-only financial readers', async () => {
     const {db,ownerId,teamManagerId,context,insertCycle}=f;
     const team = await insertCycle('2030-07', 'team', BillingAssignmentScope.ORGANISATION);
     const org = await insertCycle('2030-07', 'organisation', BillingAssignmentScope.ORGANISATION);
@@ -33,9 +33,15 @@ describe.skipIf(!enabled)('captured organisation cycle scope',()=>{
       { prisma: db.prisma, now: new Date('2030-07-15T00:00:00.000Z') });
     expect(second.cycles[0]?.cycle_id).toBe(team.id);
     expect(first.cycles[0]?.scope.team_id).toBeNull();
+    expect((await getBillingCycleDetail(owner, org.id, {prisma:db.prisma})).cycle_id).toBe(org.id);
+    expect((await getBillingCycleDetail(owner, team.id, {prisma:db.prisma})).cycle_id).toBe(team.id);
     const manager = context(teamManagerId);
-    expect((await getBillingCycleDetail(manager, org.id, {prisma:db.prisma})).cycle_id).toBe(org.id);
-    expect((await getBillingCycleDetail(manager, team.id, {prisma:db.prisma})).cycle_id).toBe(team.id);
+    await expect(listBillingCycles(manager, {}, {prisma:db.prisma}))
+      .rejects.toMatchObject({ statusCode: 403, message: 'BILLING_MANAGER_REQUIRED' });
+    for (const cycle of [org, team]) {
+      await expect(getBillingCycleDetail(manager, cycle.id, {prisma:db.prisma}))
+        .rejects.toMatchObject({ statusCode: 403, message: 'BILLING_MANAGER_REQUIRED' });
+    }
   });
 
 
@@ -73,7 +79,7 @@ describe.skipIf(!enabled)('captured organisation cycle scope',()=>{
       id: randomUUID(), serviceId, orgId, teamId, billingMonth: '2030-04',
       revision: 1, state: 'finalized', payerScope: BillingAssignmentScope.TEAM,
       publicSnapshot: { ...row.publicSnapshot as object, cycle_id: 'wrong-cycle' },
-      privateEvidence: row.privateEvidence, snapshotSha256: 'a'.repeat(64),
+      privateEvidence: row.privateEvidence ?? Prisma.JsonNull, snapshotSha256: 'a'.repeat(64),
     } });
     await expect(getBillingCycleDetail(owner, bad.id, { prisma: db.prisma }))
       .rejects.toMatchObject({ message: 'BILLING_CYCLE_SNAPSHOT_INTEGRITY' });
