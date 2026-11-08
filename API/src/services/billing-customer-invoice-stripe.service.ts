@@ -11,9 +11,13 @@ import { AppError } from '../utils/errors.js';
 import { cycleMoney } from './billing-cycle-quote-projection.service.js';
 import { stripeInvoiceCashDigest } from './billing-stripe-payment-evidence.service.js';
 
-export type StripePaymentInvoiceSource = Prisma.BillingStripePaymentInvoiceGetPayload<{
+type BaseInvoiceSource=Prisma.BillingStripePaymentInvoiceGetPayload<{
   include: { lines: true; subscription: true; cashPayments: true; adjustments: true };
 }>;
+export type StripePaymentInvoiceSource=BaseInvoiceSource&{addonSubscription?:
+  Prisma.BillingRecurringAddonSubscriptionGetPayload<{include:{customer:true}}>|null};
+export const stripePaymentInvoiceReadInclude={lines:true,subscription:true,cashPayments:true,adjustments:true,
+  addonSubscription:{include:{customer:true}}} as const;
 
 function hold(): never {
   throw new AppError('INTERNAL', 503, 'BILLING_CUSTOMER_STRIPE_INVOICE_SOURCE_UNPROVEN');
@@ -104,10 +108,14 @@ function verifiedAdjustments(row: StripePaymentInvoiceSource, paid: bigint) {
 
 /** The same immutable financial and cash proof gates invoices and cycle allocations. */
 export function verifyStripeInvoiceFinancialSource(row: StripePaymentInvoiceSource) {
-  if (row.subscription.id !== row.subscriptionId ||
-    row.subscription.accountId !== row.accountId ||
-    row.subscription.livemode !== row.livemode ||
-    row.subscription.orgId !== row.orgId || row.subscription.teamId !== row.teamId ||
+  const base=row.subscription,addon=row.addonSubscription;
+  const bound=base&&row.subscriptionId&&row.addonSubscriptionId==null?base.id===row.subscriptionId&&
+    base.accountId===row.accountId&&base.livemode===row.livemode&&base.orgId===row.orgId&&base.teamId===row.teamId:
+    addon&&row.addonSubscriptionId&&row.subscriptionId===null?addon.id===row.addonSubscriptionId&&addon.accountId===row.accountId&&
+      addon.livemode===row.livemode&&addon.orgId===row.orgId&&addon.customer.accountId===row.accountId&&
+      addon.customer.orgId===row.orgId&&addon.customer.teamId===row.teamId&&addon.customer.stripeCustomerId===row.stripeCustomerId:false;
+  if (!bound ||row.addonSubscriptionId&&(!row.addonPeriodStartsAt||!row.addonPeriodEndsAt||row.addonPeriodEndsAt<=row.addonPeriodStartsAt||
+    row.lines.some(line=>line.billingMonth!==row.addonPeriodStartsAt!.toISOString().slice(0,7)))||
     !/^[A-Z]{3}$/.test(row.currency) ||
     !row.stripeInvoiceId || !row.stripeCustomerId ||
     row.grossAmountMinor <= 0n || row.taxAmountMinor < 0n ||

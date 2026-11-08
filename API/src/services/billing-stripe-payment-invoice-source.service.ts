@@ -10,6 +10,8 @@ import { stripeExternalId } from './billing-stripe-webhook-utils.service.js';
 import { stripeInvoiceMinor, stripeInvoiceCashDigest, verifyStripeInvoiceCash,
   type StripeInvoiceCashClient } from './billing-stripe-payment-evidence.service.js';
 import { verifyStripePaymentInvoiceLines } from './billing-stripe-payment-lines.service.js';
+import { prepareAddonPaymentInvoice } from './billing-addon-payment-invoice-source.service.js';
+import { hasRecurringAddonMarker } from './billing-recurring-addon-stripe-binding.service.js';
 
 type Provider = StripeInvoiceCashClient & Pick<Stripe, 'subscriptions'>;
 export type PreparedStripePaymentInvoice = NonNullable<Awaited<ReturnType<typeof prepareStripePaymentInvoice>>>;
@@ -21,6 +23,11 @@ export async function prepareStripePaymentInvoice(
   assertStripeObjectLivemode(invoice, account.livemode);
   if (invoice.id !== invoiceId) {
     throw new AppError('INTERNAL', 409, 'STRIPE_SUBSCRIPTION_INVOICE_BINDING_INVALID');
+  }
+  const addonId=stripeExternalId(invoice.parent?.subscription_details?.subscription);
+  if(hasRecurringAddonMarker(invoice.parent?.subscription_details?.metadata)||addonId&&
+    await prisma.billingRecurringAddonSubscription.count({where:{accountId:account.id,stripeSubscriptionId:addonId}})) {
+    return prepareAddonPaymentInvoice(invoice,account,prisma,stripe);
   }
   let stripeSubscriptionId = invoice.parent?.type === 'subscription_details' ?
     stripeExternalId(invoice.parent.subscription_details?.subscription ?? null) : null;

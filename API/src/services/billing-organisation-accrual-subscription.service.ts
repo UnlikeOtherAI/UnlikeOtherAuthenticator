@@ -44,7 +44,7 @@ export async function readOrganisationAccruedSubscriptions(input:{organisationId
       kind:'subscription',currency:quote.currency,amountMinor:quote.amountMinor});
   }
   const invoices=await prisma.billingStripePaymentInvoice.findMany({where:{orgId:input.organisationId,
-    accountId:input.account.id,livemode:input.account.livemode,lines:{some:{billingMonth:input.period.month}}},
+    accountId:input.account.id,livemode:input.account.livemode,subscriptionId:{not:null},lines:{some:{billingMonth:input.period.month}}},
     include:{lines:true,subscription:true,cashPayments:true,adjustments:true}});
   const paid=new Map<string,bigint>();
   for(const row of invoices){

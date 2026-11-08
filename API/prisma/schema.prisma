@@ -4746,6 +4746,7 @@ model BillingRecurringAddonSubscription {
   activationWebhookEvent BillingStripeWebhookEvent?                @relation("RecurringAddonActivationEvent", fields: [activationWebhookEventId], references: [id], onDelete: Restrict)
   cancellationIntents    BillingRecurringAddonCancellationIntent[]
   contractInvoiceLines   BillingInvoiceAddonLine[]
+  paymentInvoices BillingStripePaymentInvoice[]
 
   @@unique([accountId, stripeSubscriptionId])
   @@unique([accountId, stripeItemId])
@@ -5002,7 +5003,10 @@ model BillingManualCreditNote {
 model BillingStripePaymentInvoice {
   id                     String   @id @default(cuid())
   accountId              String   @map("account_id")
-  subscriptionId         String   @map("subscription_id")
+  subscriptionId         String?   @map("subscription_id")
+  addonSubscriptionId String? @map("addon_subscription_id")
+  addonPeriodStartsAt DateTime? @map("addon_period_starts_at") @db.Timestamptz(3)
+  addonPeriodEndsAt DateTime? @map("addon_period_ends_at") @db.Timestamptz(3)
   livemode               Boolean
   stripeInvoiceId        String   @map("stripe_invoice_id") @db.VarChar(255)
   stripeCustomerId       String   @map("stripe_customer_id") @db.VarChar(255)
@@ -5032,7 +5036,8 @@ model BillingStripePaymentInvoice {
   updatedAt              DateTime @updatedAt @map("updated_at")
 
   account      BillingStripeAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
-  subscription BillingStripeSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+  subscription BillingStripeSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+  addonSubscription BillingRecurringAddonSubscription? @relation(fields:[addonSubscriptionId],references:[id],onDelete:Restrict)
   lines        BillingStripePaymentInvoiceLine[]
   adjustments  BillingStripePaymentInvoiceAdjustment[]
   cashPayments BillingStripePaymentInvoiceCashPayment[]
@@ -5040,6 +5045,7 @@ model BillingStripePaymentInvoice {
   @@unique([accountId, livemode, stripeInvoiceId])
   @@index([orgId, teamId, paidAt, id])
   @@index([state, nextIssueAttemptAt, id])
+  @@index([addonSubscriptionId],map:"stripe_payment_invoice_addon")
   @@map("billing_stripe_payment_invoices")
 }
 

@@ -300,7 +300,7 @@ const INVOICE_EVENTS = new Set([
   'invoice.voided',
 ]);
 
-export function assertPaidInvoice(
+export function assertRecurringAddonInvoiceTerms(
   invoice: Stripe.Invoice,
   local: Subscription,
   remote: Stripe.Subscription,
@@ -311,12 +311,12 @@ export function assertPaidInvoice(
   const legacyLineSubscriptionId = stripeExternalId(line?.subscription);
   const expected = Number(local.catalog.monthlyAmountMinor);
   if (
-    invoice.status !== 'paid' ||
+    !['paid','open','uncollectible'].includes(invoice.status??'') ||
     invoice.billing_reason !== billingReason ||
     invoice.collection_method !== 'charge_automatically' ||
     invoice.amount_due !== expected ||
-    invoice.amount_paid !== expected ||
-    invoice.amount_remaining !== 0 ||
+    !Number.isSafeInteger(expected)||expected<=0||!Number.isSafeInteger(invoice.amount_paid)||invoice.amount_paid<0||invoice.amount_paid>expected||
+    invoice.amount_remaining !== expected-invoice.amount_paid ||
     invoice.subtotal !== expected ||
     invoice.total !== expected ||
     invoice.currency.toUpperCase() !== local.catalog.currency ||
@@ -356,6 +356,15 @@ export function assertPaidInvoice(
         ? 'STRIPE_RECURRING_ADDON_INITIAL_INVOICE_INVALID'
         : 'STRIPE_RECURRING_ADDON_RENEWAL_INVOICE_INVALID',
     );
+  }
+}
+
+export function assertPaidInvoice(invoice:Stripe.Invoice,local:Subscription,remote:Stripe.Subscription,
+  billingReason:'subscription_create'|'subscription_cycle'):void {
+  assertRecurringAddonInvoiceTerms(invoice,local,remote,billingReason);
+  if(invoice.status!=='paid'||invoice.amount_paid!==Number(local.catalog.monthlyAmountMinor)||invoice.amount_remaining!==0) {
+    throw new AppError('INTERNAL',503,billingReason==='subscription_create'?
+      'STRIPE_RECURRING_ADDON_INITIAL_INVOICE_INVALID':'STRIPE_RECURRING_ADDON_RENEWAL_INVOICE_INVALID');
   }
 }
 

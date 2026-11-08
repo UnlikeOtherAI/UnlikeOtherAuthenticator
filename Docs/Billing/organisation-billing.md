@@ -126,6 +126,23 @@ must cover all ORG-paid instances; retained TEAM subscriptions do not become
 current ORG state. Stored cancellation confirmations recover exact captured
 objects; fresh previews cannot replace an old source with current mode.
 
+Actual add-on payment invoices now retain their original add-on subscription
+and invoice period as an alternate legal financial source. No base subscription
+is manufactured, and existing base invoice hashes/records are unchanged. The
+normal verified webhook transaction captures invoice cash and the independent
+entitlement effect once. History/PDF reads use the actual ORG customer as payer,
+even when entitlement belongs to a team or subscriber. Monthly licensed add-on
+fees enter the accrued bill at their captured period start, in their own
+currency, with actual confirmed cash. Missing or overlapping invoice periods,
+unresolved refunds/disputes, and retained TEAM payers hold that bill section.
+These checks do not imply that an active flag proves payment.
+
+Pre-existing add-on payment history that has not been captured in this source
+still needs original-provider invoice recovery before history can be declared
+complete. No historical entitlement, money or subscription is copied into the
+ORG payer by this migration. The bounded recovery workflow and production
+completeness verification remain rollout prerequisites.
+
 ## Provider configuration and deployment boundary
 
 No new credentials, account IDs, Stripe API version, webhook URL, event set or

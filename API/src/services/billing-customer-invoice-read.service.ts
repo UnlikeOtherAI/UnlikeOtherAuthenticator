@@ -28,7 +28,7 @@ import {
   projectPrepaidCustomerInvoiceDetail, projectPrepaidCustomerInvoiceSummary,
 } from './billing-customer-invoice-prepaid.service.js';
 import {
-  projectStripeCustomerInvoiceDetail, projectStripeCustomerInvoiceSummary,
+  projectStripeCustomerInvoiceDetail, projectStripeCustomerInvoiceSummary,stripePaymentInvoiceReadInclude,
 } from './billing-customer-invoice-stripe.service.js';
 
 type Storage = ReturnType<typeof createBillingInvoicePdfStorage>;
@@ -210,7 +210,7 @@ export async function listCustomerInvoices(
   });
   const stripe = await prisma.billingStripePaymentInvoice.findMany({ where: {
     id: { in: stripeKeys.map((key) => key.invoiceId) },
-  }, include: { lines: true, subscription: true, cashPayments: true, adjustments: true } });
+  }, include: stripePaymentInvoiceReadInclude });
   const results: Array<{ key: Cursor; summary: BillingCustomerInvoiceSummaryV1 }> = [
     ...creditNotes.map((row) => ({ key: { at: row.issuedAt?.toISOString() ?? notFound(),
       kind: 'credit_note' as const, id: row.id },
@@ -282,7 +282,7 @@ async function readCustomerInvoice(
         serviceIdentifier: context.request.product },
       every: { serviceId: context.credential.service.id,
         serviceIdentifier: context.request.product } },
-    }, include: { lines: true, subscription: true, cashPayments: true, adjustments: true } });
+    }, include: stripePaymentInvoiceReadInclude });
     if (!row) notFound();
     if (chargeMonth && !row.cashPayments.some((payment) =>
       payment.paidAt.toISOString().slice(0, 7) === chargeMonth)) notFound();

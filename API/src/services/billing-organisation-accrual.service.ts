@@ -5,6 +5,7 @@ import { assertOrganisationBillPeriod } from './billing-organisation-period.serv
 import { readOrganisationAccruedUsage } from './billing-organisation-accrual-usage.service.js';
 import { readOrganisationAccruedSubscriptions } from './billing-organisation-accrual-subscription.service.js';
 import { readOrganisationAccruedManual } from './billing-organisation-accrual-manual.service.js';
+import { readOrganisationAccruedAddons } from './billing-organisation-accrual-addon.service.js';
 import { readOrganisationAccruedAdjustments } from './billing-organisation-accrual-adjustment.service.js';
 import { organisationAccrualTotals } from './billing-organisation-accrual-totals.service.js';
 import { organisationFinancialAccount } from './billing-organisation-wallet.service.js';
@@ -16,19 +17,17 @@ import type { OrganisationBillingContext } from './billing-organisation-authorit
 export async function readOrganisationAccruedBill(context:OrganisationBillingContext,
   selection:OrganisationBillingSelection,month:string,now:Date,prisma:PrismaClient,
   deps:{usage?:typeof readOrganisationAccruedUsage;subscriptions?:typeof readOrganisationAccruedSubscriptions;
-    manual?:typeof readOrganisationAccruedManual;adjustments?:typeof readOrganisationAccruedAdjustments}={}):Promise<BillingOrganisationAccruedBillV1> {
+    manual?:typeof readOrganisationAccruedManual;addons?:typeof readOrganisationAccruedAddons;
+    adjustments?:typeof readOrganisationAccruedAdjustments}={}):Promise<BillingOrganisationAccruedBillV1> {
   const account=await organisationFinancialAccount(selection,prisma);
   const period=await assertOrganisationBillPeriod(prisma,{organisationId:context.request.organisationId,
     accountId:account.id,month,now});
   const [manual,addons,phone]=await Promise.all([
     (deps.manual??readOrganisationAccruedManual)({organisationId:context.request.organisationId,accountId:account.id,period,observedAt:now},prisma),
-    prisma.billingRecurringAddonSubscription.count({where:{orgId:context.request.organisationId,
-      accountId:account.id,createdAt:{lt:period.asOf},OR:[{status:{notIn:['canceled','incomplete_expired']}},
-        {currentPeriodEnd:{gt:period.start}}]}}),
+    (deps.addons??readOrganisationAccruedAddons)({organisationId:context.request.organisationId,account,period,observedAt:now},prisma),
     prisma.billingCreditEntry.count({where:{creditAccount:{orgId:context.request.organisationId,accountId:account.id},
       kind:{in:['SMS_PREPAID_USAGE','VOICE_PREPAID_USAGE']},occurredAt:{gte:period.start,lt:period.asOf}}}),
   ]);
-  if(addons)throw new AppError('INTERNAL',409,'BILLING_ACCRUAL_ADDON_RECONCILIATION_REQUIRED');
   if(phone)throw new AppError('INTERNAL',409,'BILLING_ACCRUAL_TELEPHONY_RECONCILIATION_REQUIRED');
   const subscriptions=await (deps.subscriptions??readOrganisationAccruedSubscriptions)({
     organisationId:context.request.organisationId,account,period,observedAt:now},prisma);
@@ -47,8 +46,9 @@ export async function readOrganisationAccruedBill(context:OrganisationBillingCon
   }
   const paid=new Map(subscriptions.paid);
   for(const [currency,amount] of manual.paid)paid.set(currency,(paid.get(currency)??0n)+amount);
-  const financial=organisationAccrualTotals([...subscriptions.lines,...manual.lines,...usage.lines,...adjustments],paid,
-    [...manual.currencies,...usage.currencies]);
+  for(const [currency,amount] of addons.paid)paid.set(currency,(paid.get(currency)??0n)+amount);
+  const financial=organisationAccrualTotals([...subscriptions.lines,...manual.lines,...addons.lines,...usage.lines,...adjustments],paid,
+    [...manual.currencies,...addons.currencies,...usage.currencies]);
   if(!financial.totals.length)throw new AppError('INTERNAL',409,'BILLING_ACCRUAL_SCOPE_UNPROVEN');
   return {as_of:now.toISOString(),period:{month,starts_at:period.start.toISOString(),
     ends_at:period.end.toISOString()},...financial};

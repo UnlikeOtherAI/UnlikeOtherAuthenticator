@@ -6,7 +6,7 @@ import type { BillingCycleContext } from './billing-cycle-read.service.js';
 import { authorizeBillingCycle } from './billing-cycle-authority.service.js';
 import { localizeCustomerInvoiceDetail,localizeCustomerInvoiceSummary } from './billing-customer-invoice-display.service.js';
 import { projectPrepaidCustomerInvoiceDetail,projectPrepaidCustomerInvoiceSummary } from './billing-customer-invoice-prepaid.service.js';
-import { projectStripeCustomerInvoiceDetail,projectStripeCustomerInvoiceSummary } from './billing-customer-invoice-stripe.service.js';
+import { projectStripeCustomerInvoiceDetail,projectStripeCustomerInvoiceSummary,stripePaymentInvoiceReadInclude } from './billing-customer-invoice-stripe.service.js';
 import { createBillingInvoicePdfStorage } from './billing-invoice-storage.service.js';
 import { assertNoUnboundManualHistory,listOrganisationManualInvoices,readOrganisationManualInvoice } from './billing-organisation-manual-history.service.js';
 import { organisationHistoryAccount,organisationHistorySubject,historyCursorBinding,decodeOrganisationInvoiceCursor,
@@ -47,7 +47,7 @@ export async function listOrganisationInvoices(context:BillingCycleContext,
     ORDER BY MAX(cash.paid_at) DESC,invoice.id COLLATE "C" DESC LIMIT ${limit+1}`);
   const stripe=await db.billingStripePaymentInvoice.findMany({where:{id:{in:stripeKeys.map(row=>row.id)},
     orgId:context.request.organisationId,accountId:account.id,livemode:account.livemode},
-    include:{lines:true,subscription:true,cashPayments:true,adjustments:true}});
+    include:stripePaymentInvoiceReadInclude});
   const changes=await adjustments(db,prepaid);
   const services=await db.billingService.findMany({where:{id:{in:[...new Set(prepaid.map(row=>row.serviceId))]}},select:{id:true,identifier:true}});
   const byId=new Map(services.map(service=>[service.id,service.identifier]));
@@ -79,7 +79,7 @@ async function read(context:BillingCycleContext,invoiceId:string,db:PrismaClient
     const result=await readOrganisationManualInvoice(context,account.id,invoiceId,db,chargeMonth);
     detail=result.detail;pdfKey=result.pdfKey;sha256=result.sha256;
   }else if(match[1]==='stripe'){
-    const row=await db.billingStripePaymentInvoice.findFirst({where:scope,include:{lines:true,subscription:true,cashPayments:true,adjustments:true}});
+    const row=await db.billingStripePaymentInvoice.findFirst({where:scope,include:stripePaymentInvoiceReadInclude});
     if(!row)missing();await verifyOrganisationInvoiceServices(db,row.lines);
     if(chargeMonth&&!row.cashPayments.some(payment=>payment.paidAt.toISOString().slice(0,7)===chargeMonth))missing();
     detail=projectStripeCustomerInvoiceDetail(row,context.request.product,context.credential.service.id,subject,chargeMonth,true);
