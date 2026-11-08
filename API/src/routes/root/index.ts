@@ -126,6 +126,7 @@ export function registerRootRoute(app: FastifyInstance): void {
       },
       product_api_concurrency:
         'Product data APIs — /org/*, /domain/*, /settings/*, /internal/org/*, /avatar/*, /email/* — share a small per-instance concurrency cap so sign-in always keeps database connections. An excess request waits briefly in FIFO order, then answers 503 with Retry-After: 1 and code PRODUCT_API_BUSY (the request had no effect). Retry after the delay with backoff and never fan out one UOA call per end-user request: resolve /org/me and settings once per session and cache them. /auth/* (including /auth/token), /oauth/*, /2fa/*, /integrations/*, /internal/admin/*, /billing/* and discovery are never limited.',
+      organisation_financial_history: 'Explicit financial_scope organisation on cycles/invoices reads spans products and teams, remains manager-only, and uses exactly one named account/mode. Preserve source download bodies and opaque scoped cursors. Unknown mode binding returns reconciliation; no historical records move.',
       billing_provider_unavailable:
         'Billing calls that cannot resolve the configured payment-provider account return 503 BILLING_PAYMENT_PROVIDER_UNAVAILABLE. Retain the user session, report billing temporarily unavailable and retry reads with backoff. Do not interpret this as zero credits, insufficient funds or permission to start paid work. Payment mutations retain their existing idempotency and reconciliation requirements.',
       org_me_subject_assertion:

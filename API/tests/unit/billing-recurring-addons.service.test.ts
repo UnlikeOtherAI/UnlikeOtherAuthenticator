@@ -33,7 +33,7 @@ const collection = {
     createdAt: now,
     updatedAt: now,
   },
-  stripeCollectionEnabled: true,
+  stripeCollectionEnabled: true,scopeEpoch:'2026-11-08T00:00:00.000Z',modeRevision:0,
 };
 
 function addonData(
@@ -69,7 +69,7 @@ function addonData(
     subscriptions: [
       {
         id: 'subscription_secret',
-        offerId: 'offer_privacy',
+        offerId: 'offer_privacy', teamId:request.teamId,
         scope,
         subscribingUserId,
         status: 'active',
@@ -81,7 +81,7 @@ function addonData(
         updatedAt: now,
       },
     ],
-    checkouts: [],
+    checkouts: [],retainedSubscriptions:[],
   };
 }
 
@@ -120,7 +120,7 @@ describe('privacy-safe recurring add-on scopes', () => {
     ] as never;
 
     const result = await getBillingRecurringAddons(
-      { request, actorToken: 'signed-actor', credential, locale: 'cs' },
+      { request, actorToken: 'signed-actor', credential, supportsBillingMode:true, locale: 'cs' },
       dependencies(data, true) as never,
     );
 
@@ -141,7 +141,7 @@ describe('privacy-safe recurring add-on scopes', () => {
 
   it('keeps the read projection available while collection actions are frozen', async () => {
     const result = await getBillingRecurringAddons(
-      { request, actorToken: 'signed-actor', credential, locale: 'cs' },
+      { request, actorToken: 'signed-actor', credential, supportsBillingMode:true, locale: 'cs' },
       dependencies(
         addonData(
           BillingRecurringAddonSubscriptionScope.TEAM,
@@ -187,36 +187,18 @@ describe('privacy-safe recurring add-on scopes', () => {
       relationship: 'other_team_member',
     },
   ])(
-    'shows $scope entitlement without leaking owner identity to members',
-    async ({ scope, entitlementScope, userId, relationship }) => {
-      const result = await getBillingRecurringAddons(
-        { request, actorToken: 'signed-actor', credential },
-        dependencies(addonData(scope, entitlementScope, userId), false) as never,
-      );
-      const serialized = JSON.stringify(result);
-
-      expect(() => assertBillingRecurringAddonsContract(result)).not.toThrow();
-      expect(result).toMatchObject({
-        viewer: { role: 'member' },
-        capabilities: { can_manage_addons: false },
-        offers: [
-          {
-            key: 'privacy',
-            monthly_price: { amount: '50', amount_minor: '5000' },
-            entitlement: { state: 'active' },
-            subscription: { owner_relationship: relationship },
-            actions: [],
-          },
-        ],
-      });
-      expect(serialized).not.toContain('subscription_secret');
-      expect(serialized).not.toContain('user_secret_other');
+    'refuses $scope financial reads to an ordinary member before reading funding',
+    async ({ scope, entitlementScope, userId }) => {
+      const deps=dependencies(addonData(scope,entitlementScope,userId),false);
+      await expect(getBillingRecurringAddons({request,actorToken:'signed-actor',credential,supportsBillingMode:true},deps as never))
+        .rejects.toMatchObject({statusCode:403,message:'BILLING_MANAGER_REQUIRED'});
+      expect(deps.resolveCollection).not.toHaveBeenCalled();expect(deps.loadData).not.toHaveBeenCalled();
     },
   );
 
   it('gives billing managers the exact subscription and subscribing-user identity', async () => {
     const result = await getBillingRecurringAddons(
-      { request, actorToken: 'signed-actor', credential },
+      { request, actorToken: 'signed-actor', credential, supportsBillingMode:true },
       dependencies(
         addonData(
           BillingRecurringAddonSubscriptionScope.SUBSCRIBING_USER,

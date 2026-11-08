@@ -3,6 +3,7 @@ import { AppError } from '../utils/errors.js';
 import { loadAddonData } from './billing-recurring-addon-data.service.js';
 import { freezeDisplayedBillingActions } from './billing-action-context.service.js';
 import { billingModeRefreshCopy } from './billing-mode-copy.catalog.js';
+import { organisationAddonCopy } from './billing-organisation-addon-copy.catalog.js';
 import {
   BillingRecurringAddonEntitlementScope,
   BillingRecurringAddonSubscriptionScope,
@@ -183,6 +184,7 @@ function managerActions(params: {
 }): Array<BillingRecurringAddonCheckoutAction | BillingRecurringAddonCancelAction> {
   const copy = billingAddonCopy(params.context.locale);
   if (!params.availability.entitlementScope) return [];
+  if(params.context.teamId===null&&params.availability.entitlementScope!==BillingRecurringAddonEntitlementScope.ORGANISATION)return [];
   const scope = recurringAddonScope(params.availability.entitlementScope, {
     product: params.context.product,
     organisationId: params.context.organisationId,
@@ -221,7 +223,7 @@ function managerActions(params: {
       },
     ];
   }
-  const pending = params.data.checkouts.some(
+  const pending = params.data.retainedSubscriptions.some(row=>row.offerKey===params.offer.key)||params.data.checkouts.some(
     (checkout) =>
       checkout.offerId === params.offer.id &&
       checkout.scope === scope.scope &&
@@ -264,11 +266,15 @@ function offersForManager(
   return data.offers.map((offer) => {
     const scopes = new Set(offer.featurePolicies.map((policy) => policy.entitlementScope));
     const subscription = selectSubscription(
-      data.subscriptions.filter((row) => row.offerId === offer.id),
+      data.subscriptions.filter((row) => row.offerId === offer.id&&
+        (row.scope===BillingRecurringAddonSubscriptionScope.ORGANISATION||row.teamId===context.teamId)),
       scopes,
       viewer.userId,
     );
-    const availability = recurringAddonOfferAvailability(offer, context.collectionEnabled);
+    const sourceAvailability = recurringAddonOfferAvailability(offer, context.collectionEnabled);
+    const retained=data.retainedSubscriptions.some(row=>row.offerKey===offer.key);
+    const availability={...sourceAvailability,available:sourceAvailability.available&&!retained&&
+      (context.teamId!==null||sourceAvailability.entitlementScope===BillingRecurringAddonEntitlementScope.ORGANISATION)};
     return {
       id: offer.id,
       key: offer.key,
@@ -283,7 +289,9 @@ function offersForManager(
       ),
       interval: 'month',
       available: availability.available,
-      unavailable_reason: availability.available ? null : !context.collectionEnabled ? copy.noCollection : availability.entitlementScope ? copy.checkoutUnavailable : copy.noEntitlementScope,
+      unavailable_reason: availability.available ? null : retained?organisationAddonCopy(context.locale).retained:
+        context.teamId===null&&availability.entitlementScope!==BillingRecurringAddonEntitlementScope.ORGANISATION?
+          organisationAddonCopy(context.locale).targetRequired:!context.collectionEnabled ? copy.noCollection : availability.entitlementScope ? copy.checkoutUnavailable : copy.noEntitlementScope,
       entitlement: entitlement(subscription, offer.featurePolicies.length > 0, context.locale),
       subscription: managerSubscription(subscription, context.locale),
       actions: managerActions({ offer, subscription, data, viewer, context, availability }),
@@ -397,7 +405,8 @@ export async function getBillingRecurringAddons(
       stripe_mode: collection.account.livemode ? ('live' as const) : ('test' as const),
     },
     title: `${params.credential.service.name} ${billingAddonCopy(params.locale).titleSuffix}`,
-    description: billingAddonCopy(params.locale).catalogDescription,
+    description: `${billingAddonCopy(params.locale).catalogDescription} ${organisationAddonCopy(params.locale).description}${
+      params.request.teamId===null?` ${organisationAddonCopy(params.locale).targetRequired}`:''}`,
   };
   const offerContext: OfferContext = {
     product: params.credential.service.identifier,

@@ -1,4 +1,5 @@
 import { registerModeHistoryCase } from './billing-stripe-payment-invoice.cases-mode.js';
+import { registerOrganisationHistoryCases } from './billing-organisation-history.cases.js';
 
 
 import { describe, vi } from 'vitest';
@@ -12,4 +13,5 @@ setupPersistenceSuite();
 registerCases1();
 registerCases2();
 registerModeHistoryCase();
+registerOrganisationHistoryCases();
 });

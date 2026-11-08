@@ -135,10 +135,10 @@ export function verifyStripeInvoiceFinancialSource(row: StripePaymentInvoiceSour
 
 export function projectStripeCustomerInvoiceSummary(
   row: StripePaymentInvoiceSource, product: string, serviceId: string,
-  chargeMonth?: string,
+  chargeMonth?: string, organisationScope=false,
 ): BillingCustomerInvoiceSummaryV1 {
   verifyStripeInvoiceFinancialSource(row);
-  if (row.lines.some((line) => line.serviceIdentifier !== product ||
+  if (!organisationScope&&row.lines.some((line) => line.serviceIdentifier !== product ||
     line.serviceId !== serviceId)) hold();
   const payments = verifiedPayments(row);
   const paid = payments.reduce((sum, payment) => sum + payment.amount, 0n);
@@ -167,7 +167,7 @@ export function projectStripeCustomerInvoiceSummary(
     charge_month: selectedMonth, payments_in_charge_month: cycleMoney(paidInMonth, row.currency),
     scope: { organisation_id: row.orgId, team_id: row.teamId,
       scope_type: row.teamId === null ? 'organisation' : 'team' },
-    product_identifiers: [product],
+    product_identifiers: organisationScope?[...new Set(row.lines.map(line=>line.serviceIdentifier))].sort():[product],
     totals: { currency, gross_total: cycleMoney(row.grossAmountMinor, currency),
       tax: cycleMoney(row.taxAmountMinor, currency),
       credits_applied: cycleMoney(row.creditAmountMinor, currency), voided_amount: zero,
@@ -182,11 +182,11 @@ export function projectStripeCustomerInvoiceSummary(
 export function projectStripeCustomerInvoiceDetail(
   row: StripePaymentInvoiceSource, product: string, serviceId: string,
   subject: BillingSubjectRequest,
-  chargeMonth?: string,
+  chargeMonth?: string, organisationScope=false,
 ): BillingCustomerInvoiceDetailV1 {
-  const summary = projectStripeCustomerInvoiceSummary(row, product, serviceId, chargeMonth);
-  if (subject.product !== product || subject.organisation_id !== row.orgId ||
-    (row.teamId !== null && subject.team_id !== row.teamId)) hold();
+  const summary = projectStripeCustomerInvoiceSummary(row, product, serviceId, chargeMonth,organisationScope);
+  if (subject.organisation_id !== row.orgId || (!organisationScope&&
+    (subject.product !== product || (row.teamId !== null && subject.team_id !== row.teamId)))) hold();
   const invoiceId = `stripe:${row.id}`;
   return { ...summary, schema_version: 1,
     payments: verifiedPayments(row)

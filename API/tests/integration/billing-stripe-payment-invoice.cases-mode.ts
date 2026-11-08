@@ -1,29 +1,33 @@
-import { expect, it, vi } from 'vitest';
-import { listCustomerInvoices, getCustomerInvoiceDetail } from '../../src/services/billing-customer-invoice-read.service.js';
-import { db, orgId, ownerId, accountId, context } from './billing-stripe-payment-invoice.suite-fixture.js';
-export function registerModeHistoryCase() {
-  it('keeps TEST cash out of a LIVE team list while retaining exact historical reads', async () => {
-    const team = await db.prisma.team.create({ data: { orgId, name: 'New LIVE team', slug: 'new-live-team' } });
-    await db.prisma.teamMember.create({ data: { teamId: team.id, userId: ownerId, teamRole: 'owner' } });
-    const viewer = { ...context(), request: { ...context().request, teamId: team.id } };
-    const original = await db.prisma.billingStripePaymentInvoice.findFirstOrThrow({ where: { orgId, livemode: false } });
-    const list = await listCustomerInvoices(viewer, { chargeMonth: '2026-10' }, { prisma: db.prisma });
-    expect(list.invoices).toEqual([]);
-    const detail = await getCustomerInvoiceDetail(viewer, `stripe:${original.id}`, { prisma: db.prisma });
-    expect(detail.invoice_id).toBe(`stripe:${original.id}`);
-    expect((await db.prisma.billingStripePaymentInvoice.findUniqueOrThrow({ where: { id: original.id } })).livemode).toBe(false);
+import { expect,it,vi } from 'vitest';
+import { listCustomerInvoices,getCustomerInvoiceDetail } from '../../src/services/billing-customer-invoice-read.service.js';
+import { db,orgId,ownerId,accountId,context } from './billing-stripe-payment-invoice.suite-fixture.js';
+export function registerModeHistoryCase(){
+  it('keeps future teams in the same org mode and separates explicit LIVE/TEST history',async()=>{
+    const team=await db.prisma.team.create({data:{orgId,name:'Future team',slug:'future-team'}});
+    const source=await db.prisma.billingStripePaymentInvoice.findFirstOrThrow({where:{orgId,livemode:false}});
+    const base=context();const viewer={...base,financialScope:'organisation' as const,billingMode:'sandbox' as const,
+      request:{...base.request,teamId:team.id}};
+    // The org owner is admitted without a TeamMember for this new team.
+    expect(await db.prisma.teamMember.count({where:{teamId:team.id,userId:ownerId}})).toBe(0);
+    expect((await listCustomerInvoices(viewer,{chargeMonth:'2026-10'},{prisma:db.prisma})).invoices.some(row=>row.invoice_id==='stripe:'+source.id)).toBe(true);
+    expect((await getCustomerInvoiceDetail(viewer,'stripe:'+source.id,{prisma:db.prisma})).invoice_id).toBe('stripe:'+source.id);
+    const account=await db.prisma.billingStripeAccount.findUniqueOrThrow({where:{id:accountId}});
+    await db.prisma.billingStripeAccount.upsert({where:{stripeAccountId_livemode:{stripeAccountId:account.stripeAccountId,livemode:true}},
+      create:{stripeAccountId:account.stripeAccountId,livemode:true},update:{}});
+    expect((await listCustomerInvoices({...viewer,billingMode:'live'},{chargeMonth:'2026-10'},{prisma:db.prisma})).invoices).toEqual([]);
+    await expect(getCustomerInvoiceDetail({...viewer,billingMode:'live'},'stripe:'+source.id,{prisma:db.prisma})).rejects.toMatchObject({statusCode:404});
+    expect((await db.prisma.billingStripePaymentInvoice.findUniqueOrThrow({where:{id:source.id}})).livemode).toBe(false);
   });
-  it('does not list cash from a different named account of the same mode', async () => {
-    const original = await db.prisma.billingStripePaymentInvoice.findFirstOrThrow({ where: { orgId, livemode: false } });
-    vi.stubEnv('STRIPE_SANDBOX_ACCOUNT_ID', 'acct_anotherNamedTest');
-    try {
-      expect((await listCustomerInvoices(context(), { chargeMonth: '2026-10' }, { prisma: db.prisma })).invoices).toEqual([]);
-      expect((await getCustomerInvoiceDetail(context(), `stripe:${original.id}`, { prisma: db.prisma })).invoice_id)
-        .toBe(`stripe:${original.id}`);
-    } finally {
-      const account = await db.prisma.billingStripeAccount.findUniqueOrThrow({ where: { id: accountId } });
-      vi.stubEnv('STRIPE_SANDBOX_ACCOUNT_ID', account.stripeAccountId);
-    }
+  it('refuses another named provider account of the same mode for exact detail and cursor',async()=>{
+    const source=await db.prisma.billingStripePaymentInvoice.findFirstOrThrow({where:{orgId,livemode:false}});
+    const viewer={...context(),financialScope:'organisation' as const,billingMode:'sandbox' as const};
+    const before=await listCustomerInvoices(viewer,{chargeMonth:'2026-10',limit:1},{prisma:db.prisma});
+    await db.prisma.billingStripeAccount.create({data:{stripeAccountId:'acct_anotherNamedTest',livemode:false}});
+    vi.stubEnv('STRIPE_SANDBOX_ACCOUNT_ID','acct_anotherNamedTest');
+    try{
+      expect((await listCustomerInvoices(viewer,{chargeMonth:'2026-10'},{prisma:db.prisma})).invoices).toEqual([]);
+      await expect(getCustomerInvoiceDetail(viewer,'stripe:'+source.id,{prisma:db.prisma})).rejects.toMatchObject({statusCode:404});
+      if(before.next_cursor)await expect(listCustomerInvoices(viewer,{chargeMonth:'2026-10',cursor:before.next_cursor},{prisma:db.prisma})).rejects.toMatchObject({statusCode:400});
+    }finally{vi.stubEnv('STRIPE_SANDBOX_ACCOUNT_ID',(await db.prisma.billingStripeAccount.findUniqueOrThrow({where:{id:accountId}})).stripeAccountId);}
   });
-
 }

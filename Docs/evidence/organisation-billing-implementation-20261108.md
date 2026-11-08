@@ -71,12 +71,34 @@ The corresponding chooser/directory/scoped-login unit gate passes 32 tests with
 the intended DB-less unit environment. These are API/service checks; hosted
 chooser interaction remains to be exercised with the final integrated source.
 
+The provider invoice/history PostgreSQL gate passes 12 tests, retaining its
+original cash, refund, invoice integrity, idempotency and PDF recovery assertions.
+It now admits active team managers to org finances and covers future teams
+without synthetic owner membership, explicit LIVE versus TEST lists/details,
+same-mode named-account refusal and scoped cursors. The new history case reads
+captured cycles across two products/teams and reads an original product invoice
+through another registered product's financial audience. Actor verification is
+stubbed in this persistence suite; it proves real DB financial scope and source
+checks, not the final signed HTTP journey. Current organisation cycles use real
+captured snapshots, never the old empty current-cycle preview as an accrued bill.
+Manual invoices and cycles without a proven captured account remain explicit
+409 reconciliation states. Their mode is not inferred or backfilled.
+
+Three real PostgreSQL add-on tests exercise the original coherence triggers
+without disabling them. New TEAM/USER entitlements use the exact ORG customer
+and captured account/epoch, including an org owner with no team membership.
+An actor admitted to one team who manages another can capture ORG work; ordinary
+members and a team-only manager using null admission are refused. Null org-owner
+admission retains the original finite action-intent check. The source contains
+no provider calls and creates no payments or funding entries. Seven add-on unit
+tests plus three invoice route tests pass. Captured add-on cancellation recovery
+and rendered consumer flows remain outstanding.
+
 ## Work still required before release
 
-Complete the organisation history branch, remaining accrual sources and their
-account/mode proofs, shared org-admin chooser and
-custody admission, focused recovery
-and race proofs, rendered desktop/phone flows, screenshots and final runbook.
+Complete remaining accrual sources and their account/mode proofs, signed HTTP
+history/role/custody checks, captured add-on recovery, focused races, hosted team
+chooser interaction, the remaining rendered flows and final runbook.
 Manual/add-on/adjustment sources without complete accrual proof currently produce
 an explicit reconciliation state, not a guessed amount. That is not a claim of
 complete accrued billing support. No-team financial browser sign-in is outside

@@ -70,8 +70,8 @@ it('freezes the actual cash date, exact legal allocations and duplicate webhook 
       .rejects.toMatchObject({ statusCode: 404 });
     expect(JSON.stringify(customerDetail)).not.toMatch(
       /provider_cost|markup|raw_units|token_count|stripe_customer_id|payment_intent_id/i);
-    await expect(getCustomerInvoiceDetail(context(teamManagerId), `stripe:${row.id}`,
-      { prisma: db.prisma })).rejects.toMatchObject({ statusCode: 403 });
+    expect((await getCustomerInvoiceDetail(context(teamManagerId), `stripe:${row.id}`,
+      { prisma: db.prisma })).invoice_id).toBe(`stripe:${row.id}`);
     expect((await listCustomerInvoices(context(), { chargeMonth: '2026-10' },
       { prisma: db.prisma })).invoices.some((item) => item.invoice_id === `stripe:${row.id}`))
       .toBe(true);
@@ -163,9 +163,8 @@ it('rolls the source and its lines back together then recovers a persisted PDF l
     const downloaded = await downloadCustomerInvoice(context(), `stripe:${source.id}`,
       `stripe:${source.id}`, { prisma: db.prisma, storage });
     expect(downloaded.bytes).toEqual(pdf);
-    await expect(downloadCustomerInvoice(context(teamManagerId), `stripe:${source.id}`,
-      `stripe:${source.id}`, { prisma: db.prisma, storage }))
-      .rejects.toMatchObject({ statusCode: 403 });
+    expect((await downloadCustomerInvoice(context(teamManagerId), `stripe:${source.id}`,
+      `stripe:${source.id}`, { prisma: db.prisma, storage })).bytes).toEqual(pdf);
     expect(files.size).toBe(1);
     await expect(db.prisma.billingStripePaymentInvoiceLine.create({ data: {
       invoiceId: source.id, stripeLineId: 'il_extra', serviceId,

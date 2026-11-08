@@ -71,7 +71,7 @@ beforeAll(async () => {
     const team = await db.prisma.team.create({ data: { orgId,
       name: 'Selected team', slug: `selected-${randomUUID().slice(0, 8)}` } });
     selectedTeamId = team.id;
-    await db.prisma.billingTeamMode.create({ data: { teamId: team.id, sandbox: true, revision: 1 } });
+    await db.prisma.billingOrganisationMode.create({ data: { orgId, sandbox: true, revision: 1 } });
     await db.prisma.orgMember.create({ data: { orgId, userId: owner.id, role: 'owner' } });
     await db.prisma.teamMember.create({ data: { teamId: team.id, userId: owner.id,
       teamRole: 'owner' } });
@@ -112,6 +112,7 @@ beforeAll(async () => {
     } });
     const checkout = await db.prisma.billingStripeCheckoutSession.create({ data: {
       billingModeTeamId: selectedTeamId, billingModeRevision: 1,
+      billingScopeEpoch:new Date((await db.prisma.$queryRaw<Array<{at:Date}>>`SELECT activated_at AS at FROM billing_organisation_scope_cutover WHERE id=1`)[0].at),
       accountId, appKeyId: appKey.id, customerId: customer.id,
       serviceId, tariffId, tariffSource: 'SERVICE_DEFAULT',
       orgId, teamId: null, scope: 'ORGANISATION', scopeKey: orgId,

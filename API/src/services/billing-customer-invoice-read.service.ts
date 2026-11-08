@@ -2,6 +2,7 @@ import type { BillingOrganisationFinancialDto as FinancialDto } from '../contrac
 import { createHash } from 'node:crypto';
 import { getEnv } from '../config/env.js';
 import { resolveTeamBillingMode } from './billing-team-mode.service.js';
+import { listOrganisationInvoices,getOrganisationInvoice,downloadOrganisationInvoice } from './billing-organisation-invoices.service.js';
 
 import {
   BillingAssignmentScope, BillingInvoiceStatus, Prisma, type PrismaClient,
@@ -138,6 +139,7 @@ export async function listCustomerInvoices(
   deps?: { prisma?: PrismaClient; now?: Date },
 ): Promise<BillingCustomerInvoicesListV1> {
   const prisma = deps?.prisma ?? getAdminPrisma();
+  if(context.financialScope==='organisation')return listOrganisationInvoices(context,params,prisma,deps?.now);
   const viewer = await authorizeBillingCycle(context, { prisma });
   const selection = await resolveTeamBillingMode(context.request, prisma);
   const env = getEnv();
@@ -313,6 +315,7 @@ export async function getCustomerInvoiceDetail(
   context: BillingCycleContext, invoiceId: string,
   deps?: { prisma?: PrismaClient; chargeMonth?: string },
 ): Promise<BillingCustomerInvoiceDetailV1> {
+  if(context.financialScope==='organisation')return getOrganisationInvoice(context,invoiceId,deps?.prisma??getAdminPrisma(),deps?.chargeMonth);
   const { detail } = await readCustomerInvoice(context, invoiceId, deps?.prisma ?? getAdminPrisma(),
     deps?.chargeMonth);
   return localizeCustomerInvoiceDetail(detail, context.locale);
@@ -323,6 +326,7 @@ export async function downloadCustomerInvoice(
   deps?: { prisma?: PrismaClient; storage?: Storage },
 ): Promise<{ bytes: Buffer; contentType: 'application/pdf'; filename: string }> {
   const prisma = deps?.prisma ?? getAdminPrisma();
+  if(context.financialScope==='organisation')return downloadOrganisationInvoice(context,invoiceId,documentId,prisma,deps?.storage);
   if (invoiceId !== documentId) notFound();
   const before = await readCustomerInvoice(context, invoiceId, prisma);
   if (!before.detail.document || !before.pdfKey || !before.sha256) notFound();

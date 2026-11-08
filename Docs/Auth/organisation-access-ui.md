@@ -171,4 +171,3 @@ recovery when its signed configuration permits team creation. Login does not
 silently create a replacement team or a new personal organisation. Explicit last
 TEAM deletion preserves the organisation and active org authority; explicit
 organisation deletion remains a separate destructive action.
-
