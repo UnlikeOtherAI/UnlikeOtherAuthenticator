@@ -63,10 +63,10 @@ export function projectCustomerCreditNoteSummary(note: CreditNoteSource,
 }
 
 export function projectCustomerCreditNoteDetail(note: CreditNoteSource,
-  subject: BillingSubjectRequest, chargeMonth?: string, locale?: BillingCustomerLocale): BillingCustomerInvoiceDetailV1 {
+  subject: BillingSubjectRequest, chargeMonth?: string, locale?: BillingCustomerLocale, organisationScope=false): BillingCustomerInvoiceDetailV1 {
   checked(note);
   if (subject.organisation_id !== note.orgId ||
-    note.originalInvoice.lines[0]?.serviceIdentifier !== subject.product) hold();
+    (!organisationScope&&note.originalInvoice.lines[0]?.serviceIdentifier !== subject.product)) hold();
   const summary = projectCustomerCreditNoteSummary(note,
     chargeMonth ?? note.issuedAt.toISOString().slice(0, 7));
   const id = `credit_note:${note.id}`;

@@ -102,14 +102,14 @@ export function projectManualCustomerInvoiceSummary(
 }
 
 export function projectManualCustomerInvoiceDetail(
-  invoice: ManualInvoiceSource, subject: BillingSubjectRequest, chargeMonth?: string,
+  invoice: ManualInvoiceSource, subject: BillingSubjectRequest, chargeMonth?: string, organisationScope=false,
 ): BillingCustomerInvoiceDetailV1 {
   const summary = projectManualCustomerInvoiceSummary(invoice, chargeMonth);
   const number = summary.number;
   const issuedAt = summary.issued_at;
   if (!number || !issuedAt) hold();
   if (subject.organisation_id !== invoice.orgId ||
-    invoice.lines.some((line) => line.serviceIdentifier !== subject.product)) hold();
+    (!organisationScope&&invoice.lines.some((line) => line.serviceIdentifier !== subject.product))) hold();
   return { ...summary, schema_version: 1,
     payments: invoice.paymentEvents.filter((event) => event.kind === 'PAYMENT')
       .sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime() ||

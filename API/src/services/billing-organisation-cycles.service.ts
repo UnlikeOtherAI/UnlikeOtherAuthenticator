@@ -25,12 +25,17 @@ function sources(orgId:string,cycleId?:string) {
     ORDER BY c.billing_month DESC,c.service_id,COALESCE(c.team_id,''),c.revision DESC,c.id DESC
   ), bound AS (
     SELECT c.id,c.billing_month,c.service_id,COALESCE(c.team_id,'') AS team_key,
-      COALESCE(s.account_id,w.account_id) AS account_id,
-      (s.account_id IS NOT NULL AND w.account_id IS NOT NULL AND s.account_id<>w.account_id) AS conflict
+      COALESCE(s.account_id,contract.billing_account_id,w.account_id) AS account_id,
+      (s.account_id IS NOT NULL AND w.account_id IS NOT NULL AND s.account_id<>w.account_id OR
+       contract.billing_account_id IS NOT NULL AND w.account_id IS NOT NULL AND contract.billing_account_id<>w.account_id) AS conflict
     FROM latest c LEFT JOIN billing_stripe_subscriptions s
       ON c.private_evidence#>>'{quote,source,kind}'='stripe'
       AND s.id=c.private_evidence#>>'{quote,source,id}' AND s.org_id=c.org_id AND s.service_id=c.service_id
       AND s.team_id IS NOT DISTINCT FROM c.team_id
+    LEFT JOIN billing_contract_service_terms term ON c.private_evidence#>>'{quote,source,kind}'='manual'
+      AND term.id=c.private_evidence#>>'{quote,source,id}' AND term.service_id=c.service_id AND c.team_id IS NULL
+    LEFT JOIN billing_organisation_contract_versions version ON version.id=term.contract_version_id
+    LEFT JOIN billing_organisation_contracts contract ON contract.id=version.contract_id AND contract.org_id=c.org_id
     LEFT JOIN billing_credit_accounts w ON w.id=c.private_evidence#>>'{wallet_boundary,account_id}'
       AND w.org_id=c.org_id AND (w.team_id IS NOT DISTINCT FROM c.team_id OR c.payer_scope='ORGANISATION' AND w.team_id IS NULL)
   )`;

@@ -8,8 +8,9 @@ import { localizeCustomerInvoiceDetail,localizeCustomerInvoiceSummary } from './
 import { projectPrepaidCustomerInvoiceDetail,projectPrepaidCustomerInvoiceSummary } from './billing-customer-invoice-prepaid.service.js';
 import { projectStripeCustomerInvoiceDetail,projectStripeCustomerInvoiceSummary } from './billing-customer-invoice-stripe.service.js';
 import { createBillingInvoicePdfStorage } from './billing-invoice-storage.service.js';
+import { assertNoUnboundManualHistory,listOrganisationManualInvoices,readOrganisationManualInvoice } from './billing-organisation-manual-history.service.js';
 import { organisationHistoryAccount,organisationHistorySubject,historyCursorBinding,decodeOrganisationInvoiceCursor,
-  encodeOrganisationHistoryCursor,compareOrganisationInvoiceCursor,verifyOrganisationInvoiceServices,
+  encodeOrganisationHistoryCursor,compareOrganisationInvoiceCursor,verifyOrganisationInvoiceServices,organisationInvoiceAfterSql,
   type OrganisationInvoiceCursor } from './billing-organisation-history.service.js';
 
 type List=BillingOrganisationFinancialTypes['invoices_list_response'];
@@ -23,34 +24,27 @@ async function adjustments(db:PrismaClient,rows:Array<{accountId:string;stripePa
   return rows.length?db.billingCreditPaymentAdjustment.findMany({where:{OR:rows.map(row=>({accountId:row.accountId,
     stripePaymentIntentId:row.stripePaymentIntentId}))},orderBy:[{occurredAt:'asc'},{id:'asc'}]}):[];
 }
-/** Manual sources without a captured mode remain visibly unresolved. They may
- * not appear once under LIVE and again under Sandbox by inference. */
-async function assertNoUnboundManualHistory(db:PrismaClient,orgId:string,month?:string) {
-  const period=month?monthPeriod(month):null;
-  const count=await db.billingInvoice.count({where:{orgId,status:{in:['ISSUED','VOID']},
-    ...(period?{OR:[{issuedAt:{gte:period.start,lt:period.end}},
-      {paymentEvents:{some:{occurredAt:{gte:period.start,lt:period.end}}}}]}:{})}});
-  if(count)throw new AppError('BAD_REQUEST',409,'BILLING_HISTORY_MANUAL_BINDING_RECONCILIATION_REQUIRED');
-}
 export async function listOrganisationInvoices(context:BillingCycleContext,
   input:{chargeMonth:string;limit?:number;cursor?:string},db:PrismaClient,now=new Date()):Promise<List> {
   await authorizeBillingCycle(context,{prisma:db});const account=await organisationHistoryAccount(context,db);
   const limit=input.limit??20;if(!Number.isSafeInteger(limit)||limit<1||limit>50)throw new AppError('BAD_REQUEST',400,'BILLING_INVOICE_LIMIT_INVALID');
-  const {start,end}=monthPeriod(input.chargeMonth),binding=historyCursorBinding(context,account.id);
-  const cursor=decodeOrganisationInvoiceCursor(input.cursor,binding),at=cursor?new Date(cursor.at):null;
-  await assertNoUnboundManualHistory(db,context.request.organisationId,input.chargeMonth);
-  const prepaid=await db.billingCreditPaymentInvoice.findMany({where:{orgId:context.request.organisationId,
-    accountId:account.id,livemode:account.livemode,paidAt:{gte:start,lt:end},
-    ...(at?{AND:[{OR:[{paidAt:{lt:at}},...(cursor?.kind==='prepaid'?[{paidAt:at,id:{lt:cursor.id}}]:[])]}]}:{})},
+  const {start,end}=monthPeriod(input.chargeMonth),binding=historyCursorBinding(context,account.id,`invoices:${input.chargeMonth}`);
+  const cursor=decodeOrganisationInvoiceCursor(input.cursor,binding);
+  await assertNoUnboundManualHistory(db,context.request.organisationId,{start,end});
+  const prepaidKeys=await db.$queryRaw<Array<{id:string}>>(Prisma.sql`SELECT id FROM billing_credit_payment_invoices
+    WHERE org_id=${context.request.organisationId} AND account_id=${account.id} AND livemode=${account.livemode}
+      AND paid_at>=${start} AND paid_at<${end} AND ${organisationInvoiceAfterSql(cursor,'prepaid',Prisma.sql`paid_at`,Prisma.sql`id`)}
+    ORDER BY paid_at DESC,id COLLATE "C" DESC LIMIT ${limit+1}`);
+  const prepaid=await db.billingCreditPaymentInvoice.findMany({where:{id:{in:prepaidKeys.map(key=>key.id)},orgId:context.request.organisationId,
+    accountId:account.id,livemode:account.livemode},
     include:{creditEntry:true,autoAttempt:{select:{id:true,currency:true}}},orderBy:[{paidAt:'desc'},{id:'desc'}],take:limit+1});
   const stripeKeys=await db.$queryRaw<Array<{id:string;at:Date}>>(Prisma.sql`
     SELECT invoice.id,MAX(cash.paid_at) AS at FROM billing_stripe_payment_invoices invoice
     JOIN billing_stripe_payment_invoice_cash_payments cash ON cash.invoice_id=invoice.id
     WHERE invoice.org_id=${context.request.organisationId} AND invoice.account_id=${account.id}
       AND invoice.livemode=${account.livemode} AND cash.paid_at>=${start} AND cash.paid_at<${end}
-    GROUP BY invoice.id ${at?Prisma.sql`HAVING MAX(cash.paid_at)<${at} OR
-      (MAX(cash.paid_at)=${at} AND ${cursor?.kind==='stripe'?Prisma.sql`invoice.id<${cursor.id}`:Prisma.sql`TRUE`})`:Prisma.empty}
-    ORDER BY MAX(cash.paid_at) DESC,invoice.id DESC LIMIT ${limit+1}`);
+    GROUP BY invoice.id HAVING ${organisationInvoiceAfterSql(cursor,'stripe',Prisma.sql`MAX(cash.paid_at)`,Prisma.sql`invoice.id`)}
+    ORDER BY MAX(cash.paid_at) DESC,invoice.id COLLATE "C" DESC LIMIT ${limit+1}`);
   const stripe=await db.billingStripePaymentInvoice.findMany({where:{id:{in:stripeKeys.map(row=>row.id)},
     orgId:context.request.organisationId,accountId:account.id,livemode:account.livemode},
     include:{lines:true,subscription:true,cashPayments:true,adjustments:true}});
@@ -59,6 +53,7 @@ export async function listOrganisationInvoices(context:BillingCycleContext,
   const byId=new Map(services.map(service=>[service.id,service.identifier]));
   await Promise.all(stripe.map(row=>verifyOrganisationInvoiceServices(db,row.lines)));
   const rows:Array<{cursor:OrganisationInvoiceCursor;summary:List['invoices'][number]}>= [
+    ...await listOrganisationManualInvoices(context,account.id,{month:input.chargeMonth,start,end,binding,cursor,limit},db),
     ...prepaid.map(row=>({cursor:{binding,at:row.paidAt.toISOString(),kind:'prepaid' as const,id:row.id},
       summary:projectPrepaidCustomerInvoiceSummary(row,changes.filter(change=>change.accountId===row.accountId&&
         change.stripePaymentIntentId===row.stripePaymentIntentId),byId.get(row.serviceId)??missing(),input.chargeMonth)})),
@@ -76,12 +71,14 @@ export async function listOrganisationInvoices(context:BillingCycleContext,
 
 async function read(context:BillingCycleContext,invoiceId:string,db:PrismaClient,chargeMonth?:string) {
   await authorizeBillingCycle(context,{prisma:db});const account=await organisationHistoryAccount(context,db);
-  const match=/^(prepaid|stripe):([a-zA-Z0-9_-]{1,128})$/.exec(invoiceId);
-  if(!match){if(/^(manual|credit_note):/.test(invoiceId))await assertNoUnboundManualHistory(db,context.request.organisationId);missing();}
+  const match=/^(prepaid|stripe|manual|credit_note):([a-zA-Z0-9_-]{1,128})$/.exec(invoiceId);if(!match)missing();
   const scope={id:match[2],orgId:context.request.organisationId,accountId:account.id,livemode:account.livemode};
   const subject=organisationHistorySubject(context);
   let detail:Detail,pdfKey:string|null,sha256:string|null;
-  if(match[1]==='stripe'){
+  if(match[1]==='manual'||match[1]==='credit_note'){
+    const result=await readOrganisationManualInvoice(context,account.id,invoiceId,db,chargeMonth);
+    detail=result.detail;pdfKey=result.pdfKey;sha256=result.sha256;
+  }else if(match[1]==='stripe'){
     const row=await db.billingStripePaymentInvoice.findFirst({where:scope,include:{lines:true,subscription:true,cashPayments:true,adjustments:true}});
     if(!row)missing();await verifyOrganisationInvoiceServices(db,row.lines);
     if(chargeMonth&&!row.cashPayments.some(payment=>payment.paidAt.toISOString().slice(0,7)===chargeMonth))missing();

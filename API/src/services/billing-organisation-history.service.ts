@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
-import type { PrismaClient } from '@prisma/client';
+import { Prisma,type PrismaClient } from '@prisma/client';
 import { getEnv } from '../config/env.js';
 import { AppError } from '../utils/errors.js';
 import { resolveOrganisationBillingMode } from './billing-organisation-mode.service.js';
@@ -20,11 +20,11 @@ export function organisationHistorySubject(context:BillingCycleContext) {
     user_id:context.request.userId,financial_scope:'organisation' as const,
     ...(context.billingMode?{billing_mode:context.billingMode}:{})};
 }
-export function historyCursorBinding(context:BillingCycleContext,accountId:string) {
-  return createHash('sha256').update(JSON.stringify(['organisation-history-v1',context.request.organisationId,accountId])).digest('hex');
+export function historyCursorBinding(context:BillingCycleContext,accountId:string,namespace='cycles') {
+  return createHash('sha256').update(JSON.stringify(['organisation-history-v1',context.request.organisationId,accountId,namespace])).digest('hex');
 }
 const cursorSchema=z.object({binding:z.string().regex(/^[0-9a-f]{64}$/),at:z.iso.datetime(),
-  kind:z.enum(['prepaid','stripe']),id:z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/)}).strict();
+  kind:z.enum(['credit_note','manual','prepaid','stripe']),id:z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/)}).strict();
 export type OrganisationInvoiceCursor=z.infer<typeof cursorSchema>;
 export function decodeOrganisationInvoiceCursor(value:string|undefined,binding:string):OrganisationInvoiceCursor|null {
   if(!value)return null;
@@ -37,6 +37,15 @@ export const encodeOrganisationHistoryCursor=(value:unknown)=>Buffer.from(JSON.s
 export function compareOrganisationInvoiceCursor(a:OrganisationInvoiceCursor,b:OrganisationInvoiceCursor) {
   return Buffer.compare(Buffer.from(b.at),Buffer.from(a.at))||Buffer.compare(Buffer.from(a.kind),Buffer.from(b.kind))||
     Buffer.compare(Buffer.from(b.id),Buffer.from(a.id));
+}
+/** Identical keyset ordering for each source, including ties across source kinds. */
+export function organisationInvoiceAfterSql(cursor:OrganisationInvoiceCursor|null,
+  kind:OrganisationInvoiceCursor['kind'],at:Prisma.Sql,id:Prisma.Sql) {
+  if(!cursor)return Prisma.sql`TRUE`;
+  const time=new Date(cursor.at);
+  const tied=kind===cursor.kind?Prisma.sql`${id} COLLATE "C"<${cursor.id} COLLATE "C"`:
+    kind>cursor.kind?Prisma.sql`TRUE`:Prisma.sql`FALSE`;
+  return Prisma.sql`(${at}<${time} OR ${at}=${time} AND ${tied})`;
 }
 /** Source labels must resolve to current UOA service IDs. The product presenting
  * the manager's actor is an admission audience, never a financial row filter. */
