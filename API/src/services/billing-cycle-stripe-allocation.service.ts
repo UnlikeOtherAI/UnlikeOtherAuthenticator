@@ -47,13 +47,13 @@ export async function readStripeCycleFinancialSources(reader: Reader, scope: Sco
   }
   const rows = await reader.billingStripePaymentInvoice.findMany({ where: {
     accountId: subscription.accountId, livemode: subscription.livemode,
-    orgId: scope.orgId, teamId: scope.teamId,
+    orgId: scope.orgId, teamId: scope.teamId,addonSubscriptionId:null,
     lines: { some: { serviceId: scope.serviceId, billingMonth: scope.billingMonth } },
   }, include: { lines: true, subscription: true, cashPayments: true, adjustments: true },
   orderBy: { id: 'asc' } });
   const sources = rows.map((row) => {
     const verified = verifyStripeInvoiceFinancialSource(row);
-    if (row.state !== 'ISSUED' || row.currency !== scope.currency ||
+    if (!row.subscription || row.state !== 'ISSUED' || row.currency !== scope.currency ||
       row.stripeCustomerId !== subscription.customer.stripeCustomerId ||
       row.subscription.customerId !== subscription.customerId ||
       row.subscription.scope !== subscription.scope ||
