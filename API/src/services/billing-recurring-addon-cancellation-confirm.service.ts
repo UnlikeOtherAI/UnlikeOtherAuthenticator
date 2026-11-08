@@ -321,9 +321,15 @@ export async function confirmRecurringAddonCancellation(
   const current = await prisma.billingRecurringAddonSubscription.findFirst({
     where: {
       id: claimed.subscription.id,
+      accountId:claimed.subscription.accountId,
+      checkoutId:claimed.subscription.checkoutId,
+      customerId:claimed.subscription.customerId,
+      catalogId:claimed.subscription.catalogId,
+      stripeSubscriptionId:claimed.subscription.stripeSubscriptionId,
+      scope:claimed.subscription.scope,scopeKey:claimed.subscription.scopeKey,
+      teamId:claimed.subscription.teamId,subscribingUserId:claimed.subscription.subscribingUserId,
       serviceId: params.credential.service.id,
       orgId: params.request.organisationId,
-      OR: [{ scope: 'ORGANISATION', teamId: null }, { teamId: params.request.teamId }],
     },
     include: recurringAddonSubscriptionInclude,
   });

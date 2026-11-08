@@ -156,6 +156,12 @@ export async function createRecurringAddonCancellationPreview(
       scopeEpoch:selection.epoch,appKeyId:params.credential.id},params.endpoint,{
       product:params.request.product,organisation_id:params.request.organisationId,team_id:params.request.teamId,
       user_id:params.request.userId,subscription_id:params.request.subscriptionId});
+    if(subscription.customer.scope!=='ORGANISATION'||subscription.customer.teamId!==null||
+      subscription.customer.orgId!==params.request.organisationId||subscription.customer.accountId!==account.id||
+      account.livemode!==(selection.mode==='live')||
+      subscription.scope!=='ORGANISATION'&&subscription.teamId!==params.request.teamId) {
+      throw new AppError('BAD_REQUEST',409,'BILLING_CONTEXT_STALE');
+    }
   }
   const refreshed = await refreshRecurringAddonSubscriptionProjection(
     { local: subscription, account, now: deps?.now?.() },

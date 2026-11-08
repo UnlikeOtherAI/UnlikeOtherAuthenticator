@@ -4,6 +4,7 @@ import { loadAddonData } from './billing-recurring-addon-data.service.js';
 import { freezeDisplayedBillingActions } from './billing-action-context.service.js';
 import { billingModeRefreshCopy } from './billing-mode-copy.catalog.js';
 import { organisationAddonCopy } from './billing-organisation-addon-copy.catalog.js';
+import { resolveTeamBillingMode } from './billing-team-mode.service.js';
 import {
   BillingRecurringAddonEntitlementScope,
   BillingRecurringAddonSubscriptionScope,
@@ -356,6 +357,7 @@ export async function getBillingRecurringAddons(
     resolveCollection?: typeof resolveCreditCollectionContext;
     resolveViewer?: typeof resolveBillingFundingViewer;
     loadData?: typeof loadAddonData;
+    resolveMode?: typeof resolveTeamBillingMode;
   },
 ): Promise<BillingRecurringAddonsV1> {
   const prisma = deps?.prisma;
@@ -387,6 +389,11 @@ export async function getBillingRecurringAddons(
     { prisma },
   );
   const now = deps?.now?.() ?? new Date();
+  const finalViewer=await (deps?.resolveViewer??resolveBillingFundingViewer)(params.request,{prisma});
+  if(!finalViewer.billingManager)throw new AppError('FORBIDDEN',403,'BILLING_MANAGER_REQUIRED');
+  const finalMode=await (deps?.resolveMode??resolveTeamBillingMode)(params.request,prisma);
+  if(finalMode.epoch!==collection.scopeEpoch||finalMode.revision!==collection.modeRevision||
+    collection.account.livemode!==(finalMode.mode==='live'))throw new AppError('BAD_REQUEST',409,'BILLING_CONTEXT_STALE');
   const common = {
     schema_version: 1 as const,
     generated_at: now.toISOString(),

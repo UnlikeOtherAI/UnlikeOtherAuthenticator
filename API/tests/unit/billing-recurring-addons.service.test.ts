@@ -94,6 +94,8 @@ function dependencies(
     now: () => now,
     resolveEntitlement: vi.fn().mockResolvedValue({ actor: {}, payload: {} }),
     resolveCollection: vi.fn().mockResolvedValue(collectionContext),
+    resolveMode:vi.fn().mockResolvedValue({mode:collectionContext.account.livemode?'live':'sandbox',
+      epoch:collectionContext.scopeEpoch,revision:collectionContext.modeRevision}),
     resolveViewer: vi.fn().mockResolvedValue({
       userId: request.userId,
       displayName: 'Viewer',
@@ -108,6 +110,17 @@ function dependencies(
 }
 
 describe('privacy-safe recurring add-on scopes', () => {
+  it('refuses a display after mode/revision drift or manager revocation during the read',async()=>{
+    for(const change of ['mode','revision','epoch','manager']){
+      const deps=dependencies(addonData(BillingRecurringAddonSubscriptionScope.TEAM,
+        BillingRecurringAddonEntitlementScope.TEAM,null),true);
+      if(change==='manager')deps.resolveViewer.mockResolvedValueOnce({billingManager:true}).mockResolvedValue({billingManager:false});
+      else deps.resolveMode.mockResolvedValue({mode:change==='mode'?'live':'sandbox',
+        epoch:change==='epoch'?'2026-11-09T00:00:00.000Z':collection.scopeEpoch,revision:change==='revision'?1:0});
+      await expect(getBillingRecurringAddons({request,actorToken:'signed-actor',credential,supportsBillingMode:true},deps as never))
+        .rejects.toMatchObject({statusCode:change==='manager'?403:409});
+    }
+  });
   it('freezes subscribe when the persisted Stripe catalog binding is incomplete', async () => {
     const data = addonData(
       BillingRecurringAddonSubscriptionScope.TEAM,
