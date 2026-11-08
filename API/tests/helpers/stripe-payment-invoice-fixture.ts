@@ -4,11 +4,9 @@ import type { PrismaClient } from '@prisma/client';
 import type Stripe from 'stripe';
 import { vi } from 'vitest';
 
-const startsAt = new Date('2026-08-01T00:00:00.000Z');
-const endsAt = new Date('2026-09-01T00:00:00.000Z');
-const paidAt = new Date('2026-10-01T00:00:00.000Z');
 
-export async function createStripeInvoiceFixture(prisma: PrismaClient, accountId: string, id = `in_${randomUUID().replaceAll('-', '')}`) {
+export async function createStripeInvoiceFixture(prisma: PrismaClient, accountId: string, id = `in_${randomUUID().replaceAll('-', '')}`,year=2026) {
+    const startsAt=new Date(`${year}-08-01T00:00:00Z`),endsAt=new Date(`${year}-09-01T00:00:00Z`),paidAt=new Date(`${year}-10-01T00:00:00Z`);
     const account = await prisma.billingStripeAccount.findUniqueOrThrow({ where: { id: accountId } });
     const invoice = { id, livemode: false, status: 'paid', customer: 'cus_monthly', currency: 'usd',
       parent: { type: 'subscription_details', subscription_details: { subscription: 'sub_monthly' } },

@@ -1,9 +1,11 @@
+import { createTestSandboxOrganisationPolicy } from '../helpers/organisation-financial-binding.js';
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { createTestDb } from '../helpers/test-db.js';
 
 type TestDb = NonNullable<Awaited<ReturnType<typeof createTestDb>>>;
+let billingScopeEpoch:Date;
 
 describe.skipIf(!process.env.DATABASE_URL)('pending Stripe fixed-seat capacity', () => {
   let db: TestDb;
@@ -33,7 +35,7 @@ describe.skipIf(!process.env.DATABASE_URL)('pending Stripe fixed-seat capacity',
       orgId, name: 'Checkout team', slug: 'checkout-team',
     } });
     teamId = team.id;
-    await db.prisma.billingTeamMode.create({ data: { teamId, sandbox: true, revision: 1 } });
+    billingScopeEpoch=await createTestSandboxOrganisationPolicy(db.prisma,orgId);
     const service = await db.prisma.billingService.create({ data: {
       identifier: 'pending-checkout-seats', name: 'Pending checkout seats',
     } });
@@ -68,7 +70,7 @@ describe.skipIf(!process.env.DATABASE_URL)('pending Stripe fixed-seat capacity',
 
   function checkout(id: string, quantity: number) {
     return {
-      billingModeTeamId: teamId, billingModeRevision: 1,
+      billingModeTeamId: teamId, billingModeRevision: 1,billingScopeEpoch,
       id, accountId, appKeyId, customerId, serviceId, tariffId,
       tariffSource: 'SERVICE_DEFAULT' as const, orgId, teamId: null,
       scope: 'ORGANISATION' as const, scopeKey: orgId, actorJti: id,

@@ -1,3 +1,4 @@
+import { createTestSandboxOrganisationPolicy } from '../helpers/organisation-financial-binding.js';
 import { createHash, randomUUID } from 'node:crypto';
 
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -16,6 +17,7 @@ import { createStripeInvoiceFixture } from '../helpers/stripe-payment-invoice-fi
 import { createTestDb } from '../helpers/test-db.js';
 
 type TestDb = NonNullable<Awaited<ReturnType<typeof createTestDb>>>;
+let billingScopeEpoch:Date;
 const pdf = Buffer.from('%PDF-1.7\nverified cash invoice\n%%EOF');
 class MemoryStorage implements BillingInvoicePdfStorage {
   readonly objects = new Map<string, Buffer>();
@@ -31,6 +33,7 @@ describe.skipIf(!process.env.DATABASE_URL)('actual Stripe cash source closes a c
   beforeAll(async () => {
     const created = await createTestDb(); if (!created) throw new Error('DATABASE_URL_REQUIRED');
     db = created;
+    vi.setSystemTime(new Date('2031-01-01T00:00:00Z')); // Future complete month; timers remain real.
     const suffix = randomUUID();
     const user = await db.prisma.user.create({ data: { email: `${suffix}@example.test`,
       userKey: `${suffix}@example.test` } });
@@ -48,7 +51,7 @@ describe.skipIf(!process.env.DATABASE_URL)('actual Stripe cash source closes a c
       actorIssuer: 'https://app.example.test', actorAudience: 'https://uoa.example.test', actorKeyId: 'cycle',
       actorPublicJwk: { kty: 'RSA', kid: 'cycle', n: 'AQAB', e: 'AQAB' } } });
     const modeTeam = await db.prisma.team.create({ data: { orgId: org.id, name: 'TEST billing team', slug: 'test-billing' } });
-    await db.prisma.billingTeamMode.create({ data: { teamId: modeTeam.id, sandbox: true, revision: 1 } });
+    billingScopeEpoch=await createTestSandboxOrganisationPolicy(db.prisma,org.id);
     const account = await db.prisma.billingStripeAccount.create({ data: {
       stripeAccountId: `acct_${suffix}`, livemode: false } });
     accountId = account.id;
@@ -56,30 +59,30 @@ describe.skipIf(!process.env.DATABASE_URL)('actual Stripe cash source closes a c
       accountId, orgId: org.id, teamId: null, scope: 'ORGANISATION', scopeKey: org.id,
       stripeCustomerId: 'cus_monthly' } });
     const checkout = await db.prisma.billingStripeCheckoutSession.create({ data: {
-      billingModeTeamId: modeTeam.id, billingModeRevision: 1,
+      billingModeTeamId: modeTeam.id, billingModeRevision: 1,billingScopeEpoch,
       accountId, appKeyId: key.id, customerId: customer.id, serviceId, tariffId: tariff.id,
       tariffSource: 'SERVICE_DEFAULT', orgId: org.id, teamId: null, scope: 'ORGANISATION', scopeKey: org.id,
       actorJti: randomUUID(), requestedByUserId: user.id, successUrlDigest: 'a'.repeat(64),
-      cancelUrlDigest: 'b'.repeat(64), leaseExpiresAt: new Date('2026-10-05T00:00:00Z') } });
+      cancelUrlDigest: 'b'.repeat(64), leaseExpiresAt: new Date('2030-10-05T00:00:00Z') } });
     const subscription = await db.prisma.billingStripeSubscription.create({ data: {
       accountId, checkoutId: checkout.id, customerId: customer.id, serviceId, tariffId: tariff.id,
       tariffSource: 'SERVICE_DEFAULT', orgId: org.id, teamId: null, scope: 'ORGANISATION', scopeKey: org.id,
       stripeSubscriptionId: 'sub_monthly', stripeMonthlyItemId: 'si_monthly', stripeUsageItemId: 'si_metered',
-      status: 'active', livemode: false, billableFrom: new Date('2026-08-01T00:00:00Z') } });
+      status: 'active', livemode: false, billableFrom: new Date('2030-08-01T00:00:00Z') } });
     subscriptionId = subscription.id;
     const prepared = await prepareBillingCycleClose({ source: { kind: 'stripe', id: subscriptionId },
-      billingMonth: '2026-08' }, { prisma: db.prisma,
+      billingMonth: '2030-08' }, { prisma: db.prisma,now:()=>new Date('2030-11-01T00:00:00Z'),
       discoverTeams: vi.fn().mockResolvedValue({ teamIds: [] }) });
     cycleId = prepared.cycleId;
   });
-  afterAll(async () => { await db?.cleanup(); });
+  afterAll(async () => { await db?.cleanup();vi.useRealTimers(); });
 
   it('does not turn an unpaid quote into an invoice', async () => {
     expect(await captureIssuedStripeBillingCycle({ cycleId }, { prisma: db.prisma, storage })).toBeNull();
     expect(await db.prisma.billingCustomerCycle.count({ where: { state: 'finalized' } })).toBe(0);
   });
   it('freezes actual VAT and paid cash, keeps October payment separate from August usage', async () => {
-    const fixture = await createStripeInvoiceFixture(db.prisma, accountId);
+    const fixture = await createStripeInvoiceFixture(db.prisma, accountId,undefined,2030);
     const prepared = await prepareStripePaymentInvoice(fixture.invoice.id, fixture.account,
       db.prisma, fixture.stripe);
     if (!prepared) throw new Error('SOURCE_REQUIRED');
@@ -91,7 +94,7 @@ describe.skipIf(!process.env.DATABASE_URL)('actual Stripe cash source closes a c
     const result = await captureIssuedStripeBillingCycle({ cycleId }, { prisma: db.prisma, storage });
     const row = await db.prisma.billingCustomerCycle.findUniqueOrThrow({ where: { id: result?.cycleId } });
     const value = row.publicSnapshot as unknown as BillingCycleDetailV2;
-    expect(value).toMatchObject({ state: 'finalized', period: { month: '2026-08' },
+    expect(value).toMatchObject({ state: 'finalized', period: { month: '2030-08' },
       totals: [{ subscription: { amount_minor: '2000' }, usage_charge: { amount_minor: '0' },
         tax: { amount_minor: '500' }, gross_total: { amount_minor: '2500' },
         credits_applied: { amount_minor: '500' }, total_due: { amount_minor: '2000' },
@@ -102,7 +105,7 @@ describe.skipIf(!process.env.DATABASE_URL)('actual Stripe cash source closes a c
     expect(await captureIssuedStripeBillingCycle({ cycleId: row.id }, { prisma: db.prisma, storage })).toEqual(result);
     expect(await db.prisma.billingCustomerCycle.count()).toBe(2);
     const source = await db.prisma.billingStripePaymentInvoice.findUniqueOrThrow({ where: { id: invoiceId } });
-    expect(source.paidAt.toISOString().slice(0, 7)).toBe('2026-10');
+    expect(source.paidAt.toISOString().slice(0, 7)).toBe('2030-10');
     expect(source.pdfSha256).toBe(createHash('sha256').update(pdf).digest('hex'));
   });
   it('rejects corrupted original legal bytes before creating another cycle', async () => {

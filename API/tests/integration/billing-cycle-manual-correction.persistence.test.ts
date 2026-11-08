@@ -1,3 +1,4 @@
+import { captureTestOrganisationFinancialBinding,createTestCapturedPaidLiability } from '../helpers/organisation-financial-binding.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
 
@@ -50,7 +51,7 @@ describe.skipIf(!enabled)('issued manual late receipt correction', () => {
   const storage = new MemoryStorage();
   const ids = { user: '', org: '', team: '', service: '', tariff: '', term: '',
     contract: '', version: '', issuer: '', buyer: '', invoice: '' };
-  const month = '2026-08';
+  const month = '2030-08';
   const rows: Array<{ dispatchId: string; receiptId: string; cost: string }> = [];
   let cost = '0';
   let originalCycleId = '';
@@ -80,7 +81,7 @@ describe.skipIf(!enabled)('issued manual late receipt correction', () => {
     const service = await db.prisma.billingService.create({ data: {
       identifier: process.env.BILLING_CONFORMANCE_PRODUCT ??
         `manual-correction-${randomUUID()}`, name: 'Customer service',
-      tariffHistoryFromMonth: '2026-01',
+      tariffHistoryFromMonth: '2030-01',
     } });
     ids.service = service.id;
     const tariff = await db.prisma.billingTariff.create({ data: {
@@ -91,9 +92,9 @@ describe.skipIf(!enabled)('issued manual late receipt correction', () => {
       markupBps: 3000, monthlyAmountMinor: 0n, currency: 'USD',
     } });
     ids.tariff = tariff.id;
-    const contract = await db.prisma.billingOrganisationContract.create({ data: {
+    const contract = await db.prisma.billingOrganisationContract.create({ data: { ...await captureTestOrganisationFinancialBinding(db.prisma,org.id),
       orgId: org.id, reference: `correction-${randomUUID()}`, name: 'Agreement',
-      status: 'ACTIVE', activatedAt: new Date('2026-08-01T00:00:00.000Z'),
+      status: 'ACTIVE', activatedAt: new Date('2030-08-01T00:00:00.000Z'),
     } });
     ids.contract = contract.id;
     const version = await db.prisma.billingOrganisationContractVersion.create({ data: {
@@ -119,12 +120,12 @@ describe.skipIf(!enabled)('issued manual late receipt correction', () => {
     ids.buyer = buyer.id;
   });
 
-  afterAll(async () => { await db?.cleanup(); });
+  afterAll(async () => { await db?.cleanup(); vi.unstubAllEnvs(); });
 
   async function settle(rawCost: string, ratedMicrocredits: bigint) {
     const dispatchId = `dispatch-${randomUUID()}`;
     const receiptId = `receipt-${randomUUID()}`;
-    await db.prisma.billingPaidUsageLiability.create({ data: {
+    await createTestCapturedPaidLiability(db.prisma,{ data: {
       dispatchId, receiptId, serviceId: ids.service,
       providerServiceId: 'provider-test', orgId: ids.org, teamId: ids.team,
       userId: ids.user, billingMonth: month, currency: 'USD',
@@ -148,8 +149,8 @@ describe.skipIf(!enabled)('issued manual late receipt correction', () => {
   function metering(product: string) {
     return { schemaVersion: 1 as const, product, groupBy: 'user' as const,
       scope: { organizationId: ids.org, teamId: ids.team, userId: null,
-        month, startsAt: '2026-08-01T00:00:00.000Z',
-        endsAt: '2026-09-01T00:00:00.000Z' },
+        month, startsAt: '2030-08-01T00:00:00.000Z',
+        endsAt: '2030-09-01T00:00:00.000Z' },
       calls: String(rows.length), lines: rows.length ? [{
         serviceId: 'provider-test', usageUnit: 'tokens', calls: String(rows.length),
         inputUnits: '1', cachedInputUnits: '0', outputUnits: '1',
@@ -160,7 +161,7 @@ describe.skipIf(!enabled)('issued manual late receipt correction', () => {
       }] : [], billingCompleteness: { state: 'complete' as const,
         unresolvedPaidAttempts: '0' },
       snapshot: { cursor: `cursor-${rows.length}`, id: `snap-${rows.length}`,
-        capturedAt: '2026-09-02T00:00:00.000Z', immutable: true as const,
+        capturedAt: '2030-09-02T00:00:00.000Z', immutable: true as const,
         sha256: 'a'.repeat(64) } };
   }
 
@@ -175,7 +176,7 @@ describe.skipIf(!enabled)('issued manual late receipt correction', () => {
       scope: { billing_product: product, organization_id: ids.org,
         team_id: ids.team, billing_month: month },
       snapshot: { cursor: `mpr_${'a'.repeat(32)}`,
-        captured_at: '2026-09-02T00:00:00.000Z', immutable: true as const },
+        captured_at: '2030-09-02T00:00:00.000Z', immutable: true as const },
       paid_receipt_count: String(rows.length), paid_receipt_sha256: digest.digest('hex'),
       zero_incremental_count: '0', zero_incremental_sha256:
         createHash('sha256').update('ledger-paid-receipt-set-v1:zero\n').digest('hex'),
@@ -187,11 +188,11 @@ describe.skipIf(!enabled)('issued manual late receipt correction', () => {
       id: ids.service,
     } })).identifier;
     return prepareBillingCycleClose({ source: quote().source, billingMonth: month }, {
-      prisma: db.prisma, now: () => new Date('2026-09-03T00:00:00.000Z'),
+      prisma: db.prisma, now: () => new Date('2030-09-03T00:00:00.000Z'),
       quote: vi.fn().mockResolvedValue(quote()),
       discoverTeams: vi.fn().mockResolvedValue({ teamIds: [ids.team], snapshot: {
         cursor: `teams-${rows.length}`, id: `teams-${rows.length}`,
-        capturedAt: '2026-09-02T00:00:00.000Z', sha256: 'b'.repeat(64),
+        capturedAt: '2030-09-02T00:00:00.000Z', sha256: 'b'.repeat(64),
       } }),
       fetchMetering: vi.fn().mockImplementation(async () => metering(product)),
       fetchPaidReceiptSet: vi.fn().mockImplementation(async () => proof(product)),
@@ -219,7 +220,7 @@ describe.skipIf(!enabled)('issued manual late receipt correction', () => {
       meteringRefs: { create: { serviceId: ids.service,
         ledgerSnapshotCursor: 'initial-ledger-coverage',
         ledgerSnapshotSha256: 'd'.repeat(64),
-        capturedAt: new Date('2026-09-02T00:00:00.000Z') } },
+        capturedAt: new Date('2030-09-02T00:00:00.000Z') } },
     } });
     ids.invoice = original.id;
     const line = await db.prisma.billingInvoiceLine.findFirstOrThrow({ where: {
@@ -242,7 +243,7 @@ describe.skipIf(!enabled)('issued manual late receipt correction', () => {
     } });
     await issueBillingInvoice({ invoiceId: original.id,
       actor: { email: 'operator@example.test' } }, { prisma: db.prisma,
-      storage, now: () => new Date('2026-09-04T00:00:00.000Z'),
+      storage, now: () => new Date('2030-09-04T00:00:00.000Z'),
       authorizeAdminEffect: vi.fn().mockResolvedValue(undefined) });
     const pending = await close();
     const captured = await captureIssuedManualBillingCycle({ cycleId: pending.cycleId,
@@ -279,7 +280,7 @@ describe.skipIf(!enabled)('issued manual late receipt correction', () => {
     ]);
     await issueBillingInvoice({ invoiceId: supplement.id,
       actor: { email: actor.email } }, { prisma: db.prisma, storage,
-      now: () => new Date('2026-09-05T00:00:00.000Z'),
+      now: () => new Date('2030-09-05T00:00:00.000Z'),
       authorizeAdminEffect: vi.fn().mockResolvedValue(undefined) });
     const captured = await captureIssuedManualBillingCycleCorrection({
       invoiceId: supplement.id,
@@ -304,8 +305,8 @@ describe.skipIf(!enabled)('issued manual late receipt correction', () => {
   });
 
   it('carries two settled half-cent wallet offsets across separate VAT supplements', async () => {
-    const stripe = await db.prisma.billingStripeAccount.create({ data: {
-      stripeAccountId: `acct_${randomUUID()}`, livemode: false } });
+    const contract=await db.prisma.billingOrganisationContract.findUniqueOrThrow({where:{id:ids.contract}});
+    const stripe=await db.prisma.billingStripeAccount.findUniqueOrThrow({where:{id:contract.billingAccountId??''}});
     const customer = await db.prisma.billingStripeCustomer.create({ data: {
       accountId: stripe.id, orgId: ids.org, teamId: null,
       scope: BillingAssignmentScope.ORGANISATION, scopeKey: ids.org } });
@@ -340,7 +341,7 @@ describe.skipIf(!enabled)('issued manual late receipt correction', () => {
         kind: 'ADJUSTMENT', amountMicrocredits: 20_000_000n,
         balanceAfterMicrocredits: 20_000_000n, currency: 'USD',
         idempotencyKey: fundingId, sourceType: 'credit_admin_adjustment',
-        sourceId: fundingId, occurredAt: new Date('2026-08-01T00:00:01.000Z'),
+        sourceId: fundingId, occurredAt: new Date('2030-08-01T00:00:01.000Z'),
       } });
     });
     const settlement = await db.prisma.billingCreditUsageSettlement.create({ data: {
@@ -360,7 +361,7 @@ describe.skipIf(!enabled)('issued manual late receipt correction', () => {
         teamId: ids.team, perspectiveServiceId: ids.service,
         perspectiveProduct: service.identifier, billingMonth: month,
         ledgerSnapshotId: snapshotId, ledgerSnapshotCursor: snapshotId,
-        capturedAt: new Date(`2026-09-0${sequence + 5}T00:00:00.000Z`),
+        capturedAt: new Date(`2030-09-0${sequence + 5}T00:00:00.000Z`),
         sha256: 'e'.repeat(64),
       } });
       const adjustmentId = randomUUID();
@@ -376,7 +377,7 @@ describe.skipIf(!enabled)('issued manual late receipt correction', () => {
           balanceAfterMicrocredits: 20_000_000n - cumulativeCredits,
           currency: 'USD', idempotencyKey: randomUUID(),
           sourceType: 'credit_usage_settlement_adjustment', sourceId: adjustmentId,
-          occurredAt: new Date(`2026-08-${sequence + 20}T00:00:00.000Z`),
+          occurredAt: new Date(`2030-08-${sequence + 20}T00:00:00.000Z`),
         } });
         await tx.billingCreditUsageSettlementAdjustment.create({ data: {
           id: adjustmentId, settlementId: settlement.id, accountId: stripe.id,
@@ -420,7 +421,7 @@ describe.skipIf(!enabled)('issued manual late receipt correction', () => {
       });
       await issueBillingInvoice({ invoiceId: supplement.id,
         actor: { email: actor.email } }, { prisma: db.prisma, storage,
-        now: () => new Date(`2026-09-0${sequence + 5}T00:00:00.000Z`),
+        now: () => new Date(`2030-09-0${sequence + 5}T00:00:00.000Z`),
         authorizeAdminEffect: vi.fn().mockResolvedValue(undefined) });
       supplementIds.push(supplement.id);
       const captured = await captureIssuedManualBillingCycleCorrection({

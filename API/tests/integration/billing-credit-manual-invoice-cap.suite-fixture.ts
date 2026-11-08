@@ -1,3 +1,4 @@
+import { captureTestOrganisationFinancialBinding,createTestCapturedPaidLiability } from '../helpers/organisation-financial-binding.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { BillingAppKeyPurpose } from '@prisma/client';
 import { afterAll, beforeAll, expect, vi } from 'vitest';
@@ -15,11 +16,11 @@ export const enabled = process.env.BILLING_FUNDING_DATABASE_TESTS === 'true' &&
 
 export type TestDb = NonNullable<Awaited<ReturnType<typeof createTestDb>>>;
 
-export const month = '2026-08';
+export const month = '2030-08';
 
-export const startsAt = '2026-08-01T00:00:00.000Z';
+export const startsAt = '2030-08-01T00:00:00.000Z';
 
-export const endsAt = '2026-09-01T00:00:00.000Z';
+export const endsAt = '2030-09-01T00:00:00.000Z';
 
 export class MemoryStorage implements BillingInvoicePdfStorage {
   private readonly bytes = new Map<string, Buffer>();
@@ -115,7 +116,7 @@ beforeAll(async () => {
       teamRole: 'owner' } });
     const service = await db.prisma.billingService.create({ data: {
       identifier: `manual-cap-${randomUUID()}`, name: 'Manual cap service',
-      tariffHistoryFromMonth: '2026-01',
+      tariffHistoryFromMonth: '2030-01',
     } });
     ids.service = service.id;
     const tariff = await db.prisma.billingTariff.create({ data: {
@@ -127,7 +128,7 @@ beforeAll(async () => {
     ids.tariff = tariff.id;
     await db.prisma.billingTariffTermEvent.create({ data: {
       serviceId: service.id, tariffId: tariff.id, source: 'SERVICE_DEFAULT',
-      scopeKey: service.id, effectiveFromMonth: '2026-01', reason: 'test_seed',
+      scopeKey: service.id, effectiveFromMonth: '2030-01', reason: 'test_seed',
     } });
     const appKey = await db.prisma.billingAppKey.create({ data: {
       serviceId: service.id, purpose: BillingAppKeyPurpose.CUSTOMER_LIFECYCLE,
@@ -138,22 +139,21 @@ beforeAll(async () => {
       checkoutReturnOrigins: ['https://test.example'],
     } });
     credential = { ...appKey, service } as typeof credential;
-    const account = await db.prisma.billingStripeAccount.create({ data: {
-      stripeAccountId: `acct_${randomUUID()}`, livemode: false,
-    } });
+    const binding=await captureTestOrganisationFinancialBinding(db.prisma,org.id);
+    const account=await db.prisma.billingStripeAccount.findUniqueOrThrow({where:{id:binding.billingAccountId}});
     ids.account = account.id;
     const customer = await db.prisma.billingStripeCustomer.create({ data: {
-      accountId: account.id, orgId: org.id, teamId: team.id,
-      scope: 'TEAM', scopeKey: `${org.id}:${team.id}`,
+      accountId: account.id, orgId: org.id, teamId: null,
+      scope: 'ORGANISATION', scopeKey: org.id,
     } });
     const wallet = await db.prisma.billingCreditAccount.create({ data: {
-        createdAt: new Date('2026-01-01T00:00:00Z'),
+        createdAt: new Date('2030-01-01T00:00:00Z'),
       accountId: account.id, customerId: customer.id, orgId: org.id,
-      teamId: team.id, scope: 'TEAM', scopeKey: `${org.id}:${team.id}`,
+      teamId: null, scope: 'ORGANISATION', scopeKey: org.id,
       currency: 'USD',
     } });
     ids.creditAccount = wallet.id;
-    const contract = await db.prisma.billingOrganisationContract.create({ data: {
+    const contract = await db.prisma.billingOrganisationContract.create({ data: { ...binding,
       orgId: org.id, reference: `manual-${randomUUID()}`, name: 'Manual cap agreement',
       status: 'ACTIVE', activatedAt: new Date(startsAt),
     } });
@@ -177,7 +177,7 @@ beforeAll(async () => {
     } });
     const dispatchId = `dispatch-${randomUUID()}`;
     const receiptId = `receipt-${randomUUID()}`;
-    await db.prisma.billingPaidUsageLiability.create({ data: {
+    await createTestCapturedPaidLiability(db.prisma,{ data: {
       dispatchId, receiptId, serviceId: service.id, providerServiceId: 'provider-test',
       orgId: org.id, teamId: team.id, userId: user.id, billingMonth: month,
       currency: 'USD', tariffId: tariff.id, frozenMarkupBps: 3000,
@@ -195,7 +195,7 @@ beforeAll(async () => {
         id: 'team-proof', cursor: 'team-proof', capturedAt: endsAt,
         sha256: 'a'.repeat(64) } }),
       fetchPaidReceiptSet: async () => proof(service.identifier),
-      now: () => new Date('2026-09-03T00:00:00.000Z'),
+      now: () => new Date('2030-09-03T00:00:00.000Z'),
     });
     ids.invoice = invoice.id;
     expect(await db.prisma.billingInvoicePaidReceipt.count({ where: {
@@ -204,9 +204,9 @@ beforeAll(async () => {
     await issueBillingInvoice({ invoiceId: invoice.id,
       actor: { email: 'operator@example.test' } }, {
       prisma: db.prisma, storage: new MemoryStorage(),
-      now: () => new Date('2026-09-04T00:00:00.000Z'),
+      now: () => new Date('2030-09-04T00:00:00.000Z'),
       authorizeAdminEffect: vi.fn().mockResolvedValue(undefined),
     });
   });
-afterAll(async () => { await db?.cleanup(); });
+afterAll(async () => { await db?.cleanup(); vi.unstubAllEnvs(); });
 }

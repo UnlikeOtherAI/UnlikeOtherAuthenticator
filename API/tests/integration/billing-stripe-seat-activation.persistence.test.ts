@@ -1,9 +1,11 @@
+import { createTestSandboxOrganisationPolicy } from '../helpers/organisation-financial-binding.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { syncBaseStripeSubscription } from '../../src/services/billing-stripe-subscription-projection.service.js';
 import { createTestDb } from '../helpers/test-db.js';
 
 type TestDb = NonNullable<Awaited<ReturnType<typeof createTestDb>>>;
+let billingScopeEpoch:Date;
 
 describe.skipIf(!process.env.DATABASE_URL)('Stripe per-seat activation projection', () => {
   let db: TestDb;
@@ -40,7 +42,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Stripe per-seat activation projectio
       },
     } });
     const modeTeam = await db.prisma.team.create({ data: { orgId: org.id, name: 'TEST billing team', slug: 'test-billing' } });
-    await db.prisma.billingTeamMode.create({ data: { teamId: modeTeam.id, sandbox: true, revision: 1 } });
+    billingScopeEpoch=await createTestSandboxOrganisationPolicy(db.prisma,org.id);
     const account = await db.prisma.billingStripeAccount.create({ data: {
       stripeAccountId: 'acct_stripe_seat', livemode: false,
     } });
@@ -59,7 +61,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Stripe per-seat activation projectio
       monthlyAmountMinor: 299n, stripeMonthlyPriceId: null,
     } });
     await db.prisma.billingStripeCheckoutSession.create({ data: {
-      billingModeTeamId: modeTeam.id, billingModeRevision: 1,
+      billingModeTeamId: modeTeam.id, billingModeRevision: 1,billingScopeEpoch,
       id: 'stripe_seat_checkout', accountId, appKeyId: appKey.id,
       customerId: customer.id, serviceId: service.id, tariffId: tariff.id,
       tariffSource: 'SERVICE_DEFAULT', orgId: org.id, teamId: null,

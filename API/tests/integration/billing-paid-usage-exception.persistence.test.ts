@@ -1,6 +1,7 @@
+import { captureTestOrganisationFinancialBinding } from '../helpers/organisation-financial-binding.js';
 import { createHash } from 'node:crypto';
 import { Prisma, type PrismaClient } from '@prisma/client';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it,vi } from 'vitest';
 
 import {
   getPaidUsageException, paidExceptionEvidenceDigest, registerPaidUsageException,
@@ -41,7 +42,8 @@ async function seed() {
     await tx.$executeRaw(Prisma.sql`INSERT INTO teams
       (id, org_id, name, slug, updated_at)
       VALUES (${ids.team}, ${ids.org}, 'Exception', 'exception', CURRENT_TIMESTAMP)`);
-    await tx.$executeRaw(Prisma.sql`INSERT INTO billing_team_modes(team_id,sandbox,revision) VALUES (${ids.team},true,1)`);
+    await tx.$executeRaw(Prisma.sql`INSERT INTO billing_organisation_modes(org_id,sandbox,revision) VALUES (${ids.org},true,1)`);
+    await tx.$executeRaw(Prisma.sql`INSERT INTO billing_organisation_mode_events(org_id,sandbox,revision) VALUES (${ids.org},true,1)`);
     await tx.$executeRaw(Prisma.sql`INSERT INTO domain_roles (domain, user_id, role)
       VALUES ('authentication.unlikeotherai.com', ${ids.user}, 'SUPERUSER')`);
     await tx.$executeRaw(Prisma.sql`INSERT INTO billing_services
@@ -54,16 +56,16 @@ async function seed() {
         'STANDARD', 'NONE', 0, 'USD', 'PREPAID')`);
     await tx.$executeRaw(Prisma.sql`INSERT INTO billing_stripe_accounts
       (id, stripe_account_id, livemode, updated_at)
-      VALUES (${ids.account}, 'acct_paid_exception', false, CURRENT_TIMESTAMP)`);
+      VALUES (${ids.account}, 'acct_PaidException', false, CURRENT_TIMESTAMP)`);
     await tx.$executeRaw(Prisma.sql`INSERT INTO billing_stripe_customers
       (id, account_id, org_id, team_id, scope, scope_key, updated_at)
-      VALUES (${ids.customer}, ${ids.account}, ${ids.org}, ${ids.team},
-        'TEAM', ${`${ids.org}:${ids.team}`}, CURRENT_TIMESTAMP)`);
+      VALUES (${ids.customer}, ${ids.account}, ${ids.org}, NULL,
+        'ORGANISATION', ${ids.org}, CURRENT_TIMESTAMP)`);
     await tx.$executeRaw(Prisma.sql`INSERT INTO billing_credit_accounts
       (id, account_id, customer_id, org_id, team_id, scope, scope_key,
         currency, balance_microcredits, updated_at)
       VALUES (${ids.credit}, ${ids.account}, ${ids.customer}, ${ids.org},
-        ${ids.team}, 'TEAM', ${`${ids.org}:${ids.team}`}, 'USD', 100,
+        NULL, 'ORGANISATION', ${ids.org}, 'USD', 100,
         CURRENT_TIMESTAMP)`);
   });
   await prisma.billingLedgerRuntimeKey.create({ data: {
@@ -77,6 +79,7 @@ async function seed() {
 async function createDispatch(dispatchId: string, paymentMode: 'PREPAID' | 'PAY_AS_YOU_GO') {
   const startedAt = new Date('2026-10-04T12:00:00.000Z');
   await prisma.billingCreditBudgetDispatch.create({ data: {
+    ...await captureTestOrganisationFinancialBinding(prisma,ids.org,{stripeAccountId:'acct_PaidException',livemode:false}),
     dispatchId, contextDigest, serviceId: ids.service, providerServiceId: 'openai',
     orgId: ids.org, teamId: ids.team, userId: ids.user, billingMonth: '2026-10',
     currency: 'USD', tariffId: ids.tariff, frozenMarkupBps: 0,
@@ -113,7 +116,7 @@ describe.skipIf(!enabled)('paid usage operator exception PostgreSQL proof', () =
     cleanup = db.cleanup;
     await seed();
   });
-  afterAll(async () => { if (cleanup) await cleanup(); });
+  afterAll(async () => { if (cleanup) await cleanup();vi.unstubAllEnvs(); });
 
   for (const mode of ['PREPAID', 'PAY_AS_YOU_GO'] as const) {
     it(`holds ${mode} overbound evidence then books gross and waives only excess`, async () => {

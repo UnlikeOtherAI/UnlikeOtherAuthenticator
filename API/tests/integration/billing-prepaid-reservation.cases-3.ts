@@ -13,7 +13,7 @@ export function registerCases3() {
     const tariff = await prisma.billingTariff.findUniqueOrThrow({ where: { id: ids.tariff } });
     expect((await readCycleCreditEvidence(prisma, {
       orgId: ids.org, teamId: ids.team, serviceId: ids.service,
-      billingMonth: '2026-10', payer: BillingAssignmentScope.TEAM,
+      billingMonth: '2026-10', payer: BillingAssignmentScope.ORGANISATION,
       tariff, ratedAmount: '0.0000000013', rawLines: [{
         billingDisposition: 'paid', selectedProviderCost: '0.0000000013',
       }] as never,

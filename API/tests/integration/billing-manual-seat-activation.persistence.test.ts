@@ -1,4 +1,5 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { captureTestOrganisationFinancialBinding } from '../helpers/organisation-financial-binding.js';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { getAdminAuthDomain } from '../../src/config/env.js';
 import {
@@ -48,7 +49,7 @@ describe.skipIf(!process.env.DATABASE_URL)('manual per-seat source activation', 
     } });
     automaticServiceId = automaticService.id;
     fixedServiceId = fixedService.id;
-    const contract = await db.prisma.billingOrganisationContract.create({ data: {
+    const contract = await db.prisma.billingOrganisationContract.create({ data: { ...await captureTestOrganisationFinancialBinding(db.prisma,org.id),
       orgId: org.id, reference: 'monthly-seat-agreement', name: 'Monthly seats',
     } });
     contractId = contract.id;
@@ -58,7 +59,7 @@ describe.skipIf(!process.env.DATABASE_URL)('manual per-seat source activation', 
     } });
     versionId = version.id;
   });
-  afterAll(async () => { if (db) await db.cleanup(); });
+  afterAll(async () => { if (db) await db.cleanup(); vi.unstubAllEnvs(); });
 
   it('captures roster now, freezes future commercial terms, and holds unclosed liability', async () => {
     const services = [

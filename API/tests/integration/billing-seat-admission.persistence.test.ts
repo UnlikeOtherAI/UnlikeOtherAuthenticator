@@ -1,5 +1,6 @@
+import { captureTestOrganisationFinancialBinding } from '../helpers/organisation-financial-binding.js';
 import { Prisma, PrismaClient } from '@prisma/client';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { createTestDb } from '../helpers/test-db.js';
 import { getAdminAuthDomain } from '../../src/config/env.js';
@@ -36,11 +37,11 @@ async function makeSeatSubscription(
     seatChargeTiming: options.timing ?? 'PRORATED', monthlyAmountMinor: 1000n,
   } });
   const contract = await prisma.billingOrganisationContract.create({
-    data: { orgId, reference: id, name: id },
+    data: { ...await captureTestOrganisationFinancialBinding(prisma,orgId), orgId, reference: id, name: id },
   });
   const version = await prisma.billingOrganisationContractVersion.create({ data: {
     contractId: contract.id, version: 1, usageMarkupBps: 3000, currency: 'USD',
-    paymentTermsDays: 30, effectiveFromMonth: '2026-11',
+    paymentTermsDays: 30, effectiveFromMonth: '2030-11',
   } });
   const term = await prisma.billingContractServiceTerm.create({ data: {
     contractVersionId: version.id, serviceId: service.id, tariffId: tariff.id,
@@ -85,7 +86,7 @@ describe.skipIf(!enabled)('authoritative seat admission and evidence', () => {
     await prisma.teamMember.create({ data: { teamId, userId: ownerId, teamRole: 'owner' } });
     await prisma.teamMember.create({ data: { teamId: otherTeamId, userId: ownerId, teamRole: 'owner' } });
   });
-  afterAll(async () => { if (db) await db.cleanup(); });
+  afterAll(async () => { if (db) await db.cleanup(); vi.unstubAllEnvs(); });
 
   it('captures a zero-capable baseline and tracks team and organisation human intervals', async () => {
     await makeSeatSubscription('seat_auto_org', { policy: 'AUTOMATIC', scope: 'ORGANISATION' });
