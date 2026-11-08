@@ -72,7 +72,9 @@ export function domainTeamAvatarImageUrl(params: {
  *
  * `?v=` is the team row's `updatedAt`, which an avatar upload or removal moves too (§11.4). The
  * route lets a browser keep a generated image for a day under one URL, so a new logo has to be a
- * new URL. Only a reader entitled to the team is handed one; the route never reads it.
+ * new URL. The route never reads it. Since 2026-11-08 `POST /public/teams/lookup` also hands it to
+ * any holder of the team id (a team id → display fields is not a secret), so the version can tell such
+ * a caller when the team row last changed.
  */
 export function publicTeamAvatarImageUrl(params: {
   baseUrl?: string | null;
