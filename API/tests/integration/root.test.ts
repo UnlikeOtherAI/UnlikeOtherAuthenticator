@@ -426,8 +426,8 @@ describe('GET /llm', () => {
     expect(res.body).toContain('authorized app-key ID');
     expect(res.body).toContain('/billing/v1/effective-tariff');
     expect(res.body).toContain('"collection_mode": "stripe"');
-    expect(res.body).toContain('Shared team credits and recurring add-ons');
-    expect(res.body).toContain('Remaining credits');
+    expect(res.body).toContain('Organisation credits and recurring add-ons');
+    expect(res.body).toContain('/billing/v1/organisation/overview');
     expect(res.body).toContain('/billing/v1/credits');
     expect(res.body).toContain('/billing/v1/recurring-addons');
     expect(res.body).toContain('DELETE /internal/admin/organisations/:orgId');

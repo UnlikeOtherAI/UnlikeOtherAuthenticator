@@ -65,7 +65,7 @@ describe.skipIf(!enabled)('SalesNerd research-job grants', () => {
         ('sales-job-grant-other-subject', 'other-grant@example.com', 'other-grant@example.com', 'Other')`);
       await tx.$executeRaw(Prisma.sql`INSERT INTO organisations
         (id, domain, name, slug, owner_id, updated_at) VALUES
-        (${orgId}, ${sourceDomain}, 'Grant test', 'sales-job-grant', ${subjectId}, CURRENT_TIMESTAMP)`);
+        (${orgId}, ${sourceDomain}, 'Grant test', 'sales-job-grant', 'sales-job-grant-other-subject', CURRENT_TIMESTAMP)`);
       await tx.$executeRaw(Prisma.sql`INSERT INTO teams
         (id, org_id, name, slug, updated_at) VALUES
         (${teamId}, ${orgId}, 'Grant test', 'sales-job-grant', CURRENT_TIMESTAMP)`);
@@ -74,8 +74,8 @@ describe.skipIf(!enabled)('SalesNerd research-job grants', () => {
         ('sales-job-grant-other-team', ${orgId}, 'Other team', 'sales-job-grant-other', CURRENT_TIMESTAMP)`);
       await tx.$executeRaw(Prisma.sql`INSERT INTO org_members
         (id, org_id, user_id, domain, role, updated_at) VALUES
-        ('sales-job-grant-org-member', ${orgId}, ${subjectId}, ${sourceDomain}, 'owner', CURRENT_TIMESTAMP),
-        ('sales-job-grant-other-org-member', ${orgId}, 'sales-job-grant-other-subject', ${sourceDomain}, 'member', CURRENT_TIMESTAMP)`);
+        ('sales-job-grant-org-member', ${orgId}, ${subjectId}, ${sourceDomain}, 'member', CURRENT_TIMESTAMP),
+        ('sales-job-grant-other-org-member', ${orgId}, 'sales-job-grant-other-subject', ${sourceDomain}, 'owner', CURRENT_TIMESTAMP)`);
       await tx.$executeRaw(Prisma.sql`INSERT INTO team_members
         (id, team_id, user_id, team_role, updated_at) VALUES
         ('sales-job-grant-team-member', ${teamId}, ${subjectId}, 'owner', CURRENT_TIMESTAMP),

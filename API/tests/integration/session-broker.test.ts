@@ -46,8 +46,10 @@ describe.skipIf(!process.env.DATABASE_URL)('durable Selkie broker validation', (
       actorIssuer: resource, actorAudience: `${issuer}/billing/v1/effective-tariff`, actorKeyId: 'test',
       actorPublicJwk: {}, checkoutReturnOrigins: [resource] } });
     await db.prisma.domainRole.create({ data: { domain: 'api.selkie.live', userId, role: 'USER' } });
-    const org = await db.prisma.organisation.create({ data: { domain: source, ownerId: user.id, name: 'Test', slug: randomUUID() } }); orgId = org.id;
-    await db.prisma.orgMember.create({ data: { orgId, userId, role: 'owner' } });
+    const owner=await db.prisma.user.create({data:{email:`${randomUUID()}@example.test`,userKey:randomUUID()}});
+    const org = await db.prisma.organisation.create({ data: { domain: source, ownerId: owner.id, name: 'Test', slug: randomUUID() } }); orgId = org.id;
+    await db.prisma.orgMember.create({ data: { orgId,userId:owner.id,role:'owner' } });
+    await db.prisma.orgMember.create({ data: { orgId, userId, role: 'member' } });
     const team = await db.prisma.team.create({ data: { orgId, name: 'Test', slug: randomUUID() } }); teamId = team.id;
     await db.prisma.teamMember.create({ data: { teamId, userId, teamRole: 'owner' } });
     await db.prisma.domainRole.create({ data: { domain: source, userId, role: 'USER' } });
@@ -57,7 +59,7 @@ describe.skipIf(!process.env.DATABASE_URL)('durable Selkie broker validation', (
   async function token(overrides = {}) {
     return signConfidentialAccessToken({ subject: userId, credentialEpoch: 0, email: 'test@example.com',
       sourceDomain: source, product: 'coder', resource, issuer, ttlSeconds: 300, scope: 'session:broker',
-      active: { orgId, teamId }, org: { org_id: orgId, tenant_slug: 'test', org_role: 'owner',
+      active: { orgId, teamId }, org: { org_id: orgId, tenant_slug: 'test', org_role: 'member',
         teams: [teamId], team_roles: { [teamId]: 'owner' } }, ...overrides });
   }
   const validate = (value: string, domain = 'api.selkie.live', enabled = true) => validateSessionBroker({ token: value, targetConfig: { domain, org_features: { enabled } } }, { prisma: db.prisma });

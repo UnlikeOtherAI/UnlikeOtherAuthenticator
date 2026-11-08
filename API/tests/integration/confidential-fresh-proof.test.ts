@@ -144,9 +144,10 @@ describe('fresh confidential independent proof before floor enrollment', () => {
   it.each(['membership', 'enterprise', 'epoch', 'custody'] as const)('checks current %s before any proof-bearing switch edge', async reason => {
     const f = await fixture({ selected: true }); const original = tokenBody.parse((await f.exchange(await f.login())).json());
     const before = await f.db.refreshToken.findUniqueOrThrow({ where: { tokenHash: hashRefreshToken(original.refresh_token, TEST_SHARED_SECRET) } });
-    const org = await f.db.organisation.create({ data: { domain: f.domain, ownerId: f.user.id, name: 'Target org', slug: randomUUID() } });
+    const owner=reason==='membership'?await f.db.user.create({data:{email:`${randomUUID()}@example.test`,userKey:randomUUID()}}):f.user;
+    const org = await f.db.organisation.create({ data: { domain: f.domain, ownerId: owner.id, name: 'Target org', slug: randomUUID() } });
     const team = await f.db.team.create({ data: { orgId: org.id, name: 'Target team', slug: randomUUID() } });
-    await f.db.orgMember.create({ data: { orgId: org.id, userId: f.user.id, role: 'owner' } });
+    await f.db.orgMember.create({ data: { orgId: org.id, userId: f.user.id, role: reason==='membership'?'member':'owner' } });
     if (reason !== 'membership') await f.db.teamMember.create({ data: { teamId: team.id, userId: f.user.id, teamRole: 'admin' } });
     if (reason === 'enterprise') await f.db.orgSsoPolicy.create({ data: { clientDomain: f.domain, orgId: org.id,
       arrangementEnabled: true, enforcement: 'required_for_all_members' } });

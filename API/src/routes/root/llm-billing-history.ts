@@ -83,7 +83,7 @@ Platform superusers create exact organisation/team one-time or monthly add-ons a
 credits in UOA Admin. Values are integer minor-currency strings, audited, and
 deactivated rather than deleted. Ledger never receives them.
 
-### Shared team credits and recurring add-ons
+### Organisation credits and recurring add-ons
 
 \`POST /billing/v1/credits\` and both customer-statement versions are superseded
 team aggregate reads. They authenticate current financial authority, then return
