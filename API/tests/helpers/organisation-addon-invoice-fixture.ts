@@ -43,7 +43,7 @@ export async function seedOrganisationAddonInvoices(db:PrismaClient) {
       pretax_credit_amounts:[],taxes:[],period:{start:startsAt.getTime()/1000,end:endsAt.getTime()/1000},
       parent:{type:'subscription_item_details',subscription_item_details:{proration:false,subscription:remote.id,subscription_item:item.id}},
       pricing:{price_details:{price:'price_privacy'},unit_amount_decimal:'5000'}};
-    const invoice={id:`in_addon_${suffix}`,object:'invoice',livemode:true,status:'paid',customer:'cus_controls',currency:'usd',
+    const invoice={id:`in_addon_${suffix}`,object:'invoice',created:startsAt.getTime()/1000,livemode:true,status:'paid',customer:'cus_controls',currency:'usd',
       parent:{type:'subscription_details',subscription_details:{subscription:remote.id,metadata}},billing_reason:'subscription_create',
       collection_method:'charge_automatically',amount_due:5000,amount_paid:5000,amount_remaining:0,subtotal:5000,total:5000,
       starting_balance:0,amount_shipping:0,pre_payment_credit_notes_amount:0,post_payment_credit_notes_amount:0,discounts:[],
@@ -56,9 +56,11 @@ export async function seedOrganisationAddonInvoices(db:PrismaClient) {
   let event:unknown;
   const sourceFor=(id:string)=>sources.find(row=>[row.invoice.id,row.remote.id,`pi_addon_${row.suffix}`,`ch_addon_${row.suffix}`].includes(id))!;
   const stripe={accounts:{retrieveCurrent:vi.fn().mockResolvedValue({id:account.stripeAccountId})},
-    subscriptions:{retrieve:vi.fn(async(id:string)=>sourceFor(id).remote)},invoices:{retrieve:vi.fn(async(id:string)=>sourceFor(id).invoice)},
-    invoicePayments:{list:vi.fn(async({invoice}:{invoice:string})=>{const source=sourceFor(invoice);return {data:[{
-      id:`inpay_addon_${source.suffix}`,invoice,livemode:true,currency:'usd',status:'paid',amount_paid:5000,
+    subscriptions:{retrieve:vi.fn(async(id:string)=>sourceFor(id).remote)},invoices:{retrieve:vi.fn(async(id:string)=>sourceFor(id).invoice),
+      list:vi.fn(async({subscription}:{subscription:string})=>({data:sources.filter(row=>row.remote.id===subscription).map(row=>row.invoice),has_more:false}))},
+    invoicePayments:{list:vi.fn(async(input:{invoice?:string;payment?:{payment_intent:string}})=>{
+      const source=sourceFor(input.invoice??input.payment!.payment_intent);return {data:[{
+      id:`inpay_addon_${source.suffix}`,invoice:source.invoice.id,livemode:true,currency:'usd',status:'paid',amount_paid:5000,
       payment:{type:'payment_intent',payment_intent:`pi_addon_${source.suffix}`},status_transitions:{paid_at:paidAt.getTime()/1000}}],has_more:false};})},
     paymentIntents:{retrieve:vi.fn(async(id:string)=>({id,latest_charge:`ch_addon_${sourceFor(id).suffix}`,customer:'cus_controls',currency:'usd',
       livemode:true,status:'succeeded',amount_received:5000}))},

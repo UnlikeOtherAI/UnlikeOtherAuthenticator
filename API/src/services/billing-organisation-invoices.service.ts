@@ -3,6 +3,7 @@ import { Prisma,type PrismaClient } from '@prisma/client';
 import type { BillingOrganisationFinancialTypes } from '../contracts/billing-statement-v1.js';
 import { AppError } from '../utils/errors.js';
 import type { BillingCycleContext } from './billing-cycle-read.service.js';
+import { assertAddonInvoiceHistoryComplete } from './billing-addon-invoice-recovery.service.js';
 import { authorizeBillingCycle } from './billing-cycle-authority.service.js';
 import { localizeCustomerInvoiceDetail,localizeCustomerInvoiceSummary } from './billing-customer-invoice-display.service.js';
 import { projectPrepaidCustomerInvoiceDetail,projectPrepaidCustomerInvoiceSummary } from './billing-customer-invoice-prepaid.service.js';
@@ -27,6 +28,7 @@ async function adjustments(db:PrismaClient,rows:Array<{accountId:string;stripePa
 export async function listOrganisationInvoices(context:BillingCycleContext,
   input:{chargeMonth:string;limit?:number;cursor?:string},db:PrismaClient,now=new Date()):Promise<List> {
   await authorizeBillingCycle(context,{prisma:db});const account=await organisationHistoryAccount(context,db);
+  await assertAddonInvoiceHistoryComplete(db,context.request.organisationId,account.id,account.livemode);
   const limit=input.limit??20;if(!Number.isSafeInteger(limit)||limit<1||limit>50)throw new AppError('BAD_REQUEST',400,'BILLING_INVOICE_LIMIT_INVALID');
   const {start,end}=monthPeriod(input.chargeMonth),binding=historyCursorBinding(context,account.id,`invoices:${input.chargeMonth}`);
   const cursor=decodeOrganisationInvoiceCursor(input.cursor,binding);

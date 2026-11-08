@@ -137,11 +137,44 @@ currency, with actual confirmed cash. Missing or overlapping invoice periods,
 unresolved refunds/disputes, and retained TEAM payers hold that bill section.
 These checks do not imply that an active flag proves payment.
 
-Pre-existing add-on payment history that has not been captured in this source
-still needs original-provider invoice recovery before history can be declared
-complete. No historical entitlement, money or subscription is copied into the
-ORG payer by this migration. The bounded recovery workflow and production
-completeness verification remain rollout prerequisites.
+Pre-existing add-on payment history must finish original-provider invoice
+recovery before history can be declared complete. Migration
+`20261108024000_addon_invoice_recovery` queues original subscription/account/mode
+bindings, including historical TEAM customers. The worker reads one subscription
+and at most20 provider invoices per tick, retains an immutable scan watermark,
+and commits genuine invoice/cash sources and its cursor together under a lease.
+It retries temporary failures without deleting or resetting a source. Captured
+credentials remain usable independently of new collection admission. No old
+entitlement, balance, consent, customer or subscription is moved into ORG.
+
+Invoice LIST returns409 `BILLING_ADDON_HISTORY_RECONCILIATION_REQUIRED` while a
+source in that exact org/account/mode remains incomplete. This is a history
+reconciliation state, not a stale action context or an empty history. Confirmed
+invoice DETAIL/PDF remains independently accessible. Existing base invoice
+history is unaffected when no captured add-on source needs recovery.
+
+Before completion, the worker checks original cash for prior refunds/disputes.
+A missing refund movement remains held until the existing verified webhook/cash
+path proves it; it never invents a webhook ID. Historical disputed charges remain
+held for separate original-source reconciliation. Incomplete invoice pages,
+unknown metadata/period/tax terms or unavailable provider permissions also remain
+held. The original subscription and financial records remain unchanged.
+
+The operator can preview one exact tuple using the existing secure API/DB
+bindings, without provider mutations or database writes:
+
+```sh
+pnpm --filter @uoa/api billing:recover-addon-invoices --mode sandbox --account acct_1Sn2VfGY1l8e0vu2 --organisation <exact-org-id> --dry-run
+```
+
+Only after reviewing that scope, `--apply --max-cycles 3` in place of `--dry-run`
+appends verified original sources and advances at most three bounded pages. It
+does not charge, refund, create a subscription or alter a provider object. Its
+inventory is explicitly from before the operation; repeat `--dry-run` afterward
+and inspect canonical holds/completeness. The periodic worker also resumes due
+work automatically. These source-recovery commands are separate from retained
+positive-wallet disposition and do not release that gate. Production execution
+and final completeness verification remain parent/operator prerequisites.
 
 New base and ordinary add-on subscription checkouts use an ORG provider customer
 key of `<org-id>:billing:<ISO-currency>` under the exact captured account/mode.

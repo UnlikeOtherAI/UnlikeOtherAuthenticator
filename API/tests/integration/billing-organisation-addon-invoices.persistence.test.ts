@@ -8,6 +8,7 @@ import { listCustomerInvoices,getCustomerInvoiceDetail,downloadCustomerInvoice }
 import type { BillingCycleContext } from '../../src/services/billing-cycle-read.service.js';
 import type { BillingInvoicePdfStorage } from '../../src/services/billing-invoice-storage.service.js';
 import { readOrganisationAccruedBill } from '../../src/services/billing-organisation-accrual.service.js';
+import { runAddonInvoiceRecoveryCycle } from '../../src/services/billing-addon-invoice-recovery.service.js';
 vi.mock('../../src/services/billing-actor.service.js',()=>({verifyBillingActor:async()=>({})}));
 describe.skipIf(process.env.BILLING_FUNDING_DATABASE_TESTS!=='true')('actual add-on invoice financial sources',()=>{
   let handle:NonNullable<Awaited<ReturnType<typeof createTestDb>>>,seed:Awaited<ReturnType<typeof seedOrganisationAddonInvoices>>;
@@ -43,7 +44,13 @@ describe.skipIf(process.env.BILLING_FUNDING_DATABASE_TESTS!=='true')('actual add
     expect(await handle.prisma.billingCreditEntry.count()).toBe(0);
   });
   it('reads financial history for both entitlement teams and downloads the exact captured PDF',async()=>{
-    const p=handle.prisma,list=await listCustomerInvoices(context,{chargeMonth:'2030-01'},{prisma:p});
+    const p=handle.prisma;
+    await expect(listCustomerInvoices(context,{chargeMonth:'2030-01'},{prisma:p})).rejects.toThrow('BILLING_ADDON_HISTORY_RECONCILIATION_REQUIRED');
+    const known=await p.billingStripePaymentInvoice.findFirstOrThrow();
+    expect((await getCustomerInvoiceDetail(context,`stripe:${known.id}`,{prisma:p})).document_available).toBe(true);
+    for(let index=0;index<2;index++)expect(await runAddonInvoiceRecoveryCycle({prisma:p,now:()=>new Date('2030-01-08'),
+      runtime:async()=>({client:seed.stripe,livemode:true,webhookSecret:'fixture'})})).toMatchObject({completed:1,held:0});
+    const list=await listCustomerInvoices(context,{chargeMonth:'2030-01'},{prisma:p});
     expect(list.invoices).toHaveLength(2);expect(list.invoices.every(row=>row.scope.scope_type==='organisation'&&row.scope.team_id===null)).toBe(true);
     const id=list.invoices[0]!.invoice_id,detail=await getCustomerInvoiceDetail(context,id,{prisma:p});
     expect(detail.charges[0]?.label).toBe('Private research');expect(detail.totals.total_paid.amount_minor).toBe('5000');

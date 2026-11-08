@@ -1417,6 +1417,7 @@ model Organisation {
   billingCreditAutoTopUpDisables    BillingCreditAutoTopUpDisableEvent[]
   recurringAddonCheckouts           BillingRecurringAddonCheckout[]
   recurringAddonSubscriptions       BillingRecurringAddonSubscription[]
+  addonInvoiceRecoveries BillingAddonInvoiceRecovery[]
   recurringAddonCancellationIntents BillingRecurringAddonCancellationIntent[]
   billingContracts                  BillingOrganisationContract[]
   billingInvoiceProfiles            BillingOrganisationInvoiceProfile[]
@@ -2309,6 +2310,7 @@ model BillingStripeAccount {
   creditConsentRevisions            BillingCreditAutoTopUpConsentRevision[]
   creditAutoTopUpDisables           BillingCreditAutoTopUpDisableEvent[]
   stripePaymentInvoices            BillingStripePaymentInvoice[]
+  addonInvoiceRecoveries BillingAddonInvoiceRecovery[]
   creditPaymentInvoices            BillingCreditPaymentInvoice[]
   creditInvoiceTaxPolicies         BillingCreditInvoiceTaxPolicy[]
   recurringAddonCatalogs            BillingRecurringAddonCatalog[]
@@ -4747,6 +4749,7 @@ model BillingRecurringAddonSubscription {
   cancellationIntents    BillingRecurringAddonCancellationIntent[]
   contractInvoiceLines   BillingInvoiceAddonLine[]
   paymentInvoices BillingStripePaymentInvoice[]
+  invoiceRecovery BillingAddonInvoiceRecovery?
 
   @@unique([accountId, stripeSubscriptionId])
   @@unique([accountId, stripeItemId])
@@ -4757,6 +4760,30 @@ model BillingRecurringAddonSubscription {
   @@index([teamId])
   @@index([subscribingUserId])
   @@map("billing_recurring_addon_subscriptions")
+}
+
+// Original provider invoice scan progress; no entitlement or money is migrated.
+model BillingAddonInvoiceRecovery {
+  subscriptionId String @id @map("subscription_id")
+  accountId String @map("account_id")
+  orgId String @map("org_id")
+  livemode Boolean
+  scanBefore DateTime? @map("scan_before") @db.Timestamptz(3)
+  cursor String? @db.VarChar(255)
+  complete Boolean @default(false)
+  completedAt DateTime? @map("completed_at") @db.Timestamptz(3)
+  leaseToken String? @map("lease_token") @db.Uuid
+  leaseExpiresAt DateTime? @map("lease_expires_at") @db.Timestamptz(3)
+  nextAttemptAt DateTime @default(now()) @map("next_attempt_at") @db.Timestamptz(3)
+  attemptCount Int @default(0) @map("attempt_count")
+  holdReason String? @map("hold_reason") @db.VarChar(160)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(3)
+  subscription BillingRecurringAddonSubscription @relation(fields:[subscriptionId],references:[id],onDelete:Restrict)
+  account BillingStripeAccount @relation(fields:[accountId],references:[id],onDelete:Restrict)
+  org Organisation @relation(fields:[orgId],references:[id],onDelete:Restrict)
+  @@index([complete,nextAttemptAt],map:"billing_addon_invoice_recovery_due")
+  @@map("billing_addon_invoice_recoveries")
 }
 
 // A cancellation preview is a single-use, replay-safe capability bound to the
