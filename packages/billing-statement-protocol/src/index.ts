@@ -252,3 +252,7 @@ export * from './organisation-overview-fixture.js';
 export * from './organisation-overview-openapi.js';
 export * from './organisation-financial-types.js';
 export * from './organisation-financial-schema.js';
+export * from './billing-authority-types.js';
+export * from './billing-authority-schema.js';
+export * from './billing-authority-fixture.js';
+export * from './billing-authority-openapi.js';

@@ -5,6 +5,10 @@ import { fileURLToPath } from 'node:url';
 import { normalizeArtifactLineEndings, serializeArtifact } from './artifact-text.mjs';
 
 import {
+  billingAuthorityV1JsonSchema,
+  billingAuthorityV1OpenApiDocument,
+  billingCapabilitiesV2ConformanceFixtures,
+  billingTeamOverviewV1ConformanceFixture,
   billingOrganisationFinancialV1JsonSchema,
   billingOrganisationProtocolV1JsonSchema,
   billingOrganisationV1OpenApiDocument,
@@ -47,6 +51,12 @@ import {
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const artifacts = new Map([
+  [resolve(packageRoot, 'schema/billing-authority-v1.json'), billingAuthorityV1JsonSchema],
+  [resolve(packageRoot, 'openapi/billing-authority-v1.openapi.json'), billingAuthorityV1OpenApiDocument],
+  [resolve(packageRoot, 'fixtures/billing-authority-v1.example.json'), {
+    capabilities: billingCapabilitiesV2ConformanceFixtures,
+    team_overview: billingTeamOverviewV1ConformanceFixture,
+  }],
   [resolve(packageRoot, 'schema/billing-organisation-financial-v1.json'), billingOrganisationFinancialV1JsonSchema],
   [resolve(packageRoot, 'schema/billing-organisation-v1.json'), billingOrganisationProtocolV1JsonSchema],
   [resolve(packageRoot, 'openapi/billing-organisation-v1.openapi.json'), billingOrganisationV1OpenApiDocument],

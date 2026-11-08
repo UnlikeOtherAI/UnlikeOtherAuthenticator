@@ -1,6 +1,6 @@
 {
   "name": "@unlikeotherai/billing-statement-protocol",
-  "version": "6.3.0",
+  "version": "6.4.0",
   "description": "Public UOA billing statement and customer-action consumer contracts",
   "license": "MIT",
   "type": "module",
@@ -24,6 +24,9 @@
     "ORGANISATION-BILLING.md"
   ],
   "exports": {
+    "./schema/billing-authority-v1.json": "./schema/billing-authority-v1.json",
+    "./fixtures/billing-authority-v1.example.json": "./fixtures/billing-authority-v1.example.json",
+    "./openapi/billing-authority-v1.openapi.json": "./openapi/billing-authority-v1.openapi.json",
     "./schema/billing-organisation-financial-v1.json": "./schema/billing-organisation-financial-v1.json",
     "./schema/billing-sms-v1.json": "./schema/billing-sms-v1.json",
     "./openapi/billing-sms-v1.openapi.json": "./openapi/billing-sms-v1.openapi.json",

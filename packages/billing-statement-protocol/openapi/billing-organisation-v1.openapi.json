@@ -435,7 +435,7 @@
     "/billing/v1/organisation/overview": {
       "post": {
         "operationId": "billingOrganisationOverview",
-        "description": "One organisation/account/mode financial overview. Independent sections; no numeric bill while held. Current org manager or active team manager in this org. Explicit null team requires org manager and organisation financial actor scope.",
+        "description": "One organisation/account/mode financial overview. Independent sections; no numeric bill while held. Current organisation owner/admin only. Team-only admins have separate own-team read-only access. Explicit null team requires organisation manager and organisation financial actor scope.",
         "security": [
           {
             "billingAppKey": [],

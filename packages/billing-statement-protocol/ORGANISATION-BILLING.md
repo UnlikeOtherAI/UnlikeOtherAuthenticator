@@ -1,5 +1,54 @@
 # Organisation financial overview — protocol 1.3.0 / package 6.3.0
 
+## Authority clarification — package 6.4.0
+
+This section supersedes the earlier any-team-manager financial authority below.
+Only an ACTIVE organisation owner/admin manages or reads organisation finances.
+A team-only owner/admin can read their own selected ACTIVE team's recorded usage
+and retained TEAM credit history, with no organisation money or monetary action.
+Organisation owners/admins may select any ACTIVE same-organisation team through
+current UOA authority without a fabricated TeamMember record. When no team exists,
+the browser uses Create team recovery; null financial endpoints do not create a
+separate sign-in or grant general content access.
+
+Opt in on the existing capabilities endpoint with
+`X-UOA-Billing-Authority-Protocol: 1.0.0`. The strict schema-version 2 response has
+`access: organisation_manager | team_reader | none`. Only the first branch has
+`financial_scope`. The team-reader branch names the exact `team_scope` and
+`overview_request`. Without this header, schema-version 1 stays shape-compatible;
+team-only admins now receive both financial capability booleans false. Unsupported
+header versions fail 400 `BILLING_AUTHORITY_PROTOCOL_UNSUPPORTED`.
+
+`POST /billing/v1/team/overview` accepts the strict non-null selected-team subject
+and optional `billing_month`. Sign the exact endpoint with the same registered
+customer-lifecycle app key and original assurance custody. UOA requires current
+org-manager authority or ACTIVE owner/admin membership in that exact selected team;
+otherwise 403 `BILLING_TEAM_ACCESS_REQUIRED`. Adminship of another team confers no
+access. Authority is rechecked after dependency reads.
+
+The response contains independently confirmed/pending/unavailable `activity`,
+`recorded_credit_usage` and `retained_credits` sections. Usage is attribution,
+not a team invoice or a share of the organisation wallet. Each original captured
+account/mode stays separate. `source_ref` is opaque provenance, never a provider
+account identifier; `mode` is canonical display-safe LIVE/Sandbox information.
+No section contains organisation balances, invoices, subscriptions, cards, consents,
+financial actions or an amount due. Unconfirmed sections have no numeric data.
+Render source-owned labels, formatted amounts and messages without adding totals.
+
+The accepted TEST disposition retains original TEAM records as history and starts
+organisation wallets fresh. No transfer, copy, adoption, deletion or waiver occurs.
+Retained records are not current spendable organisation funds. New/unclassified
+LIVE exposure still requires an activation-time reviewed disposition.
+
+Ordinary active members may still make the separate nonfinancial funding request
+without a financial GET; eligible recipients are current organisation financial
+managers. Team readers cannot use the organisation overview, financial history or
+any frozen monetary mutation. A previously displayed context never grants authority.
+All original context, captured recovery, mode separation and inclusive holds remain.
+
+Types, strict schemas, OpenAPI and conformance examples are exported from the package
+and `billing-authority-v1` artifacts. All pre-6.4 schema shapes remain unchanged.
+
 This supersedes per-team customer billing. One UOA organisation owns one financial
 scope, one LIVE/Sandbox policy and independent money/customer bindings in each
 captured account/mode. Selected team and product are current actor admission and

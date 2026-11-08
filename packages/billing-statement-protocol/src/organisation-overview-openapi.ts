@@ -26,7 +26,7 @@ export const billingOrganisationV1OpenApiDocument = {
       'Current UOA role capability; independent from Stripe, credits and Ledger. Selected team is actor admission context.',
       billingOrganisationRequestV1JsonSchema, billingOrganisationCapabilitiesV1JsonSchema) },
     [BILLING_ORGANISATION_OVERVIEW_PATH]: { post: post('billingOrganisationOverview',
-      'One organisation/account/mode financial overview. Independent sections; no numeric bill while held. Current org manager or active team manager in this org. Explicit null team requires org manager and organisation financial actor scope.',
+      'One organisation/account/mode financial overview. Independent sections; no numeric bill while held. Current organisation owner/admin only. Team-only admins have separate own-team read-only access. Explicit null team requires organisation manager and organisation financial actor scope.',
       billingOrganisationOverviewRequestV1JsonSchema, billingOrganisationOverviewV1JsonSchema) },
   },
   components: { securitySchemes: {
