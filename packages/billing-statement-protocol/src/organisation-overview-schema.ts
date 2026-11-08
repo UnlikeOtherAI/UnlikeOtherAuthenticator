@@ -26,13 +26,15 @@ const section = (data: unknown) => ({ oneOf: [
 ] });
 const common = { schema_version: { const: 1 }, generated_at: datetime, subject };
 export const billingOrganisationCapabilitiesV1JsonSchema = { oneOf: [
-  object({ ...common, capabilities: object({ can_view_billing: { const: false }, can_manage_billing: { const: false } }) }),
+  object({ ...common, capabilities: object({ can_view_billing: { const: false },
+    can_manage_billing: { const: false } }) }),
   object({ ...common, capabilities: object({ can_view_billing: { const: true }, can_manage_billing: { const: true } }),
     financial_scope: billingOrganisationScopeV1JsonSchema }),
 ] };
 const credits = billingCreditsV1JsonSchema.properties;
 const statement = billingStatementV1JsonSchema.properties;
-const pick = (properties: Record<string, unknown>, keys: string[]) => Object.fromEntries(keys.map(key => [key, properties[key]]));
+const pick = (properties: Record<string, unknown>, keys: string[]) =>
+  Object.fromEntries(keys.map(key => [key, properties[key]]));
 export const billingOrganisationCreditBalanceV1JsonSchema = object({ credit_account_id: id,
   confirmed_balance: creditAmountSchema({ signed: true }), reserved_credits: creditAmountSchema(),
   spendable_balance: creditAmountSchema({ signed: true }), as_of: datetime,
@@ -68,14 +70,17 @@ export const billingOrganisationHistoryV1JsonSchema = object({
 export const billingOrganisationOverviewV1JsonSchema = object({ ...common,
   financial_scope: billingOrganisationScopeV1JsonSchema,
   sections: object({ accrued_bill: section(billingOrganisationAccruedBillV1JsonSchema),
-    credits: section(billingOrganisationCreditBalanceV1JsonSchema), funding: section(billingOrganisationFundingV1JsonSchema),
-    subscription: section(billingOrganisationSubscriptionV1JsonSchema), history: section(billingOrganisationHistoryV1JsonSchema),
+    credits: section(billingOrganisationCreditBalanceV1JsonSchema),
+    funding: section(billingOrganisationFundingV1JsonSchema),
+    subscription: section(billingOrganisationSubscriptionV1JsonSchema),
+    history: section(billingOrganisationHistoryV1JsonSchema),
     attention:section({type:'array',items:billingCreditAttentionV1JsonSchema}) },
   ['accrued_bill','credits','funding','subscription','history']),
 });
 export const billingOrganisationProtocolV1JsonSchema = {
   $schema: 'https://json-schema.org/draft/2020-12/schema', $id: BILLING_ORGANISATION_SCHEMA_PATH,
-  $defs: { request: billingOrganisationRequestV1JsonSchema, overview_request: billingOrganisationOverviewRequestV1JsonSchema,
+  $defs: { request: billingOrganisationRequestV1JsonSchema,
+    overview_request: billingOrganisationOverviewRequestV1JsonSchema,
     capabilities: billingOrganisationCapabilitiesV1JsonSchema, overview: billingOrganisationOverviewV1JsonSchema },
   oneOf: [{ $ref: '#/$defs/capabilities' }, { $ref: '#/$defs/overview' }],
 };

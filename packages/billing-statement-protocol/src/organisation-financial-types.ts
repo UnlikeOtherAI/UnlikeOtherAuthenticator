@@ -27,9 +27,12 @@ export type BillingOrganisationFinancialTypes={
   subject:BillingOrganisationRequestV1;
   region_request:BillingOrganisationRequestV1 & {region?:BillingRegionV1};region_response:BillingRegionViewV1;
   top_up_request:Action & {offer_id:string};auto_top_up_setup_request:Action & {option_id:string};
-  auto_top_up_update_request:Action & {option_id:string};auto_top_up_disable_request:Action;auto_top_up_recover_request:Action;
+  auto_top_up_update_request:Action & {option_id:string};
+  auto_top_up_disable_request:Action;
+  auto_top_up_recover_request:Action;
   purchase_status_request:BillingOrganisationRequestV1 & {purchase_id:string};
-  hosted_redirect_response:BillingHostedRedirectResponse;purchase_status_response:Financial<BillingCreditPurchaseStatusV1>;
+  hosted_redirect_response:BillingHostedRedirectResponse;
+  purchase_status_response:Financial<BillingCreditPurchaseStatusV1>;
   checkout_request:Financial<BillingCheckoutSessionRequest>;checkout_response:BillingCheckoutSessionResponse;
   portal_request:Financial<BillingPortalSessionRequest>;portal_response:BillingPortalSessionResponse;
   subscription_summary_request:BillingOrganisationRequestV1;

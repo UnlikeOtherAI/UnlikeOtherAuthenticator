@@ -24,7 +24,8 @@ export type BillingOrganisationFinancialScopeV1 = {
 };
 export type BillingOrganisationCapabilitiesV1 = {
   schema_version: 1; generated_at: string; subject: BillingOrganisationRequestV1;
-} & ({ capabilities: { can_view_billing: true; can_manage_billing: true }; financial_scope: BillingOrganisationFinancialScopeV1 }
+} & ({ capabilities: { can_view_billing: true; can_manage_billing: true };
+  financial_scope: BillingOrganisationFinancialScopeV1 }
   | { capabilities: { can_view_billing: false; can_manage_billing: false }; financial_scope?: never });
 
 /** No data/numeric total is admitted in an unconfirmed section. Sections fail independently. */
