@@ -62,6 +62,19 @@ Invalid requester proof returns an inactive decision rather than signing out a
 healthy receiver. Unauthenticated local callers keep ordinary manual pairing.
 See [Kelpie account connectivity](Auth/kelpie-connect.md) for both endpoints.
 
+## Public team display lookup (2026-11-08)
+
+Ruling: a team id → display name is not a secret. `POST /public/teams/lookup` takes
+`{teamIds}` (at most 50 exact UOA team ids) with no credential and returns, in request
+order, `{teams:[{teamId, teamName, teamSlug, orgId, orgName, orgSlug, avatarUrl}]}`.
+Only the ids asked for are read. Unknown ids, and teams whose team or organisation is
+not ACTIVE, are omitted. Nothing about members, roles, domains, email policies or
+settings is returned. `avatarUrl` is the public team image URL (Docs/Auth/avatars.md
+§11.3–§11.4). The caller is a product server (Nessie naming a computer's teams without
+a person's session), so the limit is 1,200 requests per minute per IP plus a global
+ceiling of 6,000 per minute per instance. The result is display data, never an
+authority: membership and access still come from `/org/*` and token claims.
+
 ## Product action verification (2026-09-24)
 
 Products can request fresh verification for an exact sensitive action through

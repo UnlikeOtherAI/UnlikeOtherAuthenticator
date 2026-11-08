@@ -20,6 +20,7 @@ import { registerConfigVerifyRoute } from './config-verify.js';
 import { registerLlmRoute } from './llm.js';
 import { endpoints } from './schema.js';
 import { jobComputeContinuationEndpoint } from './schema.job-compute-continuation.js';
+import { publicTeamLookupEndpoint } from './schema.public-team-lookup.js';
 import { registrationVerificationDocumentation } from './schema.registration.js';
 // Email-link approval continues only the original cookie-bound registration.
 // Admin schema includes exact-user activity filters and canonical invitation history states.
@@ -98,7 +99,7 @@ export function registerRootRoute(app: FastifyInstance): void {
       confidential_token_exchange: confidentialTokenExchangeDocumentation,
       config_validation: configValidationEndpointDocumentation,
       config_verification: configVerificationEndpointDocumentation,
-      endpoints: [...endpoints, jobComputeContinuationEndpoint],
+      endpoints: [...endpoints, jobComputeContinuationEndpoint, publicTeamLookupEndpoint],
       customer_invoices: 'Actual prepaid payment and monthly service charge invoices use the /billing/v1/invoices/* endpoints; their canonical JSON Schema and examples are at /schemas/billing-customer-invoices-v1.json.',
       // Includes explicit TEAM-only deletion and preserved empty-org recovery authority.
       lifecycle: lifecycleDocumentation,

@@ -530,3 +530,8 @@ the version, which costs one refetch and nothing else. The version comes from th
 payload already selects, so it adds no read of `team_avatars`. The route accepts `v` (any string up
 to 64 characters) and never reads it, so it reveals nothing to an anonymous caller; only a reader
 already entitled to the team is handed a version.
+
+Since 2026-11-08 the public team display lookup (`POST /public/teams/lookup`, brief "Public team
+display lookup") also returns this URL, version included, to any caller holding the team id, under
+the ruling that a team id → display fields is not a secret. The version then tells such a caller
+when the team row last changed, and nothing about what changed.
