@@ -1,3 +1,4 @@
+import { registerEmbeddedKelpieRoutes } from './oauth/embedded-kelpie.js';
 import type { FastifyInstance } from 'fastify';
 
 import { buildPublicErrorBody } from '../utils/error-response.js';
@@ -47,6 +48,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   registerEmailRoutes(app);
   registerIntegrationRoutes(app);
   registerOAuthRoutes(app);
+  registerEmbeddedKelpieRoutes(app);
   registerInternalAdminRoutes(app);
   registerInternalOrgRoutes(app);
   registerOrgRoutes(app);

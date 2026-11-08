@@ -3469,3 +3469,7 @@ grant or lose its resource binding through generic token exchange.
 ## Shared team archive (7 November 2026)
 
 A product may archive a shared UOA team across all connected products while permanent deletion stays held. This is separate from executable erasure, including for the default or last team. UOA owns the lifecycle, billing stop proof and revocation; products store references only. The contract and focused checks are in [Shared team archive](Auth/team-archive.md).
+
+## Embedded Kelpie host sessions (8 November 2026)
+
+Nessie may embed the complete Kelpie browser and share only its existing UOA session. A short-lived, scoped, profile-free access grant derives from the original independent host proof; UOA remains the profile/settings authority and retains live revocation. No native app impersonation, refresh-token copy, identity replica or new refresh family is permitted. The explicit token classes, API contract, custody and coordinated rollout are defined in [Embedded Kelpie host sessions](Auth/embedded-kelpie.md). Standalone native grants and consent remain unchanged.

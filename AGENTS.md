@@ -53,3 +53,5 @@ Kelpie's dedicated `kelpie.connect` scope, operator gateway allowlist, short-liv
 profile-free tickets and live domain-authenticated revocation checks follow
 [Kelpie account connectivity](Docs/Auth/kelpie-connect.md). Native refresh grants
 never widen silently; app scope edits require fresh registration and consent.
+
+Embedded Kelpie uses the host product's original independent UOA proof and distinct short-lived token classes; follow [host sessions](Docs/Auth/embedded-kelpie.md). It never impersonates the standalone native registration or copies refresh credentials.

@@ -1028,3 +1028,7 @@ interactive entry. See the organisation-scoped sign-in addendum in `Docs/brief.m
 ### Held shared-team archive
 
 The archive authority, receipt recovery, provider reconciliation and database holds are defined in [Shared team archive](team-archive.md). These endpoints use UOA as the sole cross-product lifecycle authority and never invoke erasure jobs.
+
+### Embedded Kelpie
+
+`routes/oauth/embedded-kelpie.ts` registers the original-proof host grant and explicit embedded account/gateway routes. `services/oauth/embedded-kelpie.service.ts` owns derived authority. `routes/oauth/browser-account.ts` shares profile/conditional settings handlers with standalone accounts; `routes/oauth/settings-events.ts` shares stream capacity and delivery. Contracts live in `schema.embedded-kelpie.ts` and `llm-embedded-kelpie.ts`. See [host sessions](embedded-kelpie.md).
