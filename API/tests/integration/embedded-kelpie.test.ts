@@ -103,17 +103,16 @@ describe('embedded Kelpie original host authority with PostgreSQL', () => {
       expect(put.statusCode).toBe(403);
     }
     const address = await f.app.listen({ host: '127.0.0.1', port: 0 });
-    const status = await new Promise<number>((resolve, reject) => {
+    const handshake = await new Promise<{ status: number; cache: unknown }>((resolve, reject) => {
       const socket = new WebSocket(address.replace('http:', 'ws:') + '/embedded/kelpie/me/settings/private-product/private-preference/events',
         { headers: { authorization: 'Bearer ' + token }, handshakeTimeout: 3000 });
       socket.once('open', () => { socket.close(); reject(new Error('Unrelated setting stream was admitted')); });
       socket.once('error', reject);
       socket.once('unexpected-response', (_request, response) => {
-        expect(response.headers['cache-control']).toContain('no-store');
-        response.resume(); resolve(response.statusCode ?? 0); socket.terminate();
+        response.resume(); resolve({ status: response.statusCode ?? 0, cache: response.headers['cache-control'] }); socket.terminate();
       });
     });
-    expect(status).toBe(403);
+    expect(handshake.status).toBe(403); expect(handshake.cache).toContain('no-store');
     expect(await f.db.userSetting.findUnique({ where: { userId_namespace_key: {
       userId: f.user.id, namespace: 'private-product', key: 'private-preference',
     } } })).toMatchObject({ value: 'owned elsewhere' });
