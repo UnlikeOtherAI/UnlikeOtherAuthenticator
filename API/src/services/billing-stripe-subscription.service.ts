@@ -1,4 +1,5 @@
 import { requireBillingManager } from './billing-financial-authority.service.js';
+import { billingSubscriptionContextObject } from './billing-subscription-context.service.js';
 import { assertBillingActionContext } from './billing-action-context.service.js';
 import { requireTeamStripeBilling, resolveTeamBillingMode } from './billing-team-mode.service.js';
 import type { BillingCustomerLocale } from '../contracts/billing-statement-v1.js';
@@ -308,7 +309,7 @@ export async function createStripePortalSession(
   if (!deps?.stripe || params.request.billingContext !== undefined) {
     const selection = await resolveTeamBillingMode(params.request, context.prisma);
     assertBillingActionContext(params.request.billingContext, { account, revision: selection.revision, scopeEpoch: selection.epoch,
-      appKeyId: params.credential.id }, params.endpoint, {
+      appKeyId: params.credential.id,objectBinding:billingSubscriptionContextObject(subscription) }, params.endpoint, {
       product: params.request.product, organisation_id: params.request.organisationId,
       team_id: params.request.teamId, user_id: params.request.userId, return_url: params.request.returnUrl,
     });

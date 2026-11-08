@@ -3,6 +3,7 @@ import { type Prisma, type PrismaClient } from '@prisma/client';
 import { getAdminPrisma } from '../db/prisma.js';
 import { getEnv } from '../config/env.js';
 import { AppError } from '../utils/errors.js';
+import { billingSubscriptionContextObject } from './billing-subscription-context.service.js';
 import { readOrganisationBillingMode,resolveOrganisationBillingMode } from './billing-organisation-mode.service.js';
 import { type BillingAdminEffectActor }
   from './billing-admin-effect-authority.service.js';
@@ -53,7 +54,8 @@ export async function resolveBillingDisplayBinding(subject: { organisationId: st
     const subscription = await prisma.billingStripeSubscription.findFirst({ where: {
       id: subscriptionId, orgId: subject.organisationId }, include: { account: true } });
     if (!subscription) throw new AppError('BAD_REQUEST', 409, 'BILLING_CONTEXT_STALE');
-    return { account: subscription.account, revision: selection.revision, scopeEpoch: selection.epoch, appKeyId };
+    return { account: subscription.account, revision: selection.revision, scopeEpoch: selection.epoch, appKeyId,
+      objectBinding:billingSubscriptionContextObject(subscription) };
   }
   const env = getEnv();
   const expectedId = selection.mode === 'live' ? env.STRIPE_LIVE_ACCOUNT_ID : env.STRIPE_SANDBOX_ACCOUNT_ID;

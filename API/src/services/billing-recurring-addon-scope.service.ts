@@ -7,6 +7,7 @@ import { createHash } from 'node:crypto';
 
 import { AppError } from '../utils/errors.js';
 import type { OrganisationBillingFundingViewer } from './billing-funding-viewer.service.js';
+import { organisationSubscriptionCustomerScopeKey } from './billing-subscription-customer-scope.service.js';
 
 
 export type RecurringAddonSubject = {
@@ -71,7 +72,8 @@ export function recurringAddonScope(
       subscribingUserId: null,
       customerScope: BillingAssignmentScope.ORGANISATION,
       customerScopeKey: offer?.resourceKind === 'sms_mobile_number'
-        ? smsNumberCustomerScopeKey(subject.organisationId, offer.currency) : subject.organisationId,
+        ? smsNumberCustomerScopeKey(subject.organisationId, offer.currency) :
+          offer?organisationSubscriptionCustomerScopeKey(subject.organisationId,offer.currency):subject.organisationId,
       customerTeamId: null,
     };
   }
@@ -84,7 +86,7 @@ export function recurringAddonScope(
       teamId: subject.teamId,
       subscribingUserId: null,
       customerScope: BillingAssignmentScope.ORGANISATION,
-      customerScopeKey: subject.organisationId,
+      customerScopeKey: offer?organisationSubscriptionCustomerScopeKey(subject.organisationId,offer.currency):subject.organisationId,
       customerTeamId: null,
     };
   }
@@ -94,7 +96,7 @@ export function recurringAddonScope(
     teamId: subject.teamId,
     subscribingUserId: subject.userId,
     customerScope: BillingAssignmentScope.ORGANISATION,
-    customerScopeKey: subject.organisationId,
+    customerScopeKey: offer?organisationSubscriptionCustomerScopeKey(subject.organisationId,offer.currency):subject.organisationId,
     customerTeamId: null,
   };
 }

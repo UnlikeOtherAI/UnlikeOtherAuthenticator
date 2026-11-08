@@ -5,6 +5,7 @@ import { withLiveTeamBillingEffect } from './team-billing-effect.service.js';
 import type { BillingCustomerLocale } from '../contracts/billing-statement-v1.js';
 import { stripeCheckoutLocale } from './billing-stripe-locale.js';
 import { requireIdentityEmail } from './entity-lifecycle.service.js';
+import { activeTeamAuthorityWhere } from './organisation-team-authority.service.js';
 import {
   BillingRecurringAddonCheckoutStatus,
   Prisma,
@@ -220,7 +221,7 @@ export async function createRecurringAddonCheckout(
   }
 
   const details = await prisma.$transaction(async (tx) => {
-    const [user, organisation, team, orgMember, teamMember, liveSubscription] = await Promise.all([
+    const [user, organisation, team, orgMember, liveSubscription] = await Promise.all([
       tx.user.findUnique({
         where: { lifecycleStatus: 'ACTIVE', id: params.request.userId },
         select: { id: true, email: true, name: true },
@@ -230,7 +231,7 @@ export async function createRecurringAddonCheckout(
         select: { id: true, name: true },
       }),
       params.request.teamId===null ? Promise.resolve(null) : tx.team.findFirst({
-        where: { id: params.request.teamId, orgId: params.request.organisationId },
+        where: { ...activeTeamAuthorityWhere(params.request.userId),id: params.request.teamId, orgId: params.request.organisationId },
         select: { id: true, name: true },
       }),
       tx.orgMember.findUnique({
@@ -239,12 +240,6 @@ export async function createRecurringAddonCheckout(
             orgId: params.request.organisationId,
             userId: params.request.userId,
           },
-        },
-        select: { status: true },
-      }),
-      params.request.teamId===null ? Promise.resolve(null) : tx.teamMember.findUnique({
-        where: {
-          teamId_userId: { teamId: params.request.teamId, userId: params.request.userId },
         },
         select: { status: true },
       }),
@@ -260,14 +255,13 @@ export async function createRecurringAddonCheckout(
         select: { id: true },
       }),
     ]);
-    return { user, organisation, team, orgMember, teamMember, liveSubscription };
+    return { user, organisation, team, orgMember, liveSubscription };
   });
   if (
     !details.user ||
     !details.organisation ||
     (params.request.teamId!==null && !details.team) ||
-    details.orgMember?.status !== MembershipStatus.ACTIVE ||
-    (params.request.teamId!==null && details.teamMember?.status !== MembershipStatus.ACTIVE)
+    details.orgMember?.status !== MembershipStatus.ACTIVE
   ) {
     throw new AppError('FORBIDDEN', 403, 'BILLING_SUBJECT_NOT_ENTITLED');
   }
@@ -275,7 +269,10 @@ export async function createRecurringAddonCheckout(
     throw new AppError('BAD_REQUEST', 409, 'BILLING_RECURRING_ADDON_SUBSCRIPTION_EXISTS');
   }
 
-  let customer = await prisma.billingStripeCustomer.upsert({
+  let checkout = await prisma.billingRecurringAddonCheckout.findFirst({where:{accountId:account.id,serviceId:offer.serviceId,
+    offerKey:offer.key,scope:selectedScope.scope,scopeKey:selectedScope.scopeKey,status:{in:['CREATING','OPEN','NEEDS_REVIEW']}}});
+  let customer = checkout?await prisma.billingStripeCustomer.findUniqueOrThrow({where:{id:checkout.customerId}}):
+    await prisma.billingStripeCustomer.upsert({
     where: {
       accountId_scopeKey: { accountId: account.id, scopeKey: selectedScope.customerScopeKey },
     },
@@ -304,7 +301,7 @@ export async function createRecurringAddonCheckout(
       orgId: params.request.organisationId,
       teamId: selectedScope.customerTeamId,
       scope: selectedScope.customerScope,
-      scopeKey: selectedScope.customerScopeKey,
+      scopeKey: customer.scopeKey,
     },
     { prisma, stripe },
   );
@@ -328,16 +325,6 @@ export async function createRecurringAddonCheckout(
     successUrlDigest: digest(urls.success),
     cancelUrlDigest: digest(urls.cancel),
   };
-  let checkout = await prisma.billingRecurringAddonCheckout.findFirst({
-    where: {
-      accountId: account.id,
-      serviceId: offer.serviceId,
-      offerKey: offer.key,
-      scope: selectedScope.scope,
-      scopeKey: selectedScope.scopeKey,
-      status: { in: ['CREATING', 'OPEN', 'NEEDS_REVIEW'] },
-    },
-  });
   if (checkout) {
     assertCheckoutIdentity(checkout, identity);
     const recovered = await recoverOpenCheckout(checkout, customer.stripeCustomerId, {
@@ -346,7 +333,7 @@ export async function createRecurringAddonCheckout(
       livemode,
     });
     if (recovered.redirect) return recovered.redirect;
-    if (!recovered.reusable) checkout = null;
+    if (!recovered.reusable)throw new AppError('BAD_REQUEST',409,'BILLING_CONTEXT_STALE');
   }
 
   const now = deps?.now?.() ?? new Date();
@@ -406,7 +393,7 @@ export async function createRecurringAddonCheckout(
       });
       if (recovered.redirect) return recovered.redirect;
       if (!recovered.reusable) {
-        throw new AppError('INTERNAL', 503, 'BILLING_RECURRING_ADDON_CHECKOUT_RETRY');
+        throw new AppError('BAD_REQUEST', 409, 'BILLING_CONTEXT_STALE');
       }
     }
   }

@@ -143,6 +143,28 @@ complete. No historical entitlement, money or subscription is copied into the
 ORG payer by this migration. The bounded recovery workflow and production
 completeness verification remain rollout prerequisites.
 
+New base and ordinary add-on subscription checkouts use an ORG provider customer
+key of `<org-id>:billing:<ISO-currency>` under the exact captured account/mode.
+Stripe does not support simultaneous active subscriptions in different
+currencies on one customer; see [its customer currency contract](https://docs.stripe.com/invoicing/multi-currency-customers).
+These are provider customer bindings, not separate financial tenants: the payer,
+wallet, mode, authority and accrued bill remain ORG-wide. SMS keeps its existing
+`<org-id>:sms:<currency>` customer key. Credit funding keeps its original ORG
+wallet customer and saved consent. Nothing rebinds an existing customer or moves
+its card, balance, checkout or subscription. Pending checkout recovery first
+selects its captured customer. An abandoned source requires refresh/new click
+before new work can choose a currency-specific customer.
+
+The subscription Portal label names the captured product and subscription
+currency. Its description explains that other subscriptions on that same customer
+may appear and directs automatic credit funding to its own controls; it does not
+present that customer as every organisation card. A retained legacy customer can
+still be shared with its original wallet; no new isolation is claimed for it.
+Portal and cancellation-preview display tokens additionally capture immutable
+subscription/customer identities. Replacing a subscription makes that original
+display stale (409), even within the same org/account/mode/epoch/revision. The
+opaque `billing_context` contract and public `6.3.0` shapes remain unchanged.
+
 ## Provider configuration and deployment boundary
 
 No new credentials, account IDs, Stripe API version, webhook URL, event set or

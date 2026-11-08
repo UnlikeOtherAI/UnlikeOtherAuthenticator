@@ -12,7 +12,7 @@ const CONTEXT_PATHS = new Set([
   '/billing/v1/stripe/checkout-session', '/billing/v1/stripe/portal-session',
   '/billing/v1/cancellation/preview','/billing/v1/recurring-addons/cancellation/preview',
 ]);
-type Binding = { account: StripeAccountContext; revision: number; appKeyId: string; scopeEpoch?: string };
+type Binding = { account: StripeAccountContext; revision: number; appKeyId: string; scopeEpoch?: string; objectBinding?:string };
 
 function bodyDigest(body: Record<string, unknown>): string {
   // The one customer-editable field is admitted separately by the purchased-seat guard.
@@ -31,15 +31,16 @@ function bindingValues(binding: Binding, endpoint: string, body: Record<string, 
 
 export function mintBillingActionContext(binding: Binding, endpoint: string,
   body: Record<string, unknown>, now = new Date()): string {
-  const payload = Buffer.from(JSON.stringify([binding.scopeEpoch ? 2 : 1, now.getTime() + TTL_MS,
-    ...bindingValues(binding, endpoint, body), ...(binding.scopeEpoch ? [binding.scopeEpoch] : [])])).toString('base64url');
+  const payload = Buffer.from(JSON.stringify([binding.objectBinding?3:binding.scopeEpoch ? 2 : 1, now.getTime() + TTL_MS,
+    ...bindingValues(binding, endpoint, body), ...(binding.objectBinding?[binding.scopeEpoch??null,binding.objectBinding]:
+      binding.scopeEpoch ? [binding.scopeEpoch] : [])])).toString('base64url');
   return `${payload}.${signature(payload)}`;
 }
 
 export function assertBillingActionContext(token: string | undefined, binding: Binding,
   endpoint: string, body: Record<string, unknown>, now = new Date()): void {
   if (token === undefined) {
-    if (!binding.scopeEpoch && binding.revision === 0 && binding.account.livemode) return;
+    if (!binding.scopeEpoch && !binding.objectBinding && binding.revision === 0 && binding.account.livemode) return;
     throw new AppError('BAD_REQUEST', 409, 'BILLING_CONTEXT_REQUIRED');
   }
   let values: unknown;
@@ -51,7 +52,8 @@ export function assertBillingActionContext(token: string | undefined, binding: B
     if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) throw new Error();
     values = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
   } catch { throw new AppError('BAD_REQUEST', 400, 'BILLING_CONTEXT_INVALID'); }
-  if (!Array.isArray(values) || !(values.length === 9 && values[0] === 1 || values.length === 10 && values[0] === 2) ||
+  if (!Array.isArray(values) || !(values.length === 9 && values[0] === 1 || values.length === 10 && values[0] === 2 ||
+    values.length===11&&values[0]===3&&typeof values[10]==='string'&&(values[9]===null||typeof values[9]==='string')) ||
     !Number.isSafeInteger(values[1])) throw new AppError('BAD_REQUEST', 400, 'BILLING_CONTEXT_INVALID');
   const expected = bindingValues(binding, endpoint, body);
   // Subject, app, endpoint and body mismatches are invalid, even if the display also expired.
@@ -61,7 +63,8 @@ export function assertBillingActionContext(token: string | undefined, binding: B
   if (values[1] <= now.getTime() || values[1] > now.getTime() + TTL_MS ||
     values[2] !== expected[0] || values[3] !== expected[1] ||
     values[4] !== expected[2] || values[5] !== expected[3] ||
-    (binding.scopeEpoch ? values[0] !== 2 || values[9] !== binding.scopeEpoch : values[0] !== 1)) {
+    (binding.objectBinding?values[0]!==3||values[9] !== (binding.scopeEpoch??null)||values[10]!==binding.objectBinding:
+      binding.scopeEpoch ? values[0] !== 2 || values[9] !== binding.scopeEpoch : values[0] !== 1)) {
     throw new AppError('BAD_REQUEST', 409, 'BILLING_CONTEXT_STALE');
   }
 }
@@ -70,7 +73,7 @@ export function assertBillingActionContext(token: string | undefined, binding: B
 export function freezeDisplayedBillingActions<T>(value: T, binding: Binding,
   negotiated: boolean, disabledReason: string, now = new Date()): T {
   const result = structuredClone(value);
-  const requireBound = Boolean(binding.scopeEpoch) || binding.revision !== 0 || !binding.account.livemode;
+  const requireBound = Boolean(binding.scopeEpoch) || Boolean(binding.objectBinding) || binding.revision !== 0 || !binding.account.livemode;
   const visit = (item: unknown): void => {
     if (!item || typeof item !== 'object') return;
     if (Array.isArray(item)) { item.forEach(visit); return; }
@@ -79,8 +82,10 @@ export function freezeDisplayedBillingActions<T>(value: T, binding: Binding,
     if (request?.method === 'POST' && typeof request.path === 'string' && CONTEXT_PATHS.has(request.path)
       && request.body && typeof request.body === 'object' && !Array.isArray(request.body)) {
       if (negotiated) {
-        const body = request.body as Record<string, unknown>;
-        body.billing_context = mintBillingActionContext(binding, request.path, body, now);
+        const body = structuredClone(request.body) as Record<string, unknown>;
+        request.body=body;
+        const captured=['/billing/v1/stripe/portal-session','/billing/v1/cancellation/preview'].includes(request.path);
+        body.billing_context = mintBillingActionContext(captured?binding:{...binding,objectBinding:undefined}, request.path, body, now);
       } else if (requireBound) {
         object.enabled = false; object.disabled_reason = disabledReason;
       }

@@ -1,4 +1,5 @@
 import { requireBillingManager } from './billing-financial-authority.service.js';
+import { organisationSubscriptionCustomerScopeKey } from './billing-subscription-customer-scope.service.js';
 import { requireTeamStripeBilling, assertOrganisationBillingMode } from './billing-team-mode.service.js';
 import { assertBillingActionContext } from './billing-action-context.service.js';
 import { withLiveTeamBillingEffect } from './team-billing-effect.service.js';
@@ -265,16 +266,20 @@ export async function createStripeCheckoutSession(
     { prisma },
   );
 
-  let customer = await prisma.billingStripeCustomer.upsert({
+  const customerScopeKey=organisationSubscriptionCustomerScopeKey(payload.subject.organisation_id,details.tariff.currency);
+  let checkout = await prisma.billingStripeCheckoutSession.findFirst({where:overlappingCheckoutScope(
+    account.id,params.credential.service.id,payload.subject.organisation_id,selectedScope.scope,selectedScope.scopeKey)});
+  let customer = checkout ? await prisma.billingStripeCustomer.findUniqueOrThrow({where:{id:checkout.customerId}}):
+    await prisma.billingStripeCustomer.upsert({
     where: {
-      accountId_scopeKey: { accountId: account.id, scopeKey: selectedScope.scopeKey },
+      accountId_scopeKey: { accountId: account.id, scopeKey: customerScopeKey },
     },
     create: {
       accountId: account.id,
       orgId: payload.subject.organisation_id,
       teamId: selectedScope.teamId,
       scope: selectedScope.scope,
-      scopeKey: selectedScope.scopeKey,
+      scopeKey: customerScopeKey,
     },
     update: {},
   });
@@ -295,7 +300,7 @@ export async function createStripeCheckoutSession(
       orgId: payload.subject.organisation_id,
       teamId: selectedScope.teamId,
       scope: selectedScope.scope,
-      scopeKey: selectedScope.scopeKey,
+      scopeKey: customer.scopeKey,
     },
     { prisma, stripe },
   );
@@ -304,15 +309,6 @@ export async function createStripeCheckoutSession(
   }
 
   const now = deps?.now?.() ?? new Date();
-  let checkout = await prisma.billingStripeCheckoutSession.findFirst({
-    where: overlappingCheckoutScope(
-      account.id,
-      params.credential.service.id,
-      payload.subject.organisation_id,
-      selectedScope.scope,
-      selectedScope.scopeKey,
-    ),
-  });
   if (checkout) {
     assertCheckoutBinding(checkout, {
       account,
@@ -329,7 +325,8 @@ export async function createStripeCheckoutSession(
       { prisma, stripe },
     );
     if (recovered.session) return openSessionResult(recovered.session, payload);
-    checkout = recovered.abandoned ? null : recovered.checkout;
+    if(recovered.abandoned)throw new AppError('BAD_REQUEST',409,'BILLING_CONTEXT_STALE');
+    checkout = recovered.checkout;
   }
 
   if (!checkout) {
@@ -388,7 +385,8 @@ export async function createStripeCheckoutSession(
           { prisma, stripe },
         );
         if (recovered.session) return openSessionResult(recovered.session, payload);
-        checkout = recovered.abandoned ? null : recovered.checkout;
+        if(recovered.abandoned)throw new AppError('BAD_REQUEST',409,'BILLING_CONTEXT_STALE');
+        checkout = recovered.checkout;
       }
     }
     if (!checkout) {
