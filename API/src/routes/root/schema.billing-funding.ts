@@ -189,17 +189,17 @@ export const billingFundingEndpoints: EndpointSchema[] = [
     method: 'POST',
     path: '/billing/v1/credits/auto-top-up/disable',
     description:
-      'Disable future automatic top-ups for the exact team without changing remaining credits.',
+      'Revoke future automatic top-ups for the current organisation payer without changing confirmed credits. No Stripe, catalog or FX read is required.',
     auth: lifecycleAuth,
     body: fundingSubject,
     response: {
       204: 'Automatic top-up disabled idempotently',
-      '401/403': 'Invalid app key, actor, exact-team manager, or subject',
+      '401/403': 'Invalid app key, actor, current organisation billing manager, or selected-team admission',
       409: 'Current consent or authorization conflicts with the requested change',
-      503: 'Stripe collection context unavailable',
+      503: 'Named captured-account binding or database unavailable',
     },
     notes:
-      'An unresolved payment does not prevent disabling future automatic charges. The original attempt stays bound to its immutable consent; late verified settlement cannot reactivate automatic top-up.',
+      'The original displayed billing_context and current org authority remain required, including when collection is disabled or offer/FX discovery fails. An unresolved payment does not prevent revocation. Its original attempt and consent remain captured; late settlement cannot reactivate automatic top-up.',
   },
   {
     method: 'POST',

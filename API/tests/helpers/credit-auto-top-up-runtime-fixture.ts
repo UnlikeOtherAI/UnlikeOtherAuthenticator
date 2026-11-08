@@ -124,7 +124,7 @@ export async function seedCreditAccount(
   `);
 }
 
-export async function seed(prisma: PrismaClient): Promise<void> {
+export async function seed(prisma: PrismaClient,accountName=stripeAccount.stripeAccountId): Promise<void> {
   await prisma.$transaction(async (tx) => {
     await tx.$executeRawUnsafe('SET LOCAL session_replication_role = replica');
     await tx.$executeRaw(Prisma.sql`
@@ -193,7 +193,7 @@ export async function seed(prisma: PrismaClient): Promise<void> {
     await tx.$executeRaw(Prisma.sql`
       INSERT INTO "billing_stripe_accounts" (
         "id", "stripe_account_id", "livemode", "updated_at"
-      ) VALUES (${ids.account}, ${stripeAccount.stripeAccountId}, false, CURRENT_TIMESTAMP)
+      ) VALUES (${ids.account}, ${accountName}, false, CURRENT_TIMESTAMP)
     `);
     await tx.$executeRaw(Prisma.sql`
       INSERT INTO "billing_credit_funding_policies" (

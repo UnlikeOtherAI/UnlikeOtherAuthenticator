@@ -1,5 +1,4 @@
 import { Prisma, type PrismaClient } from '@prisma/client';
-import { getEnv } from '../config/env.js';
 import type { BillingCustomerLocale, BillingOrganisationCreditBalanceV1, BillingOrganisationFundingV1 }
   from '../contracts/billing-statement-v1.js';
 import { AppError } from '../utils/errors.js';
@@ -17,16 +16,9 @@ import { readCreditPurchaseRateWithAlert } from './billing-credit-purchase-rate.
 import { billingOrganisationCopy } from './billing-organisation-copy.catalog.js';
 import type { OrganisationBillingContext } from './billing-organisation-authority.service.js';
 import type { OrganisationBillingSelection } from './billing-organisation-mode.service.js';
-
-export async function organisationFinancialAccount(selection:OrganisationBillingSelection,prisma:PrismaClient) {
-  const env=getEnv();
-  const stripeAccountId=selection.mode==='live'?env.STRIPE_LIVE_ACCOUNT_ID:env.STRIPE_SANDBOX_ACCOUNT_ID;
-  if(!stripeAccountId)throw new AppError('SERVICE_UNAVAILABLE',503,'BILLING_STRIPE_MODE_NOT_CONFIGURED');
-  const account=await prisma.billingStripeAccount.findUnique({where:{stripeAccountId_livemode:{
-    stripeAccountId,livemode:selection.mode==='live'}}});
-  if(!account)throw new AppError('SERVICE_UNAVAILABLE',503,'BILLING_STRIPE_ACCOUNT_NOT_CONFIGURED');
-  return account;
-}
+import { readOrganisationFundingControls } from './billing-organisation-funding-controls.service.js';
+import { organisationFinancialAccount } from './billing-organisation-financial-account.service.js';
+export { organisationFinancialAccount } from './billing-organisation-financial-account.service.js';
 
 /** A DB snapshot of confirmed money and holds, with no provider/FX/Ledger dependency. */
 export async function readOrganisationCreditBalance(context:OrganisationBillingContext,
@@ -58,6 +50,19 @@ export async function readOrganisationCreditBalance(context:OrganisationBillingC
 
 /** Funding controls reuse canonical price/consent validation; no metering call occurs. */
 export async function readOrganisationFunding(context:OrganisationBillingContext,
+  selection:OrganisationBillingSelection,prisma:PrismaClient,locale:BillingCustomerLocale|undefined,now:Date,
+  deps:{purchase?:typeof readOrganisationPurchaseFunding}={}):Promise<BillingOrganisationFundingV1> {
+  try{return await (deps.purchase??readOrganisationPurchaseFunding)(context,selection,prisma,locale,now);}
+  catch(error){
+    if(error instanceof AppError&&(error.statusCode===401||error.statusCode===403))throw error;
+    const controls=await readOrganisationFundingControls(context,selection,prisma,locale,now);
+    // Keep the established first-purchase region doorway. An existing consent
+    // can always be disabled even if its organisation has no region yet.
+    if(error instanceof AppError&&error.message==='BILLING_REGION_REQUIRED'&&!controls.automatic_top_up.disable_action?.enabled)throw error;
+    return controls;
+  }
+}
+async function readOrganisationPurchaseFunding(context:OrganisationBillingContext,
   selection:OrganisationBillingSelection,prisma:PrismaClient,locale:BillingCustomerLocale|undefined,now:Date):Promise<BillingOrganisationFundingV1> {
   const collection=await resolveCreditCollectionContext(context.request,{prisma});
   const wallet=await ensureOrganisationCreditAccount({account:collection.account,organisationId:context.request.organisationId},{prisma});

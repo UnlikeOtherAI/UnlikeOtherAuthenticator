@@ -18,6 +18,7 @@ import {
   type CreditPurchaseRateClient,
 } from './billing-credit-purchase-rate.service.js';
 import type { CreditPurchaseCurrency } from './billing-stripe-catalog-provisioning-spec.js';
+import { captureOrganisationFinancialSource } from './billing-financial-source-binding.service.js';
 
 const OPEN_ATTEMPT_STATUSES = [
   BillingCreditAutoTopUpAttemptStatus.PENDING,
@@ -108,8 +109,8 @@ function activeConfigurationIsExact(
     customer.accountId === accountId &&
     customer.orgId === credit.orgId &&
     customer.teamId === credit.teamId &&
-    customer.scope === BillingAssignmentScope.TEAM &&
-    customer.scopeKey === `${credit.orgId}:${credit.teamId}` &&
+    customer.scope === BillingAssignmentScope.ORGANISATION && customer.teamId===null&&
+    customer.scopeKey === credit.orgId &&
     Boolean(customer.stripeCustomerId) &&
     credit.autoTopUpPolicyId === policy.id &&
     credit.autoTopUpServiceId === policy.serviceId &&
@@ -352,6 +353,10 @@ export async function claimCreditAutoTopUpAttempt(
     if (!revision || !offer) {
       return { kind: 'skipped', creditAccountId: credit.id, reason: 'configuration_invalid' };
     }
+    // Existing attempts above recover their captured tuple. Only a NEW attempt
+    // must match the current named organisation account under its write fence.
+    const binding=await captureOrganisationFinancialSource(tx,credit.orgId);
+    if(binding.billingAccountId!==params.accountId)return {kind:'skipped',creditAccountId:credit.id,reason:'configuration_invalid'};
     const catalog = await tx.billingCreditTopUpCatalog.findUnique({
       where: {
         accountId_key_version: {
