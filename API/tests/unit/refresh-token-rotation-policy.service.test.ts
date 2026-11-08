@@ -30,6 +30,7 @@ function makePrisma(params?: {
         activeOrgs.has(where.orgId) ? { id: `member-${where.orgId}` } : null,
       ),
     },
+    team:{findFirst:vi.fn(async({where}:{where:{id:string;orgId:string}})=>activeTeams.has(where.id)&&activeOrgs.has(where.orgId)?{id:where.id}:null)},
     teamMember: {
       findFirst: vi.fn(async ({ where }: { where: { teamId: string } }) =>
         activeTeams.has(where.teamId) ? { id: `member-${where.teamId}` } : null,

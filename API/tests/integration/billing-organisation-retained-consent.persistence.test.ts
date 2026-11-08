@@ -28,7 +28,7 @@ describe.skipIf(process.env.BILLING_FUNDING_DATABASE_TESTS!=='true')('retained T
     const pair=await generateKeyPair('RS256',{extractable:true});
     vi.stubEnv('UOA_BILLING_ASSERTION_SIGNING_PRIVATE_JWK',JSON.stringify({...await exportJWK(pair.privateKey),kid:'fixture',alg:'RS256'}));
     vi.stubEnv('UOA_BILLING_ASSERTION_PUBLIC_JWKS_JSON',JSON.stringify({keys:[{...await exportJWK(pair.publicKey),kid:'fixture',alg:'RS256'}]}));
-  },120000);
+  });
   afterAll(async()=>{vi.restoreAllMocks();resetStripeClientCache();await handle?.cleanup();vi.unstubAllEnvs();});
   it('never creates a new attempt from a retained positive TEAM wallet and active consent',async()=>{
     const p=handle.prisma,before=await p.billingCreditAccount.findUniqueOrThrow({where:{id:concurrency.creditAccount}});

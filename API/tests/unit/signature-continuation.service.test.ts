@@ -63,6 +63,7 @@ function fakePrisma(existing: ReturnType<typeof continuation> | null = null) {
     },
     orgMember: { findFirst: vi.fn().mockResolvedValue({ id: 'org-member-1' }) },
     teamMember: { findFirst: vi.fn().mockResolvedValue({ id: 'team-member-1' }) },
+    team: { findFirst: vi.fn().mockResolvedValue({id:'team-1'}) },
     signingContinuation: {
       create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
         row = continuation({ id: 'created-continuation', ...data });

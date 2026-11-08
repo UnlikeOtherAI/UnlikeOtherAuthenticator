@@ -70,7 +70,7 @@ describe.skipIf(process.env.BILLING_FUNDING_DATABASE_TESTS!=='true')('captured o
       invoiceCreditMinor:0n,totalMinor:1000n,dueMinor:1000n,currency:'USD',calculationDigest:'a'.repeat(64)}))});
     await issueBillingInvoice({invoiceId,actor:{email:'operator@example.test'}},{prisma:p,storage,now:()=>new Date('2030-02-01T00:00:00Z'),
       authorizeAdminEffect:vi.fn().mockResolvedValue(undefined)});
-  },120000);
+  });
   afterAll(async()=>{await handle?.cleanup();vi.unstubAllEnvs();});
   it('reads every registered product under the captured account and verifies the original PDF',async()=>{
     const p=handle.prisma,list=await listCustomerInvoices(context,{chargeMonth:'2030-02'},{prisma:p});

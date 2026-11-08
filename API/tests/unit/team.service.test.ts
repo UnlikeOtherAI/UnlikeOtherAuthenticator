@@ -95,6 +95,7 @@ describe('Team service', () => {
           OR: [
             { NOT: { joinPolicy: 'HIDDEN' } },
             { members: { some: { userId: 'u-owner', status: 'ACTIVE' } } },
+            expect.objectContaining({AND:[expect.objectContaining({lifecycleStatus:'ACTIVE'})],org:expect.any(Object)}),
           ],
         },
         take: 2,

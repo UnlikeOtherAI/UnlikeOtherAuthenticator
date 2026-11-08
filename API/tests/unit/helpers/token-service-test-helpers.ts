@@ -81,6 +81,7 @@ export function createLegacyTokenCodeStore(): PrismaClient {
   }) };
   return {
     organisation: { findUnique: vi.fn().mockResolvedValue({ lifecycleStatus: 'ACTIVE' }) },
+    team: { findMany: vi.fn().mockResolvedValue([]) },
     $queryRaw: vi.fn().mockResolvedValue([]),
     authorizationCode: { findUnique: vi.fn(), updateMany: vi.fn() },
     enterpriseProductReadiness: { findUnique: vi.fn().mockResolvedValue({ minimumAssuranceVersion: 0 }) },

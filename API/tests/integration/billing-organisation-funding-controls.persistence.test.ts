@@ -26,7 +26,7 @@ describe.skipIf(process.env.BILLING_FUNDING_DATABASE_TESTS!=='true')('independen
     vi.stubEnv('STRIPE_BILLING_ENABLED','false');seed=await seedOrganisationConsent(db.prisma);
     context={credential:seed.credential as never,request:{product:'control',organisationId:'control-org',teamId:'control-team',userId:'control-owner'},
       actorToken:'signature-proof-owned-by-actor-suite',endpoint:'/billing/v1/organisation/overview'};
-  },120000);
+  });
   afterAll(async()=>{await handle?.cleanup();vi.unstubAllEnvs();});
   it.each(['BILLING_PURCHASE_RATE_UNAVAILABLE','STRIPE_CREDIT_PRICE_UNAVAILABLE'])('retains exact saved consent and disable without %s',async code=>{
     const result=await readOrganisationFunding(context,seed.selection,handle.prisma,'en-US',new Date(),{

@@ -34,6 +34,7 @@ export function makeConfig(overrides?: Partial<ClientConfig>): ClientConfig {
 export function makeAcceptanceTx() {
   return {
     $queryRaw: vi.fn().mockResolvedValue([]),
+    team:{findFirst:vi.fn(async({where}:{where:{id:string;orgId:string}})=>({id:where.id,orgId:where.orgId}))},
     teamInvite: {
       findUnique: vi.fn(),
       update: vi.fn(),
