@@ -97,7 +97,8 @@ describe('embedded Kelpie original host authority with PostgreSQL', () => {
     await f.db.userSetting.create({ data: { userId: f.user.id, namespace: 'private-product', key: 'private-preference', value: 'owned elsewhere' } });
     for (const path of ['private-product/private-preference', 'browser/other-setting']) {
       const url = '/embedded/kelpie/me/settings/' + path;
-      expect((await f.request(token, url)).statusCode).toBe(403);
+      const refused = await f.request(token, url);
+      expect(refused.statusCode).toBe(403); expect(refused.headers['cache-control']).toContain('no-store');
       const put = await f.app.inject({ method: 'PUT', url, headers: { authorization: 'Bearer ' + token }, payload: { value: 'not allowed' } });
       expect(put.statusCode).toBe(403);
     }
@@ -108,6 +109,7 @@ describe('embedded Kelpie original host authority with PostgreSQL', () => {
       socket.once('open', () => { socket.close(); reject(new Error('Unrelated setting stream was admitted')); });
       socket.once('error', reject);
       socket.once('unexpected-response', (_request, response) => {
+        expect(response.headers['cache-control']).toContain('no-store');
         response.resume(); resolve(response.statusCode ?? 0); socket.terminate();
       });
     });

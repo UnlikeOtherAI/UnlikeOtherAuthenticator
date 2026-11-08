@@ -70,6 +70,7 @@ export function registerSettingsEvents(app: FastifyInstance): void {
   };
   for (const authority of authorities) app.get(authority.path, {
     websocket: true,
+    onRequest: async (_request, reply) => { reply.header('Cache-Control', 'private, no-store'); },
     preHandler: [...authority.preHandler, (request, reply) => reserve(request, reply, authority)],
   }, (socket, request) => {
     const topic = reservations.get(request);
