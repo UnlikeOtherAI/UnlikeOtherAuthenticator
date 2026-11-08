@@ -20,7 +20,7 @@ export type BillingOrganisationHistorySubjectV1=BillingOrganisationRequestV1 & {
 export type BillingOrganisationHistoryDto<T>=T extends Array<infer V>?BillingOrganisationHistoryDto<V>[]
   :T extends object?{[K in keyof T]:K extends 'team_id'?T[K]|null:BillingOrganisationHistoryDto<T[K]>}
     &(T extends {product:string;organisation_id:string;team_id:string;user_id:string}
-      ?{financial_scope?:'organisation';billing_mode?:'live'|'sandbox'}:{}):T;
+      ?{financial_scope?:'organisation';billing_mode?:'live'|'sandbox'}:unknown):T;
 type Action=BillingOrganisationRequestV1 & BillingModeBoundAction;
 /** Keys exactly match billingOrganisationFinancialV1Schemas. Empty 204 mutations have no DTO. */
 export type BillingOrganisationFinancialTypes={
