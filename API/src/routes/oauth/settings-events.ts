@@ -13,21 +13,22 @@ import { SettingsStreamQueue } from '../../services/settings-stream-queue.js';
 import { USER_SETTINGS_NAMESPACE_PATTERN, USER_SETTINGS_KEY_PATTERN } from '../../services/user-settings.service.js';
 import { AppError } from '../../utils/errors.js';
 import { requireMcpOAuthPublicProfile } from './public-profile-guard.js';
+import { requireBrowserSettingsScope, type BrowserSettingsScope } from './browser-account.js';
 
 const paramsSchema = z.object({ namespace: z.string().regex(USER_SETTINGS_NAMESPACE_PATTERN), key: z.string().regex(USER_SETTINGS_KEY_PATTERN) });
 const MAX_SOCKETS = 32; // Live Cloud Run request concurrency is 80; leave capacity for sign-in.
 
 type BoundAccount = { userId: string; authorize: (tx: Prisma.TransactionClient) => Promise<unknown> };
-type Authority = { path: string; preHandler: preHandlerHookHandler[];
+type Authority = { path: string; settingsScope: BrowserSettingsScope; preHandler: preHandlerHookHandler[];
   verify: (authorization: string | undefined) => Promise<BoundAccount> };
 
 const authorities: Authority[] = [
-  { path: '/oauth/me/settings/:namespace/:key/events', preHandler: [requireMcpOAuthPublicProfile],
+  { path: '/oauth/me/settings/:namespace/:key/events', settingsScope: 'all', preHandler: [requireMcpOAuthPublicProfile],
     verify: async authorization => {
       const account = await verifyPublicAccountToken(authorization, 'settings.read');
       return { userId: account.userId, authorize: tx => authorizePublicAccount(account, tx) };
     } },
-  { path: '/embedded/kelpie/me/settings/:namespace/:key/events', preHandler: [async () => { kelpieConnectResource(); }],
+  { path: '/embedded/kelpie/me/settings/:namespace/:key/events', settingsScope: 'bookmarks', preHandler: [async () => { kelpieConnectResource(); }],
     verify: async authorization => {
       const account = await verifyEmbeddedKelpieToken(authorization, 'settings.read');
       return { userId: account.userId, authorize: tx => authorizeEmbeddedKelpieAccount(account, tx) };
@@ -50,6 +51,7 @@ export function registerSettingsEvents(app: FastifyInstance): void {
     reply.header('Retry-After', '5');
     if (request.headers.upgrade?.toLowerCase() !== 'websocket') throw new AppError('BAD_REQUEST', 400, 'INVALID_REQUEST');
     const params = paramsSchema.parse(request.params);
+    requireBrowserSettingsScope(authority.settingsScope, params.namespace, params.key);
     z.object({}).strict().parse(request.query);
     if (admitted >= MAX_SOCKETS) throw new AppError('SERVICE_UNAVAILABLE', 503, 'SETTINGS_STREAM_BUSY');
     admitted += 1;

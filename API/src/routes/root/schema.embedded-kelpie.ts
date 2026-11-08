@@ -9,8 +9,9 @@ export const embeddedKelpieEndpoints: EndpointSchema[] = [
       expires_in: 'at most 120 seconds and capped by original proof expiry', sub: 'stable UOA subject', issuer: 'UOA issuer origin' },
     notes: 'Empty JSON body. Fixed profile/email/settings.read/settings.write/kelpie.connect scope. No native registration, refresh family, profile copy or consent widening. Original proof, epoch, current domain/subject/memberships and policy are rechecked. Private/no-store, including errors.' },
   ...oauthAccountEndpoints.filter(endpoint => endpoint.path.startsWith('/oauth/me')).map(endpoint => ({
-    ...endpoint, path: endpoint.path.replace('/oauth', '/embedded/kelpie'), auth,
-    notes: 'Same profile, avatar, conditional settings and version1 stream implementation as public native clients, with live original host authority. Streams share admission limits. Expiry requires a fresh host grant. Private/no-store; no credentials in URLs.',
+    ...endpoint, path: endpoint.path.replace('/oauth', '/embedded/kelpie').replace('/:namespace/:key', '/browser/bookmarks'), auth,
+    description: endpoint.path.includes('/settings/') ? `Browser bookmarks only. ${endpoint.description}` : endpoint.description,
+    notes: 'Same profile, avatar, conditional settings and version1 stream implementation as public native clients, with live original host authority. All other settings namespaces/keys are refused. Streams share admission limits. Expiry requires a fresh host grant. Private/no-store; no credentials in URLs.',
   })),
   { method: 'POST', path: '/embedded/kelpie/connect', description: 'Issue an original-host-bound agent connection ticket.', auth,
     body: { resource: 'exact operator KELPIE_CONNECT_RESOURCE' },

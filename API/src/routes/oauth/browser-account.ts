@@ -9,8 +9,14 @@ import { AppError } from '../../utils/errors.js';
 
 const SettingParams = z.object({ namespace: z.string().regex(USER_SETTINGS_NAMESPACE_PATTERN), key: z.string().regex(USER_SETTINGS_KEY_PATTERN) });
 
+export type BrowserSettingsScope = 'all' | 'bookmarks';
+
+export function requireBrowserSettingsScope(scope: BrowserSettingsScope, namespace: string, key: string): void {
+  if (scope === 'bookmarks' && (namespace !== 'browser' || key !== 'bookmarks')) throw new AppError('FORBIDDEN', 403);
+}
+
 export function registerBrowserAccountRoutes<Account extends { userId: string }>(app: FastifyInstance, options: {
-  prefix: string; preHandler: preHandlerHookHandler[];
+  prefix: string; preHandler: preHandlerHookHandler[]; settingsScope: BrowserSettingsScope;
   verify: (authorization: string | undefined, scope: string) => Promise<Account>;
   authorize: (account: Account, tx: Prisma.TransactionClient) => Promise<unknown>;
 }): void {
@@ -35,6 +41,7 @@ export function registerBrowserAccountRoutes<Account extends { userId: string }>
   app.get(`${prefix}/me/settings/:namespace/:key`, { preHandler }, async (request, reply) => {
     const account = await verifyAccount(request.headers.authorization, 'settings.read');
     const { namespace, key } = SettingParams.parse(request.params);
+    requireBrowserSettingsScope(options.settingsScope, namespace, key);
     const row = await request.adminDb.$transaction(async (tx) => {
       await authorizeAccount(account, tx);
       return tx.userSetting.findUnique({ where: { userId_namespace_key: { userId: account.userId, namespace, key } }, select: { value: true } });
@@ -45,6 +52,7 @@ export function registerBrowserAccountRoutes<Account extends { userId: string }>
   app.put(`${prefix}/me/settings/:namespace/:key`, { preHandler }, async (request, reply) => {
     const account = await verifyAccount(request.headers.authorization, 'settings.write');
     const { namespace, key } = SettingParams.parse(request.params);
+    requireBrowserSettingsScope(options.settingsScope, namespace, key);
     const { value } = z.object({ value: z.unknown().refine((item) => item !== undefined) }).strict().parse(request.body);
     const version = request.headers['if-match'];
     if (typeof version !== 'string' || !/^"[a-f0-9]{64}"$/.test(version)) throw new AppError('BAD_REQUEST', 428, 'SETTING_VERSION_REQUIRED');

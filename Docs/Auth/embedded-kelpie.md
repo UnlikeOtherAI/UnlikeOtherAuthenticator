@@ -37,10 +37,15 @@ The provider maps the SDK's /oauth prefix to /embedded/kelpie for these paths:
 
 - GET /me: current UOA sub/email/name.
 - GET /me/avatar: UOA-resolved bytes.
-- GET and PUT /me/settings/:namespace/:key: the same authoritative settings rows
+- GET and PUT /me/settings/browser/bookmarks: the same authoritative settings rows
   and ETag/If-Match compare-and-swap semantics as native public accounts.
-- GET /me/settings/:namespace/:key/events: the same version1 snapshot/delta stream.
+- GET /me/settings/browser/bookmarks/events: the same version1 snapshot/delta stream.
 - POST /connect with the exact operator resource: a separate agent gateway ticket.
+
+Embedded grants refuse every other settings namespace/key over HTTP and streams.
+The settings scopes name operations; this purpose-specific route boundary limits
+them to canonical browser bookmarks. Standalone native settings access retains
+its existing scope.
 
 HTTP profile and settings routes share one implementation with standalone native
 accounts. Streams share admission limits, per-subject limits and a serial read lane.

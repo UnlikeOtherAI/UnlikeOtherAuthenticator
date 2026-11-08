@@ -39,7 +39,7 @@ export function registerEmbeddedKelpieRoutes(parent: FastifyInstance): void {
 
   const preHandler = [async () => { kelpieConnectResource(); },
     createRateLimiter({ limit: 120, windowMs: 60_000, keyBuilder: request => `embedded-kelpie:account:${request.ip}` })];
-  registerBrowserAccountRoutes(app, { prefix: '/embedded/kelpie', preHandler,
+  registerBrowserAccountRoutes(app, { prefix: '/embedded/kelpie', preHandler, settingsScope: 'bookmarks',
     verify: verifyEmbeddedKelpieToken, authorize: authorizeEmbeddedKelpieAccount });
   app.post('/embedded/kelpie/connect', { preHandler }, async (request, reply) => {
     reply.header('Cache-Control', 'no-store');
