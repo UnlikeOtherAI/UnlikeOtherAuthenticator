@@ -142,8 +142,12 @@ describe.skipIf(!process.env.DATABASE_URL)('prepaid payment invoice PostgreSQL s
   beforeAll(async () => {
     handle = await createTestDb();
     if (!handle) throw new Error('DATABASE_URL required');
-    await seedFundingRace(handle.prisma);
-    await handle.prisma.billingCreditTopUpCheckout.create({
+    await seedFundingRace(handle.prisma,true);
+    // Historical captured TEAM payments only. Opening evidence predates the
+    // organisation epoch; invoice recording/issuing below uses all live guards.
+    await handle.prisma.$transaction(async tx => {
+      await tx.$executeRawUnsafe('SET LOCAL session_replication_role = replica');
+    await tx.billingCreditTopUpCheckout.create({
       data: {
       billingModeTeamId: ids.team, billingModeRevision: 1,
         id: manualId,
@@ -164,14 +168,14 @@ describe.skipIf(!process.env.DATABASE_URL)('prepaid payment invoice PostgreSQL s
         leaseExpiresAt: new Date('2026-09-02T00:00:00.000Z'),
       },
     });
-    await handle.prisma.team.create({
+    await tx.team.create({
       data: {
         id: second.team, orgId: ids.org,
         name: 'Second funding team', slug: `second-${prefix}`,
       },
     });
-    await handle.prisma.billingTeamMode.create({ data: { teamId: second.team, sandbox: true, revision: 1 } });
-    await handle.prisma.teamMember.create({
+    await tx.billingTeamMode.create({ data: { teamId: second.team, sandbox: true, revision: 1 } });
+    await tx.teamMember.create({
       data: {
         id: `member_invoice_${prefix}`,
         teamId: second.team,
@@ -180,7 +184,7 @@ describe.skipIf(!process.env.DATABASE_URL)('prepaid payment invoice PostgreSQL s
         status: MembershipStatus.ACTIVE,
       },
     });
-    await handle.prisma.billingStripeCustomer.create({
+    await tx.billingStripeCustomer.create({
       data: {
         id: second.customer,
         accountId: ids.account,
@@ -191,7 +195,7 @@ describe.skipIf(!process.env.DATABASE_URL)('prepaid payment invoice PostgreSQL s
         stripeCustomerId: `cus_invoice_${prefix}`,
       },
     });
-    await handle.prisma.billingCreditAccount.create({
+    await tx.billingCreditAccount.create({
       data: {
         id: second.account,
         accountId: ids.account,
@@ -204,8 +208,7 @@ describe.skipIf(!process.env.DATABASE_URL)('prepaid payment invoice PostgreSQL s
     // The funding fixture seeds a pre-existing verified consent. This isolated
     // schema-local setup matches that precedent; invoice source writes below
     // run with all production triggers enabled.
-    await handle.prisma.$transaction(async (tx) => {
-      await tx.$executeRawUnsafe('SET LOCAL session_replication_role = replica');
+    {
       await tx.billingCreditAutoTopUpConsentRevision.create({
       data: {
         id: second.consent,
@@ -250,10 +253,10 @@ describe.skipIf(!process.env.DATABASE_URL)('prepaid payment invoice PostgreSQL s
         paymentMethodSummary: { type: 'card', brand: 'visa', last4: '4242' },
       },
       });
-    });
+    }
     for (const id of autoIds) {
       const isSecond = id === autoIds[1];
-      await handle.prisma.billingCreditAutoTopUpAttempt.create({
+      await tx.billingCreditAutoTopUpAttempt.create({
         data: {
           id,
           accountId: ids.account,
@@ -277,7 +280,7 @@ describe.skipIf(!process.env.DATABASE_URL)('prepaid payment invoice PostgreSQL s
         },
       });
     }
-    await handle.prisma.billingInvoiceIssuerProfile.create({
+    await tx.billingInvoiceIssuerProfile.create({
       data: {
         id: `issuer_${prefix}`,
         key: `prepaid-${prefix}`,
@@ -291,7 +294,7 @@ describe.skipIf(!process.env.DATABASE_URL)('prepaid payment invoice PostgreSQL s
         invoiceNumberPrefix: `PRE${prefix.toUpperCase()}`,
       },
     });
-    await handle.prisma.billingOrganisationInvoiceProfile.create({
+    await tx.billingOrganisationInvoiceProfile.create({
       data: {
         id: `buyer_${prefix}`,
         orgId: ids.org,
@@ -302,6 +305,7 @@ describe.skipIf(!process.env.DATABASE_URL)('prepaid payment invoice PostgreSQL s
           country: 'GB',
         },
       },
+    });
     });
   });
 

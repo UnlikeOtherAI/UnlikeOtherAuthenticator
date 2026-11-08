@@ -1,3 +1,4 @@
+import { fundingScopeEpoch } from './billing-credit-funding-actions.persistence.fixture.js';
 import { BillingCreditCheckoutStatus, BillingCreditPaymentAdjustmentKind, Prisma, type PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -26,7 +27,7 @@ describe.skipIf(!databaseTestsEnabled)('credit lots (PostgreSQL)', () => {
     const at = tick();
     const usd = currency === 'USD';
     await db().billingCreditTopUpCheckout.create({ data: {
-      billingModeTeamId: ids.team, billingModeRevision: 1,
+      billingModeTeamId: ids.team, billingModeRevision: 1,billingScopeEpoch:fundingScopeEpoch,
       id, accountId: ids.account, creditAccountId: ids.creditAccount, customerId: ids.customer,
       catalogId: usd ? ids.catalog : eur.catalog, serviceId: ids.service, appKeyId: ids.appKey,
       offerId: usd ? ids.offer : eur.offer, actorJti: id, requestedByUserId: ids.user,
@@ -57,7 +58,7 @@ describe.skipIf(!databaseTestsEnabled)('credit lots (PostgreSQL)', () => {
       await tx.$executeRaw(Prisma.sql`SELECT set_config('app.admin_auth_domain', ${ADMIN_DOMAIN}, true)`);
       const balance = await lockCreditBalance(tx, ids.creditAccount);
       await tx.billingCreditAdminAdjustment.create({ data: { id: `bcaa_${id}`, accountId: ids.account,
-        creditAccountId: ids.creditAccount, orgId: ids.org, teamId: ids.team, signedAmountMicrocredits: signed,
+        creditAccountId: ids.creditAccount, orgId: ids.org, teamId: null, signedAmountMicrocredits: signed,
         reason: 'Credit lot proof', idempotencyKey: id, createdByUserId: ids.user,
         createdByEmail: 'funding-race@example.com', createdByAdminDomain: ADMIN_DOMAIN, creditEntryId: `bce_${id}` } });
       await tx.billingCreditEntry.create({ data: { id: `bce_${id}`, creditAccountId: ids.creditAccount,

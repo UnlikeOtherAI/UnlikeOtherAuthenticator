@@ -1,3 +1,4 @@
+import { fundingScopeEpoch } from './billing-credit-funding-actions.persistence.fixture.js';
 import { BillingCreditCheckoutStatus } from '@prisma/client';
 import { expect, it, vi } from 'vitest';
 
@@ -17,7 +18,7 @@ export function registerCases1() {
     const acceptedAt = new Date('2026-08-31T23:59:58.000Z');
     await handle!.prisma.billingCreditTopUpCheckout.create({
       data: {
-        billingModeTeamId: ids.team, billingModeRevision: 1,
+        billingModeTeamId: ids.team, billingModeRevision: 1,billingScopeEpoch:fundingScopeEpoch,
         id: checkoutId, accountId: ids.account,
         creditAccountId: ids.creditAccount, customerId: ids.customer,
         catalogId: ids.catalog, serviceId: ids.service, appKeyId: ids.appKey,
@@ -116,7 +117,7 @@ export function registerCases1() {
     const checkoutId = 'bctc_funding_race_resume';
     await handle!.prisma.billingCreditTopUpCheckout.create({
       data: {
-        billingModeTeamId: ids.team, billingModeRevision: 1,
+        billingModeTeamId: ids.team, billingModeRevision: 1,billingScopeEpoch:fundingScopeEpoch,
         id: checkoutId,
         accountId: ids.account,
         creditAccountId: ids.creditAccount,
