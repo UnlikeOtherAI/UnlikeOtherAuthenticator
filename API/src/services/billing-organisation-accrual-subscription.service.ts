@@ -8,7 +8,7 @@ import { verifyStripeInvoiceFinancialSource } from './billing-customer-invoice-s
 import type { OrganisationAccrualLine } from './billing-organisation-accrual-totals.service.js';
 
 type Period={month:string;start:Date;end:Date;asOf:Date};
-export async function readOrganisationAccruedSubscriptions(input:{organisationId:string;account:StripeAccountContext;period:Period},
+export async function readOrganisationAccruedSubscriptions(input:{organisationId:string;account:StripeAccountContext;period:Period;observedAt?:Date},
   prisma:PrismaClient,deps:{quote?:typeof quoteSubscriptionMonthlyCharge;runtime?:typeof storedStripeBillingReader}={}) {
   const rows=await prisma.billingStripeSubscription.findMany({where:{orgId:input.organisationId,
     accountId:input.account.id,OR:[{status:{notIn:['canceled','incomplete_expired']}},
@@ -52,7 +52,7 @@ export async function readOrganisationAccruedSubscriptions(input:{organisationId
     if(row.lines.some(line=>line.billingMonth!==input.period.month)||proof.refunded!==0n||proof.disputed!==0n) {
       throw new AppError('INTERNAL',409,'BILLING_ACCRUAL_PAYMENT_RECONCILIATION_REQUIRED');
     }
-    const accepted=proof.payments.filter(payment=>new Date(payment.at)<=input.period.asOf)
+    const accepted=proof.payments.filter(payment=>new Date(payment.at)<=(input.observedAt??input.period.asOf))
       .reduce((sum,payment)=>sum+payment.amount,0n);
     paid.set(row.currency,(paid.get(row.currency)??0n)+accepted);
   }

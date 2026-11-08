@@ -4,6 +4,8 @@ import * as ajvFormats from 'ajv-formats';
 import { createTestDb } from '../helpers/test-db.js';
 import { captureOrganisationFinancialSource } from '../../src/services/billing-financial-source-binding.service.js';
 import { issueBillingInvoice } from '../../src/services/billing-invoice-lifecycle.service.js';
+import { readOrganisationAccruedBill } from '../../src/services/billing-organisation-accrual.service.js';
+import { resolveOrganisationBillingMode } from '../../src/services/billing-organisation-mode.service.js';
 import { listCustomerInvoices,getCustomerInvoiceDetail,downloadCustomerInvoice } from '../../src/services/billing-customer-invoice-read.service.js';
 import { billingCycleSnapshotDigest,listBillingCycles } from '../../src/services/billing-cycle-read.service.js';
 import type { BillingCycleContext } from '../../src/services/billing-cycle-read.service.js';
@@ -100,6 +102,17 @@ describe.skipIf(process.env.BILLING_FUNDING_DATABASE_TESTS!=='true')('captured o
       snapshotSha256:billingCycleSnapshotDigest(snapshot,evidence)}});
     expect((await listBillingCycles(context,{},{prisma:p})).cycles.map(row=>row.cycle_id)).toEqual(['manual-cycle']);
     expect((await listBillingCycles({...context,billingMode:'sandbox'},{},{prisma:p})).cycles).toEqual([]);
+    expect(await p.billingCreditEntry.count()).toBe(0);
+  });
+  it('confirms the issued ORG bill from actual allocations and later cash, without counting a product twice',async()=>{
+    const p=handle.prisma,selection=await resolveOrganisationBillingMode('manual-org',p);
+    const bill=await readOrganisationAccruedBill(context,selection,'2030-01',new Date('2030-03-05T12:00:00Z'),p);
+    expect(bill.as_of).toBe('2030-03-05T12:00:00.000Z');
+    expect(bill.totals).toMatchObject([{currency:'USD',subscription:{amount_minor:'2000'},total_due:{amount_minor:'2000'},
+      total_paid:{amount_minor:'100'},outstanding:{amount_minor:'1900'}}]);
+    expect(bill.lines.filter(line=>line.kind==='subscription')).toHaveLength(2);
+    await expect(readOrganisationAccruedBill(context,selection,'2030-02',new Date('2030-03-05T12:00:00Z'),p))
+      .rejects.toThrow('BILLING_ACCRUAL_MANUAL_TAX_RECONCILIATION_REQUIRED');
     expect(await p.billingCreditEntry.count()).toBe(0);
   });
 });

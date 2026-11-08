@@ -54,7 +54,8 @@ function correctPayer(account: { orgId: string; teamId: string | null;
  * monthly rerating. Funded wallet debit and operator waiver are independent. */
 export async function readVerifiedCycleCreditEvidence(reader: Reader,
   params: { scope: PaidReceiptScope; proof: LedgerPaidReceiptSet;
-    payer: BillingAssignmentScope; tariff: BillingTariff; rawLines: RawMeteringLine[];accountId?:string;allowUnsettled?:boolean },
+    payer: BillingAssignmentScope; tariff: BillingTariff; rawLines: RawMeteringLine[];accountId?:string;allowUnsettled?:boolean;
+    organisationSettlementCurrency?:'USD' },
 ): Promise<VerifiedCycleCreditEvidence> {
   const { scope, proof, tariff } = params;
   if (proof.scope.billing_product !== scope.product ||
@@ -64,7 +65,10 @@ export async function readVerifiedCycleCreditEvidence(reader: Reader,
     proof.unresolved_paid_attempts !== '0' || !proof.snapshot.immutable) {
     hold('BILLING_CYCLE_PAID_PROOF_SCOPE_INVALID');
   }
-  if (tariff.currency !== 'USD') hold('BILLING_CYCLE_FX_RECONCILIATION_REQUIRED');
+  // Organisation statements separate the frozen USD credit liability from a
+  // EUR/GBP monthly fee. They do not convert either amount or rerate receipts.
+  const orgUsd=params.organisationSettlementCurrency==='USD'&&params.payer===BillingAssignmentScope.ORGANISATION&&Boolean(params.accountId);
+  if (tariff.currency !== 'USD'&&!orgUsd) hold('BILLING_CYCLE_FX_RECONCILIATION_REQUIRED');
   if(params.accountId)await assertPaidFinancialSources(reader,scope,params.accountId);
   const matched = await matchUoaPaidReceiptSet(reader, scope, proof);
   const meteredRaw = params.rawLines.filter((line) => line.billingDisposition === 'paid')
@@ -82,7 +86,7 @@ export async function readVerifiedCycleCreditEvidence(reader: Reader,
   const [forward, legacy] = await Promise.all([
     reader.billingPaidUsageLiability.findMany({ where,
       select: { dispatchId: true, receiptId: true, tariffId: true,
-        paymentMode: true, creditAccountId: true, ratedMicrocredits: true } }),
+        paymentMode: true, creditAccountId: true, ratedMicrocredits: true,currency:true } }),
     reader.billingCreditBudgetLegacyLiability.findMany({ where,
       select: { dispatchId: true, sourceId: true } }),
   ]);
@@ -94,7 +98,7 @@ export async function readVerifiedCycleCreditEvidence(reader: Reader,
   const byException = new Map(exceptions.map((row) => [row.dispatchId, row]));
   let waived = 0n;
   for (const row of forward) {
-    if (row.tariffId !== tariff.id || row.paymentMode !== tariff.usagePaymentMode ||
+    if (row.currency!=='USD'||row.tariffId !== tariff.id || row.paymentMode !== tariff.usagePaymentMode ||
       row.ratedMicrocredits < 0n ||
       (row.paymentMode === BillingUsagePaymentMode.PREPAID) !==
         (row.creditAccountId !== null)) hold('BILLING_CYCLE_PAID_LIABILITY_TERMS_CONFLICT');
@@ -180,6 +184,11 @@ export async function readVerifiedCycleCreditEvidence(reader: Reader,
   }
 
   sourceIds.sort(compareBillingCycleUtf8);
+  // A remaining cash liability under a non-USD tariff still needs captured FX
+  // collection evidence. Only fully funded USD credit consumption can bypass
+  // the cycle's single-currency representation restriction.
+  if(orgUsd&&tariff.currency!=='USD'&&(fundedDebit===null||fundedDebit<matched.ratedMicrocredits-waived))
+    hold('BILLING_CYCLE_FX_RECONCILIATION_REQUIRED');
   const facts = { scope, paid_receipt_count: proof.paid_receipt_count,
     paid_receipt_sha256: proof.paid_receipt_sha256,
     rated_microcredits: matched.ratedMicrocredits.toString(),
