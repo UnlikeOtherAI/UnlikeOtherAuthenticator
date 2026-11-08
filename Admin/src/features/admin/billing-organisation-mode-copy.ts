@@ -17,6 +17,7 @@ const en = {
     sms_standing_funding: 'Funded inbound SMS allocation', voice_reservation: 'Call work in progress',
     monthly_usage: 'Usage already recorded this UTC month',
     funding_authorization: 'Active delegated funding or unexpired quote',
+    financial_source:'Active manual contract or commercial adjustment',
   } as Record<string, string>,
 };
 type Copy = typeof en;
@@ -92,12 +93,15 @@ const monthCopy: Record<string, string> = {
   fr: 'Les totaux du mois du changement restent en attente de rapprochement.',
   it: 'I totali del mese della modifica restano in sospeso fino alla riconciliazione.',
 };
+const financialSourceCopy:Record<string,string>={cs:'Aktivní ruční smlouva nebo obchodní úprava',
+  de:'Aktiver manueller Vertrag oder kommerzielle Anpassung',es:'Contrato manual o ajuste comercial activo',
+  fr:'Contrat manuel ou ajustement commercial actif',it:'Contratto manuale o rettifica commerciale attiva'};
 export function billingOrganisationModeCopy(locale = navigator.language): Copy {
   const language = locale.split('-')[0] ?? 'en';
   const labels = blockerTranslations[language];
   const blockers = labels ? Object.fromEntries(Object.keys(en.blockers).map((key, index) =>
     [key, labels[index] ?? en.blockers[key] ?? key])) : en.blockers;
   const copy = { ...en, ...translations[language], blockers };
-  return { ...copy,
+  return { ...copy,blockers:{...copy.blockers,financial_source:financialSourceCopy[language]??en.blockers.financial_source},
     effect: `${copy.effect} ${monthCopy[language] ?? monthCopy.en}` };
 }

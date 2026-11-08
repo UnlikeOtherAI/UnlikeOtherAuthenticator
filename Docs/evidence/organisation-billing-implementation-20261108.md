@@ -94,6 +94,24 @@ no provider calls and creates no payments or funding entries. Seven add-on unit
 tests plus three invoice route tests pass. Captured add-on cancellation recovery
 and rendered consumer flows remain outstanding.
 
+The lifecycle PostgreSQL gate also passes 23 tests with the database rollout
+fence installed. A locked migration-time readiness check refuses unfinished
+incompatible TEAM jobs. Fresh TEAM previews and executor leases carry
+`preserve-org-v2`. During revision overlap an old server cannot commit its former
+preview or acquire a destructive TEAM executor lease. Unsafe preview writes and
+an old executor claim are refused with the job unchanged. The last-team/org and
+funded-source recovery assertions still pass. The parent's zero-pending snapshot
+is operator evidence, not a substitute for the atomic migration precondition.
+No live jobs were changed.
+
+Three further real PostgreSQL tests pass for forward financial source capture.
+They prove exact named account/epoch capture, immutable metadata, other-mode and
+unbound insertion refusal, paid-work/adjustment quiescence, explicit source
+deactivation, and refusal to reuse an old LIVE manual draft after Sandbox
+selection. Fractional PAYG bucket keys differ by captured account; original
+prepaid wallet keys stay unchanged. No financial rows are migrated and no
+provider calls, charges, webhooks or funding entries are created by these tests.
+
 ## Work still required before release
 
 Complete remaining accrual sources and their account/mode proofs, signed HTTP

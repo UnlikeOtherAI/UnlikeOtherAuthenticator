@@ -446,6 +446,7 @@ enum ConfidentialDelegationScope {
 }
 
 model User {
+  billingBudgetDispatches BillingCreditBudgetDispatch[]
   id                                   String                                    @id @default(cuid())
   // Note: email is not globally unique because `user_scope` can be "per_domain".
   // Uniqueness is enforced via `user_key` instead (global: email, per_domain: domain|email).
@@ -1367,6 +1368,7 @@ model OrgAuditLog {
 }
 
 model Organisation {
+  billingBudgetDispatches BillingCreditBudgetDispatch[]
   id                  String       @id @default(cuid())
   billingSeatGuardVersion BigInt   @default(0) @map("billing_seat_guard_version")
   lifecycleStatus     EntityLifecycleStatus @default(ACTIVE) @map("lifecycle_status")
@@ -1595,6 +1597,7 @@ model FeatureFlagUserOverride {
 }
 
 model Team {
+  billingBudgetDispatches BillingCreditBudgetDispatch[]
   billingMode BillingTeamMode?
   archiveOperation TeamArchiveOperation?
   id                  String   @id @default(cuid())
@@ -2171,6 +2174,9 @@ model BillingServiceAccess {
 // integer minor-currency values and are never accepted from Ledger.
 model BillingCommercialAdjustment {
   id              String                   @id @default(cuid())
+  billingAccountId String? @map("billing_account_id")
+  billingScopeEpoch DateTime? @map("billing_scope_epoch") @db.Timestamptz(3)
+  billingModeRevision Int? @map("billing_mode_revision")
   serviceId       String                   @map("service_id")
   orgId           String                   @map("org_id")
   teamId          String?                  @map("team_id")
@@ -2192,8 +2198,9 @@ model BillingCommercialAdjustment {
   updatedAt       DateTime                 @updatedAt @map("updated_at")
 
   service BillingService @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-  org     Organisation   @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  team    Team?          @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  org     Organisation   @relation(fields: [orgId], references: [id], onDelete: Restrict)
+  team    Team?          @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  billingAccount BillingStripeAccount? @relation(fields:[billingAccountId],references:[id],onDelete:Restrict)
 
   @@unique([serviceId, scope, scopeKey, key, startsAt])
   @@index([orgId, teamId, active, startsAt, endsAt])
@@ -2277,6 +2284,9 @@ model BillingStripeAccount {
   livemode        Boolean
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
+  financialContracts BillingOrganisationContract[]
+  commercialAdjustments BillingCommercialAdjustment[]
+  budgetDispatches BillingCreditBudgetDispatch[]
 
   customers                         BillingStripeCustomer[]
   catalogs                          BillingStripeCatalog[]
@@ -2758,6 +2768,9 @@ model BillingStripeWebhookEvent {
 // their service terms are append-only; an invoice pins one exact version.
 model BillingOrganisationContract {
   id              String                            @id @default(cuid())
+  billingAccountId String? @map("billing_account_id")
+  billingScopeEpoch DateTime? @map("billing_scope_epoch") @db.Timestamptz(3)
+  billingModeRevision Int? @map("billing_mode_revision")
   orgId           String                            @map("org_id")
   reference       String                            @db.VarChar(100)
   name            String                            @db.VarChar(160)
@@ -2770,6 +2783,7 @@ model BillingOrganisationContract {
   updatedAt       DateTime                          @updatedAt @map("updated_at")
 
   org      Organisation                         @relation(fields: [orgId], references: [id], onDelete: Restrict)
+  billingAccount BillingStripeAccount? @relation(fields:[billingAccountId],references:[id],onDelete:Restrict)
   versions BillingOrganisationContractVersion[]
   invoices BillingInvoice[]
 
@@ -3746,6 +3760,9 @@ model BillingCreditBudgetNativeScope {
 // be released by time or counted as zero under a finite cap.
 model BillingCreditBudgetDispatch {
   dispatchId String @id @map("dispatch_id") @db.VarChar(160)
+  billingAccountId String? @map("billing_account_id")
+  billingScopeEpoch DateTime? @map("billing_scope_epoch") @db.Timestamptz(3)
+  billingModeRevision Int? @map("billing_mode_revision")
   contextDigest String @map("context_digest") @db.Char(64)
   isLegacy Boolean @default(false) @map("is_legacy")
   serviceId String @map("service_id")
@@ -3765,6 +3782,10 @@ model BillingCreditBudgetDispatch {
   terminalAt DateTime? @map("terminal_at")
 
   paidUsageException BillingPaidUsageException?
+  billingAccount BillingStripeAccount? @relation(fields:[billingAccountId],references:[id],onDelete:Restrict)
+  org Organisation @relation(fields:[orgId],references:[id],onDelete:Restrict,map:"billing_budget_org_fkey")
+  team Team @relation(fields:[teamId],references:[id],onDelete:Restrict,map:"billing_budget_team_fkey")
+  user User @relation(fields:[userId],references:[id],onDelete:Restrict,map:"billing_budget_user_fkey")
 
   @@index([status, createdAt])
   @@map("billing_credit_budget_dispatches")

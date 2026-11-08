@@ -7,6 +7,7 @@ import {
 
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
+import { captureOrganisationFinancialSource } from './billing-financial-source-binding.service.js';
 
 const KEY_PATTERN = /^[a-z0-9][a-z0-9._-]{0,99}$/;
 const CURRENCY_PATTERN = /^[A-Z]{3}$/;
@@ -105,6 +106,7 @@ export async function createCommercialAdjustment(
   return prisma.$transaction(async (tx) => {
     const adjustment = await tx.billingCommercialAdjustment.create({
       data: {
+        ...await captureOrganisationFinancialSource(tx,input.organisationId),
         serviceId: input.serviceId,
         orgId: input.organisationId,
         teamId: input.teamId ?? null,

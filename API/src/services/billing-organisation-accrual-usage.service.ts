@@ -35,7 +35,7 @@ export async function readOrganisationAccruedUsage(input:{organisationId:string;
       const projected=projectCycleUsage(usage,{serviceIdentifier:service.identifier,organisationId:input.organisationId,
         teamId,billingMonth:input.period.month,startsAt:input.period.start,endsAt:input.period.end,currency:'USD'},effective.tariff);
       const evidence=await readVerifiedCycleCreditEvidence(prisma,{scope,proof,payer:BillingAssignmentScope.ORGANISATION,
-        tariff:effective.tariff,rawLines:projected.evidence.raw_lines,accountId:input.accountId});
+        tariff:effective.tariff,rawLines:projected.evidence.raw_lines,accountId:input.accountId,allowUnsettled:true});
       if(evidence.funded_debit_microcredits===null)throw new AppError('INTERNAL',409,'BILLING_ACCRUAL_CREDIT_RECONCILIATION_REQUIRED');
       gross+=BigInt(evidence.consumed_microcredits)-BigInt(evidence.waived_microcredits);
       funded+=BigInt(evidence.funded_debit_microcredits);

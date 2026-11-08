@@ -12,6 +12,7 @@ import {
   matchUoaPaidReceiptSet, type LedgerPaidReceiptSet, type PaidReceiptScope,
 } from './billing-ledger-paid-receipt-proof.service.js';
 import { compareBillingCycleUtf8 } from './billing-cycle-binary-order.service.js';
+import { assertPaidFinancialSources } from './billing-financial-source-binding.service.js';
 
 type Reader = PrismaClient | Prisma.TransactionClient;
 
@@ -53,7 +54,7 @@ function correctPayer(account: { orgId: string; teamId: string | null;
  * monthly rerating. Funded wallet debit and operator waiver are independent. */
 export async function readVerifiedCycleCreditEvidence(reader: Reader,
   params: { scope: PaidReceiptScope; proof: LedgerPaidReceiptSet;
-    payer: BillingAssignmentScope; tariff: BillingTariff; rawLines: RawMeteringLine[];accountId?:string },
+    payer: BillingAssignmentScope; tariff: BillingTariff; rawLines: RawMeteringLine[];accountId?:string;allowUnsettled?:boolean },
 ): Promise<VerifiedCycleCreditEvidence> {
   const { scope, proof, tariff } = params;
   if (proof.scope.billing_product !== scope.product ||
@@ -64,6 +65,7 @@ export async function readVerifiedCycleCreditEvidence(reader: Reader,
     hold('BILLING_CYCLE_PAID_PROOF_SCOPE_INVALID');
   }
   if (tariff.currency !== 'USD') hold('BILLING_CYCLE_FX_RECONCILIATION_REQUIRED');
+  if(params.accountId)await assertPaidFinancialSources(reader,scope,params.accountId);
   const matched = await matchUoaPaidReceiptSet(reader, scope, proof);
   const meteredRaw = params.rawLines.filter((line) => line.billingDisposition === 'paid')
     .reduce((sum, line) => {
@@ -174,7 +176,7 @@ export async function readVerifiedCycleCreditEvidence(reader: Reader,
       // A zero-delta portfolio observation can append a new adjustment ID
       // without changing a customer's financial facts or cycle identity.
       sourceIds.push(row.id);
-    } else if (matched.ratedMicrocredits === 0n) fundedDebit = 0n;
+    } else if (matched.ratedMicrocredits === 0n || params.allowUnsettled) fundedDebit = 0n;
   }
 
   sourceIds.sort(compareBillingCycleUtf8);
